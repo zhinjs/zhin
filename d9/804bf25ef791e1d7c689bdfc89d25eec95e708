@@ -1,0 +1,63 @@
+.changeset/workroom-data-governance-subpath.md
+  s_b2903366e10f0d::t_83d5d258482181 1-6
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_b2903366e10f0d::t_c80822065a1514 6-15
+basic/cli/src/plugin-runtime/console/data-lifecycle-routes.ts
+  s_b2903366e10f0d::t_24a11c3915fc8b 2-4
+basic/cli/src/plugin-runtime/workroom/acceptance-coordinator.ts
+  s_b2903366e10f0d::t_70c9ffdba2001f 40-42
+basic/cli/src/plugin-runtime/workroom/data-governance-coordinator.ts
+  s_b2903366e10f0d::t_2e8b7031f49e06 6-8,16
+basic/cli/src/plugin-runtime/workroom/human-ingress-coordinator.ts
+  s_b2903366e10f0d::t_8df80358007df0 3-24
+basic/cli/src/plugin-runtime/workroom/local-data-governance.ts
+  s_b2903366e10f0d::t_fe044f8a1f7b53 14-15,19
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_b2903366e10f0d::t_2eb1b89b1fcb79 6-25
+basic/cli/src/plugin-runtime/workroom/planning-coordinator.ts
+  s_b2903366e10f0d::t_f005c8da0ba2a4 15-19
+basic/cli/src/plugin-runtime/workroom/profile-coordinator.ts
+  s_b2903366e10f0d::t_9b91fd4aa61634 13-15
+basic/cli/src/plugin-runtime/workroom/publication.ts
+  s_b2903366e10f0d::t_e3476e5b03c0b7 9-11
+basic/cli/src/plugin-runtime/workroom/runtime-foundation.ts
+  s_b2903366e10f0d::t_0cee0db995fa26 1-26
+docs/contributing/public-api-surface.md
+  s_b2903366e10f0d::t_50c6ba830adce6 121
+docs/en/contributing/public-api-surface.md
+  s_b2903366e10f0d::t_e7b57030748884 116
+docs/plans/workroom-group-collaboration-progress.md
+  s_b2903366e10f0d::t_e726c0e304a04d 128-129,406-410,457
+packages/im/agent/CONTEXT.md
+  s_b2903366e10f0d::t_bf794c653f56ee 179,183,247
+packages/im/workroom/README.md
+  s_b2903366e10f0d::t_fc8b4ea8c1bebe 7,14,18-19
+packages/im/workroom/package.json
+  s_b2903366e10f0d::t_6defae7bc5fbd1 28-32
+packages/im/workroom/src/data-governance.ts
+  s_b2903366e10f0d::t_ba690ddcbd0038 1-25
+packages/im/workroom/src/index.ts
+  s_b2903366e10f0d::t_18113f589710eb 2-3
+packages/im/workroom/tests/package-exports.test.ts
+  s_b2903366e10f0d::t_e3a17fd10d9bcb 6,8,27-52,54
+tsconfig.typecheck.json
+  s_b2903366e10f0d::t_8ba1546e73a66b 173-175
+tsconfig.typedoc.json
+  s_b2903366e10f0d::t_40aaac7efe4b66 77-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d9804bf25ef791e1d7c689bdfc89d25eec95e708",
+  "prompts": {},
+  "sessions": {
+    "s_b2903366e10f0d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21126ec6-b8bb-4ee7-aaf7-cbf37a8404af",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

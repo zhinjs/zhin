@@ -1,0 +1,541 @@
+.changeset/add-workroom-package.md
+  s_19275fe2d72d97::t_c977309bcd1fbd 1-6
+AGENTS.md
+  s_19275fe2d72d97::t_78eb9956b53f9c 61
+docs/concepts/architecture.md
+  s_19275fe2d72d97::t_bc1687d599928d 97
+docs/contributing/repo-structure.md
+  s_19275fe2d72d97::t_974affd66412d1 55-56,65-66,81
+docs/plans/workroom-group-collaboration-progress.md
+  s_19275fe2d72d97::t_70269b02e26569 42-44,119-124,137
+package.json
+  s_19275fe2d72d97::t_c297e526b31b5e 94
+packages/im/agent/package.json
+  s_19275fe2d72d97::t_66f29d89a501eb 128
+packages/im/agent/src/data-governance/canonical-value.ts
+  s_19275fe2d72d97::t_3ca0b8f1b7954b 1-2
+packages/im/agent/src/data-governance/data-governance.ts
+  s_19275fe2d72d97::t_c30ed3609160ce 1-2
+packages/im/agent/src/data-governance/database-payload-lifecycle-repository.ts
+  s_19275fe2d72d97::t_a8b02bf05b8e4e 1-2
+packages/im/agent/src/data-governance/disclosure-authority.ts
+  s_19275fe2d72d97::t_95ea0d2f581ac3 1-2
+packages/im/agent/src/data-governance/disclosure-manifest.ts
+  s_19275fe2d72d97::t_cbc4b7aa2f2977 1-2
+packages/im/agent/src/data-governance/durable-file-store.ts
+  s_19275fe2d72d97::t_3899680c65485c 1-2
+packages/im/agent/src/data-governance/encrypted-database-payload-vault.ts
+  s_19275fe2d72d97::t_034358d7d551ea 1-2
+packages/im/agent/src/data-governance/encrypted-file-payload-vault.ts
+  s_19275fe2d72d97::t_d7bacfc09bcebb 1-2
+packages/im/agent/src/data-governance/file-payload-lifecycle-repository.ts
+  s_19275fe2d72d97::t_fb722b6db51bf2 1-2
+packages/im/agent/src/data-governance/governance-authority-repository.ts
+  s_19275fe2d72d97::t_f76b5877157b7d 1-2
+packages/im/agent/src/data-governance/governed-payload-write-saga.ts
+  s_19275fe2d72d97::t_3409cfa0bb12d2 1-2
+packages/im/agent/src/data-governance/payload-hold-overdue-projection.ts
+  s_19275fe2d72d97::t_1b237c36cfb454 1-2
+packages/im/agent/src/data-governance/payload-lifecycle.ts
+  s_19275fe2d72d97::t_06c55f9a36efc5 1-2
+packages/im/agent/src/data-governance/payload-vault-storage-handoff.ts
+  s_19275fe2d72d97::t_bb4d10df038357 1-2
+packages/im/agent/src/portfolio/capacity-control-outbox.ts
+  s_19275fe2d72d97::t_5d677c97dce61e 1-2
+packages/im/agent/src/portfolio/database-capacity-control-outbox.ts
+  s_19275fe2d72d97::t_1a575e6348e502 1-2
+packages/im/agent/src/portfolio/file-capacity-control-outbox.ts
+  s_19275fe2d72d97::t_f5a00db20d4b76 1-2
+packages/im/agent/src/portfolio/file-portfolio-journal.ts
+  s_19275fe2d72d97::t_cb36ab038bd564 1-2
+packages/im/agent/src/portfolio/portfolio-admission.ts
+  s_19275fe2d72d97::t_8893dcb24e85b5 1-2
+packages/im/agent/src/portfolio/portfolio-journal.ts
+  s_19275fe2d72d97::t_984688a3ee4d86 1-2
+packages/im/agent/src/portfolio/resource-bundle.ts
+  s_19275fe2d72d97::t_e6f5eeb77a4583 1-2
+packages/im/agent/src/portfolio/sponsor-projection.ts
+  s_19275fe2d72d97::t_5044fb4021059a 1-2
+packages/im/agent/src/workroom/acceptance-control.ts
+  s_19275fe2d72d97::t_68d7aadf0c650f 1-2
+packages/im/agent/src/workroom/acceptance-policy.ts
+  s_19275fe2d72d97::t_03b4ea1ab9d297 1-2
+packages/im/agent/src/workroom/accepted-source-memory-application.ts
+  s_19275fe2d72d97::t_709de6b68d6c08 1-2
+packages/im/agent/src/workroom/accepted-source-projector.ts
+  s_19275fe2d72d97::t_63ca9fc98cecf0 1-2
+packages/im/agent/src/workroom/assignment-authority-grant-application.ts
+  s_19275fe2d72d97::t_0ca02bd31135f5 1-2
+packages/im/agent/src/workroom/assignment-authority-grant-repository.ts
+  s_19275fe2d72d97::t_3577070719bb14 1-2
+packages/im/agent/src/workroom/assignment-authority.ts
+  s_19275fe2d72d97::t_33a97bcdcb70ac 1-2
+packages/im/agent/src/workroom/assignment-executor.ts
+  s_19275fe2d72d97::t_51424131e82ca2 1-2
+packages/im/agent/src/workroom/assignment-observation-ingress.ts
+  s_19275fe2d72d97::t_046c8177788fb5 1-2
+packages/im/agent/src/workroom/canonical-value.ts
+  s_19275fe2d72d97::t_846ef6cfcbe3d0 1-2
+packages/im/agent/src/workroom/catalog-definition.ts
+  s_19275fe2d72d97::t_858f4bc6d0fff4 1-2
+packages/im/agent/src/workroom/catalog.ts
+  s_19275fe2d72d97::t_26eafe169d95b6 1-2
+packages/im/agent/src/workroom/coding-assignment-executor.ts
+  s_19275fe2d72d97::t_f37272a08b5ef1 1-2
+packages/im/agent/src/workroom/coding-git-objects.ts
+  s_19275fe2d72d97::t_fa92b2b04382f6 1-2
+packages/im/agent/src/workroom/database-project-knowledge-journal.ts
+  s_19275fe2d72d97::t_995a914afe92f3 1-2
+packages/im/agent/src/workroom/durable-file-store.ts
+  s_19275fe2d72d97::t_644d84285f1119 1-2
+packages/im/agent/src/workroom/dynamic-workflow-planner.ts
+  s_19275fe2d72d97::t_8730059806295e 1-2
+packages/im/agent/src/workroom/effect-blocker-repository.ts
+  s_19275fe2d72d97::t_659b73ea77e1c8 1-2
+packages/im/agent/src/workroom/effect-ledger.ts
+  s_19275fe2d72d97::t_02149ba380eff4 1-2
+packages/im/agent/src/workroom/file-accepted-source-memory-repository.ts
+  s_19275fe2d72d97::t_7c35780c684da8 1-2
+packages/im/agent/src/workroom/file-coding-execution-store.ts
+  s_19275fe2d72d97::t_f84151383a5780 1-2
+packages/im/agent/src/workroom/file-effect-ledger.ts
+  s_19275fe2d72d97::t_d886d8aeb00222 1-2
+packages/im/agent/src/workroom/file-human-ingress-application.ts
+  s_19275fe2d72d97::t_973b3a53897c86 1-2
+packages/im/agent/src/workroom/file-human-ingress.ts
+  s_19275fe2d72d97::t_f8df42ca84bf1f 1-2
+packages/im/agent/src/workroom/file-interaction-space-binding-repository.ts
+  s_19275fe2d72d97::t_9043626f4fa6ea 1-2
+packages/im/agent/src/workroom/file-profile-journal.ts
+  s_19275fe2d72d97::t_29e5eea8f0f65b 1-2
+packages/im/agent/src/workroom/git-workspace-gateway.ts
+  s_19275fe2d72d97::t_c7210e303c93c7 1-2
+packages/im/agent/src/workroom/github-workspace-transport.ts
+  s_19275fe2d72d97::t_6ddf71ff31d661 1-2
+packages/im/agent/src/workroom/governed-dispatch-reasons.ts
+  s_19275fe2d72d97::t_4ff77467c2e97b 1-2
+packages/im/agent/src/workroom/human-ingress-application.ts
+  s_19275fe2d72d97::t_ba1fa0bb41b510 1-2
+packages/im/agent/src/workroom/human-ingress-orchestrator.ts
+  s_19275fe2d72d97::t_1e02025a85e311 1-2
+packages/im/agent/src/workroom/human-ingress-source-reader.ts
+  s_19275fe2d72d97::t_479d3c59587d79 1-2
+packages/im/agent/src/workroom/human-ingress.ts
+  s_19275fe2d72d97::t_92002bafd815b4 1-2
+packages/im/agent/src/workroom/interaction-space-binding-service.ts
+  s_19275fe2d72d97::t_eca19b7b22c17a 1-2
+packages/im/agent/src/workroom/interaction-space-router.ts
+  s_19275fe2d72d97::t_9168ceb53e78eb 1-2
+packages/im/agent/src/workroom/journal-model.ts
+  s_19275fe2d72d97::t_146ab17a40d15f 1-2
+packages/im/agent/src/workroom/journal/activatable-journal.ts
+  s_19275fe2d72d97::t_62b3c70a123aa2 1-2
+packages/im/agent/src/workroom/journal/contracts.ts
+  s_19275fe2d72d97::t_9cf8e2d77b4b69 1-2
+packages/im/agent/src/workroom/journal/database-journal.ts
+  s_19275fe2d72d97::t_89ef34cd0b29b6 1-2
+packages/im/agent/src/workroom/journal/event-codec.ts
+  s_19275fe2d72d97::t_6c868335a48d4b 1-2
+packages/im/agent/src/workroom/journal/event-validation.ts
+  s_19275fe2d72d97::t_e6ba0fb3f243b1 1-2
+packages/im/agent/src/workroom/journal/file-journal.ts
+  s_19275fe2d72d97::t_1ff0c624044bb3 1-2
+packages/im/agent/src/workroom/journal/index.ts
+  s_19275fe2d72d97::t_6fbc3d8d0ce322 1-2
+packages/im/agent/src/workroom/journal/memory-journal.ts
+  s_19275fe2d72d97::t_aeb2f5657cfb8f 1-2
+packages/im/agent/src/workroom/journal/payload-governance.ts
+  s_19275fe2d72d97::t_f3a3a9b82cdaef 1-2
+packages/im/agent/src/workroom/journal/payload-reference.ts
+  s_19275fe2d72d97::t_a0a49e1fe155a2 1-2
+packages/im/agent/src/workroom/journal/stored-event-projection.ts
+  s_19275fe2d72d97::t_17d632943bc832 1-2
+packages/im/agent/src/workroom/kernel-contracts.ts
+  s_19275fe2d72d97::t_814211d3091bf4 1-2
+packages/im/agent/src/workroom/kernel-state.ts
+  s_19275fe2d72d97::t_d21738244d9bc3 1-2
+packages/im/agent/src/workroom/legacy-embedded-payload-migration.ts
+  s_19275fe2d72d97::t_e873312166cc5b 1-2
+packages/im/agent/src/workroom/legacy-run-offline-migration.ts
+  s_19275fe2d72d97::t_be0e31a8063e9b 1-2
+packages/im/agent/src/workroom/local-assignment-issuance.ts
+  s_19275fe2d72d97::t_e3fbd21fa2195e 1-2
+packages/im/agent/src/workroom/plan-approval-control.ts
+  s_19275fe2d72d97::t_18e5fa816e94ab 1-2
+packages/im/agent/src/workroom/plan-revision.ts
+  s_19275fe2d72d97::t_33e3798de29689 1-2
+packages/im/agent/src/workroom/profile-compiler.ts
+  s_19275fe2d72d97::t_f34a9e976ec9c6 1-2
+packages/im/agent/src/workroom/profile-registry.ts
+  s_19275fe2d72d97::t_003d990c23c2bf 1-2
+packages/im/agent/src/workroom/project-knowledge-registry.ts
+  s_19275fe2d72d97::t_092317b39c51c8 1-2
+packages/im/agent/src/workroom/projection-outbox/contracts.ts
+  s_19275fe2d72d97::t_5c1d7741e6442d 1-2
+packages/im/agent/src/workroom/projection-outbox/delivery-worker.ts
+  s_19275fe2d72d97::t_b83a7c6e6a7caa 1-2
+packages/im/agent/src/workroom/projection-outbox/file-repository.ts
+  s_19275fe2d72d97::t_ada8364b1c0003 1-2
+packages/im/agent/src/workroom/projection-outbox/index.ts
+  s_19275fe2d72d97::t_c1113c6092a7ad 1-2
+packages/im/agent/src/workroom/projection-outbox/memory-repository.ts
+  s_19275fe2d72d97::t_de8ca585651c1f 1-2
+packages/im/agent/src/workroom/projection-outbox/projector.ts
+  s_19275fe2d72d97::t_0c4d85bfd19cd7 1-2
+packages/im/agent/src/workroom/projection-outbox/repository-state.ts
+  s_19275fe2d72d97::t_9ddbc888c9ffd0 1-2
+packages/im/agent/src/workroom/projection-outbox/tracer.ts
+  s_19275fe2d72d97::t_270147f971fc61 1-2
+packages/im/agent/src/workroom/remote-assignment-dispatch-command.ts
+  s_19275fe2d72d97::t_07fb79f3d85dac 1-2
+packages/im/agent/src/workroom/remote-assignment-issuance.ts
+  s_19275fe2d72d97::t_5fd2a11b3fe75c 1-2
+packages/im/agent/src/workroom/remote-callback-application.ts
+  s_19275fe2d72d97::t_e34c64898d73ec 1-2
+packages/im/agent/src/workroom/remote-callback-gateway.ts
+  s_19275fe2d72d97::t_b0c665e7200e16 1-2
+packages/im/agent/src/workroom/remote-callback-inbox.ts
+  s_19275fe2d72d97::t_b2dca0a6a9d29d 1-2
+packages/im/agent/src/workroom/remote-callback-reconciliation-worker.ts
+  s_19275fe2d72d97::t_76558d661b4a2a 1-2
+packages/im/agent/src/workroom/remote-dispatch-admission.ts
+  s_19275fe2d72d97::t_3082999ca7408c 1-2
+packages/im/agent/src/workroom/remote-dispatch-outbox.ts
+  s_19275fe2d72d97::t_7b4c68ef920bb5 1-2
+packages/im/agent/src/workroom/remote-dispatch-scheduler.ts
+  s_19275fe2d72d97::t_f8a2891a554125 1-2
+packages/im/agent/src/workroom/remote-dispatch-worker.ts
+  s_19275fe2d72d97::t_02a969315b7fd5 1-2
+packages/im/agent/src/workroom/remote-dispatch.ts
+  s_19275fe2d72d97::t_1a152618d0d4f5 1-2
+packages/im/agent/src/workroom/remote-executor.ts
+  s_19275fe2d72d97::t_45fec5e8f83879 1-2
+packages/im/agent/src/workroom/role-capability-snapshot.ts
+  s_19275fe2d72d97::t_97eb52426d4a01 1-2
+packages/im/agent/src/workroom/runtime.ts
+  s_19275fe2d72d97::t_3f534ef819988e 1-2
+packages/im/agent/src/workroom/scheduler-priority-control.ts
+  s_19275fe2d72d97::t_5de23202fb20f1 1-2
+packages/im/agent/src/workroom/software-delivery-plan.ts
+  s_19275fe2d72d97::t_dff014154b6870 1-2
+packages/im/agent/src/workroom/validate-catalog.ts
+  s_19275fe2d72d97::t_0f800a9e10f51f 1-2
+packages/im/agent/src/workroom/workflow-plan-builder.ts
+  s_19275fe2d72d97::t_020894e9ae3f40 1-2
+packages/im/agent/src/workroom/workroom-assignment-knowledge-context.ts
+  s_19275fe2d72d97::t_c7cb60d55991fe 1-2
+packages/im/agent/src/workroom/workroom-kernel.ts
+  s_19275fe2d72d97::t_62fe98f67cfa51 1-2
+packages/im/agent/src/workroom/workroom-preemption.ts
+  s_19275fe2d72d97::t_02253c3c2c9882 1-2
+packages/im/agent/src/workroom/workroom-run-control.ts
+  s_19275fe2d72d97::t_e7756e91f6865b 1-2
+packages/im/agent/src/workroom/workroom-scheduler-application.ts
+  s_19275fe2d72d97::t_911c8b22563051 1-2
+packages/im/agent/src/workroom/workroom-scheduler.ts
+  s_19275fe2d72d97::t_844360fd9e99f7 1-2
+packages/im/agent/src/workroom/workroom-task-report-store.ts
+  s_19275fe2d72d97::t_b800f0d5db1e86 1-2
+packages/im/agent/tests/plugin-runtime/workroom-portfolio-grant-assignment.test.ts
+  s_19275fe2d72d97::t_61841a210ed707 34
+packages/im/agent/tests/portfolio/capacity-control-outbox-fixture.ts
+  s_19275fe2d72d97::t_5f6975983ad25b 1-47
+packages/im/workroom/README.md
+  s_19275fe2d72d97::t_175a3685db6579 1-21
+packages/im/workroom/package.json
+  s_19275fe2d72d97::t_d05edd103f510b 1-60
+packages/im/workroom/src/data-governance/canonical-value.ts
+  s_19275fe2d72d97::t_21f343f7e52155 1-35
+packages/im/workroom/src/data-governance/data-governance.ts
+  s_19275fe2d72d97::t_345f06d847d58f 1-1048
+packages/im/workroom/src/data-governance/database-payload-lifecycle-repository.ts
+  s_19275fe2d72d97::t_c19383cecc87ed 1-316
+packages/im/workroom/src/data-governance/disclosure-authority.ts
+  s_481b32855cdf2b::t_d9877669c867ae 1-53
+packages/im/workroom/src/data-governance/disclosure-manifest.ts
+  s_19275fe2d72d97::t_68c44b22efe135 1-474
+packages/im/workroom/src/data-governance/durable-file-store.ts
+  s_19275fe2d72d97::t_44b67476cef164 1-163
+packages/im/workroom/src/data-governance/encrypted-database-payload-vault.ts
+  s_19275fe2d72d97::t_51e46dafcaef3f 1-323
+packages/im/workroom/src/data-governance/encrypted-file-payload-vault.ts
+  s_19275fe2d72d97::t_597deaa413202c 1-691
+packages/im/workroom/src/data-governance/file-payload-lifecycle-repository.ts
+  s_19275fe2d72d97::t_fc5b03e230d73a 1-234
+packages/im/workroom/src/data-governance/governance-authority-repository.ts
+  s_19275fe2d72d97::t_75314c9fa436a3 1-653
+packages/im/workroom/src/data-governance/governed-payload-write-saga.ts
+  s_19275fe2d72d97::t_796c1488c9c2cf 1-657
+packages/im/workroom/src/data-governance/payload-hold-overdue-projection.ts
+  s_19275fe2d72d97::t_280b8c0462286c 1-135
+packages/im/workroom/src/data-governance/payload-lifecycle.ts
+  s_19275fe2d72d97::t_f9a97c60eac8af 1-1393
+packages/im/workroom/src/data-governance/payload-vault-storage-handoff.ts
+  s_19275fe2d72d97::t_3645051af07d10 1-693
+packages/im/workroom/src/index.ts
+  s_19275fe2d72d97::t_b2fbb9b66f86bc 1-107
+packages/im/workroom/src/portfolio/capacity-control-outbox.ts
+  s_99b3f2eaf04135::t_9a212a7056622a 1-471
+packages/im/workroom/src/portfolio/database-capacity-control-outbox.ts
+  s_99b3f2eaf04135::t_c3eed64033e71e 1-221
+packages/im/workroom/src/portfolio/file-capacity-control-outbox.ts
+  s_99b3f2eaf04135::t_829fb87b9395b1 1-128
+packages/im/workroom/src/portfolio/file-portfolio-journal.ts
+  s_99b3f2eaf04135::t_3452b2cc15af35 1-241
+packages/im/workroom/src/portfolio/portfolio-admission.ts
+  s_99b3f2eaf04135::t_e304f75320a20e 1-1248
+packages/im/workroom/src/portfolio/portfolio-journal.ts
+  s_99b3f2eaf04135::t_82d603d78ca2c6 1-1186
+packages/im/workroom/src/portfolio/resource-bundle.ts
+  s_99b3f2eaf04135::t_6fd99d6d441a91 1-629
+packages/im/workroom/src/portfolio/sponsor-projection.ts
+  s_99b3f2eaf04135::t_def72972c89db0 1-199
+packages/im/workroom/src/workroom/acceptance-control.ts
+  s_99b3f2eaf04135::t_25e30c9226c79d 1-504
+packages/im/workroom/src/workroom/acceptance-policy.ts
+  s_99b3f2eaf04135::t_603040ab02f1ca 1-827
+packages/im/workroom/src/workroom/accepted-source-memory-application.ts
+  s_99b3f2eaf04135::t_168e632b1ae756 1-499
+packages/im/workroom/src/workroom/accepted-source-projector.ts
+  s_99b3f2eaf04135::t_6f72236f99806f 1-407
+packages/im/workroom/src/workroom/assignment-authority-grant-application.ts
+  s_99b3f2eaf04135::t_f3b34025e16a3e 1-483
+packages/im/workroom/src/workroom/assignment-authority-grant-repository.ts
+  s_99b3f2eaf04135::t_05e611f3a11e6f 1-509
+packages/im/workroom/src/workroom/assignment-authority.ts
+  s_99b3f2eaf04135::t_57036f6581ab3e 1-274
+packages/im/workroom/src/workroom/assignment-executor.ts
+  s_99b3f2eaf04135::t_9f7d7a09cfa365 1-508
+packages/im/workroom/src/workroom/assignment-observation-ingress.ts
+  s_99b3f2eaf04135::t_9614746797df2f 1-56
+packages/im/workroom/src/workroom/canonical-value.ts
+  s_19275fe2d72d97::t_a74b0e209389f2 1
+packages/im/workroom/src/workroom/catalog-definition.ts
+  s_99b3f2eaf04135::t_e76c163b6ecb37 1-59
+packages/im/workroom/src/workroom/catalog.ts
+  s_99b3f2eaf04135::t_2b2bd5b1a835ec 1-439
+packages/im/workroom/src/workroom/coding-assignment-executor.ts
+  s_99b3f2eaf04135::t_aa89b9ab9e16c9 1-252
+packages/im/workroom/src/workroom/coding-git-objects.ts
+  s_99b3f2eaf04135::t_3f62ebc01142c3 1-66
+packages/im/workroom/src/workroom/database-project-knowledge-journal.ts
+  s_99b3f2eaf04135::t_cf1b10ef9f4ef3 1-196
+packages/im/workroom/src/workroom/durable-file-store.ts
+  s_19275fe2d72d97::t_aa316df805156b 1
+packages/im/workroom/src/workroom/dynamic-workflow-planner.ts
+  s_99b3f2eaf04135::t_c7fa8593a93bd6 1-362
+packages/im/workroom/src/workroom/effect-blocker-repository.ts
+  s_99b3f2eaf04135::t_58ff77f0badb66 1-219
+packages/im/workroom/src/workroom/effect-ledger.ts
+  s_99b3f2eaf04135::t_156ca6b3c28d94 1-691
+packages/im/workroom/src/workroom/file-accepted-source-memory-repository.ts
+  s_99b3f2eaf04135::t_0f37a0ddb5583f 1-179
+packages/im/workroom/src/workroom/file-coding-execution-store.ts
+  s_99b3f2eaf04135::t_849302d89b2b62 1-112
+packages/im/workroom/src/workroom/file-effect-ledger.ts
+  s_99b3f2eaf04135::t_26b9a49802c1ba 1-152
+packages/im/workroom/src/workroom/file-human-ingress-application.ts
+  s_99b3f2eaf04135::t_8a622657e9ef52 1-215
+packages/im/workroom/src/workroom/file-human-ingress.ts
+  s_99b3f2eaf04135::t_2b1bb0474a34d7 1-307
+packages/im/workroom/src/workroom/file-interaction-space-binding-repository.ts
+  s_99b3f2eaf04135::t_e1e5dc99560c9e 1-366
+packages/im/workroom/src/workroom/file-profile-journal.ts
+  s_99b3f2eaf04135::t_5c0504ad727ab1 1-394
+packages/im/workroom/src/workroom/git-workspace-gateway.ts
+  s_99b3f2eaf04135::t_322121c4153e43 1-411
+packages/im/workroom/src/workroom/github-workspace-transport.ts
+  s_99b3f2eaf04135::t_cf228db767fffd 1-225
+packages/im/workroom/src/workroom/governed-dispatch-reasons.ts
+  s_99b3f2eaf04135::t_e1e1de4eefc695 1-40
+packages/im/workroom/src/workroom/human-ingress-application.ts
+  s_99b3f2eaf04135::t_2178ba0e3f37f6 1-593
+packages/im/workroom/src/workroom/human-ingress-orchestrator.ts
+  s_99b3f2eaf04135::t_3a00d31a78170d 1-367
+packages/im/workroom/src/workroom/human-ingress-source-reader.ts
+  s_99b3f2eaf04135::t_5ffd493b79e11b 1-163
+packages/im/workroom/src/workroom/human-ingress.ts
+  s_99b3f2eaf04135::t_b276a7d8b557d5 1-778
+packages/im/workroom/src/workroom/interaction-space-binding-service.ts
+  s_99b3f2eaf04135::t_559a37264b3223 1-279
+packages/im/workroom/src/workroom/interaction-space-router.ts
+  s_99b3f2eaf04135::t_8c3882c7891191 1-337
+packages/im/workroom/src/workroom/journal-model.ts
+  s_99b3f2eaf04135::t_f453206e7220fb 1-11
+packages/im/workroom/src/workroom/journal/activatable-journal.ts
+  s_99b3f2eaf04135::t_617432d40dde9a 1-54
+packages/im/workroom/src/workroom/journal/contracts.ts
+  s_99b3f2eaf04135::t_a7ecdbda9ad1ed 1-174
+packages/im/workroom/src/workroom/journal/database-journal.ts
+  s_99b3f2eaf04135::t_2063bbbf6f2ad1 1-187
+packages/im/workroom/src/workroom/journal/event-codec.ts
+  s_99b3f2eaf04135::t_a711c6d58c8ff2 1-298
+packages/im/workroom/src/workroom/journal/event-validation.ts
+  s_99b3f2eaf04135::t_ddb2f63b0dfc09 1-633
+packages/im/workroom/src/workroom/journal/file-journal.ts
+  s_99b3f2eaf04135::t_c10a50773ed17f 1-334
+packages/im/workroom/src/workroom/journal/index.ts
+  s_99b3f2eaf04135::t_26a444daf205f5 1-23
+packages/im/workroom/src/workroom/journal/memory-journal.ts
+  s_99b3f2eaf04135::t_dc2c392a09a974 1-145
+packages/im/workroom/src/workroom/journal/payload-governance.ts
+  s_99b3f2eaf04135::t_8eef1dcc2550c2 1-372
+packages/im/workroom/src/workroom/journal/payload-reference.ts
+  s_99b3f2eaf04135::t_d006df69906eef 1-67
+packages/im/workroom/src/workroom/journal/stored-event-projection.ts
+  s_99b3f2eaf04135::t_43bd44356f212c 1-307
+packages/im/workroom/src/workroom/kernel-contracts.ts
+  s_99b3f2eaf04135::t_e11c30db0e681f 1-231
+packages/im/workroom/src/workroom/kernel-state.ts
+  s_99b3f2eaf04135::t_fc9a6a2ff8c96a 1-951
+packages/im/workroom/src/workroom/legacy-embedded-payload-migration.ts
+  s_99b3f2eaf04135::t_b540754cd31a72 1-427
+packages/im/workroom/src/workroom/legacy-run-offline-migration.ts
+  s_99b3f2eaf04135::t_c09343c6933c95 1-636
+packages/im/workroom/src/workroom/local-assignment-issuance.ts
+  s_99b3f2eaf04135::t_9245a581053eeb 1-217
+packages/im/workroom/src/workroom/plan-approval-control.ts
+  s_99b3f2eaf04135::t_3368a4ca3aae2f 1-60
+packages/im/workroom/src/workroom/plan-revision.ts
+  s_99b3f2eaf04135::t_c12c8a29640b4c 1-200
+packages/im/workroom/src/workroom/profile-compiler.ts
+  s_99b3f2eaf04135::t_5b08f7116bf230 1-573
+packages/im/workroom/src/workroom/profile-registry.ts
+  s_99b3f2eaf04135::t_ad1d42aedf8e9a 1-981
+packages/im/workroom/src/workroom/project-knowledge-registry.ts
+  s_99b3f2eaf04135::t_06295840e52f03 1-522
+packages/im/workroom/src/workroom/projection-outbox/contracts.ts
+  s_99b3f2eaf04135::t_93b0983942d2e8 1-234
+packages/im/workroom/src/workroom/projection-outbox/delivery-worker.ts
+  s_99b3f2eaf04135::t_d4d6db236be220 1-130
+packages/im/workroom/src/workroom/projection-outbox/file-repository.ts
+  s_99b3f2eaf04135::t_1745c2136317d8 1-137
+packages/im/workroom/src/workroom/projection-outbox/index.ts
+  s_99b3f2eaf04135::t_d2ac836d322631 1-17
+packages/im/workroom/src/workroom/projection-outbox/memory-repository.ts
+  s_99b3f2eaf04135::t_3e6fb65732f76e 1-70
+packages/im/workroom/src/workroom/projection-outbox/projector.ts
+  s_99b3f2eaf04135::t_6930bed659b21a 1-657
+packages/im/workroom/src/workroom/projection-outbox/repository-state.ts
+  s_99b3f2eaf04135::t_f8826af558be14 1-419
+packages/im/workroom/src/workroom/projection-outbox/tracer.ts
+  s_99b3f2eaf04135::t_3f640e7f8c80b4 1-250
+packages/im/workroom/src/workroom/remote-assignment-dispatch-command.ts
+  s_99b3f2eaf04135::t_019a963056525e 1-103
+packages/im/workroom/src/workroom/remote-assignment-issuance.ts
+  s_99b3f2eaf04135::t_a5f0d767cfbf7c 1-331
+packages/im/workroom/src/workroom/remote-callback-application.ts
+  s_99b3f2eaf04135::t_1267eb961838fc 1-820
+packages/im/workroom/src/workroom/remote-callback-gateway.ts
+  s_99b3f2eaf04135::t_22a53f13e1790f 1-263
+packages/im/workroom/src/workroom/remote-callback-inbox.ts
+  s_99b3f2eaf04135::t_04d2d5d7b10936 1-1475
+packages/im/workroom/src/workroom/remote-callback-reconciliation-worker.ts
+  s_99b3f2eaf04135::t_df07d76b4a269b 1-303
+packages/im/workroom/src/workroom/remote-dispatch-admission.ts
+  s_99b3f2eaf04135::t_deeb719d6dbf93 1-269
+packages/im/workroom/src/workroom/remote-dispatch-outbox.ts
+  s_99b3f2eaf04135::t_798f1ccd113207 1-1087
+packages/im/workroom/src/workroom/remote-dispatch-scheduler.ts
+  s_99b3f2eaf04135::t_c1f37e0b4fd6f1 1-166
+packages/im/workroom/src/workroom/remote-dispatch-worker.ts
+  s_99b3f2eaf04135::t_49df5918883226 1-162
+packages/im/workroom/src/workroom/remote-dispatch.ts
+  s_99b3f2eaf04135::t_d9a5cccf4dc59f 1-308
+packages/im/workroom/src/workroom/remote-executor.ts
+  s_99b3f2eaf04135::t_701ca423b6f69e 1-43
+packages/im/workroom/src/workroom/role-capability-snapshot.ts
+  s_99b3f2eaf04135::t_aec86dca44c123 1-675
+packages/im/workroom/src/workroom/runtime.ts
+  s_99b3f2eaf04135::t_b814d5450311c7 1-748
+packages/im/workroom/src/workroom/scheduler-priority-control.ts
+  s_99b3f2eaf04135::t_b57521cdab3d0a 1-41
+packages/im/workroom/src/workroom/software-delivery-plan.ts
+  s_99b3f2eaf04135::t_0a12ba6da93e15 1-76
+packages/im/workroom/src/workroom/validate-catalog.ts
+  s_99b3f2eaf04135::t_4ade105a81b028 1-233
+packages/im/workroom/src/workroom/workflow-plan-builder.ts
+  s_99b3f2eaf04135::t_eecbd9dae4d94f 1-333
+packages/im/workroom/src/workroom/workroom-assignment-knowledge-context.ts
+  s_99b3f2eaf04135::t_951aa2282aea82 1-216
+packages/im/workroom/src/workroom/workroom-kernel.ts
+  s_99b3f2eaf04135::t_aadcc4b41d10a8 1-1857
+packages/im/workroom/src/workroom/workroom-preemption.ts
+  s_99b3f2eaf04135::t_bb7e80b6a2f848 1-279
+packages/im/workroom/src/workroom/workroom-run-control.ts
+  s_99b3f2eaf04135::t_4f9fe7090b43e8 1-232
+packages/im/workroom/src/workroom/workroom-scheduler-application.ts
+  s_99b3f2eaf04135::t_66301f3195febf 1-117
+packages/im/workroom/src/workroom/workroom-scheduler.ts
+  s_99b3f2eaf04135::t_7cbd0a1e47944c 1-824
+packages/im/workroom/src/workroom/workroom-task-report-store.ts
+  s_99b3f2eaf04135::t_56b7e7da37d14f 1-768
+packages/im/workroom/tests/portfolio/capacity-control-outbox-fixture.ts
+  s_19275fe2d72d97::t_b196f77da79f68 1-46
+packages/im/workroom/tests/portfolio/capacity-control-outbox.test.ts
+  s_19275fe2d72d97::t_ada7fbdc516e79 9
+packages/im/workroom/tests/workroom/remote-disclosure-fixture.ts
+  s_19275fe2d72d97::t_ae318d8e10cd9e 1-73
+packages/im/workroom/tsconfig.json
+  s_19275fe2d72d97::t_876fe119233a50 1-10
+pnpm-lock.yaml
+  s_19275fe2d72d97::t_b7b1dff07b514e 1283-1285,1799-1814
+scripts/check-adapter-endpoint-boundaries.mjs
+  s_19275fe2d72d97::t_db3b0ab4cc29f3 113
+scripts/check-architecture-layers.mjs
+  s_19275fe2d72d97::t_3691691261fb31 69-71,121,289-306,394-396,402-403,439,441
+scripts/check-domain-module-boundaries.mjs
+  s_19275fe2d72d97::t_40b4c1b40f63ab 11,15-23
+scripts/check-im-send-bypass.mjs
+  s_19275fe2d72d97::t_bdd9f20e1d131e 16
+scripts/check-im-session-ssot.mjs
+  s_19275fe2d72d97::t_33cadeb2d9ae19 19
+scripts/check-llm-runtime-boundaries.mjs
+  s_19275fe2d72d97::t_f6718aba5ba7f4 11
+scripts/check-production-config.js
+  s_19275fe2d72d97::t_2372ff22fc854a 55
+scripts/check-speech-runtime-boundaries.mjs
+  s_19275fe2d72d97::t_2b29cc4aea7d6c 14
+scripts/check-workroom-ssot.mjs
+  s_19275fe2d72d97::t_ece52c4249ae98 38,79,95,118-120,122-128,136,138
+scripts/run-l4-check.mjs
+  s_19275fe2d72d97::t_7c8c33f536dae1 19-20
+scripts/run-l4-ci-check.mjs
+  s_19275fe2d72d97::t_8cbab27a3f24ca 20-21
+tsconfig.typecheck.json
+  s_19275fe2d72d97::t_efc23ade0ac848 161-166
+tsconfig.typedoc.json
+  s_19275fe2d72d97::t_09d0fa6609cc51 65-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5fd1efa5fa35ac7affe972331a2c195c5e7efff0",
+  "prompts": {},
+  "sessions": {
+    "s_19275fe2d72d97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7fe3370b-af33-4233-87b5-7d12fe2a0044",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_481b32855cdf2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f50e6f97-94be-4f20-948b-bd9478e8f839",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_99b3f2eaf04135": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bdf2548b-703f-42e3-bb9c-56b34bffa7e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

@@ -1,0 +1,57 @@
+docs/plans/workroom-group-collaboration-progress.md
+  s_481b32855cdf2b::t_46bb4bc8f05ef6 38-40,107-111,122
+packages/im/agent/src/data-governance/canonical-value.ts
+  s_481b32855cdf2b::t_e1523fe73cb511 1-32
+packages/im/agent/src/data-governance/data-governance.ts
+  s_481b32855cdf2b::t_167a7c8e822c34 2
+packages/im/agent/src/data-governance/database-payload-lifecycle-repository.ts
+  s_481b32855cdf2b::t_17d0eca68771ef 6
+packages/im/agent/src/data-governance/disclosure-manifest.ts
+  s_481b32855cdf2b::t_d1f79f5efac7a0 21
+packages/im/agent/src/data-governance/durable-file-store.ts
+  s_481b32855cdf2b::t_8cf4050c641d28 1-163
+packages/im/agent/src/data-governance/encrypted-database-payload-vault.ts
+  s_481b32855cdf2b::t_38316ab6d45279 5
+packages/im/agent/src/data-governance/encrypted-file-payload-vault.ts
+  s_481b32855cdf2b::t_1eccceb0e7eb0f 24-25
+packages/im/agent/src/data-governance/file-payload-lifecycle-repository.ts
+  s_481b32855cdf2b::t_3ec359417d3c7a 8,13
+packages/im/agent/src/data-governance/governance-authority-repository.ts
+  s_481b32855cdf2b::t_5069f55220b948 25-26
+packages/im/agent/src/data-governance/governed-payload-write-saga.ts
+  s_481b32855cdf2b::t_b7c322be0ce4a3 8-9
+packages/im/agent/src/data-governance/payload-hold-overdue-projection.ts
+  s_481b32855cdf2b::t_e212f0b90c8565 10
+packages/im/agent/src/data-governance/payload-lifecycle.ts
+  s_481b32855cdf2b::t_230f2a6e65985a 7
+packages/im/agent/src/data-governance/payload-vault-storage-handoff.ts
+  s_481b32855cdf2b::t_fe58b7b71ecfde 11
+packages/im/agent/src/workroom/canonical-value.ts
+  s_481b32855cdf2b::t_ea7e437bcf339a 1
+packages/im/agent/src/workroom/durable-file-store.ts
+  s_481b32855cdf2b::t_02b29f843811af 1
+packages/im/agent/tests/data-governance/shim-identity.test.ts
+  s_481b32855cdf2b::t_de72a84d8395ee 1-16
+scripts/check-architecture-layers.mjs
+  s_481b32855cdf2b::t_528c70be07b145 13,415-444
+scripts/check-architecture-layers.test.ts
+  s_481b32855cdf2b::t_fa9e46ba788bd9 1,104-129
+scripts/lib/find-forbidden-imports.mjs
+  s_481b32855cdf2b::t_939e18fa5f7bab 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4bbdf33882bafc61891feac004150de989c0932d",
+  "prompts": {},
+  "sessions": {
+    "s_481b32855cdf2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f50e6f97-94be-4f20-948b-bd9478e8f839",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

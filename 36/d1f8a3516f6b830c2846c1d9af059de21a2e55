@@ -1,0 +1,33 @@
+.changeset/remove-legacy-migration-tools.md
+  s_95fad6ad5888ed::t_3bafa47915bd10 7-8
+docs/contributing/legacy-concepts.md
+  s_95fad6ad5888ed::t_061ab3b6d7c330 78
+docs/en/contributing/legacy-concepts.md
+  s_95fad6ad5888ed::t_e8bea98301b875 78
+docs/plans/workroom-group-collaboration-progress.md
+  s_95fad6ad5888ed::t_a960abdf6b78c6 118-119,374-379,422
+packages/im/workroom/src/workroom/journal/legacy-payload-guard.ts
+  s_95fad6ad5888ed::t_2672e99a5cb319 24-27,31,33-36
+packages/im/workroom/src/workroom/projection-outbox/projector.ts
+  s_95fad6ad5888ed::t_322008dc5af979 563
+packages/im/workroom/tests/workroom-runtime/projection-outbox.test.ts
+  s_95fad6ad5888ed::t_d3a42401713e46 392-395
+packages/im/workroom/tests/workroom/legacy-payload-guard.test.ts
+  s_95fad6ad5888ed::t_087e4d95e6db08 44-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "36d1f8a3516f6b830c2846c1d9af059de21a2e55",
+  "prompts": {},
+  "sessions": {
+    "s_95fad6ad5888ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d623a4c-bfdc-449c-902b-15089adf8d59",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+.changeset/workroom-remote-subpath.md
+  s_a7e33dd75d134f::t_f2ebebd70b9daa 1-7
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_a7e33dd75d134f::t_a674987cec6d17 10,17,150-160
+basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts
+  s_a7e33dd75d134f::t_22624cbc5d5652 24-27
+basic/cli/src/plugin-runtime/workroom/runtime-foundation.ts
+  s_a7e33dd75d134f::t_c314457c6688b7 28-31
+basic/cli/src/utils/optional-workroom.ts
+  s_a7e33dd75d134f::t_39926ba476bbab 38-56
+basic/cli/tests/plugin-runtime/protocol-host-installer.test.ts
+  s_a7e33dd75d134f::t_25185f3de82497 16-21,29
+docs/configuration/index.md
+  s_a7e33dd75d134f::t_0bff5a7f147c5e 238
+docs/contributing/public-api-surface.md
+  s_a7e33dd75d134f::t_20e4173d8a4b93 118
+docs/en/configuration/index.md
+  s_a7e33dd75d134f::t_c90b43726d46bf 243
+docs/en/contributing/public-api-surface.md
+  s_a7e33dd75d134f::t_d710e1c1421f6e 113
+docs/plans/workroom-group-collaboration-progress.md
+  s_a7e33dd75d134f::t_ed3ea93c789536 120-127,387-392,436
+packages/host/a2a/README.md
+  s_a7e33dd75d134f::t_51185034a480a5 46-51
+packages/host/a2a/src/workroom-callback-runtime.ts
+  s_a7e33dd75d134f::t_2cd90abc919acd 9
+packages/host/a2a/src/workroom-remote-transport.ts
+  s_a7e33dd75d134f::t_d7dead1e5e85b5 7-9
+packages/host/a2a/tests/workroom-remote-transport.test.ts
+  s_a7e33dd75d134f::t_d7cdfc5ee09c08 7
+packages/im/agent/CONTEXT.md
+  s_a7e33dd75d134f::t_fb8400dcdaea06 126
+packages/im/workroom/README.md
+  s_a7e33dd75d134f::t_bd1b6098e4e778 14-16
+packages/im/workroom/package.json
+  s_a7e33dd75d134f::t_50a72fab0d7555 13-17
+packages/im/workroom/src/remote.ts
+  s_a7e33dd75d134f::t_e4272f31421fb8 1-22
+packages/im/workroom/tests/workroom-runtime/public-surface.test.ts
+  s_a7e33dd75d134f::t_2687447ad4febe 3,22-28
+packages/im/workroom/tests/workroom/remote-event-fail-closed.test.ts
+  s_a7e33dd75d134f::t_3e53d3cd61d5ff 1-26
+tsconfig.typecheck.json
+  s_a7e33dd75d134f::t_9c52c416dc9738 164-166
+tsconfig.typedoc.json
+  s_a7e33dd75d134f::t_cd7ad2638e6d9f 68-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "57b3d36334dbdb2206e4040f753e028f88c18647",
+  "prompts": {},
+  "sessions": {
+    "s_a7e33dd75d134f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac1669fd-f923-4a01-a213-7e4fd5af005c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

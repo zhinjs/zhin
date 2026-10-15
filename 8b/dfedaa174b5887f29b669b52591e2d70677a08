@@ -1,0 +1,77 @@
+.changeset/add-workroom-package.md
+  s_2ebbb5e3caac4a::t_b1c3a6b9a09aee 6
+.changeset/workroom-boundary-hardening.md
+  s_2ebbb5e3caac4a::t_14d30e93e288ab 1-11
+basic/cli/tests/plugin-runtime/protocol-host-installer-a2a-workroom.test.ts
+  s_2ebbb5e3caac4a::t_ba880f3c329762 1-75
+basic/cli/tests/plugin-runtime/workroom/acceptance-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_6b4a973150cd62 1
+basic/cli/tests/plugin-runtime/workroom/assignment-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_fbc322cc0efe71 1
+basic/cli/tests/plugin-runtime/workroom/data-governance-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_ac4379b7500e97 1,8
+basic/cli/tests/plugin-runtime/workroom/effect-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_af668507d2c9a0 1
+basic/cli/tests/plugin-runtime/workroom/execution-control-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_e3b89ead2f2d78 1
+basic/cli/tests/plugin-runtime/workroom/execution-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_eb408b5ddefe62 1
+basic/cli/tests/plugin-runtime/workroom/host-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_316bacf6508bc8 4
+basic/cli/tests/plugin-runtime/workroom/human-ingress-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_7b0bae3c2e6583 1
+basic/cli/tests/plugin-runtime/workroom/human-ingress-route.test.ts
+  s_2ebbb5e3caac4a::t_48ee87bbbbc4a3 1
+basic/cli/tests/plugin-runtime/workroom/knowledge-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_a7357e8dea3f9e 1
+basic/cli/tests/plugin-runtime/workroom/local-data-governance.test.ts
+  s_2ebbb5e3caac4a::t_a89a82134ea90f 7
+basic/cli/tests/plugin-runtime/workroom/local-portfolio.test.ts
+  s_2ebbb5e3caac4a::t_e8f8cdb85de081 1
+basic/cli/tests/plugin-runtime/workroom/module-boundary.test.ts
+  s_2ebbb5e3caac4a::t_c82a6b625e8c29 26-62
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_21fd8f2704b3ad 1
+basic/cli/tests/plugin-runtime/workroom/planning-bootstrap.test.ts
+  s_2ebbb5e3caac4a::t_e769a22c7d50b8 1
+basic/cli/tests/plugin-runtime/workroom/planning-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_91535995589936 1
+basic/cli/tests/plugin-runtime/workroom/portfolio-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_c409155896c6dc 1
+basic/cli/tests/plugin-runtime/workroom/profile-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_dccf4df8660ba1 1
+basic/cli/tests/plugin-runtime/workroom/projection-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_c3248b9f98127b 1
+basic/cli/tests/plugin-runtime/workroom/projection.test.ts
+  s_2ebbb5e3caac4a::t_17f12f37362a88 1
+basic/cli/tests/plugin-runtime/workroom/publication.test.ts
+  s_2ebbb5e3caac4a::t_5f3ec5841b914a 4
+basic/cli/tests/plugin-runtime/workroom/runtime-foundation.test.ts
+  s_2ebbb5e3caac4a::t_abc516abe03ee2 7
+docs/plans/workroom-group-collaboration-progress.md
+  s_2ebbb5e3caac4a::t_10850f969b5414 54-55,165-172,191
+packages/im/workroom/README.md
+  s_2ebbb5e3caac4a::t_5740606ca8a01b 14-17
+scripts/check-architecture-layers.mjs
+  s_2ebbb5e3caac4a::t_383c35fab4add3 14-15,326,506
+scripts/check-architecture-layers.test.ts
+  s_2ebbb5e3caac4a::t_fe5784f7d3c254 1-8,223-295
+scripts/lib/agent-workroom-boundary.mjs
+  s_2ebbb5e3caac4a::t_494e85ffd66a05 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8bdfedaa174b5887f29b669b52591e2d70677a08",
+  "prompts": {},
+  "sessions": {
+    "s_2ebbb5e3caac4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ea2d93-d1b0-4f9c-94d6-f3e31febe303",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
