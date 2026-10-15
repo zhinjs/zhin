@@ -9,7 +9,13 @@ export interface CaseRunResult {
   readonly toolCalls: number;
   /** Provider error or budget stop, when the run produced no observation. */
   readonly error?: string;
+  /** Not run (budget exhausted, or the model lacks a needed input); excluded from the pass rate. */
   readonly skipped?: boolean;
+  /**
+   * The provider stayed 503 UNAVAILABLE after its retry (rate-limit.ts): an infra
+   * failure, not a model one. Excluded from the pass rate, counted in `report.infra`.
+   */
+  readonly unavailable?: boolean;
 }
 
 export interface CaseSummary {
@@ -18,7 +24,11 @@ export interface CaseSummary {
   readonly runs: number;
   readonly passed: number;
   readonly skipped: number;
-  /** passed / (runs − skipped); null when every run was skipped. */
+  /** Of `skipped`, the runs skipped because the request/token budget ran out. */
+  readonly budgetSkipped?: number;
+  /** Runs that were provider-unavailable (503 after retry); not part of the pass rate. */
+  readonly unavailable?: number;
+  /** passed / (runs − skipped − unavailable); null when no run produced a verdict. */
   readonly passRate: number | null;
   readonly avgTokens: number;
   readonly avgToolCalls: number;
@@ -41,26 +51,52 @@ export interface NightlyReport {
   /** Set when the run had to stop early and must fail (the free-tier daily quota ran out). */
   readonly fatal?: string;
   /** Client-side pacing (see rate-limit.ts): spacing, real requests sent, 429 retries. */
-  readonly pacing?: Readonly<{ minIntervalMs: number; requests: number; retries: number; gaveUp: number }>;
+  readonly pacing?: Readonly<{ minIntervalMs: number; requests: number; retries: number; gaveUp: number; unavailable503?: number; providerUnavailable?: number }>;
+  /**
+   * Provider health. `flaky` when most attempted (non-skipped) runs were
+   * provider-unavailable: the pass rates then say nothing about model quality, and
+   * the nightly job fails as infra-flaky (see nightly.run.ts) instead of reporting
+   * regressions or becoming the next night's baseline.
+   */
+  readonly infra?: Readonly<{ attempted: number; providerUnavailable: number; flaky: boolean }>;
   readonly models: readonly ModelSummary[];
 }
+
+/** Infra-flaky: more than half of the runs that were attempted ended provider-unavailable. */
+export function infraHealth(models: readonly ModelSummary[]): { attempted: number; providerUnavailable: number; flaky: boolean } {
+  let attempted = 0;
+  let providerUnavailable = 0;
+  for (const model of models) {
+    for (const c of model.cases) {
+      attempted += c.runs - c.skipped;
+      providerUnavailable += c.unavailable ?? 0;
+    }
+  }
+  return { attempted, providerUnavailable, flaky: attempted > 0 && providerUnavailable * 2 > attempted };
+}
+
+const BUDGET_SKIP = /budget/i;
 
 function average(values: readonly number[]): number {
   return values.length === 0 ? 0 : Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10;
 }
 
 export function summarizeCase(id: string, capability: Capability, results: readonly CaseRunResult[]): CaseSummary {
-  const counted = results.filter((result) => !result.skipped);
+  const counted = results.filter((result) => !result.skipped && !result.unavailable);
+  const skipped = results.filter((result) => result.skipped);
+  const unavailable = results.filter((result) => !result.skipped && result.unavailable).length;
   const passed = counted.filter((result) => result.pass).length;
-  const failures = counted
-    .filter((result) => !result.pass)
+  const failures = results
+    .filter((result) => !result.skipped && !result.pass)
     .map((result) => result.error ?? result.checks.filter((c) => !c.pass).map((c) => `${c.name}: ${c.detail ?? ''}`).join('; '));
   return {
     id,
     capability,
     runs: results.length,
     passed,
-    skipped: results.length - counted.length,
+    skipped: skipped.length,
+    budgetSkipped: skipped.filter((result) => BUDGET_SKIP.test(result.error ?? '')).length,
+    unavailable,
     passRate: counted.length === 0 ? null : Math.round((passed / counted.length) * 1000) / 1000,
     avgTokens: average(counted.map((result) => result.totalTokens)),
     avgToolCalls: average(counted.map((result) => result.toolCalls)),
@@ -117,20 +153,43 @@ export function renderMarkdown(report: NightlyReport, diffs: readonly CaseDiff[]
     '',
     `Provider: ${report.provider} · requests ${report.budget.requests}/${report.budget.maxRequests} · tokens ${report.budget.totalTokens}/${report.budget.maxTotalTokens}${report.stoppedByBudget ? ' · **stopped by budget**' : ''}`,
     ...(report.pacing ? [`Pacing: ≥${report.pacing.minIntervalMs / 1000}s between requests · ${report.pacing.requests} sent · ${report.pacing.retries} 429 retries · ${report.pacing.gaveUp} gave up`] : []),
+    ...(report.pacing?.unavailable503 ? [`503 UNAVAILABLE: ${report.pacing.unavailable503} answers · ${report.pacing.providerUnavailable ?? 0} requests still 503 after retry`] : []),
     ...(report.fatal ? ['', `**Run failed:** ${report.fatal}`] : []),
+    ...(report.infra?.flaky ? ['', `**Infra-flaky:** ${report.infra.providerUnavailable} of ${report.infra.attempted} attempted runs were provider-unavailable (503). Pass rates and regressions below are not a quality signal; the job fails as infra-flaky.`] : []),
+    ...budgetSkipLines(report),
     '',
-    '| Model | Case | Capability | Pass rate | Δ | Avg tokens | Avg tool calls |',
-    '|---|---|---|---|---|---|---|',
+    '| Model | Case | Capability | Pass rate | Δ | Not counted | Avg tokens | Avg tool calls |',
+    '|---|---|---|---|---|---|---|---|',
   ];
   const byKey = new Map(diffs.map((d) => [`${d.model}\u0000${d.id}`, d]));
   for (const model of report.models) {
     for (const c of model.cases) {
       const diff = byKey.get(`${model.model}\u0000${c.id}`);
       const delta = diff?.status === 'new' ? 'new' : diff?.delta == null ? '—' : `${diff.delta > 0 ? '+' : ''}${Math.round(diff.delta * 100)}%${diff.status === 'regressed' ? ' ⚠️' : ''}`;
-      lines.push(`| ${model.model} | ${c.id} | ${c.capability} | ${pct(c.passRate)} (${c.passed}/${c.runs - c.skipped}) | ${delta} | ${c.avgTokens} | ${c.avgToolCalls} |`);
+      lines.push(`| ${model.model} | ${c.id} | ${c.capability} | ${pct(c.passRate)} (${c.passed}/${c.runs - c.skipped - (c.unavailable ?? 0)}) | ${delta} | ${notCounted(c)} | ${c.avgTokens} | ${c.avgToolCalls} |`);
     }
   }
   const regressions = diffs.filter((d) => d.status === 'regressed');
-  lines.push('', regressions.length ? `**Regressions:** ${regressions.map((d) => `${d.model}/${d.id}`).join(', ')}` : 'No regressions against the previous report.');
+  const label = report.infra?.flaky ? '**Regressions (untrusted, infra-flaky run):**' : '**Regressions:**';
+  lines.push('', regressions.length ? `${label} ${regressions.map((d) => `${d.model}/${d.id}`).join(', ')}` : 'No regressions against the previous report.');
   return lines.join('\n');
+}
+
+function notCounted(c: CaseSummary): string {
+  const budget = c.budgetSkipped ?? 0;
+  const parts = [
+    ...(budget ? [`${budget} budget-skipped`] : []),
+    ...(c.skipped - budget ? [`${c.skipped - budget} skipped`] : []),
+    ...(c.unavailable ? [`${c.unavailable} provider-unavailable`] : []),
+  ];
+  return parts.join(', ') || '—';
+}
+
+function budgetSkipLines(report: NightlyReport): string[] {
+  const skipped = report.models.flatMap((model) => model.cases
+    .filter((c) => (c.budgetSkipped ?? 0) > 0)
+    .map((c) => `${model.model}/${c.id} (${c.budgetSkipped}/${c.runs})`));
+  if (skipped.length === 0) return [];
+  const total = report.models.reduce((sum, model) => sum + model.cases.reduce((n, c) => n + (c.budgetSkipped ?? 0), 0), 0);
+  return ['', `**Budget-skipped:** ${total} runs not run because the budget (requests ${report.budget.requests}/${report.budget.maxRequests}) ran out: ${skipped.join(', ')}`];
 }
