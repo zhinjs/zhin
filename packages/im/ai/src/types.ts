@@ -69,17 +69,28 @@ export interface ProviderCapabilities {
 export interface ProviderConfig {
   apiKey?: string;
   /**
-   * Authorization 头前缀。默认 `'Bearer '`；设为 `''` 时仅用 apiKey 作为值（部分 API 要求 `Authorization: <key>`）。
+   * Authorization 头方案。不写时用各 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）；
+   * 设为 `''` 时 `Authorization: <key>`；设为 `'Bearer'` / `'Token'` 等时 `Authorization: <scheme> <key>`（结尾空格可有可无）。
    */
   authScheme?: string;
   baseUrl?: string;
   defaultModel?: string;
   models?: string[];
+  /** 单次请求超时（ms），覆盖 `ai.providerResilience.requestTimeoutMs`；模型 harness 的 `requestTimeoutMs` 优先。0 关闭。 */
   timeout?: number;
+  /** 每个模型的重试次数，覆盖 `ai.providerResilience.maxRetries`。 */
   maxRetries?: number;
+  /** 流式请求首个 chunk 超时（ms，含等待响应头），默认关闭；超时按 timeout 重试 / 切换备用模型。 */
+  firstChunkTimeoutMs?: number;
+  /** 流式请求两个 chunk 之间的静默超时（ms），默认关闭。 */
+  chunkTimeoutMs?: number;
   headers?: Record<string, string>;
   /** 上下文窗口大小（token 数），各 Provider 映射到自身参数 */
   contextWindow?: number;
+  /** 每次请求的输出 token 上限，默认 8192；Gemini/Claude 的思考 token 也计入 */
+  maxOutputTokens?: number;
+  /** 思考深度：`off` | `low` | `medium` | `high`；不填用 provider 默认；`providerOptions` 里的思考设置优先 */
+  thinkingLevel?: import('./llm/types/agent-event.js').ThinkingLevel;
   /** Provider 能力声明 */
   capabilities?: ProviderCapabilities;
   /** Explicit model input modalities. Prefer this over inferred provider identity. */
@@ -98,10 +109,21 @@ export interface ProviderConfig {
 
 /** 纯文本补全选项（摘要 / 判定等轻量场景）。 */
 export interface TextCompleteOptions {
-  /** 缺省用 provider.models[0]。 */
+  /** 缺省用 provider 配置的 `defaultModel`，否则 provider.models[0]。 */
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** 调用方取消信号；中止后不再重试 / fallback，直接抛出。 */
+  signal?: AbortSignal;
+  /**
+   * 单次请求超时（ms），覆盖 `resilience.requestTimeoutMs`。
+   * 缺省与主对话路径一致（180s）；`0` 关闭超时。
+   */
+  timeoutMs?: number;
+  /** 主模型重试耗尽后依次尝试的同 provider 模型 id。 */
+  fallbackModels?: readonly string[];
+  /** 重试 / 退避 / 超时 / fallback 配置，与主对话路径的 `providerResilience` 同形。 */
+  resilience?: import('./llm/provider-resilience.js').ProviderResilienceConfig;
 }
 
 /**

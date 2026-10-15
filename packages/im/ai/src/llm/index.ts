@@ -3,8 +3,10 @@ export type {
   MediaContentBlock,
   MediaBlockRef,
   AnthropicThinkingProviderOptions,
+  ThinkingProviderOptions,
   ThinkingContentBlock,
   ToolCallContentBlock,
+  ToolCallInputError,
   ContentBlock,
   UserContentBlock,
   ToolResultContentBlock,
@@ -68,6 +70,7 @@ export {
   LlmApiRuntime,
   createLlmTransportModel,
   defaultModelInput,
+  resolveProviderConfigResilience,
   createAssistantMessageEventStream,
 } from './llm-api-runtime.js';
 export {
@@ -117,6 +120,8 @@ export type {
   ProviderTimers,
   ResilientCompletionOptions,
 } from './provider-resilience.js';
+export { finishFailureKind, resolveFinish } from './bridge/finish-reason.js';
+export type { FinishFailureKind, FinishInput, FinishOutcome } from './bridge/finish-reason.js';
 export { isTieredParallelTool, TIERED_PARALLEL_TOOL_NAMES } from './tiered-tool-buckets.js';
 export type {
   AgentLoopConfig,
@@ -127,7 +132,7 @@ export type {
   ToolExecutionCause,
 } from './agent-loop.js';
 
-export { assistantText } from './convert/openai-bridge.js';
+export { assistantText, assistantAnswerText, CompletionFailureError } from './convert/openai-bridge.js';
 
 export {
   createLlmApiRuntime,

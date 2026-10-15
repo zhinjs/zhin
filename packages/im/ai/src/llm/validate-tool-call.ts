@@ -23,10 +23,27 @@ function unknownToolMessage(tools: LlmTool[], name: string): string {
     : `Unknown tool: ${name}`;
 }
 
+/** Long enough to show the model where its JSON broke, short enough for a tool result. */
+const MAX_QUOTED_INPUT = 500;
+
+function quoteInput(raw: string): string {
+  return raw.length > MAX_QUOTED_INPUT ? `${raw.slice(0, MAX_QUOTED_INPUT)}… (truncated, ${raw.length} chars)` : raw;
+}
+
 export function validateToolCall(tools: LlmTool[], toolCall: ParsedToolCall): ParsedToolCall {
   const tool = tools.find((t) => t.name === toolCall.name);
   if (!tool) {
     throw new ToolCallValidationError(unknownToolMessage(tools, toolCall.name), toolCall.name);
+  }
+
+  if (toolCall.inputError) {
+    // Quote what the model sent: "missing field" errors against `{}` would only confuse it.
+    throw new ToolCallValidationError(
+      `Invalid arguments for tool ${toolCall.name}: not a valid JSON object (${toolCall.inputError.message}). `
+        + `Received: ${quoteInput(toolCall.inputError.raw)}. Call the tool again with a JSON object matching its schema.`,
+      toolCall.name,
+      toolCall.inputError,
+    );
   }
 
   const parsed = tool.parameters.safeParse(toolCall.arguments);

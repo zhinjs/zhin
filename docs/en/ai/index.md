@@ -91,6 +91,8 @@ export default defineAgentTool<{ city: string }>({
 });
 ```
 
+A tool's parameter schema reaches the model as written: `enum`, `anyOf`, nullable types, `integer`, `format` and value ranges are kept, for MCP tools too. Arguments the model sends back are checked against the same constraints, and a violation is reported to the model so it can call again. Gemini rejects fields without a type, so those go to Gemini as strings.
+
 Restricting tools, requiring confirmation, packaging procedures as Skills and adding business context are covered in [Agent tools and Skills](../authoring/agent-tools.md).
 
 ## Common adjustments
@@ -124,18 +126,35 @@ ai:
 
 | sdk | Install | Key settings |
 |-----|---------|--------------|
-| `openai` | `@ai-sdk/openai` | `apiKey`, optional `baseUrl` |
-| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey` (`/v1` appended automatically); Cloudflare Workers AI can use `accountId` instead of `baseUrl` |
+| `openai` | `@ai-sdk/openai` | `apiKey`, optional `baseUrl` (a proxy root gets `/v1`, same rule as `openai-compatible`) |
+| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey` (`/v1` appended when the path has no version, see `compat` below); Cloudflare Workers AI can use `accountId` instead of `baseUrl` |
 | `anthropic` | `@ai-sdk/anthropic` | `apiKey`, optional `baseUrl` (`/v1` appended) |
 | `deepseek` | `@ai-sdk/deepseek` | `apiKey`, optional `baseUrl` |
+| `minimax` | `@ai-sdk/minimax` | `apiKey`, optional `baseUrl` (default `https://api.minimax.io/anthropic/v1`; for the China site use `https://api.minimaxi.com/anthropic`, `/v1` is appended) |
 | `google` | `@ai-sdk/google` | `apiKey`, optional `baseUrl` (`/v1beta` appended) |
-| `ollama` | `@ai-sdk/openai-compatible` (via the OpenAI-compatible API) | `host` (default `http://127.0.0.1:11434`, `/v1` appended); no `apiKey` |
+| `ollama` | `@ai-sdk/openai-compatible` (via the OpenAI-compatible API) | `host` (default `http://127.0.0.1:11434`, `/v1` appended); no `apiKey`; set `contextWindow` (see below) |
 
 Optional fields:
 
 - `models`: the models allowed. When omitted, they are fetched from `/v1/models` after startup (last cache first, then refreshed in the background).
-- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name. The one exception is Gemini chat models on `sdk: google`, which are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models stay text-only.
-- `contextWindow`: context window size.
+- `input`: content types the model accepts, `text | image | audio | video | file`. When omitted, the default depends on the SDK and model name:
+  - Gemini chat models on `sdk: google` are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models are text-only.
+  - On `sdk: openai`, GPT-4o, GPT-4.1, GPT-4.5, GPT-5.x, o1, o3 and o4-mini default to `text, image`, and so does every Claude 3+ model on `sdk: anthropic`. The audio, realtime, TTS, search, embedding and image-generation variants, plus o1-mini and o3-mini, are text-only. PDFs and other files are off by default; set `input: [text, image, file]` to send them.
+  - Other SDKs (DeepSeek, MiniMax, Ollama, gateways) are text-only, because one vendor's models differ in what they accept.
+
+  An explicit `input` always wins.
+- `contextWindow`: context window size. When omitted, most providers assume 128k. `sdk: ollama` is the exception: zhin reads `OLLAMA_CONTEXT_LENGTH` (when zhin and Ollama share a machine) and otherwise assumes 4096. Ollama sizes the context by VRAM (4k below 24 GiB, 32k for 24–48 GiB, 256k above), its OpenAI-compatible API cannot raise it per request, and it **silently drops the start** of a longer prompt, system prompt included. So zhin errs low. Set `contextWindow` to the CONTEXT column of `ollama ps`. Startup prints a hint when it is missing.
+- `thinkingLevel`: reasoning depth, `off | low | medium | high`. When omitted, the provider default applies. zhin passes it to each SDK as the AI SDK `reasoning` option, and the SDK maps it to its own setting: Gemini 3 `thinkingLevel` (`off` becomes `minimal`), the Gemini 2.5 thinking budget, the Claude thinking budget, or OpenAI and DeepSeek reasoning effort. A thinking setting already in `providerOptions` (`thinkingConfig`, `thinking`, `reasoningEffort` or `effort`) wins. MiniMax always uses adaptive thinking and ignores it.
+- `maxOutputTokens`: output token cap per request, default `8192`. Gemini and Claude count thinking tokens against it, so raise it with `thinkingLevel: high` to keep replies from being cut off.
+- `compat` (`openai-compatible` / `ollama`):
+  - `includeUsage`: request streamed usage (`stream_options.include_usage`). Default `true`. Without it most compatible servers stream no token counts. Set `false` for a server that rejects the field.
+  - `appendV1`: whether `/v1` is appended to `baseUrl`. Unset: a path that already names a version (`/api/v3`, `/api/paas/v4`, `/v1beta/openai`) or ends in `/openai` is used as written; anything else gets `/v1`, so existing `https://host` and `https://host/api` configs behave as before. `true` always appends (the old behaviour), `false` never does.
+  - `promptCacheKey`: send OpenAI's `prompt_cache_key`. Default `false`, because strict gateways reject unknown fields.
+  - `supportsDeveloperRole` (`sdk: openai`): `false` sends the system prompt of reasoning models (o-series, gpt-5) with the `system` role, for OpenAI-protocol endpoints that reject `developer`.
+  - `supportsReasoningContent` and `toolCallsInAssistant` are deprecated and have no effect.
+- `authScheme`: the `Authorization` scheme. Unset uses the SDK default (`Bearer` for OpenAI-style SDKs, `x-api-key` for Anthropic, `x-goog-api-key` for Google). `''` sends `Authorization: <key>`; `Bearer`, `Token` and so on send `Authorization: <scheme> <key>`. Chat and model-list requests use the same rule.
+- `timeout`, `maxRetries`: this provider's per-request timeout (ms, 0 disables) and retries per model. They override `requestTimeoutMs` / `maxRetries` in `ai.providerResilience`; a per-model `modelHarness.requestTimeoutMs` still wins.
+- `firstChunkTimeoutMs`, `chunkTimeoutMs`: streaming stall timeouts (ms), off by default. The first bounds the wait for response headers and the first chunk; the second bounds silence between chunks. A stall counts as a timeout: it is retried, then fails over to a fallback model. This catches a connected-but-silent request well before `timeout`; a few tens of seconds is a good value.
 - `imageGeneration`: defaults for text-to-image.
 - `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
 
@@ -153,7 +172,20 @@ Optional fields:
             thinkingConfig: { thinkingLevel: low }
   ```
 
-  If Gemini refuses on safety grounds (SAFETY, RECITATION and so on), the user sees a refusal that names the reason instead of an empty reply. Gemini uses implicit caching: the system prompt and tool definitions stay unchanged, and cache hits are reported as `cacheRead` in usage and as `cache_read_tokens` in the turn trace. For a steadier discount, turn on explicit caching with `contextCache: { mode: explicit, ttlSeconds: 600 }`. zhin then creates a `cachedContents` entry for the system prompt and tool definitions and reuses it within the TTL. A changed prefix gets a new cache and the old one is deleted. If the server has dropped the cache, zhin resends the full request. If a cache can't be created (for example, the prefix is too short), it falls back to implicit caching. Cache storage is billed by the hour. Explicit caching works on Gemini 3 and 2.5 only; Gemini 4 Argon and later don't support it.
+  If Gemini refuses on safety grounds (SAFETY, PROHIBITED_CONTENT, RECITATION, a blocked prompt and so on), the user sees a polite refusal that names the reason instead of an empty reply. Such a refusal is neither retried nor sent to a fallback model: the same content gets the same verdict, and switching models to get past it would bypass your `safetySettings`. Gemini uses implicit caching: the system prompt and tool definitions stay unchanged, and cache hits are reported as `cacheRead` in usage and as `cache_read_tokens` in the turn trace. For a steadier discount, turn on explicit caching with `contextCache: { mode: explicit, ttlSeconds: 600 }`. zhin then creates a `cachedContents` entry for the system prompt and tool definitions and reuses it within the TTL. A changed prefix gets a new cache and the old one is deleted. If the server has dropped the cache, zhin resends the full request. If a cache can't be created (for example, the prefix is too short), it falls back to implicit caching. Cache storage is billed by the hour. Explicit caching works on Gemini 3 and 2.5 only; Gemini 4 Argon and later don't support it.
+
+- **Gemini through your own proxy**: if the proxy simply forwards requests (same requests, same `x-goog-api-key` auth, same responses; only the host differs), point `baseUrl` at it. Both the root and a URL ending in `/v1beta` work; a trailing `/` is dropped and `/v1beta` is never doubled. The default is `https://generativelanguage.googleapis.com`. `generateContent`, streaming `streamGenerateContent`, explicit-cache `cachedContents` (create and delete) and the model list all use this URL. If the proxy needs extra request headers, add the optional `headers`; they are sent on every request:
+
+  ```yaml
+  ai:
+    providers:
+      gemini:
+        sdk: google
+        apiKey: ${GEMINI_API_KEY}
+        baseUrl: https://gemini-proxy.example.com   # same as https://gemini-proxy.example.com/v1beta
+        headers:                                   # optional
+          x-proxy-tag: zhin
+  ```
 
 ### ai.agents
 

@@ -4,7 +4,7 @@
 
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, createResilientCompletionPort, isProviderFailureMessage, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -104,10 +104,16 @@ function createTurnCompletionPort(input: {
       logger.debug(formatCompact({ op: 'provider_fallback_skip', model: candidate }));
     }
   }
-  const config = resolveProviderResilienceConfig(host.config.providerResilience, {
-    emptyReplyRetries: input.harness.emptyReplyRetries,
-    requestTimeoutMs: input.harness.requestTimeoutMs,
-  });
+  // Precedence: ai.providerResilience < provider `timeout` / `maxRetries` < model harness quirks.
+  const providerConfig = host.llmRuntime.providerConfig?.(providerAlias);
+  const config = resolveProviderResilienceConfig(
+    host.config.providerResilience,
+    resolveProviderConfigResilience(providerConfig),
+    {
+      emptyReplyRetries: input.harness.emptyReplyRetries,
+      requestTimeoutMs: input.harness.requestTimeoutMs,
+    },
+  );
   return createResilientCompletionPort(host.llmRuntime, {
     config,
     fallbackModels,

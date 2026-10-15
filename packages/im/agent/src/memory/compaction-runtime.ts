@@ -130,6 +130,7 @@ export class AgentCompactionRuntime {
       state,
       force: options.force,
       customInstructions,
+      signal,
     });
 
     if (result.summary?.trim()) {

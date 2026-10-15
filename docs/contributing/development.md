@@ -229,9 +229,11 @@ flowchart LR
   action -->|"main 合并 version PR"| pub["pnpm pub<br/>发布 npm"]
 ```
 
+npm 认证优先走可信发布（OIDC），未配置可信发布者的包回退到 npm token，所有发布都带 provenance。配置方法和每个包的 npmjs.com 清单见 [npm 发布与可信发布](./publishing.md)。
+
 ### 新包首次发包
 
-npm 不再允许本流水线代发「第一次」：包名必须先由维护者用 token 手动发布一次，之后才走 changesets。
+npm 可信发布不能创建新包名：包名必须先由维护者手动发布一次，并在 npmjs.com 配置可信发布者，之后才走 changesets。
 
 本地检测：
 
@@ -244,6 +246,12 @@ pnpm check:unpublished
 ```bash
 pnpm build
 (cd path/to/pkg && npm publish --access public)
+```
+
+再为它配置可信发布者（npm ≥ 11.15.0）：
+
+```bash
+npm trust github <包名> --repo zhinjs/zhin --file publish.yml --env npm-production --allow-publish --yes
 ```
 
 然后到 Actions → **Build and Publish** → **Run workflow** 重新执行（或再 push `main`）。

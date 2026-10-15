@@ -9,7 +9,17 @@ import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel, defaultModelInput } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
-import { classifyProviderError, createResilientCompletionPort, isProviderFailureMessage, type ProviderResilienceEvent } from '../../src/llm/provider-resilience.js';
+import {
+  ProviderRequestError,
+  classifyProviderError,
+  createResilientCompletionPort,
+  describeProviderFailure,
+  isProviderFailureMessage,
+  type ProviderResilienceConfig,
+  type ProviderResilienceEvent,
+  type ProviderTimers,
+} from '../../src/llm/provider-resilience.js';
+import { finishFailureKind } from '../../src/llm/bridge/finish-reason.js';
 
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -20,14 +30,24 @@ function sse(chunks: unknown[]): Response {
   return new Response(text, { status: 200, headers: { 'content-type': 'text/event-stream' } });
 }
 
-function geminiServer(responses: Array<(body: Record<string, any>) => unknown>) {
+/** Response marker: never answer; reject only when the request is aborted. `onHang` runs once it is pending. */
+const HANG = { __hang: true } as const;
+
+function geminiServer(responses: Array<(body: Record<string, any>) => unknown>, onHang?: () => void) {
   const captured: Captured[] = [];
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     const body = JSON.parse(String(init?.body ?? '{}'));
     captured.push({ url, body });
     const respond = responses[Math.min(captured.length - 1, responses.length - 1)]!;
-    const payload = respond(body) as { __chunks?: unknown[]; __status?: number };
+    const payload = respond(body) as { __chunks?: unknown[]; __status?: number; __hang?: boolean };
+    if (payload && payload.__hang) {
+      return new Promise<Response>((_, reject) => {
+        const signal = init?.signal;
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+        setImmediate(() => onHang?.());
+      });
+    }
     if (payload && typeof payload.__status === 'number') {
       const { __status, ...error } = payload;
       return new Response(JSON.stringify(error), { status: __status, headers: { 'content-type': 'application/json' } });
@@ -43,12 +63,21 @@ const textReply = (text: string, usage: Record<string, number>) => () => ({
   usageMetadata: usage,
 });
 
-function setup(responses: Array<(body: Record<string, any>) => unknown>, extra: Partial<ProviderInstanceConfig> = {}) {
-  const server = geminiServer(responses);
+const PRIMARY = 'gemini-3.8-flash';
+const FALLBACK = 'gemini-3.8-flash-lite';
+
+function setup(
+  responses: Array<(body: Record<string, any>) => unknown>,
+  extra: Partial<ProviderInstanceConfig> = {},
+  onHang?: () => void,
+) {
+  const server = geminiServer(responses, onHang);
   const config: ProviderInstanceConfig = { sdk: 'google', apiKey: 'test-key', ...extra };
-  const runtime = createLlmApiRuntime([{ alias: 'gemini', config, models: ['gemini-3.8-flash'], fetch: server.fetch }], () => ['gemini-3.8-flash']);
-  const model = createLlmTransportModel('gemini', config, 'gemini-3.8-flash');
-  return { runtime, model, captured: server.captured };
+  const models = [PRIMARY, FALLBACK];
+  const runtime = createLlmApiRuntime([{ alias: 'gemini', config, models, fetch: server.fetch }], () => models);
+  const model = createLlmTransportModel('gemini', config, PRIMARY);
+  const fallback = createLlmTransportModel('gemini', config, FALLBACK);
+  return { runtime, model, fallback, captured: server.captured };
 }
 
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
@@ -59,7 +88,7 @@ describe('Gemini provider (google sdk)', () => {
     expect(defaultModelInput('google', 'gemini-3.8-flash')).toContain('image');
     expect(defaultModelInput('google', 'gemini-3.8-flash-tts')).toEqual(['text']);
     expect(defaultModelInput('google', 'gemini-embedding-001')).toEqual(['text']);
-    expect(defaultModelInput('openai', 'gpt-5')).toEqual(['text']);
+    expect(defaultModelInput('deepseek', 'deepseek-chat')).toEqual(['text']);
     expect(createLlmTransportModel('g', { sdk: 'google', input: ['text'] }, 'gemini-3.8-flash').input).toEqual(['text']);
   });
 
@@ -173,10 +202,12 @@ describe('Gemini provider (google sdk)', () => {
       return runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('hi')] });
     };
 
-    it.each(['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST'])('surfaces %s as a visible refusal, not an empty reply', async (reason) => {
+    it.each(['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'IMAGE_SAFETY'])('surfaces %s as a polite, visible refusal, not an empty reply', async (reason) => {
       const message = await ask(finished(reason));
       expect(message.stopReason).toBe('error');
       expect(message.errorMessage).toContain(reason);
+      expect(message.errorMessage).toMatch(/^抱歉，.*换个说法再试试吧$/);
+      expect(finishFailureKind(message.errorMessage)).toBe('safety_block');
       expect(isProviderFailureMessage(message.errorMessage!)).toBe(true);
     });
 
@@ -184,6 +215,7 @@ describe('Gemini provider (google sdk)', () => {
       const message = await ask(() => ({ promptFeedback: { blockReason: 'SAFETY' }, usageMetadata }));
       expect(message.stopReason).toBe('error');
       expect(message.errorMessage).toContain('prompt SAFETY');
+      expect(finishFailureKind(message.errorMessage)).toBe('safety_block');
     });
 
     it('keeps partial text on MAX_TOKENS, but reports a reply that is empty because of it', async () => {
@@ -215,20 +247,40 @@ describe('Gemini provider (google sdk)', () => {
     });
     const ok = textReply('好了', { promptTokenCount: 10, candidatesTokenCount: 2, totalTokenCount: 12 });
 
-    async function resilientRun(responses: Array<() => unknown>) {
-      const { runtime, model, captured } = setup(responses);
+    const finished = (finishReason: string) => () => ({
+      candidates: [{ content: { role: 'model', parts: [] }, finishReason }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 0, totalTokenCount: 10 },
+    });
+    const dailyQuota = rpcError(429, 'RESOURCE_EXHAUSTED', [
+      {
+        '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+        violations: [{ quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests', quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }],
+      },
+      // Gemini still sends a short RetryInfo on daily quotas; retrying after it cannot succeed.
+      { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '14s' },
+    ]);
+
+    async function resilientRun(
+      responses: Array<() => unknown>,
+      options: { fallback?: boolean; config?: ProviderResilienceConfig; timers?: ProviderTimers; onHang?: () => void } = {},
+    ) {
+      const { runtime, model, fallback, captured } = setup(responses, {}, options.onHang);
       const events: ProviderResilienceEvent[] = [];
       const delays: number[] = [];
       const port = createResilientCompletionPort(runtime, {
+        config: options.config,
+        fallbackModels: options.fallback ? [fallback] : [],
         onEvent: (event) => events.push(event),
         sleep: async (ms) => { delays.push(ms); },
         random: () => 0.5,
+        ...(options.timers ? { timers: options.timers } : {}),
       });
       const outcome = await port.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('hi')] }).then(
         (message) => ({ message }),
         (error: unknown) => ({ error: error as Error & { kind?: string } }),
       );
-      return { ...outcome, events, delays, requests: captured.length };
+      const models = captured.map((c) => (c.url.includes(FALLBACK) ? FALLBACK : PRIMARY));
+      return { ...outcome, events, delays, requests: captured.length, models };
     }
 
     it('retries 429 RESOURCE_EXHAUSTED after the RetryInfo.retryDelay Gemini sends', async () => {
@@ -241,10 +293,96 @@ describe('Gemini provider (google sdk)', () => {
       expect(run.events[0]).toMatchObject({ type: 'retry', kind: 'rate_limit', delayMs: 3000 });
     });
 
-    it.each([[500, 'INTERNAL'], [503, 'UNAVAILABLE'], [504, 'DEADLINE_EXCEEDED']])('retries %s %s with backoff', async (code, status) => {
+    it.each([[500, 'INTERNAL'], [503, 'UNAVAILABLE']])('retries %s %s with backoff', async (code, status) => {
       const run = await resilientRun([rpcError(code, status), ok]);
       expect(run.message?.stopReason).toBe('stop');
       expect(run.events[0]).toMatchObject({ type: 'retry', kind: 'server' });
+    });
+
+    it('retries 504 DEADLINE_EXCEEDED as a timeout, and says so when retries run out', async () => {
+      const recovered = await resilientRun([rpcError(504, 'DEADLINE_EXCEEDED'), ok]);
+      expect(recovered.message?.stopReason).toBe('stop');
+      expect(recovered.events[0]).toMatchObject({ type: 'retry', kind: 'timeout' });
+      const exhausted = await resilientRun([rpcError(504, 'DEADLINE_EXCEEDED')]);
+      expect(exhausted.error).toBeInstanceOf(ProviderRequestError);
+      expect(exhausted.error?.message).toBe(describeProviderFailure('timeout'));
+      expect(exhausted.requests).toBe(3);
+    });
+
+    it('falls back to the next model after 503 UNAVAILABLE retries run out', async () => {
+      const unavailable = rpcError(503, 'UNAVAILABLE');
+      const run = await resilientRun([unavailable, unavailable, unavailable, ok], { fallback: true });
+      expect(run.message?.stopReason).toBe('stop');
+      expect(run.models).toEqual([PRIMARY, PRIMARY, PRIMARY, FALLBACK]);
+      expect(run.events.at(-1)).toMatchObject({ type: 'fallback', from: PRIMARY, to: FALLBACK, kind: 'server' });
+    });
+
+    it('falls back after 429 retries run out, and skips the retries when RetryInfo is too long', async () => {
+      const longDelay = rpcError(429, 'RESOURCE_EXHAUSTED', [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '3600s' }]);
+      const run = await resilientRun([longDelay, ok], { fallback: true });
+      expect(run.models).toEqual([PRIMARY, FALLBACK]);
+      expect(run.events).toEqual([expect.objectContaining({ type: 'fallback', kind: 'rate_limit' })]);
+    });
+
+    it('does not retry a per-day quota (QuotaFailure PerDay) but falls back to another model', async () => {
+      const exhausted = await resilientRun([dailyQuota]);
+      expect(classifyProviderError(exhausted.error?.cause)).toMatchObject({ kind: 'quota_exhausted', retryable: false, fallbackEligible: true });
+      const run = await resilientRun([dailyQuota, ok], { fallback: true });
+      expect(run.message?.stopReason).toBe('stop');
+      expect(run.models).toEqual([PRIMARY, FALLBACK]);
+      expect(run.delays).toEqual([]);
+    });
+
+    it('tells the user politely when a per-day quota leaves no model to fall back to', async () => {
+      const run = await resilientRun([dailyQuota]);
+      expect(run.requests).toBe(1);
+      expect(run.error).toBeInstanceOf(ProviderRequestError);
+      expect(run.error).toMatchObject({ kind: 'quota_exhausted' });
+      expect(run.error?.message).toBe(describeProviderFailure('quota_exhausted'));
+      expect(isProviderFailureMessage(run.error!.message)).toBe(true);
+    });
+
+    it('aborts a hung Gemini request at the per-attempt timeout and retries it (virtual timers)', async () => {
+      const pending: Array<{ fn: () => void; ms: number }> = [];
+      const timers: ProviderTimers = {
+        setTimeout: (fn, ms) => { const timer = { fn, ms }; pending.push(timer); return timer; },
+        clearTimeout: (handle) => { const i = pending.indexOf(handle as never); if (i >= 0) pending.splice(i, 1); },
+      };
+      const run = await resilientRun([() => HANG, ok], {
+        config: { requestTimeoutMs: 45_000 },
+        timers,
+        // The hung request is pending: let its deadline pass without a real wait.
+        onHang: () => pending.shift()?.fn(),
+      });
+      expect(run.message?.stopReason).toBe('stop');
+      expect(run.requests).toBe(2);
+      expect(run.events[0]).toMatchObject({ type: 'retry', kind: 'timeout' });
+      expect(pending).toEqual([]);
+    });
+
+    it.each([
+      ['a SAFETY finish', finished('SAFETY')],
+      ['a PROHIBITED_CONTENT finish', finished('PROHIBITED_CONTENT')],
+      ['a blocked prompt', () => ({ promptFeedback: { blockReason: 'PROHIBITED_CONTENT' }, usageMetadata: { promptTokenCount: 10, totalTokenCount: 10 } })],
+    ])('passes %s to the user without retrying or falling back', async (_label, blocked) => {
+      const run = await resilientRun([blocked, ok], { fallback: true, config: { emptyReplyRetries: 2 } });
+      expect(run.requests).toBe(1);
+      expect(run.models).toEqual([PRIMARY]);
+      expect(run.message?.stopReason).toBe('error');
+      expect(finishFailureKind(run.message?.errorMessage)).toBe('safety_block');
+      expect(run.events).toEqual([expect.objectContaining({ type: 'refused', model: PRIMARY, kind: 'safety_block' })]);
+    });
+
+    it('re-asks MALFORMED_FUNCTION_CALL on the same model only when the preset opts in', async () => {
+      const reasked = await resilientRun([finished('MALFORMED_FUNCTION_CALL'), ok], { fallback: true, config: { emptyReplyRetries: 1 } });
+      expect(reasked.message?.stopReason).toBe('stop');
+      expect(reasked.models).toEqual([PRIMARY, PRIMARY]);
+      expect(reasked.events[0]).toMatchObject({ type: 'retry', kind: 'malformed_tool_call', delayMs: 0 });
+
+      const passedThrough = await resilientRun([finished('MALFORMED_FUNCTION_CALL'), ok], { fallback: true });
+      expect(passedThrough.requests).toBe(1);
+      expect(passedThrough.message?.stopReason).toBe('error');
+      expect(passedThrough.message?.errorMessage).toContain('MALFORMED_FUNCTION_CALL');
     });
 
     it('treats 400 API_KEY_INVALID as auth: no retry, no fallback', async () => {

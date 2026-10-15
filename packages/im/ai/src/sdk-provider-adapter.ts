@@ -8,7 +8,14 @@ import type {
   TextCompleteOptions,
 } from './types.js';
 import type { ProviderInstanceConfig } from './llm/types/model.js';
-import { createLanguageModel, normalizeGoogleBaseUrl, type SdkId } from './llm/sdk-registry.js';
+import {
+  createLanguageModel,
+  formatAuthorizationHeader,
+  normalizeGoogleBaseUrl,
+  normalizeOpenAiBaseUrl,
+  resolveOpenAiCompatibleBaseUrl,
+  type SdkId,
+} from './llm/sdk-registry.js';
 import {
   resolveSdkProviderModels,
   SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
@@ -18,7 +25,15 @@ import { generateTextViaAiSdk } from './llm/bridge/ai-sdk-stream.js';
 import { generateImageViaAiSdk } from './llm/bridge/ai-sdk-image.js';
 import { createContext } from './llm/types/context.js';
 import { createUserMessage } from './llm/types/agent-message.js';
-import { assistantText } from './llm/convert/openai-bridge.js';
+import { assistantAnswerText } from './llm/convert/openai-bridge.js';
+import {
+  createResilientCompletionPort,
+  resolveProviderResilienceConfig,
+  type ProviderResilienceEvent,
+} from './llm/provider-resilience.js';
+import type { LlmCompletionPort } from './llm/llm-api-runtime.js';
+import type { Model } from './llm/types/model.js';
+import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { ImageGenerateRequest, ImageGenerateResult } from './image-generation.js';
 import { createLlmTransportModel } from './llm/llm-api-runtime.js';
 import { AiHttpTransport, createAiHttpTransport } from './llm/http-transport.js';
@@ -33,7 +48,13 @@ async function fetchOpenAiCompatibleModels(
   config: ProviderInstanceConfig,
   fetchFn: typeof globalThis.fetch,
 ): Promise<string[]> {
-  let baseUrl = config.baseUrl?.trim();
+  // openai-compatible chat requests go to the normalized base (see normalizeOpenAiCompatibleBaseUrl);
+  // discovery must hit the same `/models` next to `/chat/completions`.
+  let baseUrl = config.sdk === 'openai-compatible'
+    ? resolveOpenAiCompatibleBaseUrl(config)
+    : config.sdk === 'openai'
+      ? normalizeOpenAiBaseUrl(config.baseUrl, config.compat?.appendV1)
+      : config.baseUrl?.trim();
   if (!baseUrl && config.host?.trim()) {
     const host = stripTrailingSlashes(config.host);
     baseUrl = host.endsWith('/v1') ? host : `${host}/v1`;
@@ -44,11 +65,9 @@ async function fetchOpenAiCompatibleModels(
   if (!baseUrl) return [];
 
   const headers: Record<string, string> = { ...config.headers };
-  if (config.apiKey) {
-    headers.Authorization = config.authScheme === ''
-      ? config.apiKey
-      : `${config.authScheme ?? 'Bearer '}${config.apiKey}`.trim();
-  }
+  // Same rule as chat requests (sdk-registry buildHeaders), with Bearer as the default scheme.
+  const authorization = formatAuthorizationHeader(config.authScheme ?? 'Bearer', config.apiKey);
+  if (authorization) headers.Authorization = authorization;
 
   const res = await fetchFn(`${stripTrailingSlashes(baseUrl)}/models`, { headers });
   if (!res.ok) return [];
@@ -113,6 +132,13 @@ export async function fetchGoogleModels(
   });
 }
 
+const logger = getLogger('ai-provider');
+
+function logResilienceEvent(provider: string, event: ProviderResilienceEvent): void {
+  const { type, error, ...fields } = event;
+  logger.warn(formatCompact({ op: `complete_text_${type}`, provider, ...fields, error: truncatePreview(error, 200) }));
+}
+
 export class SdkProviderAdapter implements AIProvider {
   name: string;
   readonly sdk: SdkId;
@@ -143,22 +169,56 @@ export class SdkProviderAdapter implements AIProvider {
   /**
    * 纯文本补全（compaction / 话题判定 / 上下文摘要等轻量场景）：
    * system + user → assistant 文本，走 ai-sdk 传输。
+   *
+   * 与主对话路径对齐（S13）：经 {@link createResilientCompletionPort} 做错误分类、
+   * 退避重试、单次超时和同 provider 模型 fallback；`signal` 中止后立即抛出；
+   * 只返回正文，绝不把 thinking 当结果；内容安全 / 长度失败抛 `CompletionFailureError`。
    */
   async completeText(
     system: string,
     user: string,
     opts: TextCompleteOptions = {},
   ): Promise<string> {
-    const modelId = opts.model ?? this.models[0];
-    const model = createLlmTransportModel(this.name, this.config, modelId);
-    const ctx = createContext(system, [createUserMessage(user)]);
-    const assistant = await generateTextViaAiSdk(
-      createLanguageModel(this.sdk, this.config, modelId, this.#transport.fetch),
-      model,
-      ctx,
-      { temperature: opts.temperature, maxTokens: opts.maxTokens },
+    const modelId = opts.model ?? this.defaultModelId();
+    const primary = createLlmTransportModel(this.name, this.config, modelId);
+    const fallbackModels = (opts.fallbackModels ?? [])
+      .filter((id) => id && id !== modelId)
+      .map((id) => createLlmTransportModel(this.name, this.config, id));
+    const config = resolveProviderResilienceConfig(
+      opts.resilience,
+      opts.timeoutMs !== undefined ? { requestTimeoutMs: opts.timeoutMs } : undefined,
     );
-    return assistantText(assistant);
+    const port = createResilientCompletionPort(this.#textCompletionPort(), {
+      config,
+      fallbackModels,
+      onEvent: (event) => logResilienceEvent(this.name, event),
+    });
+    const ctx = createContext(system, [createUserMessage(user)]);
+    const assistant = await port.completeSimple(primary, ctx, {
+      temperature: opts.temperature,
+      maxTokens: opts.maxTokens,
+      signal: opts.signal,
+    });
+    return assistantAnswerText(assistant);
+  }
+
+  /** YAML `defaultModel` when it is listed (or no list is known), else the first model. */
+  private defaultModelId(): string {
+    const configured = this.config.defaultModel?.trim();
+    if (configured && (this.models.length === 0 || this.models.includes(configured))) return configured;
+    return this.models[0] ?? configured ?? '';
+  }
+
+  /** Single-attempt port over `generateText`; the resilient wrapper owns retries. */
+  #textCompletionPort(): LlmCompletionPort {
+    const complete = (model: Model, context: Parameters<LlmCompletionPort['complete']>[1], options?: Parameters<LlmCompletionPort['complete']>[2]) =>
+      generateTextViaAiSdk(
+        createLanguageModel(this.sdk, this.config, model.id, this.#transport.fetch),
+        model,
+        context,
+        options,
+      );
+    return { complete, completeSimple: complete };
   }
 
   async listModels(): Promise<string[]> {

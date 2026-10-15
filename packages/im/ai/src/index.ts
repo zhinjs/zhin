@@ -12,6 +12,7 @@ export {
   LlmApiRuntime,
   createLlmTransportModel,
   defaultModelInput,
+  resolveProviderConfigResilience,
   createAssistantMessageEventStream,
   createContext,
   createUserMessage,
@@ -28,6 +29,8 @@ export {
   agentLoop,
   agentContextFrom,
   assistantText,
+  assistantAnswerText,
+  CompletionFailureError,
   createLlmApiRuntime,
   isSdkId,
   SDK_IDS,
@@ -122,6 +125,8 @@ export type {
   ProviderTimers,
   ResilientCompletionOptions,
 } from './llm/index.js';
+export { finishFailureKind, resolveFinish } from './llm/index.js';
+export type { FinishFailureKind, FinishInput, FinishOutcome } from './llm/index.js';
 
 // ── Core AI Types ──
 export type {

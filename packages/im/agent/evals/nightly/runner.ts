@@ -1,5 +1,5 @@
 /** Runs the capability matrix against real models under a hard budget. */
-import { createUserMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
+import { createUserMessage, type LlmCompletionPort, type MediaContentBlock, type Model } from '@zhin.js/ai';
 import { BudgetExceededError, type BudgetedCompletionPort, type NightlyBudget } from './budget.js';
 import type { CapabilityCase } from './matrix-cases.js';
 import { summarizeCase, type CaseRunResult, type ModelSummary, type NightlyReport } from './report.js';
@@ -14,6 +14,11 @@ export interface NightlyRunInput {
   readonly seedCases?: readonly NightlySeedCase[];
   readonly port: BudgetedCompletionPort | (LlmCompletionPort & { usage(): { requests: number; totalTokens: number } });
   readonly budget: NightlyBudget;
+  /**
+   * Sampling temperature for matrix requests. Omitted when undefined: Gemini 3.6+
+   * ignores custom temperatures and warns about them (ai.google.dev troubleshooting).
+   */
+  readonly temperature?: number;
   /** Optional judge; unused by the built-in matrix, which relies on deterministic semantic checks. */
   readonly judge?: LlmJudge;
   readonly now?: () => Date;
@@ -34,12 +39,16 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
           results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, skipped: true, error: 'skipped: budget exhausted' });
           continue;
         }
+        if (definition.images?.length && !model.input.includes('image')) {
+          results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, skipped: true, error: 'skipped: model has no image input' });
+          continue;
+        }
         try {
           const message = await input.port.complete(model, {
             systemPrompt: definition.systemPrompt,
-            messages: [createUserMessage(definition.user)],
+            messages: [createUserMessage(definition.user, imageBlocks(definition))],
             tools: definition.tools ? [...definition.tools] : undefined,
-          }, { temperature: 0.2 });
+          }, input.temperature !== undefined ? { temperature: input.temperature } : {});
           if (message.stopReason === 'error') throw new Error(message.errorMessage ?? 'provider error');
           const observation = observe(message);
           const checks = definition.checks(observation);
@@ -101,4 +110,11 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
 function budgetSpent(input: NightlyRunInput): boolean {
   const usage = input.port.usage();
   return usage.requests >= input.budget.maxRequests || usage.totalTokens >= input.budget.maxTotalTokens;
+}
+
+function imageBlocks(definition: CapabilityCase): MediaContentBlock[] | undefined {
+  return definition.images?.map((image) => ({
+    type: 'image',
+    data: { media: { kind: 'base64', value: image.base64, mime_type: image.mimeType } },
+  }));
 }

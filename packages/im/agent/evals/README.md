@@ -119,6 +119,15 @@ A case also fails on any of these, whatever its `expect` block says:
   time. With no pending timer it fails at once instead of blocking the suite.
   `runEvalCase(definition, { clock })` accepts your own clock; by default each
   case gets a fresh fake clock.
+- `{ fault: { kind: 'error', message, status, body } }` also carries a raw
+  provider JSON `body` (as the AI SDK's `responseBody`), for Gemini errors whose
+  meaning is in the body: `{ error: { status: 'RESOURCE_EXHAUSTED', details: [...] } }`
+  with `RetryInfo` or a `QuotaFailure`.
+- `{ fault: { kind: 'finish', finishReason, raw?, blockReason? } }` returns the
+  reply the AI SDK bridge builds for a content-less finish, through the same
+  `resolveFinish` mapping: `finishReason: 'content-filter', raw: 'SAFETY'` is a
+  Gemini safety block, `blockReason: 'PROHIBITED_CONTENT'` a blocked prompt, and
+  `finishReason: 'error', raw: 'MALFORMED_FUNCTION_CALL'` a malformed function call.
 
 Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 
@@ -154,9 +163,20 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `multimodal-text-only-model-placeholder` | multimodal | #769 Gemini switch — text-only models still never get image bytes |
 | `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
 | `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
+| `provider-billing-no-same-provider-fallback` | long-task | #724 provider resilience: 402 / out of credit → no pointless same-key fallback |
+| `provider-deepseek-insufficient-resource-retried` | long-task | #724 provider audit S9: DeepSeek insufficient_system_resource → retry |
+| `provider-gemini-context-overflow-compacted` | context, long-task | #724 provider audit S2: one shared context-overflow detector (Gemini / Vertex / Anthropic wording) |
+| `provider-gemini-daily-quota-fallback` | long-task | #724 provider resilience, Gemini primary (#770): daily quota → fallback without retry |
+| `provider-gemini-deadline-exceeded-polite` | long-task | #724 provider resilience, Gemini primary (#770): 504 DEADLINE_EXCEEDED → timeout |
+| `provider-gemini-malformed-function-call-reasked` | long-task | #724 provider resilience, Gemini primary (#770): MALFORMED_FUNCTION_CALL → re-ask (model-harness preset) |
+| `provider-gemini-prompt-blocked-polite` | long-task | #724 provider resilience, Gemini primary (#770): blocked prompt → no retry, no fallback |
+| `provider-gemini-rate-limit-retry-delay` | long-task | #724 provider resilience, Gemini primary (#770): 429 RESOURCE_EXHAUSTED → retry |
+| `provider-gemini-safety-block-polite` | long-task | #724 provider resilience, Gemini primary (#770): safety block → no retry, no fallback |
+| `provider-gemini-unavailable-fallback` | long-task | #724 provider resilience, Gemini primary (#770): 503 UNAVAILABLE → retry → fallback |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
 | `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |
 | `provider-malformed-tool-call` | tool-use | #724 provider resilience (malformed tool call) |
+| `provider-openai-insufficient-quota-not-retried` | long-task | #724 provider audit S19: OpenAI insufficient_quota retried uselessly |
 | `provider-rate-limit-retried` | long-task | #724 provider resilience (rate limit → retry) |
 | `provider-retries-exhausted-polite` | long-task | #724 provider resilience (retries exhausted → friendly feedback) |
 | `provider-timeout-exhausted-polite` | long-task | #724 provider resilience (timeouts exhausted → friendly feedback) |
@@ -182,6 +202,10 @@ pull requests and low pass rates do not fail the job.
 | `matrix-parallel-calls` | parallel calls | one response calls `get_weather` for both 北京 and 广州 |
 | `matrix-long-context` | long context | the code buried in ~10k characters of filler is returned |
 | `matrix-zh-instruction` | Chinese instruction following | exactly three `- ` lines, in Chinese, nothing else |
+| `matrix-multimodal-image` | multimodal | names the colour (红 / red) and shape (圆 / circle) of the committed `fixtures/images.ts` red-circle PNG |
+
+The multimodal column needs a model that declares image input (Gemini models
+do by default); text-only models record it as skipped without a request.
 
 Each case is one request, run `runsPerCase` times per model. Checks are
 semantic (tool names, arguments, key facts, structure), not exact wording.
@@ -222,7 +246,7 @@ as skipped):
 | Max output tokens per request | 1,024 | `NIGHTLY_MAX_OUTPUT_TOKENS` |
 | Request timeout | 120 s | `NIGHTLY_REQUEST_TIMEOUT_MS` |
 
-The default run (1 model, 3 runs per case) is about 12 matrix requests (~60k
+The default run (1 model, 3 runs per case) is about 15 matrix requests (~61k
 tokens) plus about 50 seed-case requests (~300k tokens, since each carries the
 full agent system prompt). Models come from `NIGHTLY_MODELS` (workflow input, else the
 `NIGHTLY_MODELS` repository variable, else `gemini-3.8-flash`, the stable
@@ -231,7 +255,7 @@ Requests go through the `google` SDK, so seed cases exercise the same Gemini
 provider as production, including images and implicit prompt caching.
 
 **Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
-optional `GEMINI_BASE_URL` env for a proxy). Without it the job logs a notice and skips.
+optional `GEMINI_BASE_URL` repository variable for a pass-through proxy). Without it the job logs a notice and skips.
 The key is passed only as an environment variable and is never printed.
 
 **Reports:** `eval-reports/nightly.json` (pass rate, average tokens and average
@@ -241,6 +265,12 @@ flagged). They are uploaded as the `nightly-eval-report` artifact and the
 Markdown goes to the job summary.
 
 Run it locally with `GEMINI_API_KEY=… pnpm eval:nightly` (after `pnpm build`).
+
+**Provider:** Gemini is the default. Set `NIGHTLY_PROVIDER=minimax` (workflow
+input `provider`, or the `NIGHTLY_PROVIDER` repository variable) to run the same
+matrix on MiniMax with the `MINIMAX_API_KEY` secret (default model `minimax-m3`,
+temperature 0.2); without that secret the job logs a notice and skips. Matrix
+requests to Gemini send no temperature, since Gemini 3.6+ ignores it and warns.
 
 ## Conventions
 

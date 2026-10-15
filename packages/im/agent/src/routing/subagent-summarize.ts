@@ -8,6 +8,7 @@ export async function summarizeSubagentResultForUser(
   subagentName: string,
   userRequest: string,
   subagentResult: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   const zhinBinding = ai.getBindingRegistry().requireZhinBinding();
   const provider = ai.getProvider(zhinBinding.providerAlias);
@@ -15,7 +16,7 @@ export async function summarizeSubagentResultForUser(
   const system = `你是 Zhin 主助手。子 agent「${subagentName}」已完成任务，请将结果整理成面向用户的简洁回复（中文），保留关键事实，不要暴露内部工具名或 JSON。`;
   const user = `用户请求：\n${userRequest}\n\n子 agent 原始输出：\n${subagentResult}`;
   try {
-    const text = await provider.completeText(system, user, { model, temperature: 0.3 });
+    const text = await provider.completeText(system, user, { model, temperature: 0.3, signal });
     return text.trim() || subagentResult;
   } catch {
     return subagentResult;
