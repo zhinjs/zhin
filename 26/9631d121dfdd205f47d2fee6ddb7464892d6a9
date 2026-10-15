@@ -1,0 +1,34 @@
+.changeset/ai-provider-transport.md
+  h_b680f75345178a 1-5
+docs/ai/index.md
+  h_b680f75345178a 128,132,138-142
+docs/en/ai/index.md
+  h_b680f75345178a 128,132,138-142
+packages/im/ai/src/llm/bridge/ai-sdk-prompt-cache.ts
+  h_b680f75345178a 7-8,28-29,86-90,95-104,106,113,120
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  h_b680f75345178a 270,436
+packages/im/ai/src/llm/provider-gateway-presets.ts
+  h_b680f75345178a 99-104,125-143,147,152-154
+packages/im/ai/src/llm/sdk-registry.ts
+  h_b680f75345178a 61-83,87-93,141-143,220-221,270-271
+packages/im/ai/src/llm/types/model.ts
+  h_b680f75345178a 25-42
+packages/im/ai/src/sdk-provider-adapter.ts
+  h_b680f75345178a 11,36-38
+packages/im/ai/tests/llm/providers/ollama.test.ts
+  h_b680f75345178a 7,32-54
+packages/im/ai/tests/llm/providers/openai-compatible.test.ts
+  h_b680f75345178a 8,59-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "269631d121dfdd205f47d2fee6ddb7464892d6a9",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
