@@ -1,0 +1,19 @@
+tests/snapshots/api-surface.json
+  s_f21319594bee88::t_a14ea6d45fa705 38,100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5fc14358d21c77ad5df527d5544d76b284c7ca89",
+  "prompts": {},
+  "sessions": {
+    "s_f21319594bee88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03291-207e-7d10-a69e-0838833440c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
