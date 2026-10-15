@@ -1,0 +1,37 @@
+.changeset/room-human-ingress-trigger-filter.md
+  s_937b6c28be4d40::t_2074220dd7d107 1-7
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_937b6c28be4d40::t_646ea845be6674 59-60,268-271
+basic/cli/src/plugin-runtime/agent/turn/trigger.ts
+  s_937b6c28be4d40::t_00646e56f44490 1,77-106,115
+basic/cli/tests/plugin-runtime/agent/turn/room-ingress.test.ts
+  s_937b6c28be4d40::t_853b827437b249 27,80,190-224
+basic/cli/tests/plugin-runtime/agent/turn/trigger.test.ts
+  s_937b6c28be4d40::t_da4bc94bc431ed 7,142-172
+docs/plans/workroom-group-collaboration-progress.md
+  s_937b6c28be4d40::t_1c3adb8c163282 131-132,494-498,558
+packages/im/agent/src/turn/turn-ingress.ts
+  s_937b6c28be4d40::t_4667d5e26eedac 382-384
+packages/im/agent/tests/turn/turn-ingress.test.ts
+  s_937b6c28be4d40::t_2c001417eacb6f 221-226
+packages/im/workroom/src/room/room-turn-coordinator.ts
+  s_937b6c28be4d40::t_ac7c1ae1477f2d 527
+packages/im/workroom/tests/room/room-turn-coordinator.test.ts
+  s_937b6c28be4d40::t_a26f159b08c8e1 444,446
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d1bf26c0ea5b08d0b562a1896c907956269e4e7",
+  "prompts": {},
+  "sessions": {
+    "s_937b6c28be4d40": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fab2bb0-dcbd-46cf-8365-1ca1614bed3a",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
