@@ -1,0 +1,22 @@
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  h_b680f75345178a 10,249-272,336,485
+packages/im/ai/src/llm/llm-api-runtime.ts
+  h_b680f75345178a 65-67,101,103
+packages/im/ai/src/llm/types/model.ts
+  h_b680f75345178a 42-43,67-79
+packages/im/ai/src/types.ts
+  h_b680f75345178a 83-86
+packages/im/ai/tests/llm/reasoning-level.test.ts
+  h_b680f75345178a 1-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "06b1409d227b50fc09f52eb56d538dd543d7d050",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
