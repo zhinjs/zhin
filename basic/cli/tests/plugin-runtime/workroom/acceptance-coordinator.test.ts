@@ -1,3 +1,4 @@
+// 保留内部 import 的原因：该 coordinator 只在 WorkroomHostCoordinator.create 内部构造，缺少 governed payload port 的 fail-closed 路径无法通过公开接口单独触达（host 会先在 persistence/governance 阶段抛错）。
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomAcceptanceCoordinator } from '../../../src/plugin-runtime/workroom/acceptance-coordinator.js';

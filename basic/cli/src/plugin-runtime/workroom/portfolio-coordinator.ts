@@ -1,29 +1,6 @@
 import { join } from 'node:path';
-import { FilePortfolioJournalRepository } from '@zhin.js/agent';
-import {
-  GenerationOwnedPortfolioCapacityRuntime,
-  WorkroomPortfolioAssignmentFailureAuthority,
-  WorkroomPortfolioSponsorRuntime,
-  createCatalogGovernedWorkroomProjectionAuthority,
-  createCatalogPortfolioSponsorCommandAuthority,
-  createGovernedPortfolioSponsorProjectionReader,
-  portfolioAtomicBundleAuthorityToken,
-  portfolioCapacityRuntimeToken,
-  portfolioClockAuthorityToken,
-  portfolioControlOutboxRepositoryToken,
-  portfolioJournalRepositoryToken,
-  portfolioKernelCommandAuthorityToken,
-  portfolioPolicyAuthorityToken,
-  portfolioSponsorCommandToken,
-  portfolioUsageGatewayAuthorityToken,
-  workroomSchedulerCapacityRequestToken,
-  type AgentHostPortfolioSponsorControlPort,
-  type PortfolioAtomicBundleAuthorityPort,
-  type PortfolioClockAuthorityPort,
-  type PortfolioKernelCommandAuthorityPort,
-  type PortfolioSponsorProjection,
-  type PortfolioUsageGatewayAuthorityPort,
-} from '@zhin.js/agent/runtime';
+import { createCatalogGovernedWorkroomProjectionAuthority, type AgentHostPortfolioSponsorControlPort } from '@zhin.js/workroom';
+import { FilePortfolioJournalRepository, GenerationOwnedPortfolioCapacityRuntime, WorkroomPortfolioAssignmentFailureAuthority, WorkroomPortfolioSponsorRuntime, createCatalogPortfolioSponsorCommandAuthority, createGovernedPortfolioSponsorProjectionReader, portfolioAtomicBundleAuthorityToken, portfolioCapacityRuntimeToken, portfolioClockAuthorityToken, portfolioControlOutboxRepositoryToken, portfolioJournalRepositoryToken, portfolioKernelCommandAuthorityToken, portfolioPolicyAuthorityToken, portfolioSponsorCommandToken, portfolioUsageGatewayAuthorityToken, workroomSchedulerCapacityRequestToken, type PortfolioAtomicBundleAuthorityPort, type PortfolioClockAuthorityPort, type PortfolioKernelCommandAuthorityPort, type PortfolioSponsorProjection, type PortfolioUsageGatewayAuthorityPort } from '@zhin.js/workroom/portfolio';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { installLocalWorkroomPortfolioAuthorities } from './local-portfolio.js';
 import type { WorkroomPersistenceCoordinator } from './persistence-coordinator.js';

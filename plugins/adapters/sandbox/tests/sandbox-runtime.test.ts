@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
+import { getProcessPeerRegistry } from 'zhin.js/adapter';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
@@ -32,6 +33,30 @@ afterEach(async () => {
 });
 
 describe('sandbox plugin runtime adapter', () => {
+  it('reports the configured bot id as its synthetic account and revokes it on stop', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const gateway: OutboundMessageService = {
+      receive: vi.fn(async () => Object.freeze({ matched: false })),
+      send: vi.fn(async () => 'sent'),
+    };
+    const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
+      gateway,
+      http,
+      defaults: resolveSandboxEndpoint({ id: 'self-bot', owner: 'sandbox-user' }),
+    }), gateway, undefined);
+    expect(endpoint.selfUserId).toBeUndefined();
+    endpoint.start();
+    expect(endpoint.selfUserId).toBeUndefined();
+    endpoint.open();
+    expect(endpoint.selfUserId).toBe('self-bot');
+    expect(getProcessPeerRegistry().selfOf('test-endpoint')).toBe('self-bot');
+    endpoint.stop();
+    expect(endpoint.selfUserId).toBeUndefined();
+    expect(getProcessPeerRegistry().isReady('test-endpoint')).toBe(false);
+  });
+
   it('keeps the replacement path claim when the previous HMR endpoint stops', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

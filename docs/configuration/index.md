@@ -235,7 +235,7 @@ a2a:
 
 两段都挂在 HTTP Host 上，按需启用；未配置时对应 SDK 不会被加载。Workroom
 远程执行使用 `a2a.workroomCallbacks` 与 `a2a.workroomRemoteExecutors` 的固定代级
-transport binding；Project/成员/群绑定不放在这里，而由持久 Workroom Catalog 管理。
+transport binding（A2A 扩展，已冻结并移出 `@zhin.js/workroom` 包根，子路径 `@zhin.js/workroom/remote`；仅 transport 配置按需生效，默认装配仍会创建其内部占位 Remote Callback Runtime 与 Remote Assignment Authority，留到 C2 之后处理）；Project/成员/群绑定不放在这里，而由持久 Workroom Catalog 管理。
 完整示例见 GitHub 上的 [`@zhin.js/a2a` README](https://github.com/zhinjs/zhin/blob/main/packages/host/a2a/README.md#workroom-execution-callbacks)。
 
 ## ai

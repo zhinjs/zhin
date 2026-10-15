@@ -282,6 +282,15 @@ export function shouldSkipSelfInboundMessage(
   return Number(data.self_id) === Number(data.user_id);
 }
 
+/** 登录后的机器人 QQ 号；仅正整数有效（mock/未登录的 0、NaN、空均视为未知）。 */
+export function resolveIcqqSelfUserId(client: { uin?: number | string }): string | undefined {
+  const raw = client?.uin;
+  if (typeof raw !== "number" && typeof raw !== "string") return undefined;
+  if (typeof raw === "string" && !/^\d+$/.test(raw.trim())) return undefined;
+  const uin = Number(raw);
+  return Number.isSafeInteger(uin) && uin > 0 ? String(uin) : undefined;
+}
+
 /** 群临时会话私聊：icqq message_type=private & sub_type=group */
 export function isIcqqGroupTempPrivateMessage(data: IcqqMessageEvent): boolean {
   const messageType =

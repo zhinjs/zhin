@@ -80,6 +80,32 @@ export class RuntimeInteractiveRouter<Admission = never> {
     return allocated;
   }
 
+  /**
+   * Content-aware probe for Room routing: would this input resolve against an unexpired keyboard
+   * fallback on this exact (Endpoint-scoped) conversation and generation? A live keyboard alone is
+   * not an answer. With an action segment, only a payload that belongs to one of this
+   * conversation's live fallback maps counts; plain text counts only when its label / number maps
+   * to a button. Strictly read-only: it never calls `#pruneFallbacks()` and never mutates state;
+   * expired entries are simply ignored.
+   */
+  resolvesLiveFallback(
+    conversation: ConversationRef,
+    generation: number,
+    input: { readonly content: string; readonly segments?: readonly Segment[] },
+  ): boolean {
+    const now = Date.now();
+    const entries = this.#fallbacks.get(interactiveConversationKey(conversation, generation));
+    const live = entries?.filter(entry => entry.expiresAt > now);
+    if (!live?.length) return false;
+    const actionPayload = actionPayloadFromSegments(input.segments);
+    if (actionPayload !== undefined) {
+      return live.some(entry => Object.values(entry.map).includes(actionPayload));
+    }
+    const raw = input.content.trim();
+    if (!raw) return false;
+    return resolvePayloadFromText(raw, Object.assign({}, ...live.map(entry => entry.map))) !== undefined;
+  }
+
   resolvePayload(message: Message): string | undefined {
     const fromSegments = actionPayloadFromSegments(message.segments);
     if (fromSegments) return fromSegments;
@@ -153,7 +179,8 @@ export class RuntimeInteractiveRouter<Admission = never> {
   }
 }
 
-function actionPayloadFromSegments(segments: readonly Segment[] | undefined): string | undefined {
+/** @internal Payload of the first action segment (platform callback) that carries a non-empty string. */
+export function actionPayloadFromSegments(segments: readonly Segment[] | undefined): string | undefined {
   for (const segment of segments ?? []) {
     if (segment.type !== 'action') continue;
     const payload = (segment.data as { payload?: unknown } | undefined)?.payload;

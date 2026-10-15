@@ -1,5 +1,5 @@
 import { readJsonBody } from '@zhin.js/host-http';
-import type { WorkroomEffectSponsorDecisionCommand } from '@zhin.js/agent/runtime';
+import type { WorkroomEffectSponsorDecisionCommand } from '@zhin.js/workroom';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { writeJson } from './http-response.js';
 import {

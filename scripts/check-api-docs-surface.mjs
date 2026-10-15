@@ -107,7 +107,7 @@ const expectedMembers = new Map([
   ['zhin.js/core/runtime.MessageBase', [
     '$client', '$reply', '$replyFrom', '$replyToChannel', '$replyToGroup', '$replyToPrivate',
     '$sendTo', 'clientAdapter', 'content', 'conversation', 'endpointId', 'generation', 'id',
-    'mentioned', 'message', 'metadata', 'replyTo', 'segments', 'sender',
+    'mentioned', 'message', 'metadata', 'origin', 'replyTo', 'segments', 'sender',
   ]],
   ['zhin.js.PluginDefinition', ['config', 'metadata', 'name', 'requires', 'setup']],
   ['zhin.js.PluginConfigSchema', ['output', 'toJsonSchema']],

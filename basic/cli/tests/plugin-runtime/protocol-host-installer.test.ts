@@ -10,20 +10,18 @@ import {
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   agentHostToken,
+} from '@zhin.js/agent/runtime';
+import { workroomHostToken, workroomAssignmentAuthorityGrantRepositoryToken, workroomAssignmentGrantClaimPreviewToken, MemoryAssignmentAuthorityGrantRepository } from '@zhin.js/workroom';
+import { workroomSchedulerAssignmentRouteRegistryToken } from '@zhin.js/workroom/scheduler';
+import {
   remoteAssignmentDispatchServiceToken,
   remoteAssignmentDispatchSchedulerToken,
   remoteAssignmentDispatchCommandServiceToken,
   workroomRemoteAssignmentAuthorityToken,
   workroomRemoteCallbackRuntimeToken,
   workroomRemoteExecutorToken,
-  workroomSchedulerAssignmentRouteRegistryToken,
-  workroomAssignmentAuthorityGrantRepositoryToken,
-  workroomAssignmentGrantClaimPreviewToken,
-} from '@zhin.js/agent/runtime';
-import {
-  MemoryAssignmentAuthorityGrantRepository,
   WORKROOM_A2A_EXTENSION_URI,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom/remote';
 import type { RootResourceContext } from '@zhin.js/runtime';
 import { installProtocolHosts } from '../../src/plugin-runtime/protocol-host-installer.js';
 
@@ -60,6 +58,7 @@ describe('Protocol Host composition', () => {
       introspection: { listMcpServers: () => [] },
       console: {} as never,
     });
+    resources.provide(workroomHostToken, { console: { workroomCatalog: {} } as never });
     resources.provide(workroomSchedulerAssignmentRouteRegistryToken, {
       generation: 1,
       register: registerRoute,

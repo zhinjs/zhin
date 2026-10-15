@@ -83,6 +83,11 @@ export interface EndpointActivationContext {
   readonly signal: AbortSignal;
   readonly identity: EndpointIdentity;
   readonly events: EndpointEventSink;
+  /**
+   * 上报登录后的平台账号 id（运行期事实）。空 / 非法值视为未登录并撤销登记；
+   * 仅在 generation active 后才进入进程级 Peer Registry。
+   */
+  reportSelfUserId(userId: string | undefined): void;
 }
 
 /** Context passed once to an object-style Endpoint's `connect` hook. */
@@ -101,6 +106,8 @@ export interface EndpointImplementation<TClient = unknown> {
   readonly client: TClient;
   readonly transportState?: EndpointTransportState;
   readonly name?: string;
+  /** 登录后的平台账号 id；open() 后读取一次并上报，空则不上报。 */
+  readonly selfUserId?: string;
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;

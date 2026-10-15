@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { selfDeliveryProjectToken } from '@zhin.js/agent/runtime';
+import { selfDeliveryProjectToken } from '@zhin.js/workroom';
 
 export default defineCommand({
   description: 'Check self-delivery configuration and live capabilities',

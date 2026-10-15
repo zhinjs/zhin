@@ -1,9 +1,11 @@
 import type {
   AIService,
   AssistantConfig,
-  WorkroomDefinition,
   McpServerEntry,
 } from '@zhin.js/agent';
+import type {
+  WorkroomDefinition,
+} from '@zhin.js/workroom';
 import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';

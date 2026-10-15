@@ -16,6 +16,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const scanRoots = [
   'packages/im/ai/src',
   'packages/im/agent/src',
+  'packages/im/workroom/src',
   'packages/im/core/src',
   'packages/im/zhin/src',
 ];

@@ -1,3 +1,4 @@
+import type { Segment } from '../../src/built/segment-contract/types.js';
 import { RuntimeInteractiveRouter } from '../../src/plugin-runtime/im/interactive-router.js';
 import type { Message } from '../../src/plugin-runtime/im/contracts.js';
 
@@ -57,5 +58,54 @@ describe('Interactive fallback numbering', () => {
     expect(router.rememberFallback(conversation, 1, map)['10']).toBe('ttt:board:cell-9');
     expect(router.resolvePayload(message('@bot ttt 10'))).toBe('ttt:board:cell-9');
     expect(router.resolvePayload(message('ttt 11'))).toBeUndefined();
+  });
+});
+
+describe('Interactive fallback probe', () => {
+  const input = (content: string, segments?: Segment[]) => ({ content, ...(segments ? { segments } : {}) });
+
+  it('counts a live keyboard as pending only when the input resolves to a button, per exact endpoint conversation and generation', () => {
+    let now = 1000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const router = new RuntimeInteractiveRouter(100);
+      expect(router.resolvesLiveFallback(conversation, 1, input('1'))).toBe(false);
+      router.rememberFallback(conversation, 1, { '1': 'p' });
+      expect(router.resolvesLiveFallback(conversation, 1, input('1'))).toBe(true);
+      expect(router.resolvesLiveFallback(conversation, 1, input('hello @other'))).toBe(false);
+      expect(router.resolvesLiveFallback(conversation, 1, input(''))).toBe(false);
+      expect(router.resolvesLiveFallback(conversation, 1, input('', [{ type: 'action', data: { payload: 'p' } }]))).toBe(true);
+      expect(router.resolvesLiveFallback(conversation, 2, input('1'))).toBe(false);
+      expect(router.resolvesLiveFallback({ ...conversation, endpoint: { ...conversation.endpoint, id: 'other' } }, 1, input('1'))).toBe(false);
+      expect(router.resolvePayload(message('1'))).toBe('p');
+      now += 101;
+      expect(router.resolvesLiveFallback(conversation, 1, input('1'))).toBe(false);
+    } finally { clock.mockRestore(); }
+  });
+
+  it('counts an action segment only when its payload belongs to a live fallback map of this conversation', () => {
+    const router = new RuntimeInteractiveRouter(100);
+    const action = (payload: string) => input('', [{ type: 'action', data: { payload } }]);
+    expect(router.resolvesLiveFallback(conversation, 1, action('p'))).toBe(false);
+    router.rememberFallback(conversation, 1, { '1': 'p', yes: 'q' });
+    expect(router.resolvesLiveFallback(conversation, 1, action('p'))).toBe(true);
+    expect(router.resolvesLiveFallback(conversation, 1, action('q'))).toBe(true);
+    expect(router.resolvesLiveFallback(conversation, 1, action('foreign'))).toBe(false);
+    expect(router.resolvesLiveFallback(conversation, 1, input('1', [{ type: 'action', data: { payload: 'foreign' } }]))).toBe(false);
+    expect(router.resolvesLiveFallback(conversation, 2, action('p'))).toBe(false);
+    expect(router.resolvesLiveFallback({ ...conversation, endpoint: { ...conversation.endpoint, id: 'other' } }, 1, action('p'))).toBe(false);
+  });
+
+  it('does not prune or otherwise mutate state', () => {
+    let now = 1000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const router = new RuntimeInteractiveRouter(100);
+      router.rememberFallback(conversation, 1, { '1': 'p' });
+      now += 101;
+      expect(router.resolvesLiveFallback(conversation, 1, input('1'))).toBe(false);
+      // The probe left the expired entry for the normal path to retire, so it still reads as an expired button.
+      expect(router.isExpiredFallback(message('1'))).toBe(true);
+    } finally { clock.mockRestore(); }
   });
 });

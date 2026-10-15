@@ -1,7 +1,8 @@
+// 保留内部 import 的原因：该 coordinator 只在 Host 内部构造，aborted 路径无法通过公开接口单独触达。
 import {
   workroomAssignmentKnowledgeContextToken,
   workroomEphemeralAssignmentContextToken,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomKnowledgeCoordinator } from '../../../src/plugin-runtime/workroom/knowledge-coordinator.js';

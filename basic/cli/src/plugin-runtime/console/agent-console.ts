@@ -3,16 +3,22 @@ import type {
   ConsoleWorkroomKnowledgeControlPort,
   ConsoleWorkroomProfileControlPort,
 } from '@zhin.js/host-http';
-import type { PortfolioSponsorProjection, WorkroomDefinition } from '@zhin.js/agent';
 import type {
+  WorkroomDefinition,
   AgentHostWorkroomRunControlPort,
-  PortfolioSponsorCommand,
-  WorkroomDataLifecycleConsoleControlPort,
   WorkroomEffectSponsorDecisionCommand,
   WorkroomEffectSponsorDecisionRecord,
   WorkroomRuntimeHandle,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
+import type {
+  WorkroomDataLifecycleConsoleControlPort,
+} from '@zhin.js/workroom/data-governance';
+import type { PortfolioSponsorProjection, PortfolioSponsorCommand } from '@zhin.js/workroom/portfolio';
 import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import { isWorkroomPackageMissing } from '../../utils/optional-workroom.js';
+
+const logger = getLogger('agent-console');
 
 /**
  * 新 Runtime 的 agent 门面。Session tree 仍由独立服务端口提供；Agent 本体只从
@@ -21,11 +27,48 @@ import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-r
  */
 let agentModule: {
   agentHostToken?: { readonly id: TokenId };
+  workroomHostToken?: { readonly id: TokenId };
 } | null | undefined;
 
-void import('@zhin.js/agent/runtime')
-  .then((runtime) => { agentModule = runtime as typeof agentModule; })
-  .catch(() => { agentModule = null; });
+type AgentConsoleModule = NonNullable<typeof agentModule>;
+
+/**
+ * Resolves the Console's token module. Returns null when the Agent package is
+ * absent. Workroom is optional: a genuinely missing package degrades silently
+ * (no Workroom routes); any other load error is reported and also degrades the
+ * Console only (startup still fails closed independently). The result is
+ * produced after both imports settle so it is assigned atomically.
+ */
+export async function loadAgentConsoleModule(
+  importAgent: () => Promise<{ agentHostToken: { readonly id: TokenId } }>,
+  importWorkroom: () => Promise<{ workroomHostToken: { readonly id: TokenId } }>,
+  onWarn: (message: string) => void,
+): Promise<AgentConsoleModule | null> {
+  let agentHostToken: { readonly id: TokenId };
+  try {
+    agentHostToken = (await importAgent()).agentHostToken;
+  } catch {
+    return null;
+  }
+  let workroomHostToken: { readonly id: TokenId } | undefined;
+  try {
+    workroomHostToken = (await importWorkroom()).workroomHostToken;
+  } catch (error) {
+    if (!isWorkroomPackageMissing(error)) {
+      onWarn(formatCompact({
+        op: 'workroom_console_token_load_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+  }
+  return { agentHostToken, ...(workroomHostToken ? { workroomHostToken } : {}) };
+}
+
+void loadAgentConsoleModule(
+  () => import('@zhin.js/agent/runtime'),
+  () => import('@zhin.js/workroom'),
+  message => logger.warn(message),
+).then(module => { agentModule = module; });
 
 export type AgentIntrospection = {
   listTools(): readonly { name: string; hidden?: boolean; description?: string }[];
@@ -45,10 +88,10 @@ export function resolveGenerationAgentIntrospection(
 
 export type AgentConsolePort = {
   readonly sessionTree: ConsoleAgentRuntime['sessionTree'];
-  readonly workroom: WorkroomRuntimeHandle;
+  readonly workroom?: WorkroomRuntimeHandle;
   readonly workroomControl?: AgentHostWorkroomRunControlPort;
   readonly assistant: AssistantRuntime | null;
-  readonly workroomCatalog: {
+  readonly workroomCatalog?: {
     read(): Promise<Readonly<{
       definitions: Readonly<Record<string, WorkroomDefinition>>;
       revision: string;
@@ -99,15 +142,37 @@ export type AgentConsolePort = {
   readonly dataLifecycle?: WorkroomDataLifecycleConsoleControlPort;
 };
 
+/**
+ * Agent 与 Workroom 分别发布各自的 Host token；Console 门面在这里合并成一个视图。
+ * 用属性描述符合并，保留 Workroom 控制端口的惰性 getter（这些端口在 generation 内晚绑定）。
+ */
 export function resolveGenerationAgentConsole(
   snapshot: RuntimeSnapshot | undefined,
-  token: { readonly id: TokenId } | undefined,
+  agentToken: { readonly id: TokenId } | undefined,
+  workroomToken?: { readonly id: TokenId },
 ): AgentConsolePort | null {
-  if (!snapshot || !token) return null;
-  const host = snapshot.resources.get(snapshot.root)?.get(token.id) as {
-    console?: AgentConsolePort;
-  } | undefined;
-  return host?.console ?? null;
+  if (!snapshot || !agentToken) return null;
+  const rootResources = snapshot.resources.get(snapshot.root);
+  const agentConsole = (rootResources?.get(agentToken.id) as { console?: object } | undefined)?.console;
+  if (!agentConsole) return null;
+  const workroomConsole = workroomToken
+    ? (rootResources?.get(workroomToken.id) as { console?: object } | undefined)?.console
+    : undefined;
+  if (!workroomConsole) {
+    // Workroom not installed (or not published): Agent console alone; Workroom routes answer 503.
+    return Object.freeze(Object.defineProperties({}, Object.getOwnPropertyDescriptors(agentConsole))) as AgentConsolePort;
+  }
+  const overlapping = Reflect.ownKeys(agentConsole)
+    .filter(key => Object.prototype.hasOwnProperty.call(workroomConsole, key));
+  if (overlapping.length > 0) {
+    throw new Error(
+      `Agent and Workroom console ports must not define overlapping keys: ${overlapping.map(String).join(', ')}`,
+    );
+  }
+  return Object.freeze(Object.defineProperties({}, {
+    ...Object.getOwnPropertyDescriptors(agentConsole),
+    ...Object.getOwnPropertyDescriptors(workroomConsole),
+  })) as AgentConsolePort;
 }
 
 export function resolveCurrentAgentIntrospection(
@@ -119,7 +184,11 @@ export function resolveCurrentAgentIntrospection(
 export function resolveCurrentAgentConsole(
   snapshot: RuntimeSnapshot | undefined,
 ): AgentConsolePort | null {
-  return resolveGenerationAgentConsole(snapshot, agentModule?.agentHostToken);
+  return resolveGenerationAgentConsole(
+    snapshot,
+    agentModule?.agentHostToken,
+    agentModule?.workroomHostToken,
+  );
 }
 
 export function acquireGenerationAgentConsole(snapshots?: SnapshotReader): {

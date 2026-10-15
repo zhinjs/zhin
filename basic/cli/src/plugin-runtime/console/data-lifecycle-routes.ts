@@ -1,5 +1,7 @@
 import { readJsonBody } from '@zhin.js/host-http';
-import type { WorkroomDataLifecycleConsoleCommand } from '@zhin.js/agent/runtime';
+import type {
+  WorkroomDataLifecycleConsoleCommand,
+} from '@zhin.js/workroom/data-governance';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { writeJson } from './http-response.js';
 import {

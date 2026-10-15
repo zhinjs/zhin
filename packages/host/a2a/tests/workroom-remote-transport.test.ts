@@ -4,10 +4,10 @@ import {
   createWorkroomRemoteDispatchOutboxItem,
   digestRemoteCallbackPollSnapshot,
   WORKROOM_A2A_EXTENSION_URI,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom/remote';
 import { WorkroomA2aAuthRegistry } from '../src/workroom-auth-registry.js';
 import { WorkroomA2aHttpRemoteTransport } from '../src/workroom-remote-transport.js';
-import { remoteDisclosureFixture } from '../../../im/agent/tests/workroom/remote-disclosure-fixture.js';
+import { remoteDisclosureFixture } from '../../../im/workroom/tests/workroom/remote-disclosure-fixture.js';
 
 const CARD = `sha256:${'a'.repeat(64)}`;
 const EXTENSION = `sha256:${createHash('sha256').update(WORKROOM_A2A_EXTENSION_URI).digest('hex')}`;

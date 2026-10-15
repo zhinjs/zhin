@@ -37,8 +37,8 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
     "@zhin.js/pagemanager": "workspace:*",
-    "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
     "@zhin.js/scaffold-wizard": "workspace:*",
     "@zhin.js/schedule": "workspace:*",
@@ -64,6 +64,7 @@
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/speech": "workspace:*",
+    "@zhin.js/workroom": "workspace:*",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
   },
@@ -77,6 +78,9 @@
     "@zhin.js/speech": {
       "optional": true
     },
+    "@zhin.js/workroom": {
+      "optional": true
+    },
     "typescript": {
       "optional": true
     }
@@ -85,6 +89,7 @@
     "@zhin.js/a2a": "workspace:^",
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/speech": "workspace:^",
+    "@zhin.js/workroom": "workspace:^",
     "typescript": ">=5.8.0 <7.0.0"
   },
   "repository": {

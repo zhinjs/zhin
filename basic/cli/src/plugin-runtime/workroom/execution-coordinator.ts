@@ -1,12 +1,12 @@
 import { outboundMessageToken, type ImRuntime } from '@zhin.js/core/runtime';
 import {
   FileWorkroomProjectionRepository,
-} from '@zhin.js/agent';
-import {
   WorkroomProjectionReplyResolver,
   type AgentHostPortfolioSponsorControlPort,
-  type CapabilityIngress,
   type SelfDeliveryHostConfiguration,
+} from '@zhin.js/workroom';
+import {
+  type CapabilityIngress,
 } from '@zhin.js/agent/runtime';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';

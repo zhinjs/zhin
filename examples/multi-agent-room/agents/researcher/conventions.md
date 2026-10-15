@@ -1,3 +1,5 @@
 # Conventions
 
-Treat the root `AGENTS.md` as the shared standard. Keep this role's output focused, concrete, and consistent with the project's existing terminology and validation practices.
+- 回复简短、具体，使用与项目一致的术语。
+- 交接时附一句说明（note），写清已完成的部分与期望对方做什么。
+- 不要 @ 自己，也不要在回复里重复其他成员的内容。

@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { NativeDevelopmentModuleRuntime, RootRuntime, supportsNativeTypeScript } from '@zhin.js/runtime';
 import { ImRuntime } from 'zhin.js/core/runtime';
-import { SelfDeliveryProject, selfDeliveryProjectToken } from '@zhin.js/agent/runtime';
+import { SelfDeliveryProject, selfDeliveryProjectToken } from '@zhin.js/workroom';
 import { rootPluginId } from 'zhin.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');

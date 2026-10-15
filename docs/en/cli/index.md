@@ -294,8 +294,6 @@ zhin agent workroom run <runId> --project <projectId> [--json]
 zhin agent workroom readiness <runId> --project <projectId> [--json]
 zhin agent workroom cancel <runId> --project <projectId> --expected-sequence <n> --reason-code <code> --control-deadline <timestamp> [--operation-id <id>] [--json]
 zhin agent workroom request-replan <runId> --project <projectId> --expected-sequence <n> --reason-code <code> [--operation-id <id>] [--json]
-zhin agent legacy-runs <input> [--output <file>]
-zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [--storage file|database]
 ```
 
 | Command | Purpose |
@@ -303,7 +301,6 @@ zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [
 | `info` | List discovered Agent capabilities and named Agents (Tools, Skills, Hooks…) |
 | `workroom runs` / `run` / `readiness` | Connect to the running bot and read Run, Task, Assignment and Blocker state (no content) using the token identity from config |
 | `workroom cancel` / `request-replan` | Require the current Project Sponsor permission and use `expected-sequence` to prevent concurrent conflicts. `request-replan` only records the replan request and pauses scheduling; it never pretends a new plan revision exists |
-| `legacy-runs` / `legacy-payloads` | Offline, read-only audits; they don't start the bot or write to a new Workroom Journal |
 
 ## Exit Codes
 

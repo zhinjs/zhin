@@ -7,13 +7,14 @@ import {
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { loadWorkroomPackage, loadWorkroomRemotePackage, loadWorkroomSchedulerPackage } from '../utils/optional-workroom.js';
 import type { HttpHostOptions } from '@zhin.js/host-http';
 import type { RuntimeMcpConfig } from '@zhin.js/mcp/runtime';
 import type { RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
 import type {
   WorkroomRemoteAssignmentAuthorityInput,
   WorkroomRemoteAssignmentResolvedAuthority,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom/remote';
 import {
   expandEnvironmentValue,
   type RootResourceInstaller,
@@ -106,9 +107,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         WorkroomA2aHttpRemoteTransport,
       }, {
         agentHostToken,
-        remoteAssignmentDispatchCommandServiceToken,
-        remoteAssignmentDispatchSchedulerToken,
-        remoteAssignmentDispatchServiceToken,
+      }, {
         createWorkroomGenerationAuthoritySnapshotFromRuntime,
         GenerationOwnedWorkroomAssignmentAuthorityProvider,
         GrantAwareRemoteAssignmentDispatchCommandService,
@@ -122,16 +121,14 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         workroomAssignmentAuthorityGrantApplicationToken,
         workroomProjectProfileRegistryToken,
         workroomRemoteEndpointAuthorityToken,
-        workroomRemoteAssignmentAuthorityToken,
-        workroomRemoteCallbackRuntimeToken,
-        workroomRemoteExecutorToken,
-        workroomSchedulerAssignmentRouteRegistryToken,
+        workroomHostToken,
       }, {
-        WorkroomRemoteCallbackGateway,
+        workroomSchedulerAssignmentRouteRegistryToken,
       }] = await Promise.all([
         import('@zhin.js/a2a/runtime'),
         import('@zhin.js/agent/runtime'),
-        import('@zhin.js/agent'),
+        loadWorkroomPackage(),
+        loadWorkroomSchedulerPackage(),
       ]);
       if (resolved.a2a.enabled !== false) {
         if (!resources.has(agentHostToken)) {
@@ -152,6 +149,18 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         throw new Error('a2a.workroomRemoteExecutors.enabled requires workroomCallbacks.enabled');
       }
       if (callbacks?.enabled === true) {
+        // A2A extension (frozen subpath). Only this transport wiring is
+        // conditional on `a2a.workroomCallbacks.enabled`; the default Workroom
+        // assembly still imports the remote subpath statically (revisit after C2).
+        const {
+          remoteAssignmentDispatchCommandServiceToken,
+          remoteAssignmentDispatchSchedulerToken,
+          remoteAssignmentDispatchServiceToken,
+          workroomRemoteAssignmentAuthorityToken,
+          workroomRemoteCallbackRuntimeToken,
+          workroomRemoteExecutorToken,
+          WorkroomRemoteCallbackGateway,
+        } = await loadWorkroomRemotePackage();
         if (!resources.has(workroomRemoteCallbackRuntimeToken)) {
           throw new Error('a2a.workroomCallbacks.enabled requires the Workroom Agent runtime');
         }
@@ -229,6 +238,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
             && resources.has(workroomProjectProfileRegistryToken)
             && resources.has(workroomAssignmentAuthorityGrantToken)) {
             const agentHost = resources.use(agentHostToken);
+            const workroomHost = resources.use(workroomHostToken);
             resources.provide(
               workroomRemoteAssignmentAuthorityToken,
               Object.freeze({
@@ -250,7 +260,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
                     return await new GenerationOwnedWorkroomAssignmentAuthorityProvider({
                       generation: generationSupply,
                       profiles: resources.use(workroomProjectProfileRegistryToken),
-                      catalog: agentHost.console.workroomCatalog,
+                      catalog: workroomHost.console.workroomCatalog,
                       grants: resources.use(workroomAssignmentAuthorityGrantToken),
                       endpoints: remoteTransport,
                     }).resolve(input);

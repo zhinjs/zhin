@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "zhin.js": "workspace:*",
-    "@zhin.js/agent": "workspace:*"
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/workroom": "workspace:*"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",

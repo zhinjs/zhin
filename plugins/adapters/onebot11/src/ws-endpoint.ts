@@ -42,10 +42,13 @@ import {
   type OneBot11WsCreateOptions,
   type OneBot11WsSocket,
 } from './ws-types.js';
+import { probeOnebot11SelfId, resolveOnebot11SelfId } from './self-id.js';
 import { callOnebot11Client, createOnebot11EndpointClient, forwardOnebot11ClientEvents, type Onebot11Client } from './client.js';
 
 export interface OneBot11WsEndpointOptions {
   readonly id: CapabilityId;
+  /** 连接后 best-effort 调用 get_login_info 上报账号（Adapter 工厂开启；默认关闭以免占用首个 echo）。 */
+  readonly probeLoginInfo?: boolean;
   readonly config: OneBot11WsConfig;
   readonly createWebSocket?: (
     url: string,
@@ -63,6 +66,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
   readonly content;
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot11WsSocket;
+  #stopped = false;
   #requestId = { value: 0 };
   #pending = new Map<string, OneBot11PendingAction>();
 
@@ -101,8 +105,10 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
 
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;
+    this.#stopped = false;
     try {
       await this.#lifecycle.start((handle) => this.#connect(handle));
+      if (this.#options.probeLoginInfo) void this.#probeSelfUserId();
     } catch (err) {
       // start 失败必须清理现场（状态复位由基座保证）
       if (this.#ws) {
@@ -118,11 +124,13 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
   }
 
   async stop(): Promise<void> {
+    this.#stopped = true;
     this.close();
     // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
     await this.#lifecycle.stop();
     rejectAllPending(this.#pending);
     this.#ws = undefined;
+    this.reportSelfUserId(undefined);
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -156,6 +164,8 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
   }
 
   #admitRaw(ev: OneBot11Event): void {
+    const selfId = resolveOnebot11SelfId(ev.self_id);
+    if (!this.#stopped && selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
         (name, payload) => this.emit(name, payload),
@@ -189,6 +199,18 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
         error: err instanceof Error ? err.message : String(err),
       }));
     });
+  }
+
+  /** Best-effort 登录账号探测；失败仅 debug，不影响连接。 */
+  async #probeSelfUserId(): Promise<void> {
+    const selfId = await probeOnebot11SelfId(this.client, (error) => {
+      this.#logger.debug(formatCompact({
+        op: 'onebot11_get_login_info_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+    if (this.#stopped || this.transportState !== 'open') return;
+    if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
   }
 
   #warnPlatformEvent(error: unknown): void {

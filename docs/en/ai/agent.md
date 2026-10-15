@@ -464,9 +464,9 @@ On first issue, a self-hosted Host creates `.zhin/workroom-data-governance-root-
 - **Remote execution**: the optional Remote A2A Executor reuses the same Assignment lease / fence / event contract. A new claim is allowed only when the persistent Profile, Authority Grant, Workspace, Disclosure and the endpoint's Card / auth / transport snapshots all match exactly; anything missing blocks persistently. The old `ai.remoteAgents` poller no longer exists.
 :::
 
-### Auditing legacy data
+### Legacy data
 
-When upgrading old data, `zhin agent legacy-runs <input>` audits a legacy Run export read-only, and `zhin agent legacy-payloads <input> --kind <kind>` scans legacy inline payloads read-only. Both only produce create-only audits / proposals; they never write a new Journal, accept old results, delete payloads or perform migrations. See [Legacy concept migration](../contributing/legacy-concepts.md).
+The legacy format (a Journal with embedded payloads) and legacy Runs are no longer supported and have no migration tooling; opening a legacy-format store fails closed. See [Legacy concept migration](../contributing/legacy-concepts.md).
 
 ## Related
 

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import {
   createLocalWorkroomDataGovernanceAuthority,
-} from '../../../src/plugin-runtime/workroom/local-data-governance.js';
+} from '../../../src/plugin-runtime/workroom/module.js';
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();

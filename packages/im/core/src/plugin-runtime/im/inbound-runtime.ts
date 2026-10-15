@@ -5,7 +5,7 @@ import type {
   RuntimeSnapshot,
   SnapshotLease,
 } from '@zhin.js/plugin-runtime';
-import type { EndpointEvent } from '@zhin.js/adapter';
+import type { EndpointEvent, PeerRegistry } from '@zhin.js/adapter';
 import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
@@ -37,17 +37,36 @@ import {
   type RuntimeMessageEvent,
 } from './message-events.js';
 import { resolveIngressRoute } from './ingress-route.js';
+import type { InboundDeduper } from './inbound-dedup.js';
+import { actionPayloadFromSegments } from './interactive-router.js';
+import { readMentionSegmentTarget } from '../../built/segment-contract/mention.js';
+import {
+  roomMembershipToken,
+  type InboundOriginClassifier,
+  type RoomInboundRouteInput,
+  type RoomMembershipPort,
+} from './inbound-origin.js';
 
 const logger = getLogger('im.inbound');
 
 type InboundInteractionPort = Pick<
   RuntimeInteractionCoordinator<GenerationAdmissionGate>,
   'create' | 'createForMessage' | 'createFromUnknown' | 'dispatch' | 'resolveClaim'
->;
+> & Partial<Pick<RuntimeInteractionCoordinator<GenerationAdmissionGate>, 'hasPendingAnswer'>>;
 
 interface InboundRuntimeContext {
   readonly interactions: InboundInteractionPort;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
+  readonly originClassifier?: InboundOriginClassifier;
+  /** Cross-Endpoint dedup of human group messages. Absent: no dedup. */
+  readonly deduper?: Pick<InboundDeduper, 'claim'> & Partial<Pick<InboundDeduper, 'arbitrate'>>;
+  /** Registry probes handed to the Room Router (account / availability). */
+  readonly registry?: Pick<PeerRegistry, 'isReady' | 'selfOf'>;
+  /** Process-level prompt probe (`inboundClaim`-style). Absent: false. */
+  readonly inboundClaimPending?: (conversation: IncomingMessage['conversation'], senderId: string) => boolean;
+  /** Resolve a replied-to message id to the local Endpoint that sent it (outbound ledger). */
+  readonly resolveReplyTarget?: (conversation: IncomingMessage['conversation'], messageId: string) => string | undefined;
   readonly enrichSender?: (
     sender: MessageSenderRef | undefined,
     conversation: IncomingMessage['conversation'],
@@ -111,6 +130,45 @@ export class InboundRuntime {
     }
   }
 
+  #routeInput(
+    conversation: IncomingMessage['conversation'],
+    senderId: string,
+    input: IncomingMessage,
+    adapters: ReturnType<typeof requireAdapters>,
+    generation: number,
+  ): RoomInboundRouteInput {
+    const mentionTargets = (input.segments ?? [])
+      .map((segment) => readMentionSegmentTarget(segment as { type: unknown; data?: unknown }))
+      .filter((target) => target !== '' && target !== 'all');
+    const replyToId = input.replyTo?.id;
+    const replyToEndpointId = replyToId !== undefined && this.context.resolveReplyTarget
+      ? this.context.resolveReplyTarget(conversation, replyToId)
+      : undefined;
+    const registry = this.context.registry;
+    return {
+      conversation,
+      senderId,
+      content: input.content,
+      mentionTargets,
+      ...(replyToEndpointId !== undefined ? { replyToEndpointId } : {}),
+      pending: (endpointId) => {
+        // Registry/index skew or a throwing probe must never fail the whole message closed:
+        // an Endpoint we cannot probe simply has nothing pending.
+        try {
+          const adapter = adapters.clientAdapter(endpointId as CapabilityId);
+          const probe = Object.freeze({ ...conversation, endpoint: Object.freeze({ id: endpointId, adapter }) });
+          return this.context.interactions.hasPendingAnswer?.(
+            probe, senderId, generation, { content: input.content, segments: input.segments },
+          ) === true || this.context.inboundClaimPending?.(probe, senderId) === true;
+        } catch {
+          return false;
+        }
+      },
+      accountOf: (endpointId) => registry?.selfOf(endpointId),
+      isAvailable: (endpointId) => registry?.isReady(endpointId) === true,
+    };
+  }
+
   async #receiveMessage(
     source: EndpointEvent<IncomingMessage>,
     admission?: GenerationAdmissionGate,
@@ -139,6 +197,125 @@ export class InboundRuntime {
       const enrichedSender = this.context.enrichSender
         ? this.context.enrichSender(input.sender, conversation, lease.value)
         : input.sender;
+      // Origin is decided only from trusted state (Registry / ledger / membership port),
+      // never from payload metadata or message text.
+      const roomMembership = resolveRoomMembership(lease.value);
+      const classified = this.context.originClassifier?.classify({
+        conversation,
+        sender: enrichedSender,
+        messageId: input.message?.id,
+        content: input.content,
+      }, roomMembership);
+      const origin = classified?.origin;
+      if (origin === 'self') {
+        logger.debug(formatCompact({
+          op: 'self_echo',
+          conv: formatConversationLog(conversation),
+          basis: classified?.basis,
+        }));
+        return Object.freeze({ matched: false });
+      }
+      // Must stay synchronous and before any await: concurrent arrivals of the same
+      // message from N Endpoints are decided atomically. Only human origin claims,
+      // so bot-origin messages never consume the key. Scoped to Room conversations:
+      // outside a Room each Endpoint keeps handling its own copy (mention / interaction
+      // state is relative to the receiving Endpoint).
+      let recordOnly: 'duplicate' | 'dedup_error' | undefined;
+      // Set when the Room Router picked this Endpoint (or a fallback took over for it): `mentioned`
+      // is relative to the receiving Endpoint, so the copy is forced to mentioned=true or AI ingress
+      // would not trigger.
+      let routedTarget = false;
+      let pendingSettle: { readonly target: string; readonly listed: boolean; readonly settle: () => Promise<'handle' | 'duplicate'> } | undefined;
+      // Action segments are only ever produced by an adapter from a platform callback structure
+      // (e.g. Telegram callback_query); a plain text message cannot carry one. Such a callback is
+      // delivered only to the Endpoint that sent the keyboard, and only that Endpoint holds the
+      // keyboard's JSX registry / fallback. It is handled where it arrived: never routed elsewhere,
+      // never claimed, never turned into a duplicate, never forced to mentioned.
+      const platformCallback = actionPayloadFromSegments(input.segments) !== undefined;
+      if ((origin === 'human' || origin === undefined) && this.context.deduper && !platformCallback
+        && (conversation.kind === 'group' || conversation.kind === 'channel')) {
+        try {
+          if (roomMembership?.hasRoom?.(conversation) === true) {
+            const senderId = String(enrichedSender?.id ?? '');
+            const deduper = this.context.deduper;
+            if (typeof roomMembership.route === 'function' && typeof deduper.arbitrate === 'function') {
+              const route = roomMembership.route.bind(roomMembership);
+              const routeInput = this.#routeInput(conversation, senderId, input, adapters, lease.value.generation);
+              const verdict = deduper.arbitrate(conversation, senderId, input.message?.id, () => {
+                try {
+                  const decision = route(routeInput);
+                  return decision
+                    ? { target: decision.endpointId, fallbacks: decision.fallbackEndpointIds ?? [] }
+                    : undefined;
+                } catch (error) {
+                  // A broken router must not drop the message: degrade to first-come-first-served.
+                  logger.warn(formatCompact({
+                    op: 'room_route_error',
+                    conv: formatConversationLog(conversation),
+                    error: error instanceof Error ? error.message : String(error),
+                  }));
+                  return undefined;
+                }
+              });
+              switch (verdict.kind) {
+                case 'handle':
+                  routedTarget = verdict.routed;
+                  break;
+                case 'duplicate':
+                  recordOnly = 'duplicate';
+                  logger.debug(formatCompact({
+                    op: 'room_non_target_copy',
+                    conv: formatConversationLog(conversation),
+                  }));
+                  break;
+                case 'wait':
+                  pendingSettle = verdict;
+                  break;
+                case 'unkeyed':
+                  // Known limitation: no message id / sender / private chat cannot be arbitrated,
+                  // so each Endpoint keeps handling its own copy (may duplicate, never drops).
+                  break;
+              }
+            } else {
+              const claim = deduper.claim(conversation, senderId, input.message?.id);
+              if (claim === 'duplicate') recordOnly = 'duplicate';
+            }
+          }
+        } catch (error) {
+          logger.warn(formatCompact({
+            op: 'inbound_dedup_error',
+            conv: formatConversationLog(conversation),
+            error: error instanceof Error ? error.message : String(error),
+          }));
+          recordOnly = 'dedup_error';
+        }
+      }
+      if (pendingSettle) {
+        // The Router's target had not delivered its copy yet. Wait (grace period, a couple of
+        // seconds at most, lease held) for it; if it never shows up this copy takes over so the
+        // message is not lost. Nothing has been recorded yet, so a duplicate stays history-only.
+        const outcome = await pendingSettle.settle();
+        if (outcome === 'handle') {
+          routedTarget = true;
+          if (!pendingSettle.listed) {
+            logger.warn(formatCompact({
+              op: 'room_unlisted_member_takeover',
+              conv: formatConversationLog(conversation),
+              target: pendingSettle.target,
+              takeover: conversation.endpoint.id,
+            }));
+          }
+          logger.debug(formatCompact({
+            op: 'room_target_missing_takeover',
+            conv: formatConversationLog(conversation),
+            target: pendingSettle.target,
+            takeover: conversation.endpoint.id,
+          }));
+        } else {
+          recordOnly = 'duplicate';
+        }
+      }
+      const mentioned = routedTarget ? true : input.mentioned;
       const message = new RuntimeMessage(
         conversation,
         input.content,
@@ -159,7 +336,7 @@ export class InboundRuntime {
               messageId: input.message?.id,
               timestamp: receivedAt,
               endpointId: input.endpointId,
-              mentioned: input.mentioned,
+              mentioned,
             },
           }, lease.value);
         },
@@ -168,7 +345,7 @@ export class InboundRuntime {
         input.segments ? Object.freeze([...input.segments]) : undefined,
         input.message,
         input.endpointId,
-        input.mentioned,
+        mentioned,
         input.replyTo,
         (): unknown => {
           if (!active) throw new Error('Message Client scope has ended');
@@ -177,10 +354,52 @@ export class InboundRuntime {
         source.endpoint.adapter,
         { snapshot: lease.value, assertActive: () => {
           if (!active) throw new Error('Message author binding scope has ended');
-        } },
+        }, ...(origin ? { origin } : {}) },
       );
       const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
+      if (recordOnly === 'duplicate') {
+        // Duplicate of a message already routed via another Endpoint: history only,
+        // no publish (avoids N copies in the console message feed).
+        logger.debug(formatCompact({
+          op: 'inbound_duplicate',
+          conv: formatConversationLog(conversation),
+          basis: recordOnly,
+        }));
+        return result;
+      }
+      if (recordOnly === 'dedup_error') {
+        // Undecidable: record only and never route (no duplicate routing), but publish so
+        // the console feed still shows the message and a persistent failure is visible.
+        this.context.publish({
+          direction: 'inbound',
+          conversation,
+          ...(input.sender !== undefined ? { sender: input.sender } : {}),
+          contentPreview: previewMessageContent(input.content),
+          ...(input.message?.id ? { messageId: input.message.id } : {}),
+          timestamp: receivedAt,
+        });
+        return result;
+      }
+      if (origin === 'member' || origin === 'peer_bot') {
+        // Bot-origin messages are recorded as chat history only: no claim, handlers,
+        // commands, middleware or ingress route (prevents bot-to-bot loops).
+        logger.debug(formatCompact({
+          op: 'bot_origin_recorded',
+          conv: formatConversationLog(conversation),
+          origin,
+          basis: classified?.basis,
+        }));
+        this.context.publish({
+          direction: 'inbound',
+          conversation,
+          ...(input.sender !== undefined ? { sender: input.sender } : {}),
+          contentPreview: previewMessageContent(input.content),
+          ...(input.message?.id ? { messageId: input.message.id } : {}),
+          timestamp: receivedAt,
+        });
+        return result;
+      }
       const claimed = await this.context.inboundClaim?.(message) === true;
       if (claimed) {
         result = interactionResult(requester);
@@ -393,6 +612,19 @@ export class InboundRuntime {
     return handled
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;
+  }
+}
+
+function resolveRoomMembership(snapshot: RuntimeSnapshot): RoomMembershipPort | undefined {
+  try {
+    const candidate = snapshot.resources.get(snapshot.root)?.get(roomMembershipToken.id);
+    return candidate
+      && typeof candidate === 'object'
+      && typeof (candidate as RoomMembershipPort).isMember === 'function'
+      ? candidate as RoomMembershipPort
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 

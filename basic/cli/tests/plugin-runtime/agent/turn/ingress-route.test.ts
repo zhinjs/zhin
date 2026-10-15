@@ -21,6 +21,20 @@ describe('AgentTurnIngressRoute', () => {
     expect(preRoute).toHaveBeenCalledWith(message, 42);
   });
 
+  it('behaves as a no-op Workroom pre-route when Workroom is not installed', async () => {
+    const route = new AgentTurnIngressRoute({
+      projectRoot: process.cwd(),
+      runtime: {} as never,
+      im: {} as never,
+      ingress: {} as never,
+      agent: {} as never,
+    });
+    const message = {} as never;
+
+    await expect(route.preRoute(message, {} as never, {} as never, 1)).resolves.toBe(false);
+    expect(route.shouldRouteBeforeDispatch(message)).toBe(false);
+  });
+
   it('selects a visible specialist only when no deterministic Agent was selected', async () => {
     const specialist = agent('reminders');
     const evaluate = vi.fn<DecisionProvider['evaluate']>().mockResolvedValue({

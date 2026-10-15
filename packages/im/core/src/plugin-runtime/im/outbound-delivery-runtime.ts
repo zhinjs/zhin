@@ -19,6 +19,8 @@ const logger = getLogger('im.outbound');
 interface OutboundDeliveryContext {
   prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
   record(request: SendRequest, receipt: DeliveryReceipt): Promise<void>;
+  /** Side-channel correlation ledger for inbound origin; failures never affect the receipt. */
+  ledger?(conversation: ConversationRef, receipt: DeliveryReceipt, payload: unknown): void;
   rememberFallback(
     conversation: ConversationRef,
     generation: number,
@@ -135,6 +137,11 @@ export class OutboundDeliveryRuntime {
 
           if (receipt.status === 'sent') {
             await this.context.record(request, receipt);
+            try {
+              this.context.ledger?.(request.conversation, receipt, payload);
+            } catch (error) {
+              logger.warn(`outbound ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
+            }
             this.context.publish({
               direction: 'outbound',
               rendering: projection.rendering,

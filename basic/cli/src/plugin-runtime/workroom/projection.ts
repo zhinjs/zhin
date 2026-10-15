@@ -14,8 +14,8 @@ import {
   type WorkroomProjectionRepository,
   type HumanIngressTargetResolverPort,
   type HumanIngressTargetResolutionRequest,
-} from '@zhin.js/agent';
-import { workroomProjectionCatalogBindingDigest } from '@zhin.js/agent/runtime';
+  workroomProjectionCatalogBindingDigest,
+} from '@zhin.js/workroom';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
 interface RuntimeEndpointIdentity {

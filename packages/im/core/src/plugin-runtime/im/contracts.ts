@@ -2,6 +2,7 @@ import type { JSXElement } from '@zhin.js/jsx';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { operationInputBinding } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
+import type { MessageOrigin } from './inbound-origin.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
 // 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
@@ -161,6 +162,11 @@ export interface MessageBase extends IncomingMessage {
   readonly metadata: Readonly<Record<string, unknown>>;
   readonly id?: string;
   readonly clientAdapter?: string;
+  /**
+   * 入站来源（self / member / peer_bot / human），仅由 InboundRuntime 可信判定写入；
+   * 合成消息（Console / Sandbox / 定时任务）为 undefined。绝不从 metadata / 正文读取。
+   */
+  readonly origin?: MessageOrigin;
   readonly $client: unknown;
   readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
   readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<DeliveryReceipt>;
@@ -183,6 +189,7 @@ export class RuntimeMessage implements MessageBase {
   readonly #author?: PluginId;
   readonly #snapshot?: RuntimeSnapshot;
   readonly #assertActive?: () => void;
+  readonly origin?: MessageOrigin;
 
   /** @internal Constructed only by the generation-owned IM Runtime. */
   constructor(
@@ -206,8 +213,14 @@ export class RuntimeMessage implements MessageBase {
       throw new Error('Message has no Endpoint Client context');
     },
     readonly clientAdapter?: string,
-    binding: Readonly<{ requester?: PluginId; snapshot?: RuntimeSnapshot; assertActive?: () => void }> = {},
+    binding: Readonly<{
+      requester?: PluginId;
+      snapshot?: RuntimeSnapshot;
+      assertActive?: () => void;
+      origin?: MessageOrigin;
+    }> = {},
   ) {
+    this.origin = binding.origin;
     this.#resolveClient = client;
     this.#reply = reply;
     this.#author = binding.requester;
@@ -260,7 +273,7 @@ export class RuntimeMessage implements MessageBase {
       this.conversation, this.content, this.generation, this.#reply,
       this.sender, this.metadata, this.segments, this.message, this.endpointId,
       this.mentioned, this.replyTo, this.#resolveClient, this.clientAdapter,
-      { requester: owner, snapshot, assertActive: this.#assertActive },
+      { requester: owner, snapshot, assertActive: this.#assertActive, origin: this.origin },
     );
   }
 
