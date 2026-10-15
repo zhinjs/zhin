@@ -156,6 +156,15 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 - PR 门禁只跑脚本化用例：`pnpm eval:agent`，不调用真模型。
 - 真模型的能力矩阵只在 nightly 跑（`.github/workflows/nightly-evals.yml`，`pnpm eval:nightly`），作为趋势指标，不作为 PR 必过项；预算上限见评测 README。
 
+## 包导出与发布清单
+
+workspace 包的 `exports` 带 `"development": "./src/*.ts"` 条件，仓库内的 Vitest、Vite、tsx 靠它直接跑 TypeScript 源码。`src/` 不在 npm 包里，所以发布出去的 `package.json` 不能带这个条件，否则开启 `development` 条件的工具（Vitest 4 默认开启）会去找不存在的文件。
+
+- 每个可发布包的 `publishConfig.exports` 等于去掉 `development` 后的 `exports`。`pnpm publish`（也就是 `changeset publish`）打包时会用它替换 `exports`，本地开发不受影响。
+- 修改 `exports` 后运行 `pnpm sync:publish-exports` 重新生成；`scripts/sync-publish-exports.test.ts` 在漂移、发布清单仍带 `development` 或导出目标不在 `files` 里时失败。
+- `pnpm check:plugin-scaffold` 打包 `zhin.js` 的依赖闭包，确认每个包的 `exports` 目标都在 tarball 里，再用本地构建的 CLI 跑 `zhin new`，对这些 tarball 安装后执行生成的 Vitest、`tsc` 和 `pnpm pack`。
+- 只用 `pnpm publish` 发布：`npm publish` 不认 `publishConfig.exports`，也不会替换 `workspace:` 协议。
+
 ## changeset 工作流
 
 ### 变更审查与兼容性

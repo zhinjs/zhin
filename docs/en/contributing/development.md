@@ -127,6 +127,15 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | Stable Smoke (`pnpm check:stable`) | Sandbox + Agent core unit tests + minimal-bot contract |
 | L4-CI (`pnpm check:l4-ci`) | L4 deterministic subset (orchestration/memory/full-bot contract); full `pnpm check:l4` runs nightly |
 
+## Package Exports and Published Manifests
+
+Workspace packages declare a `"development": "./src/*.ts"` export condition so Vitest, Vite, and tsx run TypeScript sources inside the repo. `src/` is not in the npm tarball, so the published `package.json` must not carry that condition; otherwise any tool that enables `development` (Vitest 4 does by default) looks for files that do not exist.
+
+- Every publishable package has `publishConfig.exports` equal to `exports` without `development`. `pnpm publish` (and therefore `changeset publish`) swaps it in when packing, so local development is unaffected.
+- After changing `exports`, run `pnpm sync:publish-exports`. `scripts/sync-publish-exports.test.ts` fails on drift, on a published manifest that still has `development`, or on an export target outside `files`.
+- `pnpm check:plugin-scaffold` packs the `zhin.js` dependency closure, checks every `exports` target is in its tarball, then runs `zhin new` from the locally built CLI, installs against those tarballs, and runs the generated Vitest, `tsc`, and `pnpm pack`.
+- Publish with `pnpm publish` only: `npm publish` ignores `publishConfig.exports` and does not rewrite `workspace:` protocols.
+
 ## Changeset Workflow
 
 The repo uses [changesets](https://github.com/changesets/changesets) for version management and changelogs (config in `.changeset/config.json`: `baseBranch: main`, `access: public`). Any change that affects the behavior of a published package must include a changeset:

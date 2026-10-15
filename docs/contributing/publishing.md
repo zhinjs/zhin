@@ -37,9 +37,11 @@ npm 目前**不能**用 OIDC 发布一个从未发布过的包：可信发布者
 
 ```bash
 pnpm build
-(cd path/to/pkg && npm publish --access public)   # 维护者本机，npm login + 2FA
+(cd path/to/pkg && pnpm publish --access public --no-git-checks)   # 维护者本机，npm login + 2FA
 npm trust github <包名> --repo zhinjs/zhin --file publish.yml --env npm-production --allow-publish --yes
 ```
+
+这里必须用 `pnpm publish`：它会把 `workspace:` 协议换成真实版本，并用 `publishConfig.exports` 替换 `exports`（去掉指向 `src/` 的 `development` 条件）；`npm publish` 两样都不做。
 
 然后重跑 **Build and Publish**。`npm trust` 需要 npm ≥ 11.15.0 且账号开启 2FA，也可以改在网页上配置（见下文）。
 
