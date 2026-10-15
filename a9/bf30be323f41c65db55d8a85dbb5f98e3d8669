@@ -1,0 +1,25 @@
+packages/im/agent/evals/cases/provider-billing-no-same-provider-fallback.case.ts
+  s_2104cc474f1ce5::t_98b9a65d42dc61 1-25
+packages/im/agent/evals/cases/provider-deepseek-insufficient-resource-retried.case.ts
+  s_2104cc474f1ce5::t_14316b17ca24e3 1-20
+packages/im/agent/evals/cases/provider-gemini-context-overflow-compacted.case.ts
+  s_2104cc474f1ce5::t_9c502fdb03b96a 1-37
+packages/im/agent/evals/cases/provider-openai-insufficient-quota-not-retried.case.ts
+  s_2104cc474f1ce5::t_c0bd4c363f140d 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9bf30be323f41c65db55d8a85dbb5f98e3d8669",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
