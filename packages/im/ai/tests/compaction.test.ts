@@ -389,3 +389,42 @@ describe('压缩失败语义（不得静默吞错丢历史）', () => {
     expect(shouldAutoCompact(messages, 13_050, tracking)).toBe(false);
   });
 });
+
+describe('压缩取消信号透传（S13）', () => {
+  const messages = () => Array.from({ length: 12 }, (_, i) =>
+    createMsg(i % 2 === 0 ? 'user' : 'assistant', `message ${i}`),
+  );
+
+  it('compactSession 把 signal 传给 completeText', async () => {
+    const provider = { models: ['mock-model'], completeText: vi.fn().mockResolvedValue('摘要内容') };
+    const controller = new AbortController();
+    await compactSession({ provider: provider as any, messages: messages(), keepRecentCount: 6, signal: controller.signal });
+    expect(provider.completeText).toHaveBeenCalled();
+    for (const call of provider.completeText.mock.calls) {
+      expect(call[2]).toMatchObject({ signal: controller.signal });
+    }
+  });
+
+  it('取消后不再走降级摘要，也不计入熔断', async () => {
+    const controller = new AbortController();
+    const provider = {
+      models: ['mock-model'],
+      completeText: vi.fn().mockImplementation(async () => {
+        controller.abort();
+        throw new Error('aborted');
+      }),
+    };
+    const tracking = createAutoCompactTracking();
+    const original = messages();
+    const result = await autoCompactIfNeeded({
+      provider: provider as any,
+      messages: original,
+      contextWindow: 13_050,
+      tracking,
+      signal: controller.signal,
+    });
+    expect(provider.completeText).toHaveBeenCalledTimes(1);
+    expect(tracking.consecutiveFailures).toBe(0);
+    expect(result.messages).toEqual(original);
+  });
+});

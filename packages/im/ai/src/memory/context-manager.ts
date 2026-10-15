@@ -302,7 +302,7 @@ export class ContextManager {
   /**
    * 执行总结
    */
-  async summarize(sceneId: string): Promise<string | null> {
+  async summarize(sceneId: string, signal?: AbortSignal): Promise<string | null> {
     if (!this.aiProvider) {
       logger.warn('未设置 AI provider，无法总结');
       return null;
@@ -331,7 +331,7 @@ export class ContextManager {
       const summary = await this.aiProvider.completeText(
         this.config.summaryPrompt,
         conversationText,
-        { temperature: 0.3, maxTokens: 500 },
+        { temperature: 0.3, maxTokens: 500, signal },
       );
 
       if (!summary.trim()) {

@@ -204,6 +204,7 @@ async function generateSummary(
   maxChunkTokens: number,
   previousSummary?: string,
   customInstructions?: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   const conversation = messages.map(m => {
     const role = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
@@ -232,7 +233,7 @@ The summary should be brief but informative so that later turns can quickly reco
 
   let result: string;
   try {
-    result = await provider.completeText(systemPrompt, userContent);
+    result = await provider.completeText(systemPrompt, userContent, { signal });
   } catch (e: unknown) {
     logger.warn(formatCompact( { summarize: 'fail', error: truncatePreview(e instanceof Error ? e.message : String(e)) }));
     // 摘要失败必须抛错：吞错返回占位文本会让上层把占位当真摘要注入、静默丢历史
@@ -253,6 +254,7 @@ async function summarizeChunks(params: {
   maxChunkTokens: number;
   previousSummary?: string;
   customInstructions?: string;
+  signal?: AbortSignal;
 }): Promise<string> {
   if (params.messages.length === 0) {
     return params.previousSummary ?? DEFAULT_SUMMARY_FALLBACK;
@@ -268,6 +270,7 @@ async function summarizeChunks(params: {
       params.maxChunkTokens,
       summary,
       params.customInstructions,
+      params.signal,
     );
   }
 
@@ -286,6 +289,8 @@ export async function summarizeWithFallback(params: {
   contextWindow: number;
   previousSummary?: string;
   customInstructions?: string;
+  /** 取消信号：中止后不再走降级摘要，直接抛出。 */
+  signal?: AbortSignal;
 }): Promise<string> {
   if (params.messages.length === 0) {
     return params.previousSummary ?? DEFAULT_SUMMARY_FALLBACK;
@@ -297,6 +302,7 @@ export async function summarizeWithFallback(params: {
     return await summarizeChunks(params);
   } catch (e: unknown) {
     fullError = e;
+    if (params.signal?.aborted) throw e;
     logger.warn(formatCompact( { summarize: 'partial_fail', error: truncatePreview(e instanceof Error ? e.message : String(e)) }));
   }
 
@@ -341,6 +347,7 @@ export async function summarizeInStages(params: {
   previousSummary?: string;
   customInstructions?: string;
   parts?: number;
+  signal?: AbortSignal;
 }): Promise<string> {
   const { messages } = params;
   if (messages.length === 0) {
@@ -466,6 +473,7 @@ export async function compactSession(params: {
   messages: ChatMessage[];
   contextWindow?: number;
   keepRecentCount?: number;
+  signal?: AbortSignal;
 }): Promise<{
   summary: string;
   keptMessages: ChatMessage[];
@@ -496,6 +504,7 @@ export async function compactSession(params: {
     messages: toCompact,
     maxChunkTokens,
     contextWindow,
+    signal: params.signal,
   });
 
   return {
@@ -591,6 +600,7 @@ export async function autoCompactIfNeeded(params: {
   tracking?: AutoCompactTrackingState;
   microCompactOptions?: MicroCompactOptions;
   keepRecentCount?: number;
+  signal?: AbortSignal;
 }): Promise<AutoCompactResult> {
   const contextWindow = params.contextWindow ?? DEFAULT_CONTEXT_TOKENS;
   const tracking = params.tracking;
@@ -633,6 +643,7 @@ export async function autoCompactIfNeeded(params: {
       messages,
       contextWindow,
       keepRecentCount: params.keepRecentCount,
+      signal: params.signal,
     });
 
     autoSavedTokens = result.savedTokens;
@@ -666,8 +677,8 @@ export async function autoCompactIfNeeded(params: {
       summary: result.summary,
     };
   } catch (error: unknown) {
-    // 断路器记录
-    if (tracking) {
+    // 断路器记录（调用方取消不算失败）
+    if (tracking && !params.signal?.aborted) {
       tracking.consecutiveFailures++;
     }
     logger.error(`Auto-compact 失败: ${error instanceof Error ? error.message : String(error)}`);
