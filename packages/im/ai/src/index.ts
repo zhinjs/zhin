@@ -28,6 +28,8 @@ export {
   agentLoop,
   agentContextFrom,
   assistantText,
+  assistantAnswerText,
+  CompletionFailureError,
   createLlmApiRuntime,
   isSdkId,
   SDK_IDS,

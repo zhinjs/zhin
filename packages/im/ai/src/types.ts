@@ -98,10 +98,21 @@ export interface ProviderConfig {
 
 /** 纯文本补全选项（摘要 / 判定等轻量场景）。 */
 export interface TextCompleteOptions {
-  /** 缺省用 provider.models[0]。 */
+  /** 缺省用 provider 配置的 `defaultModel`，否则 provider.models[0]。 */
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  /** 调用方取消信号；中止后不再重试 / fallback，直接抛出。 */
+  signal?: AbortSignal;
+  /**
+   * 单次请求超时（ms），覆盖 `resilience.requestTimeoutMs`。
+   * 缺省与主对话路径一致（180s）；`0` 关闭超时。
+   */
+  timeoutMs?: number;
+  /** 主模型重试耗尽后依次尝试的同 provider 模型 id。 */
+  fallbackModels?: readonly string[];
+  /** 重试 / 退避 / 超时 / fallback 配置，与主对话路径的 `providerResilience` 同形。 */
+  resilience?: import('./llm/provider-resilience.js').ProviderResilienceConfig;
 }
 
 /**
