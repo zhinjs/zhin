@@ -254,6 +254,37 @@ default per ai.google.dev; see `DEFAULT_NIGHTLY_MODEL` in `nightly.run.ts`).
 Requests go through the `google` SDK, so seed cases exercise the same Gemini
 provider as production, including images and implicit prompt caching.
 
+**Rate limits** (`rate-limit.ts`; CI's key is on the Gemini free tier, 15 RPM
+plus a daily request quota (RPD) per project, which resets at midnight Pacific; see
+https://ai.google.dev/gemini-api/docs/rate-limits and the project's limits in AI Studio):
+
+- Everything is serial: one workflow run at a time (`concurrency: nightly-evals`, no
+  matrix), one test file and test at a time (`fileParallelism: false`,
+  `maxConcurrency: 1`), and one request at a time through `RateLimitedCompletionPort`.
+- Request starts are at least 4 s apart (`NIGHTLY_MIN_REQUEST_INTERVAL_MS`), counting
+  every multi-turn and tool step, retries included, so a run stays at or under 15 RPM.
+- A per-minute 429 is retried after 2 s, 4 s, then 8 s, or after Google's `RetryInfo`
+  `retryDelay` / `Retry-After` when that is longer. After 3 retries the request fails
+  (that trial fails). The SDK's own retries are off (`maxRetries: 0`), and production
+  provider defaults are unchanged.
+- A daily-quota 429 (`PerDay` / RPD) is never retried. The run stops, every remaining
+  trial is recorded as failed ("not run"), the report's `fatal` says the free-tier daily
+  quota is exhausted, and the job fails. It never passes or skips.
+- Only 429s are retried. Every other error and every failed check stays a failure.
+
+A full run at 3 trials sends about 63 requests (5 matrix cases × 3, plus ~48
+seed-case requests, tool steps included). With 4 s spacing that takes at least
+~4.2 min, and at the 120-request cap at least 8 min plus any backoff.
+
+CI's actual free-tier limits for `gemini-3.8-flash` are lower: its 429s report
+**5 RPM and 20 RPD** per project. So for `gemini` the workflow defaults to 1 trial
+per case, `NIGHTLY_MAX_REQUESTS=20` and `NIGHTLY_MIN_REQUEST_INTERVAL_MS=12000`,
+which works out to about 21 requests, of which ≤20 are sent. That is ≥4 min at 12 s
+spacing, and the last seed case may be budget-skipped. Set the `NIGHTLY_RUNS_PER_CASE`,
+`NIGHTLY_MAX_REQUESTS` and `NIGHTLY_MIN_REQUEST_INTERVAL_MS` repository variables to
+restore 3 trials on a paid key. A manual dispatch on a day the scheduled run already
+used the quota fails with the daily-quota message.
+
 **Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
 optional `GEMINI_BASE_URL` repository variable for a pass-through proxy). Without it the job logs a notice and skips.
 The key is passed only as an environment variable and is never printed.
