@@ -1,0 +1,20 @@
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  h_b680f75345178a 74-75
+packages/im/ai/src/llm/context-overflow.ts
+  h_b680f75345178a 1-63
+packages/im/ai/src/llm/provider-resilience.ts
+  h_b680f75345178a 25,286
+packages/im/ai/tests/llm/context-overflow.test.ts
+  h_b680f75345178a 1-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d4daf1a821e3916a2da25a07404699bcc824d2cb",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
