@@ -1,0 +1,19 @@
+.changeset/agent-perception-prepass.md
+  s_15a0dd49e989c3::t_9f380bf9249f58 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1adb612de1bc71a927ebb9919dacda1a6509efdd",
+  "prompts": {},
+  "sessions": {
+    "s_15a0dd49e989c3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4f2c15a5914700c6",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
