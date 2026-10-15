@@ -62,6 +62,9 @@ export interface RegisteredProvider {
   fetch?: typeof globalThis.fetch;
 }
 
+/** Output token cap when the provider config sets no `maxOutputTokens`. */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
+
 function languageModelKey(alias: string, modelId: string): string {
   return `${alias}::${modelId}`;
 }
@@ -95,8 +98,9 @@ export function createLlmTransportModel(
     reasoning: inferModelReasoning(modelId),
     input: config.input?.length ? [...config.input] : [...defaultModelInput(config.sdk, modelId)],
     contextWindow: resolveTransportContextWindow(config, modelId),
-    maxTokens: 8_192,
+    maxTokens: config.maxOutputTokens && config.maxOutputTokens > 0 ? config.maxOutputTokens : DEFAULT_MAX_OUTPUT_TOKENS,
     ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
+    ...(config.thinkingLevel ? { thinkingLevel: config.thinkingLevel } : {}),
   };
 }
 

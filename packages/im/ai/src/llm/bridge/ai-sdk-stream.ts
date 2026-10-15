@@ -7,6 +7,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
 import type { Model } from '../types/model.js';
+import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
@@ -245,6 +246,30 @@ function buildProviderOptions(
   return Object.keys(opts).length > 0 ? opts : undefined;
 }
 
+/** providerOptions keys that already pick a reasoning setting for that provider. */
+const EXPLICIT_REASONING_KEYS = ['thinkingConfig', 'thinking', 'reasoningEffort', 'effort'];
+
+/**
+ * StreamOptions.thinkingLevel (or the provider's `thinkingLevel`) → AI SDK `reasoning`.
+ * Skipped for MiniMax (forced adaptive) and when providerOptions already set reasoning.
+ */
+export function resolveReasoningOption(
+  model: Pick<Model, 'sdk' | 'providerOptions' | 'thinkingLevel'>,
+  level: ThinkingLevel | undefined,
+): 'none' | 'low' | 'medium' | 'high' | undefined {
+  const effective = level ?? model.thinkingLevel;
+  if (!effective || model.sdk === 'minimax') return undefined;
+  const explicit = Object.values(model.providerOptions ?? {})
+    .some((options) => EXPLICIT_REASONING_KEYS.some((key) => options?.[key] !== undefined));
+  if (explicit) return undefined;
+  return effective === 'off' ? 'none' : effective;
+}
+
+function withReasoning(model: Model, options: StreamOptions | undefined): { reasoning?: 'none' | 'low' | 'medium' | 'high' } {
+  const reasoning = resolveReasoningOption(model, options?.thinkingLevel);
+  return reasoning ? { reasoning } : {};
+}
+
 function isGoogleSdk(sdk: string | undefined): boolean {
   return sdk === 'google';
 }
@@ -308,6 +333,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         abortSignal: options?.signal,
         ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
         providerOptions,
+        ...withReasoning(model, options),
         output: buildStructuredOutputSpec(options?.outputSchema),
         // Gemini reports a blocked prompt only in a candidate-less chunk; the SDK drops it.
         ...(isGoogleSdk(model.sdk) ? { includeRawChunks: true } : {}),
@@ -456,6 +482,7 @@ export async function generateTextViaAiSdk(
     maxOutputTokens: options?.maxTokens ?? model.maxTokens,
     abortSignal: options?.signal,
     providerOptions,
+    ...withReasoning(model, options),
     output: buildStructuredOutputSpec(options?.outputSchema),
   });
 
