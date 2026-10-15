@@ -2,8 +2,9 @@
 /**
  * 检测 workspace 中尚未出现在 npm registry 的可发布包。
  *
- * npm 可信发布 / OIDC 要求包名已存在；新包必须由维护者用 token **手动首次发布**，
- * 之后才可走 changesets `pnpm pub`。本脚本只检测与提示，不再代发。
+ * npm 可信发布 / OIDC 要求包名已存在；新包必须由维护者 **手动首次发布**，
+ * 再在 npmjs.com 配置可信发布者，之后才走 changesets `pnpm pub`。
+ * 本脚本只检测与提示，不再代发。流程见 docs/contributing/publishing.md。
  *
  * 用法：
  *   node scripts/check-unpublished-packages.mjs
@@ -107,7 +108,14 @@ async function main() {
       `       (cd ${rel(p.path)} && npm publish --access public)`,
     );
   }
-  console.error('  4. Re-run "Build and Publish" (push to main or workflow_dispatch).');
+  console.error('  4. Add the trusted publisher for each new package (npm >= 11.15.0):');
+  for (const p of unpublished) {
+    console.error(
+      `       npm trust github ${p.name} --repo zhinjs/zhin --file publish.yml --env npm-production --allow-publish --yes`,
+    );
+  }
+  console.error('  5. Re-run "Build and Publish" (push to main or workflow_dispatch).');
+  console.error('  Details: docs/contributing/publishing.md');
   console.error('');
   console.error(
     'After the names exist on npm, subsequent versions go through changesets (pnpm pub).',
