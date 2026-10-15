@@ -21,7 +21,8 @@ describe('deepseek provider (baseline)', () => {
     expect(req.body.stream_options).toEqual({ include_usage: true });
     expect(req.body.messages[0]).toEqual({ role: 'system', content: 'sys' });
     expect(events.some((e) => e.type === 'thinking_delta')).toBe(true);
-    expect(message.content).toEqual([{ type: 'text', text: '答案' }, { type: 'thinking', thinking: '先想想' }]);
+    // Thinking precedes text (S6, #782), matching the order the model produced them.
+    expect(message.content).toEqual([{ type: 'thinking', thinking: '先想想' }, { type: 'text', text: '答案' }]);
     expect(message.usage).toMatchObject({ input: 40, output: 10, cacheRead: 32, reasoning: 6 });
   });
 
