@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel, defaultModelInput } from '../../src/llm/llm-api-runtime.js';
-import { createUserMessage } from '../../src/llm/types/agent-message.js';
+import { createUserMessage, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
 import { classifyProviderError, createResilientCompletionPort, isProviderFailureMessage, type ProviderResilienceEvent } from '../../src/llm/provider-resilience.js';
 
@@ -276,5 +276,63 @@ describe('Gemini provider (google sdk)', () => {
     await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('hi')] });
     expect(captured[0]!.body.safetySettings).toEqual(safetySettings);
     expect(captured[0]!.body.generationConfig.thinkingConfig).toMatchObject({ thinkingLevel: 'low' });
+  });
+});
+
+describe('Gemini streaming: thoughts and usage accounting (streamGenerateContent SSE)', () => {
+  const finalUsage = {
+    promptTokenCount: 5200,
+    candidatesTokenCount: 12,
+    thoughtsTokenCount: 80,
+    cachedContentTokenCount: 4096,
+    totalTokenCount: 5292,
+  };
+
+  it('surfaces thought parts as reasoning, keeps them out of visible text, and accounts every usage field', async () => {
+    const deltas: Array<{ type: string; text?: string; thinking?: string }> = [];
+    const { runtime, model, captured } = setup([() => ({ __chunks: [
+      { candidates: [{ content: { role: 'model', parts: [{ text: '先想一下：用户要天气。', thought: true }] } }], usageMetadata: { promptTokenCount: 5200 } },
+      { candidates: [{ content: { role: 'model', parts: [{ text: '内部推理第二段', thought: true }] } }] },
+      { candidates: [{ content: { role: 'model', parts: [{ text: '上海今天' }] } }] },
+      { candidates: [{ content: { role: 'model', parts: [{ text: '晴。' }] }, finishReason: 'STOP' }], usageMetadata: finalUsage },
+    ] })], { providerOptions: { google: { thinkingConfig: { includeThoughts: true } } } });
+    const stream = runtime.stream(model, { systemPrompt: SYSTEM, messages: [createUserMessage('上海天气？')] });
+    let message: AssistantMessage | undefined;
+    for await (const event of stream) {
+      if (event.type === 'text_delta' || event.type === 'thinking_delta') deltas.push(event as never);
+      if (event.type === 'done' && event.message) message = event.message;
+    }
+    if (!message) throw new Error('stream ended without a message');
+
+    expect(captured[0]!.url).toContain('streamGenerateContent');
+    expect(captured[0]!.body.generationConfig.thinkingConfig).toMatchObject({ includeThoughts: true });
+    const visible = message.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
+    expect(visible).toBe('上海今天晴。');
+    expect(visible).not.toContain('推理');
+    const thinking = message.content.filter((b) => b.type === 'thinking').map((b) => (b as { thinking: string }).thinking).join('');
+    expect(thinking).toContain('先想一下');
+    expect(thinking).toContain('内部推理第二段');
+    expect(deltas.filter((d) => d.type === 'text_delta').map((d) => d.text).join('')).toBe('上海今天晴。');
+    expect(deltas.filter((d) => d.type === 'thinking_delta').map((d) => d.thinking).join('')).toContain('内部推理');
+
+    expect(message.usage).toMatchObject({
+      input: 5200, // promptTokenCount (includes the cached part)
+      cacheRead: 4096, // cachedContentTokenCount
+      output: 92, // candidatesTokenCount + thoughtsTokenCount
+      reasoning: 80, // thoughtsTokenCount
+      totalTokens: 5292,
+    });
+  });
+
+  it('accounts usage on a streamed function-call turn', async () => {
+    const { runtime, model } = setup([() => ({ __chunks: [
+      { candidates: [{ content: { role: 'model', parts: [{ text: '要查天气', thought: true }] } }] },
+      { candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'get_weather', args: { city: '上海' } }, thoughtSignature: 'c2ln' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 4300, candidatesTokenCount: 9, thoughtsTokenCount: 40, cachedContentTokenCount: 4096, totalTokenCount: 4349 } },
+    ] })], { providerOptions: { google: { thinkingConfig: { includeThoughts: true } } } });
+    const message = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('上海天气？')], tools: [weather] });
+    expect(message.stopReason).toBe('toolCalls');
+    expect(message.content.filter((b) => b.type === 'text')).toEqual([]);
+    expect(message.usage).toMatchObject({ input: 4300, cacheRead: 4096, output: 49, reasoning: 40, totalTokens: 4349 });
   });
 });
