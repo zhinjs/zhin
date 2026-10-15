@@ -297,8 +297,9 @@ ai:
 | `provider` / `model` | 必填，绑定的 provider 别名与模型 |
 | `nickname` | Agent 自称与界面展示名 |
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
-| `priority` / `match` | 入站路由：`match` 可按 `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` 匹配，单条或数组 |
 | `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |
+
+IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
 
 ### mcpServers：外部 MCP Server
 

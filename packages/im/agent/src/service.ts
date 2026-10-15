@@ -6,7 +6,7 @@
 import { type AITriggerConfig, type AIAccessConfig } from '@zhin.js/core';
 import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, SdkProviderAdapter } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
-import { DEFAULT_CONFIG, findDeprecatedAgentConfigKeys } from './config/index.js';
+import { DEFAULT_CONFIG, findDeprecatedAgentBindingKeys, findDeprecatedAgentConfigKeys } from './config/index.js';
 import { getLogger } from '@zhin.js/logger';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
@@ -72,6 +72,9 @@ export class AIService {
   readonly loopHooks = new PluginAILoopHookRegistry();
 
   constructor(config: AIConfig = {}) {
+    for (const { agent, key, reason } of findDeprecatedAgentBindingKeys((config as { agents?: unknown }).agents)) {
+      logger.warn(`ai.agents.${agent}.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
+    }
     this.routing = normalizeAiRoutingConfig(config);
     const validationErrors = validateAiRoutingConfig(this.routing);
     if (validationErrors.length > 0) {

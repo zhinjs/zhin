@@ -23,7 +23,31 @@ describe('applyAiConfigFixes', () => {
     const normalized = normalizeAiRoutingConfig(ai as never);
     expect(validateAiRoutingConfig(normalized)).toEqual([]);
     expect(normalized.agents.zhin?.model).toBe('gpt-4o-mini');
-    expect(normalized.agents.vision?.priority).toBe(10);
+    expect(normalized.agents.vision).toEqual({ provider: 'openai', model: 'gpt-4o' });
+    expect(ai).not.toHaveProperty('routes');
+    expect((ai as { agents: Record<string, unknown> }).agents.vision).toEqual({ provider: 'openai', model: 'gpt-4o' });
+    expect(fixes).toContain('removed ai.routes (inbound routing never took effect)');
+    expect(fixes).toContain('removed deprecated ai.agents.vision.priority');
+    expect(fixes).toContain('removed deprecated ai.agents.vision.match');
+  });
+
+  it('删除所有 Agent 上已弃用的 priority/match（包括 zhin）', () => {
+    const { ai, fixes } = applyAiConfigFixes({
+      providers: { p: { sdk: 'openai', apiKey: 'x' } },
+      agents: {
+        zhin: { provider: 'p', model: 'm', priority: 1, match: { scene: 'group' } },
+        planner: { provider: 'p', model: 'm2', nickname: '规划', match: [{ adapter: 'icqq' }] },
+      },
+    } as never);
+    expect((ai as { agents: unknown }).agents).toEqual({
+      zhin: { provider: 'p', model: 'm' },
+      planner: { provider: 'p', model: 'm2', nickname: '规划' },
+    });
+    expect(fixes).toEqual([
+      'removed deprecated ai.agents.zhin.priority',
+      'removed deprecated ai.agents.zhin.match',
+      'removed deprecated ai.agents.planner.match',
+    ]);
   });
 
   it('只移除旧模型字段并保留当前 ai.agent 配置', () => {

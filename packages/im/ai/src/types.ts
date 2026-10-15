@@ -331,6 +331,10 @@ export interface ProviderInstanceConfig extends ProviderConfig, OllamaProviderCo
   sdk: import('./llm/sdk-registry.js').SdkId;
 }
 
+/**
+ * @deprecated Inbound routing by `match` never took effect (IM inbound always
+ * uses the `zhin` binding). Accepted with a warning; removed in the next minor.
+ */
 export interface RouteMatchConfig {
   adapter?: string;
   endpoint?: string;
@@ -343,9 +347,9 @@ export interface AgentBindingConfig {
   provider: string;
   model: string;
   mcpServers?: string[];
-  /** 入站路由优先级（须与 match 同时配置；zhin 不可配置） */
+  /** @deprecated 入站路由从未生效；启动时告警，`zhin config check --fix` 会删除。 */
   priority?: number;
-  /** 入站路由匹配条件（无则仅 spawn_task / 绑定，不参与入站竞争） */
+  /** @deprecated 入站路由从未生效（含 hasMedia）；启动时告警，`zhin config check --fix` 会删除。 */
   match?: RouteMatchConfig;
   /** Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 */
   nickname?: string;
@@ -393,7 +397,7 @@ export interface AIConfig {
   };
   /** 命名 provider 实例 */
   providers?: Record<string, ProviderInstanceConfig>;
-  /** per-agent 绑定 + 可选入站 priority/match（协作角色如 researcher 亦用 agents.<role>） */
+  /** per-agent 绑定（协作角色如 researcher 亦用 agents.<role>）；IM 入站总是交给 zhin */
   agents?: Record<string, AgentBindingConfig>;
   sessions?: {
     /** 最大历史消息数（数据库模式默认200，内存模式默认100） */

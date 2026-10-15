@@ -225,8 +225,6 @@ ai:
     planner:
       provider: openrouter
       model: openrouter/free
-      match:                    # 什么样的消息交给它（可以是数组）
-        scene: group
       permission:               # 它能派出哪些子 Agent
         task: { "researcher": allow, "*": deny }
 ```
@@ -236,8 +234,13 @@ ai:
 | `provider` / `model` | 引用 `ai.providers` 的名字与模型 id（必填） |
 | `mcpServers` | 引用 `ai.mcpServers` 中的 `name` |
 | `nickname` | AI 的自称与展示名 |
-| `match` | 路由条件：`adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
 | `permission.task` | glob → `allow` / `deny`，限制 `spawn_task` 能派出的子 Agent |
+
+IM 消息总是交给 `zhin`；其他 Agent 只按名字调用（`spawn_task`、协作角色）。
+
+::: warning 已弃用：`priority` / `match`
+`ai.agents.<name>.priority` 和 `match`（包括 `hasMedia`、`scene`、`adapter` 等全部条件）从来没有生效过。现在仍然接受，但启动时会告警，`zhin config check --fix` 会删除它们，下一个 minor 版本移除。想让文本模型看懂图片，请用 [`ai.multimodal.perception`](#ai-multimodal-perception)。
+:::
 
 ### ai.mcpServers
 

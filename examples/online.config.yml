@@ -27,7 +27,7 @@ hostApi:
 inbox:
   enabled: true
 
-# AI：providers（命名实例）+ agents（绑定 + 可选 priority/match 入站路由）
+# AI：providers（命名实例）+ agents（绑定；IM 消息总是交给 zhin）
 # 编排使用 discover / load_tool 按需加载能力，并通过 spawn_task 委派复杂任务
 ai:
   providers:

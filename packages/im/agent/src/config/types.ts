@@ -8,6 +8,10 @@ export interface ProviderInstanceConfig extends ProviderConfig, OllamaProviderCo
   accountId?: string;
 }
 
+/**
+ * @deprecated Inbound routing by `match` never took effect (IM inbound always
+ * uses the `zhin` binding). Accepted with a warning; removed in the next minor.
+ */
 export interface RouteMatchConfig {
   adapter?: string;
   endpoint?: string;
@@ -27,8 +31,16 @@ export interface AgentBindingConfig {
   provider: string;
   model: string;
   mcpServers?: string[];
+  /**
+   * @deprecated Never took effect; accepted with a warning and removed by
+   * `zhin config check --fix`. Dropped from the effective config.
+   */
   priority?: number;
-  /** 单条或多条路由规则（ADR 0031 五 Bot 配置为数组） */
+  /**
+   * @deprecated Never took effect (including `hasMedia`); accepted with a
+   * warning and removed by `zhin config check --fix`. Dropped from the
+   * effective config.
+   */
   match?: RouteMatchConfig | RouteMatchConfig[];
   /** Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024 #11）。 */
   nickname?: string;

@@ -12,6 +12,11 @@ export {
   findDeprecatedAgentConfigKeys,
   type DeprecatedAgentConfigKey,
 } from './deprecated-agent-keys.js';
+export {
+  DEPRECATED_AGENT_BINDING_KEYS,
+  findDeprecatedAgentBindingKeys,
+  type DeprecatedAgentBindingKey,
+} from './deprecated-agent-binding-keys.js';
 export { AgentBindingRegistry } from './agent-binding-registry.js';
 export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export type {

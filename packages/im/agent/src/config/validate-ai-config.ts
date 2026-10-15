@@ -1,5 +1,4 @@
 import { isSdkId } from '@zhin.js/ai';
-import { normalizeMatchRules } from '../routing/match-rules.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 import type { NormalizedAiRoutingConfig } from './normalize-ai-config.js';
 
@@ -44,28 +43,6 @@ export function validateAiRoutingConfig(cfg: NormalizedAiRoutingConfig): string[
       } else if (!configuredMcp.has(srv.trim())) {
         errors.push(`ai.agents.${name}: unknown MCP server "${srv}"`);
       }
-    }
-
-    const matchRules = normalizeMatchRules(binding.match);
-    const hasMatch = matchRules.length > 0;
-    const hasPriority = binding.priority != null;
-
-    if (name === DEFAULT_ZHIN_AGENT_NAME) {
-      if (hasMatch || hasPriority) {
-        errors.push(`ai.agents.${DEFAULT_ZHIN_AGENT_NAME}: must not set priority or match (use implicit fallback)`);
-      }
-      continue;
-    }
-
-    if (binding.match != null && !hasMatch) {
-      errors.push(`ai.agents.${name}: match has no routable constraints (need adapter/endpoint/scene/sceneId/hasMedia/contentContains)`);
-    }
-
-    if (hasMatch && typeof binding.priority !== 'number') {
-      errors.push(`ai.agents.${name}: priority is required when match is set`);
-    }
-    if (hasPriority && !hasMatch) {
-      errors.push(`ai.agents.${name}: match is required when priority is set`);
     }
   }
 

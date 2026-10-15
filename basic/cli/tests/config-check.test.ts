@@ -263,3 +263,53 @@ ai:
     expect(issue?.fixable).toBe(true);
   });
 });
+
+describe('config check: deprecated ai.agents.<name>.priority/match', () => {
+  let tmpDir: string;
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-config-check-routing-'));
+  });
+  afterEach(async () => {
+    await fs.remove(tmpDir);
+  });
+
+  it('报告可修复的弃用警告，不再报路由错误', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+plugins: {}
+ai:
+  enabled: true
+  providers:
+    p: { sdk: openai, apiKey: k }
+  agents:
+    zhin: { provider: p, model: m, priority: 1 }
+    vision:
+      provider: p
+      model: v
+      match: { hasMedia: [image] }
+`);
+    const result = await runConfigCheck(tmpDir, {});
+    const routing = result.issues.filter((i) => i.code === 'ai.agent_routing_deprecated');
+    expect(routing.map((i) => i.path)).toEqual(['ai.agents.zhin.priority', 'ai.agents.vision.match']);
+    expect(routing.every((i) => i.severity === 'warn' && i.fixable)).toBe(true);
+    expect(result.issues.some((i) => i.code === 'ai.routing_invalid')).toBe(false);
+  });
+
+  it('--fix 删除 priority/match', () => {
+    const { config: fixed, fixes } = applyConfigFixes({
+      plugins: {},
+      ai: {
+        providers: { p: { sdk: 'openai', apiKey: 'k' } },
+        agents: {
+          zhin: { provider: 'p', model: 'm' },
+          vision: { provider: 'p', model: 'v', priority: 10, match: { hasMedia: ['image'] } },
+        },
+      },
+    });
+    expect((fixed.ai as { agents: unknown }).agents).toEqual({
+      zhin: { provider: 'p', model: 'm' },
+      vision: { provider: 'p', model: 'v' },
+    });
+    expect(fixes).toContain('removed deprecated ai.agents.vision.priority');
+    expect(fixes).toContain('removed deprecated ai.agents.vision.match');
+  });
+});
