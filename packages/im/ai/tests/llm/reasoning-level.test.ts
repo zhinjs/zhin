@@ -1,26 +1,18 @@
 /**
  * S8 / S20: the agent's thinking level and the provider's `maxOutputTokens` reach the
- * request. Bodies are captured with a minimal local fetch mock; these can move to
- * the shared mocked-HTTP provider harness once it lands.
+ * request. Request bodies come from the shared provider harness (`h.capture`).
  */
 import { describe, expect, it } from 'vitest';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel, DEFAULT_MAX_OUTPUT_TOKENS } from '../../src/llm/llm-api-runtime.js';
 import { resolveReasoningOption } from '../../src/llm/bridge/ai-sdk-stream.js';
-import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import type { ThinkingLevel } from '../../src/llm/types/agent-event.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+import { createProviderHarness } from '../helpers/provider-harness/index.js';
 
-async function requestBody(config: ProviderInstanceConfig, modelId: string, thinkingLevel?: ThinkingLevel) {
-  const bodies: Array<Record<string, any>> = [];
-  const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    bodies.push(JSON.parse(String(init?.body ?? '{}')));
-    return new Response('{"error":{"message":"stop here"}}', { status: 400, headers: { 'content-type': 'application/json' } });
-  }) as typeof globalThis.fetch;
-  const runtime = createLlmApiRuntime([{ alias: 'p', config, models: [modelId], fetch }], () => [modelId]);
-  await runtime.complete(createLlmTransportModel('p', config, modelId), { systemPrompt: 's', messages: [createUserMessage('hi')] }, { maxRetries: 0, thinkingLevel }).catch(() => undefined);
-  expect(bodies).toHaveLength(1);
-  return bodies[0]!;
+async function requestBody({ sdk, ...config }: ProviderInstanceConfig, modelId: string, thinkingLevel?: ThinkingLevel) {
+  const h = createProviderHarness({ sdk, model: modelId, config });
+  const { body } = await h.capture({ system: 's', user: 'hi' }, { thinkingLevel });
+  return body;
 }
 
 describe('reasoning level (S8)', () => {
