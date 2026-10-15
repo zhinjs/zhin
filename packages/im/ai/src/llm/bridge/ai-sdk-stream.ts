@@ -9,7 +9,7 @@ import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, t
 import type { Model } from '../types/model.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
-import type { AnthropicThinkingProviderOptions, ThinkingContentBlock } from '../types/content-block.js';
+import type { AnthropicThinkingProviderOptions, ThinkingContentBlock, ToolCallProviderOptions } from '../types/content-block.js';
 
 import { formatRedactedJson } from '../redact-request-body.js';
 import {
@@ -154,11 +154,24 @@ function resolveThinkingParts(input: {
   return text ? [{ text }] : [];
 }
 
+type CapturedToolCall = { id: string; name: string; arguments: Record<string, unknown>; providerOptions?: ToolCallProviderOptions };
+
+/** Keep the Gemini function-call signature (`providerMetadata.google.thoughtSignature`) for replay. */
+export function toolCallProviderOptions(metadata: unknown): ToolCallProviderOptions | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const out: ToolCallProviderOptions = {};
+  for (const key of ['google', 'vertex']) {
+    const signature = (metadata as Record<string, { thoughtSignature?: unknown } | undefined>)[key]?.thoughtSignature;
+    if (typeof signature === 'string' && signature) out[key] = { thoughtSignature: signature };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function buildAssistantMessage(
   model: Model,
   text: string,
   thinkingParts: readonly CapturedThinkingPart[],
-  toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>,
+  toolCalls: CapturedToolCall[],
   stopReason: AssistantMessage['stopReason'],
   usage: AssistantMessage['usage'],
 ): AssistantMessage {
@@ -190,6 +203,7 @@ function buildAssistantMessage(
       id: call.id,
       name: call.name,
       arguments: call.arguments,
+      ...(call.providerOptions ? { providerOptions: call.providerOptions } : {}),
     });
   }
   return {
@@ -292,7 +306,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       let text = '';
       let thinking = '';
       let streamedThinkingOptions: AnthropicThinkingProviderOptions | undefined;
-      const toolCalls = new Map<string, { id: string; name: string; arguments: Record<string, unknown> }>();
+      const toolCalls = new Map<string, CapturedToolCall>();
       const toolInputBuffers = new Map<string, string>();
 
       for await (const part of result.fullStream) {
@@ -326,10 +340,12 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
               args = {};
             }
           }
+          const signed = toolCallProviderOptions(part.providerMetadata);
           toolCalls.set(part.toolCallId, {
             id: part.toolCallId,
             name: part.toolName,
             arguments: args,
+            ...(signed ? { providerOptions: signed } : {}),
           });
           push({
             type: 'toolcall_delta',
@@ -423,11 +439,15 @@ export async function generateTextViaAiSdk(
   });
 
   const structured = await readStructuredOutput(result, Boolean(options?.outputSchema));
-  const toolCalls = result.toolCalls.map((call) => ({
-    id: call.toolCallId,
-    name: call.toolName,
-    arguments: ('input' in call ? call.input : {}) as Record<string, unknown>,
-  }));
+  const toolCalls: CapturedToolCall[] = result.toolCalls.map((call) => {
+    const signed = toolCallProviderOptions(call.providerMetadata);
+    return {
+      id: call.toolCallId,
+      name: call.toolName,
+      arguments: ('input' in call ? call.input : {}) as Record<string, unknown>,
+      ...(signed ? { providerOptions: signed } : {}),
+    };
+  });
 
   return buildAssistantMessage(
     model,

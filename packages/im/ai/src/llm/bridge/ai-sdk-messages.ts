@@ -137,6 +137,7 @@ function assistantToAiMessage(
       toolCallId: b.id,
       toolName: b.name,
       input: b.arguments,
+      ...(b.providerOptions ? { providerOptions: b.providerOptions } : {}),
     }));
 
   if (

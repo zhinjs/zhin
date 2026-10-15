@@ -26,7 +26,8 @@ function geminiServer(responses: Array<(body: Record<string, any>) => unknown>) 
     const body = JSON.parse(String(init?.body ?? '{}'));
     captured.push({ url, body });
     const respond = responses[Math.min(captured.length - 1, responses.length - 1)]!;
-    const payload = respond(body);
+    const payload = respond(body) as { __chunks?: unknown[] };
+    if (payload && Array.isArray(payload.__chunks)) return sse(payload.__chunks);
     return url.includes('streamGenerateContent') ? sse([payload]) : new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } });
   }) as typeof globalThis.fetch;
   return { fetch, captured };
@@ -100,5 +101,59 @@ describe('Gemini provider (google sdk)', () => {
     expect(JSON.stringify(b!.contents.slice(0, a!.contents.length))).toBe(JSON.stringify(a!.contents));
     expect(first.usage.cacheRead).toBe(0);
     expect(second.usage.cacheRead).toBe(4096);
+  });
+
+  it('returns parallel function calls from one chunk and streamed across chunks', async () => {
+    const usageMetadata = { promptTokenCount: 30, candidatesTokenCount: 9, totalTokenCount: 39 };
+    const { runtime, model } = setup([
+      () => ({
+        candidates: [{ content: { role: 'model', parts: [
+          { functionCall: { name: 'get_weather', args: { city: '上海' } } },
+          { functionCall: { name: 'get_weather', args: { city: '北京' } } },
+        ] }, finishReason: 'STOP' }],
+        usageMetadata,
+      }),
+      () => ({ __chunks: [
+        { candidates: [{ content: { role: 'model', parts: [{ text: '先查' }] } }] },
+        { candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'get_weather', args: { city: '广州' } } }] } }] },
+        { candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'get_weather', args: { city: '深圳' } } }] }, finishReason: 'STOP' }], usageMetadata },
+      ] }),
+    ]);
+    const cities = (m: { content: Array<{ type: string; arguments?: Record<string, unknown> }> }) =>
+      m.content.filter((b) => b.type === 'toolCall').map((b) => b.arguments?.city);
+    const one = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('上海和北京天气？')], tools: [weather] });
+    expect(one.stopReason).toBe('toolCalls');
+    expect(cities(one)).toEqual(['上海', '北京']);
+    const streamed = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('广州和深圳？')], tools: [weather] });
+    expect(cities(streamed)).toEqual(['广州', '深圳']);
+    expect(streamed.content).toEqual(expect.arrayContaining([{ type: 'text', text: '先查' }]));
+    const ids = streamed.content.filter((b) => b.type === 'toolCall').map((b) => (b as { id: string }).id);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it('round-trips the Gemini 3 function-call thought signature on the next request', async () => {
+    const { runtime, model, captured } = setup([
+      () => ({
+        candidates: [{ content: { role: 'model', parts: [
+          { functionCall: { name: 'get_weather', args: { city: '上海' } }, thoughtSignature: 'c2lnLWFiYw==' },
+        ] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 30, candidatesTokenCount: 5, totalTokenCount: 35 },
+      }),
+      textReply('上海晴', { promptTokenCount: 40, candidatesTokenCount: 3, totalTokenCount: 43 }),
+    ]);
+    const call = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('上海天气？')], tools: [weather] });
+    const block = call.content.find((b) => b.type === 'toolCall') as { id: string; providerOptions?: unknown };
+    expect(block.providerOptions).toEqual({ google: { thoughtSignature: 'c2lnLWFiYw==' } });
+    await runtime.complete(model, {
+      systemPrompt: SYSTEM,
+      messages: [
+        createUserMessage('上海天气？'),
+        call,
+        { role: 'toolResult', toolCallId: block.id, toolName: 'get_weather', content: [{ type: 'text', text: '晴 25°C' }], isError: false, timestamp: Date.now() },
+      ],
+      tools: [weather],
+    });
+    const modelTurn = captured[1]!.body.contents.find((c: { role: string }) => c.role === 'model');
+    expect(modelTurn.parts).toEqual([expect.objectContaining({ functionCall: expect.objectContaining({ name: 'get_weather' }), thoughtSignature: 'c2lnLWFiYw==' })]);
   });
 });
