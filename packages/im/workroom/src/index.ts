@@ -1,6 +1,6 @@
 // Barrel for the Workroom, Portfolio and Data Governance domain.
-// Remote, scheduler/preemption and portfolio exports live on the frozen
-// `./remote`, `./scheduler` and `./portfolio` subpaths (not the package root).
+// Remote, scheduler/preemption, portfolio and data-governance exports live on the frozen
+// `./remote`, `./scheduler`, `./portfolio` and `./data-governance` subpaths (not the package root).
 export type {
   WorkroomMemberRole,
   WorkroomAssignmentRouteDefinition,
@@ -53,12 +53,6 @@ export * from './workroom/git-workspace-gateway.js';
 export * from './workroom/effect-blocker-repository.js';
 export * from './workroom/role-capability-snapshot.js';
 export { LegacyEmbeddedPayloadDetectedError } from './workroom/journal/legacy-payload-guard.js';
-export * from './data-governance/data-governance.js';
-export * from './data-governance/disclosure-manifest.js';
-export * from './data-governance/database-payload-lifecycle-repository.js';
-export * from './data-governance/encrypted-database-payload-vault.js';
-export * from './data-governance/payload-vault-storage-handoff.js';
-export * from './data-governance/payload-hold-overdue-projection.js';
 export * from './workroom/assignment-authority-grant-application.js';
 export * from './workroom/assignment-authority-grant-repository.js';
 export type {
@@ -76,7 +70,6 @@ export {
 } from './workroom/runtime.js';
 export { digestCanonicalWorkroomValue } from './workroom/canonical-value.js';
 export * from './workroom/governed-dispatch-reasons.js';
-export * from './data-governance/disclosure-authority.js';
 export * from './workroom/github-workspace-transport.js';
 export * from './workroom/software-delivery-plan.js';
 export * from './workroom/coding-assignment-executor.js';
@@ -137,15 +130,6 @@ export {
 } from './workroom-runtime/workroom-assignment-authority-provider.js';
 export * from './workroom-runtime/workroom-assignment-knowledge-composition.js';
 export * from './workroom-runtime/workroom-capability-realization.js';
-export * from './workroom-runtime/workroom-data-governance-authority-writer.js';
-export * from './workroom-runtime/workroom-data-governance-bootstrap.js';
-export * from './workroom-runtime/workroom-data-governance-composition.js';
-export * from './workroom-runtime/workroom-data-governance-root-provider.js';
-export * from './workroom-runtime/workroom-data-governance-runtime.js';
-export * from './workroom-runtime/workroom-data-governance-storage.js';
-export * from './workroom-runtime/workroom-data-lifecycle-composition.js';
-export * from './workroom-runtime/workroom-data-lifecycle-console.js';
-export * from './workroom-runtime/workroom-data-lifecycle-human-ingress.js';
 export * from './workroom-runtime/workroom-delivery-gateway.js';
 export * from './workroom-runtime/workroom-dynamic-planning-provider.js';
 export * from './workroom-runtime/workroom-dynamic-planning.js';
@@ -162,7 +146,6 @@ export * from './workroom-runtime/workroom-local-assignment-executor.js';
 export * from './workroom-runtime/workroom-local-assignment-runtime.js';
 export * from './workroom-runtime/workroom-local-assignment-supply.js';
 export * from './workroom-runtime/workroom-overlay-pack-promotion.js';
-export * from './workroom-runtime/workroom-payload-processor-recall.js';
 export * from './workroom-runtime/workroom-plan-gate-authority.js';
 export * from './workroom-runtime/workroom-profile-authority-composition.js';
 export * from './workroom-runtime/workroom-profile-authority-runtime.js';

@@ -1,4 +1,29 @@
-import { ActivatableWorkroomCatalog, ActivatableWorkroomJournal, WorkroomKernel, createCatalogWorkroomRunControlAuthority, type WorkroomPlanGateAuthorityPort, createCatalogGovernedWorkroomProjectionAuthority, createCatalogWorkroomPlanGateAuthority, createGenerationOwnedWorkroomJournalPayloadPort, createGenerationWorkroomAcceptanceAuthority, createGenerationWorkroomAcceptancePolicyPort, createGenerationWorkroomLocalAssignmentAuthority, createGenerationWorkroomPlanGateAuthority, createWorkroomRuntime, installWorkroomDataGovernanceResources, workroomAcceptanceAuthorityToken, workroomAcceptancePolicyDecisionToken, workroomDynamicPlanningPolicyToken, workroomLocalAssignmentAuthorityToken, workroomPlanGateAuthorityToken, workroomPlanningDisclosureToken, type WorkroomDynamicPlanningPolicyPort, type WorkroomPlanningDisclosurePort } from '@zhin.js/workroom';
+import {
+  ActivatableWorkroomCatalog,
+  ActivatableWorkroomJournal,
+  WorkroomKernel,
+  createCatalogWorkroomRunControlAuthority,
+  type WorkroomPlanGateAuthorityPort,
+  createCatalogGovernedWorkroomProjectionAuthority,
+  createCatalogWorkroomPlanGateAuthority,
+  createGenerationOwnedWorkroomJournalPayloadPort,
+  createGenerationWorkroomAcceptanceAuthority,
+  createGenerationWorkroomAcceptancePolicyPort,
+  createGenerationWorkroomLocalAssignmentAuthority,
+  createGenerationWorkroomPlanGateAuthority,
+  createWorkroomRuntime,
+  workroomAcceptanceAuthorityToken,
+  workroomAcceptancePolicyDecisionToken,
+  workroomDynamicPlanningPolicyToken,
+  workroomLocalAssignmentAuthorityToken,
+  workroomPlanGateAuthorityToken,
+  workroomPlanningDisclosureToken,
+  type WorkroomDynamicPlanningPolicyPort,
+  type WorkroomPlanningDisclosurePort,
+} from '@zhin.js/workroom';
+import {
+  installWorkroomDataGovernanceResources,
+} from '@zhin.js/workroom/data-governance';
 import { CatalogWorkroomPriorityAuthority, GenerationWorkroomPriorityAuthority, workroomPriorityAuthorityToken } from '@zhin.js/workroom/scheduler';
 import {
   createGenerationWorkroomRemoteAssignmentAuthority,

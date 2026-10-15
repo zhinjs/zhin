@@ -74,6 +74,9 @@
       "@zhin.js/workroom/portfolio": [
         "./packages/im/workroom/src/portfolio.ts"
       ],
+      "@zhin.js/workroom/data-governance": [
+        "./packages/im/workroom/src/data-governance.ts"
+      ],
       "@zhin.js/im-contract": [
         "./packages/im/im-contract/src/index.ts"
       ],

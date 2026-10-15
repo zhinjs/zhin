@@ -118,6 +118,7 @@
 | `@zhin.js/workroom/remote` remote dispatch / callback / assignment | `internal` | `@zhin.js/workroom` | A2A 扩展；已移出包根并冻结；默认装配仍创建 Remote Callback Runtime / Remote Assignment Authority（旧 Kernel/runtime 路径依赖，C2 之后处理），仅 A2A transport 接线按配置懒加载 |
 | `@zhin.js/workroom/scheduler` scheduler / preemption / priority authority | `internal` | `@zhin.js/workroom` | 已移出包根并冻结（C4b）；仅移出包根导出，默认装配（旧 Kernel 路径）仍创建 scheduler / preemption runtime，C2 之后处理 |
 | `@zhin.js/workroom/portfolio` portfolio journal / admission / capacity outbox / sponsor | `internal` | `@zhin.js/workroom` | 已移出包根并冻结（C4b）；仅移出包根导出，默认装配（旧 Kernel 路径）仍创建 portfolio runtime，C2 之后处理 |
+| `@zhin.js/workroom/data-governance` payload vault / disclosure manifest & authority / payload lifecycle / workroom-data-* & workroom-payload-* runtime | `internal` | `@zhin.js/workroom` | 已移出包根并冻结（C4c）；仅移出包根导出，默认装配（旧 Kernel 路径）仍创建 data-governance runtime，C2 之后处理 |
 | Workroom / Portfolio / Data Governance domain contracts | `internal` | `@zhin.js/agent` | 领域值对象、策略和持久化端口；不依赖 Agent runtime/config，Host 适配器从 `@zhin.js/agent/runtime` 组合 |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |

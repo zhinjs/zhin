@@ -176,11 +176,11 @@ _避免使用_：进程内消息数组、每条消息直接 spawn、让 Orchestr
 _避免使用_：等待无期限 Promise、只有 Agent 能解除的阻塞、进程内 cancel flag、无法识别 owner 的 pending
 
 **Workroom Scheduler**:
-消费 Kernel facts 的无状态、确定性决策器。多实例对同一 sequence 必须产生相同 decision，并以 `append(expectedSequence, events)` 竞争提交；dispatch 通过 event outbox/Assignment id 幂等交付。排序依次考虑 Kernel control、安全 reservation、starvation bound、Sponsor lane、deadline、lane 内 rank/aging、enqueue sequence 与 task key。Orchestrator 只可在 lane 内调 rank；跨 lane 必须提交带 owner/deadline/approve/reject/rebase/cancel 的 Approval Gate。capacity、aging、starvation 与 preemption 阈值作为 Run 的 Scheduler Policy Snapshot 持久化，HMR 不得改变旧 Journal replay。
+消费 Kernel facts 的无状态、确定性决策器。多实例对同一 sequence 必须产生相同 decision，并以 `append(expectedSequence, events)` 竞争提交；dispatch 通过 event outbox/Assignment id 幂等交付。排序依次考虑 Kernel control、安全 reservation、starvation bound、Sponsor lane、deadline、lane 内 rank/aging、enqueue sequence 与 task key。Orchestrator 只可在 lane 内调 rank；跨 lane 必须提交带 owner/deadline/approve/reject/rebase/cancel 的 Approval Gate。capacity、aging、starvation 与 preemption 阈值作为 Run 的 Scheduler Policy Snapshot 持久化，HMR 不得改变旧 Journal replay。 其导出位于冻结的 `@zhin.js/workroom/scheduler` 子路径（C4b，仅移出包根）。
 _避免使用_：模型上下文里的隐式队列、FIFO 即全部策略、无限期饿死低优先级 Task
 
 **Portfolio Admission**:
-位于多个 Project 之上的持久化资源准入控制面。它只比较各 Workroom Scheduler 已选择的不透明 Capacity Request，按 Sponsor Portfolio Policy、预算、Pool capacity/rate、weighted dominant service 与 starvation reservation 决定是否发放 Capacity Grant；不能读取 Project Context/Memory、重排 Project 内 Task、修改 Plan，或直接完成/暂停/取消 Task。Sponsor Room 是 Portfolio facts/commands 的 projection，不是状态 writer。
+位于多个 Project 之上的持久化资源准入控制面。它只比较各 Workroom Scheduler 已选择的不透明 Capacity Request，按 Sponsor Portfolio Policy、预算、Pool capacity/rate、weighted dominant service 与 starvation reservation 决定是否发放 Capacity Grant；不能读取 Project Context/Memory、重排 Project 内 Task、修改 Plan，或直接完成/暂停/取消 Task。Sponsor Room 是 Portfolio facts/commands 的 projection，不是状态 writer。 其导出位于冻结的 `@zhin.js/workroom/portfolio` 子路径（C4b，仅移出包根）。
 _避免使用_：全局总 Orchestrator、合并所有 Project queue、进程内 semaphore 即资源权威、Portfolio 直接改 Task status
 
 **Capacity Request**:
@@ -244,7 +244,7 @@ _避免使用_：单一 privacy level、消息 metadata 自分类、摘要即匿
 _避免使用_：sensitive 万能标签、regulated 作为保密等级、用 risk tier 代替数据治理
 
 **Disclosure Decision**:
-当前 Data Governance Policy 对 exact Descriptor、Envelope/principal、purpose、channel、Processing Destination/recipient snapshot 与 approvals 的唯一判定，结果只能为 full、metadata-only、trusted transform required、exact approval required 或 deny。Context View、Evidence Port、IM/Console projection 与 A2A 共享此判定，不得各自放宽。
+当前 Data Governance Policy 对 exact Descriptor、Envelope/principal、purpose、channel、Processing Destination/recipient snapshot 与 approvals 的唯一判定，结果只能为 full、metadata-only、trusted transform required、exact approval required 或 deny。Context View、Evidence Port、IM/Console projection 与 A2A 共享此判定，不得各自放宽。 其包根导出已在 C4c 移到冻结的 `@zhin.js/workroom/data-governance` 子路径（仅移出包根，旧 Kernel 默认装配仍创建；C2 之后处理）。
 _避免使用_：引用即授权、sink 本地过滤、Sponsor 可越过 tenant/credential hard deny、缓存旧受众决定
 
 **Trusted Minimizing Transform**:

@@ -125,7 +125,8 @@ sidebar: false
   - 2026-10-15 · 「docs(workroom): 改正 remote 子路径的装配说明并补加载测试」· changeset 与中英文文档改为“移出包根导出、冻结，默认装配仍创建 Remote Callback Runtime / Remote Assignment Authority，C2 之后处理”；`loadWorkroomRemotePackage` 补未安装提示与子路径不可用原样抛出两个用例；可选的重放篡改用例未加；18 个相关测试通过
 - [x] C4b portfolio / scheduler / preemption
   - 2026-10-15 · 「refactor(workroom): scheduler / preemption / portfolio 移到子路径」· 未删除（旧 Kernel 默认装配仍创建这些 runtime），从 `@zhin.js/workroom` 包根移到冻结的 `./scheduler`、`./portfolio` 子路径；CLI 新增 fail-closed 的 `loadWorkroomSchedulerPackage`；新 Room 核心与示例不引用；文档与 changeset 如实写明“只移出包根导出，默认装配仍创建，C2 之后处理”；workroom / cli patch changeset；1251 个 workroom 测试 + 676 个 a2a / CLI 测试通过
-- [ ] C4c data-governance、`workroom-data-*`、`workroom-payload-*`（§6 第 1 条已确认移出主路径），作为可选入口
+- [x] C4c data-governance、`workroom-data-*`、`workroom-payload-*`（§6 第 1 条已确认移出主路径），作为可选入口
+  - 2026-10-15 · 「refactor(workroom): data-governance 与 data / payload 模块移到子路径」· 未删除（旧 Kernel 默认装配仍静态导入并创建），7 个 data-governance 模块与 10 个 workroom-runtime data / payload 模块从包根移到冻结的 `./data-governance` 子路径；`LegacyEmbeddedPayloadDetectedError` 与明文载荷拒绝仍在包根并补断言；158 个移出符号对全仓导入逐一核对；CLI 只有 type 导入故不加可选加载器；workroom / cli patch changeset；1254 个 workroom 测试 + 676 个 a2a / CLI 测试通过
 - [ ] C4d overlay-pack-promotion / github / self-delivery，移到自交付相关的可选插件
 - [ ] C5 简化 acceptance：去掉独立的验收引擎，reviewer 改为普通角色
 - [ ] C6 文档：在 `agent-workroom-orchestration-decision-map.md` 中把冲突条目标为 Superseded，新增 ADR，更新 README / 示例文档，补 changeset。跑通 `pnpm check:all`，在本文末尾写总结
@@ -402,6 +403,11 @@ sidebar: false
 - 无 Blocking / Should fix；只移出包根导出，默认装配行为不变；basic/cli、host/a2a、examples、scripts 的静态与动态导入逐个核对无残留；`loadWorkroomSchedulerPackage` 缺包给安装提示、子路径不可用原样抛出；agent 引用 workroom 任何子路径仍被 `isWorkroomPackageSpecifier` 禁止；exports、tsconfig.typecheck / typedoc 同步；新增 `package-exports.test.ts` 断言符号不在包根、子路径可取、各入口无重名运行时导出
 - Nit（只记录，可在 C4 收尾或 C6 统一处理）：CLI 多处多行导入被压成一行（`assignment-coordinator.ts:2`、`execution-control-coordinator.ts:1-2`、`human-ingress-coordinator.ts:3`、`local-portfolio.ts:3-5`、`persistence-coordinator.ts:6-7`、`portfolio-coordinator.ts:2-3`、`runtime-foundation.ts:1-2`、`agent-console.ts:6`、`tests/plugin-runtime/workroom/local-portfolio.test.ts:4`），应恢复每行一个符号；`packages/im/workroom/README.md:18` 中文段落未提 `./scheduler`、`./portfolio`；`packages/im/agent/CONTEXT.md:178/182` Scheduler / Portfolio Admission 词条缺冻结与子路径说明；`protocol-host-installer-a2a-workroom.test.ts:18` 未覆盖 scheduler 子路径缺失时 a2a 安装 fail-closed 的集成用例（单元层已覆盖）
 
+### 第 43 轮（2026-10-15，审查 C4c）
+
+- 无 Blocking / Should fix；只移出包根导出，默认装配行为不变；fail-closed 不变量保持；动态 import 调用方不读取被移出符号；新 Room 核心与示例不引用；exports、tsconfig.typecheck / typedoc、package-exports.test.ts、中英文 public-api-surface 同步
+- Nit（只记录）：`human-ingress-coordinator.ts:4`、`persistence-coordinator.ts:6`、`runtime-foundation.ts:1`、`console/agent-console.ts:6` 单行导入被整体展开为每行一个符号（与 C4b 方向相反，导入风格可在 C4 收尾统一）；`packages/im/agent/CONTEXT.md:179/183` 顺带补了 C4b 的子路径说明（处理了第 42 轮的 Nit），但“。 其…”句号后多一个空格（247 行同）；`packages/im/workroom/README.md` 末尾换行被删（编排者已在提交前恢复）
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -448,3 +454,4 @@ sidebar: false
 - 2026-10-15 08:35 定时运行：origin/main 无新提交，install / build 通过；C4 范围过大，拆为 C4a–C4d（C4 改为父条目）；完成 C4a（4 个 agent，约 9.3 分钟，workroom / a2a / cli build、type-check、1248 个 workroom 测试、502 个 a2a / CLI 测试、check:architecture、API 快照、plugin-runtime API、check:workroom-ssot、eslint 通过，审查无 Blocking，1 个 Should fix（文档与代码不符）+ 2 个 Nit 新增为 C4a-1）。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改
 - 2026-10-15 同一次定时运行：完成 C4a-1（4 个 agent，约 2.4 分钟，cli build、type-check、18 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，4 个 Nit 只记录，见第 41 轮）。下一个可做条目为 C4b
 - 2026-10-15 08:56 定时运行：origin/main 无新提交，install / build 通过；完成 C4b（4 个 agent，约 7.7 分钟，workroom / a2a / cli build、type-check、1251 个 workroom 测试、676 个 a2a / CLI 测试、check:architecture、check:workroom-ssot、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，4 个 Nit 只记录，见第 42 轮）。备注：继续内联传入 step-workflow.js，内容未改
+- 2026-10-15 同一次定时运行：完成 C4c（4 个 agent，约 7 分钟，workroom / cli build、type-check、1254 个 workroom 测试、676 个 a2a / CLI 测试、check:architecture、check:workroom-ssot、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，3 个 Nit 只记录，见第 43 轮）。备注：本次 `scriptPath` 指向会话 workflows 目录中的脚本副本可用。下一个可做条目为 C4d

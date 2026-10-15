@@ -9,8 +9,10 @@ import {
   createWorkroomGenerationAuthoritySnapshotFromRuntime,
   createWorkroomProfileGenerationView,
   installWorkroomProfileAuthorityResources,
-  workroomAcceptanceProjectionSourceAuthorityToken,
 } from '@zhin.js/workroom';
+import {
+  workroomAcceptanceProjectionSourceAuthorityToken,
+} from '@zhin.js/workroom/data-governance';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 

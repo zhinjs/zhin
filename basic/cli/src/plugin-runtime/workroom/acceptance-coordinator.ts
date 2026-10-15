@@ -20,7 +20,6 @@ import {
   installWorkroomAcceptanceResources,
   installWorkroomEffectResources,
   workroomAcceptanceProjectionPayloadToken,
-  workroomAcceptanceProjectionSourceAuthorityToken,
   workroomAcceptedReportReaderToken,
   workroomAcceptedSourceRecallToken,
   workroomAcceptedSourceRuntimeToken,
@@ -38,6 +37,9 @@ import {
   type WorkroomProjectMemorySchemaAuthorityPort,
   type WorkroomRiskHeaderProducerAuthorityPort,
 } from '@zhin.js/workroom';
+import {
+  workroomAcceptanceProjectionSourceAuthorityToken,
+} from '@zhin.js/workroom/data-governance';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';
 import type { WorkroomProfileCoordinator } from './profile-coordinator.js';

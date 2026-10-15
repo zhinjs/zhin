@@ -4,9 +4,11 @@ import {
   type AgentHostPortfolioSponsorControlPort,
   type AgentHostWorkroomKnowledgeControlPort,
   type AgentHostWorkroomProfileControlPort,
-  type WorkroomDataLifecycleConsoleControlPort,
   type WorkroomRunControlCommand,
 } from '@zhin.js/workroom';
+import {
+  type WorkroomDataLifecycleConsoleControlPort,
+} from '@zhin.js/workroom/data-governance';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { WorkroomRuntimeFoundation } from './runtime-foundation.js';
 

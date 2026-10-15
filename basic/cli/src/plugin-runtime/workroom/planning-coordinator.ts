@@ -3,10 +3,7 @@ import {
   type WorkroomDefinition,
   digestWorkroomCatalogProjectBinding,
   WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL,
-  WorkroomDataGovernanceAuthorityWriter,
-  assertAcceptanceProjectionDataGovernanceAuthority,
   createCapabilityPackManifest,
-  createWorkroomDataGovernanceBootstrapCandidate,
   createWorkroomDynamicPlanningGenerationSnapshot,
   createWorkroomGenerationAuthoritySnapshotFromRuntime,
   createWorkroomProfileOverlay,
@@ -15,6 +12,11 @@ import {
   type WorkroomPlanningBootstrapCommand,
   type WorkroomPlanningSetupStatus,
 } from '@zhin.js/workroom';
+import {
+  WorkroomDataGovernanceAuthorityWriter,
+  assertAcceptanceProjectionDataGovernanceAuthority,
+  createWorkroomDataGovernanceBootstrapCandidate,
+} from '@zhin.js/workroom/data-governance';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   assessWorkroomDisclosureSetup,

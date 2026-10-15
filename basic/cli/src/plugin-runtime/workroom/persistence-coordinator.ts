@@ -3,7 +3,26 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   type AIService,
 } from '@zhin.js/agent';
-import { ActivatableAssignmentAuthorityGrantRepository, ActivatableOverlayPackPromotionRepository, ActivatableProjectKnowledgeJournal, ActivatableWorkroomCatalog, ActivatableWorkroomJournal, DatabaseAssignmentAuthorityGrantRepository, DatabaseOverlayPackPromotionRepository, DatabaseProjectKnowledgeJournal, FileAssignmentAuthorityGrantRepository, FileOverlayPackPromotionRepository, FileProjectKnowledgeJournal, FileWorkroomCatalog, FileWorkroomJournal, createGenerationOwnedWorkroomDataGovernanceStorage, defineWorkroomDatabaseModels, prepareWorkroomDatabaseStorage } from '@zhin.js/workroom';
+import {
+  ActivatableAssignmentAuthorityGrantRepository,
+  ActivatableOverlayPackPromotionRepository,
+  ActivatableProjectKnowledgeJournal,
+  ActivatableWorkroomCatalog,
+  ActivatableWorkroomJournal,
+  DatabaseAssignmentAuthorityGrantRepository,
+  DatabaseOverlayPackPromotionRepository,
+  DatabaseProjectKnowledgeJournal,
+  FileAssignmentAuthorityGrantRepository,
+  FileOverlayPackPromotionRepository,
+  FileProjectKnowledgeJournal,
+  FileWorkroomCatalog,
+  FileWorkroomJournal,
+  defineWorkroomDatabaseModels,
+  prepareWorkroomDatabaseStorage,
+} from '@zhin.js/workroom';
+import {
+  createGenerationOwnedWorkroomDataGovernanceStorage,
+} from '@zhin.js/workroom/data-governance';
 import { ActivatablePortfolioControlOutboxRepository, DatabasePortfolioControlOutboxRepository, FilePortfolioControlOutboxRepository, portfolioJournalRepositoryToken } from '@zhin.js/workroom/portfolio';
 import {
   activateAiDatabaseStorage,

@@ -25,6 +25,11 @@
       "types": "./lib/portfolio.d.ts",
       "development": "./src/portfolio.ts",
       "import": "./lib/portfolio.js"
+    },
+    "./data-governance": {
+      "types": "./lib/data-governance.d.ts",
+      "development": "./src/data-governance.ts",
+      "import": "./lib/data-governance.js"
     }
   },
   "files": [
