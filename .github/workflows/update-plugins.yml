@@ -6,8 +6,11 @@ on:
     - cron: '0 6 * * 1,4'
   workflow_dispatch:
 
+# main is branch-protected (changes must go through a PR), so the refreshed
+# registry is proposed as a PR instead of being pushed to main.
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update:
@@ -23,16 +26,26 @@ jobs:
       - name: Fetch plugin data from npm
         run: node scripts/update-plugins.mjs
 
-      - name: Check for changes
-        id: diff
-        run: |
-          git diff --quiet docs/public/plugins.json && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      - name: Commit and push
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/public/plugins.json
-          git commit -m "chore: update plugin registry [skip ci]"
-          git push
+      # Opens or updates one PR from the fixed branch below. If plugins.json is
+      # unchanged versus main, no PR is opened (and a stale one is closed).
+      #
+      # PRs opened with GITHUB_TOKEN do not trigger other workflows, so the
+      # required CI checks will not run on them. Set the optional
+      # PLUGIN_REGISTRY_PR_TOKEN secret (fine-grained PAT with contents and
+      # pull-requests write on this repo) to have CI run automatically;
+      # otherwise a maintainer must re-trigger CI on the PR.
+      - name: Open or update registry PR
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.PLUGIN_REGISTRY_PR_TOKEN || secrets.GITHUB_TOKEN }}
+          add-paths: docs/public/plugins.json
+          branch: chore/update-plugin-registry
+          delete-branch: true
+          commit-message: 'chore: update plugin registry'
+          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          title: 'chore: update plugin registry'
+          body: |
+            Automated refresh of `docs/public/plugins.json` from npm by the
+            **Update Plugin Registry** workflow (`scripts/update-plugins.mjs`).
+            Each scheduled run updates this same PR.
