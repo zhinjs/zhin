@@ -3,8 +3,11 @@
  * fail with readable messages, and invalid fixtures are rejected up front.
  */
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
+import type { AssistantMessage, Context, LlmCompletionPort, Model } from '@zhin.js/ai';
 import {
   createFakeClock,
+  createLiveModel,
   defineEvalCase,
   evaluateExpectations,
   formatEvalReport,
@@ -188,6 +191,17 @@ describe('eval framework', () => {
       'duplicate tool names: dup',
       'tool "bash" uses a reserved built-in name; mocked tools need their own names',
     ]);
+    const liveWithoutSchema = defineEvalCase({
+      id: 'live-no-schema',
+      description: 'A live case whose mock tool hides its arguments.',
+      source: 'framework self-test',
+      inbound: { text: '北京天气' },
+      tools: [{ name: 'get_weather', result: 'sunny' }],
+      script: [{ toolCalls: [{ name: 'get_weather', args: { city: 'Beijing' } }] }, { text: 'sunny' }],
+      expect: {},
+      live: { checks: () => [] },
+    });
+    expect(validateEvalCase(liveWithoutSchema)).toEqual(['live case: tool "get_weather" must declare parameters for city']);
     const valid = approvalCase('approve');
     expect(() => loadEvalCases({ 'a.case.ts': { default: valid }, 'b.case.ts': { default: valid } }))
       .toThrow('b.case.ts: id "approval-gate" already used by a.case.ts');
@@ -238,5 +252,36 @@ describe('eval framework: multi-model and virtual clock', () => {
     // instead of blocking the suite until the vitest timeout.
     expect(run.modelRequests).toHaveLength(1);
     expect(run.terminals.at(-1)?.type).toBe('turn_end');
+  });
+});
+
+describe('eval framework: mock tool parameters', () => {
+  it('sends a mock tool\'s parameters schema to the model', async () => {
+    const seen: Context[] = [];
+    const reply = (model: Model): AssistantMessage => ({
+      role: 'assistant', content: [{ type: 'text', text: 'ok' }], api: model.api, provider: model.provider, model: model.id,
+      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: 'stop', timestamp: 0,
+    });
+    const port: LlmCompletionPort = {
+      complete: async (model, context) => { seen.push(context); return reply(model); },
+      completeSimple: async (model, context) => { seen.push(context); return reply(model); },
+    };
+    const model = { id: 'real', provider: 'p', api: 'ai-sdk', sdk: 'openai', input: ['text'], contextWindow: 100_000, maxTokens: 1000 } as Model;
+    const parameters = { type: 'object' as const, properties: { city: { type: 'string' } }, required: ['city'] };
+    const definition = defineEvalCase({
+      id: 'mock-tool-parameters',
+      description: 'Mock tool parameters reach the model.',
+      source: 'framework self-test',
+      inbound: { text: '北京天气' },
+      tools: [{ name: 'get_weather', description: 'Weather for a city.', parameters, result: 'sunny' }],
+      script: [{ text: 'ok' }],
+      expect: {},
+    });
+    await runEvalCase(definition, { model: () => createLiveModel({ port, model }) });
+    const tool = seen[0]!.tools?.find((candidate) => candidate.name === 'get_weather');
+    expect(tool?.description).toBe('Weather for a city.');
+    // Tools reach the model port as zod schemas; compare their JSON Schema projection.
+    expect(z.toJSONSchema(tool!.parameters as z.ZodType)).toMatchObject({ type: 'object', properties: { city: { type: 'string' } }, required: ['city'] });
   });
 });
