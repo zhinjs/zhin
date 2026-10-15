@@ -3,9 +3,7 @@
   "compilerOptions": {
     "types": ["node"],
     "outDir": "./lib",
-    "rootDir": "./src",
-    "declaration": false,
-    "declarationMap": false
+    "rootDir": "./src"
   },
   "include": ["src/**/*"],
   "exclude": ["lib", "node_modules", "tests", "tools", "commands"]

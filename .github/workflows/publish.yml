@@ -79,6 +79,10 @@ jobs:
       - name: build packages
         run: pnpm build
 
+      # Every relative import in packed JS must resolve inside its tarball (#799).
+      - name: verify packed relative imports resolve
+        run: pnpm check:pack-imports
+
       - name: verify clean generated project before publishing
         run: pnpm check:created-project
 

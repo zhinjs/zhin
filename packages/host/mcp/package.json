@@ -11,11 +11,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
-    "./adapter-tools-helper": {
-      "types": "./lib/adapter-tools-helper.d.ts",
-      "development": "./src/adapter-tools-helper.ts",
-      "import": "./lib/adapter-tools-helper.js"
-    },
     "./runtime": {
       "types": "./lib/runtime.d.ts",
       "development": "./src/runtime.ts",
