@@ -4,13 +4,18 @@
  */
 import type { SdkId } from './sdk-registry.js';
 import type { ProviderInstanceConfig } from './types/model.js';
-import { GROQ_ALIASES, GROQ_BASE_URL } from './groq.js';
+import { GROQ_BASE_URL, isGroqGateway } from './groq.js';
 
 export interface ProviderGatewayPreset {
   /** Provider alias (exact, case-insensitive) */
   aliases?: readonly string[];
   /** baseUrl must include one of these substrings (case-insensitive) */
   baseUrlIncludes?: readonly string[];
+  /**
+   * Custom matcher; replaces `aliases` / `baseUrlIncludes` when set. Use it when the
+   * gateway already has a detection helper, so the preset and the request fixes agree.
+   */
+  matches?: (alias: string, baseUrl: string | undefined) => boolean;
   sdk?: SdkId;
   contextWindow?: number;
   /** When true, preset sdk overrides yaml sdk when baseUrl matches */
@@ -44,8 +49,8 @@ export const PROVIDER_GATEWAY_PRESETS: readonly ProviderGatewayPreset[] = [
   {
     // Request fixes (reasoning replay, unsupported fields, GPT-OSS effort) live in groq.ts.
     // No preset contextWindow: Groq hosts models of different sizes, so it comes from the model id.
-    aliases: GROQ_ALIASES,
-    baseUrlIncludes: ['api.groq.com'],
+    // Same helper as the request transform: alias groq / groqcloud, or exact host api.groq.com.
+    matches: isGroqGateway,
     sdk: 'openai-compatible',
     coerceSdk: true,
     baseUrl: GROQ_BASE_URL,
@@ -57,6 +62,7 @@ function matchesPreset(
   baseUrl: string | undefined,
   preset: ProviderGatewayPreset,
 ): boolean {
+  if (preset.matches) return preset.matches(alias, baseUrl);
   const aliasLower = alias.trim().toLowerCase();
   if (preset.aliases?.some((a) => a.toLowerCase() === aliasLower)) return true;
   const url = baseUrl?.trim().toLowerCase() ?? '';

@@ -54,6 +54,29 @@ describe('Groq gateway preset', () => {
     expect(isGroqGateway('openrouter', 'https://openrouter.ai/api/v1')).toBe(false);
   });
 
+  it('preset and request fixes share one detector: exact host api.groq.com, no lookalikes', async () => {
+    const groqUrls = ['https://api.groq.com/openai/v1', 'https://API.GROQ.COM/openai/v1', 'https://api.groq.com:443/openai/v1'];
+    const lookalikes = [
+      'https://api.groq.com.evil.example/openai/v1',
+      'https://evil.example/api.groq.com/v1',
+      'https://xapi.groq.com/openai/v1',
+      'https://gateway.test/v1?u=api.groq.com',
+      'not a url api.groq.com',
+    ];
+    for (const baseUrl of groqUrls) {
+      expect(isGroqGateway('fast', baseUrl), baseUrl).toBe(true);
+      expect(applyProviderGatewayPreset('fast', { sdk: 'openai', baseUrl }).sdk, baseUrl).toBe('openai-compatible');
+    }
+    for (const baseUrl of lookalikes) {
+      expect(isGroqGateway('fast', baseUrl), baseUrl).toBe(false);
+      // The preset no longer matches on a substring, so sdk is left alone.
+      expect(applyProviderGatewayPreset('fast', { sdk: 'openai', baseUrl }).sdk, baseUrl).toBe('openai');
+    }
+    // And no Groq request fix leaks to the lookalike host.
+    const evil = groq(GPT_OSS, { baseUrl: 'https://api.groq.com.evil.example/openai/v1' }, 'fast');
+    expect((await evil.capture('hi')).body).not.toHaveProperty('reasoning_effort');
+  });
+
   it('takes the context window from the model id (gpt-oss 131072), explicit config first', () => {
     expect(resolveTransportContextWindow({ sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL }, 'openai/gpt-oss-120b')).toBe(131_072);
     expect(resolveTransportContextWindow({ sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL }, 'openai/gpt-oss-20b')).toBe(131_072);
