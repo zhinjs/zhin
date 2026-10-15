@@ -1,0 +1,14 @@
+packages/im/ai/tests/llm/provider-stream-errors.test.ts
+  h_b680f75345178a 19,34,47,51,61-62,73,76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "32c2f71a9f9550920eb30bc9da333c68048c183b",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
