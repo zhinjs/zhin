@@ -255,16 +255,31 @@ describe('503 UNAVAILABLE', () => {
 });
 
 describe('provider-unavailable in the nightly report', () => {
-  const run = (responses: Parameters<ProviderHarness['reply']>, opts: { runs?: number; maxRequests?: number; seeds?: boolean } = {}) => {
+  /**
+   * The runner (and the eval driver behind seed cases) does real async work before and
+   * between requests, so stepping fake timers races it. These tests instead give the port
+   * a virtual clock: `sleep` advances virtual time and resolves at once, so pacing and the
+   * 8–15 s 503 wait take no real time and every sleep is recorded.
+   */
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+  const run = async (responses: Parameters<ProviderHarness['reply']>, opts: { runs?: number; maxRequests?: number; seeds?: boolean } = {}) => {
     const h = createProviderHarness({ sdk: 'google', model: 'gemini-3.8-flash', responses });
     const budget = { ...DEFAULT_NIGHTLY_BUDGET, runsPerCase: opts.runs ?? 3, maxRequests: opts.maxRequests ?? 120 };
-    const port = new RateLimitedCompletionPort(new BudgetedCompletionPort(h.runtime, budget));
+    let now = 0;
+    const sleeps: number[] = [];
+    const clock = { now: () => now, sleep: async (ms: number) => { sleeps.push(ms); now += ms; }, random: () => 0 };
+    const events: RateLimitEvent[] = [];
+    const port = new RateLimitedCompletionPort(new BudgetedCompletionPort(h.runtime, budget), FREE_TIER_RATE_LIMIT, { clock, onEvent: (e) => events.push(e) });
     const seedCases = opts.seeds ? liveSeedCases([groupMemberNoShell]) : undefined;
-    return settle(runNightlyMatrix({ provider: 'gemini', models: [h.model], cases: opts.seeds ? [] : zhCase, seedCases, port, rateLimiter: port, budget }));
+    const value = await runNightlyMatrix({ provider: 'gemini', models: [h.model], cases: opts.seeds ? [] : zhCase, seedCases, port, rateLimiter: port, budget });
+    return { value, events, sleeps, requests: h.requests };
   };
 
   it('marks a run that stays 503 provider-unavailable, outside the pass rate', async () => {
-    const { value: report } = await run([ok(ZH_ANSWER), overloaded(), overloaded(), ok(ZH_ANSWER)]);
+    const { value: report, sleeps } = await run([ok(ZH_ANSWER), overloaded(), overloaded(), ok(ZH_ANSWER)]);
+    expect(sleeps).toContain(8_000);
     expect(report!.models[0]!.cases[0]).toMatchObject({ passed: 2, unavailable: 1, skipped: 0, passRate: 1 });
     expect(report!.models[0]!.cases[0]!.failures).toEqual([expect.stringMatching(/^provider-unavailable/)]);
     expect(report!.infra).toEqual({ attempted: 3, providerUnavailable: 1, flaky: false });
@@ -287,9 +302,11 @@ describe('provider-unavailable in the nightly report', () => {
   });
 
   it('marks a seed run provider-unavailable when one of its turns stayed 503', async () => {
-    const { value: report } = await run([overloaded(), overloaded()], { runs: 1, seeds: true });
-    expect(report!.models[0]!.cases[0]).toMatchObject({ id: 'seed-group-member-no-shell', unavailable: 1, passRate: null });
-    expect(report!.infra?.flaky).toBe(true);
+    const { value: report, events } = await run([overloaded(), overloaded()], { runs: 1, seeds: true });
+    expect(events.filter((e) => e.type === 'unavailable_retry')).toEqual([expect.objectContaining({ delayMs: 8_000 })]);
+    expect(events.filter((e) => e.type === 'unavailable')).toEqual([expect.objectContaining({ attempts: 2 })]);
+    expect(report.models[0]!.cases[0]).toMatchObject({ id: 'seed-group-member-no-shell', unavailable: 1, passRate: null });
+    expect(report.infra?.flaky).toBe(true);
   });
 
   it('lists budget-skipped runs in the summary', async () => {
