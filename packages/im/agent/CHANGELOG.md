@@ -1,5 +1,148 @@
 # @zhin.js/agent
 
+## 1.1.32
+
+### Patch Changes
+
+- 9891e66: Extract the Workroom, Portfolio and Data Governance domain code from `@zhin.js/agent` into the new `@zhin.js/workroom` package. Compatibility stubs at the old internal agent paths were removed in A4b (see `move-workroom-runtime`), together with the `./workroom/*.js`-style deep exports; `@zhin.js/workroom` exposes only its package root. Import from `@zhin.js/workroom`.
+- c829031: feat(agent): 长对话压缩、已告知账本与缓存友好的提示词顺序（#730）。
+  - 自动压缩改为在消息达到 `contextWindow × thresholdRatio`（新配置 `ai.agent.compaction.thresholdRatio`，默认 0.7）减去系统提示和工具定义占用时触发，插件运行时会话同样生效；以前要接近“窗口减 13k”才触发。
+  - 压缩摘要会保留已告知用户的结论和承诺。
+  - 新增按会话的“已告知”账本，最终回复和进度汇报共用：下一轮以 `[Already told the user]` 短块提供给模型，自动去重，最多 8 条。
+  - git 状态移到系统提示最后一段，便于缓存稳定前缀。
+  - 回合追踪记录 provider 返回的缓存命中 token。
+- 0c17e0b: feat(agent): 上下文量化与按需披露（#729）。每轮第一次模型请求的上下文开销按段估算（系统提示、工具 schema、按需工具索引、技能目录、专家 agent 目录、已加载技能、记忆、bootstrap、历史、本轮输入），写入回合追踪的 `context_budget`，`zhin trace last` 可见。插件运行时的技能目录和专家 agent 目录改为只列名称加一行说明（最多 96 字符、40 条），技能正文在 `load_skill` 后才注入；未常驻的工具在系统提示 `## Deferred tools` 段列出名称和短说明（只含本回合有权使用的工具）。修复 `load_tool` / `load_skill` 之后模型直接给出文字回复时，agent loop 仍多发一次模型请求的问题。
+- bf52b40: fix(agent): read_file / list_dir / glob / grep / edit_file / write_file 默认常驻加载（仍受本轮工具过滤与 exec 策略约束），常驻工具不再写入会话快照，不占 `maxLoadedPerSession` 名额也不会被挤出。模型直接调用本轮目录中的延迟工具时自动加载并执行，审批与权限检查照常生效；不在目录中的名字仍按未知工具拒绝，并提示使用 discover / load_tool。
+- 1f24fbf: feat(agent): 后台任务（Detached Task）——持久化状态机、冻结权限快照、每步 checkpoint 与重启恢复、副作用幂等键（#731）
+- 55811d1: Provider resilience gate cases for model fallback and request timeouts (#724). The eval scripted model can register several candidate models and records the model id of each request; a `hang` fault step drives a virtual clock so timeout cases never wait in real time. The provider request timeout now accepts injected timers (`ProviderTimers`).
+- 9b8b586: Add a scripted-model agent eval framework (`packages/im/agent/evals`) that drives `FullAgentTurnEngine` through `TurnIngress`, with tool, outbound-text, approval and termination assertions; run it with `pnpm eval:agent` (CI gate).
+- a6ea7b4: Agent evals: multi-message ingress cases (#725). A case can now feed several timed messages through the IM admission protocol (TurnAdmissionGate) on a virtual clock, which makes same-sender merging, FIFO queuing of different members, cancel and queue-full/expiry testable end to end.
+- 9486586: Eval mock tools can declare `parameters` (JSON Schema), which is sent to the model. Cases with live checks must declare every argument their script passes. This fixes the nightly `seed-group-member-read-only-lookup` failure, where a real model saw `get_weather` with no arguments and called it without a city.
+- 2b5e5ae: Add 27 seed agent eval cases covering QQ regressions, #716/#718 fixes and #719 group-member tightening. The scripted eval driver gains native file/bash tools on a temp workspace, `notOffered` tool-call expectations, model-input assertions and generic provider fault steps, and applies the same group-member restriction as AgentRuntime via the new shared `restrictGroupMemberTurn` helper.
+- bf52b40: 新增探索纪律 harness：model harness 支持 `explorationBudget`（连续只读探索调用达到次数后在工具结果中注入提示，默认 8，0 关闭）与 `explorationGuidance`（系统提示加入"先规划、限定目标文件"）；内置 MiniMax M 系列预设（explorationBudget 5，开启 guidance，不改 maxIterations），均可通过 `ai.agent.modelHarness` 覆盖。
+- bf52b40: 原生文件工具不再淹没上下文：grep/glob 默认跳过 node_modules、.git、.opencode、.zhin、dist、coverage 等目录并遵循 .gitignore（路径直接指向这些目录时仍可搜索）；grep 拒绝 `.*`、`^` 等匹配所有行的模式并给出改用 read_file / glob / list_dir 的提示，跳过二进制与超大文件；grep 匹配数、输出字节、单行长度，glob 文件数，list_dir 条目数与 read_file 行数均有上限，截断时提示如何缩小范围或继续读取。
+- bf52b40: Harness 组合修复：直接调用被策略移除的 bash 不再被自动加载进会话；standalone 子 loop 支持传入父 turn 策略以同样隐藏 bash；交互提示的回答（如审批回复 y）不再作为背景事件进入下一轮上下文。
+- bf52b40: 修复 IM 审批静默拒绝：审批结果区分「用户拒绝 / 审核器拒绝 / 超时 / 无审批通道」，并以不诱导重试的文案返回给模型；审批提示支持回复 y/同意、n/拒绝；超时不再被当作用户拒绝记忆；owner 读取工作区内 package.json、锁文件等非机密项目文件不再需要确认（.env、密钥等仍需确认，写入审批不变）。
+- bf52b40: fix(agent): 本轮策略无法执行 Shell 时不再向模型提供 bash（工具列表与目录同时过滤，load_tool 也无法再加载），万一触发会返回明确、不可重试的错误。新增 `ai.agent.masterShell`（默认 `off`）：设为 `isolated` 时，仅 IM 私聊中的 master 可在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、白名单外命令需审批），宿主无 Docker 时直接失败、不降级到宿主机。
+- fc75499: feat(agent): injection guard, outbound leak check and usage quotas (#727). Once external content (tool results, web pages, files, sub-agent reports, background group events) has entered a turn, shell commands, messages to other conversations, config changes and scheduled tasks always go through the ApprovalPort, with the source chain on the approval card; unattended turns deny them (`ai.agent.injectionGuard.confirmHighRisk`, default on). Replies, progress updates and outbound tool messages now mask verbatim system-prompt lines, secrets and other sessions' memory before delivery (`ai.agent.injectionGuard.outboundCheck`, default on). New `ai.agent.usageQuota` adds per-user / per-group token quotas and a per-group rate limit, all off by default, owner exempt.
+- bf52b40: fix(agent): 工具步数用尽时不再把原始工具输出发给用户。循环结束且没有可见回复时，会关闭工具再请模型总结已完成的工作、剩余事项并询问是否继续；总结失败则回复固定提示。`formatToolCallsForUser` 不再展示 read_file / grep / glob / list_dir / web_fetch 等只读探索工具的结果，并限制总长度。
+- 2a9d08b: Semantic memory gets a data model and write policy (#733). Entries now carry `kind` (user_fact / preference / task_state / episodic), the writing turn and its trust level, `last_used_at` and a bounded version history; existing `memory_entries` tables gain the new columns at startup without losing rows. `memory_upsert` attributes writes to the turn (the model can no longer set `source`), keeps group members out of global/platform memory and away from facts written at a higher trust level, defaults group-member writes to their own `user` scope, and gives `task_state` a bounded expiry that can be tied to a task.
+- e4fbfb2: Semantic memory retrieval uses BM25 (#734). `memory_search` ranks with BM25 (word tokens plus CJK bigrams), and each turn now recalls the top-k entries relevant to the current message from the initiator's visible scopes into the turn context, bounded by `ai.memory.semantic.recall` (`topK` 5, `maxTokens` 400 by default), so memory cost per turn no longer grows with the number of entries. Users can view and forget memory about themselves with `/memory` and `/forget`; `SemanticMemoryRuntime` gains `list` / `delete` for management surfaces.
+- 4ce55db: Add a minimal per-turn trace: `TurnTrace` collector (model calls and tokens, redacted tool-call summaries with duration and result size, denials, budget extensions and auto-continuations, nested sub-agent turns, termination) fed from the turn journal, the last 50 traces kept in `data/agent-traces/recent.json`, a new `zhin trace <turnId|last>` command, and traces attached to failing eval reports.
+- ba56e74: Nightly real-model evals (#723): a MiniMax capability matrix (tool-call format, parallel calls, long context, Chinese instruction following) with semantic checks, an optional LLM-judge interface, hard request/token budgets, and JSON/Markdown reports diffed against the previous night. Runs from a scheduled workflow, never as a PR gate.
+- 56bafda: feat(agent): 多模态感知预处理 `ai.multimodal.perception`。主模型收不了的图片 / 视频 / PDF，由配置的感知模型（如 Gemini Flash-Lite）经 provider 韧性层描述后，以 `[图片描述]` 等不可信外部内容注入，并写入会话历史；按字节 sha256 缓存，每回合有上限，失败回到原占位。描述会让回合进入“已接触外部内容”状态（高危动作需审批），`media_resolution` 事件带上来源模型。不配置时行为不变；配置错误时启动失败，`zhin config check` 同样报错。
+
+  fix(agent): 模型 fallback 跳过不支持本回合媒体类型的候选（已接收的图片不会在 fallback 时悄悄变成占位）；带图片的回合仍以绑定的模型（`ai.agents.<name>.model`）为第一候选。
+
+  deprecate（仍兼容，下一个 minor 移除）：
+
+  - `ai.agents.<name>.priority` / `match`（含 `hasMedia` 等全部条件）从未生效：IM 消息总是交给 `ai.agents.zhin`。仍接受，启动时告警，不再因此校验报错；`zhin config check` 报 `ai.agent_routing_deprecated`，`--fix` 自动删除。`ai.routes` 的 `--fix` 改为直接删除。删除未导出的 `routing/route-matcher` / `match-rules`；`RouteMatchConfig` 与相关字段标记 `@deprecated`。
+  - `ZhinAgentConfig.visionModel`（仅代码可设置的残留）：仍作为图片回合的后备候选，设置时告警。
+  - `AgentCore.runVision` / `runVisionTurn`、`runAgentLoopVisionTurn` / `runAgentLoopVisionTurnRun` 及其类型：无生产调用方，标记 `@deprecated`。
+
+- 7d2263c: Progress-aware tool-call budget (`ai.agent.toolBudget`): `maxIterations` becomes a soft budget extended while the turn makes progress (not when looping or failing), with hard step/wall-clock/token caps, opt-out automatic in-turn continuation (default: master private chat), throttled natural-language progress updates (default: private chats), and the exploration budget resetting on the same progress signal. Sub-agents use the same budget with a lower hard cap and no continuation.
+- 1ea299a: Add PR-gate eval cases for provider resilience (#724): 429 retry then success, retries exhausted with a polite reply, empty reply with and without a re-ask preset, and a malformed tool call.
+- 27da0e8: Provider resilience for agent turns: classify provider errors (rate limit, timeout, 5xx, network, empty reply, malformed tool call), retry with exponential backoff honouring Retry-After, per-request timeout, fallback across `modelCandidates`, and per-model quirk presets (`emptyReplyRetries`, `requestTimeoutMs`; MiniMax M-series re-asks once on an empty reply). Configured via `ai.agent.providerResilience` with conservative defaults.
+- 7d2263c: Add opt-in in-turn sub-agents (`ai.agent.subagentTurnMode: sync`) on the plugin-runtime turn path. Sub-agents inherit the parent turn policy, never wider (no bash unless the parent can run it); approvals go to the parent conversation and requester. DeferredWorkerRunner now offers no bash unless given a frozen turn policy snapshot.
+- dbc1456: feat(agent): 后台任务插话、改向与叫停，`/tasks`、`/task stop|redirect` 命令，并从 `@zhin.js/agent` 导出后台任务模块（#732）
+- d91d21a: feat(agent): trust tiers and initiator binding (#726). Each turn now has an initiator trust level (owner / trusted_member / group_member), and its authority is that level's ceiling intersected with the configured policy. This replaces the #719 group-member special case; group-member turns keep the same restrictions, but denials now report the `trust-level` policy. Sub-agent reports, third-party plugin prompt sections, skill instructions and background group events are rendered as labelled `external_content`, and traces record the initiator trust level.
+- a62acca: Ordinary IM turns now have a clear policy for messages that arrive while a turn is running (#725). A sender's follow-up replaces their own unanswered turn and is answered together with the earlier text, or merges into their queued turn. Other members' messages always queue and never interrupt or merge into someone else's turn. The initiator or master can stop a turn with `取消` / `cancel`. Queues are bounded by the new `ai.agent.inboundQueue.maxQueuedTurns` (default 5) and `ttlMs`, and queue waits and merges are recorded on the TurnTrace.
+- 9ab9ffb: fix(ai): `completeText`（压缩、上下文摘要、子 agent 摘要）与主对话路径对齐。
+  - 经现有 provider 韧性层（`createResilientCompletionPort`）做错误分类、退避重试、单次超时（默认 180s）和同 provider 模型 fallback；SDK 自带重试置 0，避免重试叠加。
+  - `TextCompleteOptions` 新增 `signal`、`timeoutMs`、`fallbackModels`、`resilience`；压缩与摘要调用方在有取消信号时透传，取消不再走降级摘要，也不计入自动压缩熔断。
+  - 只返回正文，绝不把模型的 thinking 当摘要；内容安全 / 长度失败抛出 `CompletionFailureError`（消息即面向用户的说明）。
+  - 未指定模型时优先使用 provider 配置的 `defaultModel`。
+- 1280631: Gemini provider fixes (#769). Gemini chat models now default to multimodal input, and images go out as typed file parts. Gemini 3 function-call thought signatures round-trip. SAFETY, RECITATION and blocked-prompt refusals, empty MAX_TOKENS replies and MALFORMED_FUNCTION_CALL now show up as visible errors instead of empty replies. Gemini `RetryInfo.retryDelay`, `API_KEY_INVALID` and RPC statuses feed retry classification. A new provider-config `providerOptions` field carries `safetySettings` and `thinkingConfig`, and opt-in `contextCache: { mode: 'explicit' }` adds explicit Gemini `cachedContents` with TTL refresh and invalidation. The nightly real-model evals now run on Gemini (`GEMINI_API_KEY`), with new multimodal eval cases.
+- bd78a94: Gemini coverage for the provider resilience layer (#724). Gemini safety blocks (SAFETY, PROHIBITED_CONTENT, BLOCKLIST, SPII, IMAGE_SAFETY, RECITATION and blocked prompts) now get a polite refusal and are never retried or sent to a fallback model. A per-day Gemini quota (`QuotaFailure` `PerDay`) skips retries and falls back to the next candidate model. 504 `DEADLINE_EXCEEDED` is reported as a timeout. A new Gemini model-harness preset re-asks an empty reply or a `MALFORMED_FUNCTION_CALL` once on the same model. The nightly capability matrix gets a multimodal column, and `NIGHTLY_PROVIDER=minimax` keeps MiniMax available next to the Gemini default.
+- 57ea5f7: Provider config fixes. Provider `timeout` and `maxRetries` now take effect: they override `ai.providerResilience` for that provider, below per-model harness settings. New opt-in `firstChunkTimeoutMs` / `chunkTimeoutMs` abort streams that connect but go silent, and the stall is retried and failed over like any timeout. `authScheme` now works for every scheme (`Token`, `Bearer`, `''`) on chat requests and model discovery alike. The `sdk: openai` `baseUrl` gets `/v1` on a bare proxy root, like the other OpenAI-protocol providers; `compat.appendV1: false` keeps the old as-written behaviour. `compat.supportsDeveloperRole: false` sends `system` instead of `developer` to reasoning models. OpenAI refusals now surface as a content-policy message instead of an empty reply. MiniMax `baseUrl` values ending in `/anthropic` or naming only a host are completed to `/anthropic/v1`, and `@ai-sdk/minimax` is declared as an optional peer dependency. `compat.supportsReasoningContent` and `compat.toolCallsInAssistant` are deprecated no-ops, and gateway presets no longer set them.
+- f48ba72: `deferredTools.alwaysLoadedTools` now extends the default resident tools (`ask_user`, `spawn_task`, `discover`, `load_tool`, `load_skill`) instead of replacing them, so an override no longer hides `discover`/`load_tool`. Set `deferredTools.alwaysLoadedMode: 'replace'` to restore the previous replace behaviour.
+- 417ec5b: **Behaviour change (#753):** IM private chats from senders who are neither the owner (`master`) nor on `trigger.trusted` now get the `group_member` trust level instead of `trusted_member`. Such stranger DMs no longer get `bash`, file-write or send-to-other-conversation tools. Owner DMs, trusted-list DMs and non-IM ingress (HTTP, CLI, schedules) are unchanged. To restore full authority for a DM user, add their ID to `trigger.trusted`.
+- 7f0f8ca: Agent evals: the eval driver accepts a real-model source (`createLiveModel`), and the nightly MiniMax runner now replays seed cases that declare `live` semantic checks end to end through the driver. The PR gate also runs those checks on each scripted run, so it stays deterministic (#723).
+- d38d38c: Tighten agent turns started by ordinary group members (not master, not in `trigger.trusted`): no bash, read-only files, and no outbound messaging tools. Restricted tools are hidden and also denied at execution with a clear reason (#719).
+- 8e26cf1: 配置面收敛（#735）：弃用运行时未读取的 `ai.agent.maxSkills`、`policyDenialStopAfter`、`deferredToolMaxResults`、`taskExecApprovalMode`（启动告警，`zhin config check --fix` 可移除），新增《默认行为规范》权威文档与开关清单门禁。
+- 9891e66: 入站消息 `origin` 标签（self / member / peer_bot / human）与出站 ledger 兜底：
+
+  - 新增 `Message.origin`（仅由 InboundRuntime 经 Peer Registry、出站 ledger 与 `roomMembershipToken` 端口可信判定，绝不读取正文或 metadata）。
+  - self / member / peer_bot 来源的消息只记录（self 不重复记录），不触发命令、handlers、middleware、ingressRoute 或 agent turn；无法判定时 fail closed 为 peer_bot。
+  - `[sender:...]` 标签增加 `origin=`（缺省时输出不变）；`createRuntimeTurnAccess` 对非 human 来源抛错。
+  - `stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造的 `[sender:` / `[origin:` 标签（全角 `［`），不再剥离开头。
+  - 新增 `roomMembershipToken` 端口；Room 成员端口的实现、“Registry 未就绪的 Room 不开始协作”以及背景上下文块中 peer_bot 消息的标签留给后续条目（Room 激活 / Room Bus）。
+
+- f768296: Stream observers of `executeAgentTurn` now read a journal-derived feed: the turn journal is the single source, so authority tool events (`tool_call` / `tool_result` / `tool_denied`) committed by TurnToolRuntime reach stream consumers in commit order with the existing TurnEvent shape, without being journaled twice. Adds `createJournalFeed` / `journalFeedOf`.
+- 9891e66: Move the Workroom runtime composition (`workroom-runtime`) from `@zhin.js/agent` into `@zhin.js/workroom`; the dependency direction is now `@zhin.js/workroom` -> `@zhin.js/agent`.
+
+  - Workroom exports were removed from `@zhin.js/agent`, `@zhin.js/agent/runtime` and `zhin.js/agent`; the `zhin.js/agent` re-export surface shrank, so users who imported Workroom exports through `zhin.js/agent` must import them from `@zhin.js/workroom` instead (the export names are unchanged). `@zhin.js/agent` no longer depends on `@zhin.js/workroom`.
+  - The `Local*` assignment authority types declared by the authority provider module (`WorkroomLocalAssignmentAuthorityInput`, `WorkroomLocalAssignmentResolvedAuthority`, `WorkroomLocalAssignmentAuthorityPort`) clash with the domain contracts of the same name in a single barrel; the provider variants are exported with a `WorkroomProvider` prefix.
+  - Compatibility stubs at the old internal agent paths and the `./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js` deep exports of `@zhin.js/workroom` are removed. Use the package root.
+  - `@zhin.js/agent` gains three narrow host-integration exports: `collectAgentLoopTurnRun` and type `ZhinAgentPrivate` (`@zhin.js/agent/core`; `ZhinAgentPrivate` is an internal host-integration type, not a stable API), and `runWithAgentTurnConfiguration` (`@zhin.js/agent/turn`).
+  - `@zhin.js/cli` and `@zhin.js/a2a` declare `@zhin.js/workroom` as an optional/dev + peer dependency (like `@zhin.js/agent`), so installing the core no longer pulls in agent/workroom.
+
+- bc09928: Nightly evals: retry a 503 UNAVAILABLE once (8–15 s, or a longer Retry-After), record runs that stay 503 as provider-unavailable instead of model failures, fail mostly-503 nights as infra-flaky, list budget-skipped runs in the summary, and default to gemini-3.5-flash-lite.
+- 779750f: Nightly evals: serialize and pace real model requests to the Gemini free tier (≥4 s apart, ≤15 RPM). A 429 is retried after 2/4/8 s or after a longer `retryDelay` / `Retry-After`; a daily-quota 429 is never retried and fails the run with a clear message.
+- 9891e66: Separate Workroom runtime code from the generic Agent runtime (`src/workroom-runtime/`) and remove Agent-core reverse dependencies on Workroom.
+
+  Migration notes:
+
+  - `validateWorkroomDefinitions` is no longer exported from `@zhin.js/agent/config`; import it from `@zhin.js/workroom`.
+  - Workroom console fields (`workroom`, `workroomCatalog`, `workroomControl`, `workroomProfiles`, `workroomKnowledge`, `portfolioSponsor`, `effectSponsor`, `dataLifecycle`) moved from `AgentHostConsolePort` to the new `workroomHostToken` (`@zhin.js/workroom`).
+  - `defineAiDatabaseModels` now registers only Agent tables; call `defineWorkroomDatabaseModels` for Workroom tables. `activateAiDatabaseStorage` no longer activates the Workroom journal/catalog; use `prepareWorkroomDatabaseStorage` (validates persisted journal headers) before it and `.activate(...)` after.
+  - `plugin-runtime/deferred-capability-plan.ts` is now Workroom-free: the Workroom realization/authority code moved to `workroom-runtime/workroom-capability-realization.ts` (exported from `@zhin.js/workroom`); `createDeferredCapabilityPlan` takes an injected `ceiling` (`DeferredCapabilityCeiling`) instead of `authority`, and `isReservedControlToolName` is exported.
+  - `createDeferredCapabilityPlan` now throws if the legacy `authority` option is passed (it used to be silently ignored; use `createWorkroomDeferredCapabilityPlan`), and it throws if the injected `ceiling` returns tools or skills that are not a subset of its input (by reference).
+  - `RESERVED_CONTROL_TOOL_PREFIX` ('workroom\_') is exported from `@zhin.js/agent/runtime` next to `isReservedControlToolName`.
+
+- b3fea8c: Agent turn traces are now persisted in `data/agent-traces/<day>.jsonl`, kept for 7 days with a 64 MB size cap (`ZHIN_TRACE_RETENTION_DAYS`, `ZHIN_TRACE_MAX_MB`), and redacted again when written. `zhin trace` can filter by session and time (`--sessions`, `--session`, `--since`, `--until`). A new read-only host API (`/api/agent/trace-archive/*`, full scope) backs the Console Agent Trace page (`TraceArchivePage`), which goes from sessions to turns to a turn detail with a waterfall and the raw record. Failing agent evals print a `zhin trace` command that opens the failing case's trace (#728).
+- Updated dependencies [9891e66]
+- Updated dependencies [c829031]
+- Updated dependencies [0c17e0b]
+- Updated dependencies [bf52b40]
+- Updated dependencies [55811d1]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [fc75499]
+- Updated dependencies [2a9d08b]
+- Updated dependencies [e4fbfb2]
+- Updated dependencies [56bafda]
+- Updated dependencies [7d2263c]
+- Updated dependencies [27da0e8]
+- Updated dependencies [7d2263c]
+- Updated dependencies [d91d21a]
+- Updated dependencies [a62acca]
+- Updated dependencies [9ab9ffb]
+- Updated dependencies [1280631]
+- Updated dependencies [bd78a94]
+- Updated dependencies [acfaaef]
+- Updated dependencies [57ea5f7]
+- Updated dependencies [6e035e5]
+- Updated dependencies [57ea5f7]
+- Updated dependencies [55db42d]
+- Updated dependencies [f48ba72]
+- Updated dependencies [386150d]
+- Updated dependencies [2dfe5fa]
+- Updated dependencies [2dfe5fa]
+- Updated dependencies [3237f63]
+- Updated dependencies [8e26cf1]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+  - @zhin.js/adapter@1.1.18
+  - @zhin.js/ai@1.1.38
+  - @zhin.js/core@1.1.43
+  - @zhin.js/permission@1.1.5
+  - @zhin.js/plugin-runtime@1.1.13
+  - @zhin.js/kernel@1.1.3
+  - @zhin.js/mcp-feature@1.1.5
+  - @zhin.js/agent-feature@1.1.5
+  - @zhin.js/prompt-section@1.1.4
+  - @zhin.js/skill@1.1.5
+  - @zhin.js/tool@1.1.5
+
 ## 1.1.31
 
 ### Patch Changes
