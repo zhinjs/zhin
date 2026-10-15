@@ -144,6 +144,7 @@
     "check:prod": "node scripts/check-production-config.js",
     "check:plugin": "node scripts/check-plugin-spec.mjs",
     "check:plugin-capability-publish": "node scripts/check-plugin-capability-publish.mjs",
+    "check:pack-imports": "node scripts/check-pack-imports.mjs",
     "check:publish-repository": "node scripts/check-publish-repository.mjs",
     "check:unpublished": "node scripts/check-unpublished-packages.mjs",
     "check:agent-tool-schema": "node scripts/check-agent-tool-schema.mjs",

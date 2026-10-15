@@ -5,20 +5,6 @@
     "outDir": "./lib",
     "rootDir": "./src"
   },
-  "include": [
-    "src/index.ts",
-    "src/config.ts",
-    "src/shared-runtime.ts",
-    "src/db-store.ts",
-    "src/tables.ts",
-    "src/memory-store.ts",
-    "src/checkin-lib.ts",
-    "src/keyword-store.ts",
-    "src/analysis-card.ts",
-    "src/analysis.ts",
-    "src/card-layout.ts",
-    "src/stats-card.ts",
-    "src/stats-data.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "exclude": ["lib", "node_modules", "tests", "commands", "middlewares", "tools"]
 }

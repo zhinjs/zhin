@@ -45,6 +45,16 @@ npm trust github <包名> --repo zhinjs/zhin --file publish.yml --env npm-produc
 
 然后重跑 **Build and Publish**。`npm trust` 需要 npm ≥ 11.15.0 且账号开启 2FA，也可以改在网页上配置（见下文）。
 
+## 打包产物导入检查
+
+工作区测试直接导入 `src/`，所以「打包后的入口引用了没被编译出来的模块」这类问题只有在发布包里才会暴露（例如 `@zhin.js/plugin-group-suite@1.1.8` 缺少 `lib/keywords.js`）。`pnpm check:pack-imports` 会在 `pnpm build` 之后对每个可发布包：
+
+- 按 prepack 生成 Plugin Runtime JS 入口，用 `npm pack --dry-run --json --ignore-scripts` 列出 tarball 文件，检查结束后清理生成的入口；
+- 检查打包 `.js/.mjs/.cjs` 中所有相对 `import`/`export`/`import()`/`require()` 都能解析到 tarball 内的文件，且不越出包根；
+- 检查 `main`、`bin`、`exports`（`development` 条件除外）指向的文件都在 tarball 里。
+
+只有打包器才能解析的无扩展名导入（如浏览器端的 `./types`）只报警告，加 `--strict` 才算失败。CI 和发布工作流都在构建后运行这项检查，可用 `--filter <包名>` 只检查单个包。
+
 ## 在 npmjs.com 配置可信发布者
 
 每个包在 **npmjs.com → Packages → 包名 → Settings → Trusted publishing** 里选 **GitHub Actions**，填写：
