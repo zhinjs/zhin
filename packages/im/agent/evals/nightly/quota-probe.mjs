@@ -14,7 +14,8 @@
  * is never logged; only model names, status codes and quota metadata are printed.
  *
  * Env: GEMINI_API_KEY (required), GEMINI_BASE_URL (optional), PROBE_MODEL,
- * PROBE_MAX_REQUESTS (default 40), PROBE_MAX_MINUTES (default 30),
+ * PROBE_MAX_REQUESTS (default 40), PROBE_MAX_MINUTES (default 30), PROBE_CONCURRENCY
+ * (default 1; >1 sends that many at once, to reach the per-minute limit despite latency),
  * PROBE_REPORT (default eval-reports/quota-probe.json).
  */
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -30,6 +31,7 @@ const base = (env.GEMINI_BASE_URL?.trim() || 'https://generativelanguage.googlea
 const model = env.PROBE_MODEL?.trim() || 'gemini-3.5-flash-lite';
 const maxRequests = Number(env.PROBE_MAX_REQUESTS) > 0 ? Number(env.PROBE_MAX_REQUESTS) : 40;
 const deadline = Date.now() + (Number(env.PROBE_MAX_MINUTES) > 0 ? Number(env.PROBE_MAX_MINUTES) : 30) * 60_000;
+const concurrency = Math.max(1, Math.min(Number(env.PROBE_CONCURRENCY) || 1, 50));
 const reportPath = env.PROBE_REPORT || 'eval-reports/quota-probe.json';
 const headers = { 'content-type': 'application/json', 'x-goog-api-key': key };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,45 +78,60 @@ let unavailable = 0;
 let otherErrors = 0;
 let sent = 0;
 let stopReason = 'max requests';
-while (sent < maxRequests) {
-  if (Date.now() > deadline) { stopReason = 'time limit'; break; }
-  sent += 1;
-  const at = Date.now() - t0;
-  const res = await fetch(`${base}/models/${model}:generateContent`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply with OK.' }] }], generationConfig: { maxOutputTokens: 16 } }),
-  });
-  if (res.ok) {
-    ok += 1;
-    await res.text();
-    continue;
-  }
-  let body;
-  try { body = await res.json(); } catch { body = undefined; }
-  const info = quotaInfo(body);
-  log.push({ n: sent, atMs: at, http: res.status, okSoFar: ok, ...info, retryAfter: res.headers.get('retry-after') ?? undefined });
-  console.log(`[probe] #${sent} t=${(at / 1000).toFixed(1)}s HTTP ${res.status} ${info.status ?? ''} ok=${ok} ${info.violations.map((v) => `${v.quotaId}=${v.quotaValue}`).join(' ')} retryDelay=${info.retryDelay ?? '-'}`);
-  if (res.status === 429) {
-    rejected429 += 1;
-    const ids = info.violations.map((v) => v.quotaId ?? '').join(' ');
-    for (const v of info.violations) if (v.quotaId) limits[v.quotaId] = v.quotaValue;
-    if (/PerDay/.test(ids)) { stopReason = 'per-day 429'; break; }
-    const delay = Math.min(Math.max(Math.ceil(parseFloat(info.retryDelay ?? '10')) * 1000, 1000), 70_000);
-    await sleep(delay);
-  } else if (res.status === 503) {
-    unavailable += 1;
-    await sleep(10_000);
-  } else {
-    otherErrors += 1;
-    if (otherErrors >= 3) { stopReason = `HTTP ${res.status}`; break; }
-    await sleep(5_000);
+let stopped = false;
+async function worker() {
+  while (!stopped && sent < maxRequests) {
+    if (Date.now() > deadline) { stopReason = 'time limit'; stopped = true; break; }
+    sent += 1;
+    const n = sent;
+    const at = Date.now() - t0;
+    let res;
+    try {
+      res = await fetch(`${base}/models/${model}:generateContent`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Reply with OK.' }] }], generationConfig: { maxOutputTokens: 16 } }),
+      });
+    } catch (error) {
+      otherErrors += 1;
+      console.log(`[probe] #${n} network error: ${error?.name ?? 'Error'}`);
+      if (otherErrors >= 3) { stopReason = 'network errors'; stopped = true; }
+      await sleep(5_000);
+      continue;
+    }
+    if (res.ok) {
+      ok += 1;
+      await res.text();
+      continue;
+    }
+    let body;
+    try { body = await res.json(); } catch { body = undefined; }
+    const info = quotaInfo(body);
+    log.push({ n, atMs: at, http: res.status, okSoFar: ok, ...info, retryAfter: res.headers.get('retry-after') ?? undefined });
+    console.log(`[probe] #${n} t=${(at / 1000).toFixed(1)}s HTTP ${res.status} ${info.status ?? ''} ok=${ok} ${info.violations.map((v) => `${v.quotaId}=${v.quotaValue}`).join(' ')} retryDelay=${info.retryDelay ?? '-'}`);
+    if (res.status === 429) {
+      rejected429 += 1;
+      const ids = info.violations.map((v) => v.quotaId ?? '').join(' ');
+      for (const v of info.violations) if (v.quotaId) limits[v.quotaId] = v.quotaValue;
+      if (/PerDay/.test(ids)) { stopReason = 'per-day 429'; stopped = true; break; }
+      if (env.PROBE_STOP_ON_RPM === '1') { stopReason = 'per-minute 429'; stopped = true; break; }
+      await sleep(Math.min(Math.max(Math.ceil(parseFloat(info.retryDelay ?? '10')) * 1000, 1000), 70_000));
+    } else if (res.status === 503) {
+      unavailable += 1;
+      await sleep(10_000);
+    } else {
+      otherErrors += 1;
+      if (otherErrors >= 3) { stopReason = `HTTP ${res.status}`; stopped = true; break; }
+      await sleep(5_000);
+    }
   }
 }
+await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
 const summary = {
   model,
   modelListed,
+  concurrency,
   flashLiteFamily: flashLite,
   sent,
   ok,

@@ -29,6 +29,10 @@ on:
         description: 'quota-probe only: max generateContent requests (each is tiny)'
         required: false
         default: '40'
+      probe_concurrency:
+        description: 'quota-probe only: requests in flight at once (raise to reach the per-minute limit)'
+        required: false
+        default: '1'
 
 permissions:
   contents: read
@@ -115,6 +119,7 @@ jobs:
           GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL }}
           PROBE_MODEL: ${{ inputs.models }}
           PROBE_MAX_REQUESTS: ${{ inputs.probe_max_requests }}
+          PROBE_CONCURRENCY: ${{ inputs.probe_concurrency }}
           PROBE_MAX_MINUTES: '35'
           PROBE_REPORT: ${{ github.workspace }}/eval-reports/quota-probe.json
         run: node packages/im/agent/evals/nightly/quota-probe.mjs
