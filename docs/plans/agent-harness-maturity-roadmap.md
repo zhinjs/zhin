@@ -193,6 +193,6 @@ P0 评测底座 ──┬─> P1 可观测 ──┬─> P2 上下文瘦身 ─�
 ## 4. 已定决策（原待决问题）
 
 1. 评测放在包内：`packages/im/agent/evals`，和 `turbo test` 的依赖一致。
-2. nightly 真模型评测使用 Gemini（默认 `gemini-3.8-flash`，`GEMINI_API_KEY`），小预算，key 存在 GitHub Actions secrets。
+2. nightly 真模型评测使用 Gemini（默认 `gemini-3.5-flash-lite`，`GEMINI_API_KEY`），小预算，key 存在 GitHub Actions secrets。
 3. 记忆检索第一版用 BM25，等评测证明不够再升级 embedding。
 4. 群聊 `group_member` 回合立即临时收紧（不给 shell、不给文件写入、不向第三方外发），作为本轮第一个 PR（#719）。P3 信任分级（#726）落地后替换这个临时方案。

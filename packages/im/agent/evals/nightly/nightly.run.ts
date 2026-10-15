@@ -53,6 +53,8 @@ describe('nightly real-model evals', () => {
       onEvent: (event) => {
         if (event.type === 'backoff') console.warn(`[nightly] 429 on ${event.model}: retry ${event.retry} in ${event.delayMs} ms`);
         if (event.type === 'give_up') console.warn(`[nightly] 429 on ${event.model}: gave up after ${event.retries} retries`);
+        if (event.type === 'unavailable_retry') console.warn(`[nightly] 503 UNAVAILABLE on ${event.model}: retry once in ${event.delayMs} ms`);
+        if (event.type === 'unavailable') console.warn(`[nightly] 503 UNAVAILABLE on ${event.model} again: provider-unavailable`);
         if (event.type === 'daily_quota') console.error(`[nightly] daily quota exhausted on ${event.model}; failing the run`);
       },
     });
@@ -77,7 +79,12 @@ describe('nightly real-model evals', () => {
     await writeFile(join(outDir, 'nightly-diff.json'), `${JSON.stringify(diffs, null, 2)}\n`);
     await writeFile(join(outDir, 'nightly.md'), `${renderMarkdown(report, diffs)}\n`);
     // Trend metric only: the run itself never fails on low pass rates. It does fail
-    // when it could not run, so an exhausted daily quota never shows up green.
+    // when it could not run, so an exhausted daily quota never shows up green, and when
+    // most runs were provider-unavailable (503): such a night carries no quality signal
+    // and must not become the baseline for the next night's diff.
     if (report.fatal) throw new Error(report.fatal);
+    if (report.infra?.flaky) {
+      throw new Error(`infra-flaky: ${report.infra.providerUnavailable} of ${report.infra.attempted} attempted runs were provider-unavailable (503 UNAVAILABLE after retry); no quality signal tonight`);
+    }
   }, 30 * 60_000);
 });
