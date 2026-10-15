@@ -150,7 +150,7 @@ graph LR
 - **防循环**：每个 Room 有 handoff 深度上限和每分钟 turn 上限；同一任务在两个成员之间来回超过 N 次，就停下来 @ 人类。
 - **发言串行**：同一 Room 内一次只跑一个成员的 turn（或按任务串行），避免多个 bot 抢话。
 - **角色权限**：Role 声明的工具集就是这个成员的上限，复用现有 security policy，不另起一套。
-- **人类优先**：人类消息可以随时打断 / 取消当前任务。
+- **人类优先**：人类可以打断和取消，但按 §3.7.5 授权：打断当前 turn 只限发起人或 master（与 #725 一致）；取消 Task 只限 Task 创建者、成员 Endpoint 的 master 和配置的人类账号。
 
 ### 3.4 发言者身份判定（防止把 Bot 当真人）
 
@@ -208,13 +208,19 @@ Task 状态用小型事件溯源：`created → assigned → in_progress → don
 
 **建议顺序**：先做拆包（不依赖里程碑），再按里程碑推进；新 Room 核心最后搭在 Tool Runtime 上。
 
-### 3.7 `room` 执行模式契约（2026-10-15 维护者确认，C1 选项 C）
+### 3.7 `room` 执行模式契约（2026-10-15 维护者确认 C1 选项 C；同日按维护者审查修订）
 
-成员的 turn 用 agent 包里新增的 `room` 执行模式运行，不复用 IM 的 interactive 模式。agent 包只定义纯数据类型，不 import `@zhin.js/workroom`，A5 的边界规则不变。
+成员的 turn 用 agent 包里新增的 `room` 执行模式运行。agent 包只定义纯数据类型，不 import `@zhin.js/workroom`，A5 的边界规则不变。本契约必须与 main 上已合并的 harness 机制对齐，**不另起平行机制**：信任分级（#726，`security/trust-level.ts`）、同会话 admission（#725，`turn/turn-admission-gate.ts`）、记忆写入策略（#733，`memory/memory-write-policy.ts`）、后台任务与 `/tasks`（#731 / #732，`detached-task/`）、TurnTrace（#722 / #728）、评测框架（#720 / #758，`packages/im/agent/evals/`）。
 
-**触发范围（D1）**：所有成员 turn 都走 `room` 模式，包括人类 @ 或回复成员触发的 turn，以及 handoff / assign 唤醒的 turn。这样两种入口下的工具集和权限一致。
+**发版约束**：所有 changeset 只用 **patch**，包括 `@zhin.js/agent` 与 `@zhin.js/tool` 的公开类型新增，不破例。
 
-**类型**（`TurnExecutionProfile` 新增一个分支；`@zhin.js/tool` 的 `ToolInvocationOrigin` 新增 `{ kind: 'room'; roomId; taskId; memberId }`；两个包都发 minor changeset）：
+#### 3.7.1 触发范围（D1）
+
+所有成员 turn 都走 `room` 模式：人类 @ 或回复成员触发的 turn，以及 handoff / assign 唤醒的 turn。两种入口用同一套工具与权限规则。
+
+#### 3.7.2 类型
+
+`TurnExecutionProfile` 新增：
 
 ```ts
 | Readonly<{
@@ -222,31 +228,72 @@ Task 状态用小型事件溯源：`created → assigned → in_progress → don
     roomId: string; taskId: string; memberId: string; role: string;
     trigger:
       | { kind: 'human_message' }
-      | { kind: 'handoff'; fromMemberId: string; eventSequence: number }
-      | { kind: 'assign'; by: string; eventSequence: number };
+      | { kind: 'handoff'; fromMemberId: string; eventSequence: number; causeTurnId: string }
+      | { kind: 'assign'; by: string; eventSequence: number; causeTurnId?: string };
     brief: string; // 任务标题 + 最近的交接说明，作为 prompt 段注入
   }>
 ```
 
-**身份与权限**：
-- 人类消息触发：principal 就是这个发言的人类（`origin: 'human'`）。
-- handoff / assign 唤醒：principal 是合成入口，不设 `origin`。`subjectId` 取 Task 的创建人，`roles` 取创建 Task 时冻结的快照。
-- policy = 角色声明的工具和安全上限 ∩ principal 的权限。handoff 只能缩小权限，不能扩大（与 `deriveSubagentPolicy` 规则一致）。
-- `unattended: false`；回复端口用该成员自己的 Endpoint 在群里发言，走正常发送链。
+`@zhin.js/tool` 的 `ToolInvocationOrigin` 新增 `{ kind: 'room'; roomId; taskId; memberId }`。
 
-**审批（D3）**：
+#### 3.7.3 信任与权限（修订：防止 handoff 放大权限）
+
+问题：`resolveTurnTrustLevel` 把所有非 IM 来源映射为 `trusted_member`。如果 `room` 来源直接走这个分支，群成员创建的 Task 交接到下一个 bot 时，权限会被放大。
+
+规则：
+- `resolveTurnTrustLevel` 为 `origin.kind === 'room'` 增加**显式分支**，不走“非 IM 即 trusted_member”的默认分支：
+  - 人类消息触发：按该人类的 roles 定级，与 IM 完全一致。
+  - handoff / assign 唤醒：按 **Task 创建者在创建时冻结的角色快照**定级。快照里有 `master` 才是 `owner`，有 `trusted` 才是 `trusted_member`，**其余一律（包括快照缺失）为 `group_member`**。
+- policy = 角色声明的工具与安全上限 ∩ `narrowPolicyForTrust(…, level)`。沿着 handoff 链只能缩小，不能扩大。
+- 其他 bot 发的群消息（origin 为 `member` / `peer_bot`）以及 handoff 的交接说明，如果要进入 prompt，一律用 `renderExternalContent` 渲染为 `external_content`，不能发起 turn，也不能提升权限。
+- 唤醒 turn 的 principal 是合成入口，不设 `origin`。`subjectId` 为 `room:<roomId>/member:<memberId>`，**不冒用 Task 创建者的身份**；创建者只作为 `onBehalfOf` 记录在 trace 和 Room 事件里。
+- `unattended: false`。回复端口用该成员自己的 Endpoint 在群里发言，走正常发送链。
+
+#### 3.7.4 审批（D3）
+
 - 审批人**只能**是这个成员 Endpoint 的 master，即 `endpointRoles.resolveOwner(adapter, endpoint)` 解析出的账号。全局 `ai.trigger.masters` 不算审批人。
 - 审批请求在群里 @ 这个 master，只接受它的回复。
-- master 未配置、master 不在该群、或者无法确认是否在群里（拿不到群成员列表或查询失败）时，一律不提供审批端口。此时需要审批的工具直接拒绝，返回 `approval required but ApprovalPort unavailable`（fail closed）。
+- master 未配置、不在该群、或者无法确认（拿不到群成员列表或查询失败）时，一律不提供审批端口。需要审批的工具直接拒绝，返回 `approval required but ApprovalPort unavailable`（fail closed）。
 
-**会话、意图与取消**：
-- 会话 key：`room:<roomId>:task:<taskId>:member:<memberId>`，每个成员在每个 Task 上各有一份上下文。
-- 意图：唤醒用 `new`；成员 turn 进行中收到人类消息时，用已有的 `steer` 插入。
-- 取消：`signal` 与 Room 绑定。人类取消、Task 进入 cancelled、护栏触发时都 abort，工具调用随之取消。同一个 Room 内 turn 串行执行，复用 B4 护栏。
+#### 3.7.5 排队、打断与取消（修订：与 #725 对齐）
 
-**Room 工具**：放在 workroom 插件的 `tools/*.ts` 中，只在 `execution.kind === 'room'` 时出现：`room_handoff` / `room_block` / `room_complete` / `room_assign`（只有 lead 能用）。授权复用 `createRoomRoleAuthorizer` / `createRoomRoleAssignAuthorizer`。幂等键 `commandId = <turnId>:<toolUseId>`，turn 重放时不会重复写事件。`room_task_events` 并入 `defineWorkroomDatabaseModels`。
+- **只有一层排队**：成员 turn 进入 main 的 `TurnAdmissionGate`，session key 用 `room:<roomId>`（一个 Room 一个 admission 会话），所以“每个 Room 同时只跑一个 turn”由 gate 保证。删除 Room 自己的串行队列，B4 中的串行护栏改为断言 gate 已生效，不再自己排队。每个成员在每个 Task 上的对话上下文仍然各自独立，存放在 `room:<roomId>:task:<taskId>:member:<memberId>` 下；这个 key 只用于上下文存储，**不参与 admission**。
+- **打断规则照搬 #725**：只有当前 turn 的发起人或 master 能打断或叫停，其他人的消息按 FIFO 排队。唤醒 turn 的发起人是合成 principal，因此只有 master 能打断。
+- **取消 Task 不同于打断 turn**：取消 Room Task（并 abort 它正在运行的 turn）只允许 Task 创建者、成员 Endpoint 的 master、以及配置里列出的人类账号。原方案 §3.3 的“任何人都能取消”作废。
+- **清空排队**：清空一个 Room 的排队只有 master 能做，其他人只能撤回自己排队中的消息（与 gate 现有语义一致）。
+- 取消通过 `signal` 传到正在执行的工具调用。
 
-**Journal（D2）**：`room_task_events` 仍是 Task 状态的唯一来源，turn journal 照常记录工具调用。两边用 `turnId` / `commandId` 互相引用，不合并成同一张表。这一点偏离了 §3.6 的“Room 事件流是同一个 Journal 的消费者”，留到 Journal 持久化里程碑完成后再收敛。
+#### 3.7.6 记忆（修订：归属与回忆开销）
+
+- **人类消息触发的 turn**：照常按 #733 归属给这个人类，使用这个人类的信任级别。
+- **唤醒 turn**：写入的 trust level 用 3.7.3 定出的级别（默认 `group_member`），归属为 `room:<roomId>/member:<memberId>`，并记录 `onBehalfOf = Task 创建者`。**不写入 Task 创建者的 `user` 范围**，只允许写 `session` 范围或绑定 `taskId` 的 `task_state`，Task 结束后过期。
+- **回忆开销**：唤醒 turn 默认只回忆当前 Task 的 `task_state` 和 Room 会话范围的条目，并单独设置预算（默认 150 token，可配置，0 表示关闭），不再在每一跳都带上完整的用户回忆（约 400 token）。
+
+#### 3.7.7 Room Task 与后台任务 / `/tasks` 的关系（修订：先定边界）
+
+- Room Task 是**群内协作工作项**，状态唯一来源是 `room_task_events`。成员 turn 是普通前台 turn，**不是** detached task。
+- C1 范围内，room turn 不创建 detached task。如果以后要让成员在后台长时间工作，创建的 detached task 必须带 `parent = { roomId, taskId }`，权限沿用 detached task 的冻结 policy 规则，并且不能高于 3.7.3 的级别。
+- `/tasks` 仍然只列 detached task。在 Room 群里另外提供只读的 `/room tasks` 查看 Room Task；取消一律走 3.7.5 的授权规则。两套任务不互相投影状态。
+
+#### 3.7.8 Room 工具
+
+- 放在 workroom 插件的 `tools/*.ts` 中，只在 `execution.kind === 'room'` 时出现：`room_handoff` / `room_block` / `room_complete` / `room_assign`（只有 lead 能用）。
+- 授权复用 `createRoomRoleAuthorizer` / `createRoomRoleAssignAuthorizer`。
+- 幂等键 `commandId = <turnId>:<toolUseId>`，turn 重放时不会重复写事件。
+- `room_task_events` 并入 `defineWorkroomDatabaseModels`。
+
+#### 3.7.9 Journal 与 Trace（D2；修订：能看到整条链）
+
+- `room_task_events` 仍是 Task 状态的唯一来源，turn journal 照常记录工具调用。两边用 `turnId` / `commandId` 互相引用，不合并成同一张表。这一点偏离了 §3.6，留到 Journal 持久化里程碑完成后再收敛。
+- TurnTrace 增加 room 字段：`roomId`、`taskId`、`memberId`、`trigger`、`causeTurnId`、`onBehalfOf`、信任级别。`zhin trace` 与 Console trace 页面支持 `--room <roomId> --task <taskId>`，按 `causeTurnId` 把一条 handoff 链上的所有 turn 串成一棵树显示。
+
+#### 3.7.10 重启与宽限期（修订：#742 未覆盖的窗口）
+
+问题：非目标副本在 2 秒宽限期内等待目标副本时，消息还没写入历史。此时进程重启，这条人类消息既没有被处理，也没有被记录。
+
+规则：
+- 关停开始时，所有处于宽限期的等待者立即结算：如果运行时还接受 turn，由已到达副本中优先级最高的一个立即接管；否则把消息写入聊天记录，标记为 `interrupted_by_stop`，打 warn 日志，并推送到控制台消息流。**不静默丢弃**。
+- 重启后不自动重放这些消息（避免重复回复），由 trace 和控制台暴露给运维。
 
 ## 4. 现有模块去留（建议，待确认）
 
