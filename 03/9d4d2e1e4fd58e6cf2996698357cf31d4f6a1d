@@ -1,0 +1,77 @@
+basic/cli/src/utils/ai-config-loader.ts
+  s_937b6c28be4d40::t_e1124fbe65cda9 14-15
+basic/cli/src/utils/config-check.ts
+  s_937b6c28be4d40::t_ea0e8ef84580ba 378,390-413
+basic/cli/tests/config-check.test.ts
+  s_937b6c28be4d40::t_39469b3ea890f9 65-90
+packages/im/agent/src/config/index.ts
+  s_937b6c28be4d40::t_dc13dab25c916d 7-8
+packages/im/agent/src/config/perception-config.ts
+  s_937b6c28be4d40::t_3a3a1e586ce588 1-81
+packages/im/agent/src/config/zhin-agent-dependencies.ts
+  s_937b6c28be4d40::t_fa12dac9b9ff6a 20,37-38
+packages/im/agent/src/event/turn-event.ts
+  s_937b6c28be4d40::t_0a9a8033b2bed6 86-92
+packages/im/agent/src/init/configure-zhin-agent.ts
+  s_937b6c28be4d40::t_fbc6ed62ce2976 26,71
+packages/im/agent/src/internal/agent-host.ts
+  s_937b6c28be4d40::t_fdc56a0ba1e7a4 26,104-105
+packages/im/agent/src/media/index.ts
+  s_937b6c28be4d40::t_617ccb8cc7b6ce 14
+packages/im/agent/src/media/perception.ts
+  s_937b6c28be4d40::t_0d9b5644879a01 1-194
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_937b6c28be4d40::t_dfbfb40153e8c5 193,203,224-227
+packages/im/agent/src/security/provenance.ts
+  s_937b6c28be4d40::t_ef07c00147d5fc 86-88,152
+packages/im/agent/src/service.ts
+  s_937b6c28be4d40::t_f736dfef21e97a 15,68,98-106
+packages/im/agent/src/turn/turn-pipeline.ts
+  s_937b6c28be4d40::t_59ba1a1feb5a95 205
+packages/im/agent/src/zhin-agent/index.ts
+  s_937b6c28be4d40::t_94ac4ac768b70c 64,164
+packages/im/agent/tests/media/perception.test.ts
+  s_2104cc474f1ce5::t_a94429660ec632 1-171
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_15a0dd49e989c3::t_ba89bfe4af2691 7,65,79,107-130
+packages/im/agent/src/index.ts
+  s_15a0dd49e989c3::t_28a6219dd2f233 307-308
+packages/im/agent/src/turn/inbound-media.ts
+  s_15a0dd49e989c3::t_22be1810cc2600 8-11,21,39-47,55-56,98,117,182-213
+packages/im/agent/tests/turn/inbound-media.test.ts
+  s_15a0dd49e989c3::t_d695bc5caab904 10,168-255
+packages/im/ai/src/types.ts
+  s_15a0dd49e989c3::t_fed42ff280fed7 441-458
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "039d4d2e1e4fd58e6cf2996698357cf31d4f6a1d",
+  "prompts": {},
+  "sessions": {
+    "s_15a0dd49e989c3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4f2c15a5914700c6",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_937b6c28be4d40": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fab2bb0-dcbd-46cf-8365-1ca1614bed3a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
