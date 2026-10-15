@@ -1,0 +1,206 @@
+basic/cli/package.json
+  h_b680f75345178a 102-108
+basic/database/package.json
+  h_b680f75345178a 64-71
+basic/logger/package.json
+  h_b680f75345178a 45-52
+basic/schedule/package.json
+  h_b680f75345178a 40-46
+basic/schema/package.json
+  h_b680f75345178a 33-39
+package.json
+  h_b680f75345178a 78
+packages/console/contract/package.json
+  h_b680f75345178a 39-45
+packages/console/layout/package.json
+  h_b680f75345178a 51-57
+packages/console/page/package.json
+  h_b680f75345178a 51-57
+packages/console/pagemanager/package.json
+  h_b680f75345178a 81-102
+packages/console/plugin-contract/package.json
+  h_b680f75345178a 35-41
+packages/console/protocol/package.json
+  h_b680f75345178a 31-37
+packages/game-kit/package.json
+  h_b680f75345178a 43-49
+packages/host/a2a/package.json
+  h_b680f75345178a 69-79
+packages/host/http-contract/package.json
+  h_b680f75345178a 37-43
+packages/host/http/package.json
+  h_b680f75345178a 47-53
+packages/host/mcp/package.json
+  h_b680f75345178a 77-91
+packages/im/adapter/package.json
+  h_b680f75345178a 52-58
+packages/im/agent-feature/package.json
+  h_b680f75345178a 51-57
+packages/im/agent/package.json
+  h_b680f75345178a 156-234
+packages/im/ai/package.json
+  h_b680f75345178a 113-147
+packages/im/command/package.json
+  h_b680f75345178a 52-58
+packages/im/component/package.json
+  h_b680f75345178a 49-55
+packages/im/config-file/package.json
+  h_b680f75345178a 44-50
+packages/im/core/package.json
+  h_b680f75345178a 106-152
+packages/im/feature-kit/package.json
+  h_b680f75345178a 40-46
+packages/im/handler/package.json
+  h_b680f75345178a 50-56
+packages/im/im-contract/package.json
+  h_b680f75345178a 37-43
+packages/im/interaction/package.json
+  h_b680f75345178a 36-42
+packages/im/isolate/package.json
+  h_b680f75345178a 43-49
+packages/im/jsx/package.json
+  h_b680f75345178a 53-67
+packages/im/kernel/package.json
+  h_b680f75345178a 38-44
+packages/im/mcp-feature/package.json
+  h_b680f75345178a 51-57
+packages/im/middleware/package.json
+  h_b680f75345178a 49-55
+packages/im/permission/package.json
+  h_b680f75345178a 41-47
+packages/im/plugin-runtime/package.json
+  h_b680f75345178a 37-43
+packages/im/prompt-section/package.json
+  h_b680f75345178a 51-57
+packages/im/runtime/package.json
+  h_b680f75345178a 56-62
+packages/im/schedule-feature/package.json
+  h_b680f75345178a 51-57
+packages/im/skill/package.json
+  h_b680f75345178a 53-59
+packages/im/tool/package.json
+  h_b680f75345178a 52-58
+packages/im/workroom/package.json
+  h_b680f75345178a 67-89
+packages/im/zhin/package.json
+  h_b680f75345178a 139-204
+packages/toolkit/components/package.json
+  h_b680f75345178a 53-59
+packages/toolkit/html-renderer/package.json
+  h_b680f75345178a 61-68
+packages/toolkit/plugin-test-kit/package.json
+  h_b680f75345178a 49-55
+packages/toolkit/scaffold-wizard/package.json
+  h_b680f75345178a 50-56
+packages/toolkit/speech/package.json
+  h_b680f75345178a 60-67
+packages/toolkit/tailwind/package.json
+  h_b680f75345178a 48-54
+plugins/adapters/dingtalk/package.json
+  h_b680f75345178a 97-103
+plugins/adapters/discord/package.json
+  h_b680f75345178a 98-104
+plugins/adapters/email/package.json
+  h_b680f75345178a 79-85
+plugins/adapters/github/package.json
+  h_b680f75345178a 112-123
+plugins/adapters/icqq/package.json
+  h_b680f75345178a 106-112
+plugins/adapters/kook/package.json
+  h_b680f75345178a 97-103
+plugins/adapters/lark/package.json
+  h_b680f75345178a 99-105
+plugins/adapters/line/package.json
+  h_b680f75345178a 94-100
+plugins/adapters/milky/package.json
+  h_b680f75345178a 101-107
+plugins/adapters/napcat/package.json
+  h_b680f75345178a 101-107
+plugins/adapters/onebot11/package.json
+  h_b680f75345178a 101-107
+plugins/adapters/onebot12/package.json
+  h_b680f75345178a 90-96
+plugins/adapters/qq/package.json
+  h_b680f75345178a 103-109
+plugins/adapters/sandbox/package.json
+  h_b680f75345178a 96-102
+plugins/adapters/satori/package.json
+  h_b680f75345178a 92-98
+plugins/adapters/slack/package.json
+  h_b680f75345178a 97-103
+plugins/adapters/telegram/package.json
+  h_b680f75345178a 95-101
+plugins/adapters/wechat-mp/package.json
+  h_b680f75345178a 85-91
+plugins/adapters/wecom/package.json
+  h_b680f75345178a 97-103
+plugins/adapters/weixin-ilink/package.json
+  h_b680f75345178a 49-55
+plugins/features/process-monitor/package.json
+  h_b680f75345178a 63-70
+plugins/games/blackjack/package.json
+  h_b680f75345178a 50-57
+plugins/games/dice-duel/package.json
+  h_b680f75345178a 50-57
+plugins/games/dungeon-expedition/package.json
+  h_b680f75345178a 50-57
+plugins/games/guess-number/package.json
+  h_b680f75345178a 50-57
+plugins/games/hub/package.json
+  h_b680f75345178a 48-55
+plugins/games/idiom-chain/package.json
+  h_b680f75345178a 51-58
+plugins/games/rps/package.json
+  h_b680f75345178a 50-57
+plugins/games/text-adventure/package.json
+  h_b680f75345178a 50-57
+plugins/games/tic-tac-toe/package.json
+  h_b680f75345178a 50-57
+plugins/games/word-riddle/package.json
+  h_b680f75345178a 52-59
+plugins/services/activity-feedback/package.json
+  h_b680f75345178a 76-84
+plugins/services/typesafe/package.json
+  h_b680f75345178a 56-63
+plugins/utils/60s/package.json
+  h_b680f75345178a 86-93
+plugins/utils/calendar/package.json
+  h_b680f75345178a 83-90
+plugins/utils/code-runner/package.json
+  h_b680f75345178a 75-82
+plugins/utils/content-moderation/package.json
+  h_b680f75345178a 64-71
+plugins/utils/group-suite/package.json
+  h_b680f75345178a 97-104
+plugins/utils/link-poster/package.json
+  h_b680f75345178a 67-74
+plugins/utils/lottery/package.json
+  h_b680f75345178a 84-91
+plugins/utils/music/package.json
+  h_b680f75345178a 91-98
+plugins/utils/qrcode/package.json
+  h_b680f75345178a 79-86
+plugins/utils/reminder/package.json
+  h_b680f75345178a 72-78
+plugins/utils/repeater/package.json
+  h_b680f75345178a 66-73
+plugins/utils/rss/package.json
+  h_b680f75345178a 82-89
+plugins/utils/short-url/package.json
+  h_b680f75345178a 73-80
+scripts/sync-publish-exports.mjs
+  h_b680f75345178a 1-119
+scripts/sync-publish-exports.test.ts
+  h_b680f75345178a 1-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9233e18f563af7d8b6f850365c6dc0e53021e8c7",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
