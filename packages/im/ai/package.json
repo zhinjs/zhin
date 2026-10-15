@@ -110,7 +110,41 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./agent-stream": {
+        "types": "./lib/agent-stream.d.ts",
+        "import": "./lib/agent-stream.js"
+      },
+      "./agent-stream-consumer": {
+        "types": "./lib/agent-stream-consumer.d.ts",
+        "import": "./lib/agent-stream-consumer.js"
+      },
+      "./agent-step-checkpoint": {
+        "types": "./lib/agent-step-checkpoint.d.ts",
+        "import": "./lib/agent-step-checkpoint.js"
+      },
+      "./tool-policy": {
+        "types": "./lib/tool-policy.d.ts",
+        "import": "./lib/tool-policy.js"
+      },
+      "./mcp-qualified-name": {
+        "types": "./lib/mcp-qualified-name.d.ts",
+        "import": "./lib/mcp-qualified-name.js"
+      },
+      "./authorization-events": {
+        "types": "./lib/authorization-events.d.ts",
+        "import": "./lib/authorization-events.js"
+      },
+      "./journal-store": {
+        "types": "./lib/journal-store.d.ts",
+        "import": "./lib/journal-store.js"
+      }
+    }
   },
   "license": "MIT",
   "author": {

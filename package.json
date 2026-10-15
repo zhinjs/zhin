@@ -75,6 +75,7 @@
     "check:adapter-docs": "node scripts/sync-adapter-docs.mjs --check",
     "check:platform-tiers-ssot": "node scripts/check-platform-tiers-ssot.mjs",
     "sync:adapter-docs": "node scripts/sync-adapter-docs.mjs",
+    "sync:publish-exports": "node scripts/sync-publish-exports.mjs",
     "check:stable": "node scripts/run-stable-smoke.mjs",
     "check:created-project": "node scripts/check-created-project.mjs",
     "check:created-project:onebot11": "node scripts/check-created-project.mjs --onebot11",

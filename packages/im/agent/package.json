@@ -153,7 +153,85 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./config": {
+        "types": "./lib/config/index.d.ts",
+        "import": "./lib/config/index.js"
+      },
+      "./task-executor": {
+        "types": "./lib/task-executor.d.ts",
+        "import": "./lib/task-executor.js"
+      },
+      "./core": {
+        "types": "./lib/core/index.d.ts",
+        "import": "./lib/core/index.js"
+      },
+      "./tool": {
+        "types": "./lib/tool/index.d.ts",
+        "import": "./lib/tool/index.js"
+      },
+      "./session": {
+        "types": "./lib/session/index.d.ts",
+        "import": "./lib/session/index.js"
+      },
+      "./event": {
+        "types": "./lib/event/index.d.ts",
+        "import": "./lib/event/index.js"
+      },
+      "./skill": {
+        "types": "./lib/skill/index.d.ts",
+        "import": "./lib/skill/index.js"
+      },
+      "./memory": {
+        "types": "./lib/memory/index.d.ts",
+        "import": "./lib/memory/index.js"
+      },
+      "./subagent": {
+        "types": "./lib/subagent/index.d.ts",
+        "import": "./lib/subagent/index.js"
+      },
+      "./context": {
+        "types": "./lib/context/index.d.ts",
+        "import": "./lib/context/index.js"
+      },
+      "./prompt": {
+        "types": "./lib/prompt/index.d.ts",
+        "import": "./lib/prompt/index.js"
+      },
+      "./turn": {
+        "types": "./lib/turn/index.d.ts",
+        "import": "./lib/turn/index.js"
+      },
+      "./skills": {
+        "types": "./lib/authoring/entries/skills.d.ts",
+        "import": "./lib/authoring/entries/skills.js"
+      },
+      "./hooks": {
+        "types": "./lib/authoring/entries/hooks.d.ts",
+        "import": "./lib/authoring/entries/hooks.js"
+      },
+      "./evals": {
+        "types": "./lib/authoring/entries/evals.d.ts",
+        "import": "./lib/authoring/entries/evals.js"
+      },
+      "./trace": {
+        "types": "./lib/trace/index.d.ts",
+        "import": "./lib/trace/index.js"
+      },
+      "./security": {
+        "types": "./lib/security/index.d.ts",
+        "import": "./lib/security/index.js"
+      },
+      "./runtime": {
+        "types": "./lib/plugin-runtime/index.d.ts",
+        "import": "./lib/plugin-runtime/index.js"
+      }
+    }
   },
   "license": "MIT",
   "author": {

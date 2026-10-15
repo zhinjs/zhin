@@ -42,7 +42,14 @@
     "lib"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js",
+        "default": "./lib/index.js"
+      }
+    }
   },
   "repository": {
     "type": "git",

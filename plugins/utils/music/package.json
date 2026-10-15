@@ -88,7 +88,14 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    }
   },
   "engines": {
     "node": ">=22.19.0"

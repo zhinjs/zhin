@@ -103,7 +103,53 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./queue-im-field-contract": {
+        "types": "./lib/built/queue-im-field-contract.d.ts",
+        "import": "./lib/built/queue-im-field-contract.js"
+      },
+      "./runtime": {
+        "types": "./lib/plugin-runtime/im/index.d.ts",
+        "import": "./lib/plugin-runtime/im/index.js"
+      },
+      "./jsx": {
+        "types": "./lib/jsx.d.ts",
+        "import": "./lib/jsx.js"
+      },
+      "./jsx-runtime": {
+        "types": "./lib/jsx-runtime.d.ts",
+        "import": "./lib/jsx-runtime.js"
+      },
+      "./jsx-dev-runtime": {
+        "types": "./lib/jsx-dev-runtime.d.ts",
+        "import": "./lib/jsx-dev-runtime.js"
+      },
+      "./feature/adapter": {
+        "types": "./lib/feature/adapter.d.ts",
+        "import": "./lib/feature/adapter.js"
+      },
+      "./feature/command": {
+        "types": "./lib/feature/command.d.ts",
+        "import": "./lib/feature/command.js"
+      },
+      "./feature/component": {
+        "types": "./lib/feature/component.d.ts",
+        "import": "./lib/feature/component.js"
+      },
+      "./feature/middleware": {
+        "types": "./lib/feature/middleware.d.ts",
+        "import": "./lib/feature/middleware.js"
+      },
+      "./feature/handler": {
+        "types": "./lib/feature/handler.d.ts",
+        "import": "./lib/feature/handler.js"
+      }
+    }
   },
   "license": "MIT",
   "author": {
