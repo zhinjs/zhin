@@ -1,0 +1,33 @@
+packages/im/agent/evals/cases/injection-media-caption-outbound-gated.case.ts
+  s_2104cc474f1ce5::t_a7f84d90788eaa 1-35
+packages/im/agent/evals/cases/multimodal-perception-caption.case.ts
+  s_2104cc474f1ce5::t_ee2275fd8eeb15 1-31
+packages/im/agent/evals/cases/multimodal-perception-failure-placeholder.case.ts
+  s_15a0dd49e989c3::t_6a05768503e8dc 1-24
+packages/im/agent/evals/framework/assertions.ts
+  s_15a0dd49e989c3::t_0cf569ab269104 65-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f26db0384d54d7c912227e812c0f1987c28e46d1",
+  "prompts": {},
+  "sessions": {
+    "s_15a0dd49e989c3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a4f2c15a5914700c6",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
