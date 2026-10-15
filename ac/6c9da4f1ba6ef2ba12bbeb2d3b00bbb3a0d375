@@ -1,0 +1,29 @@
+packages/im/agent/evals/nightly/quota-probe.mjs
+  s_f21319594bee88::t_38d1e928941bc1 1-144
+.github/workflows/nightly-evals.yml
+  s_9477e63ef5cee5::t_548451f72d57da 22-31,91,96,99,102,107-120,122,148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ac6c9da4f1ba6ef2ba12bbeb2d3b00bbb3a0d375",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_f21319594bee88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03291-207e-7d10-a69e-0838833440c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
