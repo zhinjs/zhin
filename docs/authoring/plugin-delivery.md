@@ -81,3 +81,4 @@ pnpm check:plugin-capability-publish
 - [definePlugin](./define-plugin.md)：入口能做的所有事。
 - [约定目录](./conventions.md)：每种能力放在哪里。
 - [Console 页面](./console-pages.md)：给插件加一个管理页面。
+- [本地联调指南](./local-dev.md)：发布前在外部项目里联调本地插件与框架。

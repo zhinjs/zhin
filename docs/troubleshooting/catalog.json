@@ -82,6 +82,22 @@
       ]
     },
     {
+      "id": "multiple-package-locations",
+      "title": { "zh": "同一个包出现多个安装位置", "en": "Multiple package locations for one package" },
+      "symptom": { "zh": "启动时报 `Multiple package locations for @zhin.js/... are not supported in one generation`。", "en": "Startup fails with `Multiple package locations for @zhin.js/... are not supported in one generation`." },
+      "causes": [
+        { "zh": "项目混用了 npm 依赖与指向 zhin 源码仓库的 `link:`/`workspace:` 插件，同一个 zhin 包被解析到两个目录。", "en": "The project mixes npm dependencies with a `link:`/`workspace:` plugin from a zhin source checkout, so one zhin package resolves to two directories." },
+        { "zh": "手写的 `pnpm.overrides` 只覆盖了部分 zhin 包。", "en": "Hand-written `pnpm.overrides` cover only some zhin packages." }
+      ],
+      "actions": [
+        { "zh": "按[本地联调指南](/authoring/local-dev)诊断：用 `pnpm why` 与 `readlink -f` 找出两个解析路径。", "en": "Diagnose with the [local development guide](/en/authoring/local-dev): find both resolved paths with `pnpm why` and `readlink -f`." },
+        { "zh": "外部项目改用 `pnpm zhin:local link <项目路径>` 统一切换到本地源码，或全部改回 npm 版本。", "en": "Switch the external project consistently with `pnpm zhin:local link <project-path>`, or move everything back to npm versions." }
+      ],
+      "verification": [
+        { "zh": "重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin runtime start --once` 输出 `\"started\": true`。", "en": "After `pnpm install`, each zhin package has a single resolved path and `zhin runtime start --once` prints `\"started\": true`." }
+      ]
+    },
+    {
       "id": "agent-provider-unavailable",
       "title": { "zh": "Agent 无模型或 Provider 不可用", "en": "Agent has no available model or provider" },
       "symptom": { "zh": "Agent 工作台无法开始回合，提示 Provider、模型或 API Key 不可用。", "en": "Agent Studio cannot start a turn and reports an unavailable provider, model, or API key." },
