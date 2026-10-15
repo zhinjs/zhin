@@ -2,7 +2,8 @@
  * pi Context ↔ AI SDK ModelMessage bridge (ADR 0018).
  */
 
-import { type AssistantContent, type ModelMessage, type ToolSet, type UserModelMessage, tool } from 'ai';
+import { type AssistantContent, type ModelMessage, type ToolSet, type UserModelMessage, jsonSchema, tool } from 'ai';
+import type { JSONSchema7 } from 'ai';
 import type { Context } from '../types/context.js';
 import { isLlmAgentMessage, type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage } from '../types/agent-message.js';
 import type { AnthropicThinkingProviderOptions, ThinkingContentBlock } from '../types/content-block.js';
@@ -15,6 +16,7 @@ import {
 
 import { repairAgentMessagesForLlm } from '../repair-agent-messages.js';
 import type { LlmTool } from '../types/tool.js';
+import { geminiCompatibleSchema } from '../json-schema-zod.js';
 
 /**
  * DeepSeek thinking + tools requires `reasoning_content` on every assistant
@@ -227,13 +229,34 @@ export function shouldEnsureToolCallReasoning(model: {
   return true;
 }
 
-export function llmToolsToAiSdk(tools: LlmTool[] | undefined): ToolSet | undefined {
+/**
+ * The tool input schema as the provider sees it. A tool with `inputJsonSchema`
+ * is sent as written (Gemini gets untyped leaves typed, see `geminiCompatibleSchema`)
+ * and validated with its zod `parameters`; a zod-only tool is converted by the AI SDK.
+ */
+function toolInputSchema(llmTool: LlmTool, sdk: string | undefined) {
+  if (!llmTool.inputJsonSchema) return llmTool.parameters;
+  const wire = sdk === 'google' ? geminiCompatibleSchema(llmTool.inputJsonSchema) : llmTool.inputJsonSchema;
+  return jsonSchema<Record<string, unknown>>(wire as JSONSchema7, {
+    validate: (value) => {
+      const parsed = llmTool.parameters.safeParse(value);
+      return parsed.success
+        ? { success: true, value: value as Record<string, unknown> }
+        : { success: false, error: parsed.error };
+    },
+  });
+}
+
+export function llmToolsToAiSdk(
+  tools: LlmTool[] | undefined,
+  options?: { sdk?: string },
+): ToolSet | undefined {
   if (!tools?.length) return undefined;
   const out: ToolSet = {};
   for (const llmTool of tools) {
     const base = tool({
       description: llmTool.description,
-      inputSchema: llmTool.parameters,
+      inputSchema: toolInputSchema(llmTool, options?.sdk),
     });
     if (llmTool.deferLoading) {
       out[llmTool.name] = {

@@ -277,7 +277,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         },
       );
       const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
-      const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
+      const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk }), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
       const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
       const providerOptions = buildProviderOptions(model, cacheOpts, hasDeferredTools);
@@ -442,7 +442,7 @@ export async function generateTextViaAiSdk(
     },
   );
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
-  const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
+  const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk }), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
   const providerOptions = buildProviderOptions(model, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
 
