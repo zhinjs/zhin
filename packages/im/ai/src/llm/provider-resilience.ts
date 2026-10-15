@@ -6,8 +6,22 @@
  * side effects because it only re-issues one completion request. Errors that are not
  * worth retrying (auth, bad request, context overflow, caller abort) are re-thrown
  * unchanged so existing handlers such as context-overflow compaction keep working.
+ *
+ * Gemini specifics (see docs/ai/index.md and the tests in google-gemini-provider.test.ts):
+ * - 429 RESOURCE_EXHAUSTED is retried after `RetryInfo.retryDelay`, except a per-day
+ *   quota (`QuotaFailure.violations[].quotaId` containing `PerDay`): retrying cannot
+ *   succeed before the daily reset, so it skips retries and goes straight to fallback
+ *   (quotas are per project *and model*, so another model may still have quota).
+ * - 503 UNAVAILABLE / 500 INTERNAL are retried with backoff, then fall back.
+ * - 504 DEADLINE_EXCEEDED is a timeout, like our own per-attempt timeout.
+ * - A safety block (finishReason SAFETY / PROHIBITED_CONTENT / BLOCKLIST / SPII /
+ *   IMAGE_SAFETY / RECITATION, or a prompt `blockReason`) is final: no retry and no
+ *   fallback. The verdict is about the content, so the same request gets the same
+ *   answer; switching models to get past a refusal would bypass the operator's
+ *   safety settings and resend flagged content to more models. The user gets a
+ *   polite refusal instead (see `bridge/finish-reason.ts`).
  */
-import { isFinishFailureMessage } from './bridge/finish-reason.js';
+import { SAFETY_BLOCK_TEXT, finishFailureKind, isFinishFailureMessage } from './bridge/finish-reason.js';
 import type { Context } from './types/context.js';
 import type { Model } from './types/model.js';
 import type { AssistantMessage } from './types/agent-message.js';
@@ -20,6 +34,10 @@ export type ProviderErrorKind =
   | 'network'
   | 'empty_response'
   | 'malformed_tool_call'
+  /** Provider refused on content grounds (Gemini safety block); never retried or re-routed. */
+  | 'safety_block'
+  /** A quota that will not reset soon (Gemini per-day quota): skip retries, try fallback. */
+  | 'quota_exhausted'
   | 'context_overflow'
   | 'auth'
   | 'bad_request'
@@ -71,7 +89,9 @@ export const DEFAULT_PROVIDER_RESILIENCE: Readonly<Required<ProviderResilienceCo
 export type ProviderResilienceEvent =
   | Readonly<{ type: 'retry'; model: string; attempt: number; kind: ProviderErrorKind; delayMs: number; error: string }>
   | Readonly<{ type: 'fallback'; from: string; to: string; kind: ProviderErrorKind; error: string }>
-  | Readonly<{ type: 'give_up'; model: string; kind: ProviderErrorKind; error: string }>;
+  | Readonly<{ type: 'give_up'; model: string; kind: ProviderErrorKind; error: string }>
+  /** The model refused on content grounds; the refusal is passed to the user as-is. */
+  | Readonly<{ type: 'refused'; model: string; kind: 'safety_block'; error: string }>;
 
 /** Thrown after every attempt and fallback failed; carries a user-presentable message. */
 export class ProviderRequestError extends Error {
@@ -93,6 +113,8 @@ const PROVIDER_FAILURE_TEXT: Record<ProviderErrorKind, string> = {
   network: '连接模型服务失败，已自动重试仍未成功，请检查网络后再试',
   empty_response: '模型返回了空回复，已自动重试仍未成功，请换个说法再试',
   malformed_tool_call: '模型返回了无法解析的工具调用，已自动重试仍未成功，请稍后再试',
+  safety_block: SAFETY_BLOCK_TEXT,
+  quota_exhausted: '模型服务今天的调用额度已用完，请稍后再试或联系管理员更换模型',
   context_overflow: '对话内容超出模型上下文长度',
   auth: '模型服务鉴权失败，请检查 API 密钥配置',
   bad_request: '模型服务拒绝了请求',
@@ -186,14 +208,17 @@ function statusOf(error: Record<string, unknown>): number | undefined {
 interface GoogleRpcError {
   readonly status?: string;
   readonly reasons: readonly string[];
+  /** `QuotaFailure.violations[].quotaId`, e.g. `GenerateRequestsPerDayPerProjectPerModel-FreeTier`. */
+  readonly quotaIds: readonly string[];
   readonly retryDelayMs?: number;
 }
 
 /**
  * Google APIs (Gemini) put the useful part of an error in the JSON body:
  * `error.status` (RESOURCE_EXHAUSTED, UNAVAILABLE, ...), `details[].reason`
- * (API_KEY_INVALID) and `RetryInfo.retryDelay` ("37s") instead of a
- * `Retry-After` header. Read it from the AI SDK error's `data` or `responseBody`.
+ * (API_KEY_INVALID), `QuotaFailure.violations[].quotaId` and
+ * `RetryInfo.retryDelay` ("37s") instead of a `Retry-After` header. Read it
+ * from the AI SDK error's `data` or `responseBody`.
  */
 export function parseGoogleRpcError(error: Record<string, unknown>): GoogleRpcError | undefined {
   // Prefer the raw body: the SDK's parsed `data` keeps code/message/status but drops `details`.
@@ -210,15 +235,25 @@ export function parseGoogleRpcError(error: Record<string, unknown>): GoogleRpcEr
   if (!inner) return undefined;
   const status = typeof inner.status === 'string' ? inner.status : undefined;
   const reasons: string[] = [];
+  const quotaIds: string[] = [];
   let retryDelayMs: number | undefined;
   for (const detail of Array.isArray(inner.details) ? inner.details : []) {
     const rec = record(detail);
     if (typeof rec?.reason === 'string') reasons.push(rec.reason);
+    for (const violation of Array.isArray(rec?.violations) ? rec.violations : []) {
+      const quotaId = record(violation)?.quotaId;
+      if (typeof quotaId === 'string') quotaIds.push(quotaId);
+    }
     const delay = typeof rec?.retryDelay === 'string' ? /^(\d+(?:\.\d+)?)s$/.exec(rec.retryDelay) : null;
     if (delay) retryDelayMs = Math.round(Number(delay[1]) * 1000);
   }
-  if (!status && reasons.length === 0 && retryDelayMs === undefined) return undefined;
-  return { ...(status ? { status } : {}), reasons, ...(retryDelayMs !== undefined ? { retryDelayMs } : {}) };
+  if (!status && reasons.length === 0 && quotaIds.length === 0 && retryDelayMs === undefined) return undefined;
+  return { ...(status ? { status } : {}), reasons, quotaIds, ...(retryDelayMs !== undefined ? { retryDelayMs } : {}) };
+}
+
+/** A per-day quota cannot recover before the daily reset, whatever `retryDelay` says. */
+function isDailyQuota(google: GoogleRpcError | undefined): boolean {
+  return google?.quotaIds.some((id) => /PerDay/i.test(id)) ?? false;
 }
 
 const GOOGLE_STATUS_PATTERN = /\b(RESOURCE_EXHAUSTED|UNAVAILABLE|INTERNAL|DEADLINE_EXCEEDED|UNAUTHENTICATED|PERMISSION_DENIED)\b/;
@@ -243,6 +278,9 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   if (google?.reasons.some((reason) => reason === 'API_KEY_INVALID' || reason === 'API_KEY_EXPIRED')) {
     return { kind: 'auth', retryable: false, fallbackEligible: false, status };
   }
+  // Gemini answers a server-side deadline with 504 DEADLINE_EXCEEDED: a timeout, not an outage.
+  if (google?.status === 'DEADLINE_EXCEEDED') return { kind: 'timeout', retryable: true, fallbackEligible: true, status };
+  if (isDailyQuota(google)) return { kind: 'quota_exhausted', retryable: false, fallbackEligible: true, status };
 
   if (name === 'AbortError') return { kind: 'aborted', retryable: false, fallbackEligible: false };
   if (name === 'TimeoutError') return { kind: 'timeout', retryable: true, fallbackEligible: true };
@@ -287,8 +325,15 @@ export function computeBackoffDelay(
   return Math.round(ceiling / 2 + random() * (ceiling / 2));
 }
 
-/** Detect a reply that carries nothing usable, or a tool call with no name. */
+/**
+ * Detect a reply that carries nothing usable, or a broken tool call: a call with no
+ * name, or Gemini's MALFORMED_FUNCTION_CALL finish (surfaced by the bridge as an
+ * error reply). Other error replies (safety blocks included) pass through unchanged.
+ */
 function inspectReply(message: AssistantMessage): EmptyResponseError | undefined {
+  if (message.stopReason === 'error' && finishFailureKind(message.errorMessage) === 'malformed_tool_call') {
+    return new EmptyResponseError('malformed_tool_call', message);
+  }
   if (message.stopReason === 'error' || message.stopReason === 'aborted') return undefined;
   let hasPayload = false;
   for (const block of message.content) {
@@ -419,7 +464,12 @@ export function createResilientCompletionPort(
       while (true) {
         attempts += 1;
         try {
-          return await attempt(call, model, context, streamOptions);
+          const reply = await attempt(call, model, context, streamOptions);
+          if (reply.stopReason === 'error' && finishFailureKind(reply.errorMessage) === 'safety_block') {
+            // Final by design: no retry, no fallback (see the module comment).
+            options.onEvent?.({ type: 'refused', model: model.id, kind: 'safety_block', error: reply.errorMessage ?? '' });
+          }
+          return reply;
         } catch (error) {
           if (signal?.aborted) throw error;
           const info = classifyProviderError(error);
@@ -448,8 +498,9 @@ export function createResilientCompletionPort(
           // Out of empty-reply retries: hand the reply back so existing recovery paths run.
           if (isEmpty) return error.reply;
           options.onEvent?.({ type: 'give_up', model: model.id, kind: info.kind, error: message });
-          // Non-retryable errors keep their original identity for upstream handlers.
-          if (!info.retryable) throw error;
+          // Non-retryable errors keep their original identity for upstream handlers,
+          // except an exhausted quota, which has nothing to handle and a polite message.
+          if (!info.retryable && info.kind !== 'quota_exhausted') throw error;
           throw new ProviderRequestError(info.kind, attempts, error);
         }
       }

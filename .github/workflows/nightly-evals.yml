@@ -7,8 +7,12 @@ on:
     - cron: '30 18 * * *' # 02:30 Asia/Shanghai
   workflow_dispatch:
     inputs:
+      provider:
+        description: 'Provider: gemini (default) or minimax (empty: vars.NIGHTLY_PROVIDER, else gemini)'
+        required: false
+        default: ''
       models:
-        description: 'Comma-separated Gemini model ids (empty: vars.NIGHTLY_MODELS, else the default in nightly.run.ts)'
+        description: 'Comma-separated model ids for that provider (empty: vars.NIGHTLY_MODELS, else the default in evals/nightly/providers.ts)'
         required: false
         default: ''
       runs_per_case:
@@ -27,6 +31,8 @@ concurrency:
 env:
   CI: true
   NPM_TOKEN: ''
+  # gemini (zhin's primary model, #770) unless overridden; minimax stays available.
+  NIGHTLY_PROVIDER: ${{ inputs.provider || vars.NIGHTLY_PROVIDER || 'gemini' }}
 
 jobs:
   nightly:
@@ -38,9 +44,15 @@ jobs:
         id: secret
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
         run: |
-          if [ -z "$GEMINI_API_KEY" ]; then
-            echo "::notice::GEMINI_API_KEY secret is not configured; skipping nightly evals."
+          case "$NIGHTLY_PROVIDER" in
+            gemini) key_name=GEMINI_API_KEY; key="$GEMINI_API_KEY" ;;
+            minimax) key_name=MINIMAX_API_KEY; key="$MINIMAX_API_KEY" ;;
+            *) echo "::error::Unknown NIGHTLY_PROVIDER '$NIGHTLY_PROVIDER' (expected gemini or minimax)."; exit 1 ;;
+          esac
+          if [ -z "$key" ]; then
+            echo "::notice::$key_name secret is not configured; skipping nightly evals ($NIGHTLY_PROVIDER)."
             echo "present=false" >> "$GITHUB_OUTPUT"
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
@@ -85,6 +97,8 @@ jobs:
       - name: run nightly evals
         if: steps.secret.outputs.present == 'true'
         env:
+          # Keys are only passed as env; the eval reads the selected provider's (evals/nightly/providers.ts).
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL }}
           NIGHTLY_MODELS: ${{ inputs.models || vars.NIGHTLY_MODELS }}
