@@ -125,17 +125,21 @@ ai:
 | sdk | 需要安装 | 关键配置 |
 |-----|-----------|----------|
 | `openai` | `@ai-sdk/openai` | `apiKey`，可选 `baseUrl` |
-| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey`（`baseUrl` 自动补 `/v1`）；Cloudflare Workers AI 可用 `accountId` 代替 `baseUrl` |
+| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey`（路径里没有版本号时自动补 `/v1`，见下方 `compat`）；Cloudflare Workers AI 可用 `accountId` 代替 `baseUrl` |
 | `anthropic` | `@ai-sdk/anthropic` | `apiKey`，可选 `baseUrl`（自动补 `/v1`） |
 | `deepseek` | `@ai-sdk/deepseek` | `apiKey`，可选 `baseUrl` |
 | `google` | `@ai-sdk/google` | `apiKey`，可选 `baseUrl`（自动补 `/v1beta`） |
-| `ollama` | `@ai-sdk/openai-compatible`（通过 OpenAI 兼容接口） | `host`（默认 `http://127.0.0.1:11434`，自动补 `/v1`），不需要 `apiKey` |
+| `ollama` | `@ai-sdk/openai-compatible`（通过 OpenAI 兼容接口） | `host`（默认 `http://127.0.0.1:11434`，自动补 `/v1`），不需要 `apiKey`；建议写 `contextWindow`（见下方） |
 
 可选字段：
 
 - `models`：允许使用的模型列表。不写时，启动后会自动从 `/v1/models` 获取（先用上次的缓存，再在后台刷新）。
 - `input`：模型能接收的内容类型，`text | image | audio | video | file`。**不写时只按文本处理**，框架不会根据模型名猜测它能否看图。唯一例外是 `sdk: google` 的 Gemini 对话模型（Gemini 原生多模态），默认 `text, image, audio, video, file`；TTS、embedding、图像生成和 Live 模型仍只按文本处理。
-- `contextWindow`：上下文窗口大小。
+- `contextWindow`：上下文窗口大小。不写时一般按 128k 估算；`sdk: ollama` 例外：先读 `OLLAMA_CONTEXT_LENGTH` 环境变量（zhin 和 Ollama 在同一台机器时有效），否则按 4096 计算。Ollama 按显存分配上下文（24 GiB 以下 4k，24–48 GiB 32k，48 GiB 以上 256k），OpenAI 兼容接口无法逐请求调大，超出部分会被**静默截掉开头**（包括 system prompt），所以框架宁可少估。请把 `contextWindow` 写成 `ollama ps` 里 CONTEXT 列的值；没写时启动会给出提示。
+- `compat`（`openai-compatible` / `ollama`）：
+  - `includeUsage`：是否请求流式 usage（`stream_options.include_usage`），默认 `true`。不写的话大多数兼容服务流式时不返回 token 用量；少数拒绝该字段的服务设为 `false`。
+  - `appendV1`：`baseUrl` 是否补 `/v1`。不写时：路径里已有版本段（如 `/api/v3`、`/api/paas/v4`、`/v1beta/openai`）或以 `/openai` 结尾就原样使用，否则补 `/v1`（旧配置 `https://host`、`https://host/api` 行为不变）。`true` 总是补（旧行为），`false` 总是原样。
+  - `promptCacheKey`：是否发送 OpenAI 的 `prompt_cache_key`，默认 `false`（严格的网关会拒绝未知字段）。
 - `imageGeneration`：文生图的默认参数。
 - `providerOptions`：按 SDK 名分组的 AI SDK `providerOptions`，每次请求都会合并进去。Gemini 常用的是安全设置和思考深度：
 

@@ -267,6 +267,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         isStreamPromptCacheEnabled(options?.promptCache),
         model.sdk,
         options,
+        model.compat,
       );
       const { system: systemText, messages } = contextToAiSdkPrompt(
         context,
@@ -432,6 +433,7 @@ export async function generateTextViaAiSdk(
     isStreamPromptCacheEnabled(options?.promptCache),
     model.sdk,
     options,
+    model.compat,
   );
   const { system: systemText, messages } = contextToAiSdkPrompt(
     context,

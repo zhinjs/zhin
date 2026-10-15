@@ -8,7 +8,7 @@ import type {
   TextCompleteOptions,
 } from './types.js';
 import type { ProviderInstanceConfig } from './llm/types/model.js';
-import { createLanguageModel, normalizeGoogleBaseUrl, type SdkId } from './llm/sdk-registry.js';
+import { createLanguageModel, normalizeGoogleBaseUrl, resolveOpenAiCompatibleBaseUrl, type SdkId } from './llm/sdk-registry.js';
 import {
   resolveSdkProviderModels,
   SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
@@ -33,7 +33,9 @@ async function fetchOpenAiCompatibleModels(
   config: ProviderInstanceConfig,
   fetchFn: typeof globalThis.fetch,
 ): Promise<string[]> {
-  let baseUrl = config.baseUrl?.trim();
+  // openai-compatible chat requests go to the normalized base (see normalizeOpenAiCompatibleBaseUrl);
+  // discovery must hit the same `/models` next to `/chat/completions`.
+  let baseUrl = config.sdk === 'openai-compatible' ? resolveOpenAiCompatibleBaseUrl(config) : config.baseUrl?.trim();
   if (!baseUrl && config.host?.trim()) {
     const host = stripTrailingSlashes(config.host);
     baseUrl = host.endsWith('/v1') ? host : `${host}/v1`;

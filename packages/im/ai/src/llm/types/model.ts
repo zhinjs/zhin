@@ -22,6 +22,24 @@ export interface OpenAiCompatFlags {
   supportsDeveloperRole?: boolean;
   supportsReasoningContent?: boolean;
   toolCallsInAssistant?: boolean;
+  /**
+   * `sdk: openai-compatible` / `ollama`: request the streamed usage chunk
+   * (`stream_options.include_usage`). Default true; set false for a server that
+   * rejects `stream_options`.
+   */
+  includeUsage?: boolean;
+  /**
+   * `sdk: openai-compatible`: whether `/v1` is appended to `baseUrl`. Unset: appended
+   * only when the path names no API version (`/v3`, `/v1beta`, ...) and does not end
+   * in `/openai`. `true`: always (pre-1.x behaviour). `false`: use `baseUrl` as written.
+   */
+  appendV1?: boolean;
+  /**
+   * `sdk: openai-compatible`: send OpenAI's `prompt_cache_key` (and
+   * `prompt_cache_retention`) for gateways that route prompt caches by key. Default
+   * false, because strict servers reject unknown body fields.
+   */
+  promptCacheKey?: boolean;
 }
 
 export interface Model {

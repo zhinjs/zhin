@@ -96,6 +96,12 @@ export function validateProviderGatewayConfig(
       `${alias}: sdk "openai" routes to /v1/responses; OpenCode Zen chat models need sdk "openai-compatible"`,
     );
   }
+  if (config.sdk === 'ollama' && !(config.contextWindow != null && config.contextWindow > 0)) {
+    warnings.push(
+      `${alias}: ollama contextWindow not set; assuming OLLAMA_CONTEXT_LENGTH or ${OLLAMA_DEFAULT_CONTEXT_WINDOW} tokens. `
+      + 'Set contextWindow to the num_ctx your Ollama server allocates (see `ollama ps`), or Ollama silently truncates long prompts',
+    );
+  }
   const preset = resolvePreset(alias, config.baseUrl);
   if (preset?.coerceSdk && preset.sdk && config.sdk && config.sdk !== preset.sdk) {
     warnings.push(
@@ -116,12 +122,35 @@ export function inferModelReasoning(modelId: string): boolean {
   return REASONING_MODEL_RE.test(id);
 }
 
+/**
+ * Ollama's smallest server default `num_ctx` (4k below 24 GiB VRAM; 32k / 256k on
+ * bigger GPUs, or `OLLAMA_CONTEXT_LENGTH`). Ollama's OpenAI-compatible API cannot
+ * raise it per request and silently drops the head of a longer prompt, so zhin
+ * assumes the smallest value unless told otherwise.
+ */
+export const OLLAMA_DEFAULT_CONTEXT_WINDOW = 4_096;
+
+function positiveInt(value: string | undefined): number | undefined {
+  const n = Number(value?.trim());
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+/**
+ * Context window the transport plans for: explicit `contextWindow` > gateway preset
+ * > model-id hint > 128k. For `sdk: ollama`: explicit `contextWindow` >
+ * `OLLAMA_CONTEXT_LENGTH` (when zhin and Ollama share the environment) >
+ * {@link OLLAMA_DEFAULT_CONTEXT_WINDOW}.
+ */
 export function resolveTransportContextWindow(
   config: ProviderInstanceConfig,
   modelId: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
 ): number {
   if (config.contextWindow != null && config.contextWindow > 0) {
     return config.contextWindow;
+  }
+  if (config.sdk === 'ollama') {
+    return positiveInt(env.OLLAMA_CONTEXT_LENGTH) ?? OLLAMA_DEFAULT_CONTEXT_WINDOW;
   }
   const preset = resolvePreset('', config.baseUrl);
   if (preset?.contextWindow) return preset.contextWindow;

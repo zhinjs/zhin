@@ -125,17 +125,21 @@ ai:
 | sdk | Install | Key settings |
 |-----|---------|--------------|
 | `openai` | `@ai-sdk/openai` | `apiKey`, optional `baseUrl` |
-| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey` (`/v1` appended automatically); Cloudflare Workers AI can use `accountId` instead of `baseUrl` |
+| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey` (`/v1` appended when the path has no version, see `compat` below); Cloudflare Workers AI can use `accountId` instead of `baseUrl` |
 | `anthropic` | `@ai-sdk/anthropic` | `apiKey`, optional `baseUrl` (`/v1` appended) |
 | `deepseek` | `@ai-sdk/deepseek` | `apiKey`, optional `baseUrl` |
 | `google` | `@ai-sdk/google` | `apiKey`, optional `baseUrl` (`/v1beta` appended) |
-| `ollama` | `@ai-sdk/openai-compatible` (via the OpenAI-compatible API) | `host` (default `http://127.0.0.1:11434`, `/v1` appended); no `apiKey` |
+| `ollama` | `@ai-sdk/openai-compatible` (via the OpenAI-compatible API) | `host` (default `http://127.0.0.1:11434`, `/v1` appended); no `apiKey`; set `contextWindow` (see below) |
 
 Optional fields:
 
 - `models`: the models allowed. When omitted, they are fetched from `/v1/models` after startup (last cache first, then refreshed in the background).
 - `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name. The one exception is Gemini chat models on `sdk: google`, which are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models stay text-only.
-- `contextWindow`: context window size.
+- `contextWindow`: context window size. When omitted, most providers assume 128k. `sdk: ollama` is the exception: zhin reads `OLLAMA_CONTEXT_LENGTH` (when zhin and Ollama share a machine) and otherwise assumes 4096. Ollama sizes the context by VRAM (4k below 24 GiB, 32k for 24–48 GiB, 256k above), its OpenAI-compatible API cannot raise it per request, and it **silently drops the start** of a longer prompt, system prompt included. So zhin errs low. Set `contextWindow` to the CONTEXT column of `ollama ps`. Startup prints a hint when it is missing.
+- `compat` (`openai-compatible` / `ollama`):
+  - `includeUsage`: request streamed usage (`stream_options.include_usage`). Default `true`. Without it most compatible servers stream no token counts. Set `false` for a server that rejects the field.
+  - `appendV1`: whether `/v1` is appended to `baseUrl`. Unset: a path that already names a version (`/api/v3`, `/api/paas/v4`, `/v1beta/openai`) or ends in `/openai` is used as written; anything else gets `/v1`, so existing `https://host` and `https://host/api` configs behave as before. `true` always appends (the old behaviour), `false` never does.
+  - `promptCacheKey`: send OpenAI's `prompt_cache_key`. Default `false`, because strict gateways reject unknown fields.
 - `imageGeneration`: defaults for text-to-image.
 - `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
 
