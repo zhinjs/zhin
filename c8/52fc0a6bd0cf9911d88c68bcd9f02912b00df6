@@ -1,0 +1,22 @@
+packages/im/agent/src/memory/compaction-runtime.ts
+  h_b680f75345178a 133
+packages/im/agent/src/routing/subagent-summarize.ts
+  h_b680f75345178a 11,19
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  h_b680f75345178a 112,134,180,207,227-228,275,295
+packages/im/ai/src/compaction/compaction.ts
+  h_b680f75345178a 207,236,257,273,292-293,305,350,476,507,603,646,680-681
+packages/im/ai/src/memory/context-manager.ts
+  h_b680f75345178a 305,334
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c852fc0a6bd0cf9911d88c68bcd9f02912b00df6",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
