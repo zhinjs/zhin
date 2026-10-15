@@ -1,0 +1,93 @@
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator-room-journal.test.ts
+  s_b5a23dafcbf81f::t_c8d31fa39f284d 1-112
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts
+  s_b5a23dafcbf81f::t_6360cbf113c67d 60-63
+.changeset/room-tools-and-plugin-wiring.md
+  s_b5a23dafcbf81f::t_81c75d18362c10 1-8
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_b5a23dafcbf81f::t_579410b2065ec1 2-35,111
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_b5a23dafcbf81f::t_60dc1f7b09226b 10,16,72-73,194-200
+basic/cli/tests/plugin-runtime/workroom/module-boundary.test.ts
+  s_b5a23dafcbf81f::t_9d35846ad3b37c 41
+docs/plans/workroom-group-collaboration-progress.md
+  s_b5a23dafcbf81f::t_8a7595e98501fc 121-123,450-456,508
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_b5a23dafcbf81f::t_f477abe39d0a20 282,286-288
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_b5a23dafcbf81f::t_24cdae396c85d8 147
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_b5a23dafcbf81f::t_3681cb735e40b8 754-771,851,974-992
+packages/im/agent/tests/tool/turn-tool-runtime.test.ts
+  s_b5a23dafcbf81f::t_b40c281b56a544 29-39
+packages/im/tool/src/definition.ts
+  s_b5a23dafcbf81f::t_526354cf3bdd31 83-84,110-111,141-142,236,239,275,299-312
+packages/im/tool/src/tool-index.ts
+  s_b5a23dafcbf81f::t_3b937e0e2f80d7 16,32,94,140
+packages/im/tool/tests/tool.test.ts
+  s_b5a23dafcbf81f::t_28888578c8b1bf 170-218
+packages/im/workroom/README.md
+  s_b5a23dafcbf81f::t_b1a09fbca1a841 56-83
+packages/im/workroom/package.json
+  s_b5a23dafcbf81f::t_6376025ce9d7c7 36-39,44-46,75-89
+packages/im/workroom/plugin.ts
+  s_b5a23dafcbf81f::t_f4b3960ec3b2b1 1-73
+packages/im/workroom/schema.json
+  s_b5a23dafcbf81f::t_a735ccdbaa582a 1-200
+packages/im/workroom/src/room/database-room-task-journal.ts
+  s_b5a23dafcbf81f::t_83e5b9e17f7fda 40
+packages/im/workroom/src/room/index.ts
+  s_b5a23dafcbf81f::t_3cd1ce86ee65f5 15-19
+packages/im/workroom/src/room/room-approval-port.ts
+  s_b5a23dafcbf81f::t_9ba5926413436f 1-129
+packages/im/workroom/src/room/room-runtime.ts
+  s_b5a23dafcbf81f::t_15c39a8d6d2f13 1-121
+packages/im/workroom/src/room/room-task-journal-holder.ts
+  s_b5a23dafcbf81f::t_cc4ed2bf274179 1-38
+packages/im/workroom/src/room/room-tokens.ts
+  s_b5a23dafcbf81f::t_c86346cbfbd611 1-40
+packages/im/workroom/src/room/room-tool-actions.ts
+  s_b5a23dafcbf81f::t_3cc9ea4c1c67f5 1-220
+packages/im/workroom/src/workroom-runtime/workroom-database-models.ts
+  s_b5a23dafcbf81f::t_26b56d4f4f62e3 20,35
+packages/im/workroom/tests/room/room-approval-port.test.ts
+  s_b5a23dafcbf81f::t_ff0388d2fed3e1 1-144
+packages/im/workroom/tests/room/room-plugin.test.ts
+  s_b5a23dafcbf81f::t_f3e8e275fc8176 1-147
+packages/im/workroom/tests/room/room-task-journal-holder.test.ts
+  s_b5a23dafcbf81f::t_6c5c4a8f312abf 1-23
+packages/im/workroom/tests/room/room-tool-actions.test.ts
+  s_b5a23dafcbf81f::t_ddde81c499ac13 1-200
+packages/im/workroom/tests/room/validate-room.test.ts
+  s_b5a23dafcbf81f::t_cb749a9b714811 265-272,276-279
+packages/im/workroom/tests/workroom-runtime/public-surface.test.ts
+  s_b5a23dafcbf81f::t_b3c61e85a1b6d5 23-40
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  s_b5a23dafcbf81f::t_0ce2c1a0fd75d4 20,33,35,38-39
+packages/im/workroom/tools/room_assign/index.ts
+  s_b5a23dafcbf81f::t_b4cb83ed31dee7 1-17
+packages/im/workroom/tools/room_block/index.ts
+  s_b5a23dafcbf81f::t_0bb7e4f2eb9f72 1-17
+packages/im/workroom/tools/room_complete/index.ts
+  s_b5a23dafcbf81f::t_d108daae81b310 1-17
+packages/im/workroom/tools/room_handoff/index.ts
+  s_b5a23dafcbf81f::t_b933ea08f98830 1-18
+packages/im/workroom/tsconfig.plugin.json
+  s_b5a23dafcbf81f::t_7de66bf14e6a08 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "129b48a3357526ee85ce1ff098a9f40276ba3759",
+  "prompts": {},
+  "sessions": {
+    "s_b5a23dafcbf81f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd2241d8-9cb9-44d8-87cf-f4eccbabc49a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
