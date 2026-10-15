@@ -3,6 +3,7 @@ export type {
   MediaContentBlock,
   MediaBlockRef,
   AnthropicThinkingProviderOptions,
+  ThinkingProviderOptions,
   ThinkingContentBlock,
   ToolCallContentBlock,
   ContentBlock,

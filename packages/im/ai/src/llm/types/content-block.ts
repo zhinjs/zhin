@@ -15,6 +15,11 @@ export interface MediaBlockRef {
 export interface TextContentBlock {
   type: 'text';
   text: string;
+  /**
+   * Gemini 3 may sign a text part (`google.thoughtSignature`); it is sent back with
+   * the text on the next request. Only set on assistant text.
+   */
+  providerOptions?: ToolCallProviderOptions;
 }
 
 /**
@@ -41,11 +46,17 @@ export interface AnthropicThinkingProviderOptions {
   };
 }
 
+/** Thinking-block signatures: Anthropic `signature`/`redactedData`, Gemini `thoughtSignature`. */
+export interface ThinkingProviderOptions extends AnthropicThinkingProviderOptions {
+  readonly google?: { readonly thoughtSignature?: string };
+  readonly vertex?: { readonly thoughtSignature?: string };
+}
+
 export interface ThinkingContentBlock {
   type: 'thinking';
   thinking: string;
-  /** AI SDK providerOptions；Anthropic 协议下用于 round-trip signed thinking。 */
-  providerOptions?: AnthropicThinkingProviderOptions;
+  /** AI SDK providerOptions: round-trips signed thinking (Anthropic protocol, Gemini thought parts). */
+  providerOptions?: ThinkingProviderOptions;
 }
 
 export interface ToolCallContentBlock {
