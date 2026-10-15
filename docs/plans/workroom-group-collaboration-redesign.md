@@ -208,6 +208,46 @@ Task 状态用小型事件溯源：`created → assigned → in_progress → don
 
 **建议顺序**：先做拆包（不依赖里程碑），再按里程碑推进；新 Room 核心最后搭在 Tool Runtime 上。
 
+### 3.7 `room` 执行模式契约（2026-10-15 维护者确认，C1 选项 C）
+
+成员的 turn 用 agent 包里新增的 `room` 执行模式运行，不复用 IM 的 interactive 模式。agent 包只定义纯数据类型，不 import `@zhin.js/workroom`，A5 的边界规则不变。
+
+**触发范围（D1）**：所有成员 turn 都走 `room` 模式，包括人类 @ 或回复成员触发的 turn，以及 handoff / assign 唤醒的 turn。这样两种入口下的工具集和权限一致。
+
+**类型**（`TurnExecutionProfile` 新增一个分支；`@zhin.js/tool` 的 `ToolInvocationOrigin` 新增 `{ kind: 'room'; roomId; taskId; memberId }`；两个包都发 minor changeset）：
+
+```ts
+| Readonly<{
+    kind: 'room';
+    roomId: string; taskId: string; memberId: string; role: string;
+    trigger:
+      | { kind: 'human_message' }
+      | { kind: 'handoff'; fromMemberId: string; eventSequence: number }
+      | { kind: 'assign'; by: string; eventSequence: number };
+    brief: string; // 任务标题 + 最近的交接说明，作为 prompt 段注入
+  }>
+```
+
+**身份与权限**：
+- 人类消息触发：principal 就是这个发言的人类（`origin: 'human'`）。
+- handoff / assign 唤醒：principal 是合成入口，不设 `origin`。`subjectId` 取 Task 的创建人，`roles` 取创建 Task 时冻结的快照。
+- policy = 角色声明的工具和安全上限 ∩ principal 的权限。handoff 只能缩小权限，不能扩大（与 `deriveSubagentPolicy` 规则一致）。
+- `unattended: false`；回复端口用该成员自己的 Endpoint 在群里发言，走正常发送链。
+
+**审批（D3）**：
+- 审批人**只能**是这个成员 Endpoint 的 master，即 `endpointRoles.resolveOwner(adapter, endpoint)` 解析出的账号。全局 `ai.trigger.masters` 不算审批人。
+- 审批请求在群里 @ 这个 master，只接受它的回复。
+- master 未配置、master 不在该群、或者无法确认是否在群里（拿不到群成员列表或查询失败）时，一律不提供审批端口。此时需要审批的工具直接拒绝，返回 `approval required but ApprovalPort unavailable`（fail closed）。
+
+**会话、意图与取消**：
+- 会话 key：`room:<roomId>:task:<taskId>:member:<memberId>`，每个成员在每个 Task 上各有一份上下文。
+- 意图：唤醒用 `new`；成员 turn 进行中收到人类消息时，用已有的 `steer` 插入。
+- 取消：`signal` 与 Room 绑定。人类取消、Task 进入 cancelled、护栏触发时都 abort，工具调用随之取消。同一个 Room 内 turn 串行执行，复用 B4 护栏。
+
+**Room 工具**：放在 workroom 插件的 `tools/*.ts` 中，只在 `execution.kind === 'room'` 时出现：`room_handoff` / `room_block` / `room_complete` / `room_assign`（只有 lead 能用）。授权复用 `createRoomRoleAuthorizer` / `createRoomRoleAssignAuthorizer`。幂等键 `commandId = <turnId>:<toolUseId>`，turn 重放时不会重复写事件。`room_task_events` 并入 `defineWorkroomDatabaseModels`。
+
+**Journal（D2）**：`room_task_events` 仍是 Task 状态的唯一来源，turn journal 照常记录工具调用。两边用 `turnId` / `commandId` 互相引用，不合并成同一张表。这一点偏离了 §3.6 的“Room 事件流是同一个 Journal 的消费者”，留到 Journal 持久化里程碑完成后再收敛。
+
 ## 4. 现有模块去留（建议，待确认）
 
 | 模块 | 建议 | 理由 |
