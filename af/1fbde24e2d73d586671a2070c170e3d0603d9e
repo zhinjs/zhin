@@ -1,0 +1,14 @@
+packages/im/ai/tests/llm/providers/groq.live.test.ts
+  h_b680f75345178a 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af1fbde24e2d73d586671a2070c170e3d0603d9e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
