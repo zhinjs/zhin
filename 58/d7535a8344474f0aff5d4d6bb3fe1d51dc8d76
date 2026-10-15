@@ -1,0 +1,87 @@
+.changeset/workroom-scheduler-portfolio-subpath.md
+  s_b2903366e10f0d::t_dc0d83efd271ce 1-6
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_b2903366e10f0d::t_82f0e6a655b422 6-7
+basic/cli/src/plugin-runtime/console/portfolio-sponsor-routes.ts
+  s_b2903366e10f0d::t_e3547e604a92e9 2
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_b2903366e10f0d::t_7e4d1df350a8f2 10,125-126,131,152-154
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_b2903366e10f0d::t_3868568abddea2 2-3
+basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts
+  s_b2903366e10f0d::t_bcfbe087ebf1a7 1-2
+basic/cli/src/plugin-runtime/workroom/human-ingress-coordinator.ts
+  s_b2903366e10f0d::t_cc8cc847fede97 3-4
+basic/cli/src/plugin-runtime/workroom/local-portfolio.ts
+  s_b2903366e10f0d::t_5b76766ad2bf7c 3-5
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_b2903366e10f0d::t_53950d50e32489 6-7
+basic/cli/src/plugin-runtime/workroom/planning-bootstrap.ts
+  s_b2903366e10f0d::t_ad05b69f43b5ec 2-3
+basic/cli/src/plugin-runtime/workroom/portfolio-coordinator.ts
+  s_b2903366e10f0d::t_6dbec04145490a 2-3
+basic/cli/src/plugin-runtime/workroom/projection-coordinator.ts
+  s_b2903366e10f0d::t_7e17c554cad97d 3-4
+basic/cli/src/plugin-runtime/workroom/runtime-foundation.ts
+  s_b2903366e10f0d::t_3ed5b4b44cfb81 1-2
+basic/cli/src/utils/optional-workroom.ts
+  s_b2903366e10f0d::t_102ce4cf15cc8f 59-78
+basic/cli/tests/agent-workroom.test.ts
+  s_b2903366e10f0d::t_029f133aefc7a2 443-463
+basic/cli/tests/plugin-runtime/protocol-host-installer.test.ts
+  s_b2903366e10f0d::t_8dceae44bf771e 14-15
+basic/cli/tests/plugin-runtime/workroom/execution-control-coordinator.test.ts
+  s_b2903366e10f0d::t_837595c9618406 2
+basic/cli/tests/plugin-runtime/workroom/execution-coordinator.test.ts
+  s_b2903366e10f0d::t_9156051917c3df 3
+basic/cli/tests/plugin-runtime/workroom/local-portfolio.test.ts
+  s_b2903366e10f0d::t_878c94e44fe01e 4-6
+basic/cli/tests/plugin-runtime/workroom/portfolio-coordinator.test.ts
+  s_b2903366e10f0d::t_f0a1d69309d477 2
+basic/cli/tests/plugin-runtime/workroom/runtime-foundation.test.ts
+  s_b2903366e10f0d::t_735bc93dab30c3 1-2
+docs/configuration/index.md
+  s_b2903366e10f0d::t_dccd7e916f4d9c 238
+docs/contributing/public-api-surface.md
+  s_b2903366e10f0d::t_1b8280e45f3e84 119-120
+docs/en/configuration/index.md
+  s_b2903366e10f0d::t_f50c7a32df31fc 243
+docs/en/contributing/public-api-surface.md
+  s_b2903366e10f0d::t_c2f20278cafd7d 114-115
+docs/plans/workroom-group-collaboration-progress.md
+  s_b2903366e10f0d::t_4f4c91d6ae1dbf 126-127,400-404,450
+packages/host/a2a/README.md
+  s_b2903366e10f0d::t_5bf3a0141debe7 49,51
+packages/im/workroom/README.md
+  s_b2903366e10f0d::t_7c043ef700b925 6,14-16
+packages/im/workroom/package.json
+  s_b2903366e10f0d::t_8ce1d1a2aa1015 18-27
+packages/im/workroom/src/index.ts
+  s_b2903366e10f0d::t_b27678f2892ffb 2-3
+packages/im/workroom/src/portfolio.ts
+  s_b2903366e10f0d::t_fdb7ef5153d234 1-23
+packages/im/workroom/src/scheduler.ts
+  s_b2903366e10f0d::t_eb3cb0bf09a920 1-19
+packages/im/workroom/tests/package-exports.test.ts
+  s_b2903366e10f0d::t_f6d576cabcfd90 1-36
+tsconfig.typecheck.json
+  s_b2903366e10f0d::t_09c47316b909cc 167-172
+tsconfig.typedoc.json
+  s_b2903366e10f0d::t_79c08ac9d1bdf2 71-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "58d7535a8344474f0aff5d4d6bb3fe1d51dc8d76",
+  "prompts": {},
+  "sessions": {
+    "s_b2903366e10f0d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21126ec6-b8bb-4ee7-aaf7-cbf37a8404af",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
