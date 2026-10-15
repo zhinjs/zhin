@@ -91,6 +91,8 @@ export default defineAgentTool<{ city: string }>({
 });
 ```
 
+工具参数的 schema 会原样发给模型，`enum`、`anyOf`、可空类型、`integer`、`format` 和取值范围都会保留，MCP 工具也一样。模型传回的参数按同样的约束校验，不符合时会把错误告诉模型，让它重新调用。Gemini 不接受没有类型的字段，这类字段发给 Gemini 时会按字符串处理。
+
 限制工具的使用范围、要求用户确认、用 Skill 封装流程、补充业务背景，见 [Agent 工具与技能](../authoring/agent-tools.md)。
 
 ## 常见调整
@@ -134,8 +136,15 @@ ai:
 可选字段：
 
 - `models`：允许使用的模型列表。不写时，启动后会自动从 `/v1/models` 获取（先用上次的缓存，再在后台刷新）。
-- `input`：模型能接收的内容类型，`text | image | audio | video | file`。**不写时只按文本处理**，框架不会根据模型名猜测它能否看图。唯一例外是 `sdk: google` 的 Gemini 对话模型（Gemini 原生多模态），默认 `text, image, audio, video, file`；TTS、embedding、图像生成和 Live 模型仍只按文本处理。
+- `input`：模型能接收的内容类型，`text | image | audio | video | file`。不写时按 SDK 和模型名取默认值：
+  - `sdk: google` 的 Gemini 对话模型原生多模态，默认 `text, image, audio, video, file`；TTS、embedding、图像生成和 Live 模型只按文本处理。
+  - `sdk: openai` 的 GPT-4o、GPT-4.1、GPT-4.5、GPT-5.x 以及 o1、o3、o4-mini，和 `sdk: anthropic` 的 Claude 3 及以后的模型，默认 `text, image`。audio、realtime、TTS、search、embedding、图像生成这些变体，以及 o1-mini、o3-mini，只按文本处理。PDF 等文件不默认开启，需要时写 `input: [text, image, file]`。
+  - 其他 SDK（DeepSeek、MiniMax、Ollama、各类网关）只按文本处理，因为同一家的模型能力不一样。
+
+  写了 `input` 就以它为准。
 - `contextWindow`：上下文窗口大小。
+- `thinkingLevel`：思考深度，`off | low | medium | high`。不写时用 provider 默认。框架把它作为 AI SDK 的 `reasoning` 参数传给各 SDK，再由 SDK 换成自己的设置：Gemini 3 的 `thinkingLevel`（`off` 对应 `minimal`）、Gemini 2.5 的思考预算、Claude 的 thinking 预算、OpenAI 和 DeepSeek 的 reasoning effort。如果 `providerOptions` 里已经写了思考设置（`thinkingConfig`、`thinking`、`reasoningEffort` 或 `effort`），以 `providerOptions` 为准。MiniMax 固定用自适应思考，不受影响。
+- `maxOutputTokens`：每次请求的输出 token 上限，默认 `8192`。Gemini 和 Claude 的思考 token 也算在里面，所以 `thinkingLevel: high` 时建议调大，免得回复被截断。
 - `imageGeneration`：文生图的默认参数。
 - `providerOptions`：按 SDK 名分组的 AI SDK `providerOptions`，每次请求都会合并进去。Gemini 常用的是安全设置和思考深度：
 

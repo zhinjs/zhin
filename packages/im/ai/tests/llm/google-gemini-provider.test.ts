@@ -88,7 +88,7 @@ describe('Gemini provider (google sdk)', () => {
     expect(defaultModelInput('google', 'gemini-3.8-flash')).toContain('image');
     expect(defaultModelInput('google', 'gemini-3.8-flash-tts')).toEqual(['text']);
     expect(defaultModelInput('google', 'gemini-embedding-001')).toEqual(['text']);
-    expect(defaultModelInput('openai', 'gpt-5')).toEqual(['text']);
+    expect(defaultModelInput('deepseek', 'deepseek-chat')).toEqual(['text']);
     expect(createLlmTransportModel('g', { sdk: 'google', input: ['text'] }, 'gemini-3.8-flash').input).toEqual(['text']);
   });
 

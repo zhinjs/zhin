@@ -62,20 +62,39 @@ export interface RegisteredProvider {
   fetch?: typeof globalThis.fetch;
 }
 
+/** Output token cap when the provider config sets no `maxOutputTokens`. */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
+
 function languageModelKey(alias: string, modelId: string): string {
   return `${alias}::${modelId}`;
 }
 
+/** OpenAI chat models that take image input (GPT-4o / 4.1 / 4.5 / 5.x, o1, o3, o4-mini). */
+const OPENAI_VISION = /^(?:chatgpt-4o|gpt-4o|gpt-4\.1|gpt-4\.5|gpt-5|o1(?!-mini|-preview)|o3(?!-mini)|o4-mini)/i;
+/** Variants of those lines that are not chat-with-images models. */
+const OPENAI_NOT_VISION = /(?:audio|realtime|tts|transcribe|embedding|image|moderation|search)/i;
+
 /**
- * Input modalities when the provider config does not list `input`. Gemini
- * models are natively multimodal (image, audio, video, PDF), so the Google SDK
- * defaults to all of them; without this, images in group messages were
- * silently replaced by text placeholders. Other SDKs stay text-only unless
- * configured, because their model lines are mixed.
+ * Input modalities when the provider config does not list `input`.
+ *
+ * - Gemini models are natively multimodal (image, audio, video, PDF), so the Google
+ *   SDK defaults to all of them; without this, images in group messages were
+ *   silently replaced by text placeholders.
+ * - OpenAI GPT-4o and later and the o-series reasoning models, and every Claude 3+
+ *   model, take images, so they default to text + image. PDFs and other files stay
+ *   opt-in through `input`, because the `file` modality is not filtered by MIME type.
+ * - Everything else (DeepSeek, MiniMax, Ollama, gateways) stays text-only unless
+ *   configured, because their model lines are mixed. An explicit `input` always wins.
  */
 export function defaultModelInput(sdk: string | undefined, modelId: string): readonly ModelInputModality[] {
   if (sdk === 'google' && /gemini/i.test(modelId) && !/(?:tts|embedding|image|live|transcribe)/i.test(modelId)) {
     return ['text', 'image', 'audio', 'video', 'file'];
+  }
+  if (sdk === 'openai' && OPENAI_VISION.test(modelId) && !OPENAI_NOT_VISION.test(modelId)) {
+    return ['text', 'image'];
+  }
+  if (sdk === 'anthropic' && /^claude-(?!2|instant)/i.test(modelId)) {
+    return ['text', 'image'];
   }
   return ['text'];
 }
@@ -95,8 +114,9 @@ export function createLlmTransportModel(
     reasoning: inferModelReasoning(modelId),
     input: config.input?.length ? [...config.input] : [...defaultModelInput(config.sdk, modelId)],
     contextWindow: resolveTransportContextWindow(config, modelId),
-    maxTokens: 8_192,
+    maxTokens: config.maxOutputTokens && config.maxOutputTokens > 0 ? config.maxOutputTokens : DEFAULT_MAX_OUTPUT_TOKENS,
     ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
+    ...(config.thinkingLevel ? { thinkingLevel: config.thinkingLevel } : {}),
   };
 }
 
