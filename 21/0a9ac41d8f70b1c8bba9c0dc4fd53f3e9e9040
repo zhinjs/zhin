@@ -1,0 +1,22 @@
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_b680f75345178a 68-73
+packages/im/agent/src/context/model-resolver.ts
+  h_b680f75345178a 5
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 235-240
+packages/im/agent/tests/ai/zhin-agent.test.ts
+  h_b680f75345178a 9,106-120
+packages/im/agent/tests/zhin-agent/model-resolver.test.ts
+  h_b680f75345178a 46-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "210a9ac41d8f70b1c8bba9c0dc4fd53f3e9e9040",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
