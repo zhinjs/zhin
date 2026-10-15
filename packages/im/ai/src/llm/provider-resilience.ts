@@ -20,6 +20,13 @@
  *   answer; switching models to get past a refusal would bypass the operator's
  *   safety settings and resend flagged content to more models. The user gets a
  *   polite refusal instead (see `bridge/finish-reason.ts`).
+ *
+ * Other providers:
+ * - An `error` finish that is not a malformed tool call (DeepSeek
+ *   `insufficient_system_resource`) is retried with backoff like a 5xx, then falls back.
+ * - Error parts inside a 200 stream (Anthropic `overloaded_error`, OpenAI `server_error`)
+ *   keep their type and an inferred status (see `bridge/stream-error.ts`), so they are
+ *   classified like the equivalent HTTP error.
  */
 import { SAFETY_BLOCK_TEXT, finishFailureKind, isFinishFailureMessage } from './bridge/finish-reason.js';
 import { isContextOverflowError } from './context-overflow.js';
@@ -141,6 +148,14 @@ class EmptyResponseError extends Error {
   ) {
     super(kind === 'empty_response' ? 'Model returned an empty response' : 'Model returned a malformed tool call');
     this.name = 'EmptyResponseError';
+  }
+}
+
+/** The provider ended the stream with an `error` finish (not a malformed tool call). */
+class ProviderFinishError extends Error {
+  constructor(readonly reply: AssistantMessage) {
+    super(reply.errorMessage ?? 'Provider ended the response with an error');
+    this.name = 'ProviderFinishError';
   }
 }
 
@@ -267,6 +282,9 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   if (inner instanceof AttemptTimeoutError) {
     return { kind: 'timeout', retryable: true, fallbackEligible: true };
   }
+  if (inner instanceof ProviderFinishError) {
+    return { kind: 'server', retryable: true, fallbackEligible: true };
+  }
   const rec = record(inner) ?? {};
   const name = typeof rec.name === 'string' ? rec.name : '';
   const message = typeof rec.message === 'string' ? rec.message : String(inner ?? '');
@@ -327,11 +345,14 @@ export function computeBackoffDelay(
 /**
  * Detect a reply that carries nothing usable, or a broken tool call: a call with no
  * name, or Gemini's MALFORMED_FUNCTION_CALL finish (surfaced by the bridge as an
- * error reply). Other error replies (safety blocks included) pass through unchanged.
+ * error reply), or a provider-side `error` finish. Other error replies (safety
+ * blocks included) pass through unchanged.
  */
-function inspectReply(message: AssistantMessage): EmptyResponseError | undefined {
-  if (message.stopReason === 'error' && finishFailureKind(message.errorMessage) === 'malformed_tool_call') {
-    return new EmptyResponseError('malformed_tool_call', message);
+function inspectReply(message: AssistantMessage): EmptyResponseError | ProviderFinishError | undefined {
+  if (message.stopReason === 'error') {
+    const finish = finishFailureKind(message.errorMessage);
+    if (finish === 'malformed_tool_call') return new EmptyResponseError('malformed_tool_call', message);
+    if (finish === 'provider_error') return new ProviderFinishError(message);
   }
   if (message.stopReason === 'error' || message.stopReason === 'aborted') return undefined;
   let hasPayload = false;

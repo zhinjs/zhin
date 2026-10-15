@@ -14,6 +14,8 @@ import {
   type ProviderResilienceEvent,
 } from '../../src/llm/provider-resilience.js';
 import { ProviderStreamError, streamPartError } from '../../src/llm/bridge/stream-error.js';
+import { finishFailureKind, resolveFinish } from '../../src/llm/bridge/finish-reason.js';
+import { ProviderRequestError, describeProviderFailure, isProviderFailureMessage } from '../../src/llm/provider-resilience.js';
 
 /** One scripted HTTP answer: SSE chunks, or a JSON error body with a status. */
 type Answer =
@@ -131,5 +133,36 @@ describe('mid-stream errors over real transports', () => {
     expect(requests.map((r) => r.model)).toEqual(['primary', 'primary', 'secondary']);
     expect(events.map((e) => e.type)).toEqual(['retry', 'fallback']);
     expect(events[0]).toMatchObject({ kind: 'server', error: expect.stringContaining('The server had an error') });
+  });
+});
+
+describe('provider-side error finishes (DeepSeek insufficient_system_resource)', () => {
+  const finish = (rawFinishReason: string | undefined) => resolveFinish({ finishReason: 'error', rawFinishReason, hasText: false, hasToolCalls: false });
+
+  it('reports only Gemini tool-call parse failures as malformed tool calls', () => {
+    expect(finishFailureKind(finish('MALFORMED_FUNCTION_CALL').errorMessage)).toBe('malformed_tool_call');
+    expect(finishFailureKind(finish('insufficient_system_resource').errorMessage)).toBe('provider_error');
+    expect(finishFailureKind(finish(undefined).errorMessage)).toBe('provider_error');
+    expect(isProviderFailureMessage(finish('insufficient_system_resource').errorMessage!)).toBe(true);
+  });
+
+  const exhausted = { chunks: [chatChunk({ role: 'assistant', content: '' }), chatChunk({}, 'insufficient_system_resource'), '[DONE]'] };
+
+  it('retries the request with backoff instead of reporting a malformed tool call', async () => {
+    const { runtime, model, requests } = setup('deepseek', [exhausted, { chunks: chatText('好的') }]);
+    const { port, events } = resilient(runtime);
+    const reply = await port.complete(model, ask);
+    expect(reply.content).toEqual([expect.objectContaining({ text: '好的' })]);
+    expect(requests).toHaveLength(2);
+    expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'server', error: expect.stringContaining('insufficient_system_resource') })]);
+  });
+
+  it('gives the user the polite outage text once retries are exhausted', async () => {
+    const { runtime, model } = setup('deepseek', [exhausted]);
+    const { port, events } = resilient(runtime, [], { maxRetries: 1 });
+    const failure = await port.complete(model, ask).catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(ProviderRequestError);
+    expect((failure as Error).message).toBe(describeProviderFailure('server'));
+    expect(events.map((e) => e.type)).toEqual(['retry', 'give_up']);
   });
 });
