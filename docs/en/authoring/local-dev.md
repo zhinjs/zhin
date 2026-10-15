@@ -107,7 +107,7 @@ pnpm zhin:local link ../my-bot --no-install # only rewrite the manifest; run pnp
 - Relative paths resolve from the **caller's directory** (pnpm's `INIT_CWD`), not the repo root: `pnpm --dir ../zhin zhin:local link .` from `my-bot` equals `pnpm zhin:local link ../my-bot` from the zhin root;
 - Backups and tarballs live in the project's `.zhin-local/`; `link` adds it to the project's `.gitignore` automatically (created if missing, never duplicated); `unlink` reverts it: restored exactly if untouched, deleted if `link` created it, otherwise only that line is removed;
 - Besides dependencies, zhin packages declared in `zhin.plugins` but missing from dependencies are switched too when available locally, with a warning to add the dependency; `@zhin.js/*` packages **not** in this repo stay on npm with a warning;
-- The command refuses with a clear message when: the target is inside the zhin repo, `package.json`/`pnpm-lock.yaml` have uncommitted changes on first link, zhin-related `pnpm.overrides` already exist, `.zhin-local/` exists without `state.json`, or `package.json` was edited after linking (blocks both refresh and `unlink`; to discard those edits run `pnpm zhin:local unlink ../my-bot --force`, which lists the discarded lines first);
+- The command refuses with a clear message when: the target is inside the zhin repo, dependencies and `zhin.plugins` contain no `zhin.js` / `@zhin.js/*` from this repo, `package.json`/`pnpm-lock.yaml` have uncommitted changes on first link, zhin-related `pnpm.overrides` already exist, `.zhin-local/` exists without `state.json`, or `package.json` was edited after linking (blocks both refresh and `unlink`; to discard those edits run `pnpm zhin:local unlink ../my-bot --force`, which lists the discarded lines first);
 - Every switched zhin package comes from the same packed build, so section 1's duplicate-copy error cannot occur.
 
 If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same checkout), but cover **every** zhin package in the project's closure (including indirect ones like `@zhin.js/runtime`).
@@ -142,6 +142,6 @@ Plugins must release their own timers and connections in dispose; a dispose that
 - [ ] `pnpm why @zhin.js/command` (and `zhin.js`, `@zhin.js/tool`, ...) shows a single resolved path per package;
 - [ ] APIs and config fields used by local plugins exist in the installed zhin.js version;
 - [ ] Prefer developing inside the zhin repo (all `workspace:*`); for external projects pick one setup (all npm / tarball / `zhin:local link`) without mixing;
-- [ ] Ran `pnpm install` after dependency changes and `pnpm build` after local source changes;
+- [ ] Ran `pnpm install` after dependency changes; after source changes, ran `pnpm build` when developing inside the repo, or re-ran `pnpm zhin:local link` for an external project using `zhin:local` (it rebuilds and refreshes tarballs—`pnpm build` alone in the source repo does not update installed `.zhin-local/packs`);
 - [ ] Port is free and old instances were stopped by PID before starting;
 - [ ] Ctrl+C exits within 5 seconds without `forcedExit`; if not, check the release logic of components listed in `stillStopping`.

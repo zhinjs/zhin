@@ -107,7 +107,7 @@ pnpm zhin:local link ../my-bot --no-install # 只改清单，稍后自行 pnpm i
 - 相对路径按**调用时所在目录**解析（pnpm 的 `INIT_CWD`），不是仓库根目录：在 `my-bot` 里执行 `pnpm --dir ../zhin zhin:local link .` 与在 zhin 根目录执行 `pnpm zhin:local link ../my-bot` 等价；
 - 备份与 tarball 存放在项目内的 `.zhin-local/`，`link` 会自动把它加入项目的 `.gitignore`（不存在则创建，已存在不重复添加）；`unlink` 会撤销这一改动：未再改动则原样恢复，由 link 新建的文件会被删除，若之后另有编辑则只移除这一行；
 - 除依赖外，`zhin.plugins` 中声明但未写入依赖的 zhin 包若本仓库存在也会一并切换，并打印警告提醒补全依赖；本仓库不存在的 `@zhin.js/*` 会打印警告并**保持 npm 版本**；
-- 命令在以下情况会拒绝并说明原因：目标位于 zhin 仓库内、首次 link 时 `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、`.zhin-local/` 存在但缺少 `state.json`、或 link 之后 `package.json` 又被改过（刷新与 `unlink` 均拒绝；确认丢弃改动可用 `pnpm zhin:local unlink ../my-bot --force`，会先列出将被丢弃的行）；
+- 命令在以下情况会拒绝并说明原因：目标位于 zhin 仓库内、依赖与 `zhin.plugins` 中找不到本仓库内的 `zhin.js` / `@zhin.js/*`、首次 link 时 `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、`.zhin-local/` 存在但缺少 `state.json`、或 link 之后 `package.json` 又被改过（刷新与 `unlink` 均拒绝；确认丢弃改动可用 `pnpm zhin:local unlink ../my-bot --force`，会先列出将被丢弃的行）；
 - 所有被切换的 zhin 包来自同一份打包产物，不会出现第 1 节的多副本错误。
 
 无法使用该命令时，可手写 `pnpm.overrides`（`link:` 指向同一个源码仓库），但必须覆盖项目依赖闭包中的**全部** zhin 包（含 `@zhin.js/runtime` 等间接依赖）。
@@ -142,6 +142,6 @@ lsof -nP -iTCP:<端口> -sTCP:LISTEN
 - [ ] `pnpm why @zhin.js/command`（及 `zhin.js`、`@zhin.js/tool` 等）每个包只有一个实际解析路径；
 - [ ] 本地插件用到的 API 与配置字段在当前安装的 zhin.js 版本中存在；
 - [ ] 优先在 zhin 仓库内开发（全 `workspace:*`）；外部项目则选定一种组合（全 npm / tarball / `zhin:local link`），没有混用；
-- [ ] 修改依赖后执行了 `pnpm install`，本地源码改动后执行了 `pnpm build`；
+- [ ] 修改依赖后执行了 `pnpm install`；仓库内开发改源码后执行了 `pnpm build`；外部项目若用了 `zhin:local`，改源码后再次执行了 `pnpm zhin:local link`（会重新构建并刷新 tarball——只在源码仓库 `pnpm build` 不会更新已安装的 `.zhin-local/packs`）；
 - [ ] 启动前确认端口空闲，旧实例已按 PID 停止；
 - [ ] Ctrl+C 后 5 秒内退出且无 `forcedExit` 输出；若有，按 `stillStopping` 排查对应组件的释放逻辑。
