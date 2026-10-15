@@ -27,7 +27,10 @@ export function resolveModelCandidates(
   const candidates: string[] = [];
 
   if (preferred) candidates.push(preferred);
-  if (task === 'chat' && config.chatModel && !candidates.includes(config.chatModel)) {
+  // The bound model (`ai.agents.<name>.model`) stays first for image turns too: a text-only
+  // bound model gets the image through the perception pre-pass or a placeholder, instead of
+  // the turn silently switching to whichever registry model looks vision-capable.
+  if ((task === 'chat' || task === 'vision') && config.chatModel && !candidates.includes(config.chatModel)) {
     candidates.push(config.chatModel);
   }
   if (task === 'vision' && config.visionModel && !candidates.includes(config.visionModel)) {
