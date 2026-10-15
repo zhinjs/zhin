@@ -364,7 +364,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` 管理多模态入出站。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
+`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 `ai.multimodal.perception` 让另一个模型先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
 
 远程 Agent 不再通过 `ai.remoteAgents` 旁路接入。可选 A2A Executor 只通过持久 Workroom Catalog 和 generation-owned authority 接入，并服从 Assignment lease/fence 与 Journal 契约。
 

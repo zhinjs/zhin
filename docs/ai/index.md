@@ -276,6 +276,51 @@ ai:
 
 私聊被拒绝时回复 `denyMessage`；群聊和频道被拒绝时不回复。
 
+### ai.multimodal.perception
+
+主模型不能看图（例如 Groq 的 `gpt-oss` 只收文本）时，图片默认只会变成 `[Media unsupported:provider_input: image]` 占位，AI 不知道图里是什么。配置 `perception` 后，框架先用一个能看图的模型（例如 Gemini Flash-Lite）把图片描述成文字，再交给主模型：
+
+```yaml
+ai:
+  providers:
+    groq:
+      sdk: openai-compatible
+      baseUrl: https://api.groq.com/openai/v1
+      apiKey: ${GROQ_API_KEY}
+    gemini:
+      sdk: google
+      apiKey: ${GEMINI_API_KEY}
+  agents:
+    zhin:
+      provider: groq
+      model: openai/gpt-oss-120b
+  multimodal:
+    perception:
+      provider: gemini              # 必填，ai.providers 里的名字
+      model: gemini-2.5-flash-lite  # 必填，这个模型必须声明能接收对应类型
+      kinds: [image]                # 可选：image | video | file，默认 [image]；file 只处理 PDF
+      maxChars: 800                 # 可选：描述最长字符数，默认 800
+      timeoutMs: 30000              # 可选：单次请求超时，默认 30000
+      maxItemsPerTurn: 4            # 可选：每个回合最多描述几项，默认 4
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `provider` / `model` | 用来描述媒体的模型，`provider` 必须是 `ai.providers` 里的名字；配置错误时启动失败，`zhin config check` 也会报错 |
+| `kinds` | 要描述的类型。音频不在这里，仍走 `ai.multimodal.audio` 的语音转写 |
+| `maxChars` | 描述超出时截断 |
+| `timeoutMs` | 单次请求超时；失败最多重试 1 次，走和主对话相同的重试、超时和错误分类 |
+| `maxItemsPerTurn` | 一个回合里超出数量的媒体保持占位 |
+
+行为说明：
+
+- 只处理主模型收不了的媒体。主模型本身能看图时，图片照常直接发给主模型，不会调用 `perception`。
+- 描述以 `[图片描述]` / `[视频描述]` / `[文件描述]` 开头，并标注为**不可信的外部内容**：图片里的文字可能夹带指令，模型只把它当作数据。读过描述的回合属于“已接触外部内容”，之后执行命令、给其他会话发消息、改配置、建定时任务都需要审批，审批卡片的来源链会写“图片/媒体的自动描述”。
+- 描述会随用户消息写入会话历史，之后的回合可以继续问“刚才那张图”；图片本身不写入历史。
+- 相同内容的图片（按字节的 sha256）只描述一次，常见的表情包和贴纸不会重复调用。
+- 描述失败、超时或超出 `maxItemsPerTurn` 时，回到原来的占位，回合照常进行。每项媒体的结果记录在 `zhin trace` 时间线的 `media_resolution` 事件里，描述成功时 `code` 为 `media_perception` 并带上所用模型。
+- 不配置 `perception` 时行为与之前完全一样。
+
 ### ai.agent
 
 `ai.agent` 控制 AI 的运行方式，其中最重要的是 `bash` 等执行类工具的安全策略：
