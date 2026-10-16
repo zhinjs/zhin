@@ -116,6 +116,15 @@ zhin doctor [--fix] [--upgrade-l4]
 
 检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。
 
+### dev：联调本地 zhin 源码
+
+```bash
+zhin dev link <zhin 源码路径> [--project <dir>] [--no-install]
+zhin dev unlink [--project <dir>] [--no-install] [--force]
+```
+
+在外部插件项目里把 `zhin.js` / `@zhin.js/*` 整体切换到本地源码（打包完整依赖闭包并写入 `pnpm.overrides`，保证每个包只有一份实例），`unlink` 原样恢复。`doctor` 的「Zhin 包单实例」检查会发现多份实例并提示该命令。详见[本地联调指南](/authoring/local-dev)。
+
 ### onboard：项目引导
 
 ```bash
