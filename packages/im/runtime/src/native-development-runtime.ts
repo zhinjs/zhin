@@ -13,6 +13,7 @@ import {
   type ModuleDependencyAnalysis,
 } from './module-dependency-index.js';
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
+import { withToolPackageInstallHint } from './missing-tool-package.js';
 import { ensureTypeScriptSpecifierRemap } from './typescript-specifier-remap.js';
 
 export interface NativeDevelopmentModuleRuntimeOptions {
@@ -76,12 +77,16 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
       loaded = await import(url.href) as T;
     } catch (error) {
       if (!normalized.endsWith('.tsx') || !isUnsupportedTsxError(error) || !this.#tsxLoader) {
-        throw error;
+        throw withToolPackageInstallHint(error);
       }
-      loaded = await this.#tsxLoader.load<T>(
-        url.href,
-        pathToFileURL(`${this.#projectRoot}${sep}`).href,
-      );
+      try {
+        loaded = await this.#tsxLoader.load<T>(
+          url.href,
+          pathToFileURL(`${this.#projectRoot}${sep}`).href,
+        );
+      } catch (tsxError) {
+        throw withToolPackageInstallHint(tsxError);
+      }
     }
     if (this.#pendingDependencies) this.#pendingDependencies.set(normalized, analysis);
     else this.#dependencies.commit(normalized, analysis);

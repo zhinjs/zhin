@@ -546,6 +546,7 @@ lib/
 coverage/
 *.log
 .DS_Store
+.zhin/
 # pnpm build / prepack 生成的 JavaScript（随 npm 包发布，不进仓库）
 ${generatedJs.join('\n')}
 `;
