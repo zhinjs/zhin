@@ -85,29 +85,35 @@ cd examples/my-bot && pnpm exec zhin runtime start --once
 - **`pnpm link` / `link:` 单个插件**：不推荐。被链接插件的 `workspace:` 依赖会解析到源码仓库，正是第 1 节错误的成因。
 - **yalc**：本质与 tarball 相同（复制发布产物），不能使用未发布的框架 API，且需额外安装工具；未在本仓库验证。
 - **tarball（见下表）**：适合在**自己的外部项目**里试用本地插件、框架仍用 npm。
-- **`pnpm zhin:local link`**：外部项目需要使用本地框架时的推荐方式（见第 4 节），自动生成全部 tarball overrides 并可一键恢复；手写 `pnpm.overrides` 作为兜底。
+- **`zhin dev link`**：外部项目需要使用本地框架时的推荐方式（见第 4 节），自动生成全部 tarball overrides 并可一键恢复；手写 `pnpm.overrides` 作为兜底。
 
 ## 4. 外部项目的三种可行组合
 
 | 方案 | 做法 | 适用 | 注意 |
 |------|------|------|------|
 | 全部 npm | 插件也用已发布版本（`^x.y.z`） | 日常运行、生产 | 只能用已发布的 API 与配置字段 |
-| 全部本地 | 推荐 `pnpm zhin:local link`（写入**同一批 tarball** overrides，见下文）；或手动用 `pnpm.overrides` 把 `zhin.js` 及所有 `@zhin.js/*` 用 `link:` 指向**同一个**本地源码仓库，并先在源码仓库 `pnpm build` | 同时改框架与插件 | `zhin:local` 改源码后需再执行一次 `link`；手写 `link:` 则所有包必须同源，漏一个就会回到第 1 节 |
+| 全部本地 | 推荐 `zhin dev link`（写入**同一批 tarball** overrides，见下文）；或手动用 `pnpm.overrides` 把 `zhin.js` 及所有 `@zhin.js/*` 用 `link:` 指向**同一个**本地源码仓库，并先在源码仓库 `pnpm build` | 同时改框架与插件 | `zhin dev link` 改源码后需再执行一次；手写 `link:` 则所有包必须同源，漏一个就会回到第 1 节 |
 | 打包 tarball | 在插件目录 `pnpm pack`（会把 `workspace:` 改写成真实版本），项目里依赖 `file:./vendor/xxx.tgz` | 只想试用本地插件、框架用 npm | 插件不能依赖未发布的框架 API；每次改动需重新打包并 `pnpm install` |
 
-**外部项目推荐用一键命令**代替手写 overrides。在 zhin 源码仓库根目录执行：
+**外部项目推荐用一键命令**代替手写 overrides。在**你的项目目录**里执行（`<zhin 源码路径>` 是本地 zhin checkout）：
 
 ```bash
-pnpm zhin:local link ../my-bot              # 检测项目用到的 zhin.js / @zhin.js/*，构建并打包完整依赖闭包，写入 tarball overrides，执行 pnpm install
-pnpm zhin:local unlink ../my-bot            # 原样恢复 package.json 与 pnpm-lock.yaml，再执行 pnpm install
-pnpm zhin:local link ../my-bot --no-install # 只改清单，稍后自行 pnpm install（unlink 同样支持）
+cd my-bot
+zhin dev link ../zhin              # 检测项目用到的 zhin.js / @zhin.js/*，构建并打包完整依赖闭包，写入 tarball overrides，执行 pnpm install
+zhin dev unlink                    # 原样恢复 package.json 与 pnpm-lock.yaml，再执行 pnpm install
+zhin dev link ../zhin --no-install # 只改清单，稍后自行 pnpm install（unlink 同样支持）
+zhin dev link ../zhin --project ../my-bot   # 不在项目目录时用 --project 指定项目
 ```
 
+**为什么能保证单实例**：多实例通常是只替换了部分包，传递依赖（如 `@zhin.js/runtime`）仍从 npm 解析；而 `link:` 到源码目录时，该目录内的 `workspace:*` 又会解析回源码仓库。`zhin dev link` 计算项目依赖的 zhin 包在源码仓库中的**完整 workspace 依赖闭包**，对闭包里的**每个**包 `pnpm pack`，并全部写入 `pnpm.overrides`；overrides 对整个依赖树（含传递依赖）生效，所以每个包名只解析到一份 tarball。`zhin doctor` 的「Zhin 包单实例」检查会列出仍解析到多个物理位置的 zhin 包，并提示使用 `zhin dev link`。
+
+仓库内的 `pnpm zhin:local link/unlink <项目路径>` 仍可使用，二者状态文件（`.zhin-local/`）互通，可互相 unlink；以下说明对两者通用。
+
 - **写入的是 tarball overrides**（`file:./.zhin-local/packs/*.tgz`），不是 `link:`；与表中「手写 `link:`」兜底不同——源码改动后必须再次 `link` 才会重新打包生效（幂等）；
-- 相对路径按**调用时所在目录**解析（pnpm 的 `INIT_CWD`），不是仓库根目录：在 `my-bot` 里执行 `pnpm --dir ../zhin zhin:local link .` 与在 zhin 根目录执行 `pnpm zhin:local link ../my-bot` 等价；
+- `pnpm zhin:local` 的相对路径按**调用时所在目录**解析（pnpm 的 `INIT_CWD`），不是仓库根目录；`zhin dev link` 则直接以当前目录（或 `--project`）为项目；
 - 备份与 tarball 存放在项目内的 `.zhin-local/`，`link` 会自动把它加入项目的 `.gitignore`（不存在则创建，已存在不重复添加）；`unlink` 会撤销这一改动：未再改动则原样恢复，由 link 新建的文件会被删除，若之后另有编辑则只移除这一行；
 - 除依赖外，`zhin.plugins` 中声明但未写入依赖的 zhin 包若本仓库存在也会一并切换，并打印警告提醒补全依赖；本仓库不存在的 `@zhin.js/*` 会打印警告并**保持 npm 版本**；
-- 命令在以下情况会拒绝并说明原因：目标位于 zhin 仓库内、依赖与 `zhin.plugins` 中找不到本仓库内的 `zhin.js` / `@zhin.js/*`、首次 link 时 `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、`.zhin-local/` 存在但缺少 `state.json`、或 link 之后 `package.json` 又被改过（刷新与 `unlink` 均拒绝；确认丢弃改动可用 `pnpm zhin:local unlink ../my-bot --force`，会先列出将被丢弃的行）；
+- 命令在以下情况会拒绝并说明原因：目标位于 zhin 仓库内、依赖与 `zhin.plugins` 中找不到本仓库内的 `zhin.js` / `@zhin.js/*`、首次 link 时 `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、`.zhin-local/` 存在但缺少 `state.json`、或 link 之后 `package.json` 又被改过（刷新与 `unlink` 均拒绝；确认丢弃改动可用 `zhin dev unlink --force`，会先列出将被丢弃的行）；
 - 所有被切换的 zhin 包来自同一份打包产物，不会出现第 1 节的多副本错误。
 
 无法使用该命令时，可手写 `pnpm.overrides`（`link:` 指向同一个源码仓库），但必须覆盖项目依赖闭包中的**全部** zhin 包（含 `@zhin.js/runtime` 等间接依赖）。
@@ -141,7 +147,7 @@ lsof -nP -iTCP:<端口> -sTCP:LISTEN
 - [ ] `grep` 出的 `link:`/`file:`/`workspace:` 依赖都在预期内；
 - [ ] `pnpm why @zhin.js/command`（及 `zhin.js`、`@zhin.js/tool` 等）每个包只有一个实际解析路径；
 - [ ] 本地插件用到的 API 与配置字段在当前安装的 zhin.js 版本中存在；
-- [ ] 优先在 zhin 仓库内开发（全 `workspace:*`）；外部项目则选定一种组合（全 npm / tarball / `zhin:local link`），没有混用；
-- [ ] 修改依赖后执行了 `pnpm install`；仓库内开发改源码后执行了 `pnpm build`；外部项目若用了 `zhin:local`，改源码后再次执行了 `pnpm zhin:local link`（会重新构建并刷新 tarball——只在源码仓库 `pnpm build` 不会更新已安装的 `.zhin-local/packs`）；
+- [ ] 优先在 zhin 仓库内开发（全 `workspace:*`）；外部项目则选定一种组合（全 npm / tarball / `zhin dev link`），没有混用；
+- [ ] 修改依赖后执行了 `pnpm install`；仓库内开发改源码后执行了 `pnpm build`；外部项目若用了 `zhin dev link`，改源码后再次执行了 `zhin dev link <zhin 源码路径>`（会重新构建并刷新 tarball——只在源码仓库 `pnpm build` 不会更新已安装的 `.zhin-local/packs`）；
 - [ ] 启动前确认端口空闲，旧实例已按 PID 停止；
 - [ ] Ctrl+C 后 5 秒内退出且无 `forcedExit` 输出；若有，按 `stillStopping` 排查对应组件的释放逻辑。

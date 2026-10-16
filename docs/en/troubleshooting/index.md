@@ -158,7 +158,7 @@ Startup fails with `Multiple package locations for @zhin.js/... are not supporte
 ### Action
 
 - Diagnose with the [local development guide](/en/authoring/local-dev): find both resolved paths with `pnpm why` and `readlink -f`.
-- Switch the external project consistently with `pnpm zhin:local link <project-path>`, or move everything back to npm versions.
+- Switch the external project consistently with `zhin dev link <zhin-path>`, or move everything back to npm versions.
 
 ### Verification
 

@@ -158,7 +158,7 @@ Console 持续显示离线或重连中，页面数据不再更新。
 ### 操作
 
 - 按[本地联调指南](/authoring/local-dev)诊断：用 `pnpm why` 与 `readlink -f` 找出两个解析路径。
-- 外部项目改用 `pnpm zhin:local link <项目路径>` 统一切换到本地源码，或全部改回 npm 版本。
+- 外部项目改用 `zhin dev link <zhin 源码路径>` 统一切换到本地源码，或全部改回 npm 版本。
 
 ### 验证
 

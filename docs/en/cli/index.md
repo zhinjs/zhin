@@ -116,6 +116,15 @@ zhin doctor [--fix] [--upgrade-l4]
 
 Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack.
 
+### dev: Develop Against a Local zhin Checkout
+
+```bash
+zhin dev link <zhin-path> [--project <dir>] [--no-install]
+zhin dev unlink [--project <dir>] [--no-install] [--force]
+```
+
+In an external plugin project, switches `zhin.js` / `@zhin.js/*` to a local checkout as a whole (packs the full dependency closure and writes `pnpm.overrides`, so each package has exactly one instance); `unlink` restores the original files. The "Zhin 包单实例" check in `doctor` detects duplicate instances and suggests this command. See the [local development guide](/en/authoring/local-dev).
+
 ### onboard: Project Onboarding
 
 ```bash

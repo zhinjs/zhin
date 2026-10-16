@@ -85,29 +85,35 @@ Other options compared:
 - **`pnpm link` / `link:` a single plugin**: not recommended. The linked plugin's `workspace:` dependencies resolve into the source repo, which is exactly the cause of section 1.
 - **yalc**: essentially the same as a tarball (copies build output); can't use unreleased framework APIs and needs an extra tool; not verified in this repo.
 - **tarball (see table below)**: for trying a local plugin in **your own external project** while the framework stays on npm.
-- **`pnpm zhin:local link`**: recommended when an external project needs the local framework (section 4); generates all tarball overrides and restores in one step; hand-written `pnpm.overrides` is the fallback.
+- **`zhin dev link`**: recommended when an external project needs the local framework (section 4); generates all tarball overrides and restores in one step; hand-written `pnpm.overrides` is the fallback.
 
 ## 4. Three valid setups for external projects
 
 | Setup | How | Use for | Notes |
 |-------|-----|---------|-------|
 | All npm | Plugins also use published versions (`^x.y.z`) | Daily use, production | Only published APIs and config fields |
-| All local | Prefer `pnpm zhin:local link` (writes **one batch of tarball** overrides; see below); or manually use `pnpm.overrides` to `link:` `zhin.js` and every `@zhin.js/*` into the **same** local checkout, and run `pnpm build` there first | Changing framework and plugin together | After `zhin:local`, re-run `link` when source changes; with hand-written `link:`, every package must share one checkout or section 1 returns |
+| All local | Prefer `zhin dev link` (writes **one batch of tarball** overrides; see below); or manually use `pnpm.overrides` to `link:` `zhin.js` and every `@zhin.js/*` into the **same** local checkout, and run `pnpm build` there first | Changing framework and plugin together | After `zhin dev link`, re-run it when source changes; with hand-written `link:`, every package must share one checkout or section 1 returns |
 | Tarball | Run `pnpm pack` in the plugin dir (rewrites `workspace:` to real versions), depend on `file:./vendor/xxx.tgz` | Trying a local plugin with npm framework | Plugin can't use unreleased framework APIs; repack and `pnpm install` after each change |
 
-**For external projects, use the one-click command** instead of hand-written overrides. From the zhin source repo root:
+**For external projects, use the one-click command** instead of hand-written overrides. Run it **inside your project** (`../zhin` is your local zhin checkout):
 
 ```bash
-pnpm zhin:local link ../my-bot              # detect zhin.js / @zhin.js/* used by the project, build and pack the full closure, write tarball overrides, run pnpm install
-pnpm zhin:local unlink ../my-bot            # restore package.json and pnpm-lock.yaml exactly, then run pnpm install
-pnpm zhin:local link ../my-bot --no-install # only rewrite the manifest; run pnpm install yourself later (also works with unlink)
+cd my-bot
+zhin dev link ../zhin              # detect zhin.js / @zhin.js/* used by the project, build and pack the full closure, write tarball overrides, run pnpm install
+zhin dev unlink                    # restore package.json and pnpm-lock.yaml exactly, then run pnpm install
+zhin dev link ../zhin --no-install # only rewrite the manifest; run pnpm install yourself later (also works with unlink)
+zhin dev link ../zhin --project ../my-bot   # use --project when not in the project directory
 ```
 
+**Why this guarantees a single instance**: duplicates usually come from replacing only some packages, leaving transitive ones (e.g. `@zhin.js/runtime`) on npm, while a `link:` into the source tree makes its `workspace:*` deps resolve back into the checkout. `zhin dev link` computes the **full workspace dependency closure** of the zhin packages your project uses, runs `pnpm pack` for **every** package in it and writes them all into `pnpm.overrides`; overrides apply to the whole dependency tree (including transitive deps), so each package name resolves to exactly one tarball. The "Zhin 包单实例" check in `zhin doctor` lists zhin packages that still resolve to several physical locations and suggests `zhin dev link`.
+
+The repo script `pnpm zhin:local link/unlink <project>` still works and shares the same `.zhin-local/` state, so either can unlink the other; the notes below apply to both.
+
 - **Writes tarball overrides** (`file:./.zhin-local/packs/*.tgz`), not `link:` — unlike the hand-written `link:` fallback in the table; after source changes you must run `link` again to rebuild and refresh (idempotent);
-- Relative paths resolve from the **caller's directory** (pnpm's `INIT_CWD`), not the repo root: `pnpm --dir ../zhin zhin:local link .` from `my-bot` equals `pnpm zhin:local link ../my-bot` from the zhin root;
+- For `pnpm zhin:local`, relative paths resolve from the **caller's directory** (pnpm's `INIT_CWD`), not the repo root; `zhin dev link` simply uses the current directory (or `--project`) as the project;
 - Backups and tarballs live in the project's `.zhin-local/`; `link` adds it to the project's `.gitignore` automatically (created if missing, never duplicated); `unlink` reverts it: restored exactly if untouched, deleted if `link` created it, otherwise only that line is removed;
 - Besides dependencies, zhin packages declared in `zhin.plugins` but missing from dependencies are switched too when available locally, with a warning to add the dependency; `@zhin.js/*` packages **not** in this repo stay on npm with a warning;
-- The command refuses with a clear message when: the target is inside the zhin repo, dependencies and `zhin.plugins` contain no `zhin.js` / `@zhin.js/*` from this repo, `package.json`/`pnpm-lock.yaml` have uncommitted changes on first link, zhin-related `pnpm.overrides` already exist, `.zhin-local/` exists without `state.json`, or `package.json` was edited after linking (blocks both refresh and `unlink`; to discard those edits run `pnpm zhin:local unlink ../my-bot --force`, which lists the discarded lines first);
+- The command refuses with a clear message when: the target is inside the zhin repo, dependencies and `zhin.plugins` contain no `zhin.js` / `@zhin.js/*` from this repo, `package.json`/`pnpm-lock.yaml` have uncommitted changes on first link, zhin-related `pnpm.overrides` already exist, `.zhin-local/` exists without `state.json`, or `package.json` was edited after linking (blocks both refresh and `unlink`; to discard those edits run `zhin dev unlink --force`, which lists the discarded lines first);
 - Every switched zhin package comes from the same packed build, so section 1's duplicate-copy error cannot occur.
 
 If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same checkout), but cover **every** zhin package in the project's closure (including indirect ones like `@zhin.js/runtime`).
@@ -141,7 +147,7 @@ Plugins must release their own timers and connections in dispose; a dispose that
 - [ ] Every `link:`/`file:`/`workspace:` dependency found by `grep` is expected;
 - [ ] `pnpm why @zhin.js/command` (and `zhin.js`, `@zhin.js/tool`, ...) shows a single resolved path per package;
 - [ ] APIs and config fields used by local plugins exist in the installed zhin.js version;
-- [ ] Prefer developing inside the zhin repo (all `workspace:*`); for external projects pick one setup (all npm / tarball / `zhin:local link`) without mixing;
-- [ ] Ran `pnpm install` after dependency changes; after source changes, ran `pnpm build` when developing inside the repo, or re-ran `pnpm zhin:local link` for an external project using `zhin:local` (it rebuilds and refreshes tarballs—`pnpm build` alone in the source repo does not update installed `.zhin-local/packs`);
+- [ ] Prefer developing inside the zhin repo (all `workspace:*`); for external projects pick one setup (all npm / tarball / `zhin dev link`) without mixing;
+- [ ] Ran `pnpm install` after dependency changes; after source changes, ran `pnpm build` when developing inside the repo, or re-ran `zhin dev link <zhin-path>` for an external project using `zhin dev link` (it rebuilds and refreshes tarballs—`pnpm build` alone in the source repo does not update installed `.zhin-local/packs`);
 - [ ] Port is free and old instances were stopped by PID before starting;
 - [ ] Ctrl+C exits within 5 seconds without `forcedExit`; if not, check the release logic of components listed in `stillStopping`.
