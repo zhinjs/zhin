@@ -74,7 +74,6 @@
 "@zhin.js/plugin-rss": patch
 "@zhin.js/plugin-runtime": patch
 "@zhin.js/plugin-short-url": patch
-"@zhin.js/plugin-test-kit": patch
 "@zhin.js/plugin-text-adventure": patch
 "@zhin.js/plugin-tic-tac-toe": patch
 "@zhin.js/plugin-word-riddle": patch

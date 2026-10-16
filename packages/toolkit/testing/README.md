@@ -1,4 +1,39 @@
-# @zhin.js/plugin-test-kit
+# @zhin.js/testing
+
+The kit has two layers: typed **fakes** for fast unit tests (no `as never`, below), and
+`PluginTestKit` for integration tests through the real Plugin Runtime (the rest of this file).
+
+## Fakes for unit tests
+
+```ts
+import { createFakeMessage, fakeOf, fakeResource, runCommand, runPluginSetup } from '@zhin.js/testing';
+
+const fake = await runPluginSetup(plugin, {
+  config: { target: 'g1' },
+  resources: [fakeResource(myToken, myValue)],   // typed by the token
+});
+await fake.clock.advance(60_000);                // runs due cron jobs, in order
+expect(fake.sent).toHaveLength(1);               // recorded outbound calls
+expect(fake.rows('notes')).toEqual([]);          // tables the plugin defined
+await fake.dispose();
+
+const message = createFakeMessage({ sender: { id: 'u1', roles: ['admin'] } });
+await runCommand(fake, commandDefinition, { input: message, params: {} });
+expect(message.replies).toEqual(['ok']);
+```
+
+- `createFakePlugin(options)` / `runPluginSetup(definition, options)` build a `FakePlugin`: a real
+  `Scope`, `DisposeStack` and `GenerationHandoffStack`, plus the real owner-bound
+  `databaseHostToken`, `scheduleHostToken` and `outboundHostToken` facades over in-memory hosts
+  (`FakeDatabaseRootHost`, `FakeScheduleRootHost` driven by a `FakeClock`, `FakeOutboundRootHost`).
+- `runCommand`, `runMiddleware`, `runHandler` execute convention-directory definitions against the
+  fake. `runCommand` calls `execute()` directly: no routing, parameter parsing, `permit` or admission.
+- `fakeOf<T>(partial)` replaces `{ ... } as never` for narrow collaborators and event payloads.
+- The fakes do not run the renderer or outbound middleware; use `PluginTestKit` to verify the send chain.
+
+Full guide: `docs/authoring/testing.md`.
+
+## Integration tests with `PluginTestKit`
 
 Test a disposable Plugin Runtime application through real module discovery, configuration validation,
 command parsing, permissions, generation admission and the unified outbound chain. Synthetic endpoints
@@ -10,7 +45,7 @@ The kit neither installs packages nor replaces module resolution. Feature provid
 physical package instance used by the host, as in a normal application.
 
 ```ts
-import { PluginTestKit } from '@zhin.js/plugin-test-kit';
+import { PluginTestKit } from '@zhin.js/testing';
 
 const kit = await PluginTestKit.create({
   projectRoot: '/absolute/path/to/disposable-test-app',
