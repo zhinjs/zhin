@@ -126,6 +126,13 @@ export interface TextCompleteOptions {
   resilience?: import('./llm/provider-resilience.js').ProviderResilienceConfig;
 }
 
+/** `completeTextResult` 的返回：正文、实际作答的模型（fallback 后可能不同）与用量。 */
+export interface TextCompleteResult {
+  text: string;
+  model: string;
+  usage?: import('./llm/types/agent-message.js').TokenUsage;
+}
+
 /**
  * Provider 接口。
  *
@@ -139,6 +146,9 @@ export interface AIProvider {
 
   /** 纯文本补全：system + user → assistant 文本。 */
   completeText(system: string, user: string, opts?: TextCompleteOptions): Promise<string>;
+
+  /** 同 `completeText`，另外返回实际作答的模型与用量（实现方可选）。 */
+  completeTextResult?(system: string, user: string, opts?: TextCompleteOptions): Promise<TextCompleteResult>;
 
   /** 列出可用模型 */
   listModels?(): Promise<string[]>;
