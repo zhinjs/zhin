@@ -1,11 +1,10 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   FilePublishJournalStore,
   ProjectCommands,
-  ProjectScaffolder,
   type CommandStep,
   type ProcessRunner,
   type PublishJournal,
@@ -19,55 +18,9 @@ afterEach(async () => {
 });
 
 describe('Plugin Runtime CLI project tooling', () => {
-  it('initializes a flat Plugin monorepo and adds local Plugin/Feature packages', async () => {
-    const root = await temp();
-    const scaffold = new ProjectScaffolder(root);
-    await scaffold.init({ packageName: '@acme/root' });
-    await scaffold.createPlugin({ name: 'weather' });
-    await scaffold.createFeature({ name: 'report' });
-
-    const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as {
-      dependencies: Record<string, string>;
-      zhin: { engine: string; plugins: unknown[]; features: unknown[] };
-    };
-    expect(pkg.dependencies['@acme/plugin-weather']).toBe('workspace:*');
-    expect(pkg.dependencies['@acme/feature-report']).toBe('workspace:*');
-    expect(pkg.zhin.engine).toBe('^1.0.0');
-    expect(pkg.zhin.plugins).toEqual([
-      { package: '@acme/plugin-weather', instanceKey: 'weather' },
-    ]);
-    expect(pkg.zhin.features).toEqual([
-      { package: '@acme/feature-report', api: '^1.0.0' },
-    ]);
-
-    const workspace = await readFile(join(root, 'pnpm-workspace.yaml'), 'utf8');
-    expect(workspace).toBe('packages:\n  - packages/*\n  - plugins/*\n');
-    const tsconfig = JSON.parse(
-      await readFile(join(root, 'tsconfig.json'), 'utf8'),
-    ) as { compilerOptions: Record<string, unknown>; include: string[] };
-    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
-    expect(tsconfig.compilerOptions.jsxImportSource).toBe('zhin.js');
-    expect(tsconfig.include).toContain('adapters/**/*.ts');
-    expect(tsconfig.include).toContain('tools/**/*.ts');
-    expect(tsconfig.include).toContain('mcps/**/*.ts');
-    expect(tsconfig.include).toContain('schedules/**/*.ts');
-    expect(tsconfig.include).toContain('pages/**/*.ts');
-    expect(tsconfig.include).toContain('pages/**/*.tsx');
-    const child = JSON.parse(
-      await readFile(join(root, 'plugins/weather/package.json'), 'utf8'),
-    ) as { zhin: { engine: string } };
-    const feature = JSON.parse(
-      await readFile(join(root, 'packages/report/package.json'), 'utf8'),
-    ) as { zhin: { engine: string; featureApi: string } };
-    expect(child.zhin.engine).toBe('^1.0.0');
-    expect(feature.zhin).toMatchObject({ engine: '^1.0.0', featureApi: '1.0.0' });
-  });
-
   it('derives deterministic build and safe publish plans from the same graph', async () => {
     const root = await temp();
-    const scaffold = new ProjectScaffolder(root);
-    await scaffold.init({ packageName: '@acme/root' });
-    await scaffold.createPlugin({ name: 'weather' });
+    await writeFixtureProject(root);
     const commands = new ProjectCommands();
     const graph = await commands.inspect(root);
 
@@ -159,9 +112,7 @@ class FaultRunner implements ProcessRunner {
 
 async function publicProject(): Promise<string> {
   const root = await temp();
-  const scaffold = new ProjectScaffolder(root);
-  await scaffold.init({ packageName: '@acme/root' });
-  await scaffold.createPlugin({ name: 'weather' });
+  await writeFixtureProject(root);
   await makePublic(join(root, 'package.json'), '1.0.0');
   await makePublic(join(root, 'plugins/weather/package.json'), '1.1.0');
   return root;
@@ -178,4 +129,40 @@ async function temp(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-cli-'));
   temporary.push(root);
   return root;
+}
+
+/** Minimal flat Plugin monorepo: a root Plugin plus one local `plugins/weather` child. */
+async function writeFixtureProject(root: string): Promise<void> {
+  const manifest = {
+    protocol: 1,
+    type: 'plugin',
+    entry: './plugin.ts',
+    engine: '^1.0.0',
+    runtime: 'trusted',
+    features: [],
+    plugins: [],
+  };
+  const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
+  await writeFile(join(root, 'package.json'), json({
+    name: '@acme/root',
+    version: '0.0.0',
+    private: true,
+    type: 'module',
+    scripts: { build: 'tsc --noEmit' },
+    dependencies: { 'zhin.js': '^4.1.2', '@acme/plugin-weather': 'workspace:*' },
+    zhin: { ...manifest, plugins: [{ package: '@acme/plugin-weather', instanceKey: 'weather' }] },
+  }));
+  await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n  - plugins/*\n');
+  await writeFile(join(root, 'plugin.ts'), "import { definePlugin } from 'zhin.js';\n\nexport default definePlugin({ name: 'root' });\n");
+  const child = join(root, 'plugins/weather');
+  await mkdir(child, { recursive: true });
+  await writeFile(join(child, 'package.json'), json({
+    name: '@acme/plugin-weather',
+    version: '0.0.0',
+    private: true,
+    type: 'module',
+    dependencies: { 'zhin.js': '^4.1.2' },
+    zhin: manifest,
+  }));
+  await writeFile(join(child, 'plugin.ts'), "import { definePlugin } from 'zhin.js';\n\nexport default definePlugin({ name: 'weather' });\n");
 }

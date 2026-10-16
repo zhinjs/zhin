@@ -33,8 +33,6 @@ npx zhin --help        # 查看全部命令
 
 ```bash
 zhin runtime start [--mode production] [--no-watch] [--daemon]
-zhin runtime init [package-name]
-zhin runtime create <plugin|feature> <name> [package-name]
 zhin runtime inspect
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
@@ -44,7 +42,6 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 | 子命令 | 作用 |
 | --- | --- |
 | `start` | 启动 Bot。支持开发热重载、生产模式和守护进程，详见 [zhin runtime start](./runtime.md) |
-| `init` / `create` | **已弃用**。新建插件请用 [`zhin new`](#new：创建插件)；`create plugin` 生成的包没有测试和 README，依赖范围也与 `zhin new` 不一致 |
 | `inspect` | 输出项目结构 JSON（插件清单、构建计划） |
 | `build` / `publish` | 按项目结构构建、发布。`publish` 默认只打印计划，加 `--execute` 才执行，中断后可 `--resume` |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |

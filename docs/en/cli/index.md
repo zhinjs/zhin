@@ -33,8 +33,6 @@ All commands, grouped by purpose, follow.
 
 ```bash
 zhin runtime start [--mode production] [--no-watch] [--daemon]
-zhin runtime init [package-name]
-zhin runtime create <plugin|feature> <name> [package-name]
 zhin runtime inspect
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
@@ -44,7 +42,6 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 | Subcommand | Purpose |
 | --- | --- |
 | `start` | Start the bot, with dev hot reload, production and daemon modes; see [zhin runtime start](./runtime.md) |
-| `init` / `create` | **Deprecated.** Use [`zhin new`](#new-create-a-plugin) to create plugins; `create plugin` generates a package without tests or a README, with different dependency ranges |
 | `inspect` | Print the project structure as JSON (plugin list, build plan) |
 | `build` / `publish` | Build and publish according to the project structure. `publish` only prints the plan by default; `--execute` runs it, and `--resume` continues after an interruption |
 | `migrate` | Generate and apply a project-structure migration plan: `--check` previews, `--write` writes atomically, `status` prints a readiness report |

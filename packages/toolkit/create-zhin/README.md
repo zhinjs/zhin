@@ -138,7 +138,7 @@ npm create zhin-app my-bot --yes
 | **zhin onboard** | 项目内外统一入口：新建项目或复用配置运行 setup |
 | **zhin doctor** | 健康检查与环境修复 |
 
-新建项目请优先 `pnpm create zhin-app`；已有项目加适配器/AI 用 `zhin setup`；插件开发用 `zhin new`（独立插件加 `--standalone`）。`create-zhin-app` 不生成独立插件，`zhin runtime init/create` 已弃用。
+新建项目请优先 `pnpm create zhin-app`；已有项目加适配器/AI 用 `zhin setup`；插件开发用 `zhin new`（独立插件加 `--standalone`）。`create-zhin-app` 不生成独立插件。
 
 ## 使用场景
 

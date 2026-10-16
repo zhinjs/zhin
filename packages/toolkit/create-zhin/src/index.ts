@@ -374,7 +374,7 @@ async function main() {
       console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
       console.log('');
       console.log(chalk.yellow('插件开发：'));
-      console.log(`  ${chalk.cyan('zhin runtime create plugin <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
+      console.log(`  ${chalk.cyan('zhin new <plugin-name>')} ${chalk.gray('# 创建项目内插件；独立插件加 --standalone')}`);
     } else {
       console.log('');
       console.log(chalk.blue('💡 使用 pnpm 和 npx 运行命令：'));
@@ -393,7 +393,7 @@ async function main() {
       console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
       console.log('');
       console.log(chalk.yellow('插件开发：'));
-      console.log(`  ${chalk.cyan('npx zhin runtime create plugin <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
+      console.log(`  ${chalk.cyan('npx zhin new <plugin-name>')} ${chalk.gray('# 创建项目内插件；独立插件加 --standalone')}`);
       console.log('');
       console.log(chalk.gray('💡 后续如需全局安装 CLI，可运行：'));
       console.log(`  ${chalk.cyan('pnpm link')} ${chalk.gray('# 在项目根目录执行，链接全局 CLI')}`);
