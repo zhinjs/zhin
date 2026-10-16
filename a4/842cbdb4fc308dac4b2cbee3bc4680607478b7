@@ -1,0 +1,19 @@
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_6562bcb6cc0539::t_fbf6fc7012f83d 6,71,73-74,77-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a4842cbdb4fc308dac4b2cbee3bc4680607478b7",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
