@@ -218,7 +218,7 @@ Full site: [zhin.js.org](https://zhin.js.org) (Chinese by default; switch langua
 ```bash
 npx zhin setup            # add platforms, AI, database to an existing project
 npx zhin doctor           # diagnose Node, ports, tokens, manifest
-npx zhin new my-plugin    # scaffold a plugin package
+npx @zhin.js/cli new my-plugin --standalone  # scaffold a publishable plugin package
 npx zhin search <keyword> # find community plugins
 npx zhin install <name>   # install and mount a plugin
 ```

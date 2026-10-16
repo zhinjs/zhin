@@ -3,23 +3,9 @@ import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
 import { NativeTypeScriptSupervisor, parseStartOptions } from '../plugin-runtime/start/module.js';
-import { ProjectScaffolder } from '../plugin-runtime/scaffolder.js';
 
 export const runtimeCommand = new Command('runtime')
   .description('管理约定式 Plugin Runtime 项目');
-
-runtimeCommand.command('init [package-name]')
-  .action(async (packageName = 'zhin-plugin') => {
-    await new ProjectScaffolder(process.cwd()).init({ packageName });
-  });
-
-runtimeCommand.command('create <kind> <name> [package-name]')
-  .action(async (kind, name, packageName) => {
-    const scaffold = new ProjectScaffolder(process.cwd());
-    if (kind === 'plugin') await scaffold.createPlugin({ name, packageName });
-    else if (kind === 'feature') await scaffold.createFeature({ name, packageName });
-    else throw new Error('runtime create kind must be plugin or feature');
-  });
 
 runtimeCommand.command('inspect')
   .action(async () => {

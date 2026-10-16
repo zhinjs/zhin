@@ -31,7 +31,8 @@ tags:
 
 | 场景 | 命令 / 动作 | 输出 |
 |------|-------------|------|
-| 已有 Zhin 项目 | `zhin new <name>`（仓库根或项目根） | 官方 npm 包结构 |
+| 已有 Zhin 项目 | `zhin new <name>`（仓库根或项目根） | 项目内本地插件 `plugins/<name>/` |
+| 独立可发布插件 | `npx @zhin.js/cli new <name> --standalone` | `./<name>/` 官方 npm 包结构 |
 | 全新应用 | `pnpm create zhin-app` | 完整 bot 项目 |
 
 仅当用户明确要求「手写目录」或 `zhin new` 不可用时，才走下方手工流程。

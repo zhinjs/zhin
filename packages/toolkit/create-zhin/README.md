@@ -43,7 +43,7 @@ cd my-awesome-bot
 # 开发模式启动
 pnpm dev
 
-# 创建插件
+# 创建项目内本地插件（独立可发布插件：npx @zhin.js/cli new my-plugin --standalone）
 zhin new my-plugin
 
 # 构建插件
@@ -133,12 +133,12 @@ npm create zhin-app my-bot --yes
 |------|------|
 | **create-zhin-app** (`pnpm create zhin-app`) | 创建完整 workspace 项目（生成文件树 + 向导） |
 | **@zhin.js/scaffold-wizard** | 共享向导库（database / adapters / AI）；被上表两项消费 |
-| **zhin new** | 在已有项目内创建插件/服务/适配器包 |
+| **zhin new** | 创建插件/服务/适配器包的唯一官方入口：`zhin new <name> --standalone` 生成可发布的独立插件，不加则在已有项目内生成本地插件 |
 | **zhin setup** | 已有项目内增量配置（与 create 共用 scaffold-wizard） |
 | **zhin onboard** | 项目内外统一入口：新建项目或复用配置运行 setup |
 | **zhin doctor** | 健康检查与环境修复 |
 
-新建项目请优先 `pnpm create zhin-app`；已有项目加适配器/AI 用 `zhin setup`；插件开发用 `zhin new`。
+新建项目请优先 `pnpm create zhin-app`；已有项目加适配器/AI 用 `zhin setup`；插件开发用 `zhin new`（独立插件加 `--standalone`）。`create-zhin-app` 不生成独立插件。
 
 ## 使用场景
 

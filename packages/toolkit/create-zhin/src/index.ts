@@ -347,7 +347,7 @@ async function main() {
     console.log(chalk.blue('下一步（任选）：'));
     console.log(`  ${chalk.gray('接 QQ/Discord')}    ${chalk.cyan('npx zhin setup --adapters')}`);
     console.log(`  ${chalk.gray('启用 AI 对话')}     ${chalk.cyan('npx zhin setup --ai')}`);
-    console.log(`  ${chalk.gray('写插件')}           ${chalk.cyan('https://zhin.js.org/guide/plugin-development')}`);
+    console.log(`  ${chalk.gray('写插件')}           ${chalk.cyan('npx @zhin.js/cli new my-plugin --standalone')} ${chalk.gray('(文档 https://zhin.js.org/getting-started/first-plugin)')}`);
     console.log(`  ${chalk.gray('诊断')}             ${chalk.cyan('npx zhin doctor')}`);
     if (options.database?.dialect === 'sqlite') {
       console.log(`  ${chalk.gray('# SQLite 使用 Node 内置 node:sqlite，请使用 Node.js 22.5+（推荐 24+）')}`);
@@ -374,7 +374,7 @@ async function main() {
       console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
       console.log('');
       console.log(chalk.yellow('插件开发：'));
-      console.log(`  ${chalk.cyan('zhin runtime create plugin <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
+      console.log(`  ${chalk.cyan('zhin new <plugin-name>')} ${chalk.gray('# 创建项目内插件；独立插件加 --standalone')}`);
     } else {
       console.log('');
       console.log(chalk.blue('💡 使用 pnpm 和 npx 运行命令：'));
@@ -393,7 +393,7 @@ async function main() {
       console.log(`  ${chalk.cyan('pnpm pm2:logs')} ${chalk.gray('# 查看日志')}`);
       console.log('');
       console.log(chalk.yellow('插件开发：'));
-      console.log(`  ${chalk.cyan('npx zhin runtime create plugin <plugin-name>')} ${chalk.gray('# 创建新插件')}`);
+      console.log(`  ${chalk.cyan('npx zhin new <plugin-name>')} ${chalk.gray('# 创建项目内插件；独立插件加 --standalone')}`);
       console.log('');
       console.log(chalk.gray('💡 后续如需全局安装 CLI，可运行：'));
       console.log(`  ${chalk.cyan('pnpm link')} ${chalk.gray('# 在项目根目录执行，链接全局 CLI')}`);

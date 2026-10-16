@@ -14,6 +14,10 @@ By the end you will know the four building blocks of a plugin — manifest, entr
 - Node.js ≥22.19.0 and pnpm 9+. `pnpm dev` runs TypeScript source directly — no build step.
 :::
 
+::: tip Want a ready-made skeleton?
+This page writes four files by hand to explain each part. In practice, generate them with `npx zhin new ping-pong` (inside a bot project) or `npx @zhin.js/cli new ping-pong --standalone` (a standalone plugin to publish to npm); the output also includes tests and a README.
+:::
+
 ::: details Just want the least code possible?
 One file can register a command too: call `addCommand('ping', defineCommand({ ... }))` inside `setup({ addCommand })` in `plugin.ts`. See [single-file-bot](../examples/index.md#single-file-bot-one-bot-ts-is-a-bot). This page shows the "one capability per file" layout that scales better as features grow.
 :::

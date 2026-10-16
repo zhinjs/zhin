@@ -96,9 +96,11 @@ try {
   // Host workspace = an author's repo: plugins/* are scaffolded by the built CLI.
   await writeFile(path.join(host, 'package.json'), `${JSON.stringify({ name: 'scaffold-host', private: true, type: 'module' }, null, 2)}\n`);
   await writeFile(path.join(host, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+  // Official entry for external authors: `zhin new <name> --standalone` (no host app needed).
+  await mkdir(path.join(host, 'plugins'));
   for (const plugin of PLUGINS) {
-    console.log(`zhin new ${plugin.name} --type ${plugin.type}`);
-    await run(process.execPath, [cli, 'new', plugin.name, '--type', plugin.type, '--skip-install'], host);
+    console.log(`zhin new ${plugin.name} --standalone --type ${plugin.type}`);
+    await run(process.execPath, [cli, 'new', plugin.name, '--standalone', '--type', plugin.type, '--skip-install'], path.join(host, 'plugins'));
   }
   const hostManifest = JSON.parse(await readFile(path.join(host, 'package.json'), 'utf8'));
   const candidates = [...packed.keys()].map((name) => ({ name }));
@@ -129,7 +131,7 @@ try {
       throw new Error(`${plugin.name}: zhin.entry ${packedManifest.zhin.entry} is not in the tarball`);
     }
   }
-  console.log(`PASS: built CLI → zhin new (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js; no development condition in ${closure.length} packed manifests.`);
+  console.log(`PASS: built CLI → zhin new --standalone (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js; no development condition in ${closure.length} packed manifests.`);
 } finally {
   if (keep) console.log(`kept ${temp}`);
   else await rm(temp, { recursive: true, force: true });

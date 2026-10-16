@@ -20,6 +20,7 @@ interface NewPluginOptions {
   isOfficial?: boolean;
   packageName?: string;
   type?: PluginKind;
+  standalone?: boolean;
 }
 
 const PLUGIN_KINDS: readonly PluginKind[] = ['normal', 'service', 'adapter'];
@@ -40,11 +41,12 @@ function toCapitalizedName(pluginName: string): string {
 }
 
 export const newCommand = new Command('new')
-  .description('创建约定式插件包模板（Plugin Runtime）')
+  .description('创建约定式插件包模板（Plugin Runtime）；独立插件包的官方入口：zhin new <name> --standalone')
   .argument('[plugin-name]', '插件名称（如: my-plugin，需匹配 /^[a-z][a-z0-9-]*$/）')
   .option('--is-official', '官方插件（包名使用 @zhin.js/ 作用域，仅限本仓库）', false)
   .option('--package-name <name>', 'npm 包名（默认 zhin.js-<插件名>；也可用自己的 scope，如 @me/zhin-plugin-x）')
   .option('--skip-install', '跳过依赖安装（插件目录与 app 根都不运行 pnpm install）', false)
+  .option('--standalone', '独立插件：在当前目录下创建 ./<name>/，不依赖也不修改任何 Bot 项目（外部插件作者使用）', false)
   .option('--type <type>', '插件类型 (normal|service|adapter)')
   .action(async (pluginName: string, options: NewPluginOptions) => {
     try {
@@ -81,7 +83,9 @@ export const newCommand = new Command('new')
       const packageName = resolvePluginPackageName(name, options);
 
       // 确定插件目录
-      const pluginDir = path.resolve(process.cwd(), 'plugins', name);
+      const pluginDir = options.standalone
+        ? path.resolve(process.cwd(), name)
+        : path.resolve(process.cwd(), 'plugins', name);
 
       // 检查目录是否已存在
       if (fs.existsSync(pluginDir)) {
@@ -115,6 +119,23 @@ export const newCommand = new Command('new')
 
       // 创建插件包结构
       await createPluginPackage(pluginDir, name, packageName, options);
+
+      if (options.standalone) {
+        logger.success(`✓ 独立插件包 ${name} 创建成功！`);
+        logger.log('');
+        logger.log('📝 下一步操作：');
+        logger.log(`  cd ${name}`);
+        logger.log('  pnpm test && pnpm typecheck');
+        logger.log('  在 Bot 项目里挂载试用：pnpm add <本插件目录的路径>，再把');
+        logger.log(`    { "package": "${packageName}", "instanceKey": "${name}" }`);
+        logger.log('  加进该 Bot package.json 的 "zhin.plugins" 数组，然后 pnpm dev');
+        logger.log('  发布到 npm：在插件目录执行 pnpm publish（prepack 会自动构建 plugin.js）');
+        return;
+      }
+
+      if (!fs.existsSync(path.resolve(process.cwd(), 'package.json'))) {
+        logger.warn('当前目录不是 Bot 项目；要创建可独立发布的插件包，请使用 zhin new <name> --standalone');
+      }
 
       // 自动添加到 app/package.json 并提示挂载方式
       await addPluginToApp(name, packageName, options.skipInstall);
@@ -412,8 +433,12 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;
 
+  const standaloneUse = `先在 Bot 项目里安装本插件（发布前可用本地路径，如 \`pnpm add ../${pluginName}\`；发布后 \`pnpm add ${packageName}\`），再在该 Bot 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加 \`{ "package": "${packageName}", "instanceKey": "${pluginName}" }\`，然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。实例配置（如有）写在 \`zhin.config.yml\` 的 \`plugins.${pluginName}\` 下，结构见 \`schema.json\`。`;
+
   const readmeUse =
-    kind === 'adapter'
+    options.standalone
+      ? standaloneUse
+      : kind === 'adapter'
       ? `在 app 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加（\`instanceKey\` 即实例键，可挂载多实例）：
 
 \`\`\`json
