@@ -1,5 +1,18 @@
 # @zhin.js/cli
 
+## 1.1.12
+
+### Patch Changes
+
+- dd7f25f: Agent 的 IM 最终回复默认使用统一的 segments JSON Schema，贯通校验、终态事件与统一发送链路，支持文字、Markdown、真实用户 mention 与图片等媒体段。拒绝非法结构并保留媒体策略、泄漏检查和非 IM 调用边界。
+- Updated dependencies [dd7f25f]
+  - @zhin.js/ai@1.1.40
+  - @zhin.js/core@1.1.45
+  - @zhin.js/runtime@1.1.8
+  - @zhin.js/workroom@0.0.3
+  - @zhin.js/pagemanager@1.1.8
+  - @zhin.js/config-file@1.1.6
+
 ## 1.1.11
 
 ### Patch Changes
