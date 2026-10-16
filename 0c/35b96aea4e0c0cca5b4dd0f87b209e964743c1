@@ -1,0 +1,35 @@
+packages/im/runtime/src/native-development-runtime.ts
+  s_9477e63ef5cee5::t_274150a491c645 16,80-88
+.changeset/dx-small-issues.md
+  s_9477e63ef5cee5::t_a2551a0bb8057f 1-7
+packages/im/runtime/src/missing-tool-package.ts
+  s_9477e63ef5cee5::t_274150a491c645 1-22
+basic/cli/tests/new-integration.test.ts
+  s_9477e63ef5cee5::t_1ed3359ecf0557 150
+basic/cli/src/commands/doctor.ts
+  s_9477e63ef5cee5::t_274150a491c645 598
+packages/im/runtime/tests/missing-tool-package.test.ts
+  s_9477e63ef5cee5::t_e2ce342db14967 1-25
+packages/toolkit/create-zhin/src/workspace.ts
+  s_9477e63ef5cee5::t_274150a491c645 470
+basic/cli/src/commands/new.ts
+  s_9477e63ef5cee5::t_274150a491c645 524
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_9477e63ef5cee5::t_2b098e9dce6c71 71-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0c35b96aea4e0c0cca5b4dd0f87b209e964743c1",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
