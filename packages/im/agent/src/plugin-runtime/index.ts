@@ -1,4 +1,5 @@
 export * from './agent-runtime.js';
+export * from './ai-completion.js';
 export * from './decision-runtime.js';
 export * from '../decision/index.js';
 export { normalizeAgentDecisionConfig } from '../decision/config.js';

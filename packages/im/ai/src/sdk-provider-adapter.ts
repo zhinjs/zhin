@@ -6,6 +6,7 @@ import type {
   AIProvider,
   ProviderConfig,
   TextCompleteOptions,
+  TextCompleteResult,
 } from './types.js';
 import type { ProviderInstanceConfig } from './llm/types/model.js';
 import {
@@ -179,6 +180,15 @@ export class SdkProviderAdapter implements AIProvider {
     user: string,
     opts: TextCompleteOptions = {},
   ): Promise<string> {
+    return (await this.completeTextResult(system, user, opts)).text;
+  }
+
+  /** {@link completeText} plus the model that answered and its usage. */
+  async completeTextResult(
+    system: string,
+    user: string,
+    opts: TextCompleteOptions = {},
+  ): Promise<TextCompleteResult> {
     const modelId = opts.model ?? this.defaultModelId();
     const primary = createLlmTransportModel(this.name, this.config, modelId);
     const fallbackModels = (opts.fallbackModels ?? [])
@@ -199,7 +209,7 @@ export class SdkProviderAdapter implements AIProvider {
       maxTokens: opts.maxTokens,
       signal: opts.signal,
     });
-    return assistantAnswerText(assistant);
+    return { text: assistantAnswerText(assistant), model: assistant.model || modelId, usage: assistant.usage };
   }
 
   /** YAML `defaultModel` when it is listed (or no list is known), else the first model. */
