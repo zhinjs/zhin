@@ -1,0 +1,21 @@
+.github/actions/prepare-workspace/action.yml
+  s_9477e63ef5cee5::t_068f8f2edf5c11 1-46
+.github/workflows/ci.yml
+  s_9477e63ef5cee5::t_d14f1241b88069 29,34,60-66,70,177-183,187,192,260-364,383-387,389-407,424-430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "41cd60ac3ca0c5b70b98faef25625ff4fbc8695d",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
