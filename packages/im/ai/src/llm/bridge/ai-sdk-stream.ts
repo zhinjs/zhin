@@ -2,7 +2,7 @@
  * AI SDK streamText ↔ pi AssistantMessageEventStream bridge (ADR 0018).
  */
 
-import { generateText, Output, jsonSchema, streamText, type SystemModelMessage, type LanguageModel, type JSONValue } from 'ai';
+import { generateText, NoObjectGeneratedError, Output, jsonSchema, streamText, type SystemModelMessage, type LanguageModel, type JSONValue } from 'ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
@@ -47,15 +47,50 @@ function buildStructuredOutputSpec(schema: Record<string, unknown> | undefined) 
 async function readStructuredOutput(
   source: unknown,
   enabled: boolean,
+  hasToolCalls: boolean,
+  responseText = '',
 ): Promise<unknown> {
   if (!enabled) return undefined;
   try {
-    const output = (source as { output?: PromiseLike<unknown> | unknown } | undefined)?.output;
-    if (output == null) return undefined;
-    return await Promise.resolve(output);
+    const output = await (source as { output?: PromiseLike<unknown> | unknown } | undefined)?.output;
+    if (output == null) {
+      if (hasToolCalls) return undefined;
+      throw new Error('Missing structured output');
+    }
+    return output;
   } catch {
-    return undefined;
+    if (hasToolCalls) return undefined;
+    // MiniMax can ignore the SDK's synthetic json tool and return a JSON text
+    // block instead. The SDK hides that block; recover only the complete JSON
+    // value, never thinking, prose extraction or a partially valid response.
+    if (responseText.trim()) {
+      try { return JSON.parse(responseText); } catch { /* contract failure below */ }
+    }
+    // SDK errors can include the entire response. Keep the public failure
+    // specific to the contract without leaking the response or reasoning.
+    throw new Error('Model did not produce the requested structured output');
   }
+}
+
+function anthropicTextDelta(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') return '';
+  const event = raw as { type?: string; delta?: { type?: string; text?: unknown }; content_block?: { type?: string; text?: unknown } };
+  const block = event.type === 'content_block_delta' && event.delta?.type === 'text_delta'
+    ? event.delta : event.type === 'content_block_start' && event.content_block?.type === 'text'
+      ? event.content_block : undefined;
+  return typeof block?.text === 'string' ? block.text : '';
+}
+
+function anthropicStartsTool(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  const event = raw as { type?: string; content_block?: { type?: string } };
+  return event.type === 'content_block_start' && event.content_block?.type === 'tool_use';
+}
+
+function anthropicResponseText(raw: unknown): string {
+  if (!raw || typeof raw !== 'object' || !('content' in raw) || !Array.isArray(raw.content)) return '';
+  if (raw.content.some(block => block?.type === 'tool_use')) return '';
+  return raw.content.map(block => block?.type === 'text' && typeof block.text === 'string' ? block.text : '').join('');
 }
 
 /** structured → assistant text；string 不再二次 JSON.stringify。 */
@@ -373,6 +408,9 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       options?.onPayload?.({ system, messages, tools: tools ? Object.keys(tools) : [] });
 
       const captureRefusal = model.sdk === 'openai';
+      const captureStructuredText = model.sdk === 'minimax' && Boolean(options?.outputSchema);
+      let structuredResponseText = '';
+      let structuredResponseHasTool = false;
       const result = streamText({
         model: languageModel,
         system,
@@ -388,7 +426,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         output: buildStructuredOutputSpec(options?.outputSchema),
         // Gemini reports a blocked prompt only in a candidate-less chunk, OpenAI a refusal
         // only in `delta.refusal`; the SDK drops both.
-        ...(isGoogleSdk(model.sdk) || captureRefusal ? { includeRawChunks: true } : {}),
+        ...(isGoogleSdk(model.sdk) || captureRefusal || captureStructuredText ? { includeRawChunks: true } : {}),
         // Provider-config stall timeouts (firstChunkTimeoutMs / chunkTimeoutMs); abort as TimeoutError.
         ...(model.streamTimeout ? { timeout: model.streamTimeout } : {}),
       });
@@ -438,6 +476,10 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
             toolCall: { id: part.toolCallId, name: part.toolName, arguments: args },
           });
         } else if (part.type === 'raw') {
+          if (captureStructuredText) {
+            structuredResponseText += anthropicTextDelta(part.rawValue);
+            structuredResponseHasTool ||= anthropicStartsTool(part.rawValue);
+          }
           rawBlockReason ??= promptBlockReason({ google: part.rawValue });
         } else if (part.type === 'error') {
           throw streamPartError(part.error);
@@ -447,7 +489,8 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       const final = await result;
       options?.onResponse?.(final.response);
 
-      const structured = await readStructuredOutput(final, Boolean(options?.outputSchema));
+      const structured = await readStructuredOutput(final, Boolean(options?.outputSchema), toolCalls.size > 0,
+        structuredResponseHasTool ? '' : structuredResponseText);
       const finalText = await final.text;
       const finalReasoning = await Promise.resolve(final.reasoningText).catch(() => '');
       const finalReasoningParts = await Promise.resolve(final.reasoning).catch(() => undefined);
@@ -524,24 +567,39 @@ export async function generateTextViaAiSdk(
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
   const providerOptions = buildProviderOptions(model, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
 
-  const result = await generateText({
-    model: languageModel,
-    system,
-    messages,
-    tools,
-    toolChoice: tools ? 'auto' : undefined,
-    temperature: options?.temperature,
-    maxOutputTokens: options?.maxTokens ?? model.maxTokens,
-    abortSignal: options?.signal,
-    ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
-    providerOptions,
-    ...withReasoning(model, options),
-    output: buildStructuredOutputSpec(options?.outputSchema),
-    // Keep the raw body so an OpenAI `message.refusal` can be surfaced.
-    ...(model.sdk === 'openai' ? { include: { responseBody: true } } : {}),
-  });
+  let result;
+  try {
+    result = await generateText({
+      model: languageModel,
+      system,
+      messages,
+      tools,
+      toolChoice: tools ? 'auto' : undefined,
+      temperature: options?.temperature,
+      maxOutputTokens: options?.maxTokens ?? model.maxTokens,
+      abortSignal: options?.signal,
+      ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
+      providerOptions,
+      ...withReasoning(model, options),
+      output: buildStructuredOutputSpec(options?.outputSchema),
+      // Keep provider text/refusal blocks that structured-output conversion may discard.
+      ...(model.sdk === 'openai' || model.sdk === 'minimax' ? { include: { responseBody: true } } : {}),
+    });
+  } catch (error) {
+    // generateText validates before returning, unlike streamText's output getter.
+    if (options?.outputSchema && NoObjectGeneratedError.isInstance(error)) {
+      const raw = model.sdk === 'minimax' ? anthropicResponseText(error.response?.body) : '';
+      const structured = await readStructuredOutput(undefined, true, false, raw);
+      const text = formatStructuredAsAssistantText(structured);
+      return buildAssistantMessage(model, text, [], [], resolveFinish({
+        finishReason: error.finishReason ?? 'error', hasText: Boolean(text.trim()), hasToolCalls: false,
+      }), usageFromAiSdk(error.usage));
+    }
+    throw error;
+  }
 
-  const structured = await readStructuredOutput(result, Boolean(options?.outputSchema));
+  const structured = await readStructuredOutput(result, Boolean(options?.outputSchema), result.toolCalls.length > 0,
+    model.sdk === 'minimax' && options?.outputSchema ? anthropicResponseText(result.response.body) : '');
   const toolCalls: CapturedToolCall[] = result.toolCalls.map((call) => {
     const signed = toolCallProviderOptions(call.providerMetadata);
     const { arguments: args, inputError } = toolCallInput(call);

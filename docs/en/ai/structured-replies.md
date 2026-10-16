@@ -72,7 +72,9 @@ message schema. Console completion previews and logs project the validated outpu
 
 ## Failures and compatibility
 
-Invalid JSON, extra fields or any invalid segment reject the entire final answer.
+Invalid JSON, extra fields or any invalid segment reject the entire model answer.
+One format-only correction is allowed; if it also fails, the host sends a fixed
+failure notice.
 The harness does not strip Markdown fences, extract JSON from prose, send partial
 valid segments, or fall back to literal nickname mentions. It buffers final JSON
 until validation before emitting a readable preview. Existing outbound leak checks
@@ -90,3 +92,17 @@ Tests use scripted providers to verify schema propagation, lookup followed by a
 mixed reply, ordering, strict rejection, recovery, media policies and leak masking.
 They do not prove real group notifications, client rendering or compatibility with
 every production provider.
+
+## Provider transport and bounded correction
+
+MiniMax may return the final object as JSON text instead of calling the SDK's
+synthetic `json` tool. The transport preserves complete JSON text blocks for
+MiniMax, and Agent validates the same full schema regardless of transport.
+Reasoning is never a final reply; fenced JSON, prose extraction and numeric ID
+coercion are not accepted.
+
+On a schema mismatch, Agent makes at most one format-only completion without
+conversation history or business tools (30-second timeout, turn cancellation
+respected). Replies over 32,000 characters are not truncated for correction.
+If correction fails, a fixed host notice is sent; partial model content is never
+published and completed business operations are never replayed.

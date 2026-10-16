@@ -2,6 +2,8 @@ import { RED_CIRCLE_PNG } from '../../evals/fixtures/images.js';
 import { describe, expect, it, vi } from 'vitest';
 import { aiOutboundJsonSchema } from '@zhin.js/core';
 import type { AgentMessage, AgentTool, StreamOptions } from '@zhin.js/ai';
+import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recovery.js';
+import { formatToolCallsForUser } from '../../src/core/tool-calls-user-format.js';
 import { decodeStructuredReply } from '../../src/outbound/structured-reply.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
@@ -66,6 +68,15 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
 }
 
 describe('structured Agent final replies', () => {
+  it.each([false, true])('keeps the existing empty-reply notice without retrying (thinking: %s)', async thinking => {
+    const assistant = assistantTextReply('');
+    if (thinking) assistant.content = [{ type: 'thinking', thinking: 'private reasoning is not a JSON reply' }];
+    const { result, chunks, calls } = await run([assistant]);
+    expect(result.reply).not.toContain('private reasoning');
+    expect(chunks.join('')).not.toContain('private reasoning');
+    expect(result.reply).toBe(formatToolCallsForUser([]));
+    expect(calls).toHaveLength(1);
+  });
   it('keeps media capability and size policies on structured messages', async () => {
     const output = decodeStructuredReply(JSON.stringify({ segments: [mention('123'),
       { type: 'image', data: { media: { kind: 'base64', value: RED_CIRCLE_PNG.base64 } } }] }));
@@ -122,7 +133,21 @@ describe('structured Agent final replies', () => {
     '{"segments":[{"type":"markdown","data":{"text":"wrong field"}}]}',
   ])('rejects malformed output atomically: %s', async raw => {
     expect(() => decodeStructuredReply(raw)).toThrow();
-    await expect(run([assistantTextReply(raw)])).rejects.toThrow('Agent final reply');
+    const { result, calls } = await run([assistantTextReply(raw), assistantTextReply(raw)]);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].context.tools).toBeUndefined();
+    expect(result.reply).toBe(STRUCTURED_REPLY_FAILURE);
+  });
+
+  it('corrects a rejected numeric mention once with no tools or conversation history', async () => {
+    const invalid = JSON.stringify({ segments: [mention(123 as never)] });
+    const valid = JSON.stringify({ segments: [mention('123')] });
+    const { result, calls } = await run([assistantTextReply(invalid), assistantTextReply(valid)]);
+    expect(await publishOutboundElements(result.output!)).toEqual([mention('123')]);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].context.tools).toBeUndefined();
+    expect(calls[1].context.messages).toHaveLength(1);
+    expect(JSON.stringify(calls[1].context.messages)).toContain('/segments/0/data/target must be string');
   });
 
   it('masks Markdown and nested segment strings without changing mention order', async () => {
