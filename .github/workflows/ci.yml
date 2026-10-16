@@ -124,10 +124,15 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
+      # Same as the test job: only this script-free install gets the existing credential
+      # for the cross-organization @icqqjs packages. Without it the job only passed on a
+      # warm pnpm cache, and failed in the merge queue.
       - name: install dependencies
         run: >-
           pnpm --filter @zhin.js/database... --filter @zhin.js/cli...
           install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+        env:
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
       - name: run dependency lifecycle scripts without registry credentials
         run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... rebuild
@@ -200,10 +205,11 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
 
-      # changesets `baseBranch: main` compares against a **local** `main` ref; PR checkouts
-      # often only have `origin/main`, which makes `pnpm changeset status` fail.
+      # changesets `baseBranch: main` compares against a **local** `main` ref; PR and merge
+      # queue checkouts only have `origin/main`, which makes `pnpm changeset status` and
+      # `check:release-plan` fail.
       - name: sync local main ref for changesets
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         run: git fetch origin main:main
 
       # Existing package credential for cross-organization @icqqjs dependencies.
