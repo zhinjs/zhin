@@ -1,0 +1,60 @@
+docs/en/cli/index.md
+  s_9477e63ef5cee5::t_35646755831ca5 119-127
+docs/cli/index.md
+  s_9477e63ef5cee5::t_91aa66a40f3365 119-127
+docs/troubleshooting/catalog.json
+  s_9477e63ef5cee5::t_e9535406b1cf17 94
+basic/cli/src/commands/dev.ts
+  s_9477e63ef5cee5::t_97c8bb12868871 1-44
+docs/en/troubleshooting/index.md
+  s_9477e63ef5cee5::t_e9535406b1cf17 161
+docs/troubleshooting/index.md
+  s_9477e63ef5cee5::t_e9535406b1cf17 161
+basic/cli/src/cli.ts
+  s_9477e63ef5cee5::t_50790540421b1b 23
+  s_9477e63ef5cee5::t_2e4085e40d415f 60
+basic/cli/src/commands/doctor.ts
+  s_9477e63ef5cee5::t_5ef6c827e9ee2f 579-598
+  s_9477e63ef5cee5::t_a12e020b6cc609 32
+basic/cli/tests/dev-link.test.ts
+  s_9477e63ef5cee5::t_c83e13012a6c8b 148
+  s_9477e63ef5cee5::t_1f3918c38be64a 1-147,149-189
+basic/cli/src/utils/dev-link.ts
+  s_9477e63ef5cee5::t_f023ce36657cbd 1-369
+docs/en/authoring/local-dev.md
+  s_9477e63ef5cee5::t_b295aca0e16d8a 98,101-105,108-110
+  s_9477e63ef5cee5::t_e5d16615252bd8 88
+  s_9477e63ef5cee5::t_242d17cbc74b4e 113
+  s_9477e63ef5cee5::t_3a855d615b0df6 150
+  s_9477e63ef5cee5::t_5dc54a19bd7a99 151
+  s_9477e63ef5cee5::t_1d4d2c0c6ee387 116
+  s_9477e63ef5cee5::t_30bb5f731a67d1 95
+  s_9477e63ef5cee5::t_2f38dffb869cda 111
+docs/authoring/local-dev.md
+  s_9477e63ef5cee5::t_7b284a3d41109c 151
+  s_9477e63ef5cee5::t_54590e41c751ab 98,101-105,108-110
+  s_9477e63ef5cee5::t_42351ebf0c9419 150
+  s_9477e63ef5cee5::t_88df0c7b54bd50 88
+  s_9477e63ef5cee5::t_a4ee9e3b97ed3b 113
+  s_9477e63ef5cee5::t_6adec85785bafd 116
+  s_9477e63ef5cee5::t_96c5b4ec7b20ec 95
+  s_9477e63ef5cee5::t_8f3a82a4324bbb 111
+.changeset/cli-dev-link.md
+  s_9477e63ef5cee5::t_24354ecc4cb525 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3ffc73d7820f61fd15b28f3be670458d307ccba2",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
