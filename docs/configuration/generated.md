@@ -122,7 +122,7 @@ outline: [2, 3]
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | 否 | — | Provider Prompt Cache 保留策略。 |
 | `ai.agent.steeringMode` | string: `"one-at-a-time"`, `"all"` | 否 | — | 逐条处理 Steering 消息，或一次取出全部待处理消息。 |
 | `ai.agent.followUpMode` | string: `"one-at-a-time"`, `"all"` | 否 | — | 逐条处理 Follow-up 消息，或一次取出全部待处理消息。 |
-| `ai.agent.outputSchema` | boolean \| string: `"segments"` \| object | 否 | — | 结构化最终输出：false 表示文本，true 或 segments 表示规范消息段，也可传入自定义 JSON Schema 对象。 |
+| `ai.agent.outputSchema` | boolean \| string: `"segments"` \| object | 否 | — | 最终输出默认在 IM 会话使用 segments：false 显式使用文本，true 或 segments 使用有序规范消息段，也可传入自定义 JSON Schema。隔离及非 IM 调用不应用 IM 预设。 |
 | `ai.agent.schedule` | object | 否 | — | 无人值守 Schedule 执行策略。 |
 | `ai.agent.schedule.security` | object | 否 | — | Schedule 命令安全策略。 |
 | `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | 否 | — | Schedule Job 只能使用只读或网络预设。 |

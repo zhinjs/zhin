@@ -71,7 +71,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `promptCacheKeyPrefix` | preset | Advanced tuning; defaults are recommended |
 | `deferredTools` | preset | Advanced tuning; defaults are recommended |
 | `workerBaseTools` | preset | Advanced tuning; defaults are recommended |
-| `outputSchema` | preset | Advanced tuning; defaults are recommended |
+| `outputSchema` | preset | IM defaults to `segments`; [structured replies](./structured-replies.md). Explicit `false` keeps plain-text output. |
 | `steeringMode` | preset | Advanced tuning; defaults are recommended |
 | `followUpMode` | preset | Advanced tuning; defaults are recommended |
 | `deferredAutoContinue` | preset | Advanced tuning; defaults are recommended |

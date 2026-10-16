@@ -1,3 +1,5 @@
+import type { Segment } from '@zhin.js/im-contract';
+import { aiOutboundJsonSchema } from '@zhin.js/core';
 /**
  * Step-scripted fake model for the PR-gate eval tier.
  *
@@ -55,6 +57,7 @@ export type ScriptFault =
  */
 export type ScriptStep = (
   | Readonly<{ text: string; tokens?: number }>
+  | Readonly<{ segments: readonly Segment[]; tokens?: number }>
   | Readonly<{ toolCalls: readonly ScriptedToolCall[]; text?: string; tokens?: number }>
   | Readonly<{ fault: ScriptFault }>
 ) & Readonly<{ model?: string }>;
@@ -237,11 +240,17 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
       });
     });
 
-  const stream = (model: Model, context: Context, streamOptions?: { signal?: AbortSignal }) =>
+  const stream = (model: Model, context: Context, streamOptions?: { signal?: AbortSignal; outputSchema?: Record<string, unknown> }) =>
     createAssistantMessageEventStream(async (push) => {
       const response = respond(model, context);
       if (!('role' in response)) return hang(requests.length - 1, streamOptions?.signal);
       const message = response;
+      const step = script[cursor - 1];
+      if (streamOptions?.outputSchema === aiOutboundJsonSchema && step && !('segments' in step) && !message.errorMessage
+        && message.content.length > 0 && !message.content.some(block => block.type === 'toolCall')) {
+        const text = message.content.filter(block => block.type === 'text').map(block => block.text).join('');
+        message.content = [{ type: 'text', text: JSON.stringify({ segments: [{ type: 'text', data: { text } }] }) }];
+      }
       const text = message.content
         .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
         .map((block) => block.text)
@@ -268,6 +277,7 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
 function toAssistantMessage(step: ScriptStep, index: number, modelId: string): AssistantMessage {
   const content: AssistantMessage['content'] = [];
   if ('text' in step && step.text) content.push({ type: 'text', text: step.text });
+  if ('segments' in step) content.push({ type: 'text', text: JSON.stringify({ segments: step.segments }) });
   const calls = 'toolCalls' in step ? step.toolCalls : [];
   calls.forEach((call, offset) => {
     content.push({

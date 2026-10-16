@@ -1,6 +1,7 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { AgentMessage, MediaContentBlock, OutputElement, UserMessage } from '@zhin.js/ai';
+import type { AgentMessage, MediaContentBlock, UserMessage } from '@zhin.js/ai';
 import type { Message } from '../resource-hub/types.js';
 import { PromptAccessDeniedError } from './prompt-access.js';
 import { resolveToolRequesterRole } from '../security/owner-approval-runtime.js';
@@ -29,7 +30,7 @@ export async function runPromptTurn(
   commMessage: Message,
   runInTurnContext: <T>(turnId: string, fn: () => Promise<T>) => Promise<T>,
   options?: { media?: MediaContentBlock[]; onChunk?: OnChunkCallback },
-): Promise<OutputElement[]> {
+): Promise<AgentOutputElement[]> {
   const messages = normalizePromptMessages(input, options?.media);
   const text = messages
     .flatMap((message) => {

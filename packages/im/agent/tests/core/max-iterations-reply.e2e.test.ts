@@ -67,7 +67,7 @@ describe('agent turn that exhausts maxIterations', () => {
 
   it('sends a model-written summary instead of the raw tool dump', async () => {
     const llm = wireMockLlmApi();
-    toolsOnlyUntilDisabled(llm, () => assistantTextReply(SUMMARY));
+    toolsOnlyUntilDisabled(llm, () => assistantTextReply(JSON.stringify({ segments: [{ type: 'text', data: { text: SUMMARY } }] })));
     agent = createAgent(llm);
 
     const output = await agent.process('让 dice 输出更友好', mockCommMessage({ adapter: 'test', endpoint: 'bot1', senderId: 'u1', scope: 'private', sceneId: 's1' }), [probeTool()]);

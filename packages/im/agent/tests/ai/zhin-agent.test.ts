@@ -93,6 +93,7 @@ describe('ZhinAgent', () => {
   beforeEach(() => {
     ({ provider, llm } = createMockProvider());
     agent = new ZhinAgent(provider, {
+      outputSchema: false,
       persona: '测试助手',
       maxIterations: 3,
     }, undefined, llm.runtime);
@@ -106,11 +107,11 @@ describe('ZhinAgent', () => {
     it('ZhinAgentConfig.visionModel 已弃用：设置时告警', () => {
       const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
       try {
-        const legacy = new ZhinAgent(provider, { visionModel: 'legacy-vision' }, undefined, llm.runtime);
+        const legacy = new ZhinAgent(provider, { outputSchema: false, visionModel: 'legacy-vision' }, undefined, llm.runtime);
         legacy.dispose();
         expect(warn.mock.calls.some((call) => String(call[0]).startsWith('ZhinAgentConfig.visionModel 已弃用'))).toBe(true);
         warn.mockClear();
-        const plain = new ZhinAgent(provider, {}, undefined, llm.runtime);
+        const plain = new ZhinAgent(provider, { outputSchema: false }, undefined, llm.runtime);
         plain.dispose();
         expect(warn.mock.calls.some((call) => String(call[0]).includes('visionModel'))).toBe(false);
       } finally {
@@ -184,6 +185,7 @@ describe('ZhinAgent', () => {
     it('速率限制应生效', async () => {
       // 创建一个严格限制的 agent
       const strictAgent = new ZhinAgent(provider, {
+        outputSchema: false,
         rateLimit: { maxRequestsPerMinute: 1, cooldownSeconds: 5 },
       }, undefined, llm.runtime);
 
@@ -205,6 +207,7 @@ describe('ZhinAgent', () => {
     it('phaseTrace 开启时应输出可解析 phase 序列', async () => {
       const phases: string[] = [];
       const phaseAgent = new ZhinAgent(provider, {
+        outputSchema: false,
         phaseTrace: true,
         onPhaseTrace: ({ phase }) => phases.push(phase),
       }, undefined, llm.runtime);
@@ -225,6 +228,7 @@ describe('ZhinAgent', () => {
 
     it('应将 AI 生命周期发布到 Runtime 事件总线', async () => {
       const busAgent = new ZhinAgent(provider, {
+        outputSchema: false,
         persona: '测试助手',
         maxIterations: 3,
       }, events, llm.runtime);
@@ -258,6 +262,7 @@ describe('ZhinAgent', () => {
 
     it('应在首次写入会话时发出 ai.session.new', async () => {
       const sessionAgent = new ZhinAgent(provider, {
+        outputSchema: false,
         persona: '测试助手',
         maxIterations: 3,
       }, events, llm.runtime);

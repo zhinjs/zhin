@@ -450,6 +450,7 @@ describe('Agent CapabilityIngress', () => {
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const llm = wireMockLlmApi({ name: 'shared-session', models: ['model'] });
     const agent = new ZhinAgent(llm.provider, {
+      outputSchema: false,
       maxIterations: 5,
       toolExecution: 'sequential',
       deferredTools: { maxLoadedPerSession: 8, alwaysLoadedTools: ['child__lookup'] },

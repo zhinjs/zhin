@@ -44,7 +44,7 @@ describe('interactive structured outbound schema and parser agreement', () => {
     expect(validateSegment(segment), JSON.stringify(validateSegment.errors)).toBe(true);
     expect(isCanonicalSegment(segment)).toBe(true);
     const payload = { segments: [segment] };
-    expect(validatePayload(payload), JSON.stringify(validatePayload.errors)).toBe(true);
+    expect(validatePayload(payload)).toBe(false); // callbacks are supplied by tools, not model replies
     expect(parseAiOutboundJson(JSON.stringify(payload))?.segments).toEqual([segment]);
   });
 
@@ -56,7 +56,8 @@ describe('interactive structured outbound schema and parser agreement', () => {
 
   it('retains a mixed schema-approved message without silently losing interactions', () => {
     const segments = [{ type: 'text', data: { text: 'Choose' } }, ...valid];
-    expect(validatePayload({ segments })).toBe(true);
+    expect(segments.every(segment => validateSegment(segment))).toBe(true);
+    expect(validatePayload({ segments })).toBe(false);
     expect(parseAiOutboundJson(JSON.stringify({ segments }))?.segments).toEqual(segments);
   });
 

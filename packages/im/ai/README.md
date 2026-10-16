@@ -183,7 +183,7 @@ const text = renderToPlainText(elements)
 
 #### 结构化输出（outputSchema）
 
-`StreamOptions.outputSchema`（JSON Schema 对象）会在 LLM 调用时转为 AI SDK `Output.object` 约束，模型文本回复即为该 schema 的 JSON；tool-call 中间步自动回退原文本。zhin 出站消息段的 schema SSOT 在 `@zhin.js/core` 的 `segment-contract/json-schema.ts`（`aiOutboundJsonSchema`）；agent 侧经 `ai.agent.outputSchema`（`true`/`'segments'`/自定义 schema）开启，见 `docs/advanced/ai.md`「结构化输出」。
+`StreamOptions.outputSchema`（JSON Schema 对象）会在 LLM 调用时转为 AI SDK `Output.object` 约束，模型文本回复即为该 schema 的 JSON；tool-call 中间步自动回退原文本。zhin 出站消息段的 schema SSOT 在 `@zhin.js/core` 的 `segment-contract/json-schema.ts`（`aiOutboundJsonSchema`）；Agent 的 IM 会话默认使用 `ai.agent.outputSchema: segments`，见[结构化回复](../../../docs/ai/structured-replies.md)。隔离/非 IM 调用不继承 IM 预设，自定义 Schema 仍按调用方契约处理。
 
 ### RateLimiter（速率限制）
 

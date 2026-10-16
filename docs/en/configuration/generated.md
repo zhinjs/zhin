@@ -122,7 +122,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | no | — | Provider prompt-cache retention policy. |
 | `ai.agent.steeringMode` | string: `"one-at-a-time"`, `"all"` | no | — | Process steering messages one at a time or drain all pending messages together. |
 | `ai.agent.followUpMode` | string: `"one-at-a-time"`, `"all"` | no | — | Process follow-up messages one at a time or drain all pending messages together. |
-| `ai.agent.outputSchema` | boolean \| string: `"segments"` \| object | no | — | Structured final-output mode: false for text, true or segments for canonical message segments, or a custom JSON Schema object. |
+| `ai.agent.outputSchema` | boolean \| string: `"segments"` \| object | no | — | Final-output mode: defaults to segments for IM conversations; false for text, true or segments for ordered canonical segments, or a custom JSON Schema object. Detached and non-IM turns do not inherit the IM preset. |
 | `ai.agent.schedule` | object | no | — | Unattended Schedule execution policy. |
 | `ai.agent.schedule.security` | object | no | — | Schedule command security policy. |
 | `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | no | — | Schedule Jobs may use only the read-only or network preset. |

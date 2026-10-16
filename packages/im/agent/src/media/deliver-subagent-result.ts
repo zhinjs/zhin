@@ -1,8 +1,9 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 /**
  * 子 agent 完成回告：文本 + 工具媒体（generate_image / voice_tts）走统一出站链。
  * 日志 preview 中的 `{image}` 表示本条含 image MessageElement（见 core segment.raw），不是未发送的占位符。
  */
-import { parseOutput, type OutputElement } from '@zhin.js/ai';
+import { parseOutput } from '@zhin.js/ai';
 import type { MessageElement, MessageType, SendOptions } from '@zhin.js/core';
 import type { SubagentOrigin } from '../subagent/index.js';
 import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
@@ -14,7 +15,7 @@ export interface SubagentOutboundDelivery {
   text: string;
   toolCalls?: ToolCallRecord[];
   /** 主 Agent deferred auto-continue turn 的完整出站元素（优先于 text+toolCalls） */
-  elements?: OutputElement[];
+  elements?: AgentOutputElement[];
 }
 
 export interface DeliverSubagentResultParams {

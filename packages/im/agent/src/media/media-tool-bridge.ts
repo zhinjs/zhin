@@ -1,4 +1,4 @@
-import type { OutputElement } from '@zhin.js/ai';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 
 function parseToolResultObject(result: unknown): Record<string, unknown> | null {
@@ -23,8 +23,8 @@ function parseToolResultObject(result: unknown): Record<string, unknown> | null 
  */
 export function extractMediaElementsFromToolCalls(
   toolCalls: ToolCallRecord[],
-): OutputElement[] {
-  const out: OutputElement[] = [];
+): AgentOutputElement[] {
+  const out: AgentOutputElement[] = [];
   for (const tc of toolCalls) {
     const obj = parseToolResultObject(tc.result);
     if (!obj) continue;
@@ -58,9 +58,9 @@ export function extractMediaElementsFromToolCalls(
 
 /** parseOutput 结果 + 工具媒体元素合并 */
 export function mergeToolOutboundElements(
-  elements: OutputElement[],
+  elements: AgentOutputElement[],
   toolCalls: ToolCallRecord[],
-): OutputElement[] {
+): AgentOutputElement[] {
   const media = extractMediaElementsFromToolCalls(toolCalls);
   if (!media.length) return elements;
   return [...elements, ...media];

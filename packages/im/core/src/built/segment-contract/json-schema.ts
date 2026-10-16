@@ -182,27 +182,48 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
 };
 
 /**
- * AI 结构化出站根对象（ADR 0025 JSON DSL 的 schema 形态）。
- * 与 parseAiOutboundJson / ZhinAiOutboundPayload 对齐：text、mentions、segments
- * 均为可选（provider strict 模式兼容性考虑），"至少一项"由 prompt 与下游校验兜底。
+ * Provider-facing subset of the canonical contract. Only required fields are
+ * exposed: strict structured-output providers require closed objects with all
+ * properties required. Optional presentation/platform fields belong to renderers
+ * and tools, not to model-generated replies.
  */
+function requiredFieldsOnly(schema: JsonSchemaObject): JsonSchemaObject {
+  if (schema.type === 'object') {
+    const required = (schema.required ?? []) as string[];
+    const properties = schema.properties as Record<string, JsonSchemaObject>;
+    return {
+      type: 'object',
+      properties: Object.fromEntries(required.map(key => [key, requiredFieldsOnly(properties[key]!)])),
+      required,
+      additionalProperties: false,
+    };
+  }
+  if (typeof schema.const === 'string') return { type: 'string', ...schema };
+  return schema;
+}
+
+/** One ordered message, including plain replies. No text/mentions shorthand. */
 export const aiOutboundJsonSchema: JsonSchemaObject = {
   type: 'object',
   properties: {
-    text: {
-      type: 'string',
-      description: '纯文本回复正文；与 segments 至少输出一项。使用 mentions 时必填',
-    },
-    mentions: {
-      type: 'array',
-      items: { type: 'string' },
-      description: '要 @ 的会话成员引用（昵称或 id，由宿主解析为平台账号）；需配合 text 使用',
-    },
     segments: {
       type: 'array',
-      items: outboundSegmentJsonSchema,
-      description: 'zhin 消息段数组，如 [{type:"image",data:{media:{kind:"url",value:"https://…"}}},{type:"text",data:{text:"…"}}]',
+      items: {
+        anyOf: (outboundSegmentJsonSchema.anyOf as JsonSchemaObject[])
+          .filter(branch => {
+            const type = (branch.properties as Record<string, { const?: string }>).type?.const;
+            return type && STRICT_OUTBOUND_SEGMENT_TYPES.includes(type as typeof STRICT_OUTBOUND_SEGMENT_TYPES[number]);
+          })
+          .map(requiredFieldsOnly)
+          // Markdown is a renderer extension in the general segment contract;
+          // give the model its concrete, closed content shape.
+          .concat(requiredFieldsOnly(strictBranch('markdown', dataObject({
+            content: { type: 'string', description: 'Markdown source; rendered by the unified outbound pipeline' },
+          }, ['content'])))),
+      },
+      description: 'Ordered canonical message segments. Use an empty array only when no reply is needed.',
     },
   },
+  required: ['segments'],
   additionalProperties: false,
 };

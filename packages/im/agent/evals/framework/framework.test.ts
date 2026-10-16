@@ -1,3 +1,4 @@
+import { aiOutboundJsonSchema } from '@zhin.js/core';
 /**
  * Self-tests for the eval framework: passing runs pass, broken expectations
  * fail with readable messages, and invalid fixtures are rejected up front.
@@ -259,12 +260,15 @@ describe('eval framework: mock tool parameters', () => {
   it('sends a mock tool\'s parameters schema to the model', async () => {
     const seen: Context[] = [];
     const reply = (model: Model): AssistantMessage => ({
-      role: 'assistant', content: [{ type: 'text', text: 'ok' }], api: model.api, provider: model.provider, model: model.id,
+      role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ segments: [{ type: 'text', data: { text: 'ok' } }] }) }], api: model.api, provider: model.provider, model: model.id,
       usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
       stopReason: 'stop', timestamp: 0,
     });
     const port: LlmCompletionPort = {
-      complete: async (model, context) => { seen.push(context); return reply(model); },
+      complete: async (model, context, options) => {
+        expect(options?.outputSchema).toEqual(aiOutboundJsonSchema);
+        seen.push(context); return reply(model);
+      },
       completeSimple: async (model, context) => { seen.push(context); return reply(model); },
     };
     const model = { id: 'real', provider: 'p', api: 'ai-sdk', sdk: 'openai', input: ['text'], contextWindow: 100_000, maxTokens: 1000 } as Model;
@@ -278,7 +282,8 @@ describe('eval framework: mock tool parameters', () => {
       script: [{ text: 'ok' }],
       expect: {},
     });
-    await runEvalCase(definition, { model: () => createLiveModel({ port, model }) });
+    const run = await runEvalCase(definition, { model: () => createLiveModel({ port, model }) });
+    expect(run.outbound).toEqual(['ok']);
     const tool = seen[0]!.tools?.find((candidate) => candidate.name === 'get_weather');
     expect(tool?.description).toBe('Weather for a city.');
     // Tools reach the model port as zod schemas; compare their JSON Schema projection.

@@ -71,7 +71,7 @@
 | `promptCacheKeyPrefix` | preset | 高级调优，默认值即推荐值，不建议修改 |
 | `deferredTools` | preset | 高级调优，默认值即推荐值，不建议修改 |
 | `workerBaseTools` | preset | 高级调优，默认值即推荐值，不建议修改 |
-| `outputSchema` | preset | 高级调优，默认值即推荐值，不建议修改 |
+| `outputSchema` | preset | IM 默认使用受 Schema 约束的有序消息段；详见[结构化回复](./structured-replies.md) |
 | `steeringMode` | preset | 高级调优，默认值即推荐值，不建议修改 |
 | `followUpMode` | preset | 高级调优，默认值即推荐值，不建议修改 |
 | `deferredAutoContinue` | preset | 高级调优，默认值即推荐值，不建议修改 |

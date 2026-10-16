@@ -23,7 +23,7 @@ import {
 import type {
   ZhinAgentPrivate,
   OnChunkCallback,
-  OutputElement,
+  AgentOutputElement,
   Tool,
 } from '../internal/agent-host.js';
 import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
@@ -75,7 +75,7 @@ export async function processTextTurn(
   externalTools: Tool[] = [],
   onChunk?: OnChunkCallback,
   extras?: ProcessTextTurnOptions,
-): Promise<OutputElement[]> {
+): Promise<AgentOutputElement[]> {
   try {
     return await processTextTurnInner(host, content, commMessage, externalTools, onChunk, extras);
   } catch (error) {
@@ -105,7 +105,7 @@ async function processTextTurnInner(
   externalTools: Tool[] = [],
   onChunk?: OnChunkCallback,
   extras?: ProcessTextTurnOptions,
-): Promise<OutputElement[]> {
+): Promise<AgentOutputElement[]> {
     const t0 = now();
     const sessionSystem = requireSessionSystem(host);
     const prep = await sessionSystem.prepareTextTurn(host, commMessage, content, {

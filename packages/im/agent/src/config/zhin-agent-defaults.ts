@@ -62,7 +62,7 @@ export const DEFAULT_CONFIG = {
   followUpMode: DEFAULT_FOLLOW_UP_MODE,
   deferredAutoContinue: false,
   deferredAutoContinueMaxDepth: 8,
-  outputSchema: false,
+  outputSchema: 'segments',
   gitStatus: true,
   contextPaths: [],
   systemPromptMaxChars: 100_000,

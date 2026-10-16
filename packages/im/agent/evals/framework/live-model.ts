@@ -14,6 +14,7 @@ import {
   type Context,
   type LlmCompletionPort,
   type Model,
+  type StreamOptions,
 } from '@zhin.js/ai';
 import type { ScriptedModel, ScriptedModelRequest } from './scripted-model.js';
 import { contextText, countImages, lastUserText } from './scripted-model.js';
@@ -43,12 +44,13 @@ export function createLiveModel(options: LiveModelOptions): ScriptedModel {
   }, [modelId]);
   const requests: ScriptedModelRequest[] = [];
 
-  const stream = (_model: Model, context: Context, streamOptions?: { signal?: AbortSignal; maxTokens?: number }) =>
+  const stream = (_model: Model, context: Context, streamOptions?: StreamOptions) =>
     createAssistantMessageEventStream(async (push) => {
       const index = requests.length;
       const message = await options.port.complete(options.model, context, {
         ...(streamOptions?.signal ? { signal: streamOptions.signal } : {}),
         ...(streamOptions?.maxTokens ? { maxTokens: streamOptions.maxTokens } : {}),
+        ...(streamOptions?.outputSchema ? { outputSchema: streamOptions.outputSchema } : {}),
       });
       requests.push({
         index,

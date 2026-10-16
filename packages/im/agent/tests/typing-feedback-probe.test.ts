@@ -16,7 +16,7 @@ describe('typing 反馈事件链探针', () => {
 
   it('processTurn(eligible) → ai.processing.start 携带 platform/endpointKey/eligible', async () => {
     const llm = wireMockLlmApi({ responder: () => assistantTextReply('好的') });
-    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 2 }, events, llm.runtime);
+    const agent = new ZhinAgent(llm.provider as never, { outputSchema: false, maxIterations: 2 }, events, llm.runtime);
     const received: Array<Record<string, unknown>> = [];
     const listener = (p: unknown) => received.push(p as never);
     events.on('ai.processing.start', listener);
@@ -42,7 +42,7 @@ describe('typing 反馈事件链探针', () => {
 
   it('processTurn failure emits an awaited terminal error and typing stop', async () => {
     const llm = wireMockLlmApi();
-    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 2 }, events, llm.runtime);
+    const agent = new ZhinAgent(llm.provider as never, { outputSchema: false, maxIterations: 2 }, events, llm.runtime);
     const received: string[] = [];
     const onError = () => { received.push('error'); };
     const onStop = () => { received.push('stop'); };
@@ -70,7 +70,7 @@ describe('typing 反馈事件链探针', () => {
         ? assistantToolCallReply([{ id: 'call-1', name: 'status_probe', arguments: {} }])
         : assistantTextReply('done'),
     });
-    const agent = new ZhinAgent(llm.provider as never, { maxIterations: 3 }, events, llm.runtime);
+    const agent = new ZhinAgent(llm.provider as never, { outputSchema: false, maxIterations: 3 }, events, llm.runtime);
     const received: string[] = [];
     events.on('ai.tool.call', () => { received.push('tool.call'); });
     events.on('ai.tool.result', () => { received.push('tool.result'); });

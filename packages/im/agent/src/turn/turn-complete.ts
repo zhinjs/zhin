@@ -3,7 +3,7 @@ import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { logPhase } from '../internal/phase-trace.js';
 import { EMPTY_USAGE } from './turn-metrics.js';
 import type { AgentLoopTurnResult } from '../core/agent-loop-turn.js';
-import type { ZhinAgentPrivate, OutputElement } from '../internal/agent-host.js';
+import type { ZhinAgentPrivate, AgentOutputElement } from '../internal/agent-host.js';
 import type { Message } from '@zhin.js/core';
 import type { SessionSystem } from '../session/session-system.js';
 import type { HostTurnPath } from '../internal/host-types.js';
@@ -17,7 +17,7 @@ export async function handleTurnSuperseded(
   commMessage: Message,
   mode: TurnPipelineMode,
   err: TurnSupersededError,
-): Promise<OutputElement[]> {
+): Promise<AgentOutputElement[]> {
   if (mode === 'text') {
     logPhase(host.phaseConfig, 'turn.superseded', sessionId, { sessionKey: err.sessionKey });
   }
@@ -84,8 +84,8 @@ export async function finalizeTurnAfterAgentLoop(p: FinalizeTurnAfterLoopParams)
   }
 }
 
-export function buildTextTurnOutbound(reply: string, loopResult: AgentLoopTurnResult): OutputElement[] {
-  const outbound = mergeToolOutboundElements(parseOutput(reply), loopResult.toolCalls);
+export function buildTextTurnOutbound(reply: string, loopResult: AgentLoopTurnResult): AgentOutputElement[] {
+  const outbound = loopResult.output ?? mergeToolOutboundElements(parseOutput(reply), loopResult.toolCalls);
   if (!reply.trim() && outbound.length === 0) return [];
   return outbound;
 }

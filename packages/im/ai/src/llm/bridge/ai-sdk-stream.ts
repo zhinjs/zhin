@@ -39,7 +39,7 @@ function buildStructuredOutputSpec(schema: Record<string, unknown> | undefined) 
   return Output.object({
     schema: jsonSchema(schema),
     name: 'zhin_outbound',
-    description: 'zhin AI 出站消息（text / mentions / segments 消息段数组）',
+    description: 'Structured response matching the caller-provided JSON Schema',
   });
 }
 

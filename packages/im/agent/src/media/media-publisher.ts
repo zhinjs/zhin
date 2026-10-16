@@ -1,12 +1,13 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { type OutputElement, renderToPlainText } from '@zhin.js/ai';
-import type { Segment } from '@zhin.js/im-contract';
+import type { Segment, MediaRef } from '@zhin.js/im-contract';
 import type { OutboundMediaCapabilities, MediaBinaryPayload, MediaKind } from './media-types.js';
 import { resolveOutboundCapabilities } from './media-capabilities.js';
-import { fetchUrlAsBase64 } from './media-normalize.js';
+import { fetchUrlAsBase64, normalizeMediaRefsToPayloads } from './media-normalize.js';
 /** 超过此长度的 base64 先落盘，避免出站 segment.toString→from 模板超 400KB */
 const OUTBOUND_SPOOL_B64_CHARS = 32_000;
 
@@ -289,11 +290,29 @@ function cardToSegments(el: Extract<OutputElement, { type: 'card' }>): Segment[]
   return segments;
 }
 
+/** Canonical model media goes through the same capability/size gate as tool media. */
+async function publishMessageSegment(
+  segment: Segment,
+  caps: OutboundMediaCapabilities,
+  platform?: string,
+): Promise<Segment | null> {
+  const kind = segment.type;
+  if (kind !== 'image' && kind !== 'audio' && kind !== 'video' && kind !== 'file') return segment;
+  if (!caps[kind]) return { type: 'text', data: { text: `[${kind}]` } };
+  const media = segment.data.media as MediaRef;
+  // Opaque platform references are already hosted; their bytes are not available locally.
+  if (media.kind === 'file') return segment;
+  const maxBytes = caps.maxAttachmentBytes ?? 26_214_400;
+  const [payload] = await normalizeMediaRefsToPayloads([{ type: kind, media }], maxBytes);
+  if (!payload) return { type: 'text', data: { text: `[${kind}: 附件不可用、格式不符或超过大小限制]` } };
+  return payloadToCanonicalSegment({ ...payload, kind }, caps, platform);
+}
+
 /**
  * OutputElement[] → canonical Segment[]; platform codecs own their wire conversion.
  */
 export async function publishOutboundElements(
-  elements: OutputElement[],
+  elements: readonly AgentOutputElement[],
   platform?: string,
   capsOverride?: OutboundMediaCapabilities,
 ): Promise<Segment[]> {
@@ -301,6 +320,13 @@ export async function publishOutboundElements(
   const segments: Segment[] = [];
 
   for (const el of elements) {
+    if (el.type === 'message') {
+      for (const segment of el.segments) {
+        const published = await publishMessageSegment(segment, caps, platform);
+        if (published) segments.push(published);
+      }
+      continue;
+    }
     if (el.type === 'text') {
       if (!el.content?.trim()) continue;
       segments.push(textElementToSegment(el));

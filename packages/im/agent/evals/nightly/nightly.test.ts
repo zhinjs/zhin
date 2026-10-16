@@ -1,3 +1,4 @@
+import { aiOutboundJsonSchema } from '@zhin.js/core';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
 import { BudgetExceededError, BudgetedCompletionPort, DEFAULT_NIGHTLY_BUDGET, resolveNightlyBudget } from './budget.js';
@@ -173,7 +174,15 @@ describe('seed cases on the live model hook', () => {
   const clock = () => new Date('2026-10-14T00:00:00Z');
   const lastUser = (ctx: { messages: readonly unknown[] }) => userText([...ctx.messages].reverse().find((m) => (m as { role?: string }).role === 'user'));
   const portFor = (answer: (user: string, offered: readonly string[]) => AssistantMessage): LlmCompletionPort => ({
-    complete: async (_m, ctx) => answer(lastUser(ctx), (ctx.tools ?? []).map((t) => t.name)),
+    complete: async (_m, ctx, options) => {
+      const response = answer(lastUser(ctx), (ctx.tools ?? []).map((t) => t.name));
+      if (options?.outputSchema === aiOutboundJsonSchema && response.content.every(block => block.type === 'text')) {
+        return { ...response, content: [{ type: 'text', text: JSON.stringify({ segments: response.content.map(block => ({
+          type: 'text', data: { text: block.type === 'text' ? block.text : '' },
+        })) }) }] };
+      }
+      return response;
+    },
     completeSimple: async () => { throw new Error('unused'); },
   });
   const seeds = liveSeedCases([groupMemberNoShell, sessionHistoryCarried]);
