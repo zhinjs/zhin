@@ -147,6 +147,7 @@ describe('CLI new command integration', () => {
     const gitignore = await fs.readFile(path.join(pluginDir, '.gitignore'), 'utf-8')
     expect(gitignore).toContain('node_modules/')
     expect(gitignore).toContain('lib/')
+    expect(gitignore).toContain('.zhin/')
     expect(gitignore).toContain('plugin.js')
     expect(gitignore).toContain('commands/**/*.js')
     expect(await fs.pathExists(path.join(pluginDir, 'CHANGELOG.md'))).toBe(true)

@@ -595,7 +595,7 @@ export const doctorCommand = new Command('doctor')
           name: `端口 ${httpPort}`,
           status: 'warn',
           message: '已被占用',
-          fix: `lsof -ti:${httpPort} | xargs kill -9，或在 zhin.config.yml 修改 http.port 换用其他端口`
+          fix: `若是 zhin 进程，先正常停止（运行 zhin stop，或在其终端按 Ctrl+C）；否则用 lsof -i:${httpPort} 找到进程后 kill <pid>（SIGTERM），或在 zhin.config.yml 修改 http.port 换用其他端口`
         });
       } else {
         results.push({

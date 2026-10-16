@@ -467,6 +467,7 @@ logs/
 .DS_Store
 data/
 .pm2/
+.zhin/
 `);
 
   // 创建 README.md

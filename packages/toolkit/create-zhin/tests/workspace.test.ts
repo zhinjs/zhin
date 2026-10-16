@@ -68,6 +68,8 @@ describe('createWorkspace', () => {
     const page = await fs.readFile(path.join(projectPath, 'pages', 'index', 'index.tsx'), 'utf8')
     const navigation = await fs.readFile(path.join(projectPath, 'pages', 'nav', 'index.tsx'), 'utf8')
     const footer = await fs.readFile(path.join(projectPath, 'pages', 'footer', 'index.tsx'), 'utf8')
+    const gitignore = await fs.readFile(path.join(projectPath, '.gitignore'), 'utf8')
+    expect(gitignore.split('\n')).toContain('.zhin/')
     const schema = await fs.readJson(path.join(projectPath, 'schema.json'))
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
