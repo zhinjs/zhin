@@ -1,4 +1,5 @@
 import { lookup } from 'node:dns/promises';
+import { NETWORK_DISABLED_REASON } from './network-authority.js';
 import * as http from 'node:http';
 import * as https from 'node:https';
 import { isIP } from 'node:net';
@@ -89,7 +90,7 @@ export class NodeNetworkTransport implements NetworkTransport {
 
 export function authorizeNetworkUrl(url: string, policy: ToolInvocationPolicy): URL {
   if (!policy.network.enabled) {
-    throw new NetworkAccessDeniedError('Turn has no network authority');
+    throw new NetworkAccessDeniedError(NETWORK_DISABLED_REASON);
   }
   const decision = checkUrlNetworkAccess(url, {
     httpsOnly: policy.network.httpsOnly,

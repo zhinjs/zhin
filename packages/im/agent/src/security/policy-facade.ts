@@ -16,6 +16,7 @@
  * read 类工具由文件权限矩阵和显式 devicePathGuard 约束。
  */
 
+import { NETWORK_DISABLED_REASON, NETWORK_TOOL_NAMES } from './network-authority.js';
 import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
@@ -267,7 +268,7 @@ function hasCanonicalRiskPolicy(toolName: string): boolean {
 function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecision | undefined {
   const command = input.tool.name === 'bash' ? stringArgument(input.input, 'command') : undefined;
   const isNetworkCommand = Boolean(command && NETWORK_COMMAND_PATTERNS.some((pattern) => pattern.test(command)));
-  const isNetworkTool = input.tool.name === 'web_fetch' || input.tool.name === 'web_search';
+  const isNetworkTool = NETWORK_TOOL_NAMES.has(input.tool.name);
   if (!isNetworkCommand && !isNetworkTool) return undefined;
 
   const policy = input.turn.policy.network;
@@ -275,7 +276,7 @@ function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecis
     return Object.freeze({
       status: 'denied',
       policy: 'network-access',
-      reason: 'Turn has no network authority',
+      reason: NETWORK_DISABLED_REASON,
     });
   }
 

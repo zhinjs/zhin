@@ -38,6 +38,7 @@ import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
 import { withoutForbiddenShell } from '../plugin-runtime/native-bash-tool.js';
+import { NETWORK_DISABLED_PROMPT_NOTE, NETWORK_TOOL_NAMES, withoutForbiddenNetwork } from '../security/network-authority.js';
 import { createMissingToolResolver } from './missing-tool-resolver.js';
 import {
   DEFAULT_EXPLORATION_BUDGET,
@@ -483,12 +484,15 @@ export async function* runAgentLoopTextTurnRun(
 
   const repo = host.contextRepository;
 
-  // Bash is only offered when this turn's policy can actually run it, so the
-  // model never burns a step on a tool that is guaranteed to fail. Filtering
-  // the catalog also keeps load_tool / auto-load from re-adding it.
+  // Bash and network tools are only offered when this turn's policy can
+  // actually use them, so the model never burns a step on a tool that is
+  // guaranteed to fail. Filtering the catalog also keeps load_tool /
+  // auto-load from re-adding them.
   const turnPolicy = input.turnContext.policy;
-  const allTools = withoutForbiddenShell(turnPolicy, input.allTools);
-  const resolvedTools = withoutForbiddenShell(turnPolicy, input.resolvedTools);
+  const allTools = withoutForbiddenNetwork(turnPolicy, withoutForbiddenShell(turnPolicy, input.allTools));
+  const resolvedTools = withoutForbiddenNetwork(turnPolicy, withoutForbiddenShell(turnPolicy, input.resolvedTools));
+  const networkWithheld = [...input.allTools, ...input.resolvedTools, ...(input.toolCatalog ?? [])]
+    .some(tool => NETWORK_TOOL_NAMES.has(tool.name)) && !allTools.some(tool => NETWORK_TOOL_NAMES.has(tool.name));
 
   const providerAlias = host.getTurnProvider().name;
   const llmModel = host.llmRuntime.model(providerAlias, modelId);
@@ -543,7 +547,7 @@ export async function* runAgentLoopTextTurnRun(
     : [];
 
   const deferredController = directTools ? undefined : input.deferredController;
-  const catalog = directTools ? [] : withoutForbiddenShell(turnPolicy, input.toolCatalog ?? []);
+  const catalog = directTools ? [] : withoutForbiddenNetwork(turnPolicy, withoutForbiddenShell(turnPolicy, input.toolCatalog ?? []));
   if (!directTools && hasTools && (!deferredController || catalog.length === 0)) {
     throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
   }
@@ -605,6 +609,7 @@ export async function* runAgentLoopTextTurnRun(
       .map((item) => ({ name: item.name, description: item.brief })));
     if (toolIndex) systemPrompt = `${systemPrompt}\n\n${toolIndex}`;
   }
+  if (networkWithheld) systemPrompt = `${systemPrompt}\n\n${NETWORK_DISABLED_PROMPT_NOTE}`;
 
   const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools

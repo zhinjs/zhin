@@ -85,6 +85,9 @@ outline: [2, 3]
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | 否 | `5` | 同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。 |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
+| `ai.agent.network` | object | 否 | — | IM 回合的出网权限（web_fetch / web_search 与联网命令）。默认关闭；enabled 开启 HTTPS 出网，allowedDomains 非空时只允许这些域名。未设置 enabled 时兼容旧配置：execPreset: network 视为开启。 |
+| `ai.agent.network.enabled` | boolean | 否 | `false` | 是否允许 IM 回合 HTTPS 出网。 |
+| `ai.agent.network.allowedDomains` | array&lt;string&gt; | 否 | — | 非空时只允许访问这些域名（含子域名）。 |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | 否 | `"off"` | IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。 |
 | `ai.agent.toolBudget` | object | 否 | — | 进度感知的工具调用预算。maxIterations 为软上限，回合有进展时自动延长；硬上限始终生效。 |
 | `ai.agent.toolBudget.extendBy` | integer | 否 | `10` | 有进展时每次延长的步数；0 关闭。 |

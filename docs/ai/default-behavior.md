@@ -15,7 +15,7 @@
 ## 核心默认值
 
 - 循环：`maxIterations 15`、`timeout 120000` ms
-- 执行：`execSecurity deny`、`execApprovalMode auto`；网络仅在 `execPreset: network` 时可用
+- 执行：`execSecurity deny`、`execApprovalMode auto`；网络默认关闭，`network.enabled: true` 时开放 HTTPS 出网（`network.allowedDomains` 可限定域名；未设置 `enabled` 时兼容 `execPreset: network`）；没有出网权限的回合不提供 web_fetch / web_search
 - 子代理：`subagentTurnMode off`
 - 工具预算：`extendBy 10`、`progressWindow 5`、`maxTotalIterations 40`、`maxWallClockMs 600000`、`failureStreakLimit 3`、`repeatLimit 2`
 - 用量配额：全部为 0（关闭），`exemptOwner true`
@@ -35,6 +35,7 @@
 | `contextTokens` | keep | 常用开关，保留 |
 | `execSecurity` | keep | 常用开关，保留 |
 | `execPreset` | keep | 常用开关，保留 |
+| `network` | keep | IM 回合出网权限的独立开关（取代 `execPreset: network` 兼带出网），保留 |
 | `execAllowlist` | keep | 常用开关，保留 |
 | `execApprovalMode` | keep | 常用开关，保留 |
 | `disabledTools` | keep | 常用开关，保留 |
