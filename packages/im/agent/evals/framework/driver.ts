@@ -18,6 +18,7 @@ import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-r
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
 import { NativeBashToolFeature } from '../../src/plugin-runtime/native-bash-tool.js';
 import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-file-tools.js';
+import { createNativeWebToolFeatures } from '../../src/plugin-runtime/native-web-tools.js';
 import { createNativeSemanticMemoryToolFeatures, SemanticMemoryRuntime } from '../../src/plugin-runtime/native-semantic-memory-tools.js';
 import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/approval-port.js';
@@ -114,8 +115,8 @@ async function runInWorkspace(
   });
   const toolNames = [
     ...(definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name),
-    // Memory tools stay resident so memory cases exercise the write policy, not discovery.
-    ...(definition.nativeTools ?? []).filter((name) => name.startsWith('memory_')),
+    // Memory and web tools stay resident so their cases exercise policy, not discovery.
+    ...(definition.nativeTools ?? []).filter((name) => name.startsWith('memory_') || name.startsWith('web_')),
   ];
   // Mocked tools are always loaded so scripts can call them without a
   // discover/load_tool round trip; the default always-loaded set is kept.
@@ -459,7 +460,10 @@ async function nativeCapabilities(
   const owner = rootPluginId();
   const bash = new NativeBashToolFeature({ execute: async () => ({ stdout: bashOutput, stderr: '' }) });
   const memoryFeatures = semanticMemory ? createNativeSemanticMemoryToolFeatures(semanticMemory) : [];
-  const features = [bash, ...createNativeFileToolFeatures(), ...memoryFeatures]
+  const web = createNativeWebToolFeatures({
+    request: async (url) => { throw new Error(`eval web transport never reaches the network (${url.href})`); },
+  });
+  const features = [bash, ...createNativeFileToolFeatures(), ...memoryFeatures, ...web]
     .filter((feature) => names.includes(feature.name as EvalNativeTool));
   const slots = features.map((feature) => createCapabilitySlot({
     owner,

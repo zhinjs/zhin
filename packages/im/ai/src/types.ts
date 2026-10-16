@@ -541,6 +541,14 @@ export interface AIConfig {
     /** 预设命令白名单模式：readonly / network / development / custom（默认 custom，使用自定义 execAllowlist） */
     execPreset?: 'readonly' | 'network' | 'development' | 'custom';
     /**
+     * IM 回合的出网权限（web_fetch / web_search 与联网命令）。默认关闭；`enabled: true` 时开放 HTTPS 出网，
+     * `allowedDomains` 非空时只允许这些域名。未设置 `enabled` 时兼容旧行为：`execPreset: network` 视为开启。
+     */
+    network?: {
+      enabled?: boolean;
+      allowedDomains?: string[];
+    };
+    /**
      * IM 私聊里 master 能否使用 bash。默认 off：IM 会话不提供 bash。
      * isolated：仅 master 私聊开放，命令在 Docker 容器内执行（工作区可写、默认无网络、
      * development 白名单、白名单外命令需审批）。宿主没有可用 Docker 时执行会失败，不会降级到宿主机。

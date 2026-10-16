@@ -73,9 +73,12 @@ export interface EvalTool {
  */
 export type EvalNativeTool =
   | 'bash' | 'read_file' | 'write_file' | 'edit_file' | 'list_dir' | 'glob' | 'grep'
-  | 'memory_search' | 'memory_upsert';
+  | 'memory_search' | 'memory_upsert'
+  | 'web_fetch' | 'web_search';
 
 const MEMORY_TOOLS: readonly EvalNativeTool[] = ['memory_search', 'memory_upsert'];
+/** Native web tools; their transport never reaches the network in evals. */
+export const WEB_TOOLS: readonly EvalNativeTool[] = ['web_fetch', 'web_search'];
 
 /** Seed entry for the semantic-memory store (as written by an earlier turn). */
 export type EvalMemoryEntry = MemoryEntryUpsertInput;
@@ -233,7 +236,7 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   const toolNames = (candidate.tools ?? []).map((tool) => tool.name);
   const duplicates = toolNames.filter((name, index) => toolNames.indexOf(name) !== index);
   if (duplicates.length > 0) problems.push(`duplicate tool names: ${[...new Set(duplicates)].join(', ')}`);
-  const workspaceTools = (candidate.nativeTools ?? []).filter((name) => !MEMORY_TOOLS.includes(name));
+  const workspaceTools = (candidate.nativeTools ?? []).filter((name) => !MEMORY_TOOLS.includes(name) && !WEB_TOOLS.includes(name));
   if (workspaceTools.length && !candidate.workspace) problems.push('file and shell nativeTools need a workspace');
   for (const name of toolNames) {
     if (RESERVED_TOOL_NAMES.includes(name) || RESERVED_TOOL_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) {
