@@ -979,9 +979,6 @@ export async function* runAgentLoopTextTurnRun(
           || (!lastAssistantHadToolCalls && !answerText.trim());
         lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
           : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant);
-        if (imReply && lastAssistantNeedsHostReply && !lastAssistantText.trim()) {
-          lastAssistantText = '模型未返回可用的最终回复，请重试。';
-        }
         lastUsage = assistant.usage;
         if (assistant.usage) turnTokens += tokenUsageToLegacy(assistant.usage).total_tokens;
         logAssistantIterationFailure(assistant, modelId, sessionId);

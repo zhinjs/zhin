@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { aiOutboundJsonSchema } from '@zhin.js/core';
 import type { AgentMessage, AgentTool, StreamOptions } from '@zhin.js/ai';
 import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recovery.js';
+import { formatToolCallsForUser } from '../../src/core/tool-calls-user-format.js';
 import { decodeStructuredReply } from '../../src/outbound/structured-reply.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
@@ -67,13 +68,14 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
 }
 
 describe('structured Agent final replies', () => {
-  it('never parses thinking as the structured final answer when the provider emitted no answer', async () => {
+  it.each([false, true])('keeps the existing empty-reply notice without retrying (thinking: %s)', async thinking => {
     const assistant = assistantTextReply('');
-    assistant.content = [{ type: 'thinking', thinking: 'private reasoning is not a JSON reply' }];
-    const { result, chunks } = await run([assistant]);
+    if (thinking) assistant.content = [{ type: 'thinking', thinking: 'private reasoning is not a JSON reply' }];
+    const { result, chunks, calls } = await run([assistant]);
     expect(result.reply).not.toContain('private reasoning');
     expect(chunks.join('')).not.toContain('private reasoning');
-    expect(result.reply).not.toBe('');
+    expect(result.reply).toBe(formatToolCallsForUser([]));
+    expect(calls).toHaveLength(1);
   });
   it('keeps media capability and size policies on structured messages', async () => {
     const output = decodeStructuredReply(JSON.stringify({ segments: [mention('123'),
