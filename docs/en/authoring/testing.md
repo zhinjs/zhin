@@ -1,11 +1,11 @@
 ---
 title: "Testing Plugins"
-description: "Test plugins with the fake runtime in @zhin.js/plugin-test-kit: no hand-assembled contexts, no as never"
+description: "Test plugins with the fake runtime in @zhin.js/testing: no hand-assembled contexts, no as never"
 ---
 
 # Testing Plugins
 
-You do not need to hand-assemble the `setup` context or write `as never` in plugin tests. `@zhin.js/plugin-test-kit` offers two layers:
+You do not need to hand-assemble the `setup` context or write `as never` in plugin tests. `@zhin.js/testing` offers two layers:
 
 | Layer | Use | Entry points |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ You do not need to hand-assemble the `setup` context or write `as never` in plug
 | **Real runtime** (integration) | Real module discovery, command parsing, permissions and send chain | `PluginTestKit` |
 
 ```bash
-pnpm add -D @zhin.js/plugin-test-kit
+pnpm add -D @zhin.js/testing
 ```
 
 ## Run setup
@@ -21,7 +21,7 @@ pnpm add -D @zhin.js/plugin-test-kit
 The fake uses the **real** `Scope`, `DisposeStack` and `GenerationHandoffStack`, plus the real owner-bound `databaseHostToken` / `scheduleHostToken` / `outboundHostToken` facades over in-memory process hosts.
 
 ```ts
-import { runPluginSetup } from '@zhin.js/plugin-test-kit';
+import { runPluginSetup } from '@zhin.js/testing';
 import plugin from '../plugin.js';
 
 it('posts to the target group every 30 seconds', async () => {
@@ -63,7 +63,7 @@ Cron has six fields (sec min hour day month weekday) with `*`, `*/n`, lists and 
 Definitions from convention directories can be executed directly; the fake builds their context:
 
 ```ts
-import { createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddleware, runHandler } from '@zhin.js/plugin-test-kit';
+import { createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddleware, runHandler } from '@zhin.js/testing';
 import checkin from '../commands/checkin/index.js';
 
 const fake = createFakePlugin({ resources: [fakeResource(greeterToken, greeter)] });
@@ -94,7 +94,7 @@ Prefer real or kit-provided fakes when they exist; keep `fakeOf` for narrow coll
 
 ## Real runtime: `PluginTestKit`
 
-The fake bypasses the renderer, outbound middleware and endpoint negotiation. To verify that a message really goes through that chain, use `PluginTestKit`: it mounts a disposable real test app and synthetic endpoints capture the final payload. See the kit [README](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/plugin-test-kit/README.md) for usage and limits.
+The fake bypasses the renderer, outbound middleware and endpoint negotiation. To verify that a message really goes through that chain, use `PluginTestKit`: it mounts a disposable real test app and synthetic endpoints capture the final payload. See the kit [README](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/testing/README.md) for usage and limits.
 
 ## Official example
 

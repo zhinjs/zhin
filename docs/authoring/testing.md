@@ -1,11 +1,11 @@
 ---
 title: "插件测试"
-description: "用 @zhin.js/plugin-test-kit 的假运行环境测试插件：不再手工拼上下文、不再写 as never"
+description: "用 @zhin.js/testing 的假运行环境测试插件：不再手工拼上下文、不再写 as never"
 ---
 
 # 插件测试
 
-给插件写测试，不需要自己拼 `setup` 的上下文，也不需要 `as never`。`@zhin.js/plugin-test-kit` 提供两层工具：
+给插件写测试，不需要自己拼 `setup` 的上下文，也不需要 `as never`。`@zhin.js/testing` 提供两层工具：
 
 | 层 | 用途 | 入口 |
 | --- | --- | --- |
@@ -13,7 +13,7 @@ description: "用 @zhin.js/plugin-test-kit 的假运行环境测试插件：不�
 | **真实运行时**（集成测试） | 真实的模块发现、命令解析、权限、发送链路 | `PluginTestKit` |
 
 ```bash
-pnpm add -D @zhin.js/plugin-test-kit
+pnpm add -D @zhin.js/testing
 ```
 
 ## 跑 setup
@@ -21,7 +21,7 @@ pnpm add -D @zhin.js/plugin-test-kit
 假环境用的是**真正的** `Scope`、`DisposeStack`、`GenerationHandoffStack`，以及真正的按插件隔离的 `databaseHostToken` / `scheduleHostToken` / `outboundHostToken` 外观，底层换成内存实现。
 
 ```ts
-import { runPluginSetup } from '@zhin.js/plugin-test-kit';
+import { runPluginSetup } from '@zhin.js/testing';
 import plugin from '../plugin.js';
 
 it('每 30 秒往目标群发一条消息', async () => {
@@ -63,7 +63,7 @@ cron 为六段（秒 分 时 日 月 周），支持 `*`、`*/n`、列表和范�
 约定目录里的定义可以直接拿来执行，上下文由假环境构造：
 
 ```ts
-import { createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddleware, runHandler } from '@zhin.js/plugin-test-kit';
+import { createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddleware, runHandler } from '@zhin.js/testing';
 import checkin from '../commands/checkin/index.js';
 
 const fake = createFakePlugin({ resources: [fakeResource(greeterToken, greeter)] });
@@ -94,7 +94,7 @@ const orchestrator = fakeOf<ActivityFeedbackOrchestrator>({ startPhase: vi.fn(),
 
 ## 真实运行时：`PluginTestKit`
 
-假环境不经过渲染器、出站中间件和端点协商。需要验证"消息真的按这条链路发出去"时，用 `PluginTestKit`：它挂载一个一次性的真实测试应用，合成端点记录最终载荷。用法与限制见套件 [README](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/plugin-test-kit/README.md)。
+假环境不经过渲染器、出站中间件和端点协商。需要验证"消息真的按这条链路发出去"时，用 `PluginTestKit`：它挂载一个一次性的真实测试应用，合成端点记录最终载荷。用法与限制见套件 [README](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/testing/README.md)。
 
 ## 官方示例
 

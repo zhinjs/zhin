@@ -203,8 +203,8 @@
       "@zhin.js/plugin-runtime": [
         "./packages/im/plugin-runtime/src/index.ts"
       ],
-      "@zhin.js/plugin-test-kit": [
-        "./packages/toolkit/plugin-test-kit/src/index.ts"
+      "@zhin.js/testing": [
+        "./packages/toolkit/testing/src/index.ts"
       ],
       "@zhin.js/runtime": [
         "./packages/im/runtime/src/index.ts"
@@ -326,7 +326,7 @@
     "packages/im/core/tests/middleware-types.fixture.ts",
     "packages/im/command/tests/types/declarations.ts",
     "packages/im/plugin-runtime/tests/types/persistent-state.ts",
-    "packages/toolkit/plugin-test-kit/tests/types/public.ts",
+    "packages/toolkit/testing/tests/types/public.ts",
     "packages/im/schedule-feature/tests/types/config.ts",
     "packages/im/feature-kit/tests/construction-types.fixture.ts"
   ],

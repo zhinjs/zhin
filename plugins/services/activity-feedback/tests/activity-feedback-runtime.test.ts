@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { GenerationAdmissionGate } from 'zhin.js';
-import { createFakePlugin, fakeOf, fakeResource } from '@zhin.js/plugin-test-kit';
+import { createFakePlugin, fakeOf, fakeResource } from '@zhin.js/testing';
 import { AgentEventBus, type AIEventPayload } from '@zhin.js/agent';
 import { agentEventBusToken } from '@zhin.js/agent/runtime';
 import plugin from '../plugin.ts';

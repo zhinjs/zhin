@@ -88,7 +88,7 @@ pnpm --filter @zhin.js/plugin-group-suite build
 pnpm --filter @zhin.js/plugin-group-suite test
 ```
 
-集成验收使用公开 `@zhin.js/plugin-test-kit`、真实 Native Runtime/CommandIndex/PermissionHost、
+集成验收使用公开 `@zhin.js/testing`、真实 Native Runtime/CommandIndex/PermissionHost、
 合成端点、真实 PluginScheduleHost 和 SQLite 状态 CAS，覆盖两个实例、端点隔离、权限拒绝、
 无数据库错误、热更新、配置失败回滚及新进程重启后的持久词库。HTML 渲染使用 stub，另测文本
 降级；统计/签到/教学模型在此 fixture 为内存端口。它不代表真实平台登录、欢迎投递、截图质量或

@@ -1,5 +1,5 @@
 {
-  "name": "@zhin.js/plugin-test-kit",
+  "name": "@zhin.js/testing",
   "version": "1.0.1",
   "description": "Real Plugin Runtime integration fixtures with synthetic IM endpoints",
   "type": "module",
@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --root ../../.. packages/toolkit/plugin-test-kit/tests",
+    "test": "vitest run --root ../../.. packages/toolkit/testing/tests",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
@@ -46,7 +46,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
-    "directory": "packages/toolkit/plugin-test-kit"
+    "directory": "packages/toolkit/testing"
   },
   "publishConfig": {
     "access": "public",

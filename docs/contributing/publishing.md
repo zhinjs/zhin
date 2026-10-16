@@ -153,7 +153,7 @@ done < names.txt
 - [ ] `@zhin.js/components` — `packages/toolkit/components`
 - [ ] `create-zhin-app` — `packages/toolkit/create-zhin`
 - [ ] `@zhin.js/html-renderer` — `packages/toolkit/html-renderer`
-- [ ] `@zhin.js/plugin-test-kit` — `packages/toolkit/plugin-test-kit`
+- [ ] `@zhin.js/testing` — `packages/toolkit/testing`
 - [ ] `@zhin.js/scaffold-wizard` — `packages/toolkit/scaffold-wizard`
 - [ ] `@zhin.js/speech` — `packages/toolkit/speech`
 - [ ] `@zhin.js/tailwind` — `packages/toolkit/tailwind`

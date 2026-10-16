@@ -29,7 +29,7 @@ const plugin = definePlugin<{ target: string }>({
 });
 let disposed = false;
 
-describe('plugin-test-kit fakes', () => {
+describe('testing fakes', () => {
   it('runs setup on a real Scope with fake hosts, clock and outbound recording', async () => {
     disposed = false;
     const fake = await runPluginSetup(plugin, { config: { target: 'g1' } });

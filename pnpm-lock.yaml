@@ -1963,46 +1963,6 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/toolkit/plugin-test-kit:
-    dependencies:
-      '@zhin.js/adapter':
-        specifier: workspace:*
-        version: link:../../im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../im/command
-      '@zhin.js/core':
-        specifier: workspace:*
-        version: link:../../im/core
-      '@zhin.js/feature-kit':
-        specifier: workspace:*
-        version: link:../../im/feature-kit
-      '@zhin.js/handler':
-        specifier: workspace:*
-        version: link:../../im/handler
-      '@zhin.js/im-contract':
-        specifier: workspace:*
-        version: link:../../im/im-contract
-      '@zhin.js/middleware':
-        specifier: workspace:*
-        version: link:../../im/middleware
-      '@zhin.js/plugin-runtime':
-        specifier: workspace:*
-        version: link:../../im/plugin-runtime
-      '@zhin.js/runtime':
-        specifier: workspace:*
-        version: link:../../im/runtime
-    devDependencies:
-      '@types/node':
-        specifier: ^26.1.2
-        version: 26.1.2
-      typescript:
-        specifier: ^6.0.3
-        version: 6.0.3
-      vitest:
-        specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
-
   packages/toolkit/scaffold-wizard:
     dependencies:
       '@zhin.js/plugin-runtime':
@@ -2067,6 +2027,46 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+
+  packages/toolkit/testing:
+    dependencies:
+      '@zhin.js/adapter':
+        specifier: workspace:*
+        version: link:../../im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../im/command
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../im/feature-kit
+      '@zhin.js/handler':
+        specifier: workspace:*
+        version: link:../../im/handler
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../im/im-contract
+      '@zhin.js/middleware':
+        specifier: workspace:*
+        version: link:../../im/middleware
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../im/plugin-runtime
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../../im/runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.11)(@vitest/ui@4.1.11)(vite@6.4.3(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
 
   plugins/adapters/dingtalk:
     dependencies:
@@ -3452,9 +3452,9 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/plugin-test-kit':
+      '@zhin.js/testing':
         specifier: workspace:*
-        version: link:../../../packages/toolkit/plugin-test-kit
+        version: link:../../../packages/toolkit/testing
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
