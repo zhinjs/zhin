@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - main
+  # Required checks must also report for merge queue entries, or the queue waits until it times out.
+  merge_group:
 
 permissions:
   contents: read
@@ -218,8 +220,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: pnpm audit --prod || true
 
+      # Already enforced on the PR itself; in a merge group head_ref is empty, so the
+      # release PR could not be told apart and would fail the queue.
       - name: check changeset
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && github.event_name != 'merge_group' && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
         run: pnpm changeset status
 
       # Avoid per-package pnpm/cmd orchestrators on Windows. The same package
