@@ -1,4 +1,5 @@
-import type { OutputElement } from '@zhin.js/ai';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
+
 import { truncatePreview } from '@zhin.js/logger';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
 import { originFromMessage } from '../spawn/spawn-task-tool.js';
@@ -44,7 +45,7 @@ export async function deliverDeferredWorkerResult(
 export async function deliverDeferredAutoContinueReply(
   sender: SubagentResultSender,
   commMessage: Message,
-  elements: OutputElement[],
+  elements: AgentOutputElement[],
 ): Promise<void> {
   if (!elements.length) return;
   await sender(originFromMessage(commMessage), { text: '', elements });

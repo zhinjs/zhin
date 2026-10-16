@@ -78,19 +78,31 @@ describe('outboundSegmentJsonSchema', () => {
 });
 
 describe('aiOutboundJsonSchema', () => {
-  it('accepts the ADR 0025 outbound DSL shapes', () => {
-    expect(validateOutbound({ text: '你好' })).toBe(true);
-    expect(validateOutbound({ mentions: ['1001'], text: '请查收' })).toBe(true);
-    expect(validateOutbound({
-      segments: [
-        { type: 'text', data: { text: '看图' } },
-        { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.png' } } },
-      ],
-    })).toBe(true);
-    expect(validateOutbound({
-      text: '组合',
-      segments: [{ type: 'mention', data: { target: '1001' } }],
-    })).toBe(true);
+  it('accepts only an ordered canonical segments envelope', () => {
+    expect(validateOutbound({ segments: [
+      { type: 'mention', data: { target: '1001' } },
+      { type: 'text', data: { text: '，请查收' } },
+      { type: 'markdown', data: { content: '**说明**' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.png' } } },
+    ] })).toBe(true);
+    expect(validateOutbound({ segments: [] })).toBe(true);
+    expect(validateOutbound({ text: '你好' })).toBe(false);
+    expect(validateOutbound({ mentions: ['1001'], text: '请查收' })).toBe(false);
+    expect(validateOutbound({})).toBe(false);
+  });
+
+  it('is closed with all fields required throughout the provider-facing schema', () => {
+    function check(value: unknown): void {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) { value.forEach(check); return; }
+      const node = value as Record<string, unknown>;
+      if (node.type === 'object') {
+        expect(node.additionalProperties).toBe(false);
+        expect(node.required).toEqual(Object.keys(node.properties as object));
+      }
+      Object.values(node).forEach(check);
+    }
+    check(aiOutboundJsonSchema);
   });
 
   it('rejects malformed segments inside the payload', () => {

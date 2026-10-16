@@ -536,3 +536,19 @@ pnpm clean   # 清理 lib
 ## 许可证
 
 MIT License
+
+## Structured IM replies
+
+IM conversations default to schema-constrained `{ "segments": [...] }` final
+answers, composing text, Markdown, mentions, images and other media in order. Agent validates the complete object once and
+carries an `AgentOutputElement` (`type: 'message'`, canonical `segments`) through
+the terminal journal, reply port and media publisher. The AI package's generic
+`OutputElement` contract remains transport-neutral. Tools and host notices can
+still produce generic output elements.
+
+Mention targets are platform user IDs from the conversation or member lookup
+tools. The schema does not verify membership or resolve ambiguous nicknames.
+Detached and non-IM turns do not inherit the IM preset; an explicit custom schema
+belongs to its caller. See [结构化回复](../../../docs/ai/structured-replies.md) for
+validation, provider requirements, failure behavior and the delivery boundary
+([English](../../../docs/en/ai/structured-replies.md)).

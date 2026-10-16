@@ -1,5 +1,6 @@
+import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { randomUUID } from 'node:crypto';
-import type { OutputElement } from '@zhin.js/ai';
+
 import type { TurnEvent } from '../event/turn-event.js';
 import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
@@ -58,8 +59,9 @@ export interface ScheduleExecutionDomainDeps {
   now?: () => number;
 }
 
-function textFromElements(elements: OutputElement[]): string {
+function textFromElements(elements: AgentOutputElement[]): string {
   return elements.map(element => {
+    if (element.type === 'message') return renderAgentOutput([element]);
     if (element.type === 'text') return element.content || '';
     if (element.type === 'image') return `<image url="${element.url}"/>`;
     return '';

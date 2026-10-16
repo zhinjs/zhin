@@ -267,8 +267,8 @@
                 { "type": "string", "enum": ["segments"] },
                 { "type": "object" }
               ],
-              "description": "Structured final-output mode: false for text, true or segments for canonical message segments, or a custom JSON Schema object.",
-              "x-descriptionZh": "结构化最终输出：false 表示文本，true 或 segments 表示规范消息段，也可传入自定义 JSON Schema 对象。"
+              "description": "Final-output mode: defaults to segments for IM conversations; false for text, true or segments for ordered canonical segments, or a custom JSON Schema object. Detached and non-IM turns do not inherit the IM preset.",
+              "x-descriptionZh": "最终输出默认在 IM 会话使用 segments：false 显式使用文本，true 或 segments 使用有序规范消息段，也可传入自定义 JSON Schema。隔离及非 IM 调用不应用 IM 预设。"
             },
             "schedule": {
               "type": "object",

@@ -130,7 +130,7 @@ export interface SubagentResultDelivery {
   text: string;
   toolCalls?: { tool: string; args: Record<string, any>; result: any }[] | ToolCallRecord[];
   /** 主 Agent deferred auto-continue turn 的完整出站元素（优先于 text+toolCalls） */
-  elements?: import('@zhin.js/ai').OutputElement[];
+  elements?: import('../outbound/agent-output.js').AgentOutputElement[];
   /** 子任务 ID（非 IM ResultSink 投递时使用） */
   taskId?: string;
   /** 子任务状态（非 IM ResultSink 投递时使用） */

@@ -1,9 +1,10 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 /**
  * TurnEvent — structured event union for the AsyncGenerator streaming API.
  *
  * Consumed by processMessageStream() callers; produced by the turn pipeline.
  */
-import type { OutputElement, ToolExecutionCause, Usage } from '@zhin.js/ai';
+import type { ToolExecutionCause, Usage } from '@zhin.js/ai';
 import type { DecisionObservation } from '../decision/types.js';
 
 export interface TurnUsage {
@@ -149,7 +150,7 @@ export interface UsageEvent {
 
 export interface TurnEndEvent {
   type: 'turn_end';
-  output: OutputElement[];
+  output: AgentOutputElement[];
   usage: TurnUsage;
   /** Control-only ingress links its own principal/journal to the affected turn. */
   control?: Readonly<{

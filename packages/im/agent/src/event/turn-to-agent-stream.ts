@@ -1,3 +1,4 @@
+import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 /**
  * Maps internal TurnEvent to Eve-aligned AgentStreamEvent (ADR 0039 P0).
  */
@@ -15,17 +16,8 @@ export interface TurnToStreamContext {
   journal?: AgentRunJournal;
 }
 
-function textFromOutput(output: unknown): string {
-  if (!Array.isArray(output)) return '';
-  return output
-    .map((el) => {
-      if (el && typeof el === 'object' && 'type' in el && (el as { type: string }).type === 'text') {
-        return String((el as { content?: string }).content ?? '');
-      }
-      return '';
-    })
-    .join('\n')
-    .trim();
+function textFromOutput(output: readonly AgentOutputElement[]): string {
+  return renderAgentOutput(output).trim();
 }
 
 /** Map one TurnEvent to zero or more wire events. */

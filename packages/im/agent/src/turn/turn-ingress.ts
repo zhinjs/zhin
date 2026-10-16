@@ -1,4 +1,5 @@
-import type { OutputElement, Usage } from '@zhin.js/ai';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
+import type { Usage } from '@zhin.js/ai';
 import type { ApprovalPort } from '../session/approval-port.js';
 import type { PermissionSubject } from '@zhin.js/permission';
 import type {
@@ -144,7 +145,7 @@ export type DeliveryOutcome =
   | Readonly<{ status: 'failed'; code: string; retryable: boolean }>;
 
 export interface ReplyPort {
-  send(output: readonly OutputElement[]): Promise<DeliveryOutcome>;
+  send(output: readonly AgentOutputElement[]): Promise<DeliveryOutcome>;
 }
 
 export interface ActivityPort {
@@ -159,7 +160,7 @@ export interface DeliveryIntent {
   readonly intentId: string;
   readonly parentTurnId: string;
   readonly target: Readonly<Record<string, unknown>>;
-  readonly output: readonly OutputElement[];
+  readonly output: readonly AgentOutputElement[];
 }
 
 export interface DeliveryPort {
@@ -219,7 +220,7 @@ export interface TurnRequest {
 export type TurnAccessContext = Pick<TurnRequest, 'origin' | 'principal' | 'policy'>;
 
 export type TurnOutcome =
-  | Readonly<{ status: 'completed'; output: readonly OutputElement[]; usage: Usage }>
+  | Readonly<{ status: 'completed'; output: readonly AgentOutputElement[]; usage: Usage }>
   | Readonly<{ status: 'failed'; error: Readonly<{ code: string; message: string; retryable: boolean }>; usage: Usage }>
   | Readonly<{ status: 'cancelled'; reason: string; usage: Usage }>
   | Readonly<{ status: 'budget_exceeded'; budget: string; usage: Usage }>;

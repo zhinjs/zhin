@@ -1,3 +1,4 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 /**
  * Outbound leak check (#727, M3.4).
  *
@@ -15,7 +16,7 @@
  * - other_session_memory: lines read from another session's memory files
  *                         during this turn.
  */
-import type { OutputElement } from '@zhin.js/ai';
+
 import type { DeliveryOutcome, ReplyPort } from '../turn/turn-ingress.js';
 
 export type LeakKind = 'system_prompt' | 'secret' | 'other_session_memory';
@@ -123,9 +124,29 @@ export class OutboundLeakInspector {
   }
 
   /** Inspects the text elements of an outbound message. */
-  inspectOutput(output: readonly OutputElement[]): Readonly<{ output: readonly OutputElement[]; findings: readonly LeakFinding[] }> {
+  inspectOutput(output: readonly AgentOutputElement[]): Readonly<{ output: readonly AgentOutputElement[]; findings: readonly LeakFinding[] }> {
     const findings: LeakFinding[] = [];
     const next = output.map((element) => {
+      if (element.type === 'message') {
+        // Inspect nested strings too: share titles/URLs and media references
+        // are model-controlled content just like text segments.
+        const inspectValue = (value: unknown): unknown => {
+          if (typeof value === 'string') {
+            const inspection = this.inspect(value);
+            findings.push(...inspection.findings);
+            return inspection.text;
+          }
+          if (Array.isArray(value)) return value.map(inspectValue);
+          if (value && typeof value === 'object') {
+            return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, inspectValue(item)]));
+          }
+          return value;
+        };
+        const segments = element.segments.map(segment => ({
+          ...segment, data: inspectValue(segment.data) as typeof segment.data,
+        }));
+        return { ...element, segments };
+      }
       if (element.type !== 'text') return element;
       const inspection = this.inspect(element.content);
       if (inspection.findings.length === 0) return element;
@@ -162,7 +183,7 @@ export function guardReplyPort(
   onFindings?: (findings: readonly LeakFinding[]) => void,
 ): ReplyPort {
   return Object.freeze({
-    async send(output: readonly OutputElement[]): Promise<DeliveryOutcome> {
+    async send(output: readonly AgentOutputElement[]): Promise<DeliveryOutcome> {
       const inspected = inspector.inspectOutput(output);
       if (inspected.findings.length > 0) onFindings?.(inspected.findings);
       return port.send(inspected.output);

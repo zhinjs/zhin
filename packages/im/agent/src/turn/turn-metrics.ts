@@ -1,4 +1,5 @@
-import type { OutputElement, Usage } from '@zhin.js/ai';
+import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
+import type { Usage } from '@zhin.js/ai';
 import {
   formatCompact,
   formatCompactUsage,
@@ -91,9 +92,10 @@ export function formatAiHandlerTurnTable(
   });
 }
 
-/** OutputElement[] → 日志预览文本 */
-export function formatOutputElementsPreview(elements: OutputElement[]): string | undefined {
+/** AgentOutputElement[] → 日志预览文本 */
+export function formatOutputElementsPreview(elements: AgentOutputElement[]): string | undefined {
   const text = elements.map((el) => {
+    if (el.type === 'message') return renderAgentOutput([el]);
     if (el.type === 'text') return el.content || '';
     if (el.type === 'image') return `<image url="${el.url}"/>`;
     return '';

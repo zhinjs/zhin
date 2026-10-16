@@ -79,6 +79,7 @@ async function run(options: {
     getTurnProvider: () => ({ name: 'mock' }),
     llmRuntime: options.llm.runtime,
     config: {
+      outputSchema: false, // this fixture exercises prose progress/recovery
       maxIterations: options.maxIterations ?? 3,
       toolExecution: 'sequential',
       compaction: {},

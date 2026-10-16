@@ -2,9 +2,12 @@
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
 
-import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
+import { aiOutboundJsonSchema } from '@zhin.js/core';
+import { decodeStructuredReply, STRUCTURED_REPLY_INSTRUCTION } from '../outbound/structured-reply.js';
+import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
+import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -265,6 +268,8 @@ export interface AgentLoopTurnInput {
 
 export interface AgentLoopTurnResult {
   reply: string;
+  /** Validated final output, shared by terminal journal and delivery. */
+  output?: AgentOutputElement[];
   usage: Usage;
   path: 'chat' | 'agent' | 'multimodal';
   iterations: number;
@@ -511,7 +516,17 @@ export async function* runAgentLoopTextTurnRun(
     : { mode: 'agent' as const, preExecution: { tools: [], data: '' } };
 
   const preData = toolRun.preExecution.data;
-  const outputSchema = resolveAgentOutputSchema(host.config.outputSchema);
+  // IM conversations get a message contract. Detached/programmatic turns keep
+  // their text/custom-schema contract and never inherit the IM preset.
+  const configuredSchema = host.config.outputSchema ?? 'segments';
+  const imReply = input.turnContext.origin.kind === 'im'
+    && input.conversationPersistence !== 'none'
+    && (configuredSchema === true || configuredSchema === 'segments');
+  const outputSchema = resolveAgentOutputSchema(
+    configuredSchema === true || configuredSchema === 'segments'
+      ? (imReply ? 'segments' : false)
+      : configuredSchema,
+  );
   const turnShellPolicy = input.turnContext.policy?.shell;
   const execPolicyConfig = turnShellPolicy
     ? {
@@ -534,8 +549,9 @@ export async function* runAgentLoopTextTurnRun(
       runtime: input.promptRuntime,
       })
     : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile, input.promptRuntime);
-  if (outputSchema) {
-    systemPrompt = `${systemPrompt}\n\n${buildAiOutboundPromptHint({})}`;
+  const proseSystemPrompt = systemPrompt;
+  if (imReply) {
+    systemPrompt = `${systemPrompt}\n\n${STRUCTURED_REPLY_INSTRUCTION}`;
   }
 
   const agentTools = hasTools
@@ -903,6 +919,7 @@ export async function* runAgentLoopTextTurnRun(
   let segmentPrompt = promptMessages;
   let segmentContext = loopContext;
   let lastAssistantHadToolCalls = false;
+  let lastAssistantNeedsHostReply = false;
   const reporter = input.progressSink && hasTools && toolBudget.progressMaxUpdates > 0
     ? new TurnProgressReporter({
       sink: input.progressSink,
@@ -911,7 +928,7 @@ export async function* runAgentLoopTextTurnRun(
       summarize: () => summarizeProgress({
         transport: host.llmRuntime,
         model: llmModel,
-        systemPrompt,
+        systemPrompt: proseSystemPrompt,
         messages: [...loaded.messages, ...turnTranscript, ...segmentMessages],
         sessionId,
         signal,
@@ -929,6 +946,7 @@ export async function* runAgentLoopTextTurnRun(
     segmentMessages = [...segmentPrompt];
     for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
       for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
+        if (imReply && te.type === 'chunk') continue;
         if (input.toolEventSource === 'authority'
           && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
         emitTurnEvent(te);
@@ -939,7 +957,7 @@ export async function* runAgentLoopTextTurnRun(
         if (reporter && progress.progressedSince(lastReportIteration + 1)) {
           const sent = await reporter.report(extensionPending ? 'extension' : 'progress', {
             steps: iterations,
-            interimText: lastAssistantHadToolCalls ? lastAssistantText : undefined,
+            interimText: !imReply && lastAssistantHadToolCalls ? lastAssistantText : undefined,
           });
           if (sent) lastReportIteration = iterations;
         }
@@ -947,15 +965,18 @@ export async function* runAgentLoopTextTurnRun(
         iterations += 1;
       }
       if (event.type === 'message_end') segmentMessages.push(event.message as AgentMessage);
-      if (event.type === 'message_update' && event.delta?.type === 'text_delta') {
+      if (!imReply && event.type === 'message_update' && event.delta?.type === 'text_delta') {
         onChunk?.(event.delta.text, lastAssistantText + event.delta.text);
       }
       if (event.type === 'message_end' && event.message.role === 'assistant') {
         const assistant = event.message as AssistantMessage;
-        lastAssistantText = resolveAssistantReplyText(assistant);
+        lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
+        lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
+          || (!lastAssistantHadToolCalls && !assistantText(assistant).trim());
+        lastAssistantText = imReply && !lastAssistantNeedsHostReply ? assistantText(assistant)
+          : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant);
         lastUsage = assistant.usage;
         if (assistant.usage) turnTokens += tokenUsageToLegacy(assistant.usage).total_tokens;
-        lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
         logAssistantIterationFailure(assistant, modelId, sessionId);
         const toolNames = assistant.content
           .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
@@ -969,7 +990,7 @@ export async function* runAgentLoopTextTurnRun(
           stopReason: assistant.stopReason,
           toolNames: toolNames || undefined,
         });
-        onChunk?.(lastAssistantText, lastAssistantText);
+        if (!imReply) onChunk?.(lastAssistantText, lastAssistantText);
       }
       if (event.type === 'agent_end') {
         if (signal?.aborted) continue;
@@ -996,7 +1017,7 @@ export async function* runAgentLoopTextTurnRun(
     const checkpoint = await summarizeExhaustedTurn({
       transport: host.llmRuntime,
       model: llmModel,
-      systemPrompt,
+      systemPrompt: proseSystemPrompt,
       messages: [...loaded.messages, ...turnTranscript],
       maxIterations: iterations - segmentStartIteration,
       sessionId,
@@ -1062,9 +1083,10 @@ export async function* runAgentLoopTextTurnRun(
   const needsReplyRecovery = !delegatedOnly
     && hasTools
     && (toolCalls.length > 0 || iterations >= maxIterations)
-    && !lastAssistantText.trim();
+    && (!lastAssistantText.trim() || (imReply && lastAssistantHadToolCalls));
 
-  let reply: string;
+  let rawReply = lastAssistantText;
+  let hostReply = lastAssistantNeedsHostReply;
   if (needsReplyRecovery) {
     const summary = await summarizeExhaustedTurn({
       transport: host.llmRuntime,
@@ -1074,24 +1096,39 @@ export async function* runAgentLoopTextTurnRun(
       maxIterations,
       sessionId,
       signal,
+      outputSchema,
     });
     const lastBatch = conversationBatches.at(-1);
     if (summary.assistant && lastBatch) {
       lastBatch.messages.push(summary.assistant);
       lastBatch.messageExtras.push(undefined);
     }
-    reply = summary.reply;
-    onChunk?.(reply, reply);
-  } else {
-    reply = sanitizeAssistantReply(lastAssistantText, {
-      toolSummary: formatToolCallsForUser(toolCalls),
-    });
+    rawReply = summary.reply;
+    hostReply = !summary.assistant;
   }
-  const finalReply = delegatedOnly
-    ? ''
-    : continuations > 0 && reply.trim()
-      ? `（任务步骤较多，已自动续跑 ${continuations} 次）\n\n${reply}`
-      : reply;
+  const structuredReply = imReply && !hostReply;
+  const continuationPrefix = continuations > 0
+    ? `（任务步骤较多，已自动续跑 ${continuations} 次）\n\n` : '';
+  const proseReply = structuredReply ? ''
+    : sanitizeAssistantReply(rawReply, { toolSummary: formatToolCallsForUser(toolCalls) });
+  const textReply = delegatedOnly ? '' : proseReply.trim() ? continuationPrefix + proseReply : proseReply;
+  let output: AgentOutputElement[] = delegatedOnly ? [] : structuredReply
+    ? decodeStructuredReply(rawReply) : parseOutput(textReply);
+  if (!delegatedOnly) {
+    if (structuredReply && continuationPrefix && output[0]?.type === 'message') {
+      output[0].segments.unshift({ type: 'text', data: { text: continuationPrefix } });
+    }
+    output = mergeToolOutboundElements(output, toolCalls);
+  }
+  const finalReply = imReply ? renderAgentOutput(output) : textReply;
+  if (!imReply && needsReplyRecovery) onChunk?.(finalReply, finalReply);
+  if (imReply && finalReply) {
+    // Never expose partial JSON through streaming callbacks or activity ports.
+    onChunk?.(finalReply, finalReply);
+    const chunk: TurnEvent = { type: 'chunk', text: finalReply, accumulated: finalReply };
+    emitTurnEvent(chunk);
+    yield chunk;
+  }
 
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {
     iterations,
@@ -1099,12 +1136,16 @@ export async function* runAgentLoopTextTurnRun(
   });
 
   const usage = lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-  const endEvent = turnEndFromLegacyUsage(finalReply, usage);
+  const endEvent: TurnEvent = {
+    type: 'turn_end', output,
+    usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
+  };
   emitTurnEvent(endEvent);
   yield endEvent;
   const thinking = mapperState.accumulatedThinking.trim() || undefined;
   return {
     reply: finalReply,
+    output,
     usage,
     path: hasTools ? 'agent' : 'chat',
     iterations,

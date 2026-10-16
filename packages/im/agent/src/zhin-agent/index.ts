@@ -1,3 +1,4 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 /**
  * ZhinAgent — IM Agent 门面类（组合 ideal 模块；实现见 init/ + internal/）。
@@ -12,7 +13,6 @@ import {
   type MediaContentBlock,
   type Usage,
   type AgentEvent,
-  type OutputElement,
   type ModelRegistry,
   type AgentSessionRepository,
   type ContextRepository,
@@ -444,7 +444,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     input: string | AgentMessage | AgentMessage[],
     commMessage: Message,
     options?: { media?: MediaContentBlock[]; onChunk?: OnChunkCallback },
-  ): Promise<OutputElement[]> {
+  ): Promise<AgentOutputElement[]> {
     return runPromptTurn(asPrivate(this), input, commMessage, (id, fn) => this.runInTurnContext(id, fn), options);
   }
 
@@ -481,7 +481,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return system;
   }
 
-  async process(content: string, commMessage: Message, externalTools: Tool[] = [], onChunk?: OnChunkCallback): Promise<OutputElement[]> {
+  async process(content: string, commMessage: Message, externalTools: Tool[] = [], onChunk?: OnChunkCallback): Promise<AgentOutputElement[]> {
     return this.processTurn({
       content,
       message: commMessage,
@@ -495,7 +495,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
    * Executes one immutable, generation-owned Agent turn. This prevents two
    * concurrent IM messages from overwriting activeBinding/bootstrapContext.
    */
-  async processTurn(request: AgentTurnRequest): Promise<OutputElement[]> {
+  async processTurn(request: AgentTurnRequest): Promise<AgentOutputElement[]> {
     if (isCancelIntent(request.content ?? '')) {
       const sessionKey = resolveIMSessionIdFromMessage(request.message);
       if (this.promptController.cancelSession(sessionKey)) {

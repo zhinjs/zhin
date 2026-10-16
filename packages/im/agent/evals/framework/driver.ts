@@ -1,3 +1,4 @@
+import { renderAgentOutput } from '../../src/outbound/agent-output.js';
 /**
  * Engine driver: assembles the smallest real host (ZhinAgent + AgentCore +
  * session/context systems) around the scripted model, builds a canonical
@@ -284,9 +285,7 @@ function buildTurn(
       journal: createJournalFeed(createTracingJournal({ append: async () => undefined }, trace), { turnId }),
       reply: {
         send: async (output) => {
-          const text = output
-            .map((element) => ('content' in element && typeof element.content === 'string' ? element.content : ''))
-            .join('');
+          const text = renderAgentOutput(output);
           outbound.push(text);
           return { status: 'sent' as const };
         },

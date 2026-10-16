@@ -1,9 +1,10 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 /**
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
-import type { AIProvider, Usage, OutputElement, AgentSessionRepository, ContextRepository, RateLimiter, ModelRegistry, LlmApiRuntime } from '@zhin.js/ai';
+import type { AIProvider, Usage, AgentSessionRepository, ContextRepository, RateLimiter, ModelRegistry, LlmApiRuntime } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
@@ -119,4 +120,4 @@ export interface ZhinAgentPrivate
   readonly deferred: DeferredTurnState;
 }
 
-export type { OnChunkCallback, OutputElement, Tool, Message };
+export type { OnChunkCallback, AgentOutputElement, Tool, Message };

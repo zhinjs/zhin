@@ -1,11 +1,12 @@
-import type { OutputElement } from '@zhin.js/ai';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
+
 import type { TurnEvent } from '../event/turn-event.js';
 import { TurnTerminalGate } from './turn-terminal.js';
 
 export type TurnEventSink = (event: TurnEvent) => void;
 
 export interface TurnEventSourceInput {
-  execute(emit: TurnEventSink): Promise<readonly OutputElement[]>;
+  execute(emit: TurnEventSink): Promise<readonly AgentOutputElement[]>;
   mapError?: (error: unknown) => TurnEvent;
 }
 
@@ -22,7 +23,7 @@ export async function* streamTurnEvents(
   const terminal = new TurnTerminalGate();
   let wake: (() => void) | undefined;
   let done = false;
-  let output: readonly OutputElement[] = [];
+  let output: readonly AgentOutputElement[] = [];
   let failure: unknown;
 
   const emit: TurnEventSink = (event) => {
@@ -61,7 +62,7 @@ export async function* streamTurnEvents(
   }
 }
 
-function completed(output: readonly OutputElement[]): TurnEvent {
+function completed(output: readonly AgentOutputElement[]): TurnEvent {
   return {
     type: 'turn_end',
     output: [...output],

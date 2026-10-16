@@ -45,7 +45,7 @@ describe('direct call to a tool outside the turn catalog', () => {
     llm.respondWith((context) => {
       const answered = context.messages.some((entry) => entry.role === 'toolResult');
       return answered
-        ? assistantTextReply('完成')
+        ? assistantTextReply(JSON.stringify({ segments: [{ type: 'text', data: { text: '完成' } }] }))
         : assistantToolCallReply([{ id: 'call-1', name: toolName, arguments: {} }]);
     });
   }

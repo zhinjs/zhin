@@ -1,8 +1,10 @@
+import { renderAgentOutput, type TurnOutcome } from '@zhin.js/agent';
+import type { Segment } from '@zhin.js/im-contract';
 import type { Message } from '@zhin.js/core/runtime';
-import type { TurnOutcome } from '@zhin.js/agent';
 
 type OutputElementLike = {
   readonly type: string;
+  readonly segments?: Segment[];
   readonly content?: string;
   readonly url?: string;
   readonly title?: string;
@@ -94,6 +96,9 @@ export function flattenOutputElements(elements: readonly OutputElementLike[]): s
   const parts: string[] = [];
   for (const el of elements) {
     switch (el.type) {
+      case 'message':
+        parts.push(renderAgentOutput([{ type: 'message', segments: el.segments ?? [] }]));
+        break;
       case 'text':
         if (el.content) parts.push(el.content);
         break;

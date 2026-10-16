@@ -1,3 +1,4 @@
+import type { AgentOutputElement } from '../outbound/agent-output.js';
 /**
  * ZhinAgent 公共 API 接口定义
  *
@@ -5,7 +6,7 @@
  * ZhinAgent 类实现所有接口；外部消费方按需使用具体接口而非完整类。
  */
 
-import type { AgentMessage, AgentEvent, MediaContentBlock, OutputElement } from '@zhin.js/ai';
+import type { AgentMessage, AgentEvent, MediaContentBlock } from '@zhin.js/ai';
 import type { Message, Tool } from '../resource-hub/types.js';
 import type { SubagentSystem } from '../subagent/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
@@ -23,13 +24,13 @@ export interface IAgentTurnProcessor {
     commMessage: Message,
     externalTools?: Tool[],
     onChunk?: OnChunkCallback,
-  ): Promise<OutputElement[]>;
+  ): Promise<AgentOutputElement[]>;
 
   prompt(
     input: string | AgentMessage | AgentMessage[],
     commMessage: Message,
     options?: { media?: MediaContentBlock[]; onChunk?: OnChunkCallback },
-  ): Promise<OutputElement[]>;
+  ): Promise<AgentOutputElement[]>;
 
   steer(message: AgentMessage, commMessage: Message): void;
   followUp(message: AgentMessage, commMessage: Message): void;

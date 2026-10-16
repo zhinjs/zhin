@@ -47,6 +47,7 @@ export interface ExhaustedTurnSummaryInput {
   readonly sessionId?: string;
   readonly signal?: AbortSignal;
   readonly timeoutMs?: number;
+  readonly outputSchema?: Record<string, unknown>;
 }
 
 export interface ExhaustedTurnSummary {
@@ -72,7 +73,7 @@ export async function summarizeExhaustedTurn(
         ],
         tools: undefined,
       },
-      { signal, sessionId: input.sessionId },
+      { signal, sessionId: input.sessionId, outputSchema: input.outputSchema },
     );
 
     const text = assistantText(assistant).trim();
