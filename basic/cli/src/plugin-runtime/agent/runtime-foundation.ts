@@ -15,6 +15,8 @@ import {
   MarkdownKnowledgeIndex,
   SemanticMemoryRuntime,
   agentEventBusToken,
+  aiCompletionToken,
+  createAiCompletion,
   createAgentTraceRuntime,
   createSessionTreeRuntimeFromAgent,
 } from '@zhin.js/agent/runtime';
@@ -137,6 +139,10 @@ export class AgentRuntimeFoundation {
       options.lifecycle.add(() => created.agent.dispose());
       options.lifecycle.add(() => created.events.clear());
       options.resources.provide(agentEventBusToken, created.events);
+      options.resources.provide(aiCompletionToken, createAiCompletion({
+        service,
+        usageQuota: created.agent.usageQuota,
+      }));
 
       const schedule = createAssistantScheduleRuntime(
         created.agent,
