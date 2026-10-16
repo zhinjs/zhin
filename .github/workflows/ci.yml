@@ -26,11 +26,12 @@ jobs:
   platform-installed:
     permissions:
       contents: read
+      actions: write
       packages: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform: [onebot11, napcat, telegram, qq]
     steps:
@@ -56,6 +57,13 @@ jobs:
       - name: verify candidate packages through installed platform
         run: pnpm check:created-project:${{ matrix.platform }}
 
+      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
+      # cancels the whole run instead of letting the other jobs finish for nothing.
+      - name: cancel the rest of this run
+        if: failure()
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
   # Deliberately credential-free (see tests/docs/self-delivery-ci-credentials.test.ts).
   # Not a required check and already run on the pull request; in the merge queue it
   # cannot fetch the private @icqqjs packages without credentials, so it is skipped there.
@@ -167,11 +175,12 @@ jobs:
   test:
     permissions:
       contents: read
+      actions: write
       packages: read
     timeout-minutes: 25
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, windows-latest]
         node-version: [22, 24, 26]
@@ -189,14 +198,6 @@ jobs:
 
       - name: install fonts for Chinese component rendering
         uses: ./.github/actions/setup-rendering-fonts
-
-      - name: checkout official Console contract consumer
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
-        with:
-          repository: zhinjs/console
-          path: .tmp/console
-          persist-credentials: false
 
       - name: setup node.js
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
@@ -220,16 +221,6 @@ jobs:
 
       - name: run dependency lifecycle scripts without registry credentials
         run: pnpm rebuild
-
-      - name: audit dependencies
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm audit --prod || true
-
-      # Already enforced on the PR itself; in a merge group head_ref is empty, so the
-      # release PR could not be told apart and would fail the queue.
-      - name: check changeset
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && github.event_name != 'merge_group' && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
-        run: pnpm changeset status
 
       # Avoid per-package pnpm/cmd orchestrators on Windows. The same package
       # scripts run serially in dependency order under one pnpm process.
@@ -257,59 +248,6 @@ jobs:
         if: runner.os != 'Windows'
         run: pnpm build
 
-      # Every relative import in packed JS must resolve inside its tarball (#799).
-      - name: verify packed relative imports resolve
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm check:pack-imports
-
-      - name: verify packed Console publish contract
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm check:console-contract
-        env:
-          ZHIN_CONSOLE_DIR: .tmp/console
-
-      - name: verify clean generated project against candidate packages
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm check:created-project
-
-      # External plugin author path: built CLI -> zhin new -> install packed tarballs
-      # -> generated vitest + tsc; also fails if a packed manifest still has the
-      # source-only "development" condition.
-      - name: verify scaffolded plugin against candidate packages
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: node scripts/check-plugin-scaffold.mjs --no-build
-
-      # PR gate: scripted-model agent evals (packages/im/agent/evals), deterministic, < 1 min.
-      - name: agent evals (scripted model)
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm eval:agent
-
-      # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
-      - name: harness checks (incl. type-check, lint)
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm check:all
-        env:
-          HARNESS_SKIP_TEST: '1'
-          HARNESS_SEQUENTIAL: '1'
-
-      # Build after read-only harness checks: docs:build regenerates adapter/config docs.
-      # File-system link checks cannot catch links outside VitePress's site root.
-      - name: build documentation
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm docs:build
-        env:
-          VITE_DOCS_INSIGHTS_ENDPOINT: /__docs-insights
-          VITE_DOCS_INSIGHTS_SITE_ID: zhin-docs-test
-
-      # Exercise the same browser gate as Pages before a PR is merged.
-      - name: install docs browser
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: test docs journeys
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm test:docs:e2e:run
-
       - name: run tests with coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: pnpm vitest run --reporter=verbose --coverage
@@ -333,3 +271,151 @@ jobs:
         uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
         with:
           fail_ci_if_error: false
+
+      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
+      # cancels the whole run instead of letting the other jobs finish for nothing.
+      - name: cancel the rest of this run
+        if: failure()
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  # The extra gates that only run once (Node 24, Linux) are split out of the
+  # `test` matrix so they run in parallel instead of serially after the tests.
+  checks:
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/prepare-workspace
+        with:
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
+
+      - name: audit dependencies
+        run: pnpm audit --prod || true
+
+      # Already enforced on the PR itself; in a merge group head_ref is empty, so the
+      # release PR could not be told apart and would fail the queue.
+      - name: check changeset
+        if: github.event_name != 'merge_group' && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
+        run: pnpm changeset status
+
+      # PR gate: scripted-model agent evals (packages/im/agent/evals), deterministic, < 1 min.
+      - name: agent evals (scripted model)
+        run: pnpm eval:agent
+
+      # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
+      - name: harness checks (incl. type-check, lint)
+        run: pnpm check:all
+        env:
+          HARNESS_SKIP_TEST: '1'
+          HARNESS_SEQUENTIAL: '1'
+
+      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
+      # cancels the whole run instead of letting the other jobs finish for nothing.
+      - name: cancel the rest of this run
+        if: failure()
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  package-verify:
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: checkout official Console contract consumer
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          repository: zhinjs/console
+          path: .tmp/console
+          persist-credentials: false
+
+      - uses: ./.github/actions/prepare-workspace
+        with:
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
+
+      # Every relative import in packed JS must resolve inside its tarball (#799).
+      - name: verify packed relative imports resolve
+        run: pnpm check:pack-imports
+
+      - name: verify packed Console publish contract
+        run: pnpm check:console-contract
+        env:
+          ZHIN_CONSOLE_DIR: .tmp/console
+
+      - name: verify clean generated project against candidate packages
+        run: pnpm check:created-project
+
+      # External plugin author path: built CLI -> zhin new -> install packed tarballs
+      # -> generated vitest + tsc; also fails if a packed manifest still has the
+      # source-only "development" condition.
+      - name: verify scaffolded plugin against candidate packages
+        run: node scripts/check-plugin-scaffold.mjs --no-build
+
+      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
+      # cancels the whole run instead of letting the other jobs finish for nothing.
+      - name: cancel the rest of this run
+        if: failure()
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  docs:
+    permissions:
+      contents: read
+      packages: read
+      actions: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/prepare-workspace
+        with:
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
+
+      # Build after read-only harness checks: docs:build regenerates adapter/config docs.
+      # File-system link checks cannot catch links outside VitePress's site root.
+      - name: build documentation
+        run: pnpm docs:build
+        env:
+          VITE_DOCS_INSIGHTS_ENDPOINT: /__docs-insights
+          VITE_DOCS_INSIGHTS_SITE_ID: zhin-docs-test
+
+      # Exercise the same browser gate as Pages before a PR is merged.
+      - name: install docs browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: test docs journeys
+        run: pnpm test:docs:e2e:run
+
+      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
+      # cancels the whole run instead of letting the other jobs finish for nothing.
+      - name: cancel the rest of this run
+        if: failure()
+        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
