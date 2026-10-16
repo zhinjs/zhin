@@ -1,0 +1,166 @@
+.changeset/agent-structured-replies.md
+  s_6562bcb6cc0539::t_8842540e38eaa4 1-9
+packages/im/agent/src/turn/turn-metrics.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 98
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 2
+  s_6562bcb6cc0539::t_6a47a2f489885d 1,95-96
+packages/im/agent/src/security/outbound-leak-guard.ts
+  s_6562bcb6cc0539::t_08c3ae7f51bd4e 130,148-149
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 1,19
+  s_6562bcb6cc0539::t_0bd314444a59f4 127,131-147,186
+packages/im/agent/evals/framework/scripted-model.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 2,60,243,250-253
+  s_6562bcb6cc0539::t_617284fb3d56c3 1,248-249,280
+packages/im/agent/src/turn/turn-ingress.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 2
+  s_6562bcb6cc0539::t_98e77361a0bf42 1,148,163,223
+docs/en/ai/structured-replies.md
+  s_6562bcb6cc0539::t_9b4e4362d78e7f 1-92
+packages/im/agent/src/config/agent-interfaces.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 9
+  s_6562bcb6cc0539::t_5b2b48bf799dd8 1,27,33
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 453
+packages/im/agent/src/outbound/agent-output.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 1-14,16-20
+  s_6562bcb6cc0539::t_88a911ffce1223 15
+packages/im/agent/src/media/deliver-subagent-result.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 6
+  s_6562bcb6cc0539::t_44776160d484a2 1,18
+packages/im/agent/src/zhin-agent/index.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 1
+  s_6562bcb6cc0539::t_e50319a7a33f39 447,484,498
+packages/im/agent/src/turn/prompt-api.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 4
+  s_6562bcb6cc0539::t_331e51e080a24a 1,33
+packages/im/agent/src/core/agent-core-run.ts
+  s_6562bcb6cc0539::t_08c3ae7f51bd4e 5-8,10,271-272,519-529,552-554,931,949,960,968,993,1020,1086,1088,1099,1106-1108,1117,1120-1122,1125-1130,1148
+  s_6562bcb6cc0539::t_88a911ffce1223 1109-1111,1114-1116,1118-1119,1123-1124
+  s_6562bcb6cc0539::t_e1e3370bff9742 1139-1142
+  s_6562bcb6cc0539::t_b8a9ed447664c3 922,973-977,1089,1112-1113
+packages/im/agent/src/outbound/structured-reply.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 1-13,15-25
+  s_6562bcb6cc0539::t_88a911ffce1223 14
+packages/im/agent/evals/framework/driver.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 1,288
+packages/im/agent/src/turn/turn-complete.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 88
+  s_6562bcb6cc0539::t_2c21e589ebb168 6,20,87
+docs/en/ai/default-behavior.md
+  s_6562bcb6cc0539::t_96821ba52aaf5b 74
+packages/im/agent/src/event/turn-event.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 7
+  s_6562bcb6cc0539::t_643745db286850 1,153
+packages/im/agent/src/outbound/send-proactive.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 1
+  s_6562bcb6cc0539::t_e767c81bb27076 20
+packages/im/agent/src/turn/deferred-delivery.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 2
+  s_6562bcb6cc0539::t_84b9254d987738 1,48
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_6562bcb6cc0539::t_88a911ffce1223 84,91,122,133,135
+  s_6562bcb6cc0539::t_6476ab44a89fcb 2-83,86-90,92-117,119-121,123-127,129-132,134,136-154,156-157,159-165
+  s_6562bcb6cc0539::t_ce0e431723c5a8 1,85,118,128,155,158
+packages/im/agent/src/subagent/subagent-runtime.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 133
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 65
+packages/im/core/tests/interactive-json-schema.test.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 47,59-60
+packages/im/agent/tests/typing-feedback-probe.test.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 19,45,73
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  s_6562bcb6cc0539::t_8842540e38eaa4 42
+packages/im/agent/src/turn/turn-event-source.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 2
+  s_6562bcb6cc0539::t_d07c9e29f70728 1,9,26,65
+packages/im/agent/src/core/exhausted-turn-reply.ts
+  s_6562bcb6cc0539::t_08c3ae7f51bd4e 50,76
+basic/cli/src/plugin-runtime/agent/turn/content.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 2,7,99-101
+  s_6562bcb6cc0539::t_f264b81adca91a 1
+packages/im/agent/src/index.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 542-544
+packages/im/agent/tests/core/progress-budget.test.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 82
+packages/im/core/tests/segment-contract-json-schema.test.ts
+  s_6562bcb6cc0539::t_88a911ffce1223 85
+  s_6562bcb6cc0539::t_6476ab44a89fcb 81-84,86-105
+packages/im/agent/package.json
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 115
+packages/im/agent/src/internal/agent-host.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 7
+  s_6562bcb6cc0539::t_abd08224b5f7ae 1,123
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_6562bcb6cc0539::t_88a911ffce1223 217-222
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 185-188,190-205,211-216,223-224,227
+docs/.vitepress/config.ts
+  s_6562bcb6cc0539::t_96821ba52aaf5b 84,227
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  s_6562bcb6cc0539::t_d7b6de42e231e3 12,16,27-45
+  s_6562bcb6cc0539::t_2859ee99c209e4 1-11,13-15,17-26
+packages/im/agent/src/schedule-domain/execution-domain.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 3
+  s_6562bcb6cc0539::t_d7b6de42e231e3 64
+  s_6562bcb6cc0539::t_c5e017731a9a5b 1,62
+docs/ai/structured-replies.md
+  s_6562bcb6cc0539::t_9b4e4362d78e7f 1-99
+packages/im/agent/src/media/media-publisher.ts
+  s_6562bcb6cc0539::t_e0b1d9d27a100f 1,7,10,293-310,315,323,328-329
+  s_6562bcb6cc0539::t_bcc050337b3299 324-327
+packages/im/agent/tests/ai/zhin-agent.test.ts
+  s_6562bcb6cc0539::t_e1e3370bff9742 96,110,114
+  s_6562bcb6cc0539::t_96821ba52aaf5b 188,210,231,265
+docs/ai/default-behavior.md
+  s_6562bcb6cc0539::t_353e24c722b989 74
+docs/configuration/generated.md
+  s_6562bcb6cc0539::t_51e2edb7629d7a 125
+docs/en/configuration/generated.md
+  s_6562bcb6cc0539::t_a4a0950b945b38 125
+packages/im/agent/README.md
+  s_6562bcb6cc0539::t_e30586fe97404c 539-554
+packages/im/agent/evals/cases/structured-mixed-reply.case.ts
+  s_6562bcb6cc0539::t_30979ca982b77a 1-23
+packages/im/agent/evals/framework/framework.test.ts
+  s_6562bcb6cc0539::t_fb48225e08fc84 1,263,268-271,285-286
+packages/im/agent/evals/framework/live-model.ts
+  s_6562bcb6cc0539::t_bf43c62637ea86 17,47,53
+packages/im/agent/evals/nightly/nightly.test.ts
+  s_6562bcb6cc0539::t_6c0e9cb0692aa9 1,177-185
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_6562bcb6cc0539::t_e5875ab60a20a6 130-131
+packages/im/agent/src/event/turn-to-agent-stream.ts
+  s_6562bcb6cc0539::t_0c9ef2fea606d5 1,19-20
+packages/im/agent/src/media/media-tool-bridge.ts
+  s_6562bcb6cc0539::t_68848745b3405e 1,26-27,61,63
+packages/im/agent/src/turn/turn-pipeline.ts
+  s_6562bcb6cc0539::t_b132ae60dbb945 26,78,108
+packages/im/agent/tests/core/deferred-direct-call.e2e.test.ts
+  s_6562bcb6cc0539::t_5df9d554b441c9 48
+packages/im/agent/tests/core/max-iterations-reply.e2e.test.ts
+  s_6562bcb6cc0539::t_0d94ef4090ff42 70
+packages/im/ai/README.md
+  s_6562bcb6cc0539::t_b9ca8580407ac2 186
+packages/im/runtime/src/host-config-schema.json
+  s_6562bcb6cc0539::t_08ad38708aa236 270-271
+pnpm-lock.yaml
+  s_6562bcb6cc0539::t_4c6909753bd22e 1301-1303
+tests/snapshots/api-surface.json
+  s_6562bcb6cc0539::t_0271a21c9ae1aa 20,127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dd7f25f98a8f1ea6182526ea504a5bd111b752e1",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
