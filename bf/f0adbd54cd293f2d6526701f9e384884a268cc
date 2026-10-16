@@ -1,0 +1,46 @@
+docs/contributing/plugin-experience-plan.md
+  s_9477e63ef5cee5::t_566daaa2e38a8c 72
+packages/toolkit/testing/README.md
+  s_9477e63ef5cee5::t_566daaa2e38a8c 1-116
+plugins/utils/group-suite/README.md
+  s_9477e63ef5cee5::t_566daaa2e38a8c 91
+tsconfig.typecheck.json
+  s_9477e63ef5cee5::t_566daaa2e38a8c 206-207,329
+packages/toolkit/testing/tests/fakes.test.ts
+  s_9477e63ef5cee5::t_566daaa2e38a8c 1-115
+docs/authoring/testing.md
+  s_9477e63ef5cee5::t_566daaa2e38a8c 3,8,16,24,66,97
+.changeset/plugin-test-kit-fakes.md
+  s_9477e63ef5cee5::t_a94c837cad8eb6 7-8
+  s_9477e63ef5cee5::t_566daaa2e38a8c 2,6
+plugins/utils/group-suite/tests/practical-runtime.test.ts
+  s_9477e63ef5cee5::t_566daaa2e38a8c 4,9
+docs/contributing/publishing.md
+  s_9477e63ef5cee5::t_566daaa2e38a8c 156
+plugins/services/activity-feedback/tests/activity-feedback-runtime.test.ts
+  s_9477e63ef5cee5::t_566daaa2e38a8c 3
+docs/en/authoring/testing.md
+  s_9477e63ef5cee5::t_566daaa2e38a8c 3,8,16,24,66,97
+plugins/services/activity-feedback/package.json
+  s_9477e63ef5cee5::t_566daaa2e38a8c 52
+packages/toolkit/testing/package.json
+  s_9477e63ef5cee5::t_566daaa2e38a8c 1-61
+pnpm-lock.yaml
+  s_9477e63ef5cee5::t_dba02cee65d422 2031-2070,3455,3457
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bff0adbd54cd293f2d6526701f9e384884a268cc",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
