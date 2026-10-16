@@ -1,5 +1,27 @@
 # @zhin.js/plugin-test-kit
 
+## 1.0.2
+
+### Patch Changes
+
+- b947298: testing 新增类型化的假运行环境：`createFakePlugin` / `runPluginSetup` 提供真实 Scope 与内存版数据库、定时（可控时钟）、出站记录，`runCommand` / `runMiddleware` / `runHandler` 直接执行约定目录里的定义，`fakeOf` 取代 `as never`。activity-feedback 的测试已迁移。
+
+  包名由 `@zhin.js/plugin-test-kit` 改为 `@zhin.js/testing`（目录 `packages/toolkit/testing`）。旧名 `@zhin.js/plugin-test-kit` 不再更新，请改用新包；API 与 `PluginTestKit` 类名不变。
+
+- Updated dependencies [a64716a]
+- Updated dependencies [0c35b96]
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/runtime@1.1.7
+  - @zhin.js/adapter@1.1.19
+  - @zhin.js/command@1.1.7
+  - @zhin.js/core@1.1.44
+  - @zhin.js/feature-kit@1.1.5
+  - @zhin.js/handler@1.1.5
+  - @zhin.js/im-contract@1.1.4
+  - @zhin.js/middleware@1.1.6
+  - @zhin.js/plugin-runtime@1.1.14
+
 ## 1.0.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/schedule",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Calendar semantic scheduler for Zhin.js — solar, lunar, statutory holidays, workdays, scatter",
   "type": "module",
   "main": "./lib/index.js",
