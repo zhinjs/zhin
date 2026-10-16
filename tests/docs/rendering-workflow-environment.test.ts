@@ -4,7 +4,7 @@ import { parse } from 'yaml';
 const load = (file: string) => parse(readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8'));
 
 describe('rendering test environments', () => {
-  it.each([['ci', 'test'], ['publish', 'publish']])(
+  it.each([['ci', 'checks'], ['publish', 'publish']])(
     'sets up fonts before rendering tests in %s', (workflow, job) => {
       const steps = load(`.github/workflows/${workflow}.yml`).jobs[job].steps;
       const checkout = steps.findIndex((step: { uses?: string }) => step.uses?.startsWith('actions/checkout@'));
