@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_9477e63ef5cee5::t_6da546213ae81a 127-129,134-135,208-210,212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "638908a14701333fc0dd31101c6cdd7e49f9c241",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
