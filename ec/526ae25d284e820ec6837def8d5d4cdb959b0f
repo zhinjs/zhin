@@ -1,0 +1,51 @@
+packages/toolkit/create-zhin/src/index.ts
+  s_9477e63ef5cee5::t_6b049734f7c78e 350
+packages/toolkit/create-zhin/README.md
+  s_9477e63ef5cee5::t_4a6f6d5f7363a9 46,136,141
+scripts/check-plugin-scaffold.mjs
+  s_9477e63ef5cee5::t_4cbacb35de337e 99-100,102-103,134
+docs/getting-started/first-plugin.md
+  s_9477e63ef5cee5::t_4a6f6d5f7363a9 17-20
+packages/toolkit/create-zhin/template/skills/plugin-init/SKILL.md
+  s_9477e63ef5cee5::t_4a6f6d5f7363a9 34-35
+README.zh-CN.md
+  s_9477e63ef5cee5::t_4a6f6d5f7363a9 225
+docs/cli/index.md
+  s_9477e63ef5cee5::t_4a6f6d5f7363a9 23-24,47,141,144-147
+docs/en/cli/index.md
+  s_9477e63ef5cee5::t_4a6f6d5f7363a9 23-24,47,141,144-147
+basic/cli/src/commands/runtime.ts
+  s_9477e63ef5cee5::t_6b049734f7c78e 12,18
+.changeset/plugin-create-entry.md
+  s_9477e63ef5cee5::t_c215eb89ec6898 1-6
+docs/en/getting-started/first-plugin.md
+  s_9477e63ef5cee5::t_c215eb89ec6898 17-20
+basic/cli/src/commands/new.ts
+  s_9477e63ef5cee5::t_75dd0525a3a3d1 123-131,133-139
+  s_9477e63ef5cee5::t_c89e7aab06cfb4 132
+  s_9477e63ef5cee5::t_b0f468544a89ed 23
+  s_9477e63ef5cee5::t_6ba69d79931c18 44
+  s_9477e63ef5cee5::t_0db6c1da0f1fe1 86-88
+  s_9477e63ef5cee5::t_677a7ec39ec6aa 436-437,439-441
+  s_9477e63ef5cee5::t_2c467ba17b4961 49
+README.md
+  s_9477e63ef5cee5::t_4a6f6d5f7363a9 221
+basic/cli/tests/new-integration.test.ts
+  s_9477e63ef5cee5::t_a9cdd7e871984f 305-335
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ec526ae25d284e820ec6837def8d5d4cdb959b0f",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
