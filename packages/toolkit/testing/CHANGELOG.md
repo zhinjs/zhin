@@ -1,5 +1,13 @@
 # @zhin.js/plugin-test-kit
 
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [dd7f25f]
+  - @zhin.js/core@1.1.45
+  - @zhin.js/runtime@1.1.8
+
 ## 1.0.2
 
 ### Patch Changes
