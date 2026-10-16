@@ -337,14 +337,17 @@ useContext('ai', async (ai) => {
     provider: 'ollama',
     model: 'qwen2.5',
     systemPrompt: '只做中英互译，不解释。',
-    includeRegisteredTools: false,
   })
   const translated = await translateAgent.run('Hello world')
 })
 ```
 
-Standalone Agent 不隐式继承主 Agent 的 native Tool。能力必须通过 `tools` 显式传入，或先用
-`ai.registerTool()` 注册；`includeRegisteredTools: false` 可为单次 Agent 建立空白能力边界。
+Standalone Agent 不隐式继承主 Agent 的 native Tool，也**默认不带** `ai.registerTool()` 注册的工具：
+能力必须通过 `tools` 显式传入，或传 `includeRegisteredTools: true` 使用已注册的工具。
+
+只需要文本（总结群聊、分类消息、改写回复）时，不要借整轮 Agent，改用 `aiCompletionToken`：
+它只做一次补全，不带任何工具，自带重试和降级，不可信内容放进 `untrusted` 按数据渲染。见
+[Host Token 总览](../../../docs/authoring/host-tokens.md)。
 适合：按场景/按接口使用不同「角色」的 Agent（代码、翻译、总结等），彼此独立。
 
 ### 3. 一次调用、单次任务（不持有 Agent 实例）
