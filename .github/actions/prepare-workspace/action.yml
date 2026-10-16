@@ -40,7 +40,19 @@ runs:
       shell: bash
       run: pnpm rebuild
 
+    # Turbo's local cache (lib/** / dist/** per package task hash) is shared through the
+    # Actions cache: jobs of one run restore what another job built, and a new commit
+    # only rebuilds the packages whose inputs changed since the previous run.
+    - name: restore turbo build cache
+      if: inputs.build == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .turbo/cache
+        key: turbo-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-
+
     - name: build packages
       if: inputs.build == 'true'
       shell: bash
-      run: pnpm build
+      run: pnpm build --cache-dir=.turbo/cache

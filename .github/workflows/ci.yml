@@ -244,9 +244,19 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      # Same turbo cache as `prepare-workspace` (Windows builds through build-windows.ps1).
+      - name: restore turbo build cache
+        if: runner.os != 'Windows'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
       - name: build packages
         if: runner.os != 'Windows'
-        run: pnpm build
+        run: pnpm build --cache-dir=.turbo/cache
 
       - name: run tests with coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
