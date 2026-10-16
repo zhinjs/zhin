@@ -214,12 +214,10 @@ describe('AI Service 集成测试', () => {
         .toThrow('already registered');
       expect(() => aiService.registerTool({ ...tool, name: ' duplicate ' }))
         .toThrow('canonical name');
-      expect(() => aiService.createAgent({ tools: [tool] }))
+      expect(() => aiService.createAgent({ tools: [tool], includeRegisteredTools: true }))
         .toThrow('Duplicate standalone Agent Tool');
-      expect(() => aiService.createAgent({
-        tools: [tool],
-        includeRegisteredTools: false,
-      })).not.toThrow();
+      // Registered tools are opt-in: by default a standalone Agent starts with none.
+      expect(() => aiService.createAgent({ tools: [tool] })).not.toThrow();
     });
   });
 

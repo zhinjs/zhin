@@ -530,3 +530,12 @@ export type {
 
 // Detached background tasks (#731) and interjection / commands (#732)
 export * from './detached-task/index.js';
+
+// Plain text completion for plugins (#804): tool-free, with retry and fallback.
+export { aiCompletionToken, AiCompletionQuotaError } from './plugin-runtime/ai-completion.js';
+export type {
+  AiCompletion,
+  AiCompletionInput,
+  AiCompletionResult,
+  AiCompletionUntrustedInput,
+} from './plugin-runtime/ai-completion.js';

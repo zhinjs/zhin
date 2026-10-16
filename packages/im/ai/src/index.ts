@@ -138,6 +138,7 @@ export type {
   OllamaProviderConfig,
   ChatMessage,
   TextCompleteOptions,
+  TextCompleteResult,
   ToolCall,
   MessageRole,
   AgentTool,

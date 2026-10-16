@@ -47,7 +47,11 @@ export interface CreateServiceAgentOptions {
   model?: string;
   systemPrompt?: string;
   tools?: readonly AgentTool[];
-  /** Include tools explicitly registered on this service. */
+  /**
+   * Include tools registered on this service via `registerTool()`. Default
+   * `false`: a standalone Agent starts with no tools unless they are passed
+   * explicitly. For plain text work use `aiCompletionToken` instead.
+   */
   includeRegisteredTools?: boolean;
   maxIterations?: number;
   contextWindow?: number;
@@ -227,7 +231,7 @@ export class AIService {
 
   private resolveServiceAgentTools(options: CreateServiceAgentOptions): AgentTool[] {
     return this.standaloneTools.resolve({
-      includeRegisteredTools: options.includeRegisteredTools !== false,
+      includeRegisteredTools: options.includeRegisteredTools === true,
       explicitTools: options.tools ?? [],
     });
   }
