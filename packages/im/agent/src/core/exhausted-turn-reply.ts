@@ -8,7 +8,7 @@
  * call fails, return a fixed message. Raw tool bodies never reach the user.
  */
 import {
-  assistantText,
+  assistantAnswerText,
   createUserMessage,
   type AgentMessage,
   type AssistantMessage,
@@ -33,7 +33,7 @@ export function buildExhaustedTurnInstruction(maxIterations: number): string {
     '1. What you have done or found so far.',
     '2. What is still left to do.',
     '3. Ask whether they want you to continue.',
-    'Do not paste file contents, search results, logs or other raw tool output. Do not attempt any tool calls.',
+    'Do not paste file contents, search results, logs or other raw tool output. Do not attempt business tool calls. A supplied json response tool is still available to submit the final structured reply.',
   ].join('\n');
 }
 
@@ -76,7 +76,7 @@ export async function summarizeExhaustedTurn(
       { signal, sessionId: input.sessionId, outputSchema: input.outputSchema },
     );
 
-    const text = assistantText(assistant).trim();
+    const text = assistantAnswerText(assistant).trim();
     if (!text || assistant.errorMessage) {
       throw new Error(assistant.errorMessage ?? 'summary completion returned no text');
     }

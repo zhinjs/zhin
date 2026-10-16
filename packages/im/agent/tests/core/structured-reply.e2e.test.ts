@@ -1,3 +1,4 @@
+import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recovery.js';
 import { runEvalCase } from '../../evals/framework/index.js';
 import { mapTurnEventToAgentStreamEvents } from '../../src/event/turn-to-agent-stream.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
@@ -26,7 +27,7 @@ it('carries a mixed default-schema reply through the full engine, terminal, publ
   expect(JSON.stringify(consoleEvents)).toContain(JSON.stringify(preview).slice(1, -1));
 });
 
-it('rejects an invalid rich reply after a tool without retrying the completed operation', async () => {
+it('fails closed after one format correction without replaying the completed operation', async () => {
   const result = await runEvalCase({
     id: 'structured-invalid-after-tool', description: 'Formatting failure does not replay tools',
     inbound: { text: '做一次查询，然后展示结果' },
@@ -34,12 +35,13 @@ it('rejects an invalid rich reply after a tool without retrying the completed op
     script: [
       { toolCalls: [{ name: 'lookup_once', args: {} }] },
       { segments: [{ type: 'text', data: { text: 'valid prefix' } }, { type: 'image', data: {} }] },
+      { segments: [{ type: 'image', data: {} }] },
     ], expect: {},
   });
-  expect(result.modelRequests).toHaveLength(2);
+  expect(result.modelRequests).toHaveLength(3);
   expect(result.attemptedTools).toEqual(['lookup_once']);
   expect(result.executedTools).toHaveLength(1);
-  expect(result.outbound).toEqual([]);
-  expect(result.traces[0]?.termination?.status).toBe('failed');
+  expect(result.outbound).toEqual([STRUCTURED_REPLY_FAILURE]);
+  expect(result.modelRequests[2].offeredTools).toEqual([]);
   expect(result.extraModelRequests).toBe(0);
 });

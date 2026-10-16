@@ -18,6 +18,7 @@ import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
+import { recoverStructuredReply } from './structured-reply-recovery.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
@@ -971,10 +972,16 @@ export async function* runAgentLoopTextTurnRun(
       if (event.type === 'message_end' && event.message.role === 'assistant') {
         const assistant = event.message as AssistantMessage;
         lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
+        const answerText = assistant.content
+          .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
+          .map(block => block.text).join('');
         lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
-          || (!lastAssistantHadToolCalls && !assistantText(assistant).trim());
-        lastAssistantText = imReply && !lastAssistantNeedsHostReply ? assistantText(assistant)
+          || (!lastAssistantHadToolCalls && !answerText.trim());
+        lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
           : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant);
+        if (imReply && lastAssistantNeedsHostReply && !lastAssistantText.trim()) {
+          lastAssistantText = '模型未返回可用的最终回复，请重试。';
+        }
         lastUsage = assistant.usage;
         if (assistant.usage) turnTokens += tokenUsageToLegacy(assistant.usage).total_tokens;
         logAssistantIterationFailure(assistant, modelId, sessionId);
@@ -1112,8 +1119,24 @@ export async function* runAgentLoopTextTurnRun(
   const proseReply = structuredReply ? ''
     : sanitizeAssistantReply(rawReply, { toolSummary: formatToolCallsForUser(toolCalls) });
   const textReply = delegatedOnly ? '' : proseReply.trim() ? continuationPrefix + proseReply : proseReply;
-  let output: AgentOutputElement[] = delegatedOnly ? [] : structuredReply
-    ? decodeStructuredReply(rawReply) : parseOutput(textReply);
+  let output: AgentOutputElement[] = delegatedOnly || structuredReply ? [] : parseOutput(textReply);
+  if (!delegatedOnly && structuredReply) {
+    try {
+      output = decodeStructuredReply(rawReply);
+    } catch (error) {
+      const recovery = await recoverStructuredReply({
+        transport: host.llmRuntime, model: llmModel, raw: rawReply,
+        error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
+      });
+      output = recovery.output;
+      const lastBatch = conversationBatches.at(-1);
+      if (recovery.exchange) {
+        lastBatch?.messages.push(...recovery.exchange);
+        lastBatch?.messageExtras.push(undefined, undefined);
+        lastUsage = recovery.exchange[1].usage;
+      }
+    }
+  }
   if (!delegatedOnly) {
     if (structuredReply && continuationPrefix && output[0]?.type === 'message') {
       output[0].segments.unshift({ type: 'text', data: { text: continuationPrefix } });

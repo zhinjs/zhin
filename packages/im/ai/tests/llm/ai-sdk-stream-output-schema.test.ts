@@ -113,13 +113,24 @@ describe('createAiSdkStreamFn outputSchema', () => {
   });
 
   it('falls back to plain text when structured output is unavailable (tool-call step)', async () => {
-    vi.mocked(streamText).mockReturnValue(makeStreamResult(makeFinal({
+    const result = makeStreamResult(makeFinal({
       output: Promise.reject(new Error('NoObjectGenerated')),
-    })) as never);
+    }));
+    result.fullStream = (async function* () {
+      yield { type: 'tool-call', toolCallId: 'lookup', toolName: 'lookup', input: {} } as never;
+    })();
+    vi.mocked(streamText).mockReturnValue(result as never);
 
     const message = await runStream({ outputSchema: { type: 'object' } });
 
     const textBlock = message.content.find((b) => b.type === 'text');
     expect(textBlock).toEqual({ type: 'text', text: 'plain text' });
+  });
+
+  it('does not hide final structured-output failures as successful plain text', async () => {
+    vi.mocked(streamText).mockReturnValue(makeStreamResult(makeFinal({
+      output: Promise.reject(new Error('NoObjectGenerated: private response body')),
+    })) as never);
+    await expect(runStream({ outputSchema: { type: 'object' } })).rejects.toThrow();
   });
 });
