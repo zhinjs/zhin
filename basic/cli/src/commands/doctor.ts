@@ -29,6 +29,7 @@ import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
 import { findConfigFile, readConfig } from '../utils/config-file.js';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
+import { findDuplicateZhinInstances } from '../utils/dev-link.js';
 import { fetchReadiness } from '../plugin-runtime/readiness-client.js';
 
 const execAsync = promisify(exec);
@@ -573,6 +574,26 @@ export const doctorCommand = new Command('doctor')
         message: 'node_modules 不存在',
         fix: 'pnpm install'
       });
+    }
+
+    // 7b. 同名 zhin 包是否解析到多份实例（Token / instanceof 不互通，generation 会硬错误）
+    if (fs.existsSync(nodeModulesPath)) {
+      try {
+        const duplicates = findDuplicateZhinInstances(cwd);
+        if (duplicates.size > 0) {
+          const detail = [...duplicates].map(([name, dirs]) => `${name} ×${dirs.length}`).join(', ');
+          results.push({
+            name: 'Zhin 包单实例',
+            status: 'warn',
+            message: `同名包解析到多个物理位置: ${detail}`,
+            fix: '联调本地源码请运行 zhin dev link <zhin 源码路径>；否则统一版本后运行 pnpm dedupe（详见 authoring/local-dev）',
+          });
+        } else {
+          results.push({ name: 'Zhin 包单实例', status: 'ok', message: '每个 zhin 包只解析到一份实例' });
+        }
+      } catch {
+        results.push({ name: 'Zhin 包单实例', status: 'warn', message: '无法检查 node_modules 中的 zhin 包实例' });
+      }
     }
 
     // 8. 检查端口占用（读取已加载配置的 http.port，默认 8086）
