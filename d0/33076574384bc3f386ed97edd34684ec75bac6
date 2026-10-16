@@ -1,0 +1,54 @@
+.changeset/tidy-structured-provider-replies.md
+  s_6562bcb6cc0539::t_65fa7a4bd26390 1-6
+packages/im/agent/src/outbound/structured-reply.ts
+  s_6562bcb6cc0539::t_96e48a7da9c501 23-29
+  s_6562bcb6cc0539::t_27aa87a3244f8d 12,16
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  s_6562bcb6cc0539::t_51b9db5c46cde0 51,63-68,75-83,90-91,93,411-412,429,601-602
+  s_6562bcb6cc0539::t_27aa87a3244f8d 50,56-59,62,69-71,94-95
+  s_6562bcb6cc0539::t_cf3a32e0c50dd8 55,60
+  s_6562bcb6cc0539::t_7ac5f683715cc6 5,570-572,587-599
+  s_6562bcb6cc0539::t_b88c91e9de460b 84-89,92,413,479-482,492-493
+  s_6562bcb6cc0539::t_a23d65310dd44e 573-586
+packages/im/agent/src/core/agent-core-run.ts
+  s_6562bcb6cc0539::t_27aa87a3244f8d 975-977,979-980,982-984
+  s_6562bcb6cc0539::t_96e48a7da9c501 21,1122-1126,1128-1130,1138-1139
+  s_6562bcb6cc0539::t_a374f6224577d2 1127,1131-1137
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_6562bcb6cc0539::t_2ce490474ba949 70-77,138
+  s_6562bcb6cc0539::t_5d9c7f34f0d37c 5,134-137,139-148
+packages/im/agent/src/core/exhausted-turn-reply.ts
+  s_6562bcb6cc0539::t_96e48a7da9c501 36
+  s_6562bcb6cc0539::t_27aa87a3244f8d 11,79
+packages/im/agent/src/core/structured-reply-recovery.ts
+  s_6562bcb6cc0539::t_a374f6224577d2 1,15,19,24-27,36-38,43
+  s_6562bcb6cc0539::t_96e48a7da9c501 2-14,16-18,20-23,28-35,39-42,44
+packages/im/ai/tests/llm/ai-sdk-stream-output-schema.test.ts
+  s_6562bcb6cc0539::t_2ce490474ba949 116,118-122,129-134
+  s_6562bcb6cc0539::t_3da325d1f1ac1c 135
+docs/ai/structured-replies.md
+  s_6562bcb6cc0539::t_65fa7a4bd26390 81,86-87
+docs/en/ai/structured-replies.md
+  s_6562bcb6cc0539::t_65fa7a4bd26390 95-108
+  s_6562bcb6cc0539::t_40f8e426adefd7 75-77
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  s_6562bcb6cc0539::t_3f075162578d42 1,30,38,41,44-45
+packages/im/ai/tests/llm/provider-structured-output.test.ts
+  s_6562bcb6cc0539::t_323ce29962dcfe 1-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d033076574384bc3f386ed97edd34684ec75bac6",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
