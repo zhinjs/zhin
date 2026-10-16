@@ -1,0 +1,62 @@
+packages/toolkit/plugin-test-kit/src/fake-runners.ts
+  s_9477e63ef5cee5::t_6065f96857dcfa 1-117
+packages/toolkit/plugin-test-kit/src/partial.ts
+  s_9477e63ef5cee5::t_04fe8b2592c514 1-8
+docs/authoring/testing.md
+  s_9477e63ef5cee5::t_5addbc7f992d7a 1-65,67-106
+  s_9477e63ef5cee5::t_72c72818999e84 66
+docs/en/authoring/testing.md
+  s_9477e63ef5cee5::t_3606f1c9d6c341 1-106
+docs/en/authoring/plugin-delivery.md
+  s_9477e63ef5cee5::t_72c72818999e84 61
+packages/toolkit/plugin-test-kit/src/fake-hosts.ts
+  s_9477e63ef5cee5::t_23e386b101c557 1-131
+packages/toolkit/plugin-test-kit/README.md
+  s_9477e63ef5cee5::t_79a4d09d06b6f4 3-37
+.changeset/plugin-test-kit-fakes.md
+  s_9477e63ef5cee5::t_72c72818999e84 1-6
+plugins/services/activity-feedback/tests/activity-feedback-runtime.test.ts
+  s_9477e63ef5cee5::t_7ddf63f53273d1 8,65,97
+  s_9477e63ef5cee5::t_5d1027ff807097 74,77,79,82,88,91,93,118,124,158,166,380,386
+  s_9477e63ef5cee5::t_699ac91e3fc6d2 2-4,7,22,32,66-69,71,85,98-100,102,104
+  s_9477e63ef5cee5::t_bda50633a05f67 109,114,141,180,187,215,219,234,241,257,265,299,309,326,330-331,335-336,342,373
+  s_9477e63ef5cee5::t_c0659b8550da78 181,235,258,303
+docs/.vitepress/config.ts
+  s_9477e63ef5cee5::t_72c72818999e84 102,241
+packages/toolkit/plugin-test-kit/src/index.ts
+  s_9477e63ef5cee5::t_7fbe7a0a94eb6d 16-17
+  s_9477e63ef5cee5::t_8fae45930616fe 18
+  s_9477e63ef5cee5::t_c34ada37a3f394 14-15,19-21
+docs/authoring/plugin-delivery.md
+  s_9477e63ef5cee5::t_72c72818999e84 61
+packages/toolkit/plugin-test-kit/src/fake-clock.ts
+  s_9477e63ef5cee5::t_777e19b60ddbed 1-116
+packages/toolkit/plugin-test-kit/package.json
+  s_9477e63ef5cee5::t_7ad07068700b95 28,30-32
+plugins/services/activity-feedback/package.json
+  s_9477e63ef5cee5::t_1aff3c8144a66c 52
+packages/toolkit/plugin-test-kit/src/fake-plugin.ts
+  s_9477e63ef5cee5::t_c5d184b547b107 1-10,19-24,26-84,86-171
+  s_9477e63ef5cee5::t_7fbe7a0a94eb6d 11-18,25,85
+packages/toolkit/plugin-test-kit/tests/fakes.test.ts
+  s_9477e63ef5cee5::t_719a71ef97f72b 1-6,8-52,54-83,85-115
+  s_9477e63ef5cee5::t_7fbe7a0a94eb6d 7,53,84
+pnpm-lock.yaml
+  s_9477e63ef5cee5::t_065ec152ab4c7f 1971-1973,1977-1982,1986-1988,3455-3457
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b947298a627ad724159ff467ecc66d364701da73",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
