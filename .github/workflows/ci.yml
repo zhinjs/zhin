@@ -56,7 +56,11 @@ jobs:
       - name: verify candidate packages through installed platform
         run: pnpm check:created-project:${{ matrix.platform }}
 
+  # Deliberately credential-free (see tests/docs/self-delivery-ci-credentials.test.ts).
+  # Not a required check and already run on the pull request; in the merge queue it
+  # cannot fetch the private @icqqjs packages without credentials, so it is skipped there.
   database-live:
+    if: github.event_name != 'merge_group'
     permissions:
       contents: read
     timeout-minutes: 20
@@ -124,15 +128,10 @@ jobs:
           node-version: 24
           cache: 'pnpm'
 
-      # Same as the test job: only this script-free install gets the existing credential
-      # for the cross-organization @icqqjs packages. Without it the job only passed on a
-      # warm pnpm cache, and failed in the merge queue.
       - name: install dependencies
         run: >-
           pnpm --filter @zhin.js/database... --filter @zhin.js/cli...
           install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
-        env:
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
 
       - name: run dependency lifecycle scripts without registry credentials
         run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... rebuild
