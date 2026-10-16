@@ -222,7 +222,7 @@ ai:
 ```bash
 npx zhin setup            # 给已有项目补充平台、AI、数据库
 npx zhin doctor           # 诊断 Node、端口、Token、清单
-npx zhin new my-plugin    # 创建插件包
+npx @zhin.js/cli new my-plugin --standalone  # 创建可发布的独立插件包
 npx zhin search <关键词>   # 搜索社区插件
 npx zhin install <插件名>  # 安装并挂载插件
 ```

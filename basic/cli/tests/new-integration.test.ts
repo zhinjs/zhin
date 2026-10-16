@@ -302,6 +302,37 @@ describe('CLI new command integration', () => {
     expect(pluginTs).toContain(`name: '${pluginName}'`)
   }, 30000)
 
+  it('--standalone creates ./<name>/ without touching any app', async () => {
+    const pluginName = 'standalone-demo'
+    // 一个与插件无关的宿主 package.json：standalone 不应修改它
+    const hostManifest = { name: 'unrelated-host', version: '1.0.0' }
+    await fs.writeJson(path.join(testDir, 'package.json'), hostManifest)
+
+    execSync(
+      `node "${cliPath}" new ${pluginName} --standalone --type normal --skip-install`,
+      { cwd: testDir, stdio: 'ignore', timeout: 10000 }
+    )
+
+    const pluginDir = path.join(testDir, pluginName)
+    expect(await fs.pathExists(path.join(testDir, 'plugins'))).toBe(false)
+    expect(await fs.readJson(path.join(testDir, 'package.json'))).toEqual(hostManifest)
+
+    // Plugin Runtime 契约：清单 + definePlugin + 约定目录 + 测试 + README
+    const pkg = await fs.readJson(path.join(pluginDir, 'package.json'))
+    expect(pkg.name).toBe(`zhin.js-${pluginName}`)
+    expect(pkg.zhin).toMatchObject({ protocol: 1, type: 'plugin', entry: './plugin.js' })
+    expect(pkg.files).toContain('plugin.js')
+    expect(pkg.scripts.prepack).toBe('pnpm run build')
+    expect(pkg.scripts.test).toBe('vitest run')
+    const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
+    expect(pluginTs).toContain('export default definePlugin(')
+    expect(await fs.pathExists(path.join(pluginDir, 'commands', pluginName, 'index.ts'))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'tests', `${pluginName}-runtime.test.ts`))).toBe(true)
+    const readme = await fs.readFile(path.join(pluginDir, 'README.md'), 'utf-8')
+    expect(readme).toContain('zhin.plugins')
+    expect(readme).toContain(`pnpm add ../${pluginName}`)
+  }, 30000)
+
   it('should reject invalid plugin identity names', async () => {
     const pluginName = 'My_Plugin'
 

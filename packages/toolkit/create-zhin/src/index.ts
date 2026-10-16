@@ -347,7 +347,7 @@ async function main() {
     console.log(chalk.blue('下一步（任选）：'));
     console.log(`  ${chalk.gray('接 QQ/Discord')}    ${chalk.cyan('npx zhin setup --adapters')}`);
     console.log(`  ${chalk.gray('启用 AI 对话')}     ${chalk.cyan('npx zhin setup --ai')}`);
-    console.log(`  ${chalk.gray('写插件')}           ${chalk.cyan('https://zhin.js.org/guide/plugin-development')}`);
+    console.log(`  ${chalk.gray('写插件')}           ${chalk.cyan('npx @zhin.js/cli new my-plugin --standalone')} ${chalk.gray('(文档 https://zhin.js.org/getting-started/first-plugin)')}`);
     console.log(`  ${chalk.gray('诊断')}             ${chalk.cyan('npx zhin doctor')}`);
     if (options.database?.dialect === 'sqlite') {
       console.log(`  ${chalk.gray('# SQLite 使用 Node 内置 node:sqlite，请使用 Node.js 22.5+（推荐 24+）')}`);

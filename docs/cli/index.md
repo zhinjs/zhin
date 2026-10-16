@@ -20,7 +20,8 @@ npx zhin --help        # 查看全部命令
 | 环境或配置有问题 | `npx zhin doctor` |
 | 检查配置文件是否有效 | `npx zhin config check` |
 | 安装一个社区插件 | `npx zhin install <插件名>` |
-| 创建一个新插件 | `npx zhin new my-plugin` |
+| 创建一个可独立发布的新插件 | `npx @zhin.js/cli new my-plugin --standalone` |
+| 在已有 Bot 项目里加一个本地插件 | `npx zhin new my-plugin` |
 | 升级 Zhin | `npx zhin migrate --dry-run`，确认后去掉 `--dry-run` |
 | 安装为开机自启的系统服务 | `npx zhin service install` |
 
@@ -43,7 +44,7 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 | 子命令 | 作用 |
 | --- | --- |
 | `start` | 启动 Bot。支持开发热重载、生产模式和守护进程，详见 [zhin runtime start](./runtime.md) |
-| `init` / `create` | 生成约定式项目，或新的插件 / 能力包 |
+| `init` / `create` | **已弃用**。新建插件请用 [`zhin new`](#new：创建插件)；`create plugin` 生成的包没有测试和 README，依赖范围也与 `zhin new` 不一致 |
 | `inspect` | 输出项目结构 JSON（插件清单、构建计划） |
 | `build` / `publish` | 按项目结构构建、发布。`publish` 默认只打印计划，加 `--execute` 才执行，中断后可 `--resume` |
 | `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
@@ -137,10 +138,13 @@ zhin migrate [--dry-run] [--no-install]
 ### new：创建插件
 
 ```bash
-zhin new [plugin-name] [--type normal|service|adapter] [--package-name <npm 包名>] [--is-official] [--skip-install]
+zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package-name <npm 包名>] [--is-official] [--skip-install]
 ```
 
-在 `plugins/<name>/` 下生成插件模板。插件名须匹配 `/^[a-z][a-z0-9-]*$/`；不传参数时进入交互式问答。
+**这是创建插件的唯一官方入口。** 插件名须匹配 `/^[a-z][a-z0-9-]*$/`；不传参数时进入交互式问答。
+
+- **独立插件（要发布到 npm 的外部插件）**：`npx @zhin.js/cli new my-plugin --standalone`，在当前目录下生成 `./my-plugin/`，不需要事先有 Bot 项目，也不会修改任何 `package.json`。生成物包含 `package.json#zhin` 清单、默认导出 `definePlugin()` 的 `plugin.ts`、约定目录、`tests/`、`README.md`，开箱可 `pnpm test` / `pnpm typecheck` / `pnpm publish`。
+- **项目内本地插件**：在 Bot 项目根执行 `zhin new my-plugin`（不加 `--standalone`），生成到 `plugins/<name>/` 并把它加进根 `package.json` 的 `dependencies`。
 
 - 包名默认是 `zhin.js-<name>`；也可以用 `--package-name` 指定自己的名字或 scope（如 `@me/zhin-plugin-x`）。`@zhin.js/` 作用域只留给官方插件（`--is-official`）。
 - `zhin.js` 与能力包（`@zhin.js/command`、`@zhin.js/skill` 等）写成 peerDependencies，版本是从已安装版本推导出的 `^x.y.z`；同样的版本也写进 devDependencies，供本地测试和类型检查使用。

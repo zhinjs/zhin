@@ -9,11 +9,13 @@ export const runtimeCommand = new Command('runtime')
   .description('管理约定式 Plugin Runtime 项目');
 
 runtimeCommand.command('init [package-name]')
+  .description('[已弃用] 请使用 zhin new <name> --standalone 创建独立插件；本命令仅保留给旧脚本')
   .action(async (packageName = 'zhin-plugin') => {
     await new ProjectScaffolder(process.cwd()).init({ packageName });
   });
 
 runtimeCommand.command('create <kind> <name> [package-name]')
+  .description('[已弃用] 请使用 zhin new <name>（项目内）或 zhin new <name> --standalone（独立插件）')
   .action(async (kind, name, packageName) => {
     const scaffold = new ProjectScaffolder(process.cwd());
     if (kind === 'plugin') await scaffold.createPlugin({ name, packageName });

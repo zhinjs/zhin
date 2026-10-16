@@ -20,7 +20,8 @@ npx zhin --help        # list every command
 | Diagnose environment or config problems | `npx zhin doctor` |
 | Check the config file is valid | `npx zhin config check` |
 | Install a community plugin | `npx zhin install <plugin>` |
-| Create a new plugin | `npx zhin new my-plugin` |
+| Create a new, publishable plugin | `npx @zhin.js/cli new my-plugin --standalone` |
+| Add a local plugin to an existing bot project | `npx zhin new my-plugin` |
 | Upgrade Zhin | `npx zhin migrate --dry-run`, then again without `--dry-run` |
 | Install as a start-on-boot system service | `npx zhin service install` |
 
@@ -43,7 +44,7 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 | Subcommand | Purpose |
 | --- | --- |
 | `start` | Start the bot, with dev hot reload, production and daemon modes; see [zhin runtime start](./runtime.md) |
-| `init` / `create` | Scaffold a convention-based project, or a new plugin / capability package |
+| `init` / `create` | **Deprecated.** Use [`zhin new`](#new-create-a-plugin) to create plugins; `create plugin` generates a package without tests or a README, with different dependency ranges |
 | `inspect` | Print the project structure as JSON (plugin list, build plan) |
 | `build` / `publish` | Build and publish according to the project structure. `publish` only prints the plan by default; `--execute` runs it, and `--resume` continues after an interruption |
 | `migrate` | Generate and apply a project-structure migration plan: `--check` previews, `--write` writes atomically, `status` prints a readiness report |
@@ -137,10 +138,13 @@ Upgrades an older Zhin project to the latest: dependencies, scripts and folder s
 ### new: Create a Plugin
 
 ```bash
-zhin new [plugin-name] [--type normal|service|adapter] [--package-name <npm-name>] [--is-official] [--skip-install]
+zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package-name <npm-name>] [--is-official] [--skip-install]
 ```
 
-Generates a plugin template under `plugins/<name>/`. The name must match `/^[a-z][a-z0-9-]*$/`; without arguments it asks interactively.
+**This is the single official way to create a plugin.** The name must match `/^[a-z][a-z0-9-]*$/`; without arguments it asks interactively.
+
+- **Standalone plugin (an external plugin to publish to npm)**: `npx @zhin.js/cli new my-plugin --standalone` generates `./my-plugin/` in the current directory. No bot project is needed and no `package.json` is modified. The output has the `package.json#zhin` manifest, a `plugin.ts` that default-exports `definePlugin()`, convention directories, `tests/` and `README.md`, and works out of the box with `pnpm test` / `pnpm typecheck` / `pnpm publish`.
+- **Local plugin inside a bot project**: run `zhin new my-plugin` (without `--standalone`) at the project root. It generates `plugins/<name>/` and adds it to the root `package.json` `dependencies`.
 
 - The package name defaults to `zhin.js-<name>`. Use `--package-name` for your own name or scope (for example `@me/zhin-plugin-x`). The `@zhin.js/` scope is reserved for official plugins (`--is-official`).
 - `zhin.js` and the capability packages (`@zhin.js/command`, `@zhin.js/skill`, and so on) are peerDependencies with a `^x.y.z` range derived from the installed versions. The same versions go into devDependencies for local tests and type checks.

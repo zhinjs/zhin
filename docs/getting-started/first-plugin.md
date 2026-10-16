@@ -14,6 +14,10 @@ description: "从零写一个可配置的 /ping 子插件，挂载到你的 Bot 
 - Node.js ≥22.19.0、pnpm 9+。`pnpm dev` 会直接运行 TypeScript 源码，不需要先编译。
 :::
 
+::: tip 想直接要骨架？
+本页手写四个文件是为了讲清楚每一部分。实际开发时用 `npx zhin new ping-pong`（项目内）或 `npx @zhin.js/cli new ping-pong --standalone`（要发布到 npm 的独立插件）生成，生成物还带测试和 README。
+:::
+
 ::: details 只想要最少的代码？
 一个文件也能注册命令：在 `plugin.ts` 的 `setup({ addCommand })` 里调用 `addCommand('ping', defineCommand({ ... }))` 即可，见示例 [single-file-bot](../examples/index.md#single-file-bot-一个-bot-ts-就是机器人)。本页演示的是功能变多后更推荐的"一个能力一个文件"写法。
 :::
