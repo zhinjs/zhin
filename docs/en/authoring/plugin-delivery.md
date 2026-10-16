@@ -58,7 +58,7 @@ See [definePlugin · Release resources on hot reload](./define-plugin.md#release
 
 ## 6. Test and publish
 
-At minimum a plugin needs: unit tests for pure functions, a "capabilities are discovered" test, one full runtime integration test, and one failure-path test. Platform adapters should also use the adapter harness to verify connection lifecycle and message conversion.
+At minimum a plugin needs: unit tests for pure functions, a "capabilities are discovered" test, one full runtime integration test, and one failure-path test. Platform adapters should also use the adapter harness to verify connection lifecycle and message conversion. To avoid hand-assembled contexts and `as never`, use the fake runtime in [Testing Plugins](./testing.md).
 
 ```bash
 pnpm build

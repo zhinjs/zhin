@@ -1968,12 +1968,24 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../im/adapter
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../im/feature-kit
+      '@zhin.js/handler':
+        specifier: workspace:*
+        version: link:../../im/handler
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../im/im-contract
+      '@zhin.js/middleware':
+        specifier: workspace:*
+        version: link:../../im/middleware
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../im/plugin-runtime
@@ -3440,6 +3452,9 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
+      '@zhin.js/plugin-test-kit':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/plugin-test-kit
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
