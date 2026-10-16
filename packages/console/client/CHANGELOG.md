@@ -1,5 +1,15 @@
 # @zhin.js/client
 
+## 1.1.11
+
+### Patch Changes
+
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/console-protocol@1.1.9
+  - @zhin.js/contract@1.1.6
+
 ## 1.1.10
 
 ### Patch Changes

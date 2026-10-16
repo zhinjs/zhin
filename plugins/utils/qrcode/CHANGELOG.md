@@ -1,5 +1,22 @@
 # @zhin.js/plugin-qrcode
 
+## 1.1.9
+
+### Patch Changes
+
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- fdc2148: Unblock external plugin authors.
+
+  - Published manifests no longer expose the source-only `development` export condition (it pointed at `./src/*.ts`, which is not in the tarball, so Vitest 4 and other tools that enable `development` failed to import Zhin packages). Each package now carries `publishConfig.exports` without that condition; `pnpm publish` swaps it in when packing, and the monorepo keeps source-level development.
+  - `zhin new` no longer crashes without arguments (uses inquirer `select` instead of the removed `list` prompt; same fix for `zhin onboard` and `zhin pub`). The generated package.json uses `^x.y.z` ranges derived from installed versions instead of `latest`, declares capability packages as optional peers (plus devDependencies for local tests) instead of dependencies, sets `zhin.entry` to `./plugin.js` and builds sibling JavaScript on `prepack`, fixes the adapter template test, and adds `--package-name`. `--skip-install` now also skips the project-root install.
+
+- 267d685: 发布包补上 `lib/*.d.ts`：`package.json` 的 `types` 指向 `./lib/index.d.ts`，但 `tsconfig.json` 关闭了 `declaration`，TypeScript 使用者拿不到类型。
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/core@1.1.44
+  - @zhin.js/skill@1.1.6
+  - @zhin.js/tool@1.1.6
+
 ## 1.1.8
 
 ### Patch Changes

@@ -1,5 +1,50 @@
 # @zhin.js/cli
 
+## 1.1.11
+
+### Patch Changes
+
+- a64716a: IM 回合的出网权限改为独立开关 `ai.agent.network`（`enabled`、`allowedDomains`），默认关闭；未设置 `enabled` 时仍兼容 `execPreset: network`。没有出网权限的回合不再向模型提供 `web_fetch` / `web_search`，并在提示词里写明真正的开启方式；拒绝信息也带上同样的修复说明，模型不再编造开关位置。
+- 3ffc73d: Add `zhin dev link <zhin-path>` / `zhin dev unlink`: switch an external plugin project to a local zhin checkout by packing the full workspace dependency closure and overriding every package, so each zhin package resolves to a single instance. `zhin doctor` gains a "Zhin 包单实例" check that detects duplicate zhin package instances and suggests `zhin dev link`.
+- 0c35b96: `zhin doctor` 的端口占用提示不再建议 `kill -9`，改为正常停止或 SIGTERM；缺少 `@zhin.js/tool` 时报错直接给出 `pnpm add @zhin.js/tool`；脚手架生成的 `.gitignore` 加入 `.zhin/`。
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- cc9959e: 新增插件用的纯文本补全 `aiCompletionToken`（`zhin.js/agent` / `@zhin.js/agent/runtime`）：`completeText()` 只做一次补全、不带任何工具，复用 provider 的重试、超时和同 provider 模型降级；`untrusted` 内容按数据块渲染且不能提前闭合；传 `onBehalfOf` 时计入用量配额。`AIProvider` 新增可选的 `completeTextResult()`，返回实际作答的模型与用量。
+
+  **行为变化**：`AIService.createAgent()` / `runAgent()` 默认不再带 `registerTool()` 注册的工具（`includeRegisteredTools` 默认改为 `false`）；需要时显式传 `includeRegisteredTools: true`。
+
+- fdc2148: Unblock external plugin authors.
+
+  - Published manifests no longer expose the source-only `development` export condition (it pointed at `./src/*.ts`, which is not in the tarball, so Vitest 4 and other tools that enable `development` failed to import Zhin packages). Each package now carries `publishConfig.exports` without that condition; `pnpm publish` swaps it in when packing, and the monorepo keeps source-level development.
+  - `zhin new` no longer crashes without arguments (uses inquirer `select` instead of the removed `list` prompt; same fix for `zhin onboard` and `zhin pub`). The generated package.json uses `^x.y.z` ranges derived from installed versions instead of `latest`, declares capability packages as optional peers (plus devDependencies for local tests) instead of dependencies, sets `zhin.entry` to `./plugin.js` and builds sibling JavaScript on `prepack`, fixes the adapter template test, and adds `--package-name`. `--skip-install` now also skips the project-root install.
+
+- ec526ae: 独立插件的官方创建入口统一为 `zhin new <name> --standalone`（外部插件作者用 `npx @zhin.js/cli new my-plugin --standalone`，在当前目录生成 `./<name>/`，不依赖也不修改 Bot 项目；Bot 项目内的本地插件继续用 `zhin new <name>`）。已删除 `zhin runtime init` 和 `zhin runtime create`（及导出的 `ProjectScaffolder`）：新建插件请改用 `zhin new`，新建项目用 `npm create zhin-app`。`create-zhin-app` 完成提示里 404 的“写插件”链接改为有效页面，插件开发提示改为 `zhin new`。
+- Updated dependencies [a64716a]
+- Updated dependencies [75e26a6]
+- Updated dependencies [0c35b96]
+- Updated dependencies [75e26a6]
+- Updated dependencies [cc9959e]
+- Updated dependencies [fdc2148]
+  - @zhin.js/ai@1.1.39
+  - @zhin.js/runtime@1.1.7
+  - @zhin.js/adapter@1.1.19
+  - @zhin.js/command@1.1.7
+  - @zhin.js/component@1.1.6
+  - @zhin.js/config-file@1.1.6
+  - @zhin.js/console-protocol@1.1.9
+  - @zhin.js/core@1.1.44
+  - @zhin.js/database@1.1.4
+  - @zhin.js/host-http@1.1.6
+  - @zhin.js/im-contract@1.1.4
+  - @zhin.js/interaction@1.1.2
+  - @zhin.js/middleware@1.1.6
+  - @zhin.js/pagemanager@1.1.7
+  - @zhin.js/plugin-runtime@1.1.14
+  - @zhin.js/prompt-section@1.1.5
+  - @zhin.js/scaffold-wizard@1.1.5
+  - @zhin.js/schedule@1.1.3
+  - @zhin.js/workroom@0.0.2
+  - @zhin.js/logger@1.1.2
+
 ## 1.1.10
 
 ### Patch Changes

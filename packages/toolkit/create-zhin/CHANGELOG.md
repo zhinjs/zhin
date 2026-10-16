@@ -1,5 +1,16 @@
 # create-zhin-app
 
+## 1.1.6
+
+### Patch Changes
+
+- 0c35b96: `zhin doctor` 的端口占用提示不再建议 `kill -9`，改为正常停止或 SIGTERM；缺少 `@zhin.js/tool` 时报错直接给出 `pnpm add @zhin.js/tool`；脚手架生成的 `.gitignore` 加入 `.zhin/`。
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- ec526ae: 独立插件的官方创建入口统一为 `zhin new <name> --standalone`（外部插件作者用 `npx @zhin.js/cli new my-plugin --standalone`，在当前目录生成 `./<name>/`，不依赖也不修改 Bot 项目；Bot 项目内的本地插件继续用 `zhin new <name>`）。已删除 `zhin runtime init` 和 `zhin runtime create`（及导出的 `ProjectScaffolder`）：新建插件请改用 `zhin new`，新建项目用 `npm create zhin-app`。`create-zhin-app` 完成提示里 404 的“写插件”链接改为有效页面，插件开发提示改为 `zhin new`。
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/scaffold-wizard@1.1.5
+
 ## 1.1.5
 
 ### Patch Changes
