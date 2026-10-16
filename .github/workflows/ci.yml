@@ -306,6 +306,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Some harness checks render components with real Chromium.
+      - name: install fonts for Chinese component rendering
+        uses: ./.github/actions/setup-rendering-fonts
+
       - uses: ./.github/actions/prepare-workspace
         with:
           npm-token: ${{ secrets.PERSONAL_TOKEN }}
