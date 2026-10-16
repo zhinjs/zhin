@@ -152,6 +152,26 @@
               "description": "Command allowlist preset used outside full mode.",
               "x-descriptionZh": "非 full 模式使用的命令白名单预设。"
             },
+            "network": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Network access for IM turns (web_fetch / web_search and networked commands). Off by default; enabled allows HTTPS egress, optionally limited to allowedDomains. When enabled is unset, execPreset: network still enables it for compatibility.",
+              "x-descriptionZh": "IM 回合的出网权限（web_fetch / web_search 与联网命令）。默认关闭；enabled 开启 HTTPS 出网，allowedDomains 非空时只允许这些域名。未设置 enabled 时兼容旧配置：execPreset: network 视为开启。",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Allow HTTPS egress for IM turns.",
+                  "x-descriptionZh": "是否允许 IM 回合 HTTPS 出网。"
+                },
+                "allowedDomains": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "When non-empty, only these domains (and their subdomains) are reachable.",
+                  "x-descriptionZh": "非空时只允许访问这些域名（含子域名）。"
+                }
+              }
+            },
             "masterShell": {
               "type": "string",
               "enum": ["off", "isolated"],

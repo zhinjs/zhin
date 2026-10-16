@@ -15,7 +15,7 @@ This is the **single authoritative document** for `ai.agent.*` default behavior 
 ## Core defaults
 
 - Loop: `maxIterations 15`, `timeout 120000` ms
-- Exec: `execSecurity deny`, `execApprovalMode auto`; network only with `execPreset: network`
+- Exec: `execSecurity deny`, `execApprovalMode auto`; network is off by default; `network.enabled: true` allows HTTPS egress (`network.allowedDomains` limits domains; with `enabled` unset, `execPreset: network` still enables it); turns without network authority are not offered web_fetch / web_search
 - Sub-agents: `subagentTurnMode off`
 - Tool budget: `extendBy 10`, `progressWindow 5`, `maxTotalIterations 40`, `maxWallClockMs 600000`, `failureStreakLimit 3`, `repeatLimit 2`
 - Usage quota: all 0 (off), `exemptOwner true`
@@ -35,6 +35,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `contextTokens` | keep | Common switch, kept |
 | `execSecurity` | keep | Common switch, kept |
 | `execPreset` | keep | Common switch, kept |
+| `network` | keep | Dedicated network switch for IM turns (replaces getting egress via `execPreset: network`), kept |
 | `execAllowlist` | keep | Common switch, kept |
 | `execApprovalMode` | keep | Common switch, kept |
 | `disabledTools` | keep | Common switch, kept |

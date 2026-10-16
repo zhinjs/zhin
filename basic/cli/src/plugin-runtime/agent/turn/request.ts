@@ -531,9 +531,14 @@ export function deliveryOutcomeFromReceipt(
 export function interactiveNetworkPolicy(
   config: ReturnType<AIService['getAgentConfig']>,
 ): TurnRequest['policy']['network'] | undefined {
-  return config?.execPreset === 'network'
-    ? Object.freeze({ enabled: true, httpsOnly: true, allowedDomains: Object.freeze([]) })
-    : undefined;
+  const network = config?.network;
+  // An explicit `network.enabled` wins; unset keeps the legacy `execPreset: network` switch.
+  const enabled = network?.enabled ?? config?.execPreset === 'network';
+  if (!enabled) return undefined;
+  const allowedDomains = (network?.allowedDomains ?? [])
+    .map(domain => String(domain).trim())
+    .filter(Boolean);
+  return Object.freeze({ enabled: true, httpsOnly: true, allowedDomains: Object.freeze(allowedDomains) });
 }
 
 export function createRuntimeTurnAccess(

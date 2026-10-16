@@ -80,6 +80,8 @@ export interface ZhinAgentConfig {
   allowedTools?: string[];
   execSecurity?: 'deny' | 'allowlist' | 'full';
   execPreset?: 'readonly' | 'network' | 'development' | 'custom';
+  /** IM 回合出网权限；未设置 `enabled` 时 `execPreset: network` 视为开启（兼容旧配置）。 */
+  network?: { enabled?: boolean; allowedDomains?: string[] };
   execAllowlist?: string[];
   execApprovalMode?: ExecApprovalMode;
   subagentExecApprovalMode?: ExecApprovalMode;
