@@ -1,0 +1,138 @@
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_079f1dc5e6308d::t_cdd9dcd30aaa8d 25,84
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_079f1dc5e6308d::t_d58267e0c6d909 74,76-77,79,81-82
+  s_079f1dc5e6308d::t_0d40b3e3f4e12e 61,63
+  s_079f1dc5e6308d::t_1949fadcc94ca3 64-65,69,72,75,80,87
+basic/cli/src/plugin-runtime/console/message-diagnostic-routes.ts
+  s_079f1dc5e6308d::t_cdd9dcd30aaa8d 1-3,5-29,31-49,51-81
+  s_079f1dc5e6308d::t_97ebd2bc39c823 4,30,50
+docs/contributing/plugin-experience-plan.md
+  s_079f1dc5e6308d::t_6bdcdf1ed7990c 14-15
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_422cbef8e2c33d 87-91,93-95
+  s_079f1dc5e6308d::t_e260ea5cb3f3c5 92
+packages/im/core/src/built/html-to-text.ts
+  s_079f1dc5e6308d::t_c92b4bf7ba6483 143-205,208-230
+  s_079f1dc5e6308d::t_e52919e3b25fc0 4
+  s_079f1dc5e6308d::t_1459027ae50c66 206-207
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_1b3ac4fbd7d677 3496-3497
+  s_079f1dc5e6308d::t_98186c7143af6c 3016,3031
+  s_079f1dc5e6308d::t_76a3d066ff1bb6 2949-3015,3017-3030,3032-3041,3325
+  s_079f1dc5e6308d::t_8f7f03b2e7ca1c 3319-3320,3326-3327
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_079f1dc5e6308d::t_d58267e0c6d909 61,100-104,128,137
+packages/im/core/tests/plugin-runtime/message-diagnostics.test.ts
+  s_079f1dc5e6308d::t_8f7f03b2e7ca1c 44-46,52-56,65-66,95
+  s_079f1dc5e6308d::t_0d40b3e3f4e12e 51,60-61,67,69
+  s_079f1dc5e6308d::t_43f66dd55e7340 1-43,47-50,57-59,62-64,68,70-83,100
+  s_079f1dc5e6308d::t_98186c7143af6c 84-94,96-99
+basic/cli/tests/plugin-runtime/console/message-diagnostic-routes.test.ts
+  s_079f1dc5e6308d::t_97ebd2bc39c823 1-10,13-64
+  s_079f1dc5e6308d::t_e260ea5cb3f3c5 11
+  s_079f1dc5e6308d::t_422cbef8e2c33d 12
+packages/im/core/src/built/rich-segments/markdown-to-text.ts
+  s_079f1dc5e6308d::t_6a4309f0a9f3fd 64,66,85-86
+  s_079f1dc5e6308d::t_1459027ae50c66 7-9,28-30,32-33,38,41-42,102
+  s_079f1dc5e6308d::t_e52919e3b25fc0 2,87
+  s_079f1dc5e6308d::t_9ccb2780093a56 1,52-53
+  s_079f1dc5e6308d::t_164de024a91690 31
+  s_079f1dc5e6308d::t_ddbaa299bb0c1e 40
+  s_079f1dc5e6308d::t_1950fa27cf52cd 3-6,10-27,34-37,39,43-48,50-51,54-55,90,96-101
+  s_079f1dc5e6308d::t_813fcbd51daef9 56-63,65,67-84
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_079f1dc5e6308d::t_8f7f03b2e7ca1c 13
+  s_079f1dc5e6308d::t_d58267e0c6d909 16,21,46-47,49-56,126
+  s_079f1dc5e6308d::t_0d40b3e3f4e12e 48
+packages/im/core/tests/plugin-runtime/readable-fallback-projection.test.ts
+  s_079f1dc5e6308d::t_df5e1a690e6a38 1-28,30-39
+  s_079f1dc5e6308d::t_6a4309f0a9f3fd 29
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_0d40b3e3f4e12e 496-500
+  s_079f1dc5e6308d::t_d58267e0c6d909 29,59,123-125,195,215,217,370,381,395,416,419,434,446,456-459,472,487-495,501,508
+  s_079f1dc5e6308d::t_1949fadcc94ca3 368,484,505-506,509
+  s_079f1dc5e6308d::t_0c903a528b05e1 451,455
+packages/im/core/tests/plugin-runtime/outbound-segments.test.ts
+  s_079f1dc5e6308d::t_6a4309f0a9f3fd 119
+.changeset/experience-message-diagnostics.md
+  s_079f1dc5e6308d::t_1949fadcc94ca3 1-5
+packages/im/core/src/built/interactive-segments/resolve.ts
+  s_079f1dc5e6308d::t_696ecf760fadf0 38,67,71
+  s_079f1dc5e6308d::t_0a953f04732f2f 33,36-37,39,41,43-44,74,76,78
+  s_079f1dc5e6308d::t_322d29f2654e52 64
+docs/paths/console.md
+  s_079f1dc5e6308d::t_422cbef8e2c33d 87-91,93-95
+  s_079f1dc5e6308d::t_e260ea5cb3f3c5 92
+packages/im/core/tests/interactive-segments.test.ts
+  s_079f1dc5e6308d::t_322d29f2654e52 38-39,108-119
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_079f1dc5e6308d::t_d58267e0c6d909 26-30
+  s_6562bcb6cc0539::t_0229a1030261b1 25
+docs/contributing/user-experience-roadmap.md
+  s_079f1dc5e6308d::t_6fa7d36940b615 1-10,12-57,61-148
+  s_079f1dc5e6308d::t_797bf12c6cf884 11,58-60
+packages/im/core/tests/plugin-runtime/disabled-fallback.test.ts
+  s_079f1dc5e6308d::t_322d29f2654e52 22-83
+  s_079f1dc5e6308d::t_93fc5d988108ba 19-20
+  s_079f1dc5e6308d::t_4de43be56eebf6 1-18,21,84
+packages/im/core/src/built/readable-link.ts
+  s_079f1dc5e6308d::t_92047fc2a3139c 4-7
+  s_079f1dc5e6308d::t_e52919e3b25fc0 16-26
+  s_079f1dc5e6308d::t_5fae817d700061 1-3,8-15
+.changeset/experience-console-diagnostics.md
+  s_079f1dc5e6308d::t_cdd9dcd30aaa8d 1-2,4-6
+  s_079f1dc5e6308d::t_97ebd2bc39c823 3
+packages/console/protocol/src/index.ts
+  s_079f1dc5e6308d::t_97ebd2bc39c823 115-123,126-131,133-136,139-145
+  s_079f1dc5e6308d::t_e260ea5cb3f3c5 124-125
+  s_079f1dc5e6308d::t_574d5aa79030fa 132
+  s_079f1dc5e6308d::t_422cbef8e2c33d 137-138
+.changeset/experience-readable-fallbacks.md
+  s_079f1dc5e6308d::t_df5e1a690e6a38 1-5
+  s_079f1dc5e6308d::t_322d29f2654e52 6-7
+packages/im/core/tests/markdown-to-text.test.ts
+  s_079f1dc5e6308d::t_df5e1a690e6a38 1-13,20-21,24-37,41-42
+  s_079f1dc5e6308d::t_1459027ae50c66 14-16,38-40
+  s_079f1dc5e6308d::t_92047fc2a3139c 22-23
+  s_079f1dc5e6308d::t_e52919e3b25fc0 17-19
+packages/im/core/src/plugin-runtime/im/message-diagnostics.ts
+  s_079f1dc5e6308d::t_d58267e0c6d909 98
+  s_079f1dc5e6308d::t_43f66dd55e7340 44,122,128
+  s_079f1dc5e6308d::t_0c903a528b05e1 7
+  s_079f1dc5e6308d::t_54e6ffddfe793b 1-6,13-16,18-36,39-43,45-78,80-87,89,93-97,99-108,110-112,114-117,119-121,123-127,129-149,151,158-176
+  s_079f1dc5e6308d::t_0d40b3e3f4e12e 8-12,17,88,109,113,150,152-157
+  s_079f1dc5e6308d::t_8f7f03b2e7ca1c 37-38,79,90-92,118
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_079f1dc5e6308d::t_93fc5d988108ba 208
+  s_079f1dc5e6308d::t_3a78be80bc4be6 206-207,209
+packages/im/core/tests/html-to-text.test.ts
+  s_079f1dc5e6308d::t_df5e1a690e6a38 45-60,63-78
+  s_079f1dc5e6308d::t_92047fc2a3139c 61-62
+tests/snapshots/plugin-runtime-api.json
+  s_079f1dc5e6308d::t_d7df00db8f40f5 115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e914a937bfc6efc2faeb2fb8e6c2c358349d40a3",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
