@@ -1,0 +1,52 @@
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_c64830cc85a6fb 58-71,271-272,278,423,438,448,455,464,507-508,510,516
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_c64830cc85a6fb 2,158
+plugins/adapters/telegram/src/protocol.ts
+  s_079f1dc5e6308d::t_f3aa43a5b0e44c 158-160,609-612
+.changeset/command-menu-image.md
+  s_079f1dc5e6308d::t_bee2facefe67c4 3-4,7
+plugins/adapters/telegram/tests/share-keyboard.test.ts
+  s_079f1dc5e6308d::t_f50cba5b9cf7e6 17-30
+packages/im/command/src/command-menu.ts
+  s_079f1dc5e6308d::t_c64830cc85a6fb 23
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_699ef7e670c551 16,187,198-223
+  s_079f1dc5e6308d::t_f50cba5b9cf7e6 141-186,188-197,224-256,2899,2905-2906,3019-3023,3029,3052
+packages/im/core/src/plugin-runtime/im/command-menu-navigation.ts
+  s_079f1dc5e6308d::t_bee2facefe67c4 27
+  s_079f1dc5e6308d::t_ef270e0e330de8 36
+  s_079f1dc5e6308d::t_c64830cc85a6fb 1-26,28-35,37-42
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_079f1dc5e6308d::t_c64830cc85a6fb 12,100-102
+docs/adapters/telegram.md
+  s_079f1dc5e6308d::t_1f9f768902b002 11,162-165
+docs/authoring/commands.md
+  s_079f1dc5e6308d::t_764eb9e8fe2abe 78-80
+docs/en/adapters/telegram.md
+  s_079f1dc5e6308d::t_8a254055cc6a42 125-128
+docs/en/authoring/commands.md
+  s_079f1dc5e6308d::t_f4bd4f721466ec 78-80
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_0e08dc190af2ec 67
+packages/im/core/tests/plugin-runtime/command-menu-image.test.ts
+  s_079f1dc5e6308d::t_038954414d8e2d 125,132,144,148-149,153,158,179
+plugins/adapters/telegram/README.md
+  s_079f1dc5e6308d::t_27fe5530dd9012 150-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f3e53665b648a8d59482830df4e24015e22936f6",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
