@@ -122,14 +122,14 @@ function largeFixture(commandCount: number, pluginCount: number, renderer?: Html
 it.each([[95, 100], [0, 100], [100, 0]])('paginates %i commands and %i plugins without omission or duplication', async (commandCount, pluginCount) => {
   const { index } = largeFixture(commandCount, pluginCount);
   const found: string[] = [];
-  const pages = Math.ceil((commandCount + pluginCount) / 18);
+  const pages = Math.ceil((commandCount + pluginCount) / 30);
   for (let page = 1; page <= pages; page++) {
     const { value } = await index.dispatch(`帮助 --page ${page}`, undefined, undefined, '/');
     expect(typeof value).toBe('string');
     const text = String(value);
     expect(text).toContain(`第 ${page}/${pages} 页`);
     const entries = text.split('\n').filter(line => /^ {2}(?:\/cmd-|plugin-)\d{3}/u.test(line));
-    expect(entries.length).toBeLessThanOrEqual(18);
+    expect(entries.length).toBeLessThanOrEqual(30);
     found.push(...entries.map(line => line.trim().split(/[ (]/u)[0]!));
     if (page > 1) expect(text).toContain(`上一页：/帮助 --page ${page - 1}`);
     if (page < pages) expect(text).toContain(`下一页：/帮助 --page ${page + 1}`);
@@ -141,21 +141,21 @@ it.each([[95, 100], [0, 100], [100, 0]])('paginates %i commands and %i plugins w
 it('keeps the image page and failed-render text page identical for a large catalog', async () => {
   const renderer = rendererFixture();
   const { index, snapshot, conversation, resources } = largeFixture(95, 100, renderer);
-  const { value } = await index.dispatch('帮助 --page 6', undefined, undefined, '#');
+  const { value } = await index.dispatch('帮助 --page 4', undefined, undefined, '#');
   renderer.render.mockRejectedValueOnce(new Error('renderer failed'));
   const payload = await projectOutboundPayload(value, conversation, snapshot);
   const html = renderer.render.mock.calls[0]![0];
-  expect(html.match(/class="entry"/gu)).toHaveLength(18);
-  expect(html).toContain('06 / 11');
+  expect(html.match(/class="entry"/gu)).toHaveLength(30);
+  expect(html).toContain('04 / 07');
   expect(html).toContain('95 条指令');
   expect(html).toContain('100 个子插件');
   resources.delete(htmlRendererToken.id);
-  const plain = await index.dispatch('帮助 --page 6', undefined, undefined, '#');
+  const plain = await index.dispatch('帮助 --page 4', undefined, undefined, '#');
   expect(payload.payload).toEqual([{ type: 'text', data: { text: plain.value } }]);
 });
 
 it('preserves the plugin path and custom prefix in page navigation', async () => {
-  const base = largeFixture(40, 0);
+  const base = largeFixture(80, 0);
   const child = childPluginId(base.snapshot.root, 'music');
   const slots = [...base.snapshot.capabilities.values()].filter(slot => slot.feature === commandFeatureId)
     .map(slot => createCapabilitySlot({ ...slot, owner: child, definition: slot.definition as ReturnType<typeof defineCommand> }));
@@ -176,7 +176,7 @@ it.each(['0', '-1', '1.5', 'NaN', '9007199254740992', ''])('rejects invalid page
 });
 
 it('reports the actual page count when the requested page is out of range', async () => {
-  const { index } = largeFixture(40, 0);
+  const { index } = largeFixture(80, 0);
   expect((await index.dispatch('帮助 --page 4')).value).toContain('共 3 页');
 });
 

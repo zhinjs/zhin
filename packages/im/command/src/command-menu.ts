@@ -20,7 +20,7 @@ export interface CommandMenuSegment {
   };
 }
 
-export const MENU_PAGE_SIZE = 18;
+export const MENU_PAGE_SIZE = 30;
 
 const escape = (value: string) => value.replace(/[&<>"']/gu, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
