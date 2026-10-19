@@ -50,6 +50,48 @@ Both styles share the same command table and conflict detection. As commands gro
 
 ## Common tasks
 
+### Browse loaded commands
+
+With the Command Feature enabled, the built-in keyword is **`菜单`** (Chinese for “menu”); no help plugin is needed. Send it in a bot conversation like any other command. If the current account uses `commandPrefix: '/'`, prefix every message below with `/`:
+
+| Message (without a prefix) | Result |
+| --- | --- |
+| `菜单` | Commands, descriptions, and immediate child plugins of the root plugin |
+| `菜单 rss` | Commands and immediate children of the plugin instance named `rss` |
+| `菜单 foo.bar` | Commands and children of nested plugin `bar` under `foo` |
+| `菜单 --page 2` | The second page of the root menu |
+| `菜单 rss --page 2` | The second page of the `rss` instance menu |
+| `remind --help` | A command's parameters, options, and usage, without executing it |
+
+The menu browses one plugin at a time; it does not flatten every plugin's commands into one list. Plugin names here are **instance keys**, not npm package names. Start with `菜单` and follow the child plugin names it returns.
+
+Set the keyword at the top level of the project's `zhin.config.yml`, alongside `plugins`:
+
+```yaml
+menuKeyword: help
+```
+
+This changes the entry to `help` (or `/help` with a `/` prefix). Set `menuKeyword: false` or `menuKeyword: ''` to disable the built-in menu. Without configuration, the keyword remains `菜单`; `help` is not a default alias.
+
+With `@zhin.js/html-renderer` installed, the menu emits a styled HTML card through the unified outbound pipeline. Image-capable platforms receive a menu image; native HTML platforms follow their declared HTML policy. If rendering fails or the platform requires text or cannot accept the generated image, the original text menu is preserved. Without a renderer, it remains plain text. Browsing, prefixes and custom keywords are unchanged.
+
+Each page contains at most **30 entries**, counting commands and child plugins together. The menu shows totals, the current page and explicit previous/next messages, using the current prefix and keyword. Text fallback uses the same page; it never sends every page at once. Page numbers must be positive integers; out-of-range requests report the actual page count. Long names and descriptions in the image are limited to two lines; command help retains the full declaration.
+
+On endpoints declaring **both native Markdown and native keyboard support**, a multi-page menu also includes a Markdown page indicator and **Previous / Next** buttons. Previous is disabled on the first page, Next on the last; a single-page menu omits the controls. Each click sends the requested page through the unified reply pipeline, preserving the custom keyword, prefix and plugin target. Callback bindings stay within the original conversation and generation; expired or retired-generation buttons cannot invoke old handlers. Endpoints missing either capability retain the textual navigation. Telegram's disabled button wire format requires Bot API 10.3+; see [DisabledButton](https://core.telegram.org/bots/api#disabledbutton).
+
+The default artwork, ornaments and icons are embedded; they need no external downloads. Customize the presentation at the project root:
+
+```yaml
+menuStyle:
+  title: My Bot · Command Atlas
+  subtitle: A little help for your everyday
+  accentColor: '#e7c993'
+  # Optional: your own artwork; omit to use the built-in landscape.
+  backgroundImage: https://example.com/my-menu.webp
+```
+
+`backgroundImage` accepts HTTP(S) URLs or PNG/JPEG/WebP base64 data URLs, not file paths or executable CSS. Remote artwork must be reachable from the bot host; its availability is independent of the HTML renderer. Use a data URL for fully offline custom artwork. `accentColor` accepts a six-digit hex color; invalid optional values use the defaults. These settings change image presentation only.
+
 ### Accept parameters
 
 Declare params in order under `params`; the `params` passed to `execute` gets the right types automatically:
