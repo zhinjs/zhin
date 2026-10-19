@@ -1483,7 +1483,8 @@ _该 Schema 没有声明字段。_
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `reminder.timezone` | string | 否 | `"UTC"` | 显示提醒时间的 IANA 时区；绝对时间仍必须提供 ISO offset |
-| `reminder.maxTasks` | number | 否 | `20` | 每个插件实例新建时允许的活跃任务上限（待触发或未确认）；降低上限不删除既有任务 |
+| `reminder.maxTasks` | number | 否 | `20` | 每实例聊天个人提醒池的活跃任务上限；与管理员池独立，降低上限不删除既有任务 |
+| `reminder.adminMaxTasks` | number | 否 | `20` | 每实例管理员提醒池的活跃任务上限（待执行、暂停或未确认）；与聊天池独立，两池总量可达上限之和 |
 | `reminder.maxTasksPerSender` | number | 否 | `10` | 同一发送者在同一会话的任务上限 |
 | `reminder.batchSize` | number | 否 | `5` | 每次扫描最多投递的任务数 |
 | `reminder.missedGraceSeconds` | number | 否 | `15` | 周期轮次超过此延迟后跳过；停机期间不补历史轮次 |
