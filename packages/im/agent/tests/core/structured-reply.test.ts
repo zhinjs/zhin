@@ -26,6 +26,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   maxIterations?: number;
   outputSchema?: false | Record<string, unknown>;
   detached?: boolean;
+  emptyReplyRetries?: number;
 } = {}) {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => responses.shift()! });
   const streamOptions: (StreamOptions | undefined)[] = [];
@@ -42,6 +43,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     getTurnProvider: () => ({ name: 'mock' }),
     llmRuntime: llm.runtime,
     config: { maxIterations: options.maxIterations ?? 3, outputSchema: options.outputSchema,
+      providerResilience: { emptyReplyRetries: options.emptyReplyRetries ?? 0 },
       toolExecution: 'sequential', compaction: {}, contextTokens: 100_000,
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },
     compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
@@ -68,6 +70,30 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
 }
 
 describe('structured Agent final replies', () => {
+  it.each(['tool iterations', 'exhausted summary', 'format correction', 'rejected correction', 'empty reply retry'])('counts every returned completion in turn usage: %s', async path => {
+    const toolPath = path === 'tool iterations' || path === 'exhausted summary';
+    const lookup = { name: 'member_lookup', description: 'Find member', parameters: { type: 'object', properties: {} } } as AgentTool;
+    const valid = JSON.stringify({ segments: [text('已完成')] });
+    const responses = [
+      toolPath ? assistantToolCallReply([{ id: 'lookup', name: 'member_lookup', arguments: {} }])
+        : assistantTextReply(path === 'empty reply retry' ? '' : 'invalid JSON'),
+      assistantTextReply(path === 'rejected correction' ? 'still invalid JSON' : valid),
+    ];
+    responses[0].usage = { ...responses[0].usage, input: 40, output: 20, totalTokens: 60 };
+    responses[1].usage = { ...responses[1].usage, input: 35, output: 15, totalTokens: 50 };
+    const { result, events, calls } = await run(responses, {
+      tools: toolPath ? [lookup] : [],
+      maxIterations: path === 'exhausted summary' ? 1 : 3,
+      emptyReplyRetries: path === 'empty reply retry' ? 1 : 0,
+    });
+    expect(calls).toHaveLength(2);
+    expect(result.usage).toEqual({ prompt_tokens: 75, completion_tokens: 35, total_tokens: 110 });
+    expect(events.find(event => event.type === 'turn_end')).toMatchObject({
+      usage: { promptTokens: 75, completionTokens: 35, totalTokens: 110 },
+    });
+    expect(result.reply).toBe(path === 'rejected correction' ? STRUCTURED_REPLY_FAILURE : '已完成');
+  });
+
   it.each([false, true])('keeps the existing empty-reply notice without retrying (thinking: %s)', async thinking => {
     const assistant = assistantTextReply('');
     if (thinking) assistant.content = [{ type: 'thinking', thinking: 'private reasoning is not a JSON reply' }];
