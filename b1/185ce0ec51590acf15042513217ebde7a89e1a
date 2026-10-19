@@ -1,0 +1,79 @@
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_bd88bacaa6eb51 12,367,457,555,585,592,596,601,605,614-615,627-628,643
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_bd88bacaa6eb51 15,194,224,233,281-282,286-293
+  s_079f1dc5e6308d::t_ce09e48c51854e 7
+  s_079f1dc5e6308d::t_80b9716f578f93 294-295
+packages/im/plugin-runtime/src/snapshot.ts
+  s_079f1dc5e6308d::t_96cc22cffbf467 60,90-91,131,160,192,211,222
+.changeset/interaction-generation-reliability.md
+  s_079f1dc5e6308d::t_8942347c1008d2 1-8
+docs/en/concepts/message-flow.md
+  s_079f1dc5e6308d::t_644f7ed0fa39f9 149-152
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_079f1dc5e6308d::t_1deece20587321 17-18,20,22,27-29,31-34,37-38,40,96-99,120-125,127-128,143-144,147,159,166,169,190,192,194-196,198-201,204,207,209,219,222-223,268,270,274-308,310-315,320-322,324-339,341-342
+  s_079f1dc5e6308d::t_644f7ed0fa39f9 177-185,197,210-212
+  s_079f1dc5e6308d::t_3c504cba646134 309,316-319
+  s_079f1dc5e6308d::t_ce09e48c51854e 19,21,145-146
+  s_079f1dc5e6308d::t_e75f9724de273e 323
+  s_079f1dc5e6308d::t_42698de7def5a4 116-118,126,148
+.changeset/experience-slack-callback-thread.md
+  s_079f1dc5e6308d::t_04667143d653bf 1-5
+packages/im/core/src/built/user-interaction.ts
+  s_079f1dc5e6308d::t_1deece20587321 62-65,78,80,90
+packages/im/core/src/plugin-runtime/im/interaction-operation.ts
+  s_079f1dc5e6308d::t_ce09e48c51854e 1-9
+plugins/adapters/slack/src/endpoint.ts
+  s_079f1dc5e6308d::t_04667143d653bf 301-302,311,323
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_079f1dc5e6308d::t_ce09e48c51854e 187,231-239
+  s_079f1dc5e6308d::t_42698de7def5a4 500-502
+  s_079f1dc5e6308d::t_e75f9724de273e 694,699,727,734
+  s_079f1dc5e6308d::t_0bde3fbfbc6f5d 240-241
+docs/contributing/user-experience-roadmap.md
+  s_079f1dc5e6308d::t_c93a2ff87544dd 107-108
+packages/im/handler/src/context.ts
+  s_079f1dc5e6308d::t_bd88bacaa6eb51 3,14
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_4a846839a43d7d 3700
+packages/im/handler/tests/handler.test.ts
+  s_079f1dc5e6308d::t_644f7ed0fa39f9 139-147
+packages/im/plugin-runtime/README.md
+  s_079f1dc5e6308d::t_8942347c1008d2 30-33
+packages/im/handler/src/handler-index.ts
+  s_079f1dc5e6308d::t_bd88bacaa6eb51 101
+plugins/adapters/slack/src/protocol.ts
+  s_079f1dc5e6308d::t_04667143d653bf 69
+packages/im/core/tests/plugin-runtime/interaction-reliability.test.ts
+  s_079f1dc5e6308d::t_2defbbad272595 118-134
+  s_079f1dc5e6308d::t_42698de7def5a4 171-172
+  s_079f1dc5e6308d::t_8942347c1008d2 2-3,24-35,82-117,135-154
+  s_079f1dc5e6308d::t_e957987c6fd9d3 60-61
+  s_079f1dc5e6308d::t_e75f9724de273e 1,4-23,36-59,62-81,155-170,173-207
+tests/plugin-runtime/user-interaction-platform-codecs.test.ts
+  s_079f1dc5e6308d::t_819037a6f7c725 1-37
+packages/im/plugin-runtime/tests/kernel.test.ts
+  s_079f1dc5e6308d::t_ce09e48c51854e 8,30-52
+docs/concepts/message-flow.md
+  s_079f1dc5e6308d::t_644f7ed0fa39f9 169-177
+packages/im/core/tests/user-interaction.test.ts
+  s_079f1dc5e6308d::t_ce09e48c51854e 28-29
+plugins/adapters/slack/tests/slack-runtime.test.ts
+  s_079f1dc5e6308d::t_67158e09f80b20 201-238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b1185ce0ec51590acf15042513217ebde7a89e1a",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
