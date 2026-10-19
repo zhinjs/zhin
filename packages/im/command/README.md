@@ -60,6 +60,12 @@ commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type:
 
 ## 集中声明参数、选项与帮助
 
+**列出指令**：在 Bot 会话中发送 `菜单`，列出根插件的指令和直接子插件；`菜单 <插件实例键>` 查看子插件，嵌套实例用 `菜单 foo.bar`。菜单逐层浏览，不一次展开全树。账号设有命令前缀时同样要加前缀，如 `/菜单`。项目根配置的顶层 `menuKeyword` 可修改关键词，`false` 或空字符串关闭；默认关键词为 `菜单`，不是 `help`。详见[指令菜单](../../../docs/authoring/commands.md#查看已加载的指令菜单)。
+
+安装 `@zhin.js/html-renderer` 后，菜单发出带原始文本备用内容的 HTML 段，复用统一发送链的图片渲染和平台策略。渲染失败或平台无法消费图片时保留原文本；无渲染器时直接返回文本。Command Feature 不调用渲染器，也不新增 Core 或样式组件依赖。
+
+菜单每页最多 30 项（指令与子插件合计），`菜单 --page 2` 或 `菜单 rss --page 2` 翻页，图片与文本返回同一页。三列分区、内置背景与图标不需要外部素材；根配置 `menuStyle` 可设置 `title`、`subtitle`、六位 hex `accentColor` 以及 HTTP(S)／PNG/JPEG/WebP data URL 的 `backgroundImage`。同时支持原生 Markdown 与原生按钮时附加翻页控件：首页禁用上一页、末页禁用下一页，单页省略控件；不支持时保留文本导航。回调复用原会话、当前 generation 的 JSX 按钮机制。完整配置和边界见上述指令菜单文档。
+
 目录提供静态命令路径。静态 `commands/remind/index.ts` 可集中声明任意数量的位置参数；
 现有 `commands/foo/[id]/index.ts` 仍绑定同名 `params.id`，后面的参数无需额外动态目录。
 

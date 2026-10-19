@@ -14,3 +14,17 @@ it('preserves valid callback payloads and rejects excessive UTF-8 bytes rather t
   expect(formatOutboundActions(1, keyboard(payload))[0]).toMatchObject({ params: { reply_markup: { inline_keyboard: [[{ text: '确认', callback_data: payload }]] } } });
   for (const invalid of ['', '中'.repeat(22), 'a'.repeat(65)]) expect(() => formatOutboundActions(1, keyboard(invalid))).toThrow('1-64 UTF-8 bytes');
 });
+
+it('maps disabled buttons to Bot API DisabledButton without an actionable callback', () => {
+  const actions = formatOutboundActions(1, [
+    { type: 'markdown', data: { content: '第 1/3 页' } },
+    { type: 'keyboard', data: { rows: [[
+      { label: '上一页', payload: 'unused', disabled: true },
+      { label: '下一页', payload: 'next-page', disabled: false },
+    ]] } },
+  ]);
+  expect(actions[0]).toMatchObject({ params: { reply_markup: { inline_keyboard: [[
+    { text: '上一页', disabled: {} }, { text: '下一页', callback_data: 'next-page' },
+  ]] } } });
+  expect(JSON.stringify(actions)).not.toContain('unused');
+});

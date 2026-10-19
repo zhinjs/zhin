@@ -33,6 +33,8 @@ A reply means the whole path works: Console reached the bot over HTTP → the Sa
 
 ## 3. Know the generated project
 
+To discover commands, send **`/菜单`** in the conversation (`菜单` if no command prefix is configured). It lists the root plugin's commands and child plugins; use `/菜单 <plugin-instance-key>` to browse children. Use `/hello --help` for a command's usage. The project-level `menuKeyword` setting can change the keyword; see [Browse loaded commands](../authoring/commands.md#browse-loaded-commands).
+
 ```text
 my-bot/
 ├── package.json          # Runtime topology: entry, features, plugins

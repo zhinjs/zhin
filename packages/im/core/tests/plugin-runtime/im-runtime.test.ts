@@ -13,6 +13,7 @@ import {
   featureId,
   generationAdmissionBinder,
   generationAdmissionSource,
+  htmlRendererToken,
   rootPluginId,
   type CapabilitySlot,
   type SnapshotState,
@@ -138,6 +139,122 @@ function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<un
 }
 
 describe('IM Runtime', () => {
+  it('navigates menu pages through scoped native callbacks and disables boundary buttons', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, menuCommands: 60,
+      adapterSegments: { interactive: 'native', markdown: 'native' },
+    });
+    const input = fixtureInput(fixture, '/菜单');
+    const page = () => {
+      const payload = (sent.at(-1) as { payload: Array<{ type: string; data: {
+        text?: string; content?: string; rows?: Array<Array<{ label: string; payload: string; disabled: boolean }>>;
+      } }> }).payload;
+      expect(payload.find(segment => segment.type === 'markdown')).toBeDefined();
+      return { text: payload[0].data.text, buttons: payload.find(segment => segment.type === 'keyboard')!.data.rows![0] };
+    };
+    const action = (payload: string) => ({ ...input, content: '', segments: [{ type: 'action', data: { id: 'menu-click', payload } }] });
+    try {
+      await receive(fixture.im, input);
+      const first = page();
+      expect(first.text).toContain('第 1/3 页');
+      expect(first.buttons.map(button => [button.label, button.disabled])).toEqual([['上一页', true], ['下一页', false]]);
+      const count = sent.length;
+      const cross = action(first.buttons[1].payload);
+      await receive(fixture.im, { ...cross, conversation: { ...cross.conversation, id: 'other-room' } });
+      expect(sent).toHaveLength(count);
+      await receive(fixture.im, action(first.buttons[1].payload));
+      const middle = page();
+      expect(middle.text).toContain('第 2/3 页');
+      expect(middle.buttons.map(button => button.disabled)).toEqual([false, false]);
+      await receive(fixture.im, action(middle.buttons[1].payload));
+      const last = page();
+      expect(last.text).toContain('第 3/3 页');
+      expect(last.buttons.map(button => button.disabled)).toEqual([false, true]);
+      await receive(fixture.im, action(last.buttons[0].payload));
+      expect(page().text).toContain('第 2/3 页');
+      await receive(fixture.im, action(first.buttons[0].payload));
+      expect(JSON.stringify(sent.at(-1))).toContain('交互已过期或不可用');
+      fixture.store.commit(0, { snapshot: snapshotState(fixture.store.current), dispose: () => undefined });
+      await receive(fixture.im, action(first.buttons[1].payload));
+      expect(JSON.stringify(sent.at(-1))).toContain('交互已过期或不可用');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each([
+    { interactive: 'native', markdown: 'text' },
+    { interactive: 'text', markdown: 'native' },
+    { interactive: 'native', markdown: 'native', supported: ['text', 'markdown'] },
+    { interactive: 'native', markdown: 'native', supported: ['text', 'keyboard'] },
+  ] as const)('keeps textual menu navigation when either required capability is absent: %j', async adapterSegments => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, menuCommands: 60, adapterSegments,
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/菜单'));
+      expect(JSON.stringify(sent[0])).toContain('下一页：/菜单 --page 2');
+      expect(JSON.stringify(sent[0])).not.toContain('keyboard');
+      expect(JSON.stringify(sent[0])).not.toContain('zhin:jsx:');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each(['available', 'failed'] as const)('keeps pagination buttons with an %s HTML renderer', async state => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, menuCommands: 60,
+      adapterSegments: { interactive: 'native', markdown: 'native', outboundMedia: ['base64'] },
+    });
+    const render = vi.fn(async () => {
+      if (state === 'failed') throw new Error('renderer failed');
+      return { data: Buffer.from('menu-png'), format: 'png' as const, width: 1080, height: 1200, mimeType: 'image/png' };
+    });
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([...resources.get(current.root)!, [htmlRendererToken.id, { render }]]));
+    fixture.store.commit(0, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+    try {
+      const input = fixtureInput(fixture, '/菜单');
+      await receive(fixture.im, input);
+      const payload = (sent[0] as { payload: Array<{ type: string; data: { rows?: Array<Array<{ payload: string }>> } }> }).payload;
+      expect(payload.map(segment => segment.type)).toEqual([state === 'available' ? 'image' : 'text', 'markdown', 'keyboard']);
+      const next = payload[2].data.rows![0][1].payload;
+      await receive(fixture.im, { ...input, content: '', segments: [{ type: 'action', data: { id: 'next', payload: next } }] });
+      expect(JSON.stringify(sent.at(-1))).toContain('第 2/3 页');
+      expect(render).toHaveBeenCalledTimes(2);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('omits pagination buttons for a single-page menu', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, menuCommands: 29, adapterSegments: { interactive: 'native', markdown: 'native' },
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/菜单'));
+      expect(JSON.stringify(sent[0])).not.toContain('keyboard');
+      expect(JSON.stringify(sent[0])).not.toContain('--page 2');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('retains custom keywords and nested plugin targets when a pagination button is clicked', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, menuCommands: 60, menuKeyword: '帮助', commandOwner: childPluginId(rootPluginId(), 'music'),
+      adapterSegments: { interactive: 'native', markdown: 'native' },
+    });
+    try {
+      const input = fixtureInput(fixture, '/帮助 music');
+      await receive(fixture.im, input);
+      const payload = (sent[0] as { payload: Array<{ type: string; data: { rows?: Array<Array<{ payload: string }>> } }> }).payload;
+      const next = payload.find(segment => segment.type === 'keyboard')!.data.rows![0][1].payload;
+      await receive(fixture.im, { ...input, content: '', segments: [{ type: 'action', data: { id: 'next', payload: next } }] });
+      expect(JSON.stringify(sent.at(-1))).toContain('music 指令菜单');
+      expect(JSON.stringify(sent.at(-1))).toContain('第 2/3 页');
+      expect(JSON.stringify(sent.at(-1))).toContain('/帮助 music --page 3');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('replies to invalid and denied commands but leaves ordinary chat unmatched', async () => {
     const sent: unknown[] = [];
     const executed = vi.fn(() => 'ok');
@@ -2780,12 +2897,14 @@ async function createFixture(
     middleware?: boolean;
     validateCommand?: boolean;
     restrictCommand?: boolean;
-    adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
+    adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; markdown?: 'native' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     commandResult?: (input: Message) => SendContent | void | Promise<SendContent | void>;
     componentResult?: () => SendContent | Promise<SendContent>;
     componentOwner?: PluginId;
     commandOwner?: PluginId;
     commandShortcut?: boolean;
+    menuCommands?: number;
+    menuKeyword?: string;
     inboundOwner?: PluginId;
     inboundMiddleware?: (input: Message, next: MiddlewareNext) => unknown;
     adapterCapabilities?: readonly ('inbound' | 'outbound')[];
@@ -2898,11 +3017,17 @@ async function createFixture(
       },
     }),
   });
+  const menuCommands = Array.from({ length: options?.menuCommands ?? 0 }, (_, i) => createCapabilitySlot({
+    owner: options?.commandOwner ?? root, feature: commandFeatureId,
+    localName: `menu-${String(i).padStart(3, '0')}`, source: `/commands/menu-${i}/index.ts`,
+    definition: defineCommand({ description: `菜单项目 ${i}`, execute: () => { throw new Error('Menu must not execute commands'); } }),
+  }));
   const withMiddleware = options?.middleware !== false;
   const slots: readonly CapabilitySlot[] = [
     adapter,
     ...(options?.additionalAdapters ?? []),
     command,
+    ...menuCommands,
     resultComponent,
     ...(withMiddleware ? [inbound, outbound] : []),
   ];
@@ -2925,7 +3050,7 @@ async function createFixture(
   const adapters = await AdapterIndex.create([adapter, ...(options?.additionalAdapters ?? [])], view, new AbortController().signal);
   const projections = new Map<FeatureId, unknown>([
     [adapterFeatureId, adapters],
-    [commandFeatureId, new CommandIndex([command], view)],
+    [commandFeatureId, new CommandIndex([command, ...menuCommands], view, options?.menuCommands ? { keyword: options.menuKeyword ?? '菜单' } : undefined)],
     [componentFeatureId, new ComponentIndex([resultComponent], view)],
     ...(withMiddleware
       ? [[middlewareFeatureId, new MiddlewareIndex([inbound, outbound], view)] as const]

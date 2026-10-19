@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7e17a7d2087d2681 -->
+<!-- sync-adapter-docs:sha256=8d8ae5402da82f51 -->
 
 # @zhin.js/adapter-telegram
 
@@ -159,3 +159,7 @@ Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自
 ## License
 
 MIT
+
+### 禁用按钮
+
+canonical keyboard 的 `disabled: true` 按钮映射为 Telegram Bot API 10.3 的 `disabled: {}`，不携带 `callback_data`；启用按钮仍使用原回调数据，并保留 1–64 UTF-8 字节校验。自建 Bot API Server 需支持该版本，见 [DisabledButton](https://core.telegram.org/bots/api#disabledbutton)。
