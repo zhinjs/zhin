@@ -1,7 +1,7 @@
 import type { JSXElement } from '@zhin.js/jsx';
 import type { CommandMenuNavigation } from '@zhin.js/command';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { operationInputBinding } from '@zhin.js/feature-kit';
+import { operationInputBinding, operationInputSignal } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MessageOrigin } from './inbound-origin.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
@@ -283,6 +283,12 @@ export class RuntimeMessage implements MessageBase {
       { requester: owner, snapshot, assertActive: this.#assertActive, origin: this.origin,
         retirementSignal: this.#retirementSignal },
     );
+  }
+
+  /** @internal Retirement notification; ordinary leased sends may still drain. */
+  [operationInputSignal](): AbortSignal | undefined {
+    this.#assertActive?.();
+    return this.#retirementSignal;
   }
 
   /** @internal The command/handler author's actual leased operation. */
