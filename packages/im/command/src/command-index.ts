@@ -17,7 +17,7 @@ import {
   type PermissionHost,
 } from '@zhin.js/permission';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
-import { renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
+import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
 import {
   createCommandContext,
   resolveCommandSession,
@@ -415,13 +415,23 @@ export class CommandIndex {
     if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
     if (text.startsWith(keyword + ' ')) {
       const key = text.slice(keyword.length + 1).trim();
+      const args = key.split(/\s+/u);
+      const flag = args.indexOf('--page');
+      if (flag !== -1) {
+        const pageText = args[flag + 1] ?? '';
+        if (flag > 1 || args.length !== flag + 2 || !/^[1-9]\d*$/u.test(pageText)
+          || !Number.isSafeInteger(Number(pageText))) {
+          return `页码必须是正整数。用法：${commandPrefix}${keyword} [插件名] --page <页码>`;
+        }
+        return this.#buildMenu(flag === 1 ? args[0] : undefined, commandPrefix, keyword, snapshot, Number(pageText));
+      }
       if (key) return this.#buildMenu(key, commandPrefix, keyword, snapshot);
       return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
     }
     return undefined;
   }
 
-  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string, snapshot: RuntimeSnapshot): string | CommandMenuSegment {
+  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string, snapshot: RuntimeSnapshot, page = 1): string | CommandMenuSegment {
     const root = snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
@@ -435,21 +445,29 @@ export class CommandIndex {
       .map((childId) => snapshot.tree.get(childId))
       .filter((child): child is NonNullable<typeof child> => !!child);
 
+    const pages = Math.max(1, Math.ceil((directCommands.length + children.length) / MENU_PAGE_SIZE));
+    const invocation = `${commandPrefix}${keyword}${pluginKey ? ` ${pluginKey}` : ''}`;
+    if (page > pages) return `页码超出范围：共 ${pages} 页。请使用「${invocation} --page <页码>」。`;
+    const offset = (page - 1) * MENU_PAGE_SIZE;
+    const pageCommands = directCommands.slice(offset, offset + MENU_PAGE_SIZE);
+    const pageChildren = children.slice(Math.max(0, offset - directCommands.length), Math.max(0, offset + MENU_PAGE_SIZE - directCommands.length));
+
     const displayKey = pluginKey ?? node.instanceKey;
     const lines: string[] = [`=== ${displayKey} 指令菜单 ===`];
+    if (pages > 1) lines.push(`第 ${page}/${pages} 页 · ${directCommands.length} 条指令 · ${children.length} 个子插件`);
 
-    if (directCommands.length > 0) {
+    if (pageCommands.length > 0) {
       lines.push('');
-      for (const cmd of directCommands) {
+      for (const cmd of pageCommands) {
         const desc = cmd.description ? `  - ${cmd.description}` : '';
         lines.push(`  ${commandPrefix}${cmd.name}${desc}`);
       }
     }
 
-    if (children.length > 0) {
+    if (pageChildren.length > 0) {
       lines.push('');
       lines.push('子插件：');
-      for (const child of children) {
+      for (const child of pageChildren) {
         const childKey = pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey;
         const label = child.metadata?.displayName ?? child.instanceKey;
         lines.push(`  ${childKey}  (${label})`);
@@ -461,9 +479,11 @@ export class CommandIndex {
       lines.push('（暂无指令和子插件）');
     }
 
-    const hint = children.length > 0
-      ? `提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`
-      : undefined;
+    const hints: string[] = [];
+    if (children.length > 0) hints.push(`提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`);
+    if (page > 1) hints.push(`上一页：${invocation} --page ${page - 1}`);
+    if (page < pages) hints.push(`下一页：${invocation} --page ${page + 1}`);
+    const hint = hints.length ? hints.join('\n') : undefined;
     if (hint) {
       lines.push('');
       lines.push(hint);
@@ -471,12 +491,14 @@ export class CommandIndex {
 
     const text = lines.join('\n');
     if (!snapshot.resources.get(root)?.has(htmlRendererToken.id)) return text;
+    const config = snapshot.config.get(root) as Record<string, unknown> | undefined;
     return renderCommandMenu(displayKey,
-      directCommands.map(cmd => ({ name: `${commandPrefix}${cmd.name}`, description: cmd.description })),
-      children.map(child => ({
+      pageCommands.map(cmd => ({ name: `${commandPrefix}${cmd.name}`, description: cmd.description })),
+      pageChildren.map(child => ({
         name: pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey,
         description: child.metadata?.displayName ?? child.instanceKey,
-      })), hint, text);
+      })), hint, text, { page, pages, commandTotal: directCommands.length, pluginTotal: children.length,
+        appearance: readMenuAppearance(config?.menuStyle) });
   }
 }
 

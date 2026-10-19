@@ -36,7 +36,7 @@ function fixture(renderer?: HtmlRendererHost, html: 'image' | 'text' = 'image', 
 
 function rendererFixture() {
   const render = vi.fn<HtmlRendererHost['render']>().mockResolvedValue({
-    data: Buffer.from('png'), format: 'png', width: 860, height: 500, mimeType: 'image/png',
+    data: Buffer.from('png'), format: 'png', width: 1080, height: 500, mimeType: 'image/png',
   });
   return { render };
 }
@@ -53,7 +53,7 @@ it('renders the real command menu through the outbound pipeline and escapes meta
   const { index, snapshot, conversation } = fixture(renderer);
   const result = await index.dispatch('帮助', undefined, undefined, '/');
   expect(result.value).toMatchObject({ type: 'html', data: {
-    fileName: 'command-menu.png', width: 860, html: expect.stringContaining('/ping'),
+    fileName: 'command-menu.png', width: 1080, html: expect.stringContaining('/ping'),
     text: expect.stringContaining('=== root 指令菜单 ==='),
   } });
   const projected = await projectOutboundPayload(result.value, conversation, snapshot);
@@ -95,4 +95,109 @@ it('uses the current operation view to detect rendering resources', async () => 
   const { index, snapshot } = fixture(rendererFixture());
   const operation = { ...snapshot, resources: new Map() };
   expect(typeof (await index.dispatch('帮助', undefined, undefined, '', operation)).value).toBe('string');
+});
+
+function largeFixture(commandCount: number, pluginCount: number, renderer?: HtmlRendererHost) {
+  const base = fixture(renderer);
+  const root = base.snapshot.root;
+  const commands = Array.from({ length: commandCount }, (_, i) => createCapabilitySlot({
+    owner: root, feature: commandFeatureId, localName: `cmd-${String(i).padStart(3, '0')}`,
+    source: `/commands/cmd-${i}/index.ts`,
+    definition: defineCommand({ description: `功能 ${i}`, execute: () => { throw new Error('Menu must not execute a command'); } }),
+  }));
+  const tree = new Map(base.snapshot.tree);
+  const children = Array.from({ length: pluginCount }, (_, i) => {
+    const instanceKey = `plugin-${String(i).padStart(3, '0')}`;
+    const id = childPluginId(root, instanceKey);
+    tree.set(id, { id, instanceKey, parent: root, packageName: instanceKey, packageRoot: `/${instanceKey}`, children: [] });
+    return id;
+  });
+  tree.set(root, { ...tree.get(root)!, children });
+  const capabilities = new Map(base.snapshot.capabilities);
+  for (const slot of commands) capabilities.set(slot.id, slot);
+  const snapshot = { ...base.snapshot, tree, capabilities };
+  return { ...base, snapshot, index: new CommandIndex(commands, snapshot, { keyword: '帮助' }) };
+}
+
+it.each([[95, 100], [0, 100], [100, 0]])('paginates %i commands and %i plugins without omission or duplication', async (commandCount, pluginCount) => {
+  const { index } = largeFixture(commandCount, pluginCount);
+  const found: string[] = [];
+  const pages = Math.ceil((commandCount + pluginCount) / 18);
+  for (let page = 1; page <= pages; page++) {
+    const { value } = await index.dispatch(`帮助 --page ${page}`, undefined, undefined, '/');
+    expect(typeof value).toBe('string');
+    const text = String(value);
+    expect(text).toContain(`第 ${page}/${pages} 页`);
+    const entries = text.split('\n').filter(line => /^ {2}(?:\/cmd-|plugin-)\d{3}/u.test(line));
+    expect(entries.length).toBeLessThanOrEqual(18);
+    found.push(...entries.map(line => line.trim().split(/[ (]/u)[0]!));
+    if (page > 1) expect(text).toContain(`上一页：/帮助 --page ${page - 1}`);
+    if (page < pages) expect(text).toContain(`下一页：/帮助 --page ${page + 1}`);
+  }
+  expect(found).toHaveLength(commandCount + pluginCount);
+  expect(new Set(found).size).toBe(commandCount + pluginCount);
+});
+
+it('keeps the image page and failed-render text page identical for a large catalog', async () => {
+  const renderer = rendererFixture();
+  const { index, snapshot, conversation, resources } = largeFixture(95, 100, renderer);
+  const { value } = await index.dispatch('帮助 --page 6', undefined, undefined, '#');
+  renderer.render.mockRejectedValueOnce(new Error('renderer failed'));
+  const payload = await projectOutboundPayload(value, conversation, snapshot);
+  const html = renderer.render.mock.calls[0]![0];
+  expect(html.match(/class="entry"/gu)).toHaveLength(18);
+  expect(html).toContain('06 / 11');
+  expect(html).toContain('95 条指令');
+  expect(html).toContain('100 个子插件');
+  resources.delete(htmlRendererToken.id);
+  const plain = await index.dispatch('帮助 --page 6', undefined, undefined, '#');
+  expect(payload.payload).toEqual([{ type: 'text', data: { text: plain.value } }]);
+});
+
+it('preserves the plugin path and custom prefix in page navigation', async () => {
+  const base = largeFixture(40, 0);
+  const child = childPluginId(base.snapshot.root, 'music');
+  const slots = [...base.snapshot.capabilities.values()].filter(slot => slot.feature === commandFeatureId)
+    .map(slot => createCapabilitySlot({ ...slot, owner: child, definition: slot.definition as ReturnType<typeof defineCommand> }));
+  const tree = new Map(base.snapshot.tree);
+  tree.set(child, { id: child, instanceKey: 'music', parent: base.snapshot.root, packageName: 'music', packageRoot: '/music', children: [] });
+  const snapshot = { ...base.snapshot, tree };
+  const index = new CommandIndex(slots, snapshot, { keyword: '帮助' });
+  const result = await index.dispatch('帮助 music --page 2', undefined, undefined, '!');
+  expect(result.value).toContain('上一页：!帮助 music --page 1');
+  expect(result.value).toContain('下一页：!帮助 music --page 3');
+});
+
+it.each(['0', '-1', '1.5', 'NaN', '9007199254740992', ''])('rejects invalid page %j without generating an image', async page => {
+  const renderer = rendererFixture();
+  const { index } = fixture(renderer);
+  expect((await index.dispatch(`帮助 --page ${page}`)).value).toContain('页码必须是正整数');
+  expect(renderer.render).not.toHaveBeenCalled();
+});
+
+it('reports the actual page count when the requested page is out of range', async () => {
+  const { index } = largeFixture(40, 0);
+  expect((await index.dispatch('帮助 --page 4')).value).toContain('共 3 页');
+});
+
+it('applies safe appearance settings from root configuration without changing text fallback', async () => {
+  const { index, snapshot } = fixture(rendererFixture());
+  const operation = { ...snapshot, config: new Map([[snapshot.root, { menuStyle: {
+    title: '知音 <Atlas>', subtitle: '每天都有新发现', accentColor: '#dcad75',
+    backgroundImage: 'https://example.com/art.webp?text=</style><script>alert(1)</script>',
+  } }]]) };
+  const { value } = await index.dispatch('帮助', undefined, undefined, '', operation);
+  expect(value).toMatchObject({ type: 'html', data: {
+    html: expect.stringContaining('知音 &lt;Atlas&gt;'), text: expect.stringContaining('=== root 指令菜单 ==='),
+  } });
+  const html = (value as { data: { html: string } }).data.html;
+  expect(html).toContain('--accent:#dcad75');
+  expect(html).not.toContain('<script>');
+  expect(html).not.toContain('</style><script>');
+  const bad = { ...snapshot, config: new Map([[snapshot.root, { menuStyle: {
+    accentColor: 'red;}body{display:none}', backgroundImage: 'javascript:alert(1)',
+  } }]]) };
+  const invalid = await index.dispatch('帮助', undefined, undefined, '', bad);
+  expect((invalid.value as { data: { html: string } }).data.html).not.toContain('javascript:');
+  expect((invalid.value as { data: { html: string } }).data.html).not.toContain('display:none');
 });

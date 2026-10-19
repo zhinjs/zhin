@@ -64,6 +64,8 @@ commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type:
 
 安装 `@zhin.js/html-renderer` 后，菜单发出带原始文本备用内容的 HTML 段，复用统一发送链的图片渲染和平台策略。渲染失败或平台无法消费图片时保留原文本；无渲染器时直接返回文本。Command Feature 不调用渲染器，也不新增 Core 或样式组件依赖。
 
+菜单每页最多 18 项（指令与子插件合计），`菜单 --page 2` 或 `菜单 rss --page 2` 翻页，图片与文本返回同一页。三列分区、内置背景与图标不需要外部素材；根配置 `menuStyle` 可设置 `title`、`subtitle`、六位 hex `accentColor` 以及 HTTP(S)／PNG/JPEG/WebP data URL 的 `backgroundImage`。完整配置和边界见上述指令菜单文档。
+
 目录提供静态命令路径。静态 `commands/remind/index.ts` 可集中声明任意数量的位置参数；
 现有 `commands/foo/[id]/index.ts` 仍绑定同名 `params.id`，后面的参数无需额外动态目录。
 
