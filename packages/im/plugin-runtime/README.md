@@ -27,6 +27,10 @@ prepare shadow state -> validate -> handoff -> atomic commit
 局部 HMR 只缩小 prepare/setup/dispose 范围；每次 commit 始终发布完整一致的 snapshot。
 长期 socket、worker 或 admission loop 必须参加 generation handoff，不能成为模块级副作用。
 
+`SnapshotReader.acquire()` 返回的 `SnapshotLease.retirementSignal` 在该运行代被新一代替换、
+或 Root 关闭时同步触发，即使仍有 lease 持有旧资源。它供交互等待等需要随代结束的操作主动取消；
+不会代替 `lease.release()`、强制中断普通旧操作或提前销毁资源。被拒绝的候选不会触发当前代的信号。
+
 本包没有生产依赖。YAML、AJV、watcher、IM 与 AI 都属于上层 adapter 或 Runtime。
 
 ## 可选管理员任务端口

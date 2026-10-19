@@ -298,6 +298,8 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     const channelId = payload.channel?.id ?? '';
     const userId = payload.user.id;
     const messageTs = payload.message?.ts ?? '';
+    const sourceThread = payload.message?.thread_ts;
+    const threadTs = typeof sourceThread === 'string' && sourceThread && sourceThread !== messageTs ? sourceThread : undefined;
     if (payload.response_url) {
       postSlackEphemeral(payload.response_url, '已收到', this.#logger);
     }
@@ -306,6 +308,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
       channelId: channelId || userId,
       // block_actions 无 channel_type；无 channel 时按与发起用户的 DM 处理
       channelType: channelId ? undefined : 'im',
+      threadId: threadTs,
     });
     void this.emit('message.receive', {
       conversation,
@@ -317,7 +320,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
       metadata: Object.freeze({
         eventType: 'block_actions',
         actionId: payload.actions[0]?.action_id,
-        threadTs: messageTs || undefined,
+        threadTs,
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

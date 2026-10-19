@@ -4,12 +4,14 @@ import { operationInputBinding } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MessageOrigin } from './inbound-origin.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
+import { interactionOperationScope, type InteractionOperationScope } from './interaction-operation.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
 // 经 plugin-runtime/im/index.ts re-export，供 runtime 消费者直接引用。
 export type { MediaRef, Segment };
 
 const componentCallBrand = 'zhin.component-call/1' as const;
 const rawContentBrand = 'zhin.raw-content/1' as const;
+
 
 export interface ComponentCall<TProps = unknown> {
   readonly $content: typeof componentCallBrand;
@@ -189,6 +191,7 @@ export class RuntimeMessage implements MessageBase {
   readonly #author?: PluginId;
   readonly #snapshot?: RuntimeSnapshot;
   readonly #assertActive?: () => void;
+  readonly #retirementSignal?: AbortSignal;
   readonly origin?: MessageOrigin;
 
   /** @internal Constructed only by the generation-owned IM Runtime. */
@@ -218,6 +221,7 @@ export class RuntimeMessage implements MessageBase {
       snapshot?: RuntimeSnapshot;
       assertActive?: () => void;
       origin?: MessageOrigin;
+      retirementSignal?: AbortSignal;
     }> = {},
   ) {
     this.origin = binding.origin;
@@ -226,6 +230,7 @@ export class RuntimeMessage implements MessageBase {
     this.#author = binding.requester;
     this.#snapshot = binding.snapshot;
     this.#assertActive = binding.assertActive;
+    this.#retirementSignal = binding.retirementSignal;
     const requester = binding.requester;
     this.$reply = (content) => requester === undefined ? reply(content) : reply(content, requester);
     this.$replyFrom = (requester, content) => reply(content, requester);
@@ -273,8 +278,19 @@ export class RuntimeMessage implements MessageBase {
       this.conversation, this.content, this.generation, this.#reply,
       this.sender, this.metadata, this.segments, this.message, this.endpointId,
       this.mentioned, this.replyTo, this.#resolveClient, this.clientAdapter,
-      { requester: owner, snapshot, assertActive: this.#assertActive, origin: this.origin },
+      { requester: owner, snapshot, assertActive: this.#assertActive, origin: this.origin,
+        retirementSignal: this.#retirementSignal },
     );
+  }
+
+  /** @internal The command/handler author's actual leased operation. */
+  [interactionOperationScope](): InteractionOperationScope | undefined {
+    this.#assertActive?.();
+    return this.#snapshot ? {
+      snapshot: this.#snapshot,
+      owner: this.#author ?? this.#snapshot.root,
+      retirementSignal: this.#retirementSignal,
+    } : undefined;
   }
 
   /** 平台原生消息 id（`message` 未提供时为 undefined）。 */

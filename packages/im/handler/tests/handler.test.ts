@@ -136,6 +136,15 @@ describe('resolveHandlerEvent', () => {
 });
 
 describe('HandlerIndex', () => {
+  it('passes the indexed owner to the internal interaction factory', async () => {
+    const snapshot = createSnapshot();
+    const received: unknown[] = [];
+    const index = new HandlerIndex([createSlot('test/event', defineHandler({ event: 'test.event', handle() {} }))], snapshot);
+    await index.dispatch('test.event', ['payload'], {
+      resolveInteraction(event, args, owner) { received.push({ event, args, owner }); return undefined; },
+    });
+    expect(received).toEqual([{ event: 'test.event', args: ['payload'], owner: 'test-plugin' }]);
+  });
   it('indexes handlers by event name from definition.event', () => {
     const h1 = defineHandler({ event: 'message.receive', handle() {} });
     const h2 = defineHandler({ event: 'endpoint.connect', handle() {} });

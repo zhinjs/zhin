@@ -184,6 +184,7 @@ describe('UserInteraction via ImRuntime', () => {
       sent,
       events,
       commandExecuted,
+      store,
       getResult: () => interactionResult,
       getError: () => interactionError,
     };
@@ -225,6 +226,17 @@ describe('UserInteraction via ImRuntime', () => {
     expect(result.matched).toBe(true);
     expect(result.command).toBe('ask');
     expect(getResult()).toBe('张三');
+  });
+
+  it('immediately cancels an old question when HMR retains its owner and Endpoint', async () => {
+    const { im, sent, store } = await createInteractionFixture();
+    const pending = receive(im, incomingMessage('/ask')).catch(error => error);
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    store.commit(0, { snapshot: store.current, dispose() {} });
+    await expect(pending).resolves.toMatchObject({ name: 'AbortError' });
+    expect(sent).toHaveLength(1);
+    await expect(receive(im, incomingMessage('new generation answer'))).resolves.toMatchObject({ matched: false });
+    await store.close();
   });
 
   it('interaction 应仅匹配同一用户同一频道的消息', async () => {
@@ -485,10 +497,9 @@ describe('UserInteraction via ImRuntime', () => {
       ],
     }));
 
-    await receive(im, {
-      ...incomingMessage('[button:confirm]'),
-      segments: [{ type: 'action', data: { id: 'confirm', payload: 'yes' } }],
-    });
+    // This Endpoint declares text fallback. A fabricated callback value is not
+    // evidence of a current native button; answer the actual displayed choice.
+    await receive(im, incomingMessage('1'));
     await commandPromise;
     expect(interactionResult).toBe(true);
 
@@ -680,12 +691,12 @@ describe('UserInteraction via ImRuntime', () => {
   });
 
   it('keeps same-user interaction claims isolated by canonical thread identity', async () => {
-    const { im } = await createInteractionFixture();
+    const { im, store } = await createInteractionFixture();
     const endpoint = im.endpoints.list()[0]!.endpoint;
     const createThreadMessage = (threadId: string) => new Message(
       { ...incomingMessage('start').conversation, endpoint, threadId },
       'start',
-      1,
+      store.current.generation,
       async () => ({ status: 'sent' as const }),
       { id: 'user-1' },
     );
@@ -713,14 +724,14 @@ describe('UserInteraction via ImRuntime', () => {
   });
 
   it('createInteraction(bind.subjectId) 只接受该用户的回复', async () => {
-    const { im } = await createInteractionFixture();
+    const { im, store } = await createInteractionFixture();
     const incoming = incomingMessage('start', 'user-1');
     incoming.conversation.endpoint = im.endpoints.list()[0]!.endpoint;
     const delivered: string[] = [];
     const message = new Message(
       incoming.conversation,
       incoming.content,
-      1,
+      store.current.generation,
       async (content) => {
         delivered.push(String(content));
         return { status: 'sent' as const };

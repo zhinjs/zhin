@@ -3697,6 +3697,7 @@ describe('IM Runtime inbound origin routing', () => {
         const [a, b] = ids;
         const source = {
           conversation: { endpoint: { id: b, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' },
+          generation: f.store.current.generation,
           sender: { id: 'alice' },
           $reply: async () => ({ status: 'sent' as const }),
         };
