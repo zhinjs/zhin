@@ -20,6 +20,7 @@ npx zhin --help        # 查看全部命令
 | 环境或配置有问题 | `npx zhin doctor` |
 | 检查配置文件是否有效 | `npx zhin config check` |
 | 安装一个社区插件 | `npx zhin install <插件名>` |
+| 按功能查找插件和配置步骤 | `npx zhin use-cases` |
 | 创建一个可独立发布的新插件 | `npx @zhin.js/cli new my-plugin --standalone` |
 | 在已有 Bot 项目里加一个本地插件 | `npx zhin new my-plugin` |
 | 升级 Zhin | `npx zhin migrate --dry-run`，确认后去掉 `--dry-run` |
@@ -193,6 +194,19 @@ zhin info <package>
 ```
 
 搜索插件市场，或查看单个插件的详情。
+
+### use-cases：按用途找到配置入口
+
+```bash
+zhin use-cases
+zhin use-cases reminder
+zhin use-cases group-welcome
+zhin use-cases keyword-reply
+```
+
+查看提醒、群欢迎和关键词回复所需的插件、安装预览、操作步骤与当前限制。本命令只输出指南，不安装插件、不写配置、不启动 Bot，也不发送消息；具体操作仍使用现有安装、配置和聊天入口。
+
+Console 的[任务中心](../paths/console.md#管理员任务中心)使用同一份用途目录。首版可在网页创建和管理管理员提醒；群欢迎和关键词回复目前提供现有入口指南，不能在网页伪造群成员执行命令。
 
 ### build：构建插件
 

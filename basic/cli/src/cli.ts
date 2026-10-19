@@ -21,6 +21,7 @@ import { packagesCommand } from './commands/packages.js';
 import { runtimeCommand } from './commands/runtime.js';
 import { traceCommand } from './commands/trace.js';
 import { devCommand } from './commands/dev.js';
+import { useCasesCommand } from './commands/use-cases.js';
 
 const program = new Command();
 
@@ -58,6 +59,7 @@ program.addCommand(needsAgentCommand
 program.addCommand(runtimeCommand);
 program.addCommand(traceCommand);
 program.addCommand(devCommand);
+program.addCommand(useCasesCommand);
 
 try {
   await program.parseAsync();

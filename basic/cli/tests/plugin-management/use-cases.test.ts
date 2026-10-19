@@ -1,0 +1,15 @@
+import { formatPluginUseCases, pluginUseCases } from '../../src/plugin-management/use-cases.js';
+
+it('makes useful tasks discoverable without loading plugins or making mutations', () => {
+  expect(formatPluginUseCases()).toContain('reminder');
+  expect(formatPluginUseCases()).toContain('本命令不安装');
+  expect(new Set(pluginUseCases.map(item => item.id)).size).toBe(pluginUseCases.length);
+  expect(formatPluginUseCases('reminder')).toContain('--dry-run');
+});
+
+it('does not promise unavailable scope or impersonate a chat sender', () => {
+  expect(formatPluginUseCases('group-welcome')).toContain('所有群');
+  expect(formatPluginUseCases('group-welcome')).toContain('尚未提供精确范围');
+  expect(formatPluginUseCases('keyword-reply')).toContain('不伪造平台用户');
+  expect(() => formatPluginUseCases('missing')).toThrow('未知用途');
+});

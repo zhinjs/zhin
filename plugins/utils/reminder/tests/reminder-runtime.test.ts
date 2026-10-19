@@ -19,6 +19,9 @@ import cancel from '../commands/remind/cancel/index.js';
 import { reminderServiceToken } from '../src/runtime.js';
 import { REMINDER_STATE_KEY, parseReminderInstant, type ReminderBook, type ReminderService } from '../src/service.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { randomUUID } from 'node:crypto';
+import { pluginTaskProviderToken, type PluginTaskProvider, type PluginTaskSnapshot } from '../../../../packages/im/plugin-runtime/src/index.js';
+import { ADMIN_REMINDER_STATE_KEY, type AdminReminderBook } from '../src/admin-tasks.js';
 
 const target = { endpoint: { adapter: 'sandbox', id: 'main' }, kind: 'channel', id: 'room', parent: { kind: 'channel', id: 'guild' }, threadId: 'topic' } as const;
 const alice: import('../../../../packages/im/command/src/index.js').CommandMessage = { conversation: target, sender: { id: 'alice' }, content: '' };
@@ -26,6 +29,198 @@ const temporary: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); await Promise.all(temporary.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 
 describe('persistent reminder through real Runtime discovery', () => {
+  it.skipIf(!sqliteAvailable)('summarizes long administrator task titles without truncating reminder content', async () => {
+    const f = await fixture(); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha'); const text = '🌟'.repeat(250);
+      const snapshot = await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision,
+        target, parameters: { text, at: new Date(Date.now() + 60_000).toISOString() } });
+      expect(snapshot.tasks[0]!.title.length).toBeLessThanOrEqual(200);
+      expect(snapshot.tasks[0]!.title).toMatch(/^(?:🌟)+…$/u);
+      expect(snapshot.tasks[0]!.parameters.text).toBe(text);
+      expect((await provider.read()).tasks[0]!.parameters.text).toBe(text);
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('rotates pools across batch-one ticks while periodic chat reminders remain continuously due', async () => {
+    const f = await fixture({ batchSize: 1, maxTasks: 32, missedGraceSeconds: 60 });
+    const start = 1_800_000_000_000; const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha');
+      for (let i = 0; i < 32; i++) await f.command(`a remind every 60 chat-${i}`, { ...alice, sender: { id: `sender-${Math.floor(i / 8)}` } });
+      const created = await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision,
+        target, parameters: { text: 'administrator-fairness', at: new Date(start + 60_000).toISOString() } });
+      for (let tick = 0; tick < 24; tick++) {
+        clock.mockReturnValue(start + 60_000 + tick * 5000);
+        const before = f.send.mock.calls.length;
+        await f.jobs[0]!.execute();
+        expect(f.send.mock.calls.length - before).toBeLessThanOrEqual(1);
+        if (tick === 1) expect(f.send.mock.calls[1]![1]).toBe('⏰ 提醒：administrator-fairness');
+      }
+      expect(f.send.mock.calls[0]![1]).toBe('⏰ 提醒：chat-0');
+      expect(f.send.mock.calls.filter(call => call[1] === '⏰ 提醒：administrator-fairness')).toHaveLength(1);
+      expect((await provider.read()).tasks.find(task => task.id === created.tasks[0]!.id)!.state).toBe('succeeded');
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('keeps administrator tasks separate, reconciles durable receipts and rejects concurrent stale mutations', async () => {
+    const f = await fixture(); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha');
+      const initial = await provider.read(); expect(initial).toEqual(await provider.read()); expect(initial.revision).toBe('0');
+      const requestId = randomUUID(); const parameters = { text: '管理员提醒', at: new Date(Date.now() + 60_000).toISOString() };
+      const input = { requestId, expectedRevision: initial.revision, target, parameters };
+      const created = await provider.create(input);
+      expect(created.tasks[0]).toMatchObject({ id: requestId, ownership: 'administrator', target, state: 'scheduled', timezone: 'UTC' });
+      expect(created.receipts).toEqual([{ requestId, taskId: requestId, operation: 'create' }]);
+      expect(await provider.create(input)).toEqual(created);
+      await expect(provider.create({ ...input, parameters: { ...parameters, text: 'changed' } })).rejects.toMatchObject({ code: 'conflict' });
+      expect(await f.command('a remind list')).toContain('没有提醒');
+      expect(await f.service('alpha').cancel({ senderId: 'alice', target }, requestId)).toBe(false);
+      expect((await provider.read()).tasks[0]!.state).toBe('scheduled');
+      await f.command('a remind after 60 聊天提醒');
+      expect((await provider.read()).tasks).toHaveLength(1);
+      expect((await f.tasks('beta').read()).tasks).toEqual([]);
+      const alternate = { ...target, endpoint: { ...target.endpoint, id: 'second-account' }, parent: { ...target.parent, id: 'second-guild' }, threadId: 'second-topic' };
+      const attempts = await Promise.allSettled([1, 2].map(i => provider.create({ ...input, target: alternate, requestId: randomUUID(), expectedRevision: created.revision, parameters: { ...parameters, text: `并发-${i}` } })));
+      expect(attempts.filter(item => item.status === 'fulfilled')).toHaveLength(1);
+      expect(attempts.find(item => item.status === 'rejected')).toMatchObject({ reason: { code: 'conflict' } });
+      await expect(provider.create({ ...input, requestId: randomUUID(), expectedRevision: initial.revision })).rejects.toMatchObject({ code: 'conflict' });
+      expect(f.send).not.toHaveBeenCalled(); clock.mockReturnValue(Date.now() + 60_000);
+      await f.jobs[0]!.execute();
+      expect(f.send.mock.calls.some(call => JSON.stringify(call[0]) === JSON.stringify(target))).toBe(true);
+      expect(f.send.mock.calls.some(call => JSON.stringify(call[0]) === JSON.stringify(alternate))).toBe(true);
+      expect(f.send.mock.calls.every(call => call[2] === childPluginId(rootPluginId(), 'alpha'))).toBe(true);
+      expect(f.send.mock.calls.map(call => call[1])).toContain('⏰ 提醒：管理员提醒');
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('requires pause before edits, rejects expired one-shot resume and skips missed periodic rounds', async () => {
+    const f = await fixture(); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha');
+      let snapshot = await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
+        parameters: { text: 'once', at: new Date(Date.now() + 1000).toISOString() } });
+      const id = snapshot.tasks[0]!.id;
+      await expect(provider.change({ requestId: randomUUID(), expectedRevision: snapshot.revision, id, action: 'update', parameters: { text: 'no', at: new Date(Date.now() + 10_000).toISOString() } })).rejects.toMatchObject({ code: 'invalid_input' });
+      snapshot = await mutate(provider, snapshot, id, 'pause'); clock.mockReturnValue(Date.now() + 2000);
+      await expect(mutate(provider, snapshot, id, 'resume')).rejects.toThrow('先编辑');
+      snapshot = await provider.change({ requestId: randomUUID(), expectedRevision: snapshot.revision, id, action: 'update', parameters: { text: 'edited', at: new Date(Date.now() + 10_000).toISOString() } });
+      expect(snapshot.tasks[0]).toMatchObject({ state: 'paused', title: 'edited' });
+      snapshot = await mutate(provider, snapshot, id, 'resume');
+      const periodicId = randomUUID();
+      snapshot = await provider.create({ requestId: periodicId, expectedRevision: snapshot.revision, target,
+        parameters: { text: 'periodic', at: new Date(Date.now() + 1000).toISOString(), intervalSeconds: 60 } });
+      snapshot = await mutate(provider, snapshot, periodicId, 'pause'); clock.mockReturnValue(Date.now() + 600_000);
+      snapshot = await mutate(provider, snapshot, periodicId, 'resume');
+      expect(snapshot.tasks.find(task => task.id === periodicId)!.nextRunAt).toBeGreaterThan(Date.now());
+      expect(snapshot.tasks.find(task => task.id === periodicId)!.detail).toContain('跳过'); expect(f.send).not.toHaveBeenCalled();
+      for (const parameters of [{ text: 'x', at: '2027-01-01T12:00' }, { text: 'x', at: new Date(Date.now() + 1000).toISOString(), intervalSeconds: 59 }, { text: 'x', at: new Date(Date.now() + 1000).toISOString(), extra: true }]) {
+        await expect(provider.create({ requestId: randomUUID(), expectedRevision: snapshot.revision, target, parameters })).rejects.toMatchObject({ code: 'invalid_input' });
+      }
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('preserves unknown disposition, rejects retry and does not overwrite in-flight cancellation', async () => {
+    const f = await fixture(); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha');
+      let snapshot = await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
+        parameters: { text: 'inflight', at: new Date(Date.now() + 1000).toISOString() } });
+      let complete!: (value: string) => void;
+      f.send.mockImplementationOnce(() => new Promise<string>(resolve => { complete = resolve; }));
+      clock.mockReturnValue(Date.now() + 1000); const inflight = f.jobs[0]!.execute();
+      await vi.waitFor(() => expect(f.send).toHaveBeenCalledTimes(1));
+      snapshot = await provider.read(); expect(snapshot.tasks[0]!.state).toBe('unknown');
+      expect(snapshot.tasks[0]!.actions).toEqual(['cancel']);
+      expect(snapshot.tasks[0]!.nextRunAt).toBeUndefined();
+      await expect(mutate(provider, snapshot, snapshot.tasks[0]!.id, 'resume')).rejects.toMatchObject({ code: 'invalid_input' });
+      await expect(mutate(provider, snapshot, snapshot.tasks[0]!.id, 'pause')).rejects.toMatchObject({ code: 'invalid_input' });
+      snapshot = await mutate(provider, snapshot, snapshot.tasks[0]!.id, 'cancel'); complete('delivered'); await inflight;
+      expect((await provider.read()).tasks[0]!.state).toBe('cancelled');
+      const unknownId = randomUUID(); snapshot = await provider.create({ requestId: unknownId, expectedRevision: (await provider.read()).revision, target,
+        parameters: { text: 'unknown', at: new Date(Date.now() + 1000).toISOString() } });
+      f.send.mockResolvedValueOnce(null); clock.mockReturnValue(Date.now() + 1000);
+      await f.jobs[0]!.execute(); await f.jobs[0]!.execute(); expect(f.send).toHaveBeenCalledTimes(2);
+      expect((await provider.read()).tasks.find(task => task.id === unknownId)!.state).toBe('unknown');
+      await f.runtime.stop(); await f.restart(); await [...f.active][0]!.execute(); expect(f.send).toHaveBeenCalledTimes(2);
+      await expect(provider.read()).rejects.toMatchObject({ code: 'unavailable' });
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('keeps administrator revisions and acknowledgements through HMR, restart and history eviction', async () => {
+    const f = await fixture({ adminMaxTasks: 1 }); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha'); const initial = await provider.read();
+      const requestId = randomUUID(); const parameters = { text: 'restart', at: new Date(Date.now() + 1000).toISOString() };
+      let snapshot = await provider.create({ requestId, expectedRevision: initial.revision, target, parameters });
+      const hmr = f.runtime.createHmrCoordinator({ onError: error => { throw error; }, onRestartRequired: () => { throw new Error('Unexpected restart'); } });
+      try { await hmr.enqueue(join(f.project, 'plugins/reminder/plugin.ts')); } finally { await hmr.stop(); }
+      expect(f.active.size).toBe(2); await expect(provider.read()).rejects.toMatchObject({ code: 'unavailable' });
+      expect((await f.tasks('alpha').read()).revision).toBe(snapshot.revision);
+      await f.runtime.stop(); await f.db.stop(); await f.db.start(); await f.restart();
+      expect((await f.tasks('alpha').read()).receipts).toEqual(snapshot.receipts);
+      clock.mockReturnValue(Date.now() + 1000); await [...f.active][0]!.execute();
+      expect(f.send).toHaveBeenCalledTimes(1);
+      const current = f.tasks('alpha'); snapshot = await current.read(); const beforeEviction = snapshot.revision;
+      snapshot = await current.create({ requestId: randomUUID(), expectedRevision: snapshot.revision, target: { ...target, threadId: 'another-topic' },
+        parameters: { text: 'next', at: new Date(Date.now() + 60_000).toISOString() } });
+      expect(snapshot.tasks).toHaveLength(1); expect(snapshot.tasks[0]!.id).not.toBe(requestId);
+      await expect(current.create({ requestId: randomUUID(), expectedRevision: initial.revision, target, parameters: { text: 'stale', at: new Date(Date.now() + 60_000).toISOString() } })).rejects.toMatchObject({ code: 'conflict' });
+      expect((await current.create({ requestId, expectedRevision: initial.revision, target, parameters })).revision).toBe(snapshot.revision);
+      const pause = { requestId: randomUUID(), expectedRevision: snapshot.revision, id: snapshot.tasks[0]!.id, action: 'pause' as const };
+      const paused = await current.change(pause); expect(await current.change(pause)).toEqual(paused);
+      await expect(current.change({ ...pause, action: 'cancel' })).rejects.toMatchObject({ code: 'conflict' });
+      expect(paused.revision).not.toBe(beforeEviction);
+      expect(await f.command('a remind list')).toContain('没有提醒');
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('persists a conservative administrator claim before process loss and shares the existing batch quota', async () => {
+    const f = await fixture({ batchSize: 1, adminMaxTasks: 1 }); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha');
+      const input = { requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target, parameters: { text: 'admin', at: new Date(Date.now() + 1000).toISOString() } };
+      const created = await provider.create(input);
+      await expect(provider.create({ ...input, requestId: randomUUID(), expectedRevision: created.revision })).rejects.toThrow('管理员提醒池');
+      await f.command('a remind after 1 chat'); clock.mockReturnValue(Date.now() + 1000);
+      await f.jobs[0]!.execute(); expect(f.send).toHaveBeenCalledTimes(1); expect(f.send.mock.calls[0]![1]).toBe('⏰ 提醒：chat');
+      const port = f.db.state!; const compareExchange = port.compareExchange.bind(port);
+      const crash = vi.spyOn(port, 'compareExchange').mockImplementation(async (...args) => {
+        const committed = await compareExchange(...args);
+        if (committed && args[2] === ADMIN_REMINDER_STATE_KEY && JSON.stringify(args[4]).includes('"state":"unknown"')) f.service('alpha').stop();
+        return committed;
+      });
+      await f.jobs[0]!.execute(); expect(f.send).toHaveBeenCalledTimes(1); crash.mockRestore();
+      await f.runtime.stop(); await f.db.stop(); await f.db.start(); await f.restart();
+      await [...f.active][0]!.execute(); expect(f.send).toHaveBeenCalledTimes(1);
+      expect((await f.tasks('alpha').read()).tasks[0]!.state).toBe('unknown');
+      const state = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
+      const book = await state.state.get<AdminReminderBook>(ADMIN_REMINDER_STATE_KEY); expect(book!.tasks[0]!.claimId).toBeTruthy();
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('keeps independent quotas, records definitive failure and rejects malformed administrator state', async () => {
+    const f = await fixture({ maxTasks: 1, adminMaxTasks: 1 }); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha');
+      await f.command('a remind after 60 chat');
+      const created = await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
+        parameters: { text: 'admin', at: new Date(Date.now() + 1000).toISOString() } });
+      await expect(provider.create({ requestId: randomUUID(), expectedRevision: created.revision, target,
+        parameters: { text: 'overflow', at: new Date(Date.now() + 1000).toISOString() } })).rejects.toThrow('管理员提醒池');
+      expect(await f.command('a remind after 60 overflow')).toContain('上限');
+      f.send.mockRejectedValueOnce(new EndpointDeliveryError('platform_rejected', 'not sent', 'rejected'));
+      clock.mockReturnValue(Date.now() + 1000); await f.jobs[0]!.execute();
+      const failed = await provider.read(); expect(failed.tasks[0]!.state).toBe('failed'); expect(failed.tasks[0]!.actions).toEqual([]);
+      expect(f.send).toHaveBeenCalledTimes(1);
+      const state = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
+      await state.state.set(ADMIN_REMINDER_STATE_KEY, { version: 1, revision: 'broken', tasks: [{ state: 'scheduled' }], receipts: [] });
+      await expect(provider.read()).rejects.toMatchObject({ code: 'unavailable' });
+      await expect(f.jobs[0]!.execute()).rejects.toThrow('持久状态格式无效');
+      expect(f.send).toHaveBeenCalledTimes(1);
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
   it.skipIf(!sqliteAvailable)('isolates two instances/senders/exact conversations and survives HMR plus database restart', async () => {
     const f = await fixture();
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
@@ -235,5 +430,10 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
     const result = await index.dispatch(text, { ...source, content: text }); return result.status === 'executed' ? result.value : result;
   };
   const service = (name: string): ReminderService => runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))!.get(reminderServiceToken.id) as ReminderService;
-  return { project, get runtime() { return runtime; }, restart, db, jobs, active, send, command, service };
+  const tasks = (name: string): PluginTaskProvider => runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))!.get(pluginTaskProviderToken.id) as PluginTaskProvider;
+  return { project, get runtime() { return runtime; }, restart, db, jobs, active, send, command, service, tasks };
+}
+
+async function mutate(provider: PluginTaskProvider, snapshot: PluginTaskSnapshot, id: string, action: 'pause' | 'resume' | 'cancel'): Promise<PluginTaskSnapshot> {
+  return provider.change({ requestId: randomUUID(), expectedRevision: snapshot.revision, id, action });
 }
