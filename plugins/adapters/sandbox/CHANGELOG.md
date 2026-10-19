@@ -1,5 +1,12 @@
 # @zhin.js/adapter-process
 
+## 1.1.11
+
+### Patch Changes
+
+- @zhin.js/core@1.1.45
+- @zhin.js/client@1.1.13
+
 ## 1.1.10
 
 ### Patch Changes
