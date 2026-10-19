@@ -50,6 +50,29 @@ Both styles share the same command table and conflict detection. As commands gro
 
 ## Common tasks
 
+### Browse loaded commands
+
+With the Command Feature enabled, the built-in keyword is **`菜单`** (Chinese for “menu”); no help plugin is needed. Send it in a bot conversation like any other command. If the current account uses `commandPrefix: '/'`, prefix every message below with `/`:
+
+| Message (without a prefix) | Result |
+| --- | --- |
+| `菜单` | Commands, descriptions, and immediate child plugins of the root plugin |
+| `菜单 rss` | Commands and immediate children of the plugin instance named `rss` |
+| `菜单 foo.bar` | Commands and children of nested plugin `bar` under `foo` |
+| `remind --help` | A command's parameters, options, and usage, without executing it |
+
+The menu browses one plugin at a time; it does not flatten every plugin's commands into one list. Plugin names here are **instance keys**, not npm package names. Start with `菜单` and follow the child plugin names it returns.
+
+Set the keyword at the top level of the project's `zhin.config.yml`, alongside `plugins`:
+
+```yaml
+menuKeyword: help
+```
+
+This changes the entry to `help` (or `/help` with a `/` prefix). Set `menuKeyword: false` or `menuKeyword: ''` to disable the built-in menu. Without configuration, the keyword remains `菜单`; `help` is not a default alias.
+
+With `@zhin.js/html-renderer` installed, the menu emits a styled HTML card through the unified outbound pipeline. Image-capable platforms receive a menu image; native HTML platforms follow their declared HTML policy. If rendering fails or the platform requires text or cannot accept the generated image, the original text menu is preserved. Without a renderer, it remains plain text. Browsing, prefixes and custom keywords are unchanged.
+
 ### Accept parameters
 
 Declare params in order under `params`; the `params` passed to `execute` gets the right types automatically:

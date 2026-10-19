@@ -3,10 +3,11 @@ import {
   TypeMatcherRegistry,
   type MessageSegment,
 } from 'segment-matcher';
-import type {
-  CapabilitySlot,
-  PluginId,
-  RuntimeSnapshot,
+import {
+  htmlRendererToken,
+  type CapabilitySlot,
+  type PluginId,
+  type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
 import { bindOperationInput, operationClientAdapter } from '@zhin.js/feature-kit';
@@ -16,6 +17,7 @@ import {
   type PermissionHost,
 } from '@zhin.js/permission';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
+import { renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
 import {
   createCommandContext,
   resolveCommandSession,
@@ -252,7 +254,7 @@ export class CommandIndex {
     operationSnapshot: RuntimeSnapshot = this.snapshot,
   ): Promise<CommandDispatchResult> {
     if (this.#menu) {
-      const menuValue = this.#dispatchMenu(input, commandPrefix);
+      const menuValue = this.#dispatchMenu(input, commandPrefix, operationSnapshot);
       if (menuValue !== undefined) {
         return Object.freeze({
           matched: true,
@@ -404,33 +406,33 @@ export class CommandIndex {
   // 内置菜单命令
   // ==========================================================================
 
-  #dispatchMenu(input: CommandMatchInput, commandPrefix = ''): string | undefined {
+  #dispatchMenu(input: CommandMatchInput, commandPrefix: string, snapshot: RuntimeSnapshot): string | CommandMenuSegment | undefined {
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
     const menu = this.#menu;
     if (!menu) return undefined;
     const keyword = menu.keyword;
-    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword);
+    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
     if (text.startsWith(keyword + ' ')) {
       const key = text.slice(keyword.length + 1).trim();
-      if (key) return this.#buildMenu(key, commandPrefix, keyword);
-      return this.#buildMenu(undefined, commandPrefix, keyword);
+      if (key) return this.#buildMenu(key, commandPrefix, keyword, snapshot);
+      return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
     }
     return undefined;
   }
 
-  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string): string {
-    const root = this.snapshot.root;
+  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string, snapshot: RuntimeSnapshot): string | CommandMenuSegment {
+    const root = snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
       : root;
 
-    const node = this.snapshot.tree.get(targetId);
+    const node = snapshot.tree.get(targetId);
     if (!node) return `未找到插件: ${pluginKey}`;
 
     const directCommands = this.#commands.filter((cmd) => cmd.slot.owner === targetId);
     const children = node.children
-      .map((childId) => this.snapshot.tree.get(childId))
+      .map((childId) => snapshot.tree.get(childId))
       .filter((child): child is NonNullable<typeof child> => !!child);
 
     const displayKey = pluginKey ?? node.instanceKey;
@@ -459,12 +461,22 @@ export class CommandIndex {
       lines.push('（暂无指令和子插件）');
     }
 
-    if (children.length > 0) {
+    const hint = children.length > 0
+      ? `提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`
+      : undefined;
+    if (hint) {
       lines.push('');
-      lines.push(`提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`);
+      lines.push(hint);
     }
 
-    return lines.join('\n');
+    const text = lines.join('\n');
+    if (!snapshot.resources.get(root)?.has(htmlRendererToken.id)) return text;
+    return renderCommandMenu(displayKey,
+      directCommands.map(cmd => ({ name: `${commandPrefix}${cmd.name}`, description: cmd.description })),
+      children.map(child => ({
+        name: pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey,
+        description: child.metadata?.displayName ?? child.instanceKey,
+      })), hint, text);
   }
 }
 

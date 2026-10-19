@@ -60,6 +60,10 @@ commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type:
 
 ## 集中声明参数、选项与帮助
 
+**列出指令**：在 Bot 会话中发送 `菜单`，列出根插件的指令和直接子插件；`菜单 <插件实例键>` 查看子插件，嵌套实例用 `菜单 foo.bar`。菜单逐层浏览，不一次展开全树。账号设有命令前缀时同样要加前缀，如 `/菜单`。项目根配置的顶层 `menuKeyword` 可修改关键词，`false` 或空字符串关闭；默认关键词为 `菜单`，不是 `help`。详见[指令菜单](../../../docs/authoring/commands.md#查看已加载的指令菜单)。
+
+安装 `@zhin.js/html-renderer` 后，菜单发出带原始文本备用内容的 HTML 段，复用统一发送链的图片渲染和平台策略。渲染失败或平台无法消费图片时保留原文本；无渲染器时直接返回文本。Command Feature 不调用渲染器，也不新增 Core 或样式组件依赖。
+
 目录提供静态命令路径。静态 `commands/remind/index.ts` 可集中声明任意数量的位置参数；
 现有 `commands/foo/[id]/index.ts` 仍绑定同名 `params.id`，后面的参数无需额外动态目录。
 
