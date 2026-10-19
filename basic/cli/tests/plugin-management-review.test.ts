@@ -16,7 +16,7 @@ async function project() {
   const root = await mkdtemp(join(tmpdir(), 'zhin-management-review-'));
   roots.push(root);
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'review-root', version: '1.0.0', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, plugins: [] } }));
-  await writeFile(join(root, 'zhin.config.json'), '{}');
+  await writeFile(join(root, 'zhin.config.json'), JSON.stringify({configVersion: 2, plugins: {}}));
   return root;
 }
 
@@ -75,7 +75,7 @@ describe('reviewed CLI plugin installation paths', () => {
   it('keeps the plugin list and detail available when one optional inspection fails', async () => {
     const root = await project();
     const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-    manifest.zhin.plugins = [{ package: 'healthy', instanceKey: 'healthy' }, { package: 'broken', instanceKey: 'broken' }];
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({configVersion: 2, plugins: {healthy: 'healthy', broken: 'broken'}}));
     await writeFile(join(root, 'package.json'), JSON.stringify(manifest));
     const workflow = new PluginManagementWorkflow(root);
     vi.spyOn(workflow, 'inspect').mockImplementation(async name => { if (name === 'broken') throw new Error('Invalid plugin configuration'); return { ...await new PluginManagementWorkflow(root).inspect('healthy'), status: 'installed' }; });

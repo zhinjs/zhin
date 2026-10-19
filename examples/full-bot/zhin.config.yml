@@ -1,3 +1,4 @@
+configVersion: 2
 log_level: info
 
 http:
@@ -61,18 +62,21 @@ ai:
 plugin: {}
 
 plugins:
-  sandbox:
-    endpoints:
-      - id: full-bot-sandbox
-        owner: local-user
-  napcat:
-    connection: ws
-    endpoints:
-      - id: full-bot-napcat
-        url: ${ONEBOT11_WS_URL}
-        access_token: ${ONEBOT11_ACCESS_TOKEN}
-  kook:
-    connection: websocket
-    endpoints:
-      - id: full-bot-kook
-        token: ${KOOK_TOKEN}
+  sandbox: "@zhin.js/adapter-sandbox"
+  napcat: "@zhin.js/adapter-napcat"
+  kook: "@zhin.js/adapter-kook"
+sandbox:
+  endpoints:
+    - id: full-bot-sandbox
+      owner: local-user
+napcat:
+  connection: ws
+  endpoints:
+    - id: full-bot-napcat
+      url: ${ONEBOT11_WS_URL}
+      access_token: ${ONEBOT11_ACCESS_TOKEN}
+kook:
+  connection: websocket
+  endpoints:
+    - id: full-bot-kook
+      token: ${KOOK_TOKEN}

@@ -41,7 +41,7 @@ it('loads a discovered JSX middleware through the default RootHost in a plain No
     });
     await writeFile(join(root, 'scenario.mjs'), `
       import { RootHost } from './root-host.mjs';
-      const host = new RootHost({ projectRoot: process.cwd(), watch: false });
+      const host = new RootHost({ projectRoot: process.cwd(), config: { configVersion: 2 }, watch: false });
       try {
         const summary = await host.start();
         const slot = [...host.runtime.snapshot.capabilities.values()][0];

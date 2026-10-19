@@ -129,9 +129,11 @@ function getMinimalConfig(): any {
   return {
     log_level: 1,
     database: { dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' },
-    plugins: { sandbox: {} },
+    configVersion: 2,
+    plugins: {sandbox: '@zhin.js/adapter-sandbox'},
+    disable_plugins: [],
+    sandbox: {},
     http: { port: 8086, token: '${HTTP_TOKEN}', base: '/api' },
-    endpoints: [],
   };
 }
 

@@ -25,7 +25,7 @@ pnpm add @zhin.js/adapter-satori
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - `@zhin.js/host-http` — Webhook 模式需 `httpHostToken` 注册 POST 路由
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`baseUrl` / `token` / …）
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`（`baseUrl` / `token` / …）
 
 入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef：DIRECT 频道 → kind `private`，其余 → kind `group`、所属 guild 进 `parent`）  
 出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
@@ -45,18 +45,20 @@ pnpm add @zhin.js/adapter-satori
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  satori:
-    connection: ws
-    heartbeat_interval: 10000
-    endpoints:
-      - id: satori-bot
-        baseUrl: "http://127.0.0.1:5140"
-        token: "${SATORI_TOKEN}"
+  satori: "@zhin.js/adapter-satori"
+satori:
+  connection: ws
+  heartbeat_interval: 10000
+  endpoints:
+    - id: satori-bot
+      baseUrl: "http://127.0.0.1:5140"
+      token: "${SATORI_TOKEN}"
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-satori`（`instanceKey: satori`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-satori`（`instanceKey: satori`）。
 
 ### 可选字段
 
@@ -68,14 +70,16 @@ plugins:
 ### Webhook
 
 ```yaml
+configVersion: 2
 plugins:
-  satori:
-    connection: webhook
-    endpoints:
-      - id: satori-bot
-        baseUrl: "http://127.0.0.1:5140"
-        path: "/satori/webhook"
-        token: "${SATORI_TOKEN}"
+  satori: "@zhin.js/adapter-satori"
+satori:
+  connection: webhook
+  endpoints:
+    - id: satori-bot
+      baseUrl: "http://127.0.0.1:5140"
+      path: "/satori/webhook"
+      token: "${SATORI_TOKEN}"
 ```
 
 SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适配器从首个事件的 `login` 取得 platform / userId 用于后续 API 调用。

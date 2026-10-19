@@ -11,13 +11,14 @@ description: "zhin.config.yml 的结构、配置如何校验并分发给每个�
 
 - **配置是数据，不是代码。** 每个插件用 `schema.json`（或 `definePlugin` 的 `config`）声明自己有哪些配置项、默认值和约束。
 - **启动时整体校验。** Zhin 把所有插件的声明组合起来，对整份配置做严格校验（Ajv strict）；有错误就不会启动或不会生效。
-- **每个插件只看到自己的那一段。** 你的 Bot 读 `plugin:`，子插件读 `plugins.<instanceKey>:`，彼此不可见。
+- **每个插件只看到自己的那一段。** 你的 Bot 读 `plugin:`，子插件读 `<instanceKey>:`，彼此不可见。
 - **修改是事务。** 通过 Console 或 `zhin config` 修改时，新配置校验或激活失败会自动回滚，旧配置继续生效。
 - **密钥放 `.env`。** 在配置里写 `${VAR}` 引用环境变量。
 
 ## 文档结构
 
 ```yaml
+configVersion: 2
 # Root Plugin 的配置（对应 Root 包 schema.json）
 plugin:
   terminal:
@@ -25,23 +26,26 @@ plugin:
 
 # 子插件配置，按 instanceKey 命名空间隔离
 plugins:
-  sandbox:
-    endpoints:
-      - id: full-bot-sandbox
-        owner: local-user
-  napcat:
-    connection: ws
-    endpoints:
-      - name: full-bot-napcat
-        url: ${ONEBOT11_WS_URL}          # 环境变量插值
-        access_token: ${ONEBOT11_ACCESS_TOKEN}
+  sandbox: "@zhin.js/adapter-sandbox"
+  napcat: "@zhin.js/adapter-napcat"
+sandbox:
+  endpoints:
+    - id: full-bot-sandbox
+      owner: local-user
+napcat:
+  connection: ws
+  endpoints:
+    - name: full-bot-napcat
+      url: ${ONEBOT11_WS_URL} # 环境变量插值
+      access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
 
 有效 schema 由 `ConfigComposer`（`packages/im/runtime/src/config-composer.ts`）按插件树组合：
 
 - `plugin` — Root Plugin 自己的 schema；
-- `plugins.<instanceKey>` — 每个子插件的 schema，嵌套子插件递归挂在父 schema 的 properties 里；
+- `<instanceKey>` — 每个直接实例的业务 schema；`plugins` 只保存别名到包的映射；
 - Host 级键 `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `log_level` — 由 CLI 的 Root 安装器消费，**不会**进入任何插件的配置视图；
+- 框架菜单设置 `menuKeyword` / `menuStyle` 继续位于顶层，只加入 Root 的 generation 配置视图，供 Command Feature 使用；不进入子插件视图，Root 业务 schema 不得重复声明。
 - 顶层结构 `additionalProperties: false`：写错键名（比如 `plugin` 打成 `plugn`）会直接报错，而不是被静默忽略。
 
 ## schema.json：声明式契约
@@ -86,15 +90,17 @@ context.config.get(); // 只含本插件 schema 声明过的字段
 多账号适配器（一个插件实例挂多个平台连接）用 `endpoints` 数组声明。展开规则实现在 `AdapterIndex`（`packages/im/adapter/src/adapter-index.ts`）：
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    commandPrefix: "/"          # 顶层：所有 endpoint 共享
-    endpoints:
-      - name: bot-a
-        uin: ${ICQQ_UIN_A}
-      - name: bot-b
-        uin: ${ICQQ_UIN_B}
-        commandPrefix: ""       # 逐项覆盖顶层
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  commandPrefix: "/" # 顶层：所有 endpoint 共享
+  endpoints:
+    - name: bot-a
+      uin: ${ICQQ_UIN_A}
+    - name: bot-b
+      uin: ${ICQQ_UIN_B}
+      commandPrefix: "" # 逐项覆盖顶层
 ```
 
 - 每个 entry 的生效配置 = 实例配置（去掉 `endpoints` 键）**合并** entry 自己的字段；`name` 必填。
@@ -139,7 +145,7 @@ composition root 只创建一个具体的 `ConfigFileDocument`。Root Runtime、
 外部直接编辑配置文件也可以。配置文件适配器通过 `ConfigDocumentPort.sources` 声明受监视的
 权威文件，Runtime 重新读取、校验并比较实际投影后再决定影响范围：
 
-- `plugins.<instanceKey>` 只变化时，仅替换对应 Plugin 的最浅子树；兄弟 Plugin 和 Root
+- `<instanceKey>` 只变化时，仅替换对应 Plugin 的最浅子树；兄弟 Plugin 和 Root
   Resources 保持当前 generation；
 - Root Plugin 的 `plugin` 配置变化时，重建 Root generation；
 - `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` /

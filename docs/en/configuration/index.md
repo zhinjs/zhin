@@ -47,7 +47,7 @@ Run `npx zhin doctor` before committing. After startup, trust what Console shows
 | Workrooms, members, and chat or repository bindings | persistent Workroom Catalog, managed in Console |
 | What the runtime actually published | Endpoint, capability catalog, and generation state in Console |
 
-Configuration supplies values; it does not mount code. Install the dependency and update `package.json#zhin` before adding configuration for a new adapter, Feature, or plugin.
+Use `configVersion: 2`. Install dependencies, map instance aliases to packages in `plugins`, and place business values in same-named top-level blocks. `disable_plugins` lists inactive instances; Feature requirements remain in `package.json#zhin.features`. See the [migration guide](../../migrations/plugin-instance-declarations.md).
 
 ## Loading and Validation Flow
 
@@ -58,12 +58,12 @@ flowchart LR
     C --> D[Schema validation<br/>unknown top-level keys error immediately]
     D --> E[Host sections<br/>http / database / ai / ...]
     D --> F[plugin section -> Root Plugin]
-    D --> G[plugins.&lt;instanceKey&gt;<br/>-> each child plugin's ConfigView]
+    D --> G[&lt;instanceKey&gt;<br/>-> each child plugin's ConfigView]
 ```
 
 Configuration passes JSON Schema validation, and **only the keys listed below are allowed at the top level**. A misspelled key produces `Invalid Plugin config in zhin.config.yml` at startup.
 
-Top-level keys other than `plugin` and `plugins` are consumed by the CLI Host assembly layer. They are not passed to plugins.
+Host sections are consumed by CLI assembly. Each plugin receives only its own same-named business block.
 
 ## Environment Variable Expansion
 
@@ -91,8 +91,13 @@ Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name 
 | `mcp` | object | MCP Host (exposes bot tools as an MCP Server) |
 | `a2a` | object | A2A Host (Agent Card / remote Agent interop) |
 | `htmlRenderer` | object | Shotium HTML rendering (e.g., `width` / `viewport` / `scale`) |
+| `menuKeyword` | string \| false | Built-in menu keyword; defaults to `菜单`, `false` or an empty string disables it |
+| `menuStyle` | object | Menu title, subtitle, accent color and background when rendering is available |
 | `plugin` | object | Root Plugin (the application itself) configuration |
-| `plugins` | object | Child plugin configuration, keyed by instanceKey |
+| `configVersion` | number | Must be 2 |
+| `plugins` | object | Instance alias to package mapping |
+| `disable_plugins` | string[] | Disabled aliases; values are retained |
+| `<instanceKey>` | object | Business configuration of a declared instance |
 
 ## http
 
@@ -378,6 +383,7 @@ Remote Agents no longer attach through `ai.remoteAgents`. An optional A2A Execut
 ## plugin and plugins
 
 ```yaml
+configVersion: 2
 # Root Plugin (the application itself) configuration; keys are determined by the application's config schema
 plugin:
   terminal:
@@ -385,15 +391,16 @@ plugin:
 
 # Child plugin configuration, keyed by instanceKey
 plugins:
-  sandbox:
-    endpoints:
-      - id: sandbox-bot
-        owner: sandbox-user
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: sandbox-bot
+      owner: sandbox-user
 ```
 
 `instanceKey` defaults to the last package-name segment without the `adapter-`, `plugin-`, or `service-` prefix. For example, `@zhin.js/adapter-icqq` becomes `icqq`.
 
-`zhin install` writes `plugins.<instanceKey>` and mounts the package under `package.json#zhin.plugins`.
+`zhin install` writes the package reference under `plugins.<instanceKey>` and business settings under the top-level alias. It no longer writes manifest mounts.
 
 ### Adapter Instances: master / trusted / commandPrefix
 
@@ -410,12 +417,15 @@ Platform adapter plugin instance configurations support three common keys:
 Multi-account adapters use the `endpoints` array to declare multiple Endpoints:
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    master: "${ICQQ_MASTER}"     # Top-level shared: applies to all endpoints
-    endpoints:                   # Per-entry: name is required, other fields merge with top-level (per-entry takes priority)
-      - name: "${ICQQ_ACCOUNT_1}"
-      - name: "${ICQQ_ACCOUNT_2}"
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  master: "${ICQQ_MASTER}" # Top-level shared: applies to all endpoints
+  endpoints:
+    # Per-entry: name is required, other fields merge with top-level (per-entry takes priority)
+    - name: "${ICQQ_ACCOUNT_1}"
+    - name: "${ICQQ_ACCOUNT_2}"
 ```
 
 Expansion rules (`@zhin.js/adapter`'s `expandEndpointConfigs`):
@@ -427,30 +437,32 @@ Expansion rules (`@zhin.js/adapter`'s `expandEndpointConfigs`):
 Real-world example (QQ official bot, main account through proxy gateway + sandbox account coexisting):
 
 ```yaml
+configVersion: 2
 plugins:
-  qq:
-    endpoints:
-      - name: zhin
-        appid: "${QQ_APPID}"
-        secret: "${QQ_SECRET}"
-        mode: websocket
-        sandbox: false
-        gatewayUrl: "https://bots.example.com/gateway/102005927"
-        intents: [GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES]
-      - name: "102069707"
-        appid: "${QQ_SANDBOX_APPID}"
-        secret: "${QQ_SANDBOX_SECRET}"
-        mode: websocket
-        sandbox: true
-        intents: [GUILDS, GROUP_AND_C2C_EVENT]
-
-  slack:
-    endpoints:
-      - name: zhin
-        token: "${SLACK_TOKEN}"
-        appToken: "${SLACK_APP_TOKEN}"
-        signingSecret: "${SLACK_SIGNING_SECRET}"
-        socketMode: true
+  qq: "@zhin.js/adapter-qq"
+  slack: "@zhin.js/adapter-slack"
+qq:
+  endpoints:
+    - name: zhin
+      appid: "${QQ_APPID}"
+      secret: "${QQ_SECRET}"
+      mode: websocket
+      sandbox: false
+      gatewayUrl: "https://bots.example.com/gateway/102005927"
+      intents: [ GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES ]
+    - name: "102069707"
+      appid: "${QQ_SANDBOX_APPID}"
+      secret: "${QQ_SANDBOX_SECRET}"
+      mode: websocket
+      sandbox: true
+      intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
+slack:
+  endpoints:
+    - name: zhin
+      token: "${SLACK_TOKEN}"
+      appToken: "${SLACK_APP_TOKEN}"
+      signingSecret: "${SLACK_SIGNING_SECRET}"
+      socketMode: true
 ```
 
 For adapter-specific fields (`appid`, `intents`, `socketMode`, `url`, `access_token`, etc.), see the README of the corresponding adapter package.
@@ -460,6 +472,7 @@ For adapter-specific fields (`appid`, `intents`, `socketMode`, `url`, `access_to
 You can run without any Host sections -- this is the entire configuration for `examples/minimal-bot`:
 
 ```yaml
+configVersion: 2
 plugin:
   terminal:
     interactive: true

@@ -33,8 +33,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
       const directory = name === 'root' ? root : join(root, 'plugins', name);
       await mkdir(directory, { recursive: true });
       await writeFile(join(directory, 'package.json'), JSON.stringify({ name: `native-${name}`, version: '1.0.0', type: 'module',
-        zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false,
-          ...(name === 'root' ? { plugins: [{ package: './plugins/child', instanceKey: 'child' }, { package: './plugins/sibling', instanceKey: 'sibling' }] } : {}) } }));
+        zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false } }));
       await writeFile(join(directory, 'plugin.js'), `${name === 'child' ? "import { value } from './helper.js';" : 'const value = 1;'}
 const counts = globalThis[Symbol.for(${JSON.stringify(key)})]; counts.${name} = (counts.${name} ?? 0) + 1;
 export default { name: '${name}', config: { toJsonSchema() { return { type: 'object', properties: { value: { type: 'number', default: value } } }; } } };
@@ -48,6 +47,7 @@ import { writeFile } from 'node:fs/promises';
 import { RootRuntime, NativeDevelopmentModuleRuntime } from ${JSON.stringify(new URL('../src/index.ts', import.meta.url).href)};
 globalThis[Symbol.for(${JSON.stringify(key)})] = {};
 const runtime = new RootRuntime({ projectRoot: ${JSON.stringify(root)},
+  config: { configVersion: 2, plugins: { child: './plugins/child', sibling: './plugins/sibling' } },
   modules: new NativeDevelopmentModuleRuntime({ projectRoot: ${JSON.stringify(root)}, watch: false }),
   environment: { name: 'test', mode: 'test', platform: 'node' } });
 try {

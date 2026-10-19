@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-email
 - `@zhin.js/adapter` — convention-based `adapters/email/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json` (`smtp` / `imap`)
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json` (`smtp` / `imap`)
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the sender address)
 Outbound: `send({ conversation, payload })` -> nodemailer (recipient is `conversation.id`; payload is rendered by gateway/core; no segment-mapper)
@@ -50,27 +50,29 @@ Outbound: `send({ conversation, payload })` -> nodemailer (recipient is `convers
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  email:
-    endpoints:
-      - name: my-email-bot
-        smtp:
-          host: smtp.example.com
-          port: 465
-          secure: true
-          auth:
-            user: bot@example.com
-            pass: "${EMAIL_PASSWORD}"
-        imap:
-          host: imap.example.com
-          port: 993
-          tls: true
+  email: "@zhin.js/adapter-email"
+email:
+  endpoints:
+    - name: my-email-bot
+      smtp:
+        host: smtp.example.com
+        port: 465
+        secure: true
+        auth:
           user: bot@example.com
-          password: "${EMAIL_PASSWORD}"
+          pass: "${EMAIL_PASSWORD}"
+      imap:
+        host: imap.example.com
+        port: 993
+        tls: true
+        user: bot@example.com
+        password: "${EMAIL_PASSWORD}"
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-email` (`instanceKey: email`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-email` (`instanceKey: email`).
 
 ### Optional IMAP Fields
 

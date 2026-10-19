@@ -15,6 +15,7 @@ import {
   type RuntimeGenerationModel,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
+import { projectPrimaryConfigResources, type PrimaryConfig } from './primary-config.js';
 import {
   capabilityDeltaFromSlots,
   type CapabilityDelta,
@@ -24,6 +25,7 @@ export class SlotGenerationPreparer {
   constructor(
     private readonly modules: ModuleRuntime,
     private readonly model: RuntimeGenerationModel,
+    private readonly primaryConfig?: PrimaryConfig,
   ) {}
 
   async prepare(
@@ -61,7 +63,9 @@ export class SlotGenerationPreparer {
         root: current.root,
         tree: current.tree,
         config: current.config,
-        resources: current.resources,
+        resources: this.primaryConfig
+          ? projectPrimaryConfigResources(current.resources, this.primaryConfig)
+          : current.resources,
         capabilities,
       },
       signal,

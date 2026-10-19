@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-dingtalk
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.kind` is `group`/`private`, `conversation.id` is the conversationId)
 Outbound: `send({ conversation, payload })` -> sessionWebhook or `/robot/send` (`conversation.id` is the conversationId)
@@ -51,19 +51,21 @@ Required fields (`endpoints[i]`): `name`, `appKey`, `appSecret`, `webhookPath`, 
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  dingtalk:
-    apiBaseUrl: https://oapi.dingtalk.com # optional, shared at top level
-    endpoints:
-      - name: my-dingtalk-bot
-        appKey: ${DINGTALK_APP_KEY}
-        appSecret: ${DINGTALK_APP_SECRET}
-        robotCode: ${DINGTALK_ROBOT_CODE}
-        webhookPath: /dingtalk/webhook   # optional, default /dingtalk/webhook
+  dingtalk: "@zhin.js/adapter-dingtalk"
+dingtalk:
+  apiBaseUrl: https://oapi.dingtalk.com # optional, shared at top level
+  endpoints:
+    - name: my-dingtalk-bot
+      appKey: ${DINGTALK_APP_KEY}
+      appSecret: ${DINGTALK_APP_SECRET}
+      robotCode: ${DINGTALK_ROBOT_CODE}
+      webhookPath: /dingtalk/webhook # optional, default /dingtalk/webhook
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-dingtalk` (`instanceKey: dingtalk`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-dingtalk` (`instanceKey: dingtalk`).
 
 ## Environment Variables
 

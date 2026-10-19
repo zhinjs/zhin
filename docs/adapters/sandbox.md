@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=39e9f85da546ac65 -->
+<!-- sync-adapter-docs:sha256=df55f2243544ad81 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -60,23 +60,27 @@ Sandbox 声明 `html: direct`，聊天页在隔离 iframe 中展示 canonical `h
 
 ## 配置
 
-**推荐（与 [minimal-bot](/getting-started/) 一致）**：`plugins.sandbox.endpoints: []`，运行时提供默认 `sandbox-bot` endpoint，无需额外账号配置。
+**推荐（与 [minimal-bot](/getting-started/) 一致）**：`sandbox.endpoints: []`，运行时提供默认 `sandbox-bot` endpoint，无需额外账号配置。
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  sandbox:
-    endpoints: []
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints: []
 ```
 
 可选：若需在启动时即在 bot 列表显示**固定名称**的离线占位 bot，可显式配置：
 
 ```yaml
+configVersion: 2
 plugins:
-  sandbox:
-    endpoints:
-      - id: sandbox-bot
-        owner: sandbox-user
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: sandbox-bot
+      owner: sandbox-user
 ```
 
 ## 使用方式

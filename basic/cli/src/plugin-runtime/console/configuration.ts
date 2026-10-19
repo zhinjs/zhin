@@ -7,7 +7,7 @@ import {
   rootPluginId,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { HOST_CONFIG_KEYS, parsePluginConfigSchema, createEnvStore, type EnvStore } from '@zhin.js/runtime';
+import { HOST_CONFIG_KEYS, readApplicationPluginDeclaration, parsePluginConfigSchema, createEnvStore, type EnvStore } from '@zhin.js/runtime';
 import { loadRuntimeEnvironmentLayers } from '../start/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
@@ -42,7 +42,7 @@ export class ConsoleConfigurationStore {
     return this.#afterMutations(async () => {
       const snapshot = await this.#document.readSource();
       const configKeys = await this.#listKeys(snapshot.document);
-      const declaredPlugins = await readPluginPackageMap(this.#projectRoot);
+      const declaredPlugins = await readPluginPackageMap(this.#projectRoot, snapshot.document);
       const pluginConfigs = readPluginConfigurationMap(snapshot.document);
       return Object.freeze({
         source: snapshot.source,
@@ -72,6 +72,7 @@ export class ConsoleConfigurationStore {
     return this.#serialize(async () => {
       const current = await this.#document.read();
       const prepared = await this.#document.prepareReplacement(expectedRevision, source);
+      readApplicationPluginDeclaration(prepared.document);
       const committed = await prepared.commit();
       return Object.freeze({
         revision: committed.revision,
@@ -90,6 +91,7 @@ export class ConsoleConfigurationStore {
       const prepared = await this.#document.prepare(current, [
         configKeyPatch(current.document, pluginName, data),
       ]);
+      readApplicationPluginDeclaration(prepared.document);
       await prepared.commit();
       return Object.freeze({ restartRequired: HOST_CONFIG_KEYS.includes(pluginName) });
     });
@@ -102,6 +104,7 @@ export class ConsoleConfigurationStore {
       const prepared = await this.#document.prepare(current, [
         configKeyRemovePatch(current.document, pluginName),
       ]);
+      readApplicationPluginDeclaration(prepared.document);
       await prepared.commit();
       return Object.freeze({ restartRequired: HOST_CONFIG_KEYS.includes(pluginName) });
     });
@@ -116,13 +119,15 @@ export class ConsoleConfigurationStore {
   }
 
   async readSchema(pluginName?: string): Promise<unknown> {
-    if (pluginName) await this.#assertUnambiguousKey((await this.#document.read()).document, pluginName);
-    return this.#schemas.read(pluginName);
+    const {document} = await this.#document.read();
+    if (pluginName) await this.#assertUnambiguousKey(document, pluginName);
+    return this.#schemas.read(pluginName, document);
   }
 
   async validatePluginConfig(pluginName: string, data: unknown): Promise<PluginConfigValidation> {
-    await this.#assertUnambiguousKey((await this.#document.read()).document, pluginName);
-    const schema = await this.#schemas.readJson(pluginName);
+    const {document} = await this.#document.read();
+    await this.#assertUnambiguousKey(document, pluginName);
+    const schema = await this.#schemas.readJson(pluginName, document);
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
     const candidate = schema ? parsePluginConfigSchema(schema, data) : { value: data, errors: [] };
@@ -155,7 +160,10 @@ export class ConsoleConfigurationStore {
   }
 
   async readAllSchemas(): Promise<Record<string, unknown>> {
-    return this.#schemas.readAll(await this.listKeys());
+    return this.#afterMutations(async () => {
+      const {document} = await this.#document.read();
+      return this.#schemas.readAll(await this.#listKeys(document), document);
+    });
   }
 
   listKeys(): Promise<string[]> {
@@ -170,13 +178,13 @@ export class ConsoleConfigurationStore {
     for (const key of HOST_CONFIG_KEYS) {
       if (Object.prototype.hasOwnProperty.call(document, key)) keys.add(key);
     }
-    for (const key of (await readPluginPackageMap(this.#projectRoot)).keys()) keys.add(key);
+    for (const key of (await readPluginPackageMap(this.#projectRoot, document)).keys()) keys.add(key);
     return [...keys].sort((left, right) => left.localeCompare(right));
   }
 
   async #assertUnambiguousKey(document: RuntimeConfigDocument, key: string): Promise<void> {
     assertUnambiguousConfigKey(document, key);
-    if (HOST_CONFIG_KEYS.includes(key) && (await readPluginPackageMap(this.#projectRoot)).has(key)) {
+    if (HOST_CONFIG_KEYS.includes(key) && (await readPluginPackageMap(this.#projectRoot, document)).has(key)) {
       throw new Error(`配置键 ${key} 同时指向 Host 与已声明插件；请在配置源码中明确编辑 ${key} 或 plugins.${key}`);
     }
   }

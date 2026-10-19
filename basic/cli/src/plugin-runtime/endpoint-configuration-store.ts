@@ -8,11 +8,13 @@ import {
   type EndpointConfigurationMutation,
   type RemoveConfiguredEndpointResult,
 } from '@zhin.js/adapter';
-import type {
-  ConfigDocumentPort,
-  ConfigPatch,
-  PreparedConfigDocument,
-  RuntimeConfigDocument,
+import { pluginInstanceConfigPath } from '@zhin.js/runtime';
+import {
+  readPluginConfigurationMap,
+  type ConfigDocumentPort,
+  type ConfigPatch,
+  type PreparedConfigDocument,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 
 interface FileSnapshot {
@@ -66,7 +68,7 @@ export class ProjectEndpointConfigurationStore implements EndpointConfigurationS
         );
       }
       const prepared = await this.#document.prepare(current, [
-        endpointListPatch(request.adapterKey, [...endpoints, request.entry]),
+        endpointListPatch(current.document, request.adapterKey, [...endpoints, request.entry]),
       ]);
       await this.#commitWithEnvironment(prepared, request.environment);
       return Object.freeze({ filePath: this.#configFile });
@@ -82,7 +84,7 @@ export class ProjectEndpointConfigurationStore implements EndpointConfigurationS
         return Object.freeze({ removed: false, filePath: this.#configFile });
       }
       const prepared = await this.#document.prepare(current, [
-        endpointListPatch(adapterKey, next),
+        endpointListPatch(current.document, adapterKey, next),
       ]);
       await prepared.commit();
       return Object.freeze({ removed: true, filePath: this.#configFile });
@@ -133,12 +135,13 @@ export class ProjectEndpointConfigurationStore implements EndpointConfigurationS
 }
 
 function endpointListPatch(
+  document: RuntimeConfigDocument,
   adapterKey: string,
   endpoints: readonly ConfiguredEndpointEntry[],
 ): ConfigPatch {
   return Object.freeze({
     op: 'set',
-    path: Object.freeze(['plugins', adapterKey, 'endpoints']),
+    path: Object.freeze([...pluginInstanceConfigPath(document, adapterKey), 'endpoints']),
     value: endpoints,
   });
 }
@@ -147,19 +150,19 @@ function readConfiguredEndpoints(
   document: RuntimeConfigDocument,
   adapterKey: string,
 ): readonly ConfiguredEndpointEntry[] {
-  const plugins = optionalObject(document.plugins, 'plugins');
-  if (!plugins) return Object.freeze([]);
-  const adapter = optionalObject(plugins[adapterKey], `plugins.${adapterKey}`);
+  const plugins = readPluginConfigurationMap(document);
+  if (!Object.hasOwn(plugins, adapterKey)) throw new Error(`Unknown plugin instance: ${adapterKey}`);
+  const adapter = optionalObject(plugins[adapterKey], adapterKey);
   if (!adapter) return Object.freeze([]);
   const endpoints = adapter.endpoints;
   if (endpoints === undefined) return Object.freeze([]);
   if (!Array.isArray(endpoints)) {
-    throw new Error(`配置的 plugins.${adapterKey}.endpoints 必须是数组`);
+    throw new Error(`配置的 ${adapterKey}.endpoints 必须是数组`);
   }
   return Object.freeze(endpoints.map((value, index) => {
-    const entry = requiredObject(value, `plugins.${adapterKey}.endpoints[${index}]`);
+    const entry = requiredObject(value, `${adapterKey}.endpoints[${index}]`);
     if (typeof entry.id !== 'string' || entry.id.trim() === '') {
-      throw new Error(`配置的 plugins.${adapterKey}.endpoints[${index}].id 必须是非空字符串`);
+      throw new Error(`配置的 ${adapterKey}.endpoints[${index}].id 必须是非空字符串`);
     }
     return Object.freeze({ ...entry }) as ConfiguredEndpointEntry;
   }));

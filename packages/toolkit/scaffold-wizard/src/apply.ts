@@ -2,9 +2,9 @@ import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
 import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import type { AdapterSetupResult, AISetupConfig, DatabaseConfig, InitOptions } from './types.js';
 import {
-  collectAdapterPluginConfigs,
   collectAdapterPluginManifest,
   generateAdapterEnvVars,
   getAdapterDependencies,
@@ -28,15 +28,34 @@ export function clonePluginConfigurationMap(
 }
 
 export function applyAdaptersToConfig(config: Record<string, unknown>, result: AdapterSetupResult): void {
-  const plugins = clonePluginConfigurationMap(config);
   for (const instance of result.instances) {
-    plugins[instance.instanceKey] = mergeAdapterInstanceConfig(
-      instance.instanceKey,
-      plugins[instance.instanceKey],
-      instance.config,
-    );
+    const plugins = clonePluginConfigurationMap(config);
+    setPluginInstanceConfig(config, instance, mergeAdapterInstanceConfig(
+      instance.instanceKey, plugins[instance.instanceKey], instance.config,
+    ));
   }
-  config.plugins = plugins;
+  if (result.instances.length === 0) clonePluginConfigurationMap(config);
+}
+
+/** Writes one instance using the document's explicitly selected protocol. */
+export function setPluginInstanceConfig(
+  config: Record<string, unknown>,
+  instance: { instanceKey: string; package: string },
+  value: Record<string, unknown>,
+): void {
+  const declaration = readApplicationPluginDeclaration(config);
+  const existing = declaration.instances.find(item => item.instanceKey === instance.instanceKey);
+  if (existing && existing.package !== instance.package) {
+    throw new Error(`Plugin instance ${instance.instanceKey} already belongs to ${existing.package}`);
+  }
+  const next = {
+    ...config,
+    plugins: { ...(config.plugins as Record<string, string> | undefined), [instance.instanceKey]: instance.package },
+    [instance.instanceKey]: value,
+  };
+  readApplicationPluginDeclaration(next);
+  config.plugins = next.plugins;
+  config[instance.instanceKey] = value;
 }
 
 function endpointId(endpoint: unknown): string | undefined {
@@ -89,35 +108,6 @@ export function applyAIToConfig(config: Record<string, unknown>, ai: AISetupConf
   config.ai = materializeAIConfig(ai);
 }
 
-/** 把 zhin.plugins 清单条目合并进项目 package.json（zhin setup 路径） */
-export async function mergePluginManifestIntoPackageJson(
-  projectDir: string,
-  entries: Array<{ package: string; instanceKey: string }>,
-): Promise<boolean> {
-  if (entries.length === 0) return false;
-  const pkgPath = path.join(projectDir, 'package.json');
-  if (!(await fs.pathExists(pkgPath))) return false;
-
-  const pkg = await fs.readJson(pkgPath);
-  const zhin = pkg.zhin && typeof pkg.zhin === 'object' && !Array.isArray(pkg.zhin)
-    ? pkg.zhin
-    : { protocol: 1, type: 'plugin', entry: './plugin.ts' };
-  const manifest: Array<{ package: string; instanceKey: string }> = Array.isArray(zhin.plugins)
-    ? [...zhin.plugins]
-    : [];
-  let changed = false;
-  for (const entry of entries) {
-    if (manifest.some((item) => item?.instanceKey === entry.instanceKey)) continue;
-    manifest.push({ package: entry.package, instanceKey: entry.instanceKey });
-    changed = true;
-  }
-  if (!changed && pkg.zhin) return false;
-  zhin.plugins = manifest;
-  pkg.zhin = zhin;
-  await fs.writeJson(pkgPath, pkg, { spaces: 2 });
-  return true;
-}
-
 export async function appendWizardEnvVars(
   projectDir: string,
   adapters?: AdapterSetupResult,
@@ -135,10 +125,7 @@ export async function appendWizardEnvVars(
     await fs.writeFile(envPath, mergeEnvText(existing, extra));
   }
 
-  // 新 Plugin Runtime 通过 package.json zhin.plugins 清单挂载子插件，与依赖一起落盘
-  if (adapters) {
-    await mergePluginManifestIntoPackageJson(projectDir, collectAdapterPluginManifest(adapters));
-  }
+
 }
 
 export function collectWizardDependencies(
@@ -295,11 +282,11 @@ function applyLifeAssistantAiExtras(ai: Record<string, unknown>): Record<string,
 }
 
 /**
- * 构建新 Plugin Runtime 配置文档（顶层 http/database/ai + plugins.<instanceKey>）。
+ * 构建 v2 扁平主配置（plugins 包映射 + 顶层实例业务配置）。
  * 顶层键与 packages/im/runtime/src/config-composer.ts 的 effectiveSchema 对齐。
  */
 export function buildRuntimeConfigDocument(options: InitOptions): Record<string, unknown> {
-  const doc: Record<string, unknown> = {};
+  const doc: Record<string, unknown> = { configVersion: 2, plugins: {} };
 
   if (options.database) {
     doc.database = materializeDatabaseConfig(options.database);
@@ -317,7 +304,7 @@ export function buildRuntimeConfigDocument(options: InitOptions): Record<string,
     doc.ai = options.template === 'life-assistant' ? applyLifeAssistantAiExtras(ai) : ai;
   }
 
-  doc.plugins = options.adapters ? collectAdapterPluginConfigs(options.adapters) : {};
+  if (options.adapters) applyAdaptersToConfig(doc, options.adapters);
 
   return doc;
 }

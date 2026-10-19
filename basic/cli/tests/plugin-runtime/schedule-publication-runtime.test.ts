@@ -63,7 +63,7 @@ it('keeps real process schedules alive through failed HMR and switches callbacks
       if (!value) throw new Error(`Missing test module ${source}`);
       return value as T;
     }, async close() {} };
-    runtime = new RootRuntime({ projectRoot: project, modules: loader,
+    runtime = new RootRuntime({ projectRoot: project, modules: loader, config: { configVersion: 2 },
       environment: { name: 'test', mode: 'test', platform: 'node' },
       installResources({ resources, admission }) {
         resources.provide(scheduleRootHostToken, port);

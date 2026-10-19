@@ -47,7 +47,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | Workroom、成员与群/仓库绑定 | 持久 Workroom Catalog，通过 Console 管理 |
 | 当前运行时到底发布了什么 | Console 的 Endpoint、能力目录与 generation 状态 |
 
-配置只提供值，不负责挂载代码。新增适配器、Feature 或插件时先安装依赖并更新 `package.json#zhin`，再填写对应配置。
+主配置使用 `configVersion: 2`。先安装依赖，再在 `plugins` 映射实例名与包，业务参数放在顶层同名块；`disable_plugins` 列出停用实例。Feature 需求仍在 `package.json#zhin.features`。旧配置请先阅读[迁移指南](../migrations/plugin-instance-declarations.md)。
 
 ## 加载与校验流程
 
@@ -58,12 +58,12 @@ flowchart LR
     C --> D[Schema 校验<br/>未知顶层键直接报错]
     D --> E[Host 段<br/>http / database / ai / ...]
     D --> F[plugin 段 → Root Plugin]
-    D --> G[plugins.&lt;instanceKey&gt;<br/>→ 各子插件 ConfigView]
+    D --> G[&lt;instanceKey&gt;<br/>→ 各子插件 ConfigView]
 ```
 
 配置文件会经过 JSON Schema 校验，**顶层只允许下文列出的键**。键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`。
 
-`plugin` / `plugins` 之外的顶层键由 CLI Host 装配层消费，不会下发给插件。
+Host 键由 CLI 装配层消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
 
 ## 环境变量展开
 
@@ -91,8 +91,13 @@ dotenv 按 `.env` → `.env.<环境>` 加载。环境名由 `--environment` 指�
 | `mcp` | object | MCP Host（把 bot 工具暴露为 MCP Server） |
 | `a2a` | object | A2A Host（Agent Card / 远程 Agent 互调） |
 | `htmlRenderer` | object | Shotium HTML 渲染（如 `width` / `viewport` / `scale`） |
+| `menuKeyword` | string \| false | 内置菜单关键词；默认 `菜单`，`false` 或空字符串关闭 |
+| `menuStyle` | object | 菜单标题、副标题、强调色与背景图；渲染能力可用时生效 |
 | `plugin` | object | Root Plugin（应用自身）的配置 |
-| `plugins` | object | 子插件配置，键为 instanceKey |
+| `configVersion` | number | 必须为 2 |
+| `plugins` | object | 实例名到插件包的映射 |
+| `disable_plugins` | string[] | 停用实例名，配置仍保留 |
+| `<instanceKey>` | object | 已声明实例的业务配置 |
 
 ## http
 
@@ -374,6 +379,7 @@ ai:
 ## plugin 与 plugins
 
 ```yaml
+configVersion: 2
 # Root Plugin（应用自身）的配置，键由应用的 config schema 决定
 plugin:
   terminal:
@@ -381,15 +387,16 @@ plugin:
 
 # 子插件配置，键为 instanceKey
 plugins:
-  sandbox:
-    endpoints:
-      - id: sandbox-bot
-        owner: sandbox-user
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: sandbox-bot
+      owner: sandbox-user
 ```
 
 `instanceKey` 默认取包名最后一段，并移除 `adapter-` / `plugin-` / `service-` 前缀。例如 `@zhin.js/adapter-icqq` → `icqq`。
 
-`zhin install` 会写入 `plugins.<instanceKey>`，并把包挂进 `package.json#zhin.plugins`。
+`zhin install` 将包引用写入 `plugins.<instanceKey>`，业务参数写入顶层 `<instanceKey>`；不再写入包清单的旧挂载数组。
 
 ### 适配器实例：master / trusted / commandPrefix
 
@@ -406,12 +413,15 @@ plugins:
 多账号适配器用 `endpoints` 数组声明多个 Endpoint：
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    master: "${ICQQ_MASTER}"     # 顶层共享：所有 endpoint 生效
-    endpoints:                   # 逐项：name 必填，其余字段与顶层合并（逐项优先）
-      - name: "${ICQQ_ACCOUNT_1}"
-      - name: "${ICQQ_ACCOUNT_2}"
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  master: "${ICQQ_MASTER}" # 顶层共享：所有 endpoint 生效
+  endpoints:
+    # 逐项：name 必填，其余字段与顶层合并（逐项优先）
+    - name: "${ICQQ_ACCOUNT_1}"
+    - name: "${ICQQ_ACCOUNT_2}"
 ```
 
 展开规则（`@zhin.js/adapter` 的 `expandEndpointConfigs`）：
@@ -423,30 +433,32 @@ plugins:
 真实示例（QQ 官方 bot，主账号走代理网关 + 沙箱账号并存）：
 
 ```yaml
+configVersion: 2
 plugins:
-  qq:
-    endpoints:
-      - name: zhin
-        appid: "${QQ_APPID}"
-        secret: "${QQ_SECRET}"
-        mode: websocket
-        sandbox: false
-        gatewayUrl: "https://bots.example.com/gateway/102005927"
-        intents: [GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES]
-      - name: "102069707"
-        appid: "${QQ_SANDBOX_APPID}"
-        secret: "${QQ_SANDBOX_SECRET}"
-        mode: websocket
-        sandbox: true
-        intents: [GUILDS, GROUP_AND_C2C_EVENT]
-
-  slack:
-    endpoints:
-      - name: zhin
-        token: "${SLACK_TOKEN}"
-        appToken: "${SLACK_APP_TOKEN}"
-        signingSecret: "${SLACK_SIGNING_SECRET}"
-        socketMode: true
+  qq: "@zhin.js/adapter-qq"
+  slack: "@zhin.js/adapter-slack"
+qq:
+  endpoints:
+    - name: zhin
+      appid: "${QQ_APPID}"
+      secret: "${QQ_SECRET}"
+      mode: websocket
+      sandbox: false
+      gatewayUrl: "https://bots.example.com/gateway/102005927"
+      intents: [ GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES ]
+    - name: "102069707"
+      appid: "${QQ_SANDBOX_APPID}"
+      secret: "${QQ_SANDBOX_SECRET}"
+      mode: websocket
+      sandbox: true
+      intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
+slack:
+  endpoints:
+    - name: zhin
+      token: "${SLACK_TOKEN}"
+      appToken: "${SLACK_APP_TOKEN}"
+      signingSecret: "${SLACK_SIGNING_SECRET}"
+      socketMode: true
 ```
 
 各适配器自己的字段（`appid`、`intents`、`socketMode`、`url`、`access_token` 等）见对应适配器包的 README。
@@ -456,6 +468,7 @@ plugins:
 不写任何 Host 段也能跑——这是 `examples/minimal-bot` 的全部配置：
 
 ```yaml
+configVersion: 2
 plugin:
   terminal:
     interactive: true

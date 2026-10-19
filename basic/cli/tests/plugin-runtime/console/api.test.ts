@@ -240,6 +240,7 @@ async function makePackageRoot(): Promise<string> {
   tempRoots.push(dir);
   await mkdir(join(dir, 'node_modules', 'fake'), { recursive: true });
   await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'proj' }));
+  await writeFile(join(dir, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
   const packageRoot = join(dir, 'node_modules', 'fake');
   await writeFile(join(packageRoot, 'package.json'), JSON.stringify({
     name: '@zhin.js/adapter-icqq',
@@ -302,6 +303,8 @@ describe('plugin list helpers', () => {
       name: 'icqq',
       status: 'active',
       description: 'ICQQ',
+      metadata: { displayName: 'ICQQ' },
+      displayName: 'ICQQ',
       features: [
         {
           name: 'adapter',
@@ -568,9 +571,9 @@ describe('console REST routes', () => {
     await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
       name: 'proj', dependencies: { '@zhin.js/adapter-icqq': '1.2.3' },
       zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts',
-        plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'custom-icqq' }] },
+        plugins: [] },
     }));
-    await writeFile(join(projectRoot, 'zhin.config.yml'), 'plugin:\n  custom-icqq: {}\n');
+    await writeFile(join(projectRoot, 'zhin.config.yml'), "configVersion: 2\nplugins: {custom-icqq: '@zhin.js/adapter-icqq'}\ncustom-icqq: {}\n");
     const installedRoot = join(projectRoot, 'node_modules', '@zhin.js', 'adapter-icqq');
     await mkdir(installedRoot, { recursive: true });
     await writeFile(join(installedRoot, 'package.json'), JSON.stringify({ name: '@zhin.js/adapter-icqq', version: '1.2.3', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false } }));
@@ -589,8 +592,10 @@ describe('console REST routes', () => {
 
   it('never advertises plugin management to a demo principal for loaded or disabled declarations', async () => {
     await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
-      name: 'proj', zhin: { plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'icqq' }] },
+      name: 'proj', dependencies: { '@zhin.js/adapter-icqq': '*' },
+      zhin: {protocol: 1, type: 'plugin', entry: './plugin.ts'},
     }));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), "configVersion: 2\nplugins: {icqq: '@zhin.js/adapter-icqq'}\n");
     for (const snapshot of [stubSnapshot(packageRoot), undefined]) {
       const { port } = await startHost({ projectRoot, withTokens: true, snapshot });
       for (const [token, manageable] of [['demo-token', false], ['full-token', true]] as const) {
@@ -606,15 +611,16 @@ describe('console REST routes', () => {
 
   it('keeps loaded detail management eligibility aligned with the declared plugin list', async () => {
     await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
-      name: 'proj', zhin: { plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'icqq' }] },
+      name: 'proj', zhin: {plugins: []},
     }));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), "configVersion: 2\nplugins: {icqq: '@zhin.js/adapter-icqq'}\n");
     const { port } = await startHost({ projectRoot, snapshot: stubSnapshot(packageRoot) });
     const list = await (await fetch(`http://127.0.0.1:${port}/api/plugins`)).json();
     const detail = await (await fetch(`http://127.0.0.1:${port}/api/plugins/icqq`)).json();
     expect(list.data.find((item: { instanceKey: string }) => item.instanceKey === 'icqq').manageable).toBe(true);
     expect(detail.data.manageable).toBe(true);
     expect(detail.data.features).toEqual(list.data[0].features);
-    await writeFile(join(projectRoot, 'package.json'), JSON.stringify({ name: 'proj' }));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\n');
     const unmanaged = await (await fetch(`http://127.0.0.1:${port}/api/plugins/icqq`)).json();
     expect(unmanaged.data.manageable).toBe(false);
   });
@@ -1393,20 +1399,16 @@ describe('console REST routes', () => {
 
   it('serves detail for a declared plugin that is not active', async () => {
     await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
-      name: 'proj',
-      zhin: {
-        plugins: [{
-          package: '@zhin.js/adapter-icqq',
-          instanceKey: 'icqq',
-          enabled: false,
-        }],
-      },
+      name: 'proj', dependencies: { '@zhin.js/adapter-icqq': '*' },
+      zhin: {protocol: 1, type: 'plugin', entry: './plugin.ts'},
     }));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), "configVersion: 2\nplugins: {icqq: '@zhin.js/adapter-icqq'}\ndisable_plugins: [icqq]\n");
     const packageDir = join(projectRoot, 'node_modules', '@zhin.js', 'adapter-icqq');
     await mkdir(packageDir, { recursive: true });
     await writeFile(join(packageDir, 'package.json'), JSON.stringify({
       name: '@zhin.js/adapter-icqq',
       version: '1.2.0',
+      zhin: {protocol: 1, type: 'plugin', entry: './plugin.js', metadata: {displayName: 'Inactive QQ', icon: 'Bot'}},
     }));
 
     const { port } = await startHost({ projectRoot, withTokens: true });
@@ -1424,6 +1426,10 @@ describe('console REST routes', () => {
       manageable: true,
       version: '1.2.0',
       packageRoot: './node_modules/@zhin.js/adapter-icqq',
+      description: 'Inactive QQ · 已停用',
+      metadata: {displayName: 'Inactive QQ', icon: 'Bot'},
+      displayName: 'Inactive QQ',
+      icon: 'Bot',
     });
   });
 
@@ -1491,12 +1497,12 @@ describe('console REST routes', () => {
     expect(badBody.success).toBe(false);
     expect(badBody.error).toContain('Cannot parse YAML config');
     // 非法 YAML 不得落盘
-    expect(existsSync(join(projectRoot, 'zhin.config.yml'))).toBe(false);
+    expect(await readFile(join(projectRoot, 'zhin.config.yml'), 'utf8')).toBe('configVersion: 2\nplugins: {}\n');
 
     const good = await request({
       type: 'config:replace-source',
       requestId: 3,
-      source: 'http:\n  port: 8086\n',
+      source: 'configVersion: 2\nplugins: {}\nhttp:\n  port: 8086\n',
       expectedRevision,
     });
     expect(good.status).toBe(200);
@@ -1506,7 +1512,7 @@ describe('console REST routes', () => {
     const stale = await request({
       type: 'config:replace-source',
       requestId: 4,
-      source: 'http:\n  port: 9090\n',
+      source: 'configVersion: 2\nplugins: {}\nhttp:\n  port: 9090\n',
       expectedRevision,
     });
     expect(stale.status).toBe(400);
@@ -1526,14 +1532,14 @@ describe('console REST routes', () => {
     });
     expect(res.status).toBe(400);
     const body = await res.json() as { success: boolean; error: string };
-    expect(body.error).toContain('Invalid config key');
+    expect(body.error).toContain('Unknown configuration key');
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 
   it('serves config:get-all from the on-disk file so it stays consistent with config:set', async () => {
     // 磁盘文件是唯一数据源：即使 generation 内存快照不同，get-all 也读文件，
     // 且环境变量占位符原样保留。
-    await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  port: 1000\n  token: ${HTTP_TOKEN}\n');
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\nhttp:\n  port: 1000\n  token: ${HTTP_TOKEN}\n');
     const { port } = await startHost({ projectRoot });
     const getAll = (requestId: number) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
       method: 'POST',

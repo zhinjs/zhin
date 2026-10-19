@@ -15,6 +15,7 @@ import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
+import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../plugin-runtime/migrate/instance-declarations.js';
 
 const cwd = process.cwd();
 
@@ -469,3 +470,32 @@ export const migrateCommand = new Command('migrate')
     console.log(chalk.cyan('  pnpm dev') + chalk.gray('   start dev server'));
     console.log('');
   });
+
+// Explicit declaration conversion never invokes the general dependency upgrader.
+migrateCommand.addCommand(new Command('instances')
+  .description('离线转换旧实例声明为 configVersion: 2（默认仅预览）')
+  .option('--apply', '确认 Bot 已停止后写入，保留原文备份与恢复日志')
+  .option('--dry-run', '只检查并列出转换计划（默认）')
+  .option('--recover <action>', '恢复未完成转换：continue 或 rollback')
+  .option('--lifecycle-file <path>', '显式指定旧停用状态文件（绝对路径）')
+  .action(async (options: { apply?: boolean; dryRun?: boolean; recover?: string; lifecycleFile?: string }) => {
+    const root = process.cwd();
+    const dryRun = options.dryRun || migrateCommand.opts().dryRun;
+    if (options.apply && dryRun) throw new Error('--apply and --dry-run cannot be combined');
+    if (options.recover) {
+      if (options.apply || dryRun || options.lifecycleFile) throw new Error('--recover cannot be combined with plan/apply flags');
+      if (options.recover !== 'continue' && options.recover !== 'rollback') throw new Error('--recover must be continue or rollback');
+      await recoverInstanceDeclarationMigration(root, options.recover);
+      console.log(`Instance declaration recovery ${options.recover} completed. Backups remain in .zhin/instance-declarations-migration.`);
+      return;
+    }
+    const plan = await planInstanceDeclarationMigration(root, { lifecycleFile: options.lifecycleFile });
+    console.log(JSON.stringify({
+      mode: options.apply ? 'apply' : 'dry-run',
+      instances: plan.instances,
+      files: plan.files.map(file => ({ path: file.path, before: file.before.digest, after: file.after.digest })),
+      pendingChecks: plan.pendingChecks,
+    }, null, 2));
+    if (options.apply) await applyInstanceDeclarationMigration(plan);
+    else console.log('No files changed. Stop the Bot, review the plan, then run zhin migrate instances --apply.');
+  }));

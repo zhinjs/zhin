@@ -148,14 +148,14 @@ describe('RootRuntime with JsonConfigDocument', () => {
     await runtime.start();
 
     const committed = await runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 'v2',
+      op: 'set', path: ['child', 'label'], value: 'v2',
     }]);
     const stableSource = await readFile(file, 'utf8');
     expect(committed.generation).toBe(2);
-    expect(JSON.parse(stableSource)).toMatchObject({ plugins: { child: { label: 'v2' } } });
+    expect(JSON.parse(stableSource)).toMatchObject({ child: { label: 'v2' } });
 
     await expect(runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 'broken',
+      op: 'set', path: ['child', 'label'], value: 'broken',
     }])).rejects.toThrow('shadow setup failed');
     expect(await readFile(file, 'utf8')).toBe(stableSource);
     expect(runtime.snapshot).toBe(committed);
@@ -191,7 +191,7 @@ async function createProject(): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [{ package: '@test/child', instanceKey: 'child' }],
+      plugins: [],
     },
   });
   await writeJson(join(root, 'schema.json'), {
@@ -208,7 +208,7 @@ async function createProject(): Promise<string> {
   });
   await writeFile(join(root, 'plugin.ts'), '');
   await writeFile(join(root, 'plugins/child/plugin.ts'), '');
-  await writeJson(join(root, 'config.json'), { plugins: { child: { label: 'v1' } } });
+  await writeJson(join(root, 'config.json'), { configVersion: 2, plugins: { child: '@test/child' }, child: { label: 'v1' } });
   return realpath(root);
 }
 

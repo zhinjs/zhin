@@ -5,6 +5,7 @@ import {
   DisposeStack,
   GenerationHandoffStack,
   RootController,
+  applyConfigPatches,
   ConfigDocumentDivergenceError,
   createSnapshotView,
   rootPluginId,
@@ -32,7 +33,8 @@ import {
   type FeatureProvider,
 } from '@zhin.js/feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
-import { ConfigComposer, type JsonSchema } from './config-composer.js';
+import { ConfigComposer, HOST_CONFIG_KEYS, type JsonSchema } from './config-composer.js';
+import { createPrimaryConfig, primaryConfigToken, type PrimaryConfig } from './primary-config.js';
 import { immutableConfigSchema } from './plugin-config-schema.js';
 import { ConfigPatchPlanner, type ConfigPatchPlan } from './config-patch-planner.js';
 import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
@@ -99,6 +101,7 @@ import {
 import { TopologyGenerationPreparer } from './topology-generation-preparer.js';
 import { RestartBoundaryPlanner } from './restart-boundary.js';
 import { RuntimeInputPlanner } from './runtime-input-planner.js';
+import { TopologyTransactionPlanner } from './topology-transaction.js';
 
 export type {
   PluginConfigResolver,
@@ -113,6 +116,8 @@ export interface RootRuntimeOptions {
   readonly environmentVariables?: EnvironmentLayers;
   readonly environmentSource?: EnvironmentLayersPort;
   readonly config?: PluginConfigResolver | RuntimeConfigDocument | ConfigDocumentPort;
+  /** Explicit v2 instance declaration when config is supplied by a custom resolver. */
+  readonly application?: RuntimeConfigDocument;
   readonly installResources?: RootResourceInstaller;
   readonly isolation?: IsolatedPluginRuntimePort;
   readonly onControlError?: ControlErrorHandler;
@@ -134,6 +139,9 @@ interface RuntimeInputCandidate {
   readonly environmentLayers: Readonly<EnvironmentLayers>;
   readonly inputSources: ReadonlySet<string>;
   readonly roots: readonly PluginId[];
+  readonly inspected: InspectedProject;
+  readonly topologyChanged: boolean;
+  readonly primaryConfigChanged: boolean;
 }
 
 interface RuntimeInputState {
@@ -155,7 +163,7 @@ export class RootRuntime {
   #configDocument?: RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
   readonly #isolation?: IsolatedPluginRuntimePort;
-  #configPatchTail: Promise<unknown> = Promise.resolve();
+  #controlTail: Promise<unknown> = Promise.resolve();
   #stopResult?: Promise<void>;
   #initialConfigSchemas: ReadonlyMap<string, JsonSchema> = new Map();
   #resolveConfigurationReady!: () => void;
@@ -174,7 +182,13 @@ export class RootRuntime {
     this.#environment = defineRuntimeEnvironment(options.environment);
     this.#environmentLayers = defineEnvironmentLayers(options.environmentVariables);
     this.#environmentSource = options.environmentSource;
-    if (typeof options.config === 'function') this.#configResolver = options.config;
+    if (options.application !== undefined && typeof options.config !== 'function') {
+      throw new TypeError('application is only used with a custom config resolver; pass the v2 document as config otherwise');
+    }
+    if (typeof options.config === 'function') {
+      this.#configResolver = options.config;
+      this.#configDocument = structuredClone(options.application ?? {});
+    }
     else if (isConfigDocumentPort(options.config)) this.#configPort = options.config;
     else this.#configDocument = structuredClone(options.config ?? {});
     this.#runtimeInputSources = new Set([
@@ -220,7 +234,11 @@ export class RootRuntime {
     return this.#controller.committed.state.ownership;
   }
 
-  async start(): Promise<RuntimeSnapshot> {
+  start(): Promise<RuntimeSnapshot> {
+    return this.#enqueueControl(() => this.#start());
+  }
+
+  async #start(): Promise<RuntimeSnapshot> {
     try {
       if (this.#environmentSource) {
         this.#environmentLayers = defineEnvironmentLayers(await this.#environmentSource.read());
@@ -241,19 +259,26 @@ export class RootRuntime {
   }
 
   async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
-    const snapshot = await this.#controller.reload(target, async (current, signal) => {
-      return (await this.#prepare(current, signal)).generation;
+    return this.#enqueueControl(async () => {
+      const previousInputs = this.#runtimeInputState();
+      return this.#controller.reload(target, async (current, signal) => {
+        return (await this.#prepare(current, signal)).generation;
+      }).catch(error => {
+        this.#restoreRuntimeInputs(previousInputs);
+        throw error;
+      });
     });
-    return snapshot;
   }
 
   patchConfig(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
     const operations = cloneConfigPatches(patches);
-    const result = this.#configPatchTail.then(
-      () => this.#applyConfigPatches(operations),
-      () => this.#applyConfigPatches(operations),
-    );
-    this.#configPatchTail = result.catch(() => undefined);
+    return this.#enqueueControl(() => this.#applyConfigPatches(operations));
+  }
+
+  /** Serializes source reads and input adoption around the Controller's generation transaction. */
+  #enqueueControl<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#controlTail.then(operation, operation);
+    this.#controlTail = result.catch(() => undefined);
     return result;
   }
 
@@ -293,9 +318,15 @@ export class RootRuntime {
   async #reloadPlan(
     plan: GenerationInvalidationPlan,
   ): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
+    return this.#enqueueControl(() => this.#reloadPlanInQueue(plan));
+  }
+
+  async #reloadPlanInQueue(
+    plan: GenerationInvalidationPlan,
+  ): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
     const inputs = await this.#planRuntimeInputs(plan.changed);
     if (inputs && 'kind' in inputs) return inputs;
-    const previousInputs = inputs ? this.#runtimeInputState() : undefined;
+    const previousInputs = this.#runtimeInputState();
     const effectiveInputPlan = inputs
       ? Object.freeze({
           ...plan,
@@ -318,9 +349,11 @@ export class RootRuntime {
           && effective.subtrees.length === 0
           && effective.slots.length === 0
           && resolved.capabilities.size === 0
+          && !inputs.topologyChanged
+          && !inputs.primaryConfigChanged
         ) return undefined;
-        if (this.#model && effective.manifestSources.length > 0) {
-          const inspected = await this.#inspectProject(
+        if (this.#model && (effective.manifestSources.length > 0 || inputs?.topologyChanged)) {
+          const inspected = inputs?.inspected ?? await this.#inspectProject(
             inputs?.document,
             inputs?.environmentLayers,
           );
@@ -344,14 +377,20 @@ export class RootRuntime {
               this.#isolation,
             ).prepare(current, signal, { ...effective, capabilities: resolved.capabilities });
         } else if (effective.subtrees.length === 0 && resolved.capabilities.size > 0 && this.#model) {
-          prepared = await new SlotGenerationPreparer(this.#modules, this.#model)
+          prepared = await new SlotGenerationPreparer(this.#modules, this.#model,
+            inputs?.primaryConfigChanged
+              ? createPrimaryConfig(inputs.inspected.primaryConfigDocument,
+                createEnvStore(rootPluginId(), this.#environment, inputs.environmentLayers))
+              : undefined)
             .prepare(current, resolved.capabilities, signal);
         } else if (this.#model && this.#canPrepareSubtrees(effective)) {
-          const inspected = await this.#inspectProject(
+          const inspected = inputs?.inspected ?? await this.#inspectProject(
             inputs?.document,
             inputs?.environmentLayers,
           );
           prepared = await this.#prepareSubtrees(current, inspected, effective.subtrees, signal);
+        } else if (this.#model && inputs?.primaryConfigChanged && effective.subtrees.length === 0 && resolved.capabilities.size === 0) {
+          prepared = await this.#prepareSubtrees(current, inputs.inspected, [], signal);
         } else {
           prepared = await this.#prepare(
             current,
@@ -369,7 +408,10 @@ export class RootRuntime {
             )
           : prepared.generation;
       },
-    );
+    ).catch(error => {
+      this.#restoreRuntimeInputs(previousInputs);
+      throw error;
+    });
     if (restart) return restart;
     if (inputs) this.#adoptRuntimeInputs(inputs);
     return snapshot;
@@ -397,10 +439,13 @@ export class RootRuntime {
     const environmentLayers = environmentChanged && this.#environmentSource
       ? defineEnvironmentLayers(await this.#environmentSource.read())
       : this.#environmentLayers;
+    const inspected = await this.#inspectProject(document, environmentLayers, configSnapshot?.pluginOrder ?? this.#configSnapshot?.pluginOrder);
     const inputPlan = await new RuntimeInputPlanner(
       new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
+      this.#committedConfigComposer(),
     ).plan({
       graph: this.#model.graph,
+      nextGraph: inspected.graph,
       environment: this.#environment,
       previousDocument: requireConfigDocument(this.#configDocument),
       nextDocument: document,
@@ -422,6 +467,9 @@ export class RootRuntime {
       environmentLayers,
       inputSources,
       roots: inputPlan.roots,
+      inspected,
+      topologyChanged: new TopologyTransactionPlanner().plan(this.#model.graph, inspected.graph).changed,
+      primaryConfigChanged: this.#primaryConfigChanged(inspected.primaryConfigDocument),
     });
   }
 
@@ -501,13 +549,14 @@ export class RootRuntime {
   async #inspectProject(
     document?: RuntimeConfigDocument,
     environmentLayers: Readonly<EnvironmentLayers> = this.#environmentLayers,
+    pluginOrder?: readonly string[],
   ): Promise<InspectedProject> {
+    if (document === undefined) await this.#refreshConfigDocument();
+    const activeDocument = document ?? this.#configDocument;
     const resolver = await NodePackageResolver.create(this.#projectRoot);
     const graph = await new ProjectGraphService(resolver, {
       disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
-    }).inspect(this.#projectRoot);
-    if (document === undefined) await this.#refreshConfigDocument();
-    const activeDocument = document ?? this.#configDocument;
+    }).inspect(this.#projectRoot, activeDocument, pluginOrder ?? this.#configSnapshot?.pluginOrder);
     if (this.#configResolver) {
       const customResolver = this.#configResolver;
       const schemas = new Map(graphNodes(graph.root).flatMap(node => {
@@ -526,7 +575,7 @@ export class RootRuntime {
       return {
         graph,
         configResolver,
-        primaryConfigDocument: Object.freeze({}),
+        primaryConfigDocument: Object.freeze(structuredClone(activeDocument ?? {})),
         environmentLayers,
       };
     }
@@ -577,45 +626,66 @@ export class RootRuntime {
     return resolver;
   }
 
+  #committedConfigComposer(): ConfigComposer {
+    return new ConfigComposer([], undefined, new Map([...this.snapshot.tree.values()].flatMap(node =>
+      node.configSchema ? [[node.id, node.configSchema] as const] : [],
+    )));
+  }
+
+  #committedPrimaryConfig(): PrimaryConfig | undefined {
+    return this.snapshot.resources.get(rootPluginId())?.get(primaryConfigToken.id) as PrimaryConfig | undefined;
+  }
+
+  #primaryConfigChanged(document: RuntimeConfigDocument): boolean {
+    return !isDeepStrictEqual(this.#committedPrimaryConfig()?.document, document);
+  }
+
   async #applyConfigPatches(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
-    if (!this.#configDocument) {
+    if (this.#configResolver || !this.#configDocument) {
       throw new Error('Config patches require a document-backed RootRuntime config');
     }
     // Adopt any external edit before planning so the port's revision check
     // cannot conflict and the patch applies on top of the on-disk document.
+    const previousInputs = this.#runtimeInputState();
+    const previousDocument = this.#configDocument;
     await this.#refreshConfigDocument();
     const currentDocument = requireConfigDocument(this.#configDocument);
     let plan: ConfigPatchPlan | undefined;
     let documentTransaction: PreparedConfigDocument | undefined;
     let committedDocument: ConfigDocumentSnapshot | undefined;
     const snapshot = await this.#controller.reload(rootPluginId(), async (current, signal) => {
-      let prepared: PreparedRuntimeGeneration;
+      let prepared: PreparedRuntimeGeneration | undefined;
       signal.throwIfAborted();
-      const resolver = await NodePackageResolver.create(this.#projectRoot);
-      const graph = await new ProjectGraphService(resolver, {
-        disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
-      }).inspect(this.#projectRoot);
-      const planned = await new ConfigPatchPlanner(
-        new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
-      ).plan(graph, currentDocument, patches);
-      plan = planned;
-      if (!planned.documentChanged) return undefined;
       try {
-        if (this.#configPort) {
+        const candidate = applyConfigPatches(currentDocument, patches);
+        const editsDeclarations = patches.some(patch => patch.path.length === 0 || patch.path[0] === 'plugins');
+        if (this.#configPort && (!isDeepStrictEqual(currentDocument, candidate) || editsDeclarations)) {
           const currentSnapshot = requireConfigDocumentSnapshot(this.#configSnapshot);
           // Port preparation must remain inert; validation and shadow setup can
           // still reject this candidate without touching the backing document.
           documentTransaction = await this.#configPort.prepare(currentSnapshot, patches);
-          if (!isDeepStrictEqual(documentTransaction.document, planned.candidate)) {
+          if (!isDeepStrictEqual(documentTransaction.document, candidate)) {
             throw new ConfigDocumentDivergenceError();
           }
         }
-        // Host-level sections (http/database/ai/...) never land in a Plugin
-        // view, so their patches plan zero roots. With a Root Resource
-        // installer the whole generation must still be rebuilt; only an
-        // installer-less runtime may take the commit-only shortcut.
-        if (!this.#installResources && planned.roots.length === 0) {
-          if (documentTransaction) committedDocument = await documentTransaction.commit();
+        const resolver = await NodePackageResolver.create(this.#projectRoot);
+        const graphService = new ProjectGraphService(resolver, {
+          disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
+        });
+        const previousGraph = this.#model?.graph ?? await graphService.inspect(this.#projectRoot, previousDocument);
+        const pluginOrder = documentTransaction?.pluginOrder
+          ?? patchedPluginOrder(this.#configSnapshot?.pluginOrder, candidate, patches);
+        const graph = await graphService.inspect(this.#projectRoot, candidate, pluginOrder);
+        const planned = await new ConfigPatchPlanner(
+          new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
+          this.#committedConfigComposer(),
+        ).plan(previousGraph, currentDocument, patches, graph, previousDocument);
+        plan = planned;
+        const topologyChanged = this.#model
+          ? new TopologyTransactionPlanner().plan(this.#model.graph, graph).changed : false;
+        const orderChanged = !isDeepStrictEqual(this.#configSnapshot?.pluginOrder, pluginOrder);
+        if (!planned.documentChanged && !topologyChanged && !orderChanged && isDeepStrictEqual(previousDocument, candidate)) {
+          if (documentTransaction) await documentTransaction.rollback();
           return undefined;
         }
         const inspected: InspectedProject = {
@@ -624,13 +694,29 @@ export class RootRuntime {
           primaryConfigDocument: planned.document,
           environmentLayers: this.#environmentLayers,
         };
-        // Root resources may consume any Primary Config section. Reinstall them
-        // when present so a committed patch cannot leave Host services on the
-        // previous generation's document.
-        if (this.#model && !planned.roots.includes(rootPluginId()) && planned.roots.length > 0) {
+        if (!this.#primaryConfigChanged(planned.document) && planned.roots.length === 0 && !topologyChanged) {
+          if (documentTransaction) committedDocument = await documentTransaction.commit();
+          return undefined;
+        }
+        const previousPrimary = this.#committedPrimaryConfig()?.document;
+        const hostChanged = HOST_CONFIG_KEYS.some(key => !isDeepStrictEqual(previousPrimary?.[key], planned.document[key]));
+        const retainRoot = !this.#installResources || !hostChanged;
+        // Host sections require resource reinstallation. Other edits publish a
+        // current PrimaryConfig projection while retaining Root lifetimes.
+        if (this.#model && retainRoot && topologyChanged && !planned.roots.includes(rootPluginId())) {
+          prepared = await new TopologyGenerationPreparer(
+            this.#modules, this.#model, graph, inspected.configResolver,
+            inspected.primaryConfigDocument, this.#environment, this.#installResources,
+            this.#environmentLayers, this.#isolation,
+          ).prepare(current, signal);
+        } else if (this.#model && retainRoot && !planned.roots.includes(rootPluginId())) {
           prepared = await this.#prepareSubtrees(current, inspected, planned.roots, signal);
         } else {
           prepared = await this.#prepareInspected(current, inspected, signal);
+        }
+        if (!prepared) {
+          if (documentTransaction) committedDocument = await documentTransaction.commit();
+          return undefined;
         }
         return documentTransaction
           ? withConfigDocumentHandoff(
@@ -646,6 +732,9 @@ export class RootRuntime {
         if (documentTransaction) await documentTransaction.rollback().catch(() => undefined);
         throw error;
       }
+    }).catch(error => {
+      this.#restoreRuntimeInputs(previousInputs);
+      throw error;
     });
     const completed = requireConfigPatchPlan(plan);
     this.#configDocument = completed.candidate;
@@ -703,6 +792,30 @@ function collapseInvalidationSubtrees(values: readonly PluginId[]): readonly Plu
   return Object.freeze(sorted.filter((candidate, index) =>
     !sorted.slice(0, index).some((root) => isWithinInvalidationRoot(candidate, root)),
   ));
+}
+
+/** Preserve known source ordering when a structural port omits optional write metadata. */
+function patchedPluginOrder(
+  previous: readonly string[] | undefined,
+  candidate: RuntimeConfigDocument,
+  patches: readonly ConfigPatch[],
+): readonly string[] | undefined {
+  if (!previous) return undefined;
+  let order = [...previous];
+  for (const patch of patches) {
+    if (patch.path.length === 0 || (patch.path[0] === 'plugins' && patch.path.length === 1)) {
+      const value = patch.path.length === 0 && patch.op === 'set'
+        ? (patch.value as RuntimeConfigDocument)?.plugins : patch.op === 'set' ? patch.value : {};
+      order = value && typeof value === 'object' ? Object.keys(value) : [];
+    } else if (patch.path[0] === 'plugins' && patch.path[1]) {
+      const key = patch.path[1];
+      if (patch.op === 'remove') order = order.filter(alias => alias !== key);
+      else if (!order.includes(key)) order.push(key);
+    }
+  }
+  const plugins = candidate.plugins;
+  const keys = plugins && typeof plugins === 'object' ? Object.keys(plugins) : [];
+  return Object.freeze([...order.filter(key => keys.includes(key)), ...keys.filter(key => !order.includes(key))]);
 }
 
 function isWithinInvalidationRoot(plugin: PluginId, root: PluginId): boolean {

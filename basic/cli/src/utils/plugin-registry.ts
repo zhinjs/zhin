@@ -3,11 +3,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'fs-extra';
 import {
   findAdapterByPackage,
-  mergePluginManifestIntoPackageJson,
-  packageToInstanceKey,
   type AdapterDefinition,
 } from '@zhin.js/scaffold-wizard';
-import { stripNpmVersion } from '../commands/install.js';
+import { stripNpmVersion, enablePluginInProjectConfig } from '../commands/install.js';
 
 /** 插件生态包分类 */
 export type PluginKind = 'adapter' | 'plugin' | 'skill-pack';
@@ -189,17 +187,17 @@ export function readInstalledZhinField(cwd: string, packageName: string): Record
   }
 }
 
-/** 把插件注册进项目 package.json 的 zhin.plugins 清单（2 空格缩进，由 mergePluginManifestIntoPackageJson 保证） */
-export async function registerPluginInManifest(cwd: string, packageName: string): Promise<boolean> {
-  return mergePluginManifestIntoPackageJson(cwd, [
-    { package: packageName, instanceKey: packageToInstanceKey(packageName) },
-  ]);
+/** Registers an application instance without introducing a second manifest authority. */
+export async function registerPluginInstance(cwd: string, packageName: string): Promise<boolean> {
+  const result = await enablePluginInProjectConfig(cwd, packageName);
+  if (result.status !== 'enabled' && result.status !== 'already-enabled') throw new Error(result.message);
+  return result.status === 'enabled';
 }
 
 /** 官方适配器的一行配置入口提示 */
 export function adapterConfigHint(def: AdapterDefinition): string {
   const doc = def.docUrl ? `（文档: ${def.docUrl}）` : '';
-  return `运行 \`zhin setup\` 交互配置凭据，或在 zhin.config.yml 的 plugins.${def.value}.endpoints 下手动添加 Endpoint${doc}`;
+  return `运行 \`zhin setup\` 交互配置凭据，或在 zhin.config.yml 的 ${def.value}.endpoints 下手动添加 Endpoint${doc}`;
 }
 
 /** 按包名取适配器配置入口提示；非已知适配器返回 null */

@@ -47,7 +47,7 @@ it('generates isolated platform projects from environment variables without pers
 it('keeps Telegram fault proxy URLs as references and isolates account B', async () => {
   const prepared = await prepareProject('telegram', { ...environment, TELEGRAM_API_BASE_URL: 'http://127.0.0.1:18200', TELEGRAM_B_ENABLED: 'true', TELEGRAM_B_BOT_TOKEN: 'fixture-secondary-secret', TELEGRAM_B_TEST_CHAT_ID: '200', TELEGRAM_B_API_BASE_URL: 'http://127.0.0.1:18202' }, temporary);
   const source = await readFile(path.join(prepared.project, 'zhin.config.yml'), 'utf8');
-  const endpoints = parse(source).plugins.telegram.endpoints;
+  const endpoints = parse(source).telegram.endpoints;
   expect(endpoints[0].apiBaseUrl).toBe('${TELEGRAM_API_BASE_URL}');
   expect(endpoints[1].apiBaseUrl).toBe('${TELEGRAM_B_API_BASE_URL}');
   expect(source).not.toContain('fixture-secondary-secret');
@@ -67,12 +67,13 @@ it('generates each advanced transport with its real adapter configuration and ma
     const prepared = await prepareProject(item.platform, { ...environment, ...item.fields, [`${item.platform.toUpperCase()}_MODE`]: item.mode, ACCEPTANCE_HTTP_PORT: '18081' }, temporary);
     const source = await readFile(path.join(prepared.project, 'zhin.config.yml'), 'utf8');
     const config = parse(source);
-    expect({ ...config.plugins[item.platform], ...config.plugins[item.platform].endpoints[0] }).toMatchObject(item.expected);
+    expect({ ...config[item.platform], ...config[item.platform].endpoints[0] }).toMatchObject(item.expected);
     expect(config.http).toMatchObject({ host: '127.0.0.1', port: 18081 });
     expect(prepared.policy.mode).toBe(item.mode);
     expect(source).not.toContain('fixture-webhook-secret');
     const manifest = JSON.parse(await readFile(path.join(prepared.project, 'package.json'), 'utf8'));
-    expect(manifest.zhin.plugins).toEqual([{ package: `@zhin.js/adapter-${item.platform}`, instanceKey: item.platform }]);
+    expect(manifest.zhin.plugins).toEqual([]);
+    expect(config.plugins[item.platform]).toBe(`@zhin.js/adapter-${item.platform}`);
   }
   await expect(prepareProject('onebot11', { ...environment, ONEBOT11_MODE: 'http' }, temporary)).rejects.toThrow('ONEBOT11_MODE');
   await expect(prepareProject('telegram', { ...environment, TELEGRAM_MODE: 'webhook', TELEGRAM_WEBHOOK_PATH: '/events', TELEGRAM_WEBHOOK_DOMAIN: 'http://localhost', TELEGRAM_WEBHOOK_SECRET: 'fixture' }, temporary)).rejects.toThrow('TELEGRAM_WEBHOOK_DOMAIN');
@@ -104,9 +105,10 @@ it('prepares the additional platforms with matching manifests, targets and trans
     const source = await readFile(path.join(prepared.project, 'zhin.config.yml'), 'utf8');
     expect(source).not.toContain('fixture-mail-secret');
     expect(source).not.toContain('fixture-discord-secret');
-    expect(parse(source).plugins[platform].commandPrefix).toBe(platform === 'slack' ? '!' : '/');
+    expect(parse(source)[platform].commandPrefix).toBe(platform === 'slack' ? '!' : '/');
     const manifest = JSON.parse(await readFile(path.join(prepared.project, 'package.json'), 'utf8'));
-    expect(manifest.zhin.plugins).toEqual([{ package: `@zhin.js/adapter-${platform}`, instanceKey: platform }]);
+    expect(manifest.zhin.plugins).toEqual([]);
+    expect(parse(source).plugins[platform]).toBe(`@zhin.js/adapter-${platform}`);
   }
 });
 
@@ -114,7 +116,7 @@ it('isolates account B credentials, target and readiness and rejects listener co
   const prepared = await prepareProject('telegram', { ...environment, TELEGRAM_B_BOT_TOKEN: 'fixture-b-secret', TELEGRAM_B_TEST_CHAT_ID: '104', TELEGRAM_B_TEST_CHAT_KIND: 'group' }, temporary);
   const source = await readFile(path.join(prepared.project, 'zhin.config.yml'), 'utf8');
   const config = parse(source);
-  expect(config.plugins.telegram.endpoints[1]).toMatchObject({ id: 'test-bot-b', token: '${TELEGRAM_B_BOT_TOKEN}' });
+  expect(config.telegram.endpoints[1]).toMatchObject({ id: 'test-bot-b', token: '${TELEGRAM_B_BOT_TOKEN}' });
   expect(prepared.policy.targets[1]).toMatchObject({ alias: 'telegram-b', endpoint: 'test-bot-b', kind: 'group', id: '104' });
   expect(config.http.readiness.endpoints).toHaveLength(2);
   expect(source).not.toContain('fixture-b-secret');
@@ -137,7 +139,7 @@ it('boots the generated Telegram project through the real CLI and stops with --o
     const prepared = await prepareProject('telegram', environment, temporary);
     const configFile = path.join(prepared.project, 'zhin.config.yml');
     const config = parse(await readFile(configFile, 'utf8'));
-    config.plugins.telegram.apiBaseUrl = `http://127.0.0.1:${address.port}`;
+    config.telegram.apiBaseUrl = `http://127.0.0.1:${address.port}`;
     await writeFile(configFile, stringify(config));
     const runtimeEnvironment = { ...process.env, ...environment, ZHIN_ACCEPTANCE_POLICY: prepared.policyPath };
     delete runtimeEnvironment.ZHIN_RUNTIME_CHILD;
@@ -178,7 +180,7 @@ it('pending mode logs an incoming chat ID without replying to the unapproved con
     const prepared = await prepareProject('telegram', { ...environment, TELEGRAM_TEST_CHAT_ID: 'pending' }, temporary);
     const configFile = path.join(prepared.project, 'zhin.config.yml');
     const config = parse(await readFile(configFile, 'utf8'));
-    config.plugins.telegram.apiBaseUrl = `http://127.0.0.1:${address.port}`;
+    config.telegram.apiBaseUrl = `http://127.0.0.1:${address.port}`;
     await writeFile(configFile, stringify(config));
     const runtimeEnvironment: NodeJS.ProcessEnv = { ...process.env, ...environment, ZHIN_ACCEPTANCE_POLICY: prepared.policyPath };
     delete runtimeEnvironment.ZHIN_RUNTIME_CHILD;

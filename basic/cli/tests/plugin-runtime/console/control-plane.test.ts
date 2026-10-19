@@ -26,7 +26,7 @@ describe('process Console control plane', () => {
     cleanups.push(() => http.close());
     const im = new ImRuntime();
     const hub = createConsoleEventHub();
-    const pluginLifecycleStore = createPluginLifecycleStore();
+    const pluginLifecycleStore = createPluginLifecycleStore(projectRoot);
     cleanups.push(() => pluginLifecycleStore.dispose());
     const dispose = startConsoleControlPlane({
       http,

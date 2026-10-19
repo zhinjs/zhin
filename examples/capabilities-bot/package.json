@@ -27,12 +27,7 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": [
-      {
-        "package": "@zhin.js/adapter-sandbox",
-        "instanceKey": "sandbox"
-      }
-    ]
+    "plugins": []
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",

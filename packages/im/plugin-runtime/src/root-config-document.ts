@@ -14,11 +14,14 @@ export type ConfigPatch =
 export interface ConfigDocumentSnapshot {
   readonly document: RuntimeConfigDocument;
   readonly revision: string;
+  /** v2 declaration aliases in source order, including integer-like keys. */
+  readonly pluginOrder?: readonly string[];
 }
 
 /** A prepared write is inert until the generation handoff activates it. */
 export interface PreparedConfigDocument {
   readonly document: RuntimeConfigDocument;
+  readonly pluginOrder?: readonly string[];
   commit(): Promise<ConfigDocumentSnapshot>;
   rollback(): Promise<void>;
 }

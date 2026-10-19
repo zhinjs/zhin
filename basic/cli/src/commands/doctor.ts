@@ -730,8 +730,11 @@ function extractConfigErrorLine(err: unknown): number | null {
 export async function createDefaultConfig(cwd: string): Promise<void> {
   // 新 Plugin Runtime 形态：plugins 为 instanceKey → 配置 映射；
   // Console Host 由 CLI composition root 装配，无需 host-router/host-api 插件
-  const configContent = `plugins:
-  sandbox: {}
+  const configContent = `configVersion: 2
+plugins:
+  sandbox: '@zhin.js/adapter-sandbox'
+disable_plugins: []
+sandbox: {}
 http:
   token: \${HTTP_TOKEN}
   corsOrigins:

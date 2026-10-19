@@ -89,7 +89,7 @@ setup(context) {
 }
 ```
 
-Values go in the bot's `zhin.config.yml`: your bot's own settings under `plugin:`, child plugins under `plugins.<instanceKey>:`. See steps 4 and 5 of [First plugin](../getting-started/first-plugin.md) for a full example.
+Values go in the bot's `zhin.config.yml`: your bot's own settings under `plugin:`, child plugins under `<instanceKey>:`. See steps 4 and 5 of [First plugin](../getting-started/first-plugin.md) for a full example.
 
 For config with automatic TypeScript types, declare it inline with `config`:
 

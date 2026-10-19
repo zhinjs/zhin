@@ -89,7 +89,7 @@ setup(context) {
 }
 ```
 
-配置值写在 Bot 的 `zhin.config.yml` 中：你的 Bot 自身写在 `plugin:` 下，子插件写在 `plugins.<instanceKey>:` 下。完整示例见 [第一个插件](../getting-started/first-plugin.md) 的第 4、5 步。
+配置值写在 Bot 的 `zhin.config.yml` 中：你的 Bot 自身写在 `plugin:` 下，子插件写在 `<instanceKey>:` 下。完整示例见 [第一个插件](../getting-started/first-plugin.md) 的第 4、5 步。
 
 想要配置自动带上 TypeScript 类型，可以改用内联 `config` 声明：
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setImmediate as waitForImmediate } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
+import { defineFeatureProvider } from '@zhin.js/feature-kit';
 import {
   childPluginId,
   definePlugin,
@@ -22,15 +23,56 @@ afterEach(async () => {
   await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true })));
 });
 
-describe('Manifest topology transaction', () => {
-  it('adds, removes, and moves child and Feature mounts without rebuilding stable Scopes', async () => {
+describe('Application and Feature topology transaction', () => {
+  it('reprojects a retained Feature when an owner changes even if it has no slots', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    for (const name of ['', 'plugins/a/', 'plugins/b/']) {
+      modules.set(join(project, name, 'plugin.ts'), { default: definePlugin({ name: name.split('/')[1] || 'root' }) });
+    }
+    let projections = 0;
+    let disposed = 0;
+    modules.set(join(project, 'packages/command/index.ts'), { default: defineFeatureProvider({
+      protocol: 1, id: commandFeatureId,
+      authoring: { conventions: [], validate(value) { return value; } },
+      runtime: { retain: 'when-owner-unchanged', project() {
+        return { value: { sequence: ++projections }, dispose() { disposed++; } };
+      } },
+    }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      config: { configVersion: 2, plugins: { a: '@test/a' } },
+    });
+    const hmr = runtime.createHmrCoordinator({ onRestartRequired() {}, onError() {} });
+    try {
+      await runtime.start();
+      const first = runtime.snapshot.projections.get(commandFeatureId);
+      await runtime.patchConfig([{ op: 'set', path: ['plugins', 'b'], value: '@test/b' }]);
+      expect(runtime.snapshot.projections.get(commandFeatureId)).toBe(first);
+      expect(projections).toBe(1);
+      expect(disposed).toBe(0);
+      await writePluginManifest(project, 'b', { features: [{ package: '@test/command' }] });
+      await hmr.enqueue(join(project, 'plugins/b/package.json'));
+      expect(projections).toBe(2);
+      await writeJson(join(project, 'plugins/a/package.json'), { name: '@test/a',
+        dependencies: { '@test/command': 'workspace:*' },
+        zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/command' }], metadata: { displayName: 'Changed owner' } },
+      });
+      await hmr.enqueue(join(project, 'plugins/a/package.json'));
+      expect(projections).toBe(3);
+      expect(runtime.snapshot.capabilities.size).toBe(0);
+    } finally { await hmr.stop(); await runtime.stop(); }
+    expect(disposed).toBe(3);
+  });
+
+  it('adds, removes, and renames root instances and moves Features without rebuilding stable Scopes', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
     const rootId = rootPluginId();
     const aId = childPluginId(rootId, 'a');
     const bId = childPluginId(rootId, 'b');
-    const cInA = childPluginId(aId, 'c');
-    const cInB = childPluginId(bId, 'c');
+    const cId = childPluginId(rootId, 'c');
+    const movedC = childPluginId(rootId, 'moved');
     const setup = { root: 0, a: 0, b: 0, c: 0, broken: 0 };
     const disposed: string[] = [];
     const source = (path: string) => join(project, path);
@@ -56,6 +98,7 @@ describe('Manifest topology transaction', () => {
     }
 
     const runtime = new RootRuntime({
+      config: { configVersion: 2, plugins: { a: '@test/a', b: '@test/b' } },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -69,19 +112,15 @@ describe('Manifest topology transaction', () => {
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 0, broken: 0 });
     await expect(commandIndex(runtime.snapshot).execute('a status')).resolves.toBe('root/a');
 
-    await writePluginManifest(project, 'b', {
-      plugins: [{ package: '@test/c', instanceKey: 'c' }],
-    });
-    await hmr.enqueue(source('plugins/b/package.json'));
-    expect(runtime.snapshot.tree.get(bId)?.children).toEqual([cInB]);
+    await runtime.patchConfig([{ op: 'set', path: ['plugins', 'c'], value: '@test/c' }]);
+    expect(runtime.snapshot.tree.get(rootId)?.children).toEqual([aId, bId, cId]);
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 1, broken: 0 });
-    await expect(commandIndex(runtime.snapshot).execute('c status')).resolves.toBe('root/b/c');
+    await expect(commandIndex(runtime.snapshot).execute('c status')).resolves.toBe('root/c');
     await expect(commandIndex(runtime.snapshot).execute('c inline')).resolves.toBe('inline:c');
 
     await writePluginManifest(project, 'a', {});
     await writePluginManifest(project, 'b', {
       features: [{ package: '@test/command' }],
-      plugins: [{ package: '@test/c', instanceKey: 'c' }],
     });
     await Promise.all([
       hmr.enqueue(source('plugins/a/package.json')),
@@ -93,29 +132,22 @@ describe('Manifest topology transaction', () => {
     expect(modules.loadCount(source('packages/command/index.ts'))).toBe(1);
 
     const beforeMove = runtime.snapshots.acquire();
-    await writePluginManifest(project, 'a', {
-      plugins: [{ package: '@test/c', instanceKey: 'c' }],
-    });
-    await writePluginManifest(project, 'b', {
-      features: [{ package: '@test/command' }],
-    });
-    await Promise.all([
-      hmr.enqueue(source('plugins/a/package.json')),
-      hmr.enqueue(source('plugins/b/package.json')),
+    await runtime.patchConfig([
+      { op: 'remove', path: ['plugins', 'c'] },
+      { op: 'set', path: ['plugins', 'moved'], value: '@test/c' },
     ]);
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 2, broken: 0 });
-    expect(runtime.snapshot.tree.get(aId)?.children).toEqual([cInA]);
+    expect(runtime.snapshot.tree.get(rootId)?.children).toEqual([aId, bId, movedC]);
     expect(runtime.snapshot.tree.get(bId)?.children).toEqual([]);
-    await expect(commandIndex(runtime.snapshot).execute('c status')).resolves.toBe('root/a/c');
+    await expect(commandIndex(runtime.snapshot).execute('c status')).resolves.toBe('root/moved');
     await expect(commandIndex(runtime.snapshot).execute('c inline')).resolves.toBe('inline:c');
-    await expect(commandIndex(beforeMove.value).execute('c status')).resolves.toBe('root/b/c');
+    await expect(commandIndex(beforeMove.value).execute('c status')).resolves.toBe('root/c');
     expect(disposed).toEqual([]);
     beforeMove.release();
     await waitForImmediate();
     expect(disposed).toEqual(['c']);
 
-    await writePluginManifest(project, 'a', {});
-    await hmr.enqueue(source('plugins/a/package.json'));
+    await runtime.patchConfig([{ op: 'remove', path: ['plugins', 'moved'] }]);
     expect(commandIndex(runtime.snapshot).has('c status')).toBe(false);
     await waitForImmediate();
     expect(disposed).toEqual(['c', 'c']);
@@ -151,20 +183,12 @@ describe('Manifest topology transaction', () => {
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 2, broken: 0 });
 
     const committed = runtime.snapshot;
-    await writeRootManifest(project, [
-      { package: '@test/a', instanceKey: 'a' },
-      { package: '@test/b', instanceKey: 'b' },
-      { package: '@test/broken', instanceKey: 'broken' },
-    ]);
-    await expect(hmr.enqueue(source('package.json'))).rejects.toThrow('broken topology setup');
+    await expect(runtime.patchConfig([{ op: 'set', path: ['plugins', 'broken'], value: '@test/broken' }]))
+      .rejects.toThrow('broken topology setup');
     expect(runtime.snapshot).toBe(committed);
     expect(setup).toEqual({ root: 1, a: 1, b: 1, c: 2, broken: 1 });
     expect(disposed).toEqual(['c', 'c', 'broken']);
 
-    await writeRootManifest(project, [
-      { package: '@test/a', instanceKey: 'a' },
-      { package: '@test/b', instanceKey: 'b' },
-    ]);
     await runtime.stop();
     expect(disposed).toEqual(['c', 'c', 'broken', 'b', 'a', 'root']);
 
@@ -221,10 +245,7 @@ class FakeModuleRuntime implements ModuleRuntime {
 async function createProject(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-topology-'));
   temporary.push(root);
-  await writeRootManifest(root, [
-    { package: '@test/a', instanceKey: 'a' },
-    { package: '@test/b', instanceKey: 'b' },
-  ]);
+  await writeRootManifest(root);
   await writePluginManifest(root, 'a', {
     features: [{ package: '@test/command' }],
   });
@@ -256,10 +277,6 @@ async function createProject(): Promise<string> {
 
 interface PluginManifestOptions {
   readonly features?: readonly { readonly package: string }[];
-  readonly plugins?: readonly {
-    readonly package: string;
-    readonly instanceKey: string;
-  }[];
 }
 
 async function writePluginManifest(
@@ -278,27 +295,25 @@ async function writePluginManifest(
       type: 'plugin',
       entry: './plugin.ts',
       features: options.features ?? [],
-      plugins: options.plugins ?? [],
     },
   });
 }
 
 async function writeRootManifest(
   root: string,
-  plugins: readonly { readonly package: string; readonly instanceKey: string }[],
 ): Promise<void> {
   await writeJson(join(root, 'package.json'), {
     name: '@test/root',
     dependencies: {
       '@test/a': 'workspace:*',
       '@test/b': 'workspace:*',
+      '@test/c': 'workspace:*',
       '@test/broken': 'workspace:*',
     },
     zhin: {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins,
     },
   });
 }

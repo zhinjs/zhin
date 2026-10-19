@@ -24,25 +24,20 @@ zhin doctor
 
 The wizard keeps your chat model, writes the key to `.env`, installs the plugin manifest entry and starts Skill / Tool recommendations in `shadow` mode. On first setup, Agent selection, memory reranking and automatic approval start `off`. Reconfiguration preserves existing task settings and thresholds. Separate instances use separate key environment variables; an existing explicit key reference is preserved.
 
-For manual configuration, declare the plugin in `package.json`:
+For manual configuration, declare the plugin in `zhin.config.yml`:
 
-```json
-{
-  "zhin": {
-    "plugins": [{ "package": "@zhin.js/service-typesafe", "instanceKey": "typesafe" }]
-  }
-}
+```yaml
+configVersion: 2
+plugins:
+  typesafe: '@zhin.js/service-typesafe'
 ```
 
 Add its instance settings and exact binding in `zhin.config.yml`, alongside the existing AI configuration:
 
 ```yaml
+configVersion: 2
 plugins:
-  typesafe:
-    apiKey: ${TYPESAFE_API_KEY}
-    model: jev-latest
-    timeoutMs: 10000
-    maxRetries: 2
+  typesafe: "@zhin.js/service-typesafe"
 ai:
   # Keep existing agents/providers and other AI settings.
   decisions:
@@ -51,6 +46,11 @@ ai:
       mode: shadow
     tools:
       mode: shadow
+typesafe:
+  apiKey: ${TYPESAFE_API_KEY}
+  model: jev-latest
+  timeoutMs: 10000
+  maxRetries: 2
 ```
 
 The instance registers its client through `provideAgentDecisionProvider` from `@zhin.js/agent/runtime` in its own plugin scope. The registration binds the resource to its owning instance, so an inherited ancestor provider cannot satisfy a different configured instance. Agent configuration must explicitly bind the instance through the runtime decision configuration; merely installing a provider does not authorize decisions or change existing routing. Independent instances have independent clients and lifecycle cleanup.

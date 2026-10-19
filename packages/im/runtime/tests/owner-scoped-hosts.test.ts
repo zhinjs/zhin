@@ -85,7 +85,7 @@ describe('PluginScopeAssembler owner-scoped hosts', () => {
       }),
     });
 
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {"alpha":"@test/alpha","beta":"@test/beta"} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -137,10 +137,7 @@ async function createProject(): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [
-        { package: '@test/alpha', instanceKey: 'alpha' },
-        { package: '@test/beta', instanceKey: 'beta' },
-      ],
+      plugins: [],
     },
   });
   for (const name of ['alpha', 'beta']) {

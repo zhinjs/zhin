@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=19998697236531ee -->
+<!-- sync-adapter-docs:sha256=436157659466d191 -->
 
 # @zhin.js/adapter-discord
 
@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 - `@zhin.js/adapter` — 约定式 `adapters/discord/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（Gateway 路径）
 
 入站：`gateway.receive({ conversation, message, content: text, sender, metadata })`（`conversation` 为 `ConversationRef`，guild 频道带 `parent` guild 容器）  
@@ -59,16 +59,18 @@ pnpm add @zhin.js/adapter-discord discord.js
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  discord:
-    # connection: gateway   # 默认
-    endpoints:
-      - id: my-discord-bot
-        token: ${DISCORD_BOT_TOKEN}
+  discord: "@zhin.js/adapter-discord"
+discord:
+  # connection: gateway   # 默认
+  endpoints:
+    - id: my-discord-bot
+      token: ${DISCORD_BOT_TOKEN}
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-discord`（`instanceKey: discord`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-discord`（`instanceKey: discord`）。
 
 ## 环境变量
 

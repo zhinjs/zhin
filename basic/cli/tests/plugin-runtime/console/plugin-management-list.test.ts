@@ -11,9 +11,11 @@ describe('Console managed plugin list', () => {
     const declared = [{packageName: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox'}] as const;
     await writeFile(join(root, 'package.json'), JSON.stringify({
       name: 'root',
-      zhin: {plugins: [{package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox'}]},
+      dependencies: { '@zhin.js/adapter-sandbox': '*' },
+      zhin: {protocol: 1, type: 'plugin', entry: './plugin.ts'},
     }));
-    const store = createPluginLifecycleStore();
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({configVersion: 2, plugins: {sandbox: '@zhin.js/adapter-sandbox'}}));
+    const store = createPluginLifecycleStore(root);
     await store.setPluginEnabled(lifecycle, 'sandbox', false, declared);
     store.dispose();
     await expect(buildManagedPluginList(root, lifecycle)).resolves.toEqual([{

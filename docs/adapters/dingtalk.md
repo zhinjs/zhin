@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5459ab2dcb19f26c -->
+<!-- sync-adapter-docs:sha256=26bec7a824130bea -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -35,7 +35,7 @@ pnpm add @zhin.js/adapter-dingtalk
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
 入站：`gateway.receive({ conversation: ConversationRef, message: { conversation, id }, content: text, sender, metadata })`  
 出站：`send({ conversation, payload })` → sessionWebhook 或 `/robot/send`
@@ -52,19 +52,21 @@ pnpm add @zhin.js/adapter-dingtalk
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  dingtalk:
-    apiBaseUrl: https://oapi.dingtalk.com # 可选，顶层共享
-    endpoints:
-      - id: my-dingtalk-bot
-        appKey: ${DINGTALK_APP_KEY}
-        appSecret: ${DINGTALK_APP_SECRET}
-        robotCode: ${DINGTALK_ROBOT_CODE}
-        webhookPath: /dingtalk/webhook   # 可选，默认 /dingtalk/webhook
+  dingtalk: "@zhin.js/adapter-dingtalk"
+dingtalk:
+  apiBaseUrl: https://oapi.dingtalk.com # 可选，顶层共享
+  endpoints:
+    - id: my-dingtalk-bot
+      appKey: ${DINGTALK_APP_KEY}
+      appSecret: ${DINGTALK_APP_SECRET}
+      robotCode: ${DINGTALK_ROBOT_CODE}
+      webhookPath: /dingtalk/webhook # 可选，默认 /dingtalk/webhook
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-dingtalk`（`instanceKey: dingtalk`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-dingtalk`（`instanceKey: dingtalk`）。
 
 ## 环境变量
 

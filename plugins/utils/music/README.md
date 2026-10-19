@@ -24,16 +24,12 @@ zhin install @zhin.js/plugin-music
 
 ### 挂载插件
 
-`zhin install` 会安装依赖，并把插件实例写入 `package.json#zhin.plugins`。手工挂载时使用同一份拓扑契约：
+`zhin install` 会安装依赖，并把插件实例写入 主配置 `plugins` 映射。手工挂载时使用同一份拓扑契约：
 
-```json
-{
-  "zhin": {
-    "plugins": [
-      { "package": "@zhin.js/plugin-music", "instanceKey": "music" }
-    ]
-  }
-}
+```yaml
+configVersion: 2
+plugins:
+  music: '@zhin.js/plugin-music'
 ```
 
 ### 命令列表

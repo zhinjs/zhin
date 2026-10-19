@@ -44,14 +44,15 @@ beforeEach(() => {
   fs.mkdirSync(project);
   fs.writeFileSync(path.join(project, 'package.json'), original);
   fs.writeFileSync(path.join(project, 'pnpm-lock.yaml'), 'lock: original\n');
+  fs.writeFileSync(path.join(project, 'zhin.config.json'), JSON.stringify({configVersion: 2, plugins: {}}));
   logs = []; calls = [];
 });
 afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
 describe('dev link manifest transformation', () => {
   it('detects direct zhin deps and zhin.plugins declarations', () => {
-    const manifest = { dependencies: { 'zhin.js': '1', lodash: '1', '@zhin.js/gone': '1' }, zhin: { plugins: ['@zhin.js/command', { package: '@zhin.js/runtime' }] } };
-    expect(detectZhinPackages(manifest, new Set(workspace.map((e) => e.name)))).toEqual({
+    const manifest = { dependencies: { 'zhin.js': '1', lodash: '1', '@zhin.js/gone': '1' } };
+    expect(detectZhinPackages(manifest, new Set(workspace.map((e) => e.name)), {configVersion: 2, plugins: {command: '@zhin.js/command', runtime: '@zhin.js/runtime'}})).toEqual({
       known: ['@zhin.js/command', '@zhin.js/runtime', 'zhin.js'],
       unknown: ['@zhin.js/gone'],
       undeclared: ['@zhin.js/command', '@zhin.js/runtime'],

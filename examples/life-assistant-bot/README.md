@@ -72,12 +72,16 @@ assistant:
 
 ## 接入真实 IM
 
-在 `package.json#zhin.plugins` 将 Sandbox child 替换为平台适配器，并在配置中使用相同 `instanceKey`：
+在主配置 `plugins` 中将 Sandbox 替换为平台适配器，并使用顶层同名业务块：
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    name: "${ICQQ_ACCOUNT}"
+  icqq: '@zhin.js/adapter-icqq'
+icqq:
+  endpoints:
+    - id: main
+      uin: ${ICQQ_ACCOUNT}
 ```
 
 详见 [适配器文档](https://zhin.js.org/adapters/)。

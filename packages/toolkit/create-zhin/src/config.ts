@@ -6,7 +6,7 @@ import { InitOptions, buildRuntimeConfigDocument, serializeRuntimeConfig } from 
 export { generateDatabaseEnvVars } from '@zhin.js/scaffold-wizard';
 
 /**
- * 创建新 Plugin Runtime 配置文件（顶层 http/database/ai + plugins.<instanceKey>，
+ * 创建新 Plugin Runtime 配置文件（configVersion 2、plugins 包映射与顶层实例业务配置，
  * 与 packages/im/runtime/src/config-composer.ts 的 effectiveSchema 对齐）
  */
 export async function createConfigFile(appPath: string, format: string, options: InitOptions): Promise<void> {

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { withConfigFileLock } from './config-file-lock.js';
 import type {
@@ -9,6 +9,7 @@ import type {
   PreparedConfigDocument,
   RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
+import { readSourcePluginOrder } from './ordered-config-source.js';
 
 export type ConfigFileFormat = 'YAML' | 'JSON';
 
@@ -85,6 +86,7 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
       this.parseSource(state.exists ? state.source : EMPTY_CONFIG_SOURCE),
       state,
       this.format,
+      readSourcePluginOrder(state.exists ? state.source : EMPTY_CONFIG_SOURCE, this.format),
     );
   }
 
@@ -102,6 +104,7 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
       current.revision,
       candidate.source,
       candidate.document,
+      readSourcePluginOrder(candidate.source, this.format),
       operation => this.#mutate(operation),
     );
   }
@@ -118,6 +121,7 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
       expectedRevision,
       source,
       this.parseSource(source),
+      readSourcePluginOrder(source, this.format),
       operation => this.#mutate(operation),
     );
   }
@@ -131,6 +135,7 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
 
 class PreparedConfigFileDocument implements PreparedConfigDocument {
   readonly document: RuntimeConfigDocument;
+  readonly pluginOrder?: readonly string[];
   readonly #file: string;
   readonly #previous: ConfigFileState;
   readonly #previousRevision: string;
@@ -145,6 +150,7 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
     previousRevision: string,
     candidateSource: string,
     document: RuntimeConfigDocument,
+    pluginOrder: readonly string[] | undefined,
     private readonly mutate: MutationExecutor,
   ) {
     this.#file = file;
@@ -152,6 +158,7 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
     this.#previousRevision = previousRevision;
     this.#candidateSource = candidateSource;
     this.document = document;
+    this.pluginOrder = pluginOrder;
     this.#candidateRevision = revision({ exists: true, source: candidateSource });
   }
 
@@ -170,6 +177,7 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
     const committed = Object.freeze({
       document: this.document,
       revision: this.#candidateRevision,
+      ...(this.pluginOrder ? { pluginOrder: this.pluginOrder } : {}),
     });
     await atomicReplace(this.#file, this.#candidateSource, this.#previous.mode);
     this.#committedSnapshot = committed;
@@ -213,12 +221,14 @@ function createConfigFileSourceSnapshot(
   document: RuntimeConfigDocument,
   state: ConfigFileState,
   format: ConfigFileFormat,
+  pluginOrder?: readonly string[],
 ): ConfigFileSourceSnapshot {
   return Object.freeze({
     document,
     format,
     source: state.exists ? state.source : EMPTY_CONFIG_SOURCE,
     revision: revision(state),
+    ...(pluginOrder ? { pluginOrder } : {}),
   });
 }
 
@@ -250,6 +260,7 @@ async function atomicReplace(file: string, source: string, mode?: number): Promi
   const target = resolve(dirname(file), temporary);
   try {
     await writeFile(target, source, mode === undefined ? undefined : { mode });
+    if (mode !== undefined) await chmod(target, mode & 0o7777);
     await rename(target, file);
   } catch (error) {
     await rm(target, { force: true }).catch(() => undefined);

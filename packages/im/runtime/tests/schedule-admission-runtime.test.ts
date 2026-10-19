@@ -125,7 +125,7 @@ async function fixture(failSecond = false) {
   }, async close() {} };
   const runtime = new RootRuntime({ projectRoot: await realpath(project), modules,
     environment: { name: 'test', mode: 'test', platform: 'node' },
-    config: { plugin: { label: 'daily' } },
+    config: { configVersion: 2, plugins: {}, plugin: { label: 'daily' } },
     installResources({ resources, admission }) {
       resources.provide(resourceToken, resource);
       resources.provide(scheduleRootHostToken, port);

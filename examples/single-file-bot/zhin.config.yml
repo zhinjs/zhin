@@ -1,8 +1,9 @@
-
+configVersion: 2
 log_level: info
 plugins:
-  icqq:
-    commandPrefix: ''
-    master: "${ICQQ_MASTER:-1659488338}"
-    endpoints:
-      - id: "${ICQQ_ACCOUNT_2:-1689919782}"
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  commandPrefix: ''
+  master: "${ICQQ_MASTER:-1659488338}"
+  endpoints:
+    - id: "${ICQQ_ACCOUNT_2:-1689919782}"

@@ -2,7 +2,7 @@
 /** Published-consumer acceptance: tarballs -> creator CLI -> empty project -> real IM IO. */
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -151,6 +151,37 @@ async function checkMigrationUpgrade() {
   }
 }
 
+async function checkInstanceDeclarationsMigration() {
+  const root = path.join(temp, 'instance-conversion');
+  const plugin = path.join(root, 'plugins/sample');
+  await mkdir(plugin, { recursive: true });
+  await mkdir(path.join(root, '.zhin'));
+  await symlink(path.join(project, 'node_modules'), path.join(root, 'node_modules'), 'dir');
+  const contract = { protocol: 1, type: 'plugin', entry: './plugin.js', features: [], plugins: [], platformFeatures: false };
+  const coreVersion = JSON.parse(await readFile(path.join(project, 'node_modules/zhin.js/package.json'), 'utf8')).version;
+  const manifest = JSON.stringify({ name: 'instance-conversion', private: true, type: 'module', dependencies: { 'zhin.js': coreVersion }, zhin: {
+    ...contract, plugins: [{ package: './plugins/sample', instanceKey: 'sample' }],
+  } }, null, 2);
+  const legacy = '# consumer comment\nplugins:\n  sample:\n    value: "${SYNTHETIC_REFERENCE}" # literal reference\n';
+  await writeFile(path.join(root, 'package.json'), manifest);
+  await writeFile(path.join(root, 'zhin.config.yml'), legacy);
+  await writeFile(path.join(root, '.zhin/plugin-lifecycle.json'), '{"schemaVersion":1,"disabled":["sample"]}');
+  await writeFile(path.join(plugin, 'package.json'), JSON.stringify({name: 'conversion-sample', type: 'module', zhin: contract}));
+  // Offline migration and config check must never execute either entry.
+  for (const directory of [root, plugin]) await writeFile(path.join(directory, 'plugin.js'), "throw new Error('migration must not execute plugin entry');\n");
+  const cli = path.join(project, 'node_modules/@zhin.js/cli/bin/zhin.js');
+  const preview = await run(process.execPath, [cli, 'migrate', 'instances'], root);
+  if (!preview.stdout.includes('dry-run') || preview.stdout.includes('${SYNTHETIC_REFERENCE}')) throw new Error('Instance preview is not a sanitized dry-run');
+  if (await readFile(path.join(root, 'zhin.config.yml'), 'utf8') !== legacy || await readFile(path.join(root, 'package.json'), 'utf8') !== manifest) throw new Error('Instance preview wrote files');
+  await run(process.execPath, [cli, 'migrate', 'instances', '--apply'], root);
+  const source = await readFile(path.join(root, 'zhin.config.yml'), 'utf8');
+  const config = parse(source);
+  if (config.configVersion !== 2 || config.plugins.sample !== './plugins/sample' || config.disable_plugins[0] !== 'sample' || config.sample.value !== '${SYNTHETIC_REFERENCE}' || !source.includes('# consumer comment')) throw new Error('Instance migration changed identity, values or comments');
+  await run(process.execPath, [cli, 'config', 'check', '--json'], root, { SYNTHETIC_REFERENCE: 'synthetic-fixture-value' });
+  await run(process.execPath, [cli, 'migrate', 'instances', '--recover', 'rollback'], root);
+  if (await readFile(path.join(root, 'zhin.config.yml'), 'utf8') !== legacy || await readFile(path.join(root, 'package.json'), 'utf8') !== manifest) throw new Error('Instance rollback did not restore original files');
+}
+
 function candidateManifest(manifest) {
   return withWorkspaceTarballOverrides(manifest, [...packed.keys()].map((name) => ({ name })), packed);
 }
@@ -269,8 +300,7 @@ try {
     // Own the optional command provider explicitly: registry peer auto-resolution
     // cannot substitute a semver package for this candidate's file tarball.
     manifest.dependencies['@zhin.js/command'] = '*';
-    manifest.zhin.plugins = manifest.zhin.plugins.filter(entry => (typeof entry === 'string' ? entry : entry.package) !== '@zhin.js/adapter-sandbox');
-    manifest.zhin.plugins.push({ package: `@zhin.js/adapter-${platform}`, instanceKey: platform });
+
   }
   const names = [...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.devDependencies ?? {})];
   await packRoots(names.filter((name) => workspace.some((entry) => entry.name === name)));
@@ -292,19 +322,23 @@ try {
   if (platform === 'sandbox') {
     console.log('Checking migration preview, workspace links, preserved files and dependency reinstall…');
     await checkMigrationUpgrade();
+    console.log('Checking packed instance migration preview, apply, config check and rollback…');
+    await checkInstanceDeclarationsMigration();
   }
   const configFile = path.join(project, 'zhin.config.yml');
   const config = parse(await readFile(configFile, 'utf8'));
   const token = 'local-acceptance-token';
   if (platform !== 'sandbox') {
     delete config.plugins.sandbox;
-    config.plugins[platform] = platform === 'telegram'
+    delete config.sandbox;
+    config.plugins[platform] = `@zhin.js/adapter-${platform}`;
+    config[platform] = platform === 'telegram'
       ? { polling: true, apiBaseUrl: `http://127.0.0.1:${api.address().port}`, endpoints: [{ id: 'fixture-bot', token: 'fixture-token' }] }
       : platform === 'qq'
       ? { mode: 'websocket', endpoints: [{ id: 'fixture-bot', appid: '10001', secret: 'fixture-secret', accessTokenUrl: `${env.ZHIN_FAKE_QQ_ORIGIN}/getAppAccessToken`, gatewayUrl: `${env.ZHIN_FAKE_QQ_ORIGIN}/gateway` }] }
       : { connection: 'ws', endpoints: [{ id: 'fixture-bot', url: `ws://127.0.0.1:${gateway.address().port}`, access_token: 'fixture-token' }] };
   }
-  if (platform !== 'sandbox') config.plugins[platform].commandPrefix = '/';
+  if (platform !== 'sandbox') config[platform].commandPrefix = '/';
   config.http = { ...config.http, host: '127.0.0.1', port: 0, token,
     readiness: { endpoints: [{ owner: `root/${platform}`, name: platform === 'sandbox' ? 'sandbox~sandbox-bot' : `${platform}~fixture-bot` }] } };
   await writeFile(configFile, stringify(config));

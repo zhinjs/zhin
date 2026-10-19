@@ -34,7 +34,7 @@ description: "把一个能跑的插件变成可配置、可热重载、有测试
 
 用 `definePlugin({ config: Schema.object(...) })` 一次性声明默认值、类型、约束和 Console 表单信息，`Schema.Output` 会推导出配置类型；也可以用根目录的 `schema.json`，但两者只能选一个（`isolated` 插件只能用 `schema.json`）。见 [definePlugin · 读取配置](./define-plugin.md#读取配置)。
 
-- 你的 Bot 自身读 `plugin:` 段，子插件读 `plugins.<instanceKey>` 段。
+- 你的 Bot 自身读 `plugin:` 段，子插件读 `<instanceKey>` 段。
 - 密钥用 `${VAR}` 引用环境变量，不要写进 Schema 默认值或示例仓库。
 
 自查：修改某个配置后，是否需要重载插件？新配置非法时，旧配置是否继续生效？怎样在 Console 里确认新值已经生效？
