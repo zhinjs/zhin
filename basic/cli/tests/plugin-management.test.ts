@@ -12,6 +12,7 @@ import { createPluginManagementPort } from '../src/plugin-runtime/console/plugin
 import adapterFeature, { Endpoint, defineAdapter, adapterFeatureId, isAdapterIndex, endpointEventGatewayToken, type EndpointTransportState } from '@zhin.js/adapter';
 
 const roots: string[] = [];
+function application(configs: Record<string, unknown>, packages: Record<string, string> = Object.fromEntries(Object.keys(configs).map(key => [key, key]))) { return {configVersion: 2, plugins: packages, ...configs}; }
 const manifest = { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, features: [], plugins: [] };
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
@@ -57,7 +58,7 @@ async function fixture() {
   roots.push(root);
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'test-project', version: '1.0.0', zhin: manifest, dependencies: {} }));
   await writeFile(join(root, 'plugin.js'), 'export default {};');
-  await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: {} }));
+  await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({})));
   return root;
 }
 async function packageInstalled(root: string, name = 'reminder', version = '1.0.0', schema?: unknown) {
@@ -99,7 +100,7 @@ describe('Shared CLI and Console plugin workflow', () => {
     for (const name of ['reminder', 'preferences']) await writeFile(join(root, `node_modules/${name}/package.json`), JSON.stringify({
       name, version: '1.0.0', peerDependencies: { '@test/adapter': '*' }, zhin: { ...manifest, features: [{ package: '@test/adapter' }] },
     }));
-    const config = { plugins: { reminder: { endpoints: [{ id: 'one' }, { id: 'two' }] }, preferences: { endpoints: [{ id: 'one' }] } } };
+    const config = application({ reminder: { endpoints: [{ id: 'one' }, { id: 'two' }] }, preferences: { endpoints: [{ id: 'one' }] } });
     await writeFile(join(root, 'zhin.config.json'), JSON.stringify(config));
     const states = new Map<string, EndpointTransportState | undefined>([['root/reminder:one', 'open'], ['root/reminder:two', 'open'], ['root/preferences:one', 'closed']]);
     class LiveEndpoint extends Endpoint {
@@ -190,20 +191,20 @@ describe('Shared CLI and Console plugin workflow', () => {
     const result = await createPluginManagementPort(root, { installDependencies: runner }).install('reminder@1.2.3');
     expect(runner).toHaveBeenCalledWith(['add', 'reminder@1.2.3'], root);
     expect(result.state).toMatchObject({ version: '1.2.3', installed: true, declared: true, dependencies: 'passed', status: 'pending-restart', published: false, verification: 'not-configured' });
-    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual({ plugins: { reminder: {} } });
+    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual(application({ reminder: {} }));
   });
 
   it('refuses a config revision changed during installation and preserves the user edit and installed dependency', async () => {
     const root = await fixture();
     const workflow = new PluginManagementWorkflow(root, { installDependencies: async (args, directory) => {
       await runPackageManager(args, directory);
-      await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { custom: { endpoint: 'user-edit' } } }));
+      await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({ custom: { endpoint: 'user-edit' } })));
     } });
     let error: unknown;
     try { await workflow.install('reminder'); } catch (caught) { error = caught; }
     expect(error).toBeInstanceOf(PluginManagementOperationError);
     expect(error).toMatchObject({ completedStages: ['dependency-install'] });
-    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual({ plugins: { custom: { endpoint: 'user-edit' } } });
+    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual(application({ custom: { endpoint: 'user-edit' } }));
     expect(await workflow.inspect('reminder')).toMatchObject({ installed: true, declared: false, status: 'installed' });
   });
 
@@ -292,7 +293,7 @@ describe('Shared CLI and Console plugin workflow', () => {
     expect(await workflow.inspect('reminder')).toMatchObject({ status: 'missing-config', validation: { valid: false } });
     await expect(workflow.apply('reminder')).rejects.toThrow('不能应用');
     expect(restart).not.toHaveBeenCalled();
-    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { reminder: { token: '${ZHIN_PHASE3_UNDEFINED_SECRET}' } } }));
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({ reminder: { token: '${ZHIN_PHASE3_UNDEFINED_SECRET}' } })));
     expect(await workflow.inspect('reminder')).toMatchObject({ status: 'missing-config', validation: { valid: true, missingEnv: ['ZHIN_PHASE3_UNDEFINED_SECRET'] } });
   });
 
@@ -306,10 +307,10 @@ describe('Shared CLI and Console plugin workflow', () => {
       [join(root, 'node_modules/reminder/plugin.js'), { default: definePlugin({ name: 'reminder' }) }],
     ]);
     const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
-    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'production', mode: 'production', platform: 'node' }, environmentVariables: await loadRuntimeEnvironmentLayers(root, 'production'), config: { plugins: { reminder: {} } } });
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'production', mode: 'production', platform: 'node' }, environmentVariables: await loadRuntimeEnvironmentLayers(root, 'production'), config: JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')) });
     await runtime.start();
     try {
-      await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { reminder: { commandNamespace: '${ZHIN_PHASE3_DEV_ONLY}' } } }));
+      await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({ reminder: { commandNamespace: '${ZHIN_PHASE3_DEV_ONLY}' } })));
       const restart = vi.fn();
       const workflow = new PluginManagementWorkflow(root, { snapshots: runtime.snapshots, requestRestart: restart });
       expect(await workflow.inspect('reminder')).toMatchObject({ status: 'missing-config', validation: { missingEnv: ['ZHIN_PHASE3_DEV_ONLY'] } });
@@ -323,17 +324,15 @@ describe('Shared CLI and Console plugin workflow', () => {
     await mounted(root);
     const file = join(root, 'package.json');
     const project = JSON.parse(await readFile(file, 'utf8'));
-    project.zhin.plugins[0].instanceKey = 'first';
-    project.zhin.plugins.push({ package: 'reminder', instanceKey: 'second' });
     await writeFile(file, JSON.stringify(project));
-    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { first: {}, second: { label: 'untouched' } } }));
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({ first: {}, second: { label: 'untouched' } }, {first: 'reminder', second: 'reminder'})));
     const runner = vi.fn(runPackageManager);
     const workflow = new PluginManagementWorkflow(root, { installDependencies: runner });
     await expect(workflow.planUninstall('reminder')).rejects.toThrow('多个插件实例');
     await workflow.uninstall('second');
     expect(runner).not.toHaveBeenCalled();
-    expect(JSON.parse(await readFile(file, 'utf8')).zhin.plugins).toEqual([{ package: 'reminder', instanceKey: 'first' }]);
-    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual({ plugins: { first: {} } });
+    expect(JSON.parse(await readFile(file, 'utf8')).dependencies.reminder).toBe('1.0.0');
+    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual(application({ first: {} }, {first: 'reminder'}));
   });
 
   it('normal dependencies are installed but never mounted as Plugins', async () => {
@@ -358,32 +357,32 @@ describe('Shared CLI and Console plugin workflow', () => {
   it('uses actual Runtime defaults when a plugin has no explicit empty config entry', async () => {
     const root = await fixture();
     await mounted(root);
-    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: {} }));
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({}, {reminder: 'reminder'})));
     const files = new Map([
       [join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }],
       [join(root, 'node_modules/reminder/plugin.js'), { default: definePlugin({ name: 'reminder', config: { toJsonSchema: () => ({ type: 'object', properties: { label: { type: 'string', default: 'daily' } } }) } }) }],
     ]);
     const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
-    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugins: {} } });
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')) });
     await runtime.start();
     try {
       expect(await createPluginManagementPort(root, { snapshots: runtime.snapshots }).inspect('reminder')).toMatchObject({ status: 'enabled', published: true, validation: { valid: true } });
       await rm(join(root, 'zhin.config.json'));
-      expect(await createPluginManagementPort(root, { snapshots: runtime.snapshots }).inspect('reminder')).toMatchObject({ status: 'enabled', published: true, validation: { valid: true } });
+      await expect(createPluginManagementPort(root, { snapshots: runtime.snapshots }).inspect('reminder')).rejects.toThrow(/configVersion|configuration/);
     } finally { await runtime.stop(); }
   });
 
   it('does not let an old generation declaration hide the updated package file schema or missing schema evidence', async () => {
     const root = await fixture();
     await mounted(root);
-    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { reminder: { x: 'old' } } }));
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({ reminder: { x: 'old' } })));
     const schemaA = { type: 'object', properties: { x: { type: 'string' } } };
     const files = new Map([
       [join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }],
       [join(root, 'node_modules/reminder/plugin.js'), { default: definePlugin({ name: 'reminder', config: { toJsonSchema: () => schemaA } }) }],
     ]);
     const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
-    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugins: { reminder: { x: 'old' } } } });
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')) });
     await runtime.start();
     try {
       const restart = vi.fn();
@@ -406,11 +405,11 @@ describe('Shared CLI and Console plugin workflow', () => {
     await writeFile(join(pluginRoot, 'plugin.js'), 'export default {};');
     const file = join(root, 'package.json');
     const project = JSON.parse(await readFile(file, 'utf8'));
-    project.zhin.plugins = [{ package: './plugins/local', instanceKey: 'local' }];
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({}, {local: './plugins/local'})));
     await writeFile(file, JSON.stringify(project));
     const files = new Map([[join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }], [join(pluginRoot, 'plugin.js'), { default: definePlugin({ name: 'local' }) }]]);
     const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
-    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugins: {} } });
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')) });
     await runtime.start();
     try {
       const runner = vi.fn(runPackageManager);
@@ -430,7 +429,7 @@ describe('Shared CLI and Console plugin workflow', () => {
     const plugin = (run: typeof runA, scope: 'local' | 'platform') => ({ default: definePlugin({ name: 'reminder', setup({ resources }) { resources.provide(pluginVerificationToken, { checks: () => [{ id: 'test', title: 'test', scope, effects: [scope === 'local' ? 'temporary local task' : 'sends a platform message'] }], run }); } }) });
     const files = new Map([[join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }], [join(root, 'node_modules/reminder/plugin.js'), plugin(runA, 'local')]]);
     const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
-    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugins: { reminder: {} } } });
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')) });
     await runtime.start();
     try {
       const workflow = createPluginManagementPort(root, { snapshots: runtime.snapshots });
@@ -469,7 +468,7 @@ describe('Shared CLI and Console plugin workflow', () => {
       [join(root, 'node_modules/preferences/plugin.js'), { default: definePlugin({ name: 'fixture' }) }],
     ]);
     const modules: ModuleRuntime = { async load<T>(file: string) { const value = files.get(file); if (!value) throw new Error(file); return value as T; }, async close() {} };
-    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugins: { reminder: {}, preferences: {} } } });
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')) });
     await runtime.start();
     try {
       const workflow = createPluginManagementPort(root, { snapshots: runtime.snapshots });
@@ -485,9 +484,38 @@ describe('Shared CLI and Console plugin workflow', () => {
       await packageInstalled(root, 'reminder', '1.0.1');
       expect(await workflow.inspect('reminder')).toMatchObject({ version: '1.0.1', status: 'pending-restart', published: false });
       await packageInstalled(root, 'reminder', '1.0.0');
-      await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { reminder: { commandNamespace: 'updated' }, preferences: {} } }));
+      await writeFile(join(root, 'zhin.config.json'), JSON.stringify(application({ reminder: { commandNamespace: 'updated' }, preferences: {} })));
       expect(await workflow.inspect('reminder')).toMatchObject({ status: 'pending-restart', published: false });
       expect(await workflow.inspect('preferences')).toMatchObject({ status: 'enabled' });
     } finally { await runtime.stop(); }
   });
+});
+
+
+it('keeps a disabled sibling and its dependency when removing the active alias, and rejects ambiguous packages before writes', async () => {
+  const root = await fixture();
+  await mounted(root);
+  const document = {configVersion: 2, plugins: {active: 'reminder', parked: 'reminder'}, disable_plugins: ['parked'], active: {}, parked: {token: '${UNSET_TOKEN}'}};
+  const configFile = join(root, 'zhin.config.json');
+  await writeFile(configFile, JSON.stringify(document));
+  const manifestBefore = await readFile(join(root, 'package.json'), 'utf8');
+  const configBefore = await readFile(configFile, 'utf8');
+  const runner = vi.fn(runPackageManager);
+  const workflow = new PluginManagementWorkflow(root, {installDependencies: runner});
+  await expect(workflow.install('reminder')).rejects.toThrow('多个插件实例');
+  await expect(workflow.uninstall('reminder')).rejects.toThrow('多个插件实例');
+  expect(runner).not.toHaveBeenCalled();
+  expect(await readFile(configFile, 'utf8')).toBe(configBefore);
+  expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(manifestBefore);
+  expect(await workflow.inspect('parked')).toMatchObject({disabled: true, validation: null});
+  await workflow.uninstall('root/active');
+  expect(runner).not.toHaveBeenCalled();
+  expect(JSON.parse(await readFile(configFile, 'utf8'))).toEqual({configVersion: 2, plugins: {parked: 'reminder'}, disable_plugins: ['parked'], parked: {token: '${UNSET_TOKEN}'}});
+});
+
+it('rejects reserved implicit aliases before the package manager runs', async () => {
+  const root = await fixture(); const runner = vi.fn(runPackageManager);
+  const workflow = new PluginManagementWorkflow(root, {installDependencies: runner});
+  await expect(workflow.install('@zhin.js/plugin-ai')).rejects.toThrow(/reserved/);
+  expect(runner).not.toHaveBeenCalled();
 });

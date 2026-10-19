@@ -95,7 +95,7 @@ async function createRuntime(names: readonly string[]) {
   for (const name of names) {
     modules.set(join(root, `commands/${name}/index.ts`), { default: command(name) });
   }
-  const runtime = new RootRuntime({
+  const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
     projectRoot: root,
     modules,
     environment: { name: 'test', mode: 'test', platform: 'node' },

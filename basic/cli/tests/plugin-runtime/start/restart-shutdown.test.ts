@@ -69,7 +69,7 @@ describe('process restart shutdown', () => {
     await cp(join(fixtureSource, 'plugin.ts'), join(root, 'plugin.ts'));
     await symlink(join(fixtureSource, 'node_modules'), join(root, 'node_modules'), 'junction');
     const port = await freePort();
-    await writeFile(join(root, 'zhin.config.yml'), `plugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n  token: restart-token\n`);
+    await writeFile(join(root, 'zhin.config.yml'), `configVersion: 2\nplugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n  token: restart-token\n`);
 
     for (const attempt of [1, 2]) {
       const result = await startAndRestart(root, port);
@@ -90,7 +90,7 @@ describe('process restart shutdown', () => {
     await writeFile(join(root, 'plugin.ts'), slowStartPlugin);
     await symlink(join(fixtureSource, 'node_modules'), join(root, 'node_modules'), 'junction');
     const port = await freePort();
-    await writeFile(join(root, 'zhin.config.yml'), `plugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n  token: restart-token\n`);
+    await writeFile(join(root, 'zhin.config.yml'), `configVersion: 2\nplugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n  token: restart-token\n`);
     const result = await startAndRestart(root, port);
     expect(result.killed, result.output).toBe(false);
     expect(result.output).toContain('restart-requested');
@@ -127,7 +127,7 @@ async function project(options: { hang?: boolean } = {}): Promise<{ root: string
   else await cp(join(fixtureSource, 'plugin.ts'), join(root, 'plugin.ts'));
   await symlink(join(fixtureSource, 'node_modules'), join(root, 'node_modules'), 'junction');
   const port = await freePort();
-  await writeFile(join(root, 'zhin.config.yml'), `plugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n  token: restart-token\n`);
+  await writeFile(join(root, 'zhin.config.yml'), `configVersion: 2\nplugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n  token: restart-token\n`);
   return { root, port };
 }
 

@@ -22,7 +22,7 @@ pnpm add @zhin.js/adapter-wechat-mp
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
 入站：`gateway.receive({ conversation: { endpoint, kind: 'private', id: openid }, message: { conversation, id }, content: text, sender, metadata })`  
 出站：`send({ conversation, payload })` → 被动回复 XML（默认）或客服消息 API（`replyMode: customer_service`）
@@ -44,18 +44,20 @@ pnpm add @zhin.js/adapter-wechat-mp
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  wechat-mp:
-    path: /wechat/webhook
-    endpoints:
-      - id: my-wechat-bot
-        appId: "${WECHAT_APP_ID}"
-        appSecret: "${WECHAT_APP_SECRET}"
-        token: "${WECHAT_TOKEN}"
+  wechat-mp: "@zhin.js/adapter-wechat-mp"
+wechat-mp:
+  path: /wechat/webhook
+  endpoints:
+    - id: my-wechat-bot
+      appId: "${WECHAT_APP_ID}"
+      appSecret: "${WECHAT_APP_SECRET}"
+      token: "${WECHAT_TOKEN}"
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-wechat-mp`（`instanceKey: wechat-mp`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-wechat-mp`（`instanceKey: wechat-mp`）。
 Runtime Host（`http`）须已 listen，Webhook 才可达。
 
 ### 可选字段

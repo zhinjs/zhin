@@ -31,7 +31,7 @@ describe('RootRuntime tracer bullet', () => {
     } }) });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
     modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
-    const runtime = new RootRuntime({ projectRoot: project, modules,
+    const runtime = new RootRuntime({ application: { configVersion: 2, plugins: {} }, projectRoot: project, modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
       config: Object.assign(() => ({}), { schema: () => declaration }) });
     const ready = runtime.whenConfigurationReady();
@@ -58,13 +58,13 @@ describe('RootRuntime tracer bullet', () => {
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root',
       config: { toJsonSchema() { throw new Error('configuration preflight failed'); } } }) });
-    const runtime = new RootRuntime({ projectRoot: project, modules,
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} }, projectRoot: project, modules,
       environment: { name: 'test', mode: 'test', platform: 'node' } });
     const waiting = expect(runtime.whenConfigurationReady()).rejects.toThrow('configuration preflight failed');
     await expect(runtime.start()).rejects.toThrow('configuration preflight failed');
     await waiting;
     await runtime.stop();
-    const stopped = new RootRuntime({ projectRoot: project, modules: new FakeModuleRuntime(),
+    const stopped = new RootRuntime({ config: { configVersion: 2, plugins: {} }, projectRoot: project, modules: new FakeModuleRuntime(),
       environment: { name: 'test', mode: 'test', platform: 'node' } });
     const stopping = expect(stopped.whenConfigurationReady()).rejects.toThrow('stopped before configuration initialization');
     await expect(stopped.stop()).rejects.toThrow('Cannot stop RootController from idle');
@@ -85,7 +85,7 @@ describe('RootRuntime tracer bullet', () => {
       await held;
       return originalLoad<T>(source);
     };
-    const runtime = new RootRuntime({ projectRoot: project, modules,
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} }, projectRoot: project, modules,
       environment: { name: 'test', mode: 'test', platform: 'node' } });
     const waiting = expect(runtime.whenConfigurationReady()).rejects.toThrow('stopped before configuration initialization');
     const starting = runtime.start();
@@ -108,9 +108,9 @@ describe('RootRuntime tracer bullet', () => {
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
     modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
     const configPath = join(project, 'zhin.config.json');
-    await writeJson(configPath, { plugin: { count: 3 } });
+    await writeJson(configPath, { configVersion: 2, plugins: {}, plugin: { count: 3 } });
     const runtime = new RootRuntime({ projectRoot: project, modules,
-      environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugin: { count: 3 } } });
+      environment: { name: 'test', mode: 'test', platform: 'node' }, config: { configVersion: 2, plugins: {}, plugin: { count: 3 } } });
     try {
       const first = await runtime.start();
       expect(configs).toEqual([{ count: 3 }]);
@@ -118,11 +118,11 @@ describe('RootRuntime tracer bullet', () => {
       expect(committed.properties).toMatchObject({ count: { minimum: 1, default: 2 }, apiKey: { writeOnly: true } });
       schema.description('new metadata');
       expect(committed.description).toBeUndefined();
-      await writeJson(configPath, { plugin: { count: 0 } });
+      await writeJson(configPath, { configVersion: 2, plugins: {}, plugin: { count: 0 } });
       await expect(runtime.patchConfig([{ op: 'set', path: ['plugin', 'count'], value: 0 }])).rejects.toThrow('Invalid Plugin config');
       expect(runtime.snapshot).toBe(first);
       expect(configs).toHaveLength(1);
-      await writeJson(configPath, { plugin: { count: 4 } });
+      await writeJson(configPath, { configVersion: 2, plugins: {}, plugin: { count: 4 } });
       await runtime.patchConfig([{ op: 'set', path: ['plugin', 'count'], value: 4 }]);
       expect(runtime.snapshot.generation).toBe(2);
       expect(configs).toEqual([{ count: 3 }, { count: 4 }]);
@@ -159,7 +159,7 @@ describe('RootRuntime tracer bullet', () => {
       }),
     });
 
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -258,7 +258,7 @@ describe('RootRuntime tracer bullet', () => {
       default: defineCommand({ execute: () => 'ok' }),
     });
     modules.closeError = new Error('module close failed');
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -293,7 +293,7 @@ describe('RootRuntime tracer bullet', () => {
     modules.set(join(project, 'commands/gh/issue/list/index.ts'), {
       default: defineCommand({ execute: () => 'ok' }),
     });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },

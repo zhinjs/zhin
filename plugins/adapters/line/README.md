@@ -22,7 +22,7 @@ pnpm add @zhin.js/adapter-line
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
 入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
 出站：`send({ conversation, payload })` → Reply API（缓存 replyToken）或 Push API
@@ -40,18 +40,20 @@ pnpm add @zhin.js/adapter-line
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  line:
-    webhookPath: /line/webhook       # 可选，默认 /line/webhook
-    apiBaseUrl: https://api.line.me   # 可选，调试时可改为 LINE API 沙盒地址
-    endpoints:
-      - id: my-line-bot
-        channelSecret: ${LINE_CHANNEL_SECRET}
-        channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
+  line: "@zhin.js/adapter-line"
+line:
+  webhookPath: /line/webhook # 可选，默认 /line/webhook
+  apiBaseUrl: https://api.line.me # 可选，调试时可改为 LINE API 沙盒地址
+  endpoints:
+    - id: my-line-bot
+      channelSecret: ${LINE_CHANNEL_SECRET}
+      channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-line`（`instanceKey: line`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-line`（`instanceKey: line`）。
 
 ## 环境变量
 

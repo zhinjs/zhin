@@ -41,55 +41,6 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [],
-    "plugins": [
-      {
-        "package": "@zhin.js/adapter-qq",
-        "instanceKey": "qq"
-      },
-      {
-        "package": "@zhin.js/plugin-group-suite",
-        "instanceKey": "group-suite"
-      },
-      {
-        "package": "@zhin.js/plugin-game-hub",
-        "instanceKey": "game-hub"
-      },
-      {
-        "package": "@zhin.js/plugin-tic-tac-toe",
-        "instanceKey": "tic-tac-toe"
-      },
-      {
-        "package": "@zhin.js/plugin-rps",
-        "instanceKey": "rps"
-      },
-      {
-        "package": "@zhin.js/plugin-guess-number",
-        "instanceKey": "guess-number"
-      },
-      {
-        "package": "@zhin.js/plugin-dice-duel",
-        "instanceKey": "dice-duel"
-      },
-      {
-        "package": "@zhin.js/plugin-dungeon-expedition",
-        "instanceKey": "dungeon-expedition"
-      },
-      {
-        "package": "@zhin.js/plugin-idiom-chain",
-        "instanceKey": "idiom-chain"
-      },
-      {
-        "package": "@zhin.js/plugin-word-riddle",
-        "instanceKey": "word-riddle"
-      },
-      {
-        "package": "@zhin.js/plugin-text-adventure",
-        "instanceKey": "text-adventure"
-      },
-      {
-        "package": "@zhin.js/plugin-blackjack",
-        "instanceKey": "blackjack"
-      }
-    ]
+    "plugins": []
   }
 }

@@ -29,11 +29,6 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [],
-    "plugins": [
-      {
-        "package": "@zhin.js/adapter-icqq",
-        "instanceKey": "icqq"
-      }
-    ]
+    "plugins": []
   }
 }

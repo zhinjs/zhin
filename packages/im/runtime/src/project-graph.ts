@@ -1,4 +1,5 @@
-import { childPluginId, rootPluginId, type PluginId } from '@zhin.js/plugin-runtime';
+import { childPluginId, rootPluginId, type PluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import { PLUGIN_INSTANCE_MIGRATION_GUIDE, readApplicationPluginDeclaration, type ApplicationPluginDeclaration } from './application-plugin-declaration.js';
 import {
   assertFeatureApi,
   assertPackageEngine,
@@ -17,7 +18,6 @@ import {
   PLATFORM_FEATURE_CARRIER,
   PLATFORM_FEATURE_FACADE,
   declaredPackageDependency,
-  mergeChildPluginReferences,
   mergeFeatureReferences,
 } from './platform-features.js';
 
@@ -75,9 +75,17 @@ export class ProjectGraphService {
     );
   }
 
-  async inspect(projectRoot: string): Promise<ProjectGraph> {
+  async inspect(projectRoot: string, document: RuntimeConfigDocument = {}, pluginOrder?: readonly string[]): Promise<ProjectGraph> {
+    const declaration = readApplicationPluginDeclaration(document, 'Root config', pluginOrder);
+    if (this.#disabledPluginInstanceKeys.size > 0) {
+      throw new ProjectGraphError(`Legacy disabled Plugin state must move to disable_plugins; see ${PLUGIN_INSTANCE_MIGRATION_GUIDE}`);
+    }
     const rootPackage = await this.#resolver.root(projectRoot);
     assertPackageType(rootPackage, 'plugin');
+    if (rootPackage.packageJson.zhin.type === 'plugin'
+      && rootPackage.packageJson.zhin.plugins.length > 0) {
+      throw new ProjectGraphError(`Root package.json#zhin.plugins is no longer supported; see ${PLUGIN_INSTANCE_MIGRATION_GUIDE}`);
+    }
     const packages = new Map<string, ResolvedPackage>();
     const root = await this.#visitPlugin(
       rootPackage,
@@ -87,6 +95,7 @@ export class ProjectGraphService {
       [],
       packages,
       true,
+      declaration,
     );
     for (const pkg of this.#resolver.workspacePackages()) addPackage(packages, pkg);
     return Object.freeze({
@@ -104,6 +113,7 @@ export class ProjectGraphService {
     ancestors: readonly string[],
     packages: Map<string, ResolvedPackage>,
     isRoot: boolean,
+    declaration: ApplicationPluginDeclaration,
   ): Promise<PluginGraphNode> {
     if (ancestors.includes(pkg.root)) {
       throw new ProjectGraphError(
@@ -117,7 +127,8 @@ export class ProjectGraphService {
     let featureCarrier: ResolvedPackage | undefined;
     let pluginFacade: ResolvedPackage | undefined;
     let featureRefs = manifest.features;
-    let pluginRefs = manifest.plugins;
+    const pluginRefs: readonly ChildPluginReference[] = isRoot
+      ? declaration.instances.filter(item => item.enabled).map(item => ({ package: item.package, instanceKey: item.instanceKey })) : [];
     if (isRoot && manifest.platformFeatures !== false) {
       const platform = await tryResolvePlatform(this.#resolver, pkg);
       featureCarrier = platform.featureCarrier;
@@ -128,17 +139,7 @@ export class ProjectGraphService {
         const inherited = carrierManifest.type === 'plugin' ? carrierManifest.features : [];
         featureRefs = mergeFeatureReferences(manifest.features, inherited);
       }
-      if (pluginFacade) {
-        addPackage(packages, pluginFacade);
-        const facadeManifest = pluginFacade.packageJson.zhin;
-        const inheritedPlugins = facadeManifest.type === 'plugin' ? facadeManifest.plugins : [];
-        pluginRefs = mergeChildPluginReferences(manifest.plugins, inheritedPlugins);
-      }
-    }
-    if (isRoot && this.#disabledPluginInstanceKeys.size > 0) {
-      pluginRefs = pluginRefs.filter(
-        (reference) => !this.#disabledPluginInstanceKeys.has(reference.instanceKey),
-      );
+      if (pluginFacade) addPackage(packages, pluginFacade);
     }
 
     const featurePackages = new Set<string>();
@@ -160,7 +161,6 @@ export class ProjectGraphService {
       }),
     );
 
-    const ownPluginKeys = new Set(manifest.plugins.map((item) => item.instanceKey));
     const instanceKeys = new Set<string>();
     const children = await Promise.all(
       pluginRefs.map(async (reference) => {
@@ -170,8 +170,7 @@ export class ProjectGraphService {
           );
         }
         instanceKeys.add(reference.instanceKey);
-        const resolveFrom = ownPluginKeys.has(reference.instanceKey) ? pkg : (pluginFacade ?? pkg);
-        const resolved = await resolveReference(this.#resolver, resolveFrom, reference);
+        const resolved = await resolveReference(this.#resolver, pkg, reference);
         if (!resolved) return undefined;
         assertPackageType(resolved, 'plugin');
         return this.#visitPlugin(
@@ -182,6 +181,7 @@ export class ProjectGraphService {
           [...ancestors, pkg.root],
           packages,
           false,
+          declaration,
         );
       }),
     );

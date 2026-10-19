@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 - `@zhin.js/adapter` — convention-based `adapters/discord/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` / `@zhin.js/host-router` (Gateway path)
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId; guild channels carry `parent`)
@@ -59,16 +59,18 @@ Required fields (`endpoints[i]`): `name`, `token`.
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  discord:
-    # connection: gateway   # default
-    endpoints:
-      - name: my-discord-bot
-        token: ${DISCORD_BOT_TOKEN}
+  discord: "@zhin.js/adapter-discord"
+discord:
+  # connection: gateway   # default
+  endpoints:
+    - name: my-discord-bot
+      token: ${DISCORD_BOT_TOKEN}
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-discord` (`instanceKey: discord`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-discord` (`instanceKey: discord`).
 
 ## Environment Variables
 

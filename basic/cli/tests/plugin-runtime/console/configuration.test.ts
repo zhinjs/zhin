@@ -9,7 +9,6 @@ import {
 } from '../../../src/plugin-runtime/console/configuration.js';
 import {
   configKeyPatch,
-  configKeyRemovePatch,
   flattenConfigDocument,
 } from '../../../src/plugin-runtime/console/configuration-projection.js';
 
@@ -19,204 +18,88 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
-describe('config document flatten / write namespace', () => {
-  it('never pairs a same-named Plugin value with a Host configuration path or schema', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-collision-'));
-    tempRoots.push(root);
-    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'collision-fixture', version: '1.0.0', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', plugins: [] } }));
-    const document = { plugins: { ai: { pluginOnly: 'original' } } };
-    const file = join(root, 'zhin.config.json');
-    await writeFile(file, JSON.stringify(document));
-    const store = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(file) });
-    const source = await store.readSource();
-    expect(source.configKeys).toContain('ai');
-    expect(source.configPaths).not.toHaveProperty('ai');
-    await expect(store.readSchema('ai')).rejects.toThrow(/同时指向 Host 与插件/);
-    await expect(store.validatePluginConfig('ai', {})).rejects.toThrow(/配置源码/);
-    expect(() => configKeyPatch(document, 'ai', {})).toThrow(/配置源码/);
-    expect(() => configKeyRemovePatch(document, 'ai')).toThrow(/配置源码/);
-    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(document);
-    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'collision-fixture', zhin: { plugins: [{ package: '@test/http', instanceKey: 'http' }] } }));
-    const hostOnly = { http: { port: 8098 }, plugins: {} };
-    await writeFile(file, JSON.stringify(hostOnly));
-    expect((await store.readSource()).configPaths).not.toHaveProperty('http');
-    await expect(store.readSchema('http')).rejects.toThrow(/已声明插件/);
-    await expect(store.setKey('http', { pluginOnly: 'required' })).rejects.toThrow(/配置源码/);
-    await expect(store.removeKey('http')).rejects.toThrow(/配置源码/);
-    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(hostOnly);
+describe('application configuration projection and writes', () => {
+  it('keeps declarations out of the legacy key-oriented Console business view', () => {
+    const flat = flattenConfigDocument({configVersion: 2, plugins: {sandbox: '@zhin.js/adapter-sandbox'}, disable_plugins: ['sandbox'], http: {port: 8086}, sandbox: {endpoints: [{id: 'bot'}]}});
+    expect(flat).toEqual({http: {port: 8086}, sandbox: {endpoints: [{id: 'bot'}]}});
   });
 
-  it('loads only the selected production dotenv layer using formal Runtime environment rules', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-env-mode-'));
-    tempRoots.push(root);
-    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'env-fixture', version: '1.0.0', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, plugins: [] } }));
-    await writeFile(join(root, 'zhin.config.json'), '{}');
+  it('rejects Host collisions, undeclared aliases and prototype keys without mutating the document', () => {
+    const document = {configVersion: 2, plugins: {sandbox: 'sandbox'}};
+    expect(configKeyPatch(document, 'sandbox', {}).path).toEqual(['sandbox']);
+    expect(configKeyPatch(document, 'http', {}).path).toEqual(['http']);
+    for (const key of ['new-plugin', '__proto__', 'constructor', 'prototype', 'plugins', 'disable_plugins']) {
+      expect(() => configKeyPatch(document, key, {})).toThrow(/Unknown configuration key/);
+    }
+    expect(() => flattenConfigDocument({configVersion: 2, plugins: {ai: 'reminder'}, ai: {}})).toThrow(/reserved/);
+    expect(() => flattenConfigDocument(JSON.parse('{"configVersion":2,"plugins":{"__proto__":"plugin"}}'))).toThrow(/reserved/);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
+  it('rejects old formats and package objects rather than guessing a version', () => {
+    expect(() => configKeyPatch({plugins: {sandbox: {}}}, 'sandbox', {})).toThrow(/configVersion/);
+    expect(() => configKeyPatch({configVersion: 2, plugins: ['sandbox']}, 'sandbox', {})).toThrow(/alias-to-package|map instance/);
+    expect(() => flattenConfigDocument({configVersion: 2, plugins: {sandbox: {package: 'sandbox'}}})).toThrow(/package/);
+  });
+
+  it('serializes concurrent business updates and recovers after a rejected write', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-lock-')); tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {a: a, b: b, c: c, d: d}\na: {}\n');
+    const store = createStore(root, 'zhin.config.yml');
+    await Promise.all([store.setKey('a', {x: 1}), store.setKey('b', {y: 2}), store.setKey('c', {z: 3})]);
+    await expect(store.setKey('__proto__', {})).rejects.toThrow(/Unknown configuration key/);
+    await store.setKey('d', {ok: true});
+    const saved = parseYaml(await readFile(join(root, 'zhin.config.yml'), 'utf8'));
+    expect(saved).toMatchObject({plugins: {a: 'a', b: 'b', c: 'c', d: 'd'}, a: {x: 1}, b: {y: 2}, c: {z: 3}, d: {ok: true}});
+  });
+
+  it('keeps numeric instance declaration source order on unrelated structured and raw writes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-numeric-order-')); tempRoots.push(root);
+    const file = join(root, 'zhin.config.json');
+    await writeFile(file, '{"configVersion":2,"plugins":{"10":"reminder","2":"reminder"},"10":{},"2":{}}\n');
+    const store = createStore(root, 'zhin.config.json');
+    await store.setKey('http', {port: 9090});
+    await store.setKey('10', {zone: 'UTC'});
+    const source = await store.readSource();
+    expect(source.source.indexOf('"10"')).toBeLessThan(source.source.indexOf('"2"'));
+    expect(source.configPaths).toMatchObject({'10': ['10'], '2': ['2']});
+    await store.replaceSource(source.source, source.revision);
+    expect((await store.readSource()).source).toBe(source.source);
+  });
+
+  it('only requests process restart for Host changes and preserves instance declarations when clearing config', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-impact-')); tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {sandbox: sandbox}\n');
+    const store = createStore(root, 'zhin.config.yml');
+    await expect(store.setKey('sandbox', {endpoints: []})).resolves.toEqual({restartRequired: false});
+    await expect(store.setKey('http', {port: 9090})).resolves.toEqual({restartRequired: true});
+    await expect(store.removeKey('sandbox')).resolves.toEqual({restartRequired: false});
+    expect(parseYaml((await store.readSource()).source).plugins).toEqual({sandbox: 'sandbox'});
+    await expect(store.removeKey('http')).resolves.toEqual({restartRequired: true});
+  });
+
+  it('replaces source with revision checking, rejecting obsolete formats without writing them', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-source-')); tempRoots.push(root);
+    const file = join(root, 'zhin.config.json');
+    await writeFile(file, '{"configVersion":2,"plugins":{},"http":{"port":1000}}\n');
+    const store = createStore(root, 'zhin.config.json');
+    const current = await store.readSource();
+    await expect(store.replaceSource('{}', current.revision)).rejects.toThrow(/configVersion/);
+    expect((await store.readSource()).revision).toBe(current.revision);
+    await expect(store.replaceSource('{"configVersion":2,"plugins":{},"http":{"port":2000}}\n', current.revision)).resolves.toMatchObject({restartRequired: true});
+    await expect(store.replaceSource(current.source, current.revision)).rejects.toThrow(/changed since it was read/);
+  });
+
+  it('loads only the selected production environment without loading a disabled inline entry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-env-mode-')); tempRoots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({name: 'env-fixture', zhin: {protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false}}));
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({configVersion: 2, plugins: {missing: 'missing'}, disable_plugins: ['missing']}));
     await writeFile(join(root, '.env.development'), 'ZHIN_CONSOLE_DEV_ONLY=test-value\n');
     await writeFile(join(root, '.env.production'), 'zhin_console_prod_only=test-value\n');
-    const store = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.json')), environmentName: 'production' });
-    expect(await store.validatePluginConfig('missing', { token: '${ZHIN_CONSOLE_DEV_ONLY}', prod: '${zhin_console_prod_only}' })).toMatchObject({ missingEnv: ['ZHIN_CONSOLE_DEV_ONLY'] });
-    await writeFile(join(root, 'schema.json'), JSON.stringify({ type: 'object', properties: { token: { type: 'string', default: '${ZHIN_CONSOLE_DEV_ONLY}' } } }));
-    expect(await store.validatePluginConfig('plugin', {})).toMatchObject({ missingEnv: ['ZHIN_CONSOLE_DEV_ONLY'] });
-  });
-
-  it('flattens plugins.<key> to top-level for Console config:get-all', () => {
-    const flat = flattenConfigDocument({
-      http: { port: 8086 },
-      plugins: {
-        sandbox: { endpoints: [{ name: 'bot' }] },
-        icqq: { name: '123' },
-      },
-    });
-    expect(flat.http).toEqual({ port: 8086 });
-    expect(flat.sandbox).toEqual({ endpoints: [{ name: 'bot' }] });
-    expect(flat.icqq).toEqual({ name: '123' });
-    expect(flat.plugins).toBeUndefined();
-  });
-
-  it('prefers top-level host keys over same-named plugins.<key>', () => {
-    const flat = flattenConfigDocument({
-      ai: { providers: { openai: {} } },
-      plugins: {
-        ai: { pluginConfig: true },
-        sandbox: { endpoints: [] },
-      },
-    });
-    // instanceKey 叫 ai 时不得覆盖顶层 host 的 ai 键
-    expect(flat.ai).toEqual({ providers: { openai: {} } });
-    expect(flat.sandbox).toEqual({ endpoints: [] });
-  });
-
-  it('does not pollute the prototype when flattening documents with __proto__ keys', () => {
-    const document = JSON.parse('{"plugins": {"__proto__": {"polluted": true}}}');
-    const flat = flattenConfigDocument(document);
-    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect(Object.prototype.hasOwnProperty.call(flat, '__proto__')).toBe(false);
-  });
-
-  it('addresses host keys at the root and Plugin keys under plugins.*', () => {
-    const document = { plugins: { sandbox: {} } };
-    expect(configKeyPatch(document, 'http', { port: 9 }).path).toEqual(['http']);
-    expect(configKeyPatch(document, 'sandbox', { endpoints: [] }).path)
-      .toEqual(['plugins', 'sandbox']);
-    expect(configKeyPatch(document, 'new-plugin', { enabled: true }).path)
-      .toEqual(['plugins', 'new-plugin']);
-  });
-
-  it('rejects __proto__/constructor/prototype as config keys', () => {
-    const document: Record<string, unknown> = {};
-    for (const key of ['__proto__', 'constructor', 'prototype']) {
-      expect(() => configKeyPatch(document, key, { polluted: true })).toThrow(/Invalid config key/);
-    }
-    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-  });
-
-  it('treats prototype-inherited names (toString) as plugin keys, not top-level keys', () => {
-    const document: Record<string, unknown> = {};
-    expect(configKeyPatch(document, 'toString', { enabled: true }).path)
-      .toEqual(['plugins', 'toString']);
-  });
-
-  it('rejects plugins arrays instead of promoting legacy configuration', () => {
-    const document: Record<string, unknown> = { plugins: ['sandbox', 'icqq'] };
-    expect(() => configKeyPatch(document, 'sandbox', { endpoints: [{ name: 'bot' }] }))
-      .toThrow(/plugins must be an object keyed by Plugin instanceKey/);
-    expect(document.plugins).toEqual(['sandbox', 'icqq']);
-  });
-
-  it('serializes concurrent project configuration writes without losing keys', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-lock-'));
-    tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  a: {}\n');
-
-    // 无锁时两次 读-改-写 基于同一份旧文档，后写覆盖先写（丢一个键）。
-    const configuration = createStore(root, 'zhin.config.yml');
-    await Promise.all([
-      configuration.setKey('a', { x: 1 }),
-      configuration.setKey('b', { y: 2 }),
-      configuration.setKey('c', { z: 3 }),
-    ]);
-
-    const saved = await readFile(join(root, 'zhin.config.yml'), 'utf8');
-    const parsed = parseYaml(saved) as { plugins: Record<string, unknown> };
-    expect(parsed.plugins.a).toEqual({ x: 1 });
-    expect(parsed.plugins.b).toEqual({ y: 2 });
-    expect(parsed.plugins.c).toEqual({ z: 3 });
-
-    // 失败不断链：后续写仍可成功。
-    await expect(configuration.setKey('__proto__', { polluted: true }))
-      .rejects.toThrow(/Invalid config key/);
-    await configuration.setKey('d', { ok: true });
-    const after = parseYaml(await readFile(join(root, 'zhin.config.yml'), 'utf8')) as {
-      plugins: Record<string, unknown>;
-    };
-    expect(after.plugins.d).toEqual({ ok: true });
-  });
-
-  it('requires a process restart only for Host configuration keys', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-impact-'));
-    tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  sandbox: {}\n');
-    const configuration = createStore(root, 'zhin.config.yml');
-
-    await expect(configuration.setKey('sandbox', { endpoints: [] }))
-      .resolves.toEqual({ restartRequired: false });
-    await expect(configuration.setKey('http', { port: 9090 }))
-      .resolves.toEqual({ restartRequired: true });
-    await expect(configuration.removeKey('sandbox'))
-      .resolves.toEqual({ restartRequired: false });
-    await expect(configuration.removeKey('http'))
-      .resolves.toEqual({ restartRequired: true });
-  });
-
-  it('exposes and replaces JSON source without translating formats', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-json-'));
-    tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.json'), '{"http":{"port":1000}}\n');
-
-    const configuration = createStore(root, 'zhin.config.json');
-    const current = await configuration.readSource();
-    expect(current.format).toBe('json');
-    expect(current.configKeys).toEqual(['http']);
-    expect(current.configPaths).toEqual({ http: ['http'] });
-    const source = '{\n  "http": { "port": 2000 }\n}\n';
-    await expect(configuration.replaceSource(source, current.revision)).resolves.toEqual({
-      revision: expect.any(String),
-      restartRequired: true,
-    });
-
-    expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual({
-      http: { port: 2000 },
-    });
-  });
-
-  it('replaces Plugin-only source without requiring a process restart', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-plugin-source-'));
-    tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  sandbox:\n    enabled: false\n');
-    const configuration = createStore(root, 'zhin.config.yml');
-    const current = await configuration.readSource();
-
-    expect(current.configPaths?.sandbox).toEqual(['plugins', 'sandbox']);
-    await expect(configuration.replaceSource(
-      'plugins:\n  sandbox:\n    enabled: true\n',
-      current.revision,
-    )).resolves.toEqual({
-      revision: expect.any(String),
-      restartRequired: false,
-    });
-  });
-
-  it('rejects stale whole-document replacements', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-conflict-'));
-    tempRoots.push(root);
-    const file = join(root, 'zhin.config.yml');
-    await writeFile(file, 'http:\n  port: 1000\n');
-    const configuration = createStore(root, 'zhin.config.yml');
-    const current = await configuration.readSource();
-    await writeFile(file, 'http:\n  port: 2000\n');
-
-    await expect(configuration.replaceSource('http:\n  port: 3000\n', current.revision))
-      .rejects.toThrow(/changed since it was read/);
+    const store = new ConsoleConfigurationStore({projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.json')), environmentName: 'production'});
+    expect(await store.validatePluginConfig('missing', {token: '${ZHIN_CONSOLE_DEV_ONLY}', prod: '${zhin_console_prod_only}'})).toMatchObject({missingEnv: ['ZHIN_CONSOLE_DEV_ONLY']});
+    await writeFile(join(root, 'schema.json'), JSON.stringify({type: 'object', properties: {token: {type: 'string', default: '${ZHIN_CONSOLE_DEV_ONLY}'}}}));
+    expect(await store.validatePluginConfig('plugin', {})).toMatchObject({missingEnv: ['ZHIN_CONSOLE_DEV_ONLY']});
   });
 });
 
@@ -224,7 +107,7 @@ describe('Console schema validation', () => {
   it('reports the exact missing required field, including nested objects and array items', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-required-paths-'));
     tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), 'plugin: {}\n');
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\nplugin: {}\n');
     await writeFile(join(root, 'schema.json'), JSON.stringify({
       type: 'object', required: ['token'], properties: {
         token: { type: 'string' },
@@ -242,9 +125,9 @@ describe('Console schema validation', () => {
   it('validates absent root and embedded plugin config using object defaults without mutating declarations', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-absent-config-'));
     tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), '{}\n');
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {child: ./child}\n');
     await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'console-project',
-      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [{ package: './child', instanceKey: 'child' }] },
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [] },
     }));
     const child = join(root, 'child');
     await mkdir(child);
@@ -272,7 +155,7 @@ describe('Console schema validation', () => {
   it('uses the Runtime standard validator for strings, lists, step, unknown fields and references', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-standard-validation-'));
     tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), 'plugin: {}\n');
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\nplugin: {}\n');
     await writeFile(join(root, 'schema.json'), JSON.stringify({
       type: 'object', additionalProperties: false,
       $defs: { code: { type: 'string', minLength: 2, maxLength: 3, pattern: '^[A-Z]+$' } },
@@ -295,7 +178,7 @@ describe('Console schema validation', () => {
   it('enforces root project integer bounds and rejects container type errors without throwing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-schema-validation-'));
     tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), 'plugin: {}\n');
+    await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {}\nplugin: {}\n');
     await writeFile(join(root, 'schema.json'), JSON.stringify({
       type: 'object', properties: {
         threshold: { type: 'integer', minimum: 1, maximum: 5 },

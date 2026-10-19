@@ -10,7 +10,6 @@ import {
   applyProjectConfigPlan,
   createProjectConfigPlan,
   loadProjectConfig,
-  mergePluginManifestIntoPackageJson,
   packageToInstanceKey,
   renderProjectConfigPatch,
 } from '@zhin.js/scaffold-wizard';
@@ -85,7 +84,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       logger.log(`将执行: pnpm ${installArgs.join(' ')}`);
       if (shouldEnable && pluginName && enablePreview) {
         logger.log(`将启用: ${enablePreview.message}`);
-        logger.log(`将挂载: package.json 的 zhin.plugins 清单添加 ${pluginName}（instanceKey: ${packageToInstanceKey(pluginName)}）`);
+        logger.log(`将声明插件实例: ${packageToInstanceKey(pluginName)} → ${pluginName}（按现有配置协议写入）`);
         if (enablePreview.patch) {
           logger.log('');
           logger.log(enablePreview.patch);

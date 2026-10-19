@@ -16,17 +16,19 @@ pnpm add @zhin.js/process-monitor
 ```
 
 ```yaml
+configVersion: 2
 plugins:
-  process-monitor:
-    package: "@zhin.js/process-monitor"
-    config:
-      enabled: true
-      notifyOnStart: true
-      notifyOnRestart: true
-      notifyOnCrash: true
-      notifyChannels:
-        - type: webhook
-          target: "${PROCESS_MONITOR_WEBHOOK_URL}"
+  process-monitor: "@zhin.js/process-monitor"
+process-monitor:
+  package: "@zhin.js/process-monitor"
+  config:
+    enabled: true
+    notifyOnStart: true
+    notifyOnRestart: true
+    notifyOnCrash: true
+    notifyChannels:
+      - type: webhook
+        target: "${PROCESS_MONITOR_WEBHOOK_URL}"
 ```
 
 `notifyChannels` 当前只接受 `webhook`。Webhook 使用 `POST application/json`，正文包含：

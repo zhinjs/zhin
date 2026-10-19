@@ -78,9 +78,11 @@ With a single cleanup action you can also just return it from `connect()`.
 Mount the plugin containing the adapter on your bot and configure it in `zhin.config.yml`:
 
 ```yaml
+configVersion: 2
 plugins:
-  example:
-    token: ${EXAMPLE_TOKEN}
+  example: '@example/adapter'
+example:
+  token: ${EXAMPLE_TOKEN}
 ```
 
 After startup, check in Console's Conversations & Channels that the account is online and receiving. Mounting is covered in [First plugin · Mount it on your bot](../getting-started/first-plugin.md).

@@ -1,3 +1,4 @@
-# Root Plugin values live under plugin; child Plugin envelopes live under plugins.
+configVersion: 2
+# Root business values live under plugin; plugins maps direct instance aliases to packages.
 plugin: {}
 plugins: {}

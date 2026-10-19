@@ -20,6 +20,9 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { readSourcePluginOrder } from '@zhin.js/config-file';
+import { findConfigFile } from './config-file.js';
 
 export const STATE_DIR = '.zhin-local';
 const DEP_FIELDS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'] as const;
@@ -57,15 +60,16 @@ const fail = (message: string): never => { throw new DevLinkError(message); };
 export const isZhinPackage = (name: string): boolean => name === 'zhin.js' || name.startsWith('@zhin.js/');
 const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
 
-/** 项目直接依赖（含 zhin.plugins 声明）中的 zhin 包，按是否存在于 checkout 分类。 */
-export function detectZhinPackages(manifest: Manifest, workspaceNames: ReadonlySet<string>) {
+/** 项目直接依赖（含主配置 plugins 声明）中的 zhin 包，按是否存在于 checkout 分类。 */
+export function detectZhinPackages(manifest: Manifest, workspaceNames: ReadonlySet<string>, document?: Readonly<Record<string, unknown>>) {
+  if (manifest.zhin?.plugins?.length) throw new DevLinkError('Legacy zhin.plugins declarations; run zhin migrate instances');
   const found = new Set<string>();
   const undeclared: string[] = [];
   for (const field of DEP_FIELDS) {
     for (const name of Object.keys(manifest[field] ?? {})) if (isZhinPackage(name)) found.add(name);
   }
-  for (const entry of manifest.zhin?.plugins ?? []) {
-    const name = typeof entry === 'string' ? entry : entry?.package;
+  for (const entry of document ? readApplicationPluginDeclaration(document).instances : []) {
+    const name = entry.package;
     if (typeof name === 'string' && isZhinPackage(name) && !found.has(name)) { found.add(name); undeclared.push(name); }
   }
   const all = [...found].sort();
@@ -240,9 +244,14 @@ export function devLink(projectArg: string, options: DevLinkOptions): LinkState 
   }
   const original: Manifest = state ? JSON.parse(fs.readFileSync(path.join(backupDir, 'package.json'), 'utf8')) : JSON.parse(current);
   const workspace = o.workspace(repo);
-  const { known, unknown, undeclared } = detectZhinPackages(original, new Set(workspace.map((e) => e.name)));
+  const configFile = findConfigFile(project);
+  if (!configFile) throw new DevLinkError('Missing configVersion: 2 configuration; run zhin setup');
+  const configText = fs.readFileSync(path.join(project, configFile), 'utf8');
+  readSourcePluginOrder(configText, configFile.endsWith('.json') ? 'JSON' : 'YAML');
+  const config = configFile.endsWith('.json') ? JSON.parse(configText) : parseYaml(configText);
+  const { known, unknown, undeclared } = detectZhinPackages(original, new Set(workspace.map((e) => e.name)), config);
   if (known.length === 0) fail('项目未直接依赖 zhin.js 或任何 @zhin.js/* 包');
-  if (undeclared.length) o.log(`警告：以下包在 zhin.plugins 中声明但未写入依赖，已一并使用本地版本：${undeclared.join(', ')}`);
+  if (undeclared.length) o.log(`警告：以下包在主配置 plugins 中声明但未写入依赖，已一并使用本地版本：${undeclared.join(', ')}`);
   if (unknown.length) o.log(`警告：以下包不在本仓库中，保持 npm 版本：${unknown.join(', ')}`);
   const preset = Object.keys(original.pnpm?.overrides ?? {}).filter(isZhinPackage);
   if (preset.length) fail(`package.json 已有 zhin 相关 pnpm.overrides（${preset.join(', ')}），请先移除再 link`);

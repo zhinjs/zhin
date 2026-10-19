@@ -12,12 +12,14 @@ pnpm exec zhin install @zhin.js/plugin-60s
 
 ## 配置
 
-在应用目录运行安装命令，会安装依赖并挂载到 `package.json#zhin.plugins`，实例名为 `60s`。在 `zhin.config.yml` 的实例节点修改配置：
+在应用目录运行安装命令，会安装依赖并挂载到 主配置 `plugins` 映射，实例名为 `60s`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
+configVersion: 2
 plugins:
-  60s:
-    apiBase: https://60s.viki.moe  # 可选，默认官方地址
+  60s: "@zhin.js/plugin-60s"
+60s:
+  apiBase: https://60s.viki.moe # 可选，默认官方地址
 ```
 
 每个插件实例拥有独立的 API Client。配置更新由当前 generation 的 Client 即时读取，多个实例不会共享或覆盖运行时地址。

@@ -40,18 +40,20 @@ Webhook requires Root to provide `@zhin.js/host-http` (`zhin runtime start` asse
 ## Configuration (Plugin Runtime)
 
 ```yaml
+configVersion: 2
 # zhin.config.yml
 plugins:
-  github:
-    webhook_path: /github/webhook
-    auto_reply_repos:
-      - zhinjs/zhin
-    workspace_root: ./data/github-workspaces
-    endpoints:
-      - id: my-github-bot
-        app_id: "${GITHUB_APP_ID}"
-        private_key: ./data/github-app.pem
-        webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
+  github: "@zhin.js/adapter-github"
+github:
+  webhook_path: /github/webhook
+  auto_reply_repos:
+    - zhinjs/zhin
+  workspace_root: ./data/github-workspaces
+  endpoints:
+    - id: my-github-bot
+      app_id: "${GITHUB_APP_ID}"
+      private_key: ./data/github-app.pem
+      webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
 ```
 
 `private_key` supports both file paths and PEM content. When `webhook_secret` is not configured, only API outbound / agent tools are available (no inbound).
@@ -61,15 +63,17 @@ plugins:
 Multiple Apps: a single plugin instance can attach multiple endpoints. Each endpoint requires `id`, `app_id`, and `private_key`:
 
 ```yaml
+configVersion: 2
 plugins:
-  github:
-    endpoints:
-      - id: app-a
-        app_id: 123456
-        private_key: ./data/app-a.pem
-      - id: app-b
-        app_id: 234567
-        private_key: ./data/app-b.pem
+  github: "@zhin.js/adapter-github"
+github:
+  endpoints:
+    - id: app-a
+      app_id: 123456
+      private_key: ./data/app-a.pem
+    - id: app-b
+      app_id: 234567
+      private_key: ./data/app-b.pem
 ```
 
 ## Removed Capabilities

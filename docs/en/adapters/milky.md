@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-milky
 - `@zhin.js/adapter` — convention-based `adapters/milky/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 `AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol layer receives one expanded endpoint configuration and does not inspect nested endpoint rows or infer endpoint identity from process environment variables.
 
@@ -49,19 +49,21 @@ Outbound: `send({ conversation, payload })` -> HTTP `send_private_message` / `se
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  milky:
-    connection: ws
-    reconnect_interval: 5000
-    heartbeat_interval: 30000
-    endpoints:
-      - id: milky-bot
-        baseUrl: "http://127.0.0.1:8080"
-        access_token: "${MILKY_ACCESS_TOKEN}"
+  milky: "@zhin.js/adapter-milky"
+milky:
+  connection: ws
+  reconnect_interval: 5000
+  heartbeat_interval: 30000
+  endpoints:
+    - id: milky-bot
+      baseUrl: "http://127.0.0.1:8080"
+      access_token: "${MILKY_ACCESS_TOKEN}"
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-milky` (`instanceKey: milky`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-milky` (`instanceKey: milky`).
 
 ## Connection Modes
 

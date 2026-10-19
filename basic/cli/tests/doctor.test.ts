@@ -18,7 +18,7 @@ describe('doctor console diagnostics', () => {
     try {
       fs.writeFileSync(path.join(directory, 'package.json'), '{ invalid json');
       fs.writeFileSync(path.join(directory, 'zhin.config.json'), JSON.stringify({
-        plugins: { sandbox: {} },
+        configVersion: 2, plugins: {sandbox: '@zhin.js/adapter-sandbox'}, sandbox: {},
         http: { token: 'test-token', corsOrigins: ['https://console.zhin.dev'] },
         ...(decisions ? { ai: { decisions: { provider: 'root/typesafe', skills: { mode: 'off' } } } } : {}),
       }));
@@ -39,7 +39,7 @@ describe('doctor console diagnostics', () => {
   });
 
   it('detects missing Sandbox, CORS, and token config', () => {
-    const diagnosis = diagnoseConsoleConfig({ plugins: { example: {} }, http: {} });
+    const diagnosis = diagnoseConsoleConfig({ configVersion: 2, plugins: {example: 'example'}, example: {}, http: {} });
 
     expect(diagnosis.missingSandboxPlugin).toBe(true);
     expect(diagnosis.missingConsoleOrigin).toBe(true);
@@ -48,7 +48,7 @@ describe('doctor console diagnostics', () => {
 
   it('fills first-run Console and Sandbox config without dropping existing plugins', () => {
     const config: Record<string, unknown> = {
-      plugins: { example: {} },
+      configVersion: 2, plugins: {example: 'example'}, example: {},
       http: { port: 8086 },
     };
 
@@ -56,7 +56,7 @@ describe('doctor console diagnostics', () => {
     const diagnosis = diagnoseConsoleConfig(config);
 
     expect(changed).toBe(true);
-    expect(config.plugins).toEqual({ example: {}, sandbox: {} });
+    expect(config.plugins).toEqual({example: 'example', sandbox: '@zhin.js/adapter-sandbox'});
     expect(config.http).toMatchObject({
       port: 8086,
       token: '${HTTP_TOKEN}',
@@ -71,7 +71,7 @@ describe('doctor console diagnostics', () => {
 
   it('does not rewrite already healthy config', () => {
     const config: Record<string, unknown> = {
-      plugins: { sandbox: {} },
+      configVersion: 2, plugins: {sandbox: '@zhin.js/adapter-sandbox'}, sandbox: {},
       http: { token: '${HTTP_TOKEN}', corsOrigins: ['https://console.zhin.dev'] },
     };
 
@@ -81,7 +81,7 @@ describe('doctor console diagnostics', () => {
   it('does not repair legacy list-form plugins in the normal doctor path', () => {
     const config: Record<string, unknown> = { plugins: ['@zhin.js/adapter-sandbox'] };
     expect(() => applyConsoleConfigFixes(config))
-      .toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+      .toThrow(/configVersion/);
   });
 });
 

@@ -149,7 +149,7 @@ describe('create-zhin config', () => {
 
         expect(parsed.http.base).toBe('/api')
         expect(parsed.http.corsOrigins).toEqual(['https://console.zhin.dev'])
-        expect(parsed.plugins.sandbox.endpoints).toHaveLength(1)
+        expect(parsed.sandbox.endpoints).toHaveLength(1)
         // legacy 顶层键不得出现（runtime config-composer additionalProperties: false）
         expect(parsed.inbox).toBeUndefined()
         expect(parsed.endpoints).toBeUndefined()

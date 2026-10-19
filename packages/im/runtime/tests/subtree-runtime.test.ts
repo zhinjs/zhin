@@ -65,7 +65,7 @@ describe('Plugin subtree HMR', () => {
       default: defineCommand({ execute: ({ use }) => use(siblingValue) }),
     });
 
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -205,10 +205,7 @@ async function createProject(): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [
-        { package: '@test/child', instanceKey: 'child' },
-        { package: '@test/sibling', instanceKey: 'sibling' },
-      ],
+      plugins: [],
     },
   });
   await pluginPackage(root, 'child', '@test/child');

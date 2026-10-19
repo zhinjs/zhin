@@ -10,11 +10,13 @@ pnpm exec zhin install @zhin.js/plugin-code-runner
 
 ## Usage
 
-Run the installation command from your application directory. It installs the package and mounts the `code-runner` instance in `package.json#zhin.plugins`. The corresponding `zhin.config.yml` node is:
+Run the installation command from your application directory. It installs the package and mounts the `code-runner` instance in 主配置 `plugins` 映射. The corresponding `zhin.config.yml` node is:
 
 ```yaml
+configVersion: 2
 plugins:
-  code-runner: {}
+  code-runner: "@zhin.js/plugin-code-runner"
+code-runner: {}
 ```
 
 ## Configuration

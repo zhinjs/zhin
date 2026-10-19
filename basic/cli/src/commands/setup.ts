@@ -9,7 +9,7 @@ import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
 import { logger } from '../utils/logger.js';
-import { findConfigFile, readConfig, saveConfig } from '../utils/config-file.js';
+import { findConfigFile, prepareConfigSave, readConfig } from '../utils/config-file.js';
 import {
   configureDatabaseOptions,
   configureAdapters,
@@ -204,9 +204,10 @@ export const setupCommand = new Command('setup')
     } else {
       console.log(chalk.yellow('未找到配置文件，将创建 zhin.config.yml\n'));
       config = {
+        configVersion: 2,
         log_level: 'INFO',
-        // Plugin Runtime 配置形态：plugins 为 instanceKey → 配置 的映射
-        // （adapter/插件挂载清单在 package.json 的 zhin.plugins）
+        disable_plugins: [],
+        // plugins maps stable instance aliases to packages.
         plugins: {}
       };
     }
@@ -234,13 +235,18 @@ export const setupCommand = new Command('setup')
 
       finalizeWizardOptions(wizardOptions);
       applyWizardOptionsToConfig(config, wizardOptions);
-      await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai, wizardOptions.database);
 
+      let decisions: Awaited<ReturnType<typeof configureTypeSafeDecisions>> | undefined;
       if (options.decisions) {
-        const decisions = await configureTypeSafeDecisions(config);
-        // Validate manifest collisions before applying changes to the config document.
-        await saveTypeSafeSetupDependencies(cwd, decisions);
+        decisions = await configureTypeSafeDecisions(config);
         applyTypeSafeDecisionsToConfig(config, decisions);
+      }
+
+      // Candidate validation and the original source revision precede env/dependency writes.
+      const configTransaction = await prepareConfigSave(configPath, config);
+      await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai, wizardOptions.database);
+      if (decisions) {
+        await saveTypeSafeSetupDependencies(cwd, decisions);
         console.log(chalk.gray(options.global
           ? '  ✓ 已配置 TypeSafe 决策服务；稍后自动安装全局实例依赖。'
           : '  ✓ 已配置 TypeSafe 决策服务；运行 pnpm install 后启动。'));
@@ -272,7 +278,7 @@ export const setupCommand = new Command('setup')
       // 保存配置：仅在配置实际有变更时落盘（--bootstrap 等组合不再静默跳过）
       const configChanged = JSON.stringify(config) !== configBefore;
       if (configChanged) {
-        await saveConfig(configPath, config);
+        await configTransaction?.commit();
         console.log('');
         console.log(chalk.bold.green('✅ 配置已保存'));
         console.log(chalk.gray(`配置文件: ${formatDisplayPath(configPath)}`));

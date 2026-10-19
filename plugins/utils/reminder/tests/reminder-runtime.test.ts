@@ -125,20 +125,20 @@ describe('persistent reminder through real Runtime discovery', () => {
     const f = await fixture(); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {
       await f.runtime.start(); const provider = f.tasks('alpha');
-      let snapshot = await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
+      await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
         parameters: { text: 'inflight', at: new Date(Date.now() + 1000).toISOString() } });
       let complete!: (value: string) => void;
       f.send.mockImplementationOnce(() => new Promise<string>(resolve => { complete = resolve; }));
       clock.mockReturnValue(Date.now() + 1000); const inflight = f.jobs[0]!.execute();
       await vi.waitFor(() => expect(f.send).toHaveBeenCalledTimes(1));
-      snapshot = await provider.read(); expect(snapshot.tasks[0]!.state).toBe('unknown');
+      const snapshot = await provider.read(); expect(snapshot.tasks[0]!.state).toBe('unknown');
       expect(snapshot.tasks[0]!.actions).toEqual(['cancel']);
       expect(snapshot.tasks[0]!.nextRunAt).toBeUndefined();
       await expect(mutate(provider, snapshot, snapshot.tasks[0]!.id, 'resume')).rejects.toMatchObject({ code: 'invalid_input' });
       await expect(mutate(provider, snapshot, snapshot.tasks[0]!.id, 'pause')).rejects.toMatchObject({ code: 'invalid_input' });
-      snapshot = await mutate(provider, snapshot, snapshot.tasks[0]!.id, 'cancel'); complete('delivered'); await inflight;
+      await mutate(provider, snapshot, snapshot.tasks[0]!.id, 'cancel'); complete('delivered'); await inflight;
       expect((await provider.read()).tasks[0]!.state).toBe('cancelled');
-      const unknownId = randomUUID(); snapshot = await provider.create({ requestId: unknownId, expectedRevision: (await provider.read()).revision, target,
+      const unknownId = randomUUID(); await provider.create({ requestId: unknownId, expectedRevision: (await provider.read()).revision, target,
         parameters: { text: 'unknown', at: new Date(Date.now() + 1000).toISOString() } });
       f.send.mockResolvedValueOnce(null); clock.mockReturnValue(Date.now() + 1000);
       await f.jobs[0]!.execute(); await f.jobs[0]!.execute(); expect(f.send).toHaveBeenCalledTimes(2);
@@ -307,9 +307,9 @@ describe('persistent reminder through real Runtime discovery', () => {
     const f = await fixture();
     try {
       await f.runtime.start(); const before = f.runtime.snapshot;
-      await expect(f.runtime.patchConfig([{ op: 'set', path: ['plugins', 'alpha', 'timezone'], value: 'invalid/timezone' }])).rejects.toThrow('IANA');
+      await expect(f.runtime.patchConfig([{ op: 'set', path: ['alpha', 'timezone'], value: 'invalid/timezone' }])).rejects.toThrow('IANA');
       expect(f.runtime.snapshot).toBe(before); expect(f.active.size).toBe(2);
-      await expect(f.runtime.patchConfig([{ op: 'set', path: ['plugins', 'alpha', 'maxTasks'], value: 33 }])).rejects.toThrow();
+      await expect(f.runtime.patchConfig([{ op: 'set', path: ['alpha', 'maxTasks'], value: 33 }])).rejects.toThrow();
       const host = before.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(pluginVerificationToken.id) as PluginVerificationHost;
       expect(host.checks()[0]!.effects.join()).toContain('不发送'); expect(f.send).not.toHaveBeenCalled();
       const exchange = vi.spyOn(f.db.state!, 'compareExchange');
@@ -401,7 +401,7 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
     const path = join(project, relative); await mkdir(dirname(path), { recursive: true }); await writeFile(path, module ? '' : JSON.stringify(value)); if (module) modules.set(path, value);
   };
   const features = [{ package: '@test/command' }, { package: '@test/schedule' }];
-  await write('package.json', { name: '@test/root', dependencies: { '@test/reminder': '*', '@test/command': '*', '@test/schedule': '*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features, plugins: ['alpha', 'beta'].map(instanceKey => ({ package: '@test/reminder', instanceKey })) } });
+  await write('package.json', { name: '@test/root', dependencies: { '@test/reminder': '*', '@test/command': '*', '@test/schedule': '*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features, plugins: [] } });
   await write('plugin.ts', { default: definePlugin({ name: 'root' }) }, true);
   for (const [name, value] of [['command', commandFeature], ['schedule', scheduleFeature]] as const) {
     await write(`packages/${name}/package.json`, { name: `@test/${name}`, zhin: { protocol: 1, type: 'feature', entry: './index.ts' } });
@@ -417,7 +417,7 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
   const send = vi.fn<NonNullable<import('../../../../packages/im/plugin-runtime/src/index.js').OutboundRootHost['sendTarget']>>().mockResolvedValue('message-id');
   const outbound = { send: vi.fn().mockResolvedValue(null), sendTarget: send };
   const loader: ModuleRuntime = { async load<T>(source: string): Promise<T> { if (!modules.has(source)) throw new Error(`Missing fixture module ${source}`); return modules.get(source) as T; }, async close() {} };
-  const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader, config: { plugins: { alpha: { commandNamespace: 'a', ...settings }, beta: { commandNamespace: 'b' } } }, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission }) {
+  const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader, config: { configVersion: 2, plugins: { alpha: '@test/reminder', beta: '@test/reminder' }, alpha: { commandNamespace: 'a', ...settings }, beta: { commandNamespace: 'b' } }, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission }) {
     const database = persistence ? db : { ...db, state: undefined };
     resources.provide(databaseRootHostToken, database); resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), database, admission));
     resources.provide(scheduleRootHostToken, schedule); resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), schedule, admission));

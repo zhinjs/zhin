@@ -29,7 +29,7 @@ it('closes captured candidate Host declaration windows when actual Plugin setup 
     schedule.register({ id: 'allowed-in-setup', cron: '* * * * * *', execute() {} });
     throw new Error('setup intentionally failed');
   } }) });
-  const runtime = new RootRuntime({ projectRoot: project, modules,
+  const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2 },
     environment: { name: 'test', mode: 'test', platform: 'node' },
     installResources({ resources, admission }) {
       resources.provide(databaseRootHostToken, databasePort);
@@ -61,9 +61,7 @@ it.skipIf(!sqliteAvailable)('discovers reminder and preferences plugins with own
   const schedulers = new Map<string, PluginScheduleHost>();
   await writeJson(join(project, 'package.json'), { name: '@test/root', dependencies: {
     '@test/reminder': 'workspace:*', '@test/preferences': 'workspace:*', '@test/command': 'workspace:*' },
-  zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [
-    { package: '@test/reminder', instanceKey: 'reminder' }, { package: '@test/preferences', instanceKey: 'preferences' },
-  ] } });
+  zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [] } });
   modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
   await touch(join(project, 'plugin.ts'));
   await writeJson(join(project, 'packages/command/package.json'), {
@@ -126,6 +124,7 @@ it.skipIf(!sqliteAvailable)('discovers reminder and preferences plugins with own
   const config = { dialect: 'sqlite', filename: join(project, 'state.sqlite') } as const;
   let database = createDatabaseHost(config);
   const createRuntime = () => new RootRuntime({ projectRoot: project, modules,
+    config: { configVersion: 2, plugins: { reminder: '@test/reminder', preferences: '@test/preferences' } },
     environment: { name: 'test', mode: 'test', platform: 'node' },
     installResources(context) {
       installDatabaseHost(database)(context);

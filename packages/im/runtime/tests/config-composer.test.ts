@@ -7,7 +7,6 @@ import { Schema } from '../../../../basic/schema/src/index.js';
 import {
   ConfigComposer,
   ConfigPatchPlanner,
-  ConfigSchemaCollisionError,
   ConfigValidationError,
   NodePackageResolver,
   ProjectGraphService,
@@ -39,24 +38,24 @@ describe('hierarchical Plugin config', () => {
     };
     const childSchema = { ...rootSchema, default: { token: 'ok' } };
     const root = await configProject({ rootSchema, childSchema });
-    const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root);
+    const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const composer = new ConfigComposer();
-    const composed = await composer.compose(graph, { plugin: { token: 'ok' } });
+    const composed = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, plugin: { token: 'ok' } });
     expect(composed.views.get(graph.root.children[0]!.id)).toEqual({ token: 'ok' });
     const ownRoot = composed.ownSchemas.get(graph.root.id)!;
     const ownChild = composed.ownSchemas.get(graph.root.children[0]!.id)!;
     expect(validatePluginConfigSchema(ownRoot, undefined)).toMatchObject([{ keyword: 'required', params: { missingProperty: 'token' } }]);
-    await expect(composer.compose(graph, {})).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' } })).rejects.toBeInstanceOf(ConfigValidationError);
     expect(validatePluginConfigSchema(ownChild, undefined)).toEqual([]);
     expect(validatePluginConfigSchema(ownRoot, { token: 'ok' })).toEqual([]);
     expect(validatePluginConfigSchema(ownRoot, null)).toMatchObject([{ keyword: 'type' }]);
     await writeFile(join(root, 'schema.json'), JSON.stringify({ ...rootSchema, default: { token: 'ok' } }));
-    const defaulted = await composer.compose(graph, {});
+    const defaulted = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' } });
     expect(defaulted.views.get(graph.root.id)).toEqual({ token: 'ok' });
     expect(validatePluginConfigSchema(defaulted.ownSchemas.get(graph.root.id)!, undefined)).toEqual([]);
     await writeFile(join(root, 'plugins/child/schema.json'), JSON.stringify({ ...rootSchema, default: { token: 'x' } }));
     expect(validatePluginConfigSchema({ ...ownChild, default: { token: 'x' } }, undefined)).toMatchObject([{ keyword: 'minLength' }]);
-    await expect(composer.compose(graph, {})).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' } })).rejects.toBeInstanceOf(ConfigValidationError);
     expect(childSchema.default).toEqual({ token: 'ok' });
   });
 
@@ -65,20 +64,20 @@ describe('hierarchical Plugin config', () => {
     await rm(join(root, 'schema.json'));
     await rm(join(root, 'plugins/child/schema.json'));
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const rootSchema = Schema.object({ label: Schema.string().default('root') });
     const childSchema = Schema.object({ count: Schema.number().min(1).default(2), token: Schema.string().secret() });
     const modules = { async load<T>(source: string): Promise<T> {
       return { default: definePlugin({ name: 'fixture', config: source === join(graph.root.children[0]!.package.root, 'plugin.ts') ? childSchema : rootSchema }) } as T;
     } };
     const composer = new ConfigComposer([], modules);
-    const composed = await composer.compose(graph, { plugins: { child: { token: '${TOKEN}' } } });
+    const composed = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { token: '${TOKEN}' } });
     expect(composed.views.get(graph.root.id)).toEqual({ label: 'root' });
     expect(composed.views.get(graph.root.children[0]!.id)).toEqual({ count: 2, token: '${TOKEN}' });
     expect(composed.ownSchemas.get(graph.root.children[0]!.id)!.properties).toMatchObject({ token: { writeOnly: true } });
-    await expect(composer.compose(graph, { plugins: { child: { count: 0 } } })).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { count: 0 } })).rejects.toBeInstanceOf(ConfigValidationError);
     await writeFile(join(root, 'schema.json'), '{}');
-    await expect(composer.compose(graph)).rejects.toThrow('declares both plugin config and schema.json');
+    await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' } })).rejects.toThrow('declares both plugin config and schema.json');
   });
 
   it('composes child schemas, applies defaults, and exposes owner-only views', async () => {
@@ -96,28 +95,23 @@ describe('hierarchical Plugin config', () => {
       nested: true,
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
-    const config = await new ConfigComposer().compose(graph, {});
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    const config = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' } });
 
     expect(config.document).toEqual({
       plugin: { endpoint: 'local' },
-      plugins: { child: { retries: 3, nested: { enabled: true } } },
+      configVersion: 2, disable_plugins: [], plugins: { child: '@test/child' }, child: { retries: 3 },
     });
     expect(config.views.get(graph.root.id)).toEqual({ endpoint: 'local' });
     expect(config.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
-    expect(config.views.get(graph.root.children[0]!.children[0]!.id)).toEqual({
-      enabled: true,
-    });
+    expect(graph.root.children[0]!.children).toEqual([]);
   });
 
   it('injects optional commandNamespace into root and child Plugin config views', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
-    const config = await new ConfigComposer().compose(graph, {
-      plugin: { commandNamespace: 'root admin' },
-      plugins: { child: { commandNamespace: 'child' } },
-    });
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    const config = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, plugin: { commandNamespace: 'root admin' }, child: { commandNamespace: 'child' } });
 
     expect(config.views.get(graph.root.id)).toEqual({ commandNamespace: 'root admin' });
     expect(config.views.get(graph.root.children[0]!.id)).toEqual({ commandNamespace: 'child' });
@@ -132,9 +126,9 @@ describe('hierarchical Plugin config', () => {
       childSchema: {},
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
 
-    await expect(new ConfigComposer().compose(graph, {})).rejects.toMatchObject({
+    await expect(new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' } })).rejects.toMatchObject({
       name: 'ConfigSchemaCollisionError',
       instanceKey: 'commandNamespace',
     });
@@ -150,17 +144,11 @@ describe('hierarchical Plugin config', () => {
       },
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver, {
-      disabledPluginInstanceKeys: ['child'],
-    }).inspect(root);
-    const config = await new ConfigComposer(['child']).compose(graph, {
-      plugins: {child: {retries: 3, secret: 'preserved while inactive'}},
-    });
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' }, disable_plugins: ['child'] });
+    const config = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, disable_plugins: ['child'], child: {retries: 3, secret: 'preserved while inactive'} });
 
     expect(graph.root.children).toEqual([]);
-    expect(config.document.plugins).toEqual({
-      child: {retries: 3, secret: 'preserved while inactive'},
-    });
+    expect(config.document.child).toEqual({retries: 3, secret: 'preserved while inactive'});
     expect([...config.views.keys()]).toEqual([graph.root.id]);
   });
 
@@ -188,22 +176,18 @@ describe('hierarchical Plugin config', () => {
       },
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const composer = new ConfigComposer();
 
-    const config = await composer.compose(graph, {
-      plugins: { child: { profiles: { default: { enabled: true } } } },
-    });
+    const config = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { profiles: { default: { enabled: true } } } });
     expect(config.views.get(graph.root.children[0]!.id)).toEqual({
       profiles: { default: { enabled: true } },
     });
 
-    await expect(composer.compose(graph, {
-      plugins: { child: { profiles: { default: { enabled: 'yes' } } } },
-    })).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { profiles: { default: { enabled: 'yes' } } } })).rejects.toBeInstanceOf(ConfigValidationError);
   });
 
-  it('rejects parent fields colliding with child instance keys', async () => {
+  it('does not confuse business fields with historical package-owned child declarations', async () => {
     const root = await configProject({
       rootSchema: {},
       childSchema: {
@@ -213,11 +197,44 @@ describe('hierarchical Plugin config', () => {
       childOwnCollision: true,
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
 
-    await expect(new ConfigComposer().compose(graph, {})).rejects.toBeInstanceOf(
-      ConfigSchemaCollisionError,
-    );
+    const composed = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { nested: true } });
+    expect(composed.views.get(graph.root.children[0]!.id)).toEqual({ nested: true });
+  });
+
+  it('projects top-level menu settings only into the root Feature view', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const declaration = { configVersion: 2, plugins: { child: '@test/child' } };
+    const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root, declaration);
+    const menuStyle = { title: '我的菜单', subtitle: '按插件查看', accentColor: '#123456', backgroundImage: 'https://example.com/menu.png' };
+    const composer = new ConfigComposer();
+    for (const menuKeyword of ['帮助', false, '']) {
+      const composed = await composer.compose(graph, { ...declaration, menuKeyword, menuStyle });
+      expect(composed.document).toMatchObject({ menuKeyword, menuStyle });
+      expect(composed.views.get(graph.root.id)).toEqual({ menuKeyword, menuStyle });
+      expect(composed.views.get(graph.root.children[0]!.id)).toEqual({});
+      expect(composed.document.plugin).toEqual({});
+    }
+    for (const invalid of [{ menuKeyword: true }, { menuKeyword: 1 }, { menuStyle: 'image' }, { menuStyle: { title: 1 } }]) {
+      await expect(composer.compose(graph, { ...declaration, ...invalid })).rejects.toBeInstanceOf(ConfigValidationError);
+    }
+    const plan = await new ConfigPatchPlanner().plan(graph, { ...declaration, menuKeyword: '帮助' }, [
+      { op: 'set', path: ['menuKeyword'], value: false },
+    ]);
+    expect(plan.roots).toEqual([graph.root.id]);
+    expect(plan.views.get(graph.root.id)).toEqual({ menuKeyword: false });
+  });
+
+  it('reserves application menu fields against root business schema collisions', async () => {
+    for (const key of ['menuKeyword', 'menuStyle']) {
+      const root = await configProject({ rootSchema: { properties: { [key]: {} } }, childSchema: {} });
+      const declaration = { configVersion: 2, plugins: { child: '@test/child' } };
+      const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root, declaration);
+      await expect(new ConfigComposer().compose(graph, declaration)).rejects.toMatchObject({
+        name: 'ConfigSchemaCollisionError', instanceKey: key,
+      });
+    }
   });
 
   it('accepts opaque Host keys without projecting them into Plugin views', async () => {
@@ -234,18 +251,8 @@ describe('hierarchical Plugin config', () => {
       },
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
-    const config = await new ConfigComposer().compose(graph, {
-      http: { port: 8086, token: 'dev' },
-      database: { dialect: 'sqlite', filename: './data.db' },
-      ai: { providers: {} },
-      mcp: { enabled: true, path: '/mcp' },
-      a2a: { enabled: true },
-      speech: { stt: { provider: 'ollama' } },
-      htmlRenderer: { width: 540 },
-      assistant: { enabled: true },
-      log_level: 'debug',
-    });
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    const config = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, http: { port: 8086, token: 'dev' }, database: { dialect: 'sqlite', filename: './data.db' }, ai: { providers: {} }, mcp: { enabled: true, path: '/mcp' }, a2a: { enabled: true }, speech: { stt: { provider: 'ollama' } }, htmlRenderer: { width: 540 }, assistant: { enabled: true }, log_level: 'debug' });
 
     expect(config.document.http).toEqual({ port: 8086, token: 'dev' });
     expect(config.document.database).toEqual({ dialect: 'sqlite', filename: './data.db' });
@@ -263,12 +270,12 @@ describe('hierarchical Plugin config', () => {
   it('validates structured decision policy limits through the composed Host Schema', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const composer = new ConfigComposer();
     for (const field of ['topK', 'maxCandidates', 'maxSelections']) {
       const ai = { decisions: { provider: 'root/typesafe', memory: { mode: 'active', [field]: Number.MAX_SAFE_INTEGER } } };
-      await expect(composer.compose(graph, { ai })).resolves.toMatchObject({ document: { ai } });
-      await expect(composer.compose(graph, { ai: { decisions: { provider: 'root/typesafe',
+      await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, ai })).resolves.toMatchObject({ document: { ai } });
+      await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, ai: { decisions: { provider: 'root/typesafe',
         memory: { mode: 'active', [field]: Number.MAX_SAFE_INTEGER + 1 } } } })).rejects.toBeInstanceOf(ConfigValidationError);
     }
   });
@@ -276,8 +283,8 @@ describe('hierarchical Plugin config', () => {
   it('keeps the canonical Host Schema immutable across compositions', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
-    const first = await new ConfigComposer().compose(graph, {});
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    const first = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' } });
     const firstProperties = first.effectiveSchema.properties as Record<string, Record<string, unknown>>;
 
     expect(Object.isFrozen(firstProperties.http)).toBe(true);
@@ -285,7 +292,7 @@ describe('hierarchical Plugin config', () => {
       firstProperties.http!.type = 'string';
     }).toThrow(TypeError);
 
-    await expect(new ConfigComposer().compose(graph, { http: 'invalid' })).rejects.toBeInstanceOf(
+    await expect(new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, http: 'invalid' })).rejects.toBeInstanceOf(
       ConfigValidationError,
     );
   });
@@ -293,10 +300,10 @@ describe('hierarchical Plugin config', () => {
   it('validates readiness selectors and rejects misspelled or ambiguous policy fields', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const composer = new ConfigComposer();
     const valid = { endpoints: [{ owner: 'root/sandbox', name: 'sandbox~bot' }], agents: ['zhin'] };
-    const config = await composer.compose(graph, { http: { readiness: valid } });
+    const config = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, http: { readiness: valid } });
     expect(config.document.http).toEqual({ readiness: { ...valid, database: true } });
     for (const readiness of [
       { endpoint: [] }, { database: 'yes' }, { agents: ['zhin', 'zhin'] },
@@ -304,7 +311,7 @@ describe('hierarchical Plugin config', () => {
       { endpoints: [{ owner: 'root/sandbox' }] },
       { endpoints: [{ owner: 'root/sandbox', name: 'slot\0injection' }] },
     ]) {
-      await expect(composer.compose(graph, { http: { readiness } })).rejects.toBeInstanceOf(ConfigValidationError);
+      await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, http: { readiness } })).rejects.toBeInstanceOf(ConfigValidationError);
     }
   });
 
@@ -317,21 +324,17 @@ describe('hierarchical Plugin config', () => {
       childSchema: {},
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
 
-    await expect(new ConfigComposer().compose(graph, {
-      plugin: { port: 'bad' },
-    })).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, plugin: { port: 'bad' } })).rejects.toBeInstanceOf(ConfigValidationError);
   });
 
   it('rejects the removed collaboration Host configuration', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
 
-    await expect(new ConfigComposer().compose(graph, {
-      collaboration: { enabled: true },
-    })).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, collaboration: { enabled: true } })).rejects.toThrow('undeclared Plugin configuration block');
   });
 
   it('pinpoints the offending additionalProperty key in validation issues', async () => {
@@ -344,11 +347,9 @@ describe('hierarchical Plugin config', () => {
       childSchema: {},
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
 
-    const failure = await new ConfigComposer().compose(graph, {
-      plugin: { port: 8080, prto: 8081 },
-    }).then(
+    const failure = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, plugin: { port: 8080, prto: 8081 } }).then(
       () => { throw new Error('expected ConfigValidationError'); },
       (error: unknown) => error,
     );
@@ -366,11 +367,9 @@ describe('hierarchical Plugin config', () => {
       childSchema: {},
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
 
-    const failure = await new ConfigComposer().compose(graph, {
-      plugin: { port: 'bad' },
-    }, 'zhin.config.yml').then(
+    const failure = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, plugin: { port: 'bad' } }, 'zhin.config.yml').then(
       () => { throw new Error('expected ConfigValidationError'); },
       (error: unknown) => error,
     );
@@ -401,57 +400,52 @@ describe('hierarchical Plugin config', () => {
       },
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
-    const config = await new ConfigComposer().compose(graph, {
-      plugins: {
-        child: {
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    const config = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: {
           master: 'u-top',
           trusted: ['t1'],
           endpoints: [{ name: 'bot-a', master: 'u-ep', trusted: ['t2'] }],
-        },
-      },
-    });
-    expect(config.document.plugins).toMatchObject({
+        } });
+    expect(config.document).toMatchObject({
       child: {
         master: 'u-top',
         trusted: ['t1'],
         endpoints: [{ name: 'bot-a', master: 'u-ep', trusted: ['t2'] }],
       },
     });
-    const pluginsSchema = (config.effectiveSchema.properties as Record<string, any>).plugins;
-    const adapterProps = pluginsSchema.properties.child.properties;
+    const adapterProps = (config.effectiveSchema.properties as Record<string, any>).child.properties;
     expect(adapterProps.master).toBeTruthy();
     expect(adapterProps.trusted).toBeTruthy();
     expect(adapterProps.endpoints.items.properties.master).toBeTruthy();
     expect(adapterProps.endpoints.items.properties.trusted).toBeTruthy();
   });
 
-  it('plans the shallowest forest whose owner views actually changed', async () => {
+  it('plans the owner of nested business values without creating implicit child scopes', async () => {
     const root = await configProject({
       rootSchema: {},
       childSchema: {
         type: 'object',
-        properties: { retries: { type: 'integer', default: 3 } },
+        properties: { retries: { type: 'integer', default: 3 }, nested: { type: 'object', properties: { enabled: { type: 'boolean', default: true } } } },
       },
       nested: true,
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const child = graph.root.children[0]!;
-    const nested = child.children[0]!;
+    expect(child.children).toEqual([]);
     const planner = new ConfigPatchPlanner();
 
-    const nestedOnly = await planner.plan(graph, {}, [{
+    const nestedOnly = await planner.plan(graph, { configVersion: 2, plugins: { child: '@test/child' } }, [{
       op: 'set',
-      path: ['plugins', 'child', 'nested', 'enabled'],
+      path: ['child', 'nested', 'enabled'],
       value: false,
     }]);
-    expect(nestedOnly.roots).toEqual([nested.id]);
-    expect(nestedOnly.views.get(nested.id)).toEqual({ enabled: false });
+    expect(nestedOnly.roots).toEqual([child.id]);
+    expect(nestedOnly.views.get(child.id)).toEqual({ retries: 3, nested: { enabled: false } });
 
     const collapsed = await planner.plan(graph, nestedOnly.document, [
-      { op: 'set', path: ['plugins', 'child', 'retries'], value: 5 },
-      { op: 'set', path: ['plugins', 'child', 'nested', 'enabled'], value: true },
+      { op: 'set', path: ['child', 'retries'], value: 5 },
+      { op: 'set', path: ['child', 'nested', 'enabled'], value: true },
     ]);
     expect(collapsed.roots).toEqual([child.id]);
   });
@@ -465,20 +459,18 @@ describe('hierarchical Plugin config', () => {
       },
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
-    const plan = await new ConfigPatchPlanner().plan(graph, {}, [{
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    const plan = await new ConfigPatchPlanner().plan(graph, { configVersion: 2, plugins: { child: '@test/child' } }, [{
       op: 'set',
-      path: ['plugins', 'child', 'retries'],
+      path: ['child', 'retries'],
       value: 3,
     }]);
 
     expect(plan.roots).toEqual([]);
 
-    const changed = await new ConfigPatchPlanner().plan(graph, {
-      plugins: { child: { retries: 9 } },
-    }, [{
+    const changed = await new ConfigPatchPlanner().plan(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { retries: 9 } }, [{
       op: 'remove',
-      path: ['plugins', 'child', 'retries'],
+      path: ['child', 'retries'],
     }]);
     expect(changed.roots).toEqual([graph.root.children[0]!.id]);
     expect(changed.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
@@ -493,15 +485,15 @@ describe('hierarchical Plugin config', () => {
       },
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const planner = new ConfigPatchPlanner();
 
-    await expect(planner.plan(graph, {}, [{
+    await expect(planner.plan(graph, { configVersion: 2, plugins: { child: '@test/child' } }, [{
       op: 'set',
-      path: ['plugins', 'child', 'retries'],
+      path: ['child', 'retries'],
       value: 'bad',
     }])).rejects.toBeInstanceOf(ConfigValidationError);
-    await expect(planner.plan(graph, {}, [{
+    await expect(planner.plan(graph, { configVersion: 2, plugins: { child: '@test/child' } }, [{
       op: 'set',
       path: ['plugins', '__proto__', 'polluted'],
       value: true,
@@ -520,8 +512,8 @@ describe('hierarchical Plugin config', () => {
         childSchema: { type: 'object', properties: {} },
       });
       const resolver = await NodePackageResolver.create(root);
-      const graph = await new ProjectGraphService(resolver).inspect(root);
-      await expect(new ConfigComposer().compose(graph, { plugin: { endpoint: 'local' } }))
+      const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+      await expect(new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, plugin: { endpoint: 'local' } }))
         .rejects.toThrow(/root schema must declare properties/);
     }
   });
@@ -532,11 +524,9 @@ describe('hierarchical Plugin config', () => {
       childSchema: { type: 'object', properties: {} },
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const planner = new ConfigPatchPlanner();
-    const current = {
-      http: { endpoints: [{ url: 'a', token: 't0' }, { url: 'b' }] },
-    };
+    const current = { configVersion: 2, plugins: { child: '@test/child' }, http: { endpoints: [{ url: 'a', token: 't0' }, { url: 'b' }] } };
 
     const updated = await planner.plan(graph, current, [{
       op: 'set',
@@ -544,7 +534,7 @@ describe('hierarchical Plugin config', () => {
       value: 'a2',
     }]);
     expect(updated.candidate).toEqual({
-      http: { endpoints: [{ url: 'a2', token: 't0' }, { url: 'b' }] },
+      configVersion: 2, plugins: { child: '@test/child' }, http: { endpoints: [{ url: 'a2', token: 't0' }, { url: 'b' }] },
     });
 
     const removed = await planner.plan(graph, current, [{
@@ -552,7 +542,7 @@ describe('hierarchical Plugin config', () => {
       path: ['http', 'endpoints', '1'],
     }]);
     expect(removed.candidate).toEqual({
-      http: { endpoints: [{ url: 'a', token: 't0' }] },
+      configVersion: 2, plugins: { child: '@test/child' }, http: { endpoints: [{ url: 'a', token: 't0' }] },
     });
 
     await expect(planner.plan(graph, current, [{
@@ -595,7 +585,7 @@ async function configProject(input: ConfigProjectInput): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [{ package: '@test/child', instanceKey: 'child' }],
+      plugins: [],
     },
   });
   await json(join(root, 'schema.json'), input.rootSchema);

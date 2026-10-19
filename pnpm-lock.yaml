@@ -1968,9 +1968,15 @@ importers:
 
   packages/toolkit/scaffold-wizard:
     dependencies:
+      '@zhin.js/config-file':
+        specifier: workspace:*
+        version: link:../../im/config-file
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../im/plugin-runtime
+      '@zhin.js/runtime':
+        specifier: workspace:*
+        version: link:../../im/runtime
       chalk:
         specifier: ^5.6.2
         version: 5.6.2

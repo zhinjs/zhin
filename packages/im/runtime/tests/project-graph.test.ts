@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -55,7 +55,7 @@ describe('static Project Graph', () => {
     });
 
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, await application(root));
 
     expect(graph.root.children[0]?.id).toBe('root/child');
     expect(graph.root.features[0]?.package.name).toBe('@test/command');
@@ -82,16 +82,14 @@ describe('static Project Graph', () => {
       }],
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver, {
-      disabledPluginInstanceKeys: ['child'],
-    }).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { ...await application(root), disable_plugins: ['child'] });
     expect(graph.root.children).toEqual([]);
     // Physical workspace discovery remains complete for package tooling, while
     // the logical runtime tree no longer mounts or sets up the disabled child.
     expect(graph.buildOrder.map((pkg) => pkg.name)).toEqual(['@test/child', '@test/root']);
   });
 
-  it('resolves ./-relative local plugin directories from the declaring package root', async () => {
+  it('resolves explicit local instances without expanding package-owned children', async () => {
     const root = await project({
       root: {
         name: '@test/root',
@@ -131,14 +129,13 @@ describe('static Project Graph', () => {
     });
 
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, await application(root));
 
     const greeter = graph.root.children.find((child) => child.instanceKey === 'greeter');
     expect(greeter?.id).toBe('root/greeter');
     // 顶层 plugins/ 下的包已被 workspace 扫描登记，source 为 workspace；
     // 更深一层（不在扫描面内）的 ./ 引用才是 local
-    expect(greeter?.children.map((child) => child.id)).toEqual(['root/greeter/nested']);
-    expect(greeter?.children[0]?.package.source).toBe('local');
+    expect(greeter?.children).toEqual([]); // A package's historical children never create hidden instances.
   });
 
   it('rejects local plugin paths that escape the package root', () => {
@@ -174,7 +171,7 @@ describe('static Project Graph', () => {
     });
     const resolver = await NodePackageResolver.create(root);
 
-    await expect(new ProjectGraphService(resolver).inspect(root)).rejects.toBeInstanceOf(
+    await expect(new ProjectGraphService(resolver).inspect(root, await application(root))).rejects.toBeInstanceOf(
       PackageResolutionError,
     );
   });
@@ -240,7 +237,7 @@ describe('static Project Graph', () => {
     });
     const resolver = await NodePackageResolver.create(root);
 
-    await expect(new ProjectGraphService(resolver).inspect(root))
+    await expect(new ProjectGraphService(resolver).inspect(root, await application(root)))
       .rejects.toMatchObject({
         name: 'PackageContractError',
         contract: 'engine',
@@ -312,7 +309,7 @@ describe('static Project Graph', () => {
       ],
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, await application(root));
 
     expect(graph.root.features.map((item) => item.package.name).sort()).toEqual([
       '@zhin.js/adapter',
@@ -392,7 +389,7 @@ describe('static Project Graph', () => {
       ],
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, await application(root));
 
     expect(graph.root.features.map((item) => item.package.name).sort()).toEqual([
       '@zhin.js/adapter',
@@ -434,7 +431,7 @@ describe('static Project Graph', () => {
       }],
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, await application(root));
     expect(graph.root.features).toEqual([]);
   });
 
@@ -495,7 +492,7 @@ describe('static Project Graph', () => {
       ],
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, await application(root));
 
     const command = graph.root.features.find((item) => item.package.name === '@zhin.js/command');
     expect(command?.package.root).toBe(await realpathResolved(join(root, 'packages/command')));
@@ -505,7 +502,7 @@ describe('static Project Graph', () => {
     ]);
   });
 
-  it('inherits child plugins declared on the zhin.js facade', async () => {
+  it('does not instantiate undeclared child plugins from the zhin.js facade', async () => {
     const root = await project({
       root: {
         name: '@test/root',
@@ -571,9 +568,9 @@ describe('static Project Graph', () => {
       ],
     });
     const resolver = await NodePackageResolver.create(root);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, await application(root));
 
-    expect(graph.root.children.map((item) => item.instanceKey).sort()).toEqual(['host', 'router']);
+    expect(graph.root.children).toEqual([]);
     expect(graph.root.features.map((item) => item.package.name)).toEqual(['@zhin.js/command']);
   });
 
@@ -603,7 +600,7 @@ describe('static Project Graph', () => {
       }],
     });
     const compatibleResolver = await NodePackageResolver.create(compatible);
-    await expect(new ProjectGraphService(compatibleResolver).inspect(compatible)).resolves
+    await expect(new ProjectGraphService(compatibleResolver).inspect(compatible, await application(compatible))).resolves
       .toEqual(expect.objectContaining({ root: expect.any(Object) }));
 
     const incompatible = await project({
@@ -631,7 +628,7 @@ describe('static Project Graph', () => {
       }],
     });
     const incompatibleResolver = await NodePackageResolver.create(incompatible);
-    await expect(new ProjectGraphService(incompatibleResolver).inspect(incompatible))
+    await expect(new ProjectGraphService(incompatibleResolver).inspect(incompatible, await application(incompatible)))
       .rejects.toThrow('@test/root requires ^2.0.0, provider declares 1.4.0');
   });
 });
@@ -645,7 +642,10 @@ interface ProjectInput {
 async function project(input: ProjectInput): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-'));
   temporary.push(root);
-  await writeJson(join(root, 'package.json'), input.root);
+  const pkg = structuredClone(input.root) as { zhin: { plugins?: { instanceKey: string; package: string }[] } };
+  await writeJson(join(root, 'zhin.config.json'), { configVersion: 2, plugins: Object.fromEntries((pkg.zhin.plugins ?? []).map(item => [item.instanceKey, item.package])) });
+  pkg.zhin.plugins = [];
+  await writeJson(join(root, 'package.json'), pkg);
   for (const feature of input.features ?? []) {
     await writeJson(join(root, 'packages', feature.directory, 'package.json'), feature.json);
   }
@@ -658,4 +658,8 @@ async function project(input: ProjectInput): Promise<string> {
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(join(path, '..'), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function application(root: string): Promise<Record<string, unknown>> {
+  return JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'));
 }

@@ -49,35 +49,37 @@ refresh_token 的读取顺序：**插件数据库（聊天授权写入）优先*
 ## 配置（`zhin.config.yml`）
 
 ```yaml
+configVersion: 2
 plugins:
-  calendar:
-    provider: google # none | caldav | google | microsoft
-    timezone: Asia/Manila
-    work_day_start: "09:00"
-    work_day_end: "18:00"
-    # OAuth 回调：默认使用 zhin HTTP Host 的本机地址，例如 http://127.0.0.1:8068/calendar/oauth/callback
-    oauth_redirect_base_url: "" # 浏览器和机器人不在同一台机器时，填外部可访问地址，如 https://bot.example.com
-    oauth_callback_path: /calendar/oauth/callback
-    google:
-      enabled: true
-      client_id: ${GOOGLE_CALENDAR_CLIENT_ID}
-      client_secret: ${GOOGLE_CALENDAR_CLIENT_SECRET}
-      refresh_token: "" # 可选后备；聊天授权后可以留空
-      calendar_id: primary
-      token_file: ""
-    microsoft:
-      enabled: false
-      client_id: ${MS_GRAPH_CLIENT_ID}
-      client_secret: ${MS_GRAPH_CLIENT_SECRET} # 公共客户端可留空
-      refresh_token: ""
-      tenant: common
-      calendar_id: "" # 空 / primary / me = 默认日历；否则 Graph calendar id
-      token_file: ""
-    caldav:
-      enabled: false
-      calendar_url: ${CALDAV_CALENDAR_URL}
-      username: ${CALDAV_USERNAME}
-      password: ${CALDAV_PASSWORD}
+  calendar: "@zhin.js/plugin-calendar"
+calendar:
+  provider: google # none | caldav | google | microsoft
+  timezone: Asia/Manila
+  work_day_start: "09:00"
+  work_day_end: "18:00"
+  # OAuth 回调：默认使用 zhin HTTP Host 的本机地址，例如 http://127.0.0.1:8068/calendar/oauth/callback
+  oauth_redirect_base_url: "" # 浏览器和机器人不在同一台机器时，填外部可访问地址，如 https://bot.example.com
+  oauth_callback_path: /calendar/oauth/callback
+  google:
+    enabled: true
+    client_id: ${GOOGLE_CALENDAR_CLIENT_ID}
+    client_secret: ${GOOGLE_CALENDAR_CLIENT_SECRET}
+    refresh_token: "" # 可选后备；聊天授权后可以留空
+    calendar_id: primary
+    token_file: ""
+  microsoft:
+    enabled: false
+    client_id: ${MS_GRAPH_CLIENT_ID}
+    client_secret: ${MS_GRAPH_CLIENT_SECRET} # 公共客户端可留空
+    refresh_token: ""
+    tenant: common
+    calendar_id: "" # 空 / primary / me = 默认日历；否则 Graph calendar id
+    token_file: ""
+  caldav:
+    enabled: false
+    calendar_url: ${CALDAV_CALENDAR_URL}
+    username: ${CALDAV_USERNAME}
+    password: ${CALDAV_PASSWORD}
 ```
 
 运行项目的 `.env`（放在启动 zhin 的项目根目录，不是插件目录）：
@@ -137,14 +139,16 @@ oauth_callback_path: /grokbot/calendar/oauth/callback
 ## CalDAV
 
 ```yaml
+configVersion: 2
 plugins:
-  calendar:
-    provider: caldav
-    caldav:
-      enabled: true
-      calendar_url: ${CALDAV_CALENDAR_URL} # 日历 collection URL
-      username: ${CALDAV_USERNAME}
-      password: ${CALDAV_PASSWORD} # iCloud 请使用 App 专用密码
+  calendar: "@zhin.js/plugin-calendar"
+calendar:
+  provider: caldav
+  caldav:
+    enabled: true
+    calendar_url: ${CALDAV_CALENDAR_URL} # 日历 collection URL
+    username: ${CALDAV_USERNAME}
+    password: ${CALDAV_PASSWORD} # iCloud 请使用 App 专用密码
 ```
 
 CalDAV 不需要聊天授权。

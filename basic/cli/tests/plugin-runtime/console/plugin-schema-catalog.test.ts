@@ -22,8 +22,12 @@ async function writePackage(
   await mkdir(root, { recursive: true });
   await writeFile(join(root, 'package.json'), JSON.stringify({
     name, dependencies,
-    zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins },
+    zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [] },
   }));
+  if ((await Promise.all(roots.map(directory => realpath(directory)))).includes(await realpath(root))) {
+    const entries = plugins.map(item => `${JSON.stringify(item.instanceKey)}:${JSON.stringify(item.package)}`).join(',');
+    await writeFile(join(root, 'zhin.config.json'), `{"configVersion":2,"plugins":{${entries}}}`);
+  }
 }
 
 async function writeSchema(root: string, field: string): Promise<void> {
@@ -83,6 +87,7 @@ describe('PluginSchemaCatalog', () => {
     let rejectCandidate = false;
     const runtime = new RootRuntime({
       projectRoot: root,
+      config: {configVersion: 2, plugins: {child: './plugins/child'}},
       environment: { name: 'test', mode: 'test', platform: 'node' },
       modules: {
         async load<T>(source: string): Promise<T> {
@@ -182,124 +187,41 @@ describe('PluginSchemaCatalog', () => {
     });
   });
 
-  it('resolves multiple local mounts and nested local and npm children from their declaring package', async () => {
+  it('resolves repeated direct local mounts but never implicitly scans nested plugin declarations', async () => {
     const root = await createProject();
-    await writePackage(root, 'schema-project', [
-      { package: './plugins/local', instanceKey: 'first' },
-      { package: './plugins/local', instanceKey: 'second' },
-    ]);
-    const parent = join(root, 'plugins', 'local');
-    await writePackage(parent, 'local-parent', [
-      { package: './plugins/leaf', instanceKey: 'leaf' },
-      { package: '@test/remote', instanceKey: 'remote' },
-    ], { '@test/remote': '*' });
+    await writePackage(root, 'schema-project', [{package: './plugins/local', instanceKey: 'first'}, {package: './plugins/local', instanceKey: 'second'}]);
+    const parent = join(root, 'plugins/local');
+    await writePackage(parent, 'local-parent', [{package: './leaf', instanceKey: 'leaf'}]);
     await writeSchema(parent, 'parent');
-    const leaf = join(parent, 'plugins', 'leaf');
-    await writePackage(leaf, 'local-leaf');
-    await writeSchema(leaf, 'leaf');
-    const remote = join(parent, 'node_modules', '@test', 'remote');
-    await writePackage(remote, '@test/remote');
-    await writeSchema(remote, 'nested');
-    const rootRemote = join(root, 'node_modules', '@test', 'remote');
-    await writePackage(rootRemote, '@test/remote');
-    await writeSchema(rootRemote, 'wrong');
+    await writePackage(join(parent, 'leaf'), 'local-leaf');
+    await writeSchema(join(parent, 'leaf'), 'leaf');
     const catalog = new PluginSchemaCatalog(root);
-    await expect(catalog.readAll(['first', 'second'])).resolves.toEqual({
-      first: expectField('parent'), second: expectField('parent'),
-    });
-    await expect(catalog.read('root/first/leaf')).resolves.toEqual(expectField('leaf'));
-    await expect(catalog.read('second/remote')).resolves.toEqual(expectField('nested'));
+    await expect(catalog.readAll(['first', 'second'])).resolves.toEqual({first: expectField('parent'), second: expectField('parent')});
+    await expect(catalog.read('root/first/leaf')).resolves.toBeNull();
+    await expect(catalog.read('first/leaf')).resolves.toBeNull();
   });
 
-  it('resolves local children declared by a mounted npm package and gives exact instance keys precedence', async () => {
+  it('requires exact instance aliases when multiple aliases use one package', async () => {
     const root = await createProject();
-    const parent = join(root, 'node_modules', '@zhin.js', 'adapter-icqq');
-    await writePackage(parent, '@zhin.js/adapter-icqq', [
-      { package: './plugins/local', instanceKey: 'child' },
-    ]);
-    const child = join(parent, 'plugins', 'local');
-    await writePackage(child, 'nested-local');
-    await writeSchema(child, 'nested-local');
+    await writePackage(root, 'schema-project', [{package: '@zhin.js/adapter-icqq', instanceKey: 'first'}, {package: '@zhin.js/adapter-icqq', instanceKey: 'second'}], {'@zhin.js/adapter-icqq': '*'});
     const catalog = new PluginSchemaCatalog(root);
-    await expect(catalog.read('root/qq-main/child')).resolves.toEqual(expectField('nested-local'));
-    await writePackage(root, 'schema-project', [
-      { package: 'collision', instanceKey: 'alias' },
-      { package: './plugins/exact', instanceKey: 'collision' },
-    ], { collision: '*' });
-    const alias = join(root, 'node_modules', 'collision');
-    await writePackage(alias, 'collision');
-    await writeSchema(alias, 'alias');
-    const exact = join(root, 'plugins', 'exact');
-    await writePackage(exact, 'exact');
-    await writeSchema(exact, 'exact');
-    await expect(catalog.read('collision')).resolves.toEqual(expectField('exact'));
+    await expect(catalog.read('@zhin.js/adapter-icqq')).rejects.toThrow(/多个插件实例/);
+    await expect(catalog.read('root/second')).resolves.toEqual(expectField('account'));
   });
 
-  it('resolves inherited facade defaults from the facade, with explicit instance overrides winning', async () => {
+  it('does not inject a facade instance that is absent from the application map', async () => {
     const root = await createProject();
-    await writePackage(root, 'schema-project', [
-      { package: './plugins/override', instanceKey: 'default' },
-    ], { 'zhin.js': '*' });
-    const override = join(root, 'plugins', 'override');
-    await writePackage(override, 'override');
-    await writeSchema(override, 'override');
-    const facade = join(root, 'node_modules', 'zhin.js');
-    await writePackage(facade, 'zhin.js', [
-      { package: './plugins/default', instanceKey: 'default' },
-      { package: './plugins/inherited', instanceKey: 'inherited' },
-    ], { '@zhin.js/core': '*' });
-    await writePackage(join(facade, 'node_modules', '@zhin.js', 'core'), '@zhin.js/core');
-    for (const field of ['default', 'inherited']) {
-      const child = join(facade, 'plugins', field);
-      await writePackage(child, field);
-      await writeSchema(child, field);
-    }
-    const catalog = new PluginSchemaCatalog(root);
-    await expect(catalog.read('default')).resolves.toEqual(expectField('override'));
-    await expect(catalog.read('inherited')).resolves.toEqual(expectField('inherited'));
+    const facade = join(root, 'node_modules/zhin.js');
+    await writePackage(facade, 'zhin.js', [{package: './child', instanceKey: 'inherited'}]);
+    await writePackage(join(facade, 'child'), 'inherited-child');
+    await writeSchema(join(facade, 'child'), 'inherited');
+    await expect(new PluginSchemaCatalog(root).read('inherited')).resolves.toBeNull();
   });
 
-  it('does not resolve disabled platform inheritance, even when its packages are malformed', async () => {
+  it('rejects duplicate application aliases before selecting a schema', async () => {
     const root = await createProject();
-    const local = join(root, 'plugins', 'local');
-    await writePackage(local, 'local');
-    await writeSchema(local, 'local');
-    await writeFile(join(root, 'package.json'), JSON.stringify({
-      name: 'schema-project', dependencies: { 'zhin.js': '*', '@zhin.js/core': '*' },
-      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', platformFeatures: false,
-        plugins: [{ package: './plugins/local', instanceKey: 'local' }] },
-    }));
-    for (const name of ['zhin.js', '@zhin.js/core']) {
-      const installed = join(root, 'node_modules', name);
-      await mkdir(installed, { recursive: true });
-      await writeFile(join(installed, 'package.json'), 'invalid');
-    }
-    await expect(new PluginSchemaCatalog(root).read('local')).resolves.toEqual(expectField('local'));
-  });
-
-  it('rejects effective inherited duplicates but permits declared overrides to shadow duplicate defaults', async () => {
-    const root = await createProject();
-    await writePackage(root, 'schema-project', [], { 'zhin.js': '*' });
-    const facade = join(root, 'node_modules', 'zhin.js');
-    await writePackage(facade, 'zhin.js', [
-      { package: './plugins/first', instanceKey: 'duplicate' },
-      { package: './plugins/second', instanceKey: 'duplicate' },
-    ], { '@zhin.js/core': '*' });
-    await writePackage(join(facade, 'node_modules', '@zhin.js', 'core'), '@zhin.js/core');
-    const catalog = new PluginSchemaCatalog(root);
-    await expect(catalog.read('duplicate')).rejects.toMatchObject({
-      cause: { message: 'Duplicate child instanceKey in schema-project' },
-    });
-    const override = { package: './plugins/override', instanceKey: 'duplicate' };
-    await writePackage(root, 'schema-project', [override], { 'zhin.js': '*' });
-    const child = join(root, 'plugins', 'override');
-    await writePackage(child, 'override');
-    await writeSchema(child, 'override');
-    await expect(catalog.read('duplicate')).resolves.toEqual(expectField('override'));
-    await writePackage(root, 'schema-project', [override, override], { 'zhin.js': '*' });
-    await expect(catalog.read('duplicate')).rejects.toMatchObject({
-      cause: { message: 'Duplicate child instanceKey in schema-project' },
-    });
+    await writeFile(join(root, 'zhin.config.json'), '{"configVersion":2,"plugins":{"duplicate":"a","duplicate":"b"}}');
+    await expect(new PluginSchemaCatalog(root).read('duplicate')).rejects.toThrow(/invalid or unavailable Plugin manifest/);
   });
 
   it('projects Host fields without needing a valid Plugin manifest', async () => {

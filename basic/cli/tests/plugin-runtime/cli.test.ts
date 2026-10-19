@@ -150,8 +150,9 @@ async function writeFixtureProject(root: string): Promise<void> {
     type: 'module',
     scripts: { build: 'tsc --noEmit' },
     dependencies: { 'zhin.js': '^4.1.2', '@acme/plugin-weather': 'workspace:*' },
-    zhin: { ...manifest, plugins: [{ package: '@acme/plugin-weather', instanceKey: 'weather' }] },
+    zhin: manifest,
   }));
+  await writeFile(join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins:\n  weather: "@acme/plugin-weather"\nweather: {}\n');
   await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n  - plugins/*\n');
   await writeFile(join(root, 'plugin.ts'), "import { definePlugin } from 'zhin.js';\n\nexport default definePlugin({ name: 'root' });\n");
   const child = join(root, 'plugins/weather');

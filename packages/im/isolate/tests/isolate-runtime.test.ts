@@ -230,6 +230,7 @@ export default {
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
     const runtime = new RootRuntime({
+      config: { configVersion: 2, plugins: { child: '@test/child' } },
       projectRoot: project,
       modules,
       isolation: new NodeIsolatedPluginRuntime({ mode }),
@@ -252,6 +253,7 @@ export default {
     const rootEntry = join(project, 'plugin.ts');
     modules.set(rootEntry, { default: definePlugin({ name: 'root' }) });
     const runtime = new RootRuntime({
+      config: { configVersion: 2, plugins: { child: '@test/child' } },
       projectRoot: project,
       modules,
       isolation: new NodeIsolatedPluginRuntime(),
@@ -348,7 +350,6 @@ async function createProject(): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [{ package: '@test/child', instanceKey: 'child' }],
     },
   });
   await writeJson(join(root, 'plugins/child/package.json'), {

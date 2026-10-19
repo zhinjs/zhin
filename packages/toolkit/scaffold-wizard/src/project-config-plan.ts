@@ -1,6 +1,9 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import yaml from 'yaml';
+import { createConfigDocument, readSourcePluginOrder } from '@zhin.js/config-file';
+import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { isDeepStrictEqual } from 'node:util';
 import {
   readPluginConfigurationMap,
   ROOT_CONFIG_FILE_NAMES,
@@ -32,6 +35,8 @@ export interface LoadedProjectConfig {
   format?: ProjectConfigFormat;
   config: Record<string, unknown>;
   writable: boolean;
+  /** Exact preview source: comments and declaration order are concurrency inputs. */
+  source?: string;
   message?: string;
 }
 
@@ -55,6 +60,7 @@ export interface ProjectConfigPlan {
   relativePath?: string;
   format?: ProjectConfigFormat;
   writable: boolean;
+  expectedSource?: string;
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   mutations: string[];
@@ -128,9 +134,10 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
   }
 
   const content = fs.readFileSync(resolvedPath, 'utf8');
+  readSourcePluginOrder(content, format === 'json' ? 'JSON' : 'YAML');
   const config = parseConfig(content, format);
   try {
-    readPluginConfigurationMap(config, relativePath);
+    readApplicationPluginDeclaration(config, relativePath);
   } catch (error) {
     return {
       status: 'unsupported',
@@ -150,23 +157,25 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
     relativePath,
     format,
     config,
+    source: content,
     writable: true,
   };
 }
 
 function ensurePlugins(config: Record<string, unknown>, pluginsToAdd: readonly string[], mutations: string[]): void {
-  const plugins = { ...readPluginConfigurationMap(config) };
-  let changed = false;
+  const declaration = readApplicationPluginDeclaration(config);
+  const plugins = { ...(config.plugins as Record<string, string> | undefined) };
   for (const pkg of pluginsToAdd) {
     const instanceKey = packageToInstanceKey(pkg);
-    if (instanceKey in plugins) continue;
-    plugins[instanceKey] = {};
-    mutations.push(`added ${instanceKey} (${pkg}) to plugins`);
-    changed = true;
+    const existing = declaration.instances.find(item => item.instanceKey === instanceKey);
+    if (existing && existing.package !== pkg) throw new Error(`Plugin instance ${instanceKey} already belongs to ${existing.package}`);
+    if (!existing) {
+      plugins[instanceKey] = pkg;
+      mutations.push(`added ${instanceKey} (${pkg}) to plugins`);
+    }
   }
-  if (changed || config.plugins === undefined) {
-    config.plugins = plugins;
-  }
+  config.plugins = plugins;
+  readApplicationPluginDeclaration(config);
 }
 
 function ensureHttp(config: Record<string, unknown>, mutations: string[]): void {
@@ -332,6 +341,7 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
     relativePath: loaded.relativePath,
     format: loaded.format,
     writable: loaded.writable,
+    expectedSource: 'source' in loaded ? loaded.source : (loaded.configPath && fs.existsSync(loaded.configPath) ? fs.readFileSync(loaded.configPath, 'utf8') : undefined),
     before,
     after,
     mutations,
@@ -354,7 +364,25 @@ export function renderProjectConfigPatch(plan: ProjectConfigPlan): string {
 export async function applyProjectConfigPlan(plan: ProjectConfigPlan): Promise<boolean> {
   if (!plan.changed) return false;
   if (!plan.writable || !plan.configPath || !plan.format) return false;
-  await fs.writeFile(plan.configPath, serializeConfig(plan.after, plan.format));
+  const document = createConfigDocument(plan.configPath);
+  const snapshot = await document.readSource();
+  if ((plan.expectedSource !== undefined && snapshot.source !== plan.expectedSource) || !isDeepStrictEqual(snapshot.document, plan.before)) throw new Error('配置已在预览后发生变更，请重新生成配置计划。');
+  const keys = new Set([...Object.keys(plan.before), ...Object.keys(plan.after)]);
+  const patches = [...keys].filter(key => !isDeepStrictEqual(plan.before[key], plan.after[key])).flatMap(key => {
+    if (key === 'plugins') {
+      const before = plan.before.plugins as Record<string, string> | undefined;
+      const after = plan.after.plugins as Record<string, string> | undefined;
+      return [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])]
+        .filter(alias => before?.[alias] !== after?.[alias])
+        .map(alias => Object.hasOwn(after ?? {}, alias)
+          ? { op: 'set' as const, path: ['plugins', alias], value: after![alias] }
+          : { op: 'remove' as const, path: ['plugins', alias] });
+    }
+    return [Object.hasOwn(plan.after, key)
+      ? { op: 'set' as const, path: [key], value: plan.after[key] }
+      : { op: 'remove' as const, path: [key] }];
+  });
+  await (await document.prepare(snapshot, patches)).commit();
   return true;
 }
 

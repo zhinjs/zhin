@@ -111,14 +111,16 @@ ws.on('message', (data) => {
 适配器只声明一次（`adapters/napcat/index.ts` → `defineAdapter`），但可以在配置里展开为**多个账号连接（Endpoint）**：
 
 ```yaml
+configVersion: 2
 # examples/full-bot/zhin.config.yml（节选）
 plugins:
-  napcat:
-    connection: ws                 # 公共配置：所有账号共享
-    endpoints:
-      - id: full-bot-napcat        # 每个账号的独立配置
-        url: ${ONEBOT11_WS_URL}
-        access_token: ${ONEBOT11_ACCESS_TOKEN}
+  napcat: "@zhin.js/adapter-napcat"
+napcat:
+  connection: ws # 公共配置：所有账号共享
+  endpoints:
+    - id: full-bot-napcat # 每个账号的独立配置
+      url: ${ONEBOT11_WS_URL}
+      access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
 
 - `endpoints` 非空时，每一项创建一个账号：公共配置（去掉 `endpoints` 键）与该项**浅合并**，`id` 强制写入。`endpoints` 为空或省略时，按公共配置创建一个账号。

@@ -37,7 +37,7 @@ pnpm add @zhin.js/adapter-satori
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - `@zhin.js/host-http` — Webhook mode requires `httpHostToken` to register POST route
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json` (`baseUrl` / `token` / ...)
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json` (`baseUrl` / `token` / ...)
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId; guild lands in `parent`)
 Outbound: `send({ conversation, payload })` -> Satori `message.create` (`channel_id` is `conversation.id`; payload is rendered by gateway/core; no segment-mapper)
@@ -53,18 +53,20 @@ Inbound `metadata.mentioned`: set to `true` when the id of an `<at id="..."/>` e
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  satori:
-    connection: ws
-    heartbeat_interval: 10000
-    endpoints:
-      - name: satori-bot
-        baseUrl: "http://127.0.0.1:5140"
-        token: "${SATORI_TOKEN}"
+  satori: "@zhin.js/adapter-satori"
+satori:
+  connection: ws
+  heartbeat_interval: 10000
+  endpoints:
+    - name: satori-bot
+      baseUrl: "http://127.0.0.1:5140"
+      token: "${SATORI_TOKEN}"
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-satori` (`instanceKey: satori`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-satori` (`instanceKey: satori`).
 
 ### Optional Fields
 
@@ -76,14 +78,16 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 ### Webhook
 
 ```yaml
+configVersion: 2
 plugins:
-  satori:
-    connection: webhook
-    endpoints:
-      - name: satori-bot
-        baseUrl: "http://127.0.0.1:5140"
-        path: "/satori/webhook"
-        token: "${SATORI_TOKEN}"
+  satori: "@zhin.js/adapter-satori"
+satori:
+  connection: webhook
+  endpoints:
+    - name: satori-bot
+      baseUrl: "http://127.0.0.1:5140"
+      path: "/satori/webhook"
+      token: "${SATORI_TOKEN}"
 ```
 
 The SDK sends POST requests to `path`, with header `Satori-Opcode: 0` indicating events; the adapter obtains the platform / userId from the `login` in the first event for subsequent API calls.

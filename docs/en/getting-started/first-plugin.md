@@ -186,7 +186,7 @@ pnpm install
 cd ../..
 ```
 
-Then add two things to **the bot's** `package.json` (merge with what's there — don't overwrite it):
+Declare the dependency in **the bot's** `package.json` (`zhin.plugins` stays empty; the main configuration declares instances) (merge with what's there — don't overwrite it):
 
 ```json
 {
@@ -194,9 +194,7 @@ Then add two things to **the bot's** `package.json` (merge with what's there —
     "@zhin.js/command": "^1.1.0"
   },
   "zhin": {
-    "plugins": [
-      { "package": "./plugins/ping-pong", "instanceKey": "ping-pong" }
-    ]
+    "plugins": []
   }
 }
 ```
@@ -207,9 +205,11 @@ Then add two things to **the bot's** `package.json` (merge with what's there —
 Finally, in **the bot's** `zhin.config.yml`, add the config under the `instanceKey`:
 
 ```yaml
+configVersion: 2
 plugins:
-  ping-pong:
-    reply: pong!
+  ping-pong: './plugins/ping-pong'
+ping-pong:
+  reply: pong!
 ```
 
 ::: details Why does the bot depend on @zhin.js/command too?
@@ -232,7 +232,7 @@ Just want to check that the plugin assembles, without the interactive mode? Run 
 
 ::: tip No reply?
 - The command prefix comes from each connection's `commandPrefix`; the scaffolded Sandbox uses `/`, other platforms may use none.
-- No setup log line: check the `zhin.plugins` path in the bot's `package.json`.
+- No setup log line: check the package path in `plugins.ping-pong` in the bot configuration.
 - Run `npx zhin doctor` for an environment check.
 :::
 
@@ -260,6 +260,7 @@ The plugin is then the Root, so its config goes under `plugin:`:
 
 ```yaml
 # ping-pong/zhin.config.yml
+configVersion: 2
 plugin:
   reply: pong!
 

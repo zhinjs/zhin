@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-napcat
 - `@zhin.js/adapter` — convention-based `adapters/napcat/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; group temp sessions carry the group in `parent`)
 Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_group_msg`
@@ -48,22 +48,24 @@ Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_gro
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  napcat:
-    connection: ws
-    reconnect_interval: 5000
-    heartbeat_interval: 30000
-    endpoints:
-      - id: my-bot
-        url: "ws://127.0.0.1:3001"
-        access_token: "${NAPCAT_TOKEN}"
+  napcat: "@zhin.js/adapter-napcat"
+napcat:
+  connection: ws
+  reconnect_interval: 5000
+  heartbeat_interval: 30000
+  endpoints:
+    - id: my-bot
+      url: "ws://127.0.0.1:3001"
+      access_token: "${NAPCAT_TOKEN}"
 ```
 
 AdapterIndex merges instance connection defaults into every endpoint. The protocol receives only
 one expanded endpoint config and does not infer endpoint ids from environment variables.
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-napcat` (`instanceKey: napcat`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-napcat` (`instanceKey: napcat`).
 
 ## Connection Modes
 

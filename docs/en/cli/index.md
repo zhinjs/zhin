@@ -166,7 +166,7 @@ zhin install <plugin name or git URL> [--no-enable] [--dry-run]
 zhin add ...          # alias of install
 ```
 
-By default it installs with pnpm, writes the plugin into `plugins.<instanceKey>` in `zhin.config.yml`, and mounts it in `zhin.plugins` in `package.json`. For adapters, follow the prompt to run `zhin setup --adapters` and add an account.
+By default it installs with pnpm and writes the package reference into `plugins.<instanceKey>` in `zhin.config.yml`. Business settings use the top-level alias block; `disable_plugins` controls activation. For adapters, follow the prompt to run `zhin setup --adapters` and add an account.
 
 | Option | Description |
 | --- | --- |
