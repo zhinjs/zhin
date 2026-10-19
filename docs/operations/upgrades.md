@@ -31,6 +31,10 @@ npx zhin runtime start --once --mode test  # 装配冒烟
 
 生产环境提交 lockfile，不使用漂移的 `latest` 解析结果启动。`zhin migrate` 会把非 workspace 的 Zhin 依赖目标更新到 `latest`，因此它是显式升级动作，不是每次部署命令。
 
+显式 `workspace:` 依赖始终保留，包括从工作区子包运行升级时；当前目录缺少 `pnpm-workspace.yaml` 也不会将本地链接改成注册表依赖。工作区解析失败应检查工作区声明及包名，而不是让升级命令更换依赖来源。
+
+`migrate` 默认执行依赖安装，只有 `--no-install` 才跳过。pnpm 安装会更新锁文件以匹配迁移后的清单（`--no-frozen-lockfile`，包括 CI 环境）。如果当前目录只有 npm 锁文件却声明了 `workspace:` 依赖，命令会在修改文件前停止：npm 无法安装该协议。请先确认 pnpm 工作区配置，或明确使用 `--no-install` 仅迁移清单，再自行处理依赖安装。
+
 ## 升级前
 
 ```bash

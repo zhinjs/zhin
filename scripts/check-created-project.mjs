@@ -109,6 +109,48 @@ async function packRoots(roots) {
   }
 }
 
+async function checkMigrationUpgrade() {
+  const localName = '@zhin.js/acceptance-migration-local';
+  const local = path.join(project, 'packages/migration-local');
+  const consumer = path.join(project, 'plugins/migration-consumer');
+  await mkdir(local, { recursive: true });
+  await mkdir(consumer, { recursive: true });
+  const pluginManifest = { protocol: 1, type: 'plugin', entry: './plugin.js', features: [], plugins: [] };
+  await writeFile(path.join(local, 'package.json'), JSON.stringify({
+    name: localName, version: '0.0.0', type: 'module', exports: './index.js',
+    peerDependencies: { 'zhin.js': '^1.1.0' }, zhin: pluginManifest,
+  }));
+  await writeFile(path.join(local, 'index.js'), "export const source = 'workspace-upgrade-accepted';\n");
+  for (const directory of [local, consumer]) {
+    await writeFile(path.join(directory, 'plugin.js'), "import { definePlugin } from 'zhin.js';\nexport default definePlugin({});\n");
+  }
+  const manifestFile = path.join(consumer, 'package.json');
+  const original = JSON.stringify({
+    name: 'acceptance-migration-consumer', private: true, type: 'module',
+    dependencies: { 'zhin.js': '^1.1.0', [localName]: 'workspace:*' },
+    scripts: { dev: 'node custom-start.mjs' }, zhin: pluginManifest,
+  }, null, 2);
+  await writeFile(manifestFile, original);
+  const instructions = path.join(project, 'AGENTS.md');
+  await writeFile(instructions, '# Acceptance rules\nPreserve this user-owned file during migration.\n');
+  const protectedFiles = ['zhin.config.yml', 'plugin.ts', 'commands/hello/index.ts', 'AGENTS.md'];
+  const before = await Promise.all(protectedFiles.map(file => readFile(path.join(project, file), 'utf8')));
+  const cli = path.join(project, 'node_modules/@zhin.js/cli/bin/zhin.js');
+  await run(process.execPath, [cli, 'migrate', '--dry-run', '--no-install'], consumer);
+  if (await readFile(manifestFile, 'utf8') !== original) throw new Error('Migration dry-run changed the child manifest');
+  await run(process.execPath, [cli, 'migrate', '--no-install'], consumer);
+  const migrated = JSON.parse(await readFile(manifestFile, 'utf8'));
+  if (migrated.dependencies[localName] !== 'workspace:*' || migrated.dependencies['zhin.js'] !== 'latest'
+    || migrated.scripts.dev !== 'node custom-start.mjs') throw new Error('Migration changed workspace authority or a custom script');
+  await run(process.execPath, [cli, 'migrate'], project);
+  const { stdout } = await run(process.execPath, ['--input-type=module', '-e',
+    `import { source } from '${localName}'; console.log(source);`], consumer);
+  if (!stdout.includes('workspace-upgrade-accepted')) throw new Error('Migration no longer resolves the workspace dependency');
+  for (const [index, file] of protectedFiles.entries()) {
+    if (await readFile(path.join(project, file), 'utf8') !== before[index]) throw new Error(`Migration changed user file: ${file}`);
+  }
+}
+
 function candidateManifest(manifest) {
   return withWorkspaceTarballOverrides(manifest, [...packed.keys()].map((name) => ({ name })), packed);
 }
@@ -247,6 +289,10 @@ try {
   await writeFile(workspaceFile, stringify(workspaceConfig));
   console.log('Installing the generated project exclusively against candidate workspace tarballs…');
   await run('pnpm', ['install', '--no-frozen-lockfile'], project);
+  if (platform === 'sandbox') {
+    console.log('Checking migration preview, workspace links, preserved files and dependency reinstall…');
+    await checkMigrationUpgrade();
+  }
   const configFile = path.join(project, 'zhin.config.yml');
   const config = parse(await readFile(configFile, 'utf8'));
   const token = 'local-acceptance-token';
@@ -318,7 +364,7 @@ try {
     }, 'installed acceptance probe confirmed delivery');
   }
   passed = true;
-  console.log(`PASS [${platform}]: packed creator -> clean install -> readiness -> /hello${platform === 'sandbox' ? ' -> Console JSX preview -> JSX /card + TSX HMR' : ''} -> command HMR -> production restart${platform !== 'sandbox' ? ' -> acceptance probe receipt' : ''}.`);
+  console.log(`PASS [${platform}]: packed creator -> clean install${platform === 'sandbox' ? ' -> migration + reinstall' : ''} -> readiness -> /hello${platform === 'sandbox' ? ' -> Console JSX preview -> JSX /card + TSX HMR' : ''} -> command HMR -> production restart${platform !== 'sandbox' ? ' -> acceptance probe receipt' : ''}.`);
 } finally {
   await stopBot();
   if (gateway) { for (const socket of gateway.clients) socket.terminate(); await new Promise(resolve => gateway.close(resolve)); }
