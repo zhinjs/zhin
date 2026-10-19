@@ -33,6 +33,8 @@ Commit the production lockfile and never boot from a drifting `latest` resolutio
 
 Explicit `workspace:` dependencies are always preserved, including when migration runs from a workspace child package. A missing `pnpm-workspace.yaml` in the current directory does not turn a local link into a registry dependency. Fix workspace declarations and package names when resolution fails rather than changing the dependency source during migration.
 
+`migrate` installs dependencies by default; only `--no-install` skips installation. The pnpm install refreshes the lockfile to match the migrated manifest (`--no-frozen-lockfile`, including in CI). If the current directory has only an npm lockfile but declares `workspace:` dependencies, migration stops before changing files because npm cannot install that protocol. Check the pnpm workspace configuration first, or explicitly use `--no-install` to migrate only the manifest and handle installation separately.
+
 ## Before upgrading
 
 ```bash

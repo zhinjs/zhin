@@ -122,7 +122,7 @@ describe('migrate', () => {
     expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true })).toBe(true);
     expect(fs.readFileSync(pkgPath, 'utf8')).toBe(original);
     const output = log.mock.calls.flat().join('\n');
-    expect(output).toContain('@zhin.js/agent: ^1.1.0');
+    expect(output).toContain('@zhin.js/agent: ^1.1.0 → latest');
     expect(output).not.toContain('zhin.js: workspace:');
   });
 

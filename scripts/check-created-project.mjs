@@ -142,8 +142,7 @@ async function checkMigrationUpgrade() {
   const migrated = JSON.parse(await readFile(manifestFile, 'utf8'));
   if (migrated.dependencies[localName] !== 'workspace:*' || migrated.dependencies['zhin.js'] !== 'latest'
     || migrated.scripts.dev !== 'node custom-start.mjs') throw new Error('Migration changed workspace authority or a custom script');
-  await run(process.execPath, [cli, 'migrate', '--no-install'], project);
-  await run('pnpm', ['install', '--no-frozen-lockfile'], project);
+  await run(process.execPath, [cli, 'migrate'], project);
   const { stdout } = await run(process.execPath, ['--input-type=module', '-e',
     `import { source } from '${localName}'; console.log(source);`], consumer);
   if (!stdout.includes('workspace-upgrade-accepted')) throw new Error('Migration no longer resolves the workspace dependency');

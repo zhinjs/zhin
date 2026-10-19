@@ -369,10 +369,24 @@ export function upgradeBootstrapFiles(dir: string, dryRun: boolean): number {
   return upgraded;
 }
 
-function runInstall(dir: string, dryRun: boolean): boolean {
+function resolveMigrationInstallCommand(dir: string): string | undefined {
   const hasPnpm = fs.existsSync(path.join(dir, 'pnpm-lock.yaml'));
   const hasNpm = fs.existsSync(path.join(dir, 'package-lock.json'));
-  const cmd = hasPnpm ? 'pnpm install' : hasNpm ? 'npm install' : 'pnpm install';
+  if (hasNpm && !hasPnpm) {
+    const pkg = fs.readJsonSync(path.join(dir, 'package.json'));
+    const workspaceDependency = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']
+      .some(field => Object.values(pkg[field] ?? {})
+        .some(value => typeof value === 'string' && value.startsWith('workspace:')));
+    if (workspaceDependency) {
+      logger.error('npm 不支持 workspace: 依赖，尚未改动项目。请先确认 pnpm 工作区配置并执行 pnpm install；或使用 --no-install 仅迁移清单。');
+      return undefined;
+    }
+  }
+  // Migration edits dependency specifiers, so its install must refresh the lockfile even in CI.
+  return hasNpm && !hasPnpm ? 'npm install' : 'pnpm install --no-frozen-lockfile';
+}
+
+function runInstall(dir: string, dryRun: boolean, cmd: string): boolean {
   if (dryRun) {
     console.log(chalk.cyan(`  [dry-run] ${cmd}`));
     return true;
@@ -389,7 +403,7 @@ function runInstall(dir: string, dryRun: boolean): boolean {
 export const migrateCommand = new Command('migrate')
   .description('将老版本 Zhin 项目快速升级到最新（依赖、scripts、目录结构）')
   .option('--dry-run', '仅打印将要执行的操作，不写入文件也不安装依赖', false)
-  .option('--no-install', '跳过最后一步 pnpm install', false)
+  .option('--no-install', '跳过最后一步依赖安装')
   .action(async (options) => {
     console.log('');
     console.log(chalk.bold.cyan('  Zhin 项目升级 (migrate)'));
@@ -403,6 +417,11 @@ export const migrateCommand = new Command('migrate')
     const pkgPath = path.join(cwd, 'package.json');
     const dryRun = !!options.dryRun;
     const runInstallAfter = options.install !== false;
+    const installCommand = runInstallAfter ? resolveMigrationInstallCommand(cwd) : undefined;
+    if (runInstallAfter && !installCommand) {
+      process.exitCode = 1;
+      return;
+    }
 
     if (dryRun) {
       console.log(chalk.yellow('  [dry-run 模式] 以下变更不会实际写入'));
@@ -433,9 +452,9 @@ export const migrateCommand = new Command('migrate')
     console.log('');
 
     // 4. 安装依赖
-    if (runInstallAfter) {
+    if (installCommand) {
       console.log(chalk.bold.blue('4. Install dependencies'));
-      const ok = runInstall(cwd, dryRun);
+      const ok = runInstall(cwd, dryRun, installCommand);
       if (!ok && !dryRun) {
         process.exitCode = 1;
         return;
