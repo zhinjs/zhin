@@ -10,6 +10,7 @@ You don't need to learn Zhin's package layout first. Find what you want to build
 | What you want to deliver | Start here | You are done when |
 | --- | --- | --- |
 | A bot that receives and sends messages | [IM Bot path](/en/paths/im-bot) | Sandbox and a real platform share the same command and message flow |
+| Set reminders without AI | [Create reminders with natural time](/en/solutions/reminders) | Review the exact date, timezone and content, then persist a reminder to the original conversation |
 | A bot that understands your business | [Give the AI business context](/en/authoring/agent-tools#give-the-ai-business-context) | Console's capability catalog shows your Prompt Section is active |
 | Tools, MCP, skills, and sub-agents | [AI Agent path](/en/paths/ai-agent) | The Agent sees only capabilities authorized for the current turn |
 | Operate and diagnose a deployed bot | [Console Admin path](/en/paths/console) | You can inspect endpoints, logs, capabilities, and Agent runs |

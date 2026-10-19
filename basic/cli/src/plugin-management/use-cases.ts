@@ -21,6 +21,17 @@ export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
       '调度状态不证明平台在线或消息已展示；周期表示固定间隔，不能当作跨夏令时的本地日历计划。'],
   },
   {
+    id: 'personal-reminder', title: '在聊天里设置个人提醒', summary: '不启用 AI，补全时间和正文，确认后保存到原会话。',
+    packageName: '@zhin.js/plugin-reminder', mode: 'conversation-command',
+    steps: ['安装持久提醒插件，启用 Database Host 与 Schedule Feature，明确实例的 IANA timezone；默认 UTC。',
+      '由真实发送者在原会话执行 remind create 十分钟后 喝水；只输入 remind create 时会逐项补问。',
+      '使用实际前缀与插件命名空间；后续回答不加前缀，取消后再开始新流程。',
+      '核对绝对时间、时区、正文与完整原会话，明确回复“确认”才保存；用 remind list 查看个人任务。'],
+    limitations: ['仅支持有限中文自然时间与含 offset 的 ISO 时间，不猜发送者时区、裸时钟或夏令时重复时刻。',
+      '聊天任务归真实发送者；Console 不代为执行，管理员任务仍使用单独入口。',
+      '超时或取消不创建；投递或创建结果不确定时先核对，不自动重试。'],
+  },
+  {
     id: 'group-welcome', title: '配置新成员欢迎', summary: '为上报群成员增加事件的适配器配置欢迎文案。',
     packageName: '@zhin.js/plugin-group-suite', mode: 'plugin-configuration',
     steps: ['安装群运营套件并选择明确的插件实例；多实例时不能只凭包名修改。',

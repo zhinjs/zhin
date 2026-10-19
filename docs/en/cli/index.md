@@ -200,6 +200,7 @@ Search the plugin marketplace or show one plugin's details.
 ```bash
 zhin use-cases
 zhin use-cases reminder
+zhin use-cases personal-reminder
 zhin use-cases group-welcome
 zhin use-cases keyword-reply
 ```
