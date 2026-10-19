@@ -35,13 +35,16 @@ reminder:
   missedGraceSeconds: 15
 ```
 
-配置统一由 Schema 校验；修改仅重载插件。timezone 是有效的 IANA 时区，只影响显示，默认 UTC。绝对时间必须显式包含 `Z` 或 `±hh:mm`，没有隐式本地时间转换。多个实例应显式配置不同的 `commandNamespace`，例如 `personal` 和 `work`；使用时在指令前添加对应命名空间。Endpoint 的 `commandPrefix` 决定指令前缀。
+配置统一由 Schema 校验；修改仅重载插件。timezone 是有效的 IANA 时区，默认 UTC，用于 `create` 指令的本地日期解析和时间显示；不猜服务器或发送者时区。原有 `at`、Agent 工具和 Console 的绝对时间仍必须显式包含 `Z` 或 `±hh:mm`。多个实例应显式配置不同的 `commandNamespace`，例如 `personal` 和 `work`；使用时在指令前添加对应命名空间。Endpoint 的 `commandPrefix` 决定指令前缀。
 
 ## 指令
 
 以下示例省略 Endpoint 前缀与插件显式命名空间。各指令的 `--help` 提供参数说明。
 
 ```text
+remind create 十分钟后 喝水
+remind create "明天下午三点半" 提交周报
+remind create
 remind after 600 十分钟后休息
 remind at 2027-01-01T09:00:00+08:00 新年会议
 remind every 3600 喝水
@@ -50,6 +53,10 @@ remind cancel <任务 ID>
 ```
 
 延迟是 1 秒至一年；周期是 60 秒至一年；内容是 1–500 字符。时间必须在未来一年内。指令权限经过框架 PermissionHost；插件没有额外权限旁路或取消其他发送者任务的管理员接口。
+
+`create` 创建一次性个人提醒，不依赖 AI。缺少时间或正文时逐项补问，随后用纯文字显示绝对日期、IANA 时区、正文和完整原会话；只有明确回复 `确认` 才保存。后续回答不加命令前缀；输入 `取消` 或 `cancel` 退出后再发新命令。每步有时限且整个流程最多三分钟，输错不会无限续期。超时、取消或热重载结束旧流程，均不创建任务。确认时已过期的时间不会自动顺延。
+
+自然时间仅支持有限中文语法：如 `10分钟后`、`一天后`（固定 24 小时）、`今天18:30`、`明天九点`、`后天九点半`、`明天下午三点半`；也支持带 offset 的 ISO 时间。裸写 `九点`、日历周期和夏令时重复／不存在时刻不会猜测。按钮、Markdown 和图片均非必需；非聊天 CLI 没有真实发送者和交互能力时不能创建。完整操作与边界见[无需 AI 的提醒指南](https://zhin.js.org/solutions/reminders)。
 
 ## 执行与恢复
 

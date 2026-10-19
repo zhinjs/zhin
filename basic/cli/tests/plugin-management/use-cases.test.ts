@@ -13,3 +13,13 @@ it('does not promise unavailable scope or impersonate a chat sender', () => {
   expect(formatPluginUseCases('keyword-reply')).toContain('不伪造平台用户');
   expect(() => formatPluginUseCases('missing')).toThrow('未知用途');
 });
+
+it('keeps personal chat guidance separate from administrator task creation', () => {
+  expect(pluginUseCases.find(item => item.id === 'personal-reminder')?.mode).toBe('conversation-command');
+  expect(pluginUseCases.find(item => item.id === 'reminder')?.mode).toBe('administrator-task');
+  const personal = formatPluginUseCases('personal-reminder');
+  expect(personal).toContain('remind create');
+  expect(personal).toContain('默认 UTC');
+  expect(personal).toContain('确认');
+  expect(personal).toContain('Console 不代为执行');
+});
