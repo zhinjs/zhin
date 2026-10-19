@@ -1,5 +1,15 @@
 # @zhin.js/cli
 
+## 1.1.13
+
+### Patch Changes
+
+- Updated dependencies [d033076]
+  - @zhin.js/ai@1.1.41
+  - @zhin.js/core@1.1.45
+  - @zhin.js/workroom@0.0.4
+  - @zhin.js/pagemanager@1.1.9
+
 ## 1.1.12
 
 ### Patch Changes
