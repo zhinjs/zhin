@@ -1,0 +1,46 @@
+docs/en/configuration/generated.md
+  s_6562bcb6cc0539::t_83393fdbc90589 129-134
+docs/migrations/plugin-instance-declarations.md
+  s_6562bcb6cc0539::t_2e85f1b1281168 46-47
+.changeset/flat-plugin-instance-declarations.md
+  s_6562bcb6cc0539::t_2e85f1b1281168 50-51
+docs/configuration/index.md
+  s_6562bcb6cc0539::t_2e85f1b1281168 94-95
+packages/im/runtime/tests/config-composer.test.ts
+  s_6562bcb6cc0539::t_2e85f1b1281168 229-239
+  s_6562bcb6cc0539::t_e95b3d61344911 206-222,224-228
+  s_6562bcb6cc0539::t_04152401f26f3f 223
+packages/im/runtime/tests/im-feature-hmr.test.ts
+  s_6562bcb6cc0539::t_e95b3d61344911 37-65,67-78
+  s_6562bcb6cc0539::t_fe25789467ea1e 66
+docs/configuration/generated.md
+  s_6562bcb6cc0539::t_83393fdbc90589 129-134
+docs/en/concepts/config-as-data.md
+  s_6562bcb6cc0539::t_2e85f1b1281168 48
+docs/concepts/config-as-data.md
+  s_6562bcb6cc0539::t_2e85f1b1281168 48
+basic/cli/tests/plugin-runtime/instance-declarations-migration.test.ts
+  s_6562bcb6cc0539::t_3a831f3beac791 64-78
+docs/en/configuration/index.md
+  s_6562bcb6cc0539::t_bf2378bff2b1bf 94-95
+packages/im/runtime/src/config-composer.ts
+  s_6562bcb6cc0539::t_f20148c27be94a 22-23,118-126,245-246
+packages/im/runtime/src/host-config-schema.json
+  s_6562bcb6cc0539::t_f69eeb2cc5a923 299-315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "436c65761657a38e237018d4c68a426c0b186c66",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
