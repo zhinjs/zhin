@@ -84,6 +84,15 @@ Set `http.corsOrigins` to allow Console's origin. Behind a reverse proxy, forwar
 
 ## 7. When something breaks, check in this order
 
+If the inbound message is visible in a conversation, open its **Diagnostics** action first. It queries the exact conversation and platform message ID, showing observed origin, prefix, middleware, command outcome and reply delivery facts. It never replays the message.
+
+- `completed` means inbound processing ended. Routing to an Agent does not prove the Agent turn finished.
+- Delivery `sent` means the Endpoint returned a message ID, not that a remote client displayed it. For `deliveryUnknown`, check the original conversation before any manual resend; no automatic retry is performed.
+- Each IM Runtime keeps at most 500 records in memory for 15 minutes. Restart, expiry and capacity eviction remove records; an absent record proves neither success nor absence of receipt.
+- Only full-scope operators can read diagnostics. Message bodies, sender profiles and raw exceptions are not copied into this store. Each record holds at most 32 steps and 32 deliveries; `truncated: true` marks an incomplete record when these limits are exceeded. This is not a complete audit log.
+
+The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, or `conversation` (complete `ConversationRef` JSON) and `messageId` for an exact lookup; `limit` accepts 1–100. When no record is available, continue below. Older Hosts do not expose this endpoint; update the Host and standalone Console separately.
+
 1. **Dashboard**: is the bot connected? Are the Endpoints online?
 2. **Conversations & Channels**: did the user's message reach the bot?
 3. **Runtime Capabilities**: is the command, tool, or Prompt Section loaded?

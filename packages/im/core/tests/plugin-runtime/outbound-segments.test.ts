@@ -116,7 +116,7 @@ describe('normalizeOutboundPayload', () => {
       type: 'html',
       data: { html: '<h1>Title</h1><p>body<br>line</p>' },
     });
-    expect(payload).toEqual([{ type: 'text', data: { text: '# Title\n\n body\nline' } }]);
+    expect(payload).toEqual([{ type: 'text', data: { text: '# Title\n\nbody\nline' } }]);
   });
 
   it('falls back to text when rendering throws', async () => {

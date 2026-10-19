@@ -26,6 +26,7 @@ import {
   type SendRequest,
 } from './contracts.js';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
+import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import type {
   RuntimeInteractionCoordinator,
   UserInteractionSource,
@@ -55,6 +56,7 @@ type InboundInteractionPort = Pick<
 > & Partial<Pick<RuntimeInteractionCoordinator<GenerationAdmissionGate>, 'hasPendingAnswer'>>;
 
 interface InboundRuntimeContext {
+  readonly diagnostics?: RuntimeMessageDiagnostics;
   readonly interactions: InboundInteractionPort;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
@@ -118,7 +120,9 @@ export class InboundRuntime {
   ): Promise<unknown> {
     switch (event.name) {
       case 'message.receive':
-        return this.#receiveMessage(event as EndpointEvent<IncomingMessage>, admission);
+        return this.context.diagnostics
+          ? this.context.diagnostics.run(() => this.#receiveMessage(event as EndpointEvent<IncomingMessage>, admission))
+          : this.#receiveMessage(event as EndpointEvent<IncomingMessage>, admission);
       case 'notice.receive':
         return this.#receiveCanonicalEndpointEvent(event as EndpointEvent<IncomingNotice>);
       case 'request.receive':
@@ -188,6 +192,7 @@ export class InboundRuntime {
       const input = Object.freeze({ ...source.payload, conversation,
         ...(source.payload.message ? { message: Object.freeze({ ...source.payload.message, conversation }) } : {}),
       });
+      this.context.diagnostics?.begin(lease.value.generation, conversation, input.message?.id);
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),
@@ -207,7 +212,9 @@ export class InboundRuntime {
         content: input.content,
       }, roomMembership);
       const origin = classified?.origin;
+      this.context.diagnostics?.step('origin', origin ?? 'unclassified');
       if (origin === 'self') {
+        this.context.diagnostics?.route('self_echo');
         logger.debug(formatCompact({
           op: 'self_echo',
           conv: formatConversationLog(conversation),
@@ -358,7 +365,9 @@ export class InboundRuntime {
       );
       const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
+      let reply: InboundOutcome['reply'];
       if (recordOnly === 'duplicate') {
+        this.context.diagnostics?.route('duplicate');
         // Duplicate of a message already routed via another Endpoint: history only,
         // no publish (avoids N copies in the console message feed).
         logger.debug(formatCompact({
@@ -369,6 +378,7 @@ export class InboundRuntime {
         return result;
       }
       if (recordOnly === 'dedup_error') {
+        this.context.diagnostics?.route('dedup_error');
         // Undecidable: record only and never route (no duplicate routing), but publish so
         // the console feed still shows the message and a persistent failure is visible.
         this.context.publish({
@@ -382,6 +392,7 @@ export class InboundRuntime {
         return result;
       }
       if (origin === 'member' || origin === 'peer_bot') {
+        this.context.diagnostics?.route('bot_origin');
         // Bot-origin messages are recorded as chat history only: no claim, handlers,
         // commands, middleware or ingress route (prevents bot-to-bot loops).
         logger.debug(formatCompact({
@@ -402,8 +413,10 @@ export class InboundRuntime {
       }
       const claimed = await this.context.inboundClaim?.(message) === true;
       if (claimed) {
+        this.context.diagnostics?.route('interaction');
         result = interactionResult(requester);
       } else if (this.context.interactions.resolveClaim(message)) {
+        this.context.diagnostics?.route('interaction');
         if (input.message) this.context.markInteractionAnswer?.(input.message);
         result = interactionResult(requester);
       } else {
@@ -418,6 +431,7 @@ export class InboundRuntime {
               conversationSequence,
             ) === true;
             if (preRouted) {
+              this.context.diagnostics?.route('agent');
               result = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
               return { dispatch: result };
             }
@@ -429,15 +443,20 @@ export class InboundRuntime {
                 conversationSequence,
               );
               if (handled) {
+                this.context.diagnostics?.route('agent');
                 result = Object.freeze({ matched: true, command: 'ai', owner: requester });
                 return { dispatch: result };
               }
             }
+            this.context.diagnostics?.step('handlers', 'started');
             await this.#runHandlers(lease.value, 'message.receive', [
               withEndpointEventPayload(source, message),
             ]);
-            result = await this.#dispatchInteractive(message, requester, admission, lease.value)
-              ?? await this.#dispatcher.dispatch(message, lease.value, interactionFactory);
+            this.context.diagnostics?.step('handlers', 'completed');
+            const interactive = await this.#dispatchInteractive(message, requester, admission, lease.value);
+            if (interactive) this.context.diagnostics?.route('interaction');
+            result = interactive ?? await this.#dispatcher.dispatch(message, lease.value, interactionFactory,
+              (stage, status) => this.context.diagnostics?.step(stage, status));
             if (!result.matched && ingressRoute) {
               logger.debug(formatCompact({
                 op: 'unmatched',
@@ -450,6 +469,7 @@ export class InboundRuntime {
                 conversationSequence,
               );
               if (handled) {
+                this.context.diagnostics?.route('agent');
                 result = Object.freeze({ matched: true, command: 'ai', owner: requester });
               }
             }
@@ -461,20 +481,32 @@ export class InboundRuntime {
             };
         };
         const middleware = lease.value.projections.get(middlewareFeatureId);
+        if (isMiddlewareIndex(middleware)) this.context.diagnostics?.step('middleware', 'entered');
         const outcome = isMiddlewareIndex(middleware)
           ? await middleware.runInbound(message, terminal, {
-              stop: (owner): InboundOutcome => ({ dispatch: { matched: true, command: 'middleware', owner } }),
-              replace: (owner, value, downstream): InboundOutcome => ({
-                dispatch: downstream?.dispatch.matched
-                  ? downstream.dispatch
-                  : { matched: true, command: 'middleware', owner },
-                reply: { owner, content: value as SendContent },
-              }),
+              stop: (owner): InboundOutcome => {
+                this.context.diagnostics?.route('middleware');
+                this.context.diagnostics?.step('middleware', 'stopped');
+                return { dispatch: { matched: true, command: 'middleware', owner } };
+              },
+              replace: (owner, value, downstream): InboundOutcome => {
+                this.context.diagnostics?.step('middleware', 'replaced');
+                if (!downstream?.dispatch.matched) this.context.diagnostics?.route('middleware');
+                return {
+                  dispatch: downstream?.dispatch.matched
+                    ? downstream.dispatch
+                    : { matched: true, command: 'middleware', owner },
+                  reply: { owner, content: value as SendContent },
+                };
+              },
             }, lease.value)
           : await terminal();
         result = outcome.dispatch;
-        if (outcome.reply) await message.$replyFrom(outcome.reply.owner, outcome.reply.content);
+        if (isMiddlewareIndex(middleware)) this.context.diagnostics?.step('middleware', 'completed');
+        reply = outcome.reply;
       }
+      this.context.diagnostics?.dispatch(result);
+      if (reply) await message.$replyFrom(reply.owner, reply.content);
       if (result.matched) {
         logger.debug(formatCompact({
           op: 'dispatched',

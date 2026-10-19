@@ -30,14 +30,18 @@ function packSegments(out: SendContent[]): SendContent {
 
 /**
  * keyboard 的有效 fallback 映射：显式 `fallback.map` 优先；否则按按钮顺序
- * 自动编号（与 {@link renderKeyboardAsText} 的自动编号一致，含 disabled 按钮）。
+ * 自动编号（与 {@link renderKeyboardAsText} 一致）；disabled 不产生可执行映射。
  */
 export function effectiveKeyboardFallbackMap(data: KeyboardSegmentData): Record<string, string> {
+  const buttons = data.rows.flat();
+  const enabled = new Set(buttons.filter(button => !button.disabled).map(button => button.payload));
+  // Disabling one presentation does not disable another explicitly enabled button for the same action.
+  const disabledOnly = new Set(buttons.filter(button => button.disabled && !enabled.has(button.payload)).map(button => button.payload));
   const map = data.fallback?.map ?? {};
-  if (Object.keys(map).length > 0) return { ...map };
+  if (Object.keys(map).length > 0) return Object.fromEntries(Object.entries(map).filter(([, payload]) => !disabledOnly.has(payload)));
   const out: Record<string, string> = {};
-  data.rows.flat().forEach((btn, idx) => {
-    out[String(idx + 1)] = btn.payload;
+  buttons.forEach((btn, idx) => {
+    if (!btn.disabled) out[String(idx + 1)] = btn.payload;
   });
   return out;
 }
@@ -57,23 +61,21 @@ export function collectKeyboardFallbackMaps(
 }
 
 /** keyboard 段 → 编号文本（'text' 策略端点的中央降级渲染）。 */
-export function renderKeyboardAsText(data: KeyboardSegmentData): string {
+export function renderKeyboardAsText(data: KeyboardSegmentData, allocatedMap?: Readonly<Record<string, string>>): string {
   const lines: string[] = [];
   const flat = data.rows.flat();
+  const entries = Object.entries(allocatedMap ?? effectiveKeyboardFallbackMap(data)).sort(([a], [b]) => Number(a) - Number(b));
   if (data.fallback?.hint) {
     lines.push(data.fallback.hint);
   } else {
-    lines.push('请选择（回复数字）：');
+    lines.push(entries.length ? '请选择（回复数字）：' : '当前无可用操作。');
   }
-  const map = data.fallback?.map ?? {};
-  const entries = Object.keys(map).length > 0
-    ? Object.entries(map).sort(([a], [b]) => Number(a) - Number(b))
-    : flat.map((btn, idx) => [String(idx + 1), btn.payload] as const);
   for (const [key, payload] of entries) {
-    const btn = flat.find((b) => b.payload === payload);
+    const btn = flat.find((b) => !b.disabled && b.payload === payload);
     const label = btn?.label ?? '·';
-    lines.push(`${key}. ${label}${btn?.disabled ? ' (不可用)' : ''}`);
+    lines.push(`${key}. ${label}`);
   }
+  for (const button of flat) if (button.disabled) lines.push(`— ${button.label} (不可用)`);
   return lines.join('\n');
 }
 

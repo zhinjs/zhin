@@ -11,6 +11,8 @@ sidebar: false
 
 进度与交付记录见 [Issue #702](https://github.com/zhinjs/zhin/issues/702)。
 
+安装闭环之后的消息诊断、用途配置、生效范围和任务管理，继续按[用户体验优化路线](./user-experience-roadmap.md)推进（Issue #829）。
+
 ## 第一阶段：确定问题修复
 
 | 场景 | 改进 | 验收 |
