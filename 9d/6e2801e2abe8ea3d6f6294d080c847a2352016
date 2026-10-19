@@ -1,0 +1,39 @@
+scripts/check-created-project.mjs
+  s_6562bcb6cc0539::t_b9599508dfd939 145
+docs/en/operations/upgrades.md
+  s_6562bcb6cc0539::t_50f529bf13c0ef 37
+  s_6562bcb6cc0539::t_703a59e972066b 36
+basic/cli/src/commands/migrate.ts
+  s_6562bcb6cc0539::t_50f529bf13c0ef 372,375-384,387-389,406,420-424,455,457
+  s_6562bcb6cc0539::t_703a59e972066b 385-386
+basic/cli/tests/migrate-install.test.ts
+  s_6562bcb6cc0539::t_b9599508dfd939 37-38,45-46,72-83
+  s_6562bcb6cc0539::t_703a59e972066b 69,84
+  s_6562bcb6cc0539::t_e72b5eb417e524 32
+  s_6562bcb6cc0539::t_9ca8ddf1ca6d1a 1,19,44
+  s_6562bcb6cc0539::t_9d997f397deba6 2-18,20-31,33-36,39-43,47-68,70-71,85-86
+basic/cli/tests/cli-write-side.test.ts
+  s_6562bcb6cc0539::t_9d997f397deba6 125
+docs/operations/upgrades.md
+  s_6562bcb6cc0539::t_50f529bf13c0ef 37
+  s_6562bcb6cc0539::t_703a59e972066b 36
+.changeset/quiet-workspace-migration.md
+  s_6562bcb6cc0539::t_703a59e972066b 7
+  s_6562bcb6cc0539::t_50f529bf13c0ef 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d6e2801e2abe8ea3d6f6294d080c847a2352016",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
