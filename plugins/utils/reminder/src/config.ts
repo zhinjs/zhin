@@ -12,6 +12,9 @@ export const reminderConfig = Schema.object({
 export type ReminderConfig = Schema.Output<typeof reminderConfig>;
 
 export function assertReminderTimezone(timezone: string): void {
-  try { new Intl.DateTimeFormat('zh-CN', { timeZone: timezone }).format(0); }
+  try {
+    if (!timezone || timezone.length > 100 || timezone !== timezone.trim() || /^[+-]/u.test(timezone)) throw new RangeError('Invalid IANA timezone');
+    new Intl.DateTimeFormat('zh-CN', { timeZone: timezone }).format(0);
+  }
   catch { throw new TypeError(`提醒 timezone 必须是有效的 IANA 时区：${timezone}`); }
 }
