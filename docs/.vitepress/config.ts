@@ -149,6 +149,7 @@ const zhDevDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '目标架构（SSOT）', link: '/target-architecture' },
   { text: '仓库结构', link: '/contributing/repo-structure' },
   { text: '开发流程与门禁', link: '/contributing/development' },
+  { text: '用户体验优化路线', link: '/contributing/user-experience-roadmap' },
   { text: 'npm 发布与可信发布', link: '/contributing/publishing' },
   { text: '平台稳定认证', link: '/contributing/platform-acceptance' },
   { text: '平台验收执行器', link: '/contributing/platform-acceptance-runner' },
