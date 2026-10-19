@@ -3,6 +3,26 @@ import { runEvalCase } from '../../evals/framework/index.js';
 import { mapTurnEventToAgentStreamEvents } from '../../src/event/turn-to-agent-stream.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
 
+it('keeps trace model calls and total usage aligned with the terminal after an exhausted-turn summary', async () => {
+  const result = await runEvalCase({
+    id: 'usage-trace-summary', description: 'Trace counts summary usage as an actual model response',
+    source: '#821 turn usage must remain observable through the trace',
+    inbound: { text: '查询后总结' },
+    agentConfig: { maxIterations: 1, toolBudget: { extendBy: 0, autoContinue: 'off', progressMaxUpdates: 0 } },
+    tools: [{ name: 'lookup_once', result: 'found' }],
+    script: [
+      { toolCalls: [{ name: 'lookup_once' }], tokens: 60 },
+      { text: '已找到结果。', tokens: 50 },
+    ], expect: {},
+  });
+  const terminal = result.terminals[0];
+  expect(terminal.type).toBe('turn_end');
+  if (terminal.type !== 'turn_end') throw new Error('Missing terminal');
+  expect(terminal.usage.totalTokens).toBe(110);
+  expect(result.traces[0].usage.total_tokens).toBe(110);
+  expect(result.traces[0].model_calls).toHaveLength(2);
+});
+
 it('carries a mixed default-schema reply through the full engine, terminal, publisher and Console preview', async () => {
   const segments = [
     { type: 'markdown', data: { content: '**结果**\n' } },

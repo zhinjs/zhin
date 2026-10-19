@@ -35,6 +35,7 @@ import type { TurnEvent } from '../event/turn-event.js';
 import {
   createTurnEventMapperState,
   mapAgentEventToTurnEvents,
+  turnUsageEvent,
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
@@ -940,6 +941,13 @@ export async function* runAgentLoopTextTurnRun(
     : undefined;
   // Messages of the running segment, for progress summaries before agent_end.
   let segmentMessages: AgentMessage[] = [];
+  function* drainCompletionUsage(): Generator<TurnEvent> {
+    for (const usage of completionUsage.drainUsage()) {
+      const event = turnUsageEvent(usage);
+      emitTurnEvent(event);
+      yield event;
+    }
+  }
   // Each segment is one agentLoop run; continuations add segments to the same
   // Turn, so policy, approval ports and persisted history stay those of the Turn.
   while (true) {
@@ -948,7 +956,10 @@ export async function* runAgentLoopTextTurnRun(
     lastAssistantHadToolCalls = false;
     segmentMessages = [...segmentPrompt];
     for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
+      yield* drainCompletionUsage();
       for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
+        if (te.type === 'usage' && event.type === 'message_end' && event.message.role === 'assistant'
+          && completionUsage.hasReported(event.message)) continue;
         if (imReply && te.type === 'chunk') continue;
         if (input.toolEventSource === 'authority'
           && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
@@ -1051,6 +1062,7 @@ export async function* runAgentLoopTextTurnRun(
     }
   }
 
+  yield* drainCompletionUsage();
   if (signal?.aborted) {
     const usage = tokenUsageToLegacy(completionUsage.usage);
     const endEvent = turnEndFromLegacyUsage('', usage);
@@ -1149,6 +1161,7 @@ export async function* runAgentLoopTextTurnRun(
     yield chunk;
   }
 
+  yield* drainCompletionUsage();
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {
     iterations,
     ...tokenUsageLogFields(completionUsage.usage),

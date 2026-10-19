@@ -91,6 +91,9 @@ describe('structured Agent final replies', () => {
     expect(events.find(event => event.type === 'turn_end')).toMatchObject({
       usage: { promptTokens: 75, completionTokens: 35, totalTokens: 110 },
     });
+    const usageEvents = events.filter(event => event.type === 'usage');
+    expect(usageEvents).toHaveLength(2);
+    expect(usageEvents.reduce((sum, event) => sum + event.usage.totalTokens, 0)).toBe(110);
     expect(result.reply).toBe(path === 'rejected correction' ? STRUCTURED_REPLY_FAILURE : '已完成');
   });
 

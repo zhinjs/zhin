@@ -1,8 +1,21 @@
 /**
  * Maps @zhin.js/ai agentLoop AgentEvent stream to TurnEvent union.
  */
-import type { AgentEvent, AssistantMessage } from '@zhin.js/ai';
-import type { TurnEvent } from '../event/turn-event.js';
+import type { AgentEvent, AssistantMessage, TokenUsage } from '@zhin.js/ai';
+import type { TurnEvent, UsageEvent } from '../event/turn-event.js';
+
+export function turnUsageEvent(usage: TokenUsage): UsageEvent {
+  return {
+    type: 'usage',
+    usage: {
+      promptTokens: usage.input,
+      completionTokens: usage.output,
+      totalTokens: usage.totalTokens,
+      ...(usage.cacheRead > 0 ? { cacheReadTokens: usage.cacheRead } : {}),
+      ...(usage.reasoning ? { reasoningTokens: usage.reasoning } : {}),
+    },
+  };
+}
 
 export interface TurnEventMapperState {
   accumulatedText: string;
@@ -34,16 +47,7 @@ export function* mapAgentEventToTurnEvents(
     case 'message_end':
       if (event.message.role === 'assistant') {
         const usage = (event.message as AssistantMessage).usage;
-        yield {
-          type: 'usage',
-          usage: {
-            promptTokens: usage.input,
-            completionTokens: usage.output,
-            totalTokens: usage.totalTokens,
-            ...(usage.cacheRead > 0 ? { cacheReadTokens: usage.cacheRead } : {}),
-            ...(usage.reasoning ? { reasoningTokens: usage.reasoning } : {}),
-          },
-        };
+        yield turnUsageEvent(usage);
       }
       break;
     case 'message_update':

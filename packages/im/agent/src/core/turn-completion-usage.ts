@@ -4,10 +4,16 @@ import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type 
 export function trackTurnCompletionUsage(delegate: LlmCompletionPort): {
   transport: LlmCompletionPort;
   readonly usage: TokenUsage;
+  drainUsage(): TokenUsage[];
+  hasReported(message: object): boolean;
 } {
   const total: TokenUsage = { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } };
+  const pending: TokenUsage[] = [];
+  const reported = new WeakSet<object>();
   const record = (assistant: AssistantMessage): AssistantMessage => {
     const usage = assistant.usage;
+    pending.push({ ...usage, cost: { ...usage.cost } });
+    reported.add(assistant);
     total.input += usage.input;
     total.output += usage.output;
     total.cacheRead += usage.cacheRead;
@@ -27,5 +33,7 @@ export function trackTurnCompletionUsage(delegate: LlmCompletionPort): {
       completeSimple: async (model, context, options) => record(await delegate.completeSimple(model, context, options)),
     },
     get usage() { return { ...total, cost: { ...total.cost } }; },
+    drainUsage: () => pending.splice(0),
+    hasReported: assistant => reported.has(assistant),
   };
 }
