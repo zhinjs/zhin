@@ -111,14 +111,16 @@ ws.on('message', (data) => {
 An adapter is declared once (`adapters/napcat/index.ts` → `defineAdapter`), but config can expand it into **several account connections (Endpoints)**:
 
 ```yaml
+configVersion: 2
 # examples/full-bot/zhin.config.yml (excerpt)
 plugins:
-  napcat:
-    connection: ws                 # shared config for every account
-    endpoints:
-      - id: full-bot-napcat        # per-account config
-        url: ${ONEBOT11_WS_URL}
-        access_token: ${ONEBOT11_ACCESS_TOKEN}
+  napcat: "@zhin.js/adapter-napcat"
+napcat:
+  connection: ws # shared config for every account
+  endpoints:
+    - id: full-bot-napcat # per-account config
+      url: ${ONEBOT11_WS_URL}
+      access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
 
 - With a non-empty `endpoints`, each entry creates one account: the shared config (minus the `endpoints` key) is **shallow-merged** with the entry, and `id` is forced in. With `endpoints` empty or missing, one account is created from the shared config.

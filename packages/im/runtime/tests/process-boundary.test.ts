@@ -28,7 +28,7 @@ describe('Root/process boundary', () => {
     const modules = new FakeModules();
     const pluginSource = join(project, 'plugin.ts');
     modules.set(pluginSource, { default: definePlugin({ name: 'root' }) });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -58,7 +58,7 @@ describe('Root/process boundary', () => {
     modules.set(join(project, 'plugin.ts'), {
       default: definePlugin({ name: 'root' }),
     });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -85,7 +85,7 @@ describe('Root/process boundary', () => {
     const project = await createProject();
     const modules = new FakeModules();
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -112,7 +112,7 @@ describe('Root/process boundary', () => {
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
     modules.set(commandSource, { default: defineCommand({ execute: () => 'before' }) });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -144,7 +144,7 @@ describe('Root/process boundary', () => {
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
     modules.set(commandSource, { default: defineCommand({ execute: () => 'before' }) });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -181,7 +181,7 @@ describe('Root/process boundary', () => {
       default: definePlugin({ name: 'root' }),
     });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -218,7 +218,7 @@ describe('Root/process boundary', () => {
       default: definePlugin({ name: 'root' }),
     });
     modules.set(providerSource, { default: commandFeature });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },

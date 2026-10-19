@@ -53,12 +53,9 @@ zhin doctor
 ```
 
 ```yaml
+configVersion: 2
 plugins:
-  typesafe:
-    apiKey: ${TYPESAFE_API_KEY}
-    model: jev-latest
-    timeoutMs: 10000
-    maxRetries: 2
+  typesafe: "@zhin.js/service-typesafe"
 
 ai:
   # 保留已有 providers、agents 和其他配置。
@@ -79,6 +76,11 @@ ai:
       mode: off
     approval:
       mode: off
+typesafe:
+  apiKey: ${TYPESAFE_API_KEY}
+  model: jev-latest
+  timeoutMs: 10000
+  maxRetries: 2
 ```
 :::
 

@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-onebot11
 - `@zhin.js/adapter` — convention-based `adapters/onebot11/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 `AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol receives one expanded endpoint configuration and no longer reads nested endpoint rows, the old `type: ws_reverse` alias, or process environment variables.
 
@@ -49,19 +49,21 @@ Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_gro
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  onebot11:
-    connection: ws
-    reconnect_interval: 5000
-    heartbeat_interval: 30000
-    endpoints:
-      - id: ob11-bot
-        url: "ws://127.0.0.1:6700"
-        access_token: "${ONEBOT11_ACCESS_TOKEN}"
+  onebot11: "@zhin.js/adapter-onebot11"
+onebot11:
+  connection: ws
+  reconnect_interval: 5000
+  heartbeat_interval: 30000
+  endpoints:
+    - id: ob11-bot
+      url: "ws://127.0.0.1:6700"
+      access_token: "${ONEBOT11_ACCESS_TOKEN}"
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-onebot11` (`instanceKey: onebot11`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-onebot11` (`instanceKey: onebot11`).
 
 ## Connection Modes
 

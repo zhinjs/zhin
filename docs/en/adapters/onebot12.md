@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-onebot12
 - `@zhin.js/adapter` — convention-based `adapters/onebot12/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 `AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol receives one expanded endpoint configuration and does not inspect nested endpoint rows or infer identity from process environment variables. Webhook endpoints require both `path` and `api_url`, so their bidirectional capability is complete before startup.
 
@@ -49,19 +49,21 @@ Outbound: `send({ conversation, payload })` -> WS `send_message` (payload is ren
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  onebot12:
-    connection: ws
-    reconnect_interval: 5000
-    heartbeat_interval: 30000
-    endpoints:
-      - id: ob12-bot
-        url: "ws://127.0.0.1:6700"
-        access_token: "${ONEBOT12_ACCESS_TOKEN}"
+  onebot12: "@zhin.js/adapter-onebot12"
+onebot12:
+  connection: ws
+  reconnect_interval: 5000
+  heartbeat_interval: 30000
+  endpoints:
+    - id: ob12-bot
+      url: "ws://127.0.0.1:6700"
+      access_token: "${ONEBOT12_ACCESS_TOKEN}"
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-onebot12` (`instanceKey: onebot12`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-onebot12` (`instanceKey: onebot12`).
 
 ## Connection Modes
 

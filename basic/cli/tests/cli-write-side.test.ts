@@ -40,9 +40,9 @@ afterEach(() => {
 describe('utils/config-file', () => {
   it('JSON 配置可读写往返', async () => {
     const file = path.join(tmp, 'config.json');
-    await saveConfig(file, { log_level: 'info', ai: { enabled: false } });
+    await saveConfig(file, {configVersion: 2, plugins: {}, log_level: 'info', ai: {enabled: false}});
     const config = await readConfig(file);
-    expect(config).toEqual({ log_level: 'info', ai: { enabled: false } });
+    expect(config).toEqual({configVersion: 2, plugins: {}, log_level: 'info', ai: {enabled: false}});
   });
 
   it('findConfigFile 能发现六种契约内的 Root 配置名', () => {
@@ -61,7 +61,7 @@ describe('config 命令（JSON 落盘）', () => {
   it('config set 真正写入 config.json', async () => {
     fs.writeFileSync(
       path.join(tmp, 'config.json'),
-      JSON.stringify({ log_level: 'info', ai: { enabled: false } }),
+      JSON.stringify({configVersion: 2, plugins: {}, log_level: 'info', ai: {enabled: false}}),
     );
     await configCommand.parseAsync(['node', 'zhin', 'set', 'ai.enabled', 'true']);
     const config = await readConfig(path.join(tmp, 'config.json'));
@@ -80,7 +80,7 @@ describe('doctor createDefaultConfig', () => {
     expect(raw).not.toContain('endpoints');
 
     const config = yaml.parse(raw) as Record<string, unknown>;
-    expect(config.plugins).toEqual({ sandbox: {} });
+    expect(config.plugins).toEqual({sandbox: '@zhin.js/adapter-sandbox'});
     const diagnosis = diagnoseConsoleConfig(config);
     expect(diagnosis).toEqual({
       missingSandboxPlugin: false,

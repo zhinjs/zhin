@@ -196,14 +196,16 @@ export default defineCommand({
 角色分为三档：`user` → `trusted` → `master`（`master` 包含 `trusted` 的权限）。在适配器的配置里指定谁是 master：
 
 ```yaml
+configVersion: 2
 # zhin.config.yml
 plugins:
-  qq:
-    master: '10001'        # 整个适配器的 master
-    endpoints:
-      - name: main
-        appid: ${QQ_APPID}
-        master: '10001'    # 也可以给单个账号单独设置
+  qq: "@zhin.js/adapter-qq"
+qq:
+  master: '10001' # 整个适配器的 master
+  endpoints:
+    - name: main
+      appid: ${QQ_APPID}
+      master: '10001' # 也可以给单个账号单独设置
 ```
 
 在中间件或事件处理中需要同样的判断时，使用 `checkPermissions`：
@@ -321,12 +323,14 @@ export default defineCommand({
 默认**没有**前缀：任何消息都会尝试匹配命令。给某个平台连接配置 `commandPrefix` 后，只有以它开头的消息才会被当作命令，其余消息会进入普通聊天或 AI：
 
 ```yaml
+configVersion: 2
 plugins:
-  qq:
-    commandPrefix: '/'     # 只有 "/qq endpoint list" 这样的消息才会触发命令
-    endpoints:
-      - name: main
-        commandPrefix: ''  # 可为单个账号单独覆盖
+  qq: "@zhin.js/adapter-qq"
+qq:
+  commandPrefix: '/' # 只有 "/qq endpoint list" 这样的消息才会触发命令
+  endpoints:
+    - name: main
+      commandPrefix: '' # 可为单个账号单独覆盖
 ```
 
 `npm create zhin-app` 生成的 Sandbox 已设置为 `/`。
@@ -434,7 +438,7 @@ flowchart LR
 ::: details 给适配器生成 list / add / remove 命令
 `@zhin.js/adapter` 的 `createEndpointCommands(spec, defineCommand)` 为适配器生成 `<adapter> endpoint list / add / remove` 三个命令，用来在聊天里管理账号。除 email（配置是嵌套对象）和 sandbox（无凭据）外，所有平台适配器都已接入：qq、icqq、napcat、onebot11、onebot12、milky、satori、slack、telegram、discord、kook、lark、dingtalk、line、wecom、wechat-mp、weixin-ilink、github。
 
-- `list`：列出运行中的账号，以及 `plugins.<adapterKey>.endpoints` 中配置的账号。
+- `list`：列出运行中的账号，以及 `<adapterKey>.endpoints` 中配置的账号。
 - `add <name> <key=value...>`：录入字段。标记为 `env: true` 的凭据写入 `.env`（键名如 `TELEGRAM_BOT1_TOKEN`），配置文件中保存 `${REF}` 引用；YAML 会保留原有注释；重名拒绝。
 - `remove <name>`：从配置中移除，重启后生效；`.env` 中的键需手动清理。
 - 特殊的添加流程（如 QQ 扫码绑定）通过 `spec.bindFlow` 接管 `add`，QQ 因此多一个 `qq endpoint cancel`。
@@ -454,7 +458,7 @@ context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState(
 
 // 3. src/telegram-endpoint-commands.ts：生成命令（defineCommand 由适配器传入，避免包之间互相依赖）
 export const telegramEndpointCommands = createEndpointCommands({
-  adapterKey: 'telegram',          // = zhin.config.yml 的 plugins.<key>
+  adapterKey: 'telegram',          // = zhin.config.yml 的顶层实例名
   adapterDisplayName: 'Telegram',
   fields: [{ key: 'token', required: true, env: true, description: 'Telegram bot token' }],
   running: (use) => use(telegramRuntimeStateToken).endpoints.values(),

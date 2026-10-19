@@ -40,25 +40,29 @@ pnpm add @icqqjs/qqsign
 ## Configuration (Plugin Runtime)
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    master: "1659488338"        # Required, shared at top level (/approve and master role)
-    autoReconnect: true
-    endpoints:
-      - id: "${ICQQ_ACCOUNT}"     # QQ number
-        # password: "${ICQQ_PASSWORD}"  # Optional; omit for QR login
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  master: "1659488338" # Required, shared at top level (/approve and master role)
+  autoReconnect: true
+  endpoints:
+    - id: "${ICQQ_ACCOUNT}" # QQ number
+      # password: "${ICQQ_PASSWORD}"  # Optional; omit for QR login
 ```
 
 Multiple accounts: a single plugin instance can attach multiple endpoints. Each item overrides top-level defaults and requires `id`:
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    master: "1659488338"      # Top-level fields are shared by all endpoints
-    endpoints:
-      - id: "${ICQQ_ACCOUNT}"
-      - id: "${ICQQ_ACCOUNT_2}"
-      - id: "${ICQQ_ACCOUNT_3}"
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  master: "1659488338" # Top-level fields are shared by all endpoints
+  endpoints:
+    - id: "${ICQQ_ACCOUNT}"
+    - id: "${ICQQ_ACCOUNT_2}"
+    - id: "${ICQQ_ACCOUNT_3}"
 ```
 
 `AdapterIndex` merges instance defaults with each endpoint override before invoking the adapter. The protocol accepts only that expanded endpoint configuration; it does not read environment variables or inspect nested `endpoints`. The composition root resolves environment placeholders while loading project configuration.

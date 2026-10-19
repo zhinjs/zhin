@@ -100,7 +100,7 @@ export class PluginTestKit {
     this.#root = new RootRuntime({ projectRoot,
       modules: withTestEndpoints(modules, rootEntry, definitions),
       environment: { name: 'test', mode: 'test', platform: 'node' },
-      config: options.config,
+      config: options.config ?? { configVersion: 2 },
       installResources: async context => {
         this.#im.install(context.resources);
         await options.installResources?.(context);

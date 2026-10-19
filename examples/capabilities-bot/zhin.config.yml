@@ -1,3 +1,4 @@
+configVersion: 2
 # capabilities-bot 自己的配置（Root 读本包 schema.json）
 log_level: info
 
@@ -16,7 +17,8 @@ plugin:
   greeting: 你好呀
   heartbeatCron: "0 */5 * * * *"
 plugins:
-  sandbox:
-    endpoints:
-      - id: sandbox-bot
-        owner: sandbox-user
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: sandbox-bot
+      owner: sandbox-user

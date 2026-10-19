@@ -112,8 +112,8 @@ it('CLI observation writes exclusive sanitized metadata with a genuine installed
   try {
     const adapter = path.join(project, 'node_modules/@zhin.js/adapter-telegram');
     await mkdir(adapter, { recursive: true });
-    await writeFile(path.join(project, 'package.json'), '{"type":"module","zhin":{"plugins":[{"instanceKey":"telegram","package":"@zhin.js/adapter-telegram"}]}}');
-    await writeFile(path.join(project, 'zhin.config.yml'), 'plugins:\n  telegram:\n    polling: true\n    endpoints:\n      - id: test-bot\n');
+    await writeFile(path.join(project, 'package.json'), '{"type":"module","zhin":{"plugins":[]}}');
+    await writeFile(path.join(project, 'zhin.config.yml'), "configVersion: 2\nplugins: { telegram: '@zhin.js/adapter-telegram' }\ntelegram:\n  polling: true\n  endpoints:\n    - id: test-bot\n");
     await writeFile(path.join(adapter, 'package.json'), '{"name":"@zhin.js/adapter-telegram","version":"1.2.3","main":"index.js"}');
     await writeFile(path.join(adapter, 'index.js'), '');
     const localPolicy = { ...policy, eventsPath: path.join(project, 'events.jsonl') };

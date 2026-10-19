@@ -17,7 +17,7 @@ import type {
   ConsoleRpcRequestIdentity,
 } from './rpc-composition.js';
 import { createWorkroomCatalogRpcContext } from './workroom-catalog-rpc.js';
-import { readDeclaredPlugins } from '../plugin-lifecycle-store.js';
+import { readDeclaredPlugins, setProjectPluginEnabled } from '../plugin-lifecycle-store.js';
 import { resolveDiagnosticPlugin } from './plugin-diagnostics.js';
 
 /** Owns the generation lease and capability context for one Console RPC request. */
@@ -50,8 +50,6 @@ function createRpcContext(
     consoleRuntime,
     projectRoot,
     hub,
-    pluginLifecycleFile,
-    pluginLifecycleStore,
     configuration,
     pluginManagement,
     im,
@@ -70,13 +68,7 @@ function createRpcContext(
       configuration.replaceSource(source, expectedRevision),
     setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data),
     pluginManagement,
-    setPluginEnabled: async (instanceKey: string, enabled: boolean) =>
-      pluginLifecycleStore.setPluginEnabled(
-        pluginLifecycleFile,
-        instanceKey,
-        enabled,
-        await readDeclaredPlugins(projectRoot),
-      ),
+    setPluginEnabled: (instanceKey: string, enabled: boolean) => setProjectPluginEnabled(projectRoot, instanceKey, enabled),
     ...createWorkroomCatalogRpcContext(agent, im, principal),
     listProjectFiles: () => buildProjectFileTree(projectRoot),
     readProjectFile: (filePath: string) => readProjectFile(projectRoot, filePath),

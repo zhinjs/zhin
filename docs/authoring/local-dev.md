@@ -72,7 +72,7 @@ pnpm install
 # 新插件：plugins/utils/my-plugin（package.json 中 zhin.js、@zhin.js/* 写 "workspace:*"）
 # 测试 Bot：复制 examples/minimal-bot 为 examples/my-bot，在其依赖里加
 #   "@zhin.js/plugin-my-plugin": "workspace:*"
-# 并在 package.json 的 zhin.plugins 与 zhin.config.yml 中声明
+# 并在 zhin.config.yml 的 plugins 映射 中声明
 pnpm install
 pnpm build
 cd examples/my-bot && pnpm exec zhin runtime start --once
@@ -112,15 +112,15 @@ zhin dev link ../zhin --project ../my-bot   # 不在项目目录时用 --project
 - **写入的是 tarball overrides**（`file:./.zhin-local/packs/*.tgz`），不是 `link:`；与表中「手写 `link:`」兜底不同——源码改动后必须再次 `link` 才会重新打包生效（幂等）；
 - `pnpm zhin:local` 的相对路径按**调用时所在目录**解析（pnpm 的 `INIT_CWD`），不是仓库根目录；`zhin dev link` 则直接以当前目录（或 `--project`）为项目；
 - 备份与 tarball 存放在项目内的 `.zhin-local/`，`link` 会自动把它加入项目的 `.gitignore`（不存在则创建，已存在不重复添加）；`unlink` 会撤销这一改动：未再改动则原样恢复，由 link 新建的文件会被删除，若之后另有编辑则只移除这一行；
-- 除依赖外，`zhin.plugins` 中声明但未写入依赖的 zhin 包若本仓库存在也会一并切换，并打印警告提醒补全依赖；本仓库不存在的 `@zhin.js/*` 会打印警告并**保持 npm 版本**；
-- 命令在以下情况会拒绝并说明原因：目标位于 zhin 仓库内、依赖与 `zhin.plugins` 中找不到本仓库内的 `zhin.js` / `@zhin.js/*`、首次 link 时 `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、`.zhin-local/` 存在但缺少 `state.json`、或 link 之后 `package.json` 又被改过（刷新与 `unlink` 均拒绝；确认丢弃改动可用 `zhin dev unlink --force`，会先列出将被丢弃的行）；
+- 除依赖外，主配置 `plugins` 中声明但未写入依赖的 zhin 包若本仓库存在也会一并切换，并打印警告提醒补全依赖；本仓库不存在的 `@zhin.js/*` 会打印警告并**保持 npm 版本**；
+- 命令在以下情况会拒绝并说明原因：目标位于 zhin 仓库内、依赖与 主配置 `plugins` 中找不到本仓库内的 `zhin.js` / `@zhin.js/*`、首次 link 时 `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、`.zhin-local/` 存在但缺少 `state.json`、或 link 之后 `package.json` 又被改过（刷新与 `unlink` 均拒绝；确认丢弃改动可用 `zhin dev unlink --force`，会先列出将被丢弃的行）；
 - 所有被切换的 zhin 包来自同一份打包产物，不会出现第 1 节的多副本错误。
 
 无法使用该命令时，可手写 `pnpm.overrides`（`link:` 指向同一个源码仓库），但必须覆盖项目依赖闭包中的**全部** zhin 包（含 `@zhin.js/runtime` 等间接依赖）。
 
 修改后执行 `pnpm install`，再用第 1 节的命令确认每个包只有一个解析路径。
 
-临时停用某个插件时，需要同时移除 `package.json` 的依赖、`zhin.plugins` 中的声明，以及 `zhin.config.yml` 里 `plugins.<instanceKey>` 配置（否则会报 `/plugins must NOT have additional properties`）；可以把配置注释保留以便接回。
+临时停用某个实例时，把实例名加入主配置 `disable_plugins`；保留包依赖、`plugins` 映射和顶层同名业务块。移除声明才是删除实例，不能把停用等同于卸载。
 
 ## 5. 端口与干净退出
 

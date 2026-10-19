@@ -126,6 +126,12 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.schedule` | object | no | — | Unattended Schedule execution policy. |
 | `ai.agent.schedule.security` | object | no | — | Schedule command security policy. |
 | `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | no | — | Schedule Jobs may use only the read-only or network preset. |
+| `menuKeyword` | string \| `false` | no | — | Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu. |
+| `menuStyle` | object | no | — | Command menu appearance when an HTML renderer is available; plain text fallback remains available. |
+| `menuStyle.title` | string | no | — | Menu title. |
+| `menuStyle.subtitle` | string | no | — | Menu subtitle. |
+| `menuStyle.accentColor` | string | no | — | Six-digit hex accent color; invalid values use the renderer default. |
+| `menuStyle.backgroundImage` | string | no | — | HTTP(S) image or PNG/JPEG/WebP data URL; unsupported values use the renderer default. |
 | `mcp` | object | no | — | Expose Bot tools through an MCP Server. |
 | `a2a` | object | no | — | A2A Agent Card, remote execution, and Workroom callbacks. |
 | `speech` | object | no | — | Speech-to-text and text-to-speech Host. |
@@ -160,7 +166,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 
 ## Plugin instance fields
 
-These fields use the Runtime schema reader for trusted plugins’ `config: Schema.object(...)` declarations or `schema.json`; isolated plugins must use `schema.json`. The `<name>` in `plugins.<name>` is the default instanceKey.
+These fields use the Runtime schema reader for trusted plugins’ `config: Schema.object(...)` declarations or `schema.json`; isolated plugins must use `schema.json`. Top-level `<name>` is the default instanceKey; `plugins.<name>` only stores the package reference.
 
 ### dingtalk
 
@@ -168,29 +174,29 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.dingtalk.apiBaseUrl` | string | no | `"https://oapi.dingtalk.com"` | — |
-| `plugins.dingtalk.master` | string \| number | no | — | 框架 master（DingTalk userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.dingtalk.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.dingtalk.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.dingtalk.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（DingTalk userid）；覆盖顶层 master |
-| `plugins.dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.dingtalk.endpoints[].appKey` | string | yes | — | Dingtalk app key |
-| `plugins.dingtalk.endpoints[].appSecret` | string | yes | — | Dingtalk app secret |
-| `plugins.dingtalk.endpoints[].webhookPath` | string | no | — | Dingtalk webhook path |
-| `plugins.dingtalk.endpoints[].robotCode` | string | no | — | Dingtalk robot code |
-| `plugins.dingtalk.endpoints[].apiBaseUrl` | string | no | — | — |
-| `plugins.dingtalk.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.dingtalk.endpoints[].id` | string | yes | — | Dingtalk bot name |
-| `plugins.dingtalk.endpoints[].mode` | string: `"webhook"`, `"stream"` | no | `"webhook"` | — |
-| `plugins.dingtalk.endpoints[].cardTemplateId` | string | no | — | Stream interactive card template ID |
-| `plugins.dingtalk.endpoints[].cardButtonCount` | integer | no | `2` | Fixed button count in the card template |
-| `plugins.dingtalk.endpoints[].streamProxy` | object | no | — | 故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份 |
-| `plugins.dingtalk.endpoints[].streamProxy.port` | integer | yes | — | — |
-| `plugins.dingtalk.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `plugins.dingtalk.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.dingtalk.mode` | string: `"webhook"`, `"stream"` | no | `"webhook"` | — |
-| `plugins.dingtalk.cardTemplateId` | string | no | — | Stream interactive card template ID |
-| `plugins.dingtalk.cardButtonCount` | integer | no | `2` | Fixed button count in the card template |
+| `dingtalk.apiBaseUrl` | string | no | `"https://oapi.dingtalk.com"` | — |
+| `dingtalk.master` | string \| number | no | — | 框架 master（DingTalk userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `dingtalk.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `dingtalk.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `dingtalk.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（DingTalk userid）；覆盖顶层 master |
+| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `dingtalk.endpoints[].appKey` | string | yes | — | Dingtalk app key |
+| `dingtalk.endpoints[].appSecret` | string | yes | — | Dingtalk app secret |
+| `dingtalk.endpoints[].webhookPath` | string | no | — | Dingtalk webhook path |
+| `dingtalk.endpoints[].robotCode` | string | no | — | Dingtalk robot code |
+| `dingtalk.endpoints[].apiBaseUrl` | string | no | — | — |
+| `dingtalk.endpoints[].commandPrefix` | string | no | — | — |
+| `dingtalk.endpoints[].id` | string | yes | — | Dingtalk bot name |
+| `dingtalk.endpoints[].mode` | string: `"webhook"`, `"stream"` | no | `"webhook"` | — |
+| `dingtalk.endpoints[].cardTemplateId` | string | no | — | Stream interactive card template ID |
+| `dingtalk.endpoints[].cardButtonCount` | integer | no | `2` | Fixed button count in the card template |
+| `dingtalk.endpoints[].streamProxy` | object | no | — | 故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份 |
+| `dingtalk.endpoints[].streamProxy.port` | integer | yes | — | — |
+| `dingtalk.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `dingtalk.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `dingtalk.mode` | string: `"webhook"`, `"stream"` | no | `"webhook"` | — |
+| `dingtalk.cardTemplateId` | string | no | — | Stream interactive card template ID |
+| `dingtalk.cardButtonCount` | integer | no | `2` | Fixed button count in the card template |
 
 ### discord
 
@@ -198,43 +204,43 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.discord.connection` | string: `"gateway"`, `"interactions"` | no | `"gateway"` | Gateway WebSocket (default). interactions uses httpHostToken POST + Ed25519 verify. |
-| `plugins.discord.intents` | array&lt;number&gt; | no | — | — |
-| `plugins.discord.enableSlashCommands` | boolean | no | `false` | — |
-| `plugins.discord.globalCommands` | boolean | no | `false` | — |
-| `plugins.discord.defaultActivity` | object | no | — | — |
-| `plugins.discord.defaultActivity.name` | string | yes | — | — |
-| `plugins.discord.defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | yes | — | — |
-| `plugins.discord.defaultActivity.url` | string | no | — | — |
-| `plugins.discord.slashCommands` | array&lt;object&gt; | no | — | — |
-| `plugins.discord.applicationId` | string | no | — | Required when connection is interactions. |
-| `plugins.discord.publicKey` | string | no | — | Required when connection is interactions (hex Ed25519 public key). |
-| `plugins.discord.interactionsPath` | string | no | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
-| `plugins.discord.master` | string \| number | no | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.discord.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.discord.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `plugins.discord.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
-| `plugins.discord.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.discord.endpoints[].token` | string | yes | — | Discord bot token |
-| `plugins.discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | no | — | — |
-| `plugins.discord.endpoints[].intents` | array&lt;number&gt; | no | — | — |
-| `plugins.discord.endpoints[].enableSlashCommands` | boolean | no | — | — |
-| `plugins.discord.endpoints[].globalCommands` | boolean | no | — | — |
-| `plugins.discord.endpoints[].defaultActivity` | object | no | — | — |
-| `plugins.discord.endpoints[].defaultActivity.name` | string | yes | — | — |
-| `plugins.discord.endpoints[].defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | yes | — | — |
-| `plugins.discord.endpoints[].defaultActivity.url` | string | no | — | — |
-| `plugins.discord.endpoints[].slashCommands` | array&lt;object&gt; | no | — | — |
-| `plugins.discord.endpoints[].applicationId` | string | no | — | — |
-| `plugins.discord.endpoints[].publicKey` | string | no | — | — |
-| `plugins.discord.endpoints[].interactionsPath` | string | no | — | — |
-| `plugins.discord.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.discord.endpoints[].id` | string | yes | — | Discord bot name |
-| `plugins.discord.endpoints[].gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
-| `plugins.discord.endpoints[].restApiProxy` | object | no | — | Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理 |
-| `plugins.discord.endpoints[].restApiProxy.port` | integer | yes | — | — |
-| `plugins.discord.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.discord.gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
+| `discord.connection` | string: `"gateway"`, `"interactions"` | no | `"gateway"` | Gateway WebSocket (default). interactions uses httpHostToken POST + Ed25519 verify. |
+| `discord.intents` | array&lt;number&gt; | no | — | — |
+| `discord.enableSlashCommands` | boolean | no | `false` | — |
+| `discord.globalCommands` | boolean | no | `false` | — |
+| `discord.defaultActivity` | object | no | — | — |
+| `discord.defaultActivity.name` | string | yes | — | — |
+| `discord.defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | yes | — | — |
+| `discord.defaultActivity.url` | string | no | — | — |
+| `discord.slashCommands` | array&lt;object&gt; | no | — | — |
+| `discord.applicationId` | string | no | — | Required when connection is interactions. |
+| `discord.publicKey` | string | no | — | Required when connection is interactions (hex Ed25519 public key). |
+| `discord.interactionsPath` | string | no | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
+| `discord.master` | string \| number | no | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `discord.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `discord.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
+| `discord.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
+| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `discord.endpoints[].token` | string | yes | — | Discord bot token |
+| `discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | no | — | — |
+| `discord.endpoints[].intents` | array&lt;number&gt; | no | — | — |
+| `discord.endpoints[].enableSlashCommands` | boolean | no | — | — |
+| `discord.endpoints[].globalCommands` | boolean | no | — | — |
+| `discord.endpoints[].defaultActivity` | object | no | — | — |
+| `discord.endpoints[].defaultActivity.name` | string | yes | — | — |
+| `discord.endpoints[].defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | yes | — | — |
+| `discord.endpoints[].defaultActivity.url` | string | no | — | — |
+| `discord.endpoints[].slashCommands` | array&lt;object&gt; | no | — | — |
+| `discord.endpoints[].applicationId` | string | no | — | — |
+| `discord.endpoints[].publicKey` | string | no | — | — |
+| `discord.endpoints[].interactionsPath` | string | no | — | — |
+| `discord.endpoints[].commandPrefix` | string | no | — | — |
+| `discord.endpoints[].id` | string | yes | — | Discord bot name |
+| `discord.endpoints[].gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
+| `discord.endpoints[].restApiProxy` | object | no | — | Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理 |
+| `discord.endpoints[].restApiProxy.port` | integer | yes | — | — |
+| `discord.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `discord.gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
 
 ### email
 
@@ -242,38 +248,38 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.email.master` | string \| number | no | — | 框架 master（email address；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.email.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.email.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.email.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（email address）；覆盖顶层 master |
-| `plugins.email.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.email.endpoints[].smtp` | object | yes | — | — |
-| `plugins.email.endpoints[].smtp.host` | string | yes | — | — |
-| `plugins.email.endpoints[].smtp.port` | number | yes | — | — |
-| `plugins.email.endpoints[].smtp.secure` | boolean | yes | — | — |
-| `plugins.email.endpoints[].smtp.auth` | object | yes | — | — |
-| `plugins.email.endpoints[].smtp.auth.user` | string | yes | — | — |
-| `plugins.email.endpoints[].smtp.auth.pass` | string | yes | — | — |
-| `plugins.email.endpoints[].smtp.serverName` | string | no | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
-| `plugins.email.endpoints[].imap` | object | yes | — | — |
-| `plugins.email.endpoints[].imap.host` | string | yes | — | — |
-| `plugins.email.endpoints[].imap.port` | number | yes | — | — |
-| `plugins.email.endpoints[].imap.tls` | boolean | yes | — | — |
-| `plugins.email.endpoints[].imap.user` | string | yes | — | — |
-| `plugins.email.endpoints[].imap.password` | string | yes | — | — |
-| `plugins.email.endpoints[].imap.checkInterval` | number | no | `60000` | — |
-| `plugins.email.endpoints[].imap.reconnectInterval` | number | no | `5000` | — |
-| `plugins.email.endpoints[].imap.mailbox` | string | no | `"INBOX"` | — |
-| `plugins.email.endpoints[].imap.markSeen` | boolean | no | `true` | — |
-| `plugins.email.endpoints[].imap.serverName` | string | no | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
-| `plugins.email.endpoints[].attachments` | object | no | — | — |
-| `plugins.email.endpoints[].attachments.enabled` | boolean | no | `false` | — |
-| `plugins.email.endpoints[].attachments.downloadPath` | string | no | — | — |
-| `plugins.email.endpoints[].attachments.maxFileSize` | number | no | — | — |
-| `plugins.email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | no | — | — |
-| `plugins.email.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.email.endpoints[].id` | string | yes | — | Email bot name |
-| `plugins.email.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `email.master` | string \| number | no | — | 框架 master（email address；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `email.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `email.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `email.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（email address）；覆盖顶层 master |
+| `email.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `email.endpoints[].smtp` | object | yes | — | — |
+| `email.endpoints[].smtp.host` | string | yes | — | — |
+| `email.endpoints[].smtp.port` | number | yes | — | — |
+| `email.endpoints[].smtp.secure` | boolean | yes | — | — |
+| `email.endpoints[].smtp.auth` | object | yes | — | — |
+| `email.endpoints[].smtp.auth.user` | string | yes | — | — |
+| `email.endpoints[].smtp.auth.pass` | string | yes | — | — |
+| `email.endpoints[].smtp.serverName` | string | no | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
+| `email.endpoints[].imap` | object | yes | — | — |
+| `email.endpoints[].imap.host` | string | yes | — | — |
+| `email.endpoints[].imap.port` | number | yes | — | — |
+| `email.endpoints[].imap.tls` | boolean | yes | — | — |
+| `email.endpoints[].imap.user` | string | yes | — | — |
+| `email.endpoints[].imap.password` | string | yes | — | — |
+| `email.endpoints[].imap.checkInterval` | number | no | `60000` | — |
+| `email.endpoints[].imap.reconnectInterval` | number | no | `5000` | — |
+| `email.endpoints[].imap.mailbox` | string | no | `"INBOX"` | — |
+| `email.endpoints[].imap.markSeen` | boolean | no | `true` | — |
+| `email.endpoints[].imap.serverName` | string | no | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
+| `email.endpoints[].attachments` | object | no | — | — |
+| `email.endpoints[].attachments.enabled` | boolean | no | `false` | — |
+| `email.endpoints[].attachments.downloadPath` | string | no | — | — |
+| `email.endpoints[].attachments.maxFileSize` | number | no | — | — |
+| `email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | no | — | — |
+| `email.endpoints[].commandPrefix` | string | no | — | — |
+| `email.endpoints[].id` | string | yes | — | Email bot name |
+| `email.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### github
 
@@ -281,27 +287,27 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.github.host` | string | no | — | GitHub Enterprise hostname (default github.com) |
-| `plugins.github.webhook_path` | string | no | `"/github/webhook"` | — |
-| `plugins.github.auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
-| `plugins.github.bot_login` | string | no | — | Override App bot login (default {slug}[bot]) |
-| `plugins.github.workspace_root` | string | no | — | Managed git workspace root |
-| `plugins.github.master` | string \| number | no | — | 框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.github.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.github.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint |
-| `plugins.github.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
-| `plugins.github.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.github.endpoints[].app_id` | string \| number | yes | — | GitHub App ID |
-| `plugins.github.endpoints[].private_key` | string | yes | — | GitHub App private key (PEM content or file path) |
-| `plugins.github.endpoints[].webhook_secret` | string | no | — | Webhook HMAC secret; enables httpHostToken POST route |
-| `plugins.github.endpoints[].id` | string | yes | — | GitHub App bot name |
-| `plugins.github.endpoints[].host` | string | no | — | GitHub Enterprise hostname |
-| `plugins.github.endpoints[].webhook_path` | string | no | — | Webhook route path |
-| `plugins.github.endpoints[].auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose comments auto-trigger AI |
-| `plugins.github.endpoints[].bot_login` | string | no | — | Override App bot login |
-| `plugins.github.endpoints[].workspace_root` | string | no | — | Managed git workspace root |
-| `plugins.github.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
-| `plugins.github.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `github.host` | string | no | — | GitHub Enterprise hostname (default github.com) |
+| `github.webhook_path` | string | no | `"/github/webhook"` | — |
+| `github.auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
+| `github.bot_login` | string | no | — | Override App bot login (default {slug}[bot]) |
+| `github.workspace_root` | string | no | — | Managed git workspace root |
+| `github.master` | string \| number | no | — | 框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `github.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `github.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint |
+| `github.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
+| `github.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `github.endpoints[].app_id` | string \| number | yes | — | GitHub App ID |
+| `github.endpoints[].private_key` | string | yes | — | GitHub App private key (PEM content or file path) |
+| `github.endpoints[].webhook_secret` | string | no | — | Webhook HMAC secret; enables httpHostToken POST route |
+| `github.endpoints[].id` | string | yes | — | GitHub App bot name |
+| `github.endpoints[].host` | string | no | — | GitHub Enterprise hostname |
+| `github.endpoints[].webhook_path` | string | no | — | Webhook route path |
+| `github.endpoints[].auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose comments auto-trigger AI |
+| `github.endpoints[].bot_login` | string | no | — | Override App bot login |
+| `github.endpoints[].workspace_root` | string | no | — | Managed git workspace root |
+| `github.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
+| `github.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### icqq
 
@@ -309,40 +315,40 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.icqq.master` | string \| number | yes | — | 框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖 |
-| `plugins.icqq.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted QQ uin 列表（弱于 master） |
-| `plugins.icqq.password` | string | no | — | QQ 密码（可选，不填则扫码登录） |
-| `plugins.icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | `1` | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
-| `plugins.icqq.ver` | string | no | — | 协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本 |
-| `plugins.icqq.signApiAddr` | string | no | — | 签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名 |
-| `plugins.icqq.dataDir` | string | no | — | 数据存储文件夹路径，默认为主模块下的 data 文件夹 |
-| `plugins.icqq.autoReconnect` | boolean | no | `true` | 断线后是否自动重连（默认 true） |
-| `plugins.icqq.outboundMedia` | string: `"file"`, `"base64"` | no | `"file"` | 出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联 |
-| `plugins.icqq.ignoreSelf` | boolean | no | `true` | 群聊和频道中是否过滤自己的消息（默认 true） |
-| `plugins.icqq.resend` | boolean | no | `false` | 被风控时是否尝试用分片发送（默认 false） |
-| `plugins.icqq.cacheGroupMember` | boolean | no | `true` | 是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存 |
-| `plugins.icqq.autoServer` | boolean | no | `true` | 是否自动选择最优服务器（默认 true） |
-| `plugins.icqq.qqnt` | boolean | no | `true` | 是否使用 QQNT 协议（默认 true） |
-| `plugins.icqq.ntLogin` | boolean | no | — | 是否使用 NT 登录方式 |
-| `plugins.icqq.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.icqq.endpoints[].id` | string | yes | — | QQ uin |
-| `plugins.icqq.endpoints[].master` | string \| number | no | — | 本 endpoint 的 master QQ uin；覆盖顶层 master |
-| `plugins.icqq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.icqq.endpoints[].password` | string | no | — | 本 endpoint 的 QQ 密码 |
-| `plugins.icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | — | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
-| `plugins.icqq.endpoints[].ver` | string | no | — | 协议版本号 |
-| `plugins.icqq.endpoints[].signApiAddr` | string | no | — | 签名服务器地址 |
-| `plugins.icqq.endpoints[].dataDir` | string | no | — | 数据存储文件夹路径 |
-| `plugins.icqq.endpoints[].autoReconnect` | boolean | no | — | 断线后是否自动重连 |
-| `plugins.icqq.endpoints[].outboundMedia` | string: `"file"`, `"base64"` | no | — | 出站媒体模式 |
-| `plugins.icqq.endpoints[].ignoreSelf` | boolean | no | — | 是否过滤自己的消息 |
-| `plugins.icqq.endpoints[].resend` | boolean | no | — | 被风控时是否分片发送 |
-| `plugins.icqq.endpoints[].cacheGroupMember` | boolean | no | — | 是否缓存群员列表 |
-| `plugins.icqq.endpoints[].autoServer` | boolean | no | — | 是否自动选择最优服务器 |
-| `plugins.icqq.endpoints[].qqnt` | boolean | no | — | 是否使用 QQNT 协议 |
-| `plugins.icqq.endpoints[].ntLogin` | boolean | no | — | 是否使用 NT 登录方式 |
-| `plugins.icqq.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
-| `plugins.icqq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
+| `icqq.master` | string \| number | yes | — | 框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖 |
+| `icqq.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted QQ uin 列表（弱于 master） |
+| `icqq.password` | string | no | — | QQ 密码（可选，不填则扫码登录） |
+| `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | `1` | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
+| `icqq.ver` | string | no | — | 协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本 |
+| `icqq.signApiAddr` | string | no | — | 签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名 |
+| `icqq.dataDir` | string | no | — | 数据存储文件夹路径，默认为主模块下的 data 文件夹 |
+| `icqq.autoReconnect` | boolean | no | `true` | 断线后是否自动重连（默认 true） |
+| `icqq.outboundMedia` | string: `"file"`, `"base64"` | no | `"file"` | 出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联 |
+| `icqq.ignoreSelf` | boolean | no | `true` | 群聊和频道中是否过滤自己的消息（默认 true） |
+| `icqq.resend` | boolean | no | `false` | 被风控时是否尝试用分片发送（默认 false） |
+| `icqq.cacheGroupMember` | boolean | no | `true` | 是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存 |
+| `icqq.autoServer` | boolean | no | `true` | 是否自动选择最优服务器（默认 true） |
+| `icqq.qqnt` | boolean | no | `true` | 是否使用 QQNT 协议（默认 true） |
+| `icqq.ntLogin` | boolean | no | — | 是否使用 NT 登录方式 |
+| `icqq.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `icqq.endpoints[].id` | string | yes | — | QQ uin |
+| `icqq.endpoints[].master` | string \| number | no | — | 本 endpoint 的 master QQ uin；覆盖顶层 master |
+| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `icqq.endpoints[].password` | string | no | — | 本 endpoint 的 QQ 密码 |
+| `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | — | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
+| `icqq.endpoints[].ver` | string | no | — | 协议版本号 |
+| `icqq.endpoints[].signApiAddr` | string | no | — | 签名服务器地址 |
+| `icqq.endpoints[].dataDir` | string | no | — | 数据存储文件夹路径 |
+| `icqq.endpoints[].autoReconnect` | boolean | no | — | 断线后是否自动重连 |
+| `icqq.endpoints[].outboundMedia` | string: `"file"`, `"base64"` | no | — | 出站媒体模式 |
+| `icqq.endpoints[].ignoreSelf` | boolean | no | — | 是否过滤自己的消息 |
+| `icqq.endpoints[].resend` | boolean | no | — | 被风控时是否分片发送 |
+| `icqq.endpoints[].cacheGroupMember` | boolean | no | — | 是否缓存群员列表 |
+| `icqq.endpoints[].autoServer` | boolean | no | — | 是否自动选择最优服务器 |
+| `icqq.endpoints[].qqnt` | boolean | no | — | 是否使用 QQNT 协议 |
+| `icqq.endpoints[].ntLogin` | boolean | no | — | 是否使用 NT 登录方式 |
+| `icqq.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
+| `icqq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
 
 ### kook
 
@@ -350,36 +356,36 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.kook.connection` | string: `"websocket"`, `"webhook"` | no | `"websocket"` | WebSocket gateway (default). webhook requires httpHostToken, verify_token, and a public HTTPS callback URL. |
-| `plugins.kook.webhookPath` | string | no | `"/kook/webhook"` | POST path registered via httpHostToken when connection is webhook. |
-| `plugins.kook.data_dir` | string | no | — | — |
-| `plugins.kook.timeout` | number | no | `10000` | — |
-| `plugins.kook.max_retry` | number | no | `3` | — |
-| `plugins.kook.ignore` | string: `"bot"`, `"self"` | no | `"bot"` | — |
-| `plugins.kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | `"info"` | — |
-| `plugins.kook.master` | string \| number | no | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.kook.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.kook.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `plugins.kook.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
-| `plugins.kook.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.kook.endpoints[].token` | string | yes | — | KOOK bot token |
-| `plugins.kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | no | — | — |
-| `plugins.kook.endpoints[].webhookPath` | string | no | — | — |
-| `plugins.kook.endpoints[].verify_token` | string | no | — | KOOK developer console verify token (required for webhook mode). |
-| `plugins.kook.endpoints[].encrypt_key` | string | no | — | Optional Encrypt Key when message encryption is enabled in KOOK console. |
-| `plugins.kook.endpoints[].data_dir` | string | no | — | — |
-| `plugins.kook.endpoints[].timeout` | number | no | — | — |
-| `plugins.kook.endpoints[].max_retry` | number | no | — | — |
-| `plugins.kook.endpoints[].ignore` | string: `"bot"`, `"self"` | no | — | — |
-| `plugins.kook.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | — | — |
-| `plugins.kook.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.kook.endpoints[].id` | string | yes | — | KOOK bot name |
-| `plugins.kook.endpoints[].streamProxy` | object | no | — | WSS故障验收固定loopback，保持真实TLS身份 |
-| `plugins.kook.endpoints[].streamProxy.port` | integer | yes | — | — |
-| `plugins.kook.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `plugins.kook.endpoints[].apiProxy` | object | no | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
-| `plugins.kook.endpoints[].apiProxy.port` | integer | yes | — | — |
-| `plugins.kook.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `kook.connection` | string: `"websocket"`, `"webhook"` | no | `"websocket"` | WebSocket gateway (default). webhook requires httpHostToken, verify_token, and a public HTTPS callback URL. |
+| `kook.webhookPath` | string | no | `"/kook/webhook"` | POST path registered via httpHostToken when connection is webhook. |
+| `kook.data_dir` | string | no | — | — |
+| `kook.timeout` | number | no | `10000` | — |
+| `kook.max_retry` | number | no | `3` | — |
+| `kook.ignore` | string: `"bot"`, `"self"` | no | `"bot"` | — |
+| `kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | `"info"` | — |
+| `kook.master` | string \| number | no | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `kook.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `kook.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
+| `kook.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
+| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `kook.endpoints[].token` | string | yes | — | KOOK bot token |
+| `kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | no | — | — |
+| `kook.endpoints[].webhookPath` | string | no | — | — |
+| `kook.endpoints[].verify_token` | string | no | — | KOOK developer console verify token (required for webhook mode). |
+| `kook.endpoints[].encrypt_key` | string | no | — | Optional Encrypt Key when message encryption is enabled in KOOK console. |
+| `kook.endpoints[].data_dir` | string | no | — | — |
+| `kook.endpoints[].timeout` | number | no | — | — |
+| `kook.endpoints[].max_retry` | number | no | — | — |
+| `kook.endpoints[].ignore` | string: `"bot"`, `"self"` | no | — | — |
+| `kook.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | — | — |
+| `kook.endpoints[].commandPrefix` | string | no | — | — |
+| `kook.endpoints[].id` | string | yes | — | KOOK bot name |
+| `kook.endpoints[].streamProxy` | object | no | — | WSS故障验收固定loopback，保持真实TLS身份 |
+| `kook.endpoints[].streamProxy.port` | integer | yes | — | — |
+| `kook.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `kook.endpoints[].apiProxy` | object | no | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
+| `kook.endpoints[].apiProxy.port` | integer | yes | — | — |
+| `kook.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### lark
 
@@ -387,33 +393,33 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.lark.webhookPath` | string | no | `"/lark/webhook"` | — |
-| `plugins.lark.apiBaseUrl` | string | no | — | — |
-| `plugins.lark.isFeishu` | boolean | no | `true` | — |
-| `plugins.lark.master` | string \| number | no | — | 框架 master（Lark/Feishu open_id or user_id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.lark.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.lark.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.lark.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Lark/Feishu open_id or user_id）；覆盖顶层 master |
-| `plugins.lark.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.lark.endpoints[].appId` | string | yes | — | Lark app ID |
-| `plugins.lark.endpoints[].appSecret` | string | yes | — | Lark app secret |
-| `plugins.lark.endpoints[].encryptKey` | string | no | — | Lark encrypt key |
-| `plugins.lark.endpoints[].verificationToken` | string | no | — | Lark verification token |
-| `plugins.lark.endpoints[].webhookPath` | string | no | — | — |
-| `plugins.lark.endpoints[].apiBaseUrl` | string | no | — | — |
-| `plugins.lark.endpoints[].isFeishu` | boolean | no | — | — |
-| `plugins.lark.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.lark.endpoints[].id` | string | yes | — | Lark bot name |
-| `plugins.lark.endpoints[].mode` | string: `"webhook"`, `"websocket"` | no | `"webhook"` | — |
-| `plugins.lark.endpoints[].streamProxy` | object | no | — | WSS故障验收：仅TCP固定loopback，保留TLS身份 |
-| `plugins.lark.endpoints[].streamProxy.port` | integer | yes | — | — |
-| `plugins.lark.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `plugins.lark.endpoints[].webApiProxy` | object | no | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
-| `plugins.lark.endpoints[].webApiProxy.port` | integer | yes | — | — |
-| `plugins.lark.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.lark.mode` | string: `"webhook"`, `"websocket"` | no | `"webhook"` | — |
-| `plugins.lark.webApiProxy` | object | no | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
-| `plugins.lark.webApiProxy.port` | integer | yes | — | — |
+| `lark.webhookPath` | string | no | `"/lark/webhook"` | — |
+| `lark.apiBaseUrl` | string | no | — | — |
+| `lark.isFeishu` | boolean | no | `true` | — |
+| `lark.master` | string \| number | no | — | 框架 master（Lark/Feishu open_id or user_id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `lark.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `lark.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `lark.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Lark/Feishu open_id or user_id）；覆盖顶层 master |
+| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `lark.endpoints[].appId` | string | yes | — | Lark app ID |
+| `lark.endpoints[].appSecret` | string | yes | — | Lark app secret |
+| `lark.endpoints[].encryptKey` | string | no | — | Lark encrypt key |
+| `lark.endpoints[].verificationToken` | string | no | — | Lark verification token |
+| `lark.endpoints[].webhookPath` | string | no | — | — |
+| `lark.endpoints[].apiBaseUrl` | string | no | — | — |
+| `lark.endpoints[].isFeishu` | boolean | no | — | — |
+| `lark.endpoints[].commandPrefix` | string | no | — | — |
+| `lark.endpoints[].id` | string | yes | — | Lark bot name |
+| `lark.endpoints[].mode` | string: `"webhook"`, `"websocket"` | no | `"webhook"` | — |
+| `lark.endpoints[].streamProxy` | object | no | — | WSS故障验收：仅TCP固定loopback，保留TLS身份 |
+| `lark.endpoints[].streamProxy.port` | integer | yes | — | — |
+| `lark.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `lark.endpoints[].webApiProxy` | object | no | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `lark.endpoints[].webApiProxy.port` | integer | yes | — | — |
+| `lark.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `lark.mode` | string: `"webhook"`, `"websocket"` | no | `"webhook"` | — |
+| `lark.webApiProxy` | object | no | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `lark.webApiProxy.port` | integer | yes | — | — |
 
 ### line
 
@@ -421,20 +427,20 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.line.webhookPath` | string | no | `"/line/webhook"` | — |
-| `plugins.line.apiBaseUrl` | string | no | `"https://api.line.me"` | — |
-| `plugins.line.master` | string \| number | no | — | 框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.line.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.line.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.line.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（LINE user id）；覆盖顶层 master |
-| `plugins.line.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.line.endpoints[].channelSecret` | string | yes | — | LINE channel secret |
-| `plugins.line.endpoints[].channelAccessToken` | string | yes | — | LINE channel access token |
-| `plugins.line.endpoints[].webhookPath` | string | no | — | — |
-| `plugins.line.endpoints[].apiBaseUrl` | string | no | — | — |
-| `plugins.line.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.line.endpoints[].id` | string | yes | — | LINE bot name |
-| `plugins.line.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `line.webhookPath` | string | no | `"/line/webhook"` | — |
+| `line.apiBaseUrl` | string | no | `"https://api.line.me"` | — |
+| `line.master` | string \| number | no | — | 框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `line.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `line.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `line.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（LINE user id）；覆盖顶层 master |
+| `line.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `line.endpoints[].channelSecret` | string | yes | — | LINE channel secret |
+| `line.endpoints[].channelAccessToken` | string | yes | — | LINE channel access token |
+| `line.endpoints[].webhookPath` | string | no | — | — |
+| `line.endpoints[].apiBaseUrl` | string | no | — | — |
+| `line.endpoints[].commandPrefix` | string | no | — | — |
+| `line.endpoints[].id` | string | yes | — | LINE bot name |
+| `line.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### milky
 
@@ -442,23 +448,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
-| `plugins.milky.reconnect_interval` | number | no | `5000` | — |
-| `plugins.milky.heartbeat_interval` | number | no | `30000` | — |
-| `plugins.milky.master` | string \| number | no | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.milky.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.milky.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.milky.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `plugins.milky.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | — | — |
-| `plugins.milky.endpoints[].baseUrl` | string | yes | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
-| `plugins.milky.endpoints[].path` | string | no | — | Path for webhook / reverse-wss |
-| `plugins.milky.endpoints[].access_token` | string | no | — | Milky access token |
-| `plugins.milky.endpoints[].reconnect_interval` | number | no | — | — |
-| `plugins.milky.endpoints[].heartbeat_interval` | number | no | — | — |
-| `plugins.milky.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.milky.endpoints[].id` | string | yes | — | Milky bot name |
-| `plugins.milky.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
+| `milky.reconnect_interval` | number | no | `5000` | — |
+| `milky.heartbeat_interval` | number | no | `30000` | — |
+| `milky.master` | string \| number | no | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `milky.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `milky.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `milky.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
+| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | — | — |
+| `milky.endpoints[].baseUrl` | string | yes | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
+| `milky.endpoints[].path` | string | no | — | Path for webhook / reverse-wss |
+| `milky.endpoints[].access_token` | string | no | — | Milky access token |
+| `milky.endpoints[].reconnect_interval` | number | no | — | — |
+| `milky.endpoints[].heartbeat_interval` | number | no | — | — |
+| `milky.endpoints[].commandPrefix` | string | no | — | — |
+| `milky.endpoints[].id` | string | yes | — | Milky bot name |
+| `milky.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### napcat
 
@@ -466,27 +472,27 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.napcat.connection` | string: `"ws"`, `"wss"`, `"http"` | no | `"ws"` | ws (default), wss (reverse WS), or http (POST webhook + HTTP API outbound) |
-| `plugins.napcat.reconnect_interval` | number | no | `5000` | — |
-| `plugins.napcat.heartbeat_interval` | number | no | `30000` | — |
-| `plugins.napcat.poll_interval` | number | no | `30000` | — |
-| `plugins.napcat.master` | string \| number | no | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.napcat.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.napcat.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.napcat.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `plugins.napcat.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | no | — | — |
-| `plugins.napcat.endpoints[].url` | string | no | — | NapCat WebSocket URL (required for connection: ws) |
-| `plugins.napcat.endpoints[].path` | string | no | — | WS path for reverse-wss |
-| `plugins.napcat.endpoints[].http_url` | string | no | — | HTTP API base URL (connection: http outbound) |
-| `plugins.napcat.endpoints[].post_path` | string | no | — | HTTP POST event path (connection: http inbound) |
-| `plugins.napcat.endpoints[].access_token` | string | no | — | NapCat access token |
-| `plugins.napcat.endpoints[].reconnect_interval` | number | no | — | — |
-| `plugins.napcat.endpoints[].heartbeat_interval` | number | no | — | — |
-| `plugins.napcat.endpoints[].poll_interval` | number | no | — | — |
-| `plugins.napcat.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.napcat.endpoints[].id` | string | yes | — | NapCat bot name |
-| `plugins.napcat.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `napcat.connection` | string: `"ws"`, `"wss"`, `"http"` | no | `"ws"` | ws (default), wss (reverse WS), or http (POST webhook + HTTP API outbound) |
+| `napcat.reconnect_interval` | number | no | `5000` | — |
+| `napcat.heartbeat_interval` | number | no | `30000` | — |
+| `napcat.poll_interval` | number | no | `30000` | — |
+| `napcat.master` | string \| number | no | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `napcat.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `napcat.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `napcat.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
+| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | no | — | — |
+| `napcat.endpoints[].url` | string | no | — | NapCat WebSocket URL (required for connection: ws) |
+| `napcat.endpoints[].path` | string | no | — | WS path for reverse-wss |
+| `napcat.endpoints[].http_url` | string | no | — | HTTP API base URL (connection: http outbound) |
+| `napcat.endpoints[].post_path` | string | no | — | HTTP POST event path (connection: http inbound) |
+| `napcat.endpoints[].access_token` | string | no | — | NapCat access token |
+| `napcat.endpoints[].reconnect_interval` | number | no | — | — |
+| `napcat.endpoints[].heartbeat_interval` | number | no | — | — |
+| `napcat.endpoints[].poll_interval` | number | no | — | — |
+| `napcat.endpoints[].commandPrefix` | string | no | — | — |
+| `napcat.endpoints[].id` | string | yes | — | NapCat bot name |
+| `napcat.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### onebot11
 
@@ -494,23 +500,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.onebot11.connection` | string: `"ws"`, `"wss"` | no | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
-| `plugins.onebot11.reconnect_interval` | number | no | `5000` | — |
-| `plugins.onebot11.heartbeat_interval` | number | no | `30000` | — |
-| `plugins.onebot11.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.onebot11.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.onebot11.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.onebot11.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `plugins.onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | no | — | — |
-| `plugins.onebot11.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
-| `plugins.onebot11.endpoints[].path` | string | no | — | WS path for reverse-wss (connection: wss) |
-| `plugins.onebot11.endpoints[].access_token` | string | no | — | OneBot access token |
-| `plugins.onebot11.endpoints[].reconnect_interval` | number | no | — | — |
-| `plugins.onebot11.endpoints[].heartbeat_interval` | number | no | — | — |
-| `plugins.onebot11.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.onebot11.endpoints[].id` | string | yes | — | OneBot11 bot name |
-| `plugins.onebot11.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot11.connection` | string: `"ws"`, `"wss"` | no | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
+| `onebot11.reconnect_interval` | number | no | `5000` | — |
+| `onebot11.heartbeat_interval` | number | no | `30000` | — |
+| `onebot11.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `onebot11.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `onebot11.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `onebot11.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
+| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | no | — | — |
+| `onebot11.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
+| `onebot11.endpoints[].path` | string | no | — | WS path for reverse-wss (connection: wss) |
+| `onebot11.endpoints[].access_token` | string | no | — | OneBot access token |
+| `onebot11.endpoints[].reconnect_interval` | number | no | — | — |
+| `onebot11.endpoints[].heartbeat_interval` | number | no | — | — |
+| `onebot11.endpoints[].commandPrefix` | string | no | — | — |
+| `onebot11.endpoints[].id` | string | yes | — | OneBot11 bot name |
+| `onebot11.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### onebot12
 
@@ -518,24 +524,24 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
-| `plugins.onebot12.reconnect_interval` | number | no | `5000` | — |
-| `plugins.onebot12.heartbeat_interval` | number | no | `30000` | — |
-| `plugins.onebot12.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.onebot12.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.onebot12.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.onebot12.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `plugins.onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | — | — |
-| `plugins.onebot12.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
-| `plugins.onebot12.endpoints[].path` | string | no | — | HTTP/WS path for webhook or reverse-wss |
-| `plugins.onebot12.endpoints[].api_url` | string | no | — | HTTP action endpoint for webhook outbound (required for connection: webhook send) |
-| `plugins.onebot12.endpoints[].access_token` | string | no | — | OneBot access token |
-| `plugins.onebot12.endpoints[].reconnect_interval` | number | no | — | — |
-| `plugins.onebot12.endpoints[].heartbeat_interval` | number | no | — | — |
-| `plugins.onebot12.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.onebot12.endpoints[].id` | string | yes | — | OneBot12 bot name |
-| `plugins.onebot12.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
+| `onebot12.reconnect_interval` | number | no | `5000` | — |
+| `onebot12.heartbeat_interval` | number | no | `30000` | — |
+| `onebot12.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `onebot12.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `onebot12.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `onebot12.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
+| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | — | — |
+| `onebot12.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
+| `onebot12.endpoints[].path` | string | no | — | HTTP/WS path for webhook or reverse-wss |
+| `onebot12.endpoints[].api_url` | string | no | — | HTTP action endpoint for webhook outbound (required for connection: webhook send) |
+| `onebot12.endpoints[].access_token` | string | no | — | OneBot access token |
+| `onebot12.endpoints[].reconnect_interval` | number | no | — | — |
+| `onebot12.endpoints[].heartbeat_interval` | number | no | — | — |
+| `onebot12.endpoints[].commandPrefix` | string | no | — | — |
+| `onebot12.endpoints[].id` | string | yes | — | OneBot12 bot name |
+| `onebot12.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### qq
 
@@ -543,36 +549,36 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
-| `plugins.qq.sandbox` | boolean | no | `false` | — |
-| `plugins.qq.botKind` | string: `"public"`, `"private"` | no | `"public"` | 公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开 |
-| `plugins.qq.master` | string \| number | no | — | 框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖 |
-| `plugins.qq.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.qq.intents` | array&lt;string&gt; | no | — | WebSocket Identify intents；省略时按 botKind 自动生成（public→含 PUBLIC_GUILD_MESSAGES） |
-| `plugins.qq.accessTokenUrl` | string | no | — | — |
-| `plugins.qq.gatewayUrl` | string | no | — | — |
-| `plugins.qq.webhookPath` | string | no | `"/qq/webhook"` | POST path on httpHostToken for webhook/middleware modes. |
-| `plugins.qq.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/appid/secret 必填，其余字段覆盖实例默认值 |
-| `plugins.qq.endpoints[].appid` | string | yes | — | QQ official bot app ID |
-| `plugins.qq.endpoints[].secret` | string | yes | — | QQ official bot secret |
-| `plugins.qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | — | — |
-| `plugins.qq.endpoints[].sandbox` | boolean | no | — | — |
-| `plugins.qq.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
-| `plugins.qq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.qq.endpoints[].botKind` | string: `"public"`, `"private"` | no | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
-| `plugins.qq.endpoints[].intents` | array&lt;string&gt; | no | — | 覆盖顶层 intents |
-| `plugins.qq.endpoints[].accessTokenUrl` | string | no | — | — |
-| `plugins.qq.endpoints[].gatewayUrl` | string | no | — | — |
-| `plugins.qq.endpoints[].webhookPath` | string | no | — | — |
-| `plugins.qq.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.qq.endpoints[].id` | string | yes | — | QQ bot name |
-| `plugins.qq.endpoints[].streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
-| `plugins.qq.endpoints[].streamProxy.port` | integer | yes | — | — |
-| `plugins.qq.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `plugins.qq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.qq.streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
-| `plugins.qq.streamProxy.port` | integer | yes | — | — |
-| `plugins.qq.streamProxy.serverName` | string | yes | — | — |
+| `qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
+| `qq.sandbox` | boolean | no | `false` | — |
+| `qq.botKind` | string: `"public"`, `"private"` | no | `"public"` | 公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开 |
+| `qq.master` | string \| number | no | — | 框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖 |
+| `qq.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `qq.intents` | array&lt;string&gt; | no | — | WebSocket Identify intents；省略时按 botKind 自动生成（public→含 PUBLIC_GUILD_MESSAGES） |
+| `qq.accessTokenUrl` | string | no | — | — |
+| `qq.gatewayUrl` | string | no | — | — |
+| `qq.webhookPath` | string | no | `"/qq/webhook"` | POST path on httpHostToken for webhook/middleware modes. |
+| `qq.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/appid/secret 必填，其余字段覆盖实例默认值 |
+| `qq.endpoints[].appid` | string | yes | — | QQ official bot app ID |
+| `qq.endpoints[].secret` | string | yes | — | QQ official bot secret |
+| `qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | — | — |
+| `qq.endpoints[].sandbox` | boolean | no | — | — |
+| `qq.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
+| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `qq.endpoints[].botKind` | string: `"public"`, `"private"` | no | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
+| `qq.endpoints[].intents` | array&lt;string&gt; | no | — | 覆盖顶层 intents |
+| `qq.endpoints[].accessTokenUrl` | string | no | — | — |
+| `qq.endpoints[].gatewayUrl` | string | no | — | — |
+| `qq.endpoints[].webhookPath` | string | no | — | — |
+| `qq.endpoints[].commandPrefix` | string | no | — | — |
+| `qq.endpoints[].id` | string | yes | — | QQ bot name |
+| `qq.endpoints[].streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
+| `qq.endpoints[].streamProxy.port` | integer | yes | — | — |
+| `qq.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `qq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `qq.streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
+| `qq.streamProxy.port` | integer | yes | — | — |
+| `qq.streamProxy.serverName` | string | yes | — | — |
 
 ### sandbox
 
@@ -580,15 +586,15 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.sandbox.master` | string \| number | no | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.sandbox.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.sandbox.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.sandbox.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
-| `plugins.sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
-| `plugins.sandbox.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.sandbox.endpoints[].id` | string | yes | — | Sandbox bot name |
-| `plugins.sandbox.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `sandbox.master` | string \| number | no | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `sandbox.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `sandbox.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `sandbox.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
+| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
+| `sandbox.endpoints[].commandPrefix` | string | no | — | — |
+| `sandbox.endpoints[].id` | string | yes | — | Sandbox bot name |
+| `sandbox.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### satori
 
@@ -596,21 +602,21 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.satori.connection` | string: `"ws"`, `"webhook"` | no | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
-| `plugins.satori.heartbeat_interval` | number | no | `10000` | WS PING interval in milliseconds |
-| `plugins.satori.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.satori.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.satori.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值 |
-| `plugins.satori.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `plugins.satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.satori.endpoints[].baseUrl` | string | yes | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
-| `plugins.satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | no | — | — |
-| `plugins.satori.endpoints[].token` | string | no | — | Bearer token for API and WS IDENTIFY |
-| `plugins.satori.endpoints[].path` | string | no | — | Webhook POST path (connection: webhook) |
-| `plugins.satori.endpoints[].heartbeat_interval` | number | no | — | — |
-| `plugins.satori.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.satori.endpoints[].id` | string | yes | — | Satori bot name |
-| `plugins.satori.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `satori.connection` | string: `"ws"`, `"webhook"` | no | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
+| `satori.heartbeat_interval` | number | no | `10000` | WS PING interval in milliseconds |
+| `satori.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `satori.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `satori.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值 |
+| `satori.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
+| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `satori.endpoints[].baseUrl` | string | yes | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
+| `satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | no | — | — |
+| `satori.endpoints[].token` | string | no | — | Bearer token for API and WS IDENTIFY |
+| `satori.endpoints[].path` | string | no | — | Webhook POST path (connection: webhook) |
+| `satori.endpoints[].heartbeat_interval` | number | no | — | — |
+| `satori.endpoints[].commandPrefix` | string | no | — | — |
+| `satori.endpoints[].id` | string | yes | — | Satori bot name |
+| `satori.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### slack
 
@@ -618,28 +624,28 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.slack.socketMode` | boolean | no | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
-| `plugins.slack.webhookPath` | string | no | `"/slack/events"` | — |
-| `plugins.slack.clientPingTimeout` | number | no | `15000` | Socket Mode client ping timeout (ms) |
-| `plugins.slack.master` | string \| number | no | — | 框架 master（Slack user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.slack.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.slack.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.slack.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Slack user id）；覆盖顶层 master |
-| `plugins.slack.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.slack.endpoints[].token` | string | yes | — | Bot User OAuth Token (xoxb-...) |
-| `plugins.slack.endpoints[].signingSecret` | string | no | — | Required for HTTP Events API (socketMode: false) |
-| `plugins.slack.endpoints[].appToken` | string | no | — | App-Level Token (xapp-...) for Socket Mode |
-| `plugins.slack.endpoints[].socketMode` | boolean | no | — | — |
-| `plugins.slack.endpoints[].webhookPath` | string | no | — | — |
-| `plugins.slack.endpoints[].clientPingTimeout` | number | no | — | — |
-| `plugins.slack.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.slack.endpoints[].id` | string | yes | — | Slack bot name |
-| `plugins.slack.endpoints[].streamProxy` | object | no | — | Socket故障验收：WSS固定loopback TCP，API仍标准TLS直连 |
-| `plugins.slack.endpoints[].streamProxy.port` | integer | yes | — | — |
-| `plugins.slack.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `plugins.slack.endpoints[].webApiProxy` | object | no | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
-| `plugins.slack.endpoints[].webApiProxy.port` | integer | yes | — | — |
-| `plugins.slack.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `slack.socketMode` | boolean | no | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
+| `slack.webhookPath` | string | no | `"/slack/events"` | — |
+| `slack.clientPingTimeout` | number | no | `15000` | Socket Mode client ping timeout (ms) |
+| `slack.master` | string \| number | no | — | 框架 master（Slack user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `slack.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `slack.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `slack.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Slack user id）；覆盖顶层 master |
+| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `slack.endpoints[].token` | string | yes | — | Bot User OAuth Token (xoxb-...) |
+| `slack.endpoints[].signingSecret` | string | no | — | Required for HTTP Events API (socketMode: false) |
+| `slack.endpoints[].appToken` | string | no | — | App-Level Token (xapp-...) for Socket Mode |
+| `slack.endpoints[].socketMode` | boolean | no | — | — |
+| `slack.endpoints[].webhookPath` | string | no | — | — |
+| `slack.endpoints[].clientPingTimeout` | number | no | — | — |
+| `slack.endpoints[].commandPrefix` | string | no | — | — |
+| `slack.endpoints[].id` | string | yes | — | Slack bot name |
+| `slack.endpoints[].streamProxy` | object | no | — | Socket故障验收：WSS固定loopback TCP，API仍标准TLS直连 |
+| `slack.endpoints[].streamProxy.port` | integer | yes | — | — |
+| `slack.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `slack.endpoints[].webApiProxy` | object | no | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
+| `slack.endpoints[].webApiProxy.port` | integer | yes | — | — |
+| `slack.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### telegram
 
@@ -647,29 +653,29 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.telegram.polling` | boolean | no | `true` | Long-poll getUpdates (default). Set false for webhook via httpHostToken. |
-| `plugins.telegram.webhook` | object | no | — | Webhook settings when polling is false. |
-| `plugins.telegram.webhook.domain` | string | no | — | — |
-| `plugins.telegram.webhook.path` | string | no | `"/telegram/webhook"` | — |
-| `plugins.telegram.webhook.secretToken` | string | no | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
-| `plugins.telegram.allowedUpdates` | array&lt;string&gt; | no | `["message","callback_query"]` | — |
-| `plugins.telegram.apiBaseUrl` | string | no | `"https://api.telegram.org"` | — |
-| `plugins.telegram.master` | string \| number | no | — | 框架 master（Telegram user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.telegram.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.telegram.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.telegram.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
-| `plugins.telegram.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.telegram.endpoints[].token` | string | yes | — | Telegram bot token |
-| `plugins.telegram.endpoints[].polling` | boolean | no | — | — |
-| `plugins.telegram.endpoints[].webhook` | object | no | — | — |
-| `plugins.telegram.endpoints[].webhook.domain` | string | no | — | — |
-| `plugins.telegram.endpoints[].webhook.path` | string | no | — | — |
-| `plugins.telegram.endpoints[].webhook.secretToken` | string | no | — | — |
-| `plugins.telegram.endpoints[].allowedUpdates` | array&lt;string&gt; | no | — | — |
-| `plugins.telegram.endpoints[].apiBaseUrl` | string | no | — | — |
-| `plugins.telegram.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.telegram.endpoints[].id` | string | yes | — | Telegram bot name |
-| `plugins.telegram.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `telegram.polling` | boolean | no | `true` | Long-poll getUpdates (default). Set false for webhook via httpHostToken. |
+| `telegram.webhook` | object | no | — | Webhook settings when polling is false. |
+| `telegram.webhook.domain` | string | no | — | — |
+| `telegram.webhook.path` | string | no | `"/telegram/webhook"` | — |
+| `telegram.webhook.secretToken` | string | no | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
+| `telegram.allowedUpdates` | array&lt;string&gt; | no | `["message","callback_query"]` | — |
+| `telegram.apiBaseUrl` | string | no | `"https://api.telegram.org"` | — |
+| `telegram.master` | string \| number | no | — | 框架 master（Telegram user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `telegram.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `telegram.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `telegram.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
+| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `telegram.endpoints[].token` | string | yes | — | Telegram bot token |
+| `telegram.endpoints[].polling` | boolean | no | — | — |
+| `telegram.endpoints[].webhook` | object | no | — | — |
+| `telegram.endpoints[].webhook.domain` | string | no | — | — |
+| `telegram.endpoints[].webhook.path` | string | no | — | — |
+| `telegram.endpoints[].webhook.secretToken` | string | no | — | — |
+| `telegram.endpoints[].allowedUpdates` | array&lt;string&gt; | no | — | — |
+| `telegram.endpoints[].apiBaseUrl` | string | no | — | — |
+| `telegram.endpoints[].commandPrefix` | string | no | — | — |
+| `telegram.endpoints[].id` | string | yes | — | Telegram bot name |
+| `telegram.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### wechat-mp
 
@@ -677,28 +683,28 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.wechat-mp.path` | string | no | `"/wechat/webhook"` | — |
-| `plugins.wechat-mp.encrypt` | boolean | no | `false` | — |
-| `plugins.wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
-| `plugins.wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | no | `"passive"` | — |
-| `plugins.wechat-mp.passiveReplyTimeoutMs` | number | no | `4500` | — |
-| `plugins.wechat-mp.master` | string \| number | no | — | 框架 master（WeChat OpenID；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.wechat-mp.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.wechat-mp.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.wechat-mp.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（WeChat OpenID）；覆盖顶层 master |
-| `plugins.wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.wechat-mp.endpoints[].appId` | string | yes | — | WeChat MP app ID |
-| `plugins.wechat-mp.endpoints[].appSecret` | string | yes | — | WeChat MP app secret |
-| `plugins.wechat-mp.endpoints[].token` | string | yes | — | WeChat MP callback token |
-| `plugins.wechat-mp.endpoints[].encodingAESKey` | string | no | — | WeChat MP encoding AES key |
-| `plugins.wechat-mp.endpoints[].path` | string | no | — | — |
-| `plugins.wechat-mp.endpoints[].encrypt` | boolean | no | — | — |
-| `plugins.wechat-mp.endpoints[].encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | — |
-| `plugins.wechat-mp.endpoints[].replyMode` | string: `"passive"`, `"customer_service"` | no | — | — |
-| `plugins.wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | no | — | — |
-| `plugins.wechat-mp.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.wechat-mp.endpoints[].id` | string | yes | — | WeChat MP bot name |
-| `plugins.wechat-mp.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wechat-mp.path` | string | no | `"/wechat/webhook"` | — |
+| `wechat-mp.encrypt` | boolean | no | `false` | — |
+| `wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
+| `wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | no | `"passive"` | — |
+| `wechat-mp.passiveReplyTimeoutMs` | number | no | `4500` | — |
+| `wechat-mp.master` | string \| number | no | — | 框架 master（WeChat OpenID；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `wechat-mp.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `wechat-mp.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `wechat-mp.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（WeChat OpenID）；覆盖顶层 master |
+| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `wechat-mp.endpoints[].appId` | string | yes | — | WeChat MP app ID |
+| `wechat-mp.endpoints[].appSecret` | string | yes | — | WeChat MP app secret |
+| `wechat-mp.endpoints[].token` | string | yes | — | WeChat MP callback token |
+| `wechat-mp.endpoints[].encodingAESKey` | string | no | — | WeChat MP encoding AES key |
+| `wechat-mp.endpoints[].path` | string | no | — | — |
+| `wechat-mp.endpoints[].encrypt` | boolean | no | — | — |
+| `wechat-mp.endpoints[].encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | — |
+| `wechat-mp.endpoints[].replyMode` | string: `"passive"`, `"customer_service"` | no | — | — |
+| `wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | no | — | — |
+| `wechat-mp.endpoints[].commandPrefix` | string | no | — | — |
+| `wechat-mp.endpoints[].id` | string | yes | — | WeChat MP bot name |
+| `wechat-mp.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### wecom
 
@@ -706,22 +712,22 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.wecom.webhookPath` | string | no | `"/wecom/callback"` | — |
-| `plugins.wecom.apiBaseUrl` | string | no | `"https://qyapi.weixin.qq.com"` | — |
-| `plugins.wecom.master` | string \| number | no | — | 框架 master（WeCom userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.wecom.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.wecom.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.wecom.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（WeCom userid）；覆盖顶层 master |
-| `plugins.wecom.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.wecom.endpoints[].corpId` | string | yes | — | WeCom corp ID |
-| `plugins.wecom.endpoints[].agentSecret` | string | yes | — | WeCom agent secret |
-| `plugins.wecom.endpoints[].token` | string | yes | — | WeCom callback token |
-| `plugins.wecom.endpoints[].encodingAESKey` | string | yes | — | WeCom encoding AES key |
-| `plugins.wecom.endpoints[].webhookPath` | string | no | — | — |
-| `plugins.wecom.endpoints[].apiBaseUrl` | string | no | — | — |
-| `plugins.wecom.endpoints[].commandPrefix` | string | no | — | — |
-| `plugins.wecom.endpoints[].id` | string | yes | — | WeCom bot name |
-| `plugins.wecom.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wecom.webhookPath` | string | no | `"/wecom/callback"` | — |
+| `wecom.apiBaseUrl` | string | no | `"https://qyapi.weixin.qq.com"` | — |
+| `wecom.master` | string \| number | no | — | 框架 master（WeCom userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `wecom.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `wecom.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `wecom.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（WeCom userid）；覆盖顶层 master |
+| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `wecom.endpoints[].corpId` | string | yes | — | WeCom corp ID |
+| `wecom.endpoints[].agentSecret` | string | yes | — | WeCom agent secret |
+| `wecom.endpoints[].token` | string | yes | — | WeCom callback token |
+| `wecom.endpoints[].encodingAESKey` | string | yes | — | WeCom encoding AES key |
+| `wecom.endpoints[].webhookPath` | string | no | — | — |
+| `wecom.endpoints[].apiBaseUrl` | string | no | — | — |
+| `wecom.endpoints[].commandPrefix` | string | no | — | — |
+| `wecom.endpoints[].id` | string | yes | — | WeCom bot name |
+| `wecom.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### weixin-ilink
 
@@ -729,25 +735,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.weixin-ilink.botAgent` | string | no | — | — |
-| `plugins.weixin-ilink.baseUrl` | string | no | `"https://ilinkai.weixin.qq.com"` | — |
-| `plugins.weixin-ilink.cdnBaseUrl` | string | no | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
-| `plugins.weixin-ilink.longPollTimeoutMs` | number | no | `35000` | — |
-| `plugins.weixin-ilink.dataDir` | string | no | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
-| `plugins.weixin-ilink.master` | string \| number | no | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.weixin-ilink.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.weixin-ilink.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.weixin-ilink.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
-| `plugins.weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.weixin-ilink.endpoints[].botToken` | string | no | — | iLink bot token; omit to load endpoint state or start QR login |
-| `plugins.weixin-ilink.endpoints[].id` | string | yes | — | Weixin iLink bot name |
-| `plugins.weixin-ilink.endpoints[].botAgent` | string | no | — | — |
-| `plugins.weixin-ilink.endpoints[].baseUrl` | string | no | — | — |
-| `plugins.weixin-ilink.endpoints[].cdnBaseUrl` | string | no | — | — |
-| `plugins.weixin-ilink.endpoints[].longPollTimeoutMs` | number | no | — | — |
-| `plugins.weixin-ilink.endpoints[].dataDir` | string | no | — | Endpoint state root |
-| `plugins.weixin-ilink.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
-| `plugins.weixin-ilink.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `weixin-ilink.botAgent` | string | no | — | — |
+| `weixin-ilink.baseUrl` | string | no | `"https://ilinkai.weixin.qq.com"` | — |
+| `weixin-ilink.cdnBaseUrl` | string | no | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
+| `weixin-ilink.longPollTimeoutMs` | number | no | `35000` | — |
+| `weixin-ilink.dataDir` | string | no | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
+| `weixin-ilink.master` | string \| number | no | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `weixin-ilink.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `weixin-ilink.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `weixin-ilink.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
+| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `weixin-ilink.endpoints[].botToken` | string | no | — | iLink bot token; omit to load endpoint state or start QR login |
+| `weixin-ilink.endpoints[].id` | string | yes | — | Weixin iLink bot name |
+| `weixin-ilink.endpoints[].botAgent` | string | no | — | — |
+| `weixin-ilink.endpoints[].baseUrl` | string | no | — | — |
+| `weixin-ilink.endpoints[].cdnBaseUrl` | string | no | — | — |
+| `weixin-ilink.endpoints[].longPollTimeoutMs` | number | no | — | — |
+| `weixin-ilink.endpoints[].dataDir` | string | no | — | Endpoint state root |
+| `weixin-ilink.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
+| `weixin-ilink.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### process-monitor
 
@@ -755,13 +761,13 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.process-monitor.enabled` | boolean | no | `true` | 是否启用进程监控 |
-| `plugins.process-monitor.notifyOnStart` | boolean | no | `true` | 首次启动时通知 |
-| `plugins.process-monitor.notifyOnRestart` | boolean | no | `true` | 正常重启时通知 |
-| `plugins.process-monitor.notifyOnCrash` | boolean | no | `true` | 异常崩溃重启时通知 |
-| `plugins.process-monitor.notifyChannels` | array&lt;object&gt; | no | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
-| `plugins.process-monitor.notifyChannels[].type` | string: `"webhook"` | yes | — | — |
-| `plugins.process-monitor.notifyChannels[].target` | string | yes | — | — |
+| `process-monitor.enabled` | boolean | no | `true` | 是否启用进程监控 |
+| `process-monitor.notifyOnStart` | boolean | no | `true` | 首次启动时通知 |
+| `process-monitor.notifyOnRestart` | boolean | no | `true` | 正常重启时通知 |
+| `process-monitor.notifyOnCrash` | boolean | no | `true` | 异常崩溃重启时通知 |
+| `process-monitor.notifyChannels` | array&lt;object&gt; | no | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
+| `process-monitor.notifyChannels[].type` | string: `"webhook"` | yes | — | — |
+| `process-monitor.notifyChannels[].target` | string | yes | — | — |
 
 ### blackjack
 
@@ -829,480 +835,480 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.activity-feedback.enabled` | boolean | no | `true` | Enable activity feedback for this plugin instance. |
-| `plugins.activity-feedback.defaults` | object | no | — | Default policy for all platforms and Endpoints. |
-| `plugins.activity-feedback.defaults.enabled` | boolean | no | `true` | Enable this policy layer. |
-| `plugins.activity-feedback.defaults.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
-| `plugins.activity-feedback.defaults.phases.queued` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.private` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.queued.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.queued.group` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.queued.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.queued.channel` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.queued.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.active` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.active.private` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.active.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.active.group` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.active.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.active.channel` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.active.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.thinking` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.private` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.thinking.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.thinking.group` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.thinking.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.thinking.channel` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_start` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_error` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel` | object | no | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms` | object | no | — | Platform overrides keyed by platform name; values use the same shape as defaults. |
-| `plugins.activity-feedback.platforms.<platform>.enabled` | boolean | no | `true` | Enable this policy layer. |
-| `plugins.activity-feedback.platforms.<platform>.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel` | object | no | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints` | object | no | — | Endpoint overrides keyed by platform:endpointKey; values use the same shape as defaults. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.enabled` | boolean | no | `true` | Enable this policy layer. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel` | object | no | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule` | object | no | — | Schedule-only start, finish, and error feedback. |
-| `plugins.activity-feedback.schedule.phases` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.start` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.start.private` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.start.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.start.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.start.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.start.group` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.start.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.start.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.start.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.start.channel` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.start.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.start.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.finish` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.private` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.finish.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.finish.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.finish.group` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.finish.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.finish.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.finish.channel` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.finish.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.finish.channel.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.error` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.error.private` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.error.private.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.error.private.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.error.private.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.error.group` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.error.group.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.error.group.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.error.group.platformConfig` | object | no | — | Platform-specific options. |
-| `plugins.activity-feedback.schedule.phases.error.channel` | object | no | — | — |
-| `plugins.activity-feedback.schedule.phases.error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
-| `plugins.activity-feedback.schedule.phases.error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
-| `plugins.activity-feedback.schedule.phases.error.channel.message` | string | no | — | Status text for type=message. |
-| `plugins.activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
-| `plugins.activity-feedback.schedule.phases.error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
-| `plugins.activity-feedback.schedule.phases.error.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.enabled` | boolean | no | `true` | Enable activity feedback for this plugin instance. |
+| `activity-feedback.defaults` | object | no | — | Default policy for all platforms and Endpoints. |
+| `activity-feedback.defaults.enabled` | boolean | no | `true` | Enable this policy layer. |
+| `activity-feedback.defaults.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
+| `activity-feedback.defaults.phases.queued` | object | no | — | — |
+| `activity-feedback.defaults.phases.queued.private` | object | no | — | — |
+| `activity-feedback.defaults.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.queued.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.queued.group` | object | no | — | — |
+| `activity-feedback.defaults.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.queued.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.queued.channel` | object | no | — | — |
+| `activity-feedback.defaults.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.queued.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.active` | object | no | — | — |
+| `activity-feedback.defaults.phases.active.private` | object | no | — | — |
+| `activity-feedback.defaults.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.active.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.active.group` | object | no | — | — |
+| `activity-feedback.defaults.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.active.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.active.channel` | object | no | — | — |
+| `activity-feedback.defaults.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.active.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.thinking` | object | no | — | — |
+| `activity-feedback.defaults.phases.thinking.private` | object | no | — | — |
+| `activity-feedback.defaults.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.thinking.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.thinking.group` | object | no | — | — |
+| `activity-feedback.defaults.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.thinking.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.thinking.channel` | object | no | — | — |
+| `activity-feedback.defaults.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_start` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_start.private` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_start.group` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_start.channel` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_finish` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.private` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_finish.group` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_finish.channel` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_error` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_error.private` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_error.group` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.defaults.phases.schedule_error.channel` | object | no | — | — |
+| `activity-feedback.defaults.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.defaults.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.defaults.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.defaults.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.defaults.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.defaults.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms` | object | no | — | Platform overrides keyed by platform name; values use the same shape as defaults. |
+| `activity-feedback.platforms.<platform>.enabled` | boolean | no | `true` | Enable this policy layer. |
+| `activity-feedback.platforms.<platform>.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
+| `activity-feedback.platforms.<platform>.phases.queued` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.private` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.queued.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.queued.group` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.queued.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.queued.channel` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.active` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.private` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.active.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.active.group` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.active.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.active.channel` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.active.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.thinking` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.private` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.thinking.group` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel` | object | no | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints` | object | no | — | Endpoint overrides keyed by platform:endpointKey; values use the same shape as defaults. |
+| `activity-feedback.endpoints.<platform:endpointKey>.enabled` | boolean | no | `true` | Enable this policy layer. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases` | object | no | — | Feedback policy keyed by lifecycle phase. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel` | object | no | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule` | object | no | — | Schedule-only start, finish, and error feedback. |
+| `activity-feedback.schedule.phases` | object | no | — | — |
+| `activity-feedback.schedule.phases.start` | object | no | — | — |
+| `activity-feedback.schedule.phases.start.private` | object | no | — | — |
+| `activity-feedback.schedule.phases.start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.start.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.start.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.start.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.start.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.start.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.start.group` | object | no | — | — |
+| `activity-feedback.schedule.phases.start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.start.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.start.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.start.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.start.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.start.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.start.channel` | object | no | — | — |
+| `activity-feedback.schedule.phases.start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.start.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.start.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.start.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.start.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.start.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.finish` | object | no | — | — |
+| `activity-feedback.schedule.phases.finish.private` | object | no | — | — |
+| `activity-feedback.schedule.phases.finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.finish.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.finish.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.finish.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.finish.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.finish.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.finish.group` | object | no | — | — |
+| `activity-feedback.schedule.phases.finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.finish.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.finish.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.finish.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.finish.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.finish.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.finish.channel` | object | no | — | — |
+| `activity-feedback.schedule.phases.finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.finish.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.finish.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.finish.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.finish.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.finish.channel.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.error` | object | no | — | — |
+| `activity-feedback.schedule.phases.error.private` | object | no | — | — |
+| `activity-feedback.schedule.phases.error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.error.private.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.error.private.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.error.private.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.error.private.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.error.private.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.error.group` | object | no | — | — |
+| `activity-feedback.schedule.phases.error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.error.group.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.error.group.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.error.group.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.error.group.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.error.group.platformConfig` | object | no | — | Platform-specific options. |
+| `activity-feedback.schedule.phases.error.channel` | object | no | — | — |
+| `activity-feedback.schedule.phases.error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | no | — | How the phase is presented. |
+| `activity-feedback.schedule.phases.error.channel.emoji` | string | no | — | Reaction value for type=reaction. |
+| `activity-feedback.schedule.phases.error.channel.message` | string | no | — | Status text for type=message. |
+| `activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
+| `activity-feedback.schedule.phases.error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
+| `activity-feedback.schedule.phases.error.channel.platformConfig` | object | no | — | Platform-specific options. |
 
 ### typesafe
 
@@ -1310,12 +1316,12 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.typesafe.enabled` | boolean | no | `true` | Enable this decision provider. |
-| `plugins.typesafe.apiKey` | string | no | — | TypeSafe API key; reference TYPESAFE_API_KEY from the environment. |
-| `plugins.typesafe.model` | string | no | `"jev-latest"` | Model name; pin a model version for calibrated policies. |
-| `plugins.typesafe.baseUrl` | string | no | `"https://api.typesafe.ai"` | API root URL without query, credentials or fragment. |
-| `plugins.typesafe.timeoutMs` | integer | no | `10000` | Total budget including all requests and retry delays. |
-| `plugins.typesafe.maxRetries` | integer | no | `2` | Maximum SDK retries after the first attempt. |
+| `typesafe.enabled` | boolean | no | `true` | Enable this decision provider. |
+| `typesafe.apiKey` | string | no | — | TypeSafe API key; reference TYPESAFE_API_KEY from the environment. |
+| `typesafe.model` | string | no | `"jev-latest"` | Model name; pin a model version for calibrated policies. |
+| `typesafe.baseUrl` | string | no | `"https://api.typesafe.ai"` | API root URL without query, credentials or fragment. |
+| `typesafe.timeoutMs` | integer | no | `10000` | Total budget including all requests and retry delays. |
+| `typesafe.maxRetries` | integer | no | `2` | Maximum SDK retries after the first attempt. |
 
 ### 60s
 
@@ -1323,7 +1329,7 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
+| `60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
 
 ### calendar
 
@@ -1331,32 +1337,32 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | no | `"none"` | 日历后端；none 时工具返回未启用提示 |
-| `plugins.calendar.timezone` | string | no | `"Asia/Manila"` | 解释无偏移时间与展示用的 IANA 时区 |
-| `plugins.calendar.work_day_start` | string | no | `"09:00"` | — |
-| `plugins.calendar.work_day_end` | string | no | `"18:00"` | — |
-| `plugins.calendar.oauth_redirect_base_url` | string | no | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
-| `plugins.calendar.oauth_callback_path` | string | no | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
-| `plugins.calendar.caldav` | object | no | — | — |
-| `plugins.calendar.caldav.enabled` | boolean | no | `false` | — |
-| `plugins.calendar.caldav.calendar_url` | string | no | `""` | 日历 collection URL |
-| `plugins.calendar.caldav.username` | string | no | `""` | — |
-| `plugins.calendar.caldav.password` | string | no | `""` | — |
-| `plugins.calendar.google` | object | no | — | — |
-| `plugins.calendar.google.enabled` | boolean | no | `false` | — |
-| `plugins.calendar.google.client_id` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
-| `plugins.calendar.google.client_secret` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_SECRET} |
-| `plugins.calendar.google.refresh_token` | string | no | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取 |
-| `plugins.calendar.google.calendar_id` | string | no | `"primary"` | 日历 ID，默认 primary；可换成其它日历的 id |
-| `plugins.calendar.google.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json） |
-| `plugins.calendar.microsoft` | object | no | — | — |
-| `plugins.calendar.microsoft.enabled` | boolean | no | `false` | — |
-| `plugins.calendar.microsoft.client_id` | string | no | `""` | ${MS_GRAPH_CLIENT_ID} |
-| `plugins.calendar.microsoft.client_secret` | string | no | `""` | 可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET} |
-| `plugins.calendar.microsoft.refresh_token` | string | no | `""` | ${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取 |
-| `plugins.calendar.microsoft.tenant` | string | no | `"common"` | Azure tenant，默认 common |
-| `plugins.calendar.microsoft.calendar_id` | string | no | `""` | 留空或 primary/me = 默认日历；否则为 Graph calendar id |
-| `plugins.calendar.microsoft.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json） |
+| `calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | no | `"none"` | 日历后端；none 时工具返回未启用提示 |
+| `calendar.timezone` | string | no | `"Asia/Manila"` | 解释无偏移时间与展示用的 IANA 时区 |
+| `calendar.work_day_start` | string | no | `"09:00"` | — |
+| `calendar.work_day_end` | string | no | `"18:00"` | — |
+| `calendar.oauth_redirect_base_url` | string | no | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
+| `calendar.oauth_callback_path` | string | no | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
+| `calendar.caldav` | object | no | — | — |
+| `calendar.caldav.enabled` | boolean | no | `false` | — |
+| `calendar.caldav.calendar_url` | string | no | `""` | 日历 collection URL |
+| `calendar.caldav.username` | string | no | `""` | — |
+| `calendar.caldav.password` | string | no | `""` | — |
+| `calendar.google` | object | no | — | — |
+| `calendar.google.enabled` | boolean | no | `false` | — |
+| `calendar.google.client_id` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
+| `calendar.google.client_secret` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_SECRET} |
+| `calendar.google.refresh_token` | string | no | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取 |
+| `calendar.google.calendar_id` | string | no | `"primary"` | 日历 ID，默认 primary；可换成其它日历的 id |
+| `calendar.google.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json） |
+| `calendar.microsoft` | object | no | — | — |
+| `calendar.microsoft.enabled` | boolean | no | `false` | — |
+| `calendar.microsoft.client_id` | string | no | `""` | ${MS_GRAPH_CLIENT_ID} |
+| `calendar.microsoft.client_secret` | string | no | `""` | 可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET} |
+| `calendar.microsoft.refresh_token` | string | no | `""` | ${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取 |
+| `calendar.microsoft.tenant` | string | no | `"common"` | Azure tenant，默认 common |
+| `calendar.microsoft.calendar_id` | string | no | `""` | 留空或 primary/me = 默认日历；否则为 Graph calendar id |
+| `calendar.microsoft.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json） |
 
 ### code-runner
 
@@ -1370,40 +1376,40 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.content-moderation.enabled` | boolean | no | `true` | 总开关 |
-| `plugins.content-moderation.onError` | string: `"open"`, `"closed"` | no | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
-| `plugins.content-moderation.maskChar` | string | no | `"*"` | 文本打码字符 |
-| `plugins.content-moderation.replyTemplate` | string | no | `"消息含不当内容，已拦截。"` | reply 动作时的提示文案 |
-| `plugins.content-moderation.masters` | array&lt;string&gt; | no | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
-| `plugins.content-moderation.inbound` | object | no | — | — |
-| `plugins.content-moderation.inbound.enabled` | boolean | no | `true` | — |
-| `plugins.content-moderation.inbound.bypassMasters` | boolean | no | `true` | master 跳过入站审查 |
-| `plugins.content-moderation.inbound.whitelist` | object | no | — | — |
-| `plugins.content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | no | `[]` | — |
-| `plugins.content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | no | `[]` | — |
-| `plugins.content-moderation.outbound` | object | no | — | — |
-| `plugins.content-moderation.outbound.enabled` | boolean | no | `true` | — |
-| `plugins.content-moderation.outbound.bypass` | boolean | no | `false` | 为 true 时跳过出站审查 |
-| `plugins.content-moderation.actions` | object | no | — | severity → 动作（字符串或数组）；缺省用偏严默认表 |
-| `plugins.content-moderation.actions.pass` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
-| `plugins.content-moderation.actions.low` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
-| `plugins.content-moderation.actions.medium` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
-| `plugins.content-moderation.actions.high` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
-| `plugins.content-moderation.actions.critical` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
-| `plugins.content-moderation.sources` | array&lt;object&gt; | no | `[]` | — |
-| `plugins.content-moderation.sources[].id` | string | yes | — | — |
-| `plugins.content-moderation.sources[].type` | string: `"local"`, `"http"` | yes | — | — |
-| `plugins.content-moderation.sources[].enabled` | boolean | no | `true` | — |
-| `plugins.content-moderation.sources[].onError` | string: `"open"`, `"closed"` | no | — | — |
-| `plugins.content-moderation.sources[].includeBuiltin` | boolean | no | `true` | 是否合并内置分级违禁词词库 |
-| `plugins.content-moderation.sources[].words` | array&lt;string \| object&gt; | no | `[]` | 自定义词：字符串（用 defaultSeverity）或 { word, severity } |
-| `plugins.content-moderation.sources[].wordFiles` | array&lt;string&gt; | no | `[]` | 词库文件；行格式 word / severity:word / word\|severity |
-| `plugins.content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | 未标注分级的自定义词默认 severity |
-| `plugins.content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | 兼容旧字段，等同 defaultSeverity |
-| `plugins.content-moderation.sources[].url` | string | no | — | — |
-| `plugins.content-moderation.sources[].headers` | object | no | — | — |
-| `plugins.content-moderation.sources[].timeoutMs` | number | no | `5000` | — |
-| `plugins.content-moderation.sources[].forceUpload` | boolean | no | `false` | 强制下载图片后上传，不传 URL |
+| `content-moderation.enabled` | boolean | no | `true` | 总开关 |
+| `content-moderation.onError` | string: `"open"`, `"closed"` | no | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
+| `content-moderation.maskChar` | string | no | `"*"` | 文本打码字符 |
+| `content-moderation.replyTemplate` | string | no | `"消息含不当内容，已拦截。"` | reply 动作时的提示文案 |
+| `content-moderation.masters` | array&lt;string&gt; | no | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
+| `content-moderation.inbound` | object | no | — | — |
+| `content-moderation.inbound.enabled` | boolean | no | `true` | — |
+| `content-moderation.inbound.bypassMasters` | boolean | no | `true` | master 跳过入站审查 |
+| `content-moderation.inbound.whitelist` | object | no | — | — |
+| `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | no | `[]` | — |
+| `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | no | `[]` | — |
+| `content-moderation.outbound` | object | no | — | — |
+| `content-moderation.outbound.enabled` | boolean | no | `true` | — |
+| `content-moderation.outbound.bypass` | boolean | no | `false` | 为 true 时跳过出站审查 |
+| `content-moderation.actions` | object | no | — | severity → 动作（字符串或数组）；缺省用偏严默认表 |
+| `content-moderation.actions.pass` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
+| `content-moderation.actions.low` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
+| `content-moderation.actions.medium` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
+| `content-moderation.actions.high` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
+| `content-moderation.actions.critical` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
+| `content-moderation.sources` | array&lt;object&gt; | no | `[]` | — |
+| `content-moderation.sources[].id` | string | yes | — | — |
+| `content-moderation.sources[].type` | string: `"local"`, `"http"` | yes | — | — |
+| `content-moderation.sources[].enabled` | boolean | no | `true` | — |
+| `content-moderation.sources[].onError` | string: `"open"`, `"closed"` | no | — | — |
+| `content-moderation.sources[].includeBuiltin` | boolean | no | `true` | 是否合并内置分级违禁词词库 |
+| `content-moderation.sources[].words` | array&lt;string \| object&gt; | no | `[]` | 自定义词：字符串（用 defaultSeverity）或 { word, severity } |
+| `content-moderation.sources[].wordFiles` | array&lt;string&gt; | no | `[]` | 词库文件；行格式 word / severity:word / word\|severity |
+| `content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | 未标注分级的自定义词默认 severity |
+| `content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | 兼容旧字段，等同 defaultSeverity |
+| `content-moderation.sources[].url` | string | no | — | — |
+| `content-moderation.sources[].headers` | object | no | — | — |
+| `content-moderation.sources[].timeoutMs` | number | no | `5000` | — |
+| `content-moderation.sources[].forceUpload` | boolean | no | `false` | 强制下载图片后上传，不传 URL |
 
 ### group-suite
 
@@ -1411,18 +1417,18 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.group-suite.keywordReply` | boolean | no | `false` | — |
-| `plugins.group-suite.basePointsMin` | number | no | `10` | — |
-| `plugins.group-suite.basePointsMax` | number | no | `30` | — |
-| `plugins.group-suite.streakBonus` | number | no | `5` | — |
-| `plugins.group-suite.streakCap` | number | no | `50` | — |
-| `plugins.group-suite.rankSize` | number | no | `10` | — |
-| `plugins.group-suite.teachMaxPerGroup` | number | no | `200` | — |
-| `plugins.group-suite.teachCooldownMs` | number | no | `3000` | — |
-| `plugins.group-suite.teachAllowRegex` | boolean | no | `true` | — |
-| `plugins.group-suite.teachPageSize` | number | no | `10` | — |
-| `plugins.group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
-| `plugins.group-suite.ephemeralKeywords` | boolean | no | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
+| `group-suite.keywordReply` | boolean | no | `false` | — |
+| `group-suite.basePointsMin` | number | no | `10` | — |
+| `group-suite.basePointsMax` | number | no | `30` | — |
+| `group-suite.streakBonus` | number | no | `5` | — |
+| `group-suite.streakCap` | number | no | `50` | — |
+| `group-suite.rankSize` | number | no | `10` | — |
+| `group-suite.teachMaxPerGroup` | number | no | `200` | — |
+| `group-suite.teachCooldownMs` | number | no | `3000` | — |
+| `group-suite.teachAllowRegex` | boolean | no | `true` | — |
+| `group-suite.teachPageSize` | number | no | `10` | — |
+| `group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
+| `group-suite.ephemeralKeywords` | boolean | no | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
 
 ### link-poster
 
@@ -1436,27 +1442,27 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.lottery.pickCount` | number | no | `5` | — |
-| `plugins.lottery.scheduleCron` | string | no | `"0 0 18 * * *"` | — |
-| `plugins.lottery.historyLimit` | number | no | `500` | — |
-| `plugins.lottery.scheduleEnabled` | boolean | no | `true` | — |
-| `plugins.lottery.backtestEnabled` | boolean | no | `true` | — |
-| `plugins.lottery.backtestWindow` | number | no | `50` | — |
-| `plugins.lottery.backtestRandomTrials` | number | no | `64` | — |
-| `plugins.lottery.backtestMinHistory` | number | no | `30` | — |
-| `plugins.lottery.backtestAdaptive` | boolean | no | `true` | — |
-| `plugins.lottery.weightPersistEnabled` | boolean | no | `true` | — |
-| `plugins.lottery.weightHoldoutFallback` | boolean | no | `true` | — |
-| `plugins.lottery.games` | array&lt;string&gt; | no | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
-| `plugins.lottery.pushTargets` | array&lt;object&gt; | no | `[]` | OutboundHost push destinations for cron/publish reports |
-| `plugins.lottery.pushTargets[].adapter` | string | yes | — | — |
-| `plugins.lottery.pushTargets[].endpointId` | string | no | — | — |
-| `plugins.lottery.pushTargets[].channelType` | string | no | `"private"` | — |
-| `plugins.lottery.pushTargets[].channelId` | string | yes | — | — |
-| `plugins.lottery.kl8` | object | no | — | — |
-| `plugins.lottery.kl8.pickCount` | number | no | `5` | — |
-| `plugins.lottery.kl8.recommendGroups` | number | no | `3` | — |
-| `plugins.lottery.kl8.groupStrategies` | array&lt;string&gt; | no | `["balanced","hot","cold"]` | — |
+| `lottery.pickCount` | number | no | `5` | — |
+| `lottery.scheduleCron` | string | no | `"0 0 18 * * *"` | — |
+| `lottery.historyLimit` | number | no | `500` | — |
+| `lottery.scheduleEnabled` | boolean | no | `true` | — |
+| `lottery.backtestEnabled` | boolean | no | `true` | — |
+| `lottery.backtestWindow` | number | no | `50` | — |
+| `lottery.backtestRandomTrials` | number | no | `64` | — |
+| `lottery.backtestMinHistory` | number | no | `30` | — |
+| `lottery.backtestAdaptive` | boolean | no | `true` | — |
+| `lottery.weightPersistEnabled` | boolean | no | `true` | — |
+| `lottery.weightHoldoutFallback` | boolean | no | `true` | — |
+| `lottery.games` | array&lt;string&gt; | no | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
+| `lottery.pushTargets` | array&lt;object&gt; | no | `[]` | OutboundHost push destinations for cron/publish reports |
+| `lottery.pushTargets[].adapter` | string | yes | — | — |
+| `lottery.pushTargets[].endpointId` | string | no | — | — |
+| `lottery.pushTargets[].channelType` | string | no | `"private"` | — |
+| `lottery.pushTargets[].channelId` | string | yes | — | — |
+| `lottery.kl8` | object | no | — | — |
+| `lottery.kl8.pickCount` | number | no | `5` | — |
+| `lottery.kl8.recommendGroups` | number | no | `3` | — |
+| `lottery.kl8.groupStrategies` | array&lt;string&gt; | no | `["balanced","hot","cold"]` | — |
 
 ### music
 
@@ -1476,11 +1482,11 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.reminder.timezone` | string | no | `"UTC"` | 显示提醒时间的 IANA 时区；绝对时间仍必须提供 ISO offset |
-| `plugins.reminder.maxTasks` | number | no | `20` | 每个插件实例新建时允许的活跃任务上限（待触发或未确认）；降低上限不删除既有任务 |
-| `plugins.reminder.maxTasksPerSender` | number | no | `10` | 同一发送者在同一会话的任务上限 |
-| `plugins.reminder.batchSize` | number | no | `5` | 每次扫描最多投递的任务数 |
-| `plugins.reminder.missedGraceSeconds` | number | no | `15` | 周期轮次超过此延迟后跳过；停机期间不补历史轮次 |
+| `reminder.timezone` | string | no | `"UTC"` | 显示提醒时间的 IANA 时区；绝对时间仍必须提供 ISO offset |
+| `reminder.maxTasks` | number | no | `20` | 每个插件实例新建时允许的活跃任务上限（待触发或未确认）；降低上限不删除既有任务 |
+| `reminder.maxTasksPerSender` | number | no | `10` | 同一发送者在同一会话的任务上限 |
+| `reminder.batchSize` | number | no | `5` | 每次扫描最多投递的任务数 |
+| `reminder.missedGraceSeconds` | number | no | `15` | 周期轮次超过此延迟后跳过；停机期间不补历史轮次 |
 
 ### repeater
 
@@ -1488,9 +1494,9 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.repeater.threshold` | number | no | `3` | 触发复读的最少人数 |
-| `plugins.repeater.cooldown` | number | no | `30000` | 同一群冷却时间 (ms) |
-| `plugins.repeater.maxLength` | number | no | `200` | 消息长度上限 |
+| `repeater.threshold` | number | no | `3` | 触发复读的最少人数 |
+| `repeater.cooldown` | number | no | `30000` | 同一群冷却时间 (ms) |
+| `repeater.maxLength` | number | no | `200` | 消息长度上限 |
 
 ### rss
 
@@ -1498,10 +1504,10 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `plugins.rss.pollCron` | string | no | `"0 */5 * * * *"` | 轮询频率 (6 段 Cron 表达式) |
-| `plugins.rss.maxPerGroup` | number | no | `30` | — |
-| `plugins.rss.maxItems` | number | no | `5` | — |
-| `plugins.rss.timeout` | number | no | `15000` | — |
+| `rss.pollCron` | string | no | `"0 */5 * * * *"` | 轮询频率 (6 段 Cron 表达式) |
+| `rss.maxPerGroup` | number | no | `30` | — |
+| `rss.maxItems` | number | no | `5` | — |
+| `rss.timeout` | number | no | `15000` | — |
 
 ### short-url
 

@@ -34,7 +34,7 @@ One capability goes in a convention directory; shared resources or lifecycle go 
 
 `definePlugin({ config: Schema.object(...) })` declares defaults, types, constraints and Console form hints in one place, with types inferred via `Schema.Output`. A root `schema.json` works too, but use only one of the two (`isolated` plugins must use `schema.json`). See [definePlugin · Read config](./define-plugin.md#read-config).
 
-- Your bot itself reads the `plugin:` section; child plugins read `plugins.<instanceKey>`.
+- Your bot itself reads the `plugin:` section; child plugins read `<instanceKey>`.
 - Reference secrets with `${VAR}`; never put them in Schema defaults or example repos.
 
 Check: after changing a setting, does the plugin need to reload? If the new config is invalid, does the old one stay in effect? How do you confirm in Console that the new value is live?

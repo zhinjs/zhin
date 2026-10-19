@@ -32,7 +32,7 @@ describe('install command plugin enable helpers', () => {
 
   it('previews YAML config changes without writing', async () => {
     const root = await makeTempProject();
-    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  example: {}\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {example: example}\nexample: {}\n');
 
     const preview = previewEnablePlugin(root, '@zhin.js/adapter-telegram');
     const content = await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8');
@@ -44,7 +44,7 @@ describe('install command plugin enable helpers', () => {
 
   it('writes plugin into YAML config once', async () => {
     const root = await makeTempProject();
-    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  example: {}\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: {example: example}\nexample: {}\n');
 
     const first = await enablePluginInProjectConfig(root, '@zhin.js/adapter-telegram');
     const second = await enablePluginInProjectConfig(root, '@zhin.js/adapter-telegram');
@@ -52,25 +52,27 @@ describe('install command plugin enable helpers', () => {
 
     expect(first.status).toBe('enabled');
     expect(second.status).toBe('already-enabled');
-    expect(content.match(/^\s*telegram:/gmu)).toHaveLength(1);
+    expect((await import('yaml')).parse(content).plugins).toEqual({ example: 'example', telegram: '@zhin.js/adapter-telegram' });
+    expect(content.match(/@zhin\.js\/adapter-telegram/gu)).toHaveLength(1);
   });
 
   it('writes plugin into JSON config', async () => {
     const root = await makeTempProject();
-    await fs.writeJson(path.join(root, 'zhin.config.json'), { plugins: { example: {} } });
+    await fs.writeJson(path.join(root, 'zhin.config.json'), {configVersion: 2, plugins: {example: 'example'}, example: {}});
 
-    const result = await enablePluginInProjectConfig(root, '@scope/plugin');
+    const result = await enablePluginInProjectConfig(root, '@scope/reminder');
     const config = await fs.readJson(path.join(root, 'zhin.config.json'));
 
     expect(result.status).toBe('enabled');
-    expect(config.plugins).toEqual({ example: {}, plugin: {} });
+    expect(config.plugins).toEqual({example: 'example', reminder: '@scope/reminder'});
+    expect(config.reminder).toBeUndefined();
   });
 
   it('refuses to enable plugins in a legacy list-form config', async () => {
     const root = await makeTempProject();
     await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  - "example"\n');
 
-    const result = previewEnablePlugin(root, '@scope/plugin');
+    const result = previewEnablePlugin(root, '@scope/reminder');
 
     expect(result.status).toBe('unsupported-config');
     expect(result.message).toContain('zhin migrate');
@@ -91,9 +93,9 @@ describe('install command plugin enable helpers', () => {
   it('returns a manual fallback when no supported config exists', async () => {
     const root = await makeTempProject();
 
-    const result = previewEnablePlugin(root, '@scope/plugin');
+    const result = previewEnablePlugin(root, '@scope/reminder');
 
     expect(result.status).toBe('missing-config');
-    expect(result.message).toContain('@scope/plugin');
+    expect(result.message).toContain('@scope/reminder');
   });
 });

@@ -1,25 +1,15 @@
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createConfigDocument } from '@zhin.js/config-file';
+import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
+import { findConfigFile } from '../../utils/config-file.js';
 
-/** Reads the instance-key to package-name mapping declared by the project. */
-export async function readPluginPackageMap(
-  projectRoot: string,
-): Promise<ReadonlyMap<string, string>> {
-  const map = new Map<string, string>();
-  try {
-    const pkg = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8')) as {
-      readonly zhin?: { readonly plugins?: unknown };
-    };
-    const plugins = pkg.zhin?.plugins;
-    if (!Array.isArray(plugins)) return map;
-    for (const item of plugins) {
-      if (!item || typeof item !== 'object') continue;
-      const entry = item as { readonly package?: unknown; readonly instanceKey?: unknown };
-      if (typeof entry.package !== 'string') continue;
-      map.set(String(entry.instanceKey ?? entry.package), entry.package);
-    }
-  } catch {
-    return map;
+/** Reads only the application's instance declaration authority. */
+export async function readPluginPackageMap(projectRoot: string, currentDocument?: Readonly<Record<string, unknown>>): Promise<ReadonlyMap<string, string>> {
+  let document = currentDocument;
+  if (!document) {
+    const file = findConfigFile(projectRoot);
+    if (!file) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
+    document = (await createConfigDocument(join(projectRoot, file)).read()).document;
   }
-  return map;
+  return new Map(readApplicationPluginDeclaration(document).instances.map(item => [item.instanceKey, item.package]));
 }

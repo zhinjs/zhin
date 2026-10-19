@@ -34,40 +34,35 @@ ai-event-binder（薄） ──► ActivityFeedbackOrchestrator
 pnpm add @zhin.js/service-activity-feedback @zhin.js/agent
 ```
 
-随后在项目 `package.json#zhin.plugins` 挂载插件：
+随后在项目 主配置 `plugins` 映射 挂载插件：
 
-```json
-{
-  "zhin": {
-    "plugins": [
-      {
-        "package": "@zhin.js/service-activity-feedback",
-        "instanceKey": "activity-feedback"
-      }
-    ]
-  }
-}
+```yaml
+configVersion: 2
+plugins:
+  activity-feedback: '@zhin.js/service-activity-feedback'
 ```
 
 ## 启用
 
 ```yaml
+configVersion: 2
 plugins:
-  activity-feedback:
-    enabled: true
-    defaults:
+  activity-feedback: "@zhin.js/service-activity-feedback"
+activity-feedback:
+  enabled: true
+  defaults:
+    phases:
+      queued:
+        group: { type: reaction, emoji: "⏳" }
+      active:
+        group: { type: typing }
+      thinking:
+        group: { type: message, message: "思考中…" }
+  platforms:
+    icqq:
       phases:
-        queued:
-          group: { type: reaction, emoji: "⏳" }
         active:
-          group: { type: typing }
-        thinking:
-          group: { type: message, message: "思考中…" }
-    platforms:
-      icqq:
-        phases:
-          active:
-            group: { type: reaction, emoji: "60" }
+          group: { type: reaction, emoji: "60" }
 ```
 
 交互回合支持 `queued`、`active`、`thinking`，Schedule 支持

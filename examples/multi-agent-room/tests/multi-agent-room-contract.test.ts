@@ -5,29 +5,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
+import { parse } from 'yaml';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
+const config = parse(configText);
 
 describe('multi-agent-room 编排契约', () => {
   it('使用数据库持久化会话', () => {
-    expect(configText).toMatch(/^database:/m);
-    expect(configText).toMatch(/useDatabase:\s*true/m);
+    expect(config.database.dialect).toBe('sqlite');
+    expect(config.ai.sessions.useDatabase).toBe(true);
   });
 
   it('暴露三个 Sandbox Endpoint：coordinator / researcher / writer', () => {
-    const endpointMatches = configText.match(/id:\s*([\w-]+-bot)/g) ?? [];
-    expect(endpointMatches.map((line) => line.replace(/id:\s*/, ''))).toEqual([
-      'coordinator-bot',
-      'researcher-bot',
-      'writer-bot',
+    expect(config.sandbox.endpoints).toEqual([
+      { id: 'coordinator-bot', owner: 'planner-user' },
+      { id: 'researcher-bot', owner: 'planner-user' },
+      { id: 'writer-bot', owner: 'planner-user' },
     ]);
-    expect(configText.match(/owner:\s*planner-user/g) ?? []).toHaveLength(3);
   });
 
   it('ai.agents 与 agents 目录对应三个角色', () => {
     for (const agent of ['coordinator', 'researcher', 'writer']) {
-      expect(configText).toMatch(new RegExp(`^    ${agent}:`, 'm'));
+      expect(config.ai.agents[agent]).toMatchObject({ provider: 'ollama', model: 'qwen3:8b' });
       for (const file of ['agent.json', 'system.md', 'boundaries.md', 'conventions.md']) {
         expect(fs.existsSync(path.join(botRoot, 'agents', agent, file))).toBe(true);
       }
@@ -37,13 +37,14 @@ describe('multi-agent-room 编排契约', () => {
     expect(boundaries).toContain('Room Bus');
   });
 
-  it('uses the Plugin Runtime topology manifest', () => {
+  it('uses the Plugin Runtime package contract and explicit v2 application topology', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'));
     expect(manifest.scripts.dev).toBe('zhin runtime start');
     expect(manifest.zhin.entry).toBe('./plugin.ts');
-    expect(manifest.zhin.plugins).toEqual([
-      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
-    ]);
+    expect(manifest.zhin.plugins ?? []).toEqual([]);
+    expect(config.configVersion).toBe(2);
+    expect(config.plugins).toEqual({ sandbox: '@zhin.js/adapter-sandbox' });
+    expect(config.disable_plugins ?? []).toEqual([]);
     expect(manifest.dependencies['@zhin.js/workroom']).toBe('workspace:*');
   });
 

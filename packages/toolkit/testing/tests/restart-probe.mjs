@@ -7,7 +7,7 @@ import { manualScheduleHost } from './schedule-host.mjs';
 const projectRoot = process.argv[2];
 const db=await sqliteStateHost(join(projectRoot,'state.sqlite'));
 const schedules=manualScheduleHost();
-const kit=await PluginTestKit.create({projectRoot,config:{plugins:{alpha:{commandNamespace:'alpha',keywordReply:true},beta:{commandNamespace:'beta',keywordReply:true}}},installResources:({resources})=>{
+const kit=await PluginTestKit.create({projectRoot,config:{configVersion:2,plugins:{alpha:'./plugins/group-suite',beta:'./plugins/group-suite'},alpha:{commandNamespace:'alpha',keywordReply:true},beta:{commandNamespace:'beta',keywordReply:true}},installResources:({resources})=>{
   resources.provide(scheduleRootHostToken,schedules.host);
   resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));
   resources.provide(databaseRootHostToken,db.host);

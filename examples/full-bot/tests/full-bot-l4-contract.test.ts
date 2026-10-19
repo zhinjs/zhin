@@ -5,13 +5,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
+import { parse } from 'yaml';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
+const config = parse(configText);
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'),
 ) as {
   scripts: Record<string, string>;
+  dependencies?: Record<string, string>;
   zhin?: {
     entry: string;
     features: Array<{ package: string }>;
@@ -33,11 +36,13 @@ describe('full-bot L4 配置契约', () => {
       '@zhin.js/page',
     ]);
     expect(packageJson.dependencies?.['zhin.js']).toBeDefined();
-    expect(packageJson.zhin?.plugins).toEqual([
-      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
-      { package: '@zhin.js/adapter-napcat', instanceKey: 'napcat' },
-      { package: '@zhin.js/adapter-kook', instanceKey: 'kook' },
-    ]);
+    expect(packageJson.zhin?.plugins ?? []).toEqual([]);
+    expect(config.configVersion).toBe(2);
+    expect(config.plugins).toEqual({
+      sandbox: '@zhin.js/adapter-sandbox',
+      napcat: '@zhin.js/adapter-napcat',
+      kook: '@zhin.js/adapter-kook',
+    });
 
     for (const source of [
       'plugin.ts',
@@ -60,16 +65,14 @@ describe('full-bot L4 配置契约', () => {
   });
 
   it('启用语义记忆 semantic', () => {
-    expect(configText).toMatch(/memory:\s*\n/);
-    expect(configText).toMatch(/semantic:\s*\n/);
-    expect(configText).toMatch(/enabled:\s*true/);
-    expect(configText).toMatch(/autoConsolidate:\s*false/);
+    expect(config.ai.memory.semantic).toMatchObject({ enabled: true, autoConsolidate: false });
   });
 
-  it('三适配器使用层级 Plugin 配置且不再声明 legacy Host 插件', () => {
-    expect(configText).toMatch(/plugins:\s*\n\s+sandbox:/u);
-    expect(configText).toMatch(/\n\s+napcat:/u);
-    expect(configText).toMatch(/\n\s+kook:/u);
+  it('三适配器使用 v2 包映射与顶层业务配置且不再声明 legacy Host 插件', () => {
+    expect(config.disable_plugins ?? []).toEqual([]);
+    expect(config.sandbox.endpoints).toEqual([{ id: 'full-bot-sandbox', owner: 'local-user' }]);
+    expect(config.napcat).toMatchObject({ connection: 'ws', endpoints: [{ id: 'full-bot-napcat', url: '${ONEBOT11_WS_URL}', access_token: '${ONEBOT11_ACCESS_TOKEN}' }] });
+    expect(config.kook).toMatchObject({ connection: 'websocket', endpoints: [{ id: 'full-bot-kook', token: '${KOOK_TOKEN}' }] });
     expect(configText).not.toContain('@zhin.js/host-router');
     expect(configText).not.toContain('@zhin.js/host-api');
     expect(configText).not.toContain('@zhin.js/mcp');

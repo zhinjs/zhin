@@ -1,6 +1,5 @@
-import { createToken } from '@zhin.js/plugin-runtime';
+import { createToken, type PluginId, type RuntimeConfigDocument, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import type { EnvStore } from './environment-store.js';
-import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 
 /**
  * Generation-owned, validated Root configuration.
@@ -33,6 +32,17 @@ export function createPrimaryConfig(
       return expanded[key] as T | undefined;
     },
   });
+}
+
+/** Copies bindings so retained Scopes never mutate a leased generation's view. */
+export function projectPrimaryConfigResources(
+  resources: SnapshotState['resources'],
+  config: PrimaryConfig,
+): Map<PluginId, ReadonlyMap<TokenId, unknown>> {
+  return new Map([...resources].map(([owner, bindings]) => [
+    owner,
+    new Map([...bindings, [primaryConfigToken.id, config]]),
+  ]));
 }
 
 function freezeConfig<T>(value: T): T {

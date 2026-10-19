@@ -28,7 +28,7 @@ export default definePlugin({
 });
 ```
 
-功能多了可以拆成多个**子插件**，在 `package.json#zhin.plugins` 里挂载。深入：[插件模型](../concepts/plugin-model.md) · [definePlugin 全景](../authoring/define-plugin.md)
+功能多了可以拆成多个**子插件**，在主配置 `plugins` 中声明实例。深入：[插件模型](../concepts/plugin-model.md) · [definePlugin 全景](../authoring/define-plugin.md)
 
 ### 约定目录
 
@@ -67,7 +67,7 @@ export default definePlugin({
 | `zhin.config.yml` | **怎么配**（数值） | HTTP 端口、平台凭据、AI 模型、各插件的配置项 |
 | `.env` | **秘密** | Token、API Key，在 yml 里用 `${HTTP_TOKEN}` 引用 |
 
-在 `zhin.config.yml` 里，Root 插件的配置写在 `plugin:` 下，子插件的配置写在 `plugins.<instanceKey>:` 下。深入：[配置即数据](../concepts/config-as-data.md) · [配置参考](../configuration/index.md)
+在 `zhin.config.yml` 里，Root 插件的配置写在 `plugin:` 下，子插件的配置写在 `<instanceKey>:` 下。深入：[配置即数据](../concepts/config-as-data.md) · [配置参考](../configuration/index.md)
 
 ### Console
 

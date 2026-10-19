@@ -12,9 +12,9 @@ it('owns async runtime startup failure at CLI boundary and exits without an unha
     await symlink(join(root, 'plugins/adapters/napcat'), join(project, 'node_modules/@zhin.js/adapter-napcat'), 'dir');
     await symlink(join(root, 'packages/im/zhin'), join(project, 'node_modules/zhin.js'), 'dir');
     await writeFile(join(project, 'plugin.ts'), "import {definePlugin} from 'zhin.js'; export default definePlugin({name:'failure-fixture'});");
-    await writeFile(join(project, 'package.json'), JSON.stringify({ name: 'failure-fixture', private: true, type: 'module', dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/adapter-napcat': 'workspace:*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^1.0.0', runtime: 'trusted', plugins: [{ package: '@zhin.js/adapter-napcat', instanceKey: 'napcat' }] } }));
+    await writeFile(join(project, 'package.json'), JSON.stringify({ name: 'failure-fixture', private: true, type: 'module', dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/adapter-napcat': 'workspace:*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^1.0.0', runtime: 'trusted', plugins: [] } }));
     // Closed local port, dummy credentials only; never loads acceptance .env.
-    await writeFile(join(project, 'zhin.config.yml'), 'plugins:\n  napcat:\n    connection: ws\n    endpoints:\n      - id: fixture\n        url: ws://127.0.0.1:1\n        access_token: fixture\nhttp:\n  host: 127.0.0.1\n  port: 0\n');
+    await writeFile(join(project, 'zhin.config.yml'), 'configVersion: 2\nplugins:\n  napcat: "@zhin.js/adapter-napcat"\nnapcat:\n  connection: ws\n  endpoints:\n    - id: fixture\n      url: ws://127.0.0.1:1\n      access_token: fixture\nhttp:\n  host: 127.0.0.1\n  port: 0\n');
     const result = await promisify(execFile)(process.execPath, [join(root, 'basic/cli/bin/zhin.js'), 'runtime', 'start', '--once'], { cwd: project, timeout: 15000 }).catch(error => error);
     expect(result.code).toBe(1);
     expect(result.stderr).toMatch(/zhin: connect (?:ECONNREFUSED|EPERM)/);
@@ -35,8 +35,8 @@ it('owns published QQ SDK authentication failure through full dummy CLI startup'
     await symlink(join(root, 'plugins/adapters/qq'), join(project, 'node_modules/@zhin.js/adapter-qq'), 'dir');
     await symlink(join(root, 'packages/im/zhin'), join(project, 'node_modules/zhin.js'), 'dir');
     await writeFile(join(project, 'plugin.ts'), "import {definePlugin} from 'zhin.js'; export default definePlugin({name:'qq-auth-fixture'});");
-    await writeFile(join(project, 'package.json'), JSON.stringify({ name: 'qq-auth-fixture', private: true, type: 'module', dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/adapter-qq': 'workspace:*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^1.0.0', runtime: 'trusted', plugins: [{ package: '@zhin.js/adapter-qq', instanceKey: 'qq' }] } }));
-    await writeFile(join(project, 'zhin.config.yml'), `plugins:\n  qq:\n    mode: websocket\n    endpoints:\n      - id: fixture\n        appid: dummy\n        secret: dummy\n        accessTokenUrl: http://127.0.0.1:${address.port}/token\nhttp:\n  host: 127.0.0.1\n  port: 0\n`);
+    await writeFile(join(project, 'package.json'), JSON.stringify({ name: 'qq-auth-fixture', private: true, type: 'module', dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/adapter-qq': 'workspace:*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^1.0.0', runtime: 'trusted', plugins: [] } }));
+    await writeFile(join(project, 'zhin.config.yml'), `configVersion: 2\nplugins:\n  qq: "@zhin.js/adapter-qq"\nqq:\n  mode: websocket\n  endpoints:\n    - id: fixture\n      appid: dummy\n      secret: dummy\n      accessTokenUrl: http://127.0.0.1:${address.port}/token\nhttp:\n  host: 127.0.0.1\n  port: 0\n`);
     const result = await promisify(execFile)(process.execPath, [join(root, 'basic/cli/bin/zhin.js'), 'runtime', 'start', '--once'], { cwd: project, timeout: 15000, env: { ...process.env, NO_PROXY: '127.0.0.1,localhost' } }).catch(error => error);
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('zhin: QQ WebSocket');

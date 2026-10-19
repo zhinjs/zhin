@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-line
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the user/group/room id)
 Outbound: `send({ conversation, payload })` -> Reply API (cached replyToken) or Push API (recipient is `conversation.id`)
@@ -52,18 +52,20 @@ Required fields (`endpoints[i]`): `name`, `channelSecret`, `channelAccessToken`.
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  line:
-    webhookPath: /line/webhook       # optional, default /line/webhook
-    apiBaseUrl: https://api.line.me   # optional, can be changed to LINE API sandbox address for debugging
-    endpoints:
-      - name: my-line-bot
-        channelSecret: ${LINE_CHANNEL_SECRET}
-        channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
+  line: "@zhin.js/adapter-line"
+line:
+  webhookPath: /line/webhook # optional, default /line/webhook
+  apiBaseUrl: https://api.line.me # optional, can be changed to LINE API sandbox address for debugging
+  endpoints:
+    - name: my-line-bot
+      channelSecret: ${LINE_CHANNEL_SECRET}
+      channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-line` (`instanceKey: line`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-line` (`instanceKey: line`).
 
 ## Environment Variables
 

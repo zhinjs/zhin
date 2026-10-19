@@ -16,6 +16,8 @@ import {
 import {
   ConfigValidationError,
   RootRuntime,
+  primaryConfigToken,
+  type PrimaryConfig,
   type ModuleRuntime,
 } from '../src/index.js';
 
@@ -61,7 +63,7 @@ describe('RootRuntime config patches', () => {
       }),
     });
 
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -72,7 +74,7 @@ describe('RootRuntime config patches', () => {
 
     const childUpdate = await runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'child', 'label'],
+      path: ['child', 'label'],
       value: 'v2',
     }]);
     expect(childUpdate.generation).toBe(2);
@@ -82,7 +84,7 @@ describe('RootRuntime config patches', () => {
 
     await expect(runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'child', 'label'],
+      path: ['child', 'label'],
       value: 42,
     }])).rejects.toBeInstanceOf(ConfigValidationError);
     expect(runtime.snapshot).toBe(childUpdate);
@@ -90,7 +92,7 @@ describe('RootRuntime config patches', () => {
 
     await expect(runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'child', 'label'],
+      path: ['child', 'label'],
       value: 'broken',
     }])).rejects.toThrow('child config setup failed');
     expect(runtime.snapshot).toBe(childUpdate);
@@ -99,7 +101,7 @@ describe('RootRuntime config patches', () => {
 
     const noChange = await runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'child', 'label'],
+      path: ['child', 'label'],
       value: 'v2',
     }]);
     expect(noChange).toBe(childUpdate);
@@ -107,12 +109,12 @@ describe('RootRuntime config patches', () => {
     await Promise.all([
       runtime.patchConfig([{
         op: 'set',
-        path: ['plugins', 'child', 'label'],
+        path: ['child', 'label'],
         value: 'v3',
       }]),
       runtime.patchConfig([{
         op: 'set',
-        path: ['plugins', 'sibling', 'label'],
+        path: ['sibling', 'label'],
         value: 's2',
       }]),
     ]);
@@ -146,7 +148,7 @@ describe('RootRuntime config patches', () => {
       default: definePlugin({ name: 'sibling', setup() {} }),
     });
     const installed: unknown[] = [];
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -171,7 +173,7 @@ describe('RootRuntime config patches', () => {
     await runtime.stop();
   });
 
-  it('keeps the commit-only shortcut for host-level patches without an installer', async () => {
+  it('publishes a new primary document without rebuilding Scopes when no Host installer exists', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), {
@@ -183,7 +185,7 @@ describe('RootRuntime config patches', () => {
     modules.set(join(project, 'plugins/sibling/plugin.ts'), {
       default: definePlugin({ name: 'sibling', setup() {} }),
     });
-    const port = new FakeConfigDocumentPort({});
+    const port = new FakeConfigDocumentPort({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"},  });
     const runtime = new RootRuntime({
       projectRoot: project,
       modules,
@@ -197,10 +199,12 @@ describe('RootRuntime config patches', () => {
       path: ['http', 'port'],
       value: 8080,
     }]);
-    expect(patched).toBe(started);
+    expect(patched.generation).toBe(started.generation + 1);
+    expect((patched.resources.get(rootPluginId())?.get(primaryConfigToken.id) as PrimaryConfig).document.http).toEqual({ port: 8080 });
+    expect((started.resources.get(rootPluginId())?.get(primaryConfigToken.id) as PrimaryConfig).document.http).toBeUndefined();
     expect(port.commits).toBe(1);
     expect(port.rollbacks).toBe(0);
-    expect(port.document).toEqual({ http: { port: 8080 } });
+    expect(port.document).toEqual({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, http: { port: 8080 } });
 
     await runtime.stop();
   });
@@ -217,7 +221,7 @@ describe('RootRuntime config patches', () => {
     modules.set(join(project, 'plugins/sibling/plugin.ts'), {
       default: definePlugin({ name: 'sibling', setup() {} }),
     });
-    const port = new FakeConfigDocumentPort({});
+    const port = new FakeConfigDocumentPort({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"},  });
     const runtime = new RootRuntime({
       projectRoot: project,
       modules,
@@ -230,7 +234,7 @@ describe('RootRuntime config patches', () => {
     // External edit (e.g. hand-edited zhin.config.yml picked up by the file
     // watcher): a reload must rebuild from the file, not the stale start-up
     // in-memory document.
-    port.writeExternal({ http: { port: 9090 }, plugins: { child: { label: 'external' } } });
+    port.writeExternal({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 9090 }, child: { label: 'external' } });
     await runtime.reload();
     expect(runtime.snapshot.config.get(child)).toEqual({ label: 'external' });
 
@@ -238,27 +242,21 @@ describe('RootRuntime config patches', () => {
     // hitting a revision conflict or dropping it.
     await runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'child', 'label'],
+      path: ['child', 'label'],
       value: 'patched',
     }]);
     expect(runtime.snapshot.config.get(child)).toEqual({ label: 'patched' });
-    expect(port.document).toEqual({
-      http: { port: 9090 },
-      plugins: { child: { label: 'patched' } },
-    });
+    expect(port.document).toEqual({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 9090 }, child: { label: 'patched' } });
 
     // patchConfig right after an external edit (no reload in between) also
     // adopts the file first.
-    port.writeExternal({ http: { port: 7070 }, plugins: { child: { label: 'again' } } });
+    port.writeExternal({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 7070 }, child: { label: 'again' } });
     await runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'sibling', 'label'],
+      path: ['sibling', 'label'],
       value: 's9',
     }]);
-    expect(port.document).toEqual({
-      http: { port: 7070 },
-      plugins: { child: { label: 'again' }, sibling: { label: 's9' } },
-    });
+    expect(port.document).toEqual({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 7070 }, child: { label: 'again' }, sibling: { label: 's9' } });
 
     await runtime.stop();
   });
@@ -282,7 +280,7 @@ describe('RootRuntime config patches', () => {
     modules.set(join(project, 'plugins/sibling/plugin.ts'), {
       default: definePlugin({ name: 'sibling', setup() {} }),
     });
-    const port = new FakeConfigDocumentPort({});
+    const port = new FakeConfigDocumentPort({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"},  });
     const runtime = new RootRuntime({
       projectRoot: project,
       modules,
@@ -293,24 +291,24 @@ describe('RootRuntime config patches', () => {
 
     await expect(runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'child', 'label'],
+      path: ['child', 'label'],
       value: 'broken',
     }])).rejects.toThrow('child config setup failed');
     expect(runtime.snapshot).toBe(started);
     expect(port.commits).toBe(0);
     expect(port.rollbacks).toBe(1);
-    expect(port.document).toEqual({});
+    expect(port.document).toEqual({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' } });
 
     port.diverge = true;
     await expect(runtime.patchConfig([{
       op: 'set',
-      path: ['plugins', 'child', 'label'],
+      path: ['child', 'label'],
       value: 'v2',
     }])).rejects.toBeInstanceOf(ConfigDocumentDivergenceError);
     expect(runtime.snapshot).toBe(started);
     expect(port.commits).toBe(0);
     expect(port.rollbacks).toBe(2);
-    expect(port.document).toEqual({});
+    expect(port.document).toEqual({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' } });
 
     await runtime.stop();
   });
@@ -400,10 +398,7 @@ async function createProject(): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [
-        { package: '@test/child', instanceKey: 'child' },
-        { package: '@test/sibling', instanceKey: 'sibling' },
-      ],
+      plugins: [],
     },
   });
   await writeSchema(join(root, 'schema.json'), 'mode', 'development');

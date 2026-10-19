@@ -6,7 +6,6 @@ import {
   DATABASE_PACKAGES,
   DATABASE_DRIVER_VERSIONS,
   ZHIN_STACK_VERSIONS,
-  collectAdapterPluginManifest,
   formatEnvValue,
   generateAdapterEnvVars,
   generateAIEnvVars,
@@ -198,7 +197,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
         ...(aiEnabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : []),
         ...(aiEnabled ? [{ package: '@zhin.js/prompt-section', api: '^1.0.0' }] : []),
       ],
-      plugins: collectAdapterPluginManifest(adapters),
+      plugins: [],
     }
   }, { spaces: 2 });
 
@@ -482,7 +481,7 @@ data/
 ${projectName}/
 ├── plugin.ts              # definePlugin()，根插件入口
 ├── schema.json            # 根插件配置契约（JSON Schema）
-├── ${configFilename}     # 顶层 http/database/ai + plugins.<instanceKey> 配置
+├── ${configFilename}     # Host 配置 + plugins 包映射 + 顶层实例配置
 ├── commands/
 │   ├── hello/index.ts     # /hello 命令（defineCommand）
 │   └── card/index.ts      # /card -> component("status-card")
@@ -498,13 +497,13 @@ ${projectName}/
 ├── agents/                # <name>/agent.json + 核心 Markdown 子 Agent 目录
 ├── plugins/               # 本地子插件 workspace（仅一级）
 ├── packages/              # 贡献给 Zhin 的 Feature workspace
-├── package.json           # zhin 清单（protocol 1 / features / plugins）
+├── package.json           # zhin 清单（protocol 1 / features）
 ├── tsconfig.json
 └── pnpm-workspace.yaml
 \`\`\`
 
-\`package.json#zhin\` 是拓扑 SSOT：\`features\` 挂载的 Feature provider 会发现对应约定目录，
-\`zhin.plugins\` 清单声明挂载的子插件（适配器）实例，实例配置写在 \`${configFilename}\` 的 \`plugins.<instanceKey>\`。
+\`package.json#zhin.features\` 声明包所需的 Feature provider。
+\`${configFilename}\` 使用 \`configVersion: 2\`：\`plugins\` 映射实例名到插件包，\`disable_plugins\` 列出停用实例，业务参数放在顶层同名实例块。
 根项目默认声明 page/layout Feature；它们只提供发现与拓扑契约，浏览器构建器并不作为项目依赖安装。
 
 ${renderDatabaseReadme(options.database, configFilename)}
@@ -567,7 +566,7 @@ export default defineCommand({
 ### 接入更多平台
 
 \`\`\`bash
-npx zhin setup --adapters   # 选择平台并写入 plugins.<instanceKey> 配置与 zhin.plugins 清单
+npx zhin setup --adapters   # 选择平台并写入主配置的插件声明与同名业务配置
 \`\`\`
 
 ## 🤖 AI Agent

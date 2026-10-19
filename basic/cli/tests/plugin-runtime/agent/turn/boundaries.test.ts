@@ -689,6 +689,8 @@ function privateMessage(content: string, metadata?: Record<string, unknown>): Me
   });
 }
 
+function roleApplication(configs: Record<string, unknown>) { return {configVersion: 2, plugins: Object.fromEntries(Object.keys(configs).map(key => [key, `@zhin.js/adapter-${key}`])), ...configs}; }
+
 describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
   it('timeout 默认 60000，配置生效，非法值回退默认', () => {
     expect(resolveTriggerTimeoutMs(undefined)).toBe(60_000);
@@ -798,29 +800,23 @@ describe('缺口 3：masters / trusted 角色解析', () => {
 
 describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () => {
   it('从候选配置读取 name 或 id 形式的 Endpoint key', async () => {
-    await expect(readConfiguredEndpointKeys({
-      plugins: {
+    await expect(readConfiguredEndpointKeys(roleApplication({
         icqq: { endpoints: [{ id: '10001' }] },
         slack: { endpoints: [{ id: 'ignored-id', name: 'workspace-bot' }] },
-      },
-    } as never)).resolves.toEqual(new Set(['icqq:10001', 'slack:workspace-bot']));
+      }) as never)).resolves.toEqual(new Set(['icqq:10001', 'slack:workspace-bot']));
   });
 
   it('endpoints 缺省或为空时读取运行时创建的默认 Endpoint key', async () => {
-    await expect(readConfiguredEndpointKeys({
-      plugins: {
+    await expect(readConfiguredEndpointKeys(roleApplication({
         sandbox: {},
         icqq: { endpoints: [] },
-      },
-    } as never)).resolves.toEqual(new Set(['sandbox:sandbox', 'icqq:icqq']));
+      }) as never)).resolves.toEqual(new Set(['sandbox:sandbox', 'icqq:icqq']));
   });
 
   it('master + trusted 数组解析，name 别名键可查', async () => {
-    const resolver = await createEndpointRoleResolver({
-      plugins: {
+    const resolver = await createEndpointRoleResolver(roleApplication({
         icqq: { master: 'u-owner', name: 'bot1', trusted: ['t1', 't2'] },
-      },
-    } as never);
+      }) as never);
     expect(resolver.resolveOwner('icqq', 'x')).toBe('u-owner');
     expect(resolver.resolveOwner('bot1', 'y')).toBe('u-owner');
     expect(resolver.resolveTrusted('icqq', 'x')).toEqual(['t1', 't2']);
@@ -828,13 +824,11 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
   });
 
   it('endpoints[].master / endpoints[].trusted 解析', async () => {
-    const resolver = await createEndpointRoleResolver({
-      plugins: {
+    const resolver = await createEndpointRoleResolver(roleApplication({
         icqq: {
           endpoints: [{ name: '10001', master: 'u-ep-master', trusted: 't3 t4' }],
         },
-      },
-    } as never);
+      }) as never);
     expect(resolver.resolveOwner('icqq', '10001')).toBe('u-ep-master');
     expect(resolver.resolveOwner('10001', '10001')).toBe('u-ep-master');
     // 不挂到插件键，避免污染同适配器其它 endpoint
@@ -843,41 +837,35 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
   });
 
   it('endpoints[].owner 不作为框架 master（owner/admin 是群身份）', async () => {
-    const resolver = await createEndpointRoleResolver({
-      plugins: {
+    const resolver = await createEndpointRoleResolver(roleApplication({
         qq: {
           endpoints: [{ name: '知音', owner: 'should-not-be-master', master: 'real-master' }],
         },
-      },
-    } as never);
+      }) as never);
     expect(resolver.resolveOwner('qq', '知音')).toBe('real-master');
     expect(resolver.resolveOwner('知音', '知音')).toBe('real-master');
   });
 
   it('多 endpoint 各自 master 互不覆盖', async () => {
-    const resolver = await createEndpointRoleResolver({
-      plugins: {
+    const resolver = await createEndpointRoleResolver(roleApplication({
         qq: {
           endpoints: [
             { name: 'zhin', master: 'master-a' },
             { name: '知音', master: 'master-b' },
           ],
         },
-      },
-    } as never);
+      }) as never);
     expect(resolver.resolveOwner('qq', 'zhin')).toBe('master-a');
     expect(resolver.resolveOwner('qq', '知音')).toBe('master-b');
   });
 
   it('endpoints[].master → canonical principal role', async () => {
     const masterId = '477561AD3A89AFCDABB6AFCB71FF54DF';
-    const resolver = await createEndpointRoleResolver({
-      plugins: {
+    const resolver = await createEndpointRoleResolver(roleApplication({
         qq: {
           endpoints: [{ name: '知音', master: masterId }],
         },
-      },
-    } as never);
+      }) as never);
     const endpointMaster = resolver.resolveOwner('qq', '知音');
     expect(endpointMaster).toBe(masterId);
 
@@ -909,15 +897,15 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
   });
 
   it('无 plugins 配置时返回空解析', async () => {
-    const resolver = await createEndpointRoleResolver({} as never);
+    const resolver = await createEndpointRoleResolver({configVersion: 2} as never);
     expect(resolver.resolveOwner('icqq', 'x')).toBeUndefined();
     expect(resolver.resolveTrusted('icqq', 'x')).toEqual([]);
   });
 
   it('拒绝旧 plugins 数组而不是按空配置继续启动', async () => {
     await expect(readConfiguredEndpointKeys({ plugins: ['@zhin.js/adapter-icqq'] } as never))
-      .rejects.toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+      .rejects.toThrow(/configVersion/);
     await expect(createEndpointRoleResolver({ plugins: ['@zhin.js/adapter-icqq'] } as never))
-      .rejects.toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+      .rejects.toThrow(/configVersion/);
   });
 });

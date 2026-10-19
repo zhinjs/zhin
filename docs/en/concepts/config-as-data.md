@@ -11,13 +11,14 @@ Change a port in Console and either the whole change applies or it rolls back co
 
 - **Config is data, not code.** Each plugin declares its options, defaults and constraints with `schema.json` (or `config` in `definePlugin`).
 - **Validated as a whole at startup.** Zhin combines every plugin's declaration and validates the full document strictly (Ajv strict); errors prevent startup or the change.
-- **Each plugin sees only its own section.** Your bot reads `plugin:`, child plugins read `plugins.<instanceKey>:`, and they can't see each other's.
+- **Each plugin sees only its own section.** Your bot reads `plugin:`, child plugins read `<instanceKey>:`, and they can't see each other's.
 - **Changes are transactions.** When editing through Console or `zhin config`, a new config that fails validation or activation rolls back automatically and the old one stays in effect.
 - **Secrets go in `.env`.** Reference them in config as `${VAR}`.
 
 ## Document Structure
 
 ```yaml
+configVersion: 2
 # Root Plugin configuration (corresponding to the Root package's schema.json)
 plugin:
   terminal:
@@ -25,23 +26,26 @@ plugin:
 
 # Child plugin configuration, namespaced by instanceKey
 plugins:
-  sandbox:
-    endpoints:
-      - id: full-bot-sandbox
-        owner: local-user
-  napcat:
-    connection: ws
-    endpoints:
-      - name: full-bot-napcat
-        url: ${ONEBOT11_WS_URL}          # Environment variable interpolation
-        access_token: ${ONEBOT11_ACCESS_TOKEN}
+  sandbox: "@zhin.js/adapter-sandbox"
+  napcat: "@zhin.js/adapter-napcat"
+sandbox:
+  endpoints:
+    - id: full-bot-sandbox
+      owner: local-user
+napcat:
+  connection: ws
+  endpoints:
+    - name: full-bot-napcat
+      url: ${ONEBOT11_WS_URL} # Environment variable interpolation
+      access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
 
 The effective schema is composed by `ConfigComposer` (`packages/im/runtime/src/config-composer.ts`) from the plugin tree:
 
 - `plugin` -- the Root Plugin's own schema;
-- `plugins.<instanceKey>` -- each child plugin's schema, with nested child plugins recursively attached under the parent schema's properties;
+- `<instanceKey>` -- each direct instance's business schema; `plugins` only maps aliases to packages;
 - Host-level keys `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `log_level` -- consumed by the CLI's Root installer and **not** included in any plugin's configuration view;
+- Framework menu settings `menuKeyword` / `menuStyle` remain at the top level and are projected only into the Root generation view for the Command Feature. Child plugins never receive them, and the Root business schema cannot redeclare them.
 - Top-level structure uses `additionalProperties: false`: misspelling a key name (e.g., typing `plugn` instead of `plugin`) will produce an immediate error rather than being silently ignored.
 
 ## schema.json: Declarative Contract
@@ -86,15 +90,17 @@ Environment variable interpolation (`${VAR}`) is expanded during projection; uns
 Multi-account adapters (a single plugin instance connected to multiple platform connections) use the `endpoints` array. The expansion logic is implemented in `AdapterIndex` (`packages/im/adapter/src/adapter-index.ts`):
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    commandPrefix: "/"          # Top-level: shared by all endpoints
-    endpoints:
-      - name: bot-a
-        uin: ${ICQQ_UIN_A}
-      - name: bot-b
-        uin: ${ICQQ_UIN_B}
-        commandPrefix: ""       # Per-entry override of top-level
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  commandPrefix: "/" # Top-level: shared by all endpoints
+  endpoints:
+    - name: bot-a
+      uin: ${ICQQ_UIN_A}
+    - name: bot-b
+      uin: ${ICQQ_UIN_B}
+      commandPrefix: "" # Per-entry override of top-level
 ```
 
 - Each entry's effective configuration = instance configuration (without the `endpoints` key) **merged with** the entry's own fields; `name` is required.

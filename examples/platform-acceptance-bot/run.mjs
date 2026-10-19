@@ -140,13 +140,13 @@ export async function prepareProject(platform, environment, destination = home, 
   const manifest = {
     name: `platform-acceptance-${platform}`, private: true, version: '0.0.0', type: 'module',
     dependencies: { 'zhin.js': 'workspace:*', [`@zhin.js/adapter-${platform}`]: 'workspace:*' },
-    zhin: { ...sourceManifest.zhin, plugins: [{ package: `@zhin.js/adapter-${platform}`, instanceKey: platform }] },
+    zhin: { ...sourceManifest.zhin, plugins: [] },
   };
   await writeFile(path.join(project, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
   await copyFile(path.join(home, 'plugin.ts'), path.join(project, 'plugin.ts'));
   await copyFile(path.join(home, 'commands/acceptance/index.ts'), path.join(project, 'commands/acceptance/index.ts'));
   await writeFile(path.join(project, 'zhin.config.yml'), stringify({
-    log_level: targets.some(target => target.id === 'pending') ? 'debug' : 'info', plugin: {}, plugins: { [platform]: instance },
+    configVersion: 2, log_level: targets.some(target => target.id === 'pending') ? 'debug' : 'info', plugin: {}, plugins: { [platform]: `@zhin.js/adapter-${platform}` }, [platform]: instance,
     http: { host: environment.ACCEPTANCE_HTTP_HOST?.trim() || '127.0.0.1', port: httpPort, readiness: { endpoints: targets.map(target => ({ owner: `root/${platform}`, name: `${platform}~${target.endpoint}` })) } },
   }), { mode: 0o600 });
   await writeFile(policyPath, JSON.stringify(policy, null, 2) + '\n', { mode: 0o600 });

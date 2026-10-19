@@ -34,6 +34,48 @@ afterEach(async () => {
 });
 
 describe('IM Feature slot HMR', () => {
+  it('preserves custom menu keywords and disable intent through v2 config and generation changes', async () => {
+    const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-runtime-menu-config-')));
+    temporary.push(project);
+    await writeJson(join(project, 'package.json'), {
+      name: '@test/root', dependencies: { '@test/command': 'workspace:*' },
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/command' }] },
+    });
+    await featurePackage(project, 'command', '@test/command');
+    await touch(join(project, 'plugin.ts'));
+    await touch(join(project, 'packages/command/index.ts'));
+    const modules = new FakeModules();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({
+      name: 'root', setup({ addCommand }) { addCommand('ping', defineCommand({ execute: () => 'pong' })); },
+    }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    const menuStyle = { title: '工作菜单' };
+    const runtime = new RootRuntime({
+      projectRoot: project, modules, environment: { name: 'test', mode: 'test', platform: 'node' },
+      config: { configVersion: 2, menuKeyword: '帮助', menuStyle },
+    });
+    let lease: ReturnType<typeof runtime.snapshots.acquire> | undefined;
+    try {
+      const first = await runtime.start();
+      lease = runtime.snapshots.acquire();
+      const commands = first.projections.get(commandFeatureId) as CommandIndex;
+      await expect(commands.dispatch('帮助')).resolves.toMatchObject({ matched: true, status: 'executed' });
+      await expect(commands.dispatch('菜单')).resolves.toMatchObject({ matched: false });
+      expect(first.config.get(first.root)).toMatchObject({ menuStyle });
+      for (const value of [false, '']) {
+        await runtime.patchConfig([{ op: 'set', path: ['menuKeyword'], value }]);
+        const current = runtime.snapshot.projections.get(commandFeatureId) as CommandIndex;
+        await expect(current.dispatch('帮助')).resolves.toMatchObject({ matched: false });
+        await expect(current.dispatch('菜单')).resolves.toMatchObject({ matched: false });
+        await expect(current.execute('ping')).resolves.toBe('pong');
+        await expect(commands.dispatch('帮助')).resolves.toMatchObject({ matched: true });
+      }
+    } finally {
+      lease?.release();
+      await runtime.stop();
+    }
+  });
+
   it('refreshes operation views while keeping unchanged Adapter endpoints running', async () => {
     const project = await createProject();
     const modules = new FakeModules();
@@ -74,7 +116,7 @@ describe('IM Feature slot HMR', () => {
     modules.set(commandSource, { default: pingCommand('v1') });
     modules.set(middlewareSource, { default: traceMiddleware('v1') });
     modules.set(componentSource, { default: statusComponent('v1') });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },

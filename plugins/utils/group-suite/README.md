@@ -9,10 +9,12 @@ Plugin Runtime 群运营套件，提供签到积分、消息统计、群问答�
 pnpm exec zhin install @zhin.js/plugin-group-suite
 ```
 
-安装会将实例挂在父插件的 `package.json#zhin.plugins`。手工挂载：
+安装会将实例声明写入主配置 `plugins` 映射。手工声明：
 
-```json
-{ "package": "@zhin.js/plugin-group-suite", "instanceKey": "group-suite" }
+```yaml
+configVersion: 2
+plugins:
+  group-suite: '@zhin.js/plugin-group-suite'
 ```
 
 应用 Host 必须共享同一物理实例的 `@zhin.js/command`、`@zhin.js/middleware`、
@@ -20,20 +22,22 @@ pnpm exec zhin install @zhin.js/plugin-group-suite
 Feature provider，并装配 Schedule Host。正常 CLI 负责 Host 装配；手写测试 Host 也需要显式安装这些资源。
 
 ```yaml
+configVersion: 2
 plugins:
-  group-suite:
-    keywordReply: true
-    ephemeralKeywords: false
-    welcomeMessage: "" # 默认关闭；可设为 欢迎 {name} ({id})
-    basePointsMin: 10
-    basePointsMax: 30
-    streakBonus: 5
-    streakCap: 50
-    rankSize: 10
-    teachMaxPerGroup: 200
-    teachCooldownMs: 3000
-    teachAllowRegex: true
-    teachPageSize: 10
+  group-suite: "@zhin.js/plugin-group-suite"
+group-suite:
+  keywordReply: true
+  ephemeralKeywords: false
+  welcomeMessage: "" # 默认关闭；可设为 欢迎 {name} ({id})
+  basePointsMin: 10
+  basePointsMax: 30
+  streakBonus: 5
+  streakCap: 50
+  rankSize: 10
+  teachMaxPerGroup: 200
+  teachCooldownMs: 3000
+  teachAllowRegex: true
+  teachPageSize: 10
 ```
 
 约束以 [schema.json](./schema.json) 为准。启用关键词回复时默认要求 Database Host 的原子

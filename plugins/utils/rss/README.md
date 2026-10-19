@@ -10,15 +10,17 @@ pnpm exec zhin install @zhin.js/plugin-rss
 
 ## 配置
 
-在应用目录运行安装命令，会安装依赖并挂载到 `package.json#zhin.plugins`，实例名为 `rss`。在 `zhin.config.yml` 的实例节点修改配置：
+在应用目录运行安装命令，会安装依赖并挂载到 主配置 `plugins` 映射，实例名为 `rss`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
+configVersion: 2
 plugins:
-  rss:
-    pollCron: "0 */5 * * * *" # 六段 Cron（秒、分、时、日、月、周），每 5 分钟
-    maxPerGroup: 30            # 每个会话最大订阅数（默认 30）
-    maxItems: 5                # 单次推送最多展示条数（默认 5）
-    timeout: 15000             # 拉取 feed 的超时时间 ms（默认 15s）
+  rss: "@zhin.js/plugin-rss"
+rss:
+  pollCron: "0 */5 * * * *" # 六段 Cron（秒、分、时、日、月、周），每 5 分钟
+  maxPerGroup: 30 # 每个会话最大订阅数（默认 30）
+  maxItems: 5 # 单次推送最多展示条数（默认 5）
+  timeout: 15000 # 拉取 feed 的超时时间 ms（默认 15s）
 ```
 
 ## 命令

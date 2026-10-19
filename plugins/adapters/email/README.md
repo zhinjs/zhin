@@ -21,7 +21,7 @@ pnpm add @zhin.js/adapter-email
 - `@zhin.js/adapter` — 约定式 `adapters/email/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`smtp` / `imap`）
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`（`smtp` / `imap`）
 
 入站：`gateway.receive({ conversation, message, content: text, sender, metadata })`（`conversation` 为 kind=private、id=发件人地址的 ConversationRef）  
 出站：`send({ conversation, payload })` → nodemailer（收件人取 `conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
@@ -38,27 +38,29 @@ pnpm add @zhin.js/adapter-email
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  email:
-    endpoints:
-      - id: my-email-bot
-        smtp:
-          host: smtp.example.com
-          port: 465
-          secure: true
-          auth:
-            user: bot@example.com
-            pass: "${EMAIL_PASSWORD}"
-        imap:
-          host: imap.example.com
-          port: 993
-          tls: true
+  email: "@zhin.js/adapter-email"
+email:
+  endpoints:
+    - id: my-email-bot
+      smtp:
+        host: smtp.example.com
+        port: 465
+        secure: true
+        auth:
           user: bot@example.com
-          password: "${EMAIL_PASSWORD}"
+          pass: "${EMAIL_PASSWORD}"
+      imap:
+        host: imap.example.com
+        port: 993
+        tls: true
+        user: bot@example.com
+        password: "${EMAIL_PASSWORD}"
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-email`（`instanceKey: email`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-email`（`instanceKey: email`）。
 
 ### 可选 IMAP 字段
 

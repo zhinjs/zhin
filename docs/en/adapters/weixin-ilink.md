@@ -35,15 +35,17 @@ Can be **enabled simultaneously** with `@zhin.js/adapter-wechat-mp`.
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 plugins:
-  weixin-ilink:
-    # botAgent: "Zhin.js/1.0.0"
-    # longPollTimeoutMs: 35000
-    # baseUrl: https://ilinkai.weixin.qq.com
-    # dataDir: data/weixin-ilink
-    endpoints:
-      - id: my-wechat
-        # botToken: "..."                 # Optional; otherwise load state or scan QR
+  weixin-ilink: "@zhin.js/adapter-weixin-ilink"
+weixin-ilink:
+  # botAgent: "Zhin.js/1.0.0"
+  # longPollTimeoutMs: 35000
+  # baseUrl: https://ilinkai.weixin.qq.com
+  # dataDir: data/weixin-ilink
+  endpoints:
+    - id: my-wechat
+      # botToken: "..."                 # Optional; otherwise load state or scan QR
 ```
 
 `AdapterIndex` merges instance defaults with each endpoint override before invoking the adapter. The protocol accepts only that expanded endpoint configuration; it does not read environment variables or inspect nested `endpoints`.

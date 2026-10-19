@@ -48,7 +48,7 @@ packagesCommand
   .command('install <source>')
   .description('安装包：npm 插件/适配器，或 npm:/git: 前缀的 zhin-package 技能包')
   .option('-l, --local', '技能包安装到项目 .zhin/packages/')
-  .option('--no-enable', '只安装依赖，不自动写入 zhin.config 与 zhin.plugins 清单')
+  .option('--no-enable', '只安装依赖，不自动写入应用插件声明')
   .option('--dry-run', '打印将要执行的安装和配置改动，不写入文件')
   .action(async (source: string, opts: InstallOptions) => {
     const resolved = resolveInstallRoute(source);
@@ -70,7 +70,7 @@ packagesCommand
   });
 
 /**
- * a/b) npm 插件安装：pnpm add → 判定是否 zhin 插件 → 启用配置 + 注册 zhin.plugins 清单
+ * a/b) npm 插件安装：pnpm add → 判定是否 zhin 插件 → 提交应用实例声明与业务配置
  */
 export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallOptions, source = resolved.package) {
   const cwd = process.cwd();

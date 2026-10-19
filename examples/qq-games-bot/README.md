@@ -5,8 +5,8 @@
 其中地牢远征支持 1-4 人组队、三层持久化冒险、并发保护和确定性恢复，
 用于长时间实机稳定性验证。
 
-`package.json#zhin.plugins` 声明 QQ Adapter、Group Suite、Game Hub 与全部游戏子插件；
-`zhin.config.yml` 只按 `plugins.<instanceKey>` 提供各自配置。运行入口统一为
+主配置 `plugins` 映射声明 QQ Adapter、Group Suite、Game Hub 与全部游戏子插件；
+`zhin.config.yml` 用顶层同名实例块提供各自业务配置。运行入口统一为
 `zhin runtime start`，不依赖 legacy host-router/host-api。
 
 ## 快速开始

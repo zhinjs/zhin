@@ -186,7 +186,7 @@ pnpm install
 cd ../..
 ```
 
-然后在 **Bot 的** `package.json` 里加上两处（与已有内容合并，不要覆盖）：
+然后在 **Bot 的** `package.json` 里声明依赖（`zhin.plugins` 保持为空，实例由主配置声明）（与已有内容合并，不要覆盖）：
 
 ```json
 {
@@ -194,9 +194,7 @@ cd ../..
     "@zhin.js/command": "^1.1.0"
   },
   "zhin": {
-    "plugins": [
-      { "package": "./plugins/ping-pong", "instanceKey": "ping-pong" }
-    ]
+    "plugins": []
   }
 }
 ```
@@ -207,9 +205,11 @@ cd ../..
 最后在 **Bot 的** `zhin.config.yml` 里，以 `instanceKey` 为键填写配置：
 
 ```yaml
+configVersion: 2
 plugins:
-  ping-pong:
-    reply: pong!
+  ping-pong: './plugins/ping-pong'
+ping-pong:
+  reply: pong!
 ```
 
 ::: details 为什么 Bot 也要依赖 @zhin.js/command？
@@ -232,7 +232,7 @@ pnpm dev
 
 ::: tip 没有回复？
 - 命令前缀由每个平台连接的 `commandPrefix` 决定；脚手架生成的 Sandbox 设为 `/`，其他平台可能为空。
-- 终端没有出现 setup 日志：检查 Bot `package.json` 里的 `zhin.plugins` 路径。
+- 终端没有出现 setup 日志：检查 Bot 主配置 `plugins.ping-pong` 的包路径。
 - 运行 `npx zhin doctor` 做一次环境检查。
 :::
 
@@ -260,6 +260,7 @@ flowchart TD
 
 ```yaml
 # ping-pong/zhin.config.yml
+configVersion: 2
 plugin:
   reply: pong!
 

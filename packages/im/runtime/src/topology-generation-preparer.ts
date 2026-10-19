@@ -155,7 +155,19 @@ export class TopologyGenerationPreparer {
         featureTopology.providers,
         featureTopology.rootsByFeature,
       );
-      const projected = await new FeatureProjector(featureTopology.providers.values()).project(
+      const providers = [...featureTopology.providers.values()].filter(provider =>
+        provider.runtime.retain !== 'when-owner-unchanged'
+        || this.model.providers.get(provider.id) !== provider
+        || !current.projections.has(provider.id)
+        || !sameFeatureOwners(
+          this.model.rootsByFeature.get(provider.id) ?? [],
+          featureTopology.rootsByFeature.get(provider.id) ?? [],
+          this.model.scopes,
+          plugins.scopes,
+        )
+        || !sameFeatureSlots(provider.id, current.capabilities, capabilities));
+      const retained = new Map([...current.projections].filter(([id]) => featureTopology.providers.has(id)));
+      const projected = await new FeatureProjector(providers).project(
         current.generation + 1,
         {
           root: current.root,
@@ -165,6 +177,7 @@ export class TopologyGenerationPreparer {
           capabilities,
         },
         signal,
+        retained,
       );
       for (const [feature, dispose] of projected.disposers) {
         projectionDisposers.set(feature, dispose);
@@ -181,7 +194,10 @@ export class TopologyGenerationPreparer {
       const assets = this.model.assets.replaceScopes(
         graphOrder(this.graph),
         replacements,
-        new Set([...this.model.providers.keys(), ...featureTopology.providers.keys()]),
+        new Set([
+          ...providers.map(provider => provider.id),
+          ...[...this.model.providers.keys()].filter(id => !featureTopology.providers.has(id)),
+        ]),
         projectionDisposers,
       );
       return prepareRuntimeGeneration(
@@ -406,6 +422,30 @@ function selectedSlotsByFeature(
 
 function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameFeatureSlots(
+  feature: FeatureId,
+  previous: ReadonlyMap<CapabilityId, CapabilitySlot>,
+  next: ReadonlyMap<CapabilityId, CapabilitySlot>,
+): boolean {
+  const before = [...previous.values()].filter(slot => slot.feature === feature);
+  const after = [...next.values()].filter(slot => slot.feature === feature);
+  return before.length === after.length && before.every(slot => next.get(slot.id) === slot);
+}
+
+function sameFeatureOwners(
+  previous: readonly CapabilityRoot[],
+  next: readonly CapabilityRoot[],
+  previousScopes: ReadonlyMap<PluginId, unknown>,
+  nextScopes: ReadonlyMap<PluginId, unknown>,
+): boolean {
+  return previous.length === next.length && previous.every((root, index) => {
+    const candidate = next[index];
+    return candidate?.owner === root.owner
+      && candidate.packageRoot === root.packageRoot
+      && previousScopes.get(root.owner) === nextScopes.get(root.owner);
+  });
 }
 
 async function rollback(

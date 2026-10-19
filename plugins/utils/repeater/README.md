@@ -10,14 +10,16 @@ pnpm exec zhin install @zhin.js/plugin-repeater
 
 ## 配置
 
-在应用目录运行安装命令，会安装依赖并挂载到 `package.json#zhin.plugins`，实例名为 `repeater`。在 `zhin.config.yml` 的实例节点修改配置：
+在应用目录运行安装命令，会安装依赖并挂载到 主配置 `plugins` 映射，实例名为 `repeater`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
+configVersion: 2
 plugins:
-  repeater:
-    threshold: 3       # 触发复读的最少人数（默认 3）
-    cooldown: 30000    # 同一群冷却时间，毫秒（默认 30s）
-    maxLength: 200     # 消息长度上限，超过不触发（默认 200）
+  repeater: "@zhin.js/plugin-repeater"
+repeater:
+  threshold: 3 # 触发复读的最少人数（默认 3）
+  cooldown: 30000 # 同一群冷却时间，毫秒（默认 30s）
+  maxLength: 200 # 消息长度上限，超过不触发（默认 200）
 ```
 
 配置声明位于 `src/config.ts`，由 `plugin.ts` 暴露给 Runtime 与 Console；默认值、类型、范围和表单说明由同一声明生成。配置不满足范围或含未知字段时，候选代不会激活；有效配置更新只重载插件。

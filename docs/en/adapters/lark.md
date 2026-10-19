@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-lark
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the chat_id)
 Outbound: `send({ conversation, payload })` -> `im/v1/messages` (`receive_id` is `conversation.id`)
@@ -53,21 +53,23 @@ Required fields (`endpoints[i]`): `name`, `appId`, `appSecret`.
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  lark:
-    webhookPath: /lark/webhook          # optional, default /lark/webhook
-    isFeishu: true                      # optional, default true
-    # apiBaseUrl: https://open.feishu.cn/open-apis
-    endpoints:
-      - name: my-lark-bot
-        appId: ${LARK_APP_ID}
-        appSecret: ${LARK_APP_SECRET}
-        # encryptKey: ${LARK_ENCRYPT_KEY}          # optional
-        # verificationToken: ${LARK_VERIFY_TOKEN}  # optional
+  lark: "@zhin.js/adapter-lark"
+lark:
+  webhookPath: /lark/webhook # optional, default /lark/webhook
+  isFeishu: true # optional, default true
+  # apiBaseUrl: https://open.feishu.cn/open-apis
+  endpoints:
+    - name: my-lark-bot
+      appId: ${LARK_APP_ID}
+      appSecret: ${LARK_APP_SECRET}
+      # encryptKey: ${LARK_ENCRYPT_KEY}          # optional
+      # verificationToken: ${LARK_VERIFY_TOKEN}  # optional
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-lark` (`instanceKey: lark`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-lark` (`instanceKey: lark`).
 
 ## Environment Variables
 

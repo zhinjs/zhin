@@ -120,7 +120,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       projectRoot: botRoot,
       modules: new NativeDevelopmentModuleRuntime({ projectRoot: botRoot, watch: false }),
       environment: { name: 'test', mode: 'test', platform: 'node' },
-      config: { plugin: { terminal: { interactive: false } } },
+      config: { configVersion: 2, plugins: {}, plugin: { terminal: { interactive: false } } },
       installResources: ({ resources }) => im.install(resources),
     });
     im.attach(runtime.snapshots);
