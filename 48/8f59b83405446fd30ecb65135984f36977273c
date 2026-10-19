@@ -1,0 +1,21 @@
+docs/paths/console.md
+  s_079f1dc5e6308d::t_2f4e40397d32fd 114
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_2f4e40397d32fd 114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "488f59b83405446fd30ecb65135984f36977273c",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
