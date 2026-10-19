@@ -152,6 +152,8 @@ threadId（如有）
 
 Zhin Host 与独立 Console 是两个仓库。协议、后端权限与测试在 Zhin 仓库验证；页面状态、请求适配、交互与实际浏览器表现须在 Console 仓库分别验证。后端测试通过不说明前端已接入，Console 构建通过也不说明消息已投递。
 
+当前 Host 交付入口为 [PR #831](https://github.com/zhinjs/zhin/pull/831)，直接面向 `main`，包含 [#830](https://github.com/zhinjs/zhin/pull/830) 的消息诊断与文本降级前置，以及管理员提醒任务端口；这些是同一组前置提交，不需要重复实现或重复发版。独立 Console 对应[诊断界面 #14](https://github.com/zhinjs/console/pull/14)与[任务中心 #16](https://github.com/zhinjs/console/pull/16)。[交互可靠性 #832](https://github.com/zhinjs/zhin/pull/832) 仍是独立后续修复。切换 PR 基准或新增提交后，完整 CI 必须按实际 head 重新核验；已有预览检查不能代替未触发的主矩阵。
+
 每个纵切片的 PR 应记录：实际改动、未覆盖能力、回归范围、能力矩阵覆盖、是否做过浏览器或实机验证。验证可分为纯函数与本地测试、Host 集成、Console 浏览器、完整 CI、真实平台五层；没有执行的层次标记未验证。
 
 A 批应先完成单消息诊断及可读降级的后端和前端闭环，再推进 B、C。B/C 的设计与审计材料不能登记为交付；任务中心、自然时间、准入、配置、通知、试验台和文档入口也须按各自验收逐项推进。
