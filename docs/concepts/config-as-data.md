@@ -45,6 +45,7 @@ napcat:
 - `plugin` — Root Plugin 自己的 schema；
 - `<instanceKey>` — 每个直接实例的业务 schema；`plugins` 只保存别名到包的映射；
 - Host 级键 `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `log_level` — 由 CLI 的 Root 安装器消费，**不会**进入任何插件的配置视图；
+- 框架菜单设置 `menuKeyword` / `menuStyle` 继续位于顶层，只加入 Root 的 generation 配置视图，供 Command Feature 使用；不进入子插件视图，Root 业务 schema 不得重复声明。
 - 顶层结构 `additionalProperties: false`：写错键名（比如 `plugin` 打成 `plugn`）会直接报错，而不是被静默忽略。
 
 ## schema.json：声明式契约

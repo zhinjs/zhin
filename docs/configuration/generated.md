@@ -126,6 +126,12 @@ outline: [2, 3]
 | `ai.agent.schedule` | object | 否 | — | 无人值守 Schedule 执行策略。 |
 | `ai.agent.schedule.security` | object | 否 | — | Schedule 命令安全策略。 |
 | `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | 否 | — | Schedule Job 只能使用只读或网络预设。 |
+| `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
+| `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
+| `menuStyle.title` | string | 否 | — | 菜单标题。 |
+| `menuStyle.subtitle` | string | 否 | — | 菜单副标题。 |
+| `menuStyle.accentColor` | string | 否 | — | 六位十六进制强调色；无效值使用渲染器默认值。 |
+| `menuStyle.backgroundImage` | string | 否 | — | HTTP(S) 图片或 PNG/JPEG/WebP data URL；不支持的值使用渲染器默认值。 |
 | `mcp` | object | 否 | — | 把 Bot 工具公开为 MCP Server。 |
 | `a2a` | object | 否 | — | A2A Agent Card、远程执行与 Workroom 回调。 |
 | `speech` | object | 否 | — | 语音识别与语音合成 Host。 |

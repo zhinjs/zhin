@@ -203,6 +203,40 @@ describe('hierarchical Plugin config', () => {
     expect(composed.views.get(graph.root.children[0]!.id)).toEqual({ nested: true });
   });
 
+  it('projects top-level menu settings only into the root Feature view', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const declaration = { configVersion: 2, plugins: { child: '@test/child' } };
+    const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root, declaration);
+    const menuStyle = { title: '我的菜单', subtitle: '按插件查看', accentColor: '#123456', backgroundImage: 'https://example.com/menu.png' };
+    const composer = new ConfigComposer();
+    for (const menuKeyword of ['帮助', false, '']) {
+      const composed = await composer.compose(graph, { ...declaration, menuKeyword, menuStyle });
+      expect(composed.document).toMatchObject({ menuKeyword, menuStyle });
+      expect(composed.views.get(graph.root.id)).toEqual({ menuKeyword, menuStyle });
+      expect(composed.views.get(graph.root.children[0]!.id)).toEqual({});
+      expect(composed.document.plugin).toEqual({});
+    }
+    for (const invalid of [{ menuKeyword: true }, { menuKeyword: 1 }, { menuStyle: 'image' }, { menuStyle: { title: 1 } }]) {
+      await expect(composer.compose(graph, { ...declaration, ...invalid })).rejects.toBeInstanceOf(ConfigValidationError);
+    }
+    const plan = await new ConfigPatchPlanner().plan(graph, { ...declaration, menuKeyword: '帮助' }, [
+      { op: 'set', path: ['menuKeyword'], value: false },
+    ]);
+    expect(plan.roots).toEqual([graph.root.id]);
+    expect(plan.views.get(graph.root.id)).toEqual({ menuKeyword: false });
+  });
+
+  it('reserves application menu fields against root business schema collisions', async () => {
+    for (const key of ['menuKeyword', 'menuStyle']) {
+      const root = await configProject({ rootSchema: { properties: { [key]: {} } }, childSchema: {} });
+      const declaration = { configVersion: 2, plugins: { child: '@test/child' } };
+      const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root, declaration);
+      await expect(new ConfigComposer().compose(graph, declaration)).rejects.toMatchObject({
+        name: 'ConfigSchemaCollisionError', instanceKey: key,
+      });
+    }
+  });
+
   it('accepts opaque Host keys without projecting them into Plugin views', async () => {
     const root = await configProject({
       rootSchema: {

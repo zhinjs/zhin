@@ -91,6 +91,8 @@ Dotenv loads `.env` then `.env.<environment>`. `--environment` selects the name 
 | `mcp` | object | MCP Host (exposes bot tools as an MCP Server) |
 | `a2a` | object | A2A Host (Agent Card / remote Agent interop) |
 | `htmlRenderer` | object | Shotium HTML rendering (e.g., `width` / `viewport` / `scale`) |
+| `menuKeyword` | string \| false | Built-in menu keyword; defaults to `菜单`, `false` or an empty string disables it |
+| `menuStyle` | object | Menu title, subtitle, accent color and background when rendering is available |
 | `plugin` | object | Root Plugin (the application itself) configuration |
 | `configVersion` | number | Must be 2 |
 | `plugins` | object | Instance alias to package mapping |

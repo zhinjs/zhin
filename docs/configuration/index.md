@@ -91,6 +91,8 @@ dotenv 按 `.env` → `.env.<环境>` 加载。环境名由 `--environment` 指�
 | `mcp` | object | MCP Host（把 bot 工具暴露为 MCP Server） |
 | `a2a` | object | A2A Host（Agent Card / 远程 Agent 互调） |
 | `htmlRenderer` | object | Shotium HTML 渲染（如 `width` / `viewport` / `scale`） |
+| `menuKeyword` | string \| false | 内置菜单关键词；默认 `菜单`，`false` 或空字符串关闭 |
+| `menuStyle` | object | 菜单标题、副标题、强调色与背景图；渲染能力可用时生效 |
 | `plugin` | object | Root Plugin（应用自身）的配置 |
 | `configVersion` | number | 必须为 2 |
 | `plugins` | object | 实例名到插件包的映射 |

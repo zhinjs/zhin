@@ -43,6 +43,8 @@ Host、AI、数据库和 Root 自身 `plugin` 配置仍保留原位置。不要�
 `http`、`plugin`、`plugins`、`disable_plugins`、`configVersion` 等保留键作为实例名。
 实例名必须满足 Runtime 的校验；顶层重名会报错，不会覆盖 Host。
 
+菜单的 `menuKeyword`、`menuStyle` 也是框架顶层配置，继续与 `plugins` 同级，不搬进 `plugin` 或实例业务块。Root 的 generation 配置视图包含这两个菜单设置，供 Command Feature 使用；子插件不会收到它们。
+
 ## 手动迁移
 
 先停止正在运行的 Bot，使用包含本次变更的 CLI 版本，并备份项目 `package.json`、主配置和旧 lifecycle 文件，再执行以下搬移。

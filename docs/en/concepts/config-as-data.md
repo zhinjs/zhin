@@ -45,6 +45,7 @@ The effective schema is composed by `ConfigComposer` (`packages/im/runtime/src/c
 - `plugin` -- the Root Plugin's own schema;
 - `<instanceKey>` -- each direct instance's business schema; `plugins` only maps aliases to packages;
 - Host-level keys `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `log_level` -- consumed by the CLI's Root installer and **not** included in any plugin's configuration view;
+- Framework menu settings `menuKeyword` / `menuStyle` remain at the top level and are projected only into the Root generation view for the Command Feature. Child plugins never receive them, and the Root business schema cannot redeclare them.
 - Top-level structure uses `additionalProperties: false`: misspelling a key name (e.g., typing `plugn` instead of `plugin`) will produce an immediate error rather than being silently ignored.
 
 ## schema.json: Declarative Contract

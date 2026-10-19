@@ -61,6 +61,21 @@ it('plans without writes, executes no plugin entry, and migrates identity/raw va
   expect((await readdir(join(root, '.zhin'))).some(file => file.startsWith('instance-declarations-migration.') && file.endsWith('.backup'))).toBe(true);
 });
 
+it.each(['yaml', 'json'])('preserves application menu configuration during %s migration and rollback', async format => {
+  const { root, config, source } = await fixture({ json: format === 'json' });
+  const menuStyle = { title: '工作菜单', accentColor: '#123456' };
+  const original = format === 'json'
+    ? JSON.stringify({ ...JSON.parse(source), menuKeyword: false, menuStyle })
+    : `${source}menuKeyword: false\r\nmenuStyle:\r\n  title: 工作菜单\r\n  accentColor: '#123456'\r\n`;
+  await writeFile(config, original);
+  await applyInstanceDeclarationMigration(await planInstanceDeclarationMigration(root));
+  const { document } = await createConfigDocument(config).read();
+  expect(document).toMatchObject({ configVersion: 2, menuKeyword: false, menuStyle, plugin: {} });
+  expect(document.plugins).not.toHaveProperty('menuStyle');
+  await recoverInstanceDeclarationMigration(root, 'rollback');
+  expect(await readFile(config, 'utf8')).toBe(original);
+});
+
 it('migrates JSON while preserving declaration 10/2 rather than JS integer-key order', async () => {
   const { root, config } = await fixture({ json: true });
   await applyInstanceDeclarationMigration(await planInstanceDeclarationMigration(root));

@@ -19,6 +19,8 @@ export const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 /** Host configuration keys consumed by Runtime composition and Host installers. */
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
+const ROOT_FEATURE_CONFIG_KEYS = ['menuKeyword', 'menuStyle'] as const;
+
 export type JsonSchema = Readonly<Record<string, unknown>>;
 export interface ComposedConfig {
   readonly effectiveSchema: JsonSchema;
@@ -113,7 +115,15 @@ export class ConfigComposer {
     // also contains descendants. Re-pick fields from the owner's own schema.
     views.set(
       graph.root.id,
-      pickOwnFields(document.plugin, requireOwnSchema(ownSchemas, graph.root.id)),
+      // Built-in menu settings belong to the application, but Command Feature
+      // consumes the root's generation view. Project only these reserved fields;
+      // Host credentials and other instances never enter a Plugin ConfigView.
+      Object.freeze({
+        ...pickOwnFields(document.plugin, requireOwnSchema(ownSchemas, graph.root.id)),
+        ...Object.fromEntries(ROOT_FEATURE_CONFIG_KEYS
+          .filter(key => Object.hasOwn(document, key))
+          .map(key => [key, deepFreeze(structuredClone(document[key]))])),
+      }),
     );
     collectChildViews(graph.root, document, ownSchemas, views);
     return Object.freeze({
@@ -232,8 +242,8 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
     );
   }
   const properties = schemaProperties(schema);
-  if (Object.hasOwn(properties, 'commandNamespace')) {
-    throw new ConfigSchemaCollisionError(node.id, 'commandNamespace');
+  for (const key of ['commandNamespace', ...(!node.parent ? ROOT_FEATURE_CONFIG_KEYS : [])]) {
+    if (Object.hasOwn(properties, key)) throw new ConfigSchemaCollisionError(node.id, key);
   }
   return deepFreeze({
     $id: `urn:zhin:plugin-config:${encodeURIComponent(String(node.id))}`,

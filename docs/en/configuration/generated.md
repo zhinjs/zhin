@@ -126,6 +126,12 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.schedule` | object | no | — | Unattended Schedule execution policy. |
 | `ai.agent.schedule.security` | object | no | — | Schedule command security policy. |
 | `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | no | — | Schedule Jobs may use only the read-only or network preset. |
+| `menuKeyword` | string \| `false` | no | — | Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu. |
+| `menuStyle` | object | no | — | Command menu appearance when an HTML renderer is available; plain text fallback remains available. |
+| `menuStyle.title` | string | no | — | Menu title. |
+| `menuStyle.subtitle` | string | no | — | Menu subtitle. |
+| `menuStyle.accentColor` | string | no | — | Six-digit hex accent color; invalid values use the renderer default. |
+| `menuStyle.backgroundImage` | string | no | — | HTTP(S) image or PNG/JPEG/WebP data URL; unsupported values use the renderer default. |
 | `mcp` | object | no | — | Expose Bot tools through an MCP Server. |
 | `a2a` | object | no | — | A2A Agent Card, remote execution, and Workroom callbacks. |
 | `speech` | object | no | — | Speech-to-text and text-to-speech Host. |
