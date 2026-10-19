@@ -155,7 +155,9 @@ export interface TelegramWireSegment {
 
 export interface TelegramInlineButton {
   readonly text: string;
-  readonly callback_data: string;
+  readonly callback_data?: string;
+  /** Bot API 10.3+: mutually exclusive with callback_data. */
+  readonly disabled?: Record<string, never>;
 }
 
 export type TelegramOutboundAction =
@@ -604,8 +606,10 @@ function buildOutboundActions(
               : {};
             const text = String(record.label ?? record.text ?? '');
             const callback = String(record.payload ?? record.callback_data ?? '');
-            if (record.disabled || record.mode === 'command') throw new EndpointDeliveryError('unsupported_operation', 'Telegram disabled/command buttons are not implemented', 'not_sent');
-            if (!text.trim() || Buffer.byteLength(callback, 'utf8') < 1 || Buffer.byteLength(callback, 'utf8') > 64) throw new EndpointDeliveryError('invalid_payload', 'Telegram callback payload must be 1-64 UTF-8 bytes and label nonempty', 'not_sent');
+            if (record.mode === 'command') throw new EndpointDeliveryError('unsupported_operation', 'Telegram command buttons are not implemented', 'not_sent');
+            if (!text.trim()) throw new EndpointDeliveryError('invalid_payload', 'Telegram button label must be nonempty', 'not_sent');
+            if (record.disabled) return { text, disabled: {} };
+            if (Buffer.byteLength(callback, 'utf8') < 1 || Buffer.byteLength(callback, 'utf8') > 64) throw new EndpointDeliveryError('invalid_payload', 'Telegram callback payload must be 1-64 UTF-8 bytes and label nonempty', 'not_sent');
             return {
               text,
               callback_data: callback,

@@ -111,7 +111,7 @@ Available actions come from the plugin. Pause a scheduled task before editing or
 
 Drafts retain their original generation and revision; conflicts preserve input instead of silently overwriting. A timeout or lost response retains the operation ID and freezes writes while reading durable provider receipts. A missing receipt does not prove the command never ran. After changing login, explicitly confirm the original operation identity before reconciling; the page never resends automatically. Temporary reconciliation metadata contains no task content, parameters or credentials.
 
-Host endpoints are `GET /api/tasks/use-cases`, `GET /api/tasks/providers`, `POST /api/tasks/create` and `POST /api/tasks/change`. The plugin owns persistent task facts, revisions and receipts; the Host does not add another scheduler. See the [persistent reminder plugin](../../../plugins/utils/reminder/README.md) and [CLI use-case guide](../cli/index.md#use-cases-find-a-setup-path-by-purpose).
+Host endpoints are `GET /api/tasks/use-cases`, `GET /api/tasks/providers`, `POST /api/tasks/create` and `POST /api/tasks/change`. The plugin owns persistent task facts, revisions and receipts; the Host does not add another scheduler. See the [persistent reminder plugin](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder) and [CLI use-case guide](../cli/index.md#use-cases-find-a-setup-path-by-purpose).
 
 ## Next steps
 

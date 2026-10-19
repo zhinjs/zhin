@@ -111,7 +111,7 @@ Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录�
 
 页面保留提交时的运行代与任务版本，冲突时保留草稿，不静默覆盖。请求超时或响应丢失时保留操作 ID 并冻结写入，只读取插件持久回执核对；没有找到回执不能推断操作未执行。换登录后需明确确认原操作身份才能核对，不会自动重发。页面临时保存的核对信息不包含任务正文、参数或凭据。
 
-Host 接口为 `GET /api/tasks/use-cases`、`GET /api/tasks/providers`、`POST /api/tasks/create` 和 `POST /api/tasks/change`。任务事实、并发版本及操作回执由插件持久化，Host 不另建调度器。参见[持久提醒插件](../../plugins/utils/reminder/README.md)与 [CLI 用途指南](../cli/index.md#use-cases按用途找到配置入口)。
+Host 接口为 `GET /api/tasks/use-cases`、`GET /api/tasks/providers`、`POST /api/tasks/create` 和 `POST /api/tasks/change`。任务事实、并发版本及操作回执由插件持久化，Host 不另建调度器。参见[持久提醒插件](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder)与 [CLI 用途指南](../cli/index.md#use-cases按用途找到配置入口)。
 
 ## 下一步
 

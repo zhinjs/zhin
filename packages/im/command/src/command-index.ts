@@ -3,10 +3,11 @@ import {
   TypeMatcherRegistry,
   type MessageSegment,
 } from 'segment-matcher';
-import type {
-  CapabilitySlot,
-  PluginId,
-  RuntimeSnapshot,
+import {
+  htmlRendererToken,
+  type CapabilitySlot,
+  type PluginId,
+  type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
 import { bindOperationInput, operationClientAdapter } from '@zhin.js/feature-kit';
@@ -16,6 +17,7 @@ import {
   type PermissionHost,
 } from '@zhin.js/permission';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
+import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
 import {
   createCommandContext,
   resolveCommandSession,
@@ -53,6 +55,20 @@ export interface CommandDispatchResult {
   readonly command?: string;
   readonly owner?: PluginId;
   readonly value?: unknown;
+  readonly menu?: CommandMenuNavigation;
+}
+
+/** Semantic menu navigation; the IM composition layer supplies platform controls. */
+export interface CommandMenuNavigation {
+  readonly keyword: string;
+  readonly pluginKey?: string;
+  readonly page: number;
+  readonly pages: number;
+}
+
+interface CommandMenuResult {
+  readonly value: string | CommandMenuSegment;
+  readonly menu?: CommandMenuNavigation;
 }
 
 interface CommandRecord extends CommandDescriptor {
@@ -252,14 +268,14 @@ export class CommandIndex {
     operationSnapshot: RuntimeSnapshot = this.snapshot,
   ): Promise<CommandDispatchResult> {
     if (this.#menu) {
-      const menuValue = this.#dispatchMenu(input, commandPrefix);
-      if (menuValue !== undefined) {
+      const menuResult = this.#dispatchMenu(input, commandPrefix, operationSnapshot);
+      if (menuResult !== undefined) {
         return Object.freeze({
           matched: true,
           status: 'executed',
           command: this.#menu.keyword,
           owner: operationSnapshot.root,
-          value: menuValue,
+          ...menuResult,
         });
       }
     }
@@ -404,50 +420,68 @@ export class CommandIndex {
   // 内置菜单命令
   // ==========================================================================
 
-  #dispatchMenu(input: CommandMatchInput, commandPrefix = ''): string | undefined {
+  #dispatchMenu(input: CommandMatchInput, commandPrefix: string, snapshot: RuntimeSnapshot): CommandMenuResult | undefined {
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
     const menu = this.#menu;
     if (!menu) return undefined;
     const keyword = menu.keyword;
-    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword);
+    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
     if (text.startsWith(keyword + ' ')) {
       const key = text.slice(keyword.length + 1).trim();
-      if (key) return this.#buildMenu(key, commandPrefix, keyword);
-      return this.#buildMenu(undefined, commandPrefix, keyword);
+      const args = key.split(/\s+/u);
+      const flag = args.indexOf('--page');
+      if (flag !== -1) {
+        const pageText = args[flag + 1] ?? '';
+        if (flag > 1 || args.length !== flag + 2 || !/^[1-9]\d*$/u.test(pageText)
+          || !Number.isSafeInteger(Number(pageText))) {
+          return { value: `页码必须是正整数。用法：${commandPrefix}${keyword} [插件名] --page <页码>` };
+        }
+        return this.#buildMenu(flag === 1 ? args[0] : undefined, commandPrefix, keyword, snapshot, Number(pageText));
+      }
+      if (key) return this.#buildMenu(key, commandPrefix, keyword, snapshot);
+      return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
     }
     return undefined;
   }
 
-  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string): string {
-    const root = this.snapshot.root;
+  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string, snapshot: RuntimeSnapshot, page = 1): CommandMenuResult {
+    const root = snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
       : root;
 
-    const node = this.snapshot.tree.get(targetId);
-    if (!node) return `未找到插件: ${pluginKey}`;
+    const node = snapshot.tree.get(targetId);
+    if (!node) return { value: `未找到插件: ${pluginKey}` };
 
     const directCommands = this.#commands.filter((cmd) => cmd.slot.owner === targetId);
     const children = node.children
-      .map((childId) => this.snapshot.tree.get(childId))
+      .map((childId) => snapshot.tree.get(childId))
       .filter((child): child is NonNullable<typeof child> => !!child);
+
+    const pages = Math.max(1, Math.ceil((directCommands.length + children.length) / MENU_PAGE_SIZE));
+    const invocation = `${commandPrefix}${keyword}${pluginKey ? ` ${pluginKey}` : ''}`;
+    if (page > pages) return { value: `页码超出范围：共 ${pages} 页。请使用「${invocation} --page <页码>」。` };
+    const offset = (page - 1) * MENU_PAGE_SIZE;
+    const pageCommands = directCommands.slice(offset, offset + MENU_PAGE_SIZE);
+    const pageChildren = children.slice(Math.max(0, offset - directCommands.length), Math.max(0, offset + MENU_PAGE_SIZE - directCommands.length));
 
     const displayKey = pluginKey ?? node.instanceKey;
     const lines: string[] = [`=== ${displayKey} 指令菜单 ===`];
+    if (pages > 1) lines.push(`第 ${page}/${pages} 页 · ${directCommands.length} 条指令 · ${children.length} 个子插件`);
 
-    if (directCommands.length > 0) {
+    if (pageCommands.length > 0) {
       lines.push('');
-      for (const cmd of directCommands) {
+      for (const cmd of pageCommands) {
         const desc = cmd.description ? `  - ${cmd.description}` : '';
         lines.push(`  ${commandPrefix}${cmd.name}${desc}`);
       }
     }
 
-    if (children.length > 0) {
+    if (pageChildren.length > 0) {
       lines.push('');
       lines.push('子插件：');
-      for (const child of children) {
+      for (const child of pageChildren) {
         const childKey = pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey;
         const label = child.metadata?.displayName ?? child.instanceKey;
         lines.push(`  ${childKey}  (${label})`);
@@ -459,12 +493,27 @@ export class CommandIndex {
       lines.push('（暂无指令和子插件）');
     }
 
-    if (children.length > 0) {
+    const hints: string[] = [];
+    if (children.length > 0) hints.push(`提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`);
+    if (page > 1) hints.push(`上一页：${invocation} --page ${page - 1}`);
+    if (page < pages) hints.push(`下一页：${invocation} --page ${page + 1}`);
+    const hint = hints.length ? hints.join('\n') : undefined;
+    if (hint) {
       lines.push('');
-      lines.push(`提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`);
+      lines.push(hint);
     }
 
-    return lines.join('\n');
+    const text = lines.join('\n');
+    const menu = Object.freeze({ keyword, ...(pluginKey ? { pluginKey } : {}), page, pages });
+    if (!snapshot.resources.get(root)?.has(htmlRendererToken.id)) return { value: text, menu };
+    const config = snapshot.config.get(root) as Record<string, unknown> | undefined;
+    return { menu, value: renderCommandMenu(displayKey,
+      pageCommands.map(cmd => ({ name: `${commandPrefix}${cmd.name}`, description: cmd.description })),
+      pageChildren.map(child => ({
+        name: pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey,
+        description: child.metadata?.displayName ?? child.instanceKey,
+      })), hint, text, { page, pages, commandTotal: directCommands.length, pluginTotal: children.length,
+        appearance: readMenuAppearance(config?.menuStyle) }) };
   }
 }
 

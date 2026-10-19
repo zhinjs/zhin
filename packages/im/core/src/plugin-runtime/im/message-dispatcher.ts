@@ -9,6 +9,7 @@ import type { UserInteractionFactory } from '@zhin.js/interaction';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult } from './contracts.js';
+import { commandMenuReply } from './command-menu-navigation.js';
 
 const logger = getLogger('command');
 
@@ -109,7 +110,9 @@ export class MessageDispatcher {
         preview: truncatePreview(input),
       }));
     }
-    return result;
+    return result.menu ? Object.freeze({ ...result,
+      value: commandMenuReply(result, commands, snapshot, message.conversation, prefix),
+    }) : result;
   }
 }
 
