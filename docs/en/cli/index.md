@@ -20,6 +20,7 @@ npx zhin --help        # list every command
 | Diagnose environment or config problems | `npx zhin doctor` |
 | Check the config file is valid | `npx zhin config check` |
 | Install a community plugin | `npx zhin install <plugin>` |
+| Find plugins and setup steps by purpose | `npx zhin use-cases` |
 | Create a new, publishable plugin | `npx @zhin.js/cli new my-plugin --standalone` |
 | Add a local plugin to an existing bot project | `npx zhin new my-plugin` |
 | Upgrade Zhin | `npx zhin migrate --dry-run`, then again without `--dry-run` |
@@ -193,6 +194,19 @@ zhin info <package>
 ```
 
 Search the plugin marketplace or show one plugin's details.
+
+### use-cases: Find a Setup Path by Purpose
+
+```bash
+zhin use-cases
+zhin use-cases reminder
+zhin use-cases group-welcome
+zhin use-cases keyword-reply
+```
+
+Find the required plugin, installation preview, steps and current limitations for reminders, welcome messages and keyword replies. This command only prints a guide: it does not install plugins, change configuration, start the bot or send messages. The existing installation, configuration and chat interfaces still own those operations.
+
+The Console [administrator task center](../paths/console.md#administrator-task-center) uses the same catalog. Its first creation flow manages administrator reminders. Welcome messages and keyword replies currently link to existing setup paths; Console does not impersonate a chat member.
 
 ### build: Build a Plugin
 

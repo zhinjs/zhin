@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { createDeliveryTarget, type DeliveryTarget, type OutboundHost, type PluginStateStore } from 'zhin.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import type { ReminderConfig } from './config.js';
+import { AdministratorReminderTasks } from './admin-tasks.js';
+import { MAX_DELAY_SECONDS, nextPeriodicTime } from './timing.js';
+export { MAX_DELAY_SECONDS, parseReminderInstant } from './timing.js';
 
 export const REMINDER_STATE_KEY = 'reminders/v1';
-export const MAX_DELAY_SECONDS = 365 * 24 * 60 * 60;
 export class ReminderInputError extends Error {}
 
 type TaskStatus = 'pending' | 'unknown' | 'delivered' | 'failed' | 'cancelled';
@@ -19,19 +21,22 @@ export type ReminderBook = { readonly version: 1; readonly tasks: readonly Remin
 
 /** Generation-owned worker; saved state contains plain identities, never live objects. */
 export class ReminderService {
+  readonly administratorTasks: AdministratorReminderTasks;
   readonly #state: PluginStateStore;
   readonly #outbound: OutboundHost;
   readonly #config: ReminderConfig;
   #working = false;
   #stopped = false;
+  #administratorFirst = false;
 
   constructor(state: PluginStateStore, outbound: OutboundHost, config: ReminderConfig) {
     this.#state = state;
     this.#outbound = outbound;
     this.#config = config;
+    this.administratorTasks = new AdministratorReminderTasks(state, outbound, config);
   }
 
-  stop(): void { this.#stopped = true; }
+  stop(): void { this.#stopped = true; this.administratorTasks.stop(); }
 
   async add(actor: ReminderActor, text: string, at: number, intervalMs: number | null): Promise<ReminderTask> {
     this.#assertLive();
@@ -79,6 +84,14 @@ export class ReminderService {
       for (let count = 0; count < this.#config.batchSize && !this.#stopped; count++) {
         const now = Date.now();
         const claimId = randomUUID();
+        const administratorFirst = this.#administratorFirst;
+        // Persist priority across ticks too: batchSize=1 must not starve either pool.
+        this.#administratorFirst = !this.#administratorFirst;
+        if (administratorFirst) {
+          const administratorTask = await this.administratorTasks.claim(now, claimId);
+          if (this.#stopped) break;
+          if (administratorTask) { await this.administratorTasks.deliver(administratorTask); continue; }
+        }
         const book = await this.#state.update<ReminderBook>(REMINDER_STATE_KEY, current => {
           let claimed = false;
           return { version: 1, tasks: readBook(current).tasks.map(task => {
@@ -94,7 +107,14 @@ export class ReminderService {
           }) };
         });
         const task = book?.tasks.find(item => item.claimId === claimId);
-        if (!task || this.#stopped) break;
+        if (this.#stopped) break;
+        if (!task) {
+          if (administratorFirst) break;
+          const administratorTask = await this.administratorTasks.claim(now, claimId);
+          if (!administratorTask || this.#stopped) break;
+          await this.administratorTasks.deliver(administratorTask);
+          continue;
+        }
         let status: TaskStatus = 'unknown';
         let detail = '平台未返回确认的消息 ID；不会自动重试';
         try {
@@ -124,21 +144,6 @@ export class ReminderService {
   #assertLive(): void { if (this.#stopped) throw new Error('提醒服务属于已停止的插件实例'); }
 }
 
-export function parseReminderInstant(value: string): number {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/u.test(value)) throw new TypeError('绝对时间须为带 Z 或 ±hh:mm 的 ISO 时间，例如 2026-10-14T09:00:00+08:00');
-  const [year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0] = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/u)!.slice(1).map(item => Number(item ?? 0));
-  const calendar = new Date(0);
-  calendar.setUTCFullYear(year, month, 0);
-  const daysInMonth = calendar.getUTCDate();
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth || hour > 23 || minute > 59 || second > 59) throw new TypeError('提醒时间无效');
-  const time = Date.parse(value);
-  if (!Number.isSafeInteger(time)) throw new TypeError('提醒时间无效');
-  return time;
-}
-
-function nextPeriodicTime(from: number, interval: number, now: number): number {
-  return from + (Math.floor((now - from) / interval) + 1) * interval;
-}
 function sameActor(task: ReminderTask, actor: ReminderActor): boolean {
   return task.senderId === actor.senderId && JSON.stringify(task.target) === JSON.stringify(createDeliveryTarget({ conversation: actor.target }));
 }

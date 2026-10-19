@@ -99,6 +99,20 @@ The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, o
 4. **Agent Overview**: which step did the AI reach, and how did it end?
 5. **Logs**: filter to the same time window and source to find the error.
 
+## Administrator task center
+
+The task center (`/tasks`) starts with practical use cases and reads the task services that running plugin instances actually provide. If the reminder plugin is missing or not loaded, it offers the existing installation path. Select an exact instance when a package has several. Older Hosts need an update alongside the standalone Console.
+
+The first supported provider is persistent administrator reminders. Configure a Database Host, then select a loaded reminder instance, delivery account, conversation kind and ID, including parent and thread identities when present. Accounts come from actual Endpoints. Enter an exact target manually when the platform has no directory; a display name is not an identity. Review the target, absolute time with an explicit timezone offset, content and future delivery effects before creating. A successful creation means the task was saved, not that the platform is online or a message was delivered.
+
+Administrator tasks have separate storage and quotas from personal reminders created in chat. Chat tasks remain owned by the real sender; Console neither impersonates a platform user nor lists or cancels personal reminders. Task management requires an explicitly configured, verified full-scope Bearer Token. Tokenless and demo access are rejected.
+
+Available actions come from the plugin. Pause a scheduled task before editing or resuming it; cancellation cannot retract a delivery already in progress. An `unknown` delivery only permits cancellation after checking the target, with no retry or resume. A fixed interval is a number of seconds, not a local-calendar schedule at the same hour each day. Natural-time parsing, subscriptions and more use cases remain planned work.
+
+Drafts retain their original generation and revision; conflicts preserve input instead of silently overwriting. A timeout or lost response retains the operation ID and freezes writes while reading durable provider receipts. A missing receipt does not prove the command never ran. After changing login, explicitly confirm the original operation identity before reconciling; the page never resends automatically. Temporary reconciliation metadata contains no task content, parameters or credentials.
+
+Host endpoints are `GET /api/tasks/use-cases`, `GET /api/tasks/providers`, `POST /api/tasks/create` and `POST /api/tasks/change`. The plugin owns persistent task facts, revisions and receipts; the Host does not add another scheduler. See the [persistent reminder plugin](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder) and [CLI use-case guide](../cli/index.md#use-cases-find-a-setup-path-by-purpose).
+
 ## Next steps
 
 - [Console overview](../console/): how Console and the Host split work, and page extensions

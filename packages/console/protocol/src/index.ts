@@ -45,6 +45,49 @@ export const ENDPOINT_RPC = {
 /** Browser event dispatched when the bounded history cursor cannot be resumed. */
 export const CONSOLE_EVENT_RECOVERY_GAP_EVENT = 'zhin-console-event-recovery-gap' as const;
 
+export type ConsoleTaskJsonValue = null | boolean | number | string | readonly ConsoleTaskJsonValue[]
+  | { readonly [key: string]: ConsoleTaskJsonValue };
+export interface ConsolePluginTask {
+  readonly id: string;
+  readonly ownership: 'administrator';
+  readonly title: string;
+  readonly target: Readonly<{
+    endpoint: Readonly<{ adapter: string; id: string }>;
+    kind: 'private' | 'group' | 'channel'; id: string;
+    parent?: Readonly<{ kind: 'private' | 'group' | 'channel'; id: string }>;
+    threadId?: string;
+  }>;
+  readonly state: 'scheduled' | 'paused' | 'running' | 'unknown' | 'succeeded' | 'failed' | 'cancelled';
+  readonly createdAt: number;
+  readonly nextRunAt?: number;
+  readonly lastRunAt?: number;
+  readonly timezone?: string;
+  readonly detail?: string;
+  readonly parameters: Readonly<Record<string, ConsoleTaskJsonValue>>;
+  readonly actions: readonly ('pause' | 'resume' | 'cancel' | 'update')[];
+}
+export interface ConsolePluginTaskProvider {
+  /** Authoritative PluginId from the committed snapshot's own resource scope. */
+  readonly owner: string;
+  readonly packageName: string;
+  readonly title: string;
+  readonly description: string;
+  readonly schema: Readonly<Record<string, ConsoleTaskJsonValue>>;
+  readonly effects: readonly string[];
+  readonly revision: string;
+  readonly tasks: readonly ConsolePluginTask[];
+  /** Durable mutation acknowledgements; these do not confirm external delivery. */
+  readonly receipts: readonly Readonly<{ requestId: string; taskId: string; operation: 'create' | 'pause' | 'resume' | 'cancel' | 'update' }>[];
+}
+export interface ConsolePluginTaskProviders {
+  readonly generation: number;
+  readonly providers: readonly ConsolePluginTaskProvider[];
+}
+export interface ConsolePluginTaskMutationResult {
+  readonly generation: number;
+  readonly provider: ConsolePluginTaskProvider;
+}
+
 export interface ConsoleEndpointEventData {
   readonly adapter: string;
   readonly endpointKey: string;

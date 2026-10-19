@@ -1,5 +1,5 @@
 import { databaseHostToken, definePlugin, outboundHostToken } from 'zhin.js';
-import { pluginVerificationToken } from 'zhin.js/plugin-runtime';
+import { pluginVerificationToken, pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
 import { randomUUID } from 'node:crypto';
 import { assertReminderTimezone, reminderConfig } from './src/config.js';
 import { ReminderService } from './src/service.js';
@@ -17,6 +17,7 @@ export default definePlugin({
     if (!outbound.sendTarget) throw new Error('提醒需要支持精确 DeliveryTarget 的 Outbound Host');
     const service = new ReminderService(state, outbound, config);
     context.resources.provide(reminderServiceToken, service);
+    context.resources.provide(pluginTaskProviderToken, service.administratorTasks);
     context.resources.provide(pluginVerificationToken, {
       checks: () => [{ id: 'local-state', title: '持久状态读写检查', scope: 'local', effects: ['写入、读取并删除一个独立探针键；不创建提醒、不发送消息'] }],
       async run(checkId) {
