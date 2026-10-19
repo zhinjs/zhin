@@ -1,0 +1,32 @@
+basic/cli/tests/cli-write-side.test.ts
+  s_6562bcb6cc0539::t_37c714f97e10e2 94-128
+basic/cli/src/commands/migrate.ts
+  s_6562bcb6cc0539::t_819b64dfb84bba 83-84
+.changeset/quiet-workspace-migration.md
+  s_6562bcb6cc0539::t_819b64dfb84bba 1-5
+docs/en/operations/upgrades.md
+  s_6562bcb6cc0539::t_819b64dfb84bba 34-35
+scripts/check-created-project.mjs
+  s_6562bcb6cc0539::t_9dd327a622961e 112-117,123,127-130,132-154,293-296,368
+  s_6562bcb6cc0539::t_bf207db39d5890 118-122,124-126,131
+docs/contributing/development.md
+  s_6562bcb6cc0539::t_221fdab929c4a7 62-64
+docs/operations/upgrades.md
+  s_6562bcb6cc0539::t_819b64dfb84bba 34-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e9d49403fc3bc66173ba4467ce30286b63c552ff",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
