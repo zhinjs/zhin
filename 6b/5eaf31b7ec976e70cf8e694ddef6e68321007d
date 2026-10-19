@@ -1,0 +1,28 @@
+packages/im/agent/src/core/turn-event-mapper.ts
+  s_6562bcb6cc0539::t_e03bff047066c2 4-18,50
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  s_6562bcb6cc0539::t_4e298b73dc6caf 6-25
+packages/im/agent/src/core/agent-core-run.ts
+  s_6562bcb6cc0539::t_e03bff047066c2 38,944-950,959,961-962,1065,1164
+packages/im/agent/src/core/turn-completion-usage.ts
+  s_6562bcb6cc0539::t_e03bff047066c2 7,11,15-16,36-37
+  s_6562bcb6cc0539::t_a65c3f2839217c 8,12
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_6562bcb6cc0539::t_a65c3f2839217c 94-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6b5eaf31b7ec976e70cf8e694ddef6e68321007d",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
