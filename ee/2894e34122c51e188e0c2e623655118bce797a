@@ -1,0 +1,29 @@
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  s_079f1dc5e6308d::t_42882dd3624a79 223-238
+docs/contributing/user-experience-roadmap.md
+  s_079f1dc5e6308d::t_376fc46a14f9e8 16,19,75,79,97,107,109,157
+docs/configuration/generated.md
+  s_079f1dc5e6308d::t_719372104a7765 1485
+docs/en/configuration/generated.md
+  s_079f1dc5e6308d::t_8426045496213e 1485
+docs/en/solutions/reminders.md
+  s_079f1dc5e6308d::t_d5e853aa194e3f 39-40
+docs/solutions/reminders.md
+  s_079f1dc5e6308d::t_ac697b502b216b 39-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee2894e34122c51e188e0c2e623655118bce797a",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
