@@ -48,10 +48,6 @@ function isZhinProject(dir: string): boolean {
   }
 }
 
-function isWorkspaceProject(dir: string): boolean {
-  return fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'));
-}
-
 function collectZhinDeps(pkg: any): { dep: string; current: string; inDev: boolean }[] {
   const out: { dep: string; current: string; inDev: boolean }[] = [];
   const add = (name: string, version: string, inDev: boolean) => {
@@ -70,7 +66,6 @@ function collectZhinDeps(pkg: any): { dep: string; current: string; inDev: boole
 
 export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRun: boolean }): boolean {
   const pkg = fs.readJsonSync(pkgPath);
-  const isWorkspace = isWorkspaceProject(path.dirname(pkgPath));
 
   const zhinDeps = collectZhinDeps(pkg);
   if (zhinDeps.length === 0) {
@@ -85,8 +80,8 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
     const key = inDev ? 'devDependencies' : 'dependencies';
     const existing = pkg[key]?.[dep];
     if (existing === undefined) continue;
-    // 保留 workspace 协议（monorepo 内不改为 latest）
-    if (isWorkspace && (existing === 'workspace:*' || String(existing).startsWith('workspace:'))) {
+    // The explicit dependency source is authoritative, including in nested packages.
+    if (String(existing).startsWith('workspace:')) {
       continue;
     }
     if (existing === targetVersion) continue;

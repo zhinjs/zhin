@@ -31,6 +31,8 @@ For production, follow the full flow below and take a backup first.
 
 Commit the production lockfile and never boot from a drifting `latest` resolution. `zhin migrate` targets non-workspace Zhin dependencies at `latest`; it is an explicit upgrade action, not a deployment command.
 
+Explicit `workspace:` dependencies are always preserved, including when migration runs from a workspace child package. A missing `pnpm-workspace.yaml` in the current directory does not turn a local link into a registry dependency. Fix workspace declarations and package names when resolution fails rather than changing the dependency source during migration.
+
 ## Before upgrading
 
 ```bash

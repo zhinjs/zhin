@@ -59,6 +59,9 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 已打包的 `create-zhin-app -y --skip-install`，安装后通过真实 Sandbox WebSocket 验证
 `/hello`、命令热重载、生产重启和 `doctor --live`。CI 的 Linux/Node 24 作业及发布
 workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于离线单测。
+Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migrate`，重新安装依赖并导入本地包，
+确认显式 `workspace:` 链接、自定义脚本、配置和用户文件保留；这验证当前候选包的升级流程，
+不代表所有历史版本或数据库迁移都已验证。
 失败时可设置 `ZHIN_KEEP_ACCEPTANCE_TEMP=1` 保留临时项目排查，成功时自动清理。
 
 `pnpm check:platform-candidates` 验证 QQ 官方与 Telegram 的离线契约，

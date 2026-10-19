@@ -91,6 +91,41 @@ describe('doctor createDefaultConfig', () => {
 });
 
 describe('migrate', () => {
+  it.each(['root', 'nested', 'standalone'])('preserves explicit workspace dependencies for a %s package', location => {
+    const directory = location === 'nested' ? path.join(tmp, 'plugins', 'example') : tmp;
+    fs.mkdirSync(directory, { recursive: true });
+    if (location !== 'standalone') fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    const pkgPath = path.join(directory, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'example',
+      dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/agent': '^1.1.0', 'user-library': '^2.0.0' },
+      devDependencies: { '@zhin.js/core': 'workspace:^', '@zhin.js/ai': 'workspace:~', '@zhin.js/tool': 'workspace:../tool' },
+      scripts: { dev: 'custom-dev', test: 'custom-test' },
+    }));
+
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    expect(pkg.dependencies).toEqual({ 'zhin.js': 'workspace:*', '@zhin.js/agent': 'latest', 'user-library': '^2.0.0' });
+    expect(pkg.devDependencies).toEqual({ '@zhin.js/core': 'workspace:^', '@zhin.js/ai': 'workspace:~', '@zhin.js/tool': 'workspace:../tool' });
+    expect(pkg.scripts).toMatchObject({ dev: 'custom-dev', test: 'custom-test' });
+  });
+
+  it('previews a nested package upgrade without replacing workspace dependencies or writing files', () => {
+    const directory = path.join(tmp, 'plugins', 'example');
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'pnpm-workspace.yaml'), "packages:\n  - 'plugins/*'\n");
+    const pkgPath = path.join(directory, 'package.json');
+    const original = JSON.stringify({ dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/agent': '^1.1.0' } }, null, 4) + '\n';
+    fs.writeFileSync(pkgPath, original);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(upgradePackageJson(pkgPath, { toLatest: true, dryRun: true })).toBe(true);
+    expect(fs.readFileSync(pkgPath, 'utf8')).toBe(original);
+    const output = log.mock.calls.flat().join('\n');
+    expect(output).toContain('@zhin.js/agent: ^1.1.0');
+    expect(output).not.toContain('zhin.js: workspace:');
+  });
+
   it('engines.node 写 >=22.19.0', () => {
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, JSON.stringify({
