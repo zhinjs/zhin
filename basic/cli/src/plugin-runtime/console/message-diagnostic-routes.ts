@@ -11,9 +11,11 @@ export function registerMessageDiagnosticRoutes(options: Readonly<{
   diagnostics?: RuntimeMessageDiagnosticsReader;
 }>): void {
   const { http, base, diagnostics } = options;
-  http.route('GET', `${base}/messages/diagnostics`, (_request, response, url, authScope) => {
-    if (authScope !== 'full') {
-      writeJson(response, 403, { success: false, error: '需要 full scope 才能读取消息诊断' });
+  http.route('GET', `${base}/messages/diagnostics`, (request, response, url, authScope) => {
+    const authorization = request.headers.authorization;
+    const bearer = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+    if (authScope !== 'full' || http.tokenRegistry.resolve(bearer) !== 'full') {
+      writeJson(response, 403, { success: false, error: '需要显式配置并验证 full scope Token 才能读取消息诊断' });
       return;
     }
     if (!diagnostics) {

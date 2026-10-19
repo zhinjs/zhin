@@ -62,3 +62,16 @@ it('makes an unavailable IM runtime explicit', async () => {
   const request = await start();
   expect((await request()).status).toBe(503);
 });
+
+it('rejects tokenless full scope and arbitrary Bearer headers even on an unconfigured Host', async () => {
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+  hosts.push(http);
+  const list = vi.fn(() => []);
+  registerMessageDiagnosticRoutes({ http, base: '/api', diagnostics: { list, get: () => undefined } });
+  const { port } = await http.listen();
+  for (const authorization of [undefined, 'Bearer invented']) {
+    const response = await fetch(`http://127.0.0.1:${port}/api/messages/diagnostics`, { headers: authorization ? { authorization } : {} });
+    expect(response.status).toBe(403);
+  }
+  expect(list).not.toHaveBeenCalled();
+});

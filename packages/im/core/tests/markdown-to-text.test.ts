@@ -1,6 +1,10 @@
 import { markdownToPlainText } from '../src/built/rich-segments/markdown-to-text.js';
 
 describe('readable Markdown fallback', () => {
+  it('preserves unclosed ordinary link prose, including the rest of the line', () => {
+    expect(markdownToPlainText('[管理](unfinished 后续说明\n下一行')).toBe('[管理](unfinished 后续说明\n下一行');
+    expect(markdownToPlainText('前缀 [说明](unfinished 后续文字')).toBe('前缀 [说明](unfinished 后续文字');
+  });
   it('preserves list nesting, task state, ordered lists and table columns', () => {
     expect(markdownToPlainText('# 任务\n- [x] 已完成\n  - [ ] 待验证\n1. 发布\n| 任务 | 状态 |\n| --- | --- |\n| 早报 | 暂停 |'))
       .toBe('任务\n• [x] 已完成\n  • [ ] 待验证\n1. 发布\n| 任务 | 状态 |\n| --- | --- |\n| 早报 | 暂停 |');

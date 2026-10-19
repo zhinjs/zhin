@@ -73,9 +73,11 @@ export class RuntimeMessageDiagnostics implements RuntimeMessageDiagnosticsReade
   begin(generation: number, conversation: ConversationRef, messageId?: string): void {
     const scope = this.#operation.getStore();
     if (!scope?.active) return;
+    const identity = boundedConversation(conversation);
+    if (!identity || (messageId !== undefined && !boundedIdentifier(messageId))) return;
     this.#prune();
     const record: MutableDiagnostic = {
-      id: randomUUID(), generation, conversation: freezeConversation(conversation),
+      id: randomUUID(), generation, conversation: identity,
       ...(messageId ? { messageId } : {}), startedAt: this.#now(), status: 'processing', truncated: false, steps: [], deliveries: [],
     };
     scope.record = record;
@@ -83,6 +85,15 @@ export class RuntimeMessageDiagnostics implements RuntimeMessageDiagnosticsReade
     const capacity = this.options.capacity ?? 500;
     while (this.#records.size > capacity) this.#records.delete(this.#records.keys().next().value!);
     this.step('received', 'accepted');
+  }
+
+  /** Replace provisional bound ingress identity after canonical AdapterIndex resolution. */
+  identify(conversation: ConversationRef): void {
+    const record = this.#current();
+    if (!record) return;
+    const identity = boundedConversation(conversation);
+    if (identity) record.conversation = identity;
+    else record.truncated = true;
   }
 
   step(stage: RuntimeMessageDiagnosticStep['stage'], status: RuntimeMessageDiagnosticStep['status']): void {
@@ -109,8 +120,10 @@ export class RuntimeMessageDiagnostics implements RuntimeMessageDiagnosticsReade
   delivery(generation: number, conversation: ConversationRef, receipt: DeliveryReceipt, rendering?: RuntimeMessageRendering): void {
     const record = this.#current();
     if (!record || record.generation !== generation) return;
+    const identity = boundedConversation(conversation);
+    if (!identity) { record.truncated = true; return; }
     if (record.deliveries.length < MAX_DELIVERIES) record.deliveries = [...record.deliveries, {
-      conversation: freezeConversation(conversation),
+      conversation: identity,
       status: receipt.status,
       ...(receipt.failure ? { failureCode: safeCode(receipt.failure.code), deliveryUnknown: receipt.failure.deliveryUnknown === true } : {}),
       ...(rendering ? { rendering: { forms: [...rendering.forms], fallbacks: [...rendering.fallbacks] } } : {}),
@@ -161,6 +174,20 @@ function freezeConversation(conversation: ConversationRef): ConversationRef {
     ...(conversation.parent ? { parent: Object.freeze({ kind: conversation.parent.kind, id: conversation.parent.id }) } : {}),
     ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}),
   });
+}
+function boundedIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 2048;
+}
+function boundedConversation(conversation: ConversationRef): ConversationRef | undefined {
+  try {
+    const kind = (value: unknown) => value === 'private' || value === 'group' || value === 'channel';
+    if (!conversation || !boundedIdentifier(conversation.endpoint?.id) || !boundedIdentifier(conversation.endpoint?.adapter)
+      || !kind(conversation.kind) || !boundedIdentifier(conversation.id)
+      || (conversation.parent !== undefined && (!kind(conversation.parent?.kind) || !boundedIdentifier(conversation.parent?.id)))
+      || (conversation.threadId !== undefined && !boundedIdentifier(conversation.threadId))) return undefined;
+    const copy = freezeConversation(conversation);
+    return JSON.stringify(copy).length <= 8192 ? copy : undefined;
+  } catch { return undefined; }
 }
 function conversationKey(conversation: ConversationRef): string {
   return JSON.stringify([conversation.endpoint.id, conversation.endpoint.adapter, conversation.kind, conversation.id,

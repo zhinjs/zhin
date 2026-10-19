@@ -18,6 +18,11 @@ describe('disabled manual payloads on text platforms', () => {
     expect(JSON.stringify(projected)).not.toContain('1. 取消任务');
     expect(JSON.stringify(projected)).toContain('当前无可用操作。');
     expect(JSON.stringify(projected)).not.toContain('回复数字');
+    const customHint = applyOutboundInteractivePolicy([{ type: 'keyboard', data: { rows: [[
+      { id: 'cancel', label: '取消任务', payload: 'task:1:cancel', disabled: true },
+    ]], fallback: { hint: '回复数字选择操作', map: { '1': 'task:1:cancel' } } } }], 'text', map => router.rememberFallback(conversation, 1, map));
+    expect(JSON.stringify(customHint)).toContain('当前无可用操作');
+    expect(JSON.stringify(customHint)).not.toContain('回复数字');
   });
 
   it('aligns enabled actions after mixed disabled positions and runtime renumbering', async () => {

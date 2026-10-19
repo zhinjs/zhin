@@ -27,6 +27,9 @@ function readableLinks(text: string, literal: (value: string) => string, depth =
     const close = pairs.get(open);
     if (close === undefined || text[close + 1] !== '(') continue;
     const pairedEnd = pairs.get(close + 1);
+    // An ordinary incomplete link is literal prose; only unfinished media URLs
+    // need suppression so embedded data is not dumped into text fallback.
+    if (pairedEnd === undefined && !image) continue;
     // An incomplete inline image/link must not dump its data URL into plain text.
     const lineEnd = pairedEnd === undefined ? text.indexOf('\n', close + 2) : -1;
     const end = pairedEnd ?? (lineEnd === -1 ? text.length : lineEnd);
