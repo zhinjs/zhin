@@ -14,7 +14,7 @@ describe('self-delivery Plugin Runtime', () => {
     const runtime = new RootRuntime({ projectRoot,
       modules: new NativeDevelopmentModuleRuntime({ projectRoot, watch: false }),
       environment: { name: 'test', mode: 'test', platform: 'node' },
-      config: { plugin: { stateDirectory: './.zhin/self-delivery-issues', terminal: { interactive: false } } },
+      config: { configVersion: 2, plugins: {}, plugin: { stateDirectory: './.zhin/self-delivery-issues', terminal: { interactive: false } } },
       installResources: ({ resources }) => im.install(resources),
     });
     im.attach(runtime.snapshots);

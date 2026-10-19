@@ -27,7 +27,9 @@
     "fs-extra": "^11.4.0",
     "inquirer": "^14.0.2",
     "qrcode": "^1.5.4",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.0",
+    "@zhin.js/runtime": "workspace:*",
+    "@zhin.js/config-file": "workspace:*"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",

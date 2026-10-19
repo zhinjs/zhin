@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-wechat-mp
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the openid)
 Outbound: `send({ conversation, payload })` -> passive reply XML (default) or Customer Service Message API (`replyMode: customer_service`; touser is `conversation.id`)
@@ -56,18 +56,20 @@ merges instance defaults into every endpoint; the protocol receives only one exp
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  wechat-mp:
-    path: /wechat/webhook
-    endpoints:
-      - id: my-wechat-bot
-        appId: "${WECHAT_APP_ID}"
-        appSecret: "${WECHAT_APP_SECRET}"
-        token: "${WECHAT_TOKEN}"
+  wechat-mp: "@zhin.js/adapter-wechat-mp"
+wechat-mp:
+  path: /wechat/webhook
+  endpoints:
+    - id: my-wechat-bot
+      appId: "${WECHAT_APP_ID}"
+      appSecret: "${WECHAT_APP_SECRET}"
+      token: "${WECHAT_TOKEN}"
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-wechat-mp` (`instanceKey: wechat-mp`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-wechat-mp` (`instanceKey: wechat-mp`).
 The Runtime Host (`http`) must already be listening for the Webhook to be reachable.
 
 ### Optional Fields

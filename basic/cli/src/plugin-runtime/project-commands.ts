@@ -1,3 +1,6 @@
+import {join} from 'node:path';
+import {createConfigDocument} from '@zhin.js/config-file';
+import {findConfigFile} from '../utils/config-file.js';
 import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import {
@@ -77,7 +80,9 @@ export class NodeProcessRunner implements ProcessRunner {
 export class ProjectCommands {
   async inspect(root: string): Promise<ProjectGraph> {
     const resolver = await NodePackageResolver.create(root);
-    return new ProjectGraphService(resolver).inspect(root);
+    const file = findConfigFile(root);
+    const document = file ? (await createConfigDocument(join(root, file)).read()).document : {configVersion: 2, plugins: {}};
+    return new ProjectGraphService(resolver).inspect(root, document);
   }
 
   buildPlan(graph: ProjectGraph): ProjectPlan {

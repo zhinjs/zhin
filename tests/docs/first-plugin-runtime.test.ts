@@ -99,7 +99,7 @@ async function dispatch(config, expected, owner, expectedFailure) {
     projectRoot,
     modules: new NativeDevelopmentModuleRuntime({ projectRoot, watch: false }),
     environment: { name: 'test', mode: 'test', platform: 'node' },
-    config,
+    config: { configVersion: 2, plugins: { 'ping-pong': './plugins/ping-pong' }, ...config },
   });
   try {
     if (expectedFailure) {
@@ -124,7 +124,7 @@ async function dispatch(config, expected, owner, expectedFailure) {
   }
 }
 await dispatch(${JSON.stringify(parse(childConfigSource!))}, 'pong!', 'root/ping-pong');
-await dispatch({ plugins: { 'ping-pong': {} } }, 'pong', 'root/ping-pong');
+await dispatch({ configVersion: 2, plugins: { 'ping-pong': './plugins/ping-pong' } }, 'pong', 'root/ping-pong');
 
 // npm's optional peer flag does not make the runtime Feature optional.
 const hostCommand = join(projectRoot, 'node_modules/@zhin.js/command');
@@ -146,7 +146,7 @@ for (const version of [commandPackage.version, '1.1.999']) {
 await rm(hostCommand);
 await rename(duplicateCommand, hostCommand);
 await rm(join(childRoot, 'node_modules'), { recursive: true, force: true });
-await dispatch({ plugins: { 'ping-pong': {} } }, 'pong', 'root/ping-pong');
+await dispatch({ configVersion: 2, plugins: { 'ping-pong': './plugins/ping-pong' } }, 'pong', 'root/ping-pong');
 
 await writeFile(join(childRoot, 'package.json'), JSON.stringify({
   ...pluginPackage, zhin: { ...pluginPackage.zhin, features: [] },

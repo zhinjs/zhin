@@ -14,6 +14,7 @@ export interface ZhinPluginManifest {
   readonly entry: string;
   readonly engine?: string;
   readonly runtime?: 'trusted' | 'isolated';
+  readonly metadata?: Readonly<{ displayName?: string; icon?: string }>;
   /**
    * When true (default), Root plugins receive official Stable Features
    * (`@zhin.js/adapter|command|component`) from the platform/CLI even if they
@@ -147,9 +148,22 @@ function parseZhinManifest(
     entry,
     engine,
     runtime: runtime as 'trusted' | 'isolated' | undefined,
+    metadata: parsePluginMetadata(record.metadata, `${source}.metadata`, issues),
     platformFeatures,
     features: parseReferences(record.features, `${source}.features`, issues, false),
     plugins: parseReferences(record.plugins, `${source}.plugins`, issues, true),
+  });
+}
+
+function parsePluginMetadata(value: unknown, source: string, issues: string[]): ZhinPluginManifest['metadata'] {
+  if (value === undefined) return undefined;
+  const record = asRecord(value, source, issues);
+  for (const key of Object.keys(record)) {
+    if (key !== 'displayName' && key !== 'icon') issues.push(`${source}.${key} is not supported`);
+  }
+  return Object.freeze({
+    ...(record.displayName !== undefined ? { displayName: readString(record, 'displayName', source, issues) } : {}),
+    ...(record.icon !== undefined ? { icon: readString(record, 'icon', source, issues) } : {}),
   });
 }
 

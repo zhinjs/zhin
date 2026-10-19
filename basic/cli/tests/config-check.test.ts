@@ -23,6 +23,7 @@ describe('config check', () => {
 
   it('数据库连接变量缺失时应阻止启动并给出向导修复命令', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
 plugins: {}
 database:
   dialect: pg
@@ -50,6 +51,7 @@ database:
 
   it('检查 schema 外的数据库连接串环境引用', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
 database:
   dialect: pg
   connectionString: postgresql://\${DB_USER}:\${DB_PASSWORD}@localhost/zhin
@@ -64,6 +66,7 @@ database:
 
   it('校验 ai.multimodal.perception（provider 必须是 ai.providers 别名）', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
 ai:
   providers:
     groq:
@@ -90,11 +93,9 @@ ai:
 
   it('应检测废弃的 ai.defaultProvider 与 provider driver/api', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
-plugins:
-  - "@zhin.js/adapter-sandbox"
-endpoints:
-  - context: sandbox
-    name: bot
+configVersion: 2
+plugins: {sandbox: '@zhin.js/adapter-sandbox'}
+sandbox: {}
 ai:
   defaultProvider: openai
   agent:
@@ -120,8 +121,9 @@ ai:
       dependencies: { 'zhin.js': '^4.0.0' },
     }));
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
-plugins:
-  - "@zhin.js/adapter-sandbox"
+configVersion: 2
+plugins: {sandbox: '@zhin.js/adapter-sandbox'}
+sandbox: {}
 ai:
   enabled: true
   agents:
@@ -170,6 +172,7 @@ ai:
 
   it('legacy plugins 数组与顶层 endpoints 报整体迁移错误', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
 plugins:
   - "@zhin.js/adapter-sandbox"
 endpoints:
@@ -179,12 +182,13 @@ endpoints:
 
     const result = await runConfigCheck(tmpDir);
     const codes = result.issues.map((i) => i.code);
-    expect(codes).toContain('plugins.legacy_form');
-    expect(codes).toContain('endpoints.legacy_form');
+    expect(codes).toContain('config.parse_error');
+    expect(result.issues[0]?.message).toMatch(/plugins|configVersion/);
   });
 
   it('新形态 plugins.<instanceKey> 的键与形态校验', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
 plugins:
   "1bad-key": {}
   sandbox: "not-an-object"
@@ -192,14 +196,14 @@ plugins:
 
     const result = await runConfigCheck(tmpDir);
     const codes = result.issues.map((i) => i.code);
-    expect(codes).toContain('plugins.key_invalid');
-    expect(codes).toContain('plugins.entry_invalid');
+    expect(codes).toContain('config.parse_error');
   });
 
   it('新形态 plugins.<instanceKey> 合法配置不误报', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
-plugins:
-  sandbox: {}
+configVersion: 2
+plugins: {sandbox: '@zhin.js/adapter-sandbox'}
+sandbox: {}
 `);
 
     const result = await runConfigCheck(tmpDir);
@@ -209,8 +213,9 @@ plugins:
 
   it('inspectProjectConfig --fix 应写回配置', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
-plugins:
-  sandbox: {}
+configVersion: 2
+plugins: {sandbox: '@zhin.js/adapter-sandbox'}
+sandbox: {}
 database:
   dialect: postgres
 log_level: 1
@@ -251,6 +256,7 @@ describe('config check: deprecated ai.agent keys (#735)', () => {
 
   it('报告可修复的弃用警告', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
 plugins: {}
 ai:
   enabled: true
@@ -275,6 +281,7 @@ describe('config check: deprecated ai.agents.<name>.priority/match', () => {
 
   it('报告可修复的弃用警告，不再报路由错误', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+configVersion: 2
 plugins: {}
 ai:
   enabled: true

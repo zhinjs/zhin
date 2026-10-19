@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { ZhinFeatureManifest, ZhinPluginManifest } from './manifest.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
@@ -124,6 +125,7 @@ function scopeContractChanged(previous: PluginGraphNode, next: PluginGraphNode):
     || previousManifest.entry !== nextManifest.entry
     || previousManifest.runtime !== nextManifest.runtime
     || previousManifest.engine !== nextManifest.engine
+    || !isDeepStrictEqual(previousManifest.metadata, nextManifest.metadata)
   );
 }
 

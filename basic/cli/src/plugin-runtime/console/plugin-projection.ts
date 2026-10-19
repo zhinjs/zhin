@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { readDeclaredPlugins, readPluginLifecycleState } from '../plugin-lifecycle-store.js';
+import { NodePackageResolver, PackageResolutionError } from '@zhin.js/runtime';
+import { readDeclaredPlugins, readProjectPluginLifecycleState } from '../plugin-lifecycle-store.js';
 import { displayConsolePath } from './display-path.js';
 
 export type ConsolePluginFeature = {
@@ -27,6 +28,9 @@ export type ConsolePluginListItem = {
   readonly packageName: string;
   readonly instanceKey: string;
   readonly manageable: boolean;
+  readonly metadata?: NonNullable<PluginNodeSnapshot['metadata']>;
+  readonly displayName?: string;
+  readonly icon?: string;
 };
 
 export function buildPluginListItem(
@@ -42,6 +46,7 @@ export function buildPluginListItem(
     packageName: node.packageName,
     instanceKey: node.instanceKey,
     manageable: false,
+    ...projectMetadata(node.metadata),
   };
 }
 
@@ -56,27 +61,51 @@ export async function buildManagedPluginList(
     .map((node) => buildPluginListItem(node, snapshot, endpoints));
   const loadedByKey = new Map(loaded.map((item) => [item.instanceKey, item]));
   const declared = await readDeclaredPlugins(projectRoot);
-  const lifecycle = await readPluginLifecycleState(lifecycleFile);
+  const lifecycle = await readProjectPluginLifecycleState(projectRoot, lifecycleFile);
   const disabled = new Set(lifecycle.disabled);
-  const managed = declared.map((reference): ConsolePluginListItem => {
+  let packages: Promise<{ resolver: NodePackageResolver; root: Awaited<ReturnType<NodePackageResolver['root']>> }> | undefined;
+  const readMetadata = async (request: string) => {
+    try {
+      packages ??= NodePackageResolver.create(projectRoot).then(async resolver => ({ resolver, root: await resolver.root(projectRoot) }));
+      const { resolver, root } = await packages;
+      const pkg = await resolver.resolve(request, root);
+      return pkg.packageJson.zhin.type === 'plugin' ? pkg.packageJson.zhin.metadata : undefined;
+    } catch (error) {
+      if (error instanceof PackageResolutionError || (error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+  };
+  const managed = await Promise.all(declared.map(async (reference): Promise<ConsolePluginListItem> => {
     const active = loadedByKey.get(reference.instanceKey);
     if (active) {
       loadedByKey.delete(reference.instanceKey);
       return Object.freeze({ ...active, manageable: true });
     }
+    const metadata = await readMetadata(reference.packageName);
+    const description = metadata?.displayName ?? reference.packageName;
     return Object.freeze({
       name: reference.instanceKey,
       status: 'inactive',
       description: disabled.has(reference.instanceKey)
-        ? `${reference.packageName} · 已停用`
-        : `${reference.packageName} · 等待 Host 加载`,
+        ? `${description} · 已停用`
+        : `${description} · 等待 Host 加载`,
       features: Object.freeze([]),
       packageName: reference.packageName,
       instanceKey: reference.instanceKey,
       manageable: true,
+      ...projectMetadata(metadata),
     });
-  });
+  }));
   return Object.freeze([...managed, ...loadedByKey.values()]);
+}
+
+function projectMetadata(metadata: PluginNodeSnapshot['metadata']): Pick<ConsolePluginListItem, 'metadata' | 'displayName' | 'icon'> {
+  if (!metadata || Object.keys(metadata).length === 0) return {};
+  return {
+    metadata: Object.freeze({ ...metadata }),
+    ...(metadata.displayName === undefined ? {} : { displayName: metadata.displayName }),
+    ...(metadata.icon === undefined ? {} : { icon: metadata.icon }),
+  };
 }
 
 const FEATURE_GROUPS: Record<string, { name: string; icon: string; desc: string }> = {

@@ -6,7 +6,7 @@ import { definePlugin, applyConfigPatches, type ConfigDocumentPort, type ConfigD
 import adapterFeature, { AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
 import handlerFeature, { HandlerIndex, handlerFeatureId, defineHandler } from '@zhin.js/handler';
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
-import { RootRuntime, type ModuleRuntime } from '../src/index.js';
+import { RootRuntime, primaryConfigToken, type PrimaryConfig, type ModuleRuntime } from '../src/index.js';
 
 /** Real Runtime/AdapterIndex; only module bytes and the SDK transport are test boundaries. */
 it('retains the untouched adapter transport across config source HMR, patches and failed sibling reload', async () => {
@@ -17,10 +17,10 @@ it('retains the untouched adapter transport across config source HMR, patches an
   const transports = { create: 0, connect: 0, stop: 0 };
   const sinks: EndpointEventSink[] = [];
   const configSource = join(root, 'zhin.config.yml');
-  const config = new ConfigPort(configSource, { plugins: { icqq: { label: 'account-v1' }, reminder: { label: 'max-20' } } });
+  const config = new ConfigPort(configSource, { configVersion: 2, plugins: {"watcher":"@test/watcher","icqq":"@test/icqq","reminder":"@test/reminder"}, icqq: { label: 'account-v1' }, reminder: { label: 'max-20' } });
   try {
     const put = async (path: string, value: unknown) => { await mkdir(dirname(path), { recursive: true }); await writeFile(path, JSON.stringify(value)); };
-    await put(join(root, 'package.json'), { name: '@test/root', dependencies: { '@test/icqq': 'workspace:*', '@test/reminder': 'workspace:*', '@test/watcher': 'workspace:*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [{ package: '@test/watcher', instanceKey: 'watcher' }, { package: '@test/icqq', instanceKey: 'icqq' }, { package: '@test/reminder', instanceKey: 'reminder' }] } });
+    await put(join(root, 'package.json'), { name: '@test/root', dependencies: { '@test/icqq': 'workspace:*', '@test/reminder': 'workspace:*', '@test/watcher': 'workspace:*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [] } });
     for (const [name, feature] of [['icqq', 'adapter'], ['reminder', 'command'], ['watcher', 'handler']]) {
       await put(join(root, `plugins/${name}/package.json`), { name: `@test/${name}`, dependencies: { [`@test/${feature}`]: 'workspace:*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: `@test/${feature}` }] } });
       await put(join(root, `plugins/${name}/schema.json`), { type: 'object', additionalProperties: false, properties: { label: { type: 'string' } } });
@@ -71,7 +71,7 @@ it('retains the untouched adapter transport across config source HMR, patches an
     coordinator = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected restart'); }, onError() {} });
 
     // Console source replacement writes this same watched document boundary.
-    config.writeExternal({ plugins: { icqq: { label: 'account-v1' }, reminder: { label: 'max-21' } } });
+    config.writeExternal({ configVersion: 2, plugins: {"watcher":"@test/watcher","icqq":"@test/icqq","reminder":"@test/reminder"}, icqq: { label: 'account-v1' }, reminder: { label: 'max-21' } });
     await coordinator.enqueue(configSource);
     expect(runtime.snapshot.generation).toBe(2);
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
@@ -85,10 +85,10 @@ it('retains the untouched adapter transport across config source HMR, patches an
     oldLease.release(); await setImmediate();
     expect(transports.stop).toBe(0);
 
-    await runtime.patchConfig([{ op: 'set', path: ['plugins', 'reminder', 'label'], value: 'max-22' }]);
+    await runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'max-22' }]);
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
-    await expect(runtime.patchConfig([{ op: 'set', path: ['plugins', 'reminder', 'label'], value: 'broken' }])).rejects.toThrow('reminder setup failed');
-    await expect(runtime.patchConfig([{ op: 'set', path: ['plugins', 'reminder', 'label'], value: 'activation-broken' }])).rejects.toThrow('reminder activation failed');
+    await expect(runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'broken' }])).rejects.toThrow('reminder setup failed');
+    await expect(runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'activation-broken' }])).rejects.toThrow('reminder activation failed');
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
     expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
     await sinks[0]!.message({ content: 'still alive', conversation: { kind: 'private', id: 'u1' }, sender: { id: 'u1' } });
@@ -99,14 +99,43 @@ it('retains the untouched adapter transport across config source HMR, patches an
     expect(() => client.readProjection()).toThrow(/project/);
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
     expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
+    // Topology edits preserve a shareable, unchanged Adapter and its lifetime.
+    await runtime.patchConfig([
+      { op: 'set', path: ['plugins', 'extra'], value: '@test/reminder' },
+      { op: 'set', path: ['extra'], value: { label: 'extra', commandNamespace: 'extra' } },
+    ]);
+    expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
+    expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
+    await runtime.patchConfig([
+      { op: 'remove', path: ['plugins', 'extra'] },
+      { op: 'remove', path: ['extra'] },
+      { op: 'set', path: ['plugins', 'draft'], value: '@test/reminder' },
+      { op: 'set', path: ['disable_plugins'], value: ['draft'] },
+      { op: 'set', path: ['draft'], value: {} },
+    ]);
+    expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
+    expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
+
+    // A config-only disabled owner and capability edit share one HMR candidate.
+    const beforeMixed = runtime.snapshots.acquire();
+    const primary = (snapshot: typeof runtime.snapshot) => snapshot.resources.get('root' as never)?.get(primaryConfigToken.id) as PrimaryConfig;
+    config.writeExternal({ ...config.document, draft: { label: 'unvalidated draft' } });
+    modules.set(commandSource, { default: defineCommand({ execute: ({ config }) => `${(config as { label: string }).label}:mixed` }) });
+    await Promise.all([coordinator.enqueue(configSource), coordinator.enqueue(commandSource)]);
+    expect(primary(runtime.snapshot).document.draft).toEqual({ label: 'unvalidated draft' });
+    expect(primary(beforeMixed.value).document.draft).toEqual({});
+    expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
+    expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
+    await verifyHandler('max-22:mixed', 'account-v1');
+    beforeMixed.release();
     const reminderIndex = runtime.snapshot.projections.get(commandFeatureId);
 
     // A real account configuration edit must still construct/activate its replacement.
-    await runtime.patchConfig([{ op: 'set', path: ['plugins', 'icqq', 'label'], value: 'account-v2' }]);
+    await runtime.patchConfig([{ op: 'set', path: ['icqq', 'label'], value: 'account-v2' }]);
     expect(runtime.snapshot.projections.get(adapterFeatureId)).not.toBe(firstIndex);
     expect(runtime.snapshot.projections.get(commandFeatureId)).not.toBe(reminderIndex);
-    expect(await (runtime.snapshot.projections.get(commandFeatureId) as CommandIndex).execute('settings')).toBe('max-22:slot');
-    await verifyHandler('max-22:slot', 'account-v2');
+    expect(await (runtime.snapshot.projections.get(commandFeatureId) as CommandIndex).execute('settings')).toBe('max-22:mixed');
+    await verifyHandler('max-22:mixed', 'account-v2');
     expect(transports.create).toBe(2); expect(transports.connect).toBe(2);
     await setImmediate(); expect(transports.stop).toBe(1);
     await runtime.stop(); expect(transports.stop).toBe(2);
@@ -123,7 +152,7 @@ class Modules implements ModuleRuntime {
 class ConfigPort implements ConfigDocumentPort {
   readonly sources: readonly string[];
   private revision = 0;
-  private document: RuntimeConfigDocument;
+  document: RuntimeConfigDocument;
   constructor(source: string, document: RuntimeConfigDocument) { this.sources = [source]; this.document = structuredClone(document); }
   writeExternal(document: RuntimeConfigDocument) { this.document = structuredClone(document); this.revision++; }
   async read(): Promise<ConfigDocumentSnapshot> { return { document: structuredClone(this.document), revision: String(this.revision) }; }

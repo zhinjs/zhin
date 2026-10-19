@@ -9,18 +9,17 @@ import { createRequire } from 'node:module';
 import { platform, release } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validatePolicy, durationMs, aggregateEvents, SCENARIOS, assessScenarios, manifestAdapterMatches, configuredMode } from './report.mjs';
+import { validatePolicy, durationMs, aggregateEvents, SCENARIOS, assessScenarios, configuredMode } from './report.mjs';
 const { values } = parseArgs({ options: { project: { type: 'string' }, policy: { type: 'string' }, report: { type: 'string' }, duration: { type: 'string', default: '30s' }, prepare: { type: 'boolean', default: false }, pid: { type: 'string' } } });
 if (!values.project || !values.policy) throw new Error('--project and --policy required');
 const project = path.resolve(values.project);
-const projectManifest = JSON.parse(await readFile(path.join(project, 'package.json'), 'utf8'));
 const policy = validatePolicy(JSON.parse(await readFile(path.resolve(values.policy), 'utf8')));
 let projectConfig;
 try { projectConfig = parseYaml(await readFile(path.join(project, 'zhin.config.yml'), 'utf8')); } catch { throw new Error('Test project configuration unavailable or invalid'); }
 for (const target of policy.targets) {
   const instanceKey = target.adapter.split('/').at(-1);
-  if (!projectManifest.zhin?.plugins?.some(entry => manifestAdapterMatches(entry, instanceKey, `@zhin.js/adapter-${policy.platform}`))) throw new Error('Policy platform differs from the declared adapter plugin instance');
-  const instance = projectConfig.plugins?.[target.adapter.split('/').at(-1)];
+  if (projectConfig.configVersion !== 2 || projectConfig.plugins?.[instanceKey] !== `@zhin.js/adapter-${policy.platform}` || projectConfig.disable_plugins?.includes(instanceKey)) throw new Error('Policy platform differs from the declared adapter plugin instance');
+  const instance = projectConfig[instanceKey];
   const endpoint = instance?.endpoints?.find(entry => String(entry.id) === target.endpoint);
   if (!instance || !endpoint) throw new Error('Policy target does not match a configured endpoint');
   const merged = { ...instance, ...endpoint };

@@ -1,7 +1,7 @@
 # @zhin.js/runtime
 
-Zhin.js Plugin 树的 Root 生命周期权威。它从静态 package manifest 构建 Plugin instance
-tree，按 owner 组合 schema/config/env，通过 Feature provider 发现 capability，并用
+Zhin.js Plugin 树的 Root 生命周期权威。它从 `configVersion: 2` 应用声明创建 Root 直接实例，
+从包 manifest 读取 Feature/API 契约，按 owner 组合 schema/config/env，通过 Feature provider 发现 capability，并用
 immutable snapshot、CAS generation 与 lease 驱动局部 HMR。
 
 ```ts
@@ -10,17 +10,23 @@ import { EsmModuleRuntime, RootRuntime } from '@zhin.js/runtime';
 const runtime = new RootRuntime({
   projectRoot: process.cwd(),
   modules: new EsmModuleRuntime(),
-  environment: { mode: 'development' },
+  config: { configVersion: 2, plugins: {} },
+  environment: { name: 'development', mode: 'development', platform: 'node' },
 });
 
 await runtime.start();
 ```
 
+`plugins` 是实例名到包引用的映射；业务配置放在顶层同名块，停用实例列在 `disable_plugins`。
+Root 自身配置仍放在 `plugin`。缺少版本标记或 Root 包仍含非空 `zhin.plugins` 时会拒绝启动，
+迁移步骤见 [插件实例声明迁移](../../../docs/migrations/plugin-instance-declarations.md)。
+自定义 `config` resolver 通过 `application` 选项提供同一 v2 应用声明，不从包清单推断实例。
+
 ## 事务边界
 
 - capability 文件变化只 prepare 对应 Slot。
 - child/schema 变化替换最浅受影响 subtree。
-- manifest topology transaction 支持 child/Feature 新增、删除和移动。
+- 应用声明拓扑事务支持 Root 实例新增、删除和重排；Feature 挂载变更仍由包 manifest 驱动。
 - Root/package ABI、lockfile 和未知 importer 变化升级为 process restart。
 - 外部 Root 配置按实际投影分类：子 Plugin 配置只替换对应 subtree，Host 配置请求
   process restart。

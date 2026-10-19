@@ -44,7 +44,7 @@ describe('Console Feature slot HMR', () => {
     modules.set(layoutProvider, { default: layoutFeature });
     modules.setClient(pageSource, artifact('/status-v1.js', 'v1', { title: 'Status v1' }));
     modules.setClient(navSource, artifact('/nav-v1.js', 'v1'));
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -112,7 +112,7 @@ describe('Console Feature slot HMR', () => {
       outDir: join(project, 'dist/client'),
       publicBase: '/assets/client',
     }));
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },

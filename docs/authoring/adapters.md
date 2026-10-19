@@ -78,9 +78,11 @@ export default defineAdapter<{ readonly token: string }>({
 把适配器所在的插件挂载到 Bot 上，并在 `zhin.config.yml` 里填写配置：
 
 ```yaml
+configVersion: 2
 plugins:
-  example:
-    token: ${EXAMPLE_TOKEN}
+  example: '@example/adapter'
+example:
+  token: ${EXAMPLE_TOKEN}
 ```
 
 启动后在 Console 的"渠道与会话"里确认账号在线、消息能收到。完整的挂载方式见 [第一个插件 · 挂载到你的 Bot](../getting-started/first-plugin.md)。

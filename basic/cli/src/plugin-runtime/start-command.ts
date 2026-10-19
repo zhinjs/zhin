@@ -1,4 +1,5 @@
-import { access } from 'node:fs/promises';
+import { assertNoPendingInstanceMigration } from './migrate/instance-declarations.js';
+import { access, readFile } from 'node:fs/promises';
 import { PluginManagementActivity } from '../plugin-management/activity.js';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
@@ -56,7 +57,7 @@ import { RootHost } from './root-host.js';
 import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
 import {
   createPluginLifecycleStore,
-  readPluginLifecycleState,
+  readProjectPluginLifecycleState,
   resolvePluginLifecycleFile,
 } from './plugin-lifecycle-store.js';
 import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
@@ -111,9 +112,12 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 }
 
 async function runProcessStartCommand(options: StartCommandOptions): Promise<void> {
+  await assertNoPendingInstanceMigration(options.root);
   const pluginManagementActivity = new PluginManagementActivity();
   const parsed = parseStartOptions(options.args);
   ensureTypeScriptSpecifierRemap();
+  const packageManifest = JSON.parse(await readFile(join(options.root, 'package.json'), 'utf8'));
+  if (Array.isArray(packageManifest.zhin?.plugins) && packageManifest.zhin.plugins.length) throw new Error('Legacy package.json zhin.plugins detected; run zhin migrate instances');
   const environmentSource = new ProjectEnvironmentFileSource(options.root, parsed.environment);
   const environmentVariables = await environmentSource.read();
   const { config, file: configFile } = await loadProjectConfig(options.root);
@@ -125,8 +129,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const hostEnvironment = createEnvStore(rootPluginId(), runtimeEnvironment, environmentVariables);
   const hostConfig = hostEnvironment.expandMissingAsEmpty((await config.read()).document);
   const pluginLifecycleFile = resolvePluginLifecycleFile(options.root);
-  const pluginLifecycle = await readPluginLifecycleState(pluginLifecycleFile);
-  const pluginLifecycleStore = createPluginLifecycleStore();
+  await readProjectPluginLifecycleState(options.root, pluginLifecycleFile);
+  const pluginLifecycleStore = createPluginLifecycleStore(options.root);
   await applyRuntimeLogLevel(hostConfig);
   const envOverlay = environmentVariables.environments?.[parsed.environment];
   const httpConfig = await resolveHttpConfig(hostConfig, envOverlay, options.root);
@@ -194,7 +198,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     environment: runtimeEnvironment,
     environmentVariables,
     environmentSource,
-    disabledPluginInstanceKeys: pluginLifecycle.disabled,
+    disabledPluginInstanceKeys: [],
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
       context.resources.provide(endpointConfigurationStoreToken, endpointConfigurationStore);

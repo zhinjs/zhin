@@ -22,7 +22,7 @@ pnpm add @zhin.js/adapter-napcat
 - `@zhin.js/adapter` — 约定式 `adapters/napcat/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
 入站：`gateway.receive({ conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）  
 出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`
@@ -36,22 +36,24 @@ pnpm add @zhin.js/adapter-napcat
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  napcat:
-    connection: ws
-    reconnect_interval: 5000
-    heartbeat_interval: 30000
-    endpoints:
-      - id: my-bot
-        url: "ws://127.0.0.1:3001"
-        access_token: "${NAPCAT_TOKEN}"
+  napcat: "@zhin.js/adapter-napcat"
+napcat:
+  connection: ws
+  reconnect_interval: 5000
+  heartbeat_interval: 30000
+  endpoints:
+    - id: my-bot
+      url: "ws://127.0.0.1:3001"
+      access_token: "${NAPCAT_TOKEN}"
 ```
 
 AdapterIndex 会把实例级连接默认值合并进每个 endpoint；协议实现只接收一份展开后的
 endpoint 配置，不会从环境变量推断 endpoint id。
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-napcat`（`instanceKey: napcat`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-napcat`（`instanceKey: napcat`）。
 
 ## 连接方式
 

@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { promisify, isDeepStrictEqual } from 'node:util';
 import { createConfigDocument, JsonConfigDocument } from '@zhin.js/config-file';
 import { loadProjectConfig, packageToInstanceKey } from '@zhin.js/scaffold-wizard';
-import { NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type EnvStore, type RuntimeEnvironment, type ResolvedPackage } from '@zhin.js/runtime';
+import { NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type EnvStore, type RuntimeEnvironment, type ResolvedPackage, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import {
   pluginVerificationToken, rootPluginId, readPluginConfigurationMap,
   type SnapshotReader, type PluginNodeSnapshot,
@@ -17,7 +17,7 @@ import type {
 import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type { PluginManagementActivity } from './activity.js';
-import { readPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-runtime/plugin-lifecycle-store.js';
+import { readProjectPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-runtime/plugin-lifecycle-store.js';
 
 const execute = promisify(execFile);
 type Project = { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; devDependencies?: Record<string, string>; zhin?: { plugins?: { package: string; instanceKey: string }[] } };
@@ -92,9 +92,17 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     });
   }
 
+  async #declaredEntries() {
+    const configuration = this.#configuration();
+    const config = configuration ? (await configuration.document.read()).document : {};
+    const declaration = readApplicationPluginDeclaration(config);
+    if ((await this.#project()).project.zhin?.plugins?.length) throw new Error('Legacy package.json zhin.plugins detected; run zhin migrate instances');
+    return declaration.instances;
+  }
+
   async #resolveTarget(request: string) {
-    const { project } = await this.#project();
-    const entries = project.zhin?.plugins ?? [];
+    const entries = await this.#declaredEntries();
+    if (request.startsWith('root/')) request = request.slice(5);
     const direct = entries.find(entry => entry.instanceKey === request);
     if (direct) return { packageName: direct.package, instanceKey: direct.instanceKey };
     const matches = entries.filter(entry => entry.package === request);
@@ -143,15 +151,12 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     const resolver = await NodePackageResolver.create(this.#root);
     const root = await resolver.root(this.#root);
     if (root.packageJson.zhin.type !== 'plugin') throw new Error('Project root is not a Plugin');
-    const mounted = candidate && !root.packageJson.zhin.plugins.some(entry => entry.instanceKey === candidate.instanceKey)
-      ? Object.freeze({ ...root, packageJson: { ...root.packageJson, zhin: { ...root.packageJson.zhin, plugins: [...root.packageJson.zhin.plugins, { package: candidate.packageName, instanceKey: candidate.instanceKey }] } } }) as ResolvedPackage
-      : root;
-    const lifecycle = await readPluginLifecycleState(this.#options.lifecycleFile ?? resolvePluginLifecycleFile(this.#root));
-    await new ProjectGraphService({
-      root: async () => mounted,
-      resolve: (request, from) => resolver.resolve(request, from),
-      workspacePackages: () => resolver.workspacePackages(),
-    }, { disabledPluginInstanceKeys: lifecycle.disabled }).inspect(this.#root);
+    const configuration = this.#configuration();
+    const document = configuration ? (await configuration.document.read()).document : {};
+    readApplicationPluginDeclaration(document);
+    const next = candidate ? { ...document, plugins: {...document.plugins as Record<string, unknown>, [candidate.instanceKey]: candidate.packageName} } : document;
+    readApplicationPluginDeclaration(next);
+    await new ProjectGraphService(resolver).inspect(this.#root, next);
   }
 
   async #revisions() {
@@ -163,23 +168,23 @@ export class PluginManagementWorkflow implements PluginManagementPort {
 
   async inspect(request: string): Promise<PluginManagementState> {
     const target = await this.#resolveTarget(request);
-    const { project } = await this.#project();
     const installed = await this.#installed(target.packageName);
-    const declared = project.zhin?.plugins?.some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey) ?? false;
+    const declared = (await this.#declaredEntries()).some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey);
     const configuration = this.#configuration();
     const config = configuration ? await configuration.store.readDocument() : {};
     const issues: string[] = installed.error ? [installed.error] : [];
     if (declared && !installed.installed) issues.push('Declared plugin package is not installed');
     let dependencies: PluginManagementState['dependencies'] = 'unchecked';
     let validation: PluginManagementState['validation'] = null;
-    if (installed.plugin && declared) {
+    const lifecycle = await readProjectPluginLifecycleState(this.#root, this.#options.lifecycleFile ?? resolvePluginLifecycleFile(this.#root));
+    const disabled = lifecycle.disabled.includes(target.instanceKey);
+    if (installed.plugin && declared && !disabled) {
       try { await this.#checkDependencies(); dependencies = 'passed'; }
       catch (error) { dependencies = 'failed'; issues.push(errorMessage(error)); }
       const validator = configuration?.store ?? this.#configurationStore(createConfigDocument(join(this.#root, 'zhin.config.yml')));
       validation = await validator.validatePluginConfig(target.instanceKey, config[target.instanceKey] ?? {});
     }
-    const lifecycle = await readPluginLifecycleState(this.#options.lifecycleFile ?? resolvePluginLifecycleFile(this.#root));
-    const disabled = lifecycle.disabled.includes(target.instanceKey);
+
     const lease = this.#options.snapshots?.acquire();
     let node: PluginNodeSnapshot | undefined;
     let generation: number | null = null;
@@ -225,10 +230,14 @@ export class PluginManagementWorkflow implements PluginManagementPort {
   async planInstall(request: string, options: Pick<PluginInstallOptions, 'enable'> = {}): Promise<PluginInstallPlan> {
     const spec = npmSpec(request);
     const state = await this.inspect(spec.name);
+    if (state.declared && state.packageName !== spec.name) throw new Error(`Instance ${state.instanceKey} already references ${state.packageName}; install by the package name or edit its declaration explicitly`);
     const config = this.#configuration();
     const document = config ? await config.store.readDocument() : {};
     const enable = options.enable !== false;
-    return Object.freeze({ packageName: spec.name, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, alreadyInstalled: state.installed, alreadyDeclared: state.declared, restartRequired: enable ? !state.declared || state.restartRequired : state.declared && state.restartRequired, changes: Object.freeze({ packageManifest: !enable || state.declared ? 'unchanged' : 'add-plugin', config: !enable ? 'unchanged' : !config ? 'schema-required' : Object.hasOwn(document, state.instanceKey) ? 'unchanged' : 'create-entry' }), warnings: Object.freeze([...state.issues, ...(enable && !config ? ['Root YAML/JSON 配置文件缺失，请先运行 zhin setup'] : []), '安装/声明不表示业务验证通过；配置就绪后显式 apply 和 verify']) });
+    const raw = config ? (await config.document.read()).document : {};
+    const v2 = readApplicationPluginDeclaration(raw).version === 2;
+    if (v2 && enable) readApplicationPluginDeclaration({...raw, plugins: {...raw.plugins as Record<string, unknown>, [state.instanceKey]: spec.name}});
+    return Object.freeze({ packageName: spec.name, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, alreadyInstalled: state.installed, alreadyDeclared: state.declared, restartRequired: enable ? !state.declared || state.restartRequired : state.declared && state.restartRequired, changes: Object.freeze({ packageManifest: v2 || !enable || state.declared ? 'unchanged' : 'add-plugin', config: !enable ? 'unchanged' : !config ? 'schema-required' : Object.hasOwn(document, state.instanceKey) ? 'unchanged' : 'create-entry' }), warnings: Object.freeze([...state.issues, ...(enable && !config ? ['Root YAML/JSON 配置文件缺失，请先运行 zhin setup'] : []), '安装/声明不表示业务验证通过；配置就绪后显式 apply 和 verify']) });
   }
 
   async #assertRevision(expectedRevision?: string, expectedProjectRevision?: string) {
@@ -308,22 +317,20 @@ export class PluginManagementWorkflow implements PluginManagementPort {
         if ((await this.#revisions()).revision !== previous.revision) throw new Error('Root config changed during installation');
         const target = { packageName: spec.name, instanceKey: plan.instanceKey };
         await this.#checkDependencies(target);
-        const { document, source, project } = await this.#project();
-        const entries = project.zhin?.plugins ?? [];
-        if (entries.some(entry => entry.instanceKey === target.instanceKey && entry.package !== target.packageName)) throw new Error(`Plugin instanceKey collision: ${target.instanceKey}`);
-        if (!entries.some(entry => entry.instanceKey === target.instanceKey && entry.package === target.packageName)) {
-          await (await document.prepare(source, [{ op: 'set', path: ['zhin', 'plugins'], value: [...entries, { package: target.packageName, instanceKey: target.instanceKey }] }])).commit();
-        }
-        completed.push('manifest-declaration');
         const configuration = this.#configuration();
-        if (configuration) {
-          const current = await configuration.document.read();
-          if (previous.revision && current.revision !== previous.revision) throw new Error('Root config changed during installation');
-          const plugins = current.document.plugins as Record<string, unknown> | undefined;
-          if (!plugins || !Object.hasOwn(plugins, target.instanceKey)) await (await configuration.document.prepare(current, [{ op: 'set', path: ['plugins', target.instanceKey], value: {} }])).commit();
-          completed.push('minimum-config');
-        }
+        if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
+        const currentConfig = await configuration.document.read();
+        readApplicationPluginDeclaration(currentConfig.document);
+        if (previous.revision && currentConfig.revision !== previous.revision) throw new Error('Root config changed during installation');
+        const entries = currentConfig.document.plugins as Record<string, unknown>;
+        if (Object.hasOwn(entries, target.instanceKey) && entries[target.instanceKey] !== target.packageName) throw new Error(`Plugin instanceKey collision: ${target.instanceKey}`);
+        const patches: import('@zhin.js/plugin-runtime').ConfigPatch[] = [];
+        if (!Object.hasOwn(entries, target.instanceKey)) patches.push({op: 'set', path: ['plugins', target.instanceKey], value: target.packageName});
+        if (!Object.hasOwn(currentConfig.document, target.instanceKey)) patches.push({op: 'set', path: [target.instanceKey], value: {}});
+        if (patches.length) await (await configuration.document.prepare(currentConfig, patches)).commit();
+        completed.push('application-declaration', 'minimum-config');
       }
+
       const state = await this.inspect(spec.name);
       return Object.freeze({ plan, restartRequired: state.restartRequired, state });
     }, spec.name);
@@ -336,26 +343,49 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return { packageName: state.packageName, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, installed: state.installed, declared: state.declared, hasConfig: Object.hasOwn(config, state.instanceKey), restartRequired: state.declared || state.published };
   }
 
-  async uninstall(request: string, expectedRevision?: string, expectedProjectRevision?: string) {
+  async uninstall(request: string, expectedRevision?: string, expectedProjectRevision?: string, options: {removeDependency?: boolean} = {}) {
     return this.#mutate(async completed => {
       const previous = await this.#assertRevision(expectedRevision, expectedProjectRevision);
       const plan = await this.planUninstall(request);
-      const { project } = await this.#project();
-      const otherInstances = project.zhin?.plugins?.filter(entry => entry.package === plan.packageName && entry.instanceKey !== plan.instanceKey) ?? [];
-      if (plan.installed && !otherInstances.length && !plan.packageName.startsWith('./')) await this.#pnpm(['remove', plan.packageName]);
-      if (plan.installed && !otherInstances.length && !plan.packageName.startsWith('./')) completed.push('dependency-remove');
+      const otherInstances = (await this.#declaredEntries()).filter(entry => entry.package === plan.packageName && entry.instanceKey !== plan.instanceKey);
+      const keepDependency = options.removeDependency === false || otherInstances.length > 0 || await this.#hasOtherPackageReference(plan.packageName, plan.instanceKey);
+      if (plan.installed && !keepDependency && !plan.packageName.startsWith('./')) await this.#pnpm(['remove', plan.packageName]);
+      if (plan.installed && !keepDependency && !plan.packageName.startsWith('./')) completed.push('dependency-remove');
       if ((await this.#revisions()).revision !== previous.revision) throw new Error('Root config changed during uninstall');
-      const { document, source, project: current } = await this.#project();
-      if (plan.declared) await (await document.prepare(source, [{ op: 'set', path: ['zhin', 'plugins'], value: (current.zhin?.plugins ?? []).filter(entry => entry.package !== plan.packageName || entry.instanceKey !== plan.instanceKey) }])).commit();
       const configuration = this.#configuration();
-      if (configuration && plan.hasConfig) {
-        const config = await configuration.document.read();
-        if (config.revision !== previous.revision) throw new Error('Root config changed during uninstall');
-        await (await configuration.document.prepare(config, [{ op: 'remove', path: ['plugins', plan.instanceKey] }])).commit();
-      }
-      completed.push('manifest-unmount', 'config-remove');
-      return { plan, restartRequired: plan.restartRequired };
+      const config = configuration ? await configuration.document.read() : undefined;
+      if (!config || !configuration) throw new Error('Missing configVersion: 2 configuration');
+      const declaration = readApplicationPluginDeclaration(config.document);
+      const patches: import('@zhin.js/plugin-runtime').ConfigPatch[] = [];
+      if (plan.declared) patches.push({op: 'remove', path: ['plugins', plan.instanceKey]});
+      if (plan.hasConfig) patches.push({op: 'remove', path: [plan.instanceKey]});
+      if (declaration.disabled.includes(plan.instanceKey)) patches.push({op: 'set', path: ['disable_plugins'], value: declaration.disabled.filter(key => key !== plan.instanceKey)});
+      if (patches.length) await (await configuration.document.prepare(config, patches)).commit();
+      completed.push('application-unmount', 'config-remove');
+      return {plan, restartRequired: plan.restartRequired};
     }, request);
+  }
+
+  async #hasOtherPackageReference(packageName: string, removedKey: string): Promise<boolean> {
+    const resolver = await NodePackageResolver.create(this.#root);
+    const root = await resolver.root(this.#root);
+    const seen = new Set<string>();
+    const visit = async (pkg: ResolvedPackage, isRoot = false): Promise<boolean> => {
+      if (seen.has(pkg.root)) return false;
+      seen.add(pkg.root);
+      if (pkg.packageJson.zhin.type !== 'plugin') return false;
+      if (pkg.packageJson.zhin.features.some(item => item.package === packageName)) return true;
+      if (!isRoot && [pkg.packageJson.dependencies, pkg.packageJson.optionalDependencies, pkg.packageJson.peerDependencies].some(deps => deps?.[packageName])) return true;
+      const entries = isRoot ? await this.#declaredEntries() : [];
+      for (const entry of entries) {
+        if (isRoot && entry.instanceKey === removedKey) continue;
+        if (entry.package === packageName) return true;
+        try { if (await visit(await resolver.resolve(entry.package, pkg))) return true; }
+        catch { return true; } // Unresolved references cannot prove dependency removal is safe.
+      }
+      return false;
+    };
+    return visit(root, true);
   }
 
   async planUpdate(request: string, targetVersion: string): Promise<PluginUpdatePlan> {

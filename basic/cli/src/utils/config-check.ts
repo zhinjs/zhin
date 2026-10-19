@@ -13,7 +13,7 @@ import {
   migrateAiLegacyConfig,
   validateDatabaseConfig,
 } from '@zhin.js/scaffold-wizard';
-import { expandEnvironmentValue } from '@zhin.js/runtime';
+import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { findConfigFile, readConfig, saveConfig } from './config-file.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
@@ -86,57 +86,18 @@ function checkEndpoints(
 ): void {
   const endpoints = config.endpoints;
   if (endpoints === undefined) return;
-  // legacy 顶层 endpoints 数组已废弃：Endpoint 收敛到 plugins.<适配器实例>.endpoints
+  // legacy 顶层 endpoints 数组已废弃：Endpoint 收敛到 <适配器实例>.endpoints
   pushIssue(issues, {
     severity: 'error',
     code: 'endpoints.legacy_form',
     path: 'endpoints',
-    message: '顶层 endpoints 数组已废弃（legacy 形态）。Endpoint 配置收敛到 plugins.<适配器实例>.endpoints；请运行 `zhin migrate` 迁移',
+    message: '顶层 endpoints 数组已废弃（legacy 形态）。Endpoint 配置收敛到 <适配器实例>.endpoints；请按 v2 实例配置手动迁移',
   });
 }
 
 function checkPlugins(config: Record<string, unknown>, issues: ConfigIssue[]): void {
-  const raw = config.plugins;
-  if (raw === undefined) return;
-  if (Array.isArray(raw)) {
-    // legacy 形态：plugins 字符串数组已废弃，整体需迁移
-    pushIssue(issues, {
-      severity: 'error',
-      code: 'plugins.legacy_form',
-      path: 'plugins',
-      message: 'plugins 数组形态已废弃（legacy）。Plugin Runtime 使用 plugins.<instanceKey> 对象形态；请运行 `zhin migrate` 迁移',
-    });
-    return;
-  }
-  if (!raw || typeof raw !== 'object') {
-    pushIssue(issues, {
-      severity: 'error',
-      code: 'plugins.invalid',
-      path: 'plugins',
-      message: 'plugins 必须是对象（plugins.<instanceKey> 形态）',
-    });
-    return;
-  }
-  // 新形态：合法键校验（与 config-composer 的 plugins 对象 Schema 对齐）
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!/^[a-zA-Z][a-zA-Z0-9._-]*$/.test(key)) {
-      pushIssue(issues, {
-        severity: 'error',
-        code: 'plugins.key_invalid',
-        path: `plugins.${key}`,
-        message: `plugins 键名 ${JSON.stringify(key)} 非法（须为 instanceKey，字母开头，字母/数字/._-）`,
-      });
-      continue;
-    }
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      pushIssue(issues, {
-        severity: 'error',
-        code: 'plugins.entry_invalid',
-        path: `plugins.${key}`,
-        message: `plugins.${key} 必须是对象（插件实例配置）`,
-      });
-    }
-  }
+  try { readApplicationPluginDeclaration(config); }
+  catch (error) { pushIssue(issues, {severity: 'error', code: 'plugins.invalid', path: 'plugins', message: error instanceof Error ? error.message : String(error)}); }
 }
 function checkLogLevel(config: Record<string, unknown>, issues: ConfigIssue[]): void {
   if (!('log_level' in config)) return;
@@ -461,6 +422,11 @@ export async function runConfigCheck(
   const aiUtils = loadAiConfigUtils(cwd);
 
   checkPlugins(config, issues);
+  const packageFile = path.join(cwd, 'package.json');
+  if (await fs.pathExists(packageFile)) {
+    const manifest = await fs.readJson(packageFile);
+    if (Array.isArray(manifest.zhin?.plugins) && manifest.zhin.plugins.length) pushIssue(issues, {severity: 'error', code: 'plugins.legacy_manifest', path: 'package.json#zhin.plugins', message: '旧插件挂载声明不再参与运行；请运行 zhin migrate instances'});
+  }
   checkLogLevel(config, issues);
   checkDatabase(config, issues, env);
   checkEndpoints(config, issues);
@@ -552,7 +518,7 @@ export async function inspectProjectConfig(
   if (options.fix && result.configFile && Object.keys(result.config).length > 0) {
     const { config: fixed, fixes } = applyConfigFixes(result.config, cwd);
     if (fixes.length > 0) {
-      await saveConfig(path.join(cwd, result.configFile), fixed);
+      await saveConfig(path.join(cwd, result.configFile), fixed, result.config);
       fixesApplied.push(...fixes);
       result = await runConfigCheck(cwd, env);
     }

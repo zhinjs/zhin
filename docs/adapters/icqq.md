@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3304dc742a852301 -->
+<!-- sync-adapter-docs:sha256=fa335f39204188ab -->
 
 # @zhin.js/adapter-icqq
 
@@ -53,25 +53,29 @@ pnpm add @icqqjs/qqsign
 ## 配置（Plugin Runtime）
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    master: "1659488338"        # 必填，顶层共享（/approve 与 master 角色）
-    autoReconnect: true
-    endpoints:
-      - id: "${ICQQ_ACCOUNT}"   # QQ 号
-        # password: "${ICQQ_PASSWORD}"  # 可选；不填则扫码登录
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  master: "1659488338" # 必填，顶层共享（/approve 与 master 角色）
+  autoReconnect: true
+  endpoints:
+    - id: "${ICQQ_ACCOUNT}" # QQ 号
+      # password: "${ICQQ_PASSWORD}"  # 可选；不填则扫码登录
 ```
 
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
 ```yaml
+configVersion: 2
 plugins:
-  icqq:
-    master: "1659488338"
-    endpoints:
-      - id: "${ICQQ_ACCOUNT}"
-      - id: "${ICQQ_ACCOUNT_2}"
-      - id: "${ICQQ_ACCOUNT_3}"
+  icqq: "@zhin.js/adapter-icqq"
+icqq:
+  master: "1659488338"
+  endpoints:
+    - id: "${ICQQ_ACCOUNT}"
+    - id: "${ICQQ_ACCOUNT_2}"
+    - id: "${ICQQ_ACCOUNT_3}"
 ```
 
 `AdapterIndex` 会先合并插件实例默认值与 endpoint 覆盖值，再把一份完整配置交给

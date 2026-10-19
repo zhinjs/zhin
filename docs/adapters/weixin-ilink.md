@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=9f92255a565da1cf -->
+<!-- sync-adapter-docs:sha256=92b66088ffc50b44 -->
 
 # @zhin.js/adapter-weixin-ilink
 
@@ -35,15 +35,17 @@ tier: Experimental
 ## 最小配置
 
 ```yaml
+configVersion: 2
 plugins:
-  weixin-ilink:
-    # botAgent: "Zhin.js/1.0.0"
-    # longPollTimeoutMs: 35000
-    # baseUrl: https://ilinkai.weixin.qq.com
-    # dataDir: data/weixin-ilink
-    endpoints:
-      - id: my-wechat
-        # botToken: "..."                 # 可选；不填则读取状态文件或扫码
+  weixin-ilink: "@zhin.js/adapter-weixin-ilink"
+weixin-ilink:
+  # botAgent: "Zhin.js/1.0.0"
+  # longPollTimeoutMs: 35000
+  # baseUrl: https://ilinkai.weixin.qq.com
+  # dataDir: data/weixin-ilink
+  endpoints:
+    - id: my-wechat
+      # botToken: "..."                 # 可选；不填则读取状态文件或扫码
 ```
 
 `AdapterIndex` 会把实例默认值与 endpoint 覆盖值合并后再调用 adapter。协议层只接受这份

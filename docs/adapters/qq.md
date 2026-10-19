@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=747c5cb7864cabcd -->
+<!-- sync-adapter-docs:sha256=ef0c7e8d1a530071 -->
 
 # @zhin.js/adapter-qq
 
@@ -36,7 +36,7 @@ pnpm add @zhin.js/adapter-qq
 - `@zhin.js/adapter` — 约定式 `adapters/qq/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（WebSocket 路径）
 
 入站：`gateway.receive({ conversation, message, content, sender, metadata })`（ConversationRef 结构化寻址）  
@@ -55,15 +55,17 @@ pnpm add @zhin.js/adapter-qq
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  qq:
-    # mode: websocket   # 默认
-    endpoints:
-      - id: my-qq-bot
-        appid: ${QQ_APPID}
-        secret: ${QQ_SECRET}
-        # botKind / intents 可由向导写入；`qq endpoint add` 扫码后会追问公域/私域再写入
+  qq: "@zhin.js/adapter-qq"
+qq:
+  # mode: websocket   # 默认
+  endpoints:
+    - id: my-qq-bot
+      appid: ${QQ_APPID}
+      secret: ${QQ_SECRET}
+      # botKind / intents 可由向导写入；`qq endpoint add` 扫码后会追问公域/私域再写入
 ```
 
 ### botKind 与 intents
@@ -82,35 +84,37 @@ WebSocket Identify 的 `intents` **必须与开放平台已开通的权限一致
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
 ```yaml
+configVersion: 2
 plugins:
-  qq:
-    mode: websocket
-    endpoints:
-      - id: main-bot
-        appid: ${QQ_APPID}
-        secret: ${QQ_SECRET}
-        botKind: public
-        intents:
-          - GROUP_AND_C2C_EVENT
-          - GROUP_MEMBER
-          - GUILDS
-          - GUILD_MEMBERS
-          - DIRECT_MESSAGE
-          - PUBLIC_GUILD_MESSAGES
-      - id: private-bot
-        appid: ${QQ_APPID_2}
-        secret: ${QQ_SECRET_2}
-        botKind: private
-        intents:
-          - GROUP_AND_C2C_EVENT
-          - GROUP_MEMBER
-          - GUILDS
-          - GUILD_MEMBERS
-          - DIRECT_MESSAGE
-          - GUILD_MESSAGES
+  qq: "@zhin.js/adapter-qq"
+qq:
+  mode: websocket
+  endpoints:
+    - id: main-bot
+      appid: ${QQ_APPID}
+      secret: ${QQ_SECRET}
+      botKind: public
+      intents:
+        - GROUP_AND_C2C_EVENT
+        - GROUP_MEMBER
+        - GUILDS
+        - GUILD_MEMBERS
+        - DIRECT_MESSAGE
+        - PUBLIC_GUILD_MESSAGES
+    - id: private-bot
+      appid: ${QQ_APPID_2}
+      secret: ${QQ_SECRET_2}
+      botKind: private
+      intents:
+        - GROUP_AND_C2C_EVENT
+        - GROUP_MEMBER
+        - GUILDS
+        - GUILD_MEMBERS
+        - DIRECT_MESSAGE
+        - GUILD_MESSAGES
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-qq`（`instanceKey: qq`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-qq`（`instanceKey: qq`）。
 
 ## Endpoint 管理命令
 
@@ -118,7 +122,7 @@ plugins:
 
 | 命令 | 说明 |
 |------|------|
-| `qq endpoint add [name]` | 手机 QQ 扫码绑定 → **追问公域/私域** → 一次性写入 `.env` + `plugins.qq.endpoints`（重启生效） |
+| `qq endpoint add [name]` | 手机 QQ 扫码绑定 → **追问公域/私域** → 一次性写入 `.env` + `qq.endpoints`（重启生效） |
 | `qq endpoint cancel` | 取消进行中的扫码绑定或待确认的公域/私域选择 |
 | `qq endpoint list` | 列出运行中与配置中的 endpoints |
 | `qq endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |

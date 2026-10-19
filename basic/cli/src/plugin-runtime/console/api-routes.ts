@@ -56,7 +56,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     eventHub,
     snapshots,
     pluginLifecycleFile = resolvePluginLifecycleFile(projectRoot),
-    pluginLifecycleStore = createPluginLifecycleStore(),
+    pluginLifecycleStore = createPluginLifecycleStore(projectRoot),
     configuration,
   } = options;
   const base = normalizeBase(apiBase);

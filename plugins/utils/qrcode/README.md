@@ -10,11 +10,13 @@ pnpm exec zhin install @zhin.js/plugin-qrcode
 
 ## Usage
 
-Run the installation command from your application directory. It installs the package and mounts the `qrcode` instance in `package.json#zhin.plugins`. The corresponding `zhin.config.yml` node is:
+Run the installation command from your application directory. It installs the package and mounts the `qrcode` instance in 主配置 `plugins` 映射. The corresponding `zhin.config.yml` node is:
 
 ```yaml
+configVersion: 2
 plugins:
-  qrcode: {}
+  qrcode: "@zhin.js/plugin-qrcode"
+qrcode: {}
 ```
 
 ## Configuration

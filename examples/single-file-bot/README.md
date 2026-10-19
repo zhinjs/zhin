@@ -45,7 +45,7 @@ pnpm dev          # = zhin runtime start
 ## 它是怎么工作的
 
 - `package.json#zhin.entry` → `./bot.ts`，`zhin runtime start` 加载默认导出的 `definePlugin`
-- `zhin.plugins` 挂 `@zhin.js/adapter-sandbox`（可选再挂真实平台，如 `@zhin.js/adapter-icqq`）
+- 主配置 `plugins` 声明 `@zhin.js/adapter-sandbox`（可选再挂真实平台，如 `@zhin.js/adapter-icqq`）
 - `setup()` 里 `addCommand('hello', …)` 与 `commands/` 目录发现进**同一个** `CommandIndex`（冲突检查、generation 事务一致）
 
 ## 什么时候该升级成目录布局

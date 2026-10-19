@@ -63,19 +63,6 @@
         "api": "^1.0.0"
       }
     ],
-    "plugins": [
-      {
-        "package": "@zhin.js/adapter-sandbox",
-        "instanceKey": "sandbox"
-      },
-      {
-        "package": "@zhin.js/adapter-napcat",
-        "instanceKey": "napcat"
-      },
-      {
-        "package": "@zhin.js/adapter-kook",
-        "instanceKey": "kook"
-      }
-    ]
+    "plugins": []
   }
 }

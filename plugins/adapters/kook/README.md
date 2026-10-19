@@ -23,7 +23,7 @@ pnpm add @zhin.js/adapter-kook
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — Webhook 模式 POST 路由（WebSocket 不需要）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 - **WebSocket 路径无需** `@zhin.js/host-http` / `@zhin.js/host-router`
 
 入站：`gateway.receive({ conversation, message, content, sender, metadata })`（ConversationRef：`channel` 频道消息带 guild `parent`，`private` 私聊）  
@@ -44,16 +44,18 @@ pnpm add @zhin.js/adapter-kook
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  kook:
-    # connection: websocket   # 默认
-    endpoints:
-      - id: my-kook-bot
-        token: ${KOOK_TOKEN}
+  kook: "@zhin.js/adapter-kook"
+kook:
+  # connection: websocket   # 默认
+  endpoints:
+    - id: my-kook-bot
+      token: ${KOOK_TOKEN}
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-kook`（`instanceKey: kook`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-kook`（`instanceKey: kook`）。
 
 ## 环境变量
 
@@ -68,15 +70,17 @@ plugins:
 在 KOOK 开发者后台选择 **WebHook** 连接模式，Callback URL 指向 Host 暴露的公网地址（建议在 URL 加 `?compress=0` 便于调试）。
 
 ```yaml
+configVersion: 2
 plugins:
-  kook:
-    connection: webhook
-    webhookPath: /kook/webhook
-    endpoints:
-      - id: my-kook-bot
-        token: ${KOOK_TOKEN}
-        verify_token: ${KOOK_VERIFY_TOKEN}
-        # encrypt_key: ${KOOK_ENCRYPT_KEY}   # 启用消息加密时必填
+  kook: "@zhin.js/adapter-kook"
+kook:
+  connection: webhook
+  webhookPath: /kook/webhook
+  endpoints:
+    - id: my-kook-bot
+      token: ${KOOK_TOKEN}
+      verify_token: ${KOOK_VERIFY_TOKEN}
+      # encrypt_key: ${KOOK_ENCRYPT_KEY}   # 启用消息加密时必填
 ```
 
 Host 需注入 `httpHostToken`。Challenge（`type: 255`）会校验 `verify_token` 并回显 `challenge`；普通事件经 `gateway.receive` 入站，出站仍走 KOOK HTTP API。

@@ -55,23 +55,27 @@ The outbound wire only does JSON wrapping; the old `segment-mapper` (canonical s
 
 ## Configuration
 
-**Recommended (consistent with [minimal-bot](/getting-started/))**: `plugins.sandbox.endpoints: []` creates the stable default endpoint `sandbox-bot` when the plugin starts.
+**Recommended (consistent with [minimal-bot](/getting-started/))**: `sandbox.endpoints: []` creates the stable default endpoint `sandbox-bot` when the plugin starts.
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  sandbox:
-    endpoints: []
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints: []
 ```
 
 Optional: if you want a **fixed-name** offline placeholder bot to appear in the bot list on startup, configure it explicitly:
 
 ```yaml
+configVersion: 2
 plugins:
-  sandbox:
-    endpoints:
-      - id: sandbox-bot
-        owner: sandbox-user
+  sandbox: "@zhin.js/adapter-sandbox"
+sandbox:
+  endpoints:
+    - id: sandbox-bot
+      owner: sandbox-user
 ```
 
 ## Usage

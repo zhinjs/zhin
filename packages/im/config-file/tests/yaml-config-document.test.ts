@@ -174,7 +174,7 @@ plugins: {}
 
 describe('RootRuntime with YamlConfigDocument', () => {
   it('commits valid patches with the generation and leaves failed candidates untouched', async () => {
-    const project = await createProject('plugins:\n  child:\n    label: v1\n');
+    const project = await createProject('configVersion: 2\nplugins:\n  child: "@test/child"\nchild:\n  label: v1\n');
     const file = join(project, 'config.yml');
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
@@ -191,17 +191,17 @@ describe('RootRuntime with YamlConfigDocument', () => {
     await runtime.start();
 
     const committed = await runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 'v2',
+      op: 'set', path: ['child', 'label'], value: 'v2',
     }]);
     expect(committed.generation).toBe(2);
     expect(await readFile(file, 'utf8')).toContain('label: v2');
     const stableSource = await readFile(file, 'utf8');
 
     await expect(runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 42,
+      op: 'set', path: ['child', 'label'], value: 42,
     }])).rejects.toBeInstanceOf(ConfigValidationError);
     await expect(runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 'broken',
+      op: 'set', path: ['child', 'label'], value: 'broken',
     }])).rejects.toThrow('shadow setup failed');
 
     expect(runtime.snapshot).toBe(committed);
@@ -210,7 +210,7 @@ describe('RootRuntime with YamlConfigDocument', () => {
   });
 
   it('persists an explicit schema default without publishing an empty generation', async () => {
-    const project = await createProject('plugin: {}\nplugins:\n  child: {}\n');
+    const project = await createProject('configVersion: 2\nplugin: {}\nplugins:\n  child: "@test/child"\nchild: {}\n');
     const file = join(project, 'config.yml');
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
@@ -221,7 +221,7 @@ describe('RootRuntime with YamlConfigDocument', () => {
     const started = await runtime.start();
 
     const result = await runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 'v1',
+      op: 'set', path: ['child', 'label'], value: 'v1',
     }]);
 
     expect(result).toBe(started);
@@ -268,7 +268,7 @@ async function createProject(config: string): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [{ package: '@test/child', instanceKey: 'child' }],
+      plugins: [],
     },
   });
   await writeJson(join(root, 'schema.json'), {

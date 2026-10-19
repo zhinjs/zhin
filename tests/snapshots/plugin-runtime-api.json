@@ -67,6 +67,7 @@
     "export * from './start-command.js';"
   ],
   "cli/runtime/migrate": [
+    "export * from './instance-declarations.js';",
     "export * from './legacy-command-migrator.js';",
     "export * from './package-cutover.js';",
     "export * from './readiness.js';",
@@ -90,7 +91,8 @@
     "export * from './config-file-document.js';",
     "export * from './create-config-document.js';",
     "export * from './json-config-document.js';",
-    "export * from './yaml-config-document.js';"
+    "export * from './yaml-config-document.js';",
+    "export{readSourcePluginOrder}from './ordered-config-source.js';"
   ],
   "console-contract": [
     "export * from './layout.js';",
@@ -242,6 +244,7 @@
     "export{default}from './provider.js';"
   ],
   "runtime": [
+    "export * from './application-plugin-declaration.js';",
     "export * from './config-composer.js';",
     "export * from './config-patch-planner.js';",
     "export * from './environment-store.js';",

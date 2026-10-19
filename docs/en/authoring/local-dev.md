@@ -72,7 +72,7 @@ pnpm install
 # New plugin: plugins/utils/my-plugin (zhin.js and @zhin.js/* as "workspace:*")
 # Test bot: copy examples/minimal-bot to examples/my-bot, add
 #   "@zhin.js/plugin-my-plugin": "workspace:*"
-# and declare it in package.json zhin.plugins and zhin.config.yml
+# and declare it in the plugins map in zhin.config.yml
 pnpm install
 pnpm build
 cd examples/my-bot && pnpm exec zhin runtime start --once
@@ -112,15 +112,15 @@ The repo script `pnpm zhin:local link/unlink <project>` still works and shares t
 - **Writes tarball overrides** (`file:./.zhin-local/packs/*.tgz`), not `link:` — unlike the hand-written `link:` fallback in the table; after source changes you must run `link` again to rebuild and refresh (idempotent);
 - For `pnpm zhin:local`, relative paths resolve from the **caller's directory** (pnpm's `INIT_CWD`), not the repo root; `zhin dev link` simply uses the current directory (or `--project`) as the project;
 - Backups and tarballs live in the project's `.zhin-local/`; `link` adds it to the project's `.gitignore` automatically (created if missing, never duplicated); `unlink` reverts it: restored exactly if untouched, deleted if `link` created it, otherwise only that line is removed;
-- Besides dependencies, zhin packages declared in `zhin.plugins` but missing from dependencies are switched too when available locally, with a warning to add the dependency; `@zhin.js/*` packages **not** in this repo stay on npm with a warning;
-- The command refuses with a clear message when: the target is inside the zhin repo, dependencies and `zhin.plugins` contain no `zhin.js` / `@zhin.js/*` from this repo, `package.json`/`pnpm-lock.yaml` have uncommitted changes on first link, zhin-related `pnpm.overrides` already exist, `.zhin-local/` exists without `state.json`, or `package.json` was edited after linking (blocks both refresh and `unlink`; to discard those edits run `zhin dev unlink --force`, which lists the discarded lines first);
+- Besides dependencies, zhin packages declared in the main configuration `plugins` map but missing from dependencies are switched too when available locally, with a warning to add the dependency; `@zhin.js/*` packages **not** in this repo stay on npm with a warning;
+- The command refuses with a clear message when: the target is inside the zhin repo, dependencies and the main configuration `plugins` map contain no `zhin.js` / `@zhin.js/*` from this repo, `package.json`/`pnpm-lock.yaml` have uncommitted changes on first link, zhin-related `pnpm.overrides` already exist, `.zhin-local/` exists without `state.json`, or `package.json` was edited after linking (blocks both refresh and `unlink`; to discard those edits run `zhin dev unlink --force`, which lists the discarded lines first);
 - Every switched zhin package comes from the same packed build, so section 1's duplicate-copy error cannot occur.
 
 If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same checkout), but cover **every** zhin package in the project's closure (including indirect ones like `@zhin.js/runtime`).
 
 Run `pnpm install` afterwards and use the commands from section 1 to confirm each package has a single resolved path.
 
-To temporarily disable a plugin, remove its `package.json` dependency, its `zhin.plugins` entry and its `plugins.<instanceKey>` config in `zhin.config.yml` (otherwise you get `/plugins must NOT have additional properties`); you can keep the config commented out for later.
+To temporarily disable an instance, add its alias to `disable_plugins`. Keep its package dependency, `plugins` mapping and top-level business configuration. Removing a declaration deletes the instance; disabling does not uninstall it.
 
 ## 5. Ports and clean exit
 

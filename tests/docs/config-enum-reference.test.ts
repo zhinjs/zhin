@@ -178,10 +178,10 @@ describe('source-owned configuration enums', () => {
       'docs/en/configuration/generated.md',
     ]) {
       const generated = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
-      expect(generated).toContain('`plugins.activity-feedback.defaults.phases.queued`');
-      expect(generated).toContain('`plugins.activity-feedback.defaults.phases.active.private.type`');
-      expect(generated).toContain('`plugins.activity-feedback.platforms.<platform>.phases.active.private.type`');
-      expect(generated).toContain('`plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type`');
+      expect(generated).toContain('`activity-feedback.defaults.phases.queued`');
+      expect(generated).toContain('`activity-feedback.defaults.phases.active.private.type`');
+      expect(generated).toContain('`activity-feedback.platforms.<platform>.phases.active.private.type`');
+      expect(generated).toContain('`activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type`');
       expect(generated).toContain('"reaction"');
       expect(generated).toContain('"none"');
     }

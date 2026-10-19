@@ -19,7 +19,7 @@ import {
 import { ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 import { formatEnvValue } from './env.js';
 
-/** 一个待挂载的子插件实例（package.json zhin.plugins 清单 + zhin.config plugins.<instanceKey> 配置） */
+/** 一个待挂载的子插件实例（主配置 plugins 包映射 + 顶层同名业务配置） */
 export interface AdapterPluginInstance {
   /** 适配器/插件包名，如 @zhin.js/adapter-sandbox */
   package: string;
@@ -570,7 +570,7 @@ export function collectAdapterPluginConfigs(result: AdapterSetupResult): Record<
 }
 
 /**
- * 汇总适配器实例为 package.json `zhin.plugins` 清单条目
+ * 汇总适配器实例的包引用与实例身份（供预览和依赖诊断）
  */
 export function collectAdapterPluginManifest(result: AdapterSetupResult): Array<{ package: string; instanceKey: string }> {
   return result.instances.map((instance) => ({

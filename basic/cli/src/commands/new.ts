@@ -127,8 +127,8 @@ export const newCommand = new Command('new')
         logger.log(`  cd ${name}`);
         logger.log('  pnpm test && pnpm typecheck');
         logger.log('  在 Bot 项目里挂载试用：pnpm add <本插件目录的路径>，再把');
-        logger.log(`    { "package": "${packageName}", "instanceKey": "${name}" }`);
-        logger.log('  加进该 Bot package.json 的 "zhin.plugins" 数组，然后 pnpm dev');
+        logger.log(`    plugins: { ${name}: "${packageName}" }`);
+        logger.log('  在 Bot 主配置设置 configVersion: 2、plugins: { 实例名: 包名 }，然后 pnpm dev');
         logger.log('  发布到 npm：在插件目录执行 pnpm publish（prepack 会自动构建 plugin.js）');
         return;
       }
@@ -143,8 +143,8 @@ export const newCommand = new Command('new')
       logger.success(`✓ 插件包 ${name} 创建成功！`);
       logger.log('');
       logger.log('📝 下一步操作：');
-      logger.log('  1. 在 app 的 package.json 的 "zhin.plugins" 数组中添加：');
-      logger.log(`     { "package": "${packageName}", "instanceKey": "${name}" }`);
+      logger.log('  1. 在 app 主配置的 plugins 映射中添加：');
+      logger.log(`     ${name}: "${packageName}"`);
       logger.log('  2. pnpm dev  # 即 zhin runtime start（约定式插件运行时）');
       logger.log('');
       logger.log('📦 发布到 npm（在项目根）：');
@@ -217,7 +217,7 @@ async function createPluginPackage(
 
   await fs.writeJson(path.join(pluginDir, 'package.json'), packageJson, { spaces: 2 });
 
-  // schema.json：plugins.<instanceKey> 配置的 JSON Schema；适配器带稳定的 endpoint id
+  // schema.json：<instanceKey> 配置的 JSON Schema；适配器带稳定的 endpoint id
   const schemaJson: Record<string, unknown> = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     type: 'object',
@@ -290,7 +290,7 @@ export default definePlugin({
 
 /**
  * 适配器约定插件入口：适配器定义在 adapters/ 目录（defineAdapter），
- * Endpoint 实例配置来自 app 配置 plugins.<instanceKey>（见 schema.json）。
+ * Endpoint 实例配置来自 app 配置 <instanceKey>（见 schema.json）。
  */
 export default definePlugin({
   name: '${pluginName}',
@@ -433,37 +433,18 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;
 
-  const standaloneUse = `先在 Bot 项目里安装本插件（发布前可用本地路径，如 \`pnpm add ../${pluginName}\`；发布后 \`pnpm add ${packageName}\`），再在该 Bot 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加 \`{ "package": "${packageName}", "instanceKey": "${pluginName}" }\`，然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。实例配置（如有）写在 \`zhin.config.yml\` 的 \`plugins.${pluginName}\` 下，结构见 \`schema.json\`。`;
-
-  const readmeUse =
-    options.standalone
-      ? standaloneUse
-      : kind === 'adapter'
-      ? `在 app 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加（\`instanceKey\` 即实例键，可挂载多实例）：
-
-\`\`\`json
-{
-  "zhin": {
-    "plugins": [
-      { "package": "${packageName}", "instanceKey": "${pluginName}" }
-    ]
-  }
-}
-\`\`\`
-
-Endpoint 配置写在 \`zhin.config.yml\` 的 \`plugins.${pluginName}\` 下（结构见 \`schema.json\`）：
+  const standaloneUse = `在 Bot 项目安装本插件：\`pnpm add ${packageName}\`（发布前可用 \`pnpm add ../${pluginName}\` 安装本地目录）。主配置使用以下格式；实例业务配置在顶层同名块，结构见 \`schema.json\`：
 
 \`\`\`yaml
+configVersion: 2
 plugins:
-  ${pluginName}:
-    id: ${pluginName}-bot
-    token: your-token-here
+  ${pluginName}: '${packageName}'
+disable_plugins: []
+${pluginName}: {}
 \`\`\`
 
-然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。`
-      : kind === 'service'
-        ? `在 app 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加 \`{ "package": "${packageName}", "instanceKey": "${pluginName}" }\`，然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。实例配置（如有）写在 \`zhin.config.yml\` 的 \`plugins.${pluginName}\` 下，结构见 \`schema.json\`。`
-        : `在 app 的 \`package.json\` 的 \`zhin.plugins\` 数组中添加 \`{ "package": "${packageName}", "instanceKey": "${pluginName}" }\`，然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。聊天中发送 \`${pluginName}\` 或 \`${pluginName}-echo 你好\` 验证命令。`;
+然后 \`pnpm dev\`（即 \`zhin runtime start\`）启动。`;
+  const readmeUse = standaloneUse;
 
   const readmeContent = `# ${packageName}
 
@@ -482,7 +463,7 @@ ${readmeUse}
 ## 目录约定
 
 - \`plugin.ts\`：插件入口（\`definePlugin\`）。\`zhin.entry\` 写的是 \`./plugin.js\`：本地运行时自动回退到 \`plugin.ts\`，npm 包里是构建出的 \`plugin.js\`
-- \`schema.json\`：实例配置（\`plugins.<instanceKey>\`）的 JSON Schema
+- \`schema.json\`：实例配置（\`<instanceKey>\`）的 JSON Schema
 ${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
 
@@ -715,9 +696,9 @@ async function addPluginToApp(pluginName: string, packageName: string, skipInsta
     await fs.writeJson(rootPackageJsonPath, packageJson, { spaces: 2 });
 
     logger.success(`✓ 已将 ${packageName} 添加到 app 的 dependencies`);
-    logger.log('  挂载方式：在 app package.json 的 "zhin.plugins" 数组中添加：');
-    logger.log(`    { "package": "${packageName}", "instanceKey": "${pluginName}" }`);
-    logger.log('  （约定式运行时不再读取 zhin.config.yml 的插件列表，请手动添加挂载项）');
+    logger.log('  挂载方式：在 app 主配置的 plugins 映射中添加：');
+    logger.log(`    ${pluginName}: "${packageName}"`);
+    logger.log('  （主配置需 configVersion: 2；业务配置写顶层同名块）');
 
     if (skipInstall) {
       logger.log('  已跳过依赖安装，稍后在项目根运行 pnpm install');

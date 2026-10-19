@@ -296,6 +296,23 @@
         }
       }
     },
+    "menuKeyword": {
+      "type": ["string", "boolean"],
+      "anyOf": [{ "type": "string" }, { "const": false }],
+      "description": "Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu.",
+      "x-descriptionZh": "内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。"
+    },
+    "menuStyle": {
+      "type": "object", "additionalProperties": false,
+      "description": "Command menu appearance when an HTML renderer is available; plain text fallback remains available.",
+      "x-descriptionZh": "HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。",
+      "properties": {
+        "title": { "type": "string", "description": "Menu title.", "x-descriptionZh": "菜单标题。" },
+        "subtitle": { "type": "string", "description": "Menu subtitle.", "x-descriptionZh": "菜单副标题。" },
+        "accentColor": { "type": "string", "description": "Six-digit hex accent color; invalid values use the renderer default.", "x-descriptionZh": "六位十六进制强调色；无效值使用渲染器默认值。" },
+        "backgroundImage": { "type": "string", "description": "HTTP(S) image or PNG/JPEG/WebP data URL; unsupported values use the renderer default.", "x-descriptionZh": "HTTP(S) 图片或 PNG/JPEG/WebP data URL；不支持的值使用渲染器默认值。" }
+      }
+    },
     "mcp": { "type": "object", "additionalProperties": true, "description": "Expose Bot tools through an MCP Server.", "x-descriptionZh": "把 Bot 工具公开为 MCP Server。" },
     "a2a": { "type": "object", "additionalProperties": true, "description": "A2A Agent Card, remote execution, and Workroom callbacks.", "x-descriptionZh": "A2A Agent Card、远程执行与 Workroom 回调。" },
     "speech": { "type": "object", "additionalProperties": true, "description": "Speech-to-text and text-to-speech Host.", "x-descriptionZh": "语音识别与语音合成 Host。" },

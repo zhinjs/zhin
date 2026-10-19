@@ -28,7 +28,7 @@ export default definePlugin({
 });
 ```
 
-As the bot grows, split it into **child plugins** mounted in `package.json#zhin.plugins`. More: [Plugin model](../concepts/plugin-model.md) · [definePlugin overview](../authoring/define-plugin.md)
+As the bot grows, split it into **child plugins** declared in the main configuration `plugins` map. More: [Plugin model](../concepts/plugin-model.md) · [definePlugin overview](../authoring/define-plugin.md)
 
 ### Convention directories
 
@@ -67,7 +67,7 @@ The most common point of confusion: a Zhin project has **two** places for config
 | `zhin.config.yml` | **How it is configured** (values) | HTTP port, platform credentials, AI models, per-plugin settings |
 | `.env` | **Secrets** | tokens and API keys, referenced from yml as `${HTTP_TOKEN}` |
 
-In `zhin.config.yml`, the Root plugin's settings go under `plugin:` and each child plugin's under `plugins.<instanceKey>:`. More: [Config as data](../concepts/config-as-data.md) · [Configuration](../configuration/index.md)
+In `zhin.config.yml`, the Root plugin's settings go under `plugin:` and each child plugin's under `<instanceKey>:`. More: [Config as data](../concepts/config-as-data.md) · [Configuration](../configuration/index.md)
 
 ### Console
 
