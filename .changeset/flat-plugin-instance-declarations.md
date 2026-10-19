@@ -1,11 +1,47 @@
 ---
-"@zhin.js/plugin-runtime": patch
-"@zhin.js/runtime": patch
-"@zhin.js/config-file": patch
+"@zhin.js/adapter-dingtalk": patch
+"@zhin.js/adapter-discord": patch
+"@zhin.js/adapter-email": patch
+"@zhin.js/adapter-github": patch
+"@zhin.js/adapter-icqq": patch
+"@zhin.js/adapter-kook": patch
+"@zhin.js/adapter-lark": patch
+"@zhin.js/adapter-line": patch
+"@zhin.js/adapter-milky": patch
+"@zhin.js/adapter-napcat": patch
+"@zhin.js/adapter-onebot11": patch
+"@zhin.js/adapter-onebot12": patch
+"@zhin.js/adapter-qq": patch
+"@zhin.js/adapter-sandbox": patch
+"@zhin.js/adapter-satori": patch
+"@zhin.js/adapter-slack": patch
+"@zhin.js/adapter-telegram": patch
+"@zhin.js/adapter-wechat-mp": patch
+"@zhin.js/adapter-wecom": patch
+"@zhin.js/adapter-weixin-ilink": patch
 "@zhin.js/cli": patch
+"@zhin.js/config-file": patch
+"@zhin.js/plugin-60s": patch
+"@zhin.js/plugin-calendar": patch
+"@zhin.js/plugin-code-runner": patch
+"@zhin.js/plugin-content-moderation": patch
+"@zhin.js/plugin-group-suite": patch
+"@zhin.js/plugin-link-poster": patch
+"@zhin.js/plugin-lottery": patch
+"@zhin.js/plugin-music": patch
+"@zhin.js/plugin-qrcode": patch
+"@zhin.js/plugin-reminder": patch
+"@zhin.js/plugin-repeater": patch
+"@zhin.js/plugin-rss": patch
+"@zhin.js/plugin-runtime": patch
+"@zhin.js/plugin-short-url": patch
+"@zhin.js/process-monitor": patch
+"@zhin.js/runtime": patch
 "@zhin.js/scaffold-wizard": patch
-"create-zhin-app": patch
+"@zhin.js/service-activity-feedback": patch
+"@zhin.js/service-typesafe": patch
 "@zhin.js/testing": patch
+"create-zhin-app": patch
 ---
 
 将应用插件装配改为 configVersion: 2：主配置 plugins 映射实例名到包，disable_plugins 控制启停，业务配置使用顶层同名块。package.json 继续保留 features、entry、engine 等包契约，并支持静态 displayName/icon。

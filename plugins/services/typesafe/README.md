@@ -24,7 +24,7 @@ zhin doctor
 
 The wizard keeps your chat model, writes the key to `.env`, installs the plugin manifest entry and starts Skill / Tool recommendations in `shadow` mode. On first setup, Agent selection, memory reranking and automatic approval start `off`. Reconfiguration preserves existing task settings and thresholds. Separate instances use separate key environment variables; an existing explicit key reference is preserved.
 
-For manual configuration, declare the plugin in `package.json`:
+For manual configuration, declare the plugin in `zhin.config.yml`:
 
 ```yaml
 configVersion: 2
