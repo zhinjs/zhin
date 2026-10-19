@@ -203,9 +203,10 @@ export function applyOutboundInteractivePolicy(
   return payload.map((item) => {
     if (!isKeyboardSegment(item)) return item;
     const data = item.data as KeyboardSegmentData;
-    const map = remember?.(effectiveKeyboardFallbackMap(data));
-    const projected = map ? { ...data, fallback: { hint: data.fallback?.hint ?? '请选择（回复数字）：', map } } : data;
-    return { type: 'text', data: { text: renderKeyboardAsText(projected) } };
+    const remembered = remember?.(effectiveKeyboardFallbackMap(data));
+    const map = remembered && typeof remembered === 'object' && !Array.isArray(remembered) ? remembered : undefined;
+    const projected = map ? { ...data, fallback: { hint: data.fallback?.hint ?? '', map } } : data;
+    return { type: 'text', data: { text: renderKeyboardAsText(projected, map) } };
   });
 }
 

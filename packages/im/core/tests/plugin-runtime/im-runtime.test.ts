@@ -116,12 +116,13 @@ function receive(
   im: ImRuntime,
   payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
 ) {
-  const input = payload as { conversation?: { endpoint?: { id?: string } } };
+  const input = payload as { conversation?: { endpoint?: { id?: string; adapter?: string } } };
   return im.endpointEvents.receive(Object.freeze({
     name: 'message.receive',
     payload,
     endpoint: Object.freeze({
       id: (input.conversation?.endpoint?.id ?? 'test-endpoint') as never,
+      adapter: input.conversation?.endpoint?.adapter ?? 'test',
       name: 'test',
     }),
     client: ignoredEndpointEvents,
@@ -3071,6 +3072,109 @@ async function createFixture(
   return { im, store, adapters, adapter, conversationEvents };
 }
 
+describe('per-message operational diagnostics', () => {
+  it('records bound ingress even when AdapterIndex owner resolution fails', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    try {
+      const input = fixtureInput(fixture, 'hello');
+      await expect(receive(fixture.im, { ...input, conversation: { ...input.conversation,
+        endpoint: { id: 'missing-endpoint', adapter: 'memory' } }, message: undefined })).rejects.toThrow();
+      expect(fixture.im.messageDiagnostics.list()[0]).toMatchObject({ status: 'failed',
+        conversation: { endpoint: { id: 'missing-endpoint', adapter: 'memory' } }, steps: [{ stage: 'received', status: 'accepted' }] });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+  it.each(['sent', 'unknown', 'suppressed', 'unsupported'] as const)('records actual %s delivery without changing the successful message feed', async outcome => {
+    const sent: unknown[] = [];
+    const observed: RuntimeMessageEvent[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: outcome === 'suppressed',
+      adapterCapabilities: outcome === 'unsupported' ? ['inbound'] : ['inbound', 'outbound'],
+      commandResult: () => 'PRIVATE-BODY',
+      ...(outcome === 'suppressed' ? { outboundMiddleware: () => undefined } : {}),
+      endpointSend: outcome === 'unknown' ? () => { throw new EndpointDeliveryError('endpoint_timeout', 'SECRET SDK response', 'unknown'); } : undefined,
+    });
+    const unsubscribe = fixture.im.messageEvents.subscribe(event => observed.push(event));
+    try {
+      const input = fixtureInput(fixture, '/gh issue list open');
+      await receive(fixture.im, { ...input, sender: { id: 'alice', name: 'PRIVATE-PROFILE' },
+        message: { conversation: input.conversation, id: 'platform-message' }, metadata: { token: 'SECRET' } });
+      const diagnostics = fixture.im.messageDiagnostics.list({ conversation: input.conversation, messageId: 'platform-message' });
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({ status: 'completed', route: 'command', command: 'gh issue list', dispatchStatus: 'executed' });
+      expect(diagnostics[0].deliveries).toHaveLength(1);
+      expect(diagnostics[0].deliveries[0]).toMatchObject({ conversation: input.conversation,
+        status: outcome === 'unknown' ? 'failed' : outcome,
+        ...(outcome === 'unknown' ? { deliveryUnknown: true, failureCode: 'endpoint_timeout' } : {}),
+      });
+      expect(observed.filter(event => event.direction === 'outbound')).toHaveLength(outcome === 'sent' ? 1 : 0);
+      expect(JSON.stringify(diagnostics)).not.toMatch(/PRIVATE-BODY|PRIVATE-PROFILE|SECRET|open/);
+    } finally { unsubscribe(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each(['prefix', 'denied', 'invalid', 'unmatched', 'middleware'] as const)('explains %s from observed branch facts', async kind => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: kind === 'middleware', restrictCommand: kind === 'denied', validateCommand: kind === 'invalid',
+      ...(kind === 'middleware' ? { inboundMiddleware: () => undefined } : {}),
+    });
+    try {
+      const content = kind === 'prefix' ? 'gh issue list open' : kind === 'unmatched' ? '/not-a-command' : '/gh issue list open';
+      await receive(fixture.im, fixtureInput(fixture, content));
+      const record = fixture.im.messageDiagnostics.list()[0];
+      if (kind === 'prefix') expect(record.steps).toContainEqual(expect.objectContaining({ stage: 'prefix', status: 'mismatch' }));
+      if (kind === 'denied' || kind === 'invalid') expect(record.dispatchStatus).toBe(kind);
+      if (kind === 'unmatched' || kind === 'prefix') expect(record.route).toBe('unmatched');
+      if (kind === 'middleware') {
+        expect(record.route).toBe('middleware');
+        expect(record.steps).toContainEqual(expect.objectContaining({ stage: 'middleware', status: 'stopped' }));
+        expect(record.steps.some(step => step.stage === 'prefix')).toBe(false);
+      }
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('captures a throwing command without recording exception text or fabricating delivery', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: () => { throw new Error('PRIVATE-ERROR'); },
+    });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).rejects.toThrow('PRIVATE-ERROR');
+      const record = fixture.im.messageDiagnostics.list()[0];
+      expect(record.status).toBe('failed');
+      expect(record.deliveries).toEqual([]);
+      expect(record.steps).toContainEqual(expect.objectContaining({ stage: 'dispatch', status: 'started' }));
+      expect(JSON.stringify(record)).not.toContain('PRIVATE-ERROR');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('records agent handoff as routing, and associates explicit cross-conversation replies with the source operation', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, { middleware: false });
+    installRoute(fixture, async message => {
+      await message.$sendTo({ kind: 'private', id: 'other-user' }, 'PRIVATE-BODY');
+      return true;
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, 'unknown input'));
+      const record = fixture.im.messageDiagnostics.list()[0];
+      expect(record).toMatchObject({ route: 'agent', status: 'completed' });
+      expect(record.deliveries[0].conversation).toMatchObject({ kind: 'private', id: 'other-user' });
+      expect(record.conversation.id).toBe('result-room');
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('captures renderer fallback while preserving a real sent receipt', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, adapterSegments: { html: 'image', supported: ['text', 'image'], outboundMedia: ['base64'] },
+      commandResult: () => jsx(Html, { children: jsx('b', { children: 'PRIVATE-BODY' }) }),
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(fixture.im.messageDiagnostics.list()[0].deliveries[0]).toMatchObject({ status: 'sent',
+        rendering: { forms: ['text'], fallbacks: ['renderer_unavailable'] } });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+});
+
 function fixtureInput(fixture: Awaited<ReturnType<typeof createFixture>>, content: string) {
   return { conversation: { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'private' as const, id: 'result-room' }, content, sender: { id: 'alice' } };
 }
@@ -3348,11 +3452,15 @@ describe('IM Runtime inbound origin routing', () => {
 
   it('drops self echoes without dispatching or routing', async () => {
     const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); });
+    const published: RuntimeMessageEvent[] = [];
+    const unsubscribe = f.im.messageEvents.subscribe(event => published.push(event));
     try {
       await expect(receive(f.im, input(f, 'bot-self'))).resolves.toEqual({ matched: false });
       expect(f.executed).not.toHaveBeenCalled();
       expect(f.route).not.toHaveBeenCalled();
-    } finally { await close(f); }
+      expect(f.im.messageDiagnostics.list()[0]).toMatchObject({ status: 'completed', route: 'self_echo', deliveries: [] });
+      expect(published).toEqual([]);
+    } finally { unsubscribe(); await close(f); }
   });
 
   it.each(['peer_bot', 'member'] as const)('does not trigger commands or ingress route for %s messages', async (kind) => {
@@ -3521,6 +3629,8 @@ describe('IM Runtime inbound origin routing', () => {
         expect(await countRecords(f, a!)).toBe(1);
         expect(await countRecords(f, b!)).toBe(1);
         expect(published).toHaveLength(1);
+        expect(f.im.messageDiagnostics.list({ messageId: 'dup-1' }).map(record => record.route)).toEqual(['duplicate', 'agent']);
+        expect(f.im.messageDiagnostics.list({ messageId: 'dup-1' })[0].deliveries).toEqual([]);
       } finally { await close(f); }
     });
 

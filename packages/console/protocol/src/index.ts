@@ -112,6 +112,37 @@ export interface ConsoleMessageEventData extends ConsoleEndpointEventData {
   }>;
 }
 
+/** Bounded process-local processing facts, available only to full-scope operators. */
+export interface ConsoleMessageDiagnostic {
+  readonly id: string;
+  readonly generation: number;
+  readonly conversation: NonNullable<ConsoleMessageEventData['conversation']>;
+  readonly messageId?: string;
+  readonly startedAt: number;
+  readonly endedAt?: number;
+  readonly status: 'processing' | 'completed' | 'failed';
+  /** Steps or deliveries exceeded their bounded per-record retention. */
+  readonly truncated: boolean;
+  /** Agent means handed to the ingress route; it does not prove an Agent turn completed. */
+  readonly route?: 'interaction' | 'middleware' | 'command' | 'agent' | 'unmatched'
+    | 'self_echo' | 'duplicate' | 'bot_origin' | 'dedup_error';
+  readonly command?: string;
+  readonly dispatchStatus?: 'unmatched' | 'invalid' | 'denied' | 'executed';
+  readonly steps: readonly Readonly<{
+    stage: 'received' | 'origin' | 'prefix' | 'middleware' | 'handlers' | 'dispatch' | 'delivery';
+    status: string;
+    at: number;
+  }>[];
+  readonly deliveries: readonly Readonly<{
+    /** Actual destination; a command may explicitly send outside the source conversation. */
+    conversation: NonNullable<ConsoleMessageEventData['conversation']>;
+    status: 'sent' | 'suppressed' | 'unsupported' | 'rejected' | 'failed';
+    failureCode?: string;
+    deliveryUnknown?: boolean;
+    rendering?: ConsoleMessageEventData['rendering'];
+  }>[];
+}
+
 export interface ConsoleEventPayloadMap {
   readonly 'notice.receive': ConsoleNoticeEventData;
   readonly 'request.receive': ConsoleRequestEventData;

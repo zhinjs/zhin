@@ -35,6 +35,8 @@ describe('resolveKeyboardSegments', () => {
     expect(raw).toContain('轮到 X');
     expect(raw).toContain('落子 1-9');
     expect(raw).toContain('1.');
+    expect(raw).not.toContain('2. ✕');
+    expect(raw).toContain('— ✕ (不可用)');
   });
 });
 
@@ -103,6 +105,18 @@ describe('stripInteractiveCommandText / resolvePayloadFromText', () => {
 });
 
 describe('collectKeyboardFallbackMaps', () => {
+  it('retains enabled positions while removing disabled actions and aliases', () => {
+    const rows = [[
+      segment.button({ id: 'a', label: '停用', payload: 'x:s:a', disabled: true }),
+      segment.button({ id: 'b', label: '启用', payload: 'x:s:b' }),
+    ]];
+    expect(collectKeyboardFallbackMaps(segment.keyboard(rows))).toEqual([{ '2': 'x:s:b' }]);
+    expect(collectKeyboardFallbackMaps(segment.keyboard(rows, {
+      fallback: { hint: '选择', map: { '7': 'x:s:a', disabled: 'x:s:a', '9': 'x:s:b', active: 'x:s:b' } },
+    }))).toEqual([{ '9': 'x:s:b', active: 'x:s:b' }]);
+    expect(segment.raw(resolveKeyboardSegments(segment.keyboard(rows), 'text'))).toContain('2. 启用');
+  });
+
   it('显式 fallback.map 优先，无显式时按按钮顺序自动编号', () => {
     const content = [
       segment.text('menu'),

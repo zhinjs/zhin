@@ -10,13 +10,15 @@ import { OutboundRenderer } from './outbound-renderer.js';
 import { projectOutboundPayload, type OutboundProjection } from './outbound-projection.js';
 import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
-import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent } from './message-events.js';
+import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent, type RuntimeMessageRendering } from './message-events.js';
 import { runRuntimeMiddleware } from './runtime-middleware.js';
 import { collectButtonPayloads, type JsxButtonBatch } from './jsx-button-registry.js';
+import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 
 const logger = getLogger('im.outbound');
 
 interface OutboundDeliveryContext {
+  readonly diagnostics?: RuntimeMessageDiagnostics;
   prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
   record(request: SendRequest, receipt: DeliveryReceipt): Promise<void>;
   /** Side-channel correlation ledger for inbound origin; failures never affect the receipt. */
@@ -41,6 +43,17 @@ export class OutboundDeliveryRuntime {
   }
 
   async deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
+    let rendering: RuntimeMessageRendering | undefined;
+    const receipt = await this.#deliver(request, snapshot, value => { rendering = value; });
+    this.context.diagnostics?.delivery(snapshot.generation, request.conversation, receipt, rendering);
+    return receipt;
+  }
+
+  async #deliver(
+    request: SendRequest,
+    snapshot: RuntimeSnapshot,
+    observeRendering: (rendering: RuntimeMessageRendering) => void,
+  ): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
     const jsxCache = new WeakMap<JSXElement, Promise<unknown>>();
     const buttons = this.context.prepareButtons?.(request, snapshot);
@@ -110,6 +123,7 @@ export class OutboundDeliveryRuntime {
               },
             });
             payload = projection.payload;
+            observeRendering(projection.rendering);
             for (const value of collectButtonPayloads(payload)) buttonPayloads.add(value);
           } catch (error) {
             receipt = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent'

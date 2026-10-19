@@ -58,6 +58,7 @@ import { InboundRuntime } from './inbound-runtime.js';
 import { InboundDeduper } from './inbound-dedup.js';
 import { OutboundLedger, ledgerScopeOf } from './outbound-ledger.js';
 import { createInboundOriginClassifier } from './inbound-origin.js';
+import { RuntimeMessageDiagnostics, type RuntimeMessageDiagnosticsReader } from './message-diagnostics.js';
 
 /** @public Stable inbound and outbound IM gateway token for Adapter integrations. */
 export const outboundMessageToken = createToken<OutboundMessageService>('zhin.im.outbound-message');
@@ -96,6 +97,11 @@ export interface ImRuntimeOptions {
 }
 
 export class ImRuntime implements OutboundMessageService {
+  readonly #messageDiagnostics = new RuntimeMessageDiagnostics();
+  readonly messageDiagnostics: RuntimeMessageDiagnosticsReader = Object.freeze({
+    list: (options?: Parameters<RuntimeMessageDiagnosticsReader['list']>[0]) => this.#messageDiagnostics.list(options),
+    get: (id: string) => this.#messageDiagnostics.get(id),
+  });
   readonly #messageEventStream = new RuntimeMessageEventStream();
   readonly messageEvents: RuntimeMessageEventSource = Object.freeze({
     subscribe: (listener: (event: RuntimeMessageEvent) => void) =>
@@ -119,6 +125,7 @@ export class ImRuntime implements OutboundMessageService {
       ledger,
     });
     this.#outbound = new OutboundDeliveryRuntime({
+      diagnostics: this.#messageDiagnostics,
       ledger: (conversation, receipt, payload) => ledger.record(conversation, receipt, payload),
       record: (request, receipt) => this.#conversations.recordOutbound(request, receipt),
       rememberFallback: (conversation, generation, map) =>
@@ -127,6 +134,7 @@ export class ImRuntime implements OutboundMessageService {
       prepareButtons: (request, snapshot) => this.#interactions.prepareButtons(request, snapshot),
     }, options.renderer);
     this.#inbound = new InboundRuntime({
+      diagnostics: this.#messageDiagnostics,
       interactions: this.#interactions,
       inboundClaim: options.inboundClaim,
       originClassifier,

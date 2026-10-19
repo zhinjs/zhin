@@ -23,6 +23,12 @@ export * from './login-assist-host.js';
 export * from './message-bus.js';
 export * from './message-dispatcher.js';
 export type {
+  RuntimeMessageDiagnostic,
+  RuntimeMessageDiagnosticStep,
+  RuntimeMessageDiagnosticDelivery,
+  RuntimeMessageDiagnosticsReader,
+} from './message-diagnostics.js';
+export type {
   RuntimeMessageEvent,
   RuntimeMessageEventSource,
   RuntimeMessageRendering,

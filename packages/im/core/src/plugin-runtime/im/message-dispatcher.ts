@@ -59,20 +59,33 @@ export class MessageDispatcher {
     message: Message,
     snapshot: RuntimeSnapshot,
     interactionFactory?: UserInteractionFactory,
+    observe?: (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => void,
   ): Promise<MessageDispatchResult> {
+    const note = (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => {
+      try { observe?.(stage, status); } catch { /* Observation never controls dispatch. */ }
+    };
     const prefix = this.resolvePrefix(message, snapshot);
     let input = message.content.trim();
     if (prefix && !input.startsWith(prefix)) {
+      note('prefix', 'mismatch');
       return Object.freeze({ matched: false });
     }
+    note('prefix', 'matched');
     if (prefix) input = input.slice(prefix.length).trim();
-    if (!input) return Object.freeze({ matched: false });
+    if (!input) {
+      note('dispatch', 'empty_input');
+      return Object.freeze({ matched: false });
+    }
     const commands = snapshot.projections.get(commandFeatureId);
-    if (!isCommandIndex(commands)) return Object.freeze({ matched: false });
+    if (!isCommandIndex(commands)) {
+      note('dispatch', 'commands_unavailable');
+      return Object.freeze({ matched: false });
+    }
     const structuredInput = message.segments
       ? stripCommandPrefix(message.segments, prefix)
       : undefined;
     const matchInput = structuredInput ?? input;
+    note('dispatch', 'started');
     const result = await commands.dispatch(matchInput, message, interactionFactory, prefix, snapshot);
     if (result.status === 'invalid') {
       return Object.freeze({
