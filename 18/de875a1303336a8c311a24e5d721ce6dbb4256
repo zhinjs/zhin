@@ -1,0 +1,36 @@
+packages/im/agent/src/core/turn-completion-usage.ts
+  s_6562bcb6cc0539::t_e52634902f3eab 1-31
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_6562bcb6cc0539::t_184eea8cb5168e 29,46,73,78-79,87
+  s_6562bcb6cc0539::t_e5d1b87586b33d 74-77,80-86,88-96
+docs/ai/agent.md
+  s_6562bcb6cc0539::t_fe7997bf9bc5d1 276-277
+packages/im/agent/evals/cases/quota-counts-tool-iterations.case.ts
+  s_6562bcb6cc0539::t_fe7997bf9bc5d1 6
+  s_6562bcb6cc0539::t_c12a54878ef931 1-5,7-20
+packages/im/agent/evals/cases/quota-counts-exhausted-summary.case.ts
+  s_6562bcb6cc0539::t_fe7997bf9bc5d1 6
+  s_6562bcb6cc0539::t_c12a54878ef931 1-5,7-24
+.changeset/tidy-turn-usage-accounting.md
+  s_6562bcb6cc0539::t_330b5a010616ed 1-5
+docs/en/ai/agent.md
+  s_6562bcb6cc0539::t_a04177b3c11f07 89-92
+packages/im/agent/src/core/agent-core-run.ts
+  s_6562bcb6cc0539::t_91d114c0c8674b 22,116,148,661,714,728,763,776,932,1022,1055,1096,1125,1154,1157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18de875a1303336a8c311a24e5d721ce6dbb4256",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
