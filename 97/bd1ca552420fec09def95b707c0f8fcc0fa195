@@ -1,0 +1,43 @@
+packages/im/core/tests/plugin-runtime/disabled-fallback.test.ts
+  s_079f1dc5e6308d::t_f8ebaf13ced045 21-22,24-25
+  s_079f1dc5e6308d::t_81d19e63d0cd2f 23
+docs/paths/console.md
+  s_079f1dc5e6308d::t_9224697ea7da0d 92
+basic/cli/src/plugin-runtime/console/message-diagnostic-routes.ts
+  s_079f1dc5e6308d::t_cc471533259978 14-18
+packages/im/core/tests/plugin-runtime/message-diagnostics.test.ts
+  s_079f1dc5e6308d::t_f8ebaf13ced045 8-25
+packages/im/core/src/built/interactive-segments/resolve.ts
+  s_079f1dc5e6308d::t_9224697ea7da0d 73
+  s_079f1dc5e6308d::t_cc471533259978 68-70
+packages/im/core/src/plugin-runtime/im/message-diagnostics.ts
+  s_079f1dc5e6308d::t_cc471533259978 76-77,80,90-98,123-124,126,178-191
+packages/im/core/tests/markdown-to-text.test.ts
+  s_079f1dc5e6308d::t_f8ebaf13ced045 4-7
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_9224697ea7da0d 92
+basic/cli/tests/plugin-runtime/console/message-diagnostic-routes.test.ts
+  s_079f1dc5e6308d::t_f8ebaf13ced045 65-77
+packages/im/core/src/built/rich-segments/markdown-to-text.ts
+  s_079f1dc5e6308d::t_cc471533259978 30-32
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_cc471533259978 185-188,199
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_f8ebaf13ced045 118,124,2951-2960
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "97bd1ca552420fec09def95b707c0f8fcc0fa195",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
