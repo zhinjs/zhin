@@ -1,0 +1,37 @@
+packages/im/core/tests/plugin-runtime/command-menu-image.test.ts
+  s_079f1dc5e6308d::t_8bf3674e426370 1-98
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_db6cd76031626f 20,257,409,415,418-419,424-425,430,435,464-467,469,472-479
+  s_079f1dc5e6308d::t_2cbc7d1e7e77c1 6-10
+.changeset/command-menu-image.md
+  s_079f1dc5e6308d::t_8bf3674e426370 1-5
+packages/im/command/src/command-menu.ts
+  s_079f1dc5e6308d::t_db6cd76031626f 1-25,27-54
+  s_079f1dc5e6308d::t_2cbc7d1e7e77c1 26
+docs/authoring/commands.md
+  s_079f1dc5e6308d::t_83a861155a5bbb 53-75
+docs/en/authoring/commands.md
+  s_079f1dc5e6308d::t_640b69a0f728c4 53-75
+docs/en/getting-started/index.md
+  s_079f1dc5e6308d::t_a40963e55e897f 36-37
+docs/getting-started/index.md
+  s_079f1dc5e6308d::t_0ecd9aaa1db95d 36-37
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_fc1b803a550734 63-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c407bd266ffb1fc32627cce96fa14d33262b77fa",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
