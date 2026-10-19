@@ -19,6 +19,7 @@ import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { recoverStructuredReply } from './structured-reply-recovery.js';
+import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
@@ -34,6 +35,7 @@ import type { TurnEvent } from '../event/turn-event.js';
 import {
   createTurnEventMapperState,
   mapAgentEventToTurnEvents,
+  turnUsageEvent,
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
@@ -112,6 +114,7 @@ function createTurnCompletionPort(input: {
   harness: Readonly<{ emptyReplyRetries?: number; requestTimeoutMs?: number }>;
   sessionId: string;
   requiredInput?: readonly ModelInputModality[];
+  transport: LlmCompletionPort;
 }): LlmCompletionPort {
   const { host, providerAlias, modelId, sessionId } = input;
   const requiredInput = input.requiredInput ?? [];
@@ -143,7 +146,7 @@ function createTurnCompletionPort(input: {
       requestTimeoutMs: input.harness.requestTimeoutMs,
     },
   );
-  return createResilientCompletionPort(host.llmRuntime, {
+  return createResilientCompletionPort(input.transport, {
     config,
     fallbackModels,
     timers: host.config.providerTimers,
@@ -656,7 +659,7 @@ export async function* runAgentLoopTextTurnRun(
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
-  let lastUsage: TokenUsage | undefined;
+  const completionUsage = trackTurnCompletionUsage(host.llmRuntime);
   const conversationBatches: Array<{
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
@@ -709,6 +712,7 @@ export async function* runAgentLoopTextTurnRun(
     modelCandidates: input.modelCandidates,
     harness,
     sessionId,
+    transport: completionUsage.transport,
     requiredInput: requiredTurnInputModalities(promptMessages),
   });
 
@@ -716,14 +720,13 @@ export async function* runAgentLoopTextTurnRun(
   const toolBudget = resolveToolBudget(host.config.toolBudget, harness);
   const progress = new TurnProgressTracker(toolBudget);
   const turnStartedAt = Date.now();
-  let turnTokens = 0;
   let segmentStartIteration = 0;
   let extensionPending = false;
   let lastReportIteration = 0;
   const segmentHardCap = Math.max(maxIterations, input.maxTotalIterations ?? toolBudget.maxTotalIterations);
   const hardLimitReached = () =>
     (toolBudget.maxWallClockMs > 0 && Date.now() - turnStartedAt >= toolBudget.maxWallClockMs)
-    || (toolBudget.maxTotalTokens > 0 && turnTokens >= toolBudget.maxTotalTokens);
+    || (toolBudget.maxTotalTokens > 0 && completionUsage.usage.totalTokens >= toolBudget.maxTotalTokens);
   const nextIterationLimit = (iteration: number, limit: number): number => {
     if (iteration > 0 && hardLimitReached()) return iteration;
     if (iteration < limit) return limit;
@@ -758,7 +761,7 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
-        transport: host.llmRuntime,
+        transport: completionUsage.transport,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -771,7 +774,7 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
-        transport: host.llmRuntime,
+        transport: completionUsage.transport,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -927,7 +930,7 @@ export async function* runAgentLoopTextTurnRun(
       minIntervalMs: toolBudget.progressMinIntervalMs,
       maxUpdates: toolBudget.progressMaxUpdates,
       summarize: () => summarizeProgress({
-        transport: host.llmRuntime,
+        transport: completionUsage.transport,
         model: llmModel,
         systemPrompt: proseSystemPrompt,
         messages: [...loaded.messages, ...turnTranscript, ...segmentMessages],
@@ -938,6 +941,13 @@ export async function* runAgentLoopTextTurnRun(
     : undefined;
   // Messages of the running segment, for progress summaries before agent_end.
   let segmentMessages: AgentMessage[] = [];
+  function* drainCompletionUsage(): Generator<TurnEvent> {
+    for (const usage of completionUsage.drainUsage()) {
+      const event = turnUsageEvent(usage);
+      emitTurnEvent(event);
+      yield event;
+    }
+  }
   // Each segment is one agentLoop run; continuations add segments to the same
   // Turn, so policy, approval ports and persisted history stay those of the Turn.
   while (true) {
@@ -946,7 +956,10 @@ export async function* runAgentLoopTextTurnRun(
     lastAssistantHadToolCalls = false;
     segmentMessages = [...segmentPrompt];
     for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
+      yield* drainCompletionUsage();
       for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
+        if (te.type === 'usage' && event.type === 'message_end' && event.message.role === 'assistant'
+          && completionUsage.hasReported(event.message)) continue;
         if (imReply && te.type === 'chunk') continue;
         if (input.toolEventSource === 'authority'
           && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
@@ -979,8 +992,6 @@ export async function* runAgentLoopTextTurnRun(
           || (!lastAssistantHadToolCalls && !answerText.trim());
         lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
           : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant);
-        lastUsage = assistant.usage;
-        if (assistant.usage) turnTokens += tokenUsageToLegacy(assistant.usage).total_tokens;
         logAssistantIterationFailure(assistant, modelId, sessionId);
         const toolNames = assistant.content
           .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
@@ -1019,7 +1030,7 @@ export async function* runAgentLoopTextTurnRun(
       || hardLimitReached()
       || shouldSuppressReplyForSpawnDelegation(toolCalls)) break;
     const checkpoint = await summarizeExhaustedTurn({
-      transport: host.llmRuntime,
+      transport: completionUsage.transport,
       model: llmModel,
       systemPrompt: proseSystemPrompt,
       messages: [...loaded.messages, ...turnTranscript],
@@ -1051,8 +1062,9 @@ export async function* runAgentLoopTextTurnRun(
     }
   }
 
+  yield* drainCompletionUsage();
   if (signal?.aborted) {
-    const usage = lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    const usage = tokenUsageToLegacy(completionUsage.usage);
     const endEvent = turnEndFromLegacyUsage('', usage);
     emitTurnEvent(endEvent);
     yield endEvent;
@@ -1093,7 +1105,7 @@ export async function* runAgentLoopTextTurnRun(
   let hostReply = lastAssistantNeedsHostReply;
   if (needsReplyRecovery) {
     const summary = await summarizeExhaustedTurn({
-      transport: host.llmRuntime,
+      transport: completionUsage.transport,
       model: llmModel,
       systemPrompt,
       messages: [...loaded.messages, ...turnTranscript],
@@ -1122,7 +1134,7 @@ export async function* runAgentLoopTextTurnRun(
       output = decodeStructuredReply(rawReply);
     } catch (error) {
       const recovery = await recoverStructuredReply({
-        transport: host.llmRuntime, model: llmModel, raw: rawReply,
+        transport: completionUsage.transport, model: llmModel, raw: rawReply,
         error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
       });
       output = recovery.output;
@@ -1130,7 +1142,6 @@ export async function* runAgentLoopTextTurnRun(
       if (recovery.exchange) {
         lastBatch?.messages.push(...recovery.exchange);
         lastBatch?.messageExtras.push(undefined, undefined);
-        lastUsage = recovery.exchange[1].usage;
       }
     }
   }
@@ -1150,12 +1161,13 @@ export async function* runAgentLoopTextTurnRun(
     yield chunk;
   }
 
+  yield* drainCompletionUsage();
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {
     iterations,
-    ...tokenUsageLogFields(lastUsage),
+    ...tokenUsageLogFields(completionUsage.usage),
   });
 
-  const usage = lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  const usage = tokenUsageToLegacy(completionUsage.usage);
   const endEvent: TurnEvent = {
     type: 'turn_end', output,
     usage: { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens },
