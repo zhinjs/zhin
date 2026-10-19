@@ -1,0 +1,21 @@
+.changeset/flat-plugin-instance-declarations.md
+  s_6562bcb6cc0539::t_8d9b79468d44bd 2-35,37-38,41-42,44
+plugins/services/typesafe/README.md
+  s_6562bcb6cc0539::t_8d9b79468d44bd 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b0fce80d843e1dd2d0c943aa9a5cd2c3a040bbd",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
