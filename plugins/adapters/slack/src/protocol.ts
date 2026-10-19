@@ -66,7 +66,7 @@ export interface SlackInteractionPayload {
   readonly trigger_id?: string;
   readonly user: { id: string; username?: string; name?: string; team_id?: string };
   readonly channel?: { id: string; name?: string };
-  readonly message?: { ts: string; text?: string; [key: string]: unknown };
+  readonly message?: { ts: string; text?: string; thread_ts?: string; [key: string]: unknown };
   readonly actions?: SlackBlockAction[];
   readonly response_url?: string;
   readonly [key: string]: unknown;

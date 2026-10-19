@@ -146,6 +146,10 @@ Command authoring uses `context.interaction` (`UserInteraction`). `ask()` descri
 
 `ImRuntime` delegates this concern to its private `RuntimeInteractionCoordinator`. The coordinator exclusively owns pending reply claims, timeouts and cancellation, sequences, action handlers, and numbered fallbacks. State is isolated by user, generation, and conversation, so a new generation cannot consume old keyboard mappings and separate Roots never share interaction state. The message gateway only decides when to invoke the coordinator; it does not implement the interaction state machine.
 
+Claims are registered before sending the prompt, so an early answer is buffered until a `sent` receipt arrives. This receipt confirms Endpoint acceptance, not remote display. Failed or unknown delivery revokes the claim without retrying. Each question uses distinct callback tokens; explicit `mode: 'command'` buttons keep their existing semantics.
+
+Claims match the complete Endpoint, conversation, parent, thread and sender, and are cancelled when their generation retires or the caller's signal aborts. Cleanup removes timers and listeners. Defaults apply only to a normal timeout, and invalid answers do not extend one `ask()` deadline. Each `sequence()` step still has its own deadline.
+
 ## Endpoint runtime ownership
 
 Each `ImRuntime` exposes one instance-owned `EndpointRuntime` as the sole runtime entry to the generation-owned `AdapterIndex`. Endpoint listing, capability lookup, Console-addressed delivery, reactions, recalls, edits, typing, and management operations acquire and release the current snapshot lease there. Upper-layer Hosts depend on narrow ports containing only the operations they use. `ImRuntime` retains the canonical inbound gateway and delegates every send to its private `OutboundDeliveryRuntime`, so Console-addressed delivery still follows `render -> before.sendMessage -> AdapterIndex.send` and cannot bypass rendering or middleware.

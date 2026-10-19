@@ -17,6 +17,8 @@ import {
   FeatureDiscovery,
   OwnerCapabilityIndex,
   defineFeatureProvider,
+  operationInputSignal,
+  readOperationInputSignal,
   type DiscoveryHost,
   type SourceConvention,
 } from '../src/index.js';
@@ -65,6 +67,20 @@ const host: DiscoveryHost = {
 };
 
 describe('Feature provider kit', () => {
+  it('reads operation lifetime only from the neutral input hook', () => {
+    const lifetime = new AbortController();
+    const untrusted = new AbortController();
+    untrusted.abort();
+    const input = { signal: untrusted.signal, metadata: { retirementSignal: untrusted.signal },
+      [operationInputSignal]() { return lifetime.signal; } };
+    expect(readOperationInputSignal(input)).toBe(lifetime.signal);
+    expect(readOperationInputSignal({ signal: untrusted.signal })).toBeUndefined();
+    expect(readOperationInputSignal({ metadata: { retirementSignal: untrusted.signal } })).toBeUndefined();
+    expect(readOperationInputSignal(undefined)).toBeUndefined();
+    expect(readOperationInputSignal('text input')).toBeUndefined();
+    lifetime.abort();
+    expect(readOperationInputSignal(input)?.aborted).toBe(true);
+  });
   it('discovers definitions and binds slots to their owner', async () => {
     const slots = await new FeatureDiscovery(host).discover(provider, [
       { owner: rootPluginId(), packageRoot: '/plugin' },

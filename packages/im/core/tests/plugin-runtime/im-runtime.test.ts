@@ -545,6 +545,44 @@ describe('IM Runtime', () => {
     } finally { release(); await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it.each(['command', 'shortcut'] as const)('retires the real %s context signal while ordinary leased replies still drain', async (entry) => {
+    const root = rootPluginId();
+    const sent: unknown[] = [];
+    let signal: AbortSignal | undefined;
+    let entered!: () => void;
+    let release!: () => void;
+    let disposed = false;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const fixture = await createFixture([], sent, undefined, gate, entered, {
+      middleware: false,
+      commandOwner: childPluginId(root, 'context-author'),
+      commandShortcut: entry === 'shortcut',
+      commandSignal: value => { signal = value; },
+      commandResult: async input => {
+        await input.$reply('ordinary explicit reply');
+        return 'ordinary command result';
+      },
+    });
+    fixture.store.commit(0, { snapshot: snapshotState(fixture.store.current), dispose: () => { disposed = true; } });
+    const lease = fixture.store.acquire();
+    const retirementSignal = lease.retirementSignal;
+    lease.release();
+    try {
+      const running = receive(fixture.im, fixtureInput(fixture, entry === 'shortcut' ? '/author shortcut' : '/gh issue list open'));
+      await started;
+      expect(signal?.aborted).toBe(false);
+      fixture.store.commit(1, { snapshot: snapshotState(fixture.store.current), dispose: () => undefined });
+      expect(signal?.aborted).toBe(true);
+      expect(signal).toBe(retirementSignal);
+      expect(disposed).toBe(false);
+      release();
+      await expect(running).resolves.toMatchObject({ matched: true });
+      expect(sent.map(item => (item as { payload: unknown }).payload)).toEqual(['ordinary explicit reply', 'ordinary command result']);
+      await vi.waitFor(() => expect(disposed).toBe(true));
+    } finally { release(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it.each(['command', 'middleware', 'component'] as const)('sends %s JSX through the real runtime exactly once', async (entry) => {
     const sent: unknown[] = [];
     const rendered = vi.fn(() => jsx(Html, { children: jsx('b', { children: 'ready' }) }));
@@ -2899,6 +2937,7 @@ async function createFixture(
     restrictCommand?: boolean;
     adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; markdown?: 'native' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     commandResult?: (input: Message) => SendContent | void | Promise<SendContent | void>;
+    commandSignal?: (signal: AbortSignal) => void;
     componentResult?: () => SendContent | Promise<SendContent>;
     componentOwner?: PluginId;
     commandOwner?: PluginId;
@@ -2958,9 +2997,10 @@ async function createFixture(
       ...(options?.validateCommand ? { params: { count: { type: 'integer' as const, min: 1 } } } : {}),
       ...(options?.restrictCommand ? { permit: ['role(master)'] } : {}),
       ...(options?.commandShortcut ? { shortcut: { 'author shortcut': {} } } : {}),
-      async execute({ args, input }) {
+      async execute({ args, input, signal }) {
         if (!input) throw new Error('Fixture command requires a Message');
         events.push(`command:${args[0]}`);
+        options?.commandSignal?.(signal);
         commandStarted?.();
         await commandGate;
         if (options?.commandResult) return options.commandResult(input);
@@ -3822,6 +3862,7 @@ describe('IM Runtime inbound origin routing', () => {
         const [a, b] = ids;
         const source = {
           conversation: { endpoint: { id: b, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' },
+          generation: f.store.current.generation,
           sender: { id: 'alice' },
           $reply: async () => ({ status: 'sent' as const }),
         };

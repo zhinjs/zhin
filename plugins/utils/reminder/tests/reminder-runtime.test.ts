@@ -16,6 +16,7 @@ import at from '../commands/remind/at/index.js';
 import every from '../commands/remind/every/index.js';
 import list from '../commands/remind/list/index.js';
 import cancel from '../commands/remind/cancel/index.js';
+import create from '../commands/remind/create/index.js';
 import { reminderServiceToken } from '../src/runtime.js';
 import { REMINDER_STATE_KEY, parseReminderInstant, type ReminderBook, type ReminderService } from '../src/service.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
@@ -308,6 +309,7 @@ describe('persistent reminder through real Runtime discovery', () => {
     try {
       await f.runtime.start(); const before = f.runtime.snapshot;
       await expect(f.runtime.patchConfig([{ op: 'set', path: ['alpha', 'timezone'], value: 'invalid/timezone' }])).rejects.toThrow('IANA');
+      await expect(f.runtime.patchConfig([{ op: 'set', path: ['alpha', 'timezone'], value: '+08:00' }])).rejects.toThrow('IANA');
       expect(f.runtime.snapshot).toBe(before); expect(f.active.size).toBe(2);
       await expect(f.runtime.patchConfig([{ op: 'set', path: ['alpha', 'maxTasks'], value: 33 }])).rejects.toThrow();
       const host = before.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(pluginVerificationToken.id) as PluginVerificationHost;
@@ -329,6 +331,8 @@ describe('persistent reminder through real Runtime discovery', () => {
     try {
       await f.runtime.start();
       expect(await f.command('a remind after --help')).toContain('seconds');
+      expect(await f.command('a remind create --help')).toContain('when');
+      expect(await f.command('a remind create 10分钟后 新建提醒')).toContain('真实聊天');
       expect(await f.command('a remind list')).toContain('没有提醒');
       const index = f.runtime.snapshot.projections.get(commandFeatureId) as CommandIndex;
       expect(await index.execute('a remind list')).toContain('真实会话');
@@ -409,7 +413,7 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
   }
   await write('plugins/reminder/package.json', { name: '@test/reminder', dependencies: { '@test/command': '*', '@test/schedule': '*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features } });
   await write('plugins/reminder/plugin.ts', { default: plugin }, true);
-  for (const [name, value] of Object.entries({ after, at, every, list, cancel })) await write(`plugins/reminder/commands/remind/${name}/index.ts`, { default: value }, true);
+  for (const [name, value] of Object.entries({ after, at, every, list, cancel, create })) await write(`plugins/reminder/commands/remind/${name}/index.ts`, { default: value }, true);
   await write('plugins/reminder/schedules/poll/index.ts', { default: poll }, true);
   const db = createDatabaseHost({ dialect: 'sqlite', filename: join(project, 'state.sqlite') }); await db.start();
   const jobs: ScheduleJobRegistration[] = []; const active = new Set<ScheduleJobRegistration>();
