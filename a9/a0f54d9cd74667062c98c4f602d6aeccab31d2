@@ -1,0 +1,33 @@
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_0d746fe9cf45ef 288
+  s_079f1dc5e6308d::t_57d081d7279353 4,289-291
+  s_079f1dc5e6308d::t_7516c14a2fda44 292-293
+packages/im/command/src/definition.ts
+  s_079f1dc5e6308d::t_57d081d7279353 9,500
+packages/im/feature-kit/tests/feature-kit.test.ts
+  s_079f1dc5e6308d::t_57d081d7279353 20-21,70-83
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_57d081d7279353 43
+packages/im/feature-kit/src/operation-input.ts
+  s_079f1dc5e6308d::t_57d081d7279353 6-19
+.changeset/command-operation-lifetime.md
+  s_079f1dc5e6308d::t_57d081d7279353 1-8
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_b9382e9317a5a8 548-585,2940,3000,3003
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9a0f54d9cd74667062c98c4f602d6aeccab31d2",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
