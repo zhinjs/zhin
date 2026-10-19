@@ -1,0 +1,819 @@
+basic/cli/src/plugin-runtime/migrate/instance-declarations.ts
+  s_6562bcb6cc0539::t_4ffad80168740c 80-85,92,137,172,214,330,334-336,338,340-341,343-345,347,349-351
+  s_6562bcb6cc0539::t_60be0fc33170d5 7,151-160
+  s_6562bcb6cc0539::t_18047b86760698 194,196,221
+  s_6562bcb6cc0539::t_3933182bce3204 67
+  s_6562bcb6cc0539::t_ab01fb089349b1 60,69,169,246-256
+  s_6562bcb6cc0539::t_b2344c58878f4e 188-190
+  s_6562bcb6cc0539::t_8385b441f6275e 2,53,208
+  s_6562bcb6cc0539::t_c563c1ffeb612b 1,3-6,8-52,54-59,61-66,68,70-79,86-91,93-129,132,138-150,161-168,173-187,191-193,195,197-207,209-213,215-220,222-245,257-259,269-290,292-301,303-329,331-333,352-355
+  s_6562bcb6cc0539::t_973ff354c1f1ee 260-268
+  s_6562bcb6cc0539::t_5b5ecc3d9afc17 130-131
+  s_6562bcb6cc0539::t_f4bfe256ae9985 133-136
+  s_6562bcb6cc0539::t_915ee0fbcf6d08 170-171
+  s_6562bcb6cc0539::t_0aa77c84b540b8 291
+  s_6562bcb6cc0539::t_d9c3c3139446a9 302
+  s_6562bcb6cc0539::t_05dbede098dcfa 337
+  s_6562bcb6cc0539::t_d374baeebffcfa 339
+  s_6562bcb6cc0539::t_e00746824db296 342
+  s_6562bcb6cc0539::t_5ff7b44d970f48 346
+  s_6562bcb6cc0539::t_5f9c18953d3f62 348
+basic/cli/tests/cli-write-side.test.ts
+  s_6562bcb6cc0539::t_4c7d477654adfb 43,45,64,83
+basic/cli/src/utils/global-home-init.ts
+  s_6562bcb6cc0539::t_fa1aacdb0d7e33 30-31,33-35
+basic/cli/src/utils/dev-link.ts
+  s_6562bcb6cc0539::t_b18e305ee0023a 24,65,250
+  s_6562bcb6cc0539::t_fa1aacdb0d7e33 63,254
+  s_6562bcb6cc0539::t_ef2c9d64a97818 23,25,64,71-72,247,249,251-252
+  s_6562bcb6cc0539::t_c5fe14fc3fbb25 248
+basic/cli/tests/new-integration.test.ts
+  s_6562bcb6cc0539::t_d50efe1c5f162d 143,333
+packages/toolkit/testing/tests/restart-probe.mjs
+  s_6562bcb6cc0539::t_8fe5b9f43b1685 10
+plugins/utils/qrcode/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 16,18-19
+  s_6562bcb6cc0539::t_b5ac71a4056b37 13
+docs/en/adapters/qq.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,86
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 56,59-65,71,73-83,94
+examples/qq-games-bot/README.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 8-9
+plugins/adapters/slack/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 50,53-59,65,67-75,81,83-90
+  s_6562bcb6cc0539::t_b5ac71a4056b37 25
+  s_6562bcb6cc0539::t_bf6205627faec6 93
+scripts/generate-config-reference.mjs
+  s_6562bcb6cc0539::t_e463f9c8a978b7 207-208
+  s_6562bcb6cc0539::t_bfa62212dfd85c 162
+docs/en/concepts/config-as-data.md
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 21,29-40,92,94-102
+  s_6562bcb6cc0539::t_e463f9c8a978b7 14,46
+docs/adapters/lark.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 57,60-70
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,38,73
+examples/life-assistant-bot/package.json
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 46
+examples/capabilities-bot/zhin.config.yml
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 1,20-24
+packages/im/runtime/tests/config-patch-runtime.test.ts
+  s_6562bcb6cc0539::t_e5aad69a2ff8a3 19-20,176,202-204
+  s_6562bcb6cc0539::t_4c5dc23810ea0d 207,300
+  s_6562bcb6cc0539::t_ef99f7f83590df 66,77,87,95,104,112,117,151,188,224,237,245,249,253,256,259,283,294,305,401
+  s_6562bcb6cc0539::t_0434dfb3ca3fbd 311
+basic/cli/src/plugin-runtime/project-commands.ts
+  s_6562bcb6cc0539::t_4c7d477654adfb 1-3,83-85
+docs/en/adapters/onebot12.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 36,66
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 52,55-63
+plugins/adapters/onebot12/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 44,47-55
+  s_6562bcb6cc0539::t_b5ac71a4056b37 24,58
+basic/cli/src/plugin-runtime/console/configuration-projection.ts
+  s_6562bcb6cc0539::t_02c65edcd35c5a 16
+  s_6562bcb6cc0539::t_a4d92b18479a0e 1-4,6-8,10-11,17,19-21,23-25
+plugins/adapters/satori/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 28,61
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 48,51-58,73,75-82
+basic/cli/src/commands/new.ts
+  s_6562bcb6cc0539::t_4c7d477654adfb 436
+  s_6562bcb6cc0539::t_ea929b9a1947c2 130-131,146-147,220,293,439,441-443,446-447,466,699-701
+packages/im/runtime/tests/root-runtime.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 34,61,67,88,111,113,121,125,162,261,296
+docs/en/authoring/endpoint-lifecycle.md
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 114,117-123
+examples/plugin-runtime-migration-bot/config.yml
+  s_6562bcb6cc0539::t_a01bbd88837255 1-2
+packages/toolkit/scaffold-wizard/package.json
+  s_6562bcb6cc0539::t_e248eb2945d665 30-32
+tests/docs/config-enum-reference.test.ts
+  s_6562bcb6cc0539::t_586f745692a23f 181-184
+docs/authoring/plugin-delivery.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 37
+config/zhin.config.yml
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 1,11-36
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_42a995c86fa80a 63-64
+docs/en/adapters/milky.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 52,55-63
+  s_6562bcb6cc0539::t_b5ac71a4056b37 36,66
+plugins/adapters/onebot11/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 24,58
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 44,47-55
+docs/adapters/github.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 11,43,46-56,68,70-78
+docs/cli/index.md
+  s_6562bcb6cc0539::t_31506286886b07 168,374-386
+packages/toolkit/scaffold-wizard/src/project-config-plan.ts
+  s_6562bcb6cc0539::t_a225cfb9a4b5f3 5-6,140,166-167,170-175,177-178,367,370,385
+  s_6562bcb6cc0539::t_063505ea63637e 4,38-39,63,137,160,344,368-369
+  s_6562bcb6cc0539::t_4ea9b01b6020cf 371-384
+packages/im/config-file/tests/json-config-document.test.ts
+  s_6562bcb6cc0539::t_384f6327318afa 151,155,158,194,211
+docs/en/adapters/slack.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,105
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 62,65-71,77,79-87,93,95-102
+plugins/adapters/dingtalk/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 43,46-54
+  s_6562bcb6cc0539::t_b5ac71a4056b37 26,57
+packages/im/config-file/src/index.ts
+  s_6562bcb6cc0539::t_614024df919160 5
+basic/cli/src/commands/config-check.ts
+  s_6562bcb6cc0539::t_5b02a0991da125 52
+basic/cli/tests/plugin-runtime/root-host.test.ts
+  s_6562bcb6cc0539::t_352e17c2822139 44
+docs/en/adapters/sandbox.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 58,61,64-66,72,74-78
+basic/cli/tests/plugin-runtime/start/restart-shutdown.test.ts
+  s_6562bcb6cc0539::t_352e17c2822139 72,93,130
+docs/en/adapters/weixin-ilink.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 38,40-48
+plugins/adapters/email/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 24,63
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 41,44-52,54-60
+docs/configuration/index.md
+  s_6562bcb6cc0539::t_9f1463d037d342 50,61,66,95-98,397
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 380,388-392,414,416-422,434,436-459,469
+docs/adapters/telegram.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,49,85
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 74,77-82,100,105-114
+plugins/utils/content-moderation/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 16,18-25,27-43,45-54
+  s_6562bcb6cc0539::t_b5ac71a4056b37 13,103
+plugins/adapters/icqq/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 44,46-52,58,60-66
+plugins/utils/repeater/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 13
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 16,18-22
+docs/migrations/plugin-instance-declarations.md
+  s_6562bcb6cc0539::t_7fffcb13aeb469 48,106
+  s_6562bcb6cc0539::t_307612438910b0 1-47,49-105,107-120
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_6562bcb6cc0539::t_0684e162d0f1ce 28
+  s_6562bcb6cc0539::t_6a55d1bf43f90d 113
+  s_6562bcb6cc0539::t_7152a5aea4a780 225,235,380-391
+  s_6562bcb6cc0539::t_4c4c85e3f2c60b 49,125
+  s_6562bcb6cc0539::t_c4394443598360 106,121,155-157,167
+  s_6562bcb6cc0539::t_be3a79defdc181 392
+docs/concepts/plugin-model.md
+  s_6562bcb6cc0539::t_9f1463d037d342 8,15-16,55,57,102,117
+  s_6562bcb6cc0539::t_31506286886b07 77,104-114,119,121,136
+  s_6562bcb6cc0539::t_52353aab85668b 103
+docs/en/adapters/satori.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 40,69
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 56,59-66,81,83-90
+plugins/services/activity-feedback/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,39-42
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 48,50-62,65
+docs/en/adapters/wechat-mp.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,72
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 59,62-69
+docs/en/authoring/commands.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 420,440
+  s_079f1dc5e6308d::t_42a995c86fa80a 53-73
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 178,181-187,305,307-312
+plugins/adapters/telegram/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,73
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 62,65-70,88,93-102
+basic/cli/src/plugin-runtime/start-command.ts
+  s_6562bcb6cc0539::t_ef2c9d64a97818 60,132,201
+  s_6562bcb6cc0539::t_b626b37086ac22 1,115
+  s_6562bcb6cc0539::t_fa1aacdb0d7e33 2,119-120
+  s_6562bcb6cc0539::t_2e14030b1e1fcc 133
+examples/single-file-bot/package.json
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 32
+basic/cli/tests/setup-save.test.ts
+  s_6562bcb6cc0539::t_3a07f33549844b 25,61-105
+packages/toolkit/scaffold-wizard/tests/project-config-plan.test.ts
+  s_6562bcb6cc0539::t_87a66e56e341f6 50,67,78-79,88,91,95
+  s_6562bcb6cc0539::t_063505ea63637e 133-151
+basic/cli/src/commands/doctor.ts
+  s_6562bcb6cc0539::t_fa1aacdb0d7e33 733-737
+plugins/utils/group-suite/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 25,27-40
+  s_6562bcb6cc0539::t_b5ac71a4056b37 12,14-17
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  s_6562bcb6cc0539::t_da6f78bf49e42b 77
+examples/test-bot/package.json
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 133
+plugins/utils/link-poster/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 16,18-19
+  s_6562bcb6cc0539::t_b5ac71a4056b37 13
+packages/im/plugin-runtime/tests/plugin-configuration.test.ts
+  s_6562bcb6cc0539::t_73dc7a8d0af0a1 7-9,13,19,23-34
+docs/adapters/qq.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 58,61-68,87,89-114,125
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,39,117
+basic/cli/tests/doctor.test.ts
+  s_6562bcb6cc0539::t_4c7d477654adfb 21,42,51,59,74,84
+basic/cli/tests/async-command-failure.test.ts
+  s_6562bcb6cc0539::t_352e17c2822139 15,17,38-39
+basic/cli/tests/plugin-runtime/schedule-publication-runtime.test.ts
+  s_6562bcb6cc0539::t_352e17c2822139 66
+plugins/adapters/discord/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 50,53-58
+  s_6562bcb6cc0539::t_b5ac71a4056b37 25,61
+docs/en/getting-started/first-plugin.md
+  s_6562bcb6cc0539::t_bfa62212dfd85c 189,197,208,210-212,235,263
+packages/im/runtime/README.md
+  s_6562bcb6cc0539::t_2ea25f0dc7333e 3-4,13-14,20-24,29
+packages/im/runtime/src/config-patch-planner.ts
+  s_6562bcb6cc0539::t_555fe96f415a59 20-23,32
+  s_6562bcb6cc0539::t_7152a5aea4a780 29,34-35
+  s_6562bcb6cc0539::t_e8c95fea43aad6 30
+plugins/adapters/line/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 43,46-53
+  s_6562bcb6cc0539::t_b5ac71a4056b37 25,56
+docs/adapters/napcat.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,37,68
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 51,54-62
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_6562bcb6cc0539::t_ef2c9d64a97818 71
+  s_6562bcb6cc0539::t_02c65edcd35c5a 20
+examples/qq-games-bot/zhin.config.yml
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 1,8-19,36-65
+basic/cli/src/plugin-runtime/console/plugin-projection.ts
+  s_6562bcb6cc0539::t_02c65edcd35c5a 5,64
+  s_6562bcb6cc0539::t_a281c4935d975a 4,31-33,49,66-78,84-85,90-91,96,98,102-108
+  s_6562bcb6cc0539::t_c360460d0ca489 109-110
+docs/adapters/kook.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 59,62-67,85,87-95
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,38,70
+examples/single-file-bot/zhin.config.yml
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 1,4-9
+plugins/adapters/lark/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 26,61
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 45,48-58
+docs/authoring/endpoint-lifecycle.md
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 114,117-123
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_6562bcb6cc0539::t_649f48e4499c26 12,29,31,34-35,38,41-44,47,58,81,92
+  s_6562bcb6cc0539::t_ef2c9d64a97818 90
+  s_6562bcb6cc0539::t_b626b37086ac22 5,13-14,80,82-89
+examples/minimal-bot/tests/stable-path.test.ts
+  s_6562bcb6cc0539::t_da6f78bf49e42b 123
+docs/adapters/sandbox.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 11,63,66,69-71,77,79-83
+basic/cli/tests/plugin-runtime/console/plugin-metadata.test.ts
+  s_6562bcb6cc0539::t_9674a3fdb843e6 86-93
+  s_6562bcb6cc0539::t_119677c15c1a35 77,80-82
+  s_6562bcb6cc0539::t_6e6a5fa0caf824 1-5,7-76,78-79,83-85,94-114,116-126
+  s_6562bcb6cc0539::t_6ec8942f7068d6 6,115
+packages/im/isolate/tests/isolate-runtime.test.ts
+  s_6562bcb6cc0539::t_73dc7a8d0af0a1 233,256
+packages/im/plugin-runtime/src/plugin-configuration.ts
+  s_6562bcb6cc0539::t_17a6c978e18714 23
+  s_6562bcb6cc0539::t_ebb893c49e6432 31
+  s_6562bcb6cc0539::t_db5a28e94bcfe9 1,15,21-22,29-30
+  s_6562bcb6cc0539::t_73dc7a8d0af0a1 32
+docs/getting-started/concepts.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 31,70
+docs/adapters/icqq.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 11,56,58-64,70,72-78
+examples/platform-acceptance-bot/run.mjs
+  s_6562bcb6cc0539::t_bfa62212dfd85c 143,149
+docs/adapters/onebot11.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,36,70
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 56,59-67
+packages/im/runtime/tests/convention-capability-delta-hmr.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 98
+docs/adapters/dingtalk.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,38,69
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 55,58-66
+packages/im/runtime/tests/package-resolver.test.ts
+  s_6562bcb6cc0539::t_ede514469a4e10 175,182,191,227,234,240,245,251,257,262,269,275,280,287,293
+docs/adapters/wechat-mp.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,37,72
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 59,62-69
+plugins/utils/code-runner/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 16,18-19
+  s_6562bcb6cc0539::t_b5ac71a4056b37 13
+plugins/utils/music/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 27-32
+examples/multi-agent-room/zhin.config.yml
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 1,9,48-55
+plugins/adapters/sandbox/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 51,54,57-59,65,67-71
+basic/cli/src/utils/plugin-registry.ts
+  s_6562bcb6cc0539::t_d50efe1c5f162d 8,190-194,200
+docs/en/configuration/generated.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 163
+  s_6562bcb6cc0539::t_9f1463d037d342 171-193,201-237,245-276,284-304,312-345,353-382,390-416,424-437,445-461,469-489,497-513,521-538,546-575,583-591,599-613,621-642,650-672,680-701,709-724,732-750,758-764,832-1305,1313-1318,1326,1334-1359,1373-1406,1414-1425,1439-1459,1479-1483,1491-1493,1501-1504
+packages/toolkit/testing/src/index.ts
+  s_6562bcb6cc0539::t_73dc7a8d0af0a1 103
+examples/single-file-bot/README.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 48
+plugins/utils/reminder/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 26,28-34
+plugins/services/typesafe/tests/plugin-runtime.test.ts
+  s_6562bcb6cc0539::t_da6f78bf49e42b 16,19,21,23,29,32,37
+packages/im/runtime/tests/agent-feature-hmr.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 52,99
+basic/cli/tests/plugin-runtime/plugin-lifecycle-store.test.ts
+  s_6562bcb6cc0539::t_80ff8deefb41f3 1,4,6-24,28-32,35-39
+  s_6562bcb6cc0539::t_0f0557628ac699 40
+examples/multi-agent-room/package.json
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 45
+packages/toolkit/scaffold-wizard/src/decisions.ts
+  s_6562bcb6cc0539::t_a225cfb9a4b5f3 6,38,58,111-113,116-118
+packages/im/runtime/src/index.ts
+  s_6562bcb6cc0539::t_ebb893c49e6432 2
+packages/toolkit/scaffold-wizard/src/apply.ts
+  s_6562bcb6cc0539::t_e248eb2945d665 5,32-35,37-45,285,289,307
+  s_6562bcb6cc0539::t_a225cfb9a4b5f3 46-58,128
+docs/concepts/config-as-data.md
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 21,29-40,92,94-102
+  s_6562bcb6cc0539::t_e463f9c8a978b7 14,46,147
+docs/authoring/local-dev.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 75,115-116,123
+packages/im/runtime/src/primary-config.ts
+  s_6562bcb6cc0539::t_ca2897e60d691b 37-40,42-45
+  s_6562bcb6cc0539::t_0684e162d0f1ce 1
+  s_6562bcb6cc0539::t_3cbde312284bbf 41
+  s_6562bcb6cc0539::t_c522d2ad176116 46-47
+docs/en/adapters/email.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 53,56-64,66-72
+  s_6562bcb6cc0539::t_b5ac71a4056b37 36,75
+packages/im/runtime/src/config-composer.ts
+  s_6562bcb6cc0539::t_adc9fd0e77f40e 63-65
+  s_6562bcb6cc0539::t_555fe96f415a59 52-53,74,79,184,186,201,206-211
+  s_6562bcb6cc0539::t_1473d22a64990d 7,62
+  s_6562bcb6cc0539::t_affaa3d54ec301 82
+  s_6562bcb6cc0539::t_2186c620021806 66-70
+  s_6562bcb6cc0539::t_2ea25f0dc7333e 93-100
+  s_6562bcb6cc0539::t_d1fb2ab11da688 118
+packages/im/runtime/tests/process-boundary.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 31,61,88,115,147,184,221
+packages/toolkit/scaffold-wizard/src/adapter.ts
+  s_6562bcb6cc0539::t_4ea9b01b6020cf 22,573
+scripts/check-created-project.mjs
+  s_6562bcb6cc0539::t_587cb14065c094 5,154-160,163-179,181-184,325-326
+  s_6562bcb6cc0539::t_bfa62212dfd85c 303,333-335,341
+  s_6562bcb6cc0539::t_47f9ce5350c4d7 161-162,180
+plugins/utils/rss/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 13
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 16,18-23
+docs/en/authoring/local-dev.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 75,115-116,123
+docs/adapters/satori.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,40,73
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 60,63-70,85,87-94
+docs/en/adapters/github.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 43,46-56,66,68-76
+basic/cli/src/commands/install.ts
+  s_6562bcb6cc0539::t_9bc5d61cda96f2 87
+packages/im/config-file/src/ordered-config-source.ts
+  s_6562bcb6cc0539::t_95c42c9f87dd38 11-18,22,25
+  s_6562bcb6cc0539::t_9048f94dc41a0c 52-55,60-65,75-76,81-82,115,117-118
+  s_6562bcb6cc0539::t_eab531b70a2c5c 3-10,19-21,23-24,26-28,39-51,66-69,72,77-80,83-88,90,111-114,116,119-143
+  s_6562bcb6cc0539::t_bfad2e11b2fea6 2,89,92-100,107-110
+  s_6562bcb6cc0539::t_0cc004929d108b 56-59,70-71,91,101-106
+  s_6562bcb6cc0539::t_88cc864da34bcd 1,29-38
+  s_6562bcb6cc0539::t_d3f686535a3b5d 73-74
+basic/cli/src/plugin-runtime/endpoint-configuration-store.ts
+  s_6562bcb6cc0539::t_4c7d477654adfb 12-17
+  s_6562bcb6cc0539::t_02c65edcd35c5a 11,71,87,138,144,153
+  s_6562bcb6cc0539::t_4cfc62715a372b 154-155,160,163,165
+basic/cli/src/commands/onboard.ts
+  s_6562bcb6cc0539::t_fa1aacdb0d7e33 132-135
+packages/im/runtime/src/application-plugin-declaration.ts
+  s_6562bcb6cc0539::t_db5a28e94bcfe9 16,22-24,30-32,81-82
+  s_6562bcb6cc0539::t_17a6c978e18714 33
+  s_6562bcb6cc0539::t_ebb893c49e6432 1-15,17-21,25-29,34-80,83-90
+examples/life-assistant-bot/zhin.config.yml
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 4,10,43,49,59-62
+tests/docs/platform-acceptance-runner.test.ts
+  s_6562bcb6cc0539::t_586f745692a23f 115-116
+plugins/features/process-monitor/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 19,21-31
+packages/im/runtime/src/runtime-input-planner.ts
+  s_6562bcb6cc0539::t_7152a5aea4a780 31,39-40,49
+  s_6562bcb6cc0539::t_555fe96f415a59 24-27,38
+packages/toolkit/scaffold-wizard/tests/optional-peers.test.ts
+  s_6562bcb6cc0539::t_87a66e56e341f6 8,17,22,29,35,43
+docs/en/getting-started/index.md
+  s_079f1dc5e6308d::t_42a995c86fa80a 36-37
+docs/getting-started/first-plugin.md
+  s_6562bcb6cc0539::t_bfa62212dfd85c 189,197,208,210-212,235,263
+basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts
+  s_6562bcb6cc0539::t_352e17c2822139 32,64,127
+docs/en/authoring/define-plugin.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 92
+docs/adapters/line.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,37,68
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 55,58-65
+basic/cli/src/plugin-runtime/console/plugin-package-map.ts
+  s_6562bcb6cc0539::t_a4d92b18479a0e 6-12,14
+  s_6562bcb6cc0539::t_02c65edcd35c5a 2-4
+docs/plans/plugin-package-and-instance-declarations.md
+  s_6562bcb6cc0539::t_1806153bf86911 190,207,216
+  s_6562bcb6cc0539::t_faf05b9d787a87 278-280
+  s_6562bcb6cc0539::t_ff99958eff113e 283,293,295-296
+  s_6562bcb6cc0539::t_81e79d56d4c2ea 10,21,49,118,126,129,131,133,137-141,143,145,147,157,171,180-181,202-204,208-209,221-223,277,282,284
+  s_6562bcb6cc0539::t_2ecb2c2a673e95 19,75,77,80,83,85-100,103,105,107-117,120,122-125,127,163,281
+  s_6562bcb6cc0539::t_339580ae702ee7 8,292,294
+  s_6562bcb6cc0539::t_6646d7b5b209ee 1-7,9,11-18,22-30,32-41,43-48,50-74,76,78,81-82,84,101-102,104,106,119,121,128,130,134-136,142,144,146,148-156,158-162,164-170,173-179,182-189,192-193,195-201,206,210-214,217-220,224-225,227-228,230-233,235-274,276
+  s_6562bcb6cc0539::t_7fffcb13aeb469 194,215
+  s_6562bcb6cc0539::t_6ff6a1a93b5852 191
+  s_6562bcb6cc0539::t_584a669c4652ab 132,226
+  s_6562bcb6cc0539::t_9f817ae0774a53 172
+  s_6562bcb6cc0539::t_a789f1057041e3 20,31,42,79,205,229,234,275,285-291,297-298
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  s_6562bcb6cc0539::t_d8a66a1a53db08 8,12,16-17,21-24,30,40,44-47
+plugins/adapters/weixin-ilink/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 26,28-36
+examples/full-bot/tests/full-bot-l4-contract.test.ts
+  s_6562bcb6cc0539::t_d8a66a1a53db08 8,12,17,39-45,68,71-75
+packages/im/runtime/tests/topology-runtime.test.ts
+  s_6562bcb6cc0539::t_3d71197cd25b4e 58
+  s_6562bcb6cc0539::t_db70a1893dbf2c 6,27-30,32-57,59-67
+  s_6562bcb6cc0539::t_4e4d561254760d 31
+  s_6562bcb6cc0539::t_e5baadaab97b19 26,68,74-75,101,115-116,118,135-137,140,142,144,150,186-187,248,310
+docs/adapters/onebot12.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,36,70
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 56,59-67
+packages/toolkit/testing/README.md
+  s_6562bcb6cc0539::t_2ea25f0dc7333e 53-57,77-79
+  s_6562bcb6cc0539::t_8e739d90ac9950 80
+docs/en/adapters/kook.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,69
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 58,61-66,86,88-96
+plugins/utils/60s/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 15
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 18,20-22
+basic/cli/tests/install.test.ts
+  s_6562bcb6cc0539::t_586f745692a23f 55-56
+  s_6562bcb6cc0539::t_d50efe1c5f162d 35,47,61,63,67,75,96,99
+  s_6562bcb6cc0539::t_7dc86c6b5698f8 68
+basic/cli/src/commands/migrate.ts
+  s_6562bcb6cc0539::t_a1bdc992bcbaab 483-484,486
+  s_6562bcb6cc0539::t_07ba428709d69e 18,473-482,485,487-501
+.changeset/flat-plugin-instance-declarations.md
+  s_6562bcb6cc0539::t_efc37350b1ab27 1-13
+examples/minimal-bot/zhin.config.yml
+  s_6562bcb6cc0539::t_e463f9c8a978b7 2
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 1
+docs/adapters/slack.md
+  s_6562bcb6cc0539::t_bf6205627faec6 11,105
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 62,65-71,77,79-87,93,95-102
+examples/full-bot/zhin.config.yml
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 1,65-82
+examples/capabilities-bot/package.json
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 30
+packages/im/runtime/src/topology-transaction.ts
+  s_6562bcb6cc0539::t_7152a5aea4a780 2,128
+basic/cli/tests/plugin-runtime/cli.test.ts
+  s_6562bcb6cc0539::t_352e17c2822139 153,155
+basic/cli/src/plugin-management/workflow.ts
+  s_6562bcb6cc0539::t_a4d92b18479a0e 99-100,156-159,179-181,187,321-331,333,357-365,379
+  s_6562bcb6cc0539::t_b7897bb3a16e5c 233
+  s_6562bcb6cc0539::t_618f4f67c21807 8,20,95-98,101-102,104-105,154-155,172,237-240,346,350-353,356,369-378,380-389
+  s_6562bcb6cc0539::t_09ca6a05c4b597 390
+docs/authoring/commands.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 420,440
+  s_079f1dc5e6308d::t_42a995c86fa80a 53-73
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 178,181-187,305,307-312
+docs/authoring/adapters.md
+  s_6562bcb6cc0539::t_7ff5269950620b 81,83-85
+plugins/services/typesafe/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 29-32
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 38,40,49-53
+packages/toolkit/testing/tests/run-kit.mjs
+  s_6562bcb6cc0539::t_8fe5b9f43b1685 33,42,85,117,142
+packages/im/config-file/src/yaml-config-document.ts
+  s_6562bcb6cc0539::t_95c42c9f87dd38 13,32
+  s_6562bcb6cc0539::t_614024df919160 33
+docs/en/adapters/onebot11.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 36,66
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 52,55-63
+tests/snapshots/plugin-runtime-api.json
+  s_6562bcb6cc0539::t_8c077a9a5a752b 70,94-95,247
+docs/ai/structured-decisions.md
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 56,58,79-83
+docs/adapters/email.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 53,56-64,66-72
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,36,75
+docs/authoring/define-plugin.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 92
+basic/cli/src/commands/packages.ts
+  s_6562bcb6cc0539::t_fa1aacdb0d7e33 51,73
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_6562bcb6cc0539::t_4c7d477654adfb 692-693,803,806,810,813,817,819,827,831,840,844,850,857,864,868,900,907,909
+plugins/adapters/milky/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 45,48-56
+  s_6562bcb6cc0539::t_b5ac71a4056b37 24,59
+packages/toolkit/create-zhin/src/workspace.ts
+  s_6562bcb6cc0539::t_e248eb2945d665 200,484,500,505-506,569
+plugins/adapters/github/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 31,34-44,56,58-66
+examples/life-assistant-bot/README.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 75,78,80-84
+plugins/adapters/qq/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 27,105
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 46,49-56,75,77-102,113
+basic/cli/tests/packages.test.ts
+  s_6562bcb6cc0539::t_d50efe1c5f162d 11,153-154,157,159-160,167-168,178
+  s_6562bcb6cc0539::t_7e7a17273b7301 169
+docs/en/adapters/discord.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,73
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 62,65-70
+basic/cli/tests/plugin-runtime/console/plugin-management-list.test.ts
+  s_6562bcb6cc0539::t_b2e36f58da94dc 14-15
+  s_2af75224fb57fa::t_2f994d33cd1fd2 17-18
+packages/im/runtime/tests/subtree-runtime.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 68,208
+docs/en/adapters/dingtalk.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,68
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 54,57-65
+packages/im/runtime/tests/project-graph.test.ts
+  s_6562bcb6cc0539::t_29c42cd9fad18c 1
+  s_6562bcb6cc0539::t_6263fc1d4ad46b 58,85,92,132,138,174,240,312,392,434,495,505,571,573,603,631,645-648,662-664
+  s_6562bcb6cc0539::t_93bc7a1117e970 665
+packages/im/config-file/src/json-config-document.ts
+  s_6562bcb6cc0539::t_614024df919160 20-21,38-42
+  s_6562bcb6cc0539::t_95c42c9f87dd38 12,37
+basic/cli/src/plugin-runtime/plugin-lifecycle-store.ts
+  s_6562bcb6cc0539::t_403df02156bfbc 56
+  s_6562bcb6cc0539::t_ef2c9d64a97818 54-55,57,94-98,101,103
+  s_6562bcb6cc0539::t_2e14030b1e1fcc 1-2,29-30,32-35,38,112-113
+  s_6562bcb6cc0539::t_02c65edcd35c5a 3-5,53,91-93,102,104-110
+examples/full-bot/package.json
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 66
+docs/en/adapters/icqq.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 43,45-51,57,59-65
+packages/im/plugin-runtime/src/root-config-document.ts
+  s_6562bcb6cc0539::t_9e69606fc67466 17-18,24
+docs/en/getting-started/concepts.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 31,70
+plugins/utils/calendar/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 52,54-82,142,144-151
+packages/im/runtime/tests/schedule-admission-runtime.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 128
+plugins/utils/lottery/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 46,48-58,60-67
+  s_6562bcb6cc0539::t_b5ac71a4056b37 43
+examples/qq-games-bot/package.json
+  s_6562bcb6cc0539::t_557f2ec7aa41dc 44
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_6562bcb6cc0539::t_649f48e4499c26 208
+  s_6562bcb6cc0539::t_804e15a08cdf85 25,27-30,190,192-194,196-197,199-201,204,206,209,212,214-218,221,223-224
+  s_6562bcb6cc0539::t_1209dcc328f64f 90
+basic/cli/src/plugin-runtime/migrate/index.ts
+  s_6562bcb6cc0539::t_07ba428709d69e 5
+docs/adapters/weixin-ilink.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 11,38,40-48
+packages/im/runtime/tests/owner-scoped-hosts.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 88,140
+packages/im/runtime/src/topology-generation-preparer.ts
+  s_6562bcb6cc0539::t_3cbde312284bbf 427-434,449-450
+  s_6562bcb6cc0539::t_cdfacb17a7c45b 162-167,435-448
+  s_6562bcb6cc0539::t_b7c5f5a7a70fac 158-161,168-170,180,197-200
+packages/im/config-file/tests/yaml-config-document.test.ts
+  s_6562bcb6cc0539::t_384f6327318afa 177,194,201,204,213,224,271
+basic/cli/tests/plugin-runtime/instance-declarations-migration.test.ts
+  s_6562bcb6cc0539::t_18047b86760698 52
+  s_6562bcb6cc0539::t_b2344c58878f4e 59-61
+  s_6562bcb6cc0539::t_e3909d11a16b27 1,157-158,179-193
+  s_6562bcb6cc0539::t_8fc9cf199ade0d 116-142
+  s_6562bcb6cc0539::t_1dd4e8ea561d51 143-156,194
+  s_6562bcb6cc0539::t_a6b202c11f2c67 159-165,167-173,175-178
+  s_6562bcb6cc0539::t_46e4fcc1c9abe1 166,174
+  s_6562bcb6cc0539::t_01a41007d616e1 2-43,45-51,53-58,62-115
+  s_6562bcb6cc0539::t_779ce6f3b9604f 195-217
+  s_6562bcb6cc0539::t_2a59ee25fb2117 44
+packages/im/runtime/tests/config-composer.test.ts
+  s_6562bcb6cc0539::t_29c42cd9fad18c 103,107,113-114,129,131,147-148,151,179,182,187,190,200,202-203,375,382,389,394,399,401,404,406,409-410,413-414,428-429,431,437,439,454,457,459,462,481-482,493,495,503,511
+  s_6562bcb6cc0539::t_ede514469a4e10 303
+  s_6562bcb6cc0539::t_9f9189c09339f1 41,43,48,53,58,67,74,78,80,98-99,220-221,239,243-244,252-253,261,269,272,280,293,295,301,316,318,336,338,369-370,374,554
+tests/docs/generated-config-reference.test.ts
+  s_6562bcb6cc0539::t_586f745692a23f 23-24,29,31
+docs/en/cli/index.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 168
+docs/adapters/discord.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 62,65-70
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,37,73
+plugins/adapters/napcat/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 25,56
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 39,42-50
+basic/cli/src/utils/config-check.ts
+  s_6562bcb6cc0539::t_b18e305ee0023a 425-429
+  s_6562bcb6cc0539::t_ef2c9d64a97818 99-100
+  s_6562bcb6cc0539::t_5b02a0991da125 521
+  s_6562bcb6cc0539::t_b626b37086ac22 16
+  s_6562bcb6cc0539::t_c64386480a561f 89,94
+basic/cli/src/commands/uninstall.ts
+  s_6562bcb6cc0539::t_9bc5d61cda96f2 135-137,171-176
+docs/adapters/wecom.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 61,64-73
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,36,76
+examples/self-delivery-bot/tests/runtime.test.ts
+  s_6562bcb6cc0539::t_da6f78bf49e42b 17
+packages/im/runtime/src/manifest.ts
+  s_6562bcb6cc0539::t_1473d22a64990d 17,151,158-166
+  s_6562bcb6cc0539::t_b7168541b73cdd 167-169
+packages/im/runtime/tests/runtime-input-hmr.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 31,47,58,73,84,114,147,279
+plugins/adapters/wecom/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 24,64
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 49,52-61
+examples/qq-games-bot/tests/runtime-contract.test.ts
+  s_6562bcb6cc0539::t_d8a66a1a53db08 5,9-10,16-18,33-36,39-48
+packages/im/runtime/tests/application-plugin-declaration.test.ts
+  s_6562bcb6cc0539::t_e6d2dc50bc61f3 1-121
+packages/im/runtime/tests/config-retained-adapter.test.ts
+  s_6562bcb6cc0539::t_7ef61dc8baa2e9 9,102-130,137-138,155
+  s_6562bcb6cc0539::t_ef99f7f83590df 20,23,74
+  s_6562bcb6cc0539::t_4c5dc23810ea0d 88
+  s_6562bcb6cc0539::t_e5baadaab97b19 90-91,134
+docs/adapters/milky.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 57,60-68
+  s_6562bcb6cc0539::t_b5ac71a4056b37 11,36,71
+basic/cli/tests/plugin-management.test.ts
+  s_6562bcb6cc0539::t_7c9359ef4cdc1c 493-521
+  s_6562bcb6cc0539::t_61fbc0d8fa4419 15,61,103,194,201,207,296,310,313,328,334-335,360,366,371,378,385,408,412,432,471,487
+docs/en/adapters/wecom.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 36,76
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 61,64-73
+docs/configuration/generated.md
+  s_6562bcb6cc0539::t_9f1463d037d342 171-193,201-237,245-276,284-304,312-345,353-382,390-416,424-437,445-461,469-489,497-513,521-538,546-575,583-591,599-613,621-642,650-672,680-701,709-724,732-750,758-764,832-1305,1313-1318,1326,1334-1359,1373-1406,1414-1425,1439-1459,1479-1483,1491-1493,1501-1504
+  s_6562bcb6cc0539::t_e463f9c8a978b7 163
+docs/en/adapters/lark.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 56,59-69
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,72
+packages/im/runtime/tests/environment-store.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 248,261,296,314,352
+packages/toolkit/create-zhin/src/config.ts
+  s_6562bcb6cc0539::t_e248eb2945d665 9
+examples/platform-acceptance-bot/tests/setup.test.ts
+  s_6562bcb6cc0539::t_586f745692a23f 50,70,75-76,108,110-111,119,142,183
+packages/im/runtime/tests/im-feature-hmr.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 77
+docs/en/adapters/telegram.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,73
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 62,65-70
+packages/im/runtime/tests/console-feature-hmr.test.ts
+  s_6562bcb6cc0539::t_ef99f7f83590df 47,115
+basic/cli/tests/dev-link.test.ts
+  s_6562bcb6cc0539::t_d50efe1c5f162d 47,54-55
+plugins/adapters/kook/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 26,58
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 47,50-55,73,75-83
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_6562bcb6cc0539::t_f048cfbb88b593 595-596,598,614,616,623,1402-1403,1405,1411,1429-1432
+  s_6562bcb6cc0539::t_e2174326517aba 306-307
+  s_2af75224fb57fa::t_cd6a8f23e970e6 243,574,576,1500,1505,1515,1535,1542
+docs/en/authoring/plugin-delivery.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 37
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_6562bcb6cc0539::t_9bc5d61cda96f2 45,181,187
+  s_6562bcb6cc0539::t_b626b37086ac22 10,75
+  s_6562bcb6cc0539::t_649f48e4499c26 122-124,128-130,163-166
+  s_6562bcb6cc0539::t_7c9359ef4cdc1c 94,107
+docs/en/authoring/adapters.md
+  s_6562bcb6cc0539::t_7ff5269950620b 81,83-85
+docs/en/adapters/line.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,68
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 55,58-65
+docs/getting-started/index.md
+  s_079f1dc5e6308d::t_42a995c86fa80a 36-37
+tests/docs/first-plugin-runtime.test.ts
+  s_6562bcb6cc0539::t_bfa62212dfd85c 102,127,149
+packages/im/runtime/src/slot-generation-preparer.ts
+  s_6562bcb6cc0539::t_4c4c85e3f2c60b 18,28,66-68
+docs/en/configuration/index.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 401
+  s_6562bcb6cc0539::t_55180d5ab1ce9c 384,392-396,418,420-426,438,440-463,473
+  s_6562bcb6cc0539::t_9f1463d037d342 50,61,66,95-98
+packages/im/runtime/src/root-runtime.ts
+  s_6562bcb6cc0539::t_add2deb9cad551 8,104,142-143,352,355-356,387,442,448,470-471,552,554-555,559
+  s_6562bcb6cc0539::t_6a55d1bf43f90d 36,144,353,392-393,472,635-642,697-703,706,712,720
+  s_6562bcb6cc0539::t_c4394443598360 166,237-241,262-269,275-281,320-324
+  s_6562bcb6cc0539::t_e8c95fea43aad6 649-650,675,682,735-737
+  s_6562bcb6cc0539::t_c0799490830b7b 119-120,188-191
+  s_6562bcb6cc0539::t_566a2a3b36315a 657,660,667,671-674,679-680,683-685,707-711,717-719
+  s_6562bcb6cc0539::t_e6d2dc50bc61f3 644
+  s_6562bcb6cc0539::t_5318963603d774 677,797-818
+  s_6562bcb6cc0539::t_73a0d32ce46650 661-662,676,678,686-688
+  s_6562bcb6cc0539::t_e8ad28022bc095 185-187,578
+  s_6562bcb6cc0539::t_b46d7ad8a89f4d 329,411-414
+  s_6562bcb6cc0539::t_e5aad69a2ff8a3 704-705
+  s_6562bcb6cc0539::t_555fe96f415a59 445,629-634,681
+  s_6562bcb6cc0539::t_4c4c85e3f2c60b 37,380-384
+  s_6562bcb6cc0539::t_71fdf6a13176b3 325
+  s_6562bcb6cc0539::t_723646356467dc 819-820
+packages/im/config-file/src/config-file-document.ts
+  s_6562bcb6cc0539::t_76a19c927e8af5 12,89,107,124,138,153,161,180,231
+  s_6562bcb6cc0539::t_a4a7741190a9e1 224
+  s_6562bcb6cc0539::t_a50df533e2c6d1 2,263
+basic/cli/src/utils/config-file.ts
+  s_6562bcb6cc0539::t_5b02a0991da125 3,9-10,13-23,34-37,39-44,47-51,64,67-73
+  s_6562bcb6cc0539::t_b18e305ee0023a 55-62
+  s_6562bcb6cc0539::t_ef2c9d64a97818 4-5,32-33,45-46,52-54
+scripts/platform-acceptance/run.mjs
+  s_6562bcb6cc0539::t_bfa62212dfd85c 12,21-22
+plugins/adapters/wechat-mp/README.md
+  s_6562bcb6cc0539::t_b5ac71a4056b37 25,60
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 47,50-57
+packages/im/runtime/tests/application-runtime.test.ts
+  s_6562bcb6cc0539::t_e5aad69a2ff8a3 4,9,16,26-39,41-43,46-86
+  s_6562bcb6cc0539::t_9dc7f7449a3892 338
+  s_6562bcb6cc0539::t_b46d7ad8a89f4d 182
+  s_6562bcb6cc0539::t_cd4ab58b250e3c 203,285
+  s_6562bcb6cc0539::t_22f16f16b8312e 328-335
+  s_6562bcb6cc0539::t_0684e162d0f1ce 5,44-45
+  s_6562bcb6cc0539::t_063ab6374e1106 177-181,183-188,222-233
+  s_6562bcb6cc0539::t_ae4e0b0a589c08 1-3,6-8,10-15,17-25,87-148,165-176,189-202,204-221,234-235,249-284,286-327,336-337,339-346
+  s_6562bcb6cc0539::t_5318963603d774 236-248
+  s_6562bcb6cc0539::t_182f606497e436 40
+  s_6562bcb6cc0539::t_459bde3038cb5c 149-164
+packages/im/runtime/tests/native-development-runtime.test.ts
+  s_6562bcb6cc0539::t_4c5dc23810ea0d 36,50
+docs/en/adapters/napcat.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 51,54-62
+  s_6562bcb6cc0539::t_b5ac71a4056b37 37,68
+plugins/utils/short-url/README.md
+  s_6562bcb6cc0539::t_95a5d95fa3f1e3 16,18-19
+  s_6562bcb6cc0539::t_b5ac71a4056b37 13
+basic/cli/src/commands/setup.ts
+  s_6562bcb6cc0539::t_ea929b9a1947c2 249
+  s_6562bcb6cc0539::t_5b02a0991da125 12,239,241,243-248,281
+  s_6562bcb6cc0539::t_a4d92b18479a0e 207,209-210
+packages/im/runtime/src/project-graph.ts
+  s_6562bcb6cc0539::t_db5a28e94bcfe9 2,80-81,85,87,130-131,142,173
+  s_6562bcb6cc0539::t_ebb893c49e6432 1,78-79,82,86,88,98,116,184
+docs/en/concepts/plugin-model.md
+  s_6562bcb6cc0539::t_e463f9c8a978b7 8,15-16,55-56,58,78,103,105-112,115,119
+packages/im/config-file/tests/v2-source-order.test.ts
+  s_6562bcb6cc0539::t_0a8746780c9d99 86-95
+  s_6562bcb6cc0539::t_ede514469a4e10 96-100
+  s_6562bcb6cc0539::t_d61c0a64b97f14 101-136
+  s_6562bcb6cc0539::t_4a933e4232d7f8 1-70
+  s_6562bcb6cc0539::t_e1a9b3b81f896e 71-85
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_6562bcb6cc0539::t_da6f78bf49e42b 115,117,209,225
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_6562bcb6cc0539::t_ab507d318d3ba7 59
+basic/cli/tests/config-check.test.ts
+  s_6562bcb6cc0539::t_32632b6ba960f3 26,54,69,96-98,124-126,175,185-186,191,199,204-206,216-218,259,284
+basic/cli/tests/config-file-revision.test.ts
+  s_6562bcb6cc0539::t_93e4958046e3e8 1-70
+basic/cli/tests/plugin-management-console-client.test.ts
+  s_6562bcb6cc0539::t_640b3a89b299ed 31,35,48,55,81
+basic/cli/tests/plugin-management-review.test.ts
+  s_6562bcb6cc0539::t_fcd6bb6da0111a 19,78
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  s_6562bcb6cc0539::t_e515970c52e5e7 21-24,27-32,34-35,39-42,45-53,56-67,70-78,81-102,110,128,130,158,181
+basic/cli/tests/plugin-runtime/console/control-plane.test.ts
+  s_6562bcb6cc0539::t_14a0460e357c72 29
+basic/cli/tests/plugin-runtime/endpoint-configuration-store.test.ts
+  s_6562bcb6cc0539::t_6d76d5f8faba90 20,66,68-72,94,104,121,133-140,142,156,159,164-165,169,183
+examples/self-delivery-bot/zhin.config.yml
+  s_6562bcb6cc0539::t_ce66aceb8a2b2e 1-4
+packages/im/config-file/tests/file-mode.test.ts
+  s_6562bcb6cc0539::t_b0d350185a5e12 1-25
+packages/toolkit/create-zhin/tests/config.test.ts
+  s_6562bcb6cc0539::t_9c39c7dc14ad5b 152
+packages/toolkit/create-zhin/tests/stable-yes.test.ts
+  s_6562bcb6cc0539::t_d1c143969ca2ed 40-41,114
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_6562bcb6cc0539::t_69231d7bc97d86 111
+packages/toolkit/scaffold-wizard/tests/apply.test.ts
+  s_6562bcb6cc0539::t_e651f78e3c7e5e 21,40,59,162-164,203,217,232,242,255,260
+packages/toolkit/scaffold-wizard/tests/decisions.test.ts
+  s_6562bcb6cc0539::t_720055af54fb39 10,18-19,42,51-56,62-64,124
+pnpm-lock.yaml
+  s_6562bcb6cc0539::t_2d8723a1edfc7d 1971-1973,1977-1979
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9816c18eeb2513e19a1143fc6a6c94d38ce9b70b",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2af75224fb57fa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a152e1-aa81-7e90-ba2f-f2fc83ccd286",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
