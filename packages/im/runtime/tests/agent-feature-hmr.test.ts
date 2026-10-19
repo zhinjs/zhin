@@ -49,7 +49,7 @@ describe('Agent Feature slot HMR', () => {
     modules.set(join(project, 'prompt-sections/project-rules/index.ts'), { default: projectRules('fixture') });
     modules.set(join(project, 'tools/lookup/index.ts'), { default: lookupTool('fixture') });
     modules.set(join(project, 'mcps/memory/index.ts'), { default: memoryMcp([]) });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -96,7 +96,7 @@ describe('Agent Feature slot HMR', () => {
     modules.set(toolSource, { default: lookupTool('v1') });
     modules.set(mcpSource, { default: memoryMcp(events) });
     modules.set(promptSource, { default: projectRules('v1') });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },

@@ -74,6 +74,7 @@ describe('sandbox console page', () => {
     const runtime = new RootRuntime({
       projectRoot: project,
       modules,
+      config: { configVersion: 2, plugins: {} },
       environment: { name: 'test', mode: 'test', platform: 'node' },
     });
     const consoleRuntime = new ConsoleRuntime();

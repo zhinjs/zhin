@@ -1,15 +1,13 @@
 # Zhin.js 生活助手示例
 # 介于 minimal-bot（Sandbox Core）与 test-bot（厨房水槽）之间
 
+configVersion: 2
 log_level: 1
 
 plugin: {}
 
 plugins:
-  sandbox:
-    endpoints:
-      - id: assistant
-        owner: assistant-user
+  sandbox: "@zhin.js/adapter-sandbox"
 
 # --- HTTP 服务 ---
 http:
@@ -42,13 +40,13 @@ ai:
   memory:
     enabled: true
     semantic:
-      enabled: false   # 生活助手推荐默认关；改为 true 启用 memory_search / memory_upsert
+      enabled: false # 生活助手推荐默认关；改为 true 启用 memory_search / memory_upsert
 
   # 触发配置
   trigger:
     respondToAt: true
     respondToPrivate: true
-    prefixes: ["ai:", "AI:"]
+    prefixes: [ "ai:", "AI:" ]
 
   # Agent 安全
   agent:
@@ -58,6 +56,10 @@ ai:
       enabled: true
       auto: true
       keepRecentTokens: 20000
+sandbox:
+  endpoints:
+    - id: assistant
+      owner: assistant-user
 
 # --- 智能家居（可选，需 Home Assistant） ---
 # 取消注释并配置 HA 凭证后，Agent 即可使用 home_* 工具控制设备

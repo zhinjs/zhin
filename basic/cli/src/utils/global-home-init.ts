@@ -27,15 +27,12 @@ const GLOBAL_PACKAGE_JSON = {
   },
 };
 
-const GLOBAL_CONFIG_YML = `log_level: 1
-
-endpoints: []
-
+const GLOBAL_CONFIG_YML = `configVersion: 2
+log_level: 1
 plugins:
-  - "@zhin.js/adapter-sandbox"
-
-plugin_dirs:
-  - node_modules
+  sandbox: '@zhin.js/adapter-sandbox'
+disable_plugins: []
+sandbox: {}
 
 ai:
   enabled: true

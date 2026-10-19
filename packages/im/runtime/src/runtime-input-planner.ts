@@ -21,18 +21,23 @@ export interface RuntimeInputPlan {
 
 /** Classifies config/environment changes by their actual expanded runtime projection. */
 export class RuntimeInputPlanner {
-  constructor(private readonly composer = new ConfigComposer()) {}
+  constructor(
+    private readonly composer = new ConfigComposer(),
+    private readonly previousComposer = composer,
+  ) {}
 
   async plan(options: {
     readonly graph: ProjectGraph;
+    readonly nextGraph?: ProjectGraph;
     readonly environment: RuntimeEnvironment;
     readonly previousDocument: RuntimeConfigDocument;
     readonly nextDocument: RuntimeConfigDocument;
     readonly previousEnvironment: EnvironmentLayers;
     readonly nextEnvironment: EnvironmentLayers;
   }): Promise<RuntimeInputPlan> {
-    const previous = await this.composer.compose(options.graph, options.previousDocument);
-    const next = await this.composer.compose(options.graph, options.nextDocument);
+    const previous = await this.previousComposer.compose(options.graph, options.previousDocument);
+    const nextGraph = options.nextGraph ?? options.graph;
+    const next = await this.composer.compose(nextGraph, options.nextDocument);
     const environmentChanged = !isDeepStrictEqual(
       options.previousEnvironment,
       options.nextEnvironment,
@@ -41,7 +46,7 @@ export class RuntimeInputPlanner {
       expandHostValue(previous.document[key], options.environment, options.previousEnvironment),
       expandHostValue(next.document[key], options.environment, options.nextEnvironment),
     ));
-    const changed = indexGraph(options.graph)
+    const changed = indexGraph(nextGraph)
       .filter((node) => !isDeepStrictEqual(
         expandPluginView(
           node.id,

@@ -49,7 +49,7 @@ export const configCheckCommand = new Command('check')
     if (options.fix && result.configFile && Object.keys(result.config).length > 0) {
       const { config: fixed, fixes } = applyConfigFixes(result.config, cwd);
       if (fixes.length > 0) {
-        await saveConfig(path.join(cwd, result.configFile), fixed);
+        await saveConfig(path.join(cwd, result.configFile), fixed, result.config);
         result.fixesApplied = fixes;
         result = await runConfigCheck(cwd, env);
         result.fixesApplied = fixes;

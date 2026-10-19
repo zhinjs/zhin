@@ -165,7 +165,7 @@ zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
 zhin add ...          # install 的别名
 ```
 
-默认会用 pnpm 安装，再把插件写进 `zhin.config.yml` 的 `plugins.<instanceKey>`，并挂到 `package.json` 的 `zhin.plugins`。安装的是适配器时，按提示运行 `zhin setup --adapters` 添加账号。
+默认会用 pnpm 安装，再把包引用写进 `zhin.config.yml` 的 `plugins.<instanceKey>`；业务参数写在顶层同名实例块，启停由 `disable_plugins` 控制。安装的是适配器时，按提示运行 `zhin setup --adapters` 添加账号。
 
 | 选项 | 说明 |
 | --- | --- |
@@ -371,3 +371,16 @@ export default TraceArchivePage;
 | `75` | 运行时要求重启（如 lockfile 变更），daemon 按防风暴策略重启 |
 
 进程模型与热重载行为见 [zhin runtime start](./runtime.md)。
+
+## 迁移应用实例声明
+
+旧项目需先停止 Bot，再迁移到 `configVersion: 2`。命令默认只预览，不安装依赖或启动插件：
+
+```bash
+zhin migrate instances
+zhin migrate instances --apply
+zhin migrate instances --recover continue
+zhin migrate instances --recover rollback
+```
+
+迁移会备份原文件并记录进度；嵌套、optional 和别名碰撞需人工处理。详见[迁移指南](../migrations/plugin-instance-declarations.md)。

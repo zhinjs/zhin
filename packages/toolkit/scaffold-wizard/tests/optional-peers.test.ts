@@ -5,7 +5,7 @@ import { diagnoseUpgradeToL4 } from '../src/upgrade-l4.js';
 describe('diagnoseOptionalPeers', () => {
   it('requires speech when transcribe strategy is set', () => {
     const result = diagnoseOptionalPeers('/tmp', {
-      ai: { enabled: true, multimodal: { audio: { strategy: 'transcribe' } } },
+      configVersion: 2, ai: { enabled: true, multimodal: { audio: { strategy: 'transcribe' } } },
     }, { dependencies: {} });
     expect(result.speech?.required).toBe(true);
     expect(result.speech?.missingFromPackageJson).toContain('@zhin.js/speech');
@@ -14,25 +14,25 @@ describe('diagnoseOptionalPeers', () => {
   it('rejects legacy list-form plugins', () => {
     expect(() => diagnoseOptionalPeers('/tmp', {
       plugins: ['@zhin.js/adapter-kook'],
-    }, { dependencies: {} })).toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+    }, { dependencies: {} })).toThrow(/configVersion must be 2/);
   });
 
   it('requires html-renderer for new runtime plugins map with html-image adapter instanceKey', () => {
     const result = diagnoseOptionalPeers('/tmp', {
-      plugins: { kook: { endpoints: [{ id: 'kook-bot', token: '${KOOK_TOKEN}' }] } },
+      configVersion: 2, plugins: { kook: '@zhin.js/adapter-kook' }, kook: { endpoints: [{ id: 'kook-bot', token: '${KOOK_TOKEN}' }] },
     }, { dependencies: {} });
     expect(result.htmlRenderer?.required).toBe(true);
   });
 
   it('does not require html-renderer for plugins map without html-image adapters', () => {
     const result = diagnoseOptionalPeers('/tmp', {
-      plugins: { sandbox: { endpoints: [{ id: 'sandbox-bot' }] } },
+      configVersion: 2, plugins: { sandbox: '@zhin.js/adapter-sandbox' }, sandbox: { endpoints: [{ id: 'sandbox-bot' }] },
     }, { dependencies: {} });
     expect(result.htmlRenderer).toBeUndefined();
   });
 
   it('does not require peers for minimal IM-only config', () => {
-    const result = diagnoseOptionalPeers('/tmp', { ai: { enabled: false } }, { dependencies: {} });
+    const result = diagnoseOptionalPeers('/tmp', { configVersion: 2, ai: { enabled: false } }, { dependencies: {} });
     expect(result.speech).toBeUndefined();
     expect(result.htmlRenderer).toBeUndefined();
   });
@@ -40,7 +40,7 @@ describe('diagnoseOptionalPeers', () => {
 
 describe('diagnoseUpgradeToL4', () => {
   it('lists missing AI deps when ai disabled', () => {
-    const result = diagnoseUpgradeToL4('/tmp', { ai: { enabled: false } }, { dependencies: {} });
+    const result = diagnoseUpgradeToL4('/tmp', { configVersion: 2, ai: { enabled: false } }, { dependencies: {} });
     expect(result.missingAiDeps.length).toBeGreaterThan(0);
     expect(result.configSnippets.some((s) => s.includes('speech:'))).toBe(true);
   });

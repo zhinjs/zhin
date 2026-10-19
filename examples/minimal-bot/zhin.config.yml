@@ -1,4 +1,5 @@
-# Root Plugin configuration. Child Plugin values live under plugins.<instanceKey>.
+configVersion: 2
+# Root Plugin configuration. Child Plugin values use top-level instance aliases.
 plugin:
   terminal:
     interactive: true

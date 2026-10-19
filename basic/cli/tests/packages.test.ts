@@ -8,7 +8,7 @@ import {
   filterSearchResults,
   formatPackageBadge,
   readInstalledZhinField,
-  registerPluginInManifest,
+  registerPluginInstance,
   resolveInstallRoute,
 } from '../src/utils/plugin-registry.js';
 
@@ -150,25 +150,24 @@ describe('readInstalledZhinField', () => {
   });
 });
 
-describe('registerPluginInManifest（zhin.plugins 注册）', () => {
-  it('向 package.json 写入 zhin.plugins 清单（2 空格缩进）且幂等', async () => {
+describe('registerPluginInstance（应用声明注册）', () => {
+  it('只向主配置注册实例且幂等', async () => {
     const root = await makeTempProject();
     await fs.writeJson(path.join(root, 'package.json'), { name: 'demo-bot', version: '0.0.0' });
+    await fs.writeJson(path.join(root, 'zhin.config.json'), {configVersion: 2, plugins: {}});
 
-    const first = await registerPluginInManifest(root, '@zhin.js/adapter-telegram');
-    const second = await registerPluginInManifest(root, '@zhin.js/adapter-telegram');
+    const first = await registerPluginInstance(root, '@zhin.js/adapter-telegram');
+    const second = await registerPluginInstance(root, '@zhin.js/adapter-telegram');
 
     expect(first).toBe(true);
     expect(second).toBe(false);
 
     const pkg = await fs.readJson(path.join(root, 'package.json'));
     expect(pkg.name).toBe('demo-bot');
-    expect(pkg.zhin.plugins).toEqual([
-      { package: '@zhin.js/adapter-telegram', instanceKey: 'telegram' },
-    ]);
+    expect(pkg.zhin).toBeUndefined();
+    const config = await fs.readJson(path.join(root, 'zhin.config.json'));
+    expect(config).toMatchObject({plugins: {telegram: '@zhin.js/adapter-telegram'}});
 
-    const raw = await fs.readFile(path.join(root, 'package.json'), 'utf8');
-    expect(raw).toContain('\n  "zhin"'); // 2 空格缩进
   });
 });
 
@@ -176,7 +175,7 @@ describe('adapterConfigHintForPackage', () => {
   it('已知适配器返回 zhin setup / endpoints 配置提示', () => {
     const hint = adapterConfigHintForPackage('@zhin.js/adapter-telegram');
     expect(hint).toContain('zhin setup');
-    expect(hint).toContain('plugins.telegram.endpoints');
+    expect(hint).toContain('telegram.endpoints');
   });
 
   it('未知包返回 null', () => {

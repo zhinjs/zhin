@@ -17,6 +17,7 @@ let environment: NodeJS.ProcessEnv;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'endpoint-configuration-store-'));
   environment = {};
+  fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'configVersion: 2\nplugins: { demo: demo, other: other }\n');
 });
 
 afterEach(() => {
@@ -62,12 +63,13 @@ describe('ProjectEndpointConfigurationStore', () => {
   it('preserves YAML comments and updates an existing environment key', async () => {
     const filePath = writeConfig([
       '# root comment',
+      'configVersion: 2',
       'log_level: info',
-      'plugins:',
-      '  demo:',
-      '    # endpoint comment',
-      '    endpoints:',
-      '      - { id: old-bot, token: old }',
+      'plugins: { demo: demo }',
+      'demo:',
+      '  # endpoint comment',
+      '  endpoints:',
+      '    - { id: old-bot, token: old }',
       '',
     ].join('\n'));
     fs.writeFileSync(path.join(root, '.env'), 'OTHER=keep\nDEMO_NEW_BOT_TOKEN=old\n');
@@ -89,7 +91,7 @@ describe('ProjectEndpointConfigurationStore', () => {
   });
 
   it('uses the same endpoint contract for JSON Root config', async () => {
-    const filePath = writeConfig('{\n  "plugins": {}\n}\n', 'zhin.config.json');
+    const filePath = writeConfig('{\n  "configVersion": 2,\n  "plugins": {"demo": "demo"}\n}\n', 'zhin.config.json');
     const store = createStore(filePath);
 
     await store.add({ adapterKey: 'demo', entry: { id: 'json-bot' }, environment: {} });
@@ -99,7 +101,7 @@ describe('ProjectEndpointConfigurationStore', () => {
       filePath,
     });
     expect(JSON.parse(fs.readFileSync(filePath, 'utf8'))).toEqual({
-      plugins: { demo: { endpoints: [] } },
+      configVersion: 2, plugins: {demo: 'demo'}, demo: { endpoints: [] },
     });
   });
 
@@ -116,7 +118,7 @@ describe('ProjectEndpointConfigurationStore', () => {
 
   it('keeps adapter namespaces independent and removes only the requested id', async () => {
     const filePath = writeConfig(
-      'plugins:\n  demo:\n    endpoints:\n      - { id: a }\n      - { id: b }\n',
+      'configVersion: 2\nplugins: {demo: demo, other: other}\ndemo:\n  endpoints:\n    - { id: a }\n    - { id: b }\n',
       'config.yaml',
     );
     const store = createStore(filePath);
@@ -128,8 +130,16 @@ describe('ProjectEndpointConfigurationStore', () => {
     expect((await store.list('other')).map((entry) => entry.id)).toEqual(['c']);
   });
 
+  it('rejects an undeclared adapter alias before writing configuration or environment', async () => {
+    const file = path.join(root, 'zhin.config.yml');
+    const before = fs.readFileSync(file, 'utf8');
+    await expect(createStore().add({adapterKey: 'unknown', entry: {id: 'bot'}, environment: {UNUSED_TOKEN: 'secret'}})).rejects.toThrow('Unknown plugin instance');
+    expect(fs.readFileSync(file, 'utf8')).toBe(before);
+    expect(fs.existsSync(path.join(root, '.env'))).toBe(false);
+  });
+
   it('rejects duplicate ids without mutating project files', async () => {
-    const filePath = writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: dup }\n');
+    const filePath = writeConfig('configVersion: 2\nplugins: {demo: demo}\ndemo:\n  endpoints:\n    - { id: dup }\n');
     const before = fs.readFileSync(filePath, 'utf8');
     const store = createStore(filePath);
 
@@ -143,20 +153,20 @@ describe('ProjectEndpointConfigurationStore', () => {
   });
 
   it('requires canonical object maps instead of promoting arrays', async () => {
-    const filePath = writeConfig('plugins: []\n');
+    const filePath = writeConfig('configVersion: 2\nplugins: []\n');
     const store = createStore(filePath);
 
-    await expect(store.list('demo')).rejects.toThrow(/plugins 必须是对象映射/);
+    await expect(store.list('demo')).rejects.toThrow(/plugins.*alias-to-package|plugins must map instance aliases/);
     await expect(store.add({
       adapterKey: 'demo',
       entry: { id: 'bot' },
       environment: {},
-    })).rejects.toThrow(/plugins 必须是对象映射/);
-    expect(fs.readFileSync(filePath, 'utf8')).toBe('plugins: []\n');
+    })).rejects.toThrow(/plugins.*alias-to-package|plugins must map instance aliases/);
+    expect(fs.readFileSync(filePath, 'utf8')).toBe('configVersion: 2\nplugins: []\n');
   });
 
   it('restores exact .env bytes when the prepared config cannot commit', async () => {
-    const filePath = writeConfig('plugins: {}\n');
+    const filePath = writeConfig('configVersion: 2\nplugins: {demo: demo}\n');
     const envPath = path.join(root, '.env');
     const original = 'OTHER=keep\r\nDEMO_BOT_TOKEN=old\r\n';
     fs.writeFileSync(envPath, original);
@@ -170,7 +180,7 @@ describe('ProjectEndpointConfigurationStore', () => {
     })).rejects.toThrow('commit rejected');
 
     expect(fs.readFileSync(envPath, 'utf8')).toBe(original);
-    expect(fs.readFileSync(filePath, 'utf8')).toBe('plugins: {}\n');
+    expect(fs.readFileSync(filePath, 'utf8')).toBe('configVersion: 2\nplugins: {demo: demo}\n');
     expect(environment.DEMO_BOT_TOKEN).toBeUndefined();
   });
 });

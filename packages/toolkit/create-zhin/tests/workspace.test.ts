@@ -108,9 +108,7 @@ describe('createWorkspace', () => {
       { package: '@zhin.js/layout', api: '^1.0.0' },
       { package: '@zhin.js/skill', api: '^1.0.0' },
     ])
-    expect(pkg.zhin.plugins).toEqual([
-      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
-    ])
+    expect(pkg.zhin.plugins).toEqual([])
 
     // 配置：新 runtime 格式
     expect(config).toContain('http:')

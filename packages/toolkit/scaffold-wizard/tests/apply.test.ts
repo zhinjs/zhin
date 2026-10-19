@@ -18,7 +18,7 @@ import type { AdapterSetupResult, InitOptions } from '../src/types.js';
 
 describe('apply wizard to config', () => {
   it('merges database, adapters, and ai into new runtime config format', () => {
-    const config: Record<string, unknown> = { plugins: { example: {} } };
+    const config: Record<string, unknown> = { configVersion: 2, plugins: { example: './plugins/example' }, example: {} };
     const options: InitOptions = {
       database: { dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' },
       adapters: {
@@ -37,7 +37,7 @@ describe('apply wizard to config', () => {
     finalizeWizardOptions(options);
     applyWizardOptionsToConfig(config, options);
 
-    const plugins = config.plugins as Record<string, unknown>;
+    const plugins = config as Record<string, unknown>;
     expect(plugins.example).toEqual({});
     expect(plugins.telegram).toEqual({ polling: true, endpoints: [{ id: 'tg', token: '${TELEGRAM_TOKEN}' }] });
     expect(config.database).toEqual({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' });
@@ -56,7 +56,7 @@ describe('apply wizard to config', () => {
       plugins: [],
       instances: [],
       envVars: {},
-    })).toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+    })).toThrow(/configVersion must be 2/);
     expect(config.plugins).toEqual(['@zhin.js/adapter-sandbox']);
   });
 });
@@ -159,9 +159,9 @@ describe('buildRuntimeConfigDocument', () => {
     expect(doc.http).toMatchObject({ token: '${HTTP_TOKEN}', port: 8068, base: '/api' });
     expect((doc.http as { corsOrigins: string[] }).corsOrigins).toContain('https://console.zhin.dev');
     expect(doc.database).toEqual({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' });
-    expect(doc.plugins).toEqual({
-      sandbox: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] },
-    });
+    expect(doc.configVersion).toBe(2);
+    expect(doc.plugins).toEqual({ sandbox: '@zhin.js/adapter-sandbox' });
+    expect(doc.sandbox).toEqual({ endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] });
     // runtime config-composer 不接受的顶层键不得出现
     expect(doc).not.toHaveProperty('endpoints');
     expect(doc).not.toHaveProperty('inbox');
@@ -200,7 +200,7 @@ describe('applyAdaptersToConfig', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const config: Record<string, unknown> = {
-        plugins: {
+        configVersion: 2, plugins: { sandbox: '@zhin.js/adapter-sandbox' },
           sandbox: {
             commandPrefix: '/',
             endpoints: [
@@ -208,14 +208,13 @@ describe('applyAdaptersToConfig', () => {
               { id: 'manual-bot', owner: 'someone-else' },
             ],
           },
-        },
       };
 
       applyAdaptersToConfig(config, sandboxResult([
         { id: 'sandbox-bot', owner: 'sandbox-user' },
       ]));
 
-      const plugins = config.plugins as Record<string, Record<string, unknown>>;
+      const plugins = config as Record<string, Record<string, unknown>>;
       expect(plugins.sandbox.commandPrefix).toBe('/');
       expect(plugins.sandbox.endpoints).toEqual([
         { id: 'sandbox-bot', owner: 'sandbox-user' },
@@ -230,18 +229,17 @@ describe('applyAdaptersToConfig', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
       const config: Record<string, unknown> = {
-        plugins: {
+        configVersion: 2, plugins: { sandbox: '@zhin.js/adapter-sandbox' },
           sandbox: {
             endpoints: [{ id: 'sandbox-bot', owner: 'stale-owner' }],
           },
-        },
       };
 
       applyAdaptersToConfig(config, sandboxResult([
         { id: 'sandbox-bot', owner: 'sandbox-user' },
       ]));
 
-      const plugins = config.plugins as Record<string, Record<string, unknown>>;
+      const plugins = config as Record<string, Record<string, unknown>>;
       expect(plugins.sandbox.endpoints).toEqual([
         { id: 'sandbox-bot', owner: 'sandbox-user' },
       ]);
@@ -254,12 +252,12 @@ describe('applyAdaptersToConfig', () => {
 
   it('adds new instances without touching existing ones', () => {
     const config: Record<string, unknown> = {
-      plugins: { telegram: { polling: true } },
+      configVersion: 2, plugins: { telegram: '@zhin.js/adapter-telegram' }, telegram: { polling: true },
     };
 
     applyAdaptersToConfig(config, sandboxResult([{ id: 'sandbox-bot' }]));
 
-    const plugins = config.plugins as Record<string, unknown>;
+    const plugins = config as Record<string, unknown>;
     expect(plugins.telegram).toEqual({ polling: true });
     expect(plugins.sandbox).toEqual({ endpoints: [{ id: 'sandbox-bot' }] });
   });

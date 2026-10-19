@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-qq
 - `@zhin.js/adapter` — convention-based `adapters/qq/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` / `@zhin.js/host-router` (WebSocket path)
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'|'channel'`; the owning guild lands in `parent`)
@@ -53,33 +53,37 @@ Required fields (`endpoints[i]`): `name`, `appid`, `secret`.
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  qq:
-    # mode: websocket   # default
-    endpoints:
-      - name: my-qq-bot
-        appid: ${QQ_APPID}
-        secret: ${QQ_SECRET}
+  qq: "@zhin.js/adapter-qq"
+qq:
+  # mode: websocket   # default
+  endpoints:
+    - name: my-qq-bot
+      appid: ${QQ_APPID}
+      secret: ${QQ_SECRET}
 ```
 
 Multiple accounts: a single plugin instance can attach multiple endpoints (each item in the `endpoints` array overrides top-level fields; `name` is required):
 
 ```yaml
+configVersion: 2
 plugins:
-  qq:
-    mode: websocket
-    intents: [GUILDS, GROUP_AND_C2C_EVENT]
-    endpoints:
-      - name: main-bot
-        appid: ${QQ_APPID}
-        secret: ${QQ_SECRET}
-      - name: second-bot
-        appid: ${QQ_APPID_2}
-        secret: ${QQ_SECRET_2}
+  qq: "@zhin.js/adapter-qq"
+qq:
+  mode: websocket
+  intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
+  endpoints:
+    - name: main-bot
+      appid: ${QQ_APPID}
+      secret: ${QQ_SECRET}
+    - name: second-bot
+      appid: ${QQ_APPID_2}
+      secret: ${QQ_SECRET_2}
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-qq` (`instanceKey: qq`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-qq` (`instanceKey: qq`).
 
 ## Endpoint Management Commands
 
@@ -87,7 +91,7 @@ The adapter comes with a `qq endpoint` command group (used directly in chat, no 
 
 | Command | Description |
 |---------|-------------|
-| `qq endpoint add [name]` | Bind via QR code on mobile QQ: sends a QR code link -> after confirmation, credentials are written to `.env` (`QQ_<NAME>_APPID/SECRET`) and appended to `plugins.qq.endpoints` (restart required to take effect) |
+| `qq endpoint add [name]` | Bind via QR code on mobile QQ: sends a QR code link -> after confirmation, credentials are written to `.env` (`QQ_<NAME>_APPID/SECRET`) and appended to `qq.endpoints` (restart required to take effect) |
 | `qq endpoint cancel` | Cancel an in-progress QR code binding (only one process allowed at a time) |
 | `qq endpoint list` | List running and configured endpoints |
 | `qq endpoint remove <name>` | Remove an endpoint from configuration (`.env` keys are preserved; manual cleanup possible) |

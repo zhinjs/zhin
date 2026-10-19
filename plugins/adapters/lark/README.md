@@ -23,7 +23,7 @@ pnpm add @zhin.js/adapter-lark
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
 入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
 出站：`send({ conversation, payload })` → `im/v1/messages`
@@ -42,21 +42,23 @@ pnpm add @zhin.js/adapter-lark
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  lark:
-    webhookPath: /lark/webhook          # 可选，默认 /lark/webhook
-    isFeishu: true                      # 可选，默认 true
-    # apiBaseUrl: https://open.feishu.cn/open-apis
-    endpoints:
-      - id: my-lark-bot
-        appId: ${LARK_APP_ID}
-        appSecret: ${LARK_APP_SECRET}
-        # encryptKey: ${LARK_ENCRYPT_KEY}          # 可选
-        # verificationToken: ${LARK_VERIFY_TOKEN}  # 可选
+  lark: "@zhin.js/adapter-lark"
+lark:
+  webhookPath: /lark/webhook # 可选，默认 /lark/webhook
+  isFeishu: true # 可选，默认 true
+  # apiBaseUrl: https://open.feishu.cn/open-apis
+  endpoints:
+    - id: my-lark-bot
+      appId: ${LARK_APP_ID}
+      appSecret: ${LARK_APP_SECRET}
+      # encryptKey: ${LARK_ENCRYPT_KEY}          # 可选
+      # verificationToken: ${LARK_VERIFY_TOKEN}  # 可选
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-lark`（`instanceKey: lark`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-lark`（`instanceKey: lark`）。
 
 ## 环境变量
 

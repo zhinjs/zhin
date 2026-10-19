@@ -140,7 +140,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(readmePath)).toBe(true)
     const readme = await fs.readFile(readmePath, 'utf-8')
     expect(readme).toContain(pluginName)
-    expect(readme).toContain('zhin.plugins')
+    expect(readme).toContain('configVersion: 2')
     expect(readme).toContain('instanceKey')
 
     // Check .gitignore / CHANGELOG.md / agent skill
@@ -330,7 +330,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(path.join(pluginDir, 'commands', pluginName, 'index.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'tests', `${pluginName}-runtime.test.ts`))).toBe(true)
     const readme = await fs.readFile(path.join(pluginDir, 'README.md'), 'utf-8')
-    expect(readme).toContain('zhin.plugins')
+    expect(readme).toContain('configVersion: 2')
     expect(readme).toContain(`pnpm add ../${pluginName}`)
   }, 30000)
 

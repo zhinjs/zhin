@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-wecom
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is FromUserName; `@chatroom` suffix means `kind: 'group'`)
 Outbound: `send({ conversation, payload })` -> WeCom `message/send` API (`conversation.id` drives the chatid/touser split)
@@ -58,20 +58,22 @@ endpoint config.
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  wecom:
-    webhookPath: /wecom/callback       # optional, default /wecom/callback
-    apiBaseUrl: https://qyapi.weixin.qq.com  # optional
-    endpoints:
-      - id: wecom-bot
-        corpId: ${WECOM_CORP_ID}
-        agentSecret: ${WECOM_AGENT_SECRET}
-        token: ${WECOM_TOKEN}
-        encodingAESKey: ${WECOM_AES_KEY}
+  wecom: "@zhin.js/adapter-wecom"
+wecom:
+  webhookPath: /wecom/callback # optional, default /wecom/callback
+  apiBaseUrl: https://qyapi.weixin.qq.com # optional
+  endpoints:
+    - id: wecom-bot
+      corpId: ${WECOM_CORP_ID}
+      agentSecret: ${WECOM_AGENT_SECRET}
+      token: ${WECOM_TOKEN}
+      encodingAESKey: ${WECOM_AES_KEY}
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-wecom` (`instanceKey: wecom`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-wecom` (`instanceKey: wecom`).
 
 ## Environment Variables
 

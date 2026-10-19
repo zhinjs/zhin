@@ -4,6 +4,7 @@ import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
 import hostConfigSchema from './host-config-schema.json' with { type: 'json' };
 import { readPluginConfigSchema } from './plugin-config-schema.js';
 import type { ModuleRuntime } from './module-runtime.js';
+import { readApplicationPluginDeclaration } from './application-plugin-declaration.js';
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -48,6 +49,8 @@ export class ConfigComposer {
   constructor(
     private readonly inactivePluginInstanceKeys: readonly string[] = [],
     private readonly modules?: Pick<ModuleRuntime, 'load'>,
+    /** Previously validated generation declarations; never import retired owners just to compare inputs. */
+    private readonly validatedSchemas?: ReadonlyMap<PluginId, JsonSchema>,
   ) {}
 
   async compose(
@@ -56,17 +59,27 @@ export class ConfigComposer {
     /** Source config file name, annotated on ConfigValidationError. */
     source?: string,
   ): Promise<ComposedConfig> {
+    const declaration = readApplicationPluginDeclaration(input, source);
+    if (this.inactivePluginInstanceKeys.length > 0) {
+      throw new TypeError('Legacy disabled Plugin state must move to disable_plugins; see docs/migrations/plugin-instance-declarations.md');
+    }
+    const enabledKeys = new Set(declaration.instances.filter(instance => instance.enabled).map(instance => instance.instanceKey));
+    if (enabledKeys.size !== graph.root.children.length
+      || graph.root.children.some(child => !enabledKeys.has(child.instanceKey))) {
+      throw new TypeError('Compose configuration against its candidate application graph before loading Plugin schemas');
+    }
     // Effective schemas include child namespaces for whole-tree validation;
     // ownSchemas retain each package's private configuration contract.
     const ownSchemas = new Map<PluginId, JsonSchema>();
-    const rootOwn = await readOwnSchema(graph.root, this.modules);
+    const rootOwn = await readOwnSchema(graph.root, this.modules, this.validatedSchemas);
     ownSchemas.set(graph.root.id, rootOwn);
     const childSchemas = await Promise.all(
       graph.root.children.map(async (child) => [
         child.instanceKey,
-        await composeNode(child, ownSchemas, this.modules),
+        await composeNode(child, ownSchemas, this.modules, this.validatedSchemas),
       ] as const),
     );
+    const childSchemaByKey = new Map(childSchemas);
     // Host-level keys (`http`, `database`, `ai`, `mcp`, `a2a`, `speech`,
     // `htmlRenderer`, `assistant`, `log_level`) are consumed by CLI Root installers /
     // start-command, not Plugin ConfigViews.
@@ -77,17 +90,14 @@ export class ConfigComposer {
       properties: {
         ...HOST_CONFIG_SCHEMA.properties,
         plugin: withDefault(rootOwn),
-        plugins: {
-          type: 'object',
-          additionalProperties: false,
-          default: {},
-          properties: Object.fromEntries(
-            [
-              ...this.inactivePluginInstanceKeys.map((key) => [key, {}] as const),
-              ...childSchemas.map(([key, schema]) => [key, withDefault(schema)] as const),
-            ],
-          ),
-        },
+        configVersion: { const: 2 },
+        plugins: { type: 'object', additionalProperties: { type: 'string' }, default: {} },
+        disable_plugins: { type: 'array', items: { type: 'string' }, default: [] },
+        ...Object.fromEntries(declaration.instances.map(instance => {
+          const schema = childSchemaByKey.get(instance.instanceKey);
+          if (instance.enabled && !schema) throw new TypeError(`Candidate graph is missing enabled Plugin ${instance.instanceKey}`);
+          return [instance.instanceKey, instance.enabled && schema ? withDefault(schema) : { type: 'object' }];
+        })),
       },
     });
 
@@ -105,7 +115,7 @@ export class ConfigComposer {
       graph.root.id,
       pickOwnFields(document.plugin, requireOwnSchema(ownSchemas, graph.root.id)),
     );
-    collectChildViews(graph.root, document.plugins, ownSchemas, views);
+    collectChildViews(graph.root, document, ownSchemas, views);
     return Object.freeze({
       effectiveSchema,
       document: Object.freeze(document),
@@ -171,8 +181,9 @@ async function composeNode(
   node: PluginGraphNode,
   ownSchemas: Map<PluginId, JsonSchema>,
   modules?: Pick<ModuleRuntime, 'load'>,
+  validatedSchemas?: ReadonlyMap<PluginId, JsonSchema>,
 ): Promise<JsonSchema> {
-  const own = await readOwnSchema(node, modules);
+  const own = await readOwnSchema(node, modules, validatedSchemas);
   ownSchemas.set(node.id, own);
   const properties = { ...schemaProperties(own) };
 
@@ -187,12 +198,17 @@ async function composeNode(
     if (Object.hasOwn(properties, child.instanceKey)) {
       throw new ConfigSchemaCollisionError(node.id, child.instanceKey);
     }
-    properties[child.instanceKey] = withDefault(await composeNode(child, ownSchemas, modules));
+    properties[child.instanceKey] = withDefault(await composeNode(child, ownSchemas, modules, validatedSchemas));
   }
   return Object.freeze({ ...own, properties });
 }
 
-async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime, 'load'>): Promise<JsonSchema> {
+async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime, 'load'>, validatedSchemas?: ReadonlyMap<PluginId, JsonSchema>): Promise<JsonSchema> {
+  if (validatedSchemas) {
+    const schema = validatedSchemas.get(node.id);
+    if (!schema) throw new TypeError(`Missing committed configuration schema for ${node.id}`);
+    return schema;
+  }
   const file = `${node.package.name} config`;
   const value: unknown = await readPluginConfigSchema(node.package, modules)
     ?? { type: 'object', additionalProperties: false, properties: {} };

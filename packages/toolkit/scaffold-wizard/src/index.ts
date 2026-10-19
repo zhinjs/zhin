@@ -128,7 +128,6 @@ export {
   collectWizardFeatures,
   mergeDependenciesIntoPackageJson,
   mergeFeaturesIntoPackageJson,
-  mergePluginManifestIntoPackageJson,
   finalizeWizardOptions,
   applyWizardOptionsToConfig,
   clonePluginConfigurationMap,

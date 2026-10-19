@@ -28,7 +28,7 @@ afterEach(async () => {
 
 describe('RootRuntime watched inputs', () => {
   it('reloads only the Plugin subtree changed by an external config edit', async () => {
-    const fixture = await createFixture({ plugins: { child: { label: 'one' } } });
+    const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, child: { label: 'one' } });
     const installs = { resources: 0, root: 0, child: 0, sibling: 0 };
     fixture.modules.installSetups(installs);
     const runtime = new RootRuntime({
@@ -44,7 +44,7 @@ describe('RootRuntime watched inputs', () => {
       onError(error) { throw error; },
     });
 
-    fixture.config.writeExternal({ plugins: { child: { label: 'two' } } });
+    fixture.config.writeExternal({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, child: { label: 'two' } });
     await coordinator.enqueue(fixture.configSource);
 
     expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'child')))
@@ -55,7 +55,7 @@ describe('RootRuntime watched inputs', () => {
   });
 
   it('requests a process restart when external config changes Host state', async () => {
-    const fixture = await createFixture({ http: { port: 8080 } });
+    const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 8080 } });
     fixture.modules.installSetups({ resources: 0, root: 0, child: 0, sibling: 0 });
     const runtime = new RootRuntime({
       projectRoot: fixture.root,
@@ -70,7 +70,7 @@ describe('RootRuntime watched inputs', () => {
       onError(error) { throw error; },
     });
 
-    fixture.config.writeExternal({ http: { port: 9090 } });
+    fixture.config.writeExternal({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 9090 } });
     await coordinator.enqueue(fixture.configSource);
     await vi.waitFor(() => expect(restarts).toHaveLength(1));
 
@@ -81,7 +81,7 @@ describe('RootRuntime watched inputs', () => {
   });
 
   it('reloads dotenv layers and re-expands Plugin config references', async () => {
-    const fixture = await createFixture({ plugins: { child: { label: '${LABEL}' } } });
+    const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, child: { label: '${LABEL}' } });
     const environment = new FakeEnvironmentSource(
       join(fixture.root, '.env'),
       { base: { LABEL: 'one' } },
@@ -111,7 +111,7 @@ describe('RootRuntime watched inputs', () => {
   });
 
   it('keeps the previous environment snapshot when shadow setup rejects a reload', async () => {
-    const fixture = await createFixture({ plugins: { child: { label: '${LABEL}' } } });
+    const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, child: { label: '${LABEL}' } });
     const environment = new FakeEnvironmentSource(
       join(fixture.root, '.env'),
       { base: { LABEL: 'one' } },
@@ -144,7 +144,7 @@ describe('RootRuntime watched inputs', () => {
   });
 
   it('restarts the process when a dotenv change alters expanded Host config', async () => {
-    const fixture = await createFixture({ http: { token: '${HTTP_TOKEN}' } });
+    const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { token: '${HTTP_TOKEN}' } });
     const environment = new FakeEnvironmentSource(
       join(fixture.root, '.env'),
       { base: { HTTP_TOKEN: 'one' } },
@@ -276,10 +276,7 @@ async function createFixture(document: RuntimeConfigDocument): Promise<{
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [
-        { package: '@test/child', instanceKey: 'child' },
-        { package: '@test/sibling', instanceKey: 'sibling' },
-      ],
+      plugins: [],
     },
   });
   await writeSchema(join(root, 'schema.json'), 'mode', 'development');

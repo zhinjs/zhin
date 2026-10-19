@@ -37,8 +37,8 @@ describe('create-zhin -y Stable 默认值', () => {
     const doc = parse(await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8'));
     const schema = await fs.readJson(fileURLToPath(new URL('../../../../plugins/adapters/sandbox/schema.json', import.meta.url)));
     const validate = new Ajv2020({ strict: false }).compile(schema);
-    expect(validate(doc.plugins.sandbox), JSON.stringify(validate.errors)).toBe(true);
-    expect(doc.plugins.sandbox.endpoints[0]).toMatchObject({ id: 'sandbox-bot' });
+    expect(validate(doc.sandbox), JSON.stringify(validate.errors)).toBe(true);
+    expect(doc.sandbox.endpoints[0]).toMatchObject({ id: 'sandbox-bot' });
     const manifest = await fs.readJson(path.join(root, 'package.json'));
     expect(manifest.packageManager).toBe('pnpm@11.27.1');
     expect(manifest).not.toHaveProperty('pnpm');
@@ -111,9 +111,7 @@ describe('create-zhin -y Stable 默认值', () => {
       { package: '@zhin.js/layout', api: '^1.0.0' },
       { package: '@zhin.js/skill', api: '^1.0.0' },
     ]);
-    expect(pkg.zhin.plugins).toEqual([
-      { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
-    ]);
+    expect(pkg.zhin.plugins).toEqual([]);
     expect(pkg.scripts.dev).toBe('zhin runtime start');
   });
 });

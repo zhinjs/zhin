@@ -74,7 +74,7 @@ describe('IM Feature slot HMR', () => {
     modules.set(commandSource, { default: pingCommand('v1') });
     modules.set(middlewareSource, { default: traceMiddleware('v1') });
     modules.set(componentSource, { default: statusComponent('v1') });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },

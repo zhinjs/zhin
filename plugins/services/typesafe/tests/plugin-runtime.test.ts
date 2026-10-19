@@ -13,28 +13,28 @@ it('composes the real plugin schema and host decision references', async () => {
   try {
     const child = join(directory, 'plugins/typesafe');
     await mkdir(child, { recursive: true });
-    await writeFile(join(directory, 'package.json'), JSON.stringify({ name: '@test/root', zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [{ package: './plugins/typesafe', instanceKey: 'typesafe' }] } }));
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ name: '@test/root', zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [] } }));
     await writeFile(join(child, 'package.json'), JSON.stringify({ name: '@test/typesafe', zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
     await writeFile(join(child, 'schema.json'), await readFile(new URL('../schema.json', import.meta.url), 'utf8'));
-    const graph = await new ProjectGraphService(await NodePackageResolver.create(directory)).inspect(directory);
+    const graph = await new ProjectGraphService(await NodePackageResolver.create(directory)).inspect(directory, { configVersion: 2, plugins: { typesafe: './plugins/typesafe' } });
     const composer = new ConfigComposer();
-    const disabled = await composer.compose(graph, { plugins: { typesafe: { enabled: false } } });
+    const disabled = await composer.compose(graph, { configVersion: 2, plugins: { typesafe: './plugins/typesafe' }, typesafe: { enabled: false } });
     expect(disabled.views.get(graph.root.children[0]!.id)).toMatchObject({ enabled: false, model: 'jev-latest', timeoutMs: 10000 });
-    await expect(composer.compose(graph, { plugins: { typesafe: {} } })).rejects.toBeInstanceOf(ConfigValidationError);
+    await expect(composer.compose(graph, { configVersion: 2, plugins: { typesafe: './plugins/typesafe' } })).rejects.toBeInstanceOf(ConfigValidationError);
     for (const config of [
       { apiKey: ' \t\n' },
       { apiKey: 'test-key', model: '  ' },
       ...['https://user:password@example.com', 'https://@example.com', 'https://example.com?token=private', 'https://example.com#fragment', 'https://example.com?', 'https://example.com#', 'https://exa mple.com'].map(baseUrl => ({ apiKey: 'test-key', baseUrl })),
     ]) {
-      await expect(composer.compose(graph, { plugins: { typesafe: config } })).rejects.toBeInstanceOf(ConfigValidationError);
+      await expect(composer.compose(graph, { configVersion: 2, plugins: { typesafe: './plugins/typesafe' }, typesafe: config })).rejects.toBeInstanceOf(ConfigValidationError);
     }
     const enabled = await composer.compose(graph, {
-      plugins: { typesafe: { apiKey: 'test-key' } },
+      configVersion: 2, plugins: { typesafe: './plugins/typesafe' }, typesafe: { apiKey: 'test-key' },
       ai: { decisions: { provider: 'root/typesafe', skills: { mode: 'shadow' } } },
     });
     expect(enabled.views.get(graph.root.children[0]!.id)).toMatchObject({ apiKey: 'test-key', model: 'jev-latest' });
     await expect(composer.compose(graph, {
-      plugins: { typesafe: { apiKey: 'test-key' } },
+      configVersion: 2, plugins: { typesafe: './plugins/typesafe' }, typesafe: { apiKey: 'test-key' },
       ai: { decisions: { provider: 'root/typesafe', skills: { mode: 'invalid' } } },
     })).rejects.toBeInstanceOf(ConfigValidationError);
   } finally { await rm(directory, { recursive: true, force: true }); }

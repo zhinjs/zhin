@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-slack
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — only needed for HTTP mode to register Events route via `httpHostToken`
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId, threads land in `conversation.threadId`)
 Outbound: `send({ conversation, payload })` -> Web API (`conversation.id` is the channel, `conversation.threadId` maps to thread_ts)
@@ -59,44 +59,50 @@ Outbound: `send({ conversation, payload })` -> Web API (`conversation.id` is the
 ## Minimal Configuration (Socket Mode)
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  slack:
-    socketMode: true          # default true, can be omitted
-    endpoints:
-      - name: my-slack-bot
-        token: ${SLACK_BOT_TOKEN}
-        appToken: ${SLACK_APP_TOKEN}
+  slack: "@zhin.js/adapter-slack"
+slack:
+  socketMode: true # default true, can be omitted
+  endpoints:
+    - name: my-slack-bot
+      token: ${SLACK_BOT_TOKEN}
+      appToken: ${SLACK_APP_TOKEN}
 ```
 
 Multiple workspaces: a single plugin instance can attach multiple endpoints (each item in the `endpoints` array overrides top-level fields; `name` is required):
 
 ```yaml
+configVersion: 2
 plugins:
-  slack:
-    endpoints:
-      - name: team-a
-        token: ${SLACK_BOT_TOKEN_A}
-        appToken: ${SLACK_APP_TOKEN_A}
-      - name: team-b
-        token: ${SLACK_BOT_TOKEN_B}
-        appToken: ${SLACK_APP_TOKEN_B}
+  slack: "@zhin.js/adapter-slack"
+slack:
+  endpoints:
+    - name: team-a
+      token: ${SLACK_BOT_TOKEN_A}
+      appToken: ${SLACK_APP_TOKEN_A}
+    - name: team-b
+      token: ${SLACK_BOT_TOKEN_B}
+      appToken: ${SLACK_APP_TOKEN_B}
 ```
 
 ## HTTP Events Configuration
 
 ```yaml
+configVersion: 2
 plugins:
-  slack:
-    socketMode: false
-    webhookPath: /slack/events   # optional, default /slack/events
-    endpoints:
-      - name: my-slack-bot
-        token: ${SLACK_BOT_TOKEN}
-        signingSecret: ${SLACK_SIGNING_SECRET}
+  slack: "@zhin.js/adapter-slack"
+slack:
+  socketMode: false
+  webhookPath: /slack/events # optional, default /slack/events
+  endpoints:
+    - name: my-slack-bot
+      token: ${SLACK_BOT_TOKEN}
+      signingSecret: ${SLACK_SIGNING_SECRET}
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-slack` (`instanceKey: slack`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-slack` (`instanceKey: slack`).
 In HTTP mode, the Runtime Host (`http`) must already be listening; the Slack App's Event Subscriptions / Interactivity / Slash Commands Request URL should point to `https://your-domain/slack/events`.
 
 ## Environment Variables

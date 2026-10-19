@@ -25,6 +25,7 @@ import {
   type GenerationAdmissionGate,
   type GenerationHandoffRegistry,
   type RuntimeSnapshot,
+  type RuntimeConfigDocument,
   type PluginDefinition,
   type PluginId,
   type PluginInstanceView,
@@ -45,10 +46,10 @@ import type { PluginGraphNode } from './project-graph.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
 import {
   createPrimaryConfig,
+  projectPrimaryConfigResources,
   primaryConfigToken,
   type PrimaryConfig,
 } from './primary-config.js';
-import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 
 export interface PluginConfigResolver {
   (node: PluginGraphNode): unknown;
@@ -102,13 +103,14 @@ export class PluginScopeAssembler {
   readonly #admission = createGenerationAdmissionGate();
   readonly #envStores: EnvStoreFactory;
   #candidateSnapshot?: RuntimeSnapshot;
+  readonly #primaryConfig: PrimaryConfig;
   #setupFeatureAliases: ReadonlyMap<string, FeatureId> = new Map();
 
   constructor(
     private readonly modules: ModuleRuntime,
     private readonly configResolver: PluginConfigResolver,
     private readonly environment: RuntimeEnvironment,
-    private readonly primaryConfigDocument: RuntimeConfigDocument,
+    primaryConfigDocument: RuntimeConfigDocument,
     private readonly generation: number,
     private readonly installResources?: RootResourceInstaller,
     environmentLayers: EnvironmentLayers = {},
@@ -116,10 +118,11 @@ export class PluginScopeAssembler {
     private readonly isolation?: IsolatedPluginRuntimePort,
   ) {
     this.#envStores = new EnvStoreFactory(environment, environmentLayers);
+    this.#primaryConfig = createPrimaryConfig(primaryConfigDocument, this.#envStores.create(rootPluginId()));
     this.scopes = new Map(seed?.scopes);
     this.tree = new Map(seed?.tree);
     this.config = new Map(seed?.config);
-    this.resources = new Map(seed?.resources);
+    this.resources = projectPrimaryConfigResources(seed?.resources ?? new Map(), this.#primaryConfig);
   }
 
   removeSubtrees(roots: readonly PluginId[]): void {
@@ -149,6 +152,9 @@ export class PluginScopeAssembler {
     // Every owner shadows the inherited EnvStore with its exact overlay view.
     const environment = this.#envStores.create(node.id);
     scope.provide(envStoreToken, environment);
+    // New setup operations shadow a retained parent's construction-time value;
+    // operation contexts read the immutable projection from their own snapshot.
+    scope.provide(primaryConfigToken, this.#primaryConfig);
     const register = <TDefinition>(
       feature: FeatureId | string,
       localName: string,
@@ -158,8 +164,7 @@ export class PluginScopeAssembler {
     if (!node.parent) {
       scope.provide(runtimeEnvironmentToken, this.environment);
       scope.provide(rootGenerationAdmissionToken, this.#admission);
-      const config = createPrimaryConfig(this.primaryConfigDocument, environment);
-      scope.provide(primaryConfigToken, config);
+      const config = this.#primaryConfig;
       await this.installResources?.({
         generation: this.generation,
         readCandidateSnapshot: () => {
@@ -217,7 +222,7 @@ export class PluginScopeAssembler {
         scope.provide(binding.token, binding.value);
       }
       if (prepared.handoff) this.#handoffs.add(prepared.handoff);
-      metadata = prepared.descriptor.metadata;
+      metadata = mergePluginMetadata(manifest, prepared.descriptor.metadata, node.id);
     } else {
       const module = await this.modules.load<ModuleNamespace>(
         resolve(node.package.root, manifest.entry),
@@ -227,6 +232,7 @@ export class PluginScopeAssembler {
       if (!definition || typeof definition.name !== 'string') {
         throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
       }
+      metadata = mergePluginMetadata(manifest, definition.metadata, node.id);
       for (const token of definition.requires ?? []) {
         if (!scope.has(token)) {
           throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
@@ -250,7 +256,6 @@ export class PluginScopeAssembler {
       );
       signal.throwIfAborted();
       if (returned) scope.disposers.add(returned);
-      metadata = definition.metadata;
     }
     scope.seal();
 
@@ -371,4 +376,17 @@ interface ModuleNamespace {
 
 function isWithin(plugin: PluginId, root: PluginId): boolean {
   return plugin === root || plugin.startsWith(`${root}/`);
+}
+
+function mergePluginMetadata(
+  manifest: ZhinPluginManifest,
+  code: PluginDefinition['metadata'],
+  owner: PluginId,
+): PluginDefinition['metadata'] {
+  for (const key of ['displayName', 'icon'] as const) {
+    if (manifest.metadata?.[key] !== undefined && code?.[key] !== undefined) {
+      throw new TypeError(`Plugin ${owner} declares metadata.${key} in both manifest and code`);
+    }
+  }
+  return manifest.metadata || code ? Object.freeze({ ...code, ...manifest.metadata }) : undefined;
 }

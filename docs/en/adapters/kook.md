@@ -34,7 +34,7 @@ pnpm add @zhin.js/adapter-kook
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — Webhook mode POST route (not needed for WebSocket)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
-- Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+- Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 - **WebSocket path does not require** `@zhin.js/host-http` / `@zhin.js/host-router`
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'channel'` carries the guild in `parent`)
@@ -55,16 +55,18 @@ Required fields (`endpoints[i]`): `name`, `token`.
 ## Minimal Configuration
 
 ```yaml
+configVersion: 2
 # zhin.config.yml (Plugin Runtime)
 plugins:
-  kook:
-    # connection: websocket   # default
-    endpoints:
-      - name: my-kook-bot
-        token: ${KOOK_TOKEN}
+  kook: "@zhin.js/adapter-kook"
+kook:
+  # connection: websocket   # default
+  endpoints:
+    - name: my-kook-bot
+      token: ${KOOK_TOKEN}
 ```
 
-The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-kook` (`instanceKey: kook`).
+The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-kook` (`instanceKey: kook`).
 
 ## Environment Variables
 
@@ -81,15 +83,17 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 In the KOOK developer dashboard, select the **WebHook** connection mode and point the Callback URL to the public address exposed by the Host (adding `?compress=0` to the URL is recommended for easier debugging).
 
 ```yaml
+configVersion: 2
 plugins:
-  kook:
-    connection: webhook
-    webhookPath: /kook/webhook
-    endpoints:
-      - name: my-kook-bot
-        token: ${KOOK_TOKEN}
-        verify_token: ${KOOK_VERIFY_TOKEN}
-        # encrypt_key: ${KOOK_ENCRYPT_KEY}   # Required when message encryption is enabled
+  kook: "@zhin.js/adapter-kook"
+kook:
+  connection: webhook
+  webhookPath: /kook/webhook
+  endpoints:
+    - name: my-kook-bot
+      token: ${KOOK_TOKEN}
+      verify_token: ${KOOK_VERIFY_TOKEN}
+      # encrypt_key: ${KOOK_ENCRYPT_KEY}   # Required when message encryption is enabled
 ```
 
 The Host must inject `httpHostToken`. The Challenge (`type: 255`) validates `verify_token` and echoes back the `challenge`; regular events are received via `gateway.receive`, while outbound still uses the KOOK HTTP API.

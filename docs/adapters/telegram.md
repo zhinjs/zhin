@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7e17a7d2087d2681 -->
+<!-- sync-adapter-docs:sha256=6a3ea914cab2c867 -->
 
 # @zhin.js/adapter-telegram
 
@@ -46,7 +46,7 @@ pnpm add @zhin.js/adapter-telegram
 - `@zhin.js/adapter` — 约定式 `adapters/telegram/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 - **无需** `@zhin.js/host-http`（polling 路径）
 
 入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef，由 `telegramInboundConversation` 归一化）  
@@ -71,16 +71,18 @@ pnpm add @zhin.js/adapter-telegram
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  telegram:
-    # polling: true   # 默认
-    endpoints:
-      - id: my-telegram-bot
-        token: ${TELEGRAM_TOKEN}
+  telegram: "@zhin.js/adapter-telegram"
+telegram:
+  # polling: true   # 默认
+  endpoints:
+    - id: my-telegram-bot
+      token: ${TELEGRAM_TOKEN}
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-telegram`（`instanceKey: telegram`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-telegram`（`instanceKey: telegram`）。
 
 ## 环境变量
 
@@ -95,19 +97,21 @@ plugins:
 `webhook.path` 必须与反向代理转发路径一致，多账号使用不同路径。
 
 ```yaml
+configVersion: 2
 http:
   host: 127.0.0.1
   port: 8086
 plugins:
-  telegram:
-    polling: false
-    endpoints:
-      - id: my-telegram-bot
-        token: ${TELEGRAM_TOKEN}
-    webhook:
-      domain: https://bot.example.com
-      path: /telegram/webhook
-      secretToken: ${TELEGRAM_WEBHOOK_SECRET}
+  telegram: "@zhin.js/adapter-telegram"
+telegram:
+  polling: false
+  endpoints:
+    - id: my-telegram-bot
+      token: ${TELEGRAM_TOKEN}
+  webhook:
+    domain: https://bot.example.com
+    path: /telegram/webhook
+    secretToken: ${TELEGRAM_WEBHOOK_SECRET}
 ```
 
 启动时注册 Host 路由并调用 `setWebhook`；停止时释放路由。

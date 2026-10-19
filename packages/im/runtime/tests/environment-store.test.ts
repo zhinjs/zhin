@@ -245,10 +245,7 @@ describe('RootRuntime EnvStore ownership', () => {
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
       environmentVariables: { base: { AI_KEY: 'secret-value' } },
-      config: {
-        ai: { apiKey: '${AI_KEY}' },
-        plugins: { child: { label: 'v1' } },
-      },
+      config: { configVersion: 2, plugins: {"child":"@test/child"}, ai: { apiKey: '${AI_KEY}' }, child: { label: 'v1' } },
       installResources({ resources, config }) {
         observed.push({
           raw: config.document.ai,
@@ -261,7 +258,7 @@ describe('RootRuntime EnvStore ownership', () => {
 
     await runtime.start();
     await runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 'v2',
+      op: 'set', path: ['child', 'label'], value: 'v2',
     }]);
 
     expect(observed).toHaveLength(1);
@@ -296,7 +293,7 @@ describe('RootRuntime EnvStore ownership', () => {
         },
       }),
     });
-    const runtime = new RootRuntime({
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {"child":"@test/child"} },
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
@@ -314,7 +311,7 @@ describe('RootRuntime EnvStore ownership', () => {
     expect(observed).toEqual({ root: ['test'], child: ['child'] });
 
     await runtime.patchConfig([{
-      op: 'set', path: ['plugins', 'child', 'label'], value: 'v2',
+      op: 'set', path: ['child', 'label'], value: 'v2',
     }]);
 
     expect(observed).toEqual({ root: ['test'], child: ['child', 'child'] });
@@ -352,7 +349,7 @@ async function createProject(): Promise<string> {
       protocol: 1,
       type: 'plugin',
       entry: './plugin.ts',
-      plugins: [{ package: '@test/child', instanceKey: 'child' }],
+      plugins: [],
     },
   });
   await writeJson(join(root, 'schema.json'), {

@@ -2,13 +2,16 @@ import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   HOST_CONFIG_KEYS,
+  readApplicationPluginDeclaration,
   HOST_CONFIG_SCHEMA,
   NodePackageResolver,
   PackageResolutionError,
-  mergeChildPluginReferences,
   type ChildPluginReference,
   type ResolvedPackage,
 } from '@zhin.js/runtime';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import { createConfigDocument } from '@zhin.js/config-file';
+import { findConfigFile } from '../../utils/config-file.js';
 import { isConsoleSchemaJson, jsonSchemaToConsoleSchema } from './console-schema.js';
 
 const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
@@ -23,21 +26,25 @@ export class PluginSchemaCatalog {
     this.#declarations = declarations;
   }
 
-  async read(pluginName?: string): Promise<unknown> {
+  async read(pluginName?: string, document?: RuntimeConfigDocument): Promise<unknown> {
     if (!pluginName) return null;
-    return this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), await this.#declarations?.());
+    return this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), await this.#declarations?.(), false, document);
   }
 
-  async readJson(pluginName: string): Promise<Readonly<Record<string, unknown>> | null> {
-    return (await this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), await this.#declarations?.(), true)) as Readonly<Record<string, unknown>> | null;
+  async readJson(pluginName: string, document?: RuntimeConfigDocument): Promise<Readonly<Record<string, unknown>> | null> {
+    return (await this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), await this.#declarations?.(), true, document)) as Readonly<Record<string, unknown>> | null;
   }
 
-  async readAll(keys: Iterable<string>): Promise<Record<string, unknown>> {
+  async readAll(keys: Iterable<string>, document?: RuntimeConfigDocument): Promise<Record<string, unknown>> {
     let resolver: Promise<NodePackageResolver> | undefined;
     const declarations = await this.#declarations?.();
+    if (!document) {
+      const file = findConfigFile(this.#projectRoot);
+      if (file) document = (await createConfigDocument(join(this.#projectRoot, file)).read()).document;
+    }
     const entries = await Promise.all([...keys].map(async (key) => [
       key,
-      await this.#read(key, () => resolver ??= NodePackageResolver.create(this.#projectRoot), declarations),
+      await this.#read(key, () => resolver ??= NodePackageResolver.create(this.#projectRoot), declarations, false, document),
     ] as const));
     return Object.fromEntries(entries.filter((entry): entry is readonly [string, unknown] =>
       entry[1] != null));
@@ -48,6 +55,7 @@ export class PluginSchemaCatalog {
     resolver: () => Promise<NodePackageResolver>,
     declarations?: ReadonlyMap<string, Readonly<Record<string, unknown>>>,
     rawSchema = false,
+    currentDocument?: RuntimeConfigDocument,
   ): Promise<unknown> {
     if (HOST_CONFIG_KEY_SET.has(pluginName)) {
       // These allowlisted sections belong to the versioned Runtime contract, not
@@ -69,8 +77,19 @@ export class PluginSchemaCatalog {
     try {
       const packages = await resolver();
       const root = await packages.root(this.#projectRoot);
-      target = await resolvePlugin(packages, root, pluginName);
+      const file = findConfigFile(this.#projectRoot);
+      const document = currentDocument ?? (file ? (await createConfigDocument(join(this.#projectRoot, file)).read()).document : {});
+      const declaration = readApplicationPluginDeclaration(document);
+      if (declaration.version === 2) {
+        const name = pluginName.startsWith('root/') ? pluginName.slice(5) : pluginName;
+        const exact = declaration.instances.find(item => item.instanceKey === name);
+        const matches = exact ? [exact] : declaration.instances.filter(item => item.package === pluginName);
+        if (matches.length > 1) throw new Error('此包存在多个插件实例，请使用精确 instanceKey');
+        if (matches[0]) target = await resolveReference(packages, root, matches[0]);
+        else if (pluginName === 'root') target = root;
+      }
     } catch (error) {
+      if (error instanceof Error && error.message.includes('多个插件实例')) throw error;
       throw new Error(`Cannot resolve schema for ${pluginName}: invalid or unavailable Plugin manifest`, { cause: error });
     }
     if (!target) return null;
@@ -79,75 +98,6 @@ export class PluginSchemaCatalog {
     if (schema) assertSchemaStructure(schema, `config declaration for ${pluginName}`);
     return jsonSchemaToConsoleSchema(schema);
   }
-}
-
-/** References resolve relative to their declaring package, never the instance name. */
-async function resolvePlugin(
-  resolver: NodePackageResolver,
-  root: ResolvedPackage,
-  name: string,
-): Promise<ResolvedPackage | undefined> {
-  // Match declared package aliases before splitting paths: scoped names contain '/'.
-  const references = await childReferences(resolver, root, true);
-  const direct = references.find(({ reference }) => reference.instanceKey === name)
-    ?? references.find(({ reference }) => reference.package === name);
-  if (direct) return resolveReference(resolver, direct.owner, direct.reference);
-  // A legal child instance named root takes precedence over the root alias.
-  if (name === 'root') return root;
-  const keys = name.startsWith('root/') ? name.slice(5).split('/') : name.split('/');
-  if (!keys.every((key) => /^[a-z0-9][a-z0-9-]*$/u.test(key))) return undefined;
-  let current = root;
-  for (const [index, key] of keys.entries()) {
-    const reference = (await childReferences(resolver, current, index === 0)).find(
-      (item) => item.reference.instanceKey === key,
-    );
-    if (!reference) return undefined;
-    const resolved = await resolveReference(resolver, reference.owner, reference.reference);
-    if (!resolved) return undefined;
-    current = resolved;
-  }
-  return current;
-}
-
-async function childReferences(
-  resolver: NodePackageResolver,
-  pkg: ResolvedPackage,
-  root = false,
-): Promise<readonly { readonly reference: ChildPluginReference; readonly owner: ResolvedPackage }[]> {
-  if (pkg.packageJson.zhin.type !== 'plugin') return [];
-  const declared = pkg.packageJson.zhin.plugins;
-  let inherited: readonly ChildPluginReference[] = [];
-  let hasCarrier = false;
-  if (root && pkg.packageJson.zhin.platformFeatures !== false
-    && (pkg.packageJson.dependencies?.['@zhin.js/core']
-    || pkg.packageJson.optionalDependencies?.['@zhin.js/core'])) {
-    try {
-      await resolver.resolve('@zhin.js/core', pkg);
-      hasCarrier = true;
-    } catch (error) {
-      if (!(error instanceof PackageResolutionError)) throw error;
-    }
-  }
-  let facade: ResolvedPackage | undefined;
-  if (root && pkg.packageJson.zhin.platformFeatures !== false
-    && (pkg.packageJson.dependencies?.['zhin.js'] || pkg.packageJson.optionalDependencies?.['zhin.js'])) {
-    try {
-      facade = await resolver.resolve('zhin.js', pkg);
-      if (!hasCarrier) await resolver.resolve('@zhin.js/core', facade);
-      if (facade.packageJson.zhin.type === 'plugin') inherited = facade.packageJson.zhin.plugins;
-    } catch (error) {
-      if (!(error instanceof PackageResolutionError)) throw error;
-    }
-  }
-  const ownKeys = new Set(declared.map((item) => item.instanceKey));
-  const merged = mergeChildPluginReferences(declared, inherited);
-  if (new Set(merged.map((item) => item.instanceKey)).size !== merged.length) {
-    throw new Error(`Duplicate child instanceKey in ${pkg.name}`);
-  }
-  return merged.map((reference) => ({
-    reference,
-    owner: ownKeys.has(reference.instanceKey) ? pkg : facade!,
-  }));
 }
 
 async function resolveReference(

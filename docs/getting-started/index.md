@@ -33,6 +33,8 @@ pnpm dev
 
 ## 3. 认识刚生成的项目
 
+想知道 Bot 还能执行哪些指令？在会话中发送 **`/菜单`**（无命令前缀时发 `菜单`）。它列出根插件的指令与子插件；再发 `/菜单 <插件实例名>` 可逐层查看。某条指令的参数用 `/hello --help` 查看。关键词可在项目配置中通过 `menuKeyword` 修改，详见[指令菜单](../authoring/commands.md#查看已加载的指令菜单)。
+
 ```text
 my-bot/
 ├── package.json          # Runtime 拓扑：entry、features、plugins

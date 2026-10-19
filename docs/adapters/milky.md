@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=cfc6722120380ee0 -->
+<!-- sync-adapter-docs:sha256=845243db13f3e9b3 -->
 
 # @zhin.js/adapter-milky
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-milky
 - `@zhin.js/adapter` — 约定式 `adapters/milky/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
 `AdapterIndex` 会把实例默认值与 `endpoints[]` 的逐项覆盖合并；协议层只接收一个已经展开的 endpoint 配置，不再读取嵌套 endpoint 或从进程环境推断 endpoint 身份。
 
@@ -54,19 +54,21 @@ Client 事件流，Endpoint 仍独占账号连接、鉴权、重连和心跳。
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  milky:
-    connection: ws
-    reconnect_interval: 5000
-    heartbeat_interval: 30000
-    endpoints:
-      - id: milky-bot
-        baseUrl: "http://127.0.0.1:8080"
-        access_token: "${MILKY_ACCESS_TOKEN}"
+  milky: "@zhin.js/adapter-milky"
+milky:
+  connection: ws
+  reconnect_interval: 5000
+  heartbeat_interval: 30000
+  endpoints:
+    - id: milky-bot
+      baseUrl: "http://127.0.0.1:8080"
+      access_token: "${MILKY_ACCESS_TOKEN}"
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-milky`（`instanceKey: milky`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-milky`（`instanceKey: milky`）。
 
 ## 连接方式
 

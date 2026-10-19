@@ -10,6 +10,7 @@ import {
   type PreparedConfigFileSource,
   requireConfigObject,
 } from './config-file-document.js';
+import { parseOrderedV2Source, patchOrderedSource, writesV2Document } from './ordered-config-source.js';
 
 /** Comment-preserving YAML implementation of the config-file transaction. */
 export class YamlConfigDocument extends ConfigFileDocument {
@@ -28,7 +29,8 @@ export class YamlConfigDocument extends ConfigFileDocument {
     patches: readonly ConfigPatch[],
   ): PreparedConfigFileSource {
     const document = parseYaml(this.file, source);
-    for (const patch of patches) applyPatch(document, patch);
+    if (parseOrderedV2Source(this.file, source, this.format, writesV2Document(patches))) patchOrderedSource(document, patches);
+    else for (const patch of patches) applyPatch(document, patch);
     const candidateSource = stringify(document, source);
     return Object.freeze({
       document: this.parseSource(candidateSource),

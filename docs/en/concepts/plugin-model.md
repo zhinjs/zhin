@@ -5,15 +5,15 @@ description: "What a plugin is, how the plugin tree is built, Plugin vs Feature,
 
 # Plugin Model
 
-Connecting two QQ accounts to the same Bot, or splitting a game plugin out for independent publishing -- in zhin.js, both are solved with the same mechanism: the plugin tree. A plugin is an ordinary npm package; the only difference is an extra `zhin` field in `package.json`. The Root Plugin (your project) declares child plugins in `zhin.plugins`, and child plugins can in turn declare their own children. Like LEGO bricks: each one is independently formed and snaps into a designated position by instanceKey.
+Connecting two QQ accounts to the same Bot, or splitting a game plugin out for independent publishing -- in zhin.js, both are solved with the same mechanism: the plugin tree. A plugin is an ordinary npm package; the only difference is an extra `zhin` field in `package.json`. The application declares direct instances in the main configuration `plugins` map. Package manifests retain static contracts such as Features and entry points. Like LEGO bricks: each one is independently formed and snaps into a designated position by instanceKey.
 
 ## Core rules
 
 | Rule | Example |
 | --- | --- |
 | Plugin = npm package + a `zhin` field in `package.json` + a `plugin.ts` entry | Your project itself is the Root plugin |
-| Child plugins are mounted in `zhin.plugins`, each with an `instanceKey` | `{ "package": "@zhin.js/adapter-qq", "instanceKey": "qq" }` |
-| The `instanceKey` decides which config section the child reads | `plugins.qq:` in `zhin.config.yml` |
+| Main configuration maps instance aliases to package references | `plugins: { qq: "@zhin.js/adapter-qq" }` |
+| The `instanceKey` decides which config section the child reads | `qq:` at the top level of `zhin.config.yml` |
 | One package can be mounted several times, each configured separately | Two `instanceKey`s mount two copies of the same game plugin |
 | Any plugin with a `zhin.config.yml` can start as a standalone application | Develop and debug one plugin on its own |
 | A **Feature** is a special package that scans a convention directory; regular plugins don't write one | `@zhin.js/command` scans `commands/` |
@@ -52,13 +52,10 @@ The fields are strictly validated by `@zhin.js/runtime`'s manifest parser (`pack
 | `runtime` | `"trusted"` or `"isolated"`, optional | Whether to load this plugin in an isolated runtime |
 | `platformFeatures` | Boolean, optional | Default `true`; whether the Root inherits platform Stable Features (see "platformFeatures Inheritance" below) |
 | `features` | Array | Feature capability packages this package depends on: `{ "package": "...", "api": "^1.0.0", "optional": false }` |
-| `plugins` | Array | Child plugins mounted by this package: `{ "package": "...", "instanceKey": "...", "optional": false }` |
+| `metadata` | Object, optional | Static `displayName` and `icon`; the same field cannot also be declared in code |
+| `plugins` | Legacy array | Must be empty or absent in an application Root; use the v2 main configuration |
 
-This array belongs only to `package.json#zhin.plugins` and describes the static
-mount graph. Runtime `zhin.config.*#plugins` is an object map keyed by
-`instanceKey`; the two documents deliberately use different shapes. Runtime,
-Console, scaffolding, and install/uninstall commands accept only the map. Only
-the explicit `zhin migrate` pipeline reads the former configuration array.
+Runtime only creates application instances from `configVersion: 2`. Nonempty Root manifest mounts require explicit migration; historical dependency mounts do not create hidden instances. See the [migration guide](../../migrations/plugin-instance-declarations.md).
 
 Packages with `type: "feature"` have fewer fields: `protocol` / `type` / `entry` / `engine` / `featureApi`. For example, `@zhin.js/adapter`:
 
@@ -78,7 +75,7 @@ Example projects are private workspaces, so they can use `plugin.ts` as the entr
 
 ## Plugin vs. Feature
 
-- A **Plugin** is an assembly unit: it declares which Features it uses and which child plugins it mounts. Its entry point default-exports `definePlugin({...})` (import from `zhin.js`).
+- A **Plugin** is an assembly unit: it declares which Features it uses; the application configures instances. Its entry point default-exports `definePlugin({...})` (import from `zhin.js`).
 - A **Feature** is a capability type: it defines "what a class of capabilities looks like" (contract + discovery convention + projection). `@zhin.js/adapter` defines the Adapter capability, `@zhin.js/command` defines the command capability, and so on.
 
 After a plugin declares a dependency on a capability type via the `features` array, it can provide capability implementations following that Feature's conventions. For example, the sandbox adapter plugin (`@zhin.js/adapter-sandbox`) declares the `@zhin.js/adapter` capability and places a convention-based entry in the `adapters/` directory:
@@ -103,21 +100,23 @@ export default defineAdapter({
 
 ## instanceKey: A Plugin's Name in the Tree
 
-The same plugin package can be mounted multiple times (e.g., two QQ accounts using two instances of the same adapter package), distinguished by `instanceKey`. The naming rule is `/^[a-z0-9][a-z0-9-]*$/` (lowercase alphanumeric plus hyphens). It determines two things: the PluginId -- a child `sandbox` of `root` has the ID `root/sandbox`, with further nesting appended sequentially; and the configuration namespace -- the instance's configuration is written under `plugins.<instanceKey>` in `zhin.config.yml` (see [Config as Data](./config-as-data.md)).
+The same plugin package can be mounted multiple times (e.g., two QQ accounts using two instances of the same adapter package), distinguished by `instanceKey`. The naming rule is `/^[a-z0-9][a-z0-9-]*$/` (lowercase alphanumeric plus hyphens). It determines two things: the PluginId -- a child `sandbox` of `root` has the ID `root/sandbox`, with further nesting appended sequentially; and the configuration namespace -- the instance's configuration is written under the top-level `<instanceKey>` block in `zhin.config.yml` (see [Config as Data](./config-as-data.md)).
 
-```jsonc
-// Root package.json
-"plugins": [
-  { "package": "@zhin.js/adapter-sandbox", "instanceKey": "sandbox" },
-  { "package": "@zhin.js/adapter-icqq",   "instanceKey": "icqq" }
-]
+```yaml
+configVersion: 2
+plugins:
+  sandbox: '@zhin.js/adapter-sandbox'
+  icqq: '@zhin.js/adapter-icqq'
+disable_plugins:
+  - icqq
+sandbox: {}
 ```
 
-Duplicate `instanceKey` declarations are deduplicated: user-explicit declarations of the same key take priority over inherited default references.
+Duplicate or reserved aliases are rejected. Disabled instances retain their configuration without loading their entry point.
 
 ## Two Sources for Child Plugins
 
-`plugins[i].package` supports two formats (validation logic in manifest.ts):
+The main configuration `plugins.<instanceKey>` supports two reference formats:
 
 1. **npm package name**: `"@zhin.js/adapter-icqq"`. The package must be a dependency of the current package.
 2. **Local relative path**: `"./plugins/my-local-plugin"`. Starts with `./` and points to a directory within the package (a common pattern for private plugins in monorepos). `..` to escape the package root is not allowed.

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=88f834be3ff58015 -->
+<!-- sync-adapter-docs:sha256=ab683a70f603d00f -->
 
 # @zhin.js/adapter-github
 
@@ -40,18 +40,20 @@ Webhook 需要 Root 提供 `@zhin.js/host-http`（`zhin runtime start` 默认装
 ## 配置（Plugin Runtime）
 
 ```yaml
+configVersion: 2
 # zhin.config.yml
 plugins:
-  github:
-    webhook_path: /github/webhook
-    auto_reply_repos:
-      - zhinjs/zhin
-    workspace_root: ./data/github-workspaces
-    endpoints:
-      - id: my-github-bot
-        app_id: "${GITHUB_APP_ID}"
-        private_key: ./data/github-app.pem
-        webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
+  github: "@zhin.js/adapter-github"
+github:
+  webhook_path: /github/webhook
+  auto_reply_repos:
+    - zhinjs/zhin
+  workspace_root: ./data/github-workspaces
+  endpoints:
+    - id: my-github-bot
+      app_id: "${GITHUB_APP_ID}"
+      private_key: ./data/github-app.pem
+      webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
 ```
 
 `private_key` 支持文件路径或 PEM 内容。未配置 `webhook_secret` 时仅 API 出站 / agent 工具可用（无入站）。
@@ -63,15 +65,17 @@ GitHub adapter。协议层只接受这份展开后的 endpoint 配置，不读�
 多 App：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段；`id`、`app_id`、`private_key` 必填）：
 
 ```yaml
+configVersion: 2
 plugins:
-  github:
-    endpoints:
-      - id: app-a
-        app_id: 123456
-        private_key: ./data/app-a.pem
-      - id: app-b
-        app_id: 234567
-        private_key: ./data/app-b.pem
+  github: "@zhin.js/adapter-github"
+github:
+  endpoints:
+    - id: app-a
+      app_id: 123456
+      private_key: ./data/app-a.pem
+    - id: app-b
+      app_id: 234567
+      private_key: ./data/app-b.pem
 ```
 
 ## 已移除的能力

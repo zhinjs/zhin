@@ -3,7 +3,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { formatEnvValue, mergeEnvText } from './env.js';
-import { clonePluginConfigurationMap, mergeDependenciesIntoPackageJson, mergePluginManifestIntoPackageJson } from './apply.js';
+import { clonePluginConfigurationMap, mergeDependenciesIntoPackageJson, setPluginInstanceConfig } from './apply.js';
 import { isAiEnabledInConfig } from './project-deps.js';
 
 export const TYPESAFE_DECISION_PACKAGE = '@zhin.js/service-typesafe';
@@ -35,7 +35,7 @@ export async function configureTypeSafeDecisions(config: Readonly<Record<string,
     { type: 'input', name: 'model', message: 'Jev 模型（生产校准后建议固定版本）', default: 'jev-latest', validate: (value: string) => value.trim().length > 0 || '请输入模型名称' },
     { type: 'select', name: 'mode', message: 'Skill / Tool 推荐运行方式', default: 'shadow', choices: [ { name: 'shadow：观察建议，评估后再启用', value: 'shadow' }, { name: 'active：启用推荐，权限仍由 Zhin 校验', value: 'active' } ] },
   ]);
-  const reference = record(record(config.plugins)[answers.instanceKey]).apiKey;
+  const reference = record(clonePluginConfigurationMap(config)[answers.instanceKey]).apiKey;
   const existingVariable = typeof reference === 'string' ? /^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/.exec(reference)?.[1] : undefined;
   return { ...answers, envVar: existingVariable ?? decisionKeyVariable(answers.instanceKey) };
 }
@@ -55,8 +55,7 @@ export function applyTypeSafeDecisionsToConfig(config: Record<string, unknown>, 
   if (!/^[a-z][a-z0-9-]*$/.test(setup.instanceKey) || !setup.model.trim() || !setup.apiKey.trim()) throw new Error('Invalid TypeSafe setup configuration.');
   const plugins = clonePluginConfigurationMap(config);
   const existing = record(plugins[setup.instanceKey]);
-  plugins[setup.instanceKey] = { ...existing, apiKey: '${' + envVariable(setup) + '}', model: setup.model.trim(), timeoutMs: 10000, maxRetries: 2, enabled: true };
-  config.plugins = plugins;
+  setPluginInstanceConfig(config, { instanceKey: setup.instanceKey, package: TYPESAFE_DECISION_PACKAGE }, { ...existing, apiKey: '${' + envVariable(setup) + '}', model: setup.model.trim(), timeoutMs: 10000, maxRetries: 2, enabled: true });
   const ai = record(config.ai);
   const previousDecisions = record(ai.decisions);
   config.ai = { ...ai, decisions: {
@@ -72,13 +71,6 @@ export function applyTypeSafeDecisionsToConfig(config: Record<string, unknown>, 
 
 export async function saveTypeSafeSetupDependencies(projectDir: string, setup: TypeSafeSetupConfig): Promise<void> {
   const variable = envVariable(setup);
-  const pkgPath = path.join(projectDir, 'package.json');
-  const pkg = await fs.readJson(pkgPath);
-  const existingManifest = record(pkg.zhin).plugins;
-  if (Array.isArray(existingManifest) && existingManifest.some(entry => record(entry).instanceKey === setup.instanceKey && record(entry).package !== TYPESAFE_DECISION_PACKAGE)) {
-    throw new Error('Decision plugin instance already belongs to another package; choose a different instanceKey.');
-  }
-  await mergePluginManifestIntoPackageJson(projectDir, [{ package: TYPESAFE_DECISION_PACKAGE, instanceKey: setup.instanceKey }]);
   await mergeDependenciesIntoPackageJson(projectDir, { [TYPESAFE_DECISION_PACKAGE]: '^1.0.0' });
   const envPath = path.join(projectDir, '.env');
   const envExists = await fs.pathExists(envPath);
@@ -116,14 +108,14 @@ export function diagnoseDecisionConfig(config: Readonly<Record<string, unknown>>
   // Nested Plugin owners are resolved from the actual runtime graph during activation.
   if (key.includes('/')) return issues;
   const pkg = record(packageJson);
-  const manifest = record(pkg.zhin).plugins;
-  const entries = Array.isArray(manifest) ? manifest.filter(entry => record(entry).instanceKey === key) : [];
-  if (entries.length !== 1) {
-    issues.push('决策插件实例未在 package.json#zhin.plugins 唯一声明。');
+  const declared = record(config.plugins);
+  if (typeof declared[key] !== 'string') {
+    issues.push('决策插件实例未在主配置 plugins 中声明。');
     return issues;
   }
-  if (record(entries[0]).package === TYPESAFE_DECISION_PACKAGE) {
-    const configForProvider = record(record(config.plugins)[key]);
+  if (Array.isArray(config.disable_plugins) && config.disable_plugins.includes(key)) issues.push('绑定的决策插件已停用。');
+  if (declared[key] === TYPESAFE_DECISION_PACKAGE) {
+    const configForProvider = record(config[key]);
     if (configForProvider.enabled === false) issues.push('绑定的 TypeSafe 插件已禁用。');
     if (typeof configForProvider.apiKey !== 'string' || !configForProvider.apiKey.trim()) issues.push('TypeSafe 插件缺少 apiKey 环境变量引用。');
     if (!Object.hasOwn({ ...record(pkg.dependencies), ...record(pkg.devDependencies) }, TYPESAFE_DECISION_PACKAGE)) issues.push('package.json 缺少 @zhin.js/service-typesafe 依赖。');

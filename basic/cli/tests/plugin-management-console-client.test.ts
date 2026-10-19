@@ -28,11 +28,11 @@ describe('CLI uses the running Console control plane', () => {
     const manifest = { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false };
     await mkdir(join(root, 'node_modules/reminder'), { recursive: true });
     await mkdir(join(root, '.zhin'));
-    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fixture-root', version: '1.0.0', dependencies: { reminder: '1.0.0' }, zhin: { ...manifest, plugins: [{ package: 'reminder', instanceKey: 'reminder' }] } }));
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fixture-root', version: '1.0.0', dependencies: { reminder: '1.0.0' }, zhin: manifest }));
     await writeFile(join(root, 'plugin.js'), 'export default {};');
     await writeFile(join(root, 'node_modules/reminder/package.json'), JSON.stringify({ name: 'reminder', version: '1.0.0', zhin: manifest }));
     await writeFile(join(root, 'node_modules/reminder/plugin.js'), 'export default {};');
-    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { reminder: {} } }));
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify({configVersion: 2, plugins: {reminder: 'reminder'}, reminder: {}}));
     const run = vi.fn(async () => {
       const task = join(root, '.zhin/probe.json');
       await writeFile(task, JSON.stringify({ task: 'probe', send: false }));
@@ -45,14 +45,14 @@ describe('CLI uses the running Console control plane', () => {
       [join(root, 'node_modules/reminder/plugin.js'), { default: definePlugin({ name: 'reminder', setup({ resources }) { resources.provide(pluginVerificationToken, { checks: () => [{ id: 'local-task', title: 'Local task probe', scope: 'local' as const, effects: ['Create/read/cancel a temporary local task; no IM send'] }], run }); } }) }],
     ]);
     const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
-    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugins: { reminder: {} } } });
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: {configVersion: 2, plugins: {reminder: 'reminder'}, reminder: {}} });
     const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'fixture-full-token', tokens: [{ token: 'fixture-demo-token', scope: 'demo' }] });
     try {
       await runtime.start();
       const restart = vi.fn();
       const workflow = new PluginManagementWorkflow(root, { snapshots: runtime.snapshots, requestRestart: restart });
       registerConsoleRpcRoute({ http, base: '/api', projectRoot: root, consoleRuntime: { runView: async () => ({ pages: [] }) } as unknown as ConsoleRuntime,
-        hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(root), pluginLifecycleStore: createPluginLifecycleStore(),
+        hub: createConsoleEventHub(), pluginLifecycleFile: resolvePluginLifecycleFile(root), pluginLifecycleStore: createPluginLifecycleStore(root),
         configuration: new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.json')) }),
         pluginManagement: workflow, snapshots: runtime.snapshots,
       });
@@ -78,7 +78,7 @@ describe('CLI uses the running Console control plane', () => {
       expect(run).toHaveBeenCalledTimes(1);
       await expect(readFile(join(root, '.zhin/probe.json'))).rejects.toMatchObject({ code: 'ENOENT' });
       vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'fixture-full-token');
-      await writeFile(join(root, 'zhin.config.json'), JSON.stringify({ plugins: { reminder: { commandNamespace: 'updated' } } }));
+      await writeFile(join(root, 'zhin.config.json'), JSON.stringify({configVersion: 2, plugins: {reminder: 'reminder'}, reminder: {commandNamespace: 'updated'}}));
       const pending = await requestPluginConsole<PluginManagementState>(host, { type: PLUGIN_RPC.INSPECT, instanceKey: 'reminder' });
       expect(pending.status).toBe('pending-restart');
       const applied = await requestPluginConsole<{ requested: boolean; state: PluginManagementState }>(host, { type: PLUGIN_RPC.APPLY, instanceKey: 'reminder', expectedProjectRevision: pending.projectRevision });

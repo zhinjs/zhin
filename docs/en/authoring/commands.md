@@ -50,6 +50,27 @@ Both styles share the same command table and conflict detection. As commands gro
 
 ## Common tasks
 
+### Browse loaded commands
+
+With the Command Feature enabled, the built-in keyword is **`菜单`** (Chinese for “menu”); no help plugin is needed. Send it in a bot conversation like any other command. If the current account uses `commandPrefix: '/'`, prefix every message below with `/`:
+
+| Message (without a prefix) | Result |
+| --- | --- |
+| `菜单` | Commands, descriptions, and immediate child plugins of the root plugin |
+| `菜单 rss` | Commands and immediate children of the plugin instance named `rss` |
+| `菜单 foo.bar` | Commands and children of nested plugin `bar` under `foo` |
+| `remind --help` | A command's parameters, options, and usage, without executing it |
+
+The menu browses one plugin at a time; it does not flatten every plugin's commands into one list. Plugin names here are **instance keys**, not npm package names. Start with `菜单` and follow the child plugin names it returns.
+
+Set the keyword at the top level of the project's `zhin.config.yml`, alongside `plugins`:
+
+```yaml
+menuKeyword: help
+```
+
+This changes the entry to `help` (or `/help` with a `/` prefix). Set `menuKeyword: false` or `menuKeyword: ''` to disable the built-in menu. Without configuration, the keyword remains `菜单`; `help` is not a default alias.
+
 ### Accept parameters
 
 Declare params in order under `params`; the `params` passed to `execute` gets the right types automatically:
@@ -154,14 +175,16 @@ All rules in the array must pass (**AND**); commas inside one rule mean **any of
 There are three roles: `user` → `trusted` → `master` (`master` includes `trusted`). Name the master in the adapter config:
 
 ```yaml
+configVersion: 2
 # zhin.config.yml
 plugins:
-  qq:
-    master: '10001'        # master for the whole adapter
-    endpoints:
-      - name: main
-        appid: ${QQ_APPID}
-        master: '10001'    # or per account
+  qq: "@zhin.js/adapter-qq"
+qq:
+  master: '10001' # master for the whole adapter
+  endpoints:
+    - name: main
+      appid: ${QQ_APPID}
+      master: '10001' # or per account
 ```
 
 For the same check in middleware or event handlers, use `checkPermissions`:
@@ -279,12 +302,14 @@ Matching happens directly on message segments; images and mentions are never fla
 By default there is **no** prefix: every message is tried as a command. Once a connection sets `commandPrefix`, only messages starting with it are treated as commands; the rest go to normal chat or the AI:
 
 ```yaml
+configVersion: 2
 plugins:
-  qq:
-    commandPrefix: '/'     # only messages like "/qq endpoint list" trigger commands
-    endpoints:
-      - name: main
-        commandPrefix: ''  # override for a single account
+  qq: "@zhin.js/adapter-qq"
+qq:
+  commandPrefix: '/' # only messages like "/qq endpoint list" trigger commands
+  endpoints:
+    - name: main
+      commandPrefix: '' # override for a single account
 ```
 
 The Sandbox created by `npm create zhin-app` is set to `/`.
@@ -392,7 +417,7 @@ Programmatic `CommandIndex.dispatch()` returns `status: unmatched | invalid | de
 ::: details Generate list / add / remove commands for an adapter
 `createEndpointCommands(spec, defineCommand)` from `@zhin.js/adapter` generates `<adapter> endpoint list / add / remove` so accounts can be managed from chat. Every platform adapter uses it except email (nested config objects) and sandbox (no credentials): qq, icqq, napcat, onebot11, onebot12, milky, satori, slack, telegram, discord, kook, lark, dingtalk, line, wecom, wechat-mp, weixin-ilink, github.
 
-- `list`: running accounts plus those configured under `plugins.<adapterKey>.endpoints`.
+- `list`: running accounts plus those configured under `<adapterKey>.endpoints`.
 - `add <name> <key=value...>`: enter fields. Credentials marked `env: true` are written to `.env` (keys like `TELEGRAM_BOT1_TOKEN`) and the config stores a `${REF}`; YAML keeps existing comments; duplicate names are refused.
 - `remove <name>`: removes from config, effective after restart; clean up `.env` keys manually.
 - Special add flows (e.g. QQ QR binding) take over `add` through `spec.bindFlow`; QQ therefore has an extra `qq endpoint cancel`.
@@ -412,7 +437,7 @@ context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState(
 
 // 3. src/telegram-endpoint-commands.ts: generate commands (defineCommand is injected by the adapter to avoid cross-package imports)
 export const telegramEndpointCommands = createEndpointCommands({
-  adapterKey: 'telegram',          // = plugins.<key> in zhin.config.yml
+  adapterKey: 'telegram',          // = top-level instance alias in zhin.config.yml
   adapterDisplayName: 'Telegram',
   fields: [{ key: 'token', required: true, env: true, description: 'Telegram bot token' }],
   running: (use) => use(telegramRuntimeStateToken).endpoints.values(),

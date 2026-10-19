@@ -160,7 +160,7 @@ outline: [2, 3]
 
 ## 插件实例字段
 
-以下字段通过 Runtime 的统一读取器从 trusted 插件的 `config: Schema.object(...)` 声明或 `schema.json` 生成；isolated 插件只能使用 `schema.json`。`plugins.<name>` 中的 `<name>` 是默认 instanceKey。
+以下字段通过 Runtime 的统一读取器从 trusted 插件的 `config: Schema.object(...)` 声明或 `schema.json` 生成；isolated 插件只能使用 `schema.json`。顶层 `<name>` 是默认 instanceKey；`plugins.<name>` 仅保存包引用。
 
 ### dingtalk
 
@@ -168,29 +168,29 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.dingtalk.apiBaseUrl` | string | 否 | `"https://oapi.dingtalk.com"` | — |
-| `plugins.dingtalk.master` | string \| number | 否 | — | 框架 master（DingTalk userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.dingtalk.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.dingtalk.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.dingtalk.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（DingTalk userid）；覆盖顶层 master |
-| `plugins.dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.dingtalk.endpoints[].appKey` | string | 是 | — | Dingtalk app key |
-| `plugins.dingtalk.endpoints[].appSecret` | string | 是 | — | Dingtalk app secret |
-| `plugins.dingtalk.endpoints[].webhookPath` | string | 否 | — | Dingtalk webhook path |
-| `plugins.dingtalk.endpoints[].robotCode` | string | 否 | — | Dingtalk robot code |
-| `plugins.dingtalk.endpoints[].apiBaseUrl` | string | 否 | — | — |
-| `plugins.dingtalk.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.dingtalk.endpoints[].id` | string | 是 | — | Dingtalk bot name |
-| `plugins.dingtalk.endpoints[].mode` | string: `"webhook"`, `"stream"` | 否 | `"webhook"` | — |
-| `plugins.dingtalk.endpoints[].cardTemplateId` | string | 否 | — | Stream interactive card template ID |
-| `plugins.dingtalk.endpoints[].cardButtonCount` | integer | 否 | `2` | Fixed button count in the card template |
-| `plugins.dingtalk.endpoints[].streamProxy` | object | 否 | — | 故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份 |
-| `plugins.dingtalk.endpoints[].streamProxy.port` | integer | 是 | — | — |
-| `plugins.dingtalk.endpoints[].streamProxy.serverName` | string | 是 | — | — |
-| `plugins.dingtalk.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.dingtalk.mode` | string: `"webhook"`, `"stream"` | 否 | `"webhook"` | — |
-| `plugins.dingtalk.cardTemplateId` | string | 否 | — | Stream interactive card template ID |
-| `plugins.dingtalk.cardButtonCount` | integer | 否 | `2` | Fixed button count in the card template |
+| `dingtalk.apiBaseUrl` | string | 否 | `"https://oapi.dingtalk.com"` | — |
+| `dingtalk.master` | string \| number | 否 | — | 框架 master（DingTalk userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `dingtalk.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `dingtalk.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `dingtalk.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（DingTalk userid）；覆盖顶层 master |
+| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `dingtalk.endpoints[].appKey` | string | 是 | — | Dingtalk app key |
+| `dingtalk.endpoints[].appSecret` | string | 是 | — | Dingtalk app secret |
+| `dingtalk.endpoints[].webhookPath` | string | 否 | — | Dingtalk webhook path |
+| `dingtalk.endpoints[].robotCode` | string | 否 | — | Dingtalk robot code |
+| `dingtalk.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `dingtalk.endpoints[].commandPrefix` | string | 否 | — | — |
+| `dingtalk.endpoints[].id` | string | 是 | — | Dingtalk bot name |
+| `dingtalk.endpoints[].mode` | string: `"webhook"`, `"stream"` | 否 | `"webhook"` | — |
+| `dingtalk.endpoints[].cardTemplateId` | string | 否 | — | Stream interactive card template ID |
+| `dingtalk.endpoints[].cardButtonCount` | integer | 否 | `2` | Fixed button count in the card template |
+| `dingtalk.endpoints[].streamProxy` | object | 否 | — | 故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份 |
+| `dingtalk.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `dingtalk.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `dingtalk.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `dingtalk.mode` | string: `"webhook"`, `"stream"` | 否 | `"webhook"` | — |
+| `dingtalk.cardTemplateId` | string | 否 | — | Stream interactive card template ID |
+| `dingtalk.cardButtonCount` | integer | 否 | `2` | Fixed button count in the card template |
 
 ### discord
 
@@ -198,43 +198,43 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.discord.connection` | string: `"gateway"`, `"interactions"` | 否 | `"gateway"` | Gateway WebSocket (default). interactions uses httpHostToken POST + Ed25519 verify. |
-| `plugins.discord.intents` | array&lt;number&gt; | 否 | — | — |
-| `plugins.discord.enableSlashCommands` | boolean | 否 | `false` | — |
-| `plugins.discord.globalCommands` | boolean | 否 | `false` | — |
-| `plugins.discord.defaultActivity` | object | 否 | — | — |
-| `plugins.discord.defaultActivity.name` | string | 是 | — | — |
-| `plugins.discord.defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | 是 | — | — |
-| `plugins.discord.defaultActivity.url` | string | 否 | — | — |
-| `plugins.discord.slashCommands` | array&lt;object&gt; | 否 | — | — |
-| `plugins.discord.applicationId` | string | 否 | — | Required when connection is interactions. |
-| `plugins.discord.publicKey` | string | 否 | — | Required when connection is interactions (hex Ed25519 public key). |
-| `plugins.discord.interactionsPath` | string | 否 | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
-| `plugins.discord.master` | string \| number | 否 | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.discord.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.discord.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `plugins.discord.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
-| `plugins.discord.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.discord.endpoints[].token` | string | 是 | — | Discord bot token |
-| `plugins.discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | 否 | — | — |
-| `plugins.discord.endpoints[].intents` | array&lt;number&gt; | 否 | — | — |
-| `plugins.discord.endpoints[].enableSlashCommands` | boolean | 否 | — | — |
-| `plugins.discord.endpoints[].globalCommands` | boolean | 否 | — | — |
-| `plugins.discord.endpoints[].defaultActivity` | object | 否 | — | — |
-| `plugins.discord.endpoints[].defaultActivity.name` | string | 是 | — | — |
-| `plugins.discord.endpoints[].defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | 是 | — | — |
-| `plugins.discord.endpoints[].defaultActivity.url` | string | 否 | — | — |
-| `plugins.discord.endpoints[].slashCommands` | array&lt;object&gt; | 否 | — | — |
-| `plugins.discord.endpoints[].applicationId` | string | 否 | — | — |
-| `plugins.discord.endpoints[].publicKey` | string | 否 | — | — |
-| `plugins.discord.endpoints[].interactionsPath` | string | 否 | — | — |
-| `plugins.discord.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.discord.endpoints[].id` | string | 是 | — | Discord bot name |
-| `plugins.discord.endpoints[].gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
-| `plugins.discord.endpoints[].restApiProxy` | object | 否 | — | Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理 |
-| `plugins.discord.endpoints[].restApiProxy.port` | integer | 是 | — | — |
-| `plugins.discord.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.discord.gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
+| `discord.connection` | string: `"gateway"`, `"interactions"` | 否 | `"gateway"` | Gateway WebSocket (default). interactions uses httpHostToken POST + Ed25519 verify. |
+| `discord.intents` | array&lt;number&gt; | 否 | — | — |
+| `discord.enableSlashCommands` | boolean | 否 | `false` | — |
+| `discord.globalCommands` | boolean | 否 | `false` | — |
+| `discord.defaultActivity` | object | 否 | — | — |
+| `discord.defaultActivity.name` | string | 是 | — | — |
+| `discord.defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | 是 | — | — |
+| `discord.defaultActivity.url` | string | 否 | — | — |
+| `discord.slashCommands` | array&lt;object&gt; | 否 | — | — |
+| `discord.applicationId` | string | 否 | — | Required when connection is interactions. |
+| `discord.publicKey` | string | 否 | — | Required when connection is interactions (hex Ed25519 public key). |
+| `discord.interactionsPath` | string | 否 | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
+| `discord.master` | string \| number | 否 | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `discord.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `discord.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
+| `discord.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
+| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `discord.endpoints[].token` | string | 是 | — | Discord bot token |
+| `discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | 否 | — | — |
+| `discord.endpoints[].intents` | array&lt;number&gt; | 否 | — | — |
+| `discord.endpoints[].enableSlashCommands` | boolean | 否 | — | — |
+| `discord.endpoints[].globalCommands` | boolean | 否 | — | — |
+| `discord.endpoints[].defaultActivity` | object | 否 | — | — |
+| `discord.endpoints[].defaultActivity.name` | string | 是 | — | — |
+| `discord.endpoints[].defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | 是 | — | — |
+| `discord.endpoints[].defaultActivity.url` | string | 否 | — | — |
+| `discord.endpoints[].slashCommands` | array&lt;object&gt; | 否 | — | — |
+| `discord.endpoints[].applicationId` | string | 否 | — | — |
+| `discord.endpoints[].publicKey` | string | 否 | — | — |
+| `discord.endpoints[].interactionsPath` | string | 否 | — | — |
+| `discord.endpoints[].commandPrefix` | string | 否 | — | — |
+| `discord.endpoints[].id` | string | 是 | — | Discord bot name |
+| `discord.endpoints[].gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
+| `discord.endpoints[].restApiProxy` | object | 否 | — | Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理 |
+| `discord.endpoints[].restApiProxy.port` | integer | 是 | — | — |
+| `discord.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `discord.gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
 
 ### email
 
@@ -242,38 +242,38 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.email.master` | string \| number | 否 | — | 框架 master（email address；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.email.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.email.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.email.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（email address）；覆盖顶层 master |
-| `plugins.email.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.email.endpoints[].smtp` | object | 是 | — | — |
-| `plugins.email.endpoints[].smtp.host` | string | 是 | — | — |
-| `plugins.email.endpoints[].smtp.port` | number | 是 | — | — |
-| `plugins.email.endpoints[].smtp.secure` | boolean | 是 | — | — |
-| `plugins.email.endpoints[].smtp.auth` | object | 是 | — | — |
-| `plugins.email.endpoints[].smtp.auth.user` | string | 是 | — | — |
-| `plugins.email.endpoints[].smtp.auth.pass` | string | 是 | — | — |
-| `plugins.email.endpoints[].smtp.serverName` | string | 否 | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
-| `plugins.email.endpoints[].imap` | object | 是 | — | — |
-| `plugins.email.endpoints[].imap.host` | string | 是 | — | — |
-| `plugins.email.endpoints[].imap.port` | number | 是 | — | — |
-| `plugins.email.endpoints[].imap.tls` | boolean | 是 | — | — |
-| `plugins.email.endpoints[].imap.user` | string | 是 | — | — |
-| `plugins.email.endpoints[].imap.password` | string | 是 | — | — |
-| `plugins.email.endpoints[].imap.checkInterval` | number | 否 | `60000` | — |
-| `plugins.email.endpoints[].imap.reconnectInterval` | number | 否 | `5000` | — |
-| `plugins.email.endpoints[].imap.mailbox` | string | 否 | `"INBOX"` | — |
-| `plugins.email.endpoints[].imap.markSeen` | boolean | 否 | `true` | — |
-| `plugins.email.endpoints[].imap.serverName` | string | 否 | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
-| `plugins.email.endpoints[].attachments` | object | 否 | — | — |
-| `plugins.email.endpoints[].attachments.enabled` | boolean | 否 | `false` | — |
-| `plugins.email.endpoints[].attachments.downloadPath` | string | 否 | — | — |
-| `plugins.email.endpoints[].attachments.maxFileSize` | number | 否 | — | — |
-| `plugins.email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | 否 | — | — |
-| `plugins.email.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.email.endpoints[].id` | string | 是 | — | Email bot name |
-| `plugins.email.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `email.master` | string \| number | 否 | — | 框架 master（email address；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `email.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `email.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `email.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（email address）；覆盖顶层 master |
+| `email.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `email.endpoints[].smtp` | object | 是 | — | — |
+| `email.endpoints[].smtp.host` | string | 是 | — | — |
+| `email.endpoints[].smtp.port` | number | 是 | — | — |
+| `email.endpoints[].smtp.secure` | boolean | 是 | — | — |
+| `email.endpoints[].smtp.auth` | object | 是 | — | — |
+| `email.endpoints[].smtp.auth.user` | string | 是 | — | — |
+| `email.endpoints[].smtp.auth.pass` | string | 是 | — | — |
+| `email.endpoints[].smtp.serverName` | string | 否 | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
+| `email.endpoints[].imap` | object | 是 | — | — |
+| `email.endpoints[].imap.host` | string | 是 | — | — |
+| `email.endpoints[].imap.port` | number | 是 | — | — |
+| `email.endpoints[].imap.tls` | boolean | 是 | — | — |
+| `email.endpoints[].imap.user` | string | 是 | — | — |
+| `email.endpoints[].imap.password` | string | 是 | — | — |
+| `email.endpoints[].imap.checkInterval` | number | 否 | `60000` | — |
+| `email.endpoints[].imap.reconnectInterval` | number | 否 | `5000` | — |
+| `email.endpoints[].imap.mailbox` | string | 否 | `"INBOX"` | — |
+| `email.endpoints[].imap.markSeen` | boolean | 否 | `true` | — |
+| `email.endpoints[].imap.serverName` | string | 否 | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
+| `email.endpoints[].attachments` | object | 否 | — | — |
+| `email.endpoints[].attachments.enabled` | boolean | 否 | `false` | — |
+| `email.endpoints[].attachments.downloadPath` | string | 否 | — | — |
+| `email.endpoints[].attachments.maxFileSize` | number | 否 | — | — |
+| `email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | 否 | — | — |
+| `email.endpoints[].commandPrefix` | string | 否 | — | — |
+| `email.endpoints[].id` | string | 是 | — | Email bot name |
+| `email.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### github
 
@@ -281,27 +281,27 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.github.host` | string | 否 | — | GitHub Enterprise hostname (default github.com) |
-| `plugins.github.webhook_path` | string | 否 | `"/github/webhook"` | — |
-| `plugins.github.auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
-| `plugins.github.bot_login` | string | 否 | — | Override App bot login (default {slug}[bot]) |
-| `plugins.github.workspace_root` | string | 否 | — | Managed git workspace root |
-| `plugins.github.master` | string \| number | 否 | — | 框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.github.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.github.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint |
-| `plugins.github.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
-| `plugins.github.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.github.endpoints[].app_id` | string \| number | 是 | — | GitHub App ID |
-| `plugins.github.endpoints[].private_key` | string | 是 | — | GitHub App private key (PEM content or file path) |
-| `plugins.github.endpoints[].webhook_secret` | string | 否 | — | Webhook HMAC secret; enables httpHostToken POST route |
-| `plugins.github.endpoints[].id` | string | 是 | — | GitHub App bot name |
-| `plugins.github.endpoints[].host` | string | 否 | — | GitHub Enterprise hostname |
-| `plugins.github.endpoints[].webhook_path` | string | 否 | — | Webhook route path |
-| `plugins.github.endpoints[].auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose comments auto-trigger AI |
-| `plugins.github.endpoints[].bot_login` | string | 否 | — | Override App bot login |
-| `plugins.github.endpoints[].workspace_root` | string | 否 | — | Managed git workspace root |
-| `plugins.github.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
-| `plugins.github.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `github.host` | string | 否 | — | GitHub Enterprise hostname (default github.com) |
+| `github.webhook_path` | string | 否 | `"/github/webhook"` | — |
+| `github.auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
+| `github.bot_login` | string | 否 | — | Override App bot login (default {slug}[bot]) |
+| `github.workspace_root` | string | 否 | — | Managed git workspace root |
+| `github.master` | string \| number | 否 | — | 框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `github.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `github.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint |
+| `github.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
+| `github.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `github.endpoints[].app_id` | string \| number | 是 | — | GitHub App ID |
+| `github.endpoints[].private_key` | string | 是 | — | GitHub App private key (PEM content or file path) |
+| `github.endpoints[].webhook_secret` | string | 否 | — | Webhook HMAC secret; enables httpHostToken POST route |
+| `github.endpoints[].id` | string | 是 | — | GitHub App bot name |
+| `github.endpoints[].host` | string | 否 | — | GitHub Enterprise hostname |
+| `github.endpoints[].webhook_path` | string | 否 | — | Webhook route path |
+| `github.endpoints[].auto_reply_repos` | array&lt;string&gt; | 否 | — | Repos whose comments auto-trigger AI |
+| `github.endpoints[].bot_login` | string | 否 | — | Override App bot login |
+| `github.endpoints[].workspace_root` | string | 否 | — | Managed git workspace root |
+| `github.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
+| `github.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### icqq
 
@@ -309,40 +309,40 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.icqq.master` | string \| number | 是 | — | 框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖 |
-| `plugins.icqq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted QQ uin 列表（弱于 master） |
-| `plugins.icqq.password` | string | 否 | — | QQ 密码（可选，不填则扫码登录） |
-| `plugins.icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | `1` | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
-| `plugins.icqq.ver` | string | 否 | — | 协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本 |
-| `plugins.icqq.signApiAddr` | string | 否 | — | 签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名 |
-| `plugins.icqq.dataDir` | string | 否 | — | 数据存储文件夹路径，默认为主模块下的 data 文件夹 |
-| `plugins.icqq.autoReconnect` | boolean | 否 | `true` | 断线后是否自动重连（默认 true） |
-| `plugins.icqq.outboundMedia` | string: `"file"`, `"base64"` | 否 | `"file"` | 出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联 |
-| `plugins.icqq.ignoreSelf` | boolean | 否 | `true` | 群聊和频道中是否过滤自己的消息（默认 true） |
-| `plugins.icqq.resend` | boolean | 否 | `false` | 被风控时是否尝试用分片发送（默认 false） |
-| `plugins.icqq.cacheGroupMember` | boolean | 否 | `true` | 是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存 |
-| `plugins.icqq.autoServer` | boolean | 否 | `true` | 是否自动选择最优服务器（默认 true） |
-| `plugins.icqq.qqnt` | boolean | 否 | `true` | 是否使用 QQNT 协议（默认 true） |
-| `plugins.icqq.ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
-| `plugins.icqq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.icqq.endpoints[].id` | string | 是 | — | QQ uin |
-| `plugins.icqq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的 master QQ uin；覆盖顶层 master |
-| `plugins.icqq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.icqq.endpoints[].password` | string | 否 | — | 本 endpoint 的 QQ 密码 |
-| `plugins.icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | — | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
-| `plugins.icqq.endpoints[].ver` | string | 否 | — | 协议版本号 |
-| `plugins.icqq.endpoints[].signApiAddr` | string | 否 | — | 签名服务器地址 |
-| `plugins.icqq.endpoints[].dataDir` | string | 否 | — | 数据存储文件夹路径 |
-| `plugins.icqq.endpoints[].autoReconnect` | boolean | 否 | — | 断线后是否自动重连 |
-| `plugins.icqq.endpoints[].outboundMedia` | string: `"file"`, `"base64"` | 否 | — | 出站媒体模式 |
-| `plugins.icqq.endpoints[].ignoreSelf` | boolean | 否 | — | 是否过滤自己的消息 |
-| `plugins.icqq.endpoints[].resend` | boolean | 否 | — | 被风控时是否分片发送 |
-| `plugins.icqq.endpoints[].cacheGroupMember` | boolean | 否 | — | 是否缓存群员列表 |
-| `plugins.icqq.endpoints[].autoServer` | boolean | 否 | — | 是否自动选择最优服务器 |
-| `plugins.icqq.endpoints[].qqnt` | boolean | 否 | — | 是否使用 QQNT 协议 |
-| `plugins.icqq.endpoints[].ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
-| `plugins.icqq.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
-| `plugins.icqq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
+| `icqq.master` | string \| number | 是 | — | 框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖 |
+| `icqq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted QQ uin 列表（弱于 master） |
+| `icqq.password` | string | 否 | — | QQ 密码（可选，不填则扫码登录） |
+| `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | `1` | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
+| `icqq.ver` | string | 否 | — | 协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本 |
+| `icqq.signApiAddr` | string | 否 | — | 签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名 |
+| `icqq.dataDir` | string | 否 | — | 数据存储文件夹路径，默认为主模块下的 data 文件夹 |
+| `icqq.autoReconnect` | boolean | 否 | `true` | 断线后是否自动重连（默认 true） |
+| `icqq.outboundMedia` | string: `"file"`, `"base64"` | 否 | `"file"` | 出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联 |
+| `icqq.ignoreSelf` | boolean | 否 | `true` | 群聊和频道中是否过滤自己的消息（默认 true） |
+| `icqq.resend` | boolean | 否 | `false` | 被风控时是否尝试用分片发送（默认 false） |
+| `icqq.cacheGroupMember` | boolean | 否 | `true` | 是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存 |
+| `icqq.autoServer` | boolean | 否 | `true` | 是否自动选择最优服务器（默认 true） |
+| `icqq.qqnt` | boolean | 否 | `true` | 是否使用 QQNT 协议（默认 true） |
+| `icqq.ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
+| `icqq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `icqq.endpoints[].id` | string | 是 | — | QQ uin |
+| `icqq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的 master QQ uin；覆盖顶层 master |
+| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `icqq.endpoints[].password` | string | 否 | — | 本 endpoint 的 QQ 密码 |
+| `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | 否 | — | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
+| `icqq.endpoints[].ver` | string | 否 | — | 协议版本号 |
+| `icqq.endpoints[].signApiAddr` | string | 否 | — | 签名服务器地址 |
+| `icqq.endpoints[].dataDir` | string | 否 | — | 数据存储文件夹路径 |
+| `icqq.endpoints[].autoReconnect` | boolean | 否 | — | 断线后是否自动重连 |
+| `icqq.endpoints[].outboundMedia` | string: `"file"`, `"base64"` | 否 | — | 出站媒体模式 |
+| `icqq.endpoints[].ignoreSelf` | boolean | 否 | — | 是否过滤自己的消息 |
+| `icqq.endpoints[].resend` | boolean | 否 | — | 被风控时是否分片发送 |
+| `icqq.endpoints[].cacheGroupMember` | boolean | 否 | — | 是否缓存群员列表 |
+| `icqq.endpoints[].autoServer` | boolean | 否 | — | 是否自动选择最优服务器 |
+| `icqq.endpoints[].qqnt` | boolean | 否 | — | 是否使用 QQNT 协议 |
+| `icqq.endpoints[].ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
+| `icqq.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
+| `icqq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
 
 ### kook
 
@@ -350,36 +350,36 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.kook.connection` | string: `"websocket"`, `"webhook"` | 否 | `"websocket"` | WebSocket gateway (default). webhook requires httpHostToken, verify_token, and a public HTTPS callback URL. |
-| `plugins.kook.webhookPath` | string | 否 | `"/kook/webhook"` | POST path registered via httpHostToken when connection is webhook. |
-| `plugins.kook.data_dir` | string | 否 | — | — |
-| `plugins.kook.timeout` | number | 否 | `10000` | — |
-| `plugins.kook.max_retry` | number | 否 | `3` | — |
-| `plugins.kook.ignore` | string: `"bot"`, `"self"` | 否 | `"bot"` | — |
-| `plugins.kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | `"info"` | — |
-| `plugins.kook.master` | string \| number | 否 | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.kook.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.kook.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `plugins.kook.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
-| `plugins.kook.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.kook.endpoints[].token` | string | 是 | — | KOOK bot token |
-| `plugins.kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | 否 | — | — |
-| `plugins.kook.endpoints[].webhookPath` | string | 否 | — | — |
-| `plugins.kook.endpoints[].verify_token` | string | 否 | — | KOOK developer console verify token (required for webhook mode). |
-| `plugins.kook.endpoints[].encrypt_key` | string | 否 | — | Optional Encrypt Key when message encryption is enabled in KOOK console. |
-| `plugins.kook.endpoints[].data_dir` | string | 否 | — | — |
-| `plugins.kook.endpoints[].timeout` | number | 否 | — | — |
-| `plugins.kook.endpoints[].max_retry` | number | 否 | — | — |
-| `plugins.kook.endpoints[].ignore` | string: `"bot"`, `"self"` | 否 | — | — |
-| `plugins.kook.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | — | — |
-| `plugins.kook.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.kook.endpoints[].id` | string | 是 | — | KOOK bot name |
-| `plugins.kook.endpoints[].streamProxy` | object | 否 | — | WSS故障验收固定loopback，保持真实TLS身份 |
-| `plugins.kook.endpoints[].streamProxy.port` | integer | 是 | — | — |
-| `plugins.kook.endpoints[].streamProxy.serverName` | string | 是 | — | — |
-| `plugins.kook.endpoints[].apiProxy` | object | 否 | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
-| `plugins.kook.endpoints[].apiProxy.port` | integer | 是 | — | — |
-| `plugins.kook.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `kook.connection` | string: `"websocket"`, `"webhook"` | 否 | `"websocket"` | WebSocket gateway (default). webhook requires httpHostToken, verify_token, and a public HTTPS callback URL. |
+| `kook.webhookPath` | string | 否 | `"/kook/webhook"` | POST path registered via httpHostToken when connection is webhook. |
+| `kook.data_dir` | string | 否 | — | — |
+| `kook.timeout` | number | 否 | `10000` | — |
+| `kook.max_retry` | number | 否 | `3` | — |
+| `kook.ignore` | string: `"bot"`, `"self"` | 否 | `"bot"` | — |
+| `kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | `"info"` | — |
+| `kook.master` | string \| number | 否 | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `kook.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `kook.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
+| `kook.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
+| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `kook.endpoints[].token` | string | 是 | — | KOOK bot token |
+| `kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | 否 | — | — |
+| `kook.endpoints[].webhookPath` | string | 否 | — | — |
+| `kook.endpoints[].verify_token` | string | 否 | — | KOOK developer console verify token (required for webhook mode). |
+| `kook.endpoints[].encrypt_key` | string | 否 | — | Optional Encrypt Key when message encryption is enabled in KOOK console. |
+| `kook.endpoints[].data_dir` | string | 否 | — | — |
+| `kook.endpoints[].timeout` | number | 否 | — | — |
+| `kook.endpoints[].max_retry` | number | 否 | — | — |
+| `kook.endpoints[].ignore` | string: `"bot"`, `"self"` | 否 | — | — |
+| `kook.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | — | — |
+| `kook.endpoints[].commandPrefix` | string | 否 | — | — |
+| `kook.endpoints[].id` | string | 是 | — | KOOK bot name |
+| `kook.endpoints[].streamProxy` | object | 否 | — | WSS故障验收固定loopback，保持真实TLS身份 |
+| `kook.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `kook.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `kook.endpoints[].apiProxy` | object | 否 | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
+| `kook.endpoints[].apiProxy.port` | integer | 是 | — | — |
+| `kook.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### lark
 
@@ -387,33 +387,33 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.lark.webhookPath` | string | 否 | `"/lark/webhook"` | — |
-| `plugins.lark.apiBaseUrl` | string | 否 | — | — |
-| `plugins.lark.isFeishu` | boolean | 否 | `true` | — |
-| `plugins.lark.master` | string \| number | 否 | — | 框架 master（Lark/Feishu open_id or user_id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.lark.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.lark.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.lark.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Lark/Feishu open_id or user_id）；覆盖顶层 master |
-| `plugins.lark.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.lark.endpoints[].appId` | string | 是 | — | Lark app ID |
-| `plugins.lark.endpoints[].appSecret` | string | 是 | — | Lark app secret |
-| `plugins.lark.endpoints[].encryptKey` | string | 否 | — | Lark encrypt key |
-| `plugins.lark.endpoints[].verificationToken` | string | 否 | — | Lark verification token |
-| `plugins.lark.endpoints[].webhookPath` | string | 否 | — | — |
-| `plugins.lark.endpoints[].apiBaseUrl` | string | 否 | — | — |
-| `plugins.lark.endpoints[].isFeishu` | boolean | 否 | — | — |
-| `plugins.lark.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.lark.endpoints[].id` | string | 是 | — | Lark bot name |
-| `plugins.lark.endpoints[].mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
-| `plugins.lark.endpoints[].streamProxy` | object | 否 | — | WSS故障验收：仅TCP固定loopback，保留TLS身份 |
-| `plugins.lark.endpoints[].streamProxy.port` | integer | 是 | — | — |
-| `plugins.lark.endpoints[].streamProxy.serverName` | string | 是 | — | — |
-| `plugins.lark.endpoints[].webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
-| `plugins.lark.endpoints[].webApiProxy.port` | integer | 是 | — | — |
-| `plugins.lark.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.lark.mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
-| `plugins.lark.webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
-| `plugins.lark.webApiProxy.port` | integer | 是 | — | — |
+| `lark.webhookPath` | string | 否 | `"/lark/webhook"` | — |
+| `lark.apiBaseUrl` | string | 否 | — | — |
+| `lark.isFeishu` | boolean | 否 | `true` | — |
+| `lark.master` | string \| number | 否 | — | 框架 master（Lark/Feishu open_id or user_id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `lark.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `lark.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `lark.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Lark/Feishu open_id or user_id）；覆盖顶层 master |
+| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `lark.endpoints[].appId` | string | 是 | — | Lark app ID |
+| `lark.endpoints[].appSecret` | string | 是 | — | Lark app secret |
+| `lark.endpoints[].encryptKey` | string | 否 | — | Lark encrypt key |
+| `lark.endpoints[].verificationToken` | string | 否 | — | Lark verification token |
+| `lark.endpoints[].webhookPath` | string | 否 | — | — |
+| `lark.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `lark.endpoints[].isFeishu` | boolean | 否 | — | — |
+| `lark.endpoints[].commandPrefix` | string | 否 | — | — |
+| `lark.endpoints[].id` | string | 是 | — | Lark bot name |
+| `lark.endpoints[].mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
+| `lark.endpoints[].streamProxy` | object | 否 | — | WSS故障验收：仅TCP固定loopback，保留TLS身份 |
+| `lark.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `lark.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `lark.endpoints[].webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `lark.endpoints[].webApiProxy.port` | integer | 是 | — | — |
+| `lark.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `lark.mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
+| `lark.webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `lark.webApiProxy.port` | integer | 是 | — | — |
 
 ### line
 
@@ -421,20 +421,20 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.line.webhookPath` | string | 否 | `"/line/webhook"` | — |
-| `plugins.line.apiBaseUrl` | string | 否 | `"https://api.line.me"` | — |
-| `plugins.line.master` | string \| number | 否 | — | 框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.line.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.line.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.line.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（LINE user id）；覆盖顶层 master |
-| `plugins.line.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.line.endpoints[].channelSecret` | string | 是 | — | LINE channel secret |
-| `plugins.line.endpoints[].channelAccessToken` | string | 是 | — | LINE channel access token |
-| `plugins.line.endpoints[].webhookPath` | string | 否 | — | — |
-| `plugins.line.endpoints[].apiBaseUrl` | string | 否 | — | — |
-| `plugins.line.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.line.endpoints[].id` | string | 是 | — | LINE bot name |
-| `plugins.line.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `line.webhookPath` | string | 否 | `"/line/webhook"` | — |
+| `line.apiBaseUrl` | string | 否 | `"https://api.line.me"` | — |
+| `line.master` | string \| number | 否 | — | 框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `line.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `line.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `line.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（LINE user id）；覆盖顶层 master |
+| `line.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `line.endpoints[].channelSecret` | string | 是 | — | LINE channel secret |
+| `line.endpoints[].channelAccessToken` | string | 是 | — | LINE channel access token |
+| `line.endpoints[].webhookPath` | string | 否 | — | — |
+| `line.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `line.endpoints[].commandPrefix` | string | 否 | — | — |
+| `line.endpoints[].id` | string | 是 | — | LINE bot name |
+| `line.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### milky
 
@@ -442,23 +442,23 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
-| `plugins.milky.reconnect_interval` | number | 否 | `5000` | — |
-| `plugins.milky.heartbeat_interval` | number | 否 | `30000` | — |
-| `plugins.milky.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.milky.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.milky.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.milky.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `plugins.milky.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | — | — |
-| `plugins.milky.endpoints[].baseUrl` | string | 是 | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
-| `plugins.milky.endpoints[].path` | string | 否 | — | Path for webhook / reverse-wss |
-| `plugins.milky.endpoints[].access_token` | string | 否 | — | Milky access token |
-| `plugins.milky.endpoints[].reconnect_interval` | number | 否 | — | — |
-| `plugins.milky.endpoints[].heartbeat_interval` | number | 否 | — | — |
-| `plugins.milky.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.milky.endpoints[].id` | string | 是 | — | Milky bot name |
-| `plugins.milky.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
+| `milky.reconnect_interval` | number | 否 | `5000` | — |
+| `milky.heartbeat_interval` | number | 否 | `30000` | — |
+| `milky.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `milky.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `milky.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `milky.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
+| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | — | — |
+| `milky.endpoints[].baseUrl` | string | 是 | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
+| `milky.endpoints[].path` | string | 否 | — | Path for webhook / reverse-wss |
+| `milky.endpoints[].access_token` | string | 否 | — | Milky access token |
+| `milky.endpoints[].reconnect_interval` | number | 否 | — | — |
+| `milky.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `milky.endpoints[].commandPrefix` | string | 否 | — | — |
+| `milky.endpoints[].id` | string | 是 | — | Milky bot name |
+| `milky.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### napcat
 
@@ -466,27 +466,27 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.napcat.connection` | string: `"ws"`, `"wss"`, `"http"` | 否 | `"ws"` | ws (default), wss (reverse WS), or http (POST webhook + HTTP API outbound) |
-| `plugins.napcat.reconnect_interval` | number | 否 | `5000` | — |
-| `plugins.napcat.heartbeat_interval` | number | 否 | `30000` | — |
-| `plugins.napcat.poll_interval` | number | 否 | `30000` | — |
-| `plugins.napcat.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.napcat.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.napcat.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.napcat.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `plugins.napcat.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | 否 | — | — |
-| `plugins.napcat.endpoints[].url` | string | 否 | — | NapCat WebSocket URL (required for connection: ws) |
-| `plugins.napcat.endpoints[].path` | string | 否 | — | WS path for reverse-wss |
-| `plugins.napcat.endpoints[].http_url` | string | 否 | — | HTTP API base URL (connection: http outbound) |
-| `plugins.napcat.endpoints[].post_path` | string | 否 | — | HTTP POST event path (connection: http inbound) |
-| `plugins.napcat.endpoints[].access_token` | string | 否 | — | NapCat access token |
-| `plugins.napcat.endpoints[].reconnect_interval` | number | 否 | — | — |
-| `plugins.napcat.endpoints[].heartbeat_interval` | number | 否 | — | — |
-| `plugins.napcat.endpoints[].poll_interval` | number | 否 | — | — |
-| `plugins.napcat.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.napcat.endpoints[].id` | string | 是 | — | NapCat bot name |
-| `plugins.napcat.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `napcat.connection` | string: `"ws"`, `"wss"`, `"http"` | 否 | `"ws"` | ws (default), wss (reverse WS), or http (POST webhook + HTTP API outbound) |
+| `napcat.reconnect_interval` | number | 否 | `5000` | — |
+| `napcat.heartbeat_interval` | number | 否 | `30000` | — |
+| `napcat.poll_interval` | number | 否 | `30000` | — |
+| `napcat.master` | string \| number | 否 | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `napcat.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `napcat.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `napcat.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
+| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | 否 | — | — |
+| `napcat.endpoints[].url` | string | 否 | — | NapCat WebSocket URL (required for connection: ws) |
+| `napcat.endpoints[].path` | string | 否 | — | WS path for reverse-wss |
+| `napcat.endpoints[].http_url` | string | 否 | — | HTTP API base URL (connection: http outbound) |
+| `napcat.endpoints[].post_path` | string | 否 | — | HTTP POST event path (connection: http inbound) |
+| `napcat.endpoints[].access_token` | string | 否 | — | NapCat access token |
+| `napcat.endpoints[].reconnect_interval` | number | 否 | — | — |
+| `napcat.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `napcat.endpoints[].poll_interval` | number | 否 | — | — |
+| `napcat.endpoints[].commandPrefix` | string | 否 | — | — |
+| `napcat.endpoints[].id` | string | 是 | — | NapCat bot name |
+| `napcat.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### onebot11
 
@@ -494,23 +494,23 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.onebot11.connection` | string: `"ws"`, `"wss"` | 否 | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
-| `plugins.onebot11.reconnect_interval` | number | 否 | `5000` | — |
-| `plugins.onebot11.heartbeat_interval` | number | 否 | `30000` | — |
-| `plugins.onebot11.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.onebot11.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.onebot11.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.onebot11.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `plugins.onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | 否 | — | — |
-| `plugins.onebot11.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
-| `plugins.onebot11.endpoints[].path` | string | 否 | — | WS path for reverse-wss (connection: wss) |
-| `plugins.onebot11.endpoints[].access_token` | string | 否 | — | OneBot access token |
-| `plugins.onebot11.endpoints[].reconnect_interval` | number | 否 | — | — |
-| `plugins.onebot11.endpoints[].heartbeat_interval` | number | 否 | — | — |
-| `plugins.onebot11.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.onebot11.endpoints[].id` | string | 是 | — | OneBot11 bot name |
-| `plugins.onebot11.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot11.connection` | string: `"ws"`, `"wss"` | 否 | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
+| `onebot11.reconnect_interval` | number | 否 | `5000` | — |
+| `onebot11.heartbeat_interval` | number | 否 | `30000` | — |
+| `onebot11.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `onebot11.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `onebot11.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `onebot11.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
+| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | 否 | — | — |
+| `onebot11.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
+| `onebot11.endpoints[].path` | string | 否 | — | WS path for reverse-wss (connection: wss) |
+| `onebot11.endpoints[].access_token` | string | 否 | — | OneBot access token |
+| `onebot11.endpoints[].reconnect_interval` | number | 否 | — | — |
+| `onebot11.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `onebot11.endpoints[].commandPrefix` | string | 否 | — | — |
+| `onebot11.endpoints[].id` | string | 是 | — | OneBot11 bot name |
+| `onebot11.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### onebot12
 
@@ -518,24 +518,24 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
-| `plugins.onebot12.reconnect_interval` | number | 否 | `5000` | — |
-| `plugins.onebot12.heartbeat_interval` | number | 否 | `30000` | — |
-| `plugins.onebot12.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.onebot12.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.onebot12.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.onebot12.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `plugins.onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | — | — |
-| `plugins.onebot12.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
-| `plugins.onebot12.endpoints[].path` | string | 否 | — | HTTP/WS path for webhook or reverse-wss |
-| `plugins.onebot12.endpoints[].api_url` | string | 否 | — | HTTP action endpoint for webhook outbound (required for connection: webhook send) |
-| `plugins.onebot12.endpoints[].access_token` | string | 否 | — | OneBot access token |
-| `plugins.onebot12.endpoints[].reconnect_interval` | number | 否 | — | — |
-| `plugins.onebot12.endpoints[].heartbeat_interval` | number | 否 | — | — |
-| `plugins.onebot12.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.onebot12.endpoints[].id` | string | 是 | — | OneBot12 bot name |
-| `plugins.onebot12.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
+| `onebot12.reconnect_interval` | number | 否 | `5000` | — |
+| `onebot12.heartbeat_interval` | number | 否 | `30000` | — |
+| `onebot12.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `onebot12.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `onebot12.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `onebot12.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
+| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | — | — |
+| `onebot12.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
+| `onebot12.endpoints[].path` | string | 否 | — | HTTP/WS path for webhook or reverse-wss |
+| `onebot12.endpoints[].api_url` | string | 否 | — | HTTP action endpoint for webhook outbound (required for connection: webhook send) |
+| `onebot12.endpoints[].access_token` | string | 否 | — | OneBot access token |
+| `onebot12.endpoints[].reconnect_interval` | number | 否 | — | — |
+| `onebot12.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `onebot12.endpoints[].commandPrefix` | string | 否 | — | — |
+| `onebot12.endpoints[].id` | string | 是 | — | OneBot12 bot name |
+| `onebot12.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### qq
 
@@ -543,36 +543,36 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
-| `plugins.qq.sandbox` | boolean | 否 | `false` | — |
-| `plugins.qq.botKind` | string: `"public"`, `"private"` | 否 | `"public"` | 公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开 |
-| `plugins.qq.master` | string \| number | 否 | — | 框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖 |
-| `plugins.qq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.qq.intents` | array&lt;string&gt; | 否 | — | WebSocket Identify intents；省略时按 botKind 自动生成（public→含 PUBLIC_GUILD_MESSAGES） |
-| `plugins.qq.accessTokenUrl` | string | 否 | — | — |
-| `plugins.qq.gatewayUrl` | string | 否 | — | — |
-| `plugins.qq.webhookPath` | string | 否 | `"/qq/webhook"` | POST path on httpHostToken for webhook/middleware modes. |
-| `plugins.qq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/appid/secret 必填，其余字段覆盖实例默认值 |
-| `plugins.qq.endpoints[].appid` | string | 是 | — | QQ official bot app ID |
-| `plugins.qq.endpoints[].secret` | string | 是 | — | QQ official bot secret |
-| `plugins.qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | — | — |
-| `plugins.qq.endpoints[].sandbox` | boolean | 否 | — | — |
-| `plugins.qq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
-| `plugins.qq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.qq.endpoints[].botKind` | string: `"public"`, `"private"` | 否 | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
-| `plugins.qq.endpoints[].intents` | array&lt;string&gt; | 否 | — | 覆盖顶层 intents |
-| `plugins.qq.endpoints[].accessTokenUrl` | string | 否 | — | — |
-| `plugins.qq.endpoints[].gatewayUrl` | string | 否 | — | — |
-| `plugins.qq.endpoints[].webhookPath` | string | 否 | — | — |
-| `plugins.qq.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.qq.endpoints[].id` | string | 是 | — | QQ bot name |
-| `plugins.qq.endpoints[].streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
-| `plugins.qq.endpoints[].streamProxy.port` | integer | 是 | — | — |
-| `plugins.qq.endpoints[].streamProxy.serverName` | string | 是 | — | — |
-| `plugins.qq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `plugins.qq.streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
-| `plugins.qq.streamProxy.port` | integer | 是 | — | — |
-| `plugins.qq.streamProxy.serverName` | string | 是 | — | — |
+| `qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
+| `qq.sandbox` | boolean | 否 | `false` | — |
+| `qq.botKind` | string: `"public"`, `"private"` | 否 | `"public"` | 公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开 |
+| `qq.master` | string \| number | 否 | — | 框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖 |
+| `qq.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `qq.intents` | array&lt;string&gt; | 否 | — | WebSocket Identify intents；省略时按 botKind 自动生成（public→含 PUBLIC_GUILD_MESSAGES） |
+| `qq.accessTokenUrl` | string | 否 | — | — |
+| `qq.gatewayUrl` | string | 否 | — | — |
+| `qq.webhookPath` | string | 否 | `"/qq/webhook"` | POST path on httpHostToken for webhook/middleware modes. |
+| `qq.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/appid/secret 必填，其余字段覆盖实例默认值 |
+| `qq.endpoints[].appid` | string | 是 | — | QQ official bot app ID |
+| `qq.endpoints[].secret` | string | 是 | — | QQ official bot secret |
+| `qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | 否 | — | — |
+| `qq.endpoints[].sandbox` | boolean | 否 | — | — |
+| `qq.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
+| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `qq.endpoints[].botKind` | string: `"public"`, `"private"` | 否 | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
+| `qq.endpoints[].intents` | array&lt;string&gt; | 否 | — | 覆盖顶层 intents |
+| `qq.endpoints[].accessTokenUrl` | string | 否 | — | — |
+| `qq.endpoints[].gatewayUrl` | string | 否 | — | — |
+| `qq.endpoints[].webhookPath` | string | 否 | — | — |
+| `qq.endpoints[].commandPrefix` | string | 否 | — | — |
+| `qq.endpoints[].id` | string | 是 | — | QQ bot name |
+| `qq.endpoints[].streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
+| `qq.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `qq.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `qq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `qq.streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
+| `qq.streamProxy.port` | integer | 是 | — | — |
+| `qq.streamProxy.serverName` | string | 是 | — | — |
 
 ### sandbox
 
@@ -580,15 +580,15 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.sandbox.master` | string \| number | 否 | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.sandbox.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.sandbox.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.sandbox.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
-| `plugins.sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.sandbox.endpoints[].owner` | string | 否 | — | Sandbox owner user ID |
-| `plugins.sandbox.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.sandbox.endpoints[].id` | string | 是 | — | Sandbox bot name |
-| `plugins.sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `sandbox.master` | string \| number | 否 | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `sandbox.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `sandbox.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `sandbox.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
+| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `sandbox.endpoints[].owner` | string | 否 | — | Sandbox owner user ID |
+| `sandbox.endpoints[].commandPrefix` | string | 否 | — | — |
+| `sandbox.endpoints[].id` | string | 是 | — | Sandbox bot name |
+| `sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### satori
 
@@ -596,21 +596,21 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.satori.connection` | string: `"ws"`, `"webhook"` | 否 | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
-| `plugins.satori.heartbeat_interval` | number | 否 | `10000` | WS PING interval in milliseconds |
-| `plugins.satori.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.satori.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值 |
-| `plugins.satori.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `plugins.satori.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.satori.endpoints[].baseUrl` | string | 是 | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
-| `plugins.satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | 否 | — | — |
-| `plugins.satori.endpoints[].token` | string | 否 | — | Bearer token for API and WS IDENTIFY |
-| `plugins.satori.endpoints[].path` | string | 否 | — | Webhook POST path (connection: webhook) |
-| `plugins.satori.endpoints[].heartbeat_interval` | number | 否 | — | — |
-| `plugins.satori.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.satori.endpoints[].id` | string | 是 | — | Satori bot name |
-| `plugins.satori.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `satori.connection` | string: `"ws"`, `"webhook"` | 否 | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
+| `satori.heartbeat_interval` | number | 否 | `10000` | WS PING interval in milliseconds |
+| `satori.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `satori.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值 |
+| `satori.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
+| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `satori.endpoints[].baseUrl` | string | 是 | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
+| `satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | 否 | — | — |
+| `satori.endpoints[].token` | string | 否 | — | Bearer token for API and WS IDENTIFY |
+| `satori.endpoints[].path` | string | 否 | — | Webhook POST path (connection: webhook) |
+| `satori.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `satori.endpoints[].commandPrefix` | string | 否 | — | — |
+| `satori.endpoints[].id` | string | 是 | — | Satori bot name |
+| `satori.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### slack
 
@@ -618,28 +618,28 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.slack.socketMode` | boolean | 否 | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
-| `plugins.slack.webhookPath` | string | 否 | `"/slack/events"` | — |
-| `plugins.slack.clientPingTimeout` | number | 否 | `15000` | Socket Mode client ping timeout (ms) |
-| `plugins.slack.master` | string \| number | 否 | — | 框架 master（Slack user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.slack.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.slack.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.slack.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Slack user id）；覆盖顶层 master |
-| `plugins.slack.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.slack.endpoints[].token` | string | 是 | — | Bot User OAuth Token (xoxb-...) |
-| `plugins.slack.endpoints[].signingSecret` | string | 否 | — | Required for HTTP Events API (socketMode: false) |
-| `plugins.slack.endpoints[].appToken` | string | 否 | — | App-Level Token (xapp-...) for Socket Mode |
-| `plugins.slack.endpoints[].socketMode` | boolean | 否 | — | — |
-| `plugins.slack.endpoints[].webhookPath` | string | 否 | — | — |
-| `plugins.slack.endpoints[].clientPingTimeout` | number | 否 | — | — |
-| `plugins.slack.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.slack.endpoints[].id` | string | 是 | — | Slack bot name |
-| `plugins.slack.endpoints[].streamProxy` | object | 否 | — | Socket故障验收：WSS固定loopback TCP，API仍标准TLS直连 |
-| `plugins.slack.endpoints[].streamProxy.port` | integer | 是 | — | — |
-| `plugins.slack.endpoints[].streamProxy.serverName` | string | 是 | — | — |
-| `plugins.slack.endpoints[].webApiProxy` | object | 否 | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
-| `plugins.slack.endpoints[].webApiProxy.port` | integer | 是 | — | — |
-| `plugins.slack.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `slack.socketMode` | boolean | 否 | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
+| `slack.webhookPath` | string | 否 | `"/slack/events"` | — |
+| `slack.clientPingTimeout` | number | 否 | `15000` | Socket Mode client ping timeout (ms) |
+| `slack.master` | string \| number | 否 | — | 框架 master（Slack user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `slack.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `slack.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `slack.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Slack user id）；覆盖顶层 master |
+| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `slack.endpoints[].token` | string | 是 | — | Bot User OAuth Token (xoxb-...) |
+| `slack.endpoints[].signingSecret` | string | 否 | — | Required for HTTP Events API (socketMode: false) |
+| `slack.endpoints[].appToken` | string | 否 | — | App-Level Token (xapp-...) for Socket Mode |
+| `slack.endpoints[].socketMode` | boolean | 否 | — | — |
+| `slack.endpoints[].webhookPath` | string | 否 | — | — |
+| `slack.endpoints[].clientPingTimeout` | number | 否 | — | — |
+| `slack.endpoints[].commandPrefix` | string | 否 | — | — |
+| `slack.endpoints[].id` | string | 是 | — | Slack bot name |
+| `slack.endpoints[].streamProxy` | object | 否 | — | Socket故障验收：WSS固定loopback TCP，API仍标准TLS直连 |
+| `slack.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `slack.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `slack.endpoints[].webApiProxy` | object | 否 | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
+| `slack.endpoints[].webApiProxy.port` | integer | 是 | — | — |
+| `slack.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### telegram
 
@@ -647,29 +647,29 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.telegram.polling` | boolean | 否 | `true` | Long-poll getUpdates (default). Set false for webhook via httpHostToken. |
-| `plugins.telegram.webhook` | object | 否 | — | Webhook settings when polling is false. |
-| `plugins.telegram.webhook.domain` | string | 否 | — | — |
-| `plugins.telegram.webhook.path` | string | 否 | `"/telegram/webhook"` | — |
-| `plugins.telegram.webhook.secretToken` | string | 否 | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
-| `plugins.telegram.allowedUpdates` | array&lt;string&gt; | 否 | `["message","callback_query"]` | — |
-| `plugins.telegram.apiBaseUrl` | string | 否 | `"https://api.telegram.org"` | — |
-| `plugins.telegram.master` | string \| number | 否 | — | 框架 master（Telegram user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.telegram.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.telegram.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.telegram.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
-| `plugins.telegram.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.telegram.endpoints[].token` | string | 是 | — | Telegram bot token |
-| `plugins.telegram.endpoints[].polling` | boolean | 否 | — | — |
-| `plugins.telegram.endpoints[].webhook` | object | 否 | — | — |
-| `plugins.telegram.endpoints[].webhook.domain` | string | 否 | — | — |
-| `plugins.telegram.endpoints[].webhook.path` | string | 否 | — | — |
-| `plugins.telegram.endpoints[].webhook.secretToken` | string | 否 | — | — |
-| `plugins.telegram.endpoints[].allowedUpdates` | array&lt;string&gt; | 否 | — | — |
-| `plugins.telegram.endpoints[].apiBaseUrl` | string | 否 | — | — |
-| `plugins.telegram.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.telegram.endpoints[].id` | string | 是 | — | Telegram bot name |
-| `plugins.telegram.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `telegram.polling` | boolean | 否 | `true` | Long-poll getUpdates (default). Set false for webhook via httpHostToken. |
+| `telegram.webhook` | object | 否 | — | Webhook settings when polling is false. |
+| `telegram.webhook.domain` | string | 否 | — | — |
+| `telegram.webhook.path` | string | 否 | `"/telegram/webhook"` | — |
+| `telegram.webhook.secretToken` | string | 否 | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
+| `telegram.allowedUpdates` | array&lt;string&gt; | 否 | `["message","callback_query"]` | — |
+| `telegram.apiBaseUrl` | string | 否 | `"https://api.telegram.org"` | — |
+| `telegram.master` | string \| number | 否 | — | 框架 master（Telegram user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `telegram.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `telegram.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `telegram.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
+| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `telegram.endpoints[].token` | string | 是 | — | Telegram bot token |
+| `telegram.endpoints[].polling` | boolean | 否 | — | — |
+| `telegram.endpoints[].webhook` | object | 否 | — | — |
+| `telegram.endpoints[].webhook.domain` | string | 否 | — | — |
+| `telegram.endpoints[].webhook.path` | string | 否 | — | — |
+| `telegram.endpoints[].webhook.secretToken` | string | 否 | — | — |
+| `telegram.endpoints[].allowedUpdates` | array&lt;string&gt; | 否 | — | — |
+| `telegram.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `telegram.endpoints[].commandPrefix` | string | 否 | — | — |
+| `telegram.endpoints[].id` | string | 是 | — | Telegram bot name |
+| `telegram.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### wechat-mp
 
@@ -677,28 +677,28 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.wechat-mp.path` | string | 否 | `"/wechat/webhook"` | — |
-| `plugins.wechat-mp.encrypt` | boolean | 否 | `false` | — |
-| `plugins.wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | 否 | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
-| `plugins.wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | 否 | `"passive"` | — |
-| `plugins.wechat-mp.passiveReplyTimeoutMs` | number | 否 | `4500` | — |
-| `plugins.wechat-mp.master` | string \| number | 否 | — | 框架 master（WeChat OpenID；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.wechat-mp.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.wechat-mp.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.wechat-mp.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeChat OpenID）；覆盖顶层 master |
-| `plugins.wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.wechat-mp.endpoints[].appId` | string | 是 | — | WeChat MP app ID |
-| `plugins.wechat-mp.endpoints[].appSecret` | string | 是 | — | WeChat MP app secret |
-| `plugins.wechat-mp.endpoints[].token` | string | 是 | — | WeChat MP callback token |
-| `plugins.wechat-mp.endpoints[].encodingAESKey` | string | 否 | — | WeChat MP encoding AES key |
-| `plugins.wechat-mp.endpoints[].path` | string | 否 | — | — |
-| `plugins.wechat-mp.endpoints[].encrypt` | boolean | 否 | — | — |
-| `plugins.wechat-mp.endpoints[].encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | 否 | — | — |
-| `plugins.wechat-mp.endpoints[].replyMode` | string: `"passive"`, `"customer_service"` | 否 | — | — |
-| `plugins.wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | 否 | — | — |
-| `plugins.wechat-mp.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.wechat-mp.endpoints[].id` | string | 是 | — | WeChat MP bot name |
-| `plugins.wechat-mp.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wechat-mp.path` | string | 否 | `"/wechat/webhook"` | — |
+| `wechat-mp.encrypt` | boolean | 否 | `false` | — |
+| `wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | 否 | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
+| `wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | 否 | `"passive"` | — |
+| `wechat-mp.passiveReplyTimeoutMs` | number | 否 | `4500` | — |
+| `wechat-mp.master` | string \| number | 否 | — | 框架 master（WeChat OpenID；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `wechat-mp.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `wechat-mp.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `wechat-mp.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeChat OpenID）；覆盖顶层 master |
+| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `wechat-mp.endpoints[].appId` | string | 是 | — | WeChat MP app ID |
+| `wechat-mp.endpoints[].appSecret` | string | 是 | — | WeChat MP app secret |
+| `wechat-mp.endpoints[].token` | string | 是 | — | WeChat MP callback token |
+| `wechat-mp.endpoints[].encodingAESKey` | string | 否 | — | WeChat MP encoding AES key |
+| `wechat-mp.endpoints[].path` | string | 否 | — | — |
+| `wechat-mp.endpoints[].encrypt` | boolean | 否 | — | — |
+| `wechat-mp.endpoints[].encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | 否 | — | — |
+| `wechat-mp.endpoints[].replyMode` | string: `"passive"`, `"customer_service"` | 否 | — | — |
+| `wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | 否 | — | — |
+| `wechat-mp.endpoints[].commandPrefix` | string | 否 | — | — |
+| `wechat-mp.endpoints[].id` | string | 是 | — | WeChat MP bot name |
+| `wechat-mp.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### wecom
 
@@ -706,22 +706,22 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.wecom.webhookPath` | string | 否 | `"/wecom/callback"` | — |
-| `plugins.wecom.apiBaseUrl` | string | 否 | `"https://qyapi.weixin.qq.com"` | — |
-| `plugins.wecom.master` | string \| number | 否 | — | 框架 master（WeCom userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.wecom.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.wecom.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.wecom.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeCom userid）；覆盖顶层 master |
-| `plugins.wecom.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.wecom.endpoints[].corpId` | string | 是 | — | WeCom corp ID |
-| `plugins.wecom.endpoints[].agentSecret` | string | 是 | — | WeCom agent secret |
-| `plugins.wecom.endpoints[].token` | string | 是 | — | WeCom callback token |
-| `plugins.wecom.endpoints[].encodingAESKey` | string | 是 | — | WeCom encoding AES key |
-| `plugins.wecom.endpoints[].webhookPath` | string | 否 | — | — |
-| `plugins.wecom.endpoints[].apiBaseUrl` | string | 否 | — | — |
-| `plugins.wecom.endpoints[].commandPrefix` | string | 否 | — | — |
-| `plugins.wecom.endpoints[].id` | string | 是 | — | WeCom bot name |
-| `plugins.wecom.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wecom.webhookPath` | string | 否 | `"/wecom/callback"` | — |
+| `wecom.apiBaseUrl` | string | 否 | `"https://qyapi.weixin.qq.com"` | — |
+| `wecom.master` | string \| number | 否 | — | 框架 master（WeCom userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `wecom.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `wecom.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `wecom.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（WeCom userid）；覆盖顶层 master |
+| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `wecom.endpoints[].corpId` | string | 是 | — | WeCom corp ID |
+| `wecom.endpoints[].agentSecret` | string | 是 | — | WeCom agent secret |
+| `wecom.endpoints[].token` | string | 是 | — | WeCom callback token |
+| `wecom.endpoints[].encodingAESKey` | string | 是 | — | WeCom encoding AES key |
+| `wecom.endpoints[].webhookPath` | string | 否 | — | — |
+| `wecom.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `wecom.endpoints[].commandPrefix` | string | 否 | — | — |
+| `wecom.endpoints[].id` | string | 是 | — | WeCom bot name |
+| `wecom.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### weixin-ilink
 
@@ -729,25 +729,25 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.weixin-ilink.botAgent` | string | 否 | — | — |
-| `plugins.weixin-ilink.baseUrl` | string | 否 | `"https://ilinkai.weixin.qq.com"` | — |
-| `plugins.weixin-ilink.cdnBaseUrl` | string | 否 | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
-| `plugins.weixin-ilink.longPollTimeoutMs` | number | 否 | `35000` | — |
-| `plugins.weixin-ilink.dataDir` | string | 否 | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
-| `plugins.weixin-ilink.master` | string \| number | 否 | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `plugins.weixin-ilink.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.weixin-ilink.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `plugins.weixin-ilink.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
-| `plugins.weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.weixin-ilink.endpoints[].botToken` | string | 否 | — | iLink bot token; omit to load endpoint state or start QR login |
-| `plugins.weixin-ilink.endpoints[].id` | string | 是 | — | Weixin iLink bot name |
-| `plugins.weixin-ilink.endpoints[].botAgent` | string | 否 | — | — |
-| `plugins.weixin-ilink.endpoints[].baseUrl` | string | 否 | — | — |
-| `plugins.weixin-ilink.endpoints[].cdnBaseUrl` | string | 否 | — | — |
-| `plugins.weixin-ilink.endpoints[].longPollTimeoutMs` | number | 否 | — | — |
-| `plugins.weixin-ilink.endpoints[].dataDir` | string | 否 | — | Endpoint state root |
-| `plugins.weixin-ilink.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
-| `plugins.weixin-ilink.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `weixin-ilink.botAgent` | string | 否 | — | — |
+| `weixin-ilink.baseUrl` | string | 否 | `"https://ilinkai.weixin.qq.com"` | — |
+| `weixin-ilink.cdnBaseUrl` | string | 否 | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
+| `weixin-ilink.longPollTimeoutMs` | number | 否 | `35000` | — |
+| `weixin-ilink.dataDir` | string | 否 | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
+| `weixin-ilink.master` | string \| number | 否 | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
+| `weixin-ilink.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
+| `weixin-ilink.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `weixin-ilink.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
+| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `weixin-ilink.endpoints[].botToken` | string | 否 | — | iLink bot token; omit to load endpoint state or start QR login |
+| `weixin-ilink.endpoints[].id` | string | 是 | — | Weixin iLink bot name |
+| `weixin-ilink.endpoints[].botAgent` | string | 否 | — | — |
+| `weixin-ilink.endpoints[].baseUrl` | string | 否 | — | — |
+| `weixin-ilink.endpoints[].cdnBaseUrl` | string | 否 | — | — |
+| `weixin-ilink.endpoints[].longPollTimeoutMs` | number | 否 | — | — |
+| `weixin-ilink.endpoints[].dataDir` | string | 否 | — | Endpoint state root |
+| `weixin-ilink.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
+| `weixin-ilink.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### process-monitor
 
@@ -755,13 +755,13 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.process-monitor.enabled` | boolean | 否 | `true` | 是否启用进程监控 |
-| `plugins.process-monitor.notifyOnStart` | boolean | 否 | `true` | 首次启动时通知 |
-| `plugins.process-monitor.notifyOnRestart` | boolean | 否 | `true` | 正常重启时通知 |
-| `plugins.process-monitor.notifyOnCrash` | boolean | 否 | `true` | 异常崩溃重启时通知 |
-| `plugins.process-monitor.notifyChannels` | array&lt;object&gt; | 否 | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
-| `plugins.process-monitor.notifyChannels[].type` | string: `"webhook"` | 是 | — | — |
-| `plugins.process-monitor.notifyChannels[].target` | string | 是 | — | — |
+| `process-monitor.enabled` | boolean | 否 | `true` | 是否启用进程监控 |
+| `process-monitor.notifyOnStart` | boolean | 否 | `true` | 首次启动时通知 |
+| `process-monitor.notifyOnRestart` | boolean | 否 | `true` | 正常重启时通知 |
+| `process-monitor.notifyOnCrash` | boolean | 否 | `true` | 异常崩溃重启时通知 |
+| `process-monitor.notifyChannels` | array&lt;object&gt; | 否 | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
+| `process-monitor.notifyChannels[].type` | string: `"webhook"` | 是 | — | — |
+| `process-monitor.notifyChannels[].target` | string | 是 | — | — |
 
 ### blackjack
 
@@ -829,480 +829,480 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.activity-feedback.enabled` | boolean | 否 | `true` | 是否启用当前活动反馈插件实例。 |
-| `plugins.activity-feedback.defaults` | object | 否 | — | 所有平台与 Endpoint 的默认策略。 |
-| `plugins.activity-feedback.defaults.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
-| `plugins.activity-feedback.defaults.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
-| `plugins.activity-feedback.defaults.phases.queued` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.private` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.queued.group` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.queued.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.active` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.active.private` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.active.group` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.active.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.thinking` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.private` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.thinking.group` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.thinking.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.defaults.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms` | object | 否 | — | 按平台名覆盖；值的结构与 defaults 相同。 |
-| `plugins.activity-feedback.platforms.<platform>.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
-| `plugins.activity-feedback.platforms.<platform>.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.platforms.<platform>.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints` | object | 否 | — | 按 platform:endpointKey 覆盖；值的结构与 defaults 相同。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule` | object | 否 | — | 仅用于 Schedule 的开始、完成与失败反馈。 |
-| `plugins.activity-feedback.schedule.phases` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.start` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.start.private` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.start.group` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.start.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.finish` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.private` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.finish.group` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.finish.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.error` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.error.private` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.error.group` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
-| `plugins.activity-feedback.schedule.phases.error.channel` | object | 否 | — | — |
-| `plugins.activity-feedback.schedule.phases.error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
-| `plugins.activity-feedback.schedule.phases.error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
-| `plugins.activity-feedback.schedule.phases.error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
-| `plugins.activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
-| `plugins.activity-feedback.schedule.phases.error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
-| `plugins.activity-feedback.schedule.phases.error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.enabled` | boolean | 否 | `true` | 是否启用当前活动反馈插件实例。 |
+| `activity-feedback.defaults` | object | 否 | — | 所有平台与 Endpoint 的默认策略。 |
+| `activity-feedback.defaults.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
+| `activity-feedback.defaults.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
+| `activity-feedback.defaults.phases.queued` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.queued.private` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.queued.group` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.queued.channel` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.active` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.active.private` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.active.group` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.active.channel` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.thinking` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.thinking.private` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.thinking.group` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.thinking.channel` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_start` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_start.private` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_start.group` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_start.channel` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_finish` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.private` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_finish.group` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_finish.channel` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_error` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_error.private` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_error.group` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.defaults.phases.schedule_error.channel` | object | 否 | — | — |
+| `activity-feedback.defaults.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.defaults.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.defaults.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.defaults.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.defaults.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.defaults.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms` | object | 否 | — | 按平台名覆盖；值的结构与 defaults 相同。 |
+| `activity-feedback.platforms.<platform>.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
+| `activity-feedback.platforms.<platform>.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
+| `activity-feedback.platforms.<platform>.phases.queued` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.private` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.queued.group` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.queued.channel` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.active` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.private` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.active.group` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.active.channel` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.thinking` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.private` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.group` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel` | object | 否 | — | — |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.platforms.<platform>.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints` | object | 否 | — | 按 platform:endpointKey 覆盖；值的结构与 defaults 相同。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.enabled` | boolean | 否 | `true` | 是否启用当前策略层。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases` | object | 否 | — | 按生命周期 phase 配置反馈策略。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.queued.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.active.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.thinking.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel` | object | 否 | — | — |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.endpoints.<platform:endpointKey>.phases.schedule_error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule` | object | 否 | — | 仅用于 Schedule 的开始、完成与失败反馈。 |
+| `activity-feedback.schedule.phases` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.start` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.start.private` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.start.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.start.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.start.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.start.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.start.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.start.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.start.group` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.start.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.start.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.start.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.start.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.start.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.start.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.start.channel` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.start.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.start.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.start.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.start.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.start.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.start.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.finish` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.finish.private` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.finish.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.finish.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.finish.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.finish.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.finish.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.finish.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.finish.group` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.finish.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.finish.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.finish.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.finish.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.finish.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.finish.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.finish.channel` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.finish.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.finish.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.finish.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.finish.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.finish.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.finish.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.error` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.error.private` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.error.private.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.error.private.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.error.private.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.error.private.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.error.private.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.error.private.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.error.group` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.error.group.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.error.group.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.error.group.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.error.group.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.error.group.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.error.group.platformConfig` | object | 否 | — | 平台特定选项。 |
+| `activity-feedback.schedule.phases.error.channel` | object | 否 | — | — |
+| `activity-feedback.schedule.phases.error.channel.type` | string: `"reaction"`, `"message"`, `"typing"`, `"none"` | 否 | — | 该 phase 的呈现方式。 |
+| `activity-feedback.schedule.phases.error.channel.emoji` | string | 否 | — | type=reaction 时使用的回应值。 |
+| `activity-feedback.schedule.phases.error.channel.message` | string | 否 | — | type=message 时使用的状态文本。 |
+| `activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
+| `activity-feedback.schedule.phases.error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
+| `activity-feedback.schedule.phases.error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
 
 ### typesafe
 
@@ -1310,12 +1310,12 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.typesafe.enabled` | boolean | 否 | `true` | 启用该决策服务。 |
-| `plugins.typesafe.apiKey` | string | 否 | — | 通过环境变量 TYPESAFE_API_KEY 引用密钥。 |
-| `plugins.typesafe.model` | string | 否 | `"jev-latest"` | 模型名称；校准后的策略应固定模型版本。 |
-| `plugins.typesafe.baseUrl` | string | 否 | `"https://api.typesafe.ai"` | API 根地址，不包含凭据、查询或片段。 |
-| `plugins.typesafe.timeoutMs` | integer | 否 | `10000` | 包含全部请求与重试等待的总超时。 |
-| `plugins.typesafe.maxRetries` | integer | 否 | `2` | 首次请求后的最大重试次数。 |
+| `typesafe.enabled` | boolean | 否 | `true` | 启用该决策服务。 |
+| `typesafe.apiKey` | string | 否 | — | 通过环境变量 TYPESAFE_API_KEY 引用密钥。 |
+| `typesafe.model` | string | 否 | `"jev-latest"` | 模型名称；校准后的策略应固定模型版本。 |
+| `typesafe.baseUrl` | string | 否 | `"https://api.typesafe.ai"` | API 根地址，不包含凭据、查询或片段。 |
+| `typesafe.timeoutMs` | integer | 否 | `10000` | 包含全部请求与重试等待的总超时。 |
+| `typesafe.maxRetries` | integer | 否 | `2` | 首次请求后的最大重试次数。 |
 
 ### 60s
 
@@ -1323,7 +1323,7 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.60s.apiBase` | string | 否 | `"https://60s.viki.moe"` | 60s API base URL |
+| `60s.apiBase` | string | 否 | `"https://60s.viki.moe"` | 60s API base URL |
 
 ### calendar
 
@@ -1331,32 +1331,32 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | 否 | `"none"` | 日历后端；none 时工具返回未启用提示 |
-| `plugins.calendar.timezone` | string | 否 | `"Asia/Manila"` | 解释无偏移时间与展示用的 IANA 时区 |
-| `plugins.calendar.work_day_start` | string | 否 | `"09:00"` | — |
-| `plugins.calendar.work_day_end` | string | 否 | `"18:00"` | — |
-| `plugins.calendar.oauth_redirect_base_url` | string | 否 | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
-| `plugins.calendar.oauth_callback_path` | string | 否 | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
-| `plugins.calendar.caldav` | object | 否 | — | — |
-| `plugins.calendar.caldav.enabled` | boolean | 否 | `false` | — |
-| `plugins.calendar.caldav.calendar_url` | string | 否 | `""` | 日历 collection URL |
-| `plugins.calendar.caldav.username` | string | 否 | `""` | — |
-| `plugins.calendar.caldav.password` | string | 否 | `""` | — |
-| `plugins.calendar.google` | object | 否 | — | — |
-| `plugins.calendar.google.enabled` | boolean | 否 | `false` | — |
-| `plugins.calendar.google.client_id` | string | 否 | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
-| `plugins.calendar.google.client_secret` | string | 否 | `""` | ${GOOGLE_CALENDAR_CLIENT_SECRET} |
-| `plugins.calendar.google.refresh_token` | string | 否 | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取 |
-| `plugins.calendar.google.calendar_id` | string | 否 | `"primary"` | 日历 ID，默认 primary；可换成其它日历的 id |
-| `plugins.calendar.google.token_file` | string | 否 | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json） |
-| `plugins.calendar.microsoft` | object | 否 | — | — |
-| `plugins.calendar.microsoft.enabled` | boolean | 否 | `false` | — |
-| `plugins.calendar.microsoft.client_id` | string | 否 | `""` | ${MS_GRAPH_CLIENT_ID} |
-| `plugins.calendar.microsoft.client_secret` | string | 否 | `""` | 可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET} |
-| `plugins.calendar.microsoft.refresh_token` | string | 否 | `""` | ${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取 |
-| `plugins.calendar.microsoft.tenant` | string | 否 | `"common"` | Azure tenant，默认 common |
-| `plugins.calendar.microsoft.calendar_id` | string | 否 | `""` | 留空或 primary/me = 默认日历；否则为 Graph calendar id |
-| `plugins.calendar.microsoft.token_file` | string | 否 | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json） |
+| `calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | 否 | `"none"` | 日历后端；none 时工具返回未启用提示 |
+| `calendar.timezone` | string | 否 | `"Asia/Manila"` | 解释无偏移时间与展示用的 IANA 时区 |
+| `calendar.work_day_start` | string | 否 | `"09:00"` | — |
+| `calendar.work_day_end` | string | 否 | `"18:00"` | — |
+| `calendar.oauth_redirect_base_url` | string | 否 | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
+| `calendar.oauth_callback_path` | string | 否 | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
+| `calendar.caldav` | object | 否 | — | — |
+| `calendar.caldav.enabled` | boolean | 否 | `false` | — |
+| `calendar.caldav.calendar_url` | string | 否 | `""` | 日历 collection URL |
+| `calendar.caldav.username` | string | 否 | `""` | — |
+| `calendar.caldav.password` | string | 否 | `""` | — |
+| `calendar.google` | object | 否 | — | — |
+| `calendar.google.enabled` | boolean | 否 | `false` | — |
+| `calendar.google.client_id` | string | 否 | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
+| `calendar.google.client_secret` | string | 否 | `""` | ${GOOGLE_CALENDAR_CLIENT_SECRET} |
+| `calendar.google.refresh_token` | string | 否 | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取 |
+| `calendar.google.calendar_id` | string | 否 | `"primary"` | 日历 ID，默认 primary；可换成其它日历的 id |
+| `calendar.google.token_file` | string | 否 | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json） |
+| `calendar.microsoft` | object | 否 | — | — |
+| `calendar.microsoft.enabled` | boolean | 否 | `false` | — |
+| `calendar.microsoft.client_id` | string | 否 | `""` | ${MS_GRAPH_CLIENT_ID} |
+| `calendar.microsoft.client_secret` | string | 否 | `""` | 可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET} |
+| `calendar.microsoft.refresh_token` | string | 否 | `""` | ${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取 |
+| `calendar.microsoft.tenant` | string | 否 | `"common"` | Azure tenant，默认 common |
+| `calendar.microsoft.calendar_id` | string | 否 | `""` | 留空或 primary/me = 默认日历；否则为 Graph calendar id |
+| `calendar.microsoft.token_file` | string | 否 | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json） |
 
 ### code-runner
 
@@ -1370,40 +1370,40 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.content-moderation.enabled` | boolean | 否 | `true` | 总开关 |
-| `plugins.content-moderation.onError` | string: `"open"`, `"closed"` | 否 | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
-| `plugins.content-moderation.maskChar` | string | 否 | `"*"` | 文本打码字符 |
-| `plugins.content-moderation.replyTemplate` | string | 否 | `"消息含不当内容，已拦截。"` | reply 动作时的提示文案 |
-| `plugins.content-moderation.masters` | array&lt;string&gt; | 否 | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
-| `plugins.content-moderation.inbound` | object | 否 | — | — |
-| `plugins.content-moderation.inbound.enabled` | boolean | 否 | `true` | — |
-| `plugins.content-moderation.inbound.bypassMasters` | boolean | 否 | `true` | master 跳过入站审查 |
-| `plugins.content-moderation.inbound.whitelist` | object | 否 | — | — |
-| `plugins.content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | 否 | `[]` | — |
-| `plugins.content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | 否 | `[]` | — |
-| `plugins.content-moderation.outbound` | object | 否 | — | — |
-| `plugins.content-moderation.outbound.enabled` | boolean | 否 | `true` | — |
-| `plugins.content-moderation.outbound.bypass` | boolean | 否 | `false` | 为 true 时跳过出站审查 |
-| `plugins.content-moderation.actions` | object | 否 | — | severity → 动作（字符串或数组）；缺省用偏严默认表 |
-| `plugins.content-moderation.actions.pass` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
-| `plugins.content-moderation.actions.low` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
-| `plugins.content-moderation.actions.medium` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
-| `plugins.content-moderation.actions.high` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
-| `plugins.content-moderation.actions.critical` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
-| `plugins.content-moderation.sources` | array&lt;object&gt; | 否 | `[]` | — |
-| `plugins.content-moderation.sources[].id` | string | 是 | — | — |
-| `plugins.content-moderation.sources[].type` | string: `"local"`, `"http"` | 是 | — | — |
-| `plugins.content-moderation.sources[].enabled` | boolean | 否 | `true` | — |
-| `plugins.content-moderation.sources[].onError` | string: `"open"`, `"closed"` | 否 | — | — |
-| `plugins.content-moderation.sources[].includeBuiltin` | boolean | 否 | `true` | 是否合并内置分级违禁词词库 |
-| `plugins.content-moderation.sources[].words` | array&lt;string \| object&gt; | 否 | `[]` | 自定义词：字符串（用 defaultSeverity）或 { word, severity } |
-| `plugins.content-moderation.sources[].wordFiles` | array&lt;string&gt; | 否 | `[]` | 词库文件；行格式 word / severity:word / word\|severity |
-| `plugins.content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | 否 | `"high"` | 未标注分级的自定义词默认 severity |
-| `plugins.content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | 否 | `"high"` | 兼容旧字段，等同 defaultSeverity |
-| `plugins.content-moderation.sources[].url` | string | 否 | — | — |
-| `plugins.content-moderation.sources[].headers` | object | 否 | — | — |
-| `plugins.content-moderation.sources[].timeoutMs` | number | 否 | `5000` | — |
-| `plugins.content-moderation.sources[].forceUpload` | boolean | 否 | `false` | 强制下载图片后上传，不传 URL |
+| `content-moderation.enabled` | boolean | 否 | `true` | 总开关 |
+| `content-moderation.onError` | string: `"open"`, `"closed"` | 否 | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
+| `content-moderation.maskChar` | string | 否 | `"*"` | 文本打码字符 |
+| `content-moderation.replyTemplate` | string | 否 | `"消息含不当内容，已拦截。"` | reply 动作时的提示文案 |
+| `content-moderation.masters` | array&lt;string&gt; | 否 | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
+| `content-moderation.inbound` | object | 否 | — | — |
+| `content-moderation.inbound.enabled` | boolean | 否 | `true` | — |
+| `content-moderation.inbound.bypassMasters` | boolean | 否 | `true` | master 跳过入站审查 |
+| `content-moderation.inbound.whitelist` | object | 否 | — | — |
+| `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | 否 | `[]` | — |
+| `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | 否 | `[]` | — |
+| `content-moderation.outbound` | object | 否 | — | — |
+| `content-moderation.outbound.enabled` | boolean | 否 | `true` | — |
+| `content-moderation.outbound.bypass` | boolean | 否 | `false` | 为 true 时跳过出站审查 |
+| `content-moderation.actions` | object | 否 | — | severity → 动作（字符串或数组）；缺省用偏严默认表 |
+| `content-moderation.actions.pass` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
+| `content-moderation.actions.low` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
+| `content-moderation.actions.medium` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
+| `content-moderation.actions.high` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
+| `content-moderation.actions.critical` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | 否 | — | — |
+| `content-moderation.sources` | array&lt;object&gt; | 否 | `[]` | — |
+| `content-moderation.sources[].id` | string | 是 | — | — |
+| `content-moderation.sources[].type` | string: `"local"`, `"http"` | 是 | — | — |
+| `content-moderation.sources[].enabled` | boolean | 否 | `true` | — |
+| `content-moderation.sources[].onError` | string: `"open"`, `"closed"` | 否 | — | — |
+| `content-moderation.sources[].includeBuiltin` | boolean | 否 | `true` | 是否合并内置分级违禁词词库 |
+| `content-moderation.sources[].words` | array&lt;string \| object&gt; | 否 | `[]` | 自定义词：字符串（用 defaultSeverity）或 { word, severity } |
+| `content-moderation.sources[].wordFiles` | array&lt;string&gt; | 否 | `[]` | 词库文件；行格式 word / severity:word / word\|severity |
+| `content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | 否 | `"high"` | 未标注分级的自定义词默认 severity |
+| `content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | 否 | `"high"` | 兼容旧字段，等同 defaultSeverity |
+| `content-moderation.sources[].url` | string | 否 | — | — |
+| `content-moderation.sources[].headers` | object | 否 | — | — |
+| `content-moderation.sources[].timeoutMs` | number | 否 | `5000` | — |
+| `content-moderation.sources[].forceUpload` | boolean | 否 | `false` | 强制下载图片后上传，不传 URL |
 
 ### group-suite
 
@@ -1411,18 +1411,18 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.group-suite.keywordReply` | boolean | 否 | `false` | — |
-| `plugins.group-suite.basePointsMin` | number | 否 | `10` | — |
-| `plugins.group-suite.basePointsMax` | number | 否 | `30` | — |
-| `plugins.group-suite.streakBonus` | number | 否 | `5` | — |
-| `plugins.group-suite.streakCap` | number | 否 | `50` | — |
-| `plugins.group-suite.rankSize` | number | 否 | `10` | — |
-| `plugins.group-suite.teachMaxPerGroup` | number | 否 | `200` | — |
-| `plugins.group-suite.teachCooldownMs` | number | 否 | `3000` | — |
-| `plugins.group-suite.teachAllowRegex` | boolean | 否 | `true` | — |
-| `plugins.group-suite.teachPageSize` | number | 否 | `10` | — |
-| `plugins.group-suite.welcomeMessage` | string | 否 | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
-| `plugins.group-suite.ephemeralKeywords` | boolean | 否 | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
+| `group-suite.keywordReply` | boolean | 否 | `false` | — |
+| `group-suite.basePointsMin` | number | 否 | `10` | — |
+| `group-suite.basePointsMax` | number | 否 | `30` | — |
+| `group-suite.streakBonus` | number | 否 | `5` | — |
+| `group-suite.streakCap` | number | 否 | `50` | — |
+| `group-suite.rankSize` | number | 否 | `10` | — |
+| `group-suite.teachMaxPerGroup` | number | 否 | `200` | — |
+| `group-suite.teachCooldownMs` | number | 否 | `3000` | — |
+| `group-suite.teachAllowRegex` | boolean | 否 | `true` | — |
+| `group-suite.teachPageSize` | number | 否 | `10` | — |
+| `group-suite.welcomeMessage` | string | 否 | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
+| `group-suite.ephemeralKeywords` | boolean | 否 | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
 
 ### link-poster
 
@@ -1436,27 +1436,27 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.lottery.pickCount` | number | 否 | `5` | — |
-| `plugins.lottery.scheduleCron` | string | 否 | `"0 0 18 * * *"` | — |
-| `plugins.lottery.historyLimit` | number | 否 | `500` | — |
-| `plugins.lottery.scheduleEnabled` | boolean | 否 | `true` | — |
-| `plugins.lottery.backtestEnabled` | boolean | 否 | `true` | — |
-| `plugins.lottery.backtestWindow` | number | 否 | `50` | — |
-| `plugins.lottery.backtestRandomTrials` | number | 否 | `64` | — |
-| `plugins.lottery.backtestMinHistory` | number | 否 | `30` | — |
-| `plugins.lottery.backtestAdaptive` | boolean | 否 | `true` | — |
-| `plugins.lottery.weightPersistEnabled` | boolean | 否 | `true` | — |
-| `plugins.lottery.weightHoldoutFallback` | boolean | 否 | `true` | — |
-| `plugins.lottery.games` | array&lt;string&gt; | 否 | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
-| `plugins.lottery.pushTargets` | array&lt;object&gt; | 否 | `[]` | OutboundHost push destinations for cron/publish reports |
-| `plugins.lottery.pushTargets[].adapter` | string | 是 | — | — |
-| `plugins.lottery.pushTargets[].endpointId` | string | 否 | — | — |
-| `plugins.lottery.pushTargets[].channelType` | string | 否 | `"private"` | — |
-| `plugins.lottery.pushTargets[].channelId` | string | 是 | — | — |
-| `plugins.lottery.kl8` | object | 否 | — | — |
-| `plugins.lottery.kl8.pickCount` | number | 否 | `5` | — |
-| `plugins.lottery.kl8.recommendGroups` | number | 否 | `3` | — |
-| `plugins.lottery.kl8.groupStrategies` | array&lt;string&gt; | 否 | `["balanced","hot","cold"]` | — |
+| `lottery.pickCount` | number | 否 | `5` | — |
+| `lottery.scheduleCron` | string | 否 | `"0 0 18 * * *"` | — |
+| `lottery.historyLimit` | number | 否 | `500` | — |
+| `lottery.scheduleEnabled` | boolean | 否 | `true` | — |
+| `lottery.backtestEnabled` | boolean | 否 | `true` | — |
+| `lottery.backtestWindow` | number | 否 | `50` | — |
+| `lottery.backtestRandomTrials` | number | 否 | `64` | — |
+| `lottery.backtestMinHistory` | number | 否 | `30` | — |
+| `lottery.backtestAdaptive` | boolean | 否 | `true` | — |
+| `lottery.weightPersistEnabled` | boolean | 否 | `true` | — |
+| `lottery.weightHoldoutFallback` | boolean | 否 | `true` | — |
+| `lottery.games` | array&lt;string&gt; | 否 | `["kl8","ssq","dlt","fc3d","pl3","pl5"]` | — |
+| `lottery.pushTargets` | array&lt;object&gt; | 否 | `[]` | OutboundHost push destinations for cron/publish reports |
+| `lottery.pushTargets[].adapter` | string | 是 | — | — |
+| `lottery.pushTargets[].endpointId` | string | 否 | — | — |
+| `lottery.pushTargets[].channelType` | string | 否 | `"private"` | — |
+| `lottery.pushTargets[].channelId` | string | 是 | — | — |
+| `lottery.kl8` | object | 否 | — | — |
+| `lottery.kl8.pickCount` | number | 否 | `5` | — |
+| `lottery.kl8.recommendGroups` | number | 否 | `3` | — |
+| `lottery.kl8.groupStrategies` | array&lt;string&gt; | 否 | `["balanced","hot","cold"]` | — |
 
 ### music
 
@@ -1476,11 +1476,11 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.reminder.timezone` | string | 否 | `"UTC"` | 显示提醒时间的 IANA 时区；绝对时间仍必须提供 ISO offset |
-| `plugins.reminder.maxTasks` | number | 否 | `20` | 每个插件实例新建时允许的活跃任务上限（待触发或未确认）；降低上限不删除既有任务 |
-| `plugins.reminder.maxTasksPerSender` | number | 否 | `10` | 同一发送者在同一会话的任务上限 |
-| `plugins.reminder.batchSize` | number | 否 | `5` | 每次扫描最多投递的任务数 |
-| `plugins.reminder.missedGraceSeconds` | number | 否 | `15` | 周期轮次超过此延迟后跳过；停机期间不补历史轮次 |
+| `reminder.timezone` | string | 否 | `"UTC"` | 显示提醒时间的 IANA 时区；绝对时间仍必须提供 ISO offset |
+| `reminder.maxTasks` | number | 否 | `20` | 每个插件实例新建时允许的活跃任务上限（待触发或未确认）；降低上限不删除既有任务 |
+| `reminder.maxTasksPerSender` | number | 否 | `10` | 同一发送者在同一会话的任务上限 |
+| `reminder.batchSize` | number | 否 | `5` | 每次扫描最多投递的任务数 |
+| `reminder.missedGraceSeconds` | number | 否 | `15` | 周期轮次超过此延迟后跳过；停机期间不补历史轮次 |
 
 ### repeater
 
@@ -1488,9 +1488,9 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.repeater.threshold` | number | 否 | `3` | 触发复读的最少人数 |
-| `plugins.repeater.cooldown` | number | 否 | `30000` | 同一群冷却时间 (ms) |
-| `plugins.repeater.maxLength` | number | 否 | `200` | 消息长度上限 |
+| `repeater.threshold` | number | 否 | `3` | 触发复读的最少人数 |
+| `repeater.cooldown` | number | 否 | `30000` | 同一群冷却时间 (ms) |
+| `repeater.maxLength` | number | 否 | `200` | 消息长度上限 |
 
 ### rss
 
@@ -1498,10 +1498,10 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `plugins.rss.pollCron` | string | 否 | `"0 */5 * * * *"` | 轮询频率 (6 段 Cron 表达式) |
-| `plugins.rss.maxPerGroup` | number | 否 | `30` | — |
-| `plugins.rss.maxItems` | number | 否 | `5` | — |
-| `plugins.rss.timeout` | number | 否 | `15000` | — |
+| `rss.pollCron` | string | 否 | `"0 */5 * * * *"` | 轮询频率 (6 段 Cron 表达式) |
+| `rss.maxPerGroup` | number | 否 | `30` | — |
+| `rss.maxItems` | number | 否 | `5` | — |
+| `rss.timeout` | number | 否 | `15000` | — |
 
 ### short-url
 

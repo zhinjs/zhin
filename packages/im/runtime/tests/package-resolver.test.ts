@@ -172,14 +172,14 @@ describe('NodePackageResolver 解析规则矩阵', () => {
     expect(resolved.source).toBe('node_modules');
   });
 
-  it('peer：宽松声明未安装时抛 PackageResolutionError，由 optional 引用容错', async () => {
+  it('peer：宽松声明未安装时抛 PackageResolutionError，显式停用实例不解析包', async () => {
     const root = await fixture({
       'package.json': {
         name: '@test/root',
         peerDependencies: { '@test/lib': '^1.0.0' },
         zhin: {
           ...pluginManifest,
-          plugins: [{ package: '@test/lib', instanceKey: 'lib', optional: true }],
+          plugins: [],
         },
       },
     });
@@ -188,7 +188,7 @@ describe('NodePackageResolver 解析规则矩阵', () => {
 
     await expect(resolver.resolve('@test/lib', from))
       .rejects.toBeInstanceOf(PackageResolutionError);
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { lib: '@test/lib' }, disable_plugins: ['lib'] });
     expect(graph.root.children).toEqual([]);
   });
 
@@ -224,73 +224,73 @@ describe('NodePackageResolver 解析规则矩阵', () => {
       .rejects.toThrow('Workspace dependency @test/lib declared by @test/root is missing');
   });
 
-  it('optional-missing：声明但未安装的 optional 引用被省略', async () => {
+  it('disabled-missing：声明但未安装的停用实例不进入有效树', async () => {
     const root = await fixture({
       'package.json': {
         name: '@test/root',
         dependencies: { '@test/optional': '^1.0.0' },
         zhin: {
           ...pluginManifest,
-          plugins: [{ package: '@test/optional', instanceKey: 'opt', optional: true }],
+          plugins: [],
         },
       },
     });
     const resolver = await NodePackageResolver.create(root);
 
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { opt: '@test/optional' }, disable_plugins: ['opt'] });
 
     expect(graph.root.children).toEqual([]);
   });
 
-  it('optional-missing：未声明的 optional 引用同样容错（统一 PackageResolutionError 容错）', async () => {
+  it('disabled-missing：停用实例不要求先声明安装依赖', async () => {
     const root = await fixture({
       'package.json': {
         name: '@test/root',
         zhin: {
           ...pluginManifest,
-          plugins: [{ package: '@test/optional', instanceKey: 'opt', optional: true }],
+          plugins: [],
         },
       },
     });
     const resolver = await NodePackageResolver.create(root);
 
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { opt: '@test/optional' }, disable_plugins: ['opt'] });
 
     expect(graph.root.children).toEqual([]);
   });
 
-  it('optional-missing：workspace:* 声明但链接缺失的 optional 引用同样容错', async () => {
+  it('disabled-missing：workspace:* 链接缺失的停用实例不解析包', async () => {
     const root = await fixture({
       'package.json': {
         name: '@test/root',
         dependencies: { '@test/optional': 'workspace:*' },
         zhin: {
           ...pluginManifest,
-          plugins: [{ package: '@test/optional', instanceKey: 'opt', optional: true }],
+          plugins: [],
         },
       },
     });
     const resolver = await NodePackageResolver.create(root);
 
-    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { opt: '@test/optional' }, disable_plugins: ['opt'] });
 
     expect(graph.root.children).toEqual([]);
   });
 
-  it('非 optional：声明但未安装的引用仍然失败', async () => {
+  it('enabled-required：声明但未安装的启用实例失败', async () => {
     const root = await fixture({
       'package.json': {
         name: '@test/root',
         dependencies: { '@test/required': '^1.0.0' },
         zhin: {
           ...pluginManifest,
-          plugins: [{ package: '@test/required', instanceKey: 'req' }],
+          plugins: [],
         },
       },
     });
     const resolver = await NodePackageResolver.create(root);
 
-    await expect(new ProjectGraphService(resolver).inspect(root))
+    await expect(new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { req: '@test/required' } }))
       .rejects.toBeInstanceOf(PackageResolutionError);
   });
 });

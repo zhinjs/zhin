@@ -23,13 +23,15 @@ zhin install @zhin.js/plugin-reminder
 根应用从 `zhin.js` 继承 Stable Command Feature；上面的直接 Command 依赖确保子插件解析到同一物理 provider。安装命令会添加插件挂载；手动维护时同样使用上述清单。启用支持持久状态原子更新的 Database Host。缺少持久数据库或精确目标投递 Host 时启动明确失败，不会降级为内存保存。SQLite、PostgreSQL、MySQL 的状态能力由框架 Database Host 提供；本插件回归使用真实 SQLite 文件。
 
 ```yaml
+configVersion: 2
 plugins:
-  reminder:
-    timezone: UTC
-    maxTasks: 20
-    maxTasksPerSender: 10
-    batchSize: 5
-    missedGraceSeconds: 15
+  reminder: "@zhin.js/plugin-reminder"
+reminder:
+  timezone: UTC
+  maxTasks: 20
+  maxTasksPerSender: 10
+  batchSize: 5
+  missedGraceSeconds: 15
 ```
 
 配置统一由 Schema 校验；修改仅重载插件。timezone 是有效的 IANA 时区，只影响显示，默认 UTC。绝对时间必须显式包含 `Z` 或 `±hh:mm`，没有隐式本地时间转换。多个实例应显式配置不同的 `commandNamespace`，例如 `personal` 和 `work`；使用时在指令前添加对应命名空间。Endpoint 的 `commandPrefix` 决定指令前缀。

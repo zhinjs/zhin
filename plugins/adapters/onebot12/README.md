@@ -21,7 +21,7 @@ pnpm add @zhin.js/adapter-onebot12
 - `@zhin.js/adapter` — 约定式 `adapters/onebot12/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
-- 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
 `AdapterIndex` 会把实例默认值与 `endpoints[]` 的逐项覆盖合并；协议层只接收一个已经展开的 endpoint 配置，不再读取嵌套 endpoint 或从进程环境推断身份。Webhook 配置必须同时提供 `path` 与 `api_url`，从而在启动前建立完整的双向能力。
 
@@ -41,19 +41,21 @@ pnpm add @zhin.js/adapter-onebot12
 ## 最小配置
 
 ```yaml
+configVersion: 2
 # zhin.config.yml（Plugin Runtime）
 plugins:
-  onebot12:
-    connection: ws
-    reconnect_interval: 5000
-    heartbeat_interval: 30000
-    endpoints:
-      - id: ob12-bot
-        url: "ws://127.0.0.1:6700"
-        access_token: "${ONEBOT12_ACCESS_TOKEN}"
+  onebot12: "@zhin.js/adapter-onebot12"
+onebot12:
+  connection: ws
+  reconnect_interval: 5000
+  heartbeat_interval: 30000
+  endpoints:
+    - id: ob12-bot
+      url: "ws://127.0.0.1:6700"
+      access_token: "${ONEBOT12_ACCESS_TOKEN}"
 ```
 
-根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-onebot12`（`instanceKey: onebot12`）。
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-onebot12`（`instanceKey: onebot12`）。
 
 ## 连接方式
 

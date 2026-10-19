@@ -40,29 +40,31 @@ scheduleCron (18:00)
 
 ## 配置
 
-安装命令会挂载到 `package.json#zhin.plugins`，实例名为 `lottery`。在 `zhin.config.yml` 的实例节点修改配置：
+安装命令会挂载到 主配置 `plugins` 映射，实例名为 `lottery`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
+configVersion: 2
 plugins:
-  lottery:
-    scheduleCron: "0 0 18 * * *"
-    scheduleEnabled: true
-    backtestEnabled: true
-    backtestWindow: 50
-    backtestRandomTrials: 64
-    backtestMinHistory: 30
+  lottery: "@zhin.js/plugin-lottery"
+lottery:
+  scheduleCron: "0 0 18 * * *"
+  scheduleEnabled: true
+  backtestEnabled: true
+  backtestWindow: 50
+  backtestRandomTrials: 64
+  backtestMinHistory: 30
+  pickCount: 5
+  historyLimit: 500
+  kl8:
     pickCount: 5
-    historyLimit: 500
-    kl8:
-      pickCount: 5
-      recommendGroups: 3
-      groupStrategies: [balanced, hot, cold]
-    games: [kl8, ssq, dlt, fc3d, pl3, pl5]
-    pushTargets:
-      - adapter: sandbox
-        endpointId: sandbox-bot
-        channelType: private
-        channelId: operator
+    recommendGroups: 3
+    groupStrategies: [ balanced, hot, cold ]
+  games: [ kl8, ssq, dlt, fc3d, pl3, pl5 ]
+  pushTargets:
+    - adapter: sandbox
+      endpointId: sandbox-bot
+      channelType: private
+      channelId: operator
 ```
 
 ## 权重训练（模拟盘）

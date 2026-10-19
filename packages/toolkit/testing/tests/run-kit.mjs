@@ -30,7 +30,7 @@ try {
   }
   await link('zhin.js', join(repo,'packages/im/zhin'));
   const mounted = mode.startsWith('group');
-  await json(join(temporary,'package.json'), {name:'@test/kit-app', type:'module', dependencies:{'zhin.js':'*','@zhin.js/command':'*','@zhin.js/tool':'*','@zhin.js/skill':'*'}, zhin:{protocol:1,type:'plugin',entry:'./main.ts', plugins: mounted ? [{package:'./plugins/group-suite',instanceKey:'alpha'},{package:'./plugins/group-suite',instanceKey:'beta'}] : []}});
+  await json(join(temporary,'package.json'), {name:'@test/kit-app', type:'module', dependencies:{'zhin.js':'*','@zhin.js/command':'*','@zhin.js/tool':'*','@zhin.js/skill':'*'}, zhin:{protocol:1,type:'plugin',entry:'./main.ts'}});
   await put(join(temporary,'main.ts'), "import {definePlugin, Schema} from 'zhin.js';export default definePlugin({name:'kit-app',config:Schema.object({label:Schema.string().default('v1')})});");
   if (mounted) {
     await cp(join(repo,'plugins/utils/group-suite'),join(temporary,'plugins/group-suite'),{recursive:true,filter: shouldCopyFixture});
@@ -39,7 +39,7 @@ try {
     await put(join(temporary,'commands/echo/[value]/index.ts'), "import {defineCommand} from 'zhin.js/command';export default defineCommand({permit:['group()','role(admin)'],params:{value:{type:'integer',min:1}},execute:({params,config})=>config.label+':'+params.value});");
     await put(join(temporary,'middlewares/trace/index.ts'), "import {defineMiddleware} from 'zhin.js/middleware';export default defineMiddleware({target:'outbound',async handle({input},next){if(input.payload==='block')return;await next();}});");
   }
-  const config = mounted ? {plugins:{alpha:{commandNamespace:'alpha', keywordReply:true, welcomeMessage:'欢迎 {name} ({id})'},beta:{commandNamespace:'beta',keywordReply:true}}} : {};
+  const config = mounted ? {configVersion:2,plugins:{alpha:'./plugins/group-suite',beta:'./plugins/group-suite'},alpha:{commandNamespace:'alpha', keywordReply:true, welcomeMessage:'欢迎 {name} ({id})'},beta:{commandNamespace:'beta',keywordReply:true}} : {configVersion:2};
   let renderCalls = 0;
   if(mounted) stateDatabase=await sqliteStateHost(join(temporary,'state.sqlite'));
   kit = await PluginTestKit.create({projectRoot:temporary,config,endpoints:['test','other'],segments: {html:'image',outboundMedia:['base64'],interactive:'text'}, installResources: mounted ? ({resources}) => {resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));resources.provide(databaseRootHostToken,stateDatabase.host);resources.provide(databaseHostToken,new PluginDatabaseHost(rootPluginId(),stateDatabase.host));if(mode==='group')resources.provide(htmlRendererToken, {async render(){renderCalls++;return {data:Buffer.from('fake-image'),format:'png',mimeType:'image/png',width:1,height:1};}});} : undefined});
@@ -82,7 +82,7 @@ try {
     assert.equal((await kit.reloadSource(command)).status,'failed');
     await kit.close();await kit.close();await assert.rejects(incoming('echo 5',['admin']));
     // Failed startup also disposes without requiring a successful generation.
-    kit=await PluginTestKit.create({projectRoot:temporary,config:{plugin:{label:2}}});
+    kit=await PluginTestKit.create({projectRoot:temporary,config:{configVersion:2,plugin:{label:2}}});
     await assert.rejects(kit.start());await kit.close();
     console.log('KIT_ACCEPTANCE_OK');
   } else {
@@ -114,7 +114,7 @@ try {
     assert.equal(schedules.host.list().length,2);
     await schedules.tick();
     await incoming('alpha stats-card');if(mode==='group'){assert.equal(renderCalls,1);assert.equal(kit.deliveries.at(-1).payload[0].type,'image');}else{assert.equal(renderCalls,0);assert.equal(kit.deliveries.at(-1).payload[0].type,'text');assert.match(kit.deliveries.at(-1).payload[0].data.text,/今日本群消息统计/);}
-    await assert.rejects(kit.patchConfig([{op:'set',path:['plugins','alpha','keywordReply'],value:'bad'}]));
+    await assert.rejects(kit.patchConfig([{op:'set',path:['alpha','keywordReply'],value:'bad'}]));
     await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     const source=join(temporary,'plugins/group-suite/commands/keyword-list/index.ts');
     await put(source,(await readFile(source,'utf8')).replace('关键词列表（共','热更新词库（共'));
@@ -139,7 +139,7 @@ try {
     // No silent persistence fallback when a Database Host is absent.
     kit=await PluginTestKit.create({projectRoot:temporary,config,installResources:({resources})=>{resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));}});
     await assert.rejects(kit.start(),/Persistent keywords require a Database Host/);await kit.close();
-    kit=await PluginTestKit.create({projectRoot:temporary,config:{plugins:{alpha:{commandNamespace:'alpha',keywordReply:true,ephemeralKeywords:true},beta:{commandNamespace:'beta',keywordReply:true,ephemeralKeywords:true}}},installResources:({resources})=>{resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));}});
+    kit=await PluginTestKit.create({projectRoot:temporary,config:{configVersion:2,plugins:config.plugins,alpha:{commandNamespace:'alpha',keywordReply:true,ephemeralKeywords:true},beta:{commandNamespace:'beta',keywordReply:true,ephemeralKeywords:true}},installResources:({resources})=>{resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));}});
     await kit.start();await incoming('alpha keyword-list');assert.match(kit.deliveries.at(-1).payload,/没有/);await kit.close();
     console.log('GROUP_ACCEPTANCE_OK');
   }

@@ -20,15 +20,15 @@ describe('generated configuration reference', () => {
 
     for (const content of [zh, en]) {
       expect(content).toContain('`http`');
-      expect(content).toContain('`plugins.qq.mode`');
-      expect(content).toContain('`plugins.sandbox.endpoints`');
+      expect(content).toContain('`qq.mode`');
+      expect(content).toContain('`sandbox.endpoints`');
       expect(content).toContain('"websocket"');
       expect(content).toContain('plugins/adapters/qq/schema.json');
       expect(content).toContain('plugins/utils/repeater/src/config.ts');
       expect(content).toContain('plugins/utils/short-url/plugin.ts');
-      expect(content).toContain('`plugins.repeater.threshold`');
+      expect(content).toContain('`repeater.threshold`');
       expect(content).not.toContain('plugins/utils/repeater/schema.json');
-      expect(content).toContain('plugins.content-moderation.actions.pass` | string:');
+      expect(content).toContain('content-moderation.actions.pass` | string:');
       expect(content).not.toContain('| unknown |');
     }
     expect(zh).toContain('由源码与 JSON Schema 自动生成');

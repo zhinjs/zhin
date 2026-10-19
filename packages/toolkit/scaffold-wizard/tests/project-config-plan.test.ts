@@ -47,7 +47,7 @@ describe('ProjectConfigPlan', () => {
 
   it('does not write host plugins into new runtime plugins map configs', async () => {
     const root = await makeProject();
-    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  sandbox: {}\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), "configVersion: 2\nplugins:\n  sandbox: '@zhin.js/adapter-sandbox'\nsandbox: {}\n");
 
     const loaded = loadProjectConfig(root);
     const plan = createProjectConfigPlan({
@@ -64,7 +64,7 @@ describe('ProjectConfigPlan', () => {
 
   it('adds instanceKey entries to new runtime plugins map configs', async () => {
     const root = await makeProject();
-    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  sandbox: {}\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), "configVersion: 2\nplugins:\n  sandbox: '@zhin.js/adapter-sandbox'\nsandbox: {}\n");
 
     const loaded = loadProjectConfig(root);
     const plan = createProjectConfigPlan({
@@ -75,8 +75,8 @@ describe('ProjectConfigPlan', () => {
 
     expect(plan.changed).toBe(true);
     const plugins = plan.after.plugins as Record<string, unknown>;
-    expect(plugins.sandbox).toEqual({});
-    expect(plugins.telegram).toEqual({});
+    expect(plugins.sandbox).toBe('@zhin.js/adapter-sandbox');
+    expect(plugins.telegram).toBe('@zhin.js/adapter-telegram');
 
     await applyProjectConfigPlan(plan);
     const content = await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8');
@@ -85,14 +85,14 @@ describe('ProjectConfigPlan', () => {
 
   it('loads the canonical config.yml Root filename', async () => {
     const root = await makeProject();
-    await fs.writeFile(path.join(root, 'config.yml'), 'plugins:\n  example: {}\n');
+    await fs.writeFile(path.join(root, 'config.yml'), "configVersion: 2\nplugins:\n  example: '@scope/example'\nexample: {}\n");
 
     const loaded = loadProjectConfig(root);
-    const plan = createProjectConfigPlan({ loaded, enablePlugins: ['@scope/plugin'] });
+    const plan = createProjectConfigPlan({ loaded, enablePlugins: ['@scope/plugin-sample'] });
     expect(loaded.status).toBe('loaded');
     expect(plan.changed).toBe(true);
     await expect(applyProjectConfigPlan(plan)).resolves.toBe(true);
-    expect(await fs.readFile(path.join(root, 'config.yml'), 'utf8')).toContain('plugin:');
+    expect(await fs.readFile(path.join(root, 'config.yml'), 'utf8')).toContain('sample:');
   });
 
   it('rejects projects with multiple Root configuration files', async () => {
@@ -129,4 +129,23 @@ describe('packageToInstanceKey', () => {
     expect(packageToInstanceKey('@zhin.js/service-activity-feedback')).toBe('activity-feedback');
     expect(packageToInstanceKey('example')).toBe('example');
   });
+});
+
+
+it('rejects duplicate JSON declaration keys before a config plan can be applied', async () => {
+  const root = await makeProject();
+  await fs.writeFile(path.join(root, 'config.json'), '{"configVersion":2,"plugins":{"a":"one","a":"two"}}');
+  expect(() => loadProjectConfig(root)).toThrow(/unique|Duplicate/);
+});
+
+it.each(['# concurrent comment\n', 'configVersion: 2\nplugins:\n  "2": two\n  "10": ten\n'])('rejects source drift after preview even when business values are unchanged', async source => {
+  const root = await makeProject();
+  const file = path.join(root, 'zhin.config.yml');
+  const original = 'configVersion: 2\nplugins:\n  "10": ten\n  "2": two\n';
+  await fs.writeFile(file, original);
+  const plan = createProjectConfigPlan({ loaded: loadProjectConfig(root), ensureHttp: true });
+  const changed = source.startsWith('#') ? source + original : source;
+  await fs.writeFile(file, changed);
+  await expect(applyProjectConfigPlan(plan)).rejects.toThrow('预览后发生变更');
+  expect(await fs.readFile(file, 'utf8')).toBe(changed);
 });

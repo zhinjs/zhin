@@ -50,7 +50,11 @@ import { PluginTestKit } from '@zhin.js/testing';
 const kit = await PluginTestKit.create({
   projectRoot: '/absolute/path/to/disposable-test-app',
   endpoints: ['test', 'second'],
-  config: { plugins: { suite: { commandNamespace: 'suite' } } },
+  config: {
+    configVersion: 2,
+    plugins: { suite: './plugins/suite' },
+    suite: { commandNamespace: 'suite' },
+  },
 });
 try {
   await kit.start();
@@ -69,6 +73,10 @@ try {
 The example requires the mounted plugin to provide `suite checkin`. Roles are supplied explicitly by
 the fixture; this verifies command admission, not a platform's real role projection. `permissions` is
 the real PermissionHost used by the IM runtime.
+
+Omitting `config` creates an empty v2 application. The kit does not read a user's configuration file
+or infer instance mounts from `package.json#zhin.plugins`; pass the disposable application's v2
+declaration explicitly when testing child instances.
 
 The test application must contain only trusted test plugins and synthetic endpoints. **This kit is not
 a sandbox:** discovered adapters and `setup()` functions execute normally and can open connections,
