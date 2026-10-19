@@ -124,3 +124,7 @@ The next milestone will register a POST route via `httpHostToken`, instead of us
 ## License
 
 MIT
+
+### Disabled buttons
+
+Canonical keyboard buttons with `disabled: true` map to Telegram Bot API 10.3 `disabled: {}` and omit `callback_data`. Enabled buttons retain their callback payload and the 1–64 UTF-8 byte validation. A self-hosted Bot API Server must support this version; see [DisabledButton](https://core.telegram.org/bots/api#disabledbutton).
