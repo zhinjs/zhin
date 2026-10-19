@@ -115,12 +115,13 @@ function receive(
   im: ImRuntime,
   payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
 ) {
-  const input = payload as { conversation?: { endpoint?: { id?: string } } };
+  const input = payload as { conversation?: { endpoint?: { id?: string; adapter?: string } } };
   return im.endpointEvents.receive(Object.freeze({
     name: 'message.receive',
     payload,
     endpoint: Object.freeze({
       id: (input.conversation?.endpoint?.id ?? 'test-endpoint') as never,
+      adapter: input.conversation?.endpoint?.adapter ?? 'test',
       name: 'test',
     }),
     client: ignoredEndpointEvents,
@@ -2947,6 +2948,16 @@ async function createFixture(
 }
 
 describe('per-message operational diagnostics', () => {
+  it('records bound ingress even when AdapterIndex owner resolution fails', async () => {
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false });
+    try {
+      const input = fixtureInput(fixture, 'hello');
+      await expect(receive(fixture.im, { ...input, conversation: { ...input.conversation,
+        endpoint: { id: 'missing-endpoint', adapter: 'memory' } }, message: undefined })).rejects.toThrow();
+      expect(fixture.im.messageDiagnostics.list()[0]).toMatchObject({ status: 'failed',
+        conversation: { endpoint: { id: 'missing-endpoint', adapter: 'memory' } }, steps: [{ stage: 'received', status: 'accepted' }] });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
   it.each(['sent', 'unknown', 'suppressed', 'unsupported'] as const)('records actual %s delivery without changing the successful message feed', async outcome => {
     const sent: unknown[] = [];
     const observed: RuntimeMessageEvent[] = [];

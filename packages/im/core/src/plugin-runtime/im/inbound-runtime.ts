@@ -182,6 +182,10 @@ export class InboundRuntime {
     let active = true;
     try {
       const adapter = source.endpoint.id as CapabilityId;
+      this.context.diagnostics?.begin(lease.value.generation, {
+        ...source.payload.conversation,
+        endpoint: { id: source.endpoint.id, adapter: source.endpoint.adapter },
+      }, source.payload.message?.id);
       const adapters = requireAdapters(lease.value);
       const requester = adapters.owner(adapter);
       // Routing identity belongs to the bound Endpoint, never to a protocol
@@ -192,7 +196,7 @@ export class InboundRuntime {
       const input = Object.freeze({ ...source.payload, conversation,
         ...(source.payload.message ? { message: Object.freeze({ ...source.payload.message, conversation }) } : {}),
       });
-      this.context.diagnostics?.begin(lease.value.generation, conversation, input.message?.id);
+      this.context.diagnostics?.identify(conversation);
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),

@@ -65,10 +65,12 @@ export function renderKeyboardAsText(data: KeyboardSegmentData, allocatedMap?: R
   const lines: string[] = [];
   const flat = data.rows.flat();
   const entries = Object.entries(allocatedMap ?? effectiveKeyboardFallbackMap(data)).sort(([a], [b]) => Number(a) - Number(b));
-  if (data.fallback?.hint) {
+  if (!entries.length) {
+    lines.push('当前无可用操作。');
+  } else if (data.fallback?.hint) {
     lines.push(data.fallback.hint);
   } else {
-    lines.push(entries.length ? '请选择（回复数字）：' : '当前无可用操作。');
+    lines.push('请选择（回复数字）：');
   }
   for (const [key, payload] of entries) {
     const btn = flat.find((b) => !b.disabled && b.payload === payload);

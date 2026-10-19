@@ -5,6 +5,24 @@ const conversation: ConversationRef = { endpoint: { id: 'endpoint-1', adapter: '
   parent: { kind: 'channel', id: 'guild' }, threadId: 'thread-1' };
 
 describe('message diagnostics projection', () => {
+  it('bounds every retained identity without truncating distinct conversation IDs into collisions', async () => {
+    const store = new RuntimeMessageDiagnostics();
+    for (const oversized of [
+      { ...conversation, id: 'x'.repeat(2049) },
+      { ...conversation, endpoint: { ...conversation.endpoint, id: 'x'.repeat(2049) } },
+      { ...conversation, parent: { kind: 'channel' as const, id: 'x'.repeat(2049) } },
+      { ...conversation, threadId: 'x'.repeat(2049) },
+      { ...conversation, id: 'x'.repeat(2000), endpoint: { id: 'e'.repeat(2000), adapter: 'a'.repeat(2000) }, parent: { kind: 'group' as const, id: 'p'.repeat(2000) }, threadId: 't'.repeat(2000) },
+    ]) await store.run(async () => store.begin(1, oversized, 'message'));
+    await store.run(async () => store.begin(1, conversation, 'x'.repeat(2049)));
+    expect(store.list()).toEqual([]);
+    await store.run(async () => {
+      store.begin(1, conversation, 'valid');
+      store.delivery(1, { ...conversation, id: 'x'.repeat(2049) }, { status: 'sent' });
+    });
+    expect(store.list()[0]).toMatchObject({ messageId: 'valid', truncated: true, deliveries: [] });
+    expect(JSON.stringify(store.list())).not.toContain('x'.repeat(2049));
+  });
   it('returns immutable point-in-time snapshots and filters exact identity before limit', async () => {
     const store = new RuntimeMessageDiagnostics();
     await store.run(async () => {
