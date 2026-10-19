@@ -220,6 +220,22 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { await f.close(); }
   });
 
+  it('does not send an old timeout when preview delivery crosses retirement and the total deadline', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    const f: Awaited<ReturnType<typeof fixture>> = await fixture({ afterSend: count => {
+      if (count !== 1) return;
+      f.store.commit(0, { snapshot: f.store.current, dispose() {} });
+      clock.mockReturnValue(1_800_000_181_000);
+    } });
+    try {
+      await f.receive('/remind create 10分钟后 old-preview');
+      expect(f.sent).toHaveLength(1);
+      expect(rendered(f.sent)).toContain('old-preview');
+      expect(rendered(f.sent)).not.toContain('提醒输入超时，未创建提醒');
+      expect(f.added).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+  });
+
   it('keeps help and non-IM execution read-only', async () => {
     const f = await fixture();
     try {

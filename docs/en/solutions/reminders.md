@@ -36,6 +36,8 @@ Review the absolute date, timezone, content and original conversation, then repl
 
 Use `/remind list` to inspect and `/remind cancel <task ID>` to cancel your own reminder. Creation confirms persistent storage, not eventual platform delivery.
 
+If no creation result arrives after confirmation, check `/remind list` in the original conversation first. A missing result does not prove that saving failed; do not create it again blindly.
+
 ## Supported time expressions
 
 | Expression | Meaning |
