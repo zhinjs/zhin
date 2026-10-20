@@ -83,6 +83,18 @@ describe('metadata-only config explanations through the actual Runtime and file 
     const f = await fixture(schema); expect(await f.explain()).toMatchObject({ projection: 'unsupported', reason: 'complex-schema', fields: [] });
   });
 
+  it('explains a fixed string-literal choice field (the same union the Console form edits) as a scalar', async () => {
+    const tone = { anyOf: [{ const: 'calm', default: 'calm' }, { const: 'excited', default: 'excited' }], default: 'calm' };
+    const f = await fixture({ type: 'object', additionalProperties: false, properties: { tone, count: { type: 'integer', default: 5 } } });
+    const first = await f.explain();
+    expect(first.projection).toBe('supported');
+    expect(field(first, 'tone')).toMatchObject({ candidateOrigin: 'schema-default', generationMatch: 'equal', generationOrigin: 'unknown' });
+    await f.save({ tone: 'excited' });
+    const saved = await f.explain();
+    expect(field(saved, 'tone')).toMatchObject({ candidateOrigin: 'file', generationMatch: 'different' });
+    expect(JSON.stringify(saved)).not.toContain('excited');
+  });
+
   it('does not trust a custom resolver claiming standard mode, and marks unavailable owners and package/schema drift explicitly', async () => {
     const custom = await fixture(simple, {}, true);
     expect(await custom.explain()).toMatchObject({ projection: 'unsupported', reason: 'custom-resolver', fields: [] });
