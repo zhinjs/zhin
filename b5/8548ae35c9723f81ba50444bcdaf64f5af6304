@@ -1,0 +1,78 @@
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_079f1dc5e6308d::t_2db529e5fc56a5 102,104-108
+  s_079f1dc5e6308d::t_afd5d87944b9dd 100-101,103,109-110
+scripts/check-api-docs-surface.mjs
+  s_079f1dc5e6308d::t_ad5bcfc145f6cc 62
+  s_079f1dc5e6308d::t_c412ed6c3ad72b 130,132-133
+packages/im/command/package.json
+  s_079f1dc5e6308d::t_afd5d87944b9dd 9-13,59-62
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_afd5d87944b9dd 21-23,56-57,266-267,317-318
+  s_079f1dc5e6308d::t_0d30dabf8e53e4 49,167,171
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_fd54144bf59c55 100,112-139
+  s_079f1dc5e6308d::t_8d86c75a4d253f 140
+.changeset/experience-command-admission.md
+  s_079f1dc5e6308d::t_fd54144bf59c55 1-7
+packages/im/command/tests/execution.test.ts
+  s_079f1dc5e6308d::t_9162b2d9990c28 1,3-18,20-63,74-90,99-108
+  s_079f1dc5e6308d::t_2db529e5fc56a5 91-98
+  s_079f1dc5e6308d::t_f8a05bc7808be9 2,19
+  s_079f1dc5e6308d::t_12787763e71452 64-73
+packages/im/command/src/execution-policy.ts
+  s_079f1dc5e6308d::t_9495d1b9b41ee5 1-39
+packages/im/command/src/execution-runtime.ts
+  s_079f1dc5e6308d::t_afd5d87944b9dd 100,145-147
+  s_079f1dc5e6308d::t_2db529e5fc56a5 17,20,47,160
+  s_079f1dc5e6308d::t_f00a7e5ab0bf2d 71,73
+  s_079f1dc5e6308d::t_f80960ecc1b455 23-24,37,44,76-77,87-91,96-97,105,133
+  s_079f1dc5e6308d::t_9cc9e38e8ffbb7 59
+  s_079f1dc5e6308d::t_9495d1b9b41ee5 1-16,18-19,21-22,25-36,38-43,45-46,48-58,60-70,72,74-75,78-86,92-95,98-99,101-104,106-132,134-144,148-159,161-165
+packages/console/protocol/src/index.ts
+  s_079f1dc5e6308d::t_1cabafc5cfa97e 173-178
+packages/im/core/src/plugin-runtime/im/message-diagnostics.ts
+  s_079f1dc5e6308d::t_1cabafc5cfa97e 5,11,37-38,108,114-115
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_079f1dc5e6308d::t_afd5d87944b9dd 13,101,139,245
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_477f6fa611c003 3245-3246,3421,3432
+  s_079f1dc5e6308d::t_2db529e5fc56a5 3248,3300,3309,3319-3322
+  s_079f1dc5e6308d::t_12787763e71452 3381-3405,3407-3420
+  s_079f1dc5e6308d::t_74e8f100f5b79b 7,2942,2999,3077-3084,3086,3088-3091
+  s_079f1dc5e6308d::t_17d2ed9510caa4 3406
+  s_079f1dc5e6308d::t_f3d792878b8615 3121,3226-3244,3247,3249-3273,3315-3318,3323-3380,3422-3431,3433-3465
+  s_079f1dc5e6308d::t_0d30dabf8e53e4 3274-3299,3301-3308,3310-3314
+  s_079f1dc5e6308d::t_7a28521a7d7247 3087
+packages/im/command/src/definition.ts
+  s_079f1dc5e6308d::t_afd5d87944b9dd 17-18,315-316,391-392,473
+packages/console/protocol/README.md
+  s_079f1dc5e6308d::t_fd54144bf59c55 16-20
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_afd5d87944b9dd 154-155,198,229,239-240,289
+packages/im/core/README.md
+  s_079f1dc5e6308d::t_fd54144bf59c55 134-139
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_f80960ecc1b455 339,353-354
+  s_079f1dc5e6308d::t_afd5d87944b9dd 16,61,186,355-357,359-363,377,524,543-544
+  s_079f1dc5e6308d::t_0171014d118087 334,358,364
+docs/authoring/commands.md
+  s_079f1dc5e6308d::t_948b8dba90880d 223-252
+docs/en/authoring/commands.md
+  s_079f1dc5e6308d::t_c9ae072fbd9458 223-252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b58548ae35c9723f81ba50444bcdaf64f5af6304",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
