@@ -1,0 +1,22 @@
+basic/cli/src/commands/new-plugin-manifest.ts
+  h_b680f75345178a 14,155-176,178-179,199-200,219
+basic/cli/src/commands/new.ts
+  h_b680f75345178a 609,617-621,627,643-644,646-647,649,653-655,658,660
+basic/cli/tests/new-integration.test.ts
+  h_b680f75345178a 193-196
+basic/cli/tests/new-plugin-manifest.test.ts
+  h_b680f75345178a 7,46,121,125-141
+scripts/check-plugin-scaffold.mjs
+  h_b680f75345178a 28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1ac6310dac8d470483cbe39b51fcbc32d80c1a9e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
