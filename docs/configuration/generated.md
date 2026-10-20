@@ -1790,6 +1790,16 @@ _该 Schema 没有声明字段。_
 | `group-suite.welcomeConversations[].threadId` | string | 否 | — | — |
 | `group-suite.ephemeralKeywords` | boolean | 否 | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
 
+### ledger
+
+[`plugins/utils/ledger/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/ledger/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `ledger.timezone` | string | 否 | `"Asia/Shanghai"` | 计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区 |
+| `ledger.reportTime` | string | 否 | `"22:00"` | 记账日报的发送时间（HH:MM，按 timezone）；只发给用「记账日报 开启」订阅的用户 |
+| `ledger.reportWhenEmpty` | boolean | 否 | `false` | 当天没有记账时是否仍发送日报 |
+
 ### link-poster
 
 [`plugins/utils/link-poster/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/link-poster/schema.json)
