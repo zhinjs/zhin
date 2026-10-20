@@ -16,7 +16,54 @@ npx zhin doctor && pnpm test # check
 npx zhin runtime start --once --mode test  # assembly smoke test
 ```
 
-For production, follow the full flow below and take a backup first.
+For production, follow the full flow below and take a backup first. Stop the Bot before upgrading so dependency directories are not replaced under a running process.
+
+## Upgrading from 1.1.13 or earlier: configVersion 2 {#configversion-2}
+
+::: warning Breaking config change
+Starting with `@zhin.js/cli` 1.1.14 the Runtime only accepts `configVersion: 2` (flat plugin configuration). After a `^1.1.x` project picks up the new packages, the old config is rejected at startup with an error containing `configVersion must be 2`; newer CLIs say "Detected a v1 configuration" directly. Migrate in this order and do not skip steps.
+:::
+
+1. **Stop the Bot before upgrading dependencies.** pnpm removes old version directories during the upgrade, so a running process can crash mid-upgrade or load a mix of old and new files.
+
+   ```bash
+   zhin stop   # also stop foreground, systemd, pm2 or launchd managed processes
+   ```
+
+2. **Upgrade to a CLI that has the migration command (1.1.14 or later).** `zhin migrate` in 1.1.13 and earlier only upgrades dependencies and scripts and has no `instances` subcommand.
+
+   ```bash
+   pnpm add zhin.js@latest @zhin.js/cli@latest
+   pnpm install
+   ```
+
+   Older `zhin migrate` versions also rewrite exact pinned versions to `latest`, so check with `--dry-run` first; newer versions keep pins by default.
+
+3. **Preview the config migration** (writes nothing and prints no config values):
+
+   ```bash
+   zhin migrate instances
+   ```
+
+4. **Apply it** (originals are backed up first):
+
+   ```bash
+   zhin migrate instances --apply
+   ```
+
+   Originals are kept in `.zhin/instance-declarations-migration/`; newer CLIs also copy them to `.zhin/backups/config-v2-<timestamp>/` and print that path.
+
+5. **Check and start again**:
+
+   ```bash
+   zhin config check
+   zhin doctor
+   pnpm start
+   ```
+
+**Restore**: keep the Bot stopped and run `zhin migrate instances --recover rollback`, or copy the files back to the paths listed in the backup's `manifest.json` and delete `.zhin/instance-declarations-migration`. If a migration was interrupted, `--recover continue` finishes it. To run the old version again you also need to restore dependencies and the lockfile to 1.1.13.
+
+Cases the tool refuses to convert automatically (nested plugins, per-mount optional, instance names colliding with reserved keys) are covered in [Migrating to flat plugin configuration](../migrations/plugin-instance-declarations.md).
 
 ## Compatibility boundaries
 
@@ -49,7 +96,7 @@ Create one checkpoint: Git commit, `package.json`, lockfile, config, `.env` key 
 ## Execute
 
 1. Run `zhin migrate --dry-run` on a copy or staging environment.
-2. Enter a maintenance window and stop ingress that creates new side effects.
+2. Enter a maintenance window and stop the Bot and any ingress that creates new side effects (before upgrading dependencies).
 3. Run `zhin migrate` and review package, script, and directory changes.
 4. Run doctor, type checks, tests, and `runtime start --once --mode test`.
 5. Start production and accept Sandbox, a real Endpoint, Agent, and Workroom.
