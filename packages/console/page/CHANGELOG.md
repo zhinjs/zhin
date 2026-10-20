@@ -1,5 +1,16 @@
 # @zhin.js/page
 
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [064b06d]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/feature-kit@1.1.6
+  - @zhin.js/plugin-runtime@1.1.15
+
 ## 1.1.6
 
 ### Patch Changes
