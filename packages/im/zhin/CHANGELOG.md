@@ -1,5 +1,24 @@
 # zhin.js
 
+## 1.1.11
+
+> **⚠️ 升级须知（configVersion 2）**：随本版本发布的 `@zhin.js/cli` 1.1.14 起，Runtime 只接受 `configVersion: 2`，旧配置会被拒绝启动。先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移（自动备份），最后 `zhin config check` 后启动。指南：https://zhin.js.org/operations/upgrades#configversion-2
+
+### Patch Changes
+
+- Updated dependencies [c407bd2]
+- Updated dependencies [064b06d]
+- Updated dependencies [a50fc8a]
+- Updated dependencies [b58548a]
+- Updated dependencies [e914a93]
+- Updated dependencies [e914a93]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/core@1.1.46
+  - @zhin.js/permission@1.1.7
+  - @zhin.js/plugin-runtime@1.1.15
+
 ## 1.1.10
 
 ### Patch Changes

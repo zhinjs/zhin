@@ -1,21 +1,24 @@
 /**
  * migrate — 将老版本 Zhin 项目快速升级到最新
  *
- * - 升级 package.json 中 zhin.js 与所有 @zhin.js/* 依赖为 latest
+ * - 升级 package.json 中 zhin.js 与所有 @zhin.js/* 依赖为 latest（精确版本等用户锁定的依赖默认保留）
  * - 补全缺失的推荐 scripts、engines
  * - 确保 data、plugins 等目录存在
  * - 执行 pnpm install
+ *
+ * 配置格式（configVersion 2）迁移由独立的 `zhin migrate instances` 负责，本命令不改配置文件。
  */
 
 import { Command } from 'commander';
 import chalk from 'chalk';
 import fs from 'fs-extra';
-import path from 'path';
+import path, { join } from 'path';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
 import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
-import { applyInstanceDeclarationMigration, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../plugin-runtime/migrate/instance-declarations.js';
+import { applyInstanceDeclarationMigration, formatInstanceMigrationPreview, planInstanceDeclarationMigration, recoverInstanceDeclarationMigration } from '../plugin-runtime/migrate/instance-declarations.js';
+import { CONFIG_V2_MIGRATION_DOCS_URL, detectLegacyConfig } from '../utils/legacy-config.js';
 
 const cwd = process.cwd();
 
@@ -65,7 +68,17 @@ function collectZhinDeps(pkg: any): { dep: string; current: string; inDev: boole
   return out;
 }
 
-export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRun: boolean }): boolean {
+/**
+ * A specifier the user deliberately locked: exact versions, aliases, links, paths, git and tarballs.
+ * Ranges (^, ~, >=, *, x) and dist-tags are considered "follow upstream" and may move to latest.
+ */
+export function isPinnedSpecifier(specifier: string): boolean {
+  const value = specifier.trim();
+  if (/^=?v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?$/.test(value)) return true;
+  return /^(?:link:|file:|portal:|npm:|catalog:|git\+|git:|github:|https?:|\.{0,2}\/)/.test(value);
+}
+
+export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean; dryRun: boolean; includePinned?: boolean }): boolean {
   const pkg = fs.readJsonSync(pkgPath);
 
   const zhinDeps = collectZhinDeps(pkg);
@@ -86,6 +99,10 @@ export function upgradePackageJson(pkgPath: string, options: { toLatest: boolean
       continue;
     }
     if (existing === targetVersion) continue;
+    if (!options.includePinned && isPinnedSpecifier(String(existing))) {
+      console.log(chalk.gray(`  · ${dep}: ${existing} 已锁定，保留（pinned, kept; use --include-pinned to move it to latest）`));
+      continue;
+    }
     if (options.dryRun) {
       console.log(chalk.cyan(`  [dry-run] ${dep}: ${existing} → ${targetVersion}`));
     } else {
@@ -402,9 +419,19 @@ function runInstall(dir: string, dryRun: boolean, cmd: string): boolean {
 }
 
 export const migrateCommand = new Command('migrate')
-  .description('将老版本 Zhin 项目快速升级到最新（依赖、scripts、目录结构）')
+  .description('升级项目依赖、scripts 与目录结构；v1 配置（缺少 configVersion: 2）请用 zhin migrate instances')
   .option('--dry-run', '仅打印将要执行的操作，不写入文件也不安装依赖', false)
   .option('--no-install', '跳过最后一步依赖安装')
+  .option('--include-pinned', '把精确版本等已锁定的 zhin 依赖也改为 latest（默认保留）', false)
+  .addHelpText('after', `
+配置格式迁移 / Config format migration (configVersion 2):
+  启动报 "configVersion must be 2" 或检测到 v1 配置时，先停止 Bot，再运行：
+    zhin migrate instances            预览改动，不写文件 / preview only
+    zhin migrate instances --apply    应用并自动备份 / apply with automatic backup
+  文档 / Docs: ${CONFIG_V2_MIGRATION_DOCS_URL}
+
+注意：zhin runtime migrate [phase] 是旧插件能力代码迁移（extract/cutover），与配置版本无关。
+Note: "zhin runtime migrate" migrates legacy plugin capability code, not the config version.`)
   .action(async (options) => {
     console.log('');
     console.log(chalk.bold.cyan('  Zhin 项目升级 (migrate)'));
@@ -431,7 +458,7 @@ export const migrateCommand = new Command('migrate')
 
     // 1. 升级 package.json
     console.log(chalk.bold.blue('1. 升级依赖与 scripts'));
-    const pkgChanged = upgradePackageJson(pkgPath, { toLatest: true, dryRun });
+    const pkgChanged = upgradePackageJson(pkgPath, { toLatest: true, dryRun, includePinned: !!options.includePinned });
     if (pkgChanged && !dryRun) {
       console.log(chalk.green('  ✓ package.json 已更新'));
     } else if (dryRun && collectZhinDeps(fs.readJsonSync(pkgPath)).length > 0) {
@@ -463,8 +490,19 @@ export const migrateCommand = new Command('migrate')
       console.log('');
     }
 
-    console.log(chalk.bold.green('✅ Migration complete'));
+    if (dryRun) console.log(chalk.bold.yellow('Dry run finished: nothing was changed. 未写入任何文件，也未安装依赖。'));
+    else console.log(chalk.bold.green('✅ Migration complete'));
     console.log('');
+    const legacy = await detectLegacyConfig(cwd);
+    if (legacy.legacy) {
+      // This command never rewrites config files; point to the dedicated converter.
+      console.log(chalk.yellow('配置仍是 v1 格式，新版 Runtime 会拒绝启动。先停止 Bot，再运行：'));
+      console.log(chalk.yellow('Your config is still v1 and the new runtime will refuse it. Stop the Bot, then run:'));
+      console.log(chalk.cyan('  zhin migrate instances') + chalk.gray('          preview'));
+      console.log(chalk.cyan('  zhin migrate instances --apply') + chalk.gray('  apply (automatic backup)'));
+      console.log(chalk.gray(`  ${CONFIG_V2_MIGRATION_DOCS_URL}`));
+      console.log('');
+    }
     console.log(chalk.gray('Next steps:'));
     console.log(chalk.cyan('  zhin doctor') + chalk.gray('  check project health'));
     console.log(chalk.cyan('  pnpm dev') + chalk.gray('   start dev server'));
@@ -478,7 +516,8 @@ migrateCommand.addCommand(new Command('instances')
   .option('--dry-run', '只检查并列出转换计划（默认）')
   .option('--recover <action>', '恢复未完成转换：continue 或 rollback')
   .option('--lifecycle-file <path>', '显式指定旧停用状态文件（绝对路径）')
-  .action(async (options: { apply?: boolean; dryRun?: boolean; recover?: string; lifecycleFile?: string }) => {
+  .option('--json', '以 JSON 输出迁移计划（仅含摘要，不含配置值）')
+  .action(async (options: { apply?: boolean; dryRun?: boolean; recover?: string; lifecycleFile?: string; json?: boolean }) => {
     const root = process.cwd();
     const dryRun = options.dryRun || migrateCommand.opts().dryRun;
     if (options.apply && dryRun) throw new Error('--apply and --dry-run cannot be combined');
@@ -490,12 +529,23 @@ migrateCommand.addCommand(new Command('instances')
       return;
     }
     const plan = await planInstanceDeclarationMigration(root, { lifecycleFile: options.lifecycleFile });
-    console.log(JSON.stringify({
-      mode: options.apply ? 'apply' : 'dry-run',
-      instances: plan.instances,
-      files: plan.files.map(file => ({ path: file.path, before: file.before.digest, after: file.after.digest })),
-      pendingChecks: plan.pendingChecks,
-    }, null, 2));
-    if (options.apply) await applyInstanceDeclarationMigration(plan);
-    else console.log('No files changed. Stop the Bot, review the plan, then run zhin migrate instances --apply.');
+    if (options.json) {
+      console.log(JSON.stringify({
+        mode: options.apply ? 'apply' : 'dry-run',
+        instances: plan.instances,
+        files: plan.files.map(file => ({ path: file.path, before: file.before.digest, after: file.after.digest })),
+        pendingChecks: plan.pendingChecks,
+      }, null, 2));
+    } else {
+      console.log(formatInstanceMigrationPreview(plan, { mode: options.apply ? 'apply' : 'dry-run' }));
+    }
+    if (options.apply) {
+      const result = await applyInstanceDeclarationMigration(plan);
+      console.log(`Migration applied. Backup / 备份: ${result.backupDirectory}`);
+      console.log('Restore / 恢复: zhin migrate instances --recover rollback');
+      console.log(`  (or copy the files listed in ${join(result.backupDirectory, 'manifest.json')} back to their original paths)`);
+      console.log('Next / 下一步: zhin config check, then start the Bot again.');
+    } else {
+      console.log('dry-run: no files changed. 未写入任何文件。Stop the Bot, review the plan, then run: zhin migrate instances --apply');
+    }
   }));

@@ -1,5 +1,20 @@
 # @zhin.js/host-http
 
+## 1.1.7
+
+### Patch Changes
+
+- 2b4d6dc: 为已保存的插件配置提供只读字段来源与当前代一致性解释。复用同一次文件/运行代观察，仅返回有界 metadata；敏感字段、环境引用和不能证明的来源保持隐藏或未知。配置解释要求完整权限，不开放给 demo，也不执行应用或发送操作。
+- Updated dependencies [7edd04c]
+- Updated dependencies [2b4d6dc]
+- Updated dependencies [b58548a]
+- Updated dependencies [e914a93]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/console-protocol@1.1.10
+  - @zhin.js/plugin-runtime@1.1.15
+
 ## 1.1.6
 
 ### Patch Changes

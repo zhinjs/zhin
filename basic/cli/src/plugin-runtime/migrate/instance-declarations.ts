@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { chmod, lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { extname, isAbsolute, join, resolve } from 'node:path';
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { isAlias, isMap, isScalar, isSeq, Pair, parseDocument, visit, type Document } from 'yaml';
 import { createConfigDocument, readSourcePluginOrder } from '@zhin.js/config-file';
 import { ROOT_CONFIG_FILE_NAMES, selectRootConfigFile } from '@zhin.js/plugin-runtime';
@@ -9,6 +9,7 @@ import { readPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-
 
 const JOURNAL_DIRECTORY = '.zhin/instance-declarations-migration';
 const JOURNAL_NAME = 'journal.json';
+const BACKUP_DIRECTORY = '.zhin/backups';
 const RESERVED = new Set([...HOST_CONFIG_KEYS, 'plugins', 'configVersion', 'disable_plugins', '__proto__', 'constructor', 'prototype']);
 const hash = (source: string) => createHash('sha256').update(source).digest('hex');
 
@@ -43,6 +44,12 @@ interface Journal {
 export interface InstanceMigrationApplyOptions {
   /** Fault-injection seam: invoked after each durable file replacement. */
   readonly afterWrite?: (index: number) => void | Promise<void>;
+  /** Clock seam for the human-readable backup directory name. */
+  readonly now?: () => Date;
+}
+export interface InstanceMigrationApplyResult {
+  /** Timestamped copy of every original file, independent of the recovery journal. */
+  readonly backupDirectory: string;
 }
 
 /** Static, offline and side-effect-free. Does not load schemas from executable entries. */
@@ -178,8 +185,8 @@ export async function assertNoPendingInstanceMigration(root: string): Promise<vo
   if (journal && !['completed', 'rolled-back'].includes(journal.status)) throw new Error('Incomplete instance-declaration migration. Keep the Bot stopped; run zhin migrate instances --recover continue or --recover rollback.');
 }
 
-export async function applyInstanceDeclarationMigration(plan: InstanceDeclarationMigrationPlan, options: InstanceMigrationApplyOptions = {}): Promise<void> {
-  await withProjectLock(plan.root, async () => {
+export async function applyInstanceDeclarationMigration(plan: InstanceDeclarationMigrationPlan, options: InstanceMigrationApplyOptions = {}): Promise<InstanceMigrationApplyResult> {
+  return withProjectLock(plan.root, async () => {
     await assertStopped(plan.root);
     await assertNoPendingInstanceMigration(plan.root);
     for (const file of plan.files) await assertState(file.path, file.before);
@@ -200,8 +207,124 @@ export async function applyInstanceDeclarationMigration(plan: InstanceDeclaratio
     }
     const journal: Journal = { version: 1, root: plan.root, status: 'prepared', files, guards: [...plan.guards] };
     await writeJournal(plan.root, journal);
+    // A plain, timestamped copy users can inspect or restore by hand, written before any cutover.
+    const backupDirectory = await writeHumanBackup(plan, (options.now ?? (() => new Date()))());
     await perform(plan.root, journal, 'continue', options);
+    return Object.freeze({ backupDirectory });
   });
+}
+
+function backupStamp(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+async function writeHumanBackup(plan: InstanceDeclarationMigrationPlan, date: Date): Promise<string> {
+  const parent = join(plan.root, BACKUP_DIRECTORY);
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  const stamp = `config-v2-${backupStamp(date)}`;
+  let directory = join(parent, stamp);
+  for (let attempt = 2; ; attempt++) {
+    try { await mkdir(directory, { mode: 0o700 }); break; }
+    catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST') || attempt > 100) throw error;
+      directory = join(parent, `${stamp}-${attempt}`);
+    }
+  }
+  await chmod(directory, 0o700);
+  const entries: Array<{ original: string; backup: string; sha256: string }> = [];
+  for (const [index, file] of plan.files.entries()) {
+    if (!file.before.exists) continue;
+    const local = relative(plan.root, file.path);
+    const name = !local || local.startsWith('..') || isAbsolute(local) ? join('external', `${index}-${basename(file.path)}`) : local;
+    const target = join(directory, name);
+    await mkdir(join(target, '..'), { recursive: true, mode: 0o700 });
+    // Originals may contain inline credentials; keep the copy private.
+    await writeFile(target, file.before.source, { mode: 0o600, flag: 'wx' });
+    await chmod(target, 0o600);
+    entries.push({ original: file.path, backup: name.split(sep).join('/'), sha256: file.before.digest });
+  }
+  const manifest = {
+    kind: 'zhin-config-v2-migration-backup',
+    createdAt: date.toISOString(),
+    root: plan.root,
+    files: entries,
+    restore: [
+      'Preferred: keep the Bot stopped and run `zhin migrate instances --recover rollback`.',
+      'Manual: copy each backup file back to its original path, then remove .zhin/instance-declarations-migration.',
+    ],
+  };
+  await writeFile(join(directory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+  return directory;
+}
+
+/**
+ * Human-readable, value-free preview of a migration plan. Only key names, package
+ * specifiers and instance state are shown; configuration values (including
+ * environment references) never appear, so the output is safe to paste in issues.
+ */
+export function formatInstanceMigrationPreview(plan: InstanceDeclarationMigrationPlan, options: { readonly mode?: 'dry-run' | 'apply' } = {}): string {
+  const mode = options.mode ?? 'dry-run';
+  const display = (file: string) => {
+    const local = relative(plan.root, file);
+    return !local || local.startsWith('..') || isAbsolute(local) ? file : local.split(sep).join('/');
+  };
+  const [configFile, packageFile, lifecycleFile] = plan.files;
+  const lines: string[] = [
+    mode === 'dry-run'
+      ? 'zhin migrate instances — dry-run（仅预览，不写文件 / preview only, nothing is written）'
+      : 'zhin migrate instances — apply（写入前自动备份 / backing up before writing）',
+    '',
+  ];
+  const legacyKeys = new Map<string, string[]>();
+  if (configFile?.before.exists) {
+    try {
+      const legacy = parseDocument(configFile.before.source).get('plugins', true);
+      if (isMap(legacy)) for (const pair of legacy.items) {
+        const key = String(isScalar(pair.key) ? pair.key.value : pair.key);
+        legacyKeys.set(key, isMap(pair.value) ? pair.value.items.map(item => String(isScalar(item.key) ? item.key.value : item.key)) : []);
+      }
+    } catch { /* planning already validated the source */ }
+  }
+  const quote = (value: string) => JSON.stringify(value);
+  const fields = (keys: readonly string[]) => keys.length ? `{${keys.slice(0, 8).join(', ')}${keys.length > 8 ? `, … +${keys.length - 8}` : ''}}` : '{}';
+  if (configFile) {
+    lines.push(`${display(configFile.path)}`);
+    lines.push('  + configVersion: 2');
+    for (const instance of plan.instances) lines.push(`  + plugins.${instance.instanceKey}: ${quote(instance.package)}`);
+    for (const instance of plan.instances) {
+      const keys = legacyKeys.get(instance.instanceKey);
+      if (keys === undefined) lines.push(`  + ${instance.instanceKey}: {}`);
+      else lines.push(`  ~ plugins.${instance.instanceKey}.${fields(keys)} → ${instance.instanceKey}.${fields(keys)}  (moved, values unchanged / 原值搬移)`);
+    }
+    const disabled = plan.instances.filter(instance => !instance.enabled).map(instance => instance.instanceKey);
+    lines.push(`  + disable_plugins: [${disabled.join(', ')}]`);
+    lines.push('');
+  }
+  if (packageFile) {
+    lines.push(display(packageFile.path));
+    lines.push(`  - zhin.plugins (${plan.instances.length} legacy mount(s) / 旧挂载) → []`);
+    lines.push('    dependencies, scripts, zhin.features/entry/engine are kept / 其余字段保持不变');
+    lines.push('');
+  }
+  if (lifecycleFile) {
+    lines.push(display(lifecycleFile.path));
+    lines.push('  ~ disabled → []  (moved to disable_plugins / 已并入 disable_plugins)');
+    lines.push('');
+  }
+  lines.push('Instances / 实例:');
+  for (const instance of plan.instances) {
+    lines.push(`  ${instance.instanceKey}  ${instance.package}  ${instance.enabled ? 'enabled' : 'disabled'}  ${instance.pluginId}`);
+  }
+  if (!plan.instances.length) lines.push('  (none)');
+  if (plan.pendingChecks.length) {
+    lines.push('', 'Pending checks / 待启动后验证:');
+    for (const check of plan.pendingChecks) lines.push(`  - ${check}`);
+  }
+  if (mode === 'dry-run') {
+    lines.push('', `Backup on --apply / 应用时自动备份到: ${BACKUP_DIRECTORY}/config-v2-<timestamp>/`);
+  }
+  return lines.join('\n');
 }
 
 export async function recoverInstanceDeclarationMigration(rootPath: string, action: 'continue' | 'rollback', options: InstanceMigrationApplyOptions = {}): Promise<void> {

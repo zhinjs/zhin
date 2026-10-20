@@ -9,6 +9,10 @@ sidebar: false
 `package.json#zhin.plugins` 或 `.zhin/plugin-lifecycle.json` 组装应用实例。
 旧格式只能由显式迁移工具读取，不能继续启动运行。
 
+::: tip 升级顺序
+先停止 Bot → 升级到 `@zhin.js/cli` 1.1.14 及以上 → `zhin migrate instances` 预览 → `zhin migrate instances --apply` → `zhin config check` 后启动。完整步骤与恢复方式见[版本兼容与迁移](../operations/upgrades.md#configversion-2)。
+:::
+
 ## 新配置的三个部分
 
 在原 `zhin.config.yml` 中维护包映射、停用列表、同名业务配置：

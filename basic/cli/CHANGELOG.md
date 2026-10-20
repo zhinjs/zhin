@@ -1,5 +1,61 @@
 # @zhin.js/cli
 
+## 1.1.14
+
+> **⚠️ 升级须知（configVersion 2）**：本版本起 Runtime 只接受 `configVersion: 2`，旧配置会被拒绝启动。先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移（自动备份），最后 `zhin config check` 后启动。恢复：`zhin migrate instances --recover rollback`。指南：https://zhin.js.org/operations/upgrades#configversion-2
+
+### Patch Changes
+
+- 1336c1a: 将独立管理员 RSS 订阅接入任务中心：完整目标、持久 CAS 与操作对账；新建和恢复首次抓取只建基线，投递未确认时停止且不自动重试，保留原聊天订阅归属。
+
+  共享用途目录与 CLI 帮助新增 RSS 订阅入口，复用任务中心的实例与管理员任务流程。
+
+- 7edd04c: 新增当前运行代内的管理员任务 REST 读写接口，使用插件自己的持久化 CAS 与幂等回执，并严格校验完整投递目标、权限与生命周期。
+- 2b4d6dc: 为已保存的插件配置提供只读字段来源与当前代一致性解释。复用同一次文件/运行代观察，仅返回有界 metadata；敏感字段、环境引用和不能证明的来源保持隐藏或未知。配置解释要求完整权限，不开放给 demo，也不执行应用或发送操作。
+- a50fc8a: 群欢迎可配置完整账号与会话的精确白名单，区分全部、空范围及具体会话，修正欢迎出站 requester 身份。新增只读命令权限说明与内置规则假设检查，共享真实准入的主体投影与匹配语义，不执行命令、动态默认值、平台或自定义权限检查；显式区分未知、未评估与条件匹配。
+- e914a93: 为完整权限 Console 提供只读单消息诊断查询，按完整会话与消息 ID 精确过滤，不回放消息或保存正文。
+- 9816c18: 将应用插件装配改为 configVersion: 2：主配置 plugins 映射实例名到包，disable_plugins 控制启停，业务配置使用顶层同名块。package.json 继续保留 features、entry、engine 等包契约，并支持静态 displayName/icon。
+
+  这是配置格式的破坏性更新：旧配置不能继续运行，请先停止 Bot，运行 `zhin migrate instances` 预览，再使用 `--apply` 转换；提供备份与中断继续/回滚，无法无损转换的嵌套、optional 和别名碰撞需人工迁移。Runtime、Console、CLI 与创建向导统一使用新声明。
+
+  保留框架顶层 `menuKeyword` / `menuStyle`，通过当前 generation 的 Root 配置视图供 Command Feature 消费；严格校验和配置修改不会丢失菜单设置，子实例配置保持隔离。
+
+- 8550f17: 补齐 Host 配置字段定义与未配置区块入口，完整投影对象、字典、联合、元组和本地引用，避免 Console 丢字段或整份退回源码。原始 Runtime Schema 继续负责校验。日历、提醒、复读和短链接发布静态配置定义，禁用时也可安全配置，无需执行插件代码。
+- 064b06d: 新增个人提醒 create 指令，按实例 IANA 时区解析有限中文自然时间，缺少时间或正文时逐项补问，核对纯文字预览后明确确认才保存。保留完整发送者和会话身份；取消、超时、运行代切换及不确定投递不自动创建或重试。补充中英文使用指南与入口。
+- 502fc0b: 插件应用证据的声明、校验和当前代比较绑定同一配置快照；读取期间文件或运行代变化时要求重新读取，避免旧应用结果配上新文件版本。
+- e9d4940: 修复 migrate 从工作区子包运行时把显式 workspace: 依赖替换为 latest 的问题，预演与实际升级均保留原依赖来源。
+
+  恢复默认依赖安装，只有 --no-install 才跳过；pnpm 安装同步更新迁移后的锁文件；npm 锁文件与 workspace: 协议冲突时，在修改清单前给出明确提示。
+
+- Updated dependencies [7edd04c]
+- Updated dependencies [c407bd2]
+- Updated dependencies [064b06d]
+- Updated dependencies [2b4d6dc]
+- Updated dependencies [a50fc8a]
+- Updated dependencies [b58548a]
+- Updated dependencies [e914a93]
+- Updated dependencies [e914a93]
+- Updated dependencies [e914a93]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [8550f17]
+- Updated dependencies [7edd04c]
+  - @zhin.js/console-protocol@1.1.10
+  - @zhin.js/command@1.1.8
+  - @zhin.js/core@1.1.46
+  - @zhin.js/runtime@1.1.9
+  - @zhin.js/host-http@1.1.7
+  - @zhin.js/permission@1.1.7
+  - @zhin.js/config-file@1.1.7
+  - @zhin.js/plugin-runtime@1.1.15
+  - @zhin.js/scaffold-wizard@1.1.6
+  - @zhin.js/adapter@1.1.20
+  - @zhin.js/workroom@0.0.5
+  - @zhin.js/pagemanager@1.1.10
+  - @zhin.js/component@1.1.7
+  - @zhin.js/middleware@1.1.7
+  - @zhin.js/prompt-section@1.1.6
+
 ## 1.1.13
 
 ### Patch Changes
