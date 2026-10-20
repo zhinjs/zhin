@@ -24,7 +24,7 @@ export { SlidingWindowRateLimiter } from './rate-limit.js';
 export { earthquakeServiceToken } from './runtime.js';
 export { createDefaultSources, EarthquakeService, EarthquakeUnavailableError } from './service.js';
 export type { EarthquakeServiceOptions, PollReport, PushSender, QueryOptions, QueryResult } from './service.js';
-export { CENC_FEED_URL, parseBeijingTime, parseCencFeed } from './sources/cenc.js';
+export { CENC_MIRROR_URL, CENC_OFFICIAL_URL, DEFAULT_CENC_URLS, parseBeijingTime, parseCencFeed } from './sources/cenc.js';
 export { FeedSource } from './sources/feed-source.js';
 export type { FeedSourceHealth, FeedSourceOptions } from './sources/feed-source.js';
 export { parseUsgsFeed, usgsFeedUrl } from './sources/usgs.js';

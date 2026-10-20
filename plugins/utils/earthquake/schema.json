@@ -5,16 +5,49 @@
   "properties": {
     "sources": {
       "type": "array",
-      "description": "启用的数据源及优先顺序；合并同一地震时，排在前面的数据源提供地点文字",
-      "items": { "type": "string", "enum": ["cenc", "usgs"] },
+      "description": "启用的数据源及优先顺序；合并同一地震时排在前面的数据源提供地点文字，某个数据源失败时由其余数据源兜底",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cenc",
+          "usgs"
+        ]
+      },
       "minItems": 1,
       "uniqueItems": true,
-      "default": ["cenc", "usgs"]
+      "default": [
+        "cenc",
+        "usgs"
+      ]
+    },
+    "cencUrls": {
+      "type": "array",
+      "description": "CENC 地震目录地址，按顺序尝试（首个为主源，其余为备用镜像）；仅支持 HTTPS，最多 5 个",
+      "items": {
+        "type": "string",
+        "pattern": "^https://"
+      },
+      "minItems": 1,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "default": [
+        "https://api.wolfx.jp/cenc_eqlist.json",
+        "https://ceic.ac.cn/data/data.json"
+      ]
     },
     "usgsFeed": {
       "type": "string",
       "description": "USGS GeoJSON 汇总源名称（震级下限_时间范围）",
-      "enum": ["significant_hour", "significant_day", "4.5_hour", "4.5_day", "2.5_hour", "2.5_day", "1.0_hour", "1.0_day"],
+      "enum": [
+        "significant_hour",
+        "significant_day",
+        "4.5_hour",
+        "4.5_day",
+        "2.5_hour",
+        "2.5_day",
+        "1.0_hour",
+        "1.0_day"
+      ],
       "default": "2.5_day"
     },
     "pollCron": {

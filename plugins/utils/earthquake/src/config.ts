@@ -25,6 +25,8 @@ export type UsgsFeed = (typeof USGS_FEEDS)[number];
 export interface EarthquakeConfig {
   /** Sources in preference order. The first one wins location text when events merge. */
   readonly sources?: readonly EarthquakeSourceId[];
+  /** CENC catalogue URLs: primary first, then mirrors/fallbacks. HTTPS only. */
+  readonly cencUrls?: readonly string[];
   /** USGS GeoJSON summary feed name. */
   readonly usgsFeed?: UsgsFeed;
   /** 6-field solar cron for the subscription poller. */
@@ -63,6 +65,10 @@ export type ResolvedEarthquakeConfig = {
 
 export const DEFAULT_EARTHQUAKE_CONFIG: ResolvedEarthquakeConfig = Object.freeze({
   sources: Object.freeze(['cenc', 'usgs'] as EarthquakeSourceId[]),
+  cencUrls: Object.freeze([
+    'https://api.wolfx.jp/cenc_eqlist.json',
+    'https://ceic.ac.cn/data/data.json',
+  ]),
   usgsFeed: '2.5_day',
   pollCron: '0 */2 * * * *',
   timezone: 'Asia/Shanghai',
@@ -108,6 +114,26 @@ function resolveSources(value: unknown): readonly EarthquakeSourceId[] {
   return Object.freeze(unique);
 }
 
+const MAX_CENC_URLS = 5;
+
+function resolveCencUrls(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return DEFAULT_EARTHQUAKE_CONFIG.cencUrls;
+  }
+  const urls: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const trimmed = entry.trim();
+    if (!trimmed.startsWith('https://')) continue;
+    if (urls.includes(trimmed)) continue;
+    urls.push(trimmed);
+  }
+  if (urls.length === 0) {
+    return DEFAULT_EARTHQUAKE_CONFIG.cencUrls;
+  }
+  return Object.freeze(urls.slice(0, MAX_CENC_URLS));
+}
+
 function resolveUsgsFeed(value: unknown): UsgsFeed {
   const known = new Set<string>(USGS_FEEDS);
   if (typeof value === 'string' && known.has(value)) {
@@ -138,6 +164,7 @@ export function resolveEarthquakeConfig(raw: unknown): ResolvedEarthquakeConfig 
   const retryMaxDelayMs = clampNumber(input.retryMaxDelayMs, defaults.retryMaxDelayMs, 1_000, 120_000);
   return Object.freeze({
     sources: resolveSources(input.sources),
+    cencUrls: resolveCencUrls(input.cencUrls),
     usgsFeed: resolveUsgsFeed(input.usgsFeed),
     pollCron: resolveString(input.pollCron, defaults.pollCron),
     timezone: resolveString(input.timezone, defaults.timezone),

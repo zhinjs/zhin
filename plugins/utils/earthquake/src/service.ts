@@ -19,7 +19,7 @@ import { matchesFilter, type EventFilter } from './filters.js';
 import { formatEventList, formatSourceWarnings } from './format.js';
 import type { HttpDependencies, RetryPolicy } from './http.js';
 import { SlidingWindowRateLimiter } from './rate-limit.js';
-import { CENC_FEED_URL, parseCencFeed } from './sources/cenc.js';
+import { parseCencFeed } from './sources/cenc.js';
 import { FeedSource, type FeedSourceHealth } from './sources/feed-source.js';
 import { parseUsgsFeed, usgsFeedUrl } from './sources/usgs.js';
 import { subscriptionKey, type EarthquakeSubscription, type SubscriptionStore } from './subscriptions.js';
@@ -95,9 +95,9 @@ export function createDefaultSources(config: ResolvedEarthquakeConfig, deps?: Ht
   };
   return config.sources.map((id) => {
     if (id === 'cenc') {
-      return new FeedSource({ id, label: SOURCE_LABELS.cenc, url: CENC_FEED_URL, parse: parseCencFeed, policy, deps });
+      return new FeedSource({ id, label: SOURCE_LABELS.cenc, urls: config.cencUrls, parse: parseCencFeed, policy, deps });
     }
-    return new FeedSource({ id, label: SOURCE_LABELS.usgs, url: usgsFeedUrl(config.usgsFeed), parse: parseUsgsFeed, policy, deps });
+    return new FeedSource({ id, label: SOURCE_LABELS.usgs, urls: [usgsFeedUrl(config.usgsFeed)], parse: parseUsgsFeed, policy, deps });
   });
 }
 

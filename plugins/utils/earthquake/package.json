@@ -14,14 +14,15 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "lib",
     "plugin.js",
     "schema.json",
     "commands",
-    "src",
-    "lib",
-    "tools",
+    "!commands/**/*.ts",
     "skills",
-    "README.md"
+    "!skills/**/*.ts",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -53,6 +54,7 @@
     "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
+    "@zhin.js/command": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",

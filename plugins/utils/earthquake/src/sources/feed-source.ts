@@ -1,6 +1,8 @@
 /**
  * One upstream feed with its own cache and health bookkeeping.
  *
+ * - Mirrors: `urls` are tried in order each round; the first one that answers
+ *   with a parseable body wins. A failing primary falls back to the next mirror.
  * - Conditional GET: unchanged feeds answer 304 and the cached events are reused.
  * - Cooldown: after a failed round the source is skipped for a growing period
  *   (30 s, 60 s, 120 s ... capped at 10 min), or longer when the server sent a
@@ -20,7 +22,8 @@ export const SOURCE_RETRY_AFTER_CAP_MS = 60 * 60_000;
 export interface FeedSourceOptions {
   readonly id: EarthquakeSourceId;
   readonly label: string;
-  readonly url: string;
+  /** Primary URL first, then mirrors. At least one entry. */
+  readonly urls: readonly string[];
   readonly parse: (body: string) => SourceEarthquake[];
   readonly policy: RetryPolicy;
   readonly deps?: HttpDependencies;
@@ -34,6 +37,8 @@ export interface FeedSourceHealth {
   readonly coolingDownUntil: number;
   readonly lastError?: string;
   readonly lastSuccessAt?: number;
+  /** URL that served the last good round. */
+  readonly activeUrl?: string;
 }
 
 export class FeedSource {
@@ -41,8 +46,10 @@ export class FeedSource {
   readonly label: string;
   readonly #options: FeedSourceOptions;
   readonly #now: () => number;
-  #validators: ConditionalValidators = {};
+  readonly #validators = new Map<string, ConditionalValidators>();
+  readonly #bodies = new Map<string, SourceEarthquake[]>();
   #cachedEvents: SourceEarthquake[] | undefined;
+  #activeUrl: string | undefined;
   #consecutiveFailures = 0;
   #coolingDownUntil = 0;
   #lastError: string | undefined;
@@ -67,6 +74,7 @@ export class FeedSource {
       coolingDownUntil: this.isCoolingDown() ? this.#coolingDownUntil : 0,
       lastError: this.#lastError,
       lastSuccessAt: this.#lastSuccessAt,
+      activeUrl: this.#activeUrl,
     };
   }
 
@@ -88,18 +96,33 @@ export class FeedSource {
   }
 
   async #fetchOnce(): Promise<SourceEarthquake[]> {
-    const hasCache = this.#cachedEvents !== undefined;
-    const result = await getTextWithRetry(this.#options.url, this.#options.policy, {
-      validators: hasCache ? this.#validators : undefined,
+    const failures: unknown[] = [];
+    for (const url of this.#options.urls) {
+      try {
+        const events = await this.#fetchUrl(url);
+        this.#cachedEvents = events;
+        this.#activeUrl = url;
+        return events;
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    throw combineFailures(failures, this.#options.urls);
+  }
+
+  async #fetchUrl(url: string): Promise<SourceEarthquake[]> {
+    const cached = this.#bodies.get(url);
+    const result = await getTextWithRetry(url, this.#options.policy, {
+      validators: cached ? this.#validators.get(url) : undefined,
       deps: this.#options.deps,
     });
-    if (result.notModified && this.#cachedEvents) {
-      return this.#cachedEvents;
+    if (result.notModified && cached) {
+      return cached;
     }
     // Parse before touching the cache so a malformed body keeps the last good data.
     const events = this.#options.parse(result.body);
-    this.#cachedEvents = events;
-    this.#validators = result.validators;
+    this.#bodies.set(url, events);
+    this.#validators.set(url, result.validators);
     return events;
   }
 
@@ -121,4 +144,17 @@ export class FeedSource {
     }
     this.#coolingDownUntil = this.#now() + cooldown;
   }
+}
+
+/** One error for a round in which every URL failed; keeps the longest Retry-After. */
+function combineFailures(failures: readonly unknown[], urls: readonly string[]): Error {
+  const messages = failures.map((failure) => (failure instanceof Error ? failure.message : String(failure)));
+  const retryAfters = failures
+    .map((failure) => (failure instanceof HttpRequestError ? failure.retryAfterMs : undefined))
+    .filter((value): value is number => value !== undefined);
+  const message = urls.length > 1 ? `全部 ${urls.length} 个地址失败：${messages.join('；')}` : messages[0] ?? '请求失败';
+  if (retryAfters.length > 0) {
+    return new HttpRequestError(message, { retryable: true, retryAfterMs: Math.max(...retryAfters), cause: failures[0] });
+  }
+  return new Error(message, { cause: failures[0] });
 }

@@ -8,7 +8,17 @@
  *      "latitude": 37.8, "longitude": 95.65, "depth": 10,
  *      "magnitude": 4.6, "location": "青海海西州直辖区" }, ...]
  *
- * Times are Beijing time (UTC+8) without an offset. The feed is undocumented, so
+ * The default primary is the keyless public mirror `https://api.wolfx.jp/cenc_eqlist.json`
+ * (much smaller, CDN-cached), which republishes the same catalogue as an object:
+ *
+ *   { "No1": { "EventID": "AU.20261020144123.7", "time": "2026-10-20 14:41:20",
+ *              "location": "青海海西州直辖区", "magnitude": "4.6", "depth": "10",
+ *              "latitude": "37.80", "longitude": "95.65", ... }, "No2": ... }
+ *
+ * Both shapes are accepted. Mirrors may assign different ids to one event, so
+ * cross-round de-duplication never relies on CENC ids alone (see dedupe.ts).
+ *
+ * Times are Beijing time (UTC+8) without an offset. The feeds are undocumented, so
  * parsing is deliberately tolerant: numeric strings are accepted, a wrapped
  * `{ data: [...] }` envelope is unwrapped, and invalid rows are skipped one by
  * one instead of failing the whole batch.
@@ -23,7 +33,11 @@ import {
   toTrimmedString,
 } from './parse-helpers.js';
 
-export const CENC_FEED_URL = 'https://ceic.ac.cn/data/data.json';
+/** Keyless public mirror (default primary). */
+export const CENC_MIRROR_URL = 'https://api.wolfx.jp/cenc_eqlist.json';
+/** Static JSON behind the official CENC "最新地震" page (default fallback). */
+export const CENC_OFFICIAL_URL = 'https://ceic.ac.cn/data/data.json';
+export const DEFAULT_CENC_URLS = Object.freeze([CENC_MIRROR_URL, CENC_OFFICIAL_URL]);
 export const CENC_HOME_URL = 'https://www.cenc.ac.cn/';
 
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1_000;
@@ -53,20 +67,33 @@ export function parseBeijingTime(value: string): number | undefined {
   return utc - BEIJING_OFFSET_MS;
 }
 
-function extractRows(payload: unknown): readonly unknown[] {
+const MIRROR_ROW_KEY = /^No\d+$/u;
+
+function isMirrorObject(payload: Record<string, unknown>): boolean {
+  return Object.keys(payload).some((key) => MIRROR_ROW_KEY.test(key));
+}
+
+/** Returns the row list, or undefined when the payload has no recognisable list. */
+function extractRows(payload: unknown): readonly unknown[] | undefined {
   if (Array.isArray(payload)) return payload;
-  if (isRecord(payload) && Array.isArray(payload.data)) return payload.data;
-  return [];
+  if (!isRecord(payload)) return undefined;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (isMirrorObject(payload)) {
+    return Object.entries(payload)
+      .filter(([key]) => MIRROR_ROW_KEY.test(key))
+      .map(([, row]) => row);
+  }
+  return undefined;
 }
 
 function parseCencRow(row: unknown): SourceEarthquake | undefined {
   if (!isRecord(row)) return undefined;
-  const id = toTrimmedString(row.id);
+  const id = toTrimmedString(row.id) ?? toTrimmedString(row.EventID);
   const timeText = toTrimmedString(row.time);
   const latitude = toFiniteNumber(row.latitude);
   const longitude = toFiniteNumber(row.longitude);
   const magnitude = toFiniteNumber(row.magnitude);
-  const location = toTrimmedString(row.location);
+  const location = toTrimmedString(row.location) ?? toTrimmedString(row.placeName);
   if (!id || !timeText || !location) return undefined;
   if (latitude === undefined || !isValidLatitude(latitude)) return undefined;
   if (longitude === undefined || !isValidLongitude(longitude)) return undefined;
@@ -94,11 +121,10 @@ export function parseCencFeed(body: string): SourceEarthquake[] {
   } catch (error) {
     throw new Error('CENC 返回的不是有效 JSON', { cause: error });
   }
-  const isList = Array.isArray(payload) || (isRecord(payload) && Array.isArray(payload.data));
-  if (!isList) {
+  const rows = extractRows(payload);
+  if (!rows) {
     throw new Error('CENC 返回的数据格式无法识别');
   }
-  const rows = extractRows(payload);
   const events: SourceEarthquake[] = [];
   for (const row of rows) {
     const event = parseCencRow(row);

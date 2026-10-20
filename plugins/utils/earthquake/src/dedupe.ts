@@ -7,10 +7,12 @@
  *
  * - origin time within `timeToleranceMs`   (default 60 s)
  * - epicentres within `distanceToleranceKm` (default 100 km, great-circle)
- * - magnitudes within `magnitudeTolerance`  (default 0.6)
+ * - magnitudes within `magnitudeTolerance`  (default 1.0; CENC M vs USGS mb often differ by ~1)
  *
- * Reports from the same source are only merged when their ids match; a source
- * never reports one event twice under different ids on purpose.
+ * Reports from the same source match when their ids match, or when origin
+ * times are within `sameSourceTimeToleranceMs` (default 5 s) and epicentres
+ * within `sameSourceDistanceKm` (default 50 km). The second rule covers CENC
+ * mirrors that assign different ids to one event, and revised reports.
  */
 import type { EarthquakeSourceId } from './config.js';
 import type { EarthquakeEvent, SourceEarthquake } from './types.js';
@@ -19,12 +21,16 @@ export interface DedupeTolerance {
   readonly timeToleranceMs: number;
   readonly distanceToleranceKm: number;
   readonly magnitudeTolerance: number;
+  readonly sameSourceTimeToleranceMs: number;
+  readonly sameSourceDistanceKm: number;
 }
 
 export const DEFAULT_DEDUPE_TOLERANCE: DedupeTolerance = Object.freeze({
   timeToleranceMs: 60_000,
   distanceToleranceKm: 100,
-  magnitudeTolerance: 0.6,
+  magnitudeTolerance: 1.0,
+  sameSourceTimeToleranceMs: 5_000,
+  sameSourceDistanceKm: 50,
 });
 
 const EARTH_RADIUS_KM = 6_371;
@@ -54,7 +60,9 @@ export function isSameEvent(
   tolerance: DedupeTolerance = DEFAULT_DEDUPE_TOLERANCE,
 ): boolean {
   if (a.source === b.source) {
-    return a.id === b.id;
+    if (a.id === b.id) return true;
+    if (Math.abs(a.time - b.time) > tolerance.sameSourceTimeToleranceMs) return false;
+    return distanceKm(a, b) <= tolerance.sameSourceDistanceKm;
   }
   if (Math.abs(a.time - b.time) > tolerance.timeToleranceMs) return false;
   if (Math.abs(a.magnitude - b.magnitude) > tolerance.magnitudeTolerance) return false;
@@ -83,20 +91,25 @@ export function mergeReports(
   });
   const groups: SourceEarthquake[][] = [];
   for (const report of ordered) {
-    const group = groups.find((candidate) => {
-      const sameSourceTaken = candidate.some((member) => member.source === report.source);
-      if (sameSourceTaken) {
-        return candidate.some((member) => member.source === report.source && member.id === report.id);
+    let placed = false;
+    for (const group of groups) {
+      const sameSourceMember = group.find((member) => member.source === report.source);
+      if (sameSourceMember) {
+        // One report per source per event: a match here is a duplicate, otherwise keep looking.
+        if (isSameEvent(sameSourceMember, report, tolerance)) {
+          placed = true;
+          break;
+        }
+        continue;
       }
-      return isSameEvent(candidate[0]!, report, tolerance);
-    });
-    if (!group) {
-      groups.push([report]);
-      continue;
+      if (isSameEvent(group[0]!, report, tolerance)) {
+        group.push(report);
+        placed = true;
+        break;
+      }
     }
-    const duplicateId = group.some((member) => member.source === report.source && member.id === report.id);
-    if (!duplicateId) {
-      group.push(report);
+    if (!placed) {
+      groups.push([report]);
     }
   }
   const events = groups.map((group) => ({ primary: group[0]!, reports: Object.freeze([...group]) }));
