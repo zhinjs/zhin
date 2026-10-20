@@ -82,6 +82,16 @@ A token is a password: keep it out of URLs, screenshots, and public frontend con
 Set `http.corsOrigins` to allow Console's origin. Behind a reverse proxy, forward the API, SSE, WebSocket, and page assets together; proxying ordinary HTTP alone breaks live messages or page loading. See [Production](../operations/production.md).
 :::
 
+## Check whether configuration was applied
+
+A plugin form shows the file revision it read. Edited values are drafts, not evidence that the file or Runtime changed. After saving, the actual receipt distinguishes system changes requiring a restart from plugin changes awaiting verification. It never declares the business feature ready. The full-source editor also shows the actual revision without claiming every change requires a restart.
+
+Use the application-evidence action in a declared plugin's form to compare one file revision, package version and current generation. Applying saved configuration is available only when evidence matches the read revision, no unsaved draft exists and the Host permits application. After confirmation, the page checks the result through read-only queries. A lost receipt or failed query is unknown, not a reason to submit another application request. Read the evidence again or inspect Host logs.
+
+Configuration semantics matching the current generation means only that this plugin's saved configuration matches its runtime values, including declared defaults. Formatting can change the file revision without changing those semantics. This does not prove the entire file was applied, platform connectivity or business acceptance. If the file or generation changes during inspection, the Host asks for another read instead of attaching an old result to a new revision.
+
+This view does not expose final values without reliable redaction or infer an old generation's default origins from the current file. Environment checks and business verification retain their own timing and limits. Schemas that cannot be safely edited still fall back to source mode.
+
 ## 7. When something breaks, check in this order
 
 If the inbound message is visible in a conversation, open its **Diagnostics** action first. It queries the exact conversation and platform message ID, showing observed origin, prefix, middleware, command outcome and reply delivery facts. It never replays the message.

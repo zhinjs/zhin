@@ -8,7 +8,7 @@ import { loadProjectConfig, packageToInstanceKey } from '@zhin.js/scaffold-wizar
 import { NodePackageResolver, PackageResolutionError, ProjectGraphService, primaryConfigToken, parsePluginConfigSchema, envStoreToken, runtimeEnvironmentToken, type EnvStore, type RuntimeEnvironment, type ResolvedPackage, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import {
   pluginVerificationToken, rootPluginId, readPluginConfigurationMap,
-  type SnapshotReader, type PluginNodeSnapshot,
+  type SnapshotReader, type PluginNodeSnapshot, type RuntimeSnapshot, type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import type {
   PluginInstallPlan, PluginManagementPort, PluginManagementState,
@@ -17,7 +17,7 @@ import type {
 import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type { PluginManagementActivity } from './activity.js';
-import { readProjectPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-runtime/plugin-lifecycle-store.js';
+import { readPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-runtime/plugin-lifecycle-store.js';
 
 const execute = promisify(execFile);
 type Project = { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; devDependencies?: Record<string, string>; zhin?: { plugins?: { package: string; instanceKey: string }[] } };
@@ -52,30 +52,33 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return { document, source, project: source.document as Project };
   }
 
-  #configuration() {
+  #configuration(snapshot?: RuntimeSnapshot) {
     const loaded = loadProjectConfig(this.#root);
     if (loaded.status === 'missing') return undefined;
     if (loaded.status !== 'loaded' || !loaded.configPath) throw new Error(loaded.message ?? 'Root configuration must use YAML or JSON');
     const document = createConfigDocument(loaded.configPath);
-    return { document, store: this.#configurationStore(document) };
+    return { document, store: this.#configurationStore(document, snapshot) };
   }
 
-  #configurationStore(document: import('@zhin.js/config-file').ConfigFileDocument) {
+  #configurationStore(document: import('@zhin.js/config-file').ConfigFileDocument, snapshot?: RuntimeSnapshot) {
+    // inspect already holds this lease. Other callers continue to resolve a fresh
+    // generation per operation, without maintaining a parallel runtime view.
+    const acquire = () => snapshot ? { value: snapshot, release() {} } : this.#options.snapshots?.acquire();
     return new ConsoleConfigurationStore({ projectRoot: this.#root, document,
       environmentName: () => {
-        const lease = this.#options.snapshots?.acquire();
+        const lease = acquire();
         try { return (lease?.value.resources.get(rootPluginId())?.get(runtimeEnvironmentToken.id) as RuntimeEnvironment | undefined)?.name ?? (process.env.NODE_ENV === 'production' ? 'production' : 'development'); }
         finally { lease?.release(); }
       },
       environmentForPlugin: instanceKey => {
-        const lease = this.#options.snapshots?.acquire();
+        const lease = acquire();
         try {
           const node = [...(lease?.value.tree.values() ?? [])].find(item => item.parent === rootPluginId() && item.instanceKey === instanceKey);
           return node ? lease?.value.resources.get(node.id)?.get(envStoreToken.id) as EnvStore | undefined : undefined;
         } finally { lease?.release(); }
       },
       configDeclarations: async () => {
-        const lease = this.#options.snapshots?.acquire();
+        const lease = acquire();
         try {
           const nodes = [...(lease?.value.tree.values() ?? [])].filter(node => node.configSchema && node.packageVersion);
           if (!nodes.length) return new Map();
@@ -100,8 +103,8 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return declaration.instances;
   }
 
-  async #resolveTarget(request: string) {
-    const entries = await this.#declaredEntries();
+  async #resolveTarget(request: string, declaredEntries?: readonly { package: string; instanceKey: string }[]) {
+    const entries = declaredEntries ?? await this.#declaredEntries();
     if (request.startsWith('root/')) request = request.slice(5);
     const direct = entries.find(entry => entry.instanceKey === request);
     if (direct) return { packageName: direct.package, instanceKey: direct.instanceKey };
@@ -147,12 +150,12 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     } catch (error) { return { installed: true, plugin: false, version, error: errorMessage(error) }; }
   }
 
-  async #checkDependencies(candidate?: { packageName: string; instanceKey: string }) {
+  async #checkDependencies(candidate?: { packageName: string; instanceKey: string }, capturedDocument?: RuntimeConfigDocument) {
     const resolver = await NodePackageResolver.create(this.#root);
     const root = await resolver.root(this.#root);
     if (root.packageJson.zhin.type !== 'plugin') throw new Error('Project root is not a Plugin');
-    const configuration = this.#configuration();
-    const document = configuration ? (await configuration.document.read()).document : {};
+    const configuration = capturedDocument ? undefined : this.#configuration();
+    const document = capturedDocument ?? (configuration ? (await configuration.document.read()).document : {});
     readApplicationPluginDeclaration(document);
     const next = candidate ? { ...document, plugins: {...document.plugins as Record<string, unknown>, [candidate.instanceKey]: candidate.packageName} } : document;
     readApplicationPluginDeclaration(next);
@@ -167,44 +170,58 @@ export class PluginManagementWorkflow implements PluginManagementPort {
   }
 
   async inspect(request: string): Promise<PluginManagementState> {
-    const target = await this.#resolveTarget(request);
+    const lease = this.#options.snapshots?.acquire();
+    try { return await this.#inspect(request, lease?.value); }
+    finally { lease?.release(); }
+  }
+
+  async #inspect(request: string, snapshot?: RuntimeSnapshot): Promise<PluginManagementState> {
+    const project = await this.#project();
+    const configuration = this.#configuration(snapshot);
+    if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
+    const source = await configuration.document.read();
+    const document = source.document;
+    const declaration = readApplicationPluginDeclaration(document);
+    const entries = declaration.instances;
+    if (project.project.zhin?.plugins?.length) throw new Error('Legacy package.json zhin.plugins detected; run zhin migrate instances');
+    const target = await this.#resolveTarget(request, entries);
     const installed = await this.#installed(target.packageName);
-    const declared = (await this.#declaredEntries()).some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey);
-    const configuration = this.#configuration();
-    const config = configuration ? await configuration.store.readDocument() : {};
+    const declared = entries.some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey);
+    const config = readPluginConfigurationMap(document);
+    const revision = source.revision;
+    const projectRevision = createHash('sha256').update(JSON.stringify([project.source.revision, revision])).digest('hex');
     const issues: string[] = installed.error ? [installed.error] : [];
     if (declared && !installed.installed) issues.push('Declared plugin package is not installed');
     let dependencies: PluginManagementState['dependencies'] = 'unchecked';
     let validation: PluginManagementState['validation'] = null;
-    const lifecycle = await readProjectPluginLifecycleState(this.#root, this.#options.lifecycleFile ?? resolvePluginLifecycleFile(this.#root));
-    const disabled = lifecycle.disabled.includes(target.instanceKey);
+    const legacy = await readPluginLifecycleState(this.#options.lifecycleFile ?? resolvePluginLifecycleFile(this.#root));
+    if (legacy.disabled.length) throw new Error('Legacy plugin lifecycle state detected; run zhin migrate instances');
+    const disabled = declaration.disabled.includes(target.instanceKey);
     if (installed.plugin && declared && !disabled) {
-      try { await this.#checkDependencies(); dependencies = 'passed'; }
+      try { await this.#checkDependencies(undefined, document); dependencies = 'passed'; }
       catch (error) { dependencies = 'failed'; issues.push(errorMessage(error)); }
-      const validator = configuration?.store ?? this.#configurationStore(createConfigDocument(join(this.#root, 'zhin.config.yml')));
-      validation = await validator.validatePluginConfig(target.instanceKey, config[target.instanceKey] ?? {});
+      validation = await configuration.store.validatePluginConfig(target.instanceKey, config[target.instanceKey] ?? {}, document);
     }
 
-    const lease = this.#options.snapshots?.acquire();
     let node: PluginNodeSnapshot | undefined;
     let generation: number | null = null;
     let published = false;
     let readiness: PluginManagementState['readiness'] = 'unknown';
     let verification: PluginManagementState['verification'] = 'not-configured';
-    try {
-      generation = lease?.value.generation ?? null;
-      node = lease && [...lease.value.tree.values()].find(item => item.parent === rootPluginId() && item.instanceKey === target.instanceKey && item.packageName === (installed.pkg?.name ?? target.packageName));
-      if (node && lease) {
+    {
+      generation = snapshot?.generation ?? null;
+      node = snapshot && [...snapshot.tree.values()].find(item => item.parent === rootPluginId() && item.instanceKey === target.instanceKey && item.packageName === (installed.pkg?.name ?? target.packageName));
+      if (node && snapshot) {
         const owner = node.id;
-        const primary = lease.value.resources.get(rootPluginId())?.get(primaryConfigToken.id) as import('@zhin.js/runtime').PrimaryConfig | undefined;
+        const primary = snapshot.resources.get(rootPluginId())?.get(primaryConfigToken.id) as import('@zhin.js/runtime').PrimaryConfig | undefined;
         const applied = primary ? readPluginConfigurationMap(primary.document) : undefined;
         const candidate = node.configSchema ? parsePluginConfigSchema(node.configSchema, config[target.instanceKey]).value : config[target.instanceKey] ?? {};
         published = Boolean(installed.version && node.packageVersion === installed.version && applied && isDeepStrictEqual(applied[target.instanceKey] ?? {}, candidate));
         if (published) {
-          const hasAdapters = [...lease.value.capabilities.values()].some(slot => slot.owner === owner && String(slot.feature) === 'zhin.adapter');
+          const hasAdapters = [...snapshot.capabilities.values()].some(slot => slot.owner === owner && String(slot.feature) === 'zhin.adapter');
           if (!hasAdapters) readiness = 'ready';
           else {
-            const adapters = lease.value.projections.get(adapterFeatureId);
+            const adapters = snapshot.projections.get(adapterFeatureId);
             if (isAdapterIndex(adapters)) {
               const endpoints = adapters.describe().filter(endpoint => endpoint.owner === owner);
               if (endpoints.length) readiness = endpoints.every(endpoint => endpoint.connected && endpoint.admitted)
@@ -213,10 +230,11 @@ export class PluginManagementWorkflow implements PluginManagementPort {
             }
           }
         }
-        if (lease.value.resources.get(node.id)?.has(pluginVerificationToken.id)) verification = 'available';
+        if (snapshot.resources.get(node.id)?.has(pluginVerificationToken.id)) verification = 'available';
       }
-    } finally { lease?.release(); }
-    // Published raw config is read from this generation's primary authority, not the disk version or expanded defaults.
+    }
+    // Publication compares this file's default-completed semantics with the
+    // generation authority; it does not attest an applied raw-file revision.
     const missingConfig = declared && (validation?.valid === false || Boolean(validation?.missingEnv.length));
     const restartRequired = declared && (disabled ? Boolean(node) : !published || dependencies !== 'passed');
     const status: PluginManagementState['status'] = issues.length ? 'degraded'
@@ -224,7 +242,12 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       : published && !disabled ? 'enabled'
       : restartRequired ? 'pending-restart'
       : declared ? 'declared' : installed.installed ? 'installed' : 'not-installed';
-    return Object.freeze({ ...target, ...await this.#revisions(), installed: installed.installed, plugin: installed.plugin, version: installed.version, declared, status, dependencies, validation, generation, published, readiness, restartRequired, disabled, issues: Object.freeze(issues), verification });
+    if ((await this.#revisions()).projectRevision !== projectRevision) throw new Error('配置或项目版本在读取期间变化，请重新读取应用证据');
+    const current = this.#options.snapshots?.acquire();
+    try {
+      if (current?.value !== snapshot) throw new Error('运行代在读取期间变化，请重新读取应用证据');
+    } finally { current?.release(); }
+    return Object.freeze({ ...target, revision, projectRevision, installed: installed.installed, plugin: installed.plugin, version: installed.version, declared, status, dependencies, validation, generation, published, readiness, restartRequired, disabled, issues: Object.freeze(issues), verification });
   }
 
   async planInstall(request: string, options: Pick<PluginInstallOptions, 'enable'> = {}): Promise<PluginInstallPlan> {
