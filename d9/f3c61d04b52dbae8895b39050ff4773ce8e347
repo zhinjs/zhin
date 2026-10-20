@@ -1,0 +1,22 @@
+packages/toolkit/testing/package.json
+  h_b680f75345178a 33,35-36
+packages/toolkit/testing/src/fake-runners.ts
+  h_b680f75345178a 8-13,124-231
+packages/toolkit/testing/src/index.ts
+  h_b680f75345178a 16-17,20-21
+packages/toolkit/testing/tests/tool-config.test.ts
+  h_b680f75345178a 1-111
+pnpm-lock.yaml
+  h_b680f75345178a 2072-2074
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d9f3c61d04b52dbae8895b39050ff4773ce8e347",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
