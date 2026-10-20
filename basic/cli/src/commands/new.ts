@@ -606,6 +606,7 @@ describe('${packageName}', () => {
 `;
   } else if (kind === 'service') {
     testContent = `import { describe, expect, it } from 'vitest';
+import { runPluginSetup } from '@zhin.js/testing';
 import plugin from '../plugin.ts';
 
 describe('${packageName}', () => {
@@ -613,29 +614,17 @@ describe('${packageName}', () => {
     expect(plugin.name).toBe('${pluginName}');
   });
 
-  it('setup registers a lifecycle dispose', () => {
-    const disposes: Array<() => void> = [];
-    const context = {
-      config: { get: () => ({}) },
-      resources: {
-        has: () => false,
-        use: () => {
-          throw new Error('resource not available in test');
-        },
-      },
-      lifecycle: {
-        add: (dispose: () => void) => {
-          disposes.push(dispose);
-        },
-      },
-    };
-    plugin.setup?.(context as never);
-    expect(disposes.length).toBeGreaterThan(0);
+  it('runs setup against typed fakes and disposes cleanly', async () => {
+    // runPluginSetup provides in-memory Database / Schedule / Outbound hosts; see docs/authoring/testing.md.
+    const fake = await runPluginSetup(plugin);
+    expect(fake.missingRequirements(plugin)).toEqual([]);
+    await fake.dispose();
   });
 });
 `;
   } else {
     testContent = `import { describe, expect, it } from 'vitest';
+import { createFakeMessage, runCommand, runPluginSetup } from '@zhin.js/testing';
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import mainCommand from '../commands/${pluginName}/index.ts';
@@ -651,18 +640,24 @@ describe('${packageName}', () => {
     expect(parseCommandDefinition(echoCommand)).toBe(echoCommand);
   });
 
+  // runCommand calls execute() with a typed context from the fake plugin (no \`as never\`).
+  // It skips routing, parameter parsing and permit; use PluginTestKit for those (docs/authoring/testing.md).
   it('main command returns greeting text', async () => {
-    const result = await mainCommand.execute({ args: [], params: {}, input: undefined } as never);
+    const fake = await runPluginSetup(plugin);
+    const result = await runCommand(fake, mainCommand, { input: createFakeMessage() });
     expect(String(result)).toContain('运行中');
+    await fake.dispose();
   });
 
   it('echo command echoes the dynamic segment', async () => {
-    const result = await echoCommand.execute({
+    const fake = await runPluginSetup(plugin);
+    const result = await runCommand(fake, echoCommand, {
+      input: createFakeMessage({ content: '${pluginName}-echo 你好' }),
       args: ['你好'],
       params: { text: '你好' },
-      input: undefined,
-    } as never);
+    });
     expect(String(result)).toContain('你好');
+    await fake.dispose();
   });
 });
 `;

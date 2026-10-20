@@ -190,8 +190,10 @@ describe('CLI new command integration', () => {
     const testFilePath = path.join(pluginDir, 'tests', `${serviceName}-runtime.test.ts`)
     expect(await fs.pathExists(testFilePath)).toBe(true)
     const testFile = await fs.readFile(testFilePath, 'utf-8')
-    expect(testFile).toContain('lifecycle')
-    expect(testFile).toContain('plugin.setup')
+    expect(testFile).toContain("from '@zhin.js/testing'")
+    expect(testFile).toContain('runPluginSetup(plugin)')
+    expect(testFile).toContain('fake.dispose()')
+    expect(testFile).not.toContain('as never')
 
     const packageJson = await fs.readJson(path.join(pluginDir, 'package.json'))
     expect(packageJson.zhin.features).toEqual([
