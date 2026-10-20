@@ -1,0 +1,23 @@
+plugins/utils/earthquake/commands/地震/manage-permission.ts
+  s_e6f5f09d5890ba::t_c04445b2b8daf3 1-28
+plugins/utils/earthquake/commands/地震/订阅/index.ts
+  s_e6f5f09d5890ba::t_78b1c991a54966 3,9,13,17
+plugins/utils/earthquake/commands/地震/退订/index.ts
+  s_e6f5f09d5890ba::t_a8fba779014076 3,8-9,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ae03c08ce742bc9cdaa03af0834bdea011bb925f",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
