@@ -40,6 +40,7 @@ commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type:
 - `args`：匹配后剩余文本按空白切分的兼容视图。
 - `segments`：匹配后剩余的结构化段，媒体和 mention 不会丢失。
 - `config` / `use()` / `owner` / `generation`：owner-scoped Runtime 上下文。
+- `signal`：真实 IM 入站操作的运行代退休时同步取消。补问、确认及其他需要随代结束的等待应观察此信号；它不会强制取消已经开始的发送，也不禁止持有旧 lease 的普通命令继续排空。没有携带运行代生命周期的输入（如普通 Host 调用）不会凭空获得 IM 生命周期。
 - `input`：派发来源；IM 中为满足 `CommandMessage` 的 Runtime `Message`。
 - `adapter` / `endpoint`：适配器实例 id 与 endpoint 名。
 - `scene`：`{ id, type, name? }` 场景对象。

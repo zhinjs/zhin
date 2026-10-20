@@ -6,6 +6,7 @@ import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   createCapabilityContext,
   readOperationClient,
+  readOperationInputSignal,
   type AdapterClient,
   type RegisteredAdapterName,
   type CapabilityContext,
@@ -496,7 +497,7 @@ export function createCommandContext(
   adapter?: string,
   options: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
 ): CommandContext {
-  const context = createCapabilityContext(snapshot, ownerId);
+  const context = createCapabilityContext(snapshot, ownerId, undefined, readOperationInputSignal(input));
   const session = resolveCommandSession(input);
   const parameterValues: Record<string, CommandParameterValue> = { __proto__: null, ...params };
   const optionValues: Record<string, CommandParameterValue> = { __proto__: null, ...options };

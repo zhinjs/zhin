@@ -9,6 +9,7 @@ import type { EndpointEvent, PeerRegistry } from '@zhin.js/adapter';
 import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
+import { bindOperationInput } from '@zhin.js/feature-kit';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { DeliveryReceipt } from '@zhin.js/im-contract';
 import type { UserInteraction } from '@zhin.js/interaction';
@@ -363,7 +364,7 @@ export class InboundRuntime {
           return source.client;
         },
         source.endpoint.adapter,
-        { snapshot: lease.value, assertActive: () => {
+        { snapshot: lease.value, retirementSignal: lease.retirementSignal, assertActive: () => {
           if (!active) throw new Error('Message author binding scope has ended');
         }, ...(origin ? { origin } : {}) },
       );
@@ -453,7 +454,7 @@ export class InboundRuntime {
               }
             }
             this.context.diagnostics?.step('handlers', 'started');
-            await this.#runHandlers(lease.value, 'message.receive', [
+            await this.#runHandlers(lease, 'message.receive', [
               withEndpointEventPayload(source, message),
             ]);
             this.context.diagnostics?.step('handlers', 'completed');
@@ -551,7 +552,7 @@ export class InboundRuntime {
         },
       };
       const dispatch = async (payload: Notice | Request | SystemEvent) => {
-        await this.#runHandlers(lease.value, source.name, [withEndpointEventPayload(source, payload)]);
+        await this.#runHandlers(lease, source.name, [withEndpointEventPayload(source, payload)]);
       };
       if (source.payload.type !== source.name.split('.')[0]) {
         throw new TypeError('Endpoint event payload type does not match its gateway event');
@@ -581,26 +582,27 @@ export class InboundRuntime {
   async #receiveSideEvent(event: EndpointEvent): Promise<void> {
     const lease = this.context.acquire();
     try {
-      await this.#runHandlers(lease.value, event.name, [event]);
+      await this.#runHandlers(lease, event.name, [event]);
     } finally {
       this.context.release(lease);
     }
   }
 
   async #runHandlers(
-    snapshot: RuntimeSnapshot,
+    lease: SnapshotLease,
     event: string,
     args: readonly unknown[],
   ): Promise<void> {
+    const snapshot = lease.value;
     const index = handlers(snapshot);
     if (!index) return;
     const options: HandlerDispatchOptions = {
       snapshot,
-      resolveInteraction: (name, interactionArgs) => {
+      resolveInteraction: (name, interactionArgs, owner) => {
         const eventContext = interactionArgs[0] as EndpointEvent | undefined;
         const payload = eventContext?.payload;
         if (name === 'message.receive' && payload instanceof RuntimeMessage) {
-          return this.createInteraction(payload);
+          return this.context.interactions.createFromUnknown(bindOperationInput(payload, owner, snapshot));
         }
         if (
           name === 'notice.receive'
@@ -609,6 +611,8 @@ export class InboundRuntime {
           return this.#createInteractionForSideEvent(
             payload as Notice | Request,
             snapshot,
+            owner,
+            lease.retirementSignal,
           );
         }
         return undefined;
@@ -620,10 +624,11 @@ export class InboundRuntime {
   #createInteractionForSideEvent(
     payload: Notice | Request,
     snapshot: RuntimeSnapshot,
+    requester: PluginId,
+    retirementSignal: AbortSignal,
   ): UserInteraction | undefined {
     const conversation = payload.conversation;
     if (!conversation) return undefined;
-    const requester = snapshot.root;
     const source: UserInteractionSource = Object.freeze({
       conversation,
       ...(payload.actor?.id
@@ -635,7 +640,7 @@ export class InboundRuntime {
         content,
       }, snapshot),
     });
-    return this.context.interactions.create(source);
+    return this.context.interactions.create(source, undefined, { snapshot, owner: requester, retirementSignal });
   }
 
   async #dispatchInteractive(

@@ -198,6 +198,44 @@ describe('slack protocol helpers', () => {
 });
 
 describe('slack plugin runtime adapter (socket)', () => {
+  it.each([
+    { label: 'reply in a thread', inboundThread: '1700000000.000001', callbackThread: '1700000000.000001', expectedThread: '1700000000.000001' },
+    { label: 'ordinary channel message', inboundThread: undefined, callbackThread: undefined, expectedThread: undefined },
+    { label: 'thread root represented as its own timestamp', inboundThread: '1700000000.000100', callbackThread: '1700000001.000000', expectedThread: undefined },
+  ])('preserves complete conversation identity from $label to its callback', async ({ inboundThread, callbackThread, expectedThread }) => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const socket = mockSocket();
+    const endpoint = bindTestEndpoint(new SlackEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'slack'), gateway, config: socketConfig,
+      createClient: () => mockClient(), createSocket: () => socket,
+    }), gateway, undefined);
+    try {
+      await endpoint.start(); endpoint.open();
+      await socket.emit('slack_event', { type: 'event_callback', event: textEvent({ ...(inboundThread ? { thread_ts: inboundThread } : {}) }) });
+      await socket.emit('interactive', { type: 'block_actions', user: { id: 'U001' }, channel: { id: 'C001' },
+        message: { ts: '1700000001.000000', ...(callbackThread ? { thread_ts: callbackThread } : {}) },
+        actions: [{ type: 'button', action_id: 'button', block_id: 'row', value: 'question:token:0', action_ts: '1700000002.000000' }],
+      });
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+      const original = receive.mock.calls[0]![0]; const callback = receive.mock.calls[1]![0];
+      expect(callback.conversation).toEqual(original.conversation);
+      expect(callback.message?.conversation).toEqual(original.conversation);
+      expect(callback.conversation.threadId).toBe(expectedThread);
+      expect(callback.metadata?.threadTs).toBe(expectedThread);
+      expect(callback.segments).toEqual([{ type: 'action', data: {
+        id: '1700000002.000000', payload: 'question:token:0', sourceMessageId: '1700000001.000000',
+      } }]);
+      await socket.emit('interactive', { type: 'block_actions', user: { id: 'U001' }, channel: { id: 'C002' },
+        message: { ts: '1700000001.000000', ...(callbackThread ? { thread_ts: callbackThread } : {}) },
+        actions: [{ type: 'button', action_id: 'button', block_id: 'row', value: 'question:token:0' }],
+      });
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(3));
+      expect(receive.mock.calls[2]![0].conversation).toMatchObject({ kind: 'group', id: 'C002' });
+      expect(receive.mock.calls[2]![0].conversation).not.toEqual(original.conversation);
+    } finally { await endpoint.stop(); }
+  });
+
   it('admits socket events via OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };

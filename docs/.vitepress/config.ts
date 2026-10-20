@@ -119,6 +119,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     ]),
     sidebarGroup('解决方案', [
       { text: '按交付结果选择', link: '/solutions/' },
+      { text: '不启用 AI 创建提醒', link: '/solutions/reminders' },
       { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
       { text: '受治理的业务 Agent', link: '/solutions/governed-agent' },
       { text: 'GitHub 仓库 Workroom', link: '/solutions/github-workroom' },
@@ -260,6 +261,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     ]),
     sidebarGroup('Solutions', [
       { text: 'Choose by Outcome', link: '/en/solutions/' },
+      { text: 'Create Reminders Without AI', link: '/en/solutions/reminders' },
       { text: 'Multi-Endpoint Operations', link: '/en/solutions/multi-endpoint-operations' },
       { text: 'Governed Business Agent', link: '/en/solutions/governed-agent' },
       { text: 'GitHub Repository Workroom', link: '/en/solutions/github-workroom' },

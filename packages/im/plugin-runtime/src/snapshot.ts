@@ -57,6 +57,7 @@ export interface CommittedGeneration<TState = undefined> {
 }
 
 interface SnapshotRecord<TState> extends CommittedGeneration<TState> {
+  readonly retirement: AbortController;
   readonly committed: CommittedGeneration<TState>;
   readonly dispose: Dispose;
   readonly admissions: ReadonlySet<GenerationAdmissionGate>;
@@ -86,6 +87,8 @@ export class SnapshotLease {
     readonly value: RuntimeSnapshot,
     private readonly releaseRecord: () => void,
     authority: typeof snapshotLeaseAuthority,
+    /** Aborted on publication of a replacement or Root close, before lease disposal. */
+    readonly retirementSignal: AbortSignal,
   ) {
     if (authority !== snapshotLeaseAuthority) throw new TypeError('SnapshotLease is owned by SnapshotStore');
   }
@@ -125,6 +128,7 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
     const committed = Object.freeze({ snapshot, state: initialState });
     const admissions = collectSnapshotAdmissions(snapshot);
     const record: SnapshotRecord<TState> = {
+      retirement: new AbortController(),
       snapshot,
       state: initialState,
       committed,
@@ -153,6 +157,7 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
       record.snapshot,
       this.#retain(record),
       snapshotLeaseAuthority,
+      record.retirement.signal,
     );
     this.#leases.add(lease);
     return lease;
@@ -184,6 +189,7 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
     const committed = Object.freeze({ snapshot, state });
     const admissions = collectSnapshotAdmissions(snapshot);
     const next: SnapshotRecord<TState> = {
+      retirement: new AbortController(),
       snapshot,
       state,
       committed,
@@ -202,6 +208,7 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
     // Commit only swaps the active pointer. The previous record may still be
     // serving in-flight work, so disposal is deferred to its final lease.
     previous.retired = true;
+    previous.retirement.abort();
     this.#retired.add(previous);
     this.#disposeIfReady(previous);
     return this.#current.committed;
@@ -212,6 +219,7 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
     this.#closed = true;
     replaceGenerationAdmissions(this.#current.admissions, new Set(), this, () => undefined);
     this.#current.retired = true;
+    this.#current.retirement.abort();
     this.#retired.add(this.#current);
     this.#disposeIfReady(this.#current);
     // A Root is not stopped while any historical generation still owns live

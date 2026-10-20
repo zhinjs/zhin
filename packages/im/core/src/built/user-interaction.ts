@@ -59,7 +59,10 @@ export function assertUserInteractionRequest(request: UserInteractionRequest): v
 }
 
 /** Project semantic content into canonical Markdown + keyboard segments. */
-export function renderUserInteraction(view: UserInteractionView): SendContent {
+export function renderUserInteraction(
+  view: UserInteractionView,
+  actionPayload: (value: string, index: number) => string = (value) => value,
+): SendContent {
   const markdown = [
     `### ${view.title}`,
     view.description?.trim(),
@@ -72,10 +75,9 @@ export function renderUserInteraction(view: UserInteractionView): SendContent {
   const buttons = actions.map((action, index) => ({
     id: `interaction-${index + 1}`,
     label: action.label,
-    payload: action.value,
+    payload: actionPayload(action.value, index),
     ...(action.style ? { style: action.style } : {}),
-    mode: 'command' as const,
-    command: { enter: true, reply: false },
+    mode: 'callback' as const,
   }));
   return [
     { type: 'markdown', data: { content: markdown } },
@@ -85,7 +87,7 @@ export function renderUserInteraction(view: UserInteractionView): SendContent {
         rows: chunk(buttons, 5),
         fallback: {
           hint: '也可以直接回复对应内容。',
-          map: Object.fromEntries(actions.map((action, index) => [String(index + 1), action.value])),
+          map: Object.fromEntries(buttons.map((button, index) => [String(index + 1), button.payload])),
         },
       },
     },
