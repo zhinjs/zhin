@@ -1681,6 +1681,17 @@ _该 Schema 没有声明字段。_
 | --- | --- | --- | --- | --- |
 | `60s.apiBase` | string | 否 | `"https://60s.viki.moe"` | 60s API base URL |
 
+### answers
+
+[`plugins/utils/answers/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/answers/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `answers.dailyStable` | boolean | 否 | `false` | 同一用户同一天问同一个问题时，答案之书给出相同答案 |
+| `answers.timezone` | string | 否 | `"Asia/Shanghai"` | dailyStable 判断「同一天」所用的 IANA 时区 |
+| `answers.quizTimeoutSeconds` | number | 否 | `120` | 出题后等待作答的秒数，超时题目作废 |
+| `answers.enableDrivingQuiz` | boolean | 否 | `true` | 启用「科目一」交规小测（原创题面，仅供娱乐参考） |
+
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)

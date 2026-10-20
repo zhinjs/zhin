@@ -241,9 +241,10 @@ done < names.txt
 - [ ] `@zhin.js/service-activity-feedback` — `plugins/services/activity-feedback`
 - [ ] `@zhin.js/service-typesafe` — `plugins/services/typesafe`
 
-### `plugins/utils/`（13）
+### `plugins/utils/`（14）
 
 - [ ] `@zhin.js/plugin-60s` — `plugins/utils/60s`
+- [ ] `@zhin.js/plugin-answers` — `plugins/utils/answers`
 - [ ] `@zhin.js/plugin-calendar` — `plugins/utils/calendar`
 - [ ] `@zhin.js/plugin-code-runner` — `plugins/utils/code-runner`
 - [ ] `@zhin.js/plugin-content-moderation` — `plugins/utils/content-moderation`

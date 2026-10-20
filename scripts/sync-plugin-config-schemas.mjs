@@ -5,7 +5,7 @@ import { tsImport } from 'tsx/esm/api';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 // Only declaration helpers are imported. Plugin entries and setup never execute.
-const declarations = [['calendar', 'calendarConfig'], ['reminder', 'reminderConfig'], ['repeater', 'repeaterConfig']];
+const declarations = [['answers', 'answersConfig'], ['calendar', 'calendarConfig'], ['reminder', 'reminderConfig'], ['repeater', 'repeaterConfig']];
 for (const [name, symbol] of declarations) {
   const module = await tsImport(pathToFileURL(resolve(root, `plugins/utils/${name}/src/config.ts`)).href, import.meta.url);
   const text = `${JSON.stringify(module[symbol].toJsonSchema(), null, 2)}\n`;
