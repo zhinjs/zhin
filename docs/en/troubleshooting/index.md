@@ -16,6 +16,7 @@ Start from the symptom. Change one condition at a time and retain startup logs, 
 - [Endpoint remains offline](#endpoint-offline)
 - [Messages or notices are missing after refresh](#messages-missing-after-refresh)
 - [Configuration is rejected at startup](#configuration-rejected)
+- [Startup fails with configVersion must be 2 after an upgrade](#config-v1-rejected)
 - [Multiple package locations for one package](#multiple-package-locations)
 - [Agent has no available model or provider](#agent-provider-unavailable)
 - [Tool is awaiting approval or denied by policy](#tool-approval-stuck)
@@ -139,6 +140,30 @@ Startup reports `Invalid Plugin config`, an unknown top-level field, or environm
 ### Verification
 
 - `npx zhin doctor` should pass, followed by `npx zhin runtime start` without validation errors.
+
+</section>
+
+<section id="config-v1-rejected">
+
+## Startup fails with configVersion must be 2 after an upgrade
+
+### Symptom
+
+After upgrading to 1.1.14 or later the Bot refuses to start with `configVersion must be 2`, `Legacy package.json zhin.plugins detected`, or "Detected a v1 configuration".
+
+### Cause
+
+- The project still uses the v1 layout: the main config has no `configVersion: 2`, or `package.json#zhin.plugins` still declares mounts.
+- The CLI is 1.1.13 or earlier and has no `zhin migrate instances`.
+
+### Action
+
+- Stop the Bot, upgrade `zhin.js` and `@zhin.js/cli` to the latest, preview with `zhin migrate instances`, then run `zhin migrate instances --apply`.
+- Follow [Upgrading to configVersion 2](/en/operations/upgrades#configversion-2) for cases the tool will not convert; undo with `zhin migrate instances --recover rollback`.
+
+### Verification
+
+- `zhin config check` no longer reports `config.legacy_v1` or `plugins.invalid`, and the Bot starts.
 
 </section>
 

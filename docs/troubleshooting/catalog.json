@@ -82,6 +82,22 @@
       ]
     },
     {
+      "id": "config-v1-rejected",
+      "title": {"zh": "升级后启动报 configVersion must be 2", "en": "Startup fails with configVersion must be 2 after an upgrade"},
+      "symptom": {"zh": "升级到 1.1.14 及以上后 Bot 无法启动，报 `configVersion must be 2`、`Legacy package.json zhin.plugins detected` 或“检测到 v1 配置”。", "en": "After upgrading to 1.1.14 or later the Bot refuses to start with `configVersion must be 2`, `Legacy package.json zhin.plugins detected`, or \"Detected a v1 configuration\"."},
+      "causes": [
+        {"zh": "项目仍是 v1 配置：主配置缺少 `configVersion: 2`，或 `package.json#zhin.plugins` 仍有旧挂载。", "en": "The project still uses the v1 layout: the main config has no `configVersion: 2`, or `package.json#zhin.plugins` still declares mounts."},
+        {"zh": "使用的 CLI 是 1.1.13 及更早版本，没有 `zhin migrate instances`。", "en": "The CLI is 1.1.13 or earlier and has no `zhin migrate instances`."}
+      ],
+      "actions": [
+        {"zh": "先停止 Bot，把 `zhin.js` 与 `@zhin.js/cli` 升级到最新，运行 `zhin migrate instances` 预览，再运行 `zhin migrate instances --apply`。", "en": "Stop the Bot, upgrade `zhin.js` and `@zhin.js/cli` to the latest, preview with `zhin migrate instances`, then run `zhin migrate instances --apply`."},
+        {"zh": "按[升级到 configVersion 2](/operations/upgrades#configversion-2)处理工具拒绝自动转换的情况；需要撤销时运行 `zhin migrate instances --recover rollback`。", "en": "Follow [Upgrading to configVersion 2](/en/operations/upgrades#configversion-2) for cases the tool will not convert; undo with `zhin migrate instances --recover rollback`."}
+      ],
+      "verification": [
+        {"zh": "`zhin config check` 不再报 `config.legacy_v1` 或 `plugins.invalid`，Bot 正常启动。", "en": "`zhin config check` no longer reports `config.legacy_v1` or `plugins.invalid`, and the Bot starts."}
+      ]
+    },
+    {
       "id": "multiple-package-locations",
       "title": { "zh": "同一个包出现多个安装位置", "en": "Multiple package locations for one package" },
       "symptom": { "zh": "启动时报 `Multiple package locations for @zhin.js/... are not supported in one generation`。", "en": "Startup fails with `Multiple package locations for @zhin.js/... are not supported in one generation`." },
