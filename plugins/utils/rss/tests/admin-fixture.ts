@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -12,11 +12,12 @@ import plugin from '../plugin.js';
 import remove from '../commands/rss-remove/[url]/index.js';
 import list from '../commands/rss-list/index.js';
 import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
+import type { RssConfig } from '../src/feed.js';
 
 export const target = { endpoint: { adapter: 'sandbox', id: 'root/sandbox\0zhin.adapter\0main~123' }, kind: 'channel', id: 'room',
   parent: { kind: 'channel', id: 'guild' }, threadId: 'topic' } as const;
 
-export async function rssFixture(options: { persistence?: boolean; outbound?: boolean; scheduler?: boolean; exactSend?: boolean } = {}) {
+export async function rssFixture(options: { persistence?: boolean; outbound?: boolean; scheduler?: boolean; exactSend?: boolean; rssConfig?: Partial<RssConfig> } = {}) {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-admin-rss-')));
   const modules = new Map<string, unknown>();
   const write = async (relative: string, value: unknown, module = false) => {
@@ -28,6 +29,7 @@ export async function rssFixture(options: { persistence?: boolean; outbound?: bo
   await write('plugin.ts', { default: definePlugin({ name: 'root' }) }, true);
   await write('plugins/rss/package.json', { name: '@test/rss', zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [] } });
   await write('plugins/rss/plugin.ts', { default: plugin }, true);
+  await write('plugins/rss/schema.json', JSON.parse(await readFile(new URL('../schema.json', import.meta.url), 'utf8')));
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(project, 'state.sqlite') });
   const jobs: ScheduleJobRegistration[] = [], active = new Set<ScheduleJobRegistration>();
   const schedule: ScheduleHost = { register(job) { jobs.push(job); active.add(job); return () => { active.delete(job); }; }, list: () => [...active] };
@@ -37,7 +39,7 @@ export async function rssFixture(options: { persistence?: boolean; outbound?: bo
     if (!modules.has(source)) throw new Error(`Missing fixture module ${source}`); return modules.get(source) as T;
   }, async close() {} };
   const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader,
-    config: { configVersion: 2, plugins: { alpha: '@test/rss', beta: '@test/rss' } },
+    config: { configVersion: 2, plugins: { alpha: '@test/rss', beta: '@test/rss' }, ...(options.rssConfig ? { alpha: options.rssConfig, beta: options.rssConfig } : {}) },
     environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission, handoff }) {
       const db = options.persistence === false ? { ...database, state: undefined } : database;
       resources.provide(databaseRootHostToken, db); resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), db, admission));

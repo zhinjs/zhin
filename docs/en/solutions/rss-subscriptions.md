@@ -36,6 +36,26 @@ An uncertain state is persisted before sending. Only a confirmed message ID retu
 
 Administrator and chat subscriptions have separate management. `rss-list`, `rss-remove` and `rss-check` cannot read, cancel or trigger administrator tasks. Chat commands currently reject addresses with parents or threads; administrator targets preserve those fields.
 
+## Accumulate updates during quiet hours
+
+Quiet hours are off by default and apply only to administrator RSS subscriptions that explicitly enable them. Scheduled reminders and chat subscriptions keep their existing behavior. Set all three task parameters:
+
+| Parameter | Example | Meaning |
+| --- | --- | --- |
+| `quietTimezone` | `Asia/Shanghai` | An explicit IANA timezone; no server or user timezone is guessed |
+| `quietStart` | `22:00` | Inclusive starting minute |
+| `quietEnd` | `08:00` | Exclusive ending minute |
+
+Times use a 24-hour clock and may cross midnight. Start and end must differ. Provide all three fields; omit or clear all three to disable. Partial configuration is rejected. Pause before editing.
+
+Polling continues during quiet hours. Newly detected identifiers and pending summary facts are persisted in the same update. The first poll outside quiet hours sends the accumulated summary before fetching any feeds; that subscription fetches again on the next poll. A currently unavailable source does not block an already-persisted summary. Delivery is not promised at the exact ending minute. Daylight-saving changes use the actual local minute at each poll rather than an inferred future timestamp.
+
+Each subscription and complete target accumulates separately, without merging across feeds, accounts or conversations. A summary retains at most three short titles and usable HTTP(S) links. Actual display also respects `maxItems`, referring readers to the source for the rest. Counts above 10000 are shown as “at least”. The 20-item fetch window and 64-item deduplication cursor still apply; summaries are not permanent archival or lossless delivery.
+
+**Pausing clears pending summaries.** Editing and cancellation also discard them. Resuming establishes a new baseline without backfill. Already-claimed delivery cannot be retracted. Uncertain summary delivery stops automatic processing and permits only cancellation after reconciliation.
+
+Cursors and summaries share the instance's 60 KiB durable-state limit. Creation and edits reserve space for bounded summaries; insufficient capacity rejects the mutation while retaining existing data. Internal records upgrade to version 2 under the same owner and key. New code reads old records; an old worker that cannot understand version 2 stops processing instead of bypassing quiet hours after a rollback.
+
 ## Polling window and capacity
 
 Each check examines the first 20 items returned by the feed without following older pages. `maxItems` displays five articles by default. If more new articles are found in one check, the message includes an omitted count and source-site hint. All examined articles enter the cursor; omitted details are not sent next round. Initial and resumed baselines also cover only the current window, so this is not permanent archival or lossless delivery.

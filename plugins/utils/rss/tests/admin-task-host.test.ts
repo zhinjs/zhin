@@ -85,6 +85,37 @@ describe.skipIf(!sqliteAvailable)('real administrator RSS provider through authe
     expect(snapshot.tasks[0].parameters.url).toBe('https://other.test/feed'); expect(f.load).not.toHaveBeenCalled(); expect(f.send).not.toHaveBeenCalled();
   });
 
+  it('preserves flat quiet parameters through the authenticated generic Host and turns them off when the real form clears all three', async () => {
+    const f = await fixture(), initial = await f.read(), requestId = randomUUID();
+    for (const key of ['quietTimezone', 'quietStart', 'quietEnd']) expect(initial.schema.properties[key]).toMatchObject({ type: 'string' });
+    expect(initial.schema.required).toEqual(['url']);
+    const parameters = { url: 'https://example.test/feed', quietTimezone: 'Asia/Shanghai', quietStart: '22:00', quietEnd: '08:00' };
+    const input = { generation: 0, owner: f.owner, requestId, expectedRevision: initial.revision, target: f.target, parameters };
+    const created = await f.request('/create', input); expect(created.status).toBe(200);
+    let snapshot = (await created.json()).data.provider;
+    expect(snapshot.tasks[0]).toMatchObject({ target: f.target, parameters }); expect(snapshot.tasks[0].nextRunAt).toBeUndefined();
+    const replay = await f.request('/create', input); expect(replay.status).toBe(200); expect((await replay.json()).data.provider).toEqual(snapshot);
+    expect((await f.request('/create', { ...input, parameters: { ...parameters, quietEnd: '09:00' } })).status).toBe(409);
+    const paused = await f.request('/change', { generation: 0, owner: f.owner, requestId: randomUUID(), expectedRevision: snapshot.revision, id: requestId, action: 'pause' });
+    expect(paused.status).toBe(200); snapshot = (await paused.json()).data.provider;
+    const edited = await f.request('/change', { generation: 0, owner: f.owner, requestId: randomUUID(), expectedRevision: snapshot.revision, id: requestId, action: 'update',
+      parameters: { ...snapshot.tasks[0].parameters, quietTimezone: '', quietStart: '', quietEnd: '' } });
+    expect(edited.status).toBe(200); expect((await edited.json()).data.provider.tasks[0].parameters).toEqual({ url: parameters.url });
+    expect(f.load).not.toHaveBeenCalled(); expect(f.send).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { quietTimezone: 'Asia/Shanghai' },
+    { quietTimezone: '+08:00', quietStart: '22:00', quietEnd: '08:00' },
+    { quietTimezone: 'UTC', quietStart: '08:00', quietEnd: '08:00' },
+  ])('rejects invalid quiet settings before persistence or any network effects: %j', async quiet => {
+    const f = await fixture(), initial = await f.read();
+    const response = await f.request('/create', { generation: 0, owner: f.owner, requestId: randomUUID(), expectedRevision: initial.revision,
+      target: f.target, parameters: { url: 'https://example.test/feed', ...quiet } });
+    expect(response.status).toBe(400); expect(await response.json()).toMatchObject({ success: false, code: 'invalid_input' });
+    expect(await f.read()).toEqual(initial); expect(f.load).not.toHaveBeenCalled(); expect(f.send).not.toHaveBeenCalled();
+  });
+
   it('rejects unauthorized, stale generation and wrong endpoint identity before invoking the provider', async () => {
     const f = await fixture(), initial = await f.read(); const read = vi.spyOn(f.provider, 'read'), create = vi.spyOn(f.provider, 'create');
     expect((await f.request('/providers', undefined, 'synthetic-demo')).status).toBe(403);
