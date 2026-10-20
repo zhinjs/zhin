@@ -53,7 +53,10 @@ export function snapshotState(snapshot: ReturnType<SnapshotStore['acquire']>['va
   };
 }
 
-export async function createRoomImFixture(options: { room?: (ids: Record<'a' | 'b' | 'c', string>) => RoomDefinition } = {}) {
+export async function createRoomImFixture(options: {
+  room?: (ids: Record<'a' | 'b' | 'c', string>) => RoomDefinition;
+  onRoute?: (message: Message, im: ImRuntime) => Promise<void> | void;
+} = {}) {
   const root = rootPluginId();
   const sent: Array<{ conversation: { endpoint: { id: string }; kind: string; id: string }; payload: unknown }> = [];
   let outSeq = 0;
@@ -129,6 +132,7 @@ export async function createRoomImFixture(options: { room?: (ids: Record<'a' | '
   commit(ingressRouteToken.id, {
     route: async (m: Message) => {
       routed.push({ endpointId: m.conversation.endpoint.id, mentioned: m.mentioned, content: m.content, origin: m.origin });
+      await options.onRoute?.(m, im);
       return true;
     },
   });
