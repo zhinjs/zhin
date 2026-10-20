@@ -26,6 +26,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "check": "tsc -p tsconfig.check.json",
     "clean": "rimraf lib",
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/earthquake/tests",
     "prepublishOnly": "pnpm run build",
