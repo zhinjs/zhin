@@ -1,0 +1,24 @@
+.changeset/group-suite-checkin-aliases.md
+  h_b680f75345178a 1-5
+plugins/utils/group-suite/README.md
+  h_b680f75345178a 64,69
+plugins/utils/group-suite/commands/checkin/index.ts
+  h_b680f75345178a 9
+plugins/utils/group-suite/commands/mypoints/index.ts
+  h_b680f75345178a 9
+plugins/utils/group-suite/commands/rank/index.ts
+  h_b680f75345178a 9
+plugins/utils/group-suite/tests/command-aliases.test.ts
+  h_b680f75345178a 1-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a3a6b5f6c0460e10d262b124985f737111b9b8e1",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
