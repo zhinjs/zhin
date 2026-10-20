@@ -19,6 +19,7 @@
     "schema.json",
     "commands/**/*.js",
     "middlewares/**/*.js",
+    "schedules/**/*.js",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -42,6 +43,7 @@
     "@zhin.js/game-kit": "workspace:*"
   },
   "devDependencies": {
+    "@zhin.js/schedule-feature": "workspace:*",
     "@zhin.js/testing": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
@@ -84,6 +86,10 @@
       {
         "package": "@zhin.js/game-kit",
         "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/schedule-feature",
+        "api": "^1.0.0"
       }
     ],
     "plugins": []
@@ -91,13 +97,17 @@
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",
     "@zhin.js/middleware": "workspace:^",
-    "zhin.js": "workspace:^"
+    "zhin.js": "workspace:^",
+    "@zhin.js/schedule-feature": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
       "optional": true
     },
     "@zhin.js/middleware": {
+      "optional": true
+    },
+    "@zhin.js/schedule-feature": {
       "optional": true
     }
   }

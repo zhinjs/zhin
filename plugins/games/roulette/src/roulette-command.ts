@@ -1,7 +1,7 @@
 import { messageFromCommandInput } from '@zhin.js/game-kit';
 import { runRouletteAction } from './game-flow.js';
 import { normalizeRouletteAction, ROULETTE_HELP } from './roulette-actions.js';
-import { resolveRouletteFlow, senderRolesOf, type RouletteCapabilityContext } from './runtime.js';
+import { endpointOf, resolveRouletteFlow, senderRolesOf, type RouletteCapabilityContext } from './runtime.js';
 
 /**
  * Shared entry for the `roulette` command and the `轮盘` alias middleware.
@@ -16,6 +16,10 @@ export async function runRouletteCommand(
   if (!action) return null;
   if (action === 'help') return ROULETTE_HELP;
   const flow = resolveRouletteFlow(context);
-  const message = messageFromCommandInput(input);
-  return runRouletteAction(flow, message, action, senderRolesOf(input));
+  const actor = {
+    message: messageFromCommandInput(input),
+    endpoint: endpointOf(input),
+    roles: senderRolesOf(input),
+  };
+  return runRouletteAction(flow, actor, action);
 }

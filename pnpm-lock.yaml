@@ -3364,6 +3364,9 @@ importers:
         specifier: workspace:^
         version: link:../../../packages/im/middleware
     devDependencies:
+      '@zhin.js/schedule-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/schedule-feature
       '@zhin.js/testing':
         specifier: workspace:*
         version: link:../../../packages/toolkit/testing

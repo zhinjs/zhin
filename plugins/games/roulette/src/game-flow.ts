@@ -14,6 +14,7 @@ import {
   stateOf,
   type RouletteAction,
   type RouletteActionResult,
+  type EndpointIdentity,
   type RouletteServices,
 } from './session-service.js';
 import {
@@ -32,6 +33,13 @@ export interface RouletteFlow {
   readonly penalty: MutePenaltyPort;
 }
 
+/** Who sent the action, from the runtime message. */
+export interface RouletteActor {
+  readonly message: GameMessageLike;
+  readonly endpoint: EndpointIdentity;
+  readonly roles: readonly string[];
+}
+
 export interface ExpiredSessionNotice {
   readonly session: RouletteSessionRow;
   readonly text: string;
@@ -43,14 +51,14 @@ const NO_GAME_TEXT = '本群没有进行中的轮盘，发送「轮盘 开局」
 
 export async function runRouletteAction(
   flow: RouletteFlow,
-  message: GameMessageLike,
+  actor: RouletteActor,
   action: RouletteCommandAction,
-  senderRoles: readonly string[],
 ): Promise<string> {
+  const message = actor.message;
   if (action === 'help') return ROULETTE_HELP;
   if (message.$channel.type === 'private') return '轮盘需要多人参与，请在群聊里玩。';
   if (action === 'penalty-on' || action === 'penalty-off' || action === 'penalty-status') {
-    return handlePenaltySetting(flow, message, action, senderRoles);
+    return handlePenaltySetting(flow, actor, action);
   }
 
   const notices: string[] = [];
@@ -60,7 +68,7 @@ export async function runRouletteAction(
     if (expired) notices.push(expired);
     session = null;
   }
-  const reply = await handleGameAction(flow, message, action, session, senderRoles);
+  const reply = await handleGameAction(flow, actor, action, session);
   return [...notices, reply].join('\n\n');
 }
 
@@ -80,15 +88,15 @@ export async function expireOverdueSessions(
 
 async function handleGameAction(
   flow: RouletteFlow,
-  message: GameMessageLike,
+  actor: RouletteActor,
   action: RouletteCommandAction,
   session: RouletteSessionRow | null,
-  senderRoles: readonly string[],
 ): Promise<string> {
-  if (action === 'open') return openLobby(flow, message, session);
+  const message = actor.message;
+  if (action === 'open') return openLobby(flow, actor, session);
   if (!session) return NO_GAME_TEXT;
   if (action === 'status') return describeStatus(stateOf(session), flow.config);
-  if (action === 'cancel' && !mayCancel(session, message, senderRoles)) {
+  if (action === 'cancel' && !mayCancel(session, message, actor.roles)) {
     return '只有开局的人或机器人管理员可以取消本局。';
   }
   const gameAction = toGameAction(action, message);
@@ -111,14 +119,14 @@ async function handleGameAction(
 
 async function openLobby(
   flow: RouletteFlow,
-  message: GameMessageLike,
+  actor: RouletteActor,
   session: RouletteSessionRow | null,
 ): Promise<string> {
   if (session) {
     return `本群已经有一局轮盘了。\n${describeStatus(stateOf(session), flow.config)}`;
   }
   try {
-    const created = await flow.services.sessions.createLobby(message, flow.config);
+    const created = await flow.services.sessions.createLobby(actor.message, actor.endpoint, flow.config);
     return describeLobby(stateOf(created), flow.config);
   } catch (error) {
     if (error instanceof GameSessionConflictError) return error.message;
@@ -197,19 +205,19 @@ async function applyLoserPenalty(
 
 async function handlePenaltySetting(
   flow: RouletteFlow,
-  message: GameMessageLike,
+  actor: RouletteActor,
   action: 'penalty-on' | 'penalty-off' | 'penalty-status',
-  senderRoles: readonly string[],
 ): Promise<string> {
+  const message = actor.message;
   if (message.$channel.type !== 'group') return '禁言惩罚只能在群聊里设置。';
   const key = channelKey(message);
   const settings = flow.services.settings;
-  const support = flow.penalty.support(conversationOfMessage(message));
+  const support = flow.penalty.support(conversationOfActor(actor));
   if (action === 'penalty-status') {
     const enabled = await settings.isMutePenaltyEnabled(key);
     return describePenaltyStatus(enabled, support === 'supported', flow.config);
   }
-  if (!isManager(senderRoles)) return '只有机器人主人或受信任用户可以修改禁言惩罚。';
+  if (!isManager(actor.roles)) return '只有机器人主人或受信任用户可以修改禁言惩罚。';
   if (action === 'penalty-off') {
     await settings.setMutePenalty(key, false, message.$sender.id);
     return '已关闭禁言惩罚，本群轮盘只计分。';
@@ -255,18 +263,18 @@ function isOverdue(session: RouletteSessionRow, now: number): boolean {
 
 export function conversationOfSession(session: RouletteSessionRow): PenaltyConversation {
   return {
-    adapter: session.adapter,
-    endpointKey: session.endpoint,
+    endpointAdapter: session.endpoint_adapter,
+    endpointId: session.endpoint_id,
     kind: session.channel_type,
     id: session.channel_id,
   };
 }
 
-function conversationOfMessage(message: GameMessageLike): PenaltyConversation {
+function conversationOfActor(actor: RouletteActor): PenaltyConversation {
   return {
-    adapter: message.$adapter,
-    endpointKey: message.$endpoint,
-    kind: message.$channel.type,
-    id: message.$channel.id,
+    endpointAdapter: actor.endpoint.adapter,
+    endpointId: actor.endpoint.id,
+    kind: actor.message.$channel.type,
+    id: actor.message.$channel.id,
   };
 }

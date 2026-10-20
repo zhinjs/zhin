@@ -1,66 +1,90 @@
-import { outboundHostToken, type OutboundHost, type Token } from 'zhin.js';
+import { adapterFeatureId, resolveEndpointManagement } from 'zhin.js/adapter';
 
-/** Where a game was played, as stored on the session row. */
+/**
+ * Where a game was played: the exact Endpoint identity from `message.conversation.endpoint`
+ * (adapter plugin owner + Endpoint capability id) plus the conversation itself.
+ */
 export interface PenaltyConversation {
-  readonly adapter: string;
-  readonly endpointKey: string;
+  readonly endpointAdapter: string;
+  readonly endpointId: string;
   readonly kind: string;
   readonly id: string;
 }
 
 export type MuteSupport =
-  /** The Endpoint declares `muteGroupMember` and this is a group. */
+  /** The live Endpoint's management port implements `muteGroupMember` and this is a group. */
   | 'supported'
   /** Muting only exists for group members (not private chats or channels). */
   | 'not-a-group'
-  /** The Endpoint does not declare `muteGroupMember`, or no outbound host is installed. */
+  /** No adapter projection, no such Endpoint, or its management port cannot mute. */
   | 'unsupported';
 
 /**
  * The only mute surface the game uses. It never looks at adapter names: support
- * comes from the capability the live Endpoint declares through `OutboundHost`.
+ * is whatever the live Endpoint's platform-neutral `EndpointManagement` implements.
  */
 export interface MutePenaltyPort {
   support(conversation: PenaltyConversation): MuteSupport;
   mute(conversation: PenaltyConversation, userId: string, durationSeconds: number): Promise<void>;
 }
 
-export function createOutboundMutePenalty(outbound: OutboundHost | undefined): MutePenaltyPort {
+/** The capability context of a command, middleware or schedule run. */
+export interface AdapterProjectionContext {
+  project<T>(feature: typeof adapterFeatureId): T;
+}
+
+type MuteGroupMember = (groupId: string, userId: string, durationSeconds: number) => Promise<void>;
+
+interface EndpointLookup {
+  connection(adapter: string, endpointKey: string): unknown;
+}
+
+export function resolveMutePenalty(context: AdapterProjectionContext): MutePenaltyPort {
   return {
     support(conversation) {
       if (conversation.kind !== 'group') return 'not-a-group';
-      if (!outbound?.muteGroupMember) return 'unsupported';
-      const capabilities = outbound.capabilities?.({
-        adapter: conversation.adapter,
-        endpointKey: conversation.endpointKey,
-      });
-      const declared = capabilities?.management ?? [];
-      return declared.includes('muteGroupMember') ? 'supported' : 'unsupported';
+      return findMuteGroupMember(context, conversation) ? 'supported' : 'unsupported';
     },
     async mute(conversation, userId, durationSeconds) {
-      if (!outbound?.muteGroupMember) {
-        throw new Error('This runtime cannot mute group members');
+      const muteGroupMember = findMuteGroupMember(context, conversation);
+      if (!muteGroupMember) {
+        throw new Error('This Endpoint cannot mute group members');
       }
-      await outbound.muteGroupMember({
-        adapter: conversation.adapter,
-        endpointKey: conversation.endpointKey,
-        groupId: conversation.id,
-        userId,
-        durationSeconds,
-      });
+      await muteGroupMember(conversation.id, userId, durationSeconds);
     },
   };
 }
 
-/** Builds the port from whatever outbound host the current runtime installed (maybe none). */
-export function resolveMutePenalty(context: { use<T>(token: Token<T>): T }): MutePenaltyPort {
-  return createOutboundMutePenalty(tryUse(context, outboundHostToken));
-}
-
-function tryUse<T>(context: { use<T>(token: Token<T>): T }, token: Token<T>): T | undefined {
+/** project(adapterFeatureId) → connection(adapter, endpointId) → resolveEndpointManagement → muteGroupMember. */
+function findMuteGroupMember(
+  context: AdapterProjectionContext,
+  conversation: PenaltyConversation,
+): MuteGroupMember | undefined {
+  const adapters = readAdapterProjection(context);
+  if (!adapters) return undefined;
+  if (!conversation.endpointAdapter || !conversation.endpointId) return undefined;
+  let endpoint: unknown;
   try {
-    return context.use(token);
+    endpoint = adapters.connection(conversation.endpointAdapter, conversation.endpointId);
   } catch {
     return undefined;
   }
+  const management = resolveEndpointManagement(endpoint);
+  const muteGroupMember = management?.muteGroupMember;
+  if (typeof muteGroupMember !== 'function') return undefined;
+  return muteGroupMember.bind(management);
+}
+
+function readAdapterProjection(context: AdapterProjectionContext): EndpointLookup | undefined {
+  let projection: unknown;
+  try {
+    projection = context.project<unknown>(adapterFeatureId);
+  } catch {
+    // No Adapter Feature in this runtime: score only.
+    return undefined;
+  }
+  if (!projection || typeof projection !== 'object') return undefined;
+  const lookup = projection as Partial<EndpointLookup>;
+  if (typeof lookup.connection !== 'function') return undefined;
+  return lookup as EndpointLookup;
 }

@@ -39,12 +39,13 @@ database:
 - 轮到的人超过 `turnTimeoutSeconds` 不开枪，判负；每开一枪重新计时。
 - 开局后超过 `lobbyTimeoutSeconds` 还没开始，自动解散，不计分。
 - 对局中离开等同认输。
-- 结束后幸存者各记 1 胜（得 1 分），输家记 1 负。取消或解散的对局不记录。用 `战绩`、`排行 轮盘` 查看。
+- 结束后幸存者各记 1 胜（得 1 分），输家记 1 负。对局和群设置都存在数据库表里（`roulette_sessions`、`roulette_group_settings`），不使用插件 state store。取消或解散的对局不记录。用 `战绩`、`排行 轮盘` 查看。
 
 ## 禁言惩罚
 
 - 按群开关，默认关闭。只有机器人主人或受信任用户可以切换，判断的是框架角色，不读取平台的群管理员身份。
-- 插件不判断平台名称。是否能禁言，取决于当前 Endpoint 通过 `OutboundHost.capabilities()` 声明的 `management: ['muteGroupMember']`，即适配器是否实现了 `EndpointManagement.muteGroupMember`。
+- 插件不判断平台名称。每次需要时，用消息自带的 `conversation.endpoint`（适配器插件和 Endpoint 能力 id）走 `project(adapterFeatureId).connection(adapter, endpointId)`，再看 `resolveEndpointManagement(endpoint)?.muteGroupMember` 是否存在。存在就能禁言，不存在（或运行时没有 Adapter Feature）就只计分。
+- 超时判负由 `schedules/deadlines` 每 5 秒检查一次，它拿到的也是同样的能力上下文，所以超时的输家同样会按上面的规则处理。
 - 平台不支持禁言时无法开启；开启后平台失去这项能力，或禁言被拒绝（例如机器人不是群管理员），这一局照常结算，只是不禁言。
 - 只在群聊里生效，输家禁言 `muteSeconds` 秒。
 

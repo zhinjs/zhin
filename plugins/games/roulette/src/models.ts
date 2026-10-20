@@ -11,6 +11,9 @@ declare module '@zhin.js/core' {
       channel_type: string;
       channel_id: string;
       channel_key: string;
+      /** Exact Endpoint identity (`conversation.endpoint`), used for the mute lookup. */
+      endpoint_adapter: string;
+      endpoint_id: string;
       host_id: string;
       state_json: string;
       phase: string;
@@ -48,6 +51,8 @@ export function defineHostTables(
     channel_type: { type: 'text', nullable: false },
     channel_id: { type: 'text', nullable: false },
     channel_key: { type: 'text', nullable: false },
+    endpoint_adapter: { type: 'text', default: '' },
+    endpoint_id: { type: 'text', default: '' },
     host_id: { type: 'text', nullable: false },
     state_json: { type: 'text', nullable: false },
     phase: { type: 'text', default: 'lobby' },

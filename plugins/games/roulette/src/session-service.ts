@@ -33,6 +33,12 @@ import type {
 
 export type RouletteDatabase = Database<unknown, Models, string>;
 
+/** `message.conversation.endpoint`: the adapter plugin owner and the Endpoint capability id. */
+export interface EndpointIdentity {
+  readonly adapter: string;
+  readonly id: string;
+}
+
 export type RouletteAction =
   | { readonly type: 'join'; readonly player: RoulettePlayer }
   | { readonly type: 'start' }
@@ -66,7 +72,11 @@ export class RouletteSessionService extends VersionedSessionService<RouletteSess
     this.#chooseBulletChamber = options.chooseBulletChamber ?? secureRandomInt;
   }
 
-  async createLobby(message: GameMessageLike, config: RouletteConfig): Promise<RouletteSessionRow> {
+  async createLobby(
+    message: GameMessageLike,
+    endpoint: EndpointIdentity,
+    config: RouletteConfig,
+  ): Promise<RouletteSessionRow> {
     const now = Date.now();
     const host = playerFromMessage(message);
     const state = createLobby(host, tableRules(config));
@@ -77,6 +87,8 @@ export class RouletteSessionService extends VersionedSessionService<RouletteSess
       channel_type: message.$channel.type,
       channel_id: message.$channel.id,
       channel_key: channelKey(message),
+      endpoint_adapter: endpoint.adapter,
+      endpoint_id: endpoint.id,
       host_id: host.id,
       state_json: JSON.stringify(state),
       phase: state.phase,

@@ -1,13 +1,14 @@
 import { createToken, type Token } from 'zhin.js';
 import { resolveRouletteConfig } from './config.js';
 import type { RouletteFlow } from './game-flow.js';
-import { resolveMutePenalty } from './mute-penalty.js';
-import type { RouletteServices } from './session-service.js';
+import { resolveMutePenalty, type AdapterProjectionContext } from './mute-penalty.js';
+import type { EndpointIdentity, RouletteServices } from './session-service.js';
 
 /** Owner-scoped services consumed by discovered commands, middleware and the deadline job. */
 export const rouletteServicesToken = createToken<RouletteServices>('zhin.game.roulette.services');
 
-export interface RouletteCapabilityContext {
+/** A command, middleware or schedule capability context. */
+export interface RouletteCapabilityContext extends AdapterProjectionContext {
   use<T>(token: Token<T>): T;
   readonly config?: unknown;
 }
@@ -28,4 +29,17 @@ export function senderRolesOf(input: unknown): readonly string[] {
   const roles = (sender as { readonly roles?: unknown }).roles;
   if (!Array.isArray(roles)) return [];
   return roles.filter((role): role is string => typeof role === 'string');
+}
+
+/** `message.conversation.endpoint`, or an empty identity (no mute possible) when absent. */
+export function endpointOf(input: unknown): EndpointIdentity {
+  const empty = { adapter: '', id: '' };
+  if (!input || typeof input !== 'object') return empty;
+  const conversation = (input as { readonly conversation?: unknown }).conversation;
+  if (!conversation || typeof conversation !== 'object') return empty;
+  const endpoint = (conversation as { readonly endpoint?: unknown }).endpoint;
+  if (!endpoint || typeof endpoint !== 'object') return empty;
+  const identity = endpoint as { readonly adapter?: unknown; readonly id?: unknown };
+  if (typeof identity.adapter !== 'string' || typeof identity.id !== 'string') return empty;
+  return { adapter: identity.adapter, id: identity.id };
 }

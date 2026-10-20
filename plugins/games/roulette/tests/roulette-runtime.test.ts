@@ -8,7 +8,9 @@ import {
   type FakeMessage,
   type FakePlugin,
 } from '@zhin.js/testing';
+import { adapterFeatureId } from 'zhin.js/adapter';
 import plugin from '../plugin.ts';
+import deadlineSchedule from '../schedules/deadlines/index.ts';
 import rouletteCommand from '../commands/roulette/[[action]]/index.ts';
 import aliasMiddleware from '../middlewares/roulette-alias/index.ts';
 import fireMiddleware from '../middlewares/roulette-fire/index.ts';
@@ -35,6 +37,70 @@ const config: Partial<RouletteConfig> = {
 
 let clock: FakeClock;
 let fake: RouletteFake;
+
+interface MuteCall {
+  readonly adapter: string;
+  readonly endpointKey: string;
+  readonly groupId: string;
+  readonly userId: string;
+  readonly durationSeconds: number;
+}
+
+/**
+ * Stands in for the Adapter Feature projection (`AdapterIndex`). Only
+ * `connection()` matters to the game: a capable Endpoint exposes
+ * `management.muteGroupMember`, an incapable one has no management port.
+ */
+const adapters = {
+  canMute: false,
+  refuseNextMute: false,
+  muteCalls: [] as MuteCall[],
+  lookups: [] as string[],
+  connection(adapter: string, endpointKey: string): unknown {
+    this.lookups.push(`${adapter} ${endpointKey}`);
+    if (!this.canMute) return { name: endpointKey };
+    return {
+      name: endpointKey,
+      management: {
+        muteGroupMember: async (groupId: string, userId: string, durationSeconds: number) => {
+          if (this.refuseNextMute) {
+            this.refuseNextMute = false;
+            throw new Error('permission denied');
+          }
+          this.muteCalls.push({ adapter, endpointKey, groupId, userId, durationSeconds });
+        },
+      },
+    };
+  },
+};
+
+function resetAdapters(): void {
+  adapters.canMute = false;
+  adapters.refuseNextMute = false;
+  adapters.muteCalls = [];
+  adapters.lookups = [];
+}
+
+/** Plugin setup plus the convention `schedules/deadlines` job, run by the fake cron with a capability context. */
+async function setUpRoulette(options: { readonly schedule?: boolean; readonly adapterFeature?: boolean } = {}): Promise<RouletteFake> {
+  const projections = options.adapterFeature === false
+    ? new Map()
+    : new Map([[adapterFeatureId, adapters]]);
+  const created = await runPluginSetup(plugin, {
+    clock,
+    config,
+    projections,
+    ...(options.schedule === false ? { hosts: { schedule: false } } : {}),
+  });
+  if (options.schedule !== false) {
+    created.scheduleHost.register({
+      id: 'roulette/deadlines',
+      cron: deadlineSchedule.cron,
+      execute: () => deadlineSchedule.execute(created.capabilityContext()),
+    });
+  }
+  return created;
+}
 
 function message(
   senderId: string,
@@ -84,8 +150,8 @@ async function playUntilShot(group = 'g1'): Promise<string[]> {
   return replies;
 }
 
-function muteCalls(): readonly unknown[] {
-  return fake.sent.filter((call) => call.kind === 'muteGroupMember').map((call) => call.input);
+function muteCalls(): readonly MuteCall[] {
+  return adapters.muteCalls;
 }
 
 function sentTexts(): readonly string[] {
@@ -99,7 +165,8 @@ beforeEach(async () => {
   clock = new FakeClock(Date.UTC(2026, 9, 20, 4, 0, 0));
   // Plugins read wall time through Date.now(); keep it on the fake clock.
   vi.spyOn(Date, 'now').mockImplementation(() => clock.now());
-  fake = await runPluginSetup(plugin, { clock, config });
+  resetAdapters();
+  fake = await setUpRoulette();
 });
 
 afterEach(async () => {
@@ -108,10 +175,9 @@ afterEach(async () => {
 });
 
 describe('roulette gameplay', () => {
-  it('registers as a game-hub game and a deadline job', () => {
+  it('registers as a game-hub game with a five-second deadline schedule', () => {
     expect(fake.features.find((feature) => feature.kind === 'game')?.localName).toBe('roulette');
-    const jobIds = fake.scheduleHost.list().map((job) => job.id);
-    expect(jobIds.some((id) => id.endsWith('roulette/deadlines'))).toBe(true);
+    expect(deadlineSchedule.cron).toBe('*/5 * * * * *');
   });
 
   it('plays a full round: lobby, turns in join order, one loser, records for the leaderboard', async () => {
@@ -175,7 +241,7 @@ describe('roulette gameplay', () => {
 
 describe('mute penalty', () => {
   it('is off by default: the loser is only scored', async () => {
-    fake.outboundHost.supportManagement(['muteGroupMember']);
+    adapters.canMute = true;
     await seatThreeAndStart();
     await playUntilShot();
 
@@ -190,7 +256,7 @@ describe('mute penalty', () => {
   });
 
   it('mutes the loser where the Endpoint can mute and the group opted in, and nowhere else', async () => {
-    fake.outboundHost.supportManagement(['muteGroupMember']);
+    adapters.canMute = true;
     expect(await say('owner', '开启禁言', { roles: ['trusted'] })).toContain('禁言 90 秒');
 
     await seatThreeAndStart('g1');
@@ -200,7 +266,7 @@ describe('mute penalty', () => {
     expect(replies.at(-1)).toContain(`🔇 ${loserId?.toUpperCase()} 被禁言 90 秒`);
     expect(muteCalls()).toEqual([{
       adapter: 'test',
-      endpointKey: 'default',
+      endpointKey: 'test',
       groupId: 'g1',
       userId: loserId,
       durationSeconds: 90,
@@ -212,9 +278,9 @@ describe('mute penalty', () => {
   });
 
   it('falls back to scoring when the platform stops supporting mute after it was enabled', async () => {
-    fake.outboundHost.supportManagement(['muteGroupMember']);
+    adapters.canMute = true;
     await say('owner', '开启禁言', { roles: ['master'] });
-    fake.outboundHost.supportManagement([]);
+    adapters.canMute = false;
 
     await seatThreeAndStart();
     const replies = await playUntilShot();
@@ -225,20 +291,36 @@ describe('mute penalty', () => {
   });
 
   it('a mute the platform refuses (bot is not an admin) still ends the round with scores', async () => {
-    fake.outboundHost.supportManagement(['muteGroupMember']);
+    adapters.canMute = true;
     await say('owner', '开启禁言', { roles: ['master'] });
     await seatThreeAndStart();
     for (const shooter of ['alice', 'bob', 'carol', 'alice', 'bob']) await say(shooter, '开枪');
 
-    fake.outboundHost.failNext(new Error('permission denied'));
+    adapters.refuseNextMute = true;
     const lastShot = await say('carol', '开枪');
 
     expect(lastShot).toContain('禁言没有成功，可能是机器人没有群管理权限；本局只计分');
     expect(fake.rows('game_records')).toHaveLength(3);
   });
 
+  it('looks the Endpoint up by the exact conversation endpoint, never by platform name', async () => {
+    await say('bob', '禁言');
+
+    expect(adapters.lookups).toEqual(['test test']);
+  });
+
+  it('a runtime without the Adapter Feature projection is score-only', async () => {
+    await fake.dispose();
+    fake = await setUpRoulette({ adapterFeature: false });
+
+    expect(await say('owner', '开启禁言', { roles: ['master'] })).toContain('当前平台不支持禁言');
+    await seatThreeAndStart();
+    await playUntilShot();
+    expect(fake.rows('game_records')).toHaveLength(3);
+  });
+
   it('turning it off stops muting', async () => {
-    fake.outboundHost.supportManagement(['muteGroupMember']);
+    adapters.canMute = true;
     await say('owner', '开启禁言', { roles: ['master'] });
     expect(await say('owner', '关闭禁言', { roles: ['master'] })).toContain('已关闭');
 
@@ -250,7 +332,7 @@ describe('mute penalty', () => {
 
 describe('timeouts (FakeClock)', () => {
   it('the player on turn loses when they do not fire in time, and the group is told', async () => {
-    fake.outboundHost.supportManagement(['muteGroupMember']);
+    adapters.canMute = true;
     await say('owner', '开启禁言', { roles: ['master'] });
     await seatThreeAndStart();
     expect(await say('alice', '开枪')).toContain('👉 轮到 BOB');
@@ -288,7 +370,7 @@ describe('timeouts (FakeClock)', () => {
 
   it('without a schedule host the timeout is applied on the next message', async () => {
     await fake.dispose();
-    fake = await runPluginSetup(plugin, { clock, config, hosts: { schedule: false } });
+    fake = await setUpRoulette({ schedule: false });
     await seatThreeAndStart();
 
     clock.set(clock.now() + 31_000);
