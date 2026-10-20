@@ -169,7 +169,7 @@ export interface RunPluginSetupOptions<TConfig = unknown> extends Omit<FakePlugi
   readonly config?: Partial<TConfig>;
   /**
    * Validate `config` against `definition.config` and apply its defaults (default `true`).
-   * Set `false` to pass `config` to `setup()` verbatim, as `runPluginSetup` did before 1.0.5.
+   * Set `false` to pass `config` to `setup()` verbatim, as earlier versions of `runPluginSetup` did.
    */
   readonly validateConfig?: boolean;
 }

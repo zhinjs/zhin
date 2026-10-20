@@ -50,7 +50,7 @@ await expect(runPluginSetup(plugin, { config: { limit: 0 } }))
 - 想拿到解析后的配置、但不跑 `setup`，用 `resolvePluginConfig(plugin, input)`。
 - 插件没有声明 `config` 时，`config` 原样传入，不做任何处理。
 
-::: warning 行为变化（@zhin.js/testing 1.0.5）
+::: warning 行为变化（1.0.5 之后的 @zhin.js/testing）
 旧版本的 `runPluginSetup` 把 `config` 原样交给 `setup()`。如果你的测试故意传了不合法或不完整的配置，现在会抛错。可以先补齐配置，或者按单个测试关掉校验：`runPluginSetup(plugin, { config, validateConfig: false })`。`createFakePlugin` 和 `fake.setup()` 不受影响。
 :::
 

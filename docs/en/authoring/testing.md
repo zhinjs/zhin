@@ -50,7 +50,7 @@ await expect(runPluginSetup(plugin, { config: { limit: 0 } }))
 - To get the resolved config without running `setup`, use `resolvePluginConfig(plugin, input)`.
 - When the plugin declares no `config`, `config` is passed through unchanged.
 
-::: warning Behaviour change (@zhin.js/testing 1.0.5)
+::: warning Behaviour change (@zhin.js/testing after 1.0.5)
 Earlier versions of `runPluginSetup` passed `config` to `setup()` verbatim. If a test deliberately passes invalid or incomplete config, it now throws. Either complete the config, or opt out per test with `runPluginSetup(plugin, { config, validateConfig: false })`. `createFakePlugin` and `fake.setup()` are unchanged.
 :::
 
