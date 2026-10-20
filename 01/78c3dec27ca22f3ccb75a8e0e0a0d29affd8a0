@@ -1,0 +1,16 @@
+README.md
+  h_b680f75345178a 69-71
+README.zh-CN.md
+  h_b680f75345178a 69-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0178c3dec27ca22f3ccb75a8e0e0a0d29affd8a0",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
