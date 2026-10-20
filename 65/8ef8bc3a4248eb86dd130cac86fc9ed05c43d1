@@ -1,0 +1,49 @@
+plugins/utils/answers/commands/好无聊/index.ts
+  s_e6f5f09d5890ba::t_8c372a29b28df0 1-17
+plugins/utils/answers/commands/科目一/index.ts
+  s_e6f5f09d5890ba::t_d571ac03f4971d 1-17
+plugins/utils/answers/commands/答案之书/index.ts
+  s_e6f5f09d5890ba::t_5ef9651b760041 1-21
+plugins/utils/answers/middlewares/quiz-answer/index.ts
+  s_e6f5f09d5890ba::t_6781078d255087 1-22
+plugins/utils/answers/schema.json
+  s_e6f5f09d5890ba::t_ce0f76e6158cdc 1-41
+plugins/utils/answers/src/book-data.ts
+  s_e6f5f09d5890ba::t_c11d388c268f7c 1-86
+plugins/utils/answers/src/book.ts
+  s_e6f5f09d5890ba::t_ca75a0b0511bad 1-48
+plugins/utils/answers/src/driving-quiz-data.ts
+  s_e6f5f09d5890ba::t_cd89f0f9c0fba7 1-37
+plugins/utils/answers/src/fun-quiz-data.ts
+  s_e6f5f09d5890ba::t_11308fcaa576dd 1-48
+plugins/utils/answers/src/index.ts
+  s_e6f5f09d5890ba::t_44758789aab1f2 1-20
+plugins/utils/answers/src/quiz-types.ts
+  s_e6f5f09d5890ba::t_f1fdfbf017ba86 1-15
+plugins/utils/answers/src/quiz.ts
+  s_e6f5f09d5890ba::t_88741196ee4f21 1-136
+plugins/utils/answers/tests/answers-content.test.ts
+  s_e6f5f09d5890ba::t_c3c8177c37ff7b 1-45
+plugins/utils/answers/tests/answers-logic.test.ts
+  s_e6f5f09d5890ba::t_9bb6a02c376f53 1-124
+pnpm-lock.yaml
+  s_e6f5f09d5890ba::t_c8be5d4e82d14b 3530-3551
+scripts/sync-plugin-config-schemas.mjs
+  s_e6f5f09d5890ba::t_d124e3638000cc 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "658ef8bc3a4248eb86dd130cac86fc9ed05c43d1",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
