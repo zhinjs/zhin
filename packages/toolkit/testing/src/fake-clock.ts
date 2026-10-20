@@ -89,6 +89,8 @@ export class FakeScheduleRootHost implements ScheduleHost {
     clock.onAdvance(async (from, to) => {
       for (let t = Math.floor(from / 1000) * 1000 + 1000; t <= to; t += 1000) {
         const date = new Date(t);
+        // A job firing at `t` must observe `t` (e.g. to decide what is due), not the advance() start.
+        clock.set(t);
         for (const job of [...this.#jobs]) {
           if (this.#jobs.has(job) && job.isActive?.() !== false && job.matches(date)) await job.execute();
         }
