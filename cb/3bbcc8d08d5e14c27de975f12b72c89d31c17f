@@ -1,0 +1,14 @@
+docs/troubleshooting/catalog.json
+  h_b680f75345178a 110-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb3bbcc8d08d5e14c27de975f12b72c89d31c17f",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
