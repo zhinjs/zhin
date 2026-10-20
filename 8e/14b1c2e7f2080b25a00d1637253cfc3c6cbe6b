@@ -1,0 +1,157 @@
+.changeset/game-kit-structured-sender.md
+  s_e6f5f09d5890ba::t_8d2d96a4271c5d 1-5
+.changeset/plugin-earthquake-initial.md
+  s_e6f5f09d5890ba::t_62d00049c311d9 1-5
+.changeset/plugin-roulette.md
+  s_e6f5f09d5890ba::t_e0ff69b092a850 1-5
+docs/configuration/generated.md
+  s_e6f5f09d5890ba::t_b6369dc7bd8cf2 1158-1169,1803-1826
+docs/contributing/publishing.md
+  s_e6f5f09d5890ba::t_ae20069e4f53b8 130,226,234,245,253
+docs/en/configuration/generated.md
+  s_e6f5f09d5890ba::t_ce3553c87fe942 1158-1169,1803-1826
+packages/game-kit/src/command-message.ts
+  s_e6f5f09d5890ba::t_507ffea76ad799 35-52,59,100-101
+packages/game-kit/tests/command-message.test.ts
+  s_e6f5f09d5890ba::t_3c1d5a026309b6 1-25
+plugins/games/README.md
+  s_e6f5f09d5890ba::t_d1bc7ba35e86f6 17
+plugins/games/roulette/README.md
+  s_e6f5f09d5890ba::t_08f27c0bc13661 1-68
+plugins/games/roulette/commands/roulette/[[action]]/index.ts
+  s_e6f5f09d5890ba::t_7edb304a6d0254 1-13
+plugins/games/roulette/middlewares/roulette-alias/index.ts
+  s_e6f5f09d5890ba::t_0f933cc5956d85 1-10
+plugins/games/roulette/middlewares/roulette-fire/index.ts
+  s_e6f5f09d5890ba::t_84de84501e0858 1-31
+plugins/games/roulette/package.json
+  s_e6f5f09d5890ba::t_fbbf788035a027 1-114
+plugins/games/roulette/plugin.ts
+  s_e6f5f09d5890ba::t_c8219145b21482 1-45
+plugins/games/roulette/schedules/deadlines/index.ts
+  s_e6f5f09d5890ba::t_bc7c275e06a01d 1-8
+plugins/games/roulette/schema.json
+  s_e6f5f09d5890ba::t_e91c7492a87371 1-42
+plugins/games/roulette/src/config.ts
+  s_e6f5f09d5890ba::t_1a70cd9d4bae34 1-46
+plugins/games/roulette/src/deadline-job.ts
+  s_e6f5f09d5890ba::t_81df2453948e06 1-46
+plugins/games/roulette/src/engine.ts
+  s_e6f5f09d5890ba::t_1441c6cac8cd2d 1-226
+plugins/games/roulette/src/game-flow.ts
+  s_e6f5f09d5890ba::t_5a0e0f2da59f0d 1-280
+plugins/games/roulette/src/index.ts
+  s_e6f5f09d5890ba::t_b718a955f8a90e 1-20
+plugins/games/roulette/src/models.ts
+  s_e6f5f09d5890ba::t_4adffbb8a264a8 1-73
+plugins/games/roulette/src/mute-penalty.ts
+  s_e6f5f09d5890ba::t_57d89231ab8d38 1-90
+plugins/games/roulette/src/roulette-actions.ts
+  s_e6f5f09d5890ba::t_20d8c0ceca1f9d 1-65
+plugins/games/roulette/src/roulette-command.ts
+  s_e6f5f09d5890ba::t_242fb13ac59576 1-25
+plugins/games/roulette/src/runtime.ts
+  s_e6f5f09d5890ba::t_0be451eba3b971 1-45
+plugins/games/roulette/src/session-service.ts
+  s_e6f5f09d5890ba::t_d7965291ce94d6 1-274
+plugins/games/roulette/src/view.ts
+  s_e6f5f09d5890ba::t_1021b8f63f8a3f 1-84
+plugins/games/roulette/tests/engine.test.ts
+  s_e6f5f09d5890ba::t_0bedc01ead04c9 1-116
+plugins/games/roulette/tests/roulette-runtime.test.ts
+  s_e6f5f09d5890ba::t_c231c6109b4ffa 1-409
+plugins/games/roulette/tsconfig.json
+  s_e6f5f09d5890ba::t_a7307126891045 1-12
+plugins/utils/earthquake/README.md
+  s_e6f5f09d5890ba::t_15a849b2c78e1b 1-116
+plugins/utils/earthquake/commands/地震/index.ts
+  s_e6f5f09d5890ba::t_d18ae35953d513 1-25
+plugins/utils/earthquake/commands/地震/manage-permission.ts
+  s_e6f5f09d5890ba::t_bd07c7771f0069 1-28
+plugins/utils/earthquake/commands/地震/订阅/index.ts
+  s_e6f5f09d5890ba::t_6fcf6860156191 1-47
+plugins/utils/earthquake/commands/地震/订阅状态/index.ts
+  s_e6f5f09d5890ba::t_96e6be878e4358 1-37
+plugins/utils/earthquake/commands/地震/退订/index.ts
+  s_e6f5f09d5890ba::t_0792920ace4b08 1-17
+plugins/utils/earthquake/package.json
+  s_e6f5f09d5890ba::t_0cd638d2cd171a 1-119
+plugins/utils/earthquake/plugin.ts
+  s_e6f5f09d5890ba::t_901196398c8fde 1-83
+plugins/utils/earthquake/schema.json
+  s_e6f5f09d5890ba::t_13183ceca7208c 1-153
+plugins/utils/earthquake/skills/earthquake/SKILL.md
+  s_e6f5f09d5890ba::t_a5377aca02ea30 1-37
+plugins/utils/earthquake/skills/earthquake/tools/recent_earthquakes/index.ts
+  s_e6f5f09d5890ba::t_547579b059d7a5 1-26
+plugins/utils/earthquake/src/config.ts
+  s_e6f5f09d5890ba::t_d01317235a54eb 1-184
+plugins/utils/earthquake/src/conversation.ts
+  s_e6f5f09d5890ba::t_50784b8d40dad9 1-58
+plugins/utils/earthquake/src/dedupe.ts
+  s_e6f5f09d5890ba::t_5a2300f63ff4c0 1-168
+plugins/utils/earthquake/src/filters.ts
+  s_e6f5f09d5890ba::t_864136f5b0eb5f 1-69
+plugins/utils/earthquake/src/format.ts
+  s_e6f5f09d5890ba::t_55a231b6d869e7 1-77
+plugins/utils/earthquake/src/http.ts
+  s_e6f5f09d5890ba::t_da3be2e6a46169 1-197
+plugins/utils/earthquake/src/index.ts
+  s_e6f5f09d5890ba::t_000c00bfa96305 1-39
+plugins/utils/earthquake/src/query-text.ts
+  s_e6f5f09d5890ba::t_96d78462e4a327 1-45
+plugins/utils/earthquake/src/rate-limit.ts
+  s_e6f5f09d5890ba::t_a6d8ac812830b1 1-42
+plugins/utils/earthquake/src/runtime.ts
+  s_e6f5f09d5890ba::t_691872fb29420c 1-8
+plugins/utils/earthquake/src/service.ts
+  s_e6f5f09d5890ba::t_17e811d2f39307 1-304
+plugins/utils/earthquake/src/sources/cenc.ts
+  s_e6f5f09d5890ba::t_54be620e7604af 1-138
+plugins/utils/earthquake/src/sources/feed-source.ts
+  s_e6f5f09d5890ba::t_e17393734061aa 1-160
+plugins/utils/earthquake/src/sources/parse-helpers.ts
+  s_e6f5f09d5890ba::t_3b6ac07ec3176f 1-41
+plugins/utils/earthquake/src/sources/usgs.ts
+  s_e6f5f09d5890ba::t_7d3449116ef0d3 1-89
+plugins/utils/earthquake/src/subscribe-args.ts
+  s_e6f5f09d5890ba::t_7e22597c1939b5 1-44
+plugins/utils/earthquake/src/subscriptions.ts
+  s_e6f5f09d5890ba::t_72ab29bdc81ead 1-147
+plugins/utils/earthquake/src/types.ts
+  s_e6f5f09d5890ba::t_d57255cd5eed75 1-38
+plugins/utils/earthquake/tests/dedupe-filters.test.ts
+  s_e6f5f09d5890ba::t_51e67aa93e4f19 1-111
+plugins/utils/earthquake/tests/fixtures.ts
+  s_e6f5f09d5890ba::t_90235a41877d24 1-133
+plugins/utils/earthquake/tests/http.test.ts
+  s_e6f5f09d5890ba::t_44e235ba8ea269 1-119
+plugins/utils/earthquake/tests/parsing.test.ts
+  s_e6f5f09d5890ba::t_1b61c7a7b1a5b4 1-97
+plugins/utils/earthquake/tests/plugin.test.ts
+  s_e6f5f09d5890ba::t_0e46f264dbb394 1-225
+plugins/utils/earthquake/tests/service.test.ts
+  s_e6f5f09d5890ba::t_3c2011e9fa2105 1-324
+plugins/utils/earthquake/tsconfig.check.json
+  s_e6f5f09d5890ba::t_7dde8c840fba4a 1-6
+plugins/utils/earthquake/tsconfig.json
+  s_e6f5f09d5890ba::t_b7fd4ca378d054 1-10
+pnpm-lock.yaml
+  s_e6f5f09d5890ba::t_8919d35bec43d2 3355-3385,3689-3716
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8e14b1c2e7f2080b25a00d1637253cfc3c6cbe6b",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
