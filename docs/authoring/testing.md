@@ -104,3 +104,4 @@ const orchestrator = fakeOf<ActivityFeedbackOrchestrator>({ startPhase: vi.fn(),
 
 - [Host Token 总览](./host-tokens.md)：假环境提供的各个 token。
 - [插件完整交付](./plugin-delivery.md)：测试与发布清单。
+- [消息场景试验台](./message-scenarios.md)：本地预览作者预期消息，导出并显式运行独立测试项目的真实回归。

@@ -104,3 +104,4 @@ The fake bypasses the renderer, outbound middleware and endpoint negotiation. To
 
 - [Host Token Reference](./host-tokens.md): the tokens the fake provides.
 - [Complete Plugin Delivery](./plugin-delivery.md): test and release checklist.
+- [Message Scenario Lab](./message-scenarios.md): preview authored expectations locally, then export and explicitly run a real regression in an independent fixture.

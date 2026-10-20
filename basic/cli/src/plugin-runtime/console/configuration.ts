@@ -124,8 +124,8 @@ export class ConsoleConfigurationStore {
     return this.#schemas.read(pluginName, document);
   }
 
-  async validatePluginConfig(pluginName: string, data: unknown): Promise<PluginConfigValidation> {
-    const {document} = await this.#document.read();
+  async validatePluginConfig(pluginName: string, data: unknown, capturedDocument?: RuntimeConfigDocument): Promise<PluginConfigValidation> {
+    const document = capturedDocument ?? (await this.#document.read()).document;
     await this.#assertUnambiguousKey(document, pluginName);
     const schema = await this.#schemas.readJson(pluginName, document);
     const errors: Array<{ path: string; message: string }> = [];
