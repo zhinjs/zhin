@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
 import {
   SnapshotStore,
+  Scope,
+  PluginOutboundHost,
   capabilityId,
   childPluginId,
   createCapabilitySlot,
@@ -75,6 +77,7 @@ import {
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
 import { InboundDeduper } from '../../src/plugin-runtime/im/inbound-dedup.js';
+import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -2938,6 +2941,7 @@ async function createFixture(
     adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; markdown?: 'native' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     commandResult?: (input: Message) => SendContent | void | Promise<SendContent | void>;
     commandSignal?: (signal: AbortSignal) => void;
+    execution?: import('@zhin.js/command').CommandExecutionPolicy;
     componentResult?: () => SendContent | Promise<SendContent>;
     componentOwner?: PluginId;
     commandOwner?: PluginId;
@@ -2994,6 +2998,7 @@ async function createFixture(
     localName: 'gh/issue/list',
     source: '/commands/gh/issue/list.ts',
     definition: defineCommand<{}, SendContent | void, Message>({
+      ...(options?.execution ? { execution: options.execution, alias: ['limited-alias'] } : {}),
       ...(options?.validateCommand ? { params: { count: { type: 'integer' as const, min: 1 } } } : {}),
       ...(options?.restrictCommand ? { permit: ['role(master)'] } : {}),
       ...(options?.commandShortcut ? { shortcut: { 'author shortcut': {} } } : {}),
@@ -3071,7 +3076,21 @@ async function createFixture(
     resultComponent,
     ...(withMiddleware ? [inbound, outbound] : []),
   ];
+  const conversationEvents = new MemoryConversationEventStore();
+  const im = new ImRuntime({
+    inboundClaim: options?.inboundClaim,
+    ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
+    ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
+    ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
+    conversationEvents,
+  });
   let base = baseState(slots);
+  if (options?.execution) {
+    const scope = new Scope(root);
+    im.install(scope);
+    scope.seal();
+    base = { ...base, resources: new Map([...base.resources, [root, scope.snapshot()]]) };
+  }
   let dispatchEndpointEvent = ignoredEndpointEvents.receive as (event: EndpointEvent) => Promise<unknown>;
   if (options?.adapterOwner || options?.additionalAdapters?.length || options?.routeEndpointEvents) {
     const resources = new Map(base.resources);
@@ -3097,19 +3116,11 @@ async function createFixture(
       : []),
   ]);
   const store = new SnapshotStore({ ...base, projections });
-  const conversationEvents = new MemoryConversationEventStore();
-  const im = new ImRuntime({
-    inboundClaim: options?.inboundClaim,
-    ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
-    ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
-    ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
-    conversationEvents,
-  });
   im.attach(store);
   dispatchEndpointEvent = event => im.endpointEvents.receive(event);
   await adapters.start();
   adapters.open();
-  return { im, store, adapters, adapter, conversationEvents };
+  return { im, store, adapters, adapter, command, conversationEvents };
 }
 
 describe('per-message operational diagnostics', () => {
@@ -3214,6 +3225,356 @@ describe('per-message operational diagnostics', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 });
+
+describe('full-operation command admission', () => {
+  it.each(['business', 'render', 'middleware', 'endpoint'] as const)('retains occupancy through %s and does not fall through to AI', async phase => {
+    const gate = admissionDeferred(); const started = admissionDeferred();
+    const events: string[] = []; const sent: unknown[] = [];
+    let sends = 0; let middlewareCalls = 0;
+    const f = await createFixture(events, sent, undefined, phase === 'business' ? gate.promise : undefined,
+      phase === 'business' ? started.resolve : undefined, {
+        execution: { maxConcurrent: 1 }, middleware: phase === 'middleware',
+        ...(phase === 'render' ? { componentResult: async () => { started.resolve(); await gate.promise; return 'final'; } } : {}),
+        ...(phase === 'middleware' ? { outboundMiddleware: async (_input: OutboundEnvelope, next: () => Promise<void>) => {
+          if (++middlewareCalls === 1) { started.resolve(); await gate.promise; } await next();
+        } } : {}),
+        ...(phase === 'endpoint' ? { endpointSend: async () => { if (++sends === 1) { started.resolve(); await gate.promise; } return 'sent'; } } : {}),
+      });
+    const route = vi.fn(async () => true); installRoute(f, route);
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try {
+      await started.promise;
+      const secondInput = fixtureInput(f, '/limited-alias open');
+      const second = await receive(f.im, { ...secondInput, message: { id: 'admission-busy', conversation: secondInput.conversation } });
+      expect(second).toMatchObject({ matched: true, status: 'limited', limit: { reason: 'busy' } });
+      expect(second.value).toBe('你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。');
+      expect(events.filter(event => event.startsWith('command:'))).toHaveLength(1);
+      expect(route).not.toHaveBeenCalled();
+      expect(f.im.messageDiagnostics.list().find(record => record.dispatchStatus === 'limited')?.limit).toEqual({ reason: 'busy' });
+      gate.resolve(); await first;
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+    } finally { gate.resolve(); await first; await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('counts the same capability through aliases and shortcuts, while help, invalid and denied attempts consume no budget', async () => {
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { cooldownMs: 1000 }, middleware: false, validateCommand: true, restrictCommand: true, commandShortcut: true,
+      commandResult: () => 'ok',
+    });
+    try {
+      const input = { ...fixtureInput(f, '/gh issue list nope'), sender: { id: 'alice', roles: ['master'] } };
+      expect((await receive(f.im, input)).status).toBe('invalid');
+      expect((await receive(f.im, { ...input, content: '/gh issue list --help' })).status).toBe('executed');
+      expect((await receive(f.im, { ...input, content: '/gh issue list 1', sender: { id: 'alice' } })).status).toBe('denied');
+      expect((await receive(f.im, { ...input, content: '/gh issue list 1' })).status).toBe('executed');
+      expect((await receive(f.im, { ...input, content: '/limited-alias 1' })).limit).toMatchObject({ reason: 'cooldown' });
+      // The shortcut lacks a required parameter, so it stays invalid rather than charging or consulting the budget.
+      expect((await receive(f.im, { ...input, content: '/author shortcut' })).status).toBe('invalid');
+    } finally { await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('drains real unawaited sends, including sends started while an older send is draining', async () => {
+    const firstSend = admissionDeferred(); const secondSend = admissionDeferred();
+    const started = admissionDeferred(); const nextStarted = admissionDeferred();
+    let input: Message | undefined;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: message => { input = message; void message.$reply('DETACHED-ONE'); },
+      endpointSend: async request => {
+        if (JSON.stringify(request).includes('DETACHED-ONE')) { started.resolve(); await firstSend.promise; }
+        if (JSON.stringify(request).includes('DETACHED-TWO')) { nextStarted.resolve(); await secondSend.promise; }
+        return 'sent';
+      },
+    });
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    let ended = false; void first.then(() => { ended = true; });
+    try {
+      await started.promise;
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      void input!.$reply('DETACHED-TWO'); await nextStarted.promise;
+      firstSend.resolve(); await Promise.resolve(); await Promise.resolve();
+      expect(ended).toBe(false);
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      secondSend.resolve(); await first; expect(ended).toBe(true);
+    } finally { firstSend.resolve(); secondSend.resolve(); await first; await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it.each(['host-send', 'host-target', 'endpoint-send', 'endpoint-target', 'im-send', 'leased-send'] as const)(
+    'drains actual unawaited %s delivery through the shared outbound boundary', async entry => {
+      const gate = admissionDeferred(); const started = admissionDeferred();
+      const f = await createFixture([], [], undefined, undefined, undefined, {
+        execution: { maxConcurrent: 1 }, middleware: false,
+        commandResult: message => { void send(message); },
+        endpointSend: async request => { if (JSON.stringify(request).includes('DETACHED-HOST')) { started.resolve(); await gate.promise; } return 'sent'; },
+      });
+      const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+      const lease = f.store.acquire();
+      const send = (message: Message): Promise<unknown> => {
+        const target = createDeliveryTarget(message), content = 'DETACHED-HOST';
+        const input = { adapter: 'memory', endpointKey: String(f.adapter.id), conversation: target, content };
+        if (entry === 'host-send') return host.send(input);
+        if (entry === 'host-target') return host.sendTarget!(target, content);
+        if (entry === 'endpoint-send') return f.im.endpoints.send(input);
+        if (entry === 'endpoint-target') return f.im.endpoints.sendTarget(target, content, rootPluginId());
+        const request = { conversation: target, requester: rootPluginId(), content };
+        return entry === 'im-send' ? f.im.send(request) : f.im.sendWithSnapshotLease(lease, request);
+      };
+      const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+      let ended = false; void first.then(() => { ended = true; });
+      try {
+        await started.promise; await Promise.resolve(); await Promise.resolve();
+        expect(ended).toBe(false);
+        expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+        gate.resolve(); await first;
+        expect(ended).toBe(true);
+        expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      } finally { gate.resolve(); await first; lease.release(); await f.adapters.stop(); await f.store.close(); }
+    });
+
+  it('drains additional Host sends started by the original async operation while another delivery is pending', async () => {
+    const firstGate = admissionDeferred(); const secondGate = admissionDeferred(); const add = admissionDeferred();
+    const firstStarted = admissionDeferred(); const secondStarted = admissionDeferred();
+    let background: Promise<void> | undefined;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: message => {
+        const target = createDeliveryTarget(message);
+        void host.sendTarget!(target, 'HOST-ONE');
+        background = (async () => { await add.promise; await host.sendTarget!(target, 'HOST-TWO'); })();
+      },
+      endpointSend: async request => {
+        if (JSON.stringify(request).includes('HOST-ONE')) { firstStarted.resolve(); await firstGate.promise; }
+        if (JSON.stringify(request).includes('HOST-TWO')) { secondStarted.resolve(); await secondGate.promise; }
+        return 'sent';
+      },
+    });
+    const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    let ended = false; void first.then(() => { ended = true; });
+    try {
+      await firstStarted.promise; add.resolve(); await secondStarted.promise;
+      firstGate.resolve(); await Promise.resolve(); await Promise.resolve();
+      expect(ended).toBe(false);
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      secondGate.resolve(); await first; await background; expect(ended).toBe(true);
+    } finally { add.resolve(); firstGate.resolve(); secondGate.resolve(); await first; await background; await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('keeps pending Host delivery occupied across HMR and isolates another actual Root', async () => {
+    const gate = admissionDeferred(); const started = admissionDeferred();
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: message => { void host.sendTarget!(createDeliveryTarget(message), 'HOST-HMR'); },
+      endpointSend: async request => { if (JSON.stringify(request).includes('HOST-HMR')) { started.resolve(); await gate.promise; } return 'sent'; },
+    });
+    const other = await createFixture([], [], undefined, undefined, undefined, { execution: { maxConcurrent: 1 }, middleware: false, commandResult: () => 'other root' });
+    const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try {
+      await started.promise;
+      const current = f.store.current; const state = snapshotState(current); const projections = new Map(current.projections);
+      projections.set(commandFeatureId, new CommandIndex([f.command], createSnapshotView(current.generation + 1, state)));
+      f.store.commit(current.generation, { snapshot: { ...state, projections }, dispose: () => undefined });
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      expect((await receive(other.im, fixtureInput(other, '/gh issue list open'))).status).toBe('executed');
+      gate.resolve(); await first;
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+    } finally { gate.resolve(); await first; await f.adapters.stop(); await f.store.close(); await other.adapters.stop(); await other.store.close(); }
+  });
+
+  it('observes a failing Host delivery without retaining the command budget or swallowing the facade rejection', async () => {
+    let delivery: Promise<unknown> | undefined;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: message => { delivery = host.sendTarget!(createDeliveryTarget(message), 'HOST-FAIL'); void delivery.catch(() => undefined); },
+      endpointSend: request => { if (JSON.stringify(request).includes('HOST-FAIL')) throw new EndpointDeliveryError('endpoint_timeout', 'uncertain', 'unknown'); return 'sent'; },
+    });
+    const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+    try {
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      await expect(delivery).rejects.toThrow();
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      await expect(delivery).rejects.toThrow();
+    } finally { await delivery?.catch(() => undefined); await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('preserves the original non-draining behavior when the command has no execution policy', async () => {
+    const gate = admissionDeferred(); const started = admissionDeferred();
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: message => { void f.im.send({ conversation: message.conversation, requester: rootPluginId(), content: 'UNLIMITED-SEND' }); },
+      endpointSend: async request => { if (JSON.stringify(request).includes('UNLIMITED-SEND')) { started.resolve(); await gate.promise; } return 'sent'; },
+    });
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try { await started.promise; expect((await first).status).toBe('executed'); }
+    finally { gate.resolve(); await first; await Promise.resolve(); await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('drains a failed unawaited render receipt without retaining occupancy', async () => {
+    let rendered = 0;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: input => { void input.$reply(component('result', {})); },
+      componentResult: () => { rendered++; throw new Error('detached renderer failure'); },
+    });
+    try {
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      expect(f.im.messageDiagnostics.list()[0].deliveries[0]).toMatchObject({ status: 'rejected', failureCode: 'outbound_payload_rejected' });
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      expect(rendered).toBe(2);
+    } finally { await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('shares cooldown with a valid shortcut', async () => {
+    const f = await createFixture([], [], undefined, undefined, undefined, { execution: { cooldownMs: 1000 }, middleware: false, commandShortcut: true, commandResult: () => 'ok' });
+    try {
+      expect((await receive(f.im, fixtureInput(f, '/author shortcut'))).status).toBe('executed');
+      const limited = await receive(f.im, fixtureInput(f, '/gh issue list'));
+      expect(limited.limit).toMatchObject({ reason: 'cooldown' });
+      expect(limited.limit?.retryAfterMs).toBeGreaterThan(0);
+      expect(limited.value).toMatch(/约 1 秒后再试/u);
+    } finally { await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('preserves active occupancy across projection replacement and retirement, then drains the old lease normally', async () => {
+    const gate = admissionDeferred(); const started = admissionDeferred(); let signal: AbortSignal | undefined;
+    const sent: unknown[] = [];
+    const f = await createFixture([], sent, undefined, gate.promise, started.resolve, {
+      execution: { maxConcurrent: 1 }, middleware: false, commandSignal: value => { signal = value; }, commandResult: () => 'old final',
+    });
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try {
+      await started.promise;
+      const current = f.store.current; const state = snapshotState(current);
+      const projections = new Map(current.projections);
+      projections.set(commandFeatureId, new CommandIndex([f.command], createSnapshotView(current.generation + 1, state)));
+      f.store.commit(current.generation, { snapshot: { ...state, projections }, dispose: () => undefined });
+      expect(signal?.aborted).toBe(true);
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      gate.resolve(); expect((await first).status).toBe('executed');
+      expect(JSON.stringify(sent)).toContain('old final');
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+    } finally { gate.resolve(); await first; await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('isolates true Root, sender, conversation, parent and thread identities', async () => {
+    const gate = admissionDeferred(); let count = 0;
+    const f = await createFixture([], [], undefined, gate.promise, () => { count++; }, { execution: { maxConcurrent: 1 }, middleware: false, commandResult: () => 'ok' });
+    const other = await createFixture([], [], undefined, undefined, undefined, { execution: { maxConcurrent: 1 }, middleware: false, commandResult: () => 'ok' });
+    const baseline = fixtureInput(f, '/gh issue list open');
+    const variations = [baseline, { ...baseline, sender: { id: 'bob' } },
+      { ...baseline, conversation: { ...baseline.conversation, id: 'other' } },
+      { ...baseline, conversation: { ...baseline.conversation, parent: { kind: 'group' as const, id: 'group-a' } } },
+      { ...baseline, conversation: { ...baseline.conversation, parent: { kind: 'group' as const, id: 'group-b' } } },
+      { ...baseline, conversation: { ...baseline.conversation, threadId: 'thread-a' } },
+      { ...baseline, conversation: { ...baseline.conversation, threadId: 'thread-b' } }];
+    const running = variations.map(input => receive(f.im, input));
+    try {
+      await vi.waitFor(() => expect(count).toBe(variations.length));
+      expect((await receive(other.im, fixtureInput(other, '/gh issue list open'))).status).toBe('executed');
+      expect((await receive(f.im, baseline)).limit).toEqual({ reason: 'busy' });
+    } finally { gate.resolve(); await Promise.all(running); await f.adapters.stop(); await f.store.close(); await other.adapters.stop(); await other.store.close(); }
+  });
+
+  it.each(['throw', 'cancel'] as const)('releases a %s operation but preserves its acceptance cooldown', async kind => {
+    const gate = admissionDeferred(); const started = admissionDeferred(); let calls = 0;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1, cooldownMs: 60_000 }, middleware: false,
+      commandResult: async () => { calls++; started.resolve(); await gate.promise; throw kind === 'cancel' ? new DOMException('Cancelled', 'AbortError') : new Error('business failure'); },
+    });
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    const observed = first.catch(error => error);
+    try {
+      await started.promise; gate.resolve(); await observed;
+      const next = await receive(f.im, fixtureInput(f, '/gh issue list open'));
+      expect(next.limit?.reason).toBe('cooldown'); expect(next.limit?.retryAfterMs).toBeGreaterThan(0); expect(calls).toBe(1);
+    } finally { gate.resolve(); await observed; await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('isolates actual bound Endpoint accounts instead of a payload adapter label', async () => {
+    const gate = admissionDeferred(); let count = 0;
+    const extra = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'memory-two', source: '/adapters/memory-two/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => ({ send: () => 'sent-extra' }) }) });
+    const f = await createFixture([], [], undefined, gate.promise, () => { count++; }, {
+      execution: { maxConcurrent: 1 }, middleware: false, additionalAdapters: [extra], commandResult: () => 'ok',
+    });
+    const identities = f.im.endpoints.list().map(endpoint => endpoint.endpoint);
+    expect(identities).toHaveLength(2);
+    const requests = identities.map(endpoint => receive(f.im, { ...fixtureInput(f, '/gh issue list open'),
+      conversation: { ...fixtureInput(f, '').conversation, endpoint } }));
+    try { await vi.waitFor(() => expect(count).toBe(2)); }
+    finally { gate.resolve(); expect((await Promise.all(requests)).map(result => result.status)).toEqual(['executed', 'executed']); await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it.each(['render', 'middleware', 'endpoint'] as const)('releases occupancy after a failing %s stage', async phase => {
+    let calls = 0;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: phase === 'middleware',
+      ...(phase === 'render' ? { componentResult: () => { if (++calls === 1) throw new Error('render failed'); return 'ok'; } } : {}),
+      ...(phase === 'middleware' ? { outboundMiddleware: async (_input: OutboundEnvelope, next: () => Promise<void>) => { if (++calls === 1) throw new Error('middleware failed'); await next(); } } : {}),
+      ...(phase === 'endpoint' ? { endpointSend: () => { if (++calls === 1) throw new EndpointDeliveryError('endpoint_timeout', 'unknown result', 'unknown'); return 'sent'; } } : {}),
+    });
+    try {
+      const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+      await first;
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      expect(calls).toBe(2);
+    } finally { await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('refuses incomplete trusted identity without executing the business', async () => {
+    const business = vi.fn(() => 'ok');
+    const f = await createFixture([], [], undefined, undefined, undefined, { execution: { maxConcurrent: 1 }, middleware: false, commandResult: business });
+    try {
+      expect((await receive(f.im, { ...fixtureInput(f, '/gh issue list open'), sender: undefined })).limit).toEqual({ reason: 'identity_unavailable' });
+      expect(business).not.toHaveBeenCalled();
+    } finally { await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it.each([false, true])('emits progress once and drains it before final reply, including retired=%s feedback I/O', async retired => {
+    const business = admissionDeferred(); const started = admissionDeferred(); const feedback = admissionDeferred(); const feedbackStarted = admissionDeferred();
+    let sends = 0; const sent: unknown[] = [];
+    const f = await createFixture([], sent, undefined, business.promise, started.resolve, {
+      execution: { maxConcurrent: 1, progressAfterMs: 50 }, middleware: false, commandResult: () => 'FINAL',
+      endpointSend: async request => { if (JSON.stringify(request).includes('正在处理中')) { feedbackStarted.resolve(); await feedback.promise; } sends++; return 'sent'; },
+    });
+    vi.useFakeTimers();
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try {
+      await started.promise; await vi.advanceTimersByTimeAsync(50); await feedbackStarted.promise;
+      if (retired) f.store.commit(f.store.current.generation, { snapshot: snapshotState(f.store.current), dispose: () => undefined });
+      business.resolve(); await vi.advanceTimersByTimeAsync(500);
+      expect(JSON.stringify(sent)).not.toContain('FINAL');
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      feedback.resolve(); await first;
+      expect(JSON.stringify(sent[0])).toContain('正在处理中'); expect(JSON.stringify(sent.at(-1))).toContain('FINAL');
+      expect(sent.filter(value => JSON.stringify(value).includes('正在处理中'))).toHaveLength(1); expect(sends).toBe(3);
+    } finally { business.resolve(); feedback.resolve(); await first; vi.useRealTimers(); await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it.each(['retirement', 'fast-final', 'failure'] as const)('never retries feedback or starts stale feedback after %s', async mode => {
+    const business = admissionDeferred(); const started = admissionDeferred(); const sent: unknown[] = [];
+    const f = await createFixture([], sent, undefined, business.promise, started.resolve, {
+      execution: { maxConcurrent: 1, progressAfterMs: 50 }, middleware: false, commandResult: () => 'FINAL',
+      endpointSend: request => { if (JSON.stringify(request).includes('正在处理中')) throw new EndpointDeliveryError('endpoint_timeout', 'secret', 'unknown'); return 'sent'; },
+    });
+    vi.useFakeTimers(); const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try {
+      await started.promise;
+      if (mode === 'retirement') f.store.commit(f.store.current.generation, { snapshot: snapshotState(f.store.current), dispose: () => undefined });
+      if (mode === 'fast-final') { business.resolve(); await first; }
+      await vi.advanceTimersByTimeAsync(500);
+      business.resolve(); await first; await vi.advanceTimersByTimeAsync(1000);
+      expect(sent.filter(value => JSON.stringify(value).includes('正在处理中'))).toHaveLength(mode === 'failure' ? 1 : 0);
+      expect(JSON.stringify(sent)).toContain('FINAL');
+    } finally { business.resolve(); await first; vi.useRealTimers(); await f.adapters.stop(); await f.store.close(); }
+  });
+});
+
+function admissionDeferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
+}
 
 function fixtureInput(fixture: Awaited<ReturnType<typeof createFixture>>, content: string) {
   return { conversation: { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'private' as const, id: 'result-room' }, content, sender: { id: 'alice' } };

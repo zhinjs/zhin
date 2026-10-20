@@ -2,12 +2,13 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
 import type { RuntimeMessageRendering } from './message-events.js';
+import type { CommandExecutionLimit } from '@zhin.js/command';
 
 export interface RuntimeMessageDiagnosticStep {
   readonly stage: 'received' | 'origin' | 'prefix' | 'middleware' | 'handlers' | 'dispatch' | 'delivery';
   readonly status: 'accepted' | 'human' | 'member' | 'peer_bot' | 'self' | 'unclassified'
     | 'matched' | 'mismatch' | 'empty_input' | 'commands_unavailable' | 'started'
-    | 'entered' | 'stopped' | 'replaced' | 'completed' | 'unmatched' | 'invalid' | 'denied' | 'executed'
+    | 'entered' | 'stopped' | 'replaced' | 'completed' | 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed'
     | 'interaction' | 'middleware' | 'command' | 'agent' | 'self_echo' | 'duplicate' | 'bot_origin' | 'dedup_error'
     | 'sent' | 'failed' | 'unsupported' | 'rejected' | 'suppressed' | 'unknown';
   readonly at: number;
@@ -33,7 +34,8 @@ export interface RuntimeMessageDiagnostic {
   readonly route?: 'interaction' | 'middleware' | 'command' | 'agent' | 'unmatched'
     | 'self_echo' | 'duplicate' | 'bot_origin' | 'dedup_error';
   readonly command?: string;
-  readonly dispatchStatus?: 'unmatched' | 'invalid' | 'denied' | 'executed';
+  readonly dispatchStatus?: 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed';
+  readonly limit?: CommandExecutionLimit;
   /** Some evidence exceeded the per-operation bound; the record is not a complete timeline. */
   readonly truncated: boolean;
   readonly steps: readonly RuntimeMessageDiagnosticStep[];
@@ -103,12 +105,14 @@ export class RuntimeMessageDiagnostics implements RuntimeMessageDiagnosticsReade
     else record.truncated = true;
   }
 
-  dispatch(result: Readonly<{ matched: boolean; command?: string; status?: RuntimeMessageDiagnostic['dispatchStatus'] }>): void {
+  dispatch(result: Readonly<{ matched: boolean; command?: string; status?: RuntimeMessageDiagnostic['dispatchStatus']; limit?: CommandExecutionLimit }>): void {
     const record = this.#current();
     if (!record) return;
     record.route ??= result.matched ? 'command' : 'unmatched';
     if (result.command) record.command = result.command.slice(0, 200);
     if (result.status) record.dispatchStatus = result.status;
+    if (result.status === 'limited' && result.limit) record.limit = Object.freeze({ reason: result.limit.reason,
+      ...(result.limit.retryAfterMs !== undefined ? { retryAfterMs: result.limit.retryAfterMs } : {}) });
     this.step('dispatch', result.status ?? record.route);
   }
 
