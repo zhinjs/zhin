@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type {
   DatabaseHost, DatabaseHostModel, DatabaseHostSelection, DeliveryTarget, JsonValue,
-  OutboundEditInput, OutboundReactionInput, OutboundRecallInput, OutboundRootHost, OutboundSendInput,
+  OutboundEditInput, OutboundEndpointCapabilities, OutboundEndpointInput, OutboundManagementOperation,
+  OutboundMuteGroupMemberInput, OutboundReactionInput, OutboundRecallInput, OutboundRootHost, OutboundSendInput,
   OutboundTypingInput, PersistentStatePort, PluginId, StateRecord, StateScope,
 } from '@zhin.js/plugin-runtime';
 
@@ -87,7 +88,8 @@ export class FakeDatabaseRootHost implements DatabaseHost {
 }
 
 export interface FakeOutboundCall {
-  readonly kind: 'send' | 'sendTarget' | 'addReaction' | 'removeReaction' | 'recall' | 'edit' | 'typing';
+  readonly kind: 'send' | 'sendTarget' | 'addReaction' | 'removeReaction' | 'recall' | 'edit' | 'typing'
+    | 'muteGroupMember';
   readonly input: unknown;
   /** Present for `sendTarget`: the sending plugin, as bound by the real facade. */
   readonly requester?: PluginId;
@@ -103,9 +105,23 @@ export class FakeOutboundRootHost implements OutboundRootHost {
   readonly calls: FakeOutboundCall[] = [];
   #failure: unknown;
   #nextId = 1;
+  #management: readonly OutboundManagementOperation[] = [];
 
   /** Make the next outbound operation reject once. */
   failNext(error: unknown = new Error('fake outbound failure')): void { this.#failure = error; }
+
+  /**
+   * Declare the member management every fake Endpoint implements (default: none), as
+   * `capabilities().management` reports it. `muteGroupMember` rejects unless declared.
+   */
+  supportManagement(operations: readonly OutboundManagementOperation[]): void {
+    this.#management = Object.freeze([...operations]);
+  }
+
+  capabilities(_input: OutboundEndpointInput): OutboundEndpointCapabilities | undefined {
+    if (this.#management.length === 0) return undefined;
+    return { operations: [], management: this.#management };
+  }
 
   #record(kind: FakeOutboundCall['kind'], input: unknown, requester?: PluginId, hasId = true): Promise<string | null> {
     if (this.#failure !== undefined) {
@@ -127,5 +143,11 @@ export class FakeOutboundRootHost implements OutboundRootHost {
   async recall(input: OutboundRecallInput): Promise<void> { await this.#record('recall', input, undefined, false); }
   edit(input: OutboundEditInput): Promise<string | null> { return this.#record('edit', input); }
   async typing(input: OutboundTypingInput): Promise<void> { await this.#record('typing', input, undefined, false); }
+  async muteGroupMember(input: OutboundMuteGroupMemberInput): Promise<void> {
+    if (!this.#management.includes('muteGroupMember')) {
+      throw new Error(`Endpoint ${input.adapter}/${input.endpointKey} does not support muteGroupMember`);
+    }
+    await this.#record('muteGroupMember', input, undefined, false);
+  }
   runWithView<T>(operation: () => Promise<T>): Promise<T> { return operation(); }
 }

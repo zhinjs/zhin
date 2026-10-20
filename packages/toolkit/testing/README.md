@@ -26,6 +26,8 @@ expect(message.replies).toEqual(['ok']);
   `Scope`, `DisposeStack` and `GenerationHandoffStack`, plus the real owner-bound
   `databaseHostToken`, `scheduleHostToken` and `outboundHostToken` facades over in-memory hosts
   (`FakeDatabaseRootHost`, `FakeScheduleRootHost` driven by a `FakeClock`, `FakeOutboundRootHost`).
+  `fake.outboundHost.supportManagement(['muteGroupMember'])` makes the fake Endpoint advertise and
+  accept member muting; by default it implements no member management.
 - `runCommand`, `runMiddleware`, `runHandler` execute convention-directory definitions against the
   fake. `runCommand` calls `execute()` directly: no routing, parameter parsing, `permit` or admission.
 - `fakeOf<T>(partial)` replaces `{ ... } as never` for narrow collaborators and event payloads.

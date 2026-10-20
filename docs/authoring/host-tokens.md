@@ -55,7 +55,7 @@ export default definePlugin<ReminderConfig>({
 
 | Token | 得到 | 主要方法 |
 | --- | --- | --- |
-| `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` 主动发送；`sendTarget(target, content)` 按保存下来的完整目标精确发送 |
+| `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` 主动发送；`sendTarget(target, content)` 按保存下来的完整目标精确发送；`capabilities({ adapter, endpointKey }).management` 列出该 Endpoint 实现的成员管理（目前只有 `muteGroupMember`），声明了才调用 `muteGroupMember({ adapter, endpointKey, groupId, userId, durationSeconds })` |
 | `outboundMessageToken`（`zhin.js/core/runtime`） | `OutboundMessageService` | `send(request) → DeliveryReceipt`、`registerInteractiveHandler`；入站处理与端点内部发送不属于这个公开接口 |
 | `outboundRootHostToken`（`zhin.js`，仅 root） | `OutboundRootHost` | 进程级投递端口；运行时为每个插件绑定 `PluginOutboundHost` |
 | `runtimeEventPublisherToken`（`zhin.js`） | `RuntimeEventPublisher` | 广播运行时事件（收件箱与 Console 消息流的来源） |
