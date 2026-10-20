@@ -1,4 +1,5 @@
 import { assertNoPendingInstanceMigration } from './migrate/instance-declarations.js';
+import { assertNotLegacyConfig } from '../utils/legacy-config.js';
 import { access, readFile } from 'node:fs/promises';
 import { PluginManagementActivity } from '../plugin-management/activity.js';
 import { join, relative } from 'node:path';
@@ -113,6 +114,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 
 async function runProcessStartCommand(options: StartCommandOptions): Promise<void> {
   await assertNoPendingInstanceMigration(options.root);
+  // Fail before any I/O-heavy setup with the exact v1 → v2 migration steps.
+  await assertNotLegacyConfig(options.root);
   const pluginManagementActivity = new PluginManagementActivity();
   const parsed = parseStartOptions(options.args);
   ensureTypeScriptSpecifierRemap();

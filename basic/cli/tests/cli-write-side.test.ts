@@ -19,6 +19,7 @@ import {
   isOldChineseTemplate,
   upgradeBootstrapFiles,
   upgradePackageJson,
+  isPinnedSpecifier,
 } from '../src/commands/migrate.js';
 import { scheduleCommand } from '../src/commands/schedule.js';
 
@@ -132,11 +133,50 @@ describe('migrate', () => {
       name: 'demo',
       dependencies: { 'zhin.js': '1.0.0' },
     }, null, 2));
-    const changed = upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    const changed = upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
     expect(changed).toBe(true);
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     expect(pkg.engines.node).toBe('>=22.19.0');
     expect(pkg.dependencies['zhin.js']).toBe('latest');
+  });
+
+  it('默认保留用户锁定的精确版本、link/file 等依赖，只移动范围版本', () => {
+    const pkgPath = path.join(tmp, 'package.json');
+    fs.writeFileSync(pkgPath, JSON.stringify({
+      name: 'demo',
+      engines: { node: '>=22.19.0' },
+      scripts: { dev: 'zhin runtime start', start: 'zhin runtime start', daemon: 'zhin runtime start --daemon', stop: 'zhin stop', build: 'tsc --noEmit' },
+      dependencies: {
+        'zhin.js': '^1.1.0',
+        '@zhin.js/agent-feature': '1.1.6',
+        '@zhin.js/calendar': 'link:../calendar',
+        '@zhin.js/local': 'file:./vendor/local.tgz',
+      },
+    }, null, 2));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      upgradePackageJson(pkgPath, { toLatest: true, dryRun: true });
+      const output = log.mock.calls.map(args => args.join(' ')).join('\n');
+      expect(output).toContain('zhin.js: ^1.1.0 → latest');
+      expect(output).not.toContain('@zhin.js/agent-feature: 1.1.6 → latest');
+      expect(output).toContain('@zhin.js/agent-feature: 1.1.6 已锁定');
+    } finally { log.mockRestore(); }
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    expect(JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).dependencies).toEqual({
+      'zhin.js': 'latest',
+      '@zhin.js/agent-feature': '1.1.6',
+      '@zhin.js/calendar': 'link:../calendar',
+      '@zhin.js/local': 'file:./vendor/local.tgz',
+    });
+  });
+
+  it('isPinnedSpecifier 区分锁定与跟随上游的写法', () => {
+    for (const pinned of ['1.1.6', '=1.2.3', 'v1.0.0', '1.2.0-beta.1', 'link:../x', 'file:../x', 'npm:zhin.js@1.0.0', 'github:zhinjs/zhin', 'https://x/y.tgz', './vendor/x.tgz']) {
+      expect(isPinnedSpecifier(pinned), pinned).toBe(true);
+    }
+    for (const floating of ['^1.1.0', '~1.1.0', '>=1.0.0', '*', 'latest', 'next', '1.x']) {
+      expect(isPinnedSpecifier(floating), floating).toBe(false);
+    }
   });
 
   it('将失效的 zhin dev/start/build scripts 替换为 Plugin Runtime 入口', () => {
@@ -152,7 +192,7 @@ describe('migrate', () => {
       },
     }, null, 2));
 
-    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
+    upgradePackageJson(pkgPath, { toLatest: true, dryRun: false, includePinned: true });
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
     expect(pkg.scripts).toMatchObject({
       dev: 'zhin runtime start',
