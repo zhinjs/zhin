@@ -1,0 +1,14 @@
+packages/im/zhin/tests/index.test.ts
+  h_b680f75345178a 25-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8c20b80f41609681fb9f57c8d9039d101b2da9e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
