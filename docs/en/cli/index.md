@@ -122,14 +122,18 @@ zhin doctor [--fix] [--upgrade-l4]
 
 Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack.
 
-### dev: Develop Against a Local zhin Checkout
+### dev: Develop Against a Local zhin Checkout or a Standalone Plugin
 
 ```bash
 zhin dev link <zhin-path> [--project <dir>] [--no-install]
 zhin dev unlink [--project <dir>] [--no-install] [--force]
+zhin dev link <plugin-dir> [--project <dir>] [--as <instance>]
+zhin dev unlink <instance> [--project <dir>]
 ```
 
-In an external plugin project, switches `zhin.js` / `@zhin.js/*` to a local checkout as a whole (packs the full dependency closure and writes `pnpm.overrides`, so each package has exactly one instance); `unlink` restores the original files. The "Zhin 包单实例" check in `doctor` detects duplicate instances and suggests this command. See the [local development guide](/en/authoring/local-dev).
+When `<plugin-dir>/package.json` has a `zhin` field, connects the standalone plugin to the current bot: links it under `plugins/`, adds `./plugins/<instance>`, and makes the plugin's `@zhin.js/*` use the bot's copies, so edits hot-reload. See [hot-reload a standalone plugin](/en/authoring/local-dev#dev-link-plugin).
+
+Given a zhin checkout, in an external plugin project it switches `zhin.js` / `@zhin.js/*` to a local checkout as a whole (packs the full dependency closure and writes `pnpm.overrides`, so each package has exactly one instance); `unlink` restores the original files. The "Zhin 包单实例" check in `doctor` detects duplicate instances and suggests this command. See the [local development guide](/en/authoring/local-dev).
 
 ### onboard: Project Onboarding
 

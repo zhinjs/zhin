@@ -330,6 +330,15 @@ export function devUnlink(projectArg: string, options: Partial<DevLinkOptions> =
  * 返回 name → 不同 realpath（仅含 >=2 个的包）。
  */
 export function findDuplicateZhinInstances(projectDir: string): Map<string, string[]> {
+  const duplicates = new Map<string, string[]>();
+  for (const [name, dirs] of collectZhinInstances(projectDir)) {
+    if (dirs.length > 1) duplicates.set(name, dirs);
+  }
+  return duplicates;
+}
+
+/** 项目依赖树中可达的每个 zhin 包 → 它解析到的物理位置（realpath，已排序）。 */
+export function collectZhinInstances(projectDir: string): Map<string, string[]> {
   const root = path.join(projectDir, 'node_modules');
   if (!fs.existsSync(root)) return new Map();
   const found = new Map<string, Set<string>>();
@@ -370,9 +379,7 @@ export function findDuplicateZhinInstances(projectDir: string): Map<string, stri
     const dir = path.join(root, name);
     if (fs.existsSync(path.join(dir, 'package.json'))) visit(fs.realpathSync(dir));
   }
-  const duplicates = new Map<string, string[]>();
-  for (const [name, dirs] of [...found].sort(([a], [b]) => a.localeCompare(b))) {
-    if (dirs.size > 1) duplicates.set(name, [...dirs].sort());
-  }
-  return duplicates;
+  const instances = new Map<string, string[]>();
+  for (const [name, dirs] of [...found].sort(([a], [b]) => a.localeCompare(b))) instances.set(name, [...dirs].sort());
+  return instances;
 }
