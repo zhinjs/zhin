@@ -1,0 +1,19 @@
+basic/cli/src/commands/new.ts
+  s_e6f5f09d5890ba::t_a016ba58bae542 142,447
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3fc2c6d9810c2505d894d2ac81742e7ad92f5b3e",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
