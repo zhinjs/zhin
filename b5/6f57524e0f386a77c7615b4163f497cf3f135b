@@ -1,0 +1,20 @@
+packages/im/feature-kit/src/context.ts
+  h_b680f75345178a 18-23,54-56
+packages/im/feature-kit/tests/construction-types.fixture.ts
+  h_b680f75345178a 30-39
+packages/im/feature-kit/tests/feature-kit.test.ts
+  h_b680f75345178a 227,237-255
+packages/toolkit/testing/src/fake-plugin.ts
+  h_b680f75345178a 121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b56f57524e0f386a77c7615b4163f497cf3f135b",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
