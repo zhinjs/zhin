@@ -1,0 +1,14 @@
+.changeset/v2-upgrade-guide-docs.md
+  h_b680f75345178a 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c39c4d17fd39e0d176e5888a499bc67f4dbddc2f",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
