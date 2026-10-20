@@ -127,6 +127,8 @@ export class PluginTestKit {
   get permissions(): ImRuntime['permissionHost'] { return this.#im.permissionHost; }
   /** The same bounded, body-free reader the Console serves at `GET /api/messages/diagnostics`. */
   get messageDiagnostics(): RuntimeMessageDiagnosticsReader { return this.#im.messageDiagnostics; }
+  /** The committed-snapshot authority Console routes read (tasks, permissions); read-only use in tests. */
+  get snapshots(): RootRuntime['snapshots'] { return this.#root.snapshots; }
   get generation(): number { return this.#root.snapshot.generation; }
   get deliveries(): readonly TestDelivery[] { return Object.freeze(this.#attempts.map(item => captureDeliveryValue(item))); }
   clearDeliveries(): void { this.#attempts.splice(0); }

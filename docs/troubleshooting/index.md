@@ -16,6 +16,7 @@ outline: [2, 3]
 - [Endpoint 一直离线](#endpoint-offline)
 - [刷新后消息或通知缺失](#messages-missing-after-refresh)
 - [配置启动时被拒绝](#configuration-rejected)
+- [升级后启动报 configVersion must be 2](#config-v1-rejected)
 - [同一个包出现多个安装位置](#multiple-package-locations)
 - [Agent 无模型或 Provider 不可用](#agent-provider-unavailable)
 - [工具等待审批或被策略拒绝](#tool-approval-stuck)
@@ -139,6 +140,30 @@ Console 持续显示离线或重连中，页面数据不再更新。
 ### 验证
 
 - `npx zhin doctor` 应通过，随后 `npx zhin runtime start` 不再出现配置校验错误。
+
+</section>
+
+<section id="config-v1-rejected">
+
+## 升级后启动报 configVersion must be 2
+
+### 症状
+
+升级到 1.1.14 及以上后 Bot 无法启动，报 `configVersion must be 2`、`Legacy package.json zhin.plugins detected` 或“检测到 v1 配置”。
+
+### 原因
+
+- 项目仍是 v1 配置：主配置缺少 `configVersion: 2`，或 `package.json#zhin.plugins` 仍有旧挂载。
+- 使用的 CLI 是 1.1.13 及更早版本，没有 `zhin migrate instances`。
+
+### 操作
+
+- 先停止 Bot，把 `zhin.js` 与 `@zhin.js/cli` 升级到最新，运行 `zhin migrate instances` 预览，再运行 `zhin migrate instances --apply`。
+- 按[升级到 configVersion 2](/operations/upgrades#configversion-2)处理工具拒绝自动转换的情况；需要撤销时运行 `zhin migrate instances --recover rollback`。
+
+### 验证
+
+- `zhin config check` 不再报 `config.legacy_v1` 或 `plugins.invalid`，Bot 正常启动。
 
 </section>
 

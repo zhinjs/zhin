@@ -66,6 +66,9 @@ pnpm dev
 
 完整步骤：[快速开始](./docs/getting-started/index.md) · 暂时不想安装？试试 [在线 Demo](https://demo.zhin.dev)。
 
+> [!IMPORTANT]
+> **从 1.1.13 及更早版本升级已有 Bot？** Runtime 现在只接受 `configVersion: 2`。先停止 Bot，把 `zhin.js` / `@zhin.js/cli` 升级到最新，再运行 `zhin migrate instances`（预览）和 `zhin migrate instances --apply`（自动备份）。完整步骤与恢复方式：[升级到 configVersion 2](./docs/operations/upgrades.md#configversion-2)。
+
 ## 一个 Bot 由什么组成
 
 ```text
