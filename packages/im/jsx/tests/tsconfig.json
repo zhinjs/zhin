@@ -1,5 +1,0 @@
-{
-  "extends": "../../../../tsconfig.base.json",
-  "compilerOptions": { "types": [], "jsx": "react-jsx", "jsxImportSource": "../src", "noEmit": true },
-  "include": ["../src/**/*.ts", "types.fixture.tsx"]
-}

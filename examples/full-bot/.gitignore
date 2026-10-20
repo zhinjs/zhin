@@ -1,7 +1,0 @@
-node_modules/
-lib/
-.zhin/
-data/
-.env
-*.db
-*.sqlite

@@ -1,1 +1,0 @@
-export * from '@zhin.js/core/jsx-dev-runtime';
