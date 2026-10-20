@@ -1,0 +1,20 @@
+.changeset/dx2-usage-subject.md
+  h_b680f75345178a 1-5
+packages/im/agent/src/index.ts
+  h_b680f75345178a 541
+packages/im/agent/src/plugin-runtime/ai-completion.ts
+  h_b680f75345178a 22-24
+tests/snapshots/api-surface.json
+  h_b680f75345178a 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ade0f33cb4c878e94096f5be9982210131f6b89f",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
