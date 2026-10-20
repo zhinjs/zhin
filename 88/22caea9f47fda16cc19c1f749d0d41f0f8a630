@@ -1,0 +1,21 @@
+packages/toolkit/testing/src/index.ts
+  s_a467b02185c88e::t_bdb474b8549885 130-131
+tests/e2e-smoke/scenarios/admission-and-welcome.mjs
+  s_a467b02185c88e::t_daf92699da9723 1-204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8822caea9f47fda16cc19c1f749d0d41f0f8a630",
+  "prompts": {},
+  "sessions": {
+    "s_a467b02185c88e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0319c-34d0-7a61-a360-f3203f30d70a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
