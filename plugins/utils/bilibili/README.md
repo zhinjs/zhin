@@ -48,6 +48,14 @@ bilibili:
 
 订阅按「适配器 + 机器人账号 + 会话」隔离，不同群互不影响。
 
+### 权限
+
+- 群聊和频道里，`bili sub` / `bili unsub` 只有**群主、群管理员或机器人主人**（`role(owner,admin,master)`）能用，其他成员会收到提示，订阅不会改动。
+- 私聊里任何人都可以订阅、取消自己这个私聊会话。
+- `bili list`、`bili live` 是只读命令，不限制。
+
+角色来自适配器给出的平台无关身份 `sender.role`（如 icqq / OneBot 的 `owner`、`admin`，以及主人账号的 `master`），判断用的是命令路由同一套内置 permit 检查。适配器拿不到群角色时，群里只有机器人主人能管理订阅。
+
 ## AI 工具
 
 技能 `bilibili` 提供两个只读工具：
@@ -105,6 +113,8 @@ Pushing needs the Schedule and Outbound hosts; persistence needs a configured da
 - `bili unsub <uid>`: unsubscribe.
 - `bili list`: list subscriptions and sources currently backing off.
 - `bili live <room>`: show a live room's status (room id or URL).
+
+**Permissions:** in groups and channels, `bili sub` / `bili unsub` are limited to the group owner, group admins and the bot master (`role(owner,admin,master)`); other members get a notice and nothing changes. In private chat anyone can manage their own conversation. `bili list` and `bili live` are read-only and unrestricted. Roles come from the adapter's platform-agnostic `sender.role` and are checked with the same built-in permit checker the command router uses; if an adapter does not report group roles, only the bot master can manage group subscriptions.
 
 ### Configuration
 

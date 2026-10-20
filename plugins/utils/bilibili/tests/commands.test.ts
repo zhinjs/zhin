@@ -11,6 +11,7 @@ import listTool from '../skills/bilibili/tools/bili_list_subscriptions/index.ts'
 import { BiliApiError } from '../src/api.js';
 import { resolveBilibiliConfig } from '../src/config.js';
 import { bilibiliRuntimeToken, type BilibiliRuntime } from '../src/runtime.js';
+import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../src/permission.js';
 import { BILI_STATE_TABLE, BILI_SUBS_TABLE, getBiliState, getBiliSubs } from '../src/store.js';
 import { biliMessage, commandContext, dyn, harness, live } from './fixtures.js';
 
@@ -47,6 +48,47 @@ describe('@zhin.js/plugin-bilibili commands', () => {
     expect(await getBiliSubs(h.db)!.select()).toEqual([]);
     expect(await getBiliState(h.db)!.select()).toEqual([]);
     expect(String(await unsubCommand.execute({ ...ctx, params: { uid: '1' } }))).toContain('没有订阅');
+  });
+
+  it('group sub/unsub are limited to the group owner, admins and the bot master', async () => {
+    const h = harness();
+    const asRole = (roles: string[], kind: 'group' | 'channel' = 'group') =>
+      commandContext(h.runtime, {}, biliMessage(kind, '10001', roles));
+
+    const member = asRole([]);
+    expect(String(await subCommand.execute({ ...member, params: { uid: '1', kind: 'all' } }))).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+    expect(String(await subCommand.execute({ ...asRole(['user', 'trusted']), params: { uid: '1', kind: 'all' } })))
+      .toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+    expect(String(await subCommand.execute({ ...asRole([], 'channel'), params: { uid: '1', kind: 'all' } })))
+      .toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+    expect(await getBiliSubs(h.db)!.select()).toEqual([]);
+
+    for (const [index, role] of ['owner', 'admin', 'master'].entries()) {
+      const uid = String(index + 1);
+      expect(String(await subCommand.execute({ ...asRole([role]), params: { uid, kind: 'all' } }))).toContain('订阅成功');
+    }
+
+    // Master flagged by the endpoint via metadata, as the command router projects it.
+    const flaggedMaster = commandContext(h.runtime, {}, { ...biliMessage('group', '10001', []), metadata: { isMaster: true } });
+    expect(String(await subCommand.execute({ ...flaggedMaster, params: { uid: '4', kind: 'all' } }))).toContain('订阅成功');
+
+    // Members can still read the list, but cannot remove subscriptions.
+    expect(String(await listCommand.execute(member))).toContain('UID 1');
+    expect(String(await unsubCommand.execute({ ...member, params: { uid: '1' } }))).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+    expect(await getBiliSubs(h.db)!.select().where({ uid: '1' })).toHaveLength(1);
+    expect(String(await unsubCommand.execute({ ...asRole(['master']), params: { uid: '1' } }))).toContain('已取消订阅');
+  });
+
+  it('anyone can manage their own private conversation and query live rooms', async () => {
+    const h = harness();
+    h.client.liveStatus.set('1', live('1', 0));
+    const priv = commandContext(h.runtime, {}, biliMessage('private', 'u9', [], 'u9'));
+    expect(String(await subCommand.execute({ ...priv, params: { uid: '1', kind: 'live' } }))).toContain('订阅成功');
+    expect(String(await listCommand.execute(priv))).toContain('UID 1');
+    expect(String(await unsubCommand.execute({ ...priv, params: { uid: '1' } }))).toContain('已取消订阅');
+
+    const member = commandContext(h.runtime, {}, biliMessage('group', '10001', []));
+    expect(String(await liveCommand.execute({ ...member, params: { room: 'https://live.bilibili.com/100' } }))).toContain('的直播间 100');
   });
 
   it('validates input, limits and unknown users', async () => {

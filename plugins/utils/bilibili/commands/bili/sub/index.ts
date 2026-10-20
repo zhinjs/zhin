@@ -3,17 +3,18 @@ import { BiliApiError, parseUid } from '../../../src/api.js';
 import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
 import type { BilibiliConfig } from '../../../src/config.js';
 import { bilibiliRuntimeToken } from '../../../src/runtime.js';
+import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../../../src/permission.js';
 import { getBiliSubs, parseKinds } from '../../../src/store.js';
 
 const KIND_TEXT = { all: '开播 + 动态', live: '开播', dynamic: '动态' } as const;
 
 export default defineCommand<BilibiliConfig>({
-  description: '订阅 B 站 UP 主的开播和动态推送',
+  description: '订阅 B 站 UP 主的开播和动态推送（群聊限群主、管理员或机器人主人）',
   params: {
     uid: { type: 'string', description: 'UP 主 UID 或空间链接' },
     kind: { type: 'string', default: 'all', description: 'all（默认）/ live / dynamic' },
   },
-  async execute({ params, input, use }) {
+  async execute({ params, input, use, adapter, scene, sender }) {
     const runtime = use(bilibiliRuntimeToken);
     const Subs = getBiliSubs(runtime.db);
     if (!Subs) return 'B 站订阅数据库尚未就绪，请稍后重试';
@@ -25,6 +26,7 @@ export default defineCommand<BilibiliConfig>({
 
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input);
+    if (!canManageSubscription({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
     const scope = subscriptionScope(channel);
 
     const existing = await Subs.select().where({ uid, ...scope });

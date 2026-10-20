@@ -1,15 +1,17 @@
+import { resolveCommandSession } from 'zhin.js/command';
 import { resolveBilibiliConfig, type BilibiliConfig } from '../src/config.js';
 import type { BiliClient, DynamicItem, LiveInfo, RoomInfo, UserCard } from '../src/api.js';
 import { BilibiliWatcher } from '../src/poll.js';
 import { createInMemoryBiliDb, type BiliDb } from '../src/store.js';
 import type { BilibiliRuntime } from '../src/runtime.js';
 
-export function biliMessage(kind: 'private' | 'group' | 'channel' = 'group', id = '10001') {
+/** Default sender is a group admin so subscription flows pass the manager check. */
+export function biliMessage(kind: 'private' | 'group' | 'channel' = 'group', id = '10001', roles: readonly string[] = ['admin'], senderId = 'u1') {
   return {
     conversation: { endpoint: { id: 'root/sandbox', adapter: 'root/sandbox' }, kind, id },
     content: 'bili list',
     generation: 1,
-    sender: { id: 'u1', name: 'tester', roles: [] },
+    sender: { id: senderId, name: 'tester', roles: [...roles] },
     clientAdapter: 'sandbox',
     endpointId: 'bot1',
     segments: [{ type: 'text', data: { text: 'bili list' } }],
@@ -104,6 +106,8 @@ export function harness(config: BilibiliConfig = {}, withOutbound = true): Harne
 
 export function commandContext(runtime: BilibiliRuntime, params: Record<string, unknown> = {}, input: unknown = biliMessage()) {
   return {
+    // Same session projection (adapter / scene / sender.role) the command router builds.
+    ...resolveCommandSession(input),
     owner: {} as never,
     generation: 0,
     config: {},
