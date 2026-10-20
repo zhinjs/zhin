@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+import { calendarConfig } from '../../../../../plugins/utils/calendar/src/config.js';
 import { createConfigDocument } from '@zhin.js/config-file';
 import {
   ConsoleConfigurationStore,
@@ -19,6 +20,35 @@ afterEach(async () => {
 });
 
 describe('application configuration projection and writes', () => {
+  it('edits one actual calendar choice using the original validator and revision without removing other data', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-calendar-form-')); tempRoots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'calendar-form',
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
+    const child = join(root, 'calendar');
+    await mkdir(child);
+    await writeFile(join(child, 'package.json'), JSON.stringify({ name: '@zhin.js/plugin-calendar',
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
+    await writeFile(join(child, 'schema.json'), JSON.stringify(calendarConfig.toJsonSchema()));
+    const before = { configVersion: 2, plugins: { alpha: './calendar', beta: './calendar' },
+      alpha: { provider: 'caldav', caldav: { password: '${CALDAV_PASSWORD}' },
+        google: { refresh_token: '${GOOGLE_REFRESH}' }, microsoft: { client_secret: '${MS_SECRET}' } },
+      beta: { provider: 'none', 'legacy.key': { untouched: true } }, plugin: { 'literal.key': [1, 2] } };
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify(before));
+    const store = new ConsoleConfigurationStore({ projectRoot: root,
+      document: createConfigDocument(join(root, 'zhin.config.json')),
+      environmentForPlugin: () => ({ has: () => true }) });
+    const source = await store.readSource();
+    expect(await store.readSchema('alpha')).toMatchObject({ object: { provider: { type: 'string', options: expect.any(Array) } } });
+    const next = structuredClone(before); next.alpha.provider = 'google';
+    const input = structuredClone(next.alpha);
+    expect(await store.validatePluginConfig('alpha', input)).toMatchObject({ schemaAvailable: true, valid: true, missingEnv: [] });
+    expect(input).toEqual(next.alpha);
+    expect(await store.validatePluginConfig('alpha', { ...input, 'unknown.key': true })).toMatchObject({ valid: false });
+    await store.replaceSource(JSON.stringify(next), source.revision);
+    expect(JSON.parse((await store.readSource()).source)).toEqual(next);
+    await expect(store.replaceSource(source.source, source.revision)).rejects.toThrow('changed since it was read');
+    expect(JSON.parse((await store.readSource()).source)).toEqual(next);
+  });
   it('keeps declarations out of the legacy key-oriented Console business view', () => {
     const flat = flattenConfigDocument({configVersion: 2, plugins: {sandbox: '@zhin.js/adapter-sandbox'}, disable_plugins: ['sandbox'], http: {port: 8086}, sandbox: {endpoints: [{id: 'bot'}]}});
     expect(flat).toEqual({http: {port: 8086}, sandbox: {endpoints: [{id: 'bot'}]}});

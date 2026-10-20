@@ -1,3 +1,5 @@
+import { readStringLiteralOptions } from './string-literal-options.js';
+
 /** Converts plugin JSON Schema into the schema shape consumed by Console forms. */
 export function jsonSchemaToConsoleSchema(
   input: unknown,
@@ -50,6 +52,14 @@ function convertSchema(input: unknown, key?: string): Record<string, unknown> | 
     : typeof schema.description === 'string' ? schema.description : undefined;
   const defaultValue = schema.default;
   const requiredFlag = schema.required === true ? true : undefined;
+
+  if (schema.anyOf !== undefined) {
+    const options = readStringLiteralOptions(schema);
+    // Host allowlisted schemas bypass the plugin catalog guard. Keep unsupported
+    // children visible so Console can fall back to source, rather than omit fields.
+    return compactMeta({ type: options ? 'string' : 'any', key, description, default: defaultValue,
+      ...(options ? { options } : {}) });
+  }
 
   if (Array.isArray(typeField)) {
     const list = typeField

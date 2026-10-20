@@ -6,6 +6,7 @@ import { PluginSchemaCatalog } from '../../../src/plugin-runtime/console/plugin-
 import { Schema } from '../../../../../basic/schema/src/index.js';
 import { definePlugin } from '@zhin.js/plugin-runtime';
 import { RootRuntime } from '@zhin.js/runtime';
+import { calendarConfig } from '../../../../../plugins/utils/calendar/src/config.js';
 
 const roots: string[] = [];
 
@@ -54,6 +55,27 @@ function expectField(field: string): unknown {
 }
 
 describe('PluginSchemaCatalog', () => {
+  it('reads actual calendar choices for exact aliases while retaining the raw validation schema', async () => {
+    const root = await createProject();
+    await writePackage(root, 'calendar-schema-project', [
+      { package: './plugins/calendar', instanceKey: 'calendar-alpha' },
+      { package: './plugins/calendar', instanceKey: 'calendar-beta' },
+    ]);
+    const child = join(root, 'plugins/calendar');
+    await writePackage(child, '@zhin.js/plugin-calendar');
+    const schema = calendarConfig.toJsonSchema();
+    await writeFile(join(child, 'schema.json'), JSON.stringify(schema));
+    const catalog = new PluginSchemaCatalog(root);
+    const forms = await catalog.readAll(['calendar-alpha', 'calendar-beta']);
+    expect(forms['calendar-alpha']).toEqual(forms['calendar-beta']);
+    expect(forms['calendar-alpha']).toMatchObject({ object: { provider: {
+      type: 'string', default: 'none', options: [
+        { label: 'none', value: 'none' }, { label: 'caldav', value: 'caldav' },
+        { label: 'google', value: 'google' }, { label: 'microsoft', value: 'microsoft' },
+      ],
+    } } });
+    await expect(catalog.readJson('calendar-alpha')).resolves.toEqual(schema);
+  });
   it('waits for declaration metadata without treating early startup as an absent inline schema', async () => {
     const root = await realpath(await createProject());
     let initialize!: () => void;
