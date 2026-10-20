@@ -93,21 +93,31 @@ describe('Room membership port on a real ImRuntime (3 Endpoints)', () => {
   it.each(['winner-first', 'loser-first'] as const)(
     'consumes a pending interaction on a non-coordinator Endpoint exactly once (%s)',
     async (order) => {
-      const f = await createRoomImFixture();
+      const answers: string[] = [];
+      const f = await createRoomImFixture({
+        async onRoute(message, im) {
+          // Start the question from a real, leased inbound Message so its
+          // generation, owner and retirement signal come from the Runtime.
+          answers.push(await im.createInteraction(message)!.ask({ type: 'text', title: 'Name', timeout: 5000 }));
+        },
+      });
+      const starting = f.deliver(f.ids.c, {
+        messageId: 'ask-start', content: 'ask my name',
+        segments: [{ type: 'mention', data: { target: ACCOUNT.c } }],
+      });
       try {
-        const source = {
-          conversation: f.conversation(f.ids.c),
-          sender: { id: 'alice' },
-          $reply: async () => ({ status: 'sent' as const }),
-        };
-        const answer = f.im.createInteraction(source as never)!.ask({ type: 'text', title: 'Name', timeout: 5000 });
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await vi.waitFor(() => expect(f.sent).toHaveLength(1));
+        expect(f.sent[0]!.conversation).toEqual(f.conversation(f.ids.c));
+        expect(answers).toEqual([]);
         const copies = [f.ids.a, f.ids.b, f.ids.c];
         if (order === 'winner-first') copies.reverse();
         await f.deliverAll(copies, { messageId: 'ask-1', content: 'my answer' });
-        await expect(answer).resolves.toBe('my answer');
-        expect(f.routed).toEqual([]);
-      } finally { await f.close(); }
+        await starting;
+        expect(answers).toEqual(['my answer']);
+        expect(f.routed).toEqual([{ endpointId: f.ids.c, mentioned: true, content: 'ask my name', origin: 'human' }]);
+      } finally {
+        try { await starting; } finally { await f.close(); }
+      }
     },
   );
 

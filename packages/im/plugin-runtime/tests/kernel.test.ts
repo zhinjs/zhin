@@ -5,6 +5,7 @@ import {
   RootController,
   Scope,
   SharedLifetime,
+  SnapshotStore,
   capabilityId,
   childPluginId,
   createToken,
@@ -26,6 +27,29 @@ function emptyState(): SnapshotState {
 }
 
 describe('Plugin Runtime kernel', () => {
+  it('retires lease signals synchronously without disposing in-flight operations', async () => {
+    let disposed = false;
+    const store = new SnapshotStore(emptyState());
+    store.commit(0, { snapshot: emptyState(), dispose: () => { disposed = true; } });
+    const old = store.acquire();
+    const aborts: number[] = [];
+    old.retirementSignal.addEventListener('abort', () => aborts.push(store.current.generation));
+    expect(() => store.commit(0, { snapshot: emptyState(), dispose() {} })).toThrow('Generation conflict');
+    expect(old.retirementSignal.aborted).toBe(false);
+    store.commit(1, { snapshot: emptyState(), dispose() {} });
+    expect(aborts).toEqual([2]);
+    expect(old.retirementSignal.aborted).toBe(true);
+    expect(old.active).toBe(true);
+    expect(disposed).toBe(false);
+    const current = store.acquire();
+    const closing = store.close();
+    expect(current.retirementSignal.aborted).toBe(true);
+    expect(current.active).toBe(true);
+    old.release();
+    current.release();
+    await closing;
+    expect(disposed).toBe(true);
+  });
   it('detaches and deeply freezes custom schema metadata when creating a snapshot', () => {
     const declaration = { type: 'object', properties: { count: { type: 'number', default: 1 } } };
     const state = emptyState();

@@ -25,8 +25,8 @@ describe('UserInteraction module', () => {
         type: 'keyboard',
         data: {
           rows: [[
-            expect.objectContaining({ label: '确认', payload: 'yes', mode: 'command' }),
-            expect.objectContaining({ label: '取消', payload: 'no', mode: 'command' }),
+            expect.objectContaining({ label: '确认', payload: 'yes', mode: 'callback' }),
+            expect.objectContaining({ label: '取消', payload: 'no', mode: 'callback' }),
           ]],
           fallback: {
             hint: '也可以直接回复对应内容。',

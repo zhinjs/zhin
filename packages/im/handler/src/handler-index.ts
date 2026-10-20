@@ -98,7 +98,7 @@ export class HandlerIndex {
     if (!records) return;
     for (const record of records) {
       const base = createCapabilityContext(options?.snapshot ?? this.#snapshot, record.owner);
-      const interaction = options?.resolveInteraction?.(event, args);
+      const interaction = options?.resolveInteraction?.(event, args, record.owner);
       const context: HandlerContext = Object.freeze({
         ...base,
         ...(interaction !== undefined ? { interaction } : {}),
