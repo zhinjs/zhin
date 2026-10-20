@@ -81,7 +81,7 @@ export default definePlugin<ReminderConfig>({
 | `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列出 Agent 绑定、提交 `TurnRequest`、读取 Console / 诊断信息；不暴露 ZhinAgent / AIService 实例 |
 | `workroomHostToken`（`@zhin.js/workroom`） | Workroom Host 端口 | 由 CLI 组合根与 `agentHostToken` 一同发布；其 `console` 只含 Workroom 控制端口（run 控制、catalog、profiles / knowledge / sponsor / 数据生命周期）。供 Console / host-http 使用，不供插件注入；Console 视图是两个 console 的 key 不相交合并 |
 | `turnIntentResolverToken`（`@zhin.js/agent/runtime`） | 由账号所属插件提供的可信意图解析器 | 按平台 / 场景把消息解析为 `supersede`、`new`、`steer`、`follow_up` 或 `observe`；只有它能为跨参与者的控制签发 `authorizedBy: 'product_policy'` |
-| `aiCompletionToken`（`zhin.js/agent` / `@zhin.js/agent/runtime`） | `AiCompletion` | `completeText({ purpose, system?, prompt, untrusted?, agent?, model?, maxTokens?, timeoutMs?, signal?, onBehalfOf? })` 只做一次纯文本补全，**不带任何工具**，自带重试、超时和同 provider 模型降级；`untrusted` 里的群聊等内容按数据渲染，内部指令无效；传 `onBehalfOf`（类型 `UsageSubject`：`{ userId, groupId?, owner }`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`）时计入该用户 / 群的用量配额（超额抛 `AiCompletionQuotaError`）。插件只需要文本时用它，不要借整轮 Agent |
+| `aiCompletionToken`（`zhin.js`；`zhin.js/agent` / `@zhin.js/agent/runtime` 再导出同一个 token） | `AiCompletion`（可选，只在配置了 AI 时存在，见 [下文](#调用纯文本-ai-补全)） | `completeText({ purpose, system?, prompt, untrusted?, agent?, model?, maxTokens?, timeoutMs?, signal?, onBehalfOf? })` 只做一次纯文本补全，**不带任何工具**，自带重试、超时和同 provider 模型降级；`untrusted` 里的群聊等内容按数据渲染，内部指令无效；传 `onBehalfOf`（类型 `UsageSubject`：`{ userId, groupId?, owner }`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`）时计入该用户 / 群的用量配额（超额抛 `AiCompletionQuotaError`）。插件只需要文本时用它，不要借整轮 Agent |
 
 ### 渲染与 HTTP
 
@@ -89,6 +89,46 @@ export default definePlugin<ReminderConfig>({
 | --- | --- | --- |
 | `htmlRendererToken`（`zhin.js`） | `HtmlRendererHost` | `render(html, opts)` → PNG；需安装 `@zhin.js/html-renderer`，未安装时出站 HTML 降级为文字 |
 | `httpHostToken`（`@zhin.js/host-http`） | `HttpHost` | `route(method, path, handler, meta?)` 注册 HTTP 路由（Console、MCP、A2A、适配器 webhook 共用） |
+
+## 调用纯文本 AI 补全
+
+`aiCompletionToken` 和它的类型都从 `zhin.js` 主入口导入，插件不需要依赖 `@zhin.js/agent`。只有安装并配置了 AI（`@zhin.js/agent`）时运行时才提供这个资源，所以先判断再 `use()`：
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+import { aiCompletionToken, hasResource, isAiCompletionQuotaError, usageSubjectFromMessage } from 'zhin.js';
+
+export default defineCommand({
+  execute: async (context) => {
+    if (!hasResource(context, aiCompletionToken)) return '没有配置 AI，无法总结';
+    const onBehalfOf = context.input ? usageSubjectFromMessage(context.input) : undefined;
+    try {
+      const { text } = await context.use(aiCompletionToken).completeText({
+        purpose: 'summarize-chat',
+        system: '用三句话总结下面的聊天记录。',
+        prompt: '请总结。',
+        untrusted: [{ source: 'group-chat', text: context.args.join(' ') }],
+        onBehalfOf,
+      });
+      return text;
+    } catch (error) {
+      if (isAiCompletionQuotaError(error)) return error.message;
+      throw error;
+    }
+  },
+});
+```
+
+| 导出（`zhin.js`） | 作用 |
+| --- | --- |
+| `hasResource(context, token)` | `context.use(token)` 能成功时返回 `true`，不抛错。优先用上下文的 `has()`，没有时退回试探 `use()` |
+| `context.has?.(token)` | 内置的构造 / 能力上下文（命令、工具、中间件、`@zhin.js/testing` 的假插件）都提供 `has()`；它是可选成员，自己手写的上下文不必实现 |
+| `usageSubjectFromMessage(message)` | 按和 Agent 回合相同的规则生成 `onBehalfOf`：平台优先取 `clientAdapter`，账号优先取 `endpointId`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`，发送者有 `master` 角色时 `owner` 为 `true`。**消息没有发送者时返回 `undefined`**（不抛错），这时不计入任何人的配额 |
+| `isAiCompletionQuotaError(error)` | 判断是否为超额错误（`scope` 为 `user` 或 `group`，`retryAfterSeconds` 为建议等待秒数），`message` 可以直接回复给用户；不需要导入 `@zhin.js/agent` |
+
+::: tip 和 Agent 包的关系
+`zhin.js/agent` 和 `@zhin.js/agent` 仍然导出 `aiCompletionToken`，它和 `zhin.js` 导出的是同一个对象，旧代码不用改。`AiCompletionQuotaError` 类仍然在 Agent 包里，插件里用 `isAiCompletionQuotaError` 判断即可。
+:::
 
 ## 保存小对象和发送目标
 

@@ -118,6 +118,7 @@ export class FakePlugin<TConfig = unknown> {
       signal: this.signal, owner, generation: this.generation,
       config: this.config as Readonly<TConfig>,
       use: <T>(token: Token<T>): T => this.resources.use(token),
+      has: (token: Token<unknown>): boolean => this.resources.has(token),
       project: <T>(feature: FeatureId): T => {
         if (!this.projections.has(feature)) throw new Error(`Missing Feature projection ${feature}`);
         return this.projections.get(feature) as T;

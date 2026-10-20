@@ -224,7 +224,7 @@ it('construction context contains only owner-lifetime resources while operations
     capabilities: new Map(), projections: new Map([[feature, 'operation']]),
   });
   const context = createConstructionContext<{ account: string }>(snapshot, owner);
-  expect(Object.keys(context).sort()).toEqual(['config', 'generation', 'owner', 'signal', 'use']);
+  expect(Object.keys(context).sort()).toEqual(['config', 'generation', 'has', 'owner', 'signal', 'use']);
   expect(Object.isFrozen(context)).toBe(true);
   expect(context.config.account).toBe('test');
   expect(context.use(token)).toBe('transport');
@@ -233,4 +233,23 @@ it('construction context contains only owner-lifetime resources while operations
   expect(() => invalid.project(feature)).toThrow(TypeError);
   expect(() => invalid.project(feature)).toThrow(/project/);
   expect(createCapabilityContext(snapshot, owner).project(feature)).toBe('operation');
+});
+
+it('has() reports optional resources without throwing, matching use() (#877)', () => {
+  const owner = rootPluginId();
+  const present = createToken<string>('fixture.present');
+  const absent = createToken<string>('fixture.absent');
+  const snapshot = createSnapshotView(1, { root: owner,
+    tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'test', packageRoot: '/fixture', children: [] }]]),
+    config: new Map([[owner, {}]]),
+    resources: new Map([[owner, new Map([[present.id, 'value']])]]),
+    capabilities: new Map(), projections: new Map(),
+  });
+  for (const context of [createConstructionContext(snapshot, owner), createCapabilityContext(snapshot, owner)]) {
+    expect(context.has?.(present)).toBe(true);
+    expect(context.has?.(absent)).toBe(false);
+    expect(() => context.use(absent)).toThrow(/Missing resource fixture\.absent/);
+    // Same id from another createToken call is the same resource (tokens match by id).
+    expect(context.has?.(createToken<string>('fixture.present'))).toBe(true);
+  }
 });
