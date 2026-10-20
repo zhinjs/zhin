@@ -15,6 +15,12 @@ export interface ConstructionContext<TConfig = unknown> {
   readonly generation: number;
   readonly config: Readonly<TConfig>;
   use<T>(token: Token<T>): T;
+  /**
+   * True when `use(token)` would succeed (optional resources such as `aiCompletionToken`).
+   * Optional so hand-written contexts stay valid; built-in contexts always provide it.
+   * Prefer `hasResource(context, token)` from `zhin.js`, which also works without it.
+   */
+  has?(token: Token<unknown>): boolean;
 }
 
 /** Context for an operation whose caller owns this generation snapshot. */
@@ -44,6 +50,9 @@ export function createConstructionContext<TConfig = unknown>(
       }
       const value = resources.get(token.id) as T;
       return admission ? bindGenerationAdmission(value, admission) : value;
+    },
+    has(token: Token<unknown>): boolean {
+      return resources.has(token.id);
     },
   });
 }
