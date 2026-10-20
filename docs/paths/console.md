@@ -113,6 +113,18 @@ Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录�
 
 Host 接口为 `GET /api/tasks/use-cases`、`GET /api/tasks/providers`、`POST /api/tasks/create` 和 `POST /api/tasks/change`。任务事实、并发版本及操作回执由插件持久化，Host 不另建调度器。参见[持久提醒插件](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder)与 [CLI 用途指南](../cli/index.md#use-cases按用途找到配置入口)。
 
+## 命令权限说明
+
+从运行时能力的命令目录进入“查看权限说明”，或打开 `/permissions`。使用当前 Host 有效的 full scope Token 读取命令目录，按命令名、说明或插件实例搜索；列表分页，不需要一次展开全部指令。
+
+选择命令后，页面逐项解释真实声明的 `permit` 和单独的 `adapter` 约束。规则数组为 AND，单项括号内的逗号为 OR。可以选填假设会话、发送者与角色，检查内置条件；账号从当前 Host 的完整 Endpoint 列表选择，不会通过平台查询角色。
+
+“条件符合”不表示已授权或可执行。缺少角色时显示“缺少依据”，平台与自定义 checker 显示“未评估”，不会执行命令、动态参数默认值或 checker。内置 `group(id)`、`private(id)`、`channel(id)` 只检查类型与 ID，不能限制具体 Bot、父容器或话题；完整身份回显也不等于这些维度受规则约束。
+
+修改假设会清除旧结果，运行代变化后须刷新目录重新检查。换 Host、凭据或退出后不沿用之前的命令和结果。没有接口的旧 Host 会明确提示升级，不伪造权限结论。
+
+需要限制实际群欢迎的范围时，使用[精确欢迎白名单](../solutions/group-welcome.md)。它通过现有配置校验、保存和应用流程生效，不由权限说明页面写入。
+
 ## 下一步
 
 - [Console 概览](../console/)：Console 与 Host 如何分工、页面扩展

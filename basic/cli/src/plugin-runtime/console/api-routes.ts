@@ -24,6 +24,7 @@ import { registerConsoleRpcRoute } from './rpc-route.js';
 import { registerConsoleSystemRoutes } from './system-routes.js';
 import { registerMessageDiagnosticRoutes } from './message-diagnostic-routes.js';
 import { registerPluginTaskRoutes } from './plugin-task-routes.js';
+import { registerPermissionExplanationRoutes } from './permission-explanation-routes.js';
 
 export interface RegisterConsoleRoutesOptions {
   readonly pluginManagementActivity?: import('../../plugin-management/activity.js').PluginManagementActivity;
@@ -84,6 +85,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
   registerConsoleSystemRoutes({ http, base, im, snapshot });
   registerMessageDiagnosticRoutes({ http, base, diagnostics: im?.messageDiagnostics });
   registerPluginTaskRoutes({ http, base, snapshots });
+  registerPermissionExplanationRoutes({ http, base, snapshots });
   const pluginManagement = createPluginManagementPort(projectRoot, {
     activity: options.pluginManagementActivity,
     snapshots,
