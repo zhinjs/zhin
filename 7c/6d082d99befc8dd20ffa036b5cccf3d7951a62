@@ -1,0 +1,33 @@
+plugins/utils/earthquake/package.json
+  s_e6f5f09d5890ba::t_f7f680e5d88fea 1-115
+plugins/utils/earthquake/src/config.ts
+  s_e6f5f09d5890ba::t_0f6d6d73cae65a 1-157
+plugins/utils/earthquake/src/conversation.ts
+  s_e6f5f09d5890ba::t_9c4c9116751a41 1-54
+plugins/utils/earthquake/src/format.ts
+  s_e6f5f09d5890ba::t_213b6484afb822 1-77
+plugins/utils/earthquake/src/runtime.ts
+  s_e6f5f09d5890ba::t_ff0a65c6d2b269 1-8
+plugins/utils/earthquake/src/service.ts
+  s_e6f5f09d5890ba::t_2cdd49d9a5f14a 1-304
+plugins/utils/earthquake/src/subscribe-args.ts
+  s_e6f5f09d5890ba::t_a949ef5d94051b 1-44
+plugins/utils/earthquake/src/subscriptions.ts
+  s_e6f5f09d5890ba::t_a7c76da65eb10c 1-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7c6d082d99befc8dd20ffa036b5cccf3d7951a62",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
