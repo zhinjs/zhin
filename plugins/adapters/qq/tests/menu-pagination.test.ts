@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { formatOutbound } from '../src/outbound.js';
+import { formatOutbound, formatOutboundMessages } from '../src/outbound.js';
 
 /** Builds the real SDK request body so the test sees what QQ actually receives. */
 async function buildSdkPayload(message: unknown): Promise<{ msg_type?: number; markdown?: { content?: string }; keyboard?: unknown }> {
@@ -75,3 +75,66 @@ describe('text + inline markdown without buttons on QQ official', () => {
     expect(formatOutbound('plain')).toBe('plain');
   });
 });
+
+async function buildSdkMessage(message: unknown): Promise<{ isFile: boolean; filePayload: Record<string, unknown>; messagePayload: { msg_type?: number; msg_id?: string; markdown?: { content?: string }; keyboard?: unknown } }> {
+  const require = createRequire(import.meta.url);
+  const { MessageBuilder } = require(join(dirname(require.resolve('qq-official-bot/package.json')), 'lib/message/builder.js'));
+  return new MessageBuilder('appid', false).build(message);
+}
+
+// commandMenuReply with an HTML renderer: [menu image, markdown page title, keyboard]
+const imageMenuPayload = [
+  { type: 'reply', data: { message_id: 'src-1' } },
+  { type: 'image', data: { media: { kind: 'base64', value: 'iVBORw0KGgo=' } } },
+  ...menuPayload.slice(1),
+];
+
+describe('image menu (image + markdown + keyboard) on QQ official', () => {
+  it('loses the image when sent as one message (documents the SDK conflict)', async () => {
+    const built = await buildSdkMessage(formatOutbound(imageMenuPayload));
+    expect(built.isFile).toBe(true);
+    expect(built.messagePayload.msg_type).toBe(2); // media msg_type 7 overwritten by markdown
+  });
+
+  it('sends the image first as its own media message, then markdown + buttons', async () => {
+    const messages = formatOutboundMessages(imageMenuPayload);
+    expect(messages).toHaveLength(2);
+    const [image, menu] = await Promise.all(messages.map(buildSdkMessage));
+    expect(image!.isFile).toBe(true);
+    expect(image!.messagePayload.msg_type).toBe(7);
+    expect(image!.messagePayload.msg_id).toBe('src-1');
+    expect(image!.filePayload.file).toBe('base64://iVBORw0KGgo=');
+    expect(image!.messagePayload.markdown).toBeUndefined();
+    expect(menu!.isFile).toBe(false);
+    expect(menu!.messagePayload.msg_type).toBe(2);
+    expect(menu!.messagePayload.msg_id).toBe('src-1');
+    expect(menu!.messagePayload.markdown?.content).toBe('**指令菜单** · 第 1/3 页');
+    expect(menu!.messagePayload.keyboard).toBeDefined();
+  });
+
+  it('keeps single-message payloads as one message', () => {
+    expect(formatOutboundMessages('plain')).toEqual(['plain']);
+    expect(formatOutboundMessages(menuPayload)).toHaveLength(1);
+    expect(formatOutboundMessages([{ type: 'text', data: { text: 'cap' } }, { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.png' } } }])).toEqual([
+      ['cap', { type: 'image', data: { url: 'https://x/y.png' } }],
+    ]);
+  });
+
+  it('endpoint sends the image message before the menu message and returns the menu message id', async () => {
+    const { QqWebsocketEndpoint } = await import('../src/endpoint.js');
+    const { resolveQqConfig } = await import('../src/protocol.js');
+    const { capabilityId, rootPluginId, featureId } = await import('zhin.js');
+    const sent: unknown[] = [];
+    const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'), config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any, createBot: () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendGroupMessage: async (_id: string, message: unknown) => { sent.push(message); return { id: `m${sent.length}` }; } }) as any });
+    try {
+      await endpoint.start();
+      const id = await endpoint.send({ conversation: { endpoint: { id: 'fixture', adapter: 'root/qq' }, kind: 'group', id: 'g1' } as any, payload: imageMenuPayload });
+      expect(sent).toHaveLength(2);
+      expect(JSON.stringify(sent[0])).toContain('"image"');
+      expect(JSON.stringify(sent[0])).not.toContain('markdown');
+      expect(JSON.stringify(sent[1])).toContain('指令菜单');
+      expect(id).toMatch(/:m2$/);
+    } finally { await endpoint.stop(); }
+  });
+});
+

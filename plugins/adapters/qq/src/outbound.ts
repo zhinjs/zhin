@@ -290,3 +290,33 @@ export function formatOutbound(payload: unknown): QqOutboundMessage {
   if (parts.length === 1) return parts[0]!;
   return parts;
 }
+
+/** SDK 能作为 msg_type=7 富媒体发送的段 */
+const SPLIT_MEDIA_TYPES = new Set(['image', 'audio', 'video']);
+/** 走 msg_type=2 的 markdown/按钮段 */
+const MARKDOWN_MESSAGE_TYPES = new Set(['markdown', 'keyboard', 'button']);
+
+/**
+ * 渲染后 payload → 按序发送的 QQ Sendable 列表。
+ *
+ * QQ 单条消息的 msg_type 只能是一种：富媒体（7，media.file_info）与 markdown/按钮（2）
+ * 互斥，SDK 后处理的段会覆盖 msg_type，导致图片被静默丢弃。markdown 图片语法要求可公网
+ * 访问的 URL，而 v2 /files 上传只返回 file_info，base64/本地渲染图拿不到 URL；故媒体段
+ * 拆为独立消息先发，markdown + 按钮作为最后一条（返回其消息 ID）。reply 段随每条消息
+ * 携带，保持被动回复。其余情况与 formatOutbound 一致（单条）。
+ */
+export function formatOutboundMessages(payload: unknown): QqOutboundMessage[] {
+  const body = formatOutbound(payload);
+  if (!Array.isArray(body)) return [body as QqOutboundMessage];
+  const elems = body as ReadonlyArray<string | QqOutboundElem>;
+  const isType = (types: Set<string>) => (part: string | QqOutboundElem): part is QqOutboundElem =>
+    typeof part !== 'string' && types.has(part.type);
+  const media = elems.filter(isType(SPLIT_MEDIA_TYPES));
+  if (media.length === 0 || !elems.some(isType(MARKDOWN_MESSAGE_TYPES))) return [body];
+  const replies = elems.filter(isType(new Set(['reply'])));
+  const rest = elems.filter((part) => !isType(SPLIT_MEDIA_TYPES)(part));
+  return [
+    ...media.map((item): QqOutboundMessage => (replies.length ? [...replies, item] : item)),
+    rest.length === 1 ? rest[0]! : rest,
+  ];
+}

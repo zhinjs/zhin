@@ -18,7 +18,7 @@ import {
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { formatOutbound } from './outbound.js';
+import { formatOutboundMessages } from './outbound.js';
 import {
   formatInboundContent,
   parseCompoundMessageId,
@@ -160,25 +160,29 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const body = formatOutbound(payload);
+    // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥），拆成多条按序发送
+    const messages = formatOutboundMessages(payload);
+    const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
     let result: unknown;
     try {
-      switch (kind) {
-        case 'private':
-          result = await bot.sendPrivateMessage(conversation.id, body);
-          break;
-        case 'group':
-          result = await bot.sendGroupMessage(conversation.id, body);
-          break;
-        case 'channel':
-          result = await bot.sendGuildMessage(conversation.id, body);
-          break;
-        case 'direct':
-          if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-          result = await bot.sendDirectMessage(conversation.id, body);
-          break;
+      for (const message of messages) {
+        switch (kind) {
+          case 'private':
+            result = await bot.sendPrivateMessage(conversation.id, message);
+            break;
+          case 'group':
+            result = await bot.sendGroupMessage(conversation.id, message);
+            break;
+          case 'channel':
+            result = await bot.sendGuildMessage(conversation.id, message);
+            break;
+          case 'direct':
+            if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
+            result = await bot.sendDirectMessage(conversation.id, message);
+            break;
+        }
       }
     } catch (error) {
       const { failure, diagnostic } = qqDeliveryFailure(error);
@@ -415,25 +419,29 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const body = formatOutbound(payload);
+    // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥），拆成多条按序发送
+    const messages = formatOutboundMessages(payload);
+    const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
     let result: unknown;
     try {
-      switch (kind) {
-        case 'private':
-          result = await bot.sendPrivateMessage(conversation.id, body);
-          break;
-        case 'group':
-          result = await bot.sendGroupMessage(conversation.id, body);
-          break;
-        case 'channel':
-          result = await bot.sendGuildMessage(conversation.id, body);
-          break;
-        case 'direct':
-          if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-          result = await bot.sendDirectMessage(conversation.id, body);
-          break;
+      for (const message of messages) {
+        switch (kind) {
+          case 'private':
+            result = await bot.sendPrivateMessage(conversation.id, message);
+            break;
+          case 'group':
+            result = await bot.sendGroupMessage(conversation.id, message);
+            break;
+          case 'channel':
+            result = await bot.sendGuildMessage(conversation.id, message);
+            break;
+          case 'direct':
+            if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
+            result = await bot.sendDirectMessage(conversation.id, message);
+            break;
+        }
       }
     } catch (error) {
       const { failure, diagnostic } = qqDeliveryFailure(error);

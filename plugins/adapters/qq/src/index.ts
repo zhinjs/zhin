@@ -25,6 +25,7 @@ export {
 
 export {
   formatOutbound,
+  formatOutboundMessages,
   resolveMediaFile,
   type QqOutboundElem,
   type QqOutboundMessage,
