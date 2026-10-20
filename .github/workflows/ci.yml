@@ -47,7 +47,9 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
-          cache: pnpm
+
+      - name: restore pnpm store
+        uses: ./.github/actions/restore-pnpm-store
       - name: install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
         env:
@@ -134,7 +136,9 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
-          cache: 'pnpm'
+
+      - name: restore pnpm store
+        uses: ./.github/actions/restore-pnpm-store
 
       - name: install dependencies
         run: >-
@@ -203,7 +207,9 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
+
+      - name: restore pnpm store
+        uses: ./.github/actions/restore-pnpm-store
 
       # changesets `baseBranch: main` compares against a **local** `main` ref; PR and merge
       # queue checkouts only have `origin/main`, which makes `pnpm changeset status` and

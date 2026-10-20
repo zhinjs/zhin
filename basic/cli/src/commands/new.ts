@@ -10,7 +10,9 @@ import {
   createPluginTsconfigs,
   resolvePluginPackageName,
   resolvePluginStackRanges,
-  sourceDirectories,
+  RUNTIME_ENTRIES_SCRIPT,
+  RUNTIME_ENTRIES_SCRIPT_PATH,
+  runtimeEntryJsGlobs,
   workspaceStackRanges,
   type PluginKind,
 } from './new-plugin-manifest.js';
@@ -139,8 +141,8 @@ export const newCommand = new Command('new')
         logger.log(`    pnpm add -w <插件目录>/${packageName.replace(/^@/, '').replace('/', '-')}-0.1.0.tgz`);
         logger.log(`  在 Bot 主配置设置 configVersion: 2、plugins: { ${name}: "${packageName}" }，然后 pnpm dev`);
         logger.log('  不要直接 pnpm add <插件目录>：插件自己的 devDependencies 会让 zhin 包出现两份实例；');
-        logger.log('    需要热重载时的联调方式见 https://zhin.js.org/authoring/local-dev#standalone-plugin');
-        logger.log('  发布到 npm：在插件目录执行 pnpm publish（prepack 会自动构建 plugin.js）');
+        logger.log(`  需要热重载：在 Bot 项目根执行 zhin dev link <插件目录>（实例名 ${name}），见 https://zhin.js.org/authoring/local-dev#dev-link-plugin`);
+        logger.log('  发布到 npm：在插件目录执行 npx @zhin.js/cli pub --dry-run 预览，再 npx @zhin.js/cli pub（不要用 npx zhin，那是 npm 上另一个旧包）');
         return;
       }
 
@@ -187,6 +189,7 @@ async function createPluginPackage(
 
   await fs.ensureDir(pluginDir);
   await fs.ensureDir(path.join(pluginDir, 'tests'));
+  await fs.ensureDir(path.join(pluginDir, 'src'));
   await fs.ensureDir(path.join(pluginDir, 'skills', pluginName));
   if (kind === 'normal') {
     await fs.ensureDir(path.join(pluginDir, 'commands', `${pluginName}-echo`));
@@ -246,10 +249,27 @@ async function createPluginPackage(
   };
   await fs.writeJson(path.join(pluginDir, 'schema.json'), schemaJson, { spaces: 2 });
 
-  // tsconfig.json 负责类型检查（含 tests）；tsconfig.build.json 把 plugin.ts 与约定目录编译成同目录 .js
+  // tsconfig.json 负责类型检查（含 tests）；tsconfig.build.json 把 src/ 编译到 lib/（.js + .d.ts）
   const tsconfigs = createPluginTsconfigs(kind);
   await fs.writeJson(path.join(pluginDir, 'tsconfig.json'), tsconfigs.tsconfig, { spaces: 2 });
   await fs.writeJson(path.join(pluginDir, 'tsconfig.build.json'), tsconfigs.build, { spaces: 2 });
+  // prepack：plugin.ts 与约定目录 → 同目录 .js（src/ 导入改写到 lib/）；postpack 清除
+  await fs.outputFile(path.join(pluginDir, RUNTIME_ENTRIES_SCRIPT_PATH), RUNTIME_ENTRIES_SCRIPT, 'utf8');
+
+  // src/：库代码，构建到 lib/ 并生成 .d.ts；plugin.ts 与约定目录用 '../src/xxx.js' 引用
+  const libraryTs = `/**
+ * 库代码：构建到 lib/（.js + .d.ts），也是本包对外的 import 入口（package.json#exports）。
+ * plugin.ts 和约定目录里用 './src/index.js' / '../../src/index.js' 引用；
+ * 打包时这些导入会被改写成 lib/。
+ */
+export const displayName = '${capitalizedName}${kind === 'adapter' ? ' Adapter' : ''}';
+${kind === 'normal' ? `
+/** 回显命令的文本格式（commands/${pluginName}-echo/[text] 使用）。 */
+export function formatEcho(text: string): string {
+  return \`你说：\${text}\`;
+}
+` : ''}`;
+  await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), libraryTs, 'utf8');
 
   // Vitest：与 tests/ 目录配套
   const vitestConfig = `import { defineConfig } from 'vitest/config';
@@ -266,6 +286,7 @@ export default defineConfig({
   // plugin.ts：约定式插件入口
   if (kind === 'service') {
     const pluginTs = `import { definePlugin, databaseHostToken } from 'zhin.js';
+import { displayName } from './src/index.js';
 
 /**
  * 服务型约定插件：setup(context) 在插件装配时执行。
@@ -277,7 +298,7 @@ export default defineConfig({
 export default definePlugin({
   name: '${pluginName}',
   metadata: {
-    displayName: '${capitalizedName}',
+    displayName,
   },
   setup(context) {
     if (context.resources.has(databaseHostToken)) {
@@ -298,6 +319,7 @@ export default definePlugin({
     await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
   } else if (kind === 'adapter') {
     const pluginTs = `import { definePlugin } from 'zhin.js';
+import { displayName } from './src/index.js';
 
 /**
  * 适配器约定插件入口：适配器定义在 adapters/ 目录（defineAdapter），
@@ -306,13 +328,14 @@ export default definePlugin({
 export default definePlugin({
   name: '${pluginName}',
   metadata: {
-    displayName: '${capitalizedName} Adapter',
+    displayName,
   },
 });
 `;
     await fs.writeFile(path.join(pluginDir, 'plugin.ts'), pluginTs, 'utf8');
   } else {
     const pluginTs = `import { definePlugin } from 'zhin.js';
+import { displayName } from './src/index.js';
 
 /**
  * 约定式插件入口（Plugin Runtime）：
@@ -322,7 +345,7 @@ export default definePlugin({
 export default definePlugin({
   name: '${pluginName}',
   metadata: {
-    displayName: '${capitalizedName}',
+    displayName,
   },
 });
 `;
@@ -342,6 +365,7 @@ export default defineCommand({
     await fs.outputFile(path.join(pluginDir, 'commands', pluginName, 'index.ts'), commandTs, 'utf8');
 
     const echoCommandTs = `import { defineCommand } from 'zhin.js/command';
+import { formatEcho } from '../../../src/index.js';
 
 /**
  * 动态段命令：目录名 [text] 声明一个必需参数，类型在 params 中定义。
@@ -353,7 +377,7 @@ export default defineCommand({
     text: { type: 'string', description: '要回显的文本' },
   },
   execute({ params }) {
-    return \`你说：\${String(params.text ?? '')}\`;
+    return formatEcho(String(params.text ?? ''));
   },
 });
 `;
@@ -444,7 +468,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;
 
-  const standaloneUse = `在 Bot 项目安装本插件：\`pnpm add ${packageName}\`（发布前联调：在本目录 \`pnpm pack\` 后在 Bot 根目录 \`pnpm add -w <tgz 路径>\`；需要热重载时把本目录链接进 Bot 的 \`plugins/\` 并以 \`./plugins/${pluginName}\` 挂载，见 https://zhin.js.org/authoring/local-dev#standalone-plugin。不要直接 \`pnpm add <本目录>\`，会出现 zhin 包多实例）。主配置使用以下格式；实例业务配置在顶层同名块，结构见 \`schema.json\`：
+  const standaloneUse = `在 Bot 项目安装本插件：\`pnpm add ${packageName}\`（发布前联调：在本目录 \`pnpm pack\` 后在 Bot 根目录 \`pnpm add -w <tgz 路径>\`；需要热重载时在 Bot 根目录执行 \`zhin dev link <本目录>\`，见 https://zhin.js.org/authoring/local-dev#dev-link-plugin。不要直接 \`pnpm add <本目录>\`，会出现 zhin 包多实例）。主配置使用以下格式；实例业务配置在顶层同名块，结构见 \`schema.json\`：
 
 \`\`\`yaml
 configVersion: 2
@@ -473,7 +497,8 @@ ${readmeUse}
 
 ## 目录约定
 
-- \`plugin.ts\`：插件入口（\`definePlugin\`）。\`zhin.entry\` 写的是 \`./plugin.js\`：本地运行时自动回退到 \`plugin.ts\`，npm 包里是构建出的 \`plugin.js\`
+- \`plugin.ts\`：插件入口（\`definePlugin\`）。\`zhin.entry\` 写的是 \`./plugin.js\`：本地运行时自动回退到 \`plugin.ts\`，npm 包里是打包时生成的 \`plugin.js\`
+- \`src/\`：库代码，\`pnpm build\` 编译到 \`lib/\`（\`.js\` + \`.d.ts\`），也是 \`import '${packageName}'\` 的入口；\`plugin.ts\` 和约定目录用 \`./src/xxx.js\` 这样的相对路径引用
 - \`schema.json\`：实例配置（\`<instanceKey>\`）的 JSON Schema
 ${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
@@ -488,8 +513,20 @@ ${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`
 pnpm install
 pnpm test        # vitest
 pnpm typecheck   # tsc --noEmit（含 tests）
-pnpm build       # 把 plugin.ts 与约定目录编译成同目录 .js（pnpm pack / publish 前自动执行）
+pnpm build       # src/ → lib/（.js + .d.ts）
+pnpm pack        # prepack 先 build，再把 plugin.ts 与约定目录编译成同目录 .js（src/ 导入改写为 lib/），postpack 清除
 \`\`\`
+
+发布包只包含 \`lib/\`、\`plugin.js\`、约定目录里的 \`.js\`、\`schema.json\`、\`skills/\` 和文档，不包含 \`.ts\` 源码、测试和配置（见 \`package.json#files\`）。
+
+## 发布
+
+\`\`\`bash
+npx @zhin.js/cli pub --dry-run   # 构建并预览 tarball，不发布
+npx @zhin.js/cli pub             # 确认后发布；CI 里加 --yes
+\`\`\`
+
+请写 \`npx @zhin.js/cli\`：本目录没装 \`@zhin.js/cli\` 时，\`npx zhin\` 会下载 npm 上另一个已停止维护的同名旧包。
 
 \`zhin.js\` 与能力包（\`@zhin.js/command\` 等）是 peerDependencies：发布后由宿主 Bot 提供同一份；devDependencies 里的副本只用于本地测试和类型检查。
 
@@ -532,14 +569,14 @@ tools: []
   await fs.writeFile(path.join(pluginDir, 'CHANGELOG.md'), changelogContent);
 
   // 创建 .gitignore
-  const generatedJs = ['plugin.js', ...sourceDirectories(kind).map((dir) => `${dir}/**/*.js`)];
+  const generatedJs = runtimeEntryJsGlobs();
   const gitignoreContent = `node_modules/
 lib/
 coverage/
 *.log
 .DS_Store
 .zhin/
-# pnpm build / prepack 生成的 JavaScript（随 npm 包发布，不进仓库）
+# prepack 生成的 JavaScript（随 npm 包发布，postpack 会清除，不进仓库）
 ${generatedJs.join('\n')}
 `;
 

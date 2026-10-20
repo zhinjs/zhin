@@ -53,7 +53,9 @@ jobs:
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
+
+      - name: restore pnpm store
+        uses: ./.github/actions/restore-pnpm-store
 
       # npm trusted publishing (OIDC) needs npm CLI >= 11.5.1. pnpm 9 hands the
       # actual upload to the npm CLI on PATH, so make sure that one is new enough.

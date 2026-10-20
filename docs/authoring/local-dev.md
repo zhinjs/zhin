@@ -130,14 +130,14 @@ zhin dev link ../zhin --project ../my-bot   # 不在项目目录时用 --project
 - 通过 `node_modules` 解析到的包不会被监听，改代码不会热重载；
 - 用 `pnpm create zhin-app` 创建的 Bot 本身是 pnpm workspace，`pnpm add` 还需要 `-w`。
 
-`zhin dev link` 只切换**框架**包，不处理插件目录。按用途选一种：
+按用途选一种：
 
 | 目的 | 做法 | 热重载 |
 | --- | --- | --- |
 | 验证发布产物 | 插件目录 `pnpm pack`，Bot 根目录 `pnpm add -w <插件目录>/<包名>-<版本>.tgz`，主配置 `plugins: { <实例名>: <包名> }` | 否，改动后重新打包安装 |
-| 边改边试 | 把插件目录链接进 Bot 的 `plugins/`（Bot 的 `pnpm-workspace.yaml` 默认包含 `plugins/*`），再以 `./` 本地路径挂载 | 是 |
+| 边改边试 | `zhin dev link <插件目录>`（见下文[独立插件热重载联调](#dev-link-plugin)）；或手动把插件目录链接进 Bot 的 `plugins/` 再以 `./` 本地路径挂载 | 是 |
 
-边改边试的步骤（在 Bot 项目根执行）：
+不用命令、手动操作的步骤（在 Bot 项目根执行）：
 
 ```bash
 ln -s /path/to/my-plugin plugins/my-plugin   # Windows：mklink /J plugins\my-plugin C:\path\to\my-plugin
@@ -155,6 +155,33 @@ plugins:
 然后 `pnpm dev`。修改 `commands/`、`tools/` 等约定目录下的文件会按能力热重载（日志 `hmr_reload | scope: capability`）；修改被多个模块共享的 `src/` 辅助模块时，日志会打印 `restartRequired`，开发模式会自动重启进程。插件版本与 Bot 的 zhin 版本不一致时 pnpm 会装出两份，`zhin doctor` 会提示，先对齐版本。
 
 用完后删除 `plugins/my-plugin` 链接和 `plugins` 中的这一项，再 `pnpm install`。
+
+### 独立插件热重载联调 {#dev-link-plugin}
+
+`zhin new --standalone` 生成的插件在自己的目录里开发和单测；要在真实 bot 里边改边看，把插件目录传给同一个命令：
+
+```bash
+cd my-bot
+zhin dev link ../zhin-plugin-glossary            # 实例名默认取包名去掉 zhin.js- / zhin-plugin- 前缀，这里是 glossary
+zhin dev link ../zhin-plugin-glossary --as terms # 指定实例名
+pnpm dev                                          # 改插件目录里的文件即热重载
+zhin dev unlink glossary                          # 撤销
+```
+
+`zhin dev link <path>` 看 `<path>/package.json`：有 `zhin` 字段就按插件处理，否则按 zhin 源码仓库处理。插件模式做三件事，都记录在 bot 的 `.zhin/dev-plugin-links.json`，`unlink` 只撤销自己做过、之后没被改过的部分：
+
+1. 在 bot 的 `plugins/<实例名>` 建一个指向插件目录的链接（Windows 用 junction）；
+2. 在主配置 `plugins` 写入 `<实例名>: ./plugins/<实例名>`，并加一个空的实例配置；`unlink` 时已填写的实例配置会保留；
+3. 插件 `node_modules` 里的 `zhin.js` / `@zhin.js/*`（开发、单测用的 devDependencies）改为指向 bot 解析到的那一份。插件代码按真实路径解析 import，不这样做会和 bot 各用一份，启动时报 `Multiple package locations for @zhin.js/command are not supported in one generation`。bot 没有的包（如 `@zhin.js/testing`）不动。
+
+为什么不用别的办法：只有主配置里 `./` 开头的本地引用才会建立文件监听。`pnpm add ../插件`、tarball、把插件目录加进 pnpm workspace，或者按包名引用 `plugins/` 下的链接，都会把插件当作 `node_modules` 里的包加载，不会热重载；`pnpm add <目录>` 还会带进插件自己的那份 `@zhin.js/*`。
+
+注意：
+
+- 两边的 `package.json`、锁文件都不改，也不执行 `pnpm install`；
+- 在插件目录重新 `pnpm install` 会恢复它自己的依赖，之后再执行一次 `zhin dev link`（幂等）；
+- 插件与 bot 的 zhin 版本应在插件 `peerDependencies` 声明的范围内，链接后插件单测跑的也是 bot 那一份；
+- 改插件共享的 `src/` 模块时运行时会整体重启（`restartRequired`），改约定目录里的文件只重载对应能力。
 
 ## 6. 端口与干净退出
 

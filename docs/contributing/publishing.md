@@ -127,7 +127,7 @@ done < names.txt
 
 ## 包清单
 
-以下 96 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
+以下 99 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
 
 ### `basic/`（5）
 
@@ -241,17 +241,20 @@ done < names.txt
 - [ ] `@zhin.js/service-activity-feedback` — `plugins/services/activity-feedback`
 - [ ] `@zhin.js/service-typesafe` — `plugins/services/typesafe`
 
-### `plugins/utils/`（14）
+### `plugins/utils/`（17）
 
 - [ ] `@zhin.js/plugin-60s` — `plugins/utils/60s`
+- [ ] `@zhin.js/plugin-answers` — `plugins/utils/answers`
 - [ ] `@zhin.js/plugin-bilibili` — `plugins/utils/bilibili`
 - [ ] `@zhin.js/plugin-calendar` — `plugins/utils/calendar`
 - [ ] `@zhin.js/plugin-code-runner` — `plugins/utils/code-runner`
 - [ ] `@zhin.js/plugin-content-moderation` — `plugins/utils/content-moderation`
 - [ ] `@zhin.js/plugin-group-suite` — `plugins/utils/group-suite`
+- [ ] `@zhin.js/plugin-ledger` — `plugins/utils/ledger`
 - [ ] `@zhin.js/plugin-link-poster` — `plugins/utils/link-poster`
 - [ ] `@zhin.js/plugin-lottery` — `plugins/utils/lottery`
 - [ ] `@zhin.js/plugin-music` — `plugins/utils/music`
+- [ ] `@zhin.js/plugin-nettools` — `plugins/utils/nettools`
 - [ ] `@zhin.js/plugin-qrcode` — `plugins/utils/qrcode`
 - [ ] `@zhin.js/plugin-reminder` — `plugins/utils/reminder`
 - [ ] `@zhin.js/plugin-repeater` — `plugins/utils/repeater`

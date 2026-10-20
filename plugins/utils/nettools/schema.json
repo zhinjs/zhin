@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "cooldownSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600,
+      "default": 10,
+      "description": "Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables)"
+    },
+    "requestTimeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 30000,
+      "default": 8000,
+      "description": "Per-attempt timeout for each external HTTP request, in milliseconds"
+    },
+    "maxRetries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "default": 2,
+      "description": "Retries for transient failures (network errors, timeouts, 429, 5xx) with exponential backoff and jitter"
+    },
+    "pingMaxNodes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 4,
+      "description": "Number of check-host.net probe nodes used by ping"
+    },
+    "pingPollIntervalMs": {
+      "type": "integer",
+      "minimum": 500,
+      "maximum": 10000,
+      "default": 2000,
+      "description": "Wait between ping result polls, in milliseconds"
+    },
+    "pingMaxPolls": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10,
+      "default": 5,
+      "description": "Maximum number of ping result polls before reporting partial results"
+    },
+    "dohProviders": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["cloudflare", "alidns", "google"] },
+      "default": ["cloudflare", "alidns", "google"],
+      "description": "DNS-over-HTTPS providers in fallback order"
+    },
+    "priceListLimit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "default": 8,
+      "description": "Number of registrars shown in a domain price comparison"
+    }
+  }
+}

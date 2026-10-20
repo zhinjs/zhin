@@ -115,14 +115,18 @@ zhin doctor [--fix] [--upgrade-l4]
 
 检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。
 
-### dev：联调本地 zhin 源码
+### dev：联调本地 zhin 源码与独立插件
 
 ```bash
 zhin dev link <zhin 源码路径> [--project <dir>] [--no-install]
 zhin dev unlink [--project <dir>] [--no-install] [--force]
+zhin dev link <插件目录> [--project <dir>] [--as <实例名>]
+zhin dev unlink <实例名> [--project <dir>]
 ```
 
-在外部插件项目里把 `zhin.js` / `@zhin.js/*` 整体切换到本地源码（打包完整依赖闭包并写入 `pnpm.overrides`，保证每个包只有一份实例），`unlink` 原样恢复。`doctor` 的「Zhin 包单实例」检查会发现多份实例并提示该命令。详见[本地联调指南](/authoring/local-dev)。
+`<插件目录>` 的 `package.json` 有 `zhin` 字段时，把独立插件接进当前 bot：在 `plugins/` 建链接、写入 `./plugins/<实例名>`，并让插件的 `@zhin.js/*` 使用 bot 的同一份，改插件源码即热重载，见[独立插件热重载联调](/authoring/local-dev#dev-link-plugin)。
+
+传 zhin 源码路径时，在外部插件项目里把 `zhin.js` / `@zhin.js/*` 整体切换到本地源码（打包完整依赖闭包并写入 `pnpm.overrides`，保证每个包只有一份实例），`unlink` 原样恢复。`doctor` 的「Zhin 包单实例」检查会发现多份实例并提示该命令。详见[本地联调指南](/authoring/local-dev)。
 
 ### onboard：项目引导
 
@@ -157,7 +161,12 @@ zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package
 
 - 包名默认是 `zhin.js-<name>`；也可以用 `--package-name` 指定自己的名字或 scope（如 `@me/zhin-plugin-x`）。`@zhin.js/` 作用域只留给官方插件（`--is-official`）。
 - `zhin.js` 与能力包（`@zhin.js/command`、`@zhin.js/skill` 等）写成 peerDependencies，版本是从已安装版本推导出的 `^x.y.z`；同样的版本也写进 devDependencies，供本地测试和类型检查使用。
-- `zhin.entry` 是 `./plugin.js`：本地运行时自动回退到 `plugin.ts`；`pnpm build`（`pnpm pack` / `pnpm publish` 前自动执行）把 `plugin.ts` 和约定目录编译成同目录的 `.js`，npm 包里发布的是 JavaScript。见 [definePlugin · 开发入口与 npm 发布入口](../authoring/define-plugin.md#开发入口与-npm-发布入口)。
+- 构建产物按[发布包目录规范](../contributing/publishing.md#发布包目录规范)组织：
+  - `src/` 是库代码，`pnpm build` 把它编译到 `lib/`（`.js` + `.d.ts`），`main`、`types`、`exports` 都指向 `lib/`。
+  - `zhin.entry` 是 `./plugin.js`，本地运行时会自动回退到 `plugin.ts`。打包（`pnpm pack` / 发布）时，`prepack` 先运行 build，再用 `scripts/build-runtime-entries.mjs` 把 `plugin.ts` 和约定目录编译成同目录的 `.js`，其中对 `src/` 的导入会改写到 `lib/`；`postpack` 再把这些生成文件清掉。
+  - `files` 是白名单，只发布 `lib/`、`plugin.js`、约定目录里的 `.js`、`schema.json`、`skills/`、`agents/` 和文档，不发布 `.ts` 源码、测试和配置。
+
+  见 [definePlugin · 开发入口与 npm 发布入口](../authoring/define-plugin.md#开发入口与-npm-发布入口)。
 - 生成的 `pnpm test`（Vitest）和 `pnpm typecheck`（`tsc --noEmit`）直接可用，不需要设置 `NODE_ENV`。
 - `--skip-install` 同时跳过插件目录和项目根的 `pnpm install`。
 
@@ -222,10 +231,13 @@ zhin build [plugin] [--clean] [--production] [--analyze]
 ### pub：发布插件
 
 ```bash
-zhin pub [plugin-name] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build]
+zhin pub [plugin-name|插件目录] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build] [--yes]
 ```
 
-在包含 `plugins/` 目录的项目根目录运行；不传名字时交互选择。`--dry-run` 只走流程，不实际发布。完整发布流程见 [插件完整交付](../authoring/plugin-delivery.md)。
+- 在 `zhin new --standalone` 生成的插件目录里，不带参数就发布当前目录：`npx @zhin.js/cli pub --dry-run` 预览，`npx @zhin.js/cli pub` 发布（插件目录里不要用 `npx zhin`，那会下载 npm 上另一个已停止维护的同名旧包）。
+- 参数也可以是任意插件目录（`package.json` 有 `zhin` 字段），如 `zhin pub ../my-plugin`。
+- 在 Bot 项目根，参数是相对 `plugins/` 的路径；不传时只有一个插件就直接选中，多个时交互选择。
+- `--dry-run` 只走流程，不实际发布；非交互环境（CI）需要加 `--yes` 才会跳过发布确认。`private: true` 的包会被拒绝，`zhin.entry` 指向 `.ts` 时会提示改用构建出的 `.js`。完整发布流程见 [插件完整交付](../authoring/plugin-delivery.md)。
 
 ### packages：插件状态与扩展包
 
