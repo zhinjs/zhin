@@ -122,7 +122,41 @@ zhin dev link ../zhin --project ../my-bot   # 不在项目目录时用 --project
 
 临时停用某个实例时，把实例名加入主配置 `disable_plugins`；保留包依赖、`plugins` 映射和顶层同名业务块。移除声明才是删除实例，不能把停用等同于卸载。
 
-## 5. 端口与干净退出
+## 5. 独立插件联调 {#standalone-plugin}
+
+`zhin new <name> --standalone` 生成的插件仓库自带 `zhin.js`、`@zhin.js/*` 开发依赖（用于测试和类型检查）。把它挂到一个 Bot 上试用时，**不要**直接 `pnpm add <插件目录>`：
+
+- `link:` 依赖让插件从**自己的** `node_modules` 解析 `@zhin.js/tool` 等包，与 Bot 的那份物理位置不同，启动报 `Multiple package locations for @zhin.js/tool are not supported in one generation`（第 1 节）；
+- 通过 `node_modules` 解析到的包不会被监听，改代码不会热重载；
+- 用 `pnpm create zhin-app` 创建的 Bot 本身是 pnpm workspace，`pnpm add` 还需要 `-w`。
+
+`zhin dev link` 只切换**框架**包，不处理插件目录。按用途选一种：
+
+| 目的 | 做法 | 热重载 |
+| --- | --- | --- |
+| 验证发布产物 | 插件目录 `pnpm pack`，Bot 根目录 `pnpm add -w <插件目录>/<包名>-<版本>.tgz`，主配置 `plugins: { <实例名>: <包名> }` | 否，改动后重新打包安装 |
+| 边改边试 | 把插件目录链接进 Bot 的 `plugins/`（Bot 的 `pnpm-workspace.yaml` 默认包含 `plugins/*`），再以 `./` 本地路径挂载 | 是 |
+
+边改边试的步骤（在 Bot 项目根执行）：
+
+```bash
+ln -s /path/to/my-plugin plugins/my-plugin   # Windows：mklink /J plugins\my-plugin C:\path\to\my-plugin
+pnpm install                                 # 插件成为 Bot 的 workspace 成员，开发依赖从 Bot 的同一 store 链接
+npx zhin doctor                              # 「Zhin 包单实例」应为 ✅
+```
+
+```yaml
+# zhin.config.yml
+configVersion: 2
+plugins:
+  my-plugin: ./plugins/my-plugin
+```
+
+然后 `pnpm dev`。修改 `commands/`、`tools/` 等约定目录下的文件会按能力热重载（日志 `hmr_reload | scope: capability`）；修改被多个模块共享的 `src/` 辅助模块时，日志会打印 `restartRequired`，开发模式会自动重启进程。插件版本与 Bot 的 zhin 版本不一致时 pnpm 会装出两份，`zhin doctor` 会提示，先对齐版本。
+
+用完后删除 `plugins/my-plugin` 链接和 `plugins` 中的这一项，再 `pnpm install`。
+
+## 6. 端口与干净退出
 
 控制面默认监听 `http.host`/`http.port`（未配置时为 `127.0.0.1:8086`）。启动报 `EADDRINUSE` 时先找占用者：
 
@@ -142,7 +176,7 @@ lsof -nP -iTCP:<端口> -sTCP:LISTEN
 
 插件自己的定时器、连接要在 dispose 中释放；dispose 永不完成会被 5 秒预算强制结束，并在 `stillStopping` 中显示为 `runtime`。
 
-## 6. 联调检查清单
+## 7. 联调检查清单
 
 - [ ] `grep` 出的 `link:`/`file:`/`workspace:` 依赖都在预期内；
 - [ ] `pnpm why @zhin.js/command`（及 `zhin.js`、`@zhin.js/tool` 等）每个包只有一个实际解析路径；
