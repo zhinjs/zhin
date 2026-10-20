@@ -1,0 +1,20 @@
+.changeset/dx2-dev-link-plugin.md
+  h_b680f75345178a 1-5
+basic/cli/src/commands/dev.ts
+  h_b680f75345178a 5,7,9,20,22,25-39,42-43,47-56
+basic/cli/src/utils/dev-link-plugin.ts
+  h_b680f75345178a 1-275
+basic/cli/tests/dev-link-plugin.test.ts
+  h_b680f75345178a 1-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d87ada21d1c76d3ff93624f1c4caef8bc45a9f71",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
