@@ -123,6 +123,12 @@ Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录�
 
 Host 接口为 `GET /api/tasks/use-cases`、`GET /api/tasks/providers`、`POST /api/tasks/create` 和 `POST /api/tasks/change`。任务事实、并发版本及操作回执由插件持久化，Host 不另建调度器。参见[持久提醒插件](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder)与 [CLI 用途指南](../cli/index.md#use-cases按用途找到配置入口)。
 
+## 按用途配置群欢迎
+
+在「任务中心 → 按用途开始」选择“配置新成员欢迎”，进入 `/use-cases/group-welcome`。页面读取 Host 指定的包和可管理实例；同包多实例必须明确选择，不按包名猜实例。尚未安装时进入市场查看具体版本和原安装计划，已有实例继续使用原配置表单、精确会话范围编辑器和插件详情应用流程。用途页只衔接导航与只读事实，不自动保存、应用或发送。
+
+返回流程后，分别核对当前代配置语义、非空欢迎文案及范围，再选择完整测试群。真实成员加入后可明确记录一次人工观察；记录不是平台自动验收，系统也不自动归因到某个实例。它仅在本页内存有效，连接、实例、配置、运行代或目标变化及重读失败后失效。空文案、空列表和未应用配置不能视为欢迎已可用；原始环境引用也不能证明展开后的文案或实际范围。详见[群欢迎配置与人工核验](../solutions/group-welcome.md)。
+
 ## 命令权限说明
 
 从运行时能力的命令目录进入“查看权限说明”，或打开 `/permissions`。使用当前 Host 有效的 full scope Token 读取命令目录，按命令名、说明或插件实例搜索；列表分页，不需要一次展开全部指令。
