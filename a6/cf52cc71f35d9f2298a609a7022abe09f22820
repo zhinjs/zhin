@@ -1,0 +1,18 @@
+docs/authoring/testing.md
+  h_b680f75345178a 12,38-56,104-139
+docs/en/authoring/testing.md
+  h_b680f75345178a 12,38-56,104-139
+packages/toolkit/testing/README.md
+  h_b680f75345178a 29-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a6cf52cc71f35d9f2298a609a7022abe09f22820",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
