@@ -12,7 +12,7 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,16 @@ const PLUGINS = [
   { name: 'e2e-service', type: 'service', js: ['plugin.js'] },
   { name: 'e2e-adapter', type: 'adapter', js: ['plugin.js', 'adapters/e2e-adapter/index.js'] },
 ];
+// Layout standard (docs/contributing/publishing.md#发布包目录规范): library code in lib/ with .d.ts.
+const LIBRARY_FILES = ['lib/index.js', 'lib/index.d.ts'];
+/** Files a scaffolded tarball must never contain: TypeScript sources, tests, build configs. */
+function layoutProblems(name, files) {
+  const bad = [...files].filter((file) => (/\.tsx?$/u.test(file) && !file.endsWith('.d.ts'))
+    || /(^|\/)(tests?|__tests__)\//u.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/u.test(file)
+    || /(^|\/)(tsconfig[^/]*\.json|vitest\.config\.[cm]?[jt]s|[^/]*\.tsbuildinfo)$/u.test(file)
+    || file.startsWith('scripts/'));
+  return bad.length ? [`${name}: tarball ships sources/tests/configs: ${bad.slice(0, 5).join(', ')}`] : [];
+}
 
 // The regression this guards: tooling that enables the `development`
 // condition (Vitest 4 does unless NODE_ENV=production) must still work.
@@ -47,6 +57,10 @@ async function run(command, args, cwd) {
       `${command} ${args.join(' ')} failed in ${cwd}:\n${String(error.stderr ?? '').slice(-6000)}\n${String(error.stdout ?? '').slice(-6000)}`,
     );
   }
+}
+
+async function exists(file) {
+  try { await access(file); return true; } catch { return false; }
 }
 
 async function tarball(file) {
@@ -126,13 +140,20 @@ try {
     await run('pnpm', ['pack', '--pack-destination', packs], dir);
     const created = (await readdir(packs)).filter((file) => file.endsWith('.tgz') && !before.has(file));
     const { files, manifest: packedManifest } = await tarball(path.join(packs, created[0]));
-    const missing = plugin.js.filter((file) => !files.has(file));
+    const missing = [...plugin.js, ...LIBRARY_FILES].filter((file) => !files.has(file));
     if (missing.length > 0) throw new Error(`${plugin.name}: tarball is missing built JavaScript: ${missing.join(', ')}`);
+    const layout = layoutProblems(plugin.name, files);
+    if (layout.length > 0) throw new Error(layout.join('\n'));
+    // Runtime entries import library code from lib/ (rewritten from src/), which must be packed.
+    const { stdout: entry } = await run('tar', ['-xzOf', path.join(packs, created[0]), 'package/plugin.js'], repo);
+    if (!/from ["']\.\/lib\/index\.js["']/u.test(entry)) throw new Error(`${plugin.name}: plugin.js does not import ./lib/index.js`);
+    // postpack removes the generated sibling JavaScript again.
+    if (await exists(path.join(dir, 'plugin.js'))) throw new Error(`${plugin.name}: postpack left plugin.js behind`);
     if (!files.has(packedManifest.zhin.entry.replace(/^\.\//u, ''))) {
       throw new Error(`${plugin.name}: zhin.entry ${packedManifest.zhin.entry} is not in the tarball`);
     }
   }
-  console.log(`PASS: built CLI → zhin new --standalone (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js; no development condition in ${closure.length} packed manifests.`);
+  console.log(`PASS: built CLI → zhin new --standalone (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js + lib/ (.d.ts), no sources/tests/configs; no development condition in ${closure.length} packed manifests.`);
 } finally {
   if (keep) console.log(`kept ${temp}`);
   else await rm(temp, { recursive: true, force: true });
