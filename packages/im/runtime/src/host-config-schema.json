@@ -1286,26 +1286,6 @@
               },
               "description": "allowlist 模式下允许的命令（支持正则字符串，如 \"^ls \"、\"^cat \"），与 preset 合并"
             },
-            "taskExecApprovalMode": {
-              "type": "string",
-              "x-zhin-config": {
-                "options": [
-                  {
-                    "label": "auto",
-                    "value": "auto"
-                  },
-                  {
-                    "label": "ask",
-                    "value": "ask"
-                  },
-                  {
-                    "label": "bypass",
-                    "value": "bypass"
-                  }
-                ]
-              },
-              "deprecated": true
-            },
             "phaseTrace": {
               "type": [
                 "boolean",
@@ -1492,13 +1472,6 @@
               },
               "description": "Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守）"
             },
-            "deferredToolMaxResults": {
-              "type": [
-                "number",
-                "string"
-              ],
-              "deprecated": true
-            },
             "deferredTools": {
               "type": "object",
               "additionalProperties": true,
@@ -1584,13 +1557,6 @@
                 "string"
               ]
             },
-            "maxSkills": {
-              "type": [
-                "number",
-                "string"
-              ],
-              "deprecated": true
-            },
             "maxTools": {
               "type": [
                 "number",
@@ -1628,13 +1594,6 @@
                 "boolean",
                 "string"
               ]
-            },
-            "chatModel": {
-              "type": "string"
-            },
-            "visionModel": {
-              "type": "string",
-              "deprecated": true
             },
             "contextTokens": {
               "type": [
@@ -1759,13 +1718,6 @@
             },
             "promptCacheKeyPrefix": {
               "type": "string"
-            },
-            "policyDenialStopAfter": {
-              "type": [
-                "number",
-                "string"
-              ],
-              "deprecated": true
             },
             "deferredAutoContinue": {
               "type": [
@@ -2253,38 +2205,6 @@
                 "items": {
                   "type": "string"
                 }
-              },
-              "priority": {
-                "type": [
-                  "number",
-                  "string"
-                ],
-                "deprecated": true
-              },
-              "match": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "adapter": {
-                    "type": "string"
-                  },
-                  "endpoint": {
-                    "type": "string"
-                  },
-                  "scene": {
-                    "type": "string"
-                  },
-                  "hasMedia": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "contentContains": {
-                    "type": "string"
-                  }
-                },
-                "deprecated": true
               },
               "nickname": {
                 "type": "string",

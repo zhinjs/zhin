@@ -191,7 +191,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.schedule.budget.maxToolCalls` | number \| string | no | — | — |
 | `ai.agent.schedule.budget.timeoutMs` | number \| string | no | — | — |
 | `ai.agent.execAllowlist` | array&lt;string&gt; | no | — | allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 |
-| `ai.agent.taskExecApprovalMode` | string | no | — | — |
 | `ai.agent.phaseTrace` | boolean \| string | no | — | 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） |
 | `ai.agent.modelHarness` | object | no | — | 按模型 / provider 模式覆盖 model harness |
 | `ai.agent.modelHarness.models` | object | no | — | 模型级覆盖：支持 "gpt-4o" 或 "openai:gpt-4o" |
@@ -218,7 +217,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.providerResilience.requestTimeoutMs` | number \| string | no | — | Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. |
 | `ai.agent.providerResilience.emptyReplyRetries` | number \| string | no | — | Extra attempts when the model returns neither text nor tool calls (or a tool call without a name). Default 0: the reply is passed through unchanged. Quirk presets (see model harness) raise this for models known to emit spurious empty replies. |
 | `ai.agent.providerResilience.fallback` | boolean \| string | no | — | Try the next entry of `modelCandidates` after retries are exhausted. Default true. |
-| `ai.agent.deferredToolMaxResults` | number \| string | no | — | — |
 | `ai.agent.deferredTools` | object | no | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | no | — | — |
 | `ai.agent.deferredTools.discoverTopK` | number \| string | no | — | — |
@@ -231,15 +229,12 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.maxIterations` | number \| string | no | — | — |
 | `ai.agent.timeout` | number \| string | no | — | — |
 | `ai.agent.preExecTimeout` | number \| string | no | — | — |
-| `ai.agent.maxSkills` | number \| string | no | — | — |
 | `ai.agent.maxTools` | number \| string | no | — | — |
 | `ai.agent.contextTailMessageLimit` | number \| string | no | — | — |
 | `ai.agent.rateLimit` | object | no | — | — |
 | `ai.agent.rateLimit.maxRequestsPerMinute` | number \| string | no | — | 每分钟最大请求数（默认 20） |
 | `ai.agent.rateLimit.cooldownSeconds` | number \| string | no | — | 冷却时间（秒），超限后需等待（默认 10） |
 | `ai.agent.toneAwareness` | boolean \| string | no | — | — |
-| `ai.agent.chatModel` | string | no | — | — |
-| `ai.agent.visionModel` | string | no | — | — |
 | `ai.agent.contextTokens` | number \| string | no | — | — |
 | `ai.agent.maxHistoryShare` | number \| string | no | — | — |
 | `ai.agent.compaction` | object | no | — | — |
@@ -261,7 +256,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.promptTraceVerbose` | boolean \| string | no | — | — |
 | `ai.agent.promptCache` | boolean \| string | no | — | — |
 | `ai.agent.promptCacheKeyPrefix` | string | no | — | — |
-| `ai.agent.policyDenialStopAfter` | number \| string | no | — | — |
 | `ai.agent.deferredAutoContinue` | boolean \| string | no | — | — |
 | `ai.agent.deferredAutoContinueMaxDepth` | number \| string | no | — | — |
 | `ai.agent.gitStatus` | boolean \| string | no | — | §1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过） |
@@ -311,13 +305,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agents.<key>.provider` | string | no | — | — |
 | `ai.agents.<key>.model` | string | no | — | — |
 | `ai.agents.<key>.mcpServers` | array \| null | no | — | — |
-| `ai.agents.<key>.priority` | number \| string | no | — | — |
-| `ai.agents.<key>.match` | object | no | — | — |
-| `ai.agents.<key>.match.adapter` | string | no | — | — |
-| `ai.agents.<key>.match.endpoint` | string | no | — | — |
-| `ai.agents.<key>.match.scene` | string | no | — | — |
-| `ai.agents.<key>.match.hasMedia` | array&lt;string&gt; | no | — | — |
-| `ai.agents.<key>.match.contentContains` | string | no | — | — |
 | `ai.agents.<key>.nickname` | string | no | — | Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 |
 | `ai.sessions` | object \| null | no | — | — |
 | `ai.sessions.maxHistory` | number \| string | no | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |

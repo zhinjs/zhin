@@ -3,6 +3,8 @@ import { HOST_CONFIG_SCHEMA, parsePluginConfigSchema } from '../../../../package
 import { resolveAssistantDefaultsConfig, resolveAssistantEventsConfig, resolveAssistantQueueConfig } from '../../../../packages/im/agent/src/assistant/config.js';
 import { resolveAssistantHomeConfig } from '../../../../packages/im/agent/src/assistant/home-config.js';
 import { normalizeAiRoutingConfig } from '../../../../packages/im/agent/src/config/normalize-ai-config.js';
+import { DEPRECATED_AGENT_CONFIG_KEYS } from '../../../../packages/im/agent/src/config/deprecated-agent-keys.js';
+import { DEPRECATED_AGENT_BINDING_KEYS } from '../../../../packages/im/agent/src/config/deprecated-agent-binding-keys.js';
 import { resolvePerceptionConfig } from '../../../../packages/im/agent/src/config/perception-config.js';
 import { resolveRecallOptions } from '../../../../packages/im/agent/src/memory/semantic-recall.js';
 import { createSpeechPipeline } from '../../../../packages/toolkit/speech/src/pipeline.js';
@@ -10,6 +12,27 @@ import { resolveAgentHostMcpServers } from '../../src/plugin-runtime/agent/confi
 import { resolveHttpConfig } from '../../src/plugin-runtime/http-host-installer.js';
 
 describe('Host schema null compatibility with actual configuration consumers', () => {
+  it('does not offer retired switches as usable fields, while preserving saved unknown properties', () => {
+    const agent = HOST_CONFIG_SCHEMA.properties.ai.properties.agent;
+    const bindings = HOST_CONFIG_SCHEMA.properties.ai.properties.agents.additionalProperties;
+    for (const key of [...Object.keys(DEPRECATED_AGENT_CONFIG_KEYS), 'chatModel', 'visionModel']) {
+      expect(agent.properties).not.toHaveProperty(key);
+    }
+    for (const key of Object.keys(DEPRECATED_AGENT_BINDING_KEYS)) expect(bindings.properties).not.toHaveProperty(key);
+    expect(agent.additionalProperties).toBe(true);
+    expect(bindings.additionalProperties).toBe(true);
+    const input = { ai: { agent: { maxSkills: 3, taskExecApprovalMode: 'ask' }, agents: {
+      fixture: { provider: 'fixture', priority: 2, match: { hasMedia: true } },
+    } } };
+    const result = parsePluginConfigSchema(HOST_CONFIG_SCHEMA, input);
+    expect(result.errors).toEqual([]);
+    expect(result.value).toMatchObject(input);
+    // visionModel still has a programmatic fallback; the application Host explicitly rejects its YAML path.
+    for (const key of ['chatModel', 'visionModel']) {
+      expect(() => normalizeAiRoutingConfig({ agent: { [key]: 'retired-model' } } as never)).toThrow(/removed/u);
+    }
+  });
+
   it('keeps explicit null MCP entries and Assistant queue blocks accepted by the existing resolvers', () => {
     const input = { ai: { mcpServers: null }, assistant: { queue: null } };
     expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, input)).toEqual({ value: input, errors: [] });

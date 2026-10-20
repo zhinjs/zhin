@@ -191,7 +191,6 @@ outline: [2, 3]
 | `ai.agent.schedule.budget.maxToolCalls` | number \| string | 否 | — | — |
 | `ai.agent.schedule.budget.timeoutMs` | number \| string | 否 | — | — |
 | `ai.agent.execAllowlist` | array&lt;string&gt; | 否 | — | allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 |
-| `ai.agent.taskExecApprovalMode` | string | 否 | — | — |
 | `ai.agent.phaseTrace` | boolean \| string | 否 | — | 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） |
 | `ai.agent.modelHarness` | object | 否 | — | 按模型 / provider 模式覆盖 model harness |
 | `ai.agent.modelHarness.models` | object | 否 | — | 模型级覆盖：支持 "gpt-4o" 或 "openai:gpt-4o" |
@@ -218,7 +217,6 @@ outline: [2, 3]
 | `ai.agent.providerResilience.requestTimeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. |
 | `ai.agent.providerResilience.emptyReplyRetries` | number \| string | 否 | — | Extra attempts when the model returns neither text nor tool calls (or a tool call without a name). Default 0: the reply is passed through unchanged. Quirk presets (see model harness) raise this for models known to emit spurious empty replies. |
 | `ai.agent.providerResilience.fallback` | boolean \| string | 否 | — | Try the next entry of `modelCandidates` after retries are exhausted. Default true. |
-| `ai.agent.deferredToolMaxResults` | number \| string | 否 | — | — |
 | `ai.agent.deferredTools` | object | 否 | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | 否 | — | — |
 | `ai.agent.deferredTools.discoverTopK` | number \| string | 否 | — | — |
@@ -231,15 +229,12 @@ outline: [2, 3]
 | `ai.agent.maxIterations` | number \| string | 否 | — | — |
 | `ai.agent.timeout` | number \| string | 否 | — | — |
 | `ai.agent.preExecTimeout` | number \| string | 否 | — | — |
-| `ai.agent.maxSkills` | number \| string | 否 | — | — |
 | `ai.agent.maxTools` | number \| string | 否 | — | — |
 | `ai.agent.contextTailMessageLimit` | number \| string | 否 | — | — |
 | `ai.agent.rateLimit` | object | 否 | — | — |
 | `ai.agent.rateLimit.maxRequestsPerMinute` | number \| string | 否 | — | 每分钟最大请求数（默认 20） |
 | `ai.agent.rateLimit.cooldownSeconds` | number \| string | 否 | — | 冷却时间（秒），超限后需等待（默认 10） |
 | `ai.agent.toneAwareness` | boolean \| string | 否 | — | — |
-| `ai.agent.chatModel` | string | 否 | — | — |
-| `ai.agent.visionModel` | string | 否 | — | — |
 | `ai.agent.contextTokens` | number \| string | 否 | — | — |
 | `ai.agent.maxHistoryShare` | number \| string | 否 | — | — |
 | `ai.agent.compaction` | object | 否 | — | — |
@@ -261,7 +256,6 @@ outline: [2, 3]
 | `ai.agent.promptTraceVerbose` | boolean \| string | 否 | — | — |
 | `ai.agent.promptCache` | boolean \| string | 否 | — | — |
 | `ai.agent.promptCacheKeyPrefix` | string | 否 | — | — |
-| `ai.agent.policyDenialStopAfter` | number \| string | 否 | — | — |
 | `ai.agent.deferredAutoContinue` | boolean \| string | 否 | — | — |
 | `ai.agent.deferredAutoContinueMaxDepth` | number \| string | 否 | — | — |
 | `ai.agent.gitStatus` | boolean \| string | 否 | — | §1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过） |
@@ -311,13 +305,6 @@ outline: [2, 3]
 | `ai.agents.<key>.provider` | string | 否 | — | — |
 | `ai.agents.<key>.model` | string | 否 | — | — |
 | `ai.agents.<key>.mcpServers` | array \| null | 否 | — | — |
-| `ai.agents.<key>.priority` | number \| string | 否 | — | — |
-| `ai.agents.<key>.match` | object | 否 | — | — |
-| `ai.agents.<key>.match.adapter` | string | 否 | — | — |
-| `ai.agents.<key>.match.endpoint` | string | 否 | — | — |
-| `ai.agents.<key>.match.scene` | string | 否 | — | — |
-| `ai.agents.<key>.match.hasMedia` | array&lt;string&gt; | 否 | — | — |
-| `ai.agents.<key>.match.contentContains` | string | 否 | — | — |
 | `ai.agents.<key>.nickname` | string | 否 | — | Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 |
 | `ai.sessions` | object \| null | 否 | — | — |
 | `ai.sessions.maxHistory` | number \| string | 否 | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
