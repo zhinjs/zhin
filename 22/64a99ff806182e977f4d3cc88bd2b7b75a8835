@@ -1,0 +1,14 @@
+.changeset/v2-config-migration-ux.md
+  h_b680f75345178a 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2264a99ff806182e977f4d3cc88bd2b7b75a8835",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
