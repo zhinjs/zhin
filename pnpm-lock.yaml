@@ -164,6 +164,9 @@ importers:
       '@zhin.js/pagemanager':
         specifier: workspace:*
         version: link:../../packages/console/pagemanager
+      '@zhin.js/permission':
+        specifier: workspace:*
+        version: link:../../packages/im/permission
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../../packages/im/plugin-runtime

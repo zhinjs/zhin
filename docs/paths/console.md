@@ -91,7 +91,7 @@ Token 就是密码：不要放进 URL、截图或公开的前端配置里。
 - 每个 IM Runtime 仅在内存保留最近 15 分钟、最多 500 条记录；重启、过期或容量淘汰后查不到，不代表处理成功或从未收到。
 - 诊断须显式配置并验证 full scope Token，未配置 Token 的 Host 也不能匿名读取；不另存正文、发送者资料或原始异常。单条记录最多保留 32 个步骤与 32 次投递；超出时 `truncated: true` 表示记录不完整，不替代完整审计日志。单个身份字段最多 2048 字符，完整会话 JSON 最多 8192 字符；超限不截断身份，不收录该诊断。
 
-Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录，或用 `conversation`（完整 `ConversationRef` JSON）、`messageId` 精确筛选，`limit` 为 1–100。找不到记录时，再按下面的路径排查。旧版 Host 不提供此接口，需分别更新 Host 与独立 Console。
+Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录，或用 `conversation`（完整 `ConversationRef` JSON）、`messageId` 精确筛选，`limit` 为 1–100。按实际结果继续阅读[消息处理排查](../troubleshooting/messages.md)；新版 Console 也会在诊断内提供对应问题的链接。找不到记录时，再按下面的路径排查。旧版 Host 不提供此接口，需分别更新 Host 与独立 Console。
 
 1. **工作台**：Bot 连上了吗？各 Endpoint 在线吗？
 2. **渠道与会话**：用户的消息到达 Bot 了吗？
@@ -112,6 +112,18 @@ Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录�
 页面保留提交时的运行代与任务版本，冲突时保留草稿，不静默覆盖。请求超时或响应丢失时保留操作 ID 并冻结写入，只读取插件持久回执核对；没有找到回执不能推断操作未执行。换登录后需明确确认原操作身份才能核对，不会自动重发。页面临时保存的核对信息不包含任务正文、参数或凭据。
 
 Host 接口为 `GET /api/tasks/use-cases`、`GET /api/tasks/providers`、`POST /api/tasks/create` 和 `POST /api/tasks/change`。任务事实、并发版本及操作回执由插件持久化，Host 不另建调度器。参见[持久提醒插件](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder)与 [CLI 用途指南](../cli/index.md#use-cases按用途找到配置入口)。
+
+## 命令权限说明
+
+从运行时能力的命令目录进入“查看权限说明”，或打开 `/permissions`。使用当前 Host 有效的 full scope Token 读取命令目录，按命令名、说明或插件实例搜索；列表分页，不需要一次展开全部指令。
+
+选择命令后，页面逐项解释真实声明的 `permit` 和单独的 `adapter` 约束。规则数组为 AND，单项括号内的逗号为 OR。可以选填假设会话、发送者与角色，检查内置条件；账号从当前 Host 的完整 Endpoint 列表选择，不会通过平台查询角色。
+
+“条件符合”不表示已授权或可执行。缺少角色时显示“缺少依据”，平台与自定义 checker 显示“未评估”，不会执行命令、动态参数默认值或 checker。内置 `group(id)`、`private(id)`、`channel(id)` 只检查类型与 ID，不能限制具体 Bot、父容器或话题；完整身份回显也不等于这些维度受规则约束。
+
+修改假设会清除旧结果，运行代变化后须刷新目录重新检查。换 Host、凭据或退出后不沿用之前的命令和结果。没有接口的旧 Host 会明确提示升级，不伪造权限结论。
+
+需要限制实际群欢迎的范围时，使用[精确欢迎白名单](../solutions/group-welcome.md)。它通过现有配置校验、保存和应用流程生效，不由权限说明页面写入。
 
 ## 下一步
 

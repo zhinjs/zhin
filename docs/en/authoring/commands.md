@@ -191,11 +191,12 @@ export default defineCommand({
 | --- | --- |
 | `role(master)` / `role(trusted)` | Sender role |
 | `adapter(icqq)` | Only on one platform |
-| `group(123)` / `private(…)` / `channel(…)` / `user(…)` | Only in given groups, DMs, channels, or for given users |
+| `group()` / `private()` / `channel()` | Restrict conversation kind; an empty value or `*` matches any ID of that kind |
+| `group(123)` / `private(…)` / `channel(…)` / `user(…)` | Compare the corresponding conversation or sender ID, without restricting the complete account, parent or thread |
 
 All rules in the array must pass (**AND**); commas inside one rule mean **any of** (OR). Users without permission don't see the command's help either.
 
-There are three roles: `user` → `trusted` → `master` (`master` includes `trusted`). Name the master in the adapter config:
+The builtin role check only makes `master` imply `trusted`; it does not infer `user`, `admin` or `owner`. Roles come from the actual message. Name the master in the adapter config:
 
 ```yaml
 configVersion: 2

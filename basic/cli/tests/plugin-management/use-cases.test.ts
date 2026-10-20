@@ -9,8 +9,9 @@ it('makes useful tasks discoverable without loading plugins or making mutations'
 });
 
 it('does not promise unavailable scope or impersonate a chat sender', () => {
-  expect(formatPluginUseCases('group-welcome')).toContain('所有群');
-  expect(formatPluginUseCases('group-welcome')).toContain('尚未提供精确范围');
+  expect(formatPluginUseCases('group-welcome')).toContain('welcomeConversations');
+  expect(formatPluginUseCases('group-welcome')).toContain('空列表不欢迎任何会话');
+  expect(formatPluginUseCases('group-welcome')).toContain('不是通配');
   expect(formatPluginUseCases('keyword-reply')).toContain('不伪造平台用户');
   expect(() => formatPluginUseCases('missing')).toThrow('未知用途');
 });

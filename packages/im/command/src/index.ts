@@ -6,6 +6,7 @@
 export * from './command-index.js';
 /** @public Command authoring contract and `defineCommand`. */
 export * from './definition.js';
+export * from './permission-explanation.js';
 export {
   assertBuiltinPermits,
   checkBuiltinPermit,

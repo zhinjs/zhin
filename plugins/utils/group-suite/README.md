@@ -77,6 +77,35 @@ group-suite:
 欢迎通过 `outboundMessageToken` 走统一发送链路，投递失败/未知会报错，不盲目重试。
 `stats-card` 是 HTML 图片/文本展示，不是平台原生 `card` 载荷。
 
+### 限定群欢迎范围
+
+`welcomeConversations` 是当前插件实例的精确会话白名单，最多 100 项。省略此字段保留原行为：
+设置非空 `welcomeMessage` 后，所有符合条件的群成员加入事件都可触发欢迎。显式配置 `[]`
+则不欢迎任何会话；`welcomeMessage` 为空时仍始终关闭欢迎。
+
+```yaml
+group-suite:
+  welcomeMessage: "欢迎 {name} ({id})"
+  welcomeConversations:
+    - endpoint:
+        adapter: "<复制实际 conversation.endpoint.adapter>"
+        id: "root/qq\u0000zhin.adapter\u0000icqq~main"
+      kind: group
+      id: "123456"
+```
+
+示例 Endpoint ID 仅说明格式，实际请复制当前 canonical `conversation.endpoint`，不要按昵称、
+账号、Endpoint 简称或实例名拼接。完整 Endpoint ID 中的 NUL 在双引号 YAML 中写为 `\u0000`。
+`endpoint.adapter` 也须与事件完全一致。
+
+每项同时匹配完整 Endpoint 身份、`kind`、会话 `id`、`parent.kind/id` 和 `threadId`，没有通配符。
+省略 `parent` 或 `threadId` 只匹配同样没有该字段的群根会话；需要父容器或线程时须完整填写。
+`null`、空 ID、残缺父容器和额外字段会被拒绝。重复条目不会重复发送欢迎。
+白名单只筛选入站群成员加入事件，不改写原会话投递目标，也不限制签到、词库、统计等能力。
+
+这不补充平台本身缺少的入站事件或目标：未提供 canonical 群会话的成员加入事件不会发送欢迎，
+也不会推测频道。配置可热更新，校验失败保留旧配置与 generation；没有单独的范围数据库。
+
 所有新数据按插件实例与完整会话隔离：平台、Endpoint 身份、群/频道/私聊类型与 ID，以及父会话、
 线程信息共同参与键。相同群号的两个 Bot 不共享词库、签到、教学或统计。群专用 Tool 只接受 IM
 群上下文，并通过当前 AdapterIndex 精确解析 Endpoint，无法确定唯一来源时拒绝执行。当前群的查询保留当前线程，只查该完整会话，不聚合其他线程。
