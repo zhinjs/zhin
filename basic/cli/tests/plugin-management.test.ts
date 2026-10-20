@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
+import { RootRuntime, ProjectGraphService, type ModuleRuntime } from '@zhin.js/runtime';
+import { createConfigDocument } from '@zhin.js/config-file';
 import { loadRuntimeEnvironmentLayers } from '../src/plugin-runtime/start/environment.js';
 import { definePlugin, pluginVerificationToken } from '@zhin.js/plugin-runtime';
 import { PluginManagementWorkflow, PluginManagementOperationError } from '../src/plugin-management/workflow.js';
@@ -15,6 +16,65 @@ const roots: string[] = [];
 function application(configs: Record<string, unknown>, packages: Record<string, string> = Object.fromEntries(Object.keys(configs).map(key => [key, key]))) { return {configVersion: 2, plugins: packages, ...configs}; }
 const manifest = { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, features: [], plugins: [] };
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+
+async function evidenceFixture() {
+  const root = await fixture(); await mounted(root);
+  const file = join(root, 'zhin.config.json');
+  await writeFile(file, JSON.stringify(application({ reminder: { label: 'private-config-marker' } })));
+  const definition = { default: definePlugin({ name: 'reminder', config: { toJsonSchema: () => ({ type: 'object', properties: { label: { type: 'string', default: 'daily' } } }) } }) };
+  const modules = new Map([[join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }], [join(root, 'node_modules/reminder/plugin.js'), definition]]);
+  const loader: ModuleRuntime = { async load<T>(source: string) { return modules.get(source) as T; }, async close() {} };
+  const runtime = new RootRuntime({ projectRoot: root, modules: loader, config: createConfigDocument(file), environment: { name: 'test', mode: 'test', platform: 'node' } });
+  await runtime.start();
+  return { root, file, runtime, document: createConfigDocument(file), workflow: new PluginManagementWorkflow(root, { snapshots: runtime.snapshots }) };
+}
+
+function pauseDependencyInspection() {
+  let reached!: () => void, release!: () => void;
+  const entered = new Promise<void>(resolve => { reached = resolve; });
+  const wait = new Promise<void>(resolve => { release = resolve; });
+  const original = ProjectGraphService.prototype.inspect;
+  const spy = vi.spyOn(ProjectGraphService.prototype, 'inspect').mockImplementationOnce(async function (...args) {
+    reached(); await wait; return original.apply(this, args);
+  });
+  return { entered, release, spy };
+}
+
+describe('configuration application evidence is one coherent observation', () => {
+  it('rejects a file changed during inspection rather than attaching its new revision to an old published result', async () => {
+    const f = await evidenceFixture(), pause = pauseDependencyInspection();
+    try {
+      const pending = f.workflow.inspect('reminder'); await pause.entered;
+      await writeFile(f.file, JSON.stringify(application({ reminder: { label: 'changed' } }))); pause.release();
+      await expect(pending).rejects.toThrow('配置或项目版本在读取期间变化');
+      expect(await f.workflow.inspect('reminder')).toMatchObject({ revision: (await f.document.read()).revision, published: false, status: 'pending-restart' });
+    } finally { pause.release(); pause.spy.mockRestore(); await f.runtime.stop(); }
+  });
+
+  it('rejects a generation changed during inspection and releases the old real Runtime lease', async () => {
+    const f = await evidenceFixture(), pause = pauseDependencyInspection();
+    const hmr = f.runtime.createHmrCoordinator({ onError: error => { throw error; }, onRestartRequired() { throw new Error('unexpected restart'); } });
+    try {
+      const initialGeneration = f.runtime.snapshot.generation;
+      const pending = f.workflow.inspect('reminder'); await pause.entered;
+      const reloaded = hmr.enqueue(join(f.root, 'node_modules/reminder/plugin.js'));
+      await vi.waitFor(() => expect(f.runtime.snapshot.generation).toBeGreaterThan(initialGeneration)); pause.release();
+      await expect(pending).rejects.toThrow('运行代在读取期间变化'); await reloaded;
+      expect(await f.workflow.inspect('reminder')).toMatchObject({ generation: f.runtime.snapshot.generation, published: true });
+    } finally { pause.release(); pause.spy.mockRestore(); await hmr.stop(); await f.runtime.stop(); }
+  });
+
+  it('reports semantic agreement for formatting-only saves without claiming an exact file revision was applied or exposing values', async () => {
+    const f = await evidenceFixture();
+    try {
+      const before = await f.workflow.inspect('reminder');
+      const config = JSON.parse(await readFile(f.file, 'utf8')); await writeFile(f.file, `${JSON.stringify(config, null, 2)}\n`);
+      const state = await f.workflow.inspect('reminder');
+      expect(state).toMatchObject({ published: true, generation: before.generation }); expect(state.revision).not.toBe(before.revision);
+      expect(state.revision).toBe((await f.document.read()).revision); expect(JSON.stringify(state)).not.toContain('private-config-marker');
+    } finally { await f.runtime.stop(); }
+  });
+});
 
 it('keeps dependency and declaration writes inside one process-owned restart guard', async () => {
   const root = await fixture();
