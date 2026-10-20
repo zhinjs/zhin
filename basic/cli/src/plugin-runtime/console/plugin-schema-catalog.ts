@@ -13,6 +13,7 @@ import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { createConfigDocument } from '@zhin.js/config-file';
 import { findConfigFile } from '../../utils/config-file.js';
 import { isConsoleSchemaJson, jsonSchemaToConsoleSchema } from './console-schema.js';
+import { readStringLiteralOptions } from './string-literal-options.js';
 
 const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
 
@@ -154,6 +155,7 @@ function assertSchemaStructure(value: unknown, location: string): void {
   // Reject these even beside supported properties, instead of displaying a partial form.
   for (const key of ['$ref', 'anyOf', 'oneOf', 'allOf', 'prefixItems', 'patternProperties']) {
     if (schema[key] !== undefined) {
+      if (key === 'anyOf' && readStringLiteralOptions(schema)) continue;
       throw new Error(`${location}.${key} is not supported by Console forms`);
     }
   }

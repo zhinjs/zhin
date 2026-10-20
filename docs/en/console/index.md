@@ -91,6 +91,15 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 
 Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events).
 
+Fixed string choices, such as the calendar `provider`, can use the existing select field instead of
+forcing the entire document into source editing. The supported `anyOf` consists of 1–64 unique,
+nonempty string constants of at most 256 characters, with no extra branch validation constraints;
+only the outer default is used. Object unions, mixed types, `oneOf`, and other combinations that
+cannot be represented completely still use source editing. The original JSON Schema validator is
+unchanged. A saved value outside the options, including an environment reference, must be preserved
+until explicitly replaced; changing one choice must not remove other backends or instances.
+This display requires the corresponding Console update.
+
 ## Agent Studio run policy
 
 The working directory and security policy belong to each run. They are not Prompt content, and the model cannot elevate them. A safe beginner baseline is the current project directory, `workspace-write`, `ask`, and network access disabled.
