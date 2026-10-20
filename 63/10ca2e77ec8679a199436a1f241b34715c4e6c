@@ -1,0 +1,20 @@
+plugins/adapters/qq/src/endpoint.ts
+  h_b680f75345178a 21,163-165,170-185,422-424,429-444
+plugins/adapters/qq/src/index.ts
+  h_b680f75345178a 28
+plugins/adapters/qq/src/outbound.ts
+  h_b680f75345178a 293-322
+plugins/adapters/qq/tests/menu-pagination.test.ts
+  h_b680f75345178a 3,78-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6310ca2e77ec8679a199436a1f241b34715c4e6c",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
