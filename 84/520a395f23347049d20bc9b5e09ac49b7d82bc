@@ -1,0 +1,66 @@
+.changeset/plugin-roulette.md
+  h_b680f75345178a 1-5
+docs/configuration/generated.md
+  h_b680f75345178a 1158-1169
+docs/contributing/publishing.md
+  h_b680f75345178a 130,226,234
+docs/en/configuration/generated.md
+  h_b680f75345178a 1158-1169
+plugins/games/README.md
+  h_b680f75345178a 17
+plugins/games/roulette/README.md
+  h_b680f75345178a 1-67
+plugins/games/roulette/commands/roulette/[[action]]/index.ts
+  h_b680f75345178a 1-13
+plugins/games/roulette/middlewares/roulette-alias/index.ts
+  h_b680f75345178a 1-10
+plugins/games/roulette/middlewares/roulette-fire/index.ts
+  h_b680f75345178a 1-31
+plugins/games/roulette/package.json
+  h_b680f75345178a 1-104
+plugins/games/roulette/plugin.ts
+  h_b680f75345178a 1-97
+plugins/games/roulette/schema.json
+  h_b680f75345178a 1-42
+plugins/games/roulette/src/config.ts
+  h_b680f75345178a 1-46
+plugins/games/roulette/src/engine.ts
+  h_b680f75345178a 1-226
+plugins/games/roulette/src/game-flow.ts
+  h_b680f75345178a 1-272
+plugins/games/roulette/src/index.ts
+  h_b680f75345178a 1-17
+plugins/games/roulette/src/models.ts
+  h_b680f75345178a 1-68
+plugins/games/roulette/src/mute-penalty.ts
+  h_b680f75345178a 1-66
+plugins/games/roulette/src/roulette-actions.ts
+  h_b680f75345178a 1-65
+plugins/games/roulette/src/roulette-command.ts
+  h_b680f75345178a 1-21
+plugins/games/roulette/src/runtime.ts
+  h_b680f75345178a 1-31
+plugins/games/roulette/src/session-service.ts
+  h_b680f75345178a 1-262
+plugins/games/roulette/src/view.ts
+  h_b680f75345178a 1-84
+plugins/games/roulette/tests/engine.test.ts
+  h_b680f75345178a 1-116
+plugins/games/roulette/tests/roulette-runtime.test.ts
+  h_b680f75345178a 1-327
+plugins/games/roulette/tsconfig.json
+  h_b680f75345178a 1-12
+pnpm-lock.yaml
+  h_b680f75345178a 3352-3379
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "84520a395f23347049d20bc9b5e09ac49b7d82bc",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
