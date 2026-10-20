@@ -1,8 +1,9 @@
 /**
  * DNS lookups over HTTPS (DoH JSON API) with provider fallback.
  *
- * Both Cloudflare (`cloudflare-dns.com/dns-query`) and Google
- * (`dns.google/resolve`) speak the same JSON dialect. Providers are tried in
+ * Cloudflare (`cloudflare-dns.com/dns-query`), AliDNS (`dns.alidns.com/resolve`,
+ * reachable from mainland China) and Google (`dns.google/resolve`) speak the
+ * same JSON dialect. Providers are tried in
  * order; we move on to the next one when a provider is unreachable, times out,
  * returns an HTTP error, returns malformed JSON or answers SERVFAIL/REFUSED.
  * NXDOMAIN and "no records" are authoritative answers and are returned as-is.
@@ -29,7 +30,7 @@ export type DnsRecordType = keyof typeof DNS_RECORD_TYPES;
 
 export const SUPPORTED_DNS_TYPES = Object.keys(DNS_RECORD_TYPES) as DnsRecordType[];
 
-export type DohProviderId = 'cloudflare' | 'google';
+export type DohProviderId = 'cloudflare' | 'alidns' | 'google';
 
 export interface DohProvider {
   readonly id: DohProviderId;
@@ -43,6 +44,11 @@ export const DOH_PROVIDERS: Readonly<Record<DohProviderId, DohProvider>> = Objec
     label: 'Cloudflare DoH',
     endpoint: 'https://cloudflare-dns.com/dns-query',
   }),
+  alidns: Object.freeze({
+    id: 'alidns',
+    label: 'AliDNS DoH',
+    endpoint: 'https://dns.alidns.com/resolve',
+  }),
   google: Object.freeze({
     id: 'google',
     label: 'Google DoH',
@@ -50,7 +56,7 @@ export const DOH_PROVIDERS: Readonly<Record<DohProviderId, DohProvider>> = Objec
   }),
 });
 
-export const DEFAULT_DOH_PROVIDERS: readonly DohProviderId[] = ['cloudflare', 'google'];
+export const DEFAULT_DOH_PROVIDERS: readonly DohProviderId[] = ['cloudflare', 'alidns', 'google'];
 
 export interface DnsRecord {
   readonly name: string;

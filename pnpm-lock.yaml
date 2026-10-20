@@ -3737,9 +3737,6 @@ importers:
 
   plugins/utils/nettools:
     dependencies:
-      '@zhin.js/command':
-        specifier: workspace:^
-        version: link:../../../packages/im/command
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
@@ -3747,6 +3744,9 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/tool
     devDependencies:
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

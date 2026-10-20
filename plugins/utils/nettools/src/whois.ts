@@ -7,15 +7,21 @@
  *    Only `https://` bases are used.
  * 2. If the bootstrap is unavailable, lacks the TLD or the registry server
  *    fails, we fall back to the public redirector `rdap.org`.
- * 3. HTTP 404 means "not registered / not in this registry". For names with
- *    more than two labels (e.g. `www.example.com`) we retry once with the
- *    leftmost label removed.
+ * 3. Last resort: the 60s API WHOIS endpoint (`60s.viki.moe/v2/whois`), which
+ *    also covers TLDs without RDAP such as `.cn`. Registrant personal data in
+ *    that answer is ignored on purpose.
+ * 4. HTTP 404 from the TLD's own registry is authoritative ("not
+ *    registered"). A 404 from rdap.org is not (the TLD may simply have no
+ *    RDAP), so the WHOIS fallback still runs.
+ * 5. For names with more than two labels (e.g. `www.example.com`) that are
+ *    not registered we retry once with the leftmost label removed.
  */
 import { NettoolsError } from './errors.js';
 import type { HttpClient } from './http.js';
 
 export const IANA_RDAP_BOOTSTRAP_URL = 'https://data.iana.org/rdap/dns.json';
 export const RDAP_FALLBACK_BASE_URL = 'https://rdap.org/';
+export const WHOIS_FALLBACK_URL = 'https://60s.viki.moe/v2/whois';
 export const DEFAULT_BOOTSTRAP_TTL_MS = 24 * 60 * 60 * 1000;
 const RDAP_ACCEPT = 'application/rdap+json, application/json;q=0.9';
 
@@ -62,22 +68,53 @@ export class RdapClient {
   }
 
   async #lookupExact(domain: string, signal?: AbortSignal): Promise<WhoisRecord> {
-    const bases = await this.#registryBases(domain, signal);
-    let lastError: unknown;
-    for (const base of [...bases, RDAP_FALLBACK_BASE_URL]) {
+    const failures: unknown[] = [];
+    const registryBases = await this.#registryBases(domain, signal);
+    for (const base of registryBases) {
       try {
         return await this.#query(base, domain, signal);
       } catch (error) {
-        if (error instanceof NettoolsError && error.kind === 'aborted') {
-          throw error;
-        }
-        lastError = error;
+        rethrowIfAborted(error);
+        failures.push(error);
       }
     }
+
+    let rdapOrgAnswer: WhoisRecord | undefined;
+    try {
+      rdapOrgAnswer = await this.#query(RDAP_FALLBACK_BASE_URL, domain, signal);
+      if (rdapOrgAnswer.registered) {
+        return rdapOrgAnswer;
+      }
+    } catch (error) {
+      rethrowIfAborted(error);
+      failures.push(error);
+    }
+
+    try {
+      return await this.#queryWhoisFallback(domain, signal);
+    } catch (error) {
+      rethrowIfAborted(error);
+      failures.push(error);
+    }
+
+    if (rdapOrgAnswer) {
+      return rdapOrgAnswer;
+    }
+    const lastError = failures[failures.length - 1];
     if (lastError instanceof NettoolsError) {
       throw lastError;
     }
-    throw new NettoolsError('network', 'RDAP 查询失败', { cause: lastError });
+    throw new NettoolsError('network', 'RDAP / WHOIS 查询失败', { cause: lastError });
+  }
+
+  async #queryWhoisFallback(domain: string, signal?: AbortSignal): Promise<WhoisRecord> {
+    const url = new URL(WHOIS_FALLBACK_URL);
+    url.searchParams.set('domain', domain);
+    const response = await this.#http.fetchJson(url, {
+      provider: 'WHOIS (60s.viki.moe)',
+      ...(signal ? { signal } : {}),
+    });
+    return parseWhoisFallback(response.body, domain, url.hostname);
   }
 
   async #query(base: string, domain: string, signal?: AbortSignal): Promise<WhoisRecord> {
@@ -204,6 +241,63 @@ export function parseRdapDomain(body: unknown, domain: string, source: string): 
   });
 }
 
+/**
+ * Parse the 60s API WHOIS answer. Only registry-level facts are kept;
+ * registrant name / organisation / e-mail are deliberately dropped.
+ */
+export function parseWhoisFallback(body: unknown, domain: string, source: string): WhoisRecord {
+  if (!isRecord(body) || !isRecord(body.data)) {
+    throw new NettoolsError('malformed', 'WHOIS 服务返回了无法识别的数据');
+  }
+  if (typeof body.code === 'number' && body.code !== 200 && body.code !== 0) {
+    throw new NettoolsError('http', `WHOIS 服务返回错误 ${body.code}`);
+  }
+  const data = body.data;
+  const text = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  const statuses = Array.isArray(data.status)
+    ? data.status.filter((value: unknown): value is string => typeof value === 'string')
+    : [];
+  const nameservers = Array.isArray(data.nameservers)
+    ? data.nameservers.filter((value: unknown): value is string => typeof value === 'string').map((value) => value.toLowerCase())
+    : [];
+  const registrar = text(data.registrar);
+  const createdAt = epochToIso(data.created_at) ?? text(data.created);
+  const expiresAt = epochToIso(data.expires_at) ?? text(data.expires);
+  const updatedAt = epochToIso(data.updated_at) ?? text(data.updated);
+  const registered = Boolean(registrar || createdAt || expiresAt || statuses.length > 0 || nameservers.length > 0);
+  if (!registered) {
+    return unregistered(domain, source);
+  }
+  const dnssecText = text(data.dnssec)?.toLowerCase();
+  const dnssec = dnssecText === undefined ? undefined : dnssecText !== 'unsigned' && dnssecText !== 'no';
+  return Object.freeze({
+    domain: (text(data.domain) ?? domain).toLowerCase(),
+    registered: true,
+    registrar,
+    statuses: Object.freeze(statuses),
+    createdAt,
+    expiresAt,
+    updatedAt,
+    nameservers: Object.freeze(nameservers),
+    dnssec,
+    source,
+  });
+}
+
+function epochToIso(value: unknown): string | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+  return new Date(value).toISOString();
+}
+
+function rethrowIfAborted(error: unknown): void {
+  if (error instanceof NettoolsError && error.kind === 'aborted') {
+    throw error;
+  }
+}
+
 function findRegistrarName(entities: unknown): string | undefined {
   if (!Array.isArray(entities)) {
     return undefined;
@@ -255,7 +349,7 @@ export function formatWhoisRecord(record: WhoisRecord): string {
   if (!record.registered) {
     return `📇 ${record.domain}\n未查询到注册信息（可能未注册，或该后缀未提供 RDAP）`;
   }
-  const lines = [`📇 ${record.domain} 注册信息（RDAP: ${record.source}）`];
+  const lines = [`📇 ${record.domain} 注册信息（来源：${record.source}）`];
   if (record.registrar) {
     lines.push(`注册商：${record.registrar}`);
   }

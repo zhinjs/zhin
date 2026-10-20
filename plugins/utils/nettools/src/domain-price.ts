@@ -1,6 +1,9 @@
 /**
  * Domain registration / renewal / transfer price comparison through the
- * public nazhumi.com API (`GET /api/v1?domain=<suffix>&order=<kind>`).
+ * public nazhumi.com API (`GET /api/v1?domain=<suffix>&order=register`).
+ * `register` is the only documented `order` value, so renew/transfer
+ * comparisons read the matching `renew` / `transfer` (+ `_cny`) fields and are
+ * sorted locally.
  *
  * There is no second keyless provider with a comparable dataset, so instead
  * of a provider fallback this module tolerates partial data: entries with a
@@ -93,7 +96,7 @@ export async function comparePrices(
 ): Promise<PriceComparison> {
   const url = new URL(NAZHUMI_API_URL);
   url.searchParams.set('domain', suffix);
-  url.searchParams.set('order', kind);
+  url.searchParams.set('order', 'register');
   const response = await http.fetchJson(url, {
     provider: PROVIDER,
     ...(signal ? { signal } : {}),

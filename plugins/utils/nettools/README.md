@@ -24,8 +24,8 @@ nettools: {}
 | Command | Description | Upstream |
 |---------|-------------|----------|
 | `ping <host>` | Ping a public host from several regions; shows average/min/max latency and packet loss per node | [check-host.net](https://check-host.net/about/api) |
-| `whois <domain>` | Registrar, creation/expiry/update dates, status, name servers, DNSSEC | RDAP via the [IANA bootstrap](https://data.iana.org/rdap/dns.json), fallback [rdap.org](https://rdap.org) |
-| `dns <name> [type]` | DNS records; `type` is one of `A AAAA CNAME MX TXT NS SOA CAA SRV PTR DS DNSKEY` (default `A`). `dns 1.1.1.1 PTR` does a reverse lookup | Cloudflare DoH, fallback Google DoH |
+| `whois <domain>` | Registrar, creation/expiry/update dates, status, name servers, DNSSEC | RDAP via the [IANA bootstrap](https://data.iana.org/rdap/dns.json), fallback [rdap.org](https://rdap.org), then the [60s API](https://60s.viki.moe) WHOIS (covers `.cn` and other TLDs without RDAP; registrant personal data is not shown) |
+| `dns <name> [type]` | DNS records; `type` is one of `A AAAA CNAME MX TXT NS SOA CAA SRV PTR DS DNSKEY` (default `A`). `dns 1.1.1.1 PTR` does a reverse lookup | Cloudflare DoH, fallback AliDNS DoH, then Google DoH |
 | `domain-price <suffix> [register\|renew\|transfer]` (alias `域名比价`) | Cheapest registrars for a suffix (`com`, `.cn`, `.co.uk`, or a full domain); Chinese kinds `注册 / 续费 / 转入` also work | [nazhumi.com](https://www.nazhumi.com) |
 
 ### Agent tools
@@ -44,7 +44,7 @@ All fields are optional; defaults are conservative because every upstream is a f
 | `pingMaxNodes` | `4` | 1–10 | check-host.net probe nodes |
 | `pingPollIntervalMs` | `2000` | 500–10000 | Wait between result polls |
 | `pingMaxPolls` | `5` | 1–10 | Poll budget; unfinished nodes are reported as "no result" |
-| `dohProviders` | `["cloudflare", "google"]` | — | DoH providers in fallback order |
+| `dohProviders` | `["cloudflare", "alidns", "google"]` | — | DoH providers in fallback order |
 | `priceListLimit` | `8` | 1–20 | Registrars shown per comparison |
 
 ```yaml
@@ -68,4 +68,4 @@ For `ping`, hostnames are also resolved (A + AAAA over DoH) and refused if **any
 
 ## Resilience
 
-Every external request has a per-attempt timeout, retries network errors, timeouts, 408/425/429/5xx with exponential backoff plus jitter, honours `Retry-After` up to 10 s (longer waits fail fast with a rate-limit message), caps response bodies at 1 MiB and parses JSON defensively. DoH falls back from Cloudflare to Google; RDAP falls back from the registry server to rdap.org (the IANA bootstrap is cached for 24 h, stale copies are reused if IANA is down); a failed ping poll does not discard a running check. Failures are reported as short, specific messages.
+Every external request has a per-attempt timeout, retries network errors, timeouts, 408/425/429/5xx with exponential backoff plus jitter, honours `Retry-After` up to 10 s (longer waits fail fast with a rate-limit message), caps response bodies at 1 MiB and parses JSON defensively. DoH falls back Cloudflare → AliDNS → Google (only one retry per provider while another remains, to bound latency); whois falls back registry RDAP → rdap.org → 60s WHOIS (the IANA bootstrap is cached for 24 h, stale copies are reused if IANA is down); a failed ping poll does not discard a running check. Failures are reported as short, specific messages.

@@ -47,8 +47,8 @@
     },
     "dohProviders": {
       "type": "array",
-      "items": { "type": "string", "enum": ["cloudflare", "google"] },
-      "default": ["cloudflare", "google"],
+      "items": { "type": "string", "enum": ["cloudflare", "alidns", "google"] },
+      "default": ["cloudflare", "alidns", "google"],
       "description": "DNS-over-HTTPS providers in fallback order"
     },
     "priceListLimit": {

@@ -47,4 +47,11 @@ export { formatPingReport, parsePingResults, parseStartResponse, runMultiRegionP
 export { nettoolsServiceToken } from './runtime.js';
 export { NettoolsService, type NettoolsServiceOptions } from './service.js';
 export { assertPublicTarget, type CheckedTarget } from './target-guard.js';
-export { formatWhoisRecord, parseBootstrap, parseRdapDomain, RdapClient, type WhoisRecord } from './whois.js';
+export {
+  formatWhoisRecord,
+  parseBootstrap,
+  parseRdapDomain,
+  parseWhoisFallback,
+  RdapClient,
+  type WhoisRecord,
+} from './whois.js';

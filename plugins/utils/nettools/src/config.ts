@@ -18,7 +18,7 @@ export interface NettoolsConfig {
   readonly pingPollIntervalMs?: number;
   /** Maximum number of ping result polls. Default 5, range 1–10. */
   readonly pingMaxPolls?: number;
-  /** DoH providers in fallback order. Default ["cloudflare", "google"]. */
+  /** DoH providers in fallback order. Default ["cloudflare", "alidns", "google"]. */
   readonly dohProviders?: readonly DohProviderId[];
   /** Registrars shown in a price comparison. Default 8, range 1–20. */
   readonly priceListLimit?: number;
