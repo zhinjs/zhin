@@ -1,0 +1,24 @@
+.changeset/dx2-zhin-shim-cli-hints.md
+  h_b680f75345178a 1-5
+basic/cli/src/commands/new.ts
+  h_b680f75345178a 145,529
+docs/authoring/plugin-delivery.md
+  h_b680f75345178a 79
+docs/cli/index.md
+  h_b680f75345178a 244
+docs/en/authoring/plugin-delivery.md
+  h_b680f75345178a 79
+docs/en/cli/index.md
+  h_b680f75345178a 244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a13029acde79d270ba00d4b5245acb19e06da04d",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
