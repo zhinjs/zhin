@@ -345,9 +345,9 @@ describe('CLI new command integration', () => {
     const readme = await fs.readFile(path.join(pluginDir, 'README.md'), 'utf-8')
     expect(readme).toContain('configVersion: 2')
     expect(readme).not.toContain(`pnpm add ../${pluginName}`)
-    expect(readme).toContain('local-dev#standalone-plugin')
+    expect(readme).toContain('local-dev#dev-link-plugin')
+    expect(readme).toContain(`zhin dev link`)
     expect(readme).toContain('npx @zhin.js/cli pub --dry-run')
-    expect(readme).toContain(`./plugins/${pluginName}`)
   }, 30000)
 
   it('fails fast instead of prompting when stdin is not a TTY', async () => {

@@ -107,7 +107,8 @@
       ],
       "actions": [
         { "zh": "按[本地联调指南](/authoring/local-dev)诊断：用 `pnpm why` 与 `readlink -f` 找出两个解析路径。", "en": "Diagnose with the [local development guide](/en/authoring/local-dev): find both resolved paths with `pnpm why` and `readlink -f`." },
-        { "zh": "外部项目改用 `zhin dev link <zhin 源码路径>` 统一切换到本地源码，或全部改回 npm 版本。", "en": "Switch the external project consistently with `zhin dev link <zhin-path>`, or move everything back to npm versions." }
+        { "zh": "外部项目改用 `zhin dev link <zhin 源码路径>` 统一切换到本地源码，或全部改回 npm 版本。", "en": "Switch the external project consistently with `zhin dev link <zhin-path>`, or move everything back to npm versions." },
+        { "zh": "用 `pnpm add <插件目录>` 接入独立插件导致的多份实例：先 `pnpm remove` 掉它，改用 `zhin dev link <插件目录>`（见[独立插件热重载联调](/authoring/local-dev#dev-link-plugin)）。", "en": "Duplicates from adding a standalone plugin with `pnpm add <plugin-dir>`: `pnpm remove` it and use `zhin dev link <plugin-dir>` instead (see [hot-reload a standalone plugin](/en/authoring/local-dev#dev-link-plugin))." }
       ],
       "verification": [
         { "zh": "重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin runtime start --once` 输出 `\"started\": true`。", "en": "After `pnpm install`, each zhin package has a single resolved path and `zhin runtime start --once` prints `\"started\": true`." }
