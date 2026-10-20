@@ -53,7 +53,45 @@ npm trust github <包名> --repo zhinjs/zhin --file publish.yml --env npm-produc
 - 检查打包 `.js/.mjs/.cjs` 中所有相对 `import`/`export`/`import()`/`require()` 都能解析到 tarball 内的文件，且不越出包根；
 - 检查 `main`、`bin`、`exports`（`development` 条件除外）指向的文件都在 tarball 里。
 
+同一次扫描还会按下文的[发布包目录规范](#发布包目录规范)检查 tarball 布局。
+
 只有打包器才能解析的无扩展名导入（如浏览器端的 `./types`）只报警告，加 `--strict` 才算失败。CI 和发布工作流都在构建后运行这项检查，可用 `--filter <包名>` 只检查单个包。
+
+## 发布包目录规范
+
+npm 包里只放运行时、类型和使用者需要读的文件。目标布局：
+
+| 内容 | 位置 | 说明 |
+| --- | --- | --- |
+| 库代码 | `lib/**/*.js` + `lib/**/*.d.ts` | 由 `src/**/*.ts` 经 `tsc` 产出；`main`、`types`、`exports` 都指向 `lib/` |
+| Plugin Runtime 入口 | 包根 `plugin.js` | `package.json#zhin.entry` 指向它；prepack 由 `scripts/build-plugin-runtime-entries.mjs` 生成 |
+| 约定目录 | 包根 `commands/`、`middlewares/`、`handlers/`、`schedules/`、`tools/`、`hooks/`、`mcps/`、`adapters/`、`prompt-sections/`、`pages/` 下的 `index.js` | 运行时从包根扫描这些目录，所以不能挪进 `lib/` |
+| 资源 | `schema.json`、`skills/`、`agents/` 里的 Markdown、`README.md`、`CHANGELOG.md` | |
+| source map（可选） | 与产物同目录的 `*.js.map` / `*.d.ts.map` | 要么同时发布它指向的源文件，要么用 `inlineSources` 把源码写进 `sourcesContent`，要么不生成 |
+
+不发布：测试（`tests/`、`__tests__/`、`*.test.*`、`*.spec.*`）、`tsconfig*.json`、`vitest`/`vite` 配置、`*.tsbuildinfo`。发布后的 `exports` 不再有 `development` 条件，`node_modules` 里的插件运行时也优先加载 `.js`，所以 `src/*.ts` 和约定目录里的 `.ts` 对使用者没有作用，新包不要发布它们（已有包是否移除见 [#857](https://github.com/zhinjs/zhin/issues/857)，移除会改变已发布路径）。
+
+`files` 白名单示例（插件包）：
+
+```json
+{
+  "files": ["lib", "plugin.js", "schema.json", "commands", "middlewares", "skills", "README.md", "CHANGELOG.md"]
+}
+```
+
+如果必须整目录发布 `src`，用取反排除测试：`"src", "!src/**/*.test.ts"`。
+
+`pnpm check:pack-imports` 对每个 tarball 的布局检查：
+
+| 规则 | 级别 |
+| --- | --- |
+| `zhin.entry` 是 `.js/.mjs/.cjs` 且在 tarball 里 | 错误 |
+| tarball 里没有测试文件 | 错误 |
+| tarball 里没有构建配置 | 警告 |
+| source map 指向的源文件已发布或已内联 | 警告 |
+| 发布的 `.ts` 源文件有 source map 引用 | 警告 |
+
+警告不阻塞 CI，加 `--strict` 时算失败。
 
 ## 在 npmjs.com 配置可信发布者
 

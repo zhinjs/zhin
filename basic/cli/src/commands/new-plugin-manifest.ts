@@ -11,6 +11,7 @@ export const PLUGIN_STACK_PACKAGES = [
   '@zhin.js/skill',
   '@zhin.js/command',
   '@zhin.js/adapter',
+  '@zhin.js/testing',
 ] as const;
 export type PluginStackPackage = (typeof PLUGIN_STACK_PACKAGES)[number];
 export type PluginStackRanges = Record<PluginStackPackage, string>;
@@ -151,9 +152,31 @@ export function capabilityPackages(kind: PluginKind): PluginStackPackage[] {
   return packages;
 }
 
+/**
+ * Server-side convention directories (docs/authoring/conventions.md) whose TypeScript the build
+ * turns into sibling JavaScript. Every kind lists all of them, so adding e.g. `tools/` later does
+ * not need edits to `files` / tsconfig: a forgotten entry used to drop the directory from the
+ * tarball silently. Globs that match nothing are harmless. `components/` (TSX) and `pages/`
+ * (Console client build) need their own build setup and are not part of the default template.
+ */
+export const CONVENTION_SOURCE_DIRECTORIES = [
+  'commands',
+  'middlewares',
+  'handlers',
+  'schedules',
+  'tools',
+  'prompt-sections',
+  'hooks',
+  'mcps',
+  'adapters',
+] as const;
+
+/** Convention directories shipped as-is (Markdown / JSON assets). */
+export const CONVENTION_ASSET_DIRECTORIES = ['skills', 'agents'] as const;
+
 /** Directories whose TypeScript the build turns into sibling JavaScript. */
-export function sourceDirectories(kind: PluginKind): string[] {
-  return ['src', ...(kind === 'normal' ? ['commands'] : []), ...(kind === 'adapter' ? ['adapters'] : [])];
+export function sourceDirectories(_kind?: PluginKind): string[] {
+  return ['src', ...CONVENTION_SOURCE_DIRECTORIES];
 }
 
 /**
@@ -173,6 +196,8 @@ export function createPluginManifest(input: PluginManifestInput): Record<string,
   const devDependencies: Record<string, string> = {
     ...PLUGIN_TOOLING_RANGES,
     'zhin.js': devRanges['zhin.js'],
+    // Typed fakes for the generated tests (no `as never`); see docs/authoring/testing.md.
+    '@zhin.js/testing': devRanges['@zhin.js/testing'],
   };
   for (const name of capabilities) {
     peerDependencies[name] = peerRanges[name];
@@ -191,7 +216,7 @@ export function createPluginManifest(input: PluginManifestInput): Record<string,
     exports: {
       './package.json': './package.json',
     },
-    files: ['plugin.js', 'schema.json', ...directories, 'skills', 'README.md', 'CHANGELOG.md'],
+    files: ['plugin.js', 'schema.json', ...directories, ...CONVENTION_ASSET_DIRECTORIES, 'README.md', 'CHANGELOG.md'],
     scripts: {
       build: 'tsc -p tsconfig.build.json',
       typecheck: 'tsc --noEmit',
