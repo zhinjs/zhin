@@ -66,12 +66,9 @@ export class InMemoryUsageQuotaStore implements UsageQuotaStore {
   keys() { return this.#buckets.keys(); }
 }
 
-export interface UsageSubject {
-  readonly userId: string;
-  /** Stable group key (platform + endpoint + group id); undefined in private chats. */
-  readonly groupId?: string;
-  readonly owner: boolean;
-}
+/** Defined in `@zhin.js/core` (#877) so plugins can build one with `usageSubjectFromMessage`. */
+import type { UsageSubject } from '@zhin.js/core';
+export type { UsageSubject };
 
 export type UsageQuotaDecision =
   | Readonly<{ allowed: true }>
