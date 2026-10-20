@@ -41,4 +41,10 @@ describe('#829 user-experience loop smoke suite', () => {
     expect(result.steps).toHaveLength(5);
     expect(result.stdout).toContain('E2E_SMOKE_RSS_QUIET_HOURS_OK');
   }, 65_000);
+
+  it('offers literal choices in the Console form, explains saved vs applied config and rejects an invalid choice', async () => {
+    const result = await runSmokeScenario('config-explain-and-enum.mjs', 60_000);
+    expect(result.steps).toHaveLength(6);
+    expect(result.stdout).toContain('E2E_SMOKE_CONFIG_EXPLAIN_ENUM_OK');
+  }, 65_000);
 });
