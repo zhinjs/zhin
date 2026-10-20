@@ -1,0 +1,32 @@
+plugins/utils/earthquake/commands/地震/index.ts
+  h_b680f75345178a 13
+plugins/utils/earthquake/package.json
+  h_b680f75345178a 58
+plugins/utils/earthquake/src/conversation.ts
+  h_b680f75345178a 42-47,52-53
+plugins/utils/earthquake/tests/dedupe-filters.test.ts
+  h_b680f75345178a 1-111
+plugins/utils/earthquake/tests/fixtures.ts
+  h_b680f75345178a 1-133
+plugins/utils/earthquake/tests/http.test.ts
+  h_b680f75345178a 1-119
+plugins/utils/earthquake/tests/parsing.test.ts
+  h_b680f75345178a 1-97
+plugins/utils/earthquake/tests/plugin.test.ts
+  h_b680f75345178a 1-160
+plugins/utils/earthquake/tests/service.test.ts
+  h_b680f75345178a 1-324
+pnpm-lock.yaml
+  h_b680f75345178a 3620-3622
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e9d459396d7abdd4e43c706ffc6e7eeb64650718",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
