@@ -191,11 +191,12 @@ export default defineCommand({
 | --- | --- |
 | `role(master)` / `role(trusted)` | 发送者角色 |
 | `adapter(icqq)` | 只在某个平台上可用 |
-| `group(123)` / `private(…)` / `channel(…)` / `user(…)` | 只在指定的群、私聊、频道，或对指定用户可用 |
+| `group()` / `private()` / `channel()` | 限制会话类型，空值或 `*` 不限该类型的会话 ID |
+| `group(123)` / `private(…)` / `channel(…)` / `user(…)` | 比较相应会话或发送者 ID；不限制完整账号、父容器或话题 |
 
 数组中的多条规则**同时满足**才通过；一条规则内用逗号分隔表示**满足其一**即可。没有权限的用户也看不到这个命令的帮助。
 
-角色分为三档：`user` → `trusted` → `master`（`master` 包含 `trusted` 的权限）。在适配器的配置里指定谁是 master：
+内置角色判断只让 `master` 隐含 `trusted`，不会额外推导 `user`、`admin` 或 `owner`。角色来自当前真实消息；适配器配置可以指定谁是 master：
 
 ```yaml
 configVersion: 2
@@ -209,6 +210,8 @@ qq:
       appid: ${QQ_APPID}
       master: '10001' # 也可以给单个账号单独设置
 ```
+
+需要逐项理解规则时，可在[Console 命令权限说明](../paths/console.md#命令权限说明)中查看内置条件或填写假设身份。它不执行平台 checker，也不授予权限；`adapter(...)` 与会话 ID 规则不能当作完整会话白名单。
 
 在中间件或事件处理中需要同样的判断时，使用 `checkPermissions`：
 

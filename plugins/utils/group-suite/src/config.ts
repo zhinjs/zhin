@@ -1,9 +1,14 @@
+import type { DeliveryTarget } from 'zhin.js';
+import { normalizeWelcomeConversations } from './welcome-scope.js';
+
 export interface GroupSuiteConfig {
   keywordReply: boolean;
   /** Explicitly volatile keywords for demos without a persistent Database Host. */
   ephemeralKeywords: boolean;
   /** Empty disables group member welcomes. {name} and {id} are literal placeholders. */
   welcomeMessage: string;
+  /** Omitted preserves all groups; [] disables welcomes. Each address matches exactly. */
+  welcomeConversations?: readonly DeliveryTarget[];
   basePointsMin: number;
   basePointsMax: number;
   streakBonus: number;
@@ -36,5 +41,8 @@ export function resolveGroupSuiteConfig(
   return {
     ...DEFAULT_GROUP_SUITE_CONFIG,
     ...raw,
+    ...(raw?.welcomeConversations === undefined ? {} : {
+      welcomeConversations: normalizeWelcomeConversations(raw.welcomeConversations),
+    }),
   };
 }

@@ -5,17 +5,18 @@ import {
 } from 'segment-matcher';
 import {
   htmlRendererToken,
+  type CapabilityId,
   type CapabilitySlot,
   type PluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
-import { bindOperationInput, operationClientAdapter } from '@zhin.js/feature-kit';
+import { bindOperationInput } from '@zhin.js/feature-kit';
 import {
   permissionHostToken,
-  toPermissionSubject,
   type PermissionHost,
 } from '@zhin.js/permission';
+import { commandAdapterMatches, toCommandPermissionSubject } from './permission-explanation.js';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
 import { admitCommandExecution } from './execution-runtime.js';
@@ -37,6 +38,8 @@ export interface CommandParameterDescriptor extends CommandParameterDefinition {
 }
 
 export interface CommandDescriptor {
+  readonly id: CapabilityId;
+  readonly owner: PluginId;
   readonly name: string;
   readonly description?: string;
   readonly adapter?: string;
@@ -166,6 +169,8 @@ export class CommandIndex {
 
       const execution = normalizeExecutionPolicy(slot.definition.execution);
       const record: CommandRecord = Object.freeze({
+        id: slot.id,
+        owner: slot.owner,
         name,
         description: slot.definition.description,
         ...(execution ? { execution } : {}),
@@ -342,9 +347,7 @@ export class CommandIndex {
     if (!source || typeof source !== 'object') return false;
     const host = this.#resolveHost(operationSnapshot);
     if (!host) return false;
-    const projected = toPermissionSubject(source);
-    const session = resolveCommandSession(source);
-    const subject = { ...projected, ...session, ...(session.sender ? { sender: { ...projected.sender, ...session.sender } } : {}) };
+    const subject = toCommandPermissionSubject(source);
     if (!subject.sender?.id && !subject.scene?.id && !subject.adapter && !subject.endpoint) return false;
     return host.checkAll(permits, subject);
   }
@@ -897,10 +900,6 @@ function toDescriptor({
   ...descriptor
 }: CommandRecord): CommandDescriptor {
   return descriptor;
-}
-
-function commandAdapterMatches(record: CommandRecord, source: unknown): boolean {
-  return !record.adapter || operationClientAdapter(source) === record.adapter;
 }
 
 export class CommandParameterValueError extends TypeError {

@@ -541,7 +541,7 @@ export function resolveCommandSession(input: unknown): CommandSession {
     || (typeof metadata?.endpoint === 'string' && metadata.endpoint ? metadata.endpoint : undefined);
 
   const scene = resolveScene(input, metadata);
-  const sender = resolveSender(input, metadata);
+  const sender = resolveCommandSender(input, metadata);
 
   return Object.freeze({
     ...(adapter ? { adapter } : {}),
@@ -590,8 +590,12 @@ function resolveScene(
   });
 }
 
-function resolveSender(
-  input: CommandMessage,
+/**
+ * Pure canonical sender projection shared with read-only command condition simulation.
+ * @internal Command dispatcher projection helper.
+ */
+export function resolveCommandSender(
+  input: Pick<CommandMessage, 'sender'>,
   metadata: Readonly<Record<string, unknown>> | undefined,
 ): CommandSender | undefined {
   const structured = (input as { readonly from?: unknown }).from;
@@ -613,7 +617,7 @@ function resolveSender(
 }
 
 function resolveRoles(
-  input: CommandMessage,
+  input: Pick<CommandMessage, 'sender'>,
   metadata: Readonly<Record<string, unknown>> | undefined,
 ): readonly string[] {
   if (input.sender?.roles?.length) {

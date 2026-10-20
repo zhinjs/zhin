@@ -76,6 +76,7 @@
   "command": [
     "export * from './command-index.js';",
     "export * from './definition.js';",
+    "export * from './permission-explanation.js';",
     "export type{CommandValidationIssue}from './arguments.js';",
     "export{CommandPathSyntaxError,commandFeatureId,default as commandFeature,}from './provider.js';",
     "export{assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
@@ -205,6 +206,7 @@
   ],
   "permission": [
     "export * from './check-permissions.js';",
+    "export * from './explain.js';",
     "export{PermissionHost,type PermissionChecker,type PlatformPermitChecker,}from './host.js';",
     "export{createSceneRolePlatformChecker,platformPermission}from './helpers.js';",
     "export{permissionHostToken}from './token.js';",
