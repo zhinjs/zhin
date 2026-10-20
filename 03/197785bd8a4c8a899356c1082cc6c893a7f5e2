@@ -1,0 +1,25 @@
+plugins/utils/bilibili/commands/bili/sub/index.ts
+  s_e6f5f09d5890ba::t_7d45dab76ccc19 6,12,17,29
+plugins/utils/bilibili/commands/bili/unsub/index.ts
+  s_e6f5f09d5890ba::t_78c96cadedb015 6,10,12,20
+plugins/utils/bilibili/src/permission.ts
+  s_e6f5f09d5890ba::t_4c3b127495fafe 1-28
+plugins/utils/bilibili/tests/fixtures.ts
+  s_e6f5f09d5890ba::t_9392f3d5176b65 1,8-9,14,109-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "03197785bd8a4c8a899356c1082cc6c893a7f5e2",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
