@@ -97,7 +97,7 @@ export default defineCommand({
 Endpoint 前缀及显式插件命名空间，不执行命令；同一权限声明仍约束帮助读取。
 
 `dispatch()` 返回 `status`：`unmatched`（继续普通消息处理）、`invalid`（`issues` +
-`help`）、`denied`（权限拒绝）、`executed`。后三者 `matched: true`，只有 `executed`
+`help`）、`denied`（权限拒绝）、`limited`（执行预算拒绝）、`executed`。后四者 `matched: true`，只有 `executed`
 包含业务结果。可靠静态路径匹配后才提示错误；纯动态路由的模糊聊天保持未匹配。
 受限命令没有可鉴权主体时拒绝，Host 可通过 `dispatch` 提供真实 `PermissionSubject`；
 `execute(name)` 无主体不能绕过权限。审批与命令准入独立。
@@ -108,6 +108,35 @@ Endpoint 前缀及显式插件命名空间，不执行命令；同一权限声�
 动态目录的路径形态无法被 TypeScript 读取。使用无默认值的 `[[id]]` 时，声明
 `params.id.optional: true`；使用 `[...items]` 时声明 `params.items.rest: true`，
 让执行参数的可选性、数组类型与运行时一致。目录绑定的参数应放在 `params` 第一项。
+
+## 可选执行预算
+
+```ts
+defineCommand({
+  execution: { cooldownMs: 5000, maxConcurrent: 1, progressAfterMs: 1500 },
+  execute: async () => buildReport(),
+});
+```
+
+未声明 `execution` 的命令保持原行为。三个字段均可省略，但配置至少一个：
+`cooldownMs` 为 1–86400000 毫秒，`maxConcurrent` 为 1–1000，
+`progressAfterMs` 为 1–3600000 毫秒，均只接受正整数，未知字段拒绝。
+
+同一能力的普通路由、别名、shortcut 共用预算；不同真实 sender、Endpoint 账号、会话、
+parent 和 thread 独立计算。没有完整可信身份或真实 IM operation 的请求明确拒绝；
+`execute(name)` 不能执行启用了预算的命令。参数错误、帮助、权限拒绝不占额度。
+`limited` 返回 `limit.reason`，冷却时附精确 `retryAfterMs`；正在执行没有预测等待时间。
+
+冷却从接纳时开始，失败或取消仍消耗本次冷却；并发占用直到业务、渲染、出站中间件、
+最终回复及该 operation 中已经启动的发送全部结束。不要依赖 operation 结束后才启动的
+异步发送。热更新只取消尚未开始的进度提示，旧执行仍排空并继续占用同一 Root 的预算；
+新策略的并发数用于新准入，原来已开始的冷却保留到原到期时间。移除策略即停止新请求的预算检查。
+状态只保留在当前进程，进程重启后重置；容量满时拒绝新身份，不驱逐活跃或仍在冷却的记录。
+
+进度默认关闭，只在业务等待阶段发送一次“正在处理中，请稍候。”，走当前平台统一发送链路。
+开始自动最终回复前停止尚未开始的提示，并等待已开始的提示完成；已开始的 I/O 随原 lease 排空。
+执行内显式 `$reply()` 不会停止进度计时。提示失败不重试，也不表示任务取消或远端已经展示。
+`@zhin.js/command/internal/execution` 是 Core 装配使用的内部入口，不是插件创作 API。
 
 ## Runtime
 

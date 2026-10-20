@@ -151,7 +151,8 @@ export interface OutboundMessageService {
 
 export interface MessageDispatchResult {
   readonly matched: boolean;
-  readonly status?: 'unmatched' | 'invalid' | 'denied' | 'executed';
+  readonly status?: 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed';
+  readonly limit?: import('@zhin.js/command').CommandExecutionLimit;
   readonly issues?: readonly Readonly<{ field: string; message: string }>[];
   readonly help?: string;
   readonly command?: string;
@@ -194,6 +195,7 @@ export class RuntimeMessage implements MessageBase {
   readonly #snapshot?: RuntimeSnapshot;
   readonly #assertActive?: () => void;
   readonly #retirementSignal?: AbortSignal;
+  readonly #registerOperationView?: (view: object, owner: PluginId) => void;
   readonly origin?: MessageOrigin;
 
   /** @internal Constructed only by the generation-owned IM Runtime. */
@@ -224,6 +226,7 @@ export class RuntimeMessage implements MessageBase {
       assertActive?: () => void;
       origin?: MessageOrigin;
       retirementSignal?: AbortSignal;
+      registerOperationView?: (view: object, owner: PluginId) => void;
     }> = {},
   ) {
     this.origin = binding.origin;
@@ -233,6 +236,8 @@ export class RuntimeMessage implements MessageBase {
     this.#snapshot = binding.snapshot;
     this.#assertActive = binding.assertActive;
     this.#retirementSignal = binding.retirementSignal;
+    this.#registerOperationView = binding.registerOperationView;
+    if (binding.snapshot) binding.registerOperationView?.(this, binding.requester ?? binding.snapshot.root);
     const requester = binding.requester;
     this.$reply = (content) => requester === undefined ? reply(content) : reply(content, requester);
     this.$replyFrom = (requester, content) => reply(content, requester);
@@ -281,7 +286,7 @@ export class RuntimeMessage implements MessageBase {
       this.sender, this.metadata, this.segments, this.message, this.endpointId,
       this.mentioned, this.replyTo, this.#resolveClient, this.clientAdapter,
       { requester: owner, snapshot, assertActive: this.#assertActive, origin: this.origin,
-        retirementSignal: this.#retirementSignal },
+        retirementSignal: this.#retirementSignal, registerOperationView: this.#registerOperationView },
     );
   }
 

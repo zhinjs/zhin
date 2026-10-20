@@ -170,7 +170,12 @@ export interface ConsoleMessageDiagnostic {
   readonly route?: 'interaction' | 'middleware' | 'command' | 'agent' | 'unmatched'
     | 'self_echo' | 'duplicate' | 'bot_origin' | 'dedup_error';
   readonly command?: string;
-  readonly dispatchStatus?: 'unmatched' | 'invalid' | 'denied' | 'executed';
+  readonly dispatchStatus?: 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed';
+  /** Admission refusal, not a platform delivery failure. Busy has no fabricated waiting time. */
+  readonly limit?: Readonly<{
+    reason: 'cooldown' | 'busy' | 'capacity' | 'operation_unavailable' | 'identity_unavailable' | 'service_unavailable';
+    retryAfterMs?: number;
+  }>;
   readonly steps: readonly Readonly<{
     stage: 'received' | 'origin' | 'prefix' | 'middleware' | 'handlers' | 'dispatch' | 'delivery';
     status: string;

@@ -220,6 +220,36 @@ if (!(await checkPermissions(context, ['group(team)', 'role(trusted)']))) return
 
 It reuses the same rules but does not replace AI tool approval or execution security policies.
 
+### Limit repeated execution and show progress {#execution-policy}
+
+Add `execution` to individual expensive commands. Commands without it keep their existing behavior. This complete example can live in `commands/slow/index.ts`:
+
+```ts
+import { setTimeout as delay } from 'node:timers/promises';
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: 'Demonstrate cooldown and concurrency for a slow task',
+  execution: { cooldownMs: 10_000, maxConcurrent: 1, progressAfterMs: 1_500 },
+  async execute({ signal }) {
+    await delay(3_000, undefined, { signal });
+    return 'Demo task completed';
+  },
+});
+```
+
+Send `slow` as a real user in the original conversation, adjusting the actual account prefix and plugin namespace. A progress notice may arrive after 1.5 seconds, followed by the result. This is a local delay demonstration with no business-service calls. A pending notice is stopped when business work ends; an already-started notice drains before the final reply, preserving message order.
+
+Budgets are isolated by command capability, real sender and complete conversation identity: Endpoint, kind, ID, parent and thread. Aliases and shortcuts share the same budget. This is not a plugin-wide or all-user concurrency cap.
+
+- `cooldownMs` starts when business execution is accepted. Failure and cancellation still consume it. Help, invalid arguments, permission denial and admission refusal do not. Maximum: one day.
+- `maxConcurrent` remains occupied until business work, rendering, outbound middleware and final sending actually settle. A retirement or hot-reload cancellation signal does not release a still-running operation. Generations share the budget. Maximum: 1000.
+- `progressAfterMs` is off by default. When set, each operation can emit at most one notice for that command during business waiting. It uses the original conversation's unified reply path. Failed or uncertain notice delivery is not retried. Maximum: one hour.
+
+All values must be positive integers, with at least one policy specified. Cooldown refusals include the remaining time when recorded. Busy operations have no predictable completion time. Diagnostics use `limited`, distinct from permission denial and platform delivery failure; a refused command is not handed to an Agent for another execution attempt.
+
+Policies require a genuine Core inbound operation and complete identity. Direct `CommandIndex` calls outside that operation cannot manufacture a source to bypass admission. Continue to `await input.$reply(...)` for additional replies; work started by arbitrary future timers is outside an already-finished operation. Cooldown does not replace idempotency, permissions or reconciliation, never retries `unknown`, and does not create a cancellation button for an operation that cannot be cancelled.
+
 ### Reply with images, cards or several messages
 
 `execute` may return:

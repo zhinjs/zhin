@@ -59,6 +59,7 @@ const expectedSurface = new Map([
     'CommandParameterDefinition', 'CommandParamSchema', 'CommandScene', 'CommandSegment',
     'CommandSender', 'CommandSession', 'CommandDynamicValue', 'CommandParameterType',
     'CommandParameterValue', 'defineCommand',
+    'CommandExecutionPolicy', 'CommandExecutionLimit',
     'CommandParams', 'CommandOptions', 'CommandOptionSchema', 'InferCommandParams', 'InferCommandOptions',
   ]],
   ['zhin.js/component', ['ComponentContext', 'ComponentDefinition', 'defineComponent']],
@@ -126,8 +127,10 @@ const expectedMembers = new Map([
     'alias', 'choices', 'default', 'description', 'max', 'min', 'optional', 'pattern', 'type', 'validate',
   ]],
   ['zhin.js/command.CommandDefinition', [
-    'adapter', 'alias', 'description', 'execute', 'options', 'params', 'permit', 'shortcut',
+    'adapter', 'alias', 'description', 'execute', 'execution', 'options', 'params', 'permit', 'shortcut',
   ]],
+  ['zhin.js/command.CommandExecutionPolicy', ['cooldownMs', 'maxConcurrent', 'progressAfterMs']],
+  ['zhin.js/command.CommandExecutionLimit', ['reason', 'retryAfterMs']],
 ]);
 for (const [qualifiedName, expected] of expectedMembers) {
   const separator = qualifiedName.lastIndexOf('.');

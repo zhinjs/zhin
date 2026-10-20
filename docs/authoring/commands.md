@@ -220,6 +220,36 @@ if (!(await checkPermissions(context, ['group(team)', 'role(trusted)']))) return
 
 它复用同一套权限规则，但不替代 AI 工具的审批或执行安全策略。
 
+### 限制重复执行与提示耗时任务 {#execution-policy}
+
+给昂贵命令单独声明 `execution`，未声明的命令保持原行为。以下是可直接放入 `commands/slow/index.ts` 的演示：
+
+```ts
+import { setTimeout as delay } from 'node:timers/promises';
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: '演示有冷却和并发限制的耗时任务',
+  execution: { cooldownMs: 10_000, maxConcurrent: 1, progressAfterMs: 1_500 },
+  async execute({ signal }) {
+    await delay(3_000, undefined, { signal });
+    return '演示任务已完成';
+  },
+});
+```
+
+由真实用户在同一完整会话发送 `slow`，约 1.5 秒后可收到一次处理中提示，业务结束后收到结果。按账号实际前缀与插件命名空间调整命令；这是本地延时演示，不调用业务服务。短任务结束前会取消尚未触发的提示；开始最终回复前等待已开始的提示，避免最终结果先到、处理中提示后到。
+
+额度按指令 capability、真实发送者与完整会话隔离，包括 Endpoint、会话类型和 ID、父容器与话题。别名与快捷方式共用额度；它不是整个插件或所有用户共享的并发上限。
+
+- `cooldownMs`：接纳业务执行时开始计时，失败和取消仍消耗这次冷却；帮助、参数无效、权限拒绝与准入拒绝不消耗。上限一天。
+- `maxConcurrent`：占用持续到该次业务、渲染、出站中间件及最终发送实际结束。热更新或退役发出取消信号不会提前释放仍在运行的任务；不同运行代沿用同一额度。上限 1000。
+- `progressAfterMs`：默认不发提示，显式设置后每次处理对该指令最多提示一次。提示仅在业务等待阶段启动，经原会话的统一回复链发送；失败或结果不确定不重试。上限一小时。
+
+三个值均为正整数，`execution` 至少声明一项。冷却拒绝包含记录时的剩余时间；并发已满无法预知何时结束，不伪造等待倒计时。诊断状态为 `limited`，与 `denied` 权限拒绝及平台投递失败分开，也不会转交 Agent 再执行。
+
+启用策略需要 Core 的真实入站操作和完整身份；脱离该操作的直接 `CommandIndex` 调用不能伪造来源绕过检查。额外回复仍应 `await input.$reply(...)`，任意未来定时器里启动的工作不属于已经结束的处理。冷却不替代幂等、权限或投递对账，不能用于自动重试 `unknown`，也不会为不支持取消的操作生成取消按钮。
+
 ### 回复图片、卡片或多条消息
 
 `execute` 可以返回：

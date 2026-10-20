@@ -18,6 +18,9 @@ import {
 } from '@zhin.js/permission';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
+import { admitCommandExecution } from './execution-runtime.js';
+import { CommandExecutionLimitedError, normalizeExecutionPolicy, type CommandExecutionLimit } from './execution-policy.js';
+export { CommandExecutionLimitedError } from './execution-policy.js';
 import {
   createCommandContext,
   resolveCommandSession,
@@ -43,13 +46,15 @@ export interface CommandDescriptor {
   readonly options: NonNullable<CommandDefinition['options']>;
   readonly alias?: readonly string[];
   readonly permit?: readonly string[];
+  readonly execution?: CommandDefinition['execution'];
   /** shortcut 触发键列表（不含预填 params）。 */
   readonly shortcut?: readonly string[];
 }
 
 export interface CommandDispatchResult {
   readonly matched: boolean;
-  readonly status: 'unmatched' | 'invalid' | 'denied' | 'executed';
+  readonly status: 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed';
+  readonly limit?: CommandExecutionLimit;
   readonly issues?: readonly CommandValidationIssue[];
   readonly help?: string;
   readonly command?: string;
@@ -159,9 +164,11 @@ export class CommandIndex {
         ? Object.freeze(Object.keys(slot.definition.shortcut).map((key) => key.trim()))
         : undefined;
 
+      const execution = normalizeExecutionPolicy(slot.definition.execution);
       const record: CommandRecord = Object.freeze({
         name,
         description: slot.definition.description,
+        ...(execution ? { execution } : {}),
         ...(slot.definition.adapter ? { adapter: slot.definition.adapter } : {}),
         source: slot.source,
         usage: commandUsage(name, slot.definition),
@@ -256,6 +263,8 @@ export class CommandIndex {
     const supplied = [...match.remaining, ...(args.length > 0 ? [{ type: 'text', data: { text: args.join(' ') } }] : [])];
     const parsed = parseCommandArguments(definition, supplied, resolveDynamicParams(match.params, undefined), {});
     if (parsed.issues.length > 0) throw new CommandArgumentValidationError(parsed.issues, commandHelp(match.command.name, definition));
+    const limit = admitCommandExecution(undefined, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
+    if (limit) throw new CommandExecutionLimitedError(limit);
     return definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
       textArgs(parsed.remaining), parsed.params, undefined, parsed.remaining, undefined, definition.adapter, parsed.options));
   }
@@ -305,6 +314,8 @@ export class CommandIndex {
     const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource));
     if (parsed.issues.length > 0) return Object.freeze({ matched: true, status: 'invalid', command: match.command.name,
       owner: match.command.slot.owner, issues: parsed.issues, help });
+    const limit = admitCommandExecution(authorSource, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
+    if (limit) return Object.freeze({ matched: true, status: 'limited', command: match.command.name, owner: match.command.slot.owner, limit });
     const value = await definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
       textArgs(parsed.remaining), parsed.params, authorSource, parsed.remaining, interactionFactory?.(authorSource), definition.adapter, parsed.options));
     return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });

@@ -10,6 +10,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { CommandExecutionBudget, commandExecutionAdmissionToken } from '@zhin.js/command/internal/execution';
 import { MessageBus, messageBusToken } from './message-bus.js';
 import {
   type EndpointContentResolveContext,
@@ -97,6 +98,7 @@ export interface ImRuntimeOptions {
 }
 
 export class ImRuntime implements OutboundMessageService {
+  readonly #commandExecution = new CommandExecutionBudget();
   readonly #messageDiagnostics = new RuntimeMessageDiagnostics();
   readonly messageDiagnostics: RuntimeMessageDiagnosticsReader = Object.freeze({
     list: (options?: Parameters<RuntimeMessageDiagnosticsReader['list']>[0]) => this.#messageDiagnostics.list(options),
@@ -134,6 +136,7 @@ export class ImRuntime implements OutboundMessageService {
       prepareButtons: (request, snapshot) => this.#interactions.prepareButtons(request, snapshot),
     }, options.renderer);
     this.#inbound = new InboundRuntime({
+      commandExecution: this.#commandExecution,
       diagnostics: this.#messageDiagnostics,
       interactions: this.#interactions,
       inboundClaim: options.inboundClaim,
@@ -239,6 +242,7 @@ export class ImRuntime implements OutboundMessageService {
     resources.provide(endpointEventGatewayToken, this.endpointEvents);
     resources.provide(loginAssistToken, this.loginAssist);
     resources.provide(permissionHostToken, this.permissionHost);
+    resources.provide(commandExecutionAdmissionToken, this.#commandExecution.admission);
     resources.provide(messageBusToken, this.messageBus);
   }
 

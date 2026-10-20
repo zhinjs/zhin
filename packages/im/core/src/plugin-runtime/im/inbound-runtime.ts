@@ -13,6 +13,7 @@ import { bindOperationInput } from '@zhin.js/feature-kit';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { DeliveryReceipt } from '@zhin.js/im-contract';
 import type { UserInteraction } from '@zhin.js/interaction';
+import type { CommandExecutionBudget, CommandOperationController } from '@zhin.js/command/internal/execution';
 import { RuntimeNotice, type IncomingNotice, type Notice } from '../../notice.js';
 import { RuntimeRequest, type IncomingRequest, type Request } from '../../request.js';
 import { RuntimeSystemEvent, type IncomingSystemEvent, type SystemEvent } from '../../system-event.js';
@@ -57,6 +58,7 @@ type InboundInteractionPort = Pick<
 > & Partial<Pick<RuntimeInteractionCoordinator<GenerationAdmissionGate>, 'hasPendingAnswer'>>;
 
 interface InboundRuntimeContext {
+  readonly commandExecution?: CommandExecutionBudget;
   readonly diagnostics?: RuntimeMessageDiagnostics;
   readonly interactions: InboundInteractionPort;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
@@ -181,6 +183,7 @@ export class InboundRuntime {
     const receivedAt = Date.now();
     const lease = this.context.acquire();
     let active = true;
+    let commandOperation: CommandOperationController | undefined;
     try {
       const adapter = source.endpoint.id as CapabilityId;
       this.context.diagnostics?.begin(lease.value.generation, {
@@ -328,16 +331,12 @@ export class InboundRuntime {
         }
       }
       const mentioned = routedTarget ? true : input.mentioned;
-      const message = new RuntimeMessage(
-        conversation,
-        input.content,
-        lease.value.generation,
-        (content, replyRequester = requester, targetConversation) => {
+      const operationReply: ConstructorParameters<typeof RuntimeMessage>[3] = (content, replyRequester = requester, targetConversation) => {
           if (!active) throw new Error('Message reply scope has ended');
           const effectiveConversation = targetConversation
             ? { ...targetConversation, endpoint: conversation.endpoint }
             : conversation;
-          return this.context.deliver({
+          const delivery = this.context.deliver({
             conversation: effectiveConversation,
             requester: replyRequester,
             content,
@@ -351,7 +350,18 @@ export class InboundRuntime {
               mentioned,
             },
           }, lease.value);
-        },
+          commandOperation?.trackSend(delivery);
+          return delivery;
+        };
+      commandOperation = this.context.commandExecution?.openOperation({
+        snapshot: lease.value, conversation, senderId: enrichedSender?.id,
+        retirementSignal: lease.retirementSignal, reply: (owner, text) => operationReply(text, owner),
+      });
+      const message = new RuntimeMessage(
+        conversation,
+        input.content,
+        lease.value.generation,
+        operationReply,
         enrichedSender,
         Object.freeze({ ...input.metadata }),
         input.segments ? Object.freeze([...input.segments]) : undefined,
@@ -364,7 +374,7 @@ export class InboundRuntime {
           return source.client;
         },
         source.endpoint.adapter,
-        { snapshot: lease.value, retirementSignal: lease.retirementSignal, assertActive: () => {
+        { snapshot: lease.value, retirementSignal: lease.retirementSignal, registerOperationView: commandOperation?.bind, assertActive: () => {
           if (!active) throw new Error('Message author binding scope has ended');
         }, ...(origin ? { origin } : {}) },
       );
@@ -511,6 +521,7 @@ export class InboundRuntime {
         reply = outcome.reply;
       }
       this.context.diagnostics?.dispatch(result);
+      await commandOperation?.stopProgress();
       if (reply) await message.$replyFrom(reply.owner, reply.content);
       if (result.matched) {
         logger.debug(formatCompact({
@@ -529,8 +540,8 @@ export class InboundRuntime {
       });
       return result;
     } finally {
-      active = false;
-      this.context.release(lease);
+      try { await commandOperation?.finish(); }
+      finally { active = false; this.context.release(lease); }
     }
   }
 

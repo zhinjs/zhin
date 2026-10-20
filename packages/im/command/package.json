@@ -6,6 +6,11 @@
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "exports": {
+    "./internal/execution": {
+      "types": "./lib/execution-runtime.d.ts",
+      "development": "./src/execution-runtime.ts",
+      "import": "./lib/execution-runtime.js"
+    },
     ".": {
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
@@ -51,6 +56,10 @@
     "access": "public",
     "registry": "https://registry.npmjs.org",
     "exports": {
+      "./internal/execution": {
+        "types": "./lib/execution-runtime.d.ts",
+        "import": "./lib/execution-runtime.js"
+      },
       ".": {
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
