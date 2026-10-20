@@ -35,8 +35,10 @@ describe('zhin dev link <plugin dir>', () => {
   it('recognises plugin directories and derives the instance key', () => {
     expect(isZhinPluginDirectory(plugin)).toBe(true);
     expect(isZhinPluginDirectory(bot)).toBe(false);
-    writePkg(path.join(root, 'exports-only'), { name: 'x', exports: { './zhin': './plugin.js' } });
-    expect(isZhinPluginDirectory(path.join(root, 'exports-only'))).toBe(true);
+    writePkg(path.join(root, 'exports-entry'), { name: 'x', exports: { './zhin': './plugin.js' }, zhin: { protocol: 1, type: 'plugin' } });
+    expect(isZhinPluginDirectory(path.join(root, 'exports-entry'))).toBe(true);
+    writePkg(path.join(root, 'no-manifest'), { name: 'y', exports: { './zhin': './plugin.js' } });
+    expect(isZhinPluginDirectory(path.join(root, 'no-manifest'))).toBe(false);
     expect(defaultInstanceKey('zhin-plugin-glossary')).toBe('glossary');
     expect(defaultInstanceKey('@me/zhin-plugin-dice')).toBe('dice');
     expect(defaultInstanceKey('@zhin.js/plugin-rss')).toBe('rss');

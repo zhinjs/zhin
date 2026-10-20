@@ -132,7 +132,7 @@ pnpm dev                                          # edits in the plugin director
 zhin dev unlink glossary                          # undo
 ```
 
-`zhin dev link <path>` looks at `<path>/package.json`: with a `zhin` field (or `exports["./zhin"]`) it is a plugin, otherwise a zhin checkout. Plugin mode does three things, recorded in the bot's `.zhin/dev-plugin-links.json`; `unlink` only reverts what it did and nobody changed since:
+`zhin dev link <path>` looks at `<path>/package.json`: with a `zhin` field it is a plugin, otherwise a zhin checkout. Plugin mode does three things, recorded in the bot's `.zhin/dev-plugin-links.json`; `unlink` only reverts what it did and nobody changed since:
 
 1. creates `plugins/<instance>` in the bot as a link to the plugin directory (a junction on Windows);
 2. adds `<instance>: ./plugins/<instance>` to the main configuration `plugins` map plus an empty instance block; on `unlink`, an instance block you filled in is kept;

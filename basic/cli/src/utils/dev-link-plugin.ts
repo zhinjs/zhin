@@ -53,15 +53,13 @@ export interface DevLinkPluginOptions {
 
 const fail = (message: string): never => { throw new DevLinkError(message); };
 
-/** 目录里的 package.json 是否声明了 zhin 插件（`zhin` 字段或 `exports["./zhin"]`）。 */
+/** 目录里的 package.json 是否声明了 zhin 清单（`zhin` 字段；入口可以写在 `zhin.entry` 或 `exports["./zhin"]`）。 */
 export function isZhinPluginDirectory(dir: string): boolean {
   const file = path.join(dir, 'package.json');
   if (!fs.existsSync(file)) return false;
   try {
     const manifest = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
-    const exportsField = manifest.exports;
-    return (typeof manifest.zhin === 'object' && manifest.zhin !== null)
-      || (typeof exportsField === 'object' && exportsField !== null && Object.hasOwn(exportsField, './zhin'));
+    return typeof manifest.zhin === 'object' && manifest.zhin !== null && !Array.isArray(manifest.zhin);
   } catch {
     return false;
   }

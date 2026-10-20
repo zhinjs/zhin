@@ -132,7 +132,7 @@ pnpm dev                                          # 改插件目录里的文件�
 zhin dev unlink glossary                          # 撤销
 ```
 
-`zhin dev link <path>` 看 `<path>/package.json`：有 `zhin` 字段（或 `exports["./zhin"]`）就按插件处理，否则按 zhin 源码仓库处理。插件模式做三件事，都记录在 bot 的 `.zhin/dev-plugin-links.json`，`unlink` 只撤销自己做过、之后没被改过的部分：
+`zhin dev link <path>` 看 `<path>/package.json`：有 `zhin` 字段就按插件处理，否则按 zhin 源码仓库处理。插件模式做三件事，都记录在 bot 的 `.zhin/dev-plugin-links.json`，`unlink` 只撤销自己做过、之后没被改过的部分：
 
 1. 在 bot 的 `plugins/<实例名>` 建一个指向插件目录的链接（Windows 用 junction）；
 2. 在主配置 `plugins` 写入 `<实例名>: ./plugins/<实例名>`，并加一个空的实例配置；`unlink` 时已填写的实例配置会保留；
