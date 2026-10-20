@@ -76,7 +76,7 @@ npx @zhin.js/cli pub --dry-run   # 构建并预览 tarball 内容，不发布
 npx @zhin.js/cli pub             # 确认后发布；CI 等非交互环境加 --yes
 ```
 
-请写 `npx @zhin.js/cli`，不要写 `npx zhin`：插件目录里没有安装 `@zhin.js/cli` 时，`npx zhin` 会下载 npm 上同名的另一个旧包（`zhin@3.x`，已停止维护）。Bot 项目里装了 `@zhin.js/cli`，`npx zhin` 才指向它。
+建议写 `npx @zhin.js/cli`：插件目录里没有安装 `@zhin.js/cli` 时，`npx zhin` 会从 npm 下载名为 `zhin` 的包。从 `zhin@4` 起它就是 `@zhin.js/cli` 的别名；但 npx 缓存或锁定里残留的 `zhin@3.x` 是已停止维护的旧版框架包。Bot 项目里装了 `@zhin.js/cli`，`npx zhin` 直接指向它。
 
 ## 发布前的完成标准
 

@@ -142,7 +142,7 @@ export const newCommand = new Command('new')
         logger.log(`  在 Bot 主配置设置 configVersion: 2、plugins: { ${name}: "${packageName}" }，然后 pnpm dev`);
         logger.log('  不要直接 pnpm add <插件目录>：插件自己的 devDependencies 会让 zhin 包出现两份实例；');
         logger.log(`  需要热重载：在 Bot 项目根执行 zhin dev link <插件目录>（实例名 ${name}），见 https://zhin.js.org/authoring/local-dev#dev-link-plugin`);
-        logger.log('  发布到 npm：在插件目录执行 npx @zhin.js/cli pub --dry-run 预览，再 npx @zhin.js/cli pub（不要用 npx zhin，那是 npm 上另一个旧包）');
+        logger.log('  发布到 npm：在插件目录执行 npx @zhin.js/cli pub --dry-run 预览，再 npx @zhin.js/cli pub（npx @zhin.js/cli 在任何版本下都可靠；npx zhin 要 zhin@4 起才是同一个 CLI）');
         return;
       }
 
@@ -526,7 +526,7 @@ npx @zhin.js/cli pub --dry-run   # 构建并预览 tarball，不发布
 npx @zhin.js/cli pub             # 确认后发布；CI 里加 --yes
 \`\`\`
 
-请写 \`npx @zhin.js/cli\`：本目录没装 \`@zhin.js/cli\` 时，\`npx zhin\` 会下载 npm 上另一个已停止维护的同名旧包。
+建议写 \`npx @zhin.js/cli\`：从 \`zhin@4\` 起 \`npx zhin\` 与它等价，但 npx 缓存或锁定里残留的 \`zhin@3.x\` 是已停止维护的旧包。
 
 \`zhin.js\` 与能力包（\`@zhin.js/command\` 等）是 peerDependencies：发布后由宿主 Bot 提供同一份；devDependencies 里的副本只用于本地测试和类型检查。
 
