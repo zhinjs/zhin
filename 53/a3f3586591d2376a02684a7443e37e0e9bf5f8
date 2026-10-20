@@ -1,0 +1,18 @@
+.changeset/dx2-standalone-pub.md
+  h_b680f75345178a 1-5
+basic/cli/src/commands/pub.ts
+  h_b680f75345178a 15,27,29,37-82,133,136,143,146-148,151-156,158-161,163-186,188-193,195,197,201,218-226,228-232
+basic/cli/tests/pub-target.test.ts
+  h_b680f75345178a 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "53a3f3586591d2376a02684a7443e37e0e9bf5f8",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
