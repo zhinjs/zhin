@@ -97,6 +97,17 @@ export class MessageDispatcher {
     if (result.status === 'denied') {
       return Object.freeze({ ...result, value: '没有权限执行此指令。' });
     }
+    if (result.status === 'limited') {
+      const reason = result.limit?.reason;
+      const waitMs = result.limit?.retryAfterMs;
+      const value = reason === 'cooldown'
+        ? typeof waitMs === 'number' && waitMs > 0
+          ? `此指令仍在冷却，约 ${Math.ceil(waitMs / 1000)} 秒后再试。` : '此指令仍在冷却，请稍后再试。'
+        : reason === 'busy' ? '你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。'
+        : reason === 'capacity' ? '当前繁忙，本次指令未被接纳，请稍后再试。'
+        : '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。';
+      return Object.freeze({ ...result, value });
+    }
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({

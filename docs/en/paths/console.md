@@ -91,7 +91,7 @@ If the inbound message is visible in a conversation, open its **Diagnostics** ac
 - Each IM Runtime keeps at most 500 records in memory for 15 minutes. Restart, expiry and capacity eviction remove records; an absent record proves neither success nor absence of receipt.
 - Reading diagnostics requires an explicitly configured and validated full-scope token, including on an otherwise tokenless Host. Message bodies, sender profiles and raw exceptions are not copied into this store. Each record holds at most 32 steps and 32 deliveries; `truncated: true` marks an incomplete record when these limits are exceeded. Identity fields are limited to 2048 characters and conversation JSON to 8192; oversized identities are omitted instead of truncated into ambiguous addresses. This is not a complete audit log.
 
-The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, or `conversation` (complete `ConversationRef` JSON) and `messageId` for an exact lookup; `limit` accepts 1–100. When no record is available, continue below. Older Hosts do not expose this endpoint; update the Host and standalone Console separately.
+The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, or `conversation` (complete `ConversationRef` JSON) and `messageId` for an exact lookup; `limit` accepts 1–100. Follow the observed result in [message troubleshooting](../troubleshooting/messages.md); newer Console versions also link to the relevant topic from each diagnostic. When no record is available, continue below. Older Hosts do not expose this endpoint; update the Host and standalone Console separately.
 
 1. **Dashboard**: is the bot connected? Are the Endpoints online?
 2. **Conversations & Channels**: did the user's message reach the bot?
@@ -112,6 +112,18 @@ Available actions come from the plugin. Pause a scheduled task before editing or
 Drafts retain their original generation and revision; conflicts preserve input instead of silently overwriting. A timeout or lost response retains the operation ID and freezes writes while reading durable provider receipts. A missing receipt does not prove the command never ran. After changing login, explicitly confirm the original operation identity before reconciling; the page never resends automatically. Temporary reconciliation metadata contains no task content, parameters or credentials.
 
 Host endpoints are `GET /api/tasks/use-cases`, `GET /api/tasks/providers`, `POST /api/tasks/create` and `POST /api/tasks/change`. The plugin owns persistent task facts, revisions and receipts; the Host does not add another scheduler. See the [persistent reminder plugin](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder) and [CLI use-case guide](../cli/index.md#use-cases-find-a-setup-path-by-purpose).
+
+## Command permission explanations
+
+Open `/permissions` or follow the permission explanation link in the command catalog. Use an explicit full-scope Token for the current Host. Search by command, description or plugin instance; the catalog is paginated.
+
+Selecting a command explains its actual `permit` declarations and its separate `adapter` constraint. Rule arrays use AND; comma-separated values within one rule use OR. Optionally supply a hypothetical conversation, sender and roles to check builtin conditions. Accounts come from the current Host's complete Endpoint catalog; no platform role lookup is performed.
+
+A matching condition is not authorization. Missing roles remain unknown; platform and custom checkers stay unevaluated. The page executes no command, dynamic parameter default or checker. Builtin conversation rules compare kind and ID only, without restricting the specific Bot account, parent or thread. Displaying a complete identity does not add those restrictions.
+
+Changing assumptions clears old results. A generation change requires a fresh catalog and check. Changing Host or credentials discards old results. Older Hosts without these interfaces receive an explicit update message rather than an invented decision.
+
+For actual welcome restrictions, configure the [exact welcome allowlist](../solutions/group-welcome.md) through the existing validation, save and apply flow. The explanation page does not write it.
 
 ## Next steps
 

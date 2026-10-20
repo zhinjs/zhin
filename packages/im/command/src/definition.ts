@@ -14,6 +14,8 @@ import {
 import { assertPermitSyntax } from '@zhin.js/permission';
 import { validateArgumentSchemas } from './arguments.js';
 import type { UserInteraction } from '@zhin.js/interaction';
+import { normalizeExecutionPolicy, type CommandExecutionPolicy } from './execution-policy.js';
+export type { CommandExecutionPolicy, CommandExecutionLimit } from './execution-policy.js';
 
 const commandBrand = 'zhin.command/1' as const;
 
@@ -310,6 +312,8 @@ export interface CommandDefinition<
    * 例：`adapter(icqq)`、`role(master)`、`group(123,456)`。
    */
   readonly permit?: readonly string[];
+  /** Optional full-operation cooldown, concurrency and one-shot progress feedback. */
+  readonly execution?: Readonly<CommandExecutionPolicy>;
   /**
    * 全局整句快捷方式：触发串（trim 后全文相等）→ 预填 params。
    * 与普通路由一样是全局用户输入，冲突会在 generation 构建时拒绝。
@@ -384,7 +388,8 @@ export function defineCommand<
   validateCommandAlias(definition.alias);
   validateCommandPermit(definition.permit);
   validateCommandShortcutShape(definition.shortcut);
-  return Object.freeze({ $feature: commandBrand, ...definition }) as Readonly<
+  const execution = normalizeExecutionPolicy(definition.execution);
+  return Object.freeze({ $feature: commandBrand, ...definition, ...(execution ? { execution } : {}) }) as Readonly<
     CommandDefinition<TConfig, TResult, TInput, string | undefined>
   >;
 }
@@ -465,6 +470,7 @@ export function parseCommandDefinition(value: unknown): CommandDefinition {
     throw new TypeError('Command module must default-export defineCommand(...)');
   }
   validateAdapterName(definition.adapter);
+  normalizeExecutionPolicy(definition.execution);
   return definition as CommandDefinition;
 }
 
@@ -535,7 +541,7 @@ export function resolveCommandSession(input: unknown): CommandSession {
     || (typeof metadata?.endpoint === 'string' && metadata.endpoint ? metadata.endpoint : undefined);
 
   const scene = resolveScene(input, metadata);
-  const sender = resolveSender(input, metadata);
+  const sender = resolveCommandSender(input, metadata);
 
   return Object.freeze({
     ...(adapter ? { adapter } : {}),
@@ -584,8 +590,12 @@ function resolveScene(
   });
 }
 
-function resolveSender(
-  input: CommandMessage,
+/**
+ * Pure canonical sender projection shared with read-only command condition simulation.
+ * @internal Command dispatcher projection helper.
+ */
+export function resolveCommandSender(
+  input: Pick<CommandMessage, 'sender'>,
   metadata: Readonly<Record<string, unknown>> | undefined,
 ): CommandSender | undefined {
   const structured = (input as { readonly from?: unknown }).from;
@@ -607,7 +617,7 @@ function resolveSender(
 }
 
 function resolveRoles(
-  input: CommandMessage,
+  input: Pick<CommandMessage, 'sender'>,
   metadata: Readonly<Record<string, unknown>> | undefined,
 ): readonly string[] {
   if (input.sender?.roles?.length) {

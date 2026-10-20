@@ -191,11 +191,12 @@ export default defineCommand({
 | --- | --- |
 | `role(master)` / `role(trusted)` | 发送者角色 |
 | `adapter(icqq)` | 只在某个平台上可用 |
-| `group(123)` / `private(…)` / `channel(…)` / `user(…)` | 只在指定的群、私聊、频道，或对指定用户可用 |
+| `group()` / `private()` / `channel()` | 限制会话类型，空值或 `*` 不限该类型的会话 ID |
+| `group(123)` / `private(…)` / `channel(…)` / `user(…)` | 比较相应会话或发送者 ID；不限制完整账号、父容器或话题 |
 
 数组中的多条规则**同时满足**才通过；一条规则内用逗号分隔表示**满足其一**即可。没有权限的用户也看不到这个命令的帮助。
 
-角色分为三档：`user` → `trusted` → `master`（`master` 包含 `trusted` 的权限）。在适配器的配置里指定谁是 master：
+内置角色判断只让 `master` 隐含 `trusted`，不会额外推导 `user`、`admin` 或 `owner`。角色来自当前真实消息；适配器配置可以指定谁是 master：
 
 ```yaml
 configVersion: 2
@@ -210,6 +211,8 @@ qq:
       master: '10001' # 也可以给单个账号单独设置
 ```
 
+需要逐项理解规则时，可在[Console 命令权限说明](../paths/console.md#命令权限说明)中查看内置条件或填写假设身份。它不执行平台 checker，也不授予权限；`adapter(...)` 与会话 ID 规则不能当作完整会话白名单。
+
 在中间件或事件处理中需要同样的判断时，使用 `checkPermissions`：
 
 ```ts
@@ -219,6 +222,36 @@ if (!(await checkPermissions(context, ['group(team)', 'role(trusted)']))) return
 ```
 
 它复用同一套权限规则，但不替代 AI 工具的审批或执行安全策略。
+
+### 限制重复执行与提示耗时任务 {#execution-policy}
+
+给昂贵命令单独声明 `execution`，未声明的命令保持原行为。以下是可直接放入 `commands/slow/index.ts` 的演示：
+
+```ts
+import { setTimeout as delay } from 'node:timers/promises';
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: '演示有冷却和并发限制的耗时任务',
+  execution: { cooldownMs: 10_000, maxConcurrent: 1, progressAfterMs: 1_500 },
+  async execute({ signal }) {
+    await delay(3_000, undefined, { signal });
+    return '演示任务已完成';
+  },
+});
+```
+
+由真实用户在同一完整会话发送 `slow`，约 1.5 秒后可收到一次处理中提示，业务结束后收到结果。按账号实际前缀与插件命名空间调整命令；这是本地延时演示，不调用业务服务。短任务结束前会取消尚未触发的提示；开始最终回复前等待已开始的提示，避免最终结果先到、处理中提示后到。
+
+额度按指令 capability、真实发送者与完整会话隔离，包括 Endpoint、会话类型和 ID、父容器与话题。别名与快捷方式共用额度；它不是整个插件或所有用户共享的并发上限。
+
+- `cooldownMs`：接纳业务执行时开始计时，失败和取消仍消耗这次冷却；帮助、参数无效、权限拒绝与准入拒绝不消耗。上限一天。
+- `maxConcurrent`：占用持续到该次业务、渲染、出站中间件及最终发送实际结束。热更新或退役发出取消信号不会提前释放仍在运行的任务；不同运行代沿用同一额度。上限 1000。
+- `progressAfterMs`：默认不发提示，显式设置后每次处理对该指令最多提示一次。提示仅在业务等待阶段启动，经原会话的统一回复链发送；失败或结果不确定不重试。上限一小时。
+
+三个值均为正整数，`execution` 至少声明一项。冷却拒绝包含记录时的剩余时间；并发已满无法预知何时结束，不伪造等待倒计时。诊断状态为 `limited`，与 `denied` 权限拒绝及平台投递失败分开，也不会转交 Agent 再执行。
+
+启用策略需要 Core 的真实入站操作和完整身份；脱离该操作的直接 `CommandIndex` 调用不能伪造来源绕过检查。额外回复仍应 `await input.$reply(...)`，任意未来定时器里启动的工作不属于已经结束的处理。冷却不替代幂等、权限或投递对账，不能用于自动重试 `unknown`，也不会为不支持取消的操作生成取消按钮。
 
 ### 回复图片、卡片或多条消息
 

@@ -35,3 +35,4 @@ export {
 
 export { createSceneRolePlatformChecker, platformPermission } from './helpers.js';
 export * from './check-permissions.js';
+export * from './explain.js';

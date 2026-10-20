@@ -47,10 +47,11 @@ export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
     packageName: '@zhin.js/plugin-group-suite', mode: 'plugin-configuration',
     steps: ['安装群运营套件并选择明确的插件实例；多实例时不能只凭包名修改。',
       '在该实例的配置表单填写 welcomeMessage，使用 {name} 和 {id} 表示新成员。',
-      '检查作用范围，保存后应用；空文案关闭欢迎。',
+      '在 welcomeConversations 选择精确账号与群；父容器和话题如有也须填写。核对范围后保存并应用。',
       '等待真实且已授权的成员加入事件验证，查看投递结果，不能用启动成功代替。'],
     limitations: ['适配器须提供标准群成员增加通知，缺少该事件时不会发送。',
-      '当前 welcomeMessage 作用于该实例收到通知的所有群；尚未提供精确范围配置，不能宣称已限制到单个群。'],
+      '省略 welcomeConversations 覆盖全部符合条件的群；空列表不欢迎任何会话。未填父容器或话题只匹配同样缺省的事件，不是通配。',
+      '此范围只约束欢迎，不改变签到、词库、统计或命令 permit；空 welcomeMessage 仍关闭欢迎。'],
   },
   {
     id: 'keyword-reply', title: '配置群关键词回复', summary: '在指定群维护持久词库，并检查修改权限与匹配效果。',
