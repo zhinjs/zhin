@@ -347,6 +347,7 @@ describe('CLI new command integration', () => {
     expect(readme).not.toContain(`pnpm add ../${pluginName}`)
     expect(readme).toContain('local-dev#dev-link-plugin')
     expect(readme).toContain(`zhin dev link`)
+    expect(readme).toContain('npx @zhin.js/cli pub --dry-run')
   }, 30000)
 
   it('fails fast instead of prompting when stdin is not a TTY', async () => {
