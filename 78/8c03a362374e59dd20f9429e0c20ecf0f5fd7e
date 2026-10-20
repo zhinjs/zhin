@@ -1,0 +1,14 @@
+basic/cli/src/commands/search.ts
+  h_b680f75345178a 54,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "788c03a362374e59dd20f9429e0c20ecf0f5fd7e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
