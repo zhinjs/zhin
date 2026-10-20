@@ -51,7 +51,6 @@ it('posts to the target group every 30 seconds', async () => {
 | `fake.rows(name)` | Rows of a table the plugin created with `define(name)` (in-memory; `where` is equality only) |
 | `fake.sent` | Every proactive send (`send`, `sendTarget`, reactions, recall, edit, typing); `sendTarget` carries the sending plugin |
 | `fake.outboundHost.failNext(error)` | Make the next send reject, to test failure paths |
-| `fake.outboundHost.supportManagement(['muteGroupMember'])` | Declare the member management the fake Endpoint implements (none by default); `capabilities().management` and `muteGroupMember` follow it |
 | `fake.clock` | `advance(ms)` moves time and runs due jobs in order; `set(time)` changes time without firing |
 | `fake.scheduleHost.trigger(id)` | Run a registered job immediately |
 | `fake.features` | Capabilities registered in `setup` via `addFeature` / `addCommand` etc. |

@@ -60,24 +60,8 @@ export interface OutboundEndpointInput {
   readonly endpointKey: string;
 }
 
-/**
- * Member management an Endpoint may implement. Names mirror the adapter
- * `EndpointManagement` port, so a plugin checks one platform-neutral id instead
- * of an adapter name.
- */
-export type OutboundManagementOperation = 'muteGroupMember';
-
 export interface OutboundEndpointCapabilities {
   readonly operations: readonly OutboundEndpointOperation[];
-  /** Member management the live Endpoint implements; omitted when it implements none. */
-  readonly management?: readonly OutboundManagementOperation[];
-}
-
-export interface OutboundMuteGroupMemberInput extends OutboundEndpointInput {
-  readonly groupId: string;
-  readonly userId: string;
-  /** Mute length in seconds; `0` lifts an existing mute. */
-  readonly durationSeconds: number;
 }
 
 export interface OutboundEditInput extends OutboundEndpointInput {
@@ -120,11 +104,6 @@ export interface OutboundHost {
   edit?(input: OutboundEditInput): Promise<string | null>;
   /** Optional: toggle the platform-native typing indicator. */
   typing?(input: OutboundTypingInput): Promise<void>;
-  /**
-   * Optional: mute one group member. Check `capabilities().management` first;
-   * the call rejects when the Endpoint does not implement it or the platform refuses.
-   */
-  muteGroupMember?(input: OutboundMuteGroupMemberInput): Promise<void>;
 }
 
 /** Root-only process port: requester is supplied by the owner-bound facade. */
@@ -142,7 +121,6 @@ export class PluginOutboundHost implements OutboundHost {
   readonly recall?: OutboundHost['recall'];
   readonly edit?: OutboundHost['edit'];
   readonly typing?: OutboundHost['typing'];
-  readonly muteGroupMember?: OutboundHost['muteGroupMember'];
 
   readonly #owner: PluginId;
   readonly #host: OutboundRootHost;
@@ -162,7 +140,6 @@ export class PluginOutboundHost implements OutboundHost {
     const recall = host.recall?.bind(host);
     const edit = host.edit?.bind(host);
     const typing = host.typing?.bind(host);
-    const muteGroupMember = host.muteGroupMember?.bind(host);
     this.sendTarget = sendTarget ? async (target, content) => this.#run(() => sendTarget(target, content, this.#owner)) : undefined;
     this.runWithView = runWithView ? (operation) => this.#run(() => runWithView(operation)) : undefined;
     this.capabilities = capabilities ? (input) => this.#run(() => capabilities(input)) : undefined;
@@ -171,9 +148,6 @@ export class PluginOutboundHost implements OutboundHost {
     this.recall = recall ? (input) => this.#run(() => recall(input)) : undefined;
     this.edit = edit ? (input) => this.#run(() => edit(input)) : undefined;
     this.typing = typing ? (input) => this.#run(() => typing(input)) : undefined;
-    this.muteGroupMember = muteGroupMember
-      ? (input) => this.#run(() => muteGroupMember(input))
-      : undefined;
   }
 
   get owner(): PluginId { return this.#owner; }

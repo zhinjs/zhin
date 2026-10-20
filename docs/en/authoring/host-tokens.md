@@ -55,7 +55,7 @@ export default definePlugin<ReminderConfig>({
 
 | Token | You get | Main methods |
 | --- | --- | --- |
-| `outboundHostToken` (`zhin.js`) | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` for proactive sends; `sendTarget(target, content)` sends precisely to a saved full target; `capabilities({ adapter, endpointKey }).management` lists the member management that Endpoint implements (currently only `muteGroupMember`), and only then call `muteGroupMember({ adapter, endpointKey, groupId, userId, durationSeconds })` |
+| `outboundHostToken` (`zhin.js`) | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` for proactive sends; `sendTarget(target, content)` sends precisely to a saved full target |
 | `outboundMessageToken` (`zhin.js/core/runtime`) | `OutboundMessageService` | `send(request) → DeliveryReceipt`, `registerInteractiveHandler`; inbound handling and endpoint-internal sending aren't part of this public contract |
 | `outboundRootHostToken` (`zhin.js`, root only) | `OutboundRootHost` | Process-level delivery port; the runtime binds a `PluginOutboundHost` for each plugin |
 | `runtimeEventPublisherToken` (`zhin.js`) | `RuntimeEventPublisher` | Broadcast runtime events (the source of the inbox and Console message streams) |

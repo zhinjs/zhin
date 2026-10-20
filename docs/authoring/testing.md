@@ -51,7 +51,6 @@ it('每 30 秒往目标群发一条消息', async () => {
 | `fake.rows(name)` | 读取插件 `define(name)` 建的表（内存实现，`where` 只支持等值） |
 | `fake.sent` | 记录所有主动发送（`send`、`sendTarget`、反应、撤回、编辑、输入中），`sendTarget` 带发送方插件 |
 | `fake.outboundHost.failNext(error)` | 让下一次发送失败，用来测失败路径 |
-| `fake.outboundHost.supportManagement(['muteGroupMember'])` | 声明假 Endpoint 支持的成员管理（默认都不支持），`capabilities().management` 和 `muteGroupMember` 随之生效 |
 | `fake.clock` | `advance(ms)` 推进并按时间顺序执行到期任务；`set(time)` 只改时间不触发 |
 | `fake.scheduleHost.trigger(id)` | 立即执行某个已注册任务 |
 | `fake.features` | `setup` 里通过 `addFeature` / `addCommand` 等登记的能力 |

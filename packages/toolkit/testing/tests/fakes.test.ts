@@ -122,18 +122,4 @@ describe('testing fakes', () => {
     expect(observedTimes).toEqual([60_000, 120_000, 180_000]);
     expect(clock.now()).toBe(3 * 60_000);
   });
-
-  it('fake Endpoints implement no member management until a test declares it', async () => {
-    const fake = createFakePlugin();
-    const endpoint = { adapter: 'test', endpointKey: 'bot' };
-    const mute = { ...endpoint, groupId: 'g1', userId: 'u1', durationSeconds: 30 };
-
-    expect(fake.outbound.capabilities?.(endpoint)).toBeUndefined();
-    await expect(fake.outbound.muteGroupMember!(mute)).rejects.toThrow('does not support muteGroupMember');
-
-    fake.outboundHost.supportManagement(['muteGroupMember']);
-    expect(fake.outbound.capabilities?.(endpoint)?.management).toEqual(['muteGroupMember']);
-    await fake.outbound.muteGroupMember!(mute);
-    expect(fake.sent).toEqual([{ kind: 'muteGroupMember', input: mute, id: null }]);
-  });
 });
