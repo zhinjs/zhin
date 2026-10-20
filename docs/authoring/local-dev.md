@@ -120,6 +120,33 @@ zhin dev link ../zhin --project ../my-bot   # 不在项目目录时用 --project
 
 修改后执行 `pnpm install`，再用第 1 节的命令确认每个包只有一个解析路径。
 
+### 独立插件热重载联调 {#dev-link-plugin}
+
+`zhin new --standalone` 生成的插件在自己的目录里开发和单测；要在真实 bot 里边改边看，把插件目录传给同一个命令：
+
+```bash
+cd my-bot
+zhin dev link ../zhin-plugin-glossary            # 实例名默认取包名去掉 zhin-plugin- 前缀，这里是 glossary
+zhin dev link ../zhin-plugin-glossary --as terms # 指定实例名
+pnpm dev                                          # 改插件目录里的文件即热重载
+zhin dev unlink glossary                          # 撤销
+```
+
+`zhin dev link <path>` 看 `<path>/package.json`：有 `zhin` 字段（或 `exports["./zhin"]`）就按插件处理，否则按 zhin 源码仓库处理。插件模式做三件事，都记录在 bot 的 `.zhin/dev-plugin-links.json`，`unlink` 只撤销自己做过、之后没被改过的部分：
+
+1. 在 bot 的 `plugins/<实例名>` 建一个指向插件目录的链接（Windows 用 junction）；
+2. 在主配置 `plugins` 写入 `<实例名>: ./plugins/<实例名>`，并加一个空的实例配置；`unlink` 时已填写的实例配置会保留；
+3. 插件 `node_modules` 里的 `zhin.js` / `@zhin.js/*`（开发、单测用的 devDependencies）改为指向 bot 解析到的那一份。插件代码按真实路径解析 import，不这样做会和 bot 各用一份，启动时报 `Multiple package locations for @zhin.js/command are not supported in one generation`。bot 没有的包（如 `@zhin.js/testing`）不动。
+
+为什么不用别的办法：只有主配置里 `./` 开头的本地引用才会建立文件监听。`pnpm add ../插件`、tarball、把插件目录加进 pnpm workspace，或者按包名引用 `plugins/` 下的链接，都会把插件当作 `node_modules` 里的包加载，不会热重载；`pnpm add <目录>` 还会带进插件自己的那份 `@zhin.js/*`。
+
+注意：
+
+- 两边的 `package.json`、锁文件都不改，也不执行 `pnpm install`；
+- 在插件目录重新 `pnpm install` 会恢复它自己的依赖，之后再执行一次 `zhin dev link`（幂等）；
+- 插件与 bot 的 zhin 版本应在插件 `peerDependencies` 声明的范围内，链接后插件单测跑的也是 bot 那一份；
+- 改插件共享的 `src/` 模块时运行时会整体重启（`restartRequired`），改约定目录里的文件只重载对应能力。
+
 临时停用某个实例时，把实例名加入主配置 `disable_plugins`；保留包依赖、`plugins` 映射和顶层同名业务块。移除声明才是删除实例，不能把停用等同于卸载。
 
 ## 5. 端口与干净退出

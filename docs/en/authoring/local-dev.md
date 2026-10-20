@@ -120,6 +120,33 @@ If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same
 
 Run `pnpm install` afterwards and use the commands from section 1 to confirm each package has a single resolved path.
 
+### Hot-reload a standalone plugin in a bot {#dev-link-plugin}
+
+A plugin from `zhin new --standalone` is developed and unit-tested in its own directory. To try it in a real bot while you edit, pass the plugin directory to the same command:
+
+```bash
+cd my-bot
+zhin dev link ../zhin-plugin-glossary            # instance name defaults to the package name without zhin-plugin-: glossary
+zhin dev link ../zhin-plugin-glossary --as terms # pick the instance name
+pnpm dev                                          # edits in the plugin directory hot-reload
+zhin dev unlink glossary                          # undo
+```
+
+`zhin dev link <path>` looks at `<path>/package.json`: with a `zhin` field (or `exports["./zhin"]`) it is a plugin, otherwise a zhin checkout. Plugin mode does three things, recorded in the bot's `.zhin/dev-plugin-links.json`; `unlink` only reverts what it did and nobody changed since:
+
+1. creates `plugins/<instance>` in the bot as a link to the plugin directory (a junction on Windows);
+2. adds `<instance>: ./plugins/<instance>` to the main configuration `plugins` map plus an empty instance block; on `unlink`, an instance block you filled in is kept;
+3. points `zhin.js` / `@zhin.js/*` in the plugin's own `node_modules` (dev and test devDependencies) at the copies the bot resolves. Plugin code resolves imports from its real path, so without this the plugin and the bot each load their own copy and startup fails with `Multiple package locations for @zhin.js/command are not supported in one generation`. Packages the bot does not have (such as `@zhin.js/testing`) are left alone.
+
+Why not something else: only `./` references in the main configuration get file watching. `pnpm add ../plugin`, a tarball, adding the plugin directory to the pnpm workspace, or referencing the link under `plugins/` by package name all load the plugin as a `node_modules` package, without hot reload; `pnpm add <dir>` also brings in the plugin's own `@zhin.js/*`.
+
+Notes:
+
+- Neither side's `package.json` or lockfile changes, and no `pnpm install` runs;
+- running `pnpm install` in the plugin restores its own dependencies; run `zhin dev link` again afterwards (idempotent);
+- keep the bot's zhin versions inside the plugin's `peerDependencies` ranges; while linked, the plugin's unit tests also use the bot's copies;
+- editing a shared `src/` module restarts the runtime (`restartRequired`); editing a convention file reloads just that capability.
+
 To temporarily disable an instance, add its alias to `disable_plugins`. Keep its package dependency, `plugins` mapping and top-level business configuration. Removing a declaration deletes the instance; disabling does not uninstall it.
 
 ## 5. Ports and clean exit
