@@ -26,6 +26,13 @@ expect(message.replies).toEqual(['ok']);
   `Scope`, `DisposeStack` and `GenerationHandoffStack`, plus the real owner-bound
   `databaseHostToken`, `scheduleHostToken` and `outboundHostToken` facades over in-memory hosts
   (`FakeDatabaseRootHost`, `FakeScheduleRootHost` driven by a `FakeClock`, `FakeOutboundRootHost`).
+- `runPluginSetup` validates `config` against the plugin's declared `config` schema, applies its
+  defaults and keeps only declared top-level fields, like the Runtime (throws
+  `PluginConfigValidationError`). Pass `validateConfig: false` to hand `config` to `setup()` verbatim.
+  `resolvePluginConfig(definition, input)` returns the resolved view without running setup.
+- `runTool(fake, tool, input, { message })` runs an Agent tool (a definition, or a local name
+  registered via `addTool()`): executable `inputSchema` parsing and `adapter` binding as in the
+  Runtime, with `origin`/`principal` derived from a fake message. No approval or policy enforcement.
 - `runCommand`, `runMiddleware`, `runHandler` execute convention-directory definitions against the
   fake. `runCommand` calls `execute()` directly: no routing, parameter parsing, `permit` or admission.
 - `fakeOf<T>(partial)` replaces `{ ... } as never` for narrow collaborators and event payloads.
