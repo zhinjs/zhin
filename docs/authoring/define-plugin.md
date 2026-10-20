@@ -342,7 +342,7 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | --- | --- | --- |
 | `protocol` | 是 | 清单协议版本，当前必须为 `1` |
 | `type` | 是 | `plugin`（普通插件，可挂载子插件）或 `feature`（提供一类能力的平台包） |
-| `entry` | 是 | 入口文件，包内相对路径，`./` 开头且不得含 `..` |
+| `entry` | 是（或用 `exports["./zhin"]`） | 入口文件，包内相对路径，`./` 开头且不得含 `..`；省略时读取 `exports["./zhin"]`，见下文 |
 | `engine` | 否 | semver 范围，与运行时版本不匹配时拒绝加载 |
 | `runtime` | 否 | `isolated` 表示在隔离环境中运行：仅限子插件、不能挂载 Host Feature，且需要隔离适配器支持 |
 | `platformFeatures` | 否 | 默认 `true`：Root 插件即使不声明，也会获得官方 Stable Features |
@@ -350,6 +350,27 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | `plugins` | 否 | 挂载的子插件。`instanceKey` **必填**，匹配 `^[a-z0-9][a-z0-9-]*$`，是配置段的键；同一包挂多个实例就用不同的 `instanceKey` |
 
 `type: "feature"` 的包只有 `protocol` / `type` / `entry` / `engine` / `featureApi` 五个字段，`featureApi` 声明它实现的 API 版本，供使用方的 `features[].api` 校验。
+
+### 用 exports 声明入口 {#exports-zhin}
+
+也可以不写 `zhin.entry`，改用标准的 `exports["./zhin"]` 声明运行时入口；`zhin` 字段仍然要有，用来放 `protocol`、`type` 等 zhin 自己的元数据：
+
+```jsonc
+{
+  "exports": {
+    ".": { "types": "./lib/index.d.ts", "import": "./lib/index.js" },   // 库 API（可选）
+    "./zhin": { "types": "./plugin.d.ts", "import": "./plugin.js" }     // 运行时入口
+  },
+  "zhin": { "protocol": 1, "type": "plugin" }
+}
+```
+
+规则：
+
+- `exports["./zhin"]` 是字符串时直接使用；是条件对象时依次取 `zhin`、`import`、`default`（嵌套条件同样处理），`types`、`require` 等其他条件忽略；是数组时取第一个能选出路径的元素。
+- 选出的路径与 `zhin.entry` 同样校验：`./` 开头、不得含 `..`；本地与 `node_modules` 来源的 `.ts` / `.js` 互换规则也一样（见下一节）。
+- **同时写了 `zhin.entry` 和 `exports["./zhin"]` 时以 `zhin.entry` 为准。** `zhin.entry` 继续完整支持，没有弃用计划；两种写法任选其一。
+- 想让运行时用另一份文件而不影响其他工具时，可以加 `zhin` 条件：`{ "zhin": "./plugin.js", "import": "./lib/plugin.js" }`。
 
 ### 开发入口与 npm 发布入口
 

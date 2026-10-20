@@ -157,7 +157,12 @@ zhin new [plugin-name] [--standalone] [--type normal|service|adapter] [--package
 
 - The package name defaults to `zhin.js-<name>`. Use `--package-name` for your own name or scope (for example `@me/zhin-plugin-x`). The `@zhin.js/` scope is reserved for official plugins (`--is-official`).
 - `zhin.js` and the capability packages (`@zhin.js/command`, `@zhin.js/skill`, and so on) are peerDependencies with a `^x.y.z` range derived from the installed versions. The same versions go into devDependencies for local tests and type checks.
-- `zhin.entry` is `./plugin.js`. The local runtime falls back to `plugin.ts`; `pnpm build` (run automatically before `pnpm pack` / `pnpm publish`) compiles `plugin.ts` and the convention directories into sibling `.js` files, so npm receives JavaScript. See [definePlugin · Development entry vs. npm entry](../authoring/define-plugin.md#development-entry-vs-npm-entry).
+- The build output follows the published package layout ([publishing guide, Chinese](../../contributing/publishing.md)):
+  - `src/` holds library code. `pnpm build` compiles it into `lib/` (`.js` + `.d.ts`), and `main`, `types` and `exports` all point at `lib/`.
+  - `zhin.entry` is `./plugin.js`; the local runtime falls back to `plugin.ts`. When you pack (`pnpm pack` or publish), `prepack` runs the build and then `scripts/build-runtime-entries.mjs`, which compiles `plugin.ts` and the convention directories into sibling `.js` files and rewrites imports of `src/` to `lib/`. `postpack` removes those generated files again.
+  - `files` is a whitelist. It ships only `lib/`, `plugin.js`, the `.js` files in convention directories, `schema.json`, `skills/`, `agents/` and docs. TypeScript sources, tests and configs are not published.
+
+  See [definePlugin · Development entry vs. npm entry](../authoring/define-plugin.md#development-entry-vs-npm-entry).
 - The generated `pnpm test` (Vitest) and `pnpm typecheck` (`tsc --noEmit`) work as is; no `NODE_ENV` setting is needed.
 - `--skip-install` skips `pnpm install` in both the plugin directory and the project root.
 
