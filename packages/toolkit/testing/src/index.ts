@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { defineAdapter, type AdapterDefinition, type AdapterSegmentPolicy,
   type EndpointIdentity, type EndpointEventSink, type EndpointIncomingMessage, type EndpointSendRequest } from '@zhin.js/adapter';
 import { ImRuntime, type ConversationAddress, type MessageDispatchResult,
-  type SendContent } from '@zhin.js/core/runtime';
+  type RuntimeMessageDiagnosticsReader, type SendContent } from '@zhin.js/core/runtime';
 import { type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
 import { rootPluginId, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { NativeDevelopmentModuleRuntime, NodePackageResolver, RootRuntime,
@@ -125,6 +125,8 @@ export class PluginTestKit {
 
   /** The same PermissionHost consumed by real command admission. */
   get permissions(): ImRuntime['permissionHost'] { return this.#im.permissionHost; }
+  /** The same bounded, body-free reader the Console serves at `GET /api/messages/diagnostics`. */
+  get messageDiagnostics(): RuntimeMessageDiagnosticsReader { return this.#im.messageDiagnostics; }
   get generation(): number { return this.#root.snapshot.generation; }
   get deliveries(): readonly TestDelivery[] { return Object.freeze(this.#attempts.map(item => captureDeliveryValue(item))); }
   clearDeliveries(): void { this.#attempts.splice(0); }
