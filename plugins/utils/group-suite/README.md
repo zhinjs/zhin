@@ -61,10 +61,12 @@ group-suite:
 
 未配置命名空间时直接使用表内指令名；如果实例设 `commandNamespace: suite`，使用
 `suite checkin` 等形式。实际前缀由 Endpoint 决定。
+别名同样位于命名空间之下（如 `suite 签到`、`suite checkin rank`）。
 
 | 指令/能力 | 说明 |
 |---|---|
 | `checkin` / `mypoints` / `rank` | 签到、积分与排行 |
+| `checkin do` / `签到` · `checkin streak` · `checkin rank` | 兼容别名：分别等同 `checkin`、`mypoints`、`rank`，方便从 `checkin <子命令>` 风格的本地签到插件迁移 |
 | `stats` / `stats-week` / `stats-rank` / `mystats` | 消息统计 |
 | `stats-card` | 当日统计 HTML 图卡；没有渲染服务时走统一文本降级 |
 | `teach` / `teach-regex` / `teach-list` / `forget` | 群问答与管理 |
