@@ -1,0 +1,49 @@
+plugins/utils/rss/src/admin-tasks.ts
+  s_079f1dc5e6308d::t_bdf4b0e2da1f75 7,9,15-16,25-26,28-29,31,40-42,49,75-76,78,91,101-103,114,117,122,125,127
+  s_079f1dc5e6308d::t_881807219e7b41 50,147,178,363,365-367
+  s_079f1dc5e6308d::t_13c848070c90bc 313-315,320-321,348-350
+  s_079f1dc5e6308d::t_d4071f106c5a78 237-242,248,275-285,291,306-312,316-318,322-323,331-347,351-362,364,368-369
+  s_079f1dc5e6308d::t_f2e74d40432155 319
+  s_079f1dc5e6308d::t_cdee7776cf6325 231
+  s_079f1dc5e6308d::t_b05fb4749c48cb 139-146,148,152,163-165,170,172-174,179,184-210,217,229-230
+plugins/utils/rss/tests/quiet-hours.test.ts
+  s_079f1dc5e6308d::t_cff04173a015c2 1-46
+plugins/utils/rss/src/quiet-hours.ts
+  s_079f1dc5e6308d::t_f2e74d40432155 1,5
+  s_079f1dc5e6308d::t_0663298f307aca 2-4,6-30
+plugins/utils/rss/tests/quiet-runtime.test.ts
+  s_079f1dc5e6308d::t_6ebf936c249596 1-14,16-18,20-42,47-67,78-100,102-187,231
+  s_079f1dc5e6308d::t_881807219e7b41 15,19,68-77
+  s_079f1dc5e6308d::t_cdee7776cf6325 43-46,101
+  s_079f1dc5e6308d::t_f7f149721a0de7 188-230
+plugins/utils/rss/tests/admin-task-host.test.ts
+  s_079f1dc5e6308d::t_f7f149721a0de7 88-118
+.changeset/experience-rss-quiet-hours.md
+  s_079f1dc5e6308d::t_13c848070c90bc 1-5
+plugins/utils/rss/README.md
+  s_079f1dc5e6308d::t_881807219e7b41 65
+  s_079f1dc5e6308d::t_cdee7776cf6325 52-64,66-73,86,92
+plugins/utils/rss/tests/admin-fixture.ts
+  s_079f1dc5e6308d::t_7b94210b4f9731 1,32
+  s_079f1dc5e6308d::t_881807219e7b41 15,20,42
+docs/en/solutions/rss-subscriptions.md
+  s_079f1dc5e6308d::t_56c47e8c98d001 39-58
+docs/solutions/rss-subscriptions.md
+  s_079f1dc5e6308d::t_75789b4c21f84d 39-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cdc09db0087224eec7473eea43df818815c989a9",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
