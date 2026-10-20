@@ -1,0 +1,39 @@
+{
+  "name": "zhin",
+  "version": "4.0.0-0",
+  "description": "Alias of @zhin.js/cli: `npx zhin` runs the Zhin.js command-line interface",
+  "type": "module",
+  "bin": {
+    "zhin": "./bin/zhin.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "scripts": {
+    "test": "vitest run --root ../../.. packages/toolkit/zhin-shim/tests"
+  },
+  "dependencies": {
+    "@zhin.js/cli": "workspace:^"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "cli"
+  ],
+  "author": "zhin team",
+  "license": "MIT",
+  "homepage": "https://zhin.js.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/toolkit/zhin-shim"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}
