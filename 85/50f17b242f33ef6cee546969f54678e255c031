@@ -1,0 +1,39 @@
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_079f1dc5e6308d::t_bb550a05a9ff02 9,58-78
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_079f1dc5e6308d::t_1c247eeb06a738 16,158
+basic/cli/tests/plugin-runtime/console/console-schema.test.ts
+  s_079f1dc5e6308d::t_591dace5c16f2a 3,119,123-134
+  s_079f1dc5e6308d::t_bb550a05a9ff02 4,72-118,120-122
+basic/cli/src/plugin-runtime/console/console-schema.ts
+  s_079f1dc5e6308d::t_1c247eeb06a738 1-2,56-57,62
+  s_079f1dc5e6308d::t_591dace5c16f2a 58-61
+  s_079f1dc5e6308d::t_3629ae8e4bd1c1 63
+docs/console/index.md
+  s_079f1dc5e6308d::t_182b55fb7049b9 100-105
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  s_079f1dc5e6308d::t_132e02d82b5603 6,23-51
+basic/cli/src/plugin-runtime/console/string-literal-options.ts
+  s_079f1dc5e6308d::t_591dace5c16f2a 24-25,32-33
+  s_079f1dc5e6308d::t_1c247eeb06a738 1-23,26-31,34-36
+docs/en/console/index.md
+  s_079f1dc5e6308d::t_182b55fb7049b9 94-102
+.changeset/literal-config-options.md
+  s_079f1dc5e6308d::t_1c247eeb06a738 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8550f17b242f33ef6cee546969f54678e255c031",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
