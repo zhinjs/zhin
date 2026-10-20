@@ -120,7 +120,7 @@ const expectedMembers = new Map([
   ['zhin.js.StateRecord', ['revision', 'value', 'expiresAt']],
   ['zhin.js.StateWriteOptions', ['ttlMs']],
   ['zhin.js/command.CommandContext', [
-    '$client', 'adapter', 'args', 'config', 'endpoint', 'generation', 'input', 'interaction',
+    '$client', 'adapter', 'args', 'config', 'endpoint', 'generation', 'has', 'input', 'interaction',
     'options', 'owner', 'params', 'project', 'scene', 'segments', 'sender', 'signal', 'use',
   ]],
   ['zhin.js/command.CommandOptionSchema', [

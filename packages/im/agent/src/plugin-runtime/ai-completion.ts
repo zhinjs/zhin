@@ -12,76 +12,40 @@
  * call made on behalf of an IM user counts against that user's / group's usage
  * quota (#727).
  */
-import { createToken } from '@zhin.js/plugin-runtime';
-import type { AIProvider, ProviderResilienceConfig, TextCompleteResult, TokenUsage } from '@zhin.js/ai';
+import type { AIProvider, ProviderResilienceConfig, TextCompleteResult } from '@zhin.js/ai';
+import type { AiCompletion, AiCompletionInput, AiCompletionResult } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIService } from '../service.js';
 import { renderExternalContent } from '../security/trust-level.js';
-import type { UsageQuota, UsageSubject } from '../security/usage-quota.js';
+import type { UsageQuota } from '../security/usage-quota.js';
 
-/** Who a completion is billed to (`onBehalfOf`); `groupId` is `${platform}:${endpoint}:${sceneId}` for group / channel chats. */
-export type { UsageSubject } from '../security/usage-quota.js';
+/**
+ * The contract (types and token) lives in `@zhin.js/core` (#877) so plugins can import it from the
+ * `zhin.js` main entry without this package; re-exported here unchanged (same token object and id).
+ */
+export { aiCompletionToken } from '@zhin.js/core';
+export type {
+  AiCompletion,
+  AiCompletionInput,
+  AiCompletionResult,
+  AiCompletionUntrustedInput,
+  UsageSubject,
+} from '@zhin.js/core';
 
 const logger = getLogger('agent');
 
-export interface AiCompletionUntrustedInput {
-  /** Where the text came from, e.g. `group-chat`; shown to the model as the block's source. */
-  readonly source: string;
-  readonly text: string;
-}
-
-export interface AiCompletionInput {
-  /** Required label for logs and usage attribution, e.g. `summarize-chat`. */
-  readonly purpose: string;
-  /** Trusted instructions written by the plugin. */
-  readonly system?: string;
-  /** Trusted input written by the plugin. */
-  readonly prompt: string;
-  /** Untrusted content (group chat, web pages, files); always rendered as data, never as instructions. */
-  readonly untrusted?: readonly AiCompletionUntrustedInput[];
-  /** Agent binding whose provider / model is used; defaults to `zhin`. */
-  readonly agent?: string;
-  /** Model id on the binding's provider; defaults to the binding's model. */
-  readonly model?: string;
-  readonly maxTokens?: number;
-  readonly temperature?: number;
-  /** Per-request timeout in ms; defaults to the provider resilience setting. */
-  readonly timeoutMs?: number;
-  readonly signal?: AbortSignal;
-  /** The IM user (and group) this call is made for; counts against their usage quota. */
-  readonly onBehalfOf?: UsageSubject;
-}
-
-export interface AiCompletionResult {
-  readonly text: string;
-  /** Model that actually answered (may be a fallback). */
-  readonly model: string;
-  readonly durationMs: number;
-  readonly usage?: TokenUsage;
-}
-
-export interface AiCompletion {
-  completeText(input: AiCompletionInput): Promise<AiCompletionResult>;
-}
-
-/** Thrown when the `onBehalfOf` user or group is over its usage quota; `message` is user-facing. */
+/** Thrown when the `onBehalfOf` user or group is over its usage quota; `message` is user-facing. Recognise it with `isAiCompletionQuotaError`. */
 export class AiCompletionQuotaError extends Error {
+  override readonly name = 'AiCompletionQuotaError' as const;
   readonly scope: 'user' | 'group';
   readonly retryAfterSeconds: number;
 
   constructor(message: string, scope: 'user' | 'group', retryAfterSeconds: number) {
     super(message);
-    this.name = 'AiCompletionQuotaError';
     this.scope = scope;
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
-
-/** Generation-owned plain text completion for plugins. Absent when no AI host is installed. */
-export const aiCompletionToken = createToken<AiCompletion>(
-  'zhin.agent.ai-completion',
-  'Tool-free text completion with retry and fallback, for plugins',
-);
 
 export interface AiCompletionOptions {
   readonly service: Pick<AIService, 'getBindingRegistry' | 'getProvider' | 'getAgentConfig'>;

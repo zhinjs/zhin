@@ -318,6 +318,17 @@ export default defineCommand({
 
 插件名不会自动加到命令前面。多个插件的命令重名时，可以给其中一个插件配置 `commandNamespace: admin`，它的所有命令都会变成 `admin xxx`。
 
+如果只是个别命令和别的插件重复，可以在该插件实例的配置里用 `disabledCommands` 把它们去掉，其余命令保持原名：
+
+```yaml
+plugins:
+  60s: "@zhin.js/plugin-60s"
+60s:
+  disabledCommands: [fanyi, weather]   # 写插件内的命令路径，不含 commandNamespace 和参数
+```
+
+写上级路径（如 `netease`）会连同 `netease login`、`netease status` 等子命令一起去掉。被去掉的命令不进路由表，也不占用路由，别的插件可以使用同名命令；没有匹配到任何命令的条目会被忽略。
+
 ### 用目录声明参数
 
 参数也可以写成路径的最后一段，风格与 Next.js 相同。类型和默认值仍然在 `params` 里声明：

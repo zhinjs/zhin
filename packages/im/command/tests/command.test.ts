@@ -948,6 +948,38 @@ describe('Command Feature', () => {
     await expect(index.dispatch('child status')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
+  it('leaves commands listed in the instance disabledCommands out of routing', async () => {
+    const owner = rootPluginId();
+    const slot = (localName: string, value: string) => createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName,
+      source: `/commands/${localName}/index.ts`,
+      definition: defineCommand({ execute: () => value }),
+    });
+    const fanyi = createCapabilitySlot({
+      owner,
+      feature: commandFeatureId,
+      localName: 'fanyi/$text',
+      source: '/commands/fanyi/[text]/index.ts',
+      definition: defineCommand({ params: { text: { type: 'string' } }, execute: () => 'fanyi' }),
+    });
+    const slots = [slot('kfc', 'kfc'), fanyi, slot('netease/login', 'login'), slot('netease/status', 'status'), slot('news', 'news')];
+    const base = snapshotFor(owner, slots);
+    const index = new CommandIndex(slots, {
+      ...base,
+      config: new Map([[owner, { commandNamespace: 'daily', disabledCommands: ['fanyi', 'netease', 'missing'] }]]),
+    });
+
+    expect(index.list().map((command) => command.name)).toEqual(['daily kfc', 'daily news']);
+    await expect(index.dispatch('daily kfc')).resolves.toMatchObject({ value: 'kfc' });
+    await expect(index.dispatch('daily fanyi hello')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch('daily netease login')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    // A malformed value fails fast instead of silently enabling everything.
+    expect(() => new CommandIndex(slots, { ...base, config: new Map([[owner, { disabledCommands: 'kfc' }]]) }))
+      .toThrow(/Invalid disabledCommands/);
+  });
+
   it('dispatches Unicode command names (e.g. Chinese 赞我)', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({

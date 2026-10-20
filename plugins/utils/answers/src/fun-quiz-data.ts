@@ -1,0 +1,48 @@
+import type { QuizQuestion } from './quiz-types.js';
+
+/**
+ * 「好无聊」趣味选择题。题面、选项与解析均为本仓库原创（MIT），
+ * 内容是公共常识类知识点，不来自任何第三方题库。
+ */
+export const FUN_QUESTIONS: readonly QuizQuestion[] = Object.freeze([
+  { id: 'fun-01', category: '天文', question: '北半球一年中白昼最长的节气是？', options: ['春分', '夏至', '秋分', '冬至'], answer: 'B', explanation: '夏至时太阳直射北回归线附近，北半球白昼最长。' },
+  { id: 'fun-02', category: '动物', question: '章鱼有几颗心脏？', options: ['1 颗', '2 颗', '3 颗', '4 颗'], answer: 'C', explanation: '章鱼有 1 颗体心脏和 2 颗鳃心脏，一共 3 颗。' },
+  { id: 'fun-03', category: '动物', question: '大熊猫抓竹子用的「伪拇指」本质上是什么？', options: ['腕部特化的籽骨', '第六根手指骨', '加厚的指甲', '一块软骨垫'], answer: 'A', explanation: '那是腕部桡侧籽骨增大形成的结构，并不是真正的手指。' },
+  { id: 'fun-04', category: '地理', question: '按「年降水量很少」的定义，世界上面积最大的沙漠是？', options: ['撒哈拉沙漠', '南极洲', '戈壁沙漠', '阿拉伯沙漠'], answer: 'B', explanation: '沙漠按降水量定义，南极洲极其干燥，面积也最大；撒哈拉是最大的热沙漠。' },
+  { id: 'fun-05', category: '天文', question: '太阳系中哪颗行星自转一圈比绕太阳公转一圈还要久？', options: ['金星', '火星', '木星', '水星'], answer: 'A', explanation: '金星自转约 243 个地球日，公转约 225 个地球日。' },
+  { id: 'fun-06', category: '化学', question: '金刚石和石墨都由哪种元素组成？', options: ['硅', '碳', '硼', '硫'], answer: 'B', explanation: '两者都是碳的同素异形体，只是原子排列方式不同。' },
+  { id: 'fun-07', category: '生物', question: '人体面积最大的器官是？', options: ['肝脏', '肺', '皮肤', '大肠'], answer: 'C', explanation: '成年人的皮肤面积大约 1.5–2 平方米，是最大的器官。' },
+  { id: 'fun-08', category: '数学', question: '0.999…（9 无限循环）和 1 相比？', options: ['比 1 小一点点', '等于 1', '比 1 大', '无法比较'], answer: 'B', explanation: '1/3 = 0.333…，两边乘以 3 就得到 0.999… = 1。' },
+  { id: 'fun-09', category: '物理', question: '真空中的光速大约是每秒多少公里？', options: ['3 万', '30 万', '300 万', '3000'], answer: 'B', explanation: '约 299,792 公里每秒，常记作 30 万公里每秒。' },
+  { id: 'fun-10', category: '生活', question: '微波炉加热食物，主要是让食物中的什么分子剧烈运动？', options: ['水分子', '盐分子', '氧分子', '糖分子'], answer: 'A', explanation: '微波让极性的水分子来回转动摩擦生热，所以很干的食物不容易热透。' },
+  { id: 'fun-11', category: '历史', question: '下面哪一项不属于中国古代「四大发明」？', options: ['造纸术', '印刷术', '火药', '算盘'], answer: 'D', explanation: '四大发明是造纸术、印刷术、火药和指南针。' },
+  { id: 'fun-12', category: '语言', question: '网络常用的「囧」字，本义是什么？', options: ['光明', '窘迫', '困倦', '圆形'], answer: 'A', explanation: '「囧」本义是窗户透光、明亮，后来因字形像表情才被用来表示窘迫。' },
+  { id: 'fun-13', category: '动物', question: '考拉的主要食物是？', options: ['竹子', '桉树叶', '昆虫', '水果'], answer: 'B', explanation: '考拉几乎只吃桉树叶，桉树叶营养少，所以考拉一天要睡很久。' },
+  { id: 'fun-14', category: '地理', question: '中国陆地面积最大的省级行政区是？', options: ['西藏', '内蒙古', '青海', '新疆'], answer: 'D', explanation: '新疆面积约 166 万平方公里，约占全国陆地面积的六分之一。' },
+  { id: 'fun-15', category: '天文', question: '月球绕地球公转一周（恒星月）大约需要多久？', options: ['7 天', '15 天', '27.3 天', '35 天'], answer: 'C', explanation: '恒星月约 27.3 天；从满月到下一次满月（朔望月）约 29.5 天。' },
+  { id: 'fun-16', category: '动物', question: '蜜蜂跳「摇摆舞」主要是在告诉同伴什么？', options: ['自己饿了', '蜜源的方向和距离', '天气要变了', '蜂后在哪里'], answer: 'B', explanation: '摇摆的角度对应蜜源相对太阳的方向，持续时间对应距离。' },
+  { id: 'fun-17', category: '物理', question: '下列介质中，声音传播最快的是？', options: ['空气', '水', '钢铁', '真空'], answer: 'C', explanation: '声音在固体中通常最快，钢铁中约 5000 米每秒；真空中无法传播。' },
+  { id: 'fun-18', category: '生活', question: '家用冰箱冷藏室比较推荐的温度大约是？', options: ['-18℃', '4℃ 左右', '15℃', '25℃'], answer: 'B', explanation: '冷藏一般保持在 0–5℃，-18℃ 是冷冻室的常用温度。' },
+  { id: 'fun-19', category: '动物', question: '现存体型最大的动物是？', options: ['非洲象', '蓝鲸', '鲸鲨', '长颈鹿'], answer: 'B', explanation: '蓝鲸体长可超过 30 米，是已知体型最大的动物。' },
+  { id: 'fun-20', category: '数学', question: '正六边形的内角和是多少度？', options: ['540°', '720°', '900°', '1080°'], answer: 'B', explanation: 'n 边形内角和为 (n−2)×180°，六边形就是 720°。' },
+  { id: 'fun-21', category: '化学', question: '地球大气中含量最多的气体是？', options: ['氧气', '二氧化碳', '氮气', '氩气'], answer: 'C', explanation: '氮气约占干燥空气体积的 78%，氧气约 21%。' },
+  { id: 'fun-22', category: '生物', question: '人类正常体细胞中有多少条染色体？', options: ['23 条', '44 条', '46 条', '48 条'], answer: 'C', explanation: '23 对共 46 条，其中 1 对是性染色体。' },
+  { id: 'fun-23', category: '地理', question: '世界最高峰珠穆朗玛峰的最新测定海拔约是多少米？', options: ['8611', '8848.86', '8516', '8201'], answer: 'B', explanation: '2020 年中尼两国共同宣布珠峰雪面高程为 8848.86 米。' },
+  { id: 'fun-24', category: '冷知识', question: '从植物学分类看，香蕉属于哪种果实？', options: ['浆果', '坚果', '核果', '荚果'], answer: 'A', explanation: '香蕉由单个子房发育而来、果皮肉质，植物学上算浆果。' },
+  { id: 'fun-25', category: '冷知识', question: '草莓表面那些小「籽」其实是什么？', options: ['真正的果实（瘦果）', '花粉', '退化的叶子', '刺'], answer: 'A', explanation: '每一粒都是一个瘦果，我们吃的红色部分是膨大的花托。' },
+  { id: 'fun-26', category: '动物', question: '火烈鸟的粉红色羽毛主要来自？', options: ['天生基因', '食物中的类胡萝卜素', '阳光照射', '泥浆染色'], answer: 'B', explanation: '它们吃的藻类和小虾含类胡萝卜素，色素沉积在羽毛里。' },
+  { id: 'fun-27', category: '物理', question: '主虹（常见的那道彩虹）最外圈是什么颜色？', options: ['紫色', '蓝色', '绿色', '红色'], answer: 'D', explanation: '主虹外红内紫；副虹的颜色顺序正好相反。' },
+  { id: 'fun-28', category: '常识', question: '在标准大气压下，纯水的沸点是？', options: ['90℃', '100℃', '110℃', '120℃'], answer: 'B', explanation: '海拔越高气压越低，沸点也会随之降低。' },
+  { id: 'fun-29', category: '体育', question: '足球比赛常规时间里，每个半场多少分钟？', options: ['30 分钟', '40 分钟', '45 分钟', '50 分钟'], answer: 'C', explanation: '常规时间两个半场各 45 分钟，另加补时。' },
+  { id: 'fun-30', category: '计算机', question: '1 KiB 等于多少字节？', options: ['1000', '1024', '1048', '512'], answer: 'B', explanation: 'KiB 是二进制前缀，等于 2 的 10 次方字节；kB 则通常指 1000 字节。' },
+  { id: 'fun-31', category: '计算机', question: '网页打不开时常见的 HTTP 404 表示什么？', options: ['服务器内部错误', '没有权限', '请求的资源不存在', '请求太频繁'], answer: 'C', explanation: '404 Not Found；500 是服务器内部错误，403 是禁止访问，429 是请求过多。' },
+  { id: 'fun-32', category: '动物', question: '野生企鹅主要分布在？', options: ['北极圈', '南半球', '赤道雨林', '北美五大湖'], answer: 'B', explanation: '企鹅几乎都生活在南半球，北极没有野生企鹅。' },
+  { id: 'fun-33', category: '生物', question: '植物光合作用会释放哪种气体？', options: ['二氧化碳', '氧气', '氮气', '氢气'], answer: 'B', explanation: '光合作用吸收二氧化碳和水，产生有机物并释放氧气。' },
+  { id: 'fun-34', category: '天文', question: '离太阳最近的行星是？', options: ['金星', '地球', '水星', '火星'], answer: 'C', explanation: '水星离太阳最近，但最热的行星是有浓厚大气的金星。' },
+  { id: 'fun-35', category: '冷知识', question: '蜗牛有牙齿吗？', options: ['没有', '有，长在齿舌上，数量很多', '只有一颗', '只有幼年有'], answer: 'B', explanation: '蜗牛的齿舌上排列着成千上万颗细小的角质齿，用来刮食。' },
+  { id: 'fun-36', category: '语言', question: '与「一石二鸟」意思最接近的成语是？', options: ['一箭双雕', '一叶障目', '一鸣惊人', '一言九鼎'], answer: 'A', explanation: '都比喻做一件事得到两种收获。' },
+  { id: 'fun-37', category: '数学', question: '圆周率 π 小数点后前四位是？', options: ['1415', '1416', '1592', '1428'], answer: 'A', explanation: 'π ≈ 3.14159…，前四位小数是 1415。' },
+  { id: 'fun-38', category: '地理', question: '赤道没有经过下列哪个大洲？', options: ['非洲', '南美洲', '亚洲', '欧洲'], answer: 'D', explanation: '赤道穿过非洲、南美洲和亚洲（印度尼西亚）等，不经过欧洲。' },
+  { id: 'fun-39', category: '生活', question: '炒菜时油锅起火，正确的第一反应是？', options: ['立刻泼水', '盖上锅盖并关火', '用嘴吹灭', '端着锅跑出去'], answer: 'B', explanation: '盖锅盖隔绝空气、关火断热源；泼水会让热油飞溅，火势更大。' },
+  { id: 'fun-40', category: '动物', question: '猫的胡须主要有什么作用？', options: ['纯粹装饰', '感知周围环境和空间宽度', '帮助吃饭', '调节体温'], answer: 'B', explanation: '胡须根部神经丰富，能感知气流和障碍，帮猫判断能否钻过缝隙。' },
+]);

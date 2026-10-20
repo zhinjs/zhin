@@ -90,7 +90,9 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
-          cache: pnpm
+      - name: restore pnpm store
+        if: steps.secret.outputs.present == 'true' && inputs.mode != 'quota-probe'
+        uses: ./.github/actions/restore-pnpm-store
       - name: install dependencies
         if: steps.secret.outputs.present == 'true' && inputs.mode != 'quota-probe'
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile

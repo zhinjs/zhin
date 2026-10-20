@@ -1681,6 +1681,17 @@ _This Schema declares no fields._
 | --- | --- | --- | --- | --- |
 | `60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
 
+### answers
+
+[`plugins/utils/answers/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/answers/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `answers.dailyStable` | boolean | no | `false` | 同一用户同一天问同一个问题时，答案之书给出相同答案 |
+| `answers.timezone` | string | no | `"Asia/Shanghai"` | dailyStable 判断「同一天」所用的 IANA 时区 |
+| `answers.quizTimeoutSeconds` | number | no | `120` | 出题后等待作答的秒数，超时题目作废 |
+| `answers.enableDrivingQuiz` | boolean | no | `true` | 启用「科目一」交规小测（原创题面，仅供娱乐参考） |
+
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
@@ -1790,6 +1801,16 @@ _This Schema declares no fields._
 | `group-suite.welcomeConversations[].threadId` | string | no | — | — |
 | `group-suite.ephemeralKeywords` | boolean | no | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
 
+### ledger
+
+[`plugins/utils/ledger/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/ledger/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `ledger.timezone` | string | no | `"Asia/Shanghai"` | 计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区 |
+| `ledger.reportTime` | string | no | `"22:00"` | 记账日报的发送时间（HH:MM，按 timezone）；只发给用「记账日报 开启」订阅的用户 |
+| `ledger.reportWhenEmpty` | boolean | no | `false` | 当天没有记账时是否仍发送日报 |
+
 ### link-poster
 
 [`plugins/utils/link-poster/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/link-poster/schema.json)
@@ -1829,6 +1850,21 @@ _This Schema declares no fields._
 [`plugins/utils/music/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/music/schema.json)
 
 _This Schema declares no fields._
+
+### nettools
+
+[`plugins/utils/nettools/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/nettools/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `nettools.cooldownSeconds` | integer | no | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
+| `nettools.requestTimeoutMs` | integer | no | `8000` | Per-attempt timeout for each external HTTP request, in milliseconds |
+| `nettools.maxRetries` | integer | no | `2` | Retries for transient failures (network errors, timeouts, 429, 5xx) with exponential backoff and jitter |
+| `nettools.pingMaxNodes` | integer | no | `4` | Number of check-host.net probe nodes used by ping |
+| `nettools.pingPollIntervalMs` | integer | no | `2000` | Wait between ping result polls, in milliseconds |
+| `nettools.pingMaxPolls` | integer | no | `5` | Maximum number of ping result polls before reporting partial results |
+| `nettools.dohProviders` | array&lt;string: `"cloudflare"`, `"alidns"`, `"google"`&gt; | no | `["cloudflare","alidns","google"]` | DNS-over-HTTPS providers in fallback order |
+| `nettools.priceListLimit` | integer | no | `8` | Number of registrars shown in a domain price comparison |
 
 ### qrcode
 

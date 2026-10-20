@@ -28,7 +28,7 @@ origins and current-generation agreement only. It never contains values, default
 environment variable names/expanded values, or historical generation origins. Unsupported
 instances/schemas return a bounded reason and no partial fields. Demo scope is denied.
 
-首版仅解释静态对象中的标量字段；固定字符串常量联合（Console 表单作为选项编辑的 `anyOf` + `const`）按字符串标量解释。除此之外，Schema 任一处含数组、字典、组合分支或引用时，
+首版仅解释静态对象中的标量字段；固定字符串常量联合（Console 表单作为选项编辑的 `anyOf` + `const`）按字符串标量解释，元素为标量的列表（如框架注入的 `disabledCommands`）整体作为一个字段解释。除此之外，Schema 任一处含对象数组、元组、字典、组合分支或引用时，
 整份解释返回 `complex-schema`，不返回部分标量证据。这不影响已有配置读取、校验或源码编辑，
 也不表示复杂表单或默认来源已完整支持。字段数量、路径深度与响应大小超限同样明确返回
 `bound-exceeded`，不静默截断。未声明 Schema 的插件返回 `schema-unavailable`。

@@ -81,7 +81,7 @@ export default definePlugin<ReminderConfig>({
 | `agentHostToken` (`@zhin.js/agent/runtime`) | Agent Host port | List Agent bindings, submit a `TurnRequest`, read Console / diagnostic projections; doesn't expose ZhinAgent / AIService instances |
 | `workroomHostToken` (`@zhin.js/workroom`) | Workroom Host port | Published by the CLI composition root together with `agentHostToken`; its `console` holds only the Workroom control ports (run control, catalog, profiles / knowledge / sponsor / data lifecycle). For the Console / host-http, not for plugins to inject; the Console view is the key-disjoint merge of the two consoles |
 | `turnIntentResolverToken` (`@zhin.js/agent/runtime`) | A trusted intent resolver provided by the account's owning plugin | Resolves a message to `supersede`, `new`, `steer`, `follow_up` or `observe` by platform / scene; only it may issue `authorizedBy: 'product_policy'` for cross-participant control |
-| `aiCompletionToken` (`zhin.js/agent` / `@zhin.js/agent/runtime`) | `AiCompletion` | `completeText({ purpose, system?, prompt, untrusted?, agent?, model?, maxTokens?, timeoutMs?, signal?, onBehalfOf? })` runs one plain text completion with **no tools at all**, with retry, timeout and same-provider model fallback. Content in `untrusted` (group chat and the like) is rendered as data, so instructions inside it have no effect. With `onBehalfOf` (type `UsageSubject`: `{ userId, groupId?, owner }`; in group / channel chats `groupId` is `${platform}:${endpoint}:${sceneId}`), the call counts against that user's / group's usage quota (`AiCompletionQuotaError` when over). Use it when a plugin only needs text instead of borrowing a whole Agent turn |
+| `aiCompletionToken` (`zhin.js`; `zhin.js/agent` / `@zhin.js/agent/runtime` re-export the same token) | `AiCompletion` (optional: present only when AI is configured, see [below](#plain-text-ai-completion)) | `completeText({ purpose, system?, prompt, untrusted?, agent?, model?, maxTokens?, timeoutMs?, signal?, onBehalfOf? })` runs one plain text completion with **no tools at all**, with retry, timeout and same-provider model fallback. Content in `untrusted` (group chat and the like) is rendered as data, so instructions inside it have no effect. With `onBehalfOf` (type `UsageSubject`: `{ userId, groupId?, owner }`; in group / channel chats `groupId` is `${platform}:${endpoint}:${sceneId}`), the call counts against that user's / group's usage quota (`AiCompletionQuotaError` when over). Use it when a plugin only needs text instead of borrowing a whole Agent turn |
 
 ### Rendering and HTTP
 
@@ -89,6 +89,46 @@ export default definePlugin<ReminderConfig>({
 | --- | --- | --- |
 | `htmlRendererToken` (`zhin.js`) | `HtmlRendererHost` | `render(html, opts)` → PNG; requires `@zhin.js/html-renderer`, otherwise outbound HTML falls back to text |
 | `httpHostToken` (`@zhin.js/host-http`) | `HttpHost` | `route(method, path, handler, meta?)` registers HTTP routes (shared by Console, MCP, A2A and adapter webhooks) |
+
+## Plain text AI completion
+
+`aiCompletionToken` and its types are imported from the `zhin.js` main entry, so a plugin does not need to depend on `@zhin.js/agent`. The runtime provides the resource only when AI (`@zhin.js/agent`) is installed and configured, so check before calling `use()`:
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+import { aiCompletionToken, hasResource, isAiCompletionQuotaError, usageSubjectFromMessage } from 'zhin.js';
+
+export default defineCommand({
+  execute: async (context) => {
+    if (!hasResource(context, aiCompletionToken)) return 'AI is not configured, cannot summarize';
+    const onBehalfOf = context.input ? usageSubjectFromMessage(context.input) : undefined;
+    try {
+      const { text } = await context.use(aiCompletionToken).completeText({
+        purpose: 'summarize-chat',
+        system: 'Summarize the chat below in three sentences.',
+        prompt: 'Please summarize.',
+        untrusted: [{ source: 'group-chat', text: context.args.join(' ') }],
+        onBehalfOf,
+      });
+      return text;
+    } catch (error) {
+      if (isAiCompletionQuotaError(error)) return error.message;
+      throw error;
+    }
+  },
+});
+```
+
+| Export (`zhin.js`) | What it does |
+| --- | --- |
+| `hasResource(context, token)` | `true` when `context.use(token)` would succeed, without throwing. Uses the context's `has()` and falls back to probing `use()` when it is missing |
+| `context.has?.(token)` | Built-in construction / capability contexts (commands, tools, middleware, `@zhin.js/testing` fake plugins) all provide `has()`. It is an optional member, so hand-written contexts do not have to implement it |
+| `usageSubjectFromMessage(message)` | Builds `onBehalfOf` with the same rules as Agent turns: platform prefers `clientAdapter`, endpoint prefers `endpointId`, `groupId` is `${platform}:${endpoint}:${sceneId}` in group / channel chats, and `owner` is `true` when the sender has the `master` role. **Returns `undefined` when the message has no sender** (it does not throw); the call then counts against nobody's quota |
+| `isAiCompletionQuotaError(error)` | Recognises the over-quota error (`scope` is `user` or `group`, `retryAfterSeconds` is the suggested wait). Its `message` can be replied to the user as is. No `@zhin.js/agent` import needed |
+
+::: tip Relation to the Agent package
+`zhin.js/agent` and `@zhin.js/agent` still export `aiCompletionToken`. It is the same object as the one from `zhin.js`, so existing code keeps working. The `AiCompletionQuotaError` class stays in the Agent package; plugins can check for it with `isAiCompletionQuotaError`.
+:::
 
 ## Saving small objects and delivery targets
 

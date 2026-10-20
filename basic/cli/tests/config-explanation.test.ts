@@ -76,7 +76,9 @@ describe('metadata-only config explanations through the actual Runtime and file 
   });
 
   it.each([
-    { type: 'object', properties: { list: { type: 'array', items: { type: 'string' } } } },
+    { type: 'object', properties: { list: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' } } } } } },
+    { type: 'object', properties: { mixed: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'number' }] } } } },
+    { type: 'object', properties: { matrix: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
     { type: 'object', properties: { nested: { type: 'object', additionalProperties: { type: 'string' } } } },
     { type: 'object', properties: { scalar: { anyOf: [{ type: 'string' }, { type: 'number' }] } } },
   ])('does not partially explain complex schemas', async schema => {
@@ -93,6 +95,24 @@ describe('metadata-only config explanations through the actual Runtime and file 
     const saved = await f.explain();
     expect(field(saved, 'tone')).toMatchObject({ candidateOrigin: 'file', generationMatch: 'different' });
     expect(JSON.stringify(saved)).not.toContain('excited');
+  });
+
+  it('explains a list of scalars as one leaf, including the framework-injected disabledCommands field', async () => {
+    const f = await fixture({ type: 'object', properties: { tags: { type: 'array', items: { type: 'string' } }, count: { type: 'integer', default: 5 } } });
+    const first = await f.explain();
+    expect(first.projection).toBe('supported');
+    expect(field(first, 'tags')).toMatchObject({ candidateOrigin: 'unset', generationMatch: 'equal' });
+    expect(field(first, 'commandNamespace')).toMatchObject({ candidateOrigin: 'unset' });
+    expect(field(first, 'disabledCommands')).toMatchObject({ candidateOrigin: 'unset', generationMatch: 'equal' });
+    await f.save({ tags: ['LIST_ITEM_SENTINEL'], disabledCommands: ['fanyi'] });
+    const saved = await f.explain();
+    expect(field(saved, 'tags')).toMatchObject({ candidateOrigin: 'file', generationMatch: 'different' });
+    expect(field(saved, 'disabledCommands')).toMatchObject({ candidateOrigin: 'file', generationMatch: 'different' });
+    expect(JSON.stringify(saved)).not.toContain('LIST_ITEM_SENTINEL');
+    await f.save({ tags: ['${API_KEY}'] });
+    const referenced = await f.explain();
+    expect(field(referenced, 'tags').generationMatch).toBe('redacted');
+    expect(JSON.stringify(referenced)).not.toContain('API_KEY');
   });
 
   it('does not trust a custom resolver claiming standard mode, and marks unavailable owners and package/schema drift explicitly', async () => {

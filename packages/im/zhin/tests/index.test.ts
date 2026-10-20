@@ -22,6 +22,17 @@ describe('Zhin Package Exports', () => {
     expectTypeOf<Request>().toEqualTypeOf<CoreRequest>()
   })
 
+  it('exports the AI completion contract from the main entry, shared with zhin.js/agent (#877)', async () => {
+    const zhin = await import('../src/index.js')
+    expect(zhin.aiCompletionToken.id).toBe('zhin.agent.ai-completion')
+    expect(typeof zhin.usageSubjectFromMessage).toBe('function')
+    expect(typeof zhin.isAiCompletionQuotaError).toBe('function')
+    expect(typeof zhin.hasResource).toBe('function')
+    const agent = await import('../src/agent.js')
+    expect(agent.aiCompletionToken).toBe(zhin.aiCompletionToken)
+    expect(zhin.isAiCompletionQuotaError(new agent.AiCompletionQuotaError('over', 'user', 5))).toBe(true)
+  })
+
   it('should export logger', async () => {
     const { logger } = await import('../src/index')
     expect(logger).toBeDefined()

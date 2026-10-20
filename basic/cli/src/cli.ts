@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs';
 import { Command } from 'commander';
 import { stopCommand } from './commands/stop.js';
 import { buildCommand } from './commands/build.js';
@@ -23,12 +24,15 @@ import { traceCommand } from './commands/trace.js';
 import { devCommand } from './commands/dev.js';
 import { useCasesCommand } from './commands/use-cases.js';
 
+// src/cli.ts 与 lib/cli.js 都在包根下一层，../package.json 就是 @zhin.js/cli 自己的清单。
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+
 const program = new Command();
 
 program
   .name('zhin')
   .description('Zhin机器人框架CLI工具')
-  .version('1.0.1');
+  .version(version);
 
 // 注册命令
 program.addCommand(stopCommand);

@@ -9,7 +9,7 @@ description: "用 @zhin.js/testing 的假运行环境测试插件：不再手工
 
 | 层 | 用途 | 入口 |
 | --- | --- | --- |
-| **假运行环境**（单元测试） | 快、无需测试应用；直接跑 `setup()`、命令、中间件、处理器 | `createFakePlugin` / `runPluginSetup` / `runCommand` … |
+| **假运行环境**（单元测试） | 快、无需测试应用；直接跑 `setup()`、命令、中间件、处理器 | `createFakePlugin` / `runPluginSetup` / `runCommand` / `runTool` … |
 | **真实运行时**（集成测试） | 真实的模块发现、命令解析、权限、发送链路 | `PluginTestKit` |
 
 ```bash
@@ -34,6 +34,25 @@ it('每 30 秒往目标群发一条消息', async () => {
   await fake.dispose();                                  // 触发 lifecycle 里的清理函数
 });
 ```
+
+### 配置校验与默认值
+
+插件声明了 `config` schema 时，`runPluginSetup` 会像真实运行时一样处理 `config`：先按 schema 校验，再填充默认值，最后只保留 schema 顶层声明的字段。校验失败抛出 `PluginConfigValidationError`，`issues` 里的报错格式与启动时相同（如 `/limit must be >= 1`）。所以可以只传用户实际会写的字段，再断言默认值生效：
+
+```ts
+const fake = await runPluginSetup(plugin, { config: { target: 'g1' } });
+expect(fake.config).toEqual({ target: 'g1', limit: 10 });      // limit 来自 schema 默认值
+
+await expect(runPluginSetup(plugin, { config: { limit: 0 } }))
+  .rejects.toThrow(PluginConfigValidationError);               // 缺 target、limit 越界
+```
+
+- 想拿到解析后的配置、但不跑 `setup`，用 `resolvePluginConfig(plugin, input)`。
+- 插件没有声明 `config` 时，`config` 原样传入，不做任何处理。
+
+::: warning 行为变化（1.0.5 之后的 @zhin.js/testing）
+旧版本的 `runPluginSetup` 把 `config` 原样交给 `setup()`。如果你的测试故意传了不合法或不完整的配置，现在会抛错。可以先补齐配置，或者按单个测试关掉校验：`runPluginSetup(plugin, { config, validateConfig: false })`。`createFakePlugin` 和 `fake.setup()` 不受影响。
+:::
 
 `createFakePlugin(options)` 只创建环境，不跑 `setup`；之后用 `fake.setup(plugin)` 运行，或直接把 `fake.context` 交给自己的函数。
 
@@ -80,6 +99,42 @@ await runHandler(fake, onReceive, createFakeMessage()); // this 即能力上下�
 
 ::: warning 这不是完整的派发
 `runCommand` 直接调用 `execute()`：不做路由匹配、参数解析、`permit` 校验和准入检查，`params` 需要你自己给出已解析的值。要验证这些，用下面的真实运行时。
+:::
+
+## 跑 Agent 工具
+
+`runTool(fake, tool, input, options)` 执行 `tools/<name>/index.ts` 的默认导出，执行方式与运行时的工具索引一致：
+
+- 如果 `inputSchema` 是可执行 schema（如 Zod），先用它解析输入；JSON Schema 的输入原样传入，运行时也是如此。
+- 工具声明了 `adapter` 时，必须传入匹配的 `client`。
+
+`tool` 也可以是 `setup()` 里通过 `addTool()` 登记的本地名称。
+
+```ts
+import { createFakeMessage, createFakePlugin, runTool } from '@zhin.js/testing';
+import lookup from '../tools/lookup/index.js';
+
+const fake = createFakePlugin({ config: { prefix: '> ' } });
+const message = createFakeMessage({ id: 'm1', sender: { id: 'u1' },
+  conversation: { endpoint: { id: 'bot', adapter: 'qq' }, kind: 'group', id: 'g1' } });
+
+const result = await runTool(fake, lookup, { word: 'zhin' }, { message });
+// 工具里的 context.origin = { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'group', sceneId: 'g1', messageId: 'm1' }
+// context.principal = { subjectId: 'u1', roles: [] }
+```
+
+| 选项 | 作用 |
+| --- | --- |
+| `message` | 根据入站消息推导 `origin`（`kind: 'im'`）和 `principal`，与命令测试用同一条假消息 |
+| `origin` / `principal` | 显式指定，优先于 `message` |
+| `policy` | 默认无权限、非无人值守、禁用网络 |
+| `client` | 原生客户端端口 `{ adapter, get() }`，绑定了 `adapter` 的工具必填 |
+| `question` / `signal` / `traceId` / `turnId` / `sessionKey` | 对应上下文字段 |
+
+`createToolContext(fake, options)` 只构造上下文，`toolOriginFromMessage(message)` 把消息转成工具的 `origin` 形状。
+
+::: warning 不经过模型和审批
+`runTool` 不做模型发现、审批、权限和策略检查，只验证工具自身的逻辑。
 :::
 
 ## 局部假对象：`fakeOf`
