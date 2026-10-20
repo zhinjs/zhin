@@ -1,0 +1,20 @@
+docs/en/migrations/plugin-instance-declarations.md
+  h_b680f75345178a 1-86
+docs/en/operations/upgrades.md
+  h_b680f75345178a 19-66,99
+docs/migrations/plugin-instance-declarations.md
+  h_b680f75345178a 12-15
+docs/operations/upgrades.md
+  h_b680f75345178a 19-66,99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "71740ec27977f4067e10280aca5154a57066b085",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
