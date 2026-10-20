@@ -5,6 +5,12 @@ import type { HandlerContext, HandlerDefinition } from '@zhin.js/handler';
 import type {
   MiddlewareContext, MiddlewareDefinition, MiddlewareNext,
 } from '@zhin.js/middleware';
+import {
+  parseToolInputSchema,
+  type AgentToolDefinition, type ToolExecutionContext, type ToolInvocationOrigin,
+  type ToolInvocationPolicy, type ToolQuestionPort,
+} from '@zhin.js/tool';
+import type { OperationClientPort } from '@zhin.js/feature-kit';
 import type { FakePlugin } from './fake-plugin.js';
 
 /** Inbound message with recorded replies. */
@@ -114,4 +120,112 @@ export async function runHandler<TConfig>(
 ): Promise<void> {
   const context: HandlerContext<TConfig> = fake.capabilityContext();
   await definition.handle.call(context as HandlerContext, ...args);
+}
+
+export interface RunToolOptions {
+  /**
+   * Derive `origin` (`kind: 'im'`) and `principal` from an inbound message, so a tool sees the same
+   * conversation the command tests use. Explicit `origin` / `principal` win.
+   */
+  readonly message?: CommandMessage;
+  /** Default: `{ kind: 'im', platform: 'test', endpoint: 'test', scope: 'group', sceneId: 'test-group' }`. */
+  readonly origin?: ToolInvocationOrigin;
+  readonly principal?: ToolExecutionContext['principal'];
+  /** Default: no permissions, attended, network disabled. */
+  readonly policy?: Partial<ToolInvocationPolicy>;
+  readonly question?: ToolQuestionPort;
+  /** Native client port; required when the tool declares `adapter`. */
+  readonly client?: OperationClientPort;
+  readonly traceId?: string;
+  readonly turnId?: string;
+  readonly sessionKey?: string;
+  readonly signal?: AbortSignal;
+}
+
+/** Map an inbound message to the Agent tool origin shape (`platform` / `endpoint` / `scope` / `sceneId`). */
+export function toolOriginFromMessage(message: CommandMessage): ToolInvocationOrigin {
+  const { conversation } = message;
+  return Object.freeze({
+    kind: 'im' as const,
+    platform: conversation.endpoint.adapter,
+    endpoint: conversation.endpoint.id,
+    scope: conversation.kind,
+    sceneId: conversation.id,
+    ...(message.id === undefined ? {} : { messageId: message.id }),
+    ...(conversation.threadId === undefined ? {} : { threadId: conversation.threadId }),
+  });
+}
+
+/** Build the context an Agent tool's `execute()` receives, shaped like the real ToolIndex builds it. */
+export function createToolContext<TConfig, TAdapter extends string | undefined = undefined>(
+  fake: FakePlugin<TConfig>,
+  options: RunToolOptions = {},
+): ToolExecutionContext<TConfig, TAdapter> {
+  const message = options.message;
+  const sender = message?.sender;
+  const policy = options.policy ?? {};
+  const context = {
+    ...fake.capabilityContext(),
+    signal: options.signal ?? fake.signal,
+    traceId: options.traceId ?? 'test-trace',
+    turnId: options.turnId ?? 'test-turn',
+    sessionKey: options.sessionKey ?? (message
+      ? `${message.conversation.endpoint.adapter}:${message.conversation.endpoint.id}:${message.conversation.kind}:${message.conversation.id}`
+      : 'test-session'),
+    origin: Object.freeze({ ...(options.origin ?? (message ? toolOriginFromMessage(message) : {
+      kind: 'im', platform: 'test', endpoint: 'test', scope: 'group', sceneId: 'test-group',
+    })) }) as ToolInvocationOrigin,
+    principal: Object.freeze({ ...(options.principal ?? {
+      subjectId: sender?.id ?? 'test-user',
+      ...(sender?.name === undefined ? {} : { displayName: sender.name }),
+      roles: sender?.roles ?? [],
+    }) }),
+    policy: Object.freeze({
+      permissions: Object.freeze([...(policy.permissions ?? [])]),
+      unattended: policy.unattended ?? false,
+      network: Object.freeze({ enabled: false, ...policy.network }),
+      ...(policy.shell ? { shell: Object.freeze({ ...policy.shell }) } : {}),
+      ...(policy.filesystem ? { filesystem: Object.freeze({ ...policy.filesystem }) } : {}),
+    }),
+    ...(options.question ? { question: options.question } : {}),
+  } as ToolExecutionContext<TConfig, TAdapter>;
+  Object.defineProperty(context, '$client', { enumerable: true, get: () => options.client?.get() });
+  return Object.freeze(context);
+}
+
+/**
+ * Execute an Agent tool against the fake, the way the Runtime's tool index does: the input is parsed
+ * by an executable `inputSchema` (e.g. Zod; JSON Schema inputs pass through unchanged, as in the
+ * Runtime), an `adapter`-bound tool requires a matching `client`, then `execute()` runs.
+ * It does NOT run model discovery, approval, permission or policy enforcement; use an Agent
+ * integration test for those.
+ *
+ * `tool` is a definition (e.g. the default export of `tools/<name>/index.ts`) or the local name of a
+ * tool registered through `addTool()` during `runPluginSetup`.
+ */
+export async function runTool<TResult = unknown, TConfig = unknown, TInput = unknown>(
+  fake: FakePlugin<TConfig>,
+  tool: AgentToolDefinition<TInput, TResult, TConfig, string | undefined> | string,
+  input?: unknown,
+  options: RunToolOptions = {},
+): Promise<TResult> {
+  const definition = typeof tool === 'string' ? registeredTool<TInput, TResult, TConfig>(fake, tool) : tool;
+  const name = typeof tool === 'string' ? tool : 'tool';
+  const parsed = parseToolInputSchema(definition.inputSchema, input ?? {});
+  if (!parsed.ok) throw new TypeError(`Invalid Agent Tool input for ${name}: ${parsed.error}`);
+  if (definition.adapter && options.client?.adapter !== definition.adapter) {
+    throw new Error(`Agent Tool ${name} requires adapter ${definition.adapter}`);
+  }
+  return await definition.execute(parsed.data, createToolContext<TConfig, string | undefined>(fake, options));
+}
+
+function registeredTool<TInput, TResult, TConfig>(
+  fake: FakePlugin<TConfig>, localName: string,
+): AgentToolDefinition<TInput, TResult, TConfig, string | undefined> {
+  const found = fake.features.find(feature => feature.kind === 'tool' && feature.localName === localName);
+  if (!found) {
+    const known = fake.features.filter(feature => feature.kind === 'tool').map(feature => feature.localName);
+    throw new Error(`No tool "${localName}" was registered through addTool()${known.length ? `; registered: ${known.join(', ')}` : ''}`);
+  }
+  return found.definition as AgentToolDefinition<TInput, TResult, TConfig, string | undefined>;
 }

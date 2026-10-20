@@ -2069,6 +2069,9 @@ importers:
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../im/runtime
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
