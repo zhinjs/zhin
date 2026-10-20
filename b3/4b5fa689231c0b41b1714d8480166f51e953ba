@@ -1,0 +1,30 @@
+plugins/utils/earthquake/package.json
+  h_b680f75345178a 17,21,23-25,57
+plugins/utils/earthquake/schema.json
+  h_b680f75345178a 8-15,18-36,41-50
+plugins/utils/earthquake/src/config.ts
+  h_b680f75345178a 28-29,68-71,117-136,167
+plugins/utils/earthquake/src/dedupe.ts
+  h_b680f75345178a 10,12-15,24-25,31-33,63-65,94-108,111-112
+plugins/utils/earthquake/src/index.ts
+  h_b680f75345178a 27
+plugins/utils/earthquake/src/service.ts
+  h_b680f75345178a 22,98,100
+plugins/utils/earthquake/src/sources/cenc.ts
+  h_b680f75345178a 11-21,36-40,70-77,79-86,91,96,124-125
+plugins/utils/earthquake/src/sources/feed-source.ts
+  h_b680f75345178a 4-5,25-26,40-41,49-50,52,77,99-116,119-120,124-125,148-160
+pnpm-lock.yaml
+  h_b680f75345178a 3617-3619
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b34b5fa689231c0b41b1714d8480166f51e953ba",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
