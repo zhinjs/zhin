@@ -1,0 +1,24 @@
+basic/cli/tsconfig.json
+  h_b680f75345178a 6-8
+packages/console/pagemanager/tsconfig.json
+  h_b680f75345178a 6-7
+packages/im/agent/tsconfig.json
+  h_b680f75345178a 6-8
+packages/im/ai/tsconfig.json
+  h_b680f75345178a 6-8
+packages/im/workroom/tsconfig.json
+  h_b680f75345178a 6-8
+packages/toolkit/create-zhin/tsconfig.json
+  h_b680f75345178a 6-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ec025beafc233798df84587111490ef2af3344f1",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
