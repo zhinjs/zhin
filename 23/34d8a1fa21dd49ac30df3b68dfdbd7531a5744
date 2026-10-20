@@ -1,0 +1,27 @@
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_4ab94af3b53e96 126-131
+docs/paths/console.md
+  s_079f1dc5e6308d::t_4ab94af3b53e96 126-131
+docs/solutions/group-welcome.md
+  s_079f1dc5e6308d::t_4ab94af3b53e96 12-14,19-20,47-57
+  s_079f1dc5e6308d::t_23c7da2145815a 58
+docs/en/solutions/group-welcome.md
+  s_079f1dc5e6308d::t_4ab94af3b53e96 12-14,19-20,47-57
+  s_079f1dc5e6308d::t_43b48174c093a2 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2334d8a1fa21dd49ac30df3b68dfdbd7531a5744",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
