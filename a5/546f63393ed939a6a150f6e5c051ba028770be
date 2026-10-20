@@ -1,0 +1,57 @@
+.changeset/experience-command-admission.md
+  s_079f1dc5e6308d::t_30b05f07afd552 1-7
+docs/authoring/commands.md
+  s_079f1dc5e6308d::t_48169f612865e2 226-255
+docs/en/authoring/commands.md
+  s_079f1dc5e6308d::t_af960231a41d78 224-253
+packages/console/protocol/README.md
+  s_079f1dc5e6308d::t_7c6b9c5cd776db 16-20
+packages/console/protocol/src/index.ts
+  s_079f1dc5e6308d::t_51b908f3a5c13d 173-178
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_819bade47a746e 117,129-157
+packages/im/command/package.json
+  s_079f1dc5e6308d::t_b98c1b1d393093 9-13,59-62
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_bece1c6d056c6f 22-24,52,59-60,170,176,271-272,322-323
+packages/im/command/src/definition.ts
+  s_079f1dc5e6308d::t_7b48bef39b2400 17-18,315-316,391-392,473
+packages/im/command/src/execution-policy.ts
+  s_079f1dc5e6308d::t_1ccdc5bee5849b 1-39
+packages/im/command/src/execution-runtime.ts
+  s_079f1dc5e6308d::t_78468b9b818b7f 1-165
+packages/im/command/tests/execution.test.ts
+  s_079f1dc5e6308d::t_fe10504d39a79b 1-108
+packages/im/core/README.md
+  s_079f1dc5e6308d::t_433cf7bb4e98f7 134-139
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_d8cfe888aaa705 154-155,198,229,239-240,289
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_079f1dc5e6308d::t_ace30200496e5a 13,101-102,140-141,153,162,247,306,320,355-361
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_a698970d904f44 16,61-62,187,335,340,354-364,366-536,546-548,550-551
+packages/im/core/src/plugin-runtime/im/message-diagnostics.ts
+  s_079f1dc5e6308d::t_7da3777c808b8c 5,11,37-38,108,114-115
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_079f1dc5e6308d::t_c66e9e65366762 100-110
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_3d12b15b51d299 7-8,80,2944,3001,3079-3086,3088-3093,3123,3228-3577
+scripts/check-api-docs-surface.mjs
+  s_079f1dc5e6308d::t_ba27ea162f7371 62,130,132-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a5546f63393ed939a6a150f6e5c051ba028770be",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
