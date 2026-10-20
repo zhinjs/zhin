@@ -1851,6 +1851,21 @@ _This Schema declares no fields._
 
 _This Schema declares no fields._
 
+### nettools
+
+[`plugins/utils/nettools/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/nettools/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `nettools.cooldownSeconds` | integer | no | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
+| `nettools.requestTimeoutMs` | integer | no | `8000` | Per-attempt timeout for each external HTTP request, in milliseconds |
+| `nettools.maxRetries` | integer | no | `2` | Retries for transient failures (network errors, timeouts, 429, 5xx) with exponential backoff and jitter |
+| `nettools.pingMaxNodes` | integer | no | `4` | Number of check-host.net probe nodes used by ping |
+| `nettools.pingPollIntervalMs` | integer | no | `2000` | Wait between ping result polls, in milliseconds |
+| `nettools.pingMaxPolls` | integer | no | `5` | Maximum number of ping result polls before reporting partial results |
+| `nettools.dohProviders` | array&lt;string: `"cloudflare"`, `"alidns"`, `"google"`&gt; | no | `["cloudflare","alidns","google"]` | DNS-over-HTTPS providers in fallback order |
+| `nettools.priceListLimit` | integer | no | `8` | Number of registrars shown in a domain price comparison |
+
 ### qrcode
 
 [`plugins/utils/qrcode/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/qrcode/schema.json)

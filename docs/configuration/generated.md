@@ -1851,6 +1851,21 @@ _该 Schema 没有声明字段。_
 
 _该 Schema 没有声明字段。_
 
+### nettools
+
+[`plugins/utils/nettools/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/nettools/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `nettools.cooldownSeconds` | integer | 否 | `10` | Per-user cooldown in seconds, shared by all nettools commands and tools (0 disables) |
+| `nettools.requestTimeoutMs` | integer | 否 | `8000` | Per-attempt timeout for each external HTTP request, in milliseconds |
+| `nettools.maxRetries` | integer | 否 | `2` | Retries for transient failures (network errors, timeouts, 429, 5xx) with exponential backoff and jitter |
+| `nettools.pingMaxNodes` | integer | 否 | `4` | Number of check-host.net probe nodes used by ping |
+| `nettools.pingPollIntervalMs` | integer | 否 | `2000` | Wait between ping result polls, in milliseconds |
+| `nettools.pingMaxPolls` | integer | 否 | `5` | Maximum number of ping result polls before reporting partial results |
+| `nettools.dohProviders` | array&lt;string: `"cloudflare"`, `"alidns"`, `"google"`&gt; | 否 | `["cloudflare","alidns","google"]` | DNS-over-HTTPS providers in fallback order |
+| `nettools.priceListLimit` | integer | 否 | `8` | Number of registrars shown in a domain price comparison |
+
 ### qrcode
 
 [`plugins/utils/qrcode/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/qrcode/schema.json)

@@ -253,6 +253,7 @@ done < names.txt
 - [ ] `@zhin.js/plugin-link-poster` — `plugins/utils/link-poster`
 - [ ] `@zhin.js/plugin-lottery` — `plugins/utils/lottery`
 - [ ] `@zhin.js/plugin-music` — `plugins/utils/music`
+- [ ] `@zhin.js/plugin-nettools` — `plugins/utils/nettools`
 - [ ] `@zhin.js/plugin-qrcode` — `plugins/utils/qrcode`
 - [ ] `@zhin.js/plugin-reminder` — `plugins/utils/reminder`
 - [ ] `@zhin.js/plugin-repeater` — `plugins/utils/repeater`
