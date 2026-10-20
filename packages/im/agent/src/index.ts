@@ -538,6 +538,7 @@ export type {
   AiCompletionInput,
   AiCompletionResult,
   AiCompletionUntrustedInput,
+  UsageSubject,
 } from './plugin-runtime/ai-completion.js';
 
 export type { AgentOutputElement } from './outbound/agent-output.js';
