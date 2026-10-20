@@ -1,5 +1,15 @@
 # @zhin.js/permission
 
+## 1.1.7
+
+### Patch Changes
+
+- a50fc8a: 群欢迎可配置完整账号与会话的精确白名单，区分全部、空范围及具体会话，修正欢迎出站 requester 身份。新增只读命令权限说明与内置规则假设检查，共享真实准入的主体投影与匹配语义，不执行命令、动态默认值、平台或自定义权限检查；显式区分未知、未评估与条件匹配。
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/plugin-runtime@1.1.15
+
 ## 1.1.6
 
 ### Patch Changes

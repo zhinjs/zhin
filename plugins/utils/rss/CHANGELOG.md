@@ -1,5 +1,23 @@
 # @zhin.js/plugin-rss
 
+## 1.1.7
+
+### Patch Changes
+
+- 1336c1a: 将独立管理员 RSS 订阅接入任务中心：完整目标、持久 CAS 与操作对账；新建和恢复首次抓取只建基线，投递未确认时停止且不自动重试，保留原聊天订阅归属。
+
+  共享用途目录与 CLI 帮助新增 RSS 订阅入口，复用任务中心的实例与管理员任务流程。
+
+- cdc09db: 管理员 RSS 订阅可显式配置 IANA 时区和静默时段；沿用原轮询与 owner 持久 CAS，在退出静默后的首轮发送有界摘要。暂停清空待发内容、恢复重建基线，未确认摘要不自动重试。内部状态在同一键升级为 v2，保留旧游标与操作确认，预算不足先拒绝变更，不影响聊天订阅与定时提醒。
+- 9816c18: 将应用插件装配改为 configVersion: 2：主配置 plugins 映射实例名到包，disable_plugins 控制启停，业务配置使用顶层同名块。package.json 继续保留 features、entry、engine 等包契约，并支持静态 displayName/icon。
+
+  这是配置格式的破坏性更新：旧配置不能继续运行，请先停止 Bot，运行 `zhin migrate instances` 预览，再使用 `--apply` 转换；提供备份与中断继续/回滚，无法无损转换的嵌套、optional 和别名碰撞需人工迁移。Runtime、Console、CLI 与创建向导统一使用新声明。
+
+  保留框架顶层 `menuKeyword` / `menuStyle`，通过当前 generation 的 Root 配置视图供 Command Feature 消费；严格校验和配置修改不会丢失菜单设置，子实例配置保持隔离。
+
+  - @zhin.js/skill@1.1.7
+  - @zhin.js/tool@1.1.7
+
 ## 1.1.6
 
 ### Patch Changes

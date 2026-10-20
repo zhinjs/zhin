@@ -1,5 +1,29 @@
 # @zhin.js/agent
 
+## 1.1.36
+
+### Patch Changes
+
+- 18de875: 累计 Agent 回合内模型接口返回的用量，修复多次工具调用只报告最后一次、总结及格式纠正漏计的问题，使回合终态、日志与已启用的用量配额使用同一累计值。
+- Updated dependencies [c407bd2]
+- Updated dependencies [064b06d]
+- Updated dependencies [a50fc8a]
+- Updated dependencies [b58548a]
+- Updated dependencies [e914a93]
+- Updated dependencies [e914a93]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/core@1.1.46
+  - @zhin.js/permission@1.1.7
+  - @zhin.js/plugin-runtime@1.1.15
+  - @zhin.js/adapter@1.1.20
+  - @zhin.js/agent-feature@1.1.7
+  - @zhin.js/mcp-feature@1.1.7
+  - @zhin.js/prompt-section@1.1.6
+  - @zhin.js/skill@1.1.7
+  - @zhin.js/tool@1.1.7
+
 ## 1.1.35
 
 ### Patch Changes
