@@ -10,7 +10,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { CommandExecutionBudget, commandExecutionAdmissionToken } from '@zhin.js/command/internal/execution';
+import { CommandExecutionBudget, commandExecutionAdmissionToken, type CommandOperationController } from '@zhin.js/command/internal/execution';
 import { MessageBus, messageBusToken } from './message-bus.js';
 import {
   type EndpointContentResolveContext,
@@ -99,6 +99,7 @@ export interface ImRuntimeOptions {
 
 export class ImRuntime implements OutboundMessageService {
   readonly #commandExecution = new CommandExecutionBudget();
+  readonly #commandOperation = new AsyncLocalStorage<CommandOperationController>();
   readonly #messageDiagnostics = new RuntimeMessageDiagnostics();
   readonly messageDiagnostics: RuntimeMessageDiagnosticsReader = Object.freeze({
     list: (options?: Parameters<RuntimeMessageDiagnosticsReader['list']>[0]) => this.#messageDiagnostics.list(options),
@@ -137,6 +138,7 @@ export class ImRuntime implements OutboundMessageService {
     }, options.renderer);
     this.#inbound = new InboundRuntime({
       commandExecution: this.#commandExecution,
+      runCommandOperation: (controller, operation) => this.#commandOperation.run(controller, operation),
       diagnostics: this.#messageDiagnostics,
       interactions: this.#interactions,
       inboundClaim: options.inboundClaim,
@@ -148,7 +150,7 @@ export class ImRuntime implements OutboundMessageService {
       enrichSender: options.enrichSender,
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),
-      deliver: (request, snapshot) => this.#outbound.deliver(request, snapshot),
+      deliver: (request, snapshot) => this.#deliver(request, snapshot),
       recordIncoming: (input, sender) => this.#conversations.recordIncoming(input, sender),
       recordNotice: (notice) => this.#conversations.recordNotice(notice),
       markInteractionAnswer: (message) => this.#conversations.markInteractionAnswer(message),
@@ -157,7 +159,7 @@ export class ImRuntime implements OutboundMessageService {
     this.endpoints = new EndpointRuntime({
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),
-      send: (request, snapshot) => this.#outbound.deliver(request, snapshot),
+      send: (request, snapshot) => this.#deliver(request, snapshot),
     });
   }
 
@@ -301,7 +303,7 @@ export class ImRuntime implements OutboundMessageService {
   async send(request: SendRequest): Promise<DeliveryReceipt> {
     const lease = this.#acquire();
     try {
-      return await this.#outbound.deliver(request, lease.value);
+      return await this.#deliver(request, lease.value);
     } finally {
       this.#release(lease);
     }
@@ -315,7 +317,7 @@ export class ImRuntime implements OutboundMessageService {
     if (!this.#snapshots?.owns(lease) || !lease.active) {
       throw new Error('Outbound message generation lease expired');
     }
-    return this.#outbound.deliver(request, lease.value);
+    return this.#deliver(request, lease.value);
   }
 
   /**
@@ -348,6 +350,13 @@ export class ImRuntime implements OutboundMessageService {
         endpoints: Object.freeze({ total: 0, online: 0 }),
       });
     }
+  }
+
+  /** All unified outbound entry points observe the actual delivery, never their own caller/drain promise. */
+  #deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
+    const delivery = this.#outbound.deliver(request, snapshot);
+    this.#commandOperation.getStore()?.trackSend(delivery);
+    return delivery;
   }
 
   #acquire(): SnapshotLease {

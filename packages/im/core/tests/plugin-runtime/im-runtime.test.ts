@@ -5,6 +5,7 @@ import { getLogger } from '@zhin.js/logger';
 import {
   SnapshotStore,
   Scope,
+  PluginOutboundHost,
   capabilityId,
   childPluginId,
   createCapabilitySlot,
@@ -76,6 +77,7 @@ import {
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
 import { InboundDeduper } from '../../src/plugin-runtime/im/inbound-dedup.js';
+import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -3295,6 +3297,116 @@ describe('full-operation command admission', () => {
       expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
       secondSend.resolve(); await first; expect(ended).toBe(true);
     } finally { firstSend.resolve(); secondSend.resolve(); await first; await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it.each(['host-send', 'host-target', 'endpoint-send', 'endpoint-target', 'im-send', 'leased-send'] as const)(
+    'drains actual unawaited %s delivery through the shared outbound boundary', async entry => {
+      const gate = admissionDeferred(); const started = admissionDeferred();
+      const f = await createFixture([], [], undefined, undefined, undefined, {
+        execution: { maxConcurrent: 1 }, middleware: false,
+        commandResult: message => { void send(message); },
+        endpointSend: async request => { if (JSON.stringify(request).includes('DETACHED-HOST')) { started.resolve(); await gate.promise; } return 'sent'; },
+      });
+      const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+      const lease = f.store.acquire();
+      const send = (message: Message): Promise<unknown> => {
+        const target = createDeliveryTarget(message), content = 'DETACHED-HOST';
+        const input = { adapter: 'memory', endpointKey: String(f.adapter.id), conversation: target, content };
+        if (entry === 'host-send') return host.send(input);
+        if (entry === 'host-target') return host.sendTarget!(target, content);
+        if (entry === 'endpoint-send') return f.im.endpoints.send(input);
+        if (entry === 'endpoint-target') return f.im.endpoints.sendTarget(target, content, rootPluginId());
+        const request = { conversation: target, requester: rootPluginId(), content };
+        return entry === 'im-send' ? f.im.send(request) : f.im.sendWithSnapshotLease(lease, request);
+      };
+      const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+      let ended = false; void first.then(() => { ended = true; });
+      try {
+        await started.promise; await Promise.resolve(); await Promise.resolve();
+        expect(ended).toBe(false);
+        expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+        gate.resolve(); await first;
+        expect(ended).toBe(true);
+        expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      } finally { gate.resolve(); await first; lease.release(); await f.adapters.stop(); await f.store.close(); }
+    });
+
+  it('drains additional Host sends started by the original async operation while another delivery is pending', async () => {
+    const firstGate = admissionDeferred(); const secondGate = admissionDeferred(); const add = admissionDeferred();
+    const firstStarted = admissionDeferred(); const secondStarted = admissionDeferred();
+    let background: Promise<void> | undefined;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: message => {
+        const target = createDeliveryTarget(message);
+        void host.sendTarget!(target, 'HOST-ONE');
+        background = (async () => { await add.promise; await host.sendTarget!(target, 'HOST-TWO'); })();
+      },
+      endpointSend: async request => {
+        if (JSON.stringify(request).includes('HOST-ONE')) { firstStarted.resolve(); await firstGate.promise; }
+        if (JSON.stringify(request).includes('HOST-TWO')) { secondStarted.resolve(); await secondGate.promise; }
+        return 'sent';
+      },
+    });
+    const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    let ended = false; void first.then(() => { ended = true; });
+    try {
+      await firstStarted.promise; add.resolve(); await secondStarted.promise;
+      firstGate.resolve(); await Promise.resolve(); await Promise.resolve();
+      expect(ended).toBe(false);
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      secondGate.resolve(); await first; await background; expect(ended).toBe(true);
+    } finally { add.resolve(); firstGate.resolve(); secondGate.resolve(); await first; await background; await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('keeps pending Host delivery occupied across HMR and isolates another actual Root', async () => {
+    const gate = admissionDeferred(); const started = admissionDeferred();
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: message => { void host.sendTarget!(createDeliveryTarget(message), 'HOST-HMR'); },
+      endpointSend: async request => { if (JSON.stringify(request).includes('HOST-HMR')) { started.resolve(); await gate.promise; } return 'sent'; },
+    });
+    const other = await createFixture([], [], undefined, undefined, undefined, { execution: { maxConcurrent: 1 }, middleware: false, commandResult: () => 'other root' });
+    const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try {
+      await started.promise;
+      const current = f.store.current; const state = snapshotState(current); const projections = new Map(current.projections);
+      projections.set(commandFeatureId, new CommandIndex([f.command], createSnapshotView(current.generation + 1, state)));
+      f.store.commit(current.generation, { snapshot: { ...state, projections }, dispose: () => undefined });
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
+      expect((await receive(other.im, fixtureInput(other, '/gh issue list open'))).status).toBe('executed');
+      gate.resolve(); await first;
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+    } finally { gate.resolve(); await first; await f.adapters.stop(); await f.store.close(); await other.adapters.stop(); await other.store.close(); }
+  });
+
+  it('observes a failing Host delivery without retaining the command budget or swallowing the facade rejection', async () => {
+    let delivery: Promise<unknown> | undefined;
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      execution: { maxConcurrent: 1 }, middleware: false,
+      commandResult: message => { delivery = host.sendTarget!(createDeliveryTarget(message), 'HOST-FAIL'); void delivery.catch(() => undefined); },
+      endpointSend: request => { if (JSON.stringify(request).includes('HOST-FAIL')) throw new EndpointDeliveryError('endpoint_timeout', 'uncertain', 'unknown'); return 'sent'; },
+    });
+    const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+    try {
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      await expect(delivery).rejects.toThrow();
+      expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).status).toBe('executed');
+      await expect(delivery).rejects.toThrow();
+    } finally { await delivery?.catch(() => undefined); await f.adapters.stop(); await f.store.close(); }
+  });
+
+  it('preserves the original non-draining behavior when the command has no execution policy', async () => {
+    const gate = admissionDeferred(); const started = admissionDeferred();
+    const f = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false, commandResult: message => { void f.im.send({ conversation: message.conversation, requester: rootPluginId(), content: 'UNLIMITED-SEND' }); },
+      endpointSend: async request => { if (JSON.stringify(request).includes('UNLIMITED-SEND')) { started.resolve(); await gate.promise; } return 'sent'; },
+    });
+    const first = receive(f.im, fixtureInput(f, '/gh issue list open'));
+    try { await started.promise; expect((await first).status).toBe('executed'); }
+    finally { gate.resolve(); await first; await Promise.resolve(); await f.adapters.stop(); await f.store.close(); }
   });
 
   it('drains a failed unawaited render receipt without retaining occupancy', async () => {
