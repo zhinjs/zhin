@@ -153,7 +153,14 @@ export class CommandIndex {
       for (const key of keys) occupancy.set(key, source);
     };
 
+    const disabledByOwner = new Map<PluginId, readonly string[]>();
     for (const slot of slots) {
+      let disabled = disabledByOwner.get(slot.owner);
+      if (!disabled) {
+        disabled = disabledCommands(this.snapshot, slot.owner);
+        disabledByOwner.set(slot.owner, disabled);
+      }
+      if (isDisabledCommand(slot.localName, disabled)) continue;
       const namespace = commandNamespace(this.snapshot, slot.owner);
       const primarySegments = [...namespace, ...runtimeSegments(slot.localName)];
       const parameter = slot.definition.$parameter;
@@ -558,6 +565,27 @@ function commandNamespace(snapshot: RuntimeSnapshot, owner: PluginId): readonly 
     );
   }
   return Object.freeze([...segments]);
+}
+
+/**
+ * 插件实例配置 disabledCommands 列出的指令不进入路由表。条目写插件本地的静态路径
+ * （不含 commandNamespace 与参数段，如 `fanyi`、`netease login`）；写上级路径会连同
+ * 其子命令一起禁用。未匹配任何指令的条目被忽略。
+ */
+function disabledCommands(snapshot: RuntimeSnapshot, owner: PluginId): readonly string[] {
+  const config = snapshot.config.get(owner) as Readonly<Record<string, unknown>> | undefined;
+  const value = config?.disabledCommands;
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
+    throw new TypeError(`Invalid disabledCommands for ${owner}: expected an array of command names`);
+  }
+  return Object.freeze(value.map((entry: string) => splitCommand(entry).join(' ')).filter(Boolean));
+}
+
+function isDisabledCommand(localName: string, disabled: readonly string[]): boolean {
+  if (disabled.length === 0) return false;
+  const path = runtimeSegments(localName).filter((segment) => !segment.startsWith('$')).join(' ');
+  return disabled.some((entry) => path === entry || path.startsWith(`${entry} `));
 }
 
 function isCommandNamespaceSegment(value: string): boolean {

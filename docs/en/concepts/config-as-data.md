@@ -72,7 +72,7 @@ The `schema.json` in each package's root directory is its configuration contract
 }
 ```
 
-The root must be an object schema; packages without a schema.json are treated as an empty object. Purely compositional root schemas are rejected. The framework injects an optional `commandNamespace` field into every plugin config; plugin schemas must not redeclare it, and omitted values mean no plugin namespace. Validation uses Ajv 2020 with strict validation and defaults. A reserved-field collision or a child `instanceKey` collision throws `ConfigSchemaCollisionError`.
+The root must be an object schema; packages without a schema.json are treated as an empty object. Purely compositional root schemas are rejected. The framework injects optional `commandNamespace` and `disabledCommands` fields into every plugin config; plugin schemas must not redeclare them. Omitted values mean no plugin namespace and no disabled commands. Validation uses Ajv 2020 with strict validation and defaults. A reserved-field collision or a child `instanceKey` collision throws `ConfigSchemaCollisionError`.
 
 ## ConfigView: Projection by Owner
 
