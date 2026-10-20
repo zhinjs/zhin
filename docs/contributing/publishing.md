@@ -241,7 +241,7 @@ done < names.txt
 - [ ] `@zhin.js/service-activity-feedback` — `plugins/services/activity-feedback`
 - [ ] `@zhin.js/service-typesafe` — `plugins/services/typesafe`
 
-### `plugins/utils/`（13）
+### `plugins/utils/`（14）
 
 - [ ] `@zhin.js/plugin-60s` — `plugins/utils/60s`
 - [ ] `@zhin.js/plugin-calendar` — `plugins/utils/calendar`
@@ -251,6 +251,7 @@ done < names.txt
 - [ ] `@zhin.js/plugin-link-poster` — `plugins/utils/link-poster`
 - [ ] `@zhin.js/plugin-lottery` — `plugins/utils/lottery`
 - [ ] `@zhin.js/plugin-music` — `plugins/utils/music`
+- [ ] `@zhin.js/plugin-nettools` — `plugins/utils/nettools`
 - [ ] `@zhin.js/plugin-qrcode` — `plugins/utils/qrcode`
 - [ ] `@zhin.js/plugin-reminder` — `plugins/utils/reminder`
 - [ ] `@zhin.js/plugin-repeater` — `plugins/utils/repeater`
