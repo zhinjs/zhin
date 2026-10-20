@@ -1704,6 +1704,22 @@ _该 Schema 没有声明字段。_
 | `answers.quizTimeoutSeconds` | number | 否 | `120` | 出题后等待作答的秒数，超时题目作废 |
 | `answers.enableDrivingQuiz` | boolean | 否 | `true` | 启用「科目一」交规小测（原创题面，仅供娱乐参考） |
 
+### bilibili
+
+[`plugins/utils/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/bilibili/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `bilibili.pollCron` | string | 否 | `"0 * * * * *"` | 轮询频率（6 段 Cron，默认每 60 秒） / Poll schedule (6-field cron, default every 60s) |
+| `bilibili.jitterMs` | number | 否 | `15000` | 每轮轮询前的随机延迟上限（毫秒） / Max random delay before each poll (ms) |
+| `bilibili.requestGapMs` | number | 否 | `1500` | 同一轮内相邻动态请求的间隔（毫秒） / Gap between dynamic requests within one poll (ms) |
+| `bilibili.maxBackoffMinutes` | number | 否 | `30` | 接口失败或风控时指数退避的上限（分钟） / Upper bound of exponential backoff (minutes) |
+| `bilibili.maxPerChannel` | number | 否 | `20` | 每个会话最多订阅的 UP 主数量 / Max UP subscriptions per conversation |
+| `bilibili.timeout` | number | 否 | `10000` | 单次 HTTP 请求超时（毫秒） / HTTP timeout (ms) |
+| `bilibili.live` | boolean | 否 | `true` | 是否轮询开播状态 / Poll live status |
+| `bilibili.dynamic` | boolean | 否 | `true` | 是否轮询 UP 主动态 / Poll UP dynamics |
+| `bilibili.cookie` | string | 否 | `""` | 可选的 B 站 Cookie（如 SESSDATA=...），风控严格时使用，请写成 ${BILIBILI_COOKIE} / Optional cookie, reference it as ${BILIBILI_COOKIE} |
+
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
