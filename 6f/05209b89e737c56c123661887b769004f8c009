@@ -1,0 +1,14 @@
+.changeset/testing-run-tool-config-validation.md
+  h_b680f75345178a 1-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6f05209b89e737c56c123661887b769004f8c009",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
