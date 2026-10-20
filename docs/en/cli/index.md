@@ -135,10 +135,12 @@ Reuses existing config, environment variables and data in a project, letting you
 ### migrate: Project Upgrade
 
 ```bash
-zhin migrate [--dry-run] [--no-install]
+zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-Upgrades an older Zhin project to the latest: dependencies, scripts and folder structure. `--dry-run` only prints the plan; `--no-install` skips the final `pnpm install`. Full upgrade flow: [Compatibility and migration](../operations/upgrades.md).
+Upgrades an older Zhin project to the latest: dependencies, scripts and folder structure. `--dry-run` only prints the plan and ends with "nothing was changed"; `--no-install` skips the final `pnpm install`. Dependencies you locked (exact versions such as `1.1.6`, `link:`, `file:`) are kept unless you pass `--include-pinned`. Full upgrade flow: [Compatibility and migration](../operations/upgrades.md).
+
+`zhin migrate` never edits config files. When startup reports `configVersion must be 2`, or `zhin doctor` / `zhin config check` flags a v1 config, stop the Bot and run `zhin migrate instances` (preview) and then `zhin migrate instances --apply`. The preview lists changes by key name without printing configuration values; `--apply` first copies the originals to `.zhin/backups/config-v2-<timestamp>/` (with a `manifest.json`) and prints that path. Restore with `zhin migrate instances --recover rollback`, or copy the files back as listed in the manifest. `zhin runtime migrate` migrates legacy plugin capability code and is unrelated to the config version.
 
 ## Plugins
 

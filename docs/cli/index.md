@@ -135,10 +135,12 @@ zhin onboard [--quick] [--flow quickstart|full]
 ### migrate：项目升级
 
 ```bash
-zhin migrate [--dry-run] [--no-install]
+zhin migrate [--dry-run] [--no-install] [--include-pinned]
 ```
 
-把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划；`--no-install` 跳过最后的 `pnpm install`。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划，结束时提示“nothing was changed”；`--no-install` 跳过最后的 `pnpm install`。精确版本（如 `1.1.6`）、`link:`、`file:` 等用户锁定的依赖默认保留，`--include-pinned` 才会一并改为 `latest`。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
+
+`zhin migrate` 不改配置文件。启动报 `configVersion must be 2` 或 `zhin doctor` / `zhin config check` 提示 v1 配置时，使用下文的 `zhin migrate instances`。`zhin runtime migrate` 是旧插件能力代码迁移，与配置版本无关。
 
 ## 插件
 
@@ -398,4 +400,4 @@ zhin migrate instances --recover continue
 zhin migrate instances --recover rollback
 ```
 
-迁移会备份原文件并记录进度；嵌套、optional 和别名碰撞需人工处理。详见[迁移指南](../migrations/plugin-instance-declarations.md)。
+预览按键名列出改动（新增 `configVersion`、`plugins` 映射、业务块搬移、`disable_plugins`、`package.json#zhin.plugins` 清空），不打印任何配置值，可直接贴到 issue；`--json` 输出机器可读摘要。`--apply` 写入前会把原文件复制到 `.zhin/backups/config-v2-<时间戳>/`（附 `manifest.json`）并打印路径；恢复优先用 `zhin migrate instances --recover rollback`，也可按 manifest 手动复制回原位置。嵌套、optional 和别名碰撞需人工处理。详见[迁移指南](../migrations/plugin-instance-declarations.md)。
