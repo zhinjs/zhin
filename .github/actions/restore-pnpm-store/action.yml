@@ -1,0 +1,28 @@
+name: Restore pnpm store
+description: >-
+  Cache the pnpm content-addressable store keyed on pnpm-lock.yaml, falling back to the newest
+  previous store when the lockfile changes so `pnpm install` only downloads the new packages.
+  Run after pnpm and Node.js are set up and before `pnpm install`. Credential-free.
+runs:
+  using: composite
+  steps:
+    # Same command setup-node uses, so the cache path (and therefore the cache version)
+    # matches the stores that `actions/setup-node` with `cache: pnpm` saved before.
+    - name: resolve pnpm store path
+      id: store
+      shell: bash
+      run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    # setup-node's `cache: pnpm` only restores an exact lockfile-hash match, so every lockfile
+    # change used to re-download the whole dependency tree. `restore-keys` restores the newest
+    # previous store instead; packages that cannot be fetched right now (for example the
+    # cross-organization @icqqjs packages when GitHub Packages is unavailable) come from it.
+    # The second restore key reads the stores setup-node saved before this action existed.
+    - name: restore pnpm store
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.store.outputs.path }}
+        key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-store-${{ runner.os }}-
+          node-cache-${{ runner.os }}-x64-pnpm-

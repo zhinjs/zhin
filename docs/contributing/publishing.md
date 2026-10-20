@@ -244,14 +244,17 @@ done < names.txt
 ### `plugins/utils/`（14）
 
 - [ ] `@zhin.js/plugin-60s` — `plugins/utils/60s`
+- [ ] `@zhin.js/plugin-answers` — `plugins/utils/answers`
 - [ ] `@zhin.js/plugin-calendar` — `plugins/utils/calendar`
 - [ ] `@zhin.js/plugin-code-runner` — `plugins/utils/code-runner`
 - [ ] `@zhin.js/plugin-content-moderation` — `plugins/utils/content-moderation`
 - [ ] `@zhin.js/plugin-earthquake` — `plugins/utils/earthquake`
 - [ ] `@zhin.js/plugin-group-suite` — `plugins/utils/group-suite`
+- [ ] `@zhin.js/plugin-ledger` — `plugins/utils/ledger`
 - [ ] `@zhin.js/plugin-link-poster` — `plugins/utils/link-poster`
 - [ ] `@zhin.js/plugin-lottery` — `plugins/utils/lottery`
 - [ ] `@zhin.js/plugin-music` — `plugins/utils/music`
+- [ ] `@zhin.js/plugin-nettools` — `plugins/utils/nettools`
 - [ ] `@zhin.js/plugin-qrcode` — `plugins/utils/qrcode`
 - [ ] `@zhin.js/plugin-reminder` — `plugins/utils/reminder`
 - [ ] `@zhin.js/plugin-repeater` — `plugins/utils/repeater`

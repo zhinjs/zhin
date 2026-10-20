@@ -1,0 +1,14 @@
+import { defineCommand } from 'zhin.js/command';
+import { commandCallerKey } from '../../../src/cooldown.js';
+import { nettoolsServiceToken } from '../../../src/runtime.js';
+
+export default defineCommand({
+  description: '从多个地区 Ping 一个公网主机（check-host.net）',
+  params: { host: { type: 'string', description: '域名或公网 IP' } },
+  async execute({ params, input, use, signal }) {
+    const service = use(nettoolsServiceToken);
+    const host = String(params.host ?? '');
+    const callerKey = commandCallerKey(input);
+    return service.run(() => service.ping(host, callerKey, signal));
+  },
+});

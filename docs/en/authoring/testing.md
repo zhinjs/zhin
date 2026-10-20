@@ -9,7 +9,7 @@ You do not need to hand-assemble the `setup` context or write `as never` in plug
 
 | Layer | Use | Entry points |
 | --- | --- | --- |
-| **Fake runtime** (unit tests) | Fast, no test app; runs `setup()`, commands, middleware and handlers directly | `createFakePlugin` / `runPluginSetup` / `runCommand` ... |
+| **Fake runtime** (unit tests) | Fast, no test app; runs `setup()`, commands, middleware and handlers directly | `createFakePlugin` / `runPluginSetup` / `runCommand` / `runTool` ... |
 | **Real runtime** (integration) | Real module discovery, command parsing, permissions and send chain | `PluginTestKit` |
 
 ```bash
@@ -34,6 +34,25 @@ it('posts to the target group every 30 seconds', async () => {
   await fake.dispose();                                  // runs lifecycle cleanups
 });
 ```
+
+### Config validation and defaults
+
+When the plugin declares a `config` schema, `runPluginSetup` treats `config` the way the real runtime does. It validates the value against the schema, fills in defaults, and keeps only the top-level fields the schema declares. Invalid config throws `PluginConfigValidationError`, whose `issues` use the same wording as startup errors (for example `/limit must be >= 1`). So you can pass only what a user would write and assert that the defaults apply:
+
+```ts
+const fake = await runPluginSetup(plugin, { config: { target: 'g1' } });
+expect(fake.config).toEqual({ target: 'g1', limit: 10 });      // limit comes from the schema default
+
+await expect(runPluginSetup(plugin, { config: { limit: 0 } }))
+  .rejects.toThrow(PluginConfigValidationError);               // missing target, limit out of range
+```
+
+- To get the resolved config without running `setup`, use `resolvePluginConfig(plugin, input)`.
+- When the plugin declares no `config`, `config` is passed through unchanged.
+
+::: warning Behaviour change (@zhin.js/testing after 1.0.5)
+Earlier versions of `runPluginSetup` passed `config` to `setup()` verbatim. If a test deliberately passes invalid or incomplete config, it now throws. Either complete the config, or opt out per test with `runPluginSetup(plugin, { config, validateConfig: false })`. `createFakePlugin` and `fake.setup()` are unchanged.
+:::
 
 `createFakePlugin(options)` only builds the environment. Run `fake.setup(plugin)` afterwards, or hand `fake.context` to your own function.
 
@@ -80,6 +99,42 @@ await runHandler(fake, onReceive, createFakeMessage()); // `this` is the capabil
 
 ::: warning This is not a full dispatch
 `runCommand` calls `execute()` directly: no route matching, parameter parsing, `permit` checks or admission. Pass already-parsed `params`. To verify those, use the real runtime below.
+:::
+
+## Run Agent tools
+
+`runTool(fake, tool, input, options)` runs the default export of `tools/<name>/index.ts` the way the runtime's tool index does:
+
+- If `inputSchema` is an executable schema (for example Zod), it parses the input first. JSON Schema inputs pass through unchanged, as they do in the runtime.
+- If the tool declares `adapter`, you must pass a matching `client`.
+
+`tool` can also be the local name of a tool registered through `addTool()` in `setup()`.
+
+```ts
+import { createFakeMessage, createFakePlugin, runTool } from '@zhin.js/testing';
+import lookup from '../tools/lookup/index.js';
+
+const fake = createFakePlugin({ config: { prefix: '> ' } });
+const message = createFakeMessage({ id: 'm1', sender: { id: 'u1' },
+  conversation: { endpoint: { id: 'bot', adapter: 'qq' }, kind: 'group', id: 'g1' } });
+
+const result = await runTool(fake, lookup, { word: 'zhin' }, { message });
+// inside the tool, context.origin = { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'group', sceneId: 'g1', messageId: 'm1' }
+// context.principal = { subjectId: 'u1', roles: [] }
+```
+
+| Option | Effect |
+| --- | --- |
+| `message` | Derives `origin` (`kind: 'im'`) and `principal` from an inbound message, the same fake message your command tests use |
+| `origin` / `principal` | Set explicitly; these take precedence over `message` |
+| `policy` | Defaults to no permissions, attended, network disabled |
+| `client` | Native client port `{ adapter, get() }`; required for tools bound to an `adapter` |
+| `question` / `signal` / `traceId` / `turnId` / `sessionKey` | The matching context fields |
+
+`createToolContext(fake, options)` only builds the context. `toolOriginFromMessage(message)` converts a message to the tool `origin` shape.
+
+::: warning No model or approval
+`runTool` skips model discovery, approval, permission and policy checks. It only exercises the tool's own logic.
 :::
 
 ## Partial fakes: `fakeOf`

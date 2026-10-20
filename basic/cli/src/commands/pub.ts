@@ -12,6 +12,7 @@ interface PublishOptions {
   registry?: string;
   dryRun?: boolean;
   skipBuild?: boolean;
+  yes?: boolean;
 }
 
 /** 递归扫描 plugins/ 下含 package.json 的 Zhin 包（扁平 my-plugin 或嵌套 adapters/icqq） */
@@ -23,12 +24,60 @@ interface PluginPublishCandidate {
 function isLikelyZhinPluginPackage(pkg: {
   name?: string;
   keywords?: string[];
+  zhin?: unknown;
 }): boolean {
+  if (hasZhinManifest(pkg)) return true;
   const n = pkg.name ?? '';
   if (/^zhin\.js-/.test(n)) return true;
   if (/^@zhin\.js\//.test(n)) return true;
   if (pkg.keywords?.includes('zhin.js')) return true;
   return false;
+}
+
+function hasZhinManifest(pkg: { zhin?: unknown }): boolean {
+  return typeof pkg.zhin === 'object' && pkg.zhin !== null && !Array.isArray(pkg.zhin);
+}
+
+function readManifest(dir: string): Record<string, unknown> | undefined {
+  try {
+    return fs.readJsonSync(path.join(dir, 'package.json')) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+const BOT_CONFIG_FILES = ['zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json'];
+
+export type PublishTarget =
+  | { readonly kind: 'directory'; readonly dir: string }
+  | { readonly kind: 'workspace'; readonly pluginsDir: string }
+  | { readonly kind: 'none'; readonly message: string };
+
+/**
+ * 决定 `zhin pub [arg]` 发布哪个包：
+ * 1. `arg` 是含 zhin 清单的目录（如 `.`、`../my-plugin`）→ 直接发布该目录；
+ * 2. 当前目录是 Bot 项目（有 `plugins/`）→ 在 `plugins/` 下按名字查找（原有行为）；
+ * 3. 不带参数、当前目录本身是插件包（`zhin new --standalone` 生成的仓库）→ 发布当前目录。
+ */
+export function resolvePublishTarget(cwd: string, arg: string | undefined): PublishTarget {
+  if (arg) {
+    const dir = path.resolve(cwd, arg);
+    const manifest = fs.existsSync(dir) && fs.statSync(dir).isDirectory() ? readManifest(dir) : undefined;
+    const dirIsBot = BOT_CONFIG_FILES.some((file) => fs.existsSync(path.join(dir, file)));
+    if (manifest && hasZhinManifest(manifest) && !dirIsBot) return { kind: 'directory', dir };
+  }
+  const pluginsDir = path.resolve(cwd, 'plugins');
+  const isBot = BOT_CONFIG_FILES.some((file) => fs.existsSync(path.join(cwd, file)));
+  if (fs.existsSync(pluginsDir) && (isBot || arg)) return { kind: 'workspace', pluginsDir };
+  const own = readManifest(cwd);
+  if (!arg && own && hasZhinManifest(own) && !isBot) return { kind: 'directory', dir: cwd };
+  if (fs.existsSync(pluginsDir)) return { kind: 'workspace', pluginsDir };
+  return {
+    kind: 'none',
+    message: arg
+      ? `未找到插件：${arg}（既不是含 zhin 字段的 package.json 目录，当前目录也没有 plugins/）`
+      : '当前目录既不是插件包（package.json 缺少 zhin 字段），也不是含 plugins/ 的 Bot 项目',
+  };
 }
 
 function collectPluginPublishCandidates(pluginsDir: string): PluginPublishCandidate[] {
@@ -81,68 +130,76 @@ function resolvePublishCandidate(
 }
 
 export const pubCommand = new Command('pub')
-  .description('发布插件到 npm')
+  .description('发布插件到 npm（在 zhin new --standalone 生成的插件目录内可直接运行：npx @zhin.js/cli pub）')
   .argument(
     '[plugin-name]',
-    '插件路径（相对 plugins/，如 my-plugin 或 adapters/icqq）；可写目录名或完整相对路径',
+    '在插件包目录内可省略（发布当前目录）；也可以是插件目录路径（如 . 或 ../my-plugin）；在 Bot 项目根是相对 plugins/ 的路径（如 my-plugin 或 adapters/icqq）',
   )
   .option('--tag <tag>', '发布标签', 'latest')
   .option('--access <access>', '访问级别 (public|restricted)', 'public')
   .option('--registry <url>', '自定义 npm registry')
   .option('--dry-run', '试运行，不实际发布', false)
   .option('--skip-build', '跳过构建步骤', false)
+  .option('-y, --yes', '跳过发布确认（非交互环境需要）', false)
   .action(async (pluginName: string, options: PublishOptions) => {
     try {
-      const pluginsDir = path.resolve(process.cwd(), 'plugins');
-      
-      // 检查 plugins 目录是否存在
-      if (!fs.existsSync(pluginsDir)) {
-        logger.error('未找到 plugins 目录，请在项目根目录运行此命令');
+      const target = resolvePublishTarget(process.cwd(), pluginName);
+      if (target.kind === 'none') {
+        logger.error(target.message);
         process.exit(1);
       }
-
-      const candidates = collectPluginPublishCandidates(pluginsDir);
-
-      if (candidates.length === 0) {
-        logger.error('未找到可发布的插件（需在 plugins 下存在含 zhin.js / @zhin.js/* 包名或 keywords 含 zhin.js 的 package.json）');
-        process.exit(1);
-      }
-
-      // 如果没有指定插件名，让用户选择
-      let selected: PluginPublishCandidate | undefined;
-      if (!pluginName) {
-        if (candidates.length === 1) {
-          selected = candidates[0];
-          logger.info(formatCompact( { cmd: 'pub', op: 'select', plugin: selected!.relPath }));
-        } else {
-          const { plugin } = await inquirer.prompt([
-            {
-              type: 'select',
-              name: 'plugin',
-              message: '请选择要发布的插件:',
-              choices: candidates.map((c) => ({
-                name: `${c.relPath} (${path.basename(c.absPath)})`,
-                value: c.relPath,
-              })),
-            },
-          ]);
-          selected = candidates.find((c) => c.relPath === plugin) ?? resolvePublishCandidate(candidates, plugin);
-        }
+      let pluginDir: string;
+      if (target.kind === 'directory') {
+        pluginDir = target.dir;
       } else {
-        selected = resolvePublishCandidate(candidates, pluginName);
-        if (!selected) {
-          logger.error(`未找到插件: ${pluginName}`);
-          logger.log(`可用插件（相对 plugins/）:\n  ${candidates.map((c) => c.relPath).join('\n  ')}`);
+        const { pluginsDir } = target;
+        const candidates = collectPluginPublishCandidates(pluginsDir);
+
+        if (candidates.length === 0) {
+          logger.error('未找到可发布的插件（需在 plugins 下存在含 zhin 字段、zhin.js / @zhin.js/* 包名或 keywords 含 zhin.js 的 package.json）');
           process.exit(1);
         }
-      }
 
-      if (!selected) {
-        logger.error('未选择插件');
-        process.exit(1);
-      }
+        // 如果没有指定插件名，让用户选择
+        let selected: PluginPublishCandidate | undefined;
+        if (!pluginName) {
+          if (candidates.length === 1) {
+            selected = candidates[0];
+            logger.info(formatCompact( { cmd: 'pub', op: 'select', plugin: selected!.relPath }));
+          } else {
+            if (!process.stdin.isTTY) {
+              logger.error(`非交互环境请指定插件：zhin pub <名字>\n可用插件（相对 plugins/）:\n  ${candidates.map((c) => c.relPath).join('\n  ')}`);
+              process.exit(1);
+            }
+            const { plugin } = await inquirer.prompt([
+              {
+                type: 'select',
+                name: 'plugin',
+                message: '请选择要发布的插件:',
+                choices: candidates.map((c) => ({
+                  name: `${c.relPath} (${path.basename(c.absPath)})`,
+                  value: c.relPath,
+                })),
+              },
+            ]);
+            selected = candidates.find((c) => c.relPath === plugin) ?? resolvePublishCandidate(candidates, plugin);
+          }
+        } else {
+          selected = resolvePublishCandidate(candidates, pluginName);
+          if (!selected) {
+            logger.error(`未找到插件: ${pluginName}`);
+            logger.log(`可用插件（相对 plugins/）:\n  ${candidates.map((c) => c.relPath).join('\n  ')}`);
+            process.exit(1);
+          }
+        }
 
-      const pluginDir = selected.absPath;
+        if (!selected) {
+          logger.error('未选择插件');
+          process.exit(1);
+        }
+
+        pluginDir = selected.absPath;
+      }
 
       const packageJsonPath = path.join(pluginDir, 'package.json');
       if (!fs.existsSync(packageJsonPath)) {
@@ -158,8 +215,21 @@ export const pubCommand = new Command('pub')
       logger.info(formatCompact( { cmd: 'pub', op: 'prepare', package: packageName, version }));
       logger.log('');
 
+      if (packageJson.private === true) {
+        logger.error(`${packageName} 的 package.json 设置了 private: true，npm 会拒绝发布`);
+        process.exit(1);
+      }
+      const entry = packageJson.zhin?.entry;
+      if (typeof entry === 'string' && /\.tsx?$/u.test(entry)) {
+        logger.warn(`zhin.entry 是 ${entry}：从 npm 安装的插件会优先加载 JavaScript，发布包请把入口写成 .js 并在 prepack 构建`);
+      }
+
       // 确认发布
-      if (!options.dryRun) {
+      if (!options.dryRun && !options.yes) {
+        if (!process.stdin.isTTY) {
+          logger.error('非交互环境无法确认发布：加 --yes 跳过确认，或先用 --dry-run 预览');
+          process.exit(1);
+        }
         const { confirm } = await inquirer.prompt([
           {
             type: 'confirm',

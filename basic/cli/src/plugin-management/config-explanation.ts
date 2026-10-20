@@ -5,7 +5,7 @@ import { readStringLiteralOptions } from '../plugin-runtime/console/string-liter
 
 type Projection = Pick<ConsoleConfigExplanation, 'projection' | 'reason' | 'fields'>;
 type Schema = Readonly<Record<string, unknown>>;
-type Field = { path: readonly string[]; secret: boolean };
+type Field = { path: readonly string[]; secret: boolean; list: boolean };
 const complexKeywords = ['$ref', '$dynamicRef', 'anyOf', 'oneOf', 'allOf', 'not', 'if', 'then', 'else', 'dependentSchemas', 'dependentRequired', 'patternProperties', 'prefixItems', 'unevaluatedProperties'];
 const forbiddenKeys = new Set(['__proto__', 'prototype', 'constructor']);
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -30,10 +30,15 @@ export function explainConfigFields(schema: Schema, input: unknown, current: unk
       for (const [key, child] of Object.entries(node.properties ?? {})) visit(child, [...path, key], secret);
       return;
     }
-    const scalarType = ['string', 'number', 'integer', 'boolean', 'null'].includes(String(node.type)) && !Array.isArray(node.type);
-    if (!literalChoice && !scalarType) { issue = 'complex-schema'; return; }
+    // A homogeneous list of scalars (e.g. the framework's `disabledCommands`) is one leaf value, compared as a whole.
+    const list = !literalChoice && node.type === 'array';
+    if (list && !scalarList(node)) { issue = 'complex-schema'; return; }
+    if (!literalChoice && !list && !scalarSchema(node)) { issue = 'complex-schema'; return; }
     if (path.length === 0 || fields.length >= 128) { issue = 'bound-exceeded'; return; }
-    fields.push({ path: Object.freeze([...path]), secret });
+    const items = list && record(node.items) ? node.items : {};
+    const itemMetadata = record(items['x-zhin-config']) ? items['x-zhin-config'] : {};
+    const itemSecret = items.writeOnly === true || itemMetadata.secret === true || itemMetadata.hidden === true || itemMetadata.component === 'password';
+    fields.push({ path: Object.freeze([...path]), secret: secret || itemSecret, list });
   };
   visit(schema, [], false);
   if (issue) return unsupported(issue);
@@ -44,10 +49,11 @@ export function explainConfigFields(schema: Schema, input: unknown, current: unk
   const metadata: ConsoleConfigFieldEvidence[] = fields.map(field => {
     const raw = at(input, field.path), next = at(candidate.value, field.path), applied = at(current, field.path), beforeExpansion = at(committedInput, field.path);
     const candidateOrigin = raw.present ? 'file' : next.present ? 'schema-default' : 'unset';
-    const redacted = field.secret || [raw, next, beforeExpansion].some(item => typeof item.value === 'string' && item.value.includes('${'));
-    // A schema scalar unexpectedly represented by an object or missing pre-expansion
+    const redacted = field.secret || [raw, next, beforeExpansion].some(item => (field.list && Array.isArray(item.value) ? item.value : [item.value])
+      .some(value => typeof value === 'string' && value.includes('${')));
+    // A schema scalar (or scalar list) unexpectedly represented by an object or missing pre-expansion
     // evidence has no proven standard comparison. Never serialize that value to explain why.
-    const unknown = [next, applied].some(item => item.value !== null && typeof item.value === 'object')
+    const unknown = [next, applied].some(item => !scalarValue(item.value, field.list))
       || (applied.present && !beforeExpansion.present);
     const generationMatch = redacted ? 'redacted' : unknown ? 'unknown'
       : next.present === applied.present && isDeepStrictEqual(next.value, applied.value) ? 'equal' : 'different';
@@ -55,6 +61,20 @@ export function explainConfigFields(schema: Schema, input: unknown, current: unk
   });
   if (Buffer.byteLength(JSON.stringify(metadata), 'utf8') > 16 * 1024) return unsupported('bound-exceeded');
   return Object.freeze({ projection: 'supported', fields: Object.freeze(metadata) });
+}
+function scalarSchema(node: Record<string, unknown>): boolean {
+  return readStringLiteralOptions(node) !== null || (['string', 'number', 'integer', 'boolean', 'null'].includes(String(node.type)) && !Array.isArray(node.type));
+}
+/** `{ type: 'array', items: <scalar or literal choice> }` with no tuple, `contains` or nested structure. */
+function scalarList(node: Record<string, unknown>): boolean {
+  const items = node.items;
+  if (!record(items) || Object.hasOwn(node, 'contains') || Object.hasOwn(node, 'additionalItems')) return false;
+  if (readStringLiteralOptions(items) === null && (complexKeywords.some(key => Object.hasOwn(items, key)) || items.additionalProperties !== undefined)) return false;
+  return scalarSchema(items);
+}
+function scalarValue(value: unknown, list: boolean): boolean {
+  if (value === null || typeof value !== 'object') return true;
+  return list && Array.isArray(value) && value.every(item => item === null || typeof item !== 'object');
 }
 function at(value: unknown, path: readonly string[]): { present: boolean; value?: unknown } {
   for (const key of path) {

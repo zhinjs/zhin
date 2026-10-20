@@ -20,6 +20,8 @@ export const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
 const ROOT_FEATURE_CONFIG_KEYS = ['menuKeyword', 'menuStyle'] as const;
+/** Command routing keys the framework injects into every Plugin config schema. */
+const COMMAND_CONFIG_KEYS = ['commandNamespace', 'disabledCommands'] as const;
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
 export interface ComposedConfig {
@@ -242,7 +244,7 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
     );
   }
   const properties = schemaProperties(schema);
-  for (const key of ['commandNamespace', ...(!node.parent ? ROOT_FEATURE_CONFIG_KEYS : [])]) {
+  for (const key of [...COMMAND_CONFIG_KEYS, ...(!node.parent ? ROOT_FEATURE_CONFIG_KEYS : [])]) {
     if (Object.hasOwn(properties, key)) throw new ConfigSchemaCollisionError(node.id, key);
   }
   return deepFreeze({
@@ -257,6 +259,13 @@ async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime
         pattern: '^\\S+(?: \\S+)*$',
         description: 'Explicit command namespace prepended after the Endpoint commandPrefix.',
         'x-descriptionZh': '显式指令命名空间；在 Endpoint commandPrefix 之后参与路由。',
+      },
+      disabledCommands: {
+        type: 'array',
+        uniqueItems: true,
+        items: { type: 'string', minLength: 1, pattern: '^\\S+(?: \\S+)*$' },
+        description: 'Commands of this Plugin instance to leave out of routing, by local path without commandNamespace or parameters (e.g. "fanyi", "netease login"). A parent path also disables its subcommands.',
+        'x-descriptionZh': '不注册的指令：写插件内的指令路径（不含 commandNamespace 和参数，如 fanyi、netease login），写上级路径会连同子命令一起禁用。',
       },
       ...properties,
     },

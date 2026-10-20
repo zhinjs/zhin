@@ -69,6 +69,15 @@ pnpm check:plugin-capability-publish
 
 Before publishing, check `files`, the ESM entry, peer dependencies, the generated JavaScript in convention directories, and the changeset. **Install the packed tarball** into a fresh project and run the full Sandbox flow again — don't test only the workspace source.
 
+A standalone plugin from `zhin new --standalone` publishes from its own directory:
+
+```bash
+npx @zhin.js/cli pub --dry-run   # build and preview the tarball, without publishing
+npx @zhin.js/cli pub             # publish after confirming; add --yes in CI and other non-interactive shells
+```
+
+Write `npx @zhin.js/cli`, not `npx zhin`: without `@zhin.js/cli` installed in the plugin directory, `npx zhin` downloads a different, unmaintained npm package with that name (`zhin@3.x`). Only inside a bot project, where `@zhin.js/cli` is installed, does `npx zhin` mean the zhin CLI.
+
 ## Done when
 
 - A new user can install, configure minimally and get a first reply by following the README.

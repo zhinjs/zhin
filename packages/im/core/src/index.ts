@@ -15,6 +15,8 @@ export type * from '@zhin.js/interaction'
 export * from './types.js'
 export * from './utils.js'
 export * from './errors.js'
+// Tool-free AI completion contract for plugins; provided by @zhin.js/agent when AI is configured (#877)
+export * from './ai-completion-contract.js'
 
 // ── Built 模块 ──────────────────────────────────────────────────────
 // Models

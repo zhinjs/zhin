@@ -130,14 +130,14 @@ A plugin repository created with `zhin new <name> --standalone` has its own `zhi
 - packages resolved through `node_modules` are not watched, so edits do not hot reload;
 - a bot created with `pnpm create zhin-app` is itself a pnpm workspace, so `pnpm add` would also need `-w`.
 
-`zhin dev link` only switches **framework** packages; it does not handle plugin directories. Pick one:
+Pick one:
 
 | Goal | How | Hot reload |
 | --- | --- | --- |
 | Check the published artifact | `pnpm pack` in the plugin, `pnpm add -w <plugin dir>/<name>-<version>.tgz` in the bot root, then `plugins: { <instance>: <package> }` in the main config | No; pack and install again after changes |
-| Edit and try | Link the plugin directory into the bot's `plugins/` (the bot's `pnpm-workspace.yaml` includes `plugins/*`) and mount it by its `./` local path | Yes |
+| Edit and try | `zhin dev link <plugin dir>` (see [hot-reload a standalone plugin](#dev-link-plugin) below); or link the plugin directory into the bot's `plugins/` by hand and mount it by its `./` local path | Yes |
 
-Edit-and-try steps, in the bot root:
+Manual steps without the command, in the bot root:
 
 ```bash
 ln -s /path/to/my-plugin plugins/my-plugin   # Windows: mklink /J plugins\my-plugin C:\path\to\my-plugin
@@ -155,6 +155,33 @@ plugins:
 Then `pnpm dev`. Editing files in convention directories such as `commands/` or `tools/` reloads that capability (log `hmr_reload | scope: capability`). Editing a shared `src/` helper logs `restartRequired`, and dev mode restarts the process. If the plugin's zhin versions differ from the bot's, pnpm installs two copies and `zhin doctor` reports it; align the versions first.
 
 Afterwards remove the `plugins/my-plugin` link and the `plugins` entry, then run `pnpm install`.
+
+### Hot-reload a standalone plugin in a bot {#dev-link-plugin}
+
+A plugin from `zhin new --standalone` is developed and unit-tested in its own directory. To try it in a real bot while you edit, pass the plugin directory to the same command:
+
+```bash
+cd my-bot
+zhin dev link ../zhin-plugin-glossary            # instance name defaults to the package name without zhin.js- / zhin-plugin-: glossary
+zhin dev link ../zhin-plugin-glossary --as terms # pick the instance name
+pnpm dev                                          # edits in the plugin directory hot-reload
+zhin dev unlink glossary                          # undo
+```
+
+`zhin dev link <path>` looks at `<path>/package.json`: with a `zhin` field it is a plugin, otherwise a zhin checkout. Plugin mode does three things, recorded in the bot's `.zhin/dev-plugin-links.json`; `unlink` only reverts what it did and nobody changed since:
+
+1. creates `plugins/<instance>` in the bot as a link to the plugin directory (a junction on Windows);
+2. adds `<instance>: ./plugins/<instance>` to the main configuration `plugins` map plus an empty instance block; on `unlink`, an instance block you filled in is kept;
+3. points `zhin.js` / `@zhin.js/*` in the plugin's own `node_modules` (dev and test devDependencies) at the copies the bot resolves. Plugin code resolves imports from its real path, so without this the plugin and the bot each load their own copy and startup fails with `Multiple package locations for @zhin.js/command are not supported in one generation`. Packages the bot does not have (such as `@zhin.js/testing`) are left alone.
+
+Why not something else: only `./` references in the main configuration get file watching. `pnpm add ../plugin`, a tarball, adding the plugin directory to the pnpm workspace, or referencing the link under `plugins/` by package name all load the plugin as a `node_modules` package, without hot reload; `pnpm add <dir>` also brings in the plugin's own `@zhin.js/*`.
+
+Notes:
+
+- Neither side's `package.json` or lockfile changes, and no `pnpm install` runs;
+- running `pnpm install` in the plugin restores its own dependencies; run `zhin dev link` again afterwards (idempotent);
+- keep the bot's zhin versions inside the plugin's `peerDependencies` ranges; while linked, the plugin's unit tests also use the bot's copies;
+- editing a shared `src/` module restarts the runtime (`restartRequired`); editing a convention file reloads just that capability.
 
 ## 6. Ports and clean exit
 

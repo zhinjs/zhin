@@ -328,7 +328,8 @@
     "packages/im/plugin-runtime/tests/types/persistent-state.ts",
     "packages/toolkit/testing/tests/types/public.ts",
     "packages/im/schedule-feature/tests/types/config.ts",
-    "packages/im/feature-kit/tests/construction-types.fixture.ts"
+    "packages/im/feature-kit/tests/construction-types.fixture.ts",
+    "packages/im/agent/tests/types/ai-completion-contract.ts"
   ],
   "exclude": [
     "node_modules",

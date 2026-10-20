@@ -597,7 +597,7 @@ export const doctorCommand = new Command('doctor')
             name: 'Zhin 包单实例',
             status: 'warn',
             message: `同名包解析到多个物理位置: ${detail}`,
-            fix: '联调本地源码请运行 zhin dev link <zhin 源码路径>；否则统一版本后运行 pnpm dedupe（详见 authoring/local-dev）',
+            fix: '用 pnpm add 接入的独立插件请先 pnpm remove，改用 zhin dev link <插件目录>；联调本地源码请运行 zhin dev link <zhin 源码路径>；否则统一版本后运行 pnpm dedupe（详见 authoring/local-dev）',
           });
         } else {
           results.push({ name: 'Zhin 包单实例', status: 'ok', message: '每个 zhin 包只解析到一份实例' });

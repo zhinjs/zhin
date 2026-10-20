@@ -69,6 +69,15 @@ pnpm check:plugin-capability-publish
 
 发布前检查 `files`、ESM 入口、peer dependency、约定目录生成的 JavaScript 以及 changeset。**用打包后的产物**安装到一个新项目里，再跑一次 Sandbox 的完整流程——不要只测试 workspace 里的源码。
 
+`zhin new --standalone` 生成的独立插件在自己的目录里发布：
+
+```bash
+npx @zhin.js/cli pub --dry-run   # 构建并预览 tarball 内容，不发布
+npx @zhin.js/cli pub             # 确认后发布；CI 等非交互环境加 --yes
+```
+
+请写 `npx @zhin.js/cli`，不要写 `npx zhin`：插件目录里没有安装 `@zhin.js/cli` 时，`npx zhin` 会下载 npm 上同名的另一个旧包（`zhin@3.x`，已停止维护）。Bot 项目里装了 `@zhin.js/cli`，`npx zhin` 才指向它。
+
 ## 发布前的完成标准
 
 - 新用户照着 README 能完成安装、最小配置并收到第一条回复。

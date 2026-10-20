@@ -134,6 +134,23 @@ describe('hierarchical Plugin config', () => {
     });
   });
 
+  it('injects optional disabledCommands and reserves it for the framework', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
+    const config = await new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { disabledCommands: ['fanyi', 'netease login'] } });
+    expect(config.views.get(graph.root.children[0]!.id)).toEqual({ disabledCommands: ['fanyi', 'netease login'] });
+    await expect(new ConfigComposer().compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { disabledCommands: 'fanyi' } }))
+      .rejects.toMatchObject({ name: 'ConfigValidationError' });
+
+    const reserved = await configProject({ rootSchema: { type: 'object', properties: { disabledCommands: { type: 'array' } } }, childSchema: {} });
+    const reservedGraph = await new ProjectGraphService(await NodePackageResolver.create(reserved)).inspect(reserved, { configVersion: 2, plugins: { child: '@test/child' } });
+    await expect(new ConfigComposer().compose(reservedGraph, { configVersion: 2, plugins: { child: '@test/child' } })).rejects.toMatchObject({
+      name: 'ConfigSchemaCollisionError',
+      instanceKey: 'disabledCommands',
+    });
+  });
+
   it('preserves an inactive child namespace without mounting or validating its Plugin view', async () => {
     const root = await configProject({
       rootSchema: {},

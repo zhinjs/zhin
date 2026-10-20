@@ -27,4 +27,13 @@ defineMcp<{ account: string }>({ create(context) {
   context.project(feature);
   return { listTools: () => [], callTool: () => account };
 } });
-void account; void resource;
+// #877: has() is optional, so hand-written contexts without it stay valid.
+const handWritten: ConstructionContext = {
+  signal: new AbortController().signal,
+  owner: construction.owner,
+  generation: 1,
+  config: {},
+  use: <T>(): T => { throw new Error('missing'); },
+};
+const present: boolean | undefined = handWritten.has?.(token);
+void account; void resource; void present;
