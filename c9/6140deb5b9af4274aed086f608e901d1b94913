@@ -1,0 +1,27 @@
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_957089084438c4 110,253
+docs/troubleshooting/messages.md
+  s_079f1dc5e6308d::t_957089084438c4 1-71
+docs/en/troubleshooting/messages.md
+  s_079f1dc5e6308d::t_957089084438c4 1-71
+docs/paths/console.md
+  s_079f1dc5e6308d::t_957089084438c4 94
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_957089084438c4 94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c96140deb5b9af4274aed086f608e901d1b94913",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
