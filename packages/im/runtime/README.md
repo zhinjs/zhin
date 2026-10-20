@@ -47,3 +47,13 @@ pnpm --filter @zhin.js/runtime build
 pnpm --filter @zhin.js/runtime test
 pnpm --filter @zhin.js/runtime check:size
 ```
+
+
+## 配置解释的证据边界
+
+`PrimaryConfig.compositionMode` 由 RootRuntime 实际执行的配置合成分支记录为
+`document` 或 `custom`；没有标记的旧 authority 视为 `unknown`。它随原有
+PrimaryConfig generation 资源提交、保留和回滚，不记录配置值的历史来源。
+`createPrimaryConfig()` 未指定模式时使用 `unknown`，不能根据值相等推断模式。
+插件的最终 ConfigView 以同一 snapshot 的 `config.get(owner)` 为准；
+PrimaryConfig.expanded 使用 Root EnvStore，不能用其中的子段替代 child owner 的环境覆盖。

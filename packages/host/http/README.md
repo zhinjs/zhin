@@ -70,3 +70,12 @@ path; links outside the root, blocked path segments, and dangling links are deni
 checked through their nearest existing parent and checked again after parent creation. File-tree
 and environment-file inventory use the same boundary. This covers existing symlink layouts; it does
 not provide an OS sandbox against a local process concurrently replacing directories during access.
+
+
+### Saved configuration explanations
+
+The full-scope `config:explain` Console RPC reuses the composition root's
+`PluginManagementPort.explainConfiguration(instanceKey, expectedRevision)` authority.
+The route returns metadata only, rejects demo before reading configuration, and normalizes
+errors without forwarding validator details or causes. It does not apply/restart the Runtime,
+expand values for clients, execute plugin code, or perform platform/network actions.
