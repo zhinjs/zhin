@@ -149,7 +149,41 @@ Notes:
 
 To temporarily disable an instance, add its alias to `disable_plugins`. Keep its package dependency, `plugins` mapping and top-level business configuration. Removing a declaration deletes the instance; disabling does not uninstall it.
 
-## 5. Ports and clean exit
+## 5. Trying a standalone plugin in a bot {#standalone-plugin}
+
+A plugin repository created with `zhin new <name> --standalone` has its own `zhin.js` / `@zhin.js/*` dev dependencies for tests and type checks. To try it in a bot, **do not** run `pnpm add <plugin dir>`:
+
+- a `link:` dependency resolves `@zhin.js/tool` and friends from the plugin's **own** `node_modules`, a different physical location from the bot's copy, so startup fails with `Multiple package locations for @zhin.js/tool are not supported in one generation` (section 1);
+- packages resolved through `node_modules` are not watched, so edits do not hot reload;
+- a bot created with `pnpm create zhin-app` is itself a pnpm workspace, so `pnpm add` would also need `-w`.
+
+`zhin dev link` only switches **framework** packages; it does not handle plugin directories. Pick one:
+
+| Goal | How | Hot reload |
+| --- | --- | --- |
+| Check the published artifact | `pnpm pack` in the plugin, `pnpm add -w <plugin dir>/<name>-<version>.tgz` in the bot root, then `plugins: { <instance>: <package> }` in the main config | No; pack and install again after changes |
+| Edit and try | Link the plugin directory into the bot's `plugins/` (the bot's `pnpm-workspace.yaml` includes `plugins/*`) and mount it by its `./` local path | Yes |
+
+Edit-and-try steps, in the bot root:
+
+```bash
+ln -s /path/to/my-plugin plugins/my-plugin   # Windows: mklink /J plugins\my-plugin C:\path\to\my-plugin
+pnpm install                                 # the plugin becomes a workspace member; its dev deps link to the bot's store
+npx zhin doctor                              # "Zhin 包单实例" (single instance) should pass
+```
+
+```yaml
+# zhin.config.yml
+configVersion: 2
+plugins:
+  my-plugin: ./plugins/my-plugin
+```
+
+Then `pnpm dev`. Editing files in convention directories such as `commands/` or `tools/` reloads that capability (log `hmr_reload | scope: capability`). Editing a shared `src/` helper logs `restartRequired`, and dev mode restarts the process. If the plugin's zhin versions differ from the bot's, pnpm installs two copies and `zhin doctor` reports it; align the versions first.
+
+Afterwards remove the `plugins/my-plugin` link and the `plugins` entry, then run `pnpm install`.
+
+## 6. Ports and clean exit
 
 The control plane listens on `http.host`/`http.port` (default `127.0.0.1:8086`). On `EADDRINUSE`, find the owner first:
 
@@ -169,7 +203,7 @@ Current exit behavior:
 
 Plugins must release their own timers and connections in dispose; a dispose that never finishes is cut off by the 5-second budget and shows up as `runtime` in `stillStopping`.
 
-## 6. Checklist
+## 7. Checklist
 
 - [ ] Every `link:`/`file:`/`workspace:` dependency found by `grep` is expected;
 - [ ] `pnpm why @zhin.js/command` (and `zhin.js`, `@zhin.js/tool`, ...) shows a single resolved path per package;

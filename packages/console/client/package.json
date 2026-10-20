@@ -26,7 +26,8 @@
   },
   "files": [
     "dist",
-    "client"
+    "client",
+    "!client/**/*.test.ts"
   ],
   "devDependencies": {
     "@types/react": "^19.2.18",

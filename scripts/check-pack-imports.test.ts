@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   entryTargets,
   findBrokenPackImports,
+  findPackLayoutProblems,
   publishedManifest,
   relativeSpecifiers,
 } from './check-pack-imports.mjs';
@@ -132,5 +133,78 @@ describe('check-pack-imports', () => {
       'lib/index.d.ts': "export * from './gone.js';",
     });
     expect(result).toEqual({ errors: [], warnings: [] });
+  });
+});
+
+function layout(files: Record<string, string>, manifest: Record<string, unknown> = { type: 'module' }) {
+  return findPackLayoutProblems({
+    files: Object.keys(files),
+    manifest,
+    readFile: async (file: string) => files[file] ?? '',
+  });
+}
+
+describe('check-pack-imports layout', () => {
+  it('accepts the standard layout', async () => {
+    const result = await layout({
+      'package.json': '{}',
+      'plugin.js': 'export default {};',
+      'commands/hello/index.js': 'export default {};',
+      'lib/index.js': 'export {};\n//# sourceMappingURL=index.js.map',
+      'lib/index.js.map': JSON.stringify({ version: 3, sources: ['../src/index.ts'], sourcesContent: ['export {};'] }),
+      'lib/index.d.ts': 'export {};',
+      'schema.json': '{}',
+      'README.md': '',
+    }, { type: 'module', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js' } });
+    expect(result).toEqual({ errors: [], warnings: [] });
+  });
+
+  it('requires zhin.entry to be packed JavaScript', async () => {
+    expect((await layout({ 'lib/index.js': '' }, { zhin: { entry: './plugin.js' } })).errors)
+      .toEqual(['zhin.entry -> ./plugin.js is not in the tarball']);
+    expect((await layout({ 'plugin.ts': '' }, { zhin: { entry: './plugin.ts' } })).errors)
+      .toEqual(['zhin.entry -> ./plugin.ts is not JavaScript']);
+  });
+
+  it('rejects packed tests but not a command that happens to be called test', async () => {
+    const result = await layout({
+      'src/mime.test.ts': '',
+      'tests/plugin.ts': '',
+      'commands/test/index.js': '',
+    });
+    expect(result.errors).toEqual(['layout: 2 test file(s) packed, e.g. src/mime.test.ts, tests/plugin.ts']);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('warns about packed build configuration', async () => {
+    const result = await layout({ 'tsconfig.build.json': '{}', 'vitest.config.ts': '', 'lib/x.tsbuildinfo': '' });
+    expect(result.errors).toEqual([]);
+    expect(result.warnings[0]).toBe('layout: build configuration packed: lib/x.tsbuildinfo, tsconfig.build.json, vitest.config.ts');
+  });
+
+  it('warns when source maps point at sources that are neither packed nor inlined', async () => {
+    const map = (sources: string[], sourcesContent?: string[]) => JSON.stringify({ version: 3, sources, sourcesContent });
+    const broken = await layout({
+      'lib/a.js.map': map(['../src/a.ts']),
+      'lib/a.d.ts.map': map(['../src/a.ts']),
+    });
+    expect(broken.warnings).toEqual([
+      'layout: 1 source map / 1 declaration map source(s) not packed or inlined, e.g. lib/a.d.ts.map -> src/a.ts',
+    ]);
+    const shipped = await layout({ 'lib/a.js.map': map(['../src/a.ts']), 'src/a.ts': '' });
+    expect(shipped.warnings).toEqual([]);
+    const inlined = await layout({ 'lib/a.js.map': map(['../src/a.ts'], ['export {}']) });
+    expect(inlined.warnings).toEqual([]);
+  });
+
+  it('warns about TypeScript sources no source map refers to', async () => {
+    const result = await layout({
+      'commands/hello/index.js': '',
+      'commands/hello/index.ts': '',
+      'lib/index.d.ts': '',
+    });
+    expect(result.warnings).toEqual([
+      'layout: 1 TypeScript source file(s) packed without a source map referring to them, e.g. commands/hello/index.ts',
+    ]);
   });
 });

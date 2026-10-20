@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util';
 import { parsePluginConfigSchema } from '@zhin.js/runtime';
 import type { ConsoleConfigExplanation, ConsoleConfigFieldEvidence } from '@zhin.js/console-protocol';
+import { readStringLiteralOptions } from '../plugin-runtime/console/string-literal-options.js';
 
 type Projection = Pick<ConsoleConfigExplanation, 'projection' | 'reason' | 'fields'>;
 type Schema = Readonly<Record<string, unknown>>;
@@ -16,8 +17,11 @@ export function explainConfigFields(schema: Schema, input: unknown, current: unk
   let issue: Projection['reason'];
   const visit = (node: unknown, path: readonly string[], inheritedSecret: boolean): void => {
     if (issue) return;
-    if (!record(node) || complexKeywords.some(key => Object.hasOwn(node, key))
-      || (node.additionalProperties !== undefined && node.additionalProperties !== false)) { issue = 'complex-schema'; return; }
+    if (!record(node)) { issue = 'complex-schema'; return; }
+    // A fixed string-literal union is the one `anyOf` the Console form edits as a plain choice; its value is a string scalar.
+    const literalChoice = readStringLiteralOptions(node) !== null;
+    if (!literalChoice && (complexKeywords.some(key => Object.hasOwn(node, key))
+      || (node.additionalProperties !== undefined && node.additionalProperties !== false))) { issue = 'complex-schema'; return; }
     if (path.length > 8 || path.some(key => !key || key.length > 128 || forbiddenKeys.has(key))) { issue = 'bound-exceeded'; return; }
     const metadata = record(node['x-zhin-config']) ? node['x-zhin-config'] : {};
     const secret = inheritedSecret || node.writeOnly === true || metadata.secret === true || metadata.hidden === true || metadata.component === 'password';
@@ -26,7 +30,8 @@ export function explainConfigFields(schema: Schema, input: unknown, current: unk
       for (const [key, child] of Object.entries(node.properties ?? {})) visit(child, [...path, key], secret);
       return;
     }
-    if (!['string', 'number', 'integer', 'boolean', 'null'].includes(String(node.type)) || Array.isArray(node.type)) { issue = 'complex-schema'; return; }
+    const scalarType = ['string', 'number', 'integer', 'boolean', 'null'].includes(String(node.type)) && !Array.isArray(node.type);
+    if (!literalChoice && !scalarType) { issue = 'complex-schema'; return; }
     if (path.length === 0 || fields.length >= 128) { issue = 'bound-exceeded'; return; }
     fields.push({ path: Object.freeze([...path]), secret });
   };

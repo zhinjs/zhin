@@ -51,6 +51,15 @@ export const newCommand = new Command('new')
   .action(async (pluginName: string, options: NewPluginOptions) => {
     try {
       let name = pluginName;
+      // Without a TTY inquirer waits forever for an answer (CI, agents, `< /dev/null`): fail fast instead.
+      const interactive = Boolean(process.stdin.isTTY);
+      if (!interactive && (!name || !options.type)) {
+        logger.error(
+          `非交互环境需要显式参数：zhin new <plugin-name> --type <${PLUGIN_KINDS.join('|')}>`
+            + '（缺少：' + [!name && '插件名称', !options.type && '--type'].filter(Boolean).join('、') + '）',
+        );
+        process.exit(1);
+      }
       if (!name) {
         const { pluginName: inputName } = await inquirer.prompt([
           {
@@ -126,9 +135,11 @@ export const newCommand = new Command('new')
         logger.log('📝 下一步操作：');
         logger.log(`  cd ${name}`);
         logger.log('  pnpm test && pnpm typecheck');
-        logger.log('  在 Bot 项目里挂载试用：pnpm add <本插件目录的路径>，再把');
-        logger.log(`    plugins: { ${name}: "${packageName}" }`);
-        logger.log('  在 Bot 主配置设置 configVersion: 2、plugins: { 实例名: 包名 }，然后 pnpm dev');
+        logger.log('  在 Bot 项目里挂载试用：在插件目录 pnpm pack，在 Bot 项目根执行');
+        logger.log(`    pnpm add -w <插件目录>/${packageName.replace(/^@/, '').replace('/', '-')}-0.1.0.tgz`);
+        logger.log(`  在 Bot 主配置设置 configVersion: 2、plugins: { ${name}: "${packageName}" }，然后 pnpm dev`);
+        logger.log('  不要直接 pnpm add <插件目录>：插件自己的 devDependencies 会让 zhin 包出现两份实例；');
+        logger.log('    需要热重载时的联调方式见 https://zhin.js.org/authoring/local-dev#standalone-plugin');
         logger.log('  发布到 npm：在插件目录执行 pnpm publish（prepack 会自动构建 plugin.js）');
         return;
       }
@@ -433,7 +444,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;
 
-  const standaloneUse = `在 Bot 项目安装本插件：\`pnpm add ${packageName}\`（发布前可用 \`pnpm add ../${pluginName}\` 安装本地目录）。主配置使用以下格式；实例业务配置在顶层同名块，结构见 \`schema.json\`：
+  const standaloneUse = `在 Bot 项目安装本插件：\`pnpm add ${packageName}\`（发布前联调：在本目录 \`pnpm pack\` 后在 Bot 根目录 \`pnpm add -w <tgz 路径>\`；需要热重载时把本目录链接进 Bot 的 \`plugins/\` 并以 \`./plugins/${pluginName}\` 挂载，见 https://zhin.js.org/authoring/local-dev#standalone-plugin。不要直接 \`pnpm add <本目录>\`，会出现 zhin 包多实例）。主配置使用以下格式；实例业务配置在顶层同名块，结构见 \`schema.json\`：
 
 \`\`\`yaml
 configVersion: 2
@@ -606,6 +617,7 @@ describe('${packageName}', () => {
 `;
   } else if (kind === 'service') {
     testContent = `import { describe, expect, it } from 'vitest';
+import { runPluginSetup } from '@zhin.js/testing';
 import plugin from '../plugin.ts';
 
 describe('${packageName}', () => {
@@ -613,29 +625,17 @@ describe('${packageName}', () => {
     expect(plugin.name).toBe('${pluginName}');
   });
 
-  it('setup registers a lifecycle dispose', () => {
-    const disposes: Array<() => void> = [];
-    const context = {
-      config: { get: () => ({}) },
-      resources: {
-        has: () => false,
-        use: () => {
-          throw new Error('resource not available in test');
-        },
-      },
-      lifecycle: {
-        add: (dispose: () => void) => {
-          disposes.push(dispose);
-        },
-      },
-    };
-    plugin.setup?.(context as never);
-    expect(disposes.length).toBeGreaterThan(0);
+  it('runs setup against typed fakes and disposes cleanly', async () => {
+    // runPluginSetup provides in-memory Database / Schedule / Outbound hosts; see docs/authoring/testing.md.
+    const fake = await runPluginSetup(plugin);
+    expect(fake.missingRequirements(plugin)).toEqual([]);
+    await fake.dispose();
   });
 });
 `;
   } else {
     testContent = `import { describe, expect, it } from 'vitest';
+import { createFakeMessage, runCommand, runPluginSetup } from '@zhin.js/testing';
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import mainCommand from '../commands/${pluginName}/index.ts';
@@ -651,18 +651,24 @@ describe('${packageName}', () => {
     expect(parseCommandDefinition(echoCommand)).toBe(echoCommand);
   });
 
+  // runCommand calls execute() with a typed context from the fake plugin (no \`as never\`).
+  // It skips routing, parameter parsing and permit; use PluginTestKit for those (docs/authoring/testing.md).
   it('main command returns greeting text', async () => {
-    const result = await mainCommand.execute({ args: [], params: {}, input: undefined } as never);
+    const fake = await runPluginSetup(plugin);
+    const result = await runCommand(fake, mainCommand, { input: createFakeMessage() });
     expect(String(result)).toContain('运行中');
+    await fake.dispose();
   });
 
   it('echo command echoes the dynamic segment', async () => {
-    const result = await echoCommand.execute({
+    const fake = await runPluginSetup(plugin);
+    const result = await runCommand(fake, echoCommand, {
+      input: createFakeMessage({ content: '${pluginName}-echo 你好' }),
       args: ['你好'],
       params: { text: '你好' },
-      input: undefined,
-    } as never);
+    });
     expect(String(result)).toContain('你好');
+    await fake.dispose();
   });
 });
 `;

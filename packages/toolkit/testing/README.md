@@ -74,7 +74,8 @@ The example requires the mounted plugin to provide `suite checkin`. Roles are su
 the fixture; this verifies command admission, not a platform's real role projection. `permissions` is
 the real PermissionHost used by the IM runtime.
 
-Omitting `config` creates an empty v2 application. The kit does not read a user's configuration file
+Pass `createConfigDocument(path)` from `@zhin.js/config-file` as `config` to run on a real configuration file;
+edit the file and call `reloadSource(path)` to apply it, as the CLI's file watcher would. Omitting `config` creates an empty v2 application. The kit does not read a user's configuration file
 or infer instance mounts from `package.json#zhin.plugins`; pass the disposable application's v2
 declaration explicitly when testing child instances.
 

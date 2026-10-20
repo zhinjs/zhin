@@ -51,7 +51,7 @@ export async function runPluginSearch(keyword: string | undefined, options: Sear
         logger.log('');
         logger.log('💡 提示：');
         logger.log('  - 尝试使用不同的关键词');
-        logger.log('  - 访问插件市场: https://zhin.pages.dev/plugins');
+        logger.log('  - 在 npm 按关键词浏览: https://www.npmjs.com/search?q=keywords%3Azhin.js');
         logger.log('  - 在 GitHub 搜索: https://github.com/topics/zhin.js');
         return;
       }
@@ -81,7 +81,7 @@ export async function runPluginSearch(keyword: string | undefined, options: Sear
       logger.log('💡 提示：');
       logger.log('  - 使用 zhin packages info <package> 查看插件详情');
       logger.log('  - 使用 zhin packages install <package> 安装插件');
-      logger.log('  - 访问 https://zhin.pages.dev/plugins 查看完整列表');
+      logger.log('  - 访问 https://www.npmjs.com/search?q=keywords%3Azhin.js 查看完整列表');
 
     } catch (error) {
       logger.error('搜索失败，请检查网络连接');
