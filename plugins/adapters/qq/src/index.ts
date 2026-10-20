@@ -25,10 +25,15 @@ export {
 
 export {
   formatOutbound,
+  formatOutboundMessages,
+  collectOutboundImageSizes,
+  type FormatOutboundMessagesOptions,
   resolveMediaFile,
   type QqOutboundElem,
   type QqOutboundMessage,
 } from './outbound.js';
+
+export { imageSizeFromBytes, probeImageSize, type QqImageSize } from './image-size.js';
 
 export {
   QqHttpEndpoint,
