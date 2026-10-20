@@ -1,0 +1,45 @@
+.changeset/config-field-explanation.md
+  s_079f1dc5e6308d::t_ac969c76858e59 1-8
+basic/cli/src/plugin-management/config-explanation.ts
+  s_079f1dc5e6308d::t_19333e0d58fe13 1-60
+basic/cli/src/plugin-management/workflow.ts
+  s_079f1dc5e6308d::t_70fc1e1a845386 18-19,181,240-255,261-291
+basic/cli/tests/config-explanation.test.ts
+  s_079f1dc5e6308d::t_c5ac16aa91aac5 1-166
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_11f9f012d2ad7d 95-102
+docs/paths/console.md
+  s_079f1dc5e6308d::t_e67b1e6d0c1eae 95-102
+packages/console/protocol/README.md
+  s_079f1dc5e6308d::t_94c2756008c2f5 21-38
+packages/console/protocol/src/index.ts
+  s_079f1dc5e6308d::t_967d96fdb760d0 465,498-514
+packages/host/http/README.md
+  s_079f1dc5e6308d::t_9952bc1985acef 73-81
+packages/host/http/src/console-rpc.ts
+  s_079f1dc5e6308d::t_50a50b06ec96b6 7,140,337-348
+packages/im/runtime/README.md
+  s_079f1dc5e6308d::t_c4efb235c020fe 50-59
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_079f1dc5e6308d::t_7516589db58f36 57-58,123
+packages/im/runtime/src/primary-config.ts
+  s_079f1dc5e6308d::t_aec84c77337669 12-13,27,32
+packages/im/runtime/src/root-runtime.ts
+  s_079f1dc5e6308d::t_df40b9c7e4c297 383,568,627
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2b4d6dc7cd76d0102a07cedb01df7d39a7be64ef",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
