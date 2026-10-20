@@ -1,0 +1,19 @@
+packages/im/runtime/src/manifest.ts
+  s_a467b02185c88e::t_2e1b8c5a095ea6 66,109-142,147-148,153-157,252-256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "29d0be9dc4a568ca922ed9b02075a0ef1d133565",
+  "prompts": {},
+  "sessions": {
+    "s_a467b02185c88e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0319c-34d0-7a61-a360-f3203f30d70a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
