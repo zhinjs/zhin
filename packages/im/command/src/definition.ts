@@ -584,7 +584,10 @@ function resolveScene(
   });
 }
 
-/** Pure canonical sender projection shared with read-only command condition simulation. */
+/**
+ * Pure canonical sender projection shared with read-only command condition simulation.
+ * @internal Command dispatcher projection helper.
+ */
 export function resolveCommandSender(
   input: Pick<CommandMessage, 'sender'>,
   metadata: Readonly<Record<string, unknown>> | undefined,
