@@ -1,0 +1,19 @@
+plugins/utils/short-url/tests/short-url-runtime.test.ts
+  s_079f1dc5e6308d::t_78353e94d1d0f8 3,15-16,19-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "efc324dfccca15728ddc3535f7696a024e1b54f3",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
