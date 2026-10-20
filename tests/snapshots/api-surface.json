@@ -129,6 +129,7 @@
     "export{stampToolGeneration,}from './tool/tool-system.js';"
   ],
   "@zhin.js/core": [
+    "export * from './ai-completion-contract.js'",
     "export * from './built/ai-access.js'",
     "export * from './built/ai-outbound/index.js'",
     "export * from './built/ai-trigger.js'",
