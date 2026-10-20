@@ -18,7 +18,7 @@ import {
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { formatOutboundMessages } from './outbound.js';
+import { collectOutboundImageSizes, formatOutboundMessages } from './outbound.js';
 import {
   formatInboundContent,
   parseCompoundMessageId,
@@ -160,8 +160,9 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥），拆成多条按序发送
-    const messages = formatOutboundMessages(payload);
+    // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
+    // 拿不到 URL/尺寸的媒体降级为独立消息先发
+    const messages = formatOutboundMessages(payload, { imageSizes: await collectOutboundImageSizes(payload) });
     const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
@@ -419,8 +420,9 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥），拆成多条按序发送
-    const messages = formatOutboundMessages(payload);
+    // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
+    // 拿不到 URL/尺寸的媒体降级为独立消息先发
+    const messages = formatOutboundMessages(payload, { imageSizes: await collectOutboundImageSizes(payload) });
     const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();

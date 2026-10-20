@@ -18,6 +18,7 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { EndpointDeliveryError, isMediaRef } from '@zhin.js/im-contract';
 import type { QqWireSegment } from './protocol.js';
+import { probeImageSize, type QqImageSize } from './image-size.js';
 
 const logger = getLogger('qq');
 
@@ -296,27 +297,96 @@ const SPLIT_MEDIA_TYPES = new Set(['image', 'audio', 'video']);
 /** 走 msg_type=2 的 markdown/按钮段 */
 const MARKDOWN_MESSAGE_TYPES = new Set(['markdown', 'keyboard', 'button']);
 
+export interface FormatOutboundMessagesOptions {
+  /** 公网图片 URL → 尺寸；有尺寸的图片才能嵌入 markdown（见 collectOutboundImageSizes）。 */
+  readonly imageSizes?: ReadonlyMap<string, QqImageSize>;
+}
+
+function isElemOf(types: Set<string>) {
+  return (part: string | QqOutboundElem): part is QqOutboundElem => typeof part !== 'string' && types.has(part.type);
+}
+
 /**
  * 渲染后 payload → 按序发送的 QQ Sendable 列表。
  *
  * QQ 单条消息的 msg_type 只能是一种：富媒体（7，media.file_info）与 markdown/按钮（2）
- * 互斥，SDK 后处理的段会覆盖 msg_type，导致图片被静默丢弃。markdown 图片语法要求可公网
- * 访问的 URL，而 v2 /files 上传只返回 file_info，base64/本地渲染图拿不到 URL；故媒体段
- * 拆为独立消息先发，markdown + 按钮作为最后一条（返回其消息 ID）。reply 段随每条消息
- * 携带，保持被动回复。其余情况与 formatOutbound 一致（单条）。
+ * 互斥，SDK 后处理的段会覆盖 msg_type，导致图片被静默丢弃。处理顺序：
+ * 1. 公网 URL 图片且已知尺寸：按 QQ markdown 语法 `![图片 #宽px #高px](url)` 嵌入同一
+ *    markdown 段（开放平台会下载转存），仍为一条消息；
+ * 2. 其余媒体（base64 / 本地渲染图：v2 /files 上传只返回 file_info，拿不到 URL；或尺寸
+ *    未知、模板 markdown 无法拼接）降级为独立富媒体消息先发，markdown + 按钮作为最后一条
+ *    （返回其消息 ID）。reply 段随每条消息携带，保持被动回复。
+ * 不含媒体与 markdown/按钮冲突时与 formatOutbound 一致（单条）。
  */
-export function formatOutboundMessages(payload: unknown): QqOutboundMessage[] {
+export function formatOutboundMessages(payload: unknown, options: FormatOutboundMessagesOptions = {}): QqOutboundMessage[] {
   const body = formatOutbound(payload);
   if (!Array.isArray(body)) return [body as QqOutboundMessage];
   const elems = body as ReadonlyArray<string | QqOutboundElem>;
-  const isType = (types: Set<string>) => (part: string | QqOutboundElem): part is QqOutboundElem =>
-    typeof part !== 'string' && types.has(part.type);
-  const media = elems.filter(isType(SPLIT_MEDIA_TYPES));
-  if (media.length === 0 || !elems.some(isType(MARKDOWN_MESSAGE_TYPES))) return [body];
-  const replies = elems.filter(isType(new Set(['reply'])));
-  const rest = elems.filter((part) => !isType(SPLIT_MEDIA_TYPES)(part));
+  const isMedia = isElemOf(SPLIT_MEDIA_TYPES);
+  if (!elems.some(isMedia) || !elems.some(isElemOf(MARKDOWN_MESSAGE_TYPES))) return [body];
+
+  const markdownIndex = elems.findIndex(isElemOf(new Set(['markdown'])));
+  const markdownElem = markdownIndex >= 0 ? elems[markdownIndex] as QqOutboundElem : undefined;
+  const markdownContent = markdownElem ? markdownElem.data.content : '';
+  const embedded = new Set<QqOutboundElem>();
+  let merged: QqOutboundElem | undefined;
+  if (typeof markdownContent === 'string') {
+    const before: string[] = [];
+    const after: string[] = [];
+    elems.forEach((part, index) => {
+      if (!isMedia(part) || part.type !== 'image' || typeof part.data.url !== 'string') return;
+      const size = options.imageSizes?.get(part.data.url);
+      if (!size) return;
+      (markdownIndex < 0 || index < markdownIndex ? before : after)
+        .push(`![图片 #${size.width}px #${size.height}px](${part.data.url})`);
+      embedded.add(part);
+    });
+    if (embedded.size > 0) {
+      merged = { type: 'markdown', data: { content: [...before, markdownContent, ...after].filter((piece) => piece.trim()).join('\n\n') } };
+    }
+  }
+
+  const replies = elems.filter(isElemOf(new Set(['reply'])));
+  const separate: QqOutboundElem[] = [];
+  const rest: Array<string | QqOutboundElem> = [];
+  let mergedPlaced = false;
+  for (const part of elems) {
+    if (merged && (part === markdownElem || (!markdownElem && embedded.has(part as QqOutboundElem)))) {
+      if (!mergedPlaced) rest.push(merged);
+      mergedPlaced = true;
+    } else if (embedded.has(part as QqOutboundElem)) {
+      continue;
+    } else if (isMedia(part)) {
+      separate.push(part);
+    } else {
+      rest.push(part);
+    }
+  }
   return [
-    ...media.map((item): QqOutboundMessage => (replies.length ? [...replies, item] : item)),
+    ...separate.map((item): QqOutboundMessage => (replies.length ? [...replies, item] : item)),
     rest.length === 1 ? rest[0]! : rest,
   ];
+}
+
+/**
+ * 预先探测需要嵌入 markdown 的公网图片尺寸：仅当 payload 同时含图片与 markdown/按钮时，
+ * 对 http(s) URL 图片并发读取文件头；失败的图片不入表，formatOutboundMessages 会降级。
+ */
+export async function collectOutboundImageSizes(
+  payload: unknown,
+  probe: (url: string) => Promise<QqImageSize | undefined> = (url) => probeImageSize(url),
+): Promise<Map<string, QqImageSize>> {
+  const sizes = new Map<string, QqImageSize>();
+  const segments = toSegmentList(payload).filter((item): item is QqWireSegment => typeof item !== 'string');
+  if (!segments.some((item) => MARKDOWN_MESSAGE_TYPES.has(item.type))) return sizes;
+  const urls = new Set<string>();
+  for (const item of segments) {
+    const media = item.type === 'image' ? (item.data ?? {}).media : undefined;
+    if (isMediaRef(media) && media.kind === 'url' && /^https?:\/\//i.test(media.value)) urls.add(media.value);
+  }
+  await Promise.all([...urls].map(async (url) => {
+    const size = await probe(url);
+    if (size) sizes.set(url, size);
+  }));
+  return sizes;
 }
