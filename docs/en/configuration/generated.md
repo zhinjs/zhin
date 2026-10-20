@@ -1155,6 +1155,18 @@ _This Schema declares no fields._
 
 _This Schema declares no fields._
 
+### roulette
+
+[`plugins/games/roulette/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/roulette/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `roulette.chambers` | integer | no | `6` | 弹巢数量，其中一发是实弹 |
+| `roulette.maxPlayers` | integer | no | `6` | 单局最多玩家数 |
+| `roulette.turnTimeoutSeconds` | integer | no | `60` | 轮到的玩家超过这个秒数不开枪，判负 |
+| `roulette.lobbyTimeoutSeconds` | integer | no | `300` | 开局后超过这个秒数仍未开始，自动解散 |
+| `roulette.muteSeconds` | integer | no | `60` | 开启禁言惩罚的群里，输家被禁言的秒数（每个群默认关闭） |
+
 ### rps
 
 [`plugins/games/rps/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/rps/schema.json)
@@ -1787,6 +1799,30 @@ _This Schema declares no fields._
 | `content-moderation.sources[].headers` | object | no | — | — |
 | `content-moderation.sources[].timeoutMs` | number | no | `5000` | — |
 | `content-moderation.sources[].forceUpload` | boolean | no | `false` | 强制下载图片后上传，不传 URL |
+
+### earthquake
+
+[`plugins/utils/earthquake/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/earthquake/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `earthquake.sources` | array&lt;string: `"cenc"`, `"usgs"`&gt; | no | `["cenc","usgs"]` | 启用的数据源及优先顺序；合并同一地震时排在前面的数据源提供地点文字，某个数据源失败时由其余数据源兜底 |
+| `earthquake.cencUrls` | array&lt;string&gt; | no | `["https://api.wolfx.jp/cenc_eqlist.json","https://ceic.ac.cn/data/data.json"]` | CENC 地震目录地址，按顺序尝试（首个为主源，其余为备用镜像）；仅支持 HTTPS，最多 5 个 |
+| `earthquake.usgsFeed` | string: `"significant_hour"`, `"significant_day"`, `"4.5_hour"`, `"4.5_day"`, `"2.5_hour"`, `"2.5_day"`, `"1.0_hour"`, `"1.0_day"` | no | `"2.5_day"` | USGS GeoJSON 汇总源名称（震级下限_时间范围） |
+| `earthquake.pollCron` | string | no | `"0 */2 * * * *"` | 订阅轮询频率（6 段 Cron：秒 分 时 日 月 周） |
+| `earthquake.timezone` | string | no | `"Asia/Shanghai"` | 显示发震时刻使用的 IANA 时区 |
+| `earthquake.requestTimeoutMs` | number | no | `10000` | 单次 HTTP 请求超时（毫秒） |
+| `earthquake.maxRetries` | number | no | `2` | 网络错误、超时、429 与 5xx 的重试次数（不含首次请求） |
+| `earthquake.retryBaseDelayMs` | number | no | `1000` | 指数退避的首次等待（毫秒），每次重试翻倍并加入随机抖动 |
+| `earthquake.retryMaxDelayMs` | number | no | `30000` | 单次退避或 Retry-After 等待上限（毫秒）；服务端要求更久时本轮放弃并冷却该数据源 |
+| `earthquake.defaultMinMagnitude` | number | no | `5` | 订阅未指定震级时使用的最小震级 |
+| `earthquake.queryMinMagnitude` | number | no | `3` | 「地震」查询未指定震级时使用的最小震级 |
+| `earthquake.queryLimit` | number | no | `5` | 「地震」查询默认列出的条数 |
+| `earthquake.maxEventAgeMinutes` | number | no | `60` | 只推送发震时间在此分钟数以内的地震，避免推送迟到或重放的旧事件 |
+| `earthquake.pushLimit` | number | no | `3` | 每个会话在一个限流窗口内最多推送的消息数 |
+| `earthquake.pushWindowMinutes` | number | no | `10` | 推送限流窗口长度（分钟） |
+| `earthquake.maxEventsPerMessage` | number | no | `5` | 单条推送消息最多列出的地震数，其余以数量概括 |
+| `earthquake.maxSubscriptions` | number | no | `100` | 本实例所有会话的订阅总数上限（每个会话最多一个订阅） |
 
 ### group-suite
 

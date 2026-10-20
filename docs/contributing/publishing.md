@@ -127,7 +127,7 @@ done < names.txt
 
 ## 包清单
 
-以下 99 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
+以下 101 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
 
 ### `basic/`（5）
 
@@ -223,7 +223,7 @@ done < names.txt
 
 - [ ] `@zhin.js/process-monitor` — `plugins/features/process-monitor`
 
-### `plugins/games/`（10）
+### `plugins/games/`（11）
 
 - [ ] `@zhin.js/plugin-blackjack` — `plugins/games/blackjack`
 - [ ] `@zhin.js/plugin-dice-duel` — `plugins/games/dice-duel`
@@ -231,6 +231,7 @@ done < names.txt
 - [ ] `@zhin.js/plugin-guess-number` — `plugins/games/guess-number`
 - [ ] `@zhin.js/plugin-game-hub` — `plugins/games/hub`
 - [ ] `@zhin.js/plugin-idiom-chain` — `plugins/games/idiom-chain`
+- [ ] `@zhin.js/plugin-roulette` — `plugins/games/roulette`
 - [ ] `@zhin.js/plugin-rps` — `plugins/games/rps`
 - [ ] `@zhin.js/plugin-text-adventure` — `plugins/games/text-adventure`
 - [ ] `@zhin.js/plugin-tic-tac-toe` — `plugins/games/tic-tac-toe`
@@ -241,7 +242,7 @@ done < names.txt
 - [ ] `@zhin.js/service-activity-feedback` — `plugins/services/activity-feedback`
 - [ ] `@zhin.js/service-typesafe` — `plugins/services/typesafe`
 
-### `plugins/utils/`（17）
+### `plugins/utils/`（18）
 
 - [ ] `@zhin.js/plugin-60s` — `plugins/utils/60s`
 - [ ] `@zhin.js/plugin-answers` — `plugins/utils/answers`
@@ -249,6 +250,7 @@ done < names.txt
 - [ ] `@zhin.js/plugin-calendar` — `plugins/utils/calendar`
 - [ ] `@zhin.js/plugin-code-runner` — `plugins/utils/code-runner`
 - [ ] `@zhin.js/plugin-content-moderation` — `plugins/utils/content-moderation`
+- [ ] `@zhin.js/plugin-earthquake` — `plugins/utils/earthquake`
 - [ ] `@zhin.js/plugin-group-suite` — `plugins/utils/group-suite`
 - [ ] `@zhin.js/plugin-ledger` — `plugins/utils/ledger`
 - [ ] `@zhin.js/plugin-link-poster` — `plugins/utils/link-poster`
