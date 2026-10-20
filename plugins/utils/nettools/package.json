@@ -1,0 +1,116 @@
+{
+  "name": "@zhin.js/plugin-nettools",
+  "version": "0.0.0",
+  "description": "Network tools plugin for Zhin.js — multi-region ping, RDAP whois, DNS-over-HTTPS lookup and domain price comparison (Plugin Runtime)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "plugin.js",
+    "commands",
+    "src",
+    "lib",
+    "tools",
+    "skills",
+    "README.md",
+    "schema.json"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/utils/nettools/tests",
+    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "plugin",
+    "ping",
+    "whois",
+    "rdap",
+    "dns",
+    "doh",
+    "domain"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@zhin.js/command": "workspace:^",
+    "zhin.js": "workspace:^",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/command": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/nettools"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.js",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  },
+  "dependencies": {
+    "@zhin.js/tool": "workspace:*",
+    "@zhin.js/skill": "workspace:*"
+  }
+}
