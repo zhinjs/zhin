@@ -1,0 +1,14 @@
+basic/cli/src/utils/dev-link.ts
+  h_b680f75345178a 333-341,382-384
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "12cced1aad2859ed8ea4fecb1bffe035ca625375",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
