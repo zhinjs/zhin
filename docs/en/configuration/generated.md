@@ -1681,6 +1681,22 @@ _This Schema declares no fields._
 | --- | --- | --- | --- | --- |
 | `60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
 
+### bilibili
+
+[`plugins/utils/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/bilibili/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `bilibili.pollCron` | string | no | `"0 * * * * *"` | 轮询频率（6 段 Cron，默认每 60 秒） / Poll schedule (6-field cron, default every 60s) |
+| `bilibili.jitterMs` | number | no | `15000` | 每轮轮询前的随机延迟上限（毫秒） / Max random delay before each poll (ms) |
+| `bilibili.requestGapMs` | number | no | `1500` | 同一轮内相邻动态请求的间隔（毫秒） / Gap between dynamic requests within one poll (ms) |
+| `bilibili.maxBackoffMinutes` | number | no | `30` | 接口失败或风控时指数退避的上限（分钟） / Upper bound of exponential backoff (minutes) |
+| `bilibili.maxPerChannel` | number | no | `20` | 每个会话最多订阅的 UP 主数量 / Max UP subscriptions per conversation |
+| `bilibili.timeout` | number | no | `10000` | 单次 HTTP 请求超时（毫秒） / HTTP timeout (ms) |
+| `bilibili.live` | boolean | no | `true` | 是否轮询开播状态 / Poll live status |
+| `bilibili.dynamic` | boolean | no | `true` | 是否轮询 UP 主动态 / Poll UP dynamics |
+| `bilibili.cookie` | string | no | `""` | 可选的 B 站 Cookie（如 SESSDATA=...），风控严格时使用，请写成 ${BILIBILI_COOKIE} / Optional cookie, reference it as ${BILIBILI_COOKIE} |
+
 ### calendar
 
 [`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
