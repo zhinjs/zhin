@@ -342,7 +342,7 @@ Plugins and Feature packages declare their manifest in the top-level `zhin` fiel
 | --- | --- | --- |
 | `protocol` | Yes | Manifest protocol version; must be `1` |
 | `type` | Yes | `plugin` (a regular plugin that can mount children) or `feature` (a platform package providing a kind of capability) |
-| `entry` | Yes | Entry file, package-relative, starting with `./` and without `..` |
+| `entry` | Yes (or `exports["./zhin"]`) | Entry file, package-relative, starting with `./` and without `..`; when omitted, `exports["./zhin"]` is read (see below) |
 | `engine` | No | A semver range; loading is refused if the runtime version doesn't satisfy it |
 | `runtime` | No | `isolated` runs the plugin in an isolated environment: child plugins only, no Host Features, and an isolation adapter is required |
 | `platformFeatures` | No | Default `true`: the Root plugin gets the official Stable Features even without declaring them |
@@ -350,6 +350,27 @@ Plugins and Feature packages declare their manifest in the top-level `zhin` fiel
 | `plugins` | No | Mounted child plugins. `instanceKey` is **required**, matches `^[a-z0-9][a-z0-9-]*$` and is the config section key; mount the same package twice with different `instanceKey`s |
 
 A `type: "feature"` package has only `protocol` / `type` / `entry` / `engine` / `featureApi`; `featureApi` declares the API version it implements, checked against consumers' `features[].api`.
+
+### Declaring the entry with exports {#exports-zhin}
+
+Instead of `zhin.entry` you can declare the runtime entry with the standard `exports["./zhin"]`. The `zhin` field is still required for zhin's own metadata such as `protocol` and `type`:
+
+```jsonc
+{
+  "exports": {
+    ".": { "types": "./lib/index.d.ts", "import": "./lib/index.js" },   // library API (optional)
+    "./zhin": { "types": "./plugin.d.ts", "import": "./plugin.js" }     // runtime entry
+  },
+  "zhin": { "protocol": 1, "type": "plugin" }
+}
+```
+
+Rules:
+
+- A string `exports["./zhin"]` is used as is. A condition object is searched for `zhin`, then `import`, then `default` (nested conditions the same way); other conditions such as `types` or `require` are ignored. An array uses its first element that yields a path.
+- The selected path is validated like `zhin.entry`: it starts with `./` and contains no `..`. The `.ts` / `.js` preference for local vs. `node_modules` packages is also the same (next section).
+- **When both `zhin.entry` and `exports["./zhin"]` are present, `zhin.entry` wins.** `zhin.entry` remains fully supported and is not deprecated; use either form.
+- To give the runtime a different file without affecting other tools, add a `zhin` condition: `{ "zhin": "./plugin.js", "import": "./lib/plugin.js" }`.
 
 ### Development entry vs. npm entry
 

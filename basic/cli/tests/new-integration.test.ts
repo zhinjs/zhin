@@ -52,7 +52,8 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(path.join(pluginDir, 'skills', pluginName, 'SKILL.md'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills'))).toBe(false)
     expect(await fs.pathExists(path.join(pluginDir, 'client'))).toBe(false)
-    expect(await fs.pathExists(path.join(pluginDir, 'src', 'index.ts'))).toBe(false)
+    expect(await fs.pathExists(path.join(pluginDir, 'src', 'index.ts'))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'scripts', 'build-runtime-entries.mjs'))).toBe(true)
 
     // Check package.json（zhin 清单 + 约定 files/scripts）
     const packageJsonPath = path.join(pluginDir, 'package.json')
@@ -62,12 +63,17 @@ describe('CLI new command integration', () => {
     expect(packageJson.scripts.build).toBe('tsc -p tsconfig.build.json')
     expect(packageJson.scripts.typecheck).toBe('tsc --noEmit')
     expect(packageJson.scripts.test).toBe('vitest run')
-    expect(packageJson.scripts.prepack).toBe('pnpm run build')
+    expect(packageJson.scripts.prepack).toBe('pnpm run build && node scripts/build-runtime-entries.mjs')
+    expect(packageJson.scripts.postpack).toBe('node scripts/build-runtime-entries.mjs --clean')
+    expect(packageJson.files).toContain('lib')
     expect(packageJson.files).toContain('plugin.js')
     expect(packageJson.files).not.toContain('plugin.ts')
+    expect(packageJson.files).not.toContain('src')
     expect(packageJson.files).toContain('schema.json')
-    expect(packageJson.files).toContain('commands')
+    expect(packageJson.files).toContain('commands/**/*.js')
     expect(packageJson.files).toContain('skills')
+    expect(packageJson.exports['.']).toEqual({ types: './lib/index.d.ts', import: './lib/index.js' })
+    expect(packageJson.types).toBe('./lib/index.d.ts')
     expect(packageJson.zhin).toMatchObject({
       protocol: 1,
       type: 'plugin',
@@ -99,8 +105,10 @@ describe('CLI new command integration', () => {
     expect(tsconfig.include).toContain('tests/**/*')
     const buildTsconfig = await fs.readJson(path.join(pluginDir, 'tsconfig.build.json'))
     expect(buildTsconfig.compilerOptions.noEmit).toBe(false)
-    expect(buildTsconfig.compilerOptions.outDir).toBeUndefined()
-    expect(buildTsconfig.include).not.toContain('tests/**/*')
+    expect(buildTsconfig.compilerOptions.outDir).toBe('./lib')
+    expect(buildTsconfig.compilerOptions.rootDir).toBe('./src')
+    expect(buildTsconfig.compilerOptions.declaration).toBe(true)
+    expect(buildTsconfig.include).toEqual(['src/**/*'])
 
     // Check plugin.ts（definePlugin 裸定义）
     const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
@@ -121,6 +129,7 @@ describe('CLI new command integration', () => {
       'utf-8'
     )
     expect(echoTs).toContain('params.text')
+    expect(echoTs).toContain("from '../../../src/index.js'")
     expect(echoTs).toContain("text: { type: 'string', description: '要回显的文本' }")
 
     // Check schema.json（空对象 schema）
@@ -249,7 +258,7 @@ describe('CLI new command integration', () => {
     expect(packageJson.peerDependencies['@zhin.js/adapter']).toBeDefined()
     expect(packageJson.peerDependenciesMeta['@zhin.js/adapter']).toEqual({ optional: true })
     expect(packageJson.peerDependencies['@zhin.js/core']).toBeUndefined()
-    expect(packageJson.files).toContain('adapters')
+    expect(packageJson.files).toContain('adapters/**/*.js')
 
     const testFilePath = path.join(pluginDir, 'tests', `${adapterName}-runtime.test.ts`)
     expect(await fs.pathExists(testFilePath)).toBe(true)
@@ -298,10 +307,12 @@ describe('CLI new command integration', () => {
     }
 
     const pluginDir = path.join(testDir, 'plugins', pluginName)
-    const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
+    const libraryTs = await fs.readFile(path.join(pluginDir, 'src', 'index.ts'), 'utf-8')
 
-    // Should convert to PascalCase: MyAwesomePlugin
-    expect(pluginTs).toContain('MyAwesomePlugin')
+    // Should convert to PascalCase: MyAwesomePlugin (displayName lives in src/, imported by plugin.ts)
+    expect(libraryTs).toContain('MyAwesomePlugin')
+    const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
+    expect(pluginTs).toContain("import { displayName } from './src/index.js'")
     expect(pluginTs).toContain(`name: '${pluginName}'`)
   }, 30000)
 
@@ -325,7 +336,7 @@ describe('CLI new command integration', () => {
     expect(pkg.name).toBe(`zhin.js-${pluginName}`)
     expect(pkg.zhin).toMatchObject({ protocol: 1, type: 'plugin', entry: './plugin.js' })
     expect(pkg.files).toContain('plugin.js')
-    expect(pkg.scripts.prepack).toBe('pnpm run build')
+    expect(pkg.scripts.prepack).toBe('pnpm run build && node scripts/build-runtime-entries.mjs')
     expect(pkg.scripts.test).toBe('vitest run')
     const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
     expect(pluginTs).toContain('export default definePlugin(')

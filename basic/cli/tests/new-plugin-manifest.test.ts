@@ -1,12 +1,15 @@
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import inquirer from 'inquirer';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   CONVENTION_SOURCE_DIRECTORIES,
   FALLBACK_STACK_RANGE,
   PLUGIN_TOOLING_RANGES,
+  RUNTIME_ENTRIES_SCRIPT,
+  RUNTIME_ENTRIES_SCRIPT_PATH,
   caretRange,
   createPluginManifest,
   createPluginTsconfigs,
@@ -115,21 +118,57 @@ describe('createPluginManifest', () => {
     expect(pkg.zhin.entry).toBe('./plugin.js');
     expect(pkg.files).toContain('plugin.js');
     expect(pkg.files).not.toContain('plugin.ts');
-    expect(pkg.scripts.prepack).toBe('pnpm run build');
+    expect(pkg.scripts.prepack).toBe('pnpm run build && node scripts/build-runtime-entries.mjs');
+    expect(pkg.scripts.postpack).toBe('node scripts/build-runtime-entries.mjs --clean');
     expect(pkg.scripts.build).toBe('tsc -p tsconfig.build.json');
     const { build } = createPluginTsconfigs('normal');
-    expect(build.include).toEqual(['plugin.ts', ...['src', ...CONVENTION_SOURCE_DIRECTORIES].map((dir) => `${dir}/**/*`)]);
-    expect((build.compilerOptions as Record<string, unknown>).noEmit).toBe(false);
+    expect(build.include).toEqual(['src/**/*']);
+    expect(build.compilerOptions).toMatchObject({ noEmit: false, rootDir: './src', outDir: './lib', declaration: true });
   });
 
-  it.each(['normal', 'service', 'adapter'] as const)('%s: ships and compiles every server-side convention directory', (kind) => {
+  it('follows the publishing layout standard: lib/ with .d.ts, runtime entries as JS, no sources', () => {
+    const pkg = manifest('normal');
+    expect(pkg.main).toBe('./lib/index.js');
+    expect(pkg.types).toBe('./lib/index.d.ts');
+    expect(pkg.exports['.']).toEqual({ types: './lib/index.d.ts', import: './lib/index.js' });
+    expect(pkg.files).toContain('lib');
+    expect(pkg.files).not.toContain('src');
+    for (const entry of pkg.files as string[]) {
+      expect(entry, entry).not.toMatch(/\.tsx?$|^tests|tsconfig|vitest/);
+    }
+  });
+
+  it('runtime entry builder rewrites src/ imports to lib/ and only cleans generated files', async () => {
+    const dir = await tempDir();
+    await fs.outputFile(path.join(dir, 'plugin.ts'), "import { a } from './src/index.js';\nexport default a;\n");
+    await fs.outputFile(path.join(dir, 'commands', 'x', 'index.ts'),
+      "import type { T } from '../../src/types.ts';\nimport { b } from '../../src/index.ts';\nexport default b as T;\n");
+    await fs.outputFile(path.join(dir, 'commands', 'x', 'helper.test.ts'), 'export {};\n');
+    await fs.outputFile(path.join(dir, 'commands', 'y', 'index.js'), 'export default 1;\n');
+    await fs.outputFile(path.join(dir, RUNTIME_ENTRIES_SCRIPT_PATH), RUNTIME_ENTRIES_SCRIPT);
+    // the generated plugin resolves typescript from its own devDependencies; borrow the CLI's copy
+    await fs.ensureSymlink(path.resolve(__dirname, '../../../node_modules/typescript'), path.join(dir, 'node_modules', 'typescript'));
+    const script = path.join(dir, RUNTIME_ENTRIES_SCRIPT_PATH);
+    execFileSync(process.execPath, [script], { cwd: dir });
+    expect(await fs.readFile(path.join(dir, 'plugin.js'), 'utf8')).toMatch(/from ['"]\.\/lib\/index\.js['"]/);
+    const command = await fs.readFile(path.join(dir, 'commands', 'x', 'index.js'), 'utf8');
+    expect(command).toMatch(/from ['"]\.\.\/\.\.\/lib\/index\.js['"]/);
+    expect(command).not.toContain('types');
+    expect(await fs.pathExists(path.join(dir, 'commands', 'x', 'helper.test.js'))).toBe(false);
+    execFileSync(process.execPath, [script, '--clean'], { cwd: dir });
+    expect(await fs.pathExists(path.join(dir, 'plugin.js'))).toBe(false);
+    expect(await fs.pathExists(path.join(dir, 'commands', 'x', 'index.js'))).toBe(false);
+    expect(await fs.pathExists(path.join(dir, 'commands', 'y', 'index.js'))).toBe(true);
+  });
+
+  it.each(['normal', 'service', 'adapter'] as const)('%s: ships and type-checks every server-side convention directory', (kind) => {
     const pkg = manifest(kind);
-    const { tsconfig, build } = createPluginTsconfigs(kind);
+    const { tsconfig } = createPluginTsconfigs(kind);
     for (const dir of CONVENTION_SOURCE_DIRECTORIES) {
-      expect(pkg.files, dir).toContain(dir);
-      expect(build.include, dir).toContain(`${dir}/**/*`);
+      expect(pkg.files, dir).toContain(`${dir}/**/*.js`);
       expect(tsconfig.include, dir).toContain(`${dir}/**/*`);
     }
+    expect(tsconfig.include).toContain('src/**/*');
     expect(pkg.files).toEqual(expect.arrayContaining(['skills', 'agents']));
   });
 
