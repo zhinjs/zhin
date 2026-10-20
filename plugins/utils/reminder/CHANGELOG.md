@@ -1,5 +1,21 @@
 # @zhin.js/plugin-reminder
 
+## 1.0.3
+
+### Patch Changes
+
+- 7edd04c: 提供独立持久的管理员提醒任务入口，支持精确目标、新建、暂停、恢复、编辑和取消；以持久版本与操作确认防止并发覆盖和盲目重放，共用现有 worker 与统一发送链路，保持聊天个人任务隔离和未知投递不重试。
+- 9816c18: 将应用插件装配改为 configVersion: 2：主配置 plugins 映射实例名到包，disable_plugins 控制启停，业务配置使用顶层同名块。package.json 继续保留 features、entry、engine 等包契约，并支持静态 displayName/icon。
+
+  这是配置格式的破坏性更新：旧配置不能继续运行，请先停止 Bot，运行 `zhin migrate instances` 预览，再使用 `--apply` 转换；提供备份与中断继续/回滚，无法无损转换的嵌套、optional 和别名碰撞需人工迁移。Runtime、Console、CLI 与创建向导统一使用新声明。
+
+  保留框架顶层 `menuKeyword` / `menuStyle`，通过当前 generation 的 Root 配置视图供 Command Feature 消费；严格校验和配置修改不会丢失菜单设置，子实例配置保持隔离。
+
+- 8550f17: 补齐 Host 配置字段定义与未配置区块入口，完整投影对象、字典、联合、元组和本地引用，避免 Console 丢字段或整份退回源码。原始 Runtime Schema 继续负责校验。日历、提醒、复读和短链接发布静态配置定义，禁用时也可安全配置，无需执行插件代码。
+- 064b06d: 新增个人提醒 create 指令，按实例 IANA 时区解析有限中文自然时间，缺少时间或正文时逐项补问，核对纯文字预览后明确确认才保存。保留完整发送者和会话身份；取消、超时、运行代切换及不确定投递不自动创建或重试。补充中英文使用指南与入口。
+  - @zhin.js/skill@1.1.7
+  - @zhin.js/tool@1.1.7
+
 ## 1.0.2
 
 ### Patch Changes

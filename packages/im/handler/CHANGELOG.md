@@ -1,5 +1,18 @@
 # @zhin.js/handler
 
+## 1.1.6
+
+### Patch Changes
+
+- 064b06d: 提供只读 SnapshotLease.retirementSignal，在运行代退休时及时结束交互等待，同时保留旧操作的 lease 排空语义。
+  问答在发送提示前建立精确会话与发送者约束，发送异常撤销等待；原生回答使用每题独立的短 callback token，避免旧按钮回答新问题。
+- Updated dependencies [064b06d]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/feature-kit@1.1.6
+  - @zhin.js/plugin-runtime@1.1.15
+
 ## 1.1.5
 
 ### Patch Changes

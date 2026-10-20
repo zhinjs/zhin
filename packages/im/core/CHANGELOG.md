@@ -1,5 +1,37 @@
 # @zhin.js/core
 
+## 1.1.46
+
+### Patch Changes
+
+- c407bd2: 安装 HTML 渲染能力时，内置指令菜单通过统一发送链生成菜单图；渲染失败或平台无法投递图片时保留原有文本菜单。菜单采用可自定义标题、配色与背景的三列主题，每页最多 30 项，支持根菜单与插件菜单翻页。平台同时支持原生 Markdown 与按钮时自动附加上一页、下一页控件，在边界禁用；其他平台保留文本导航。Telegram 禁用按钮映射为 Bot API 10.3 DisabledButton。补充中英文文档。
+- 064b06d: 通过中立的 operation input 生命周期 hook 将真实入站运行代的退休信号传给 CommandContext.signal，使补问与确认能及时取消。
+  保留旧 lease 普通操作和已开始发送的正常排空语义，不全局拦截回复。
+- b58548a: 为命令增加可选冷却、并发准入与一次进度提示，以真实发送者和完整会话身份隔离；Root 预算跨热更新共用，并在业务、渲染、中间件和已启动发送真正结束后释放。准入拒绝通过 limited 状态与有界原因进入消息诊断，避免回落到 AI。
+- e914a93: 新增按消息查看的有界运行诊断，关联真实入站决策与发送结果，保留平台降级原因且不存储消息正文或原始异常。
+- e914a93: 改善跨平台富消息的文本降级：保留安全链接、列表层级、表格列和图片描述，避免输出嵌入媒体与链接凭据；代码内容和作者指定的 HTML 备用文本继续保留。
+
+  文本键盘降级不再为禁用按钮注册可执行编号或别名；启用按钮的显示编号与当前会话、generation 的实际映射保持一致。
+
+- 064b06d: 提供只读 SnapshotLease.retirementSignal，在运行代退休时及时结束交互等待，同时保留旧操作的 lease 排空语义。
+  问答在发送提示前建立精确会话与发送者约束，发送异常撤销等待；原生回答使用每题独立的短 callback token，避免旧按钮回答新问题。
+- Updated dependencies [c407bd2]
+- Updated dependencies [064b06d]
+- Updated dependencies [a50fc8a]
+- Updated dependencies [b58548a]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/command@1.1.8
+  - @zhin.js/feature-kit@1.1.6
+  - @zhin.js/permission@1.1.7
+  - @zhin.js/plugin-runtime@1.1.15
+  - @zhin.js/handler@1.1.6
+  - @zhin.js/adapter@1.1.20
+  - @zhin.js/component@1.1.7
+  - @zhin.js/middleware@1.1.7
+  - @zhin.js/schedule-feature@1.1.6
+
 ## 1.1.45
 
 ### Patch Changes
