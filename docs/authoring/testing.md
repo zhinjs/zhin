@@ -96,6 +96,8 @@ const orchestrator = fakeOf<ActivityFeedbackOrchestrator>({ startPhase: vi.fn(),
 
 假环境不经过渲染器、出站中间件和端点协商。需要验证"消息真的按这条链路发出去"时，用 `PluginTestKit`：它挂载一个一次性的真实测试应用，合成端点记录最终载荷。用法与限制见套件 [README](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/testing/README.md)。
 
+`kit.messageDiagnostics` 与 Console `GET /api/messages/diagnostics` 读取的是同一份有界、无正文的诊断，可以断言每条消息的路由、派发状态和投递结果。
+
 ## 官方示例
 
 `plugins/services/activity-feedback/tests/activity-feedback-runtime.test.ts` 已迁移到这套工具：`setup` 用 `createFakePlugin` 提供事件总线和宿主，载荷与编排器用 `fakeOf`，文件内不再有 `as never`。
