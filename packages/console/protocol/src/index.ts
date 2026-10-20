@@ -462,6 +462,7 @@ export const CONFIG_RPC = Object.freeze({
   GET: 'config:get',
   GET_ALL: 'config:get-all',
   GET_SOURCE: 'config:get-source',
+  EXPLAIN: 'config:explain',
   REPLACE_SOURCE: 'config:replace-source',
   SET: 'config:set',
 } as const);
@@ -492,6 +493,23 @@ export interface ConsoleConfigSource {
   readonly configKeys: readonly string[];
   /** Paths resolved by the same authority used for key mutations; never infer from labels. */
   readonly configPaths?: Readonly<Record<string, readonly string[]>>;
+}
+
+/** Metadata only: never includes config/default/environment values or historical input provenance. */
+export interface ConsoleConfigFieldEvidence {
+  readonly path: readonly string[];
+  readonly candidateOrigin: 'file' | 'schema-default' | 'unset' | 'unknown';
+  readonly generationMatch: 'equal' | 'different' | 'redacted' | 'unknown';
+  readonly generationOrigin: 'unknown';
+}
+export interface ConsoleConfigExplanation {
+  readonly instanceKey: string;
+  readonly revision: string;
+  readonly projectRevision: string;
+  readonly generation: number | null;
+  readonly projection: 'supported' | 'unsupported';
+  readonly reason?: 'schema-unavailable' | 'schema-drift' | 'custom-resolver' | 'complex-schema' | 'instance-unavailable' | 'bound-exceeded' | 'candidate-invalid';
+  readonly fields: readonly ConsoleConfigFieldEvidence[];
 }
 
 export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([

@@ -380,7 +380,7 @@ export class RootRuntime {
           prepared = await new SlotGenerationPreparer(this.#modules, this.#model,
             inputs?.primaryConfigChanged
               ? createPrimaryConfig(inputs.inspected.primaryConfigDocument,
-                createEnvStore(rootPluginId(), this.#environment, inputs.environmentLayers))
+                createEnvStore(rootPluginId(), this.#environment, inputs.environmentLayers), inputs.inspected.configResolver.compositionMode)
               : undefined)
             .prepare(current, resolved.capabilities, signal);
         } else if (this.#model && this.#canPrepareSubtrees(effective)) {
@@ -565,6 +565,7 @@ export class RootRuntime {
       }));
       const configResolver: PluginConfigResolver = node => customResolver(node);
       configResolver.schema = node => schemas.get(node.id);
+      configResolver.compositionMode = 'custom';
       if (this.snapshot.generation === 0) {
         this.#initialConfigSchemas = new Map(graphNodes(graph.root).flatMap(node => {
           const schema = schemas.get(node.id);
@@ -623,6 +624,7 @@ export class RootRuntime {
         .expandMissingAsEmpty(view);
     };
     resolver.schema = (node) => schemas?.get(node.id);
+    resolver.compositionMode = 'document';
     return resolver;
   }
 

@@ -54,6 +54,8 @@ import {
 export interface PluginConfigResolver {
   (node: PluginGraphNode): unknown;
   schema?(node: PluginGraphNode): Readonly<Record<string, unknown>> | undefined;
+  /** Set by RootRuntime's actual composition branch, not by Plugin config values. */
+  compositionMode?: NonNullable<PrimaryConfig['compositionMode']>;
 }
 
 export interface RootResourceContext {
@@ -118,7 +120,7 @@ export class PluginScopeAssembler {
     private readonly isolation?: IsolatedPluginRuntimePort,
   ) {
     this.#envStores = new EnvStoreFactory(environment, environmentLayers);
-    this.#primaryConfig = createPrimaryConfig(primaryConfigDocument, this.#envStores.create(rootPluginId()));
+    this.#primaryConfig = createPrimaryConfig(primaryConfigDocument, this.#envStores.create(rootPluginId()), configResolver.compositionMode);
     this.scopes = new Map(seed?.scopes);
     this.tree = new Map(seed?.tree);
     this.config = new Map(seed?.config);
