@@ -1,0 +1,33 @@
+plugins/utils/nettools/src/address-policy.ts
+  s_e6f5f09d5890ba::t_77c284f05d2b65 1-447
+plugins/utils/nettools/src/config.ts
+  s_e6f5f09d5890ba::t_b0ac1fd26bc3aa 1-70
+plugins/utils/nettools/src/cooldown.ts
+  s_e6f5f09d5890ba::t_00c5a986fad540 1-92
+plugins/utils/nettools/src/domain-price.ts
+  s_e6f5f09d5890ba::t_02a2987e13211a 1-196
+plugins/utils/nettools/src/index.ts
+  s_e6f5f09d5890ba::t_34eb86db303855 1-50
+plugins/utils/nettools/src/runtime.ts
+  s_e6f5f09d5890ba::t_00af474fe179fd 1-8
+plugins/utils/nettools/src/service.ts
+  s_e6f5f09d5890ba::t_bdcc3a9a133d62 1-115
+plugins/utils/nettools/src/whois.ts
+  s_e6f5f09d5890ba::t_637fd7aa29255d 1-291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d966ce8e04854ea4778fbb5775c5a475bde59bf",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
