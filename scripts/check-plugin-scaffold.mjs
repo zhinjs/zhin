@@ -25,7 +25,8 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cli = path.join(repo, 'basic/cli/lib/cli.js');
 const build = !process.argv.includes('--no-build');
 const keep = process.argv.includes('--keep');
-const STACK_ROOTS = ['zhin.js', '@zhin.js/skill', '@zhin.js/command', '@zhin.js/adapter'];
+// Generated tests import @zhin.js/testing, so it ships from the same packed closure.
+const STACK_ROOTS = ['zhin.js', '@zhin.js/skill', '@zhin.js/command', '@zhin.js/adapter', '@zhin.js/testing'];
 const PLUGINS = [
   { name: 'e2e-normal', type: 'normal', js: ['plugin.js', 'commands/e2e-normal/index.js', 'commands/e2e-normal-echo/[text]/index.js'] },
   { name: 'e2e-service', type: 'service', js: ['plugin.js'] },

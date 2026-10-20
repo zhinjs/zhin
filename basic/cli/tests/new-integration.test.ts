@@ -190,8 +190,10 @@ describe('CLI new command integration', () => {
     const testFilePath = path.join(pluginDir, 'tests', `${serviceName}-runtime.test.ts`)
     expect(await fs.pathExists(testFilePath)).toBe(true)
     const testFile = await fs.readFile(testFilePath, 'utf-8')
-    expect(testFile).toContain('lifecycle')
-    expect(testFile).toContain('plugin.setup')
+    expect(testFile).toContain("from '@zhin.js/testing'")
+    expect(testFile).toContain('runPluginSetup(plugin)')
+    expect(testFile).toContain('fake.dispose()')
+    expect(testFile).not.toContain('as never')
 
     const packageJson = await fs.readJson(path.join(pluginDir, 'package.json'))
     expect(packageJson.zhin.features).toEqual([
@@ -331,7 +333,25 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(path.join(pluginDir, 'tests', `${pluginName}-runtime.test.ts`))).toBe(true)
     const readme = await fs.readFile(path.join(pluginDir, 'README.md'), 'utf-8')
     expect(readme).toContain('configVersion: 2')
-    expect(readme).toContain(`pnpm add ../${pluginName}`)
+    expect(readme).not.toContain(`pnpm add ../${pluginName}`)
+    expect(readme).toContain('local-dev#standalone-plugin')
+    expect(readme).toContain(`./plugins/${pluginName}`)
+  }, 30000)
+
+  it('fails fast instead of prompting when stdin is not a TTY', async () => {
+    let failure: { status?: number; stderr?: Buffer; stdout?: Buffer } | undefined
+    try {
+      execSync(`node "${cliPath}" new no-type-demo --standalone --skip-install`, {
+        cwd: testDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 10000,
+      })
+    } catch (error) {
+      failure = error as typeof failure
+    }
+    expect(failure?.status).toBe(1)
+    expect(`${failure?.stdout ?? ''}${failure?.stderr ?? ''}`).toContain('--type')
+    expect(await fs.pathExists(path.join(testDir, 'no-type-demo'))).toBe(false)
   }, 30000)
 
   it('should reject invalid plugin identity names', async () => {
