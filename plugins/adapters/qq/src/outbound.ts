@@ -8,7 +8,8 @@
  *   归一到 data.file，由 SDK formatMediaData 走媒体上传（v2 /files）。
  * - markdown：data.content 原文，或 custom_template_id + params 模板。
  * - keyboard：data.rows 按钮矩阵展开为 button 段（SDK processButtons 组装
- *   keyboard 载荷）；按钮消息必须带 markdown，故同行文本合并为 markdown 段。
+ *   keyboard 载荷）；按钮消息必须带 markdown，且一条消息只承载一个 markdown，
+ *   故文本与内联 markdown 段按顺序合并为同一 markdown 段。
  *   data.id 模板键盘原样透传。
  * canonical share 当前明确 not_sent/unsupported，避免静默丢标题/描述/URL。
  * 其他未识别段保持既有 data.text fallback；正常发送另受声明的 supported 白名单约束。
@@ -223,9 +224,16 @@ export function formatOutbound(payload: unknown): QqOutboundMessage {
         break;
       }
       case 'markdown': {
-        flushText();
         const markdown = normalizeMarkdownSegment(item);
-        if (markdown) parts.push(markdown);
+        if (!markdown) break;
+        // 一条 QQ 消息只有一个 markdown 字段（SDK handleMarkdown 后者覆盖前者）：
+        // 按钮消息里的文本与内联 markdown 按顺序合并为同一段，避免前面的正文被丢弃
+        if (hasKeyboard && typeof markdown.data.content === 'string') {
+          textBuf = textBuf.trim() ? `${textBuf.replace(/\s+$/, '')}\n\n${markdown.data.content}` : markdown.data.content;
+          break;
+        }
+        flushText();
+        parts.push(markdown);
         break;
       }
       case 'keyboard': {
