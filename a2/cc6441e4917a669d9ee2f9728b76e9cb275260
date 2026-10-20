@@ -1,0 +1,23 @@
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_079f1dc5e6308d::t_87500b23d172a3 13,102,141,153,162,306,320,355-361
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_c6d6a5afa1b78c 62,340,354-357,363-364,366-536,546-548
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_d8d164ee14827a 8,80,3302-3411
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2cc6441e4917a669d9ee2f9728b76e9cb275260",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
