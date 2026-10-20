@@ -1,0 +1,49 @@
+.changeset/plugin-bilibili-initial.md
+  s_e6f5f09d5890ba::t_4a2efc32faa341 1-5
+plugins/utils/bilibili/commands/bili/list/index.ts
+  s_e6f5f09d5890ba::t_3c46e4b8181964 1-26
+plugins/utils/bilibili/commands/bili/live/index.ts
+  s_e6f5f09d5890ba::t_953f19a1f1f14c 1-29
+plugins/utils/bilibili/commands/bili/sub/index.ts
+  s_e6f5f09d5890ba::t_ce7e1b0b0b2041 1-64
+plugins/utils/bilibili/commands/bili/unsub/index.ts
+  s_e6f5f09d5890ba::t_53fec220b0f3d3 1-30
+plugins/utils/bilibili/plugin.ts
+  s_e6f5f09d5890ba::t_935b9efb2fa520 1-71
+plugins/utils/bilibili/skills/bilibili/SKILL.md
+  s_e6f5f09d5890ba::t_aaaabc83841d35 1-46
+plugins/utils/bilibili/skills/bilibili/tools/bili_list_subscriptions/index.ts
+  s_e6f5f09d5890ba::t_b982bbf2928f52 1-31
+plugins/utils/bilibili/skills/bilibili/tools/bili_live_status/index.ts
+  s_e6f5f09d5890ba::t_71450bd3472912 1-36
+plugins/utils/bilibili/src/api.ts
+  s_e6f5f09d5890ba::t_e07c454014cb3a 1-349
+plugins/utils/bilibili/src/channel.ts
+  s_e6f5f09d5890ba::t_609e9547796e2d 1-57
+plugins/utils/bilibili/src/format.ts
+  s_e6f5f09d5890ba::t_e6c85f33039a14 1-39
+plugins/utils/bilibili/src/index.ts
+  s_e6f5f09d5890ba::t_d1802b412bd962 1-17
+plugins/utils/bilibili/src/poll.ts
+  s_e6f5f09d5890ba::t_b9074f7645af0f 1-290
+plugins/utils/bilibili/src/runtime.ts
+  s_e6f5f09d5890ba::t_7aec95390372fa 1-29
+plugins/utils/bilibili/src/store.ts
+  s_e6f5f09d5890ba::t_eec577754e55da 1-175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1f2217c610e20d71de288ed83d86ded7b42e67b0",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
