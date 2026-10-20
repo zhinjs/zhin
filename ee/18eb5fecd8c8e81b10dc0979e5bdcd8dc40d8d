@@ -1,0 +1,14 @@
+basic/cli/src/commands/doctor.ts
+  h_b680f75345178a 600
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee18eb5fecd8c8e81b10dc0979e5bdcd8dc40d8d",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
