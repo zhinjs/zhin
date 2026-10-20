@@ -249,6 +249,7 @@ done < names.txt
 - [ ] `@zhin.js/plugin-code-runner` — `plugins/utils/code-runner`
 - [ ] `@zhin.js/plugin-content-moderation` — `plugins/utils/content-moderation`
 - [ ] `@zhin.js/plugin-group-suite` — `plugins/utils/group-suite`
+- [ ] `@zhin.js/plugin-ledger` — `plugins/utils/ledger`
 - [ ] `@zhin.js/plugin-link-poster` — `plugins/utils/link-poster`
 - [ ] `@zhin.js/plugin-lottery` — `plugins/utils/lottery`
 - [ ] `@zhin.js/plugin-music` — `plugins/utils/music`
