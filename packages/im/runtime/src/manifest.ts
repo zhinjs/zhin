@@ -63,7 +63,7 @@ export function parsePackageJson(value: unknown, source: string): PackageJson {
   const record = asRecord(value, source, issues);
   const name = readString(record, 'name', source, issues);
   if (name && !isPackageName(name)) issues.push(`${source}#name is not a valid package name`);
-  const zhin = parseZhinManifest(record.zhin, `${source}#zhin`, issues);
+  const zhin = parseZhinManifest(record.zhin, `${source}#zhin`, issues, record.exports, `${source}#exports`);
   const version = optionalString(record.version, `${source}#version`, issues);
   const moduleType = optionalModuleType(record.type, `${source}#type`, issues);
   const main = optionalString(record.main, `${source}#main`, issues);
@@ -106,15 +106,55 @@ export function parsePackageJson(value: unknown, source: string): PackageJson {
   });
 }
 
+/** Conditions tried, in order, when `exports["./zhin"]` is a condition object. */
+export const ZHIN_EXPORT_CONDITIONS = Object.freeze(['zhin', 'import', 'default'] as const);
+
+/**
+ * The runtime entry declared by `exports["./zhin"]`, if any.
+ *
+ * A string target is used as is; a condition object is searched for `zhin`, then `import`,
+ * then `default` (nested condition objects are searched the same way); an array uses its
+ * first target that resolves. Other conditions such as `types` or `require` are ignored.
+ */
+export function zhinExportTarget(packageExports: unknown): string | undefined {
+  if (!packageExports || typeof packageExports !== 'object' || Array.isArray(packageExports)) return undefined;
+  if (!Object.hasOwn(packageExports, './zhin')) return undefined;
+  return selectExportTarget((packageExports as Record<string, unknown>)['./zhin']);
+}
+
+function selectExportTarget(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const target = selectExportTarget(item);
+      if (target !== undefined) return target;
+    }
+    return undefined;
+  }
+  if (!value || typeof value !== 'object') return undefined;
+  for (const condition of ZHIN_EXPORT_CONDITIONS) {
+    if (!Object.hasOwn(value, condition)) continue;
+    const target = selectExportTarget((value as Record<string, unknown>)[condition]);
+    if (target !== undefined) return target;
+  }
+  return undefined;
+}
+
 function parseZhinManifest(
   value: unknown,
   source: string,
   issues: string[],
+  packageExports?: unknown,
+  exportsSource = 'exports',
 ): ZhinPackageManifest | undefined {
   const record = asRecord(value, source, issues);
   if (record.protocol !== 1) issues.push(`${source}.protocol must be 1`);
   const type = readString(record, 'type', source, issues);
-  const entry = readRelativeEntry(record.entry, `${source}.entry`, issues);
+  // `zhin.entry` wins when present; `exports["./zhin"]` is the standard-field alternative.
+  const exportedEntry = record.entry === undefined ? zhinExportTarget(packageExports) : undefined;
+  const entry = exportedEntry !== undefined
+    ? readRelativeEntry(exportedEntry, `${exportsSource}["./zhin"]`, issues)
+    : readRelativeEntry(record.entry, `${source}.entry`, issues, `${exportsSource}["./zhin"]`);
   const engine = optionalString(record.engine, `${source}.engine`, issues);
   if (!entry || (type !== 'plugin' && type !== 'feature')) {
     if (type && type !== 'plugin' && type !== 'feature') {
@@ -209,7 +249,11 @@ function parseReferences(
   });
 }
 
-function readRelativeEntry(value: unknown, source: string, issues: string[]): string | undefined {
+function readRelativeEntry(value: unknown, source: string, issues: string[], alternative?: string): string | undefined {
+  if (value === undefined && alternative) {
+    issues.push(`${source} or ${alternative} must declare a package-relative path starting with ./`);
+    return undefined;
+  }
   if (typeof value !== 'string' || !value.startsWith('./')) {
     issues.push(`${source} must be a package-relative path starting with ./`);
     return undefined;

@@ -6,6 +6,7 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
   description: '查看个人积分与签到信息',
+  alias: ['checkin streak'],
   execute({ input, owner, use }) {
     return myPoints(input ?? {}, resolveGroupSuiteRuntime({ owner, use }));
   },
