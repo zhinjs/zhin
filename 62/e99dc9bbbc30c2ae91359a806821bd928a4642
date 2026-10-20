@@ -1,0 +1,20 @@
+packages/im/core/src/ai-completion-contract.ts
+  h_b680f75345178a 1-166
+packages/im/core/src/index.ts
+  h_b680f75345178a 18-19
+packages/im/core/tests/ai-completion-contract.test.ts
+  h_b680f75345178a 1-94
+tests/snapshots/api-surface.json
+  h_b680f75345178a 132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "62e99dc9bbbc30c2ae91359a806821bd928a4642",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
