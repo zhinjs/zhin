@@ -1,0 +1,16 @@
+plugins/adapters/qq/src/outbound.ts
+  h_b680f75345178a 11-12,228-236
+plugins/adapters/qq/tests/menu-pagination.test.ts
+  h_b680f75345178a 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1134f9f6bf17bf27aa6c14bb7756369e6bde16c1",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
