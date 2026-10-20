@@ -10,6 +10,7 @@ import { RootRuntime, type ModuleRuntime } from '../../../../packages/im/runtime
 import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
 import { sqliteAvailable } from '../../../../basic/cli/tests/plugin-runtime/sqlite-availability.js';
 import plugin from '../plugin.js';
+import configSchema from '../schema.json' with { type: 'json' };
 import poll from '../schedules/poll/index.js';
 import after from '../commands/remind/after/index.js';
 import at from '../commands/remind/at/index.js';
@@ -413,6 +414,7 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
   }
   await write('plugins/reminder/package.json', { name: '@test/reminder', dependencies: { '@test/command': '*', '@test/schedule': '*' }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features } });
   await write('plugins/reminder/plugin.ts', { default: plugin }, true);
+  await write('plugins/reminder/schema.json', configSchema);
   for (const [name, value] of Object.entries({ after, at, every, list, cancel, create })) await write(`plugins/reminder/commands/remind/${name}/index.ts`, { default: value }, true);
   await write('plugins/reminder/schedules/poll/index.ts', { default: poll }, true);
   const db = createDatabaseHost({ dialect: 'sqlite', filename: join(project, 'state.sqlite') }); await db.start();

@@ -1,5 +1,10 @@
 ---
 "@zhin.js/cli": patch
+"@zhin.js/runtime": patch
+"@zhin.js/plugin-calendar": patch
+"@zhin.js/plugin-reminder": patch
+"@zhin.js/plugin-repeater": patch
+"@zhin.js/plugin-short-url": patch
 ---
 
-将有限的纯字符串常量联合投影为 Console 选项字段，避免日历等插件因固定选项退回整份源码编辑；其他复杂联合仍使用源码入口，原始配置校验保持不变。
+补齐 Host 配置字段定义与未配置区块入口，完整投影对象、字典、联合、元组和本地引用，避免 Console 丢字段或整份退回源码。原始 Runtime Schema 继续负责校验。日历、提醒、复读和短链接发布静态配置定义，禁用时也可安全配置，无需执行插件代码。

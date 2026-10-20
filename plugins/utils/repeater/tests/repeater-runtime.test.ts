@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import schema from '../schema.json' with { type: 'json' };
 import Ajv2020 from 'ajv/dist/2020.js';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from '@zhin.js/middleware';
@@ -20,7 +21,7 @@ describe('@zhin.js/plugin-repeater', () => {
   it('validates and defaults the same configuration exposed to Console', () => {
     const ajv = new Ajv2020({ useDefaults: true, strict: true });
     ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
-    const validate = ajv.compile(plugin.config!.toJsonSchema());
+    const validate = ajv.compile(schema);
     const empty = {};
     expect(validate(empty)).toBe(true);
     expect(empty).toEqual(DEFAULT_REPEATER_CONFIG);
@@ -29,7 +30,7 @@ describe('@zhin.js/plugin-repeater', () => {
     expect(validate({ maxLength: 20.5 })).toBe(false);
     expect(validate({ threshold: '3' })).toBe(false);
     expect(validate({ unknown: true })).toBe(false);
-    expect(plugin.config!.toJsonSchema()).toMatchObject({
+    expect(schema).toMatchObject({
       properties: { threshold: { default: 3, 'x-zhin-config': { effect: 'reload' } } },
     });
   });

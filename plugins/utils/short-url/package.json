@@ -20,7 +20,8 @@
     "lib",
     "tools",
     "skills",
-    "README.md"
+    "README.md",
+    "schema.json"
   ],
   "scripts": {
     "build": "tsc",

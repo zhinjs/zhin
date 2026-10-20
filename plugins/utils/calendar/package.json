@@ -23,7 +23,8 @@
     "lib",
     "skills",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "schema.json"
   ],
   "scripts": {
     "build": "tsc",

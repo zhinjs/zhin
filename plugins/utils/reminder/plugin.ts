@@ -1,12 +1,12 @@
 import { databaseHostToken, definePlugin, outboundHostToken } from 'zhin.js';
 import { pluginVerificationToken, pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
 import { randomUUID } from 'node:crypto';
-import { assertReminderTimezone, reminderConfig } from './src/config.js';
+import { assertReminderTimezone, type ReminderConfig } from './src/config.js';
 import { ReminderService } from './src/service.js';
 import { reminderServiceToken } from './src/runtime.js';
 
-export default definePlugin({
-  name: 'reminder', config: reminderConfig,
+export default definePlugin<ReminderConfig>({
+  name: 'reminder',
   metadata: { displayName: '持久提醒' },
   requires: [databaseHostToken, outboundHostToken],
   setup(context) {

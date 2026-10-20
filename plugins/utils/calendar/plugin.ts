@@ -7,7 +7,7 @@ import {
 import { httpHostToken } from "@zhin.js/host-http";
 import {
   assertCalendarTimezone,
-  calendarConfig,
+  type CalendarConfig,
   createCalendarProvider,
   createOAuthTokenManagers,
 } from "./src/index.js";
@@ -25,9 +25,8 @@ import {
 import { registerOAuthCallbackRoute } from "./src/http-callback.js";
 import { calendarRuntimeToken } from "./src/runtime.js";
 
-export default definePlugin({
+export default definePlugin<CalendarConfig>({
   name: "calendar",
-  config: calendarConfig,
   metadata: { displayName: "日历" },
   setup(context) {
     const config = context.config.get();
