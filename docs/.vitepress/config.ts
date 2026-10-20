@@ -122,6 +122,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     sidebarGroup('解决方案', [
       { text: '按交付结果选择', link: '/solutions/' },
       { text: '不启用 AI 创建提醒', link: '/solutions/reminders' },
+      { text: '推送订阅更新', link: '/solutions/rss-subscriptions' },
       { text: '只在选定的群欢迎', link: '/solutions/group-welcome' },
       { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
       { text: '受治理的业务 Agent', link: '/solutions/governed-agent' },
@@ -267,6 +268,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     sidebarGroup('Solutions', [
       { text: 'Choose by Outcome', link: '/en/solutions/' },
       { text: 'Create Reminders Without AI', link: '/en/solutions/reminders' },
+      { text: 'Send Feed Updates', link: '/en/solutions/rss-subscriptions' },
       { text: 'Welcome Only Selected Groups', link: '/en/solutions/group-welcome' },
       { text: 'Multi-Endpoint Operations', link: '/en/solutions/multi-endpoint-operations' },
       { text: 'Governed Business Agent', link: '/en/solutions/governed-agent' },

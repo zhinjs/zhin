@@ -11,6 +11,7 @@ description: "不用先理解包结构：按你想交付的结果，找到对应
 | --- | --- | --- |
 | 做一个能收发消息的 Bot | [IM Bot 学习路径](/paths/im-bot) | Sandbox 与目标平台共用同一条命令/消息链 |
 | 不启用 AI 也能设置提醒 | [用自然时间创建个人提醒](/solutions/reminders) | 确认明确日期、时区与内容后，提醒持久保存到原会话 |
+| 把订阅更新发到指定会话 | [管理员 RSS 订阅](/solutions/rss-subscriptions) | 首次建立基线后，新文章送到完整目标，任务可暂停与取消 |
 | 只在一个群欢迎新成员 | [选择精确的欢迎范围](/solutions/group-welcome) | 不同 Bot、父容器和话题分别匹配，空列表表示不欢迎 |
 | 让 Bot 理解自己的业务 | [给 AI 补充业务背景](/authoring/agent-tools#给-ai-补充业务背景) | 在 Console 能力目录中能看到你的 Prompt Section 已生效 |
 | 组合工具、MCP、技能与子 Agent | [AI Agent 学习路径](/paths/ai-agent) | Agent 只看到当前回合有权使用的能力 |

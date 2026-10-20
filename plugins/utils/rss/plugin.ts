@@ -4,6 +4,8 @@ import {
   outboundHostToken,
   scheduleHostToken,
 } from 'zhin.js';
+import { pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
+import { AdministratorRssTasks } from './src/admin-tasks.js';
 import { resolveRssConfig, type RssConfig } from './src/feed.js';
 import {
   createInMemoryRssDb,
@@ -47,15 +49,16 @@ export default definePlugin<RssConfig>({
   },
   setup(context) {
     const config = resolveRssConfig(context.config.get());
-    const db = context.resources.has(databaseHostToken) ? (() => {
-      const host = context.resources.use(databaseHostToken);
+    const database = context.resources.has(databaseHostToken) ? context.resources.use(databaseHostToken) : undefined;
+    const db = database ? (() => {
+      const host = database;
       defineRssTables(host);
       return host;
     })() : createInMemoryRssDb();
 
+    const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     let outboundPush: RssOutboundPush | null = null;
-    if (context.resources.has(outboundHostToken)) {
-      const outbound = context.resources.use(outboundHostToken);
+    if (outbound) {
       outboundPush = async (input) => {
         await outbound.send({
           adapter: input.adapterName,
@@ -75,6 +78,19 @@ export default definePlugin<RssConfig>({
     });
     context.resources.provide(rssRuntimeToken, runtime);
 
+    // Keep optional in-memory/chat-only installations working. Administrator tasks
+    // must have the real durable state port, exact outbound and an active scheduler.
+    let administrator: AdministratorRssTasks | undefined;
+    if (database && outbound?.sendTarget && context.resources.has(scheduleHostToken)) {
+      let state;
+      try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
+      if (state) {
+        administrator = new AdministratorRssTasks(state, outbound, config);
+        context.resources.provide(pluginTaskProviderToken, administrator);
+        context.lifecycle.add(() => administrator?.stop());
+      }
+    }
+
     if (!context.resources.has(scheduleHostToken)) return;
     const schedule = context.resources.use(scheduleHostToken);
     const dispose = schedule.register({
@@ -82,7 +98,11 @@ export default definePlugin<RssConfig>({
       cron: config.pollCron,
       description: 'Poll RSS subscriptions',
       async execute() {
-        await pollAllFeeds(runtime);
+        // Both pools share this existing registration. A slow chat feed does not
+        // prevent administrator polling, and neither pool shares the other's cursor.
+        const results = await Promise.allSettled([pollAllFeeds(runtime), administrator?.tick()]);
+        // Keep the schedule lease until both pools drain, even if one fails.
+        for (const result of results) if (result.status === 'rejected') throw result.reason;
       },
     });
     const disposeClean = schedule.register({

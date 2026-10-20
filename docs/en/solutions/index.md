@@ -11,6 +11,7 @@ You don't need to learn Zhin's package layout first. Find what you want to build
 | --- | --- | --- |
 | A bot that receives and sends messages | [IM Bot path](/en/paths/im-bot) | Sandbox and a real platform share the same command and message flow |
 | Set reminders without AI | [Create reminders with natural time](/en/solutions/reminders) | Review the exact date, timezone and content, then persist a reminder to the original conversation |
+| Send feed updates to a specific conversation | [Administrator RSS subscriptions](/en/solutions/rss-subscriptions) | After a baseline check, new articles reach the exact target; tasks can be paused or cancelled |
 | Welcome members in one group | [Select an exact welcome scope](/en/solutions/group-welcome) | Accounts, parents and threads match separately; an empty list disables welcomes |
 | A bot that understands your business | [Give the AI business context](/en/authoring/agent-tools#give-the-ai-business-context) | Console's capability catalog shows your Prompt Section is active |
 | Tools, MCP, skills, and sub-agents | [AI Agent path](/en/paths/ai-agent) | The Agent sees only capabilities authorized for the current turn |
