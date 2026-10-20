@@ -11,6 +11,13 @@ Day to day, working with Zhin mostly means working with one command, `zhin`: sta
 npx zhin --help        # list every command
 ```
 
+::: tip Running outside a bot project
+Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly. Outside one (for example creating a standalone plugin, or publishing from a plugin directory), npx downloads the npm package named `zhin`:
+
+- Since `zhin@4.0`, `zhin` on npm is an alias of `@zhin.js/cli`: `npx zhin <command>` is the same as `npx @zhin.js/cli <command>`.
+- `zhin@3.x` is the old, unmaintained framework package, not this CLI. If your npx cache still holds 3.x, or a project pins `zhin@^3`, you get that one instead, which shows up as missing commands or startup errors. Use `npx @zhin.js/cli` (reliable with every version), or `npx zhin@latest` to force the new one.
+:::
+
 ## The commands you'll use most
 
 | I want to… | Command |

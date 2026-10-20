@@ -11,6 +11,13 @@ description: "zhin 命令行的全部子命令：启动与停止、配置向导�
 npx zhin --help        # 查看全部命令
 ```
 
+::: tip 在 Bot 项目外运行
+项目里装了 `@zhin.js/cli`，`npx zhin` 直接用它。在项目外（例如新建独立插件、在插件目录发布），npx 会去 npm 下载名为 `zhin` 的包：
+
+- 从 `zhin@4.0` 起，npm 上的 `zhin` 就是 `@zhin.js/cli` 的别名，`npx zhin <命令>` 与 `npx @zhin.js/cli <命令>` 完全相同。
+- `zhin@3.x` 是早已停止维护的旧版框架包，不是这个 CLI。npx 缓存里还留着 3.x、或项目锁在 `zhin@^3` 时会运行到它，表现为命令不存在或启动报错。此时改用 `npx @zhin.js/cli`（任何版本都可靠），或用 `npx zhin@latest` 强制取新版。
+:::
+
 ## 最常用的命令
 
 | 我想…… | 命令 |
