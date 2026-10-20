@@ -127,7 +127,7 @@ done < names.txt
 
 ## 包清单
 
-以下 95 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
+以下 96 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
 
 ### `basic/`（5）
 
@@ -248,6 +248,7 @@ done < names.txt
 - [ ] `@zhin.js/plugin-calendar` — `plugins/utils/calendar`
 - [ ] `@zhin.js/plugin-code-runner` — `plugins/utils/code-runner`
 - [ ] `@zhin.js/plugin-content-moderation` — `plugins/utils/content-moderation`
+- [ ] `@zhin.js/plugin-earthquake` — `plugins/utils/earthquake`
 - [ ] `@zhin.js/plugin-group-suite` — `plugins/utils/group-suite`
 - [ ] `@zhin.js/plugin-ledger` — `plugins/utils/ledger`
 - [ ] `@zhin.js/plugin-link-poster` — `plugins/utils/link-poster`
