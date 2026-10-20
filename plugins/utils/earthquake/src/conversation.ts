@@ -39,14 +39,18 @@ export function extractConversation(input: unknown): ConversationTarget | null {
   if (!isRecord(conversation)) return null;
   const kind = conversation.kind;
   if (kind !== 'private' && kind !== 'group' && kind !== 'channel') return null;
-  if (!isIdentifier(input.clientAdapter)) return null;
-  if (!isIdentifier(input.endpointId)) return null;
+  // Same precedence as core: explicit message fields, then the conversation's endpoint.
+  const endpoint = isRecord(conversation.endpoint) ? conversation.endpoint : {};
+  const adapter = isIdentifier(input.clientAdapter) ? input.clientAdapter : endpoint.adapter;
+  const endpointKey = isIdentifier(input.endpointId) ? input.endpointId : endpoint.id;
+  if (!isIdentifier(adapter)) return null;
+  if (!isIdentifier(endpointKey)) return null;
   if (!isIdentifier(conversation.id)) return null;
   const sender = input.sender;
   const senderId = isRecord(sender) && isIdentifier(sender.id) ? sender.id : '';
   return {
-    adapter: input.clientAdapter,
-    endpointKey: input.endpointId,
+    adapter,
+    endpointKey,
     conversationKind: kind,
     conversationId: conversation.id,
     senderId,

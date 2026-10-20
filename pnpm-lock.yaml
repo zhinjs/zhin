@@ -3617,6 +3617,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:*
         version: link:../../../packages/im/command
+      '@zhin.js/testing':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/testing
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

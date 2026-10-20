@@ -55,6 +55,7 @@
   },
   "devDependencies": {
     "@zhin.js/command": "workspace:*",
+    "@zhin.js/testing": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",
