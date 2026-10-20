@@ -1,0 +1,30 @@
+.changeset/command-disabled-commands.md
+  h_b680f75345178a 1-6
+docs/authoring/commands.md
+  h_b680f75345178a 321-331
+docs/concepts/config-as-data.md
+  h_b680f75345178a 75
+docs/en/authoring/commands.md
+  h_b680f75345178a 319-329
+docs/en/concepts/config-as-data.md
+  h_b680f75345178a 75
+packages/im/command/src/command-index.ts
+  h_b680f75345178a 156,158-163,570-590
+packages/im/command/tests/command.test.ts
+  h_b680f75345178a 951-982
+packages/im/runtime/src/config-composer.ts
+  h_b680f75345178a 23-24,247,263-269
+packages/im/runtime/tests/config-composer.test.ts
+  h_b680f75345178a 137-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "de5b2a12fd44dd068f77d6c3f8af2bf357b07e87",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
