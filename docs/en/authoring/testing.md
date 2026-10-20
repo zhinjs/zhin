@@ -96,6 +96,8 @@ Prefer real or kit-provided fakes when they exist; keep `fakeOf` for narrow coll
 
 The fake bypasses the renderer, outbound middleware and endpoint negotiation. To verify that a message really goes through that chain, use `PluginTestKit`: it mounts a disposable real test app and synthetic endpoints capture the final payload. See the kit [README](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/testing/README.md) for usage and limits.
 
+`kit.messageDiagnostics` is the same bounded, body-free reader the Console serves at `GET /api/messages/diagnostics`; use it to assert each message's route, dispatch status and delivery outcome.
+
 ## Official example
 
 `plugins/services/activity-feedback/tests/activity-feedback-runtime.test.ts` has been migrated: `setup` runs through `createFakePlugin` with the event bus and hosts, payloads and the orchestrator use `fakeOf`, and the file no longer contains `as never`.

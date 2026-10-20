@@ -91,6 +91,10 @@ write files or send real messages. Never point it at a production app or include
 - `reloadSource(absolutePath)` submits a changed file to the real HMR coordinator and reports `reloaded`,
   `unchanged`, `failed` or `restart-required`, with the committed generation. Edit the test app first.
   A process restart requirement latches the native coordinator; close this kit and create a new one.
+- `messageDiagnostics` is the same bounded, body-free reader the Console serves at
+  `GET /api/messages/diagnostics`; use it to assert route, dispatch status and delivery outcomes.
+- `snapshots` is the committed-snapshot authority the Console routes read (task center, permission
+  explanation). Mount a real route on it to test a Console flow; do not publish through it.
 - `patchConfig()` uses normal composition/validation. Invalid patches reject and keep the prior generation.
 - `installResources()` installs host-owned public resources, such as a Database Host, Schedule Host or
   a test HTML renderer. The library does not invent storage or a scheduler implementation.

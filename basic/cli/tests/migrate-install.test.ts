@@ -84,3 +84,33 @@ describe('migration installer admission', () => {
     expect(vi.mocked(console.log).mock.calls.flat().join('\n')).toContain(pnpm ? 'pnpm install --no-frozen-lockfile' : 'npm install');
   });
 });
+
+describe('migrate dry-run and config-version guidance', () => {
+  it('a dry-run says nothing changed, keeps pins and points a v1 project to migrate instances', async () => {
+    const original = JSON.stringify({ dependencies: { 'zhin.js': '^1.1.0', '@zhin.js/agent-feature': '1.1.6' } }, null, 2);
+    writeFileSync(join(directory, 'package.json'), original);
+    writeFileSync(join(directory, 'zhin.config.yml'), 'plugins:\n  reminder:\n    token: synthetic-secret\n');
+    writeFileSync(join(directory, 'pnpm-lock.yaml'), '');
+    const { migrateCommand } = await import('../src/commands/migrate.js');
+    await migrateCommand.parseAsync(['node', 'zhin', '--dry-run']);
+    const output = vi.mocked(console.log).mock.calls.map(args => args.join(' ')).join('\n');
+    expect(output).toContain('Dry run finished: nothing was changed');
+    expect(output).not.toContain('Migration complete');
+    expect(output).not.toContain('@zhin.js/agent-feature: 1.1.6 → latest');
+    expect(output).toContain('zhin migrate instances --apply');
+    expect(output).not.toContain('synthetic-secret');
+    expect(execSync).not.toHaveBeenCalled();
+    expect(readFileSync(join(directory, 'package.json'), 'utf8')).toBe(original);
+  });
+
+  it('help explains the config-version migration and the unrelated runtime migrate', async () => {
+    const { migrateCommand } = await import('../src/commands/migrate.js');
+    let help = '';
+    migrateCommand.configureOutput({ writeOut: value => { help += value; } });
+    migrateCommand.outputHelp();
+    expect(help).toContain('configVersion');
+    expect(help).toContain('zhin migrate instances --apply');
+    expect(help).toContain('--include-pinned');
+    expect(help).toContain('zhin runtime migrate');
+  });
+});

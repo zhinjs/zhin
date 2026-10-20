@@ -230,3 +230,48 @@ it.each(['continue', 'rollback'] as const)('preserves 0660 permissions under uma
     for (const entry of await readdir(directory)) expect((await stat(join(directory, entry))).mode & 0o777).toBe(0o600);
   } finally {process.umask(originalUmask);}
 });
+
+it('preview is readable, value-free and the CLI apply prints a timestamped backup it can restore from', async () => {
+  const { formatInstanceMigrationPreview } = await import('../../src/plugin-runtime/migrate/instance-declarations.js');
+  const { root, config, source } = await fixture();
+  const plan = await planInstanceDeclarationMigration(root);
+  const preview = formatInstanceMigrationPreview(plan);
+  expect(preview).toContain('dry-run');
+  expect(preview).toContain('+ configVersion: 2');
+  expect(preview).toContain('+ plugins.10: "./plugins/example"');
+  expect(preview).toContain('~ plugins.10.{token, nil} → 10.{token, nil}');
+  expect(preview).toContain('+ disable_plugins: [2]');
+  expect(preview).toContain('- zhin.plugins');
+  expect(preview).toContain('.zhin/backups/config-v2-');
+  expect(preview).not.toContain('${TOKEN}');
+  expect(preview).not.toContain('8080');
+
+  const result = await applyInstanceDeclarationMigration(plan, { now: () => new Date(2026, 9, 20, 14, 5, 9) });
+  expect(result.backupDirectory.endsWith(join('.zhin/backups/config-v2-20261020-140509'))).toBe(true);
+  expect((await stat(result.backupDirectory)).mode & 0o777).toBe(0o700);
+  const manifest = JSON.parse(await readFile(join(result.backupDirectory, 'manifest.json'), 'utf8'));
+  expect(manifest.files.map((file: { backup: string }) => file.backup)).toEqual(['zhin.config.yml', 'package.json', '.zhin/plugin-lifecycle.json']);
+  expect(await readFile(join(result.backupDirectory, 'zhin.config.yml'), 'utf8')).toBe(source);
+  expect((await stat(join(result.backupDirectory, 'zhin.config.yml'))).mode & 0o777).toBe(0o600);
+  expect(manifest.restore.join('\n')).toContain('--recover rollback');
+  await recoverInstanceDeclarationMigration(root, 'rollback');
+  expect(await readFile(config, 'utf8')).toBe(source);
+
+  // A second apply in the same second never overwrites the first backup.
+  const again = await applyInstanceDeclarationMigration(await planInstanceDeclarationMigration(root), { now: () => new Date(2026, 9, 20, 14, 5, 9) });
+  expect(again.backupDirectory.endsWith(join('.zhin/backups/config-v2-20261020-140509-2'))).toBe(true);
+});
+
+it('the explicit CLI --apply prints the backup path and restore command', async () => {
+  const { migrateCommand } = await import('../../src/commands/migrate.js');
+  const { root } = await fixture();
+  const cwd = vi.spyOn(process, 'cwd').mockReturnValue(root);
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  try {
+    await migrateCommand.parseAsync(['node', 'zhin', 'instances', '--apply']);
+    const output = log.mock.calls.map(call => String(call[0])).join('\n');
+    expect(output).toMatch(/Backup \/ 备份: .*\.zhin\/backups\/config-v2-\d{8}-\d{6}/);
+    expect(output).toContain('zhin migrate instances --recover rollback');
+    expect(output).not.toContain('${TOKEN}');
+  } finally { log.mockRestore(); cwd.mockRestore(); }
+});
