@@ -1,0 +1,24 @@
+packages/toolkit/zhin-shim/README.md
+  h_b680f75345178a 1-16
+packages/toolkit/zhin-shim/bin/resolve-cli.js
+  h_b680f75345178a 1-36
+packages/toolkit/zhin-shim/bin/zhin.js
+  h_b680f75345178a 1-20
+packages/toolkit/zhin-shim/package.json
+  h_b680f75345178a 1-39
+packages/toolkit/zhin-shim/tests/shim.test.ts
+  h_b680f75345178a 1-52
+pnpm-lock.yaml
+  h_b680f75345178a 2083-2088
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b726dc1743c3ef9da56c2f21f2e9c3f421189f59",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
