@@ -91,7 +91,7 @@ Token 就是密码：不要放进 URL、截图或公开的前端配置里。
 - 每个 IM Runtime 仅在内存保留最近 15 分钟、最多 500 条记录；重启、过期或容量淘汰后查不到，不代表处理成功或从未收到。
 - 诊断须显式配置并验证 full scope Token，未配置 Token 的 Host 也不能匿名读取；不另存正文、发送者资料或原始异常。单条记录最多保留 32 个步骤与 32 次投递；超出时 `truncated: true` 表示记录不完整，不替代完整审计日志。单个身份字段最多 2048 字符，完整会话 JSON 最多 8192 字符；超限不截断身份，不收录该诊断。
 
-Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录，或用 `conversation`（完整 `ConversationRef` JSON）、`messageId` 精确筛选，`limit` 为 1–100。找不到记录时，再按下面的路径排查。旧版 Host 不提供此接口，需分别更新 Host 与独立 Console。
+Host 查询入口为 `GET /api/messages/diagnostics`：`id` 查询一条记录，或用 `conversation`（完整 `ConversationRef` JSON）、`messageId` 精确筛选，`limit` 为 1–100。按实际结果继续阅读[消息处理排查](../troubleshooting/messages.md)；新版 Console 也会在诊断内提供对应问题的链接。找不到记录时，再按下面的路径排查。旧版 Host 不提供此接口，需分别更新 Host 与独立 Console。
 
 1. **工作台**：Bot 连上了吗？各 Endpoint 在线吗？
 2. **渠道与会话**：用户的消息到达 Bot 了吗？

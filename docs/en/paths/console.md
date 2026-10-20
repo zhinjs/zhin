@@ -91,7 +91,7 @@ If the inbound message is visible in a conversation, open its **Diagnostics** ac
 - Each IM Runtime keeps at most 500 records in memory for 15 minutes. Restart, expiry and capacity eviction remove records; an absent record proves neither success nor absence of receipt.
 - Reading diagnostics requires an explicitly configured and validated full-scope token, including on an otherwise tokenless Host. Message bodies, sender profiles and raw exceptions are not copied into this store. Each record holds at most 32 steps and 32 deliveries; `truncated: true` marks an incomplete record when these limits are exceeded. Identity fields are limited to 2048 characters and conversation JSON to 8192; oversized identities are omitted instead of truncated into ambiguous addresses. This is not a complete audit log.
 
-The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, or `conversation` (complete `ConversationRef` JSON) and `messageId` for an exact lookup; `limit` accepts 1–100. When no record is available, continue below. Older Hosts do not expose this endpoint; update the Host and standalone Console separately.
+The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, or `conversation` (complete `ConversationRef` JSON) and `messageId` for an exact lookup; `limit` accepts 1–100. Follow the observed result in [message troubleshooting](../troubleshooting/messages.md); newer Console versions also link to the relevant topic from each diagnostic. When no record is available, continue below. Older Hosts do not expose this endpoint; update the Host and standalone Console separately.
 
 1. **Dashboard**: is the bot connected? Are the Endpoints online?
 2. **Conversations & Channels**: did the user's message reach the bot?
