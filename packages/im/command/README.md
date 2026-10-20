@@ -58,6 +58,23 @@ commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type:
 `addCommand('hello', defineCommand(...))`。它与目录发现共用 CommandIndex；拆成文件后
 可获得单命令 HMR。
 
+## 只读权限解释
+
+`CommandIndex.list()` 的命令描述包含稳定的 capability `id` 与声明 `owner`。
+`toCommandPermissionSubject(source)` 与真实命令 permit gate 共用投影；
+`explainCommandPermissions(command, { source?, rolesKnown?, permissionHost })` 只做声明条件的假设检查，
+不执行命令、参数默认函数或平台与自定义 checker。`permissionHost` 表示读取端确认的
+`present` / `missing` / `unverified` 状态，不会通过调用它的方法来试探。
+
+Console 的权限解释入口使用完整会话目标及可选发送者、角色假设。角色未提供时为
+`unknown`；显式提供 canonical `sender.roles: []` 时，按实际命令投影默认 `user`，并说明
+该角色未经平台核验。命令 `adapter` 是原生适配器名称的精确约束，独立于
+permit 的 `adapter(...)` 匹配。保留 Endpoint、父容器和话题只保证模拟输入不丢身份，
+不会使 `group(...)` 等内置规则自动约束这些维度。
+
+返回的 `match` 仅表示已解释条件与假设输入匹配。空 permit、未执行 checker、缺少
+PermissionHost 或缺少身份依据均不能被展示为“已授权”或“可以执行”。
+
 
 ## 集中声明参数、选项与帮助
 

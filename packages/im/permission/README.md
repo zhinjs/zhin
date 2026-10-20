@@ -26,6 +26,22 @@ const host = new PermissionHost();
 
 `defineCommand` 的 `permit` 字段支持 builtin DSL 和 `platform(adapter,perm)` 两种形态。构建期通过 `assertPermitSyntax` 做语法校验。
 
+### 只读解释与假设检查
+
+`explainPermitRules(permits, subject?, { rolesKnown? })` 只解析声明并复用内置纯判断，返回
+`match` / `mismatch` / `unknown` / `not_evaluated`，不查询或执行 `PermissionHost` 的任何 checker。
+角色未明确作为假设输入提供时，不会把空角色或默认角色当作已核验依据。
+`platform(...)` 与未知规则保留为未执行；结果不是授权结论。
+
+规则数组为 AND，同一项括号内逗号为 OR。`group()`、`private()`、`channel()` 的空值和
+`*` 表示不限该场景的 ID；`adapter(*)` 没有通配语义。`master` 身份仅隐含
+`trusted`，不会隐含平台的 `admin`。内置场景规则不约束 Endpoint、父容器或话题：
+例如 `group(123)` 不能保证只在某个 Bot 账号的群或某个线程生效。
+
+命令应使用 `@zhin.js/command` 的 `explainCommandPermissions`，它与实际命令准入复用
+同一主体投影，并单独解释命令 `adapter` 的精确匹配约束，不能用单独的
+`toPermissionSubject()` 替代命令侧角色优先级。
+
 ### 适配器注册平台 checker
 
 ```ts

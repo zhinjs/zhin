@@ -113,6 +113,18 @@ Drafts retain their original generation and revision; conflicts preserve input i
 
 Host endpoints are `GET /api/tasks/use-cases`, `GET /api/tasks/providers`, `POST /api/tasks/create` and `POST /api/tasks/change`. The plugin owns persistent task facts, revisions and receipts; the Host does not add another scheduler. See the [persistent reminder plugin](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder) and [CLI use-case guide](../cli/index.md#use-cases-find-a-setup-path-by-purpose).
 
+## Command permission explanations
+
+Open `/permissions` or follow the permission explanation link in the command catalog. Use an explicit full-scope Token for the current Host. Search by command, description or plugin instance; the catalog is paginated.
+
+Selecting a command explains its actual `permit` declarations and its separate `adapter` constraint. Rule arrays use AND; comma-separated values within one rule use OR. Optionally supply a hypothetical conversation, sender and roles to check builtin conditions. Accounts come from the current Host's complete Endpoint catalog; no platform role lookup is performed.
+
+A matching condition is not authorization. Missing roles remain unknown; platform and custom checkers stay unevaluated. The page executes no command, dynamic parameter default or checker. Builtin conversation rules compare kind and ID only, without restricting the specific Bot account, parent or thread. Displaying a complete identity does not add those restrictions.
+
+Changing assumptions clears old results. A generation change requires a fresh catalog and check. Changing Host or credentials discards old results. Older Hosts without these interfaces receive an explicit update message rather than an invented decision.
+
+For actual welcome restrictions, configure the [exact welcome allowlist](../solutions/group-welcome.md) through the existing validation, save and apply flow. The explanation page does not write it.
+
 ## Next steps
 
 - [Console overview](../console/): how Console and the Host split work, and page extensions

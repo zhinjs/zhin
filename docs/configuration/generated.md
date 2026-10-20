@@ -1428,6 +1428,16 @@ _该 Schema 没有声明字段。_
 | `group-suite.teachAllowRegex` | boolean | 否 | `true` | — |
 | `group-suite.teachPageSize` | number | 否 | `10` | — |
 | `group-suite.welcomeMessage` | string | 否 | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
+| `group-suite.welcomeConversations` | array&lt;object&gt; | 否 | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |
+| `group-suite.welcomeConversations[].endpoint` | object | 是 | — | — |
+| `group-suite.welcomeConversations[].endpoint.adapter` | string | 是 | — | — |
+| `group-suite.welcomeConversations[].endpoint.id` | string | 是 | — | — |
+| `group-suite.welcomeConversations[].kind` | string: `"group"` | 是 | — | — |
+| `group-suite.welcomeConversations[].id` | string | 是 | — | — |
+| `group-suite.welcomeConversations[].parent` | object | 否 | — | — |
+| `group-suite.welcomeConversations[].parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
+| `group-suite.welcomeConversations[].parent.id` | string | 是 | — | — |
+| `group-suite.welcomeConversations[].threadId` | string | 否 | — | — |
 | `group-suite.ephemeralKeywords` | boolean | 否 | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
 
 ### link-poster

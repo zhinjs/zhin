@@ -1428,6 +1428,16 @@ _This Schema declares no fields._
 | `group-suite.teachAllowRegex` | boolean | no | `true` | — |
 | `group-suite.teachPageSize` | number | no | `10` | — |
 | `group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
+| `group-suite.welcomeConversations` | array&lt;object&gt; | no | — | Exact welcome conversations. Omitted welcomes all groups; [] welcomes none. Missing parent/thread requires their absence; no wildcards. |
+| `group-suite.welcomeConversations[].endpoint` | object | yes | — | — |
+| `group-suite.welcomeConversations[].endpoint.adapter` | string | yes | — | — |
+| `group-suite.welcomeConversations[].endpoint.id` | string | yes | — | — |
+| `group-suite.welcomeConversations[].kind` | string: `"group"` | yes | — | — |
+| `group-suite.welcomeConversations[].id` | string | yes | — | — |
+| `group-suite.welcomeConversations[].parent` | object | no | — | — |
+| `group-suite.welcomeConversations[].parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `group-suite.welcomeConversations[].parent.id` | string | yes | — | — |
+| `group-suite.welcomeConversations[].threadId` | string | no | — | — |
 | `group-suite.ephemeralKeywords` | boolean | no | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
 
 ### link-poster
