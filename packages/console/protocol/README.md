@@ -13,3 +13,8 @@ Client transport 直接消费 canonical dot-named push；需要持久化 Inbox �
 历史响应使用 `ConsoleEventHistoryPage`。当 `gap=true` 时，调用方必须从对应领域的 HTTP 投影完整重同步，不能把当前有界后缀误认为完整历史。
 
 通知投影使用 `ConsoleInboxNoticesQuery` / `ConsoleInboxNoticesResult`；传入 `unreadOnly: true` 可从持久化 Inbox 重建未读通知，而不是依赖本地实时内存。
+
+消息诊断中的 `dispatchStatus: 'limited'` 表示命令执行预算拒绝，仍属于已匹配命令，不能回落为 AI 输入。
+`limit.reason` 为 `cooldown`、`busy`、`capacity`、`operation_unavailable`、`identity_unavailable` 或
+`service_unavailable`。只有冷却含 `retryAfterMs`（剩余毫秒）；`busy` 不推测任务结束时间。
+它与最终投递回执独立：拒绝说明本身仍可发送成功，也可能投递失败。

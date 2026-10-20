@@ -131,6 +131,12 @@ return segment.html({
 
 ## 验证
 
+命令可通过 `execution` 显式开启冷却、并发预算与一次进度反馈，详见
+[`@zhin.js/command`](../command/README.md#可选执行预算)。Core 在真实入站 operation 上绑定身份，
+Root Resource 保存跨 generation 的预算；外层 finally 在所有已启动发送排空后释放。
+retirement signal 只停止尚未启动的提示，不释放仍在执行的占用，也不取消普通旧 lease 的发送。
+诊断 `dispatchStatus: 'limited'` 与 `limit` 表示准入拒绝，不是权限授权或平台投递失败。
+
 ```bash
 pnpm --filter @zhin.js/core build
 pnpm exec vitest run packages/im/core/tests packages/im/adapter/tests
