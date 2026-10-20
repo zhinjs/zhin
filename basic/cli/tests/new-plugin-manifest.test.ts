@@ -4,6 +4,7 @@ import path from 'node:path';
 import inquirer from 'inquirer';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  CONVENTION_SOURCE_DIRECTORIES,
   FALLBACK_STACK_RANGE,
   PLUGIN_TOOLING_RANGES,
   caretRange,
@@ -42,6 +43,7 @@ const ranges: PluginStackRanges = {
   '@zhin.js/skill': '^1.1.3',
   '@zhin.js/command': '^1.1.6',
   '@zhin.js/adapter': '^1.1.4',
+  '@zhin.js/testing': '^1.0.3',
 };
 
 function manifest(kind: PluginKind) {
@@ -116,8 +118,25 @@ describe('createPluginManifest', () => {
     expect(pkg.scripts.prepack).toBe('pnpm run build');
     expect(pkg.scripts.build).toBe('tsc -p tsconfig.build.json');
     const { build } = createPluginTsconfigs('normal');
-    expect(build.include).toEqual(['plugin.ts', 'src/**/*', 'commands/**/*']);
+    expect(build.include).toEqual(['plugin.ts', ...['src', ...CONVENTION_SOURCE_DIRECTORIES].map((dir) => `${dir}/**/*`)]);
     expect((build.compilerOptions as Record<string, unknown>).noEmit).toBe(false);
+  });
+
+  it.each(['normal', 'service', 'adapter'] as const)('%s: ships and compiles every server-side convention directory', (kind) => {
+    const pkg = manifest(kind);
+    const { tsconfig, build } = createPluginTsconfigs(kind);
+    for (const dir of CONVENTION_SOURCE_DIRECTORIES) {
+      expect(pkg.files, dir).toContain(dir);
+      expect(build.include, dir).toContain(`${dir}/**/*`);
+      expect(tsconfig.include, dir).toContain(`${dir}/**/*`);
+    }
+    expect(pkg.files).toEqual(expect.arrayContaining(['skills', 'agents']));
+  });
+
+  it('generated tests use @zhin.js/testing from devDependencies', () => {
+    const pkg = manifest('normal');
+    expect(pkg.devDependencies['@zhin.js/testing']).toBeDefined();
+    expect(pkg.peerDependencies['@zhin.js/testing']).toBeUndefined();
   });
 
   it('keeps tooling ranges in step with the repository root', async () => {

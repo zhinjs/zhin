@@ -19,6 +19,9 @@ import type { AIService } from '../service.js';
 import { renderExternalContent } from '../security/trust-level.js';
 import type { UsageQuota, UsageSubject } from '../security/usage-quota.js';
 
+/** Who a completion is billed to (`onBehalfOf`); `groupId` is `${platform}:${endpoint}:${sceneId}` for group / channel chats. */
+export type { UsageSubject } from '../security/usage-quota.js';
+
 const logger = getLogger('agent');
 
 export interface AiCompletionUntrustedInput {
