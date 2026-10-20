@@ -49,6 +49,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "rss-parser": "^3.13.0",
     "@zhin.js/skill": "workspace:*"

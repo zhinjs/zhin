@@ -3821,6 +3821,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
