@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "sources": {
+      "type": "array",
+      "description": "启用的数据源及优先顺序；合并同一地震时，排在前面的数据源提供地点文字",
+      "items": { "type": "string", "enum": ["cenc", "usgs"] },
+      "minItems": 1,
+      "uniqueItems": true,
+      "default": ["cenc", "usgs"]
+    },
+    "usgsFeed": {
+      "type": "string",
+      "description": "USGS GeoJSON 汇总源名称（震级下限_时间范围）",
+      "enum": ["significant_hour", "significant_day", "4.5_hour", "4.5_day", "2.5_hour", "2.5_day", "1.0_hour", "1.0_day"],
+      "default": "2.5_day"
+    },
+    "pollCron": {
+      "type": "string",
+      "description": "订阅轮询频率（6 段 Cron：秒 分 时 日 月 周）",
+      "default": "0 */2 * * * *"
+    },
+    "timezone": {
+      "type": "string",
+      "description": "显示发震时刻使用的 IANA 时区",
+      "default": "Asia/Shanghai"
+    },
+    "requestTimeoutMs": {
+      "type": "number",
+      "description": "单次 HTTP 请求超时（毫秒）",
+      "default": 10000,
+      "minimum": 1000,
+      "maximum": 60000
+    },
+    "maxRetries": {
+      "type": "number",
+      "description": "网络错误、超时、429 与 5xx 的重试次数（不含首次请求）",
+      "default": 2,
+      "minimum": 0,
+      "maximum": 5,
+      "multipleOf": 1
+    },
+    "retryBaseDelayMs": {
+      "type": "number",
+      "description": "指数退避的首次等待（毫秒），每次重试翻倍并加入随机抖动",
+      "default": 1000,
+      "minimum": 100,
+      "maximum": 10000
+    },
+    "retryMaxDelayMs": {
+      "type": "number",
+      "description": "单次退避或 Retry-After 等待上限（毫秒）；服务端要求更久时本轮放弃并冷却该数据源",
+      "default": 30000,
+      "minimum": 1000,
+      "maximum": 120000
+    },
+    "defaultMinMagnitude": {
+      "type": "number",
+      "description": "订阅未指定震级时使用的最小震级",
+      "default": 5,
+      "minimum": 0,
+      "maximum": 10
+    },
+    "queryMinMagnitude": {
+      "type": "number",
+      "description": "「地震」查询未指定震级时使用的最小震级",
+      "default": 3,
+      "minimum": 0,
+      "maximum": 10
+    },
+    "queryLimit": {
+      "type": "number",
+      "description": "「地震」查询默认列出的条数",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 20,
+      "multipleOf": 1
+    },
+    "maxEventAgeMinutes": {
+      "type": "number",
+      "description": "只推送发震时间在此分钟数以内的地震，避免推送迟到或重放的旧事件",
+      "default": 60,
+      "minimum": 5,
+      "maximum": 1440
+    },
+    "pushLimit": {
+      "type": "number",
+      "description": "每个会话在一个限流窗口内最多推送的消息数",
+      "default": 3,
+      "minimum": 1,
+      "maximum": 60,
+      "multipleOf": 1
+    },
+    "pushWindowMinutes": {
+      "type": "number",
+      "description": "推送限流窗口长度（分钟）",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 1440
+    },
+    "maxEventsPerMessage": {
+      "type": "number",
+      "description": "单条推送消息最多列出的地震数，其余以数量概括",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 10,
+      "multipleOf": 1
+    },
+    "maxSubscriptions": {
+      "type": "number",
+      "description": "本实例所有会话的订阅总数上限（每个会话最多一个订阅）",
+      "default": 100,
+      "minimum": 1,
+      "maximum": 1000,
+      "multipleOf": 1
+    }
+  }
+}
