@@ -1,0 +1,76 @@
+plugins/utils/rss/plugin.ts
+  s_079f1dc5e6308d::t_44cd45dd64390a 7-8,52-54,59,61,81-93,101-102
+  s_079f1dc5e6308d::t_460dac307f427d 103-105
+plugins/utils/rss/tests/admin-fixture.ts
+  s_079f1dc5e6308d::t_c064ac2a7ff9e1 62-67
+  s_079f1dc5e6308d::t_5de20732d91087 1-30,32-40,42-43,45-56,58-61,68,72-81,83-93
+  s_079f1dc5e6308d::t_46b3a57b46094c 31,41,44,82
+  s_079f1dc5e6308d::t_6ff43316706102 57
+  s_079f1dc5e6308d::t_39126fca2dabfa 69-71
+plugins/utils/rss/src/admin-tasks.ts
+  s_079f1dc5e6308d::t_319a78aa6503f0 1-85,87-198,202-204,206-208,214-233,235-237,239-242,249-256
+  s_079f1dc5e6308d::t_9e58b6dacc892d 199-201
+  s_079f1dc5e6308d::t_bae185887b3817 86,205,209-210,234,238,243,247
+  s_079f1dc5e6308d::t_6ff43316706102 248
+  s_079f1dc5e6308d::t_9e7437809337d9 211-213,244-246
+plugins/utils/rss/tests/admin-task-host.test.ts
+  s_079f1dc5e6308d::t_bae185887b3817 5-6
+  s_079f1dc5e6308d::t_241e58c40c32c7 58-60
+  s_079f1dc5e6308d::t_39126fca2dabfa 1-4,7-11,13-23,26-51,53-57,61-106,122-123
+  s_079f1dc5e6308d::t_9e7437809337d9 12,24-25,52,107-121
+plugins/utils/rss/package.json
+  s_079f1dc5e6308d::t_263384c75fe0c9 52
+plugins/utils/rss/README.md
+  s_079f1dc5e6308d::t_d380f3fc16ef01 40-63,69-71,74
+  s_079f1dc5e6308d::t_a59f2043e45da8 64-68
+  s_079f1dc5e6308d::t_f29d76db6abf0d 75
+.changeset/admin-rss-task-provider.md
+  s_079f1dc5e6308d::t_196de86df87c60 1-2,4-6
+  s_079f1dc5e6308d::t_241e58c40c32c7 7-8
+  s_079f1dc5e6308d::t_5d5b40d99d20f3 3
+plugins/utils/rss/tests/admin-tasks.test.ts
+  s_079f1dc5e6308d::t_c064ac2a7ff9e1 145,147
+  s_079f1dc5e6308d::t_e5922523d1d468 151-179,226-231
+  s_079f1dc5e6308d::t_6b734ee745443c 188-200
+  s_079f1dc5e6308d::t_68d1f056901b28 1-144,146,148-150,180-187,201-225,232-233
+basic/cli/tests/plugin-management/use-cases.test.ts
+  s_079f1dc5e6308d::t_241e58c40c32c7 2,27-40
+  s_079f1dc5e6308d::t_aa9ef34a0534e1 41
+basic/cli/src/commands/use-cases.ts
+  s_079f1dc5e6308d::t_5d5b40d99d20f3 6
+basic/cli/src/plugin-management/use-cases.ts
+  s_079f1dc5e6308d::t_5d5b40d99d20f3 14-23
+  s_079f1dc5e6308d::t_b8765444ade3c7 13
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_a37abc6aca9485 123,266
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_bd36ce83908e1a 110
+docs/en/solutions/index.md
+  s_079f1dc5e6308d::t_6aa538da6bfeec 14
+docs/en/solutions/rss-subscriptions.md
+  s_079f1dc5e6308d::t_52793ef93cf7c8 1-45
+docs/paths/console.md
+  s_079f1dc5e6308d::t_6343afe666fd45 110
+docs/solutions/index.md
+  s_079f1dc5e6308d::t_ae29a80a52d7e4 14
+docs/solutions/rss-subscriptions.md
+  s_079f1dc5e6308d::t_d741526c51efc1 1-45
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_76613f07a7b314 3824-3826
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1336c1aa69b98ca05ebb27fdda0b4cf3ea695981",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
