@@ -1,0 +1,14 @@
+packages/toolkit/testing/src/fake-plugin.ts
+  h_b680f75345178a 8,164-226,229,231-233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "78636d6dab31bb974204619577672ca14e664dae",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
