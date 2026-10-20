@@ -42,3 +42,36 @@ describe('paginated command menu on QQ official', () => {
     expect(out.filter(part => part.type === 'markdown')).toEqual([{ type: 'markdown', data: { content: 'first\n\nsecond' } }]);
   });
 });
+
+describe('text + inline markdown without buttons on QQ official', () => {
+  it('keeps the text by merging it into the single markdown, in order', async () => {
+    const out = formatOutbound([
+      { type: 'text', data: { text: '正文第一段' } },
+      { type: 'markdown', data: { content: '**标题**' } },
+      { type: 'text', data: { text: '结尾' } },
+    ]);
+    expect(out).toEqual({ type: 'markdown', data: { content: '正文第一段\n\n**标题**\n\n结尾' } });
+    const body = await buildSdkPayload(out);
+    expect(body.msg_type).toBe(2);
+    expect(body.markdown?.content).toBe('正文第一段\n\n**标题**\n\n结尾');
+  });
+
+  it('keeps one markdown when an @ splits the text', () => {
+    const out = formatOutbound([
+      { type: 'text', data: { text: 'a' } },
+      { type: 'at', data: { user_id: 'u1' } },
+      { type: 'text', data: { text: 'b' } },
+      { type: 'markdown', data: { content: 'c' } },
+    ]) as Array<{ type: string; data: Record<string, unknown> }>;
+    expect(out.filter(part => part.type === 'markdown')).toEqual([{ type: 'markdown', data: { content: 'ab\n\nc' } }]);
+  });
+
+  it('leaves template markdown and plain text unchanged', () => {
+    expect(formatOutbound([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'markdown', data: { custom_template_id: 'tpl', params: [{ key: 'k', values: ['v'] }] } },
+    ])).toEqual(['hi', { type: 'markdown', data: { custom_template_id: 'tpl', params: [{ key: 'k', values: ['v'] }] } }]);
+    expect(formatOutbound([{ type: 'text', data: { text: 'hi' } }, { type: 'text', data: { text: ' there' } }])).toBe('hi there');
+    expect(formatOutbound('plain')).toBe('plain');
+  });
+});
