@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "chambers": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 12,
+      "default": 6,
+      "description": "弹巢数量，其中一发是实弹"
+    },
+    "maxPlayers": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 10,
+      "default": 6,
+      "description": "单局最多玩家数"
+    },
+    "turnTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 600,
+      "default": 60,
+      "description": "轮到的玩家超过这个秒数不开枪，判负"
+    },
+    "lobbyTimeoutSeconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 3600,
+      "default": 300,
+      "description": "开局后超过这个秒数仍未开始，自动解散"
+    },
+    "muteSeconds": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 3600,
+      "default": 60,
+      "description": "开启禁言惩罚的群里，输家被禁言的秒数（每个群默认关闭）"
+    }
+  }
+}

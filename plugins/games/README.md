@@ -14,6 +14,7 @@
 | [@zhin.js/plugin-word-riddle](./word-riddle/) | 猜谜（`猜谜` · 字谜 + 猜成语） |
 | [@zhin.js/plugin-text-adventure](./text-adventure/) | 文字冒险（`冒险` / `adv` · 进度与成就） |
 | [@zhin.js/plugin-blackjack](./blackjack/) | 21 点（`21点` / `bj` · 对庄 Blackjack） |
+| [@zhin.js/plugin-roulette](./roulette/) | 俄罗斯轮盘（`轮盘` / `roulette` · 多人轮流开枪，可按群开启禁言惩罚） |
 
 ## 架构
 

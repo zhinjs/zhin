@@ -223,7 +223,7 @@ done < names.txt
 
 - [ ] `@zhin.js/process-monitor` — `plugins/features/process-monitor`
 
-### `plugins/games/`（10）
+### `plugins/games/`（11）
 
 - [ ] `@zhin.js/plugin-blackjack` — `plugins/games/blackjack`
 - [ ] `@zhin.js/plugin-dice-duel` — `plugins/games/dice-duel`
@@ -231,6 +231,7 @@ done < names.txt
 - [ ] `@zhin.js/plugin-guess-number` — `plugins/games/guess-number`
 - [ ] `@zhin.js/plugin-game-hub` — `plugins/games/hub`
 - [ ] `@zhin.js/plugin-idiom-chain` — `plugins/games/idiom-chain`
+- [ ] `@zhin.js/plugin-roulette` — `plugins/games/roulette`
 - [ ] `@zhin.js/plugin-rps` — `plugins/games/rps`
 - [ ] `@zhin.js/plugin-text-adventure` — `plugins/games/text-adventure`
 - [ ] `@zhin.js/plugin-tic-tac-toe` — `plugins/games/tic-tac-toe`

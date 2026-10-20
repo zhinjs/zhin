@@ -1155,6 +1155,18 @@ _This Schema declares no fields._
 
 _This Schema declares no fields._
 
+### roulette
+
+[`plugins/games/roulette/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/roulette/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `roulette.chambers` | integer | no | `6` | 弹巢数量，其中一发是实弹 |
+| `roulette.maxPlayers` | integer | no | `6` | 单局最多玩家数 |
+| `roulette.turnTimeoutSeconds` | integer | no | `60` | 轮到的玩家超过这个秒数不开枪，判负 |
+| `roulette.lobbyTimeoutSeconds` | integer | no | `300` | 开局后超过这个秒数仍未开始，自动解散 |
+| `roulette.muteSeconds` | integer | no | `60` | 开启禁言惩罚的群里，输家被禁言的秒数（每个群默认关闭） |
+
 ### rps
 
 [`plugins/games/rps/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/games/rps/schema.json)

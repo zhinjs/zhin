@@ -32,13 +32,31 @@ function isClassicMessage(input: unknown): input is GameMessageLike {
   );
 }
 
+/** Runtime `Message.sender` (structured) — older callers passed a bare id string. */
+interface RuntimeSenderRef {
+  readonly id?: string;
+  readonly name?: string;
+}
+
+function readSenderId(sender: string | RuntimeSenderRef | undefined): string | undefined {
+  if (typeof sender === 'string') return sender || undefined;
+  if (typeof sender?.id === 'string' && sender.id) return sender.id;
+  return undefined;
+}
+
+function readSenderName(sender: string | RuntimeSenderRef | undefined): string | undefined {
+  if (typeof sender !== 'object') return undefined;
+  if (typeof sender.name === 'string' && sender.name.trim()) return sender.name;
+  return undefined;
+}
+
 function isRuntimeMessage(input: unknown): input is {
   conversation?: {
     endpoint?: { id?: string; adapter?: string };
     kind?: string;
     id?: string;
   };
-  sender?: string;
+  sender?: string | RuntimeSenderRef;
   metadata?: Readonly<Record<string, unknown>>;
 } {
   if (!input || typeof input !== 'object') return false;
@@ -79,8 +97,8 @@ export function messageFromCommandInput(input: unknown): GameMessageLike {
     const endpoint = String(meta.endpoint ?? meta.endpointKey ?? 'default');
     const channelType = String(meta.type ?? meta.channelType ?? conversation?.kind ?? 'private');
     const channelId = String(meta.channelId ?? conversation?.id ?? 'smoke');
-    const senderId = String(input.sender ?? meta.senderId ?? 'smoke');
-    const senderName = String(meta.senderName ?? meta.name ?? senderId);
+    const senderId = String(readSenderId(input.sender) ?? meta.senderId ?? 'smoke');
+    const senderName = String(readSenderName(input.sender) ?? meta.senderName ?? meta.name ?? senderId);
     return {
       $adapter: adapter,
       $endpoint: endpoint,
