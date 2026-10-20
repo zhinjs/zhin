@@ -66,6 +66,9 @@ pnpm dev
 
 Full walkthrough: [Quick start](./docs/en/getting-started/index.md) · Prefer not to install yet? Try the [live demo](https://demo.zhin.dev).
 
+> [!IMPORTANT]
+> **Upgrading an existing bot from 1.1.13 or earlier?** The Runtime now only accepts `configVersion: 2`. Stop the Bot first, upgrade `zhin.js` / `@zhin.js/cli` to the latest, then run `zhin migrate instances` (preview) and `zhin migrate instances --apply` (backs up first). Full steps and restore: [Upgrading to configVersion 2](./docs/en/operations/upgrades.md#configversion-2).
+
 ## How a bot is put together
 
 ```text

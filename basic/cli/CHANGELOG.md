@@ -2,6 +2,8 @@
 
 ## 1.1.14
 
+> **⚠️ 升级须知（configVersion 2）**：本版本起 Runtime 只接受 `configVersion: 2`，旧配置会被拒绝启动。先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移（自动备份），最后 `zhin config check` 后启动。恢复：`zhin migrate instances --recover rollback`。指南：https://zhin.js.org/operations/upgrades#configversion-2
+
 ### Patch Changes
 
 - 1336c1a: 将独立管理员 RSS 订阅接入任务中心：完整目标、持久 CAS 与操作对账；新建和恢复首次抓取只建基线，投递未确认时停止且不自动重试，保留原聊天订阅归属。
