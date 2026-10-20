@@ -28,6 +28,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { formatNodeRequirementMessage, isNodeVersionSupported } from '../utils/node-requirements.js';
 import { findConfigFile, readConfig } from '../utils/config-file.js';
+import { detectLegacyConfig, formatLegacyConfigHint } from '../utils/legacy-config.js';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../utils/adapter-endpoints-check.js';
 import { findDuplicateZhinInstances } from '../utils/dev-link.js';
 import { fetchReadiness } from '../plugin-runtime/readiness-client.js';
@@ -161,7 +162,17 @@ export const doctorCommand = new Command('doctor')
     let loadedConfig: Record<string, unknown> | null = null;
     let configParseFailed = false;
 
-    if (existingConfig) {
+    const legacyConfig = await detectLegacyConfig(cwd);
+    if (existingConfig && legacyConfig.legacy) {
+      // v1 layouts cannot be read by the v2 schema; skip config-dependent checks.
+      configParseFailed = true;
+      results.push({
+        name: '配置版本',
+        status: 'error',
+        message: formatLegacyConfigHint(legacyConfig),
+        fix: 'zhin stop && zhin migrate instances && zhin migrate instances --apply',
+      });
+    } else if (existingConfig) {
       try {
         await readConfig(path.join(cwd, existingConfig));
         results.push({

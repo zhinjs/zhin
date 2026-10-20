@@ -15,6 +15,7 @@ import {
 } from '@zhin.js/scaffold-wizard';
 import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { findConfigFile, readConfig, saveConfig } from './config-file.js';
+import { detectLegacyConfig, formatLegacyConfigHint } from './legacy-config.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
 export type ConfigIssueSeverity = 'error' | 'warn' | 'info';
@@ -405,6 +406,19 @@ export async function runConfigCheck(
       fixHint: 'zhin setup',
     });
     return { configFile: null, config: {}, issues, fixesApplied };
+  }
+
+  // v1 configs fail schema reading; report them as a migration, not as a parse error.
+  const legacy = await detectLegacyConfig(cwd);
+  if (legacy.legacy) {
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'config.legacy_v1',
+      path: configFile,
+      message: formatLegacyConfigHint(legacy),
+      fixHint: 'zhin stop && zhin migrate instances && zhin migrate instances --apply',
+    });
+    return { configFile, config: {}, issues, fixesApplied };
   }
 
   let config: Record<string, unknown>;
