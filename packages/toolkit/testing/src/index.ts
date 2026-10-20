@@ -13,11 +13,12 @@ import { withTestEndpoints } from './test-module-runtime.js';
 
 export { FakeClock, FakeScheduleRootHost, parseCron, type FakeScheduledJob } from './fake-clock.js';
 export { FakeDatabaseRootHost, FakeOutboundRootHost, type FakeOutboundCall } from './fake-hosts.js';
-export { FakePlugin, createFakePlugin, runPluginSetup, fakeResource,
-  type FakePluginOptions, type FakeResource, type FakeRegisteredFeature } from './fake-plugin.js';
+export { FakePlugin, createFakePlugin, runPluginSetup, resolvePluginConfig, PluginConfigValidationError, fakeResource,
+  type FakePluginOptions, type RunPluginSetupOptions, type FakeResource, type FakeRegisteredFeature } from './fake-plugin.js';
 export { fakeOf } from './partial.js';
 export { createFakeMessage, createCommandContext, runCommand, runMiddleware, runHandler,
-  type FakeMessage, type FakeMessageInit, type RunCommandOptions, type RunMiddlewareResult } from './fake-runners.js';
+  createToolContext, runTool, toolOriginFromMessage,
+  type FakeMessage, type RunToolOptions, type FakeMessageInit, type RunCommandOptions, type RunMiddlewareResult } from './fake-runners.js';
 
 export interface PluginTestKitOptions {
   /** A real, disposable test app with its own package.json, plugin entry, dependencies and mounts. */

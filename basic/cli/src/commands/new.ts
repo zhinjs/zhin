@@ -141,8 +141,8 @@ export const newCommand = new Command('new')
         logger.log(`    pnpm add -w <插件目录>/${packageName.replace(/^@/, '').replace('/', '-')}-0.1.0.tgz`);
         logger.log(`  在 Bot 主配置设置 configVersion: 2、plugins: { ${name}: "${packageName}" }，然后 pnpm dev`);
         logger.log('  不要直接 pnpm add <插件目录>：插件自己的 devDependencies 会让 zhin 包出现两份实例；');
-        logger.log('    需要热重载时的联调方式见 https://zhin.js.org/authoring/local-dev#standalone-plugin');
-        logger.log('  发布到 npm：在插件目录执行 pnpm publish（prepack 会自动构建 plugin.js）');
+        logger.log(`  需要热重载：在 Bot 项目根执行 zhin dev link <插件目录>（实例名 ${name}），见 https://zhin.js.org/authoring/local-dev#dev-link-plugin`);
+        logger.log('  发布到 npm：在插件目录执行 npx @zhin.js/cli pub --dry-run 预览，再 npx @zhin.js/cli pub（不要用 npx zhin，那是 npm 上另一个旧包）');
         return;
       }
 
@@ -468,7 +468,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;
 
-  const standaloneUse = `在 Bot 项目安装本插件：\`pnpm add ${packageName}\`（发布前联调：在本目录 \`pnpm pack\` 后在 Bot 根目录 \`pnpm add -w <tgz 路径>\`；需要热重载时把本目录链接进 Bot 的 \`plugins/\` 并以 \`./plugins/${pluginName}\` 挂载，见 https://zhin.js.org/authoring/local-dev#standalone-plugin。不要直接 \`pnpm add <本目录>\`，会出现 zhin 包多实例）。主配置使用以下格式；实例业务配置在顶层同名块，结构见 \`schema.json\`：
+  const standaloneUse = `在 Bot 项目安装本插件：\`pnpm add ${packageName}\`（发布前联调：在本目录 \`pnpm pack\` 后在 Bot 根目录 \`pnpm add -w <tgz 路径>\`；需要热重载时在 Bot 根目录执行 \`zhin dev link <本目录>\`，见 https://zhin.js.org/authoring/local-dev#dev-link-plugin。不要直接 \`pnpm add <本目录>\`，会出现 zhin 包多实例）。主配置使用以下格式；实例业务配置在顶层同名块，结构见 \`schema.json\`：
 
 \`\`\`yaml
 configVersion: 2
@@ -518,6 +518,15 @@ pnpm pack        # prepack 先 build，再把 plugin.ts 与约定目录编译成
 \`\`\`
 
 发布包只包含 \`lib/\`、\`plugin.js\`、约定目录里的 \`.js\`、\`schema.json\`、\`skills/\` 和文档，不包含 \`.ts\` 源码、测试和配置（见 \`package.json#files\`）。
+
+## 发布
+
+\`\`\`bash
+npx @zhin.js/cli pub --dry-run   # 构建并预览 tarball，不发布
+npx @zhin.js/cli pub             # 确认后发布；CI 里加 --yes
+\`\`\`
+
+请写 \`npx @zhin.js/cli\`：本目录没装 \`@zhin.js/cli\` 时，\`npx zhin\` 会下载 npm 上另一个已停止维护的同名旧包。
 
 \`zhin.js\` 与能力包（\`@zhin.js/command\` 等）是 peerDependencies：发布后由宿主 Bot 提供同一份；devDependencies 里的副本只用于本地测试和类型检查。
 

@@ -45,7 +45,9 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 22
-          cache: pnpm
+
+      - name: restore pnpm store
+        uses: ./.github/actions/restore-pnpm-store
 
       # Preserve the existing package credential mapping for cross-organization @icqqjs access.
       # Do not materialize credentials in .npmrc or expose them to lifecycle scripts.

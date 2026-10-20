@@ -5,6 +5,7 @@ import {
   type PluginSetupContext, type Token,
 } from '@zhin.js/plugin-runtime';
 import type { CapabilityContext } from '@zhin.js/feature-kit';
+import { parsePluginConfigSchema } from '@zhin.js/runtime';
 import { FakeClock, FakeScheduleRootHost } from './fake-clock.js';
 import { FakeDatabaseRootHost, FakeOutboundRootHost, type FakeOutboundCall } from './fake-hosts.js';
 
@@ -118,6 +119,7 @@ export class FakePlugin<TConfig = unknown> {
       signal: this.signal, owner, generation: this.generation,
       config: this.config as Readonly<TConfig>,
       use: <T>(token: Token<T>): T => this.resources.use(token),
+      has: (token: Token<unknown>): boolean => this.resources.has(token),
       project: <T>(feature: FeatureId): T => {
         if (!this.projections.has(feature)) throw new Error(`Missing Feature projection ${feature}`);
         return this.projections.get(feature) as T;
@@ -160,12 +162,76 @@ export function createFakePlugin<TConfig = unknown>(options?: FakePluginOptions<
   return new FakePlugin(options);
 }
 
-/** Create a fake and run `definition.setup()` in one step. Call `dispose()` when done. */
+export interface RunPluginSetupOptions<TConfig = unknown> extends Omit<FakePluginOptions<TConfig>, 'name' | 'config'> {
+  /**
+   * Raw plugin configuration, as a user would write it under the instance key in `zhin.config.yml`.
+   * When the definition declares `config`, it is validated and defaulted like the real Runtime does.
+   */
+  readonly config?: Partial<TConfig>;
+  /**
+   * Validate `config` against `definition.config` and apply its defaults (default `true`).
+   * Set `false` to pass `config` to `setup()` verbatim, as earlier versions of `runPluginSetup` did.
+   */
+  readonly validateConfig?: boolean;
+}
+
+/** Thrown by {@link runPluginSetup} / {@link resolvePluginConfig} when config fails the plugin's schema. */
+export class PluginConfigValidationError extends TypeError {
+  override readonly name = 'PluginConfigValidationError';
+  constructor(
+    readonly plugin: string,
+    /** Human-readable `instancePath message` lines, same wording as Runtime startup errors. */
+    readonly issues: readonly string[],
+  ) {
+    super(`Invalid config for plugin ${plugin}:\n  ${issues.join('\n  ')}`);
+  }
+}
+
+/**
+ * Resolve the config view `setup()` would receive from the real Runtime: validate `input` against
+ * `definition.config`, fill schema defaults, and keep only the top-level fields the schema declares.
+ * Without a declared `config` schema the input is returned unchanged (`{}` when omitted).
+ */
+export function resolvePluginConfig<TConfig = unknown>(
+  definition: Pick<PluginDefinition<TConfig>, 'name' | 'config'>,
+  input?: unknown,
+): TConfig {
+  if (!definition.config) return (input ?? {}) as TConfig;
+  const schema = definition.config.toJsonSchema();
+  const { value, errors } = parsePluginConfigSchema(schema, input);
+  if (errors.length) {
+    throw new PluginConfigValidationError(definition.name, errors.map((error) => {
+      const params = error.params as Record<string, unknown> | undefined;
+      const detail = typeof params?.additionalProperty === 'string'
+        ? ` (additionalProperty: ${params.additionalProperty})`
+        : Array.isArray(params?.allowedValues) ? ` (allowedValues: ${JSON.stringify(params.allowedValues)})` : '';
+      const path = error.instancePath.replace(/^\/candidate/, '');
+      return `${path || '/'} ${error.message ?? error.keyword}${detail}`;
+    }));
+  }
+  // The Runtime re-picks a plugin's own top-level fields (see config-composer `pickOwnFields`).
+  const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
+    ? Object.keys(schema.properties)
+    : [];
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const view: Record<string, unknown> = {};
+  for (const key of properties) if (Object.hasOwn(record, key)) view[key] = record[key];
+  return view as TConfig;
+}
+
+/**
+ * Create a fake and run `definition.setup()` in one step. Call `dispose()` when done.
+ *
+ * When the plugin declares a `config` schema, `options.config` is validated and defaulted first
+ * (throws {@link PluginConfigValidationError}); pass `validateConfig: false` to opt out.
+ */
 export async function runPluginSetup<TConfig = unknown>(
   definition: PluginDefinition<TConfig>,
-  options?: Omit<FakePluginOptions<TConfig>, 'name'>,
+  options: RunPluginSetupOptions<TConfig> = {},
 ): Promise<FakePlugin<TConfig>> {
-  const fake = new FakePlugin<TConfig>({ ...options, name: definition.name });
+  const { validateConfig = true, config, ...rest } = options;
+  const resolved = validateConfig ? resolvePluginConfig(definition, config) : config as TConfig | undefined;
+  const fake = new FakePlugin<TConfig>({ ...rest, ...(resolved === undefined ? {} : { config: resolved }), name: definition.name });
   await fake.setup(definition);
   return fake;
 }

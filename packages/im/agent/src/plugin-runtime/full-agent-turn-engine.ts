@@ -32,6 +32,7 @@ import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector, guardReplyPort, type LeakFinding } from '../security/outbound-leak-guard.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import type { UsageSubject } from '../security/usage-quota.js';
+import { usageGroupId } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import {
   createSubagentTurnCapability,
@@ -670,7 +671,7 @@ function usageSubjectOf(turn: TurnIngress, userId: string): UsageSubject {
   const shared = origin.kind === 'im' && (origin.scope === 'group' || origin.scope === 'channel');
   return Object.freeze({
     userId,
-    ...(shared ? { groupId: `${origin.platform}:${origin.endpoint}:${origin.sceneId}` } : {}),
+    ...(shared ? { groupId: usageGroupId(origin.platform, origin.endpoint, origin.sceneId) } : {}),
     owner: resolveTurnTrustLevel(turn) === 'owner',
   });
 }

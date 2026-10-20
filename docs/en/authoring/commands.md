@@ -316,6 +316,17 @@ Nested folders are subcommands; segments are joined with spaces:
 
 The plugin name is never prepended automatically. If two plugins' commands collide, give one of them `commandNamespace: admin` and all its commands become `admin xxx`.
 
+When only a few commands overlap with another plugin, list them in that plugin instance's `disabledCommands` and keep the rest under their own names:
+
+```yaml
+plugins:
+  60s: "@zhin.js/plugin-60s"
+60s:
+  disabledCommands: [fanyi, weather]   # local command paths, without commandNamespace or parameters
+```
+
+A parent path such as `netease` also removes `netease login`, `netease status` and its other subcommands. Disabled commands are left out of routing and do not occupy their routes, so another plugin may use the same name. Entries that match no command are ignored.
+
 ### Params as folders
 
 A param can also be the last path segment, Next.js style. Types and defaults are still declared in `params`:

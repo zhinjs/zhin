@@ -115,14 +115,18 @@ zhin doctor [--fix] [--upgrade-l4]
 
 Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack.
 
-### dev: Develop Against a Local zhin Checkout
+### dev: Develop Against a Local zhin Checkout or a Standalone Plugin
 
 ```bash
 zhin dev link <zhin-path> [--project <dir>] [--no-install]
 zhin dev unlink [--project <dir>] [--no-install] [--force]
+zhin dev link <plugin-dir> [--project <dir>] [--as <instance>]
+zhin dev unlink <instance> [--project <dir>]
 ```
 
-In an external plugin project, switches `zhin.js` / `@zhin.js/*` to a local checkout as a whole (packs the full dependency closure and writes `pnpm.overrides`, so each package has exactly one instance); `unlink` restores the original files. The "Zhin 包单实例" check in `doctor` detects duplicate instances and suggests this command. See the [local development guide](/en/authoring/local-dev).
+When `<plugin-dir>/package.json` has a `zhin` field, connects the standalone plugin to the current bot: links it under `plugins/`, adds `./plugins/<instance>`, and makes the plugin's `@zhin.js/*` use the bot's copies, so edits hot-reload. See [hot-reload a standalone plugin](/en/authoring/local-dev#dev-link-plugin).
+
+Given a zhin checkout, in an external plugin project it switches `zhin.js` / `@zhin.js/*` to a local checkout as a whole (packs the full dependency closure and writes `pnpm.overrides`, so each package has exactly one instance); `unlink` restores the original files. The "Zhin 包单实例" check in `doctor` detects duplicate instances and suggests this command. See the [local development guide](/en/authoring/local-dev).
 
 ### onboard: Project Onboarding
 
@@ -227,10 +231,13 @@ zhin build [plugin] [--clean] [--production] [--analyze]
 ### pub: Publish a Plugin
 
 ```bash
-zhin pub [plugin-name] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build]
+zhin pub [plugin-name|plugin-dir] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build] [--yes]
 ```
 
-Run from a project root that contains `plugins/`; without a name it asks which plugin to publish. `--dry-run` goes through the flow without publishing. Full release flow: [Complete plugin delivery](../authoring/plugin-delivery.md).
+- Inside a standalone plugin from `zhin new --standalone`, run it without arguments to publish the current directory: `npx @zhin.js/cli pub --dry-run` to preview, `npx @zhin.js/cli pub` to publish. (Don't use `npx zhin` in a plugin directory: it downloads a different, unmaintained npm package with the same name.)
+- The argument can also be any plugin directory (its `package.json` has a `zhin` field), e.g. `zhin pub ../my-plugin`.
+- In a bot project root, the argument is a path relative to `plugins/`; without it a single plugin is picked automatically, several are offered interactively.
+- `--dry-run` goes through the flow without publishing. Non-interactive shells (CI) need `--yes` to skip the publish confirmation. Packages with `private: true` are rejected, and a `zhin.entry` pointing at `.ts` gets a hint to publish the built `.js`. Full release flow: [Complete plugin delivery](../authoring/plugin-delivery.md).
 
 ### packages: Plugin Status and Extension Packages
 
