@@ -1,0 +1,39 @@
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_7743c93eaf840c 104,248
+docs/authoring/message-scenarios.md
+  s_079f1dc5e6308d::t_b671967ed7b739 1-135
+docs/authoring/testing.md
+  s_079f1dc5e6308d::t_35c9791e05ebed 107
+docs/en/authoring/message-scenarios.md
+  s_079f1dc5e6308d::t_e43fb65b0603bc 1-135
+docs/en/authoring/testing.md
+  s_079f1dc5e6308d::t_526a5867f4fb08 107
+packages/toolkit/testing/tests/fixtures/console-scenario/README.md
+  s_079f1dc5e6308d::t_600e972573d837 1-17
+packages/toolkit/testing/tests/fixtures/console-scenario/provenance.json
+  s_079f1dc5e6308d::t_d45c36ba506947 1-6
+packages/toolkit/testing/tests/fixtures/console-scenario/scenario.json
+  s_079f1dc5e6308d::t_aebba62afa346c 1-53
+packages/toolkit/testing/tests/fixtures/console-scenario/scenario.test.mjs
+  s_079f1dc5e6308d::t_2792c46c0dbc1b 1-35
+packages/toolkit/testing/tests/run-scenario.mjs
+  s_079f1dc5e6308d::t_bac3a6b68e4ddc 1-59
+packages/toolkit/testing/tests/scenario-export.test.ts
+  s_079f1dc5e6308d::t_f6303961c578bc 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8e531850478b3486499c0e0af449773c78524c01",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
