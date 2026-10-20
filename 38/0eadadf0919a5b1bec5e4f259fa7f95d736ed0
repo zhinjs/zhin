@@ -1,0 +1,30 @@
+.github/actions/prepare-workspace/action.yml
+  h_b680f75345178a 25-27
+.github/actions/restore-pnpm-store/action.yml
+  h_b680f75345178a 1-28
+.github/workflows/ci.yml
+  h_b680f75345178a 50-52,139-141,210-212
+.github/workflows/deploy-docs.yml
+  h_b680f75345178a 51-53
+.github/workflows/nightly-evals.yml
+  h_b680f75345178a 93-95
+.github/workflows/plugin-runtime-size.yml
+  h_b680f75345178a 48-50
+.github/workflows/publish.yml
+  h_b680f75345178a 56-58
+.github/workflows/update-dependencies.yml
+  h_b680f75345178a 39-41
+tests/docs/pnpm-store-cache.test.ts
+  h_b680f75345178a 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "380eadadf0919a5b1bec5e4f259fa7f95d736ed0",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
