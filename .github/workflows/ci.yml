@@ -139,7 +139,7 @@ jobs:
       - name: install dependencies
         run: >-
           pnpm --filter @zhin.js/database... --filter @zhin.js/cli...
-          install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+          install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --config.dedupe-peer-dependents=false
 
       - name: run dependency lifecycle scripts without registry credentials
         run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... rebuild
