@@ -1,0 +1,20 @@
+.changeset/explain-scalar-list.md
+  h_b680f75345178a 1-6
+basic/cli/src/plugin-management/config-explanation.ts
+  h_b680f75345178a 8,33-36,38-41,52-54,56,65-78
+basic/cli/tests/config-explanation.test.ts
+  h_b680f75345178a 79-81,100-117
+packages/console/protocol/README.md
+  h_b680f75345178a 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d13b1d76bdc5e7aec3abb1d0e86b790f65372506",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
