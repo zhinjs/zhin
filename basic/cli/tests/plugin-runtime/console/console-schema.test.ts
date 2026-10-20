@@ -57,6 +57,52 @@ describe('jsonSchemaToConsoleSchema', () => {
     expect(jsonSchemaToConsoleSchema(HOST_CONFIG_SCHEMA.properties.ai)).toMatchObject({ object: { agent: { object: { outputSchema: { type: 'union', list: [{ type: 'boolean' }, { type: 'string' }, { type: 'object' }] } } } } });
   });
 
+  it.each([
+    { type: 'string', writeOnly: true, 'x-zhin-config': { component: 'textarea' } },
+    { type: 'string', 'x-zhin-config': { secret: true, component: 'textarea' } },
+    { type: 'string', secret: true, component: 'textarea' },
+  ])('preserves explicit multiline editors while retaining secret metadata: %j', field => {
+    const input = { type: 'object', object: { certificate: field } }, before = structuredClone(input);
+    expect(jsonSchemaToConsoleSchema(input)).toMatchObject({ object: {
+      certificate: { type: 'string', secret: true, component: 'textarea' },
+    } });
+    expect(input).toEqual(before);
+  });
+
+  it('preserves formal native scalar annotations without requiring a key or required flag', () => {
+    const field = { type: 'string', hidden: true, effect: 'reload', component: 'textarea', options: [{ label: '选项 A', value: 'a' }] };
+    expect(jsonSchemaToConsoleSchema(field)).toEqual(field);
+    expect(jsonSchemaToConsoleSchema({ type: 'object', object: { field } })).toEqual({ type: 'object', object: { field } });
+  });
+
+  it('preserves native scalar annotations on local ref siblings without downgrading secrecy', () => {
+    const projection = jsonSchemaToConsoleSchema({ type: 'object', $defs: {
+      certificate: { type: 'string', secret: true, component: 'textarea', hidden: true, effect: 'reload' },
+    }, properties: {
+      certificate: { $ref: '#/$defs/certificate', secret: false },
+      explicit: { $ref: '#/$defs/certificate', secret: false, component: 'textarea', hidden: false, effect: 'reload' },
+    } });
+    expect(projection).toMatchObject({ object: {
+      certificate: { type: 'string', secret: true, component: 'textarea', hidden: true, effect: 'reload' },
+      explicit: { type: 'string', secret: true, component: 'textarea', hidden: false, effect: 'reload' },
+    } });
+  });
+
+  it('keeps local ref secret/textarea inheritance despite a false sensitivity sibling', () => {
+    const projection = jsonSchemaToConsoleSchema({ type: 'object', $defs: {
+      certificate: { type: 'string', writeOnly: true, 'x-zhin-config': { component: 'textarea' } },
+    }, properties: {
+      certificate: { $ref: '#/$defs/certificate', 'x-zhin-config': { secret: false } },
+      password: { type: 'string', writeOnly: true },
+      downgraded: { $ref: '#/$defs/certificate', 'x-zhin-config': { secret: false, component: 'input' } },
+    } });
+    expect(projection).toMatchObject({ object: {
+      certificate: { type: 'string', secret: true, component: 'textarea' },
+      password: { type: 'string', secret: true, component: 'password' },
+      downgraded: { type: 'string', secret: true, component: 'password' },
+    } });
+  });
+
   it('preserves local reference metadata and does not erase secret annotations with sibling overrides', () => {
     const converted = jsonSchemaToConsoleSchema({ type: 'object', $defs: { token: { type: 'string', writeOnly: true, minLength: 1 } }, properties: {
       token: { $ref: '#/$defs/token', 'x-zhin-config': { secret: false, effect: 'reload' } },

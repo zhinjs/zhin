@@ -91,7 +91,7 @@ function convert(input: unknown, key: string | undefined, context: Context): Sch
   const inferred = type ?? (Array.isArray(schema.enum) && schema.enum.length ? (schema.enum[0] === null ? 'null' : typeof schema.enum[0]) : 'any');
   return finish({ type: inferred === 'integer' ? 'number' : jsonTypes.has(inferred) ? inferred : 'any', ...(inferred === 'integer' ? { integer: true } : {}) });
 }
-const annotationKeys = new Set(['title', 'description', 'x-descriptionZh', 'default', 'readOnly', 'writeOnly', 'examples', 'deprecated', 'x-zhin-config']);
+const annotationKeys = new Set(['title', 'description', 'x-descriptionZh', 'default', 'readOnly', 'writeOnly', 'examples', 'deprecated', 'x-zhin-config', 'key', 'hidden', 'component', 'options', 'effect', 'secret']);
 function annotate(result: Schema, schema: Schema, key?: string): Schema {
   const output: Schema = { ...result };
   for (const name of ['key', 'title', 'default', 'min', 'max', 'step', 'integer', 'pattern', 'minLength', 'maxLength', 'minItems', 'maxItems', 'minimum', 'maximum', 'multipleOf', 'uniqueItems', 'minProperties', 'maxProperties', 'exclusiveMinimum', 'exclusiveMaximum', 'readOnly', 'deprecated', 'format', 'unevaluatedProperties']) if (own(schema, name)) output[name] = schema[name];
@@ -100,9 +100,14 @@ function annotate(result: Schema, schema: Schema, key?: string): Schema {
   if (typeof description === 'string') output.description = description;
   if (typeof schema.required === 'boolean') output.required = schema.required;
   if (Array.isArray(schema.enum)) output.options = schema.enum.map(value => ({ label: String(value), value }));
+  for (const name of ['hidden', 'component', 'options', 'effect']) if (schema[name] !== undefined) output[name] = schema[name];
   const metadata = record(schema['x-zhin-config']) ? schema['x-zhin-config'] : {};
   for (const name of ['hidden', 'component', 'options', 'effect']) if (metadata[name] !== undefined) output[name] = metadata[name];
-  if (schema.writeOnly === true || schema.secret === true || metadata.secret === true) { output.secret = true; output.component = 'password'; }
+  if (output.secret !== true && typeof schema.secret === 'boolean') output.secret = schema.secret;
+  if (output.secret === true || schema.writeOnly === true || schema.secret === true || metadata.secret === true) {
+    output.secret = true;
+    if (output.component !== 'textarea') output.component = 'password';
+  }
   const bounds = schema.type === 'string' ? ['minLength', 'maxLength'] : schema.type === 'array' ? ['minItems', 'maxItems'] : ['minimum', 'maximum'];
   if (typeof schema[bounds[0]!] === 'number') output.min = schema[bounds[0]!];
   if (typeof schema[bounds[1]!] === 'number') output.max = schema[bounds[1]!];
@@ -113,7 +118,7 @@ function annotate(result: Schema, schema: Schema, key?: string): Schema {
 export function isConsoleSchemaJson(schema: Schema): boolean {
   if (schema.object !== undefined || schema.list !== undefined || schema.inner !== undefined || schema.additional !== undefined) return true;
   return typeof schema.type === 'string' && (['dict', 'union', 'tuple', 'intersect', 'const', 'any', 'date', 'regexp', 'list'].includes(schema.type)
-    || ['string', 'number', 'boolean', 'null'].includes(schema.type) && (schema.key !== undefined || typeof schema.required === 'boolean') && !['const', 'anyOf', 'oneOf', 'allOf', '$ref'].some(name => own(schema, name)));
+    || ['string', 'number', 'boolean', 'null'].includes(schema.type) && (schema.key !== undefined || typeof schema.required === 'boolean' || ['hidden', 'component', 'options', 'effect', 'secret'].some(name => own(schema, name))) && !['const', 'anyOf', 'oneOf', 'allOf', '$ref'].some(name => own(schema, name)));
 }
 
 /** Validation-only branches do not own a second editable copy of the same value. */
