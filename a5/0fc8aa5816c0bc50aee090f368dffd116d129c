@@ -1,0 +1,121 @@
+plugins/utils/group-suite/tests/welcome-scope.test.ts
+  s_079f1dc5e6308d::t_f04261e115c277 37-38
+  s_079f1dc5e6308d::t_b76b777d774e0c 1-12,14-36,39-51
+  s_079f1dc5e6308d::t_d53eb1e871f3df 13
+packages/im/permission/src/explain.ts
+  s_079f1dc5e6308d::t_8a1879bdd4d4a8 37
+  s_079f1dc5e6308d::t_2357d0cf576db3 1-36,38-51
+packages/im/permission/tests/explain.test.ts
+  s_079f1dc5e6308d::t_4d6f21e00468ec 1-32
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_079f1dc5e6308d::t_19a8bf26eee407 27,88
+plugins/utils/group-suite/tests/welcome-scope-native.test.ts
+  s_079f1dc5e6308d::t_6f2f76e0352de9 1-9
+packages/im/command/src/definition.ts
+  s_079f1dc5e6308d::t_4d6f21e00468ec 611
+  s_079f1dc5e6308d::t_8b6316c91f991d 538,587-589
+docs/solutions/group-welcome.md
+  s_079f1dc5e6308d::t_6ccbaa169660d2 1-50
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_6ccbaa169660d2 123,266
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_2357d0cf576db3 8,14,19,38-39,166-167,339
+basic/cli/src/plugin-management/use-cases.ts
+  s_079f1dc5e6308d::t_6ccbaa169660d2 39,42-43
+docs/authoring/commands.md
+  s_079f1dc5e6308d::t_fc273bd4bbc8f5 194-195,199,214
+  s_079f1dc5e6308d::t_fdf40dd6be9ac1 215
+basic/cli/tests/plugin-management/use-cases.test.ts
+  s_079f1dc5e6308d::t_6ccbaa169660d2 11-13
+plugins/utils/group-suite/tests/welcome-scope-runtime.test.ts
+  s_079f1dc5e6308d::t_9460ee246aa14c 6
+  s_079f1dc5e6308d::t_cafe8ea4417d6d 1-5,8-24,27-36,38-47,53-91
+  s_079f1dc5e6308d::t_645f690e503cfb 37,48-52
+  s_079f1dc5e6308d::t_d53eb1e871f3df 7,25-26
+.changeset/exact-welcome-and-permission-explanation.md
+  s_079f1dc5e6308d::t_6ccbaa169660d2 1-8
+packages/im/permission/src/index.ts
+  s_079f1dc5e6308d::t_2357d0cf576db3 38
+packages/im/command/src/permission-explanation.ts
+  s_079f1dc5e6308d::t_5c54a10cba666c 55
+  s_079f1dc5e6308d::t_8b6316c91f991d 3,25,30-31,33-34
+  s_079f1dc5e6308d::t_2357d0cf576db3 1-2,4-24,37-54,56-58
+  s_079f1dc5e6308d::t_06cd8028de4eae 26-29,32
+  s_079f1dc5e6308d::t_2b5af86f9df4bd 35-36
+basic/cli/src/plugin-runtime/console/permission-explanation-routes.ts
+  s_079f1dc5e6308d::t_8a1879bdd4d4a8 13-14
+  s_079f1dc5e6308d::t_98bf36fa3cf993 50,61,101-105
+  s_079f1dc5e6308d::t_19a8bf26eee407 1-12,15-49,51-55,57-60,62-100,106-157
+  s_079f1dc5e6308d::t_8b6316c91f991d 56
+docs/en/authoring/commands.md
+  s_079f1dc5e6308d::t_fc273bd4bbc8f5 194-195,199
+packages/im/command/tests/permission-explanation.test.ts
+  s_079f1dc5e6308d::t_2b5af86f9df4bd 4,8
+  s_079f1dc5e6308d::t_06cd8028de4eae 38-43
+  s_079f1dc5e6308d::t_059086dc230cd3 7
+  s_079f1dc5e6308d::t_4d6f21e00468ec 1-3,5-6,9-37,44-53
+plugins/utils/group-suite/tests/welcome-scope-native.mjs
+  s_079f1dc5e6308d::t_6f2f76e0352de9 1-5,8-27,29-30,33-56,60-74
+  s_079f1dc5e6308d::t_9460ee246aa14c 7
+  s_079f1dc5e6308d::t_455b9e71c623c9 31-32
+  s_079f1dc5e6308d::t_6a732ecf4849eb 6,28
+  s_079f1dc5e6308d::t_21781d3d86816b 57-59
+plugins/utils/group-suite/handlers/welcome/index.ts
+  s_079f1dc5e6308d::t_2babdc8073aae0 4,10-11,14
+  s_079f1dc5e6308d::t_455b9e71c623c9 18
+plugins/utils/group-suite/README.md
+  s_079f1dc5e6308d::t_b76b777d774e0c 80-90,92-108
+  s_079f1dc5e6308d::t_b0da5010827275 91
+docs/en/solutions/index.md
+  s_079f1dc5e6308d::t_6ccbaa169660d2 14
+basic/cli/package.json
+  s_079f1dc5e6308d::t_8ad9a84e4b59bf 30
+basic/cli/tests/plugin-runtime/console/permission-explanation-routes.test.ts
+  s_079f1dc5e6308d::t_5c54a10cba666c 1-66,68-87,90-161,164-178
+  s_079f1dc5e6308d::t_8a1879bdd4d4a8 163
+  s_079f1dc5e6308d::t_2b5af86f9df4bd 162
+  s_079f1dc5e6308d::t_059086dc230cd3 67,88-89
+packages/im/command/src/index.ts
+  s_079f1dc5e6308d::t_2357d0cf576db3 9
+docs/en/solutions/group-welcome.md
+  s_079f1dc5e6308d::t_6ccbaa169660d2 1-50
+docs/solutions/index.md
+  s_079f1dc5e6308d::t_6ccbaa169660d2 14
+docs/paths/console.md
+  s_079f1dc5e6308d::t_fc273bd4bbc8f5 116-127
+plugins/utils/group-suite/schema.json
+  s_079f1dc5e6308d::t_2babdc8073aae0 52-85
+packages/im/permission/README.md
+  s_079f1dc5e6308d::t_8a1879bdd4d4a8 29-36,38-44
+  s_079f1dc5e6308d::t_06cd8028de4eae 37
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_8a1879bdd4d4a8 61-77
+plugins/utils/group-suite/src/welcome-scope.ts
+  s_079f1dc5e6308d::t_2babdc8073aae0 1-19
+plugins/utils/group-suite/src/config.ts
+  s_079f1dc5e6308d::t_2babdc8073aae0 1-3,10-11,44-46
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_fc273bd4bbc8f5 116-127
+docs/configuration/generated.md
+  s_079f1dc5e6308d::t_43100bb7f1e5a2 1431-1440
+docs/en/configuration/generated.md
+  s_079f1dc5e6308d::t_f9de29bdf54420 1431-1440
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_35281e0fd2b54c 167-169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a50fc8aa5816c0bc50aee090f368dffd116d129c",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
