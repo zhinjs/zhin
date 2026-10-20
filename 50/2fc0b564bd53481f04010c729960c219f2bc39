@@ -1,0 +1,32 @@
+basic/cli/src/plugin-management/workflow.ts
+  s_079f1dc5e6308d::t_a187a0f873a604 182-183,191,203,236-237
+  s_079f1dc5e6308d::t_4a3aa68ef9b20b 20,157,181,184-185,197-199
+  s_079f1dc5e6308d::t_0ae7a68c305a5e 11,55,60,63-66,69,74,81,106-107,153,158,173-180,186-187,189-190,192,201,211-214,216,221,224,233,235,245-250
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_079f1dc5e6308d::t_0ae7a68c305a5e 127-128
+.changeset/plugin-config-evidence.md
+  s_079f1dc5e6308d::t_0ae7a68c305a5e 1-5
+basic/cli/tests/plugin-management.test.ts
+  s_079f1dc5e6308d::t_c58923634acecd 6-7,20-77
+  s_079f1dc5e6308d::t_e38c851b73bc96 78
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_1617a6a6c15558 85-94
+docs/paths/console.md
+  s_079f1dc5e6308d::t_802eb2d2d61540 85-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "502fc0b564bd53481f04010c729960c219f2bc39",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
