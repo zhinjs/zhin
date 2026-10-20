@@ -131,6 +131,12 @@ Drafts retain their original generation and revision; conflicts preserve input i
 
 Host endpoints are `GET /api/tasks/use-cases`, `GET /api/tasks/providers`, `POST /api/tasks/create` and `POST /api/tasks/change`. The plugin owns persistent task facts, revisions and receipts; the Host does not add another scheduler. See the [persistent reminder plugin](https://github.com/zhinjs/zhin/tree/main/plugins/utils/reminder) and [CLI use-case guide](../cli/index.md#use-cases-find-a-setup-path-by-purpose).
 
+## Configure welcomes by use case
+
+Open **Task center → Start by use case → Configure member welcomes** (`/use-cases/group-welcome`). The page reads the Host-selected package and manageable instances; explicitly select among aliases instead of inferring one from a package name. If needed, open Marketplace to review an exact version and the existing installation plan. Configuration, precise conversation scopes and application remain in their original form and plugin details. This flow links navigation and read-only facts; it does not automatically save, apply or send.
+
+On return, separately inspect current-generation configuration semantics, nonempty welcome text and scope, then select a complete test-group identity. After a real member joins, explicitly record a human observation. It is not platform acceptance, and the system does not attribute the welcome to an instance automatically. The record lives only in this page’s memory and is invalidated by changed connection, instance, configuration, generation or target, or a failed read. Empty messages, empty lists and unapplied configurations do not establish readiness; raw environment references cannot prove expanded text or actual scope. See [welcome configuration and human checks](../solutions/group-welcome.md).
+
 ## Command permission explanations
 
 Open `/permissions` or follow the permission explanation link in the command catalog. Use an explicit full-scope Token for the current Host. Search by command, description or plugin instance; the catalog is paginated.
