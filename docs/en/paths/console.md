@@ -92,6 +92,14 @@ Configuration semantics matching the current generation means only that this plu
 
 This view does not expose final values without reliable redaction or infer an old generation's default origins from the current file. Environment checks and business verification retain their own timing and limits. Schemas that cannot be safely edited still fall back to source mode.
 
+### Read field origins and current-generation agreement
+
+On the plugin configuration page, choose **读取已保存版本解释** (read saved-version explanation). The action reads the file revision already loaded by the page, not an unsaved draft. It requires full scope and versions of both the Host and standalone Console that provide this feature.
+
+`file` means the static field is present in the file; `schema-default` means the declared default fills the saved candidate during this read; `unset` means it remains absent. `equal` proves only agreement with this instance's current generation at read time. It does not prove that an older generation came from the same file or default; historical generation origins remain unknown. Sensitive fields and environment references are hidden and not compared. Final values, default values and environment variable names are never displayed.
+
+The first version supports static object/scalar Schemas, including the current Reminder and Repeater declarations. Any array, dictionary, composition branch or reference makes the whole explanation unsupported. Calendar's current union falls outside this scope; GroupSuite and RSS have no declared configuration Schema. Continue with **查看完整源码** (view complete source); the existing source fallback preserves fields. Reading an explanation does not change saved or applied state or request application automatically. Read again if the file or generation changes during inspection. See the [Console protocol boundaries](https://github.com/zhinjs/zhin/tree/main/packages/console/protocol).
+
 ## 7. When something breaks, check in this order
 
 If the inbound message is visible in a conversation, open its **Diagnostics** action first. It queries the exact conversation and platform message ID, showing observed origin, prefix, middleware, command outcome and reply delivery facts. It never replays the message.

@@ -4,6 +4,7 @@ import {
   CONFIG_RPC,
   ENDPOINT_RPC,
   type ConsoleConfigSource,
+  type ConsoleConfigExplanation,
   type ConsoleEndpointSummary,
   assertDemoConsoleRpcAllowed,
 } from '@zhin.js/console-protocol';
@@ -136,6 +137,7 @@ export interface PluginVerificationResult {
 }
 
 export interface PluginManagementPort {
+  explainConfiguration?(instanceKey: string, expectedRevision: string): Promise<ConsoleConfigExplanation>;
   inspect?(packageName: string): Promise<PluginManagementState>;
   apply?(packageName: string, expectedProjectRevision?: string): Promise<{ readonly requested: boolean; readonly state: PluginManagementState }>;
   verificationPlan?(packageName: string): Promise<PluginVerificationPlan>;
@@ -330,6 +332,18 @@ export async function dispatchRuntimeConsoleRpc(
     case 'pages:list': {
       const pages = await ctx.listPages();
       emit({ requestId, data: pages });
+      return payloads;
+    }
+    case CONFIG_RPC.EXPLAIN: {
+      if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
+      const { instanceKey, expectedRevision } = message;
+      if (typeof instanceKey !== 'string' || instanceKey.length > 128 || !/^[a-z0-9][a-z0-9-]*$/u.test(instanceKey)
+        || typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(expectedRevision)) {
+        emit({ requestId, error: '精确 instanceKey 与已读取的 expectedRevision 必填' }); return payloads;
+      }
+      if (!ctx.pluginManagement?.explainConfiguration) { emit({ requestId, error: '配置解释尚未配置' }); return payloads; }
+      try { emit({ requestId, data: await ctx.pluginManagement.explainConfiguration(instanceKey, expectedRevision) }); }
+      catch { emit({ requestId, error: '配置解释未确认，请重新读取文件版本与当前运行状态；原配置未改动。' }); }
       return payloads;
     }
     case CONFIG_RPC.GET_SOURCE: {

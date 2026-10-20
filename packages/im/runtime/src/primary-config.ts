@@ -9,6 +9,8 @@ import type { EnvStore } from './environment-store.js';
  * through the Root EnvStore instead of reading process.env themselves.
  */
 export interface PrimaryConfig {
+  /** Actual Runtime composition branch; absent on older authorities, never inferred from values. */
+  readonly compositionMode?: 'document' | 'custom' | 'unknown';
   readonly document: RuntimeConfigDocument;
   readonly expanded: RuntimeConfigDocument;
   get<T = unknown>(key: string): T | undefined;
@@ -22,10 +24,12 @@ export const primaryConfigToken = createToken<PrimaryConfig>(
 export function createPrimaryConfig(
   document: RuntimeConfigDocument,
   environment: EnvStore,
+  compositionMode: NonNullable<PrimaryConfig['compositionMode']> = 'unknown',
 ): PrimaryConfig {
   const safeDocument = freezeConfig(structuredClone(document));
   const expanded = freezeConfig(environment.expandMissingAsEmpty(safeDocument));
   return Object.freeze({
+    compositionMode,
     document: safeDocument,
     expanded,
     get<T = unknown>(key: string): T | undefined {

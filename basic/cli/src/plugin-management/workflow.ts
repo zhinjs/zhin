@@ -15,6 +15,8 @@ import type {
   PluginUninstallPlan, PluginUpdatePlan, PluginVerificationResult, PluginVerificationPlan,
 } from '@zhin.js/host-http';
 import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
+import { explainConfigFields } from './config-explanation.js';
+import type { ConsoleConfigExplanation } from '@zhin.js/console-protocol';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type { PluginManagementActivity } from './activity.js';
 import { readPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-runtime/plugin-lifecycle-store.js';
@@ -176,20 +178,13 @@ export class PluginManagementWorkflow implements PluginManagementPort {
   }
 
   async #inspect(request: string, snapshot?: RuntimeSnapshot): Promise<PluginManagementState> {
-    const project = await this.#project();
-    const configuration = this.#configuration(snapshot);
-    if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
-    const source = await configuration.document.read();
-    const document = source.document;
-    const declaration = readApplicationPluginDeclaration(document);
+    const { configuration, source, document, declaration, projectRevision } = await this.#configurationObservation(snapshot);
     const entries = declaration.instances;
-    if (project.project.zhin?.plugins?.length) throw new Error('Legacy package.json zhin.plugins detected; run zhin migrate instances');
     const target = await this.#resolveTarget(request, entries);
     const installed = await this.#installed(target.packageName);
     const declared = entries.some(entry => entry.package === target.packageName && entry.instanceKey === target.instanceKey);
     const config = readPluginConfigurationMap(document);
     const revision = source.revision;
-    const projectRevision = createHash('sha256').update(JSON.stringify([project.source.revision, revision])).digest('hex');
     const issues: string[] = installed.error ? [installed.error] : [];
     if (declared && !installed.installed) issues.push('Declared plugin package is not installed');
     let dependencies: PluginManagementState['dependencies'] = 'unchecked';
@@ -242,12 +237,58 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       : published && !disabled ? 'enabled'
       : restartRequired ? 'pending-restart'
       : declared ? 'declared' : installed.installed ? 'installed' : 'not-installed';
+    await this.#assertConfigurationObservation(projectRevision, snapshot);
+    return Object.freeze({ ...target, revision, projectRevision, installed: installed.installed, plugin: installed.plugin, version: installed.version, declared, status, dependencies, validation, generation, published, readiness, restartRequired, disabled, issues: Object.freeze(issues), verification });
+  }
+
+  async #configurationObservation(snapshot?: RuntimeSnapshot) {
+    const project = await this.#project();
+    const configuration = this.#configuration(snapshot);
+    if (!configuration) throw new Error('Missing configVersion: 2 configuration; run zhin setup');
+    const source = await configuration.document.read();
+    const document = source.document;
+    const declaration = readApplicationPluginDeclaration(document);
+    if (project.project.zhin?.plugins?.length) throw new Error('Legacy package.json zhin.plugins detected; run zhin migrate instances');
+    const projectRevision = createHash('sha256').update(JSON.stringify([project.source.revision, source.revision])).digest('hex');
+    return { project, configuration, source, document, declaration, projectRevision };
+  }
+  async #assertConfigurationObservation(projectRevision: string, snapshot?: RuntimeSnapshot): Promise<void> {
     if ((await this.#revisions()).projectRevision !== projectRevision) throw new Error('配置或项目版本在读取期间变化，请重新读取应用证据');
     const current = this.#options.snapshots?.acquire();
     try {
       if (current?.value !== snapshot) throw new Error('运行代在读取期间变化，请重新读取应用证据');
     } finally { current?.release(); }
-    return Object.freeze({ ...target, revision, projectRevision, installed: installed.installed, plugin: installed.plugin, version: installed.version, declared, status, dependencies, validation, generation, published, readiness, restartRequired, disabled, issues: Object.freeze(issues), verification });
+  }
+
+  /** Full-scope, metadata-only projection over the same file and generation observation as inspect. */
+  async explainConfiguration(instanceKey: string, expectedRevision: string): Promise<ConsoleConfigExplanation> {
+    if (typeof instanceKey !== 'string' || instanceKey.length > 128 || !/^[a-z0-9][a-z0-9-]*$/u.test(instanceKey)
+      || typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(expectedRevision)) throw new Error('请提供精确实例键及已读取的文件版本');
+    const lease = this.#options.snapshots?.acquire();
+    try {
+      const snapshot = lease?.value;
+      const { source, document, declaration, projectRevision } = await this.#configurationObservation(snapshot);
+      if (source.revision !== expectedRevision) throw new Error('配置文件版本已变化，请刷新后重新读取解释');
+      const base = { instanceKey, revision: source.revision, projectRevision, generation: snapshot?.generation ?? null };
+      const unsupported = (reason: NonNullable<ConsoleConfigExplanation['reason']>): ConsoleConfigExplanation => ({ ...base, projection: 'unsupported', reason, fields: [] });
+      const entry = declaration.instances.find(item => item.instanceKey === instanceKey);
+      const node = snapshot && [...snapshot.tree.values()].find(item => item.parent === snapshot.root && item.instanceKey === instanceKey);
+      let result: ConsoleConfigExplanation;
+      if (!entry || !node || declaration.disabled.includes(instanceKey)) result = unsupported('instance-unavailable');
+      else {
+        const installed = await this.#installed(entry.package);
+        const primary = snapshot?.resources.get(snapshot.root)?.get(primaryConfigToken.id) as import('@zhin.js/runtime').PrimaryConfig | undefined;
+        if (!installed.plugin || !installed.pkg || installed.pkg.root !== node.packageRoot || installed.pkg.name !== node.packageName
+          || !installed.version || installed.version !== node.packageVersion) result = unsupported('schema-drift');
+        else if (!node.configSchema) result = unsupported('schema-unavailable');
+        else if (primary?.compositionMode !== 'document') result = unsupported('custom-resolver');
+        else result = { ...base, ...explainConfigFields(node.configSchema, readPluginConfigurationMap(document)[instanceKey],
+          snapshot?.config.get(node.id), readPluginConfigurationMap(primary.document)[instanceKey]) };
+      }
+      await this.#assertConfigurationObservation(projectRevision, snapshot);
+      return Object.freeze(result);
+    } catch { throw new Error('配置解释未确认，请重新读取文件版本与当前运行状态；原配置未改动。'); }
+    finally { lease?.release(); }
   }
 
   async planInstall(request: string, options: Pick<PluginInstallOptions, 'enable'> = {}): Promise<PluginInstallPlan> {
