@@ -65,10 +65,10 @@ export function isZhinPluginDirectory(dir: string): boolean {
   }
 }
 
-/** `@scope/zhin-plugin-foo` / `zhin-plugin-foo` / `plugin-foo` → `foo`。 */
+/** `zhin.js-foo`（`zhin new` 的默认包名）/ `@scope/zhin-plugin-foo` / `zhin-plugin-foo` / `plugin-foo` → `foo`。 */
 export function defaultInstanceKey(packageName: string): string {
   const base = packageName.replace(/^@[^/]+\//u, '');
-  return base.replace(/^zhin-plugin-/u, '').replace(/^plugin-/u, '') || base;
+  return base.replace(/^zhin\.js-/u, '').replace(/^zhin-plugin-/u, '').replace(/^plugin-/u, '') || base;
 }
 
 function readState(project: string): PluginLinkState {

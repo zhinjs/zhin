@@ -42,6 +42,7 @@ describe('zhin dev link <plugin dir>', () => {
     expect(defaultInstanceKey('zhin-plugin-glossary')).toBe('glossary');
     expect(defaultInstanceKey('@me/zhin-plugin-dice')).toBe('dice');
     expect(defaultInstanceKey('@zhin.js/plugin-rss')).toBe('rss');
+    expect(defaultInstanceKey('zhin.js-weather')).toBe('weather');
     expect(defaultInstanceKey('my-thing')).toBe('my-thing');
   });
 

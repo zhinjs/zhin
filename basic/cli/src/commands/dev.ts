@@ -26,7 +26,7 @@ devCommand
   .description('<path> 是独立插件目录时：链接到 bot 的 plugins/ 并写入 ./plugins/<实例名>，改插件源码即热重载；'
     + '<path> 是 zhin 源码仓库时：把当前项目依赖的 zhin.js / @zhin.js/* 全部切换到本地源码（保证每个包只有一份实例）')
   .option('--project <dir>', '目标项目（bot）目录', '.')
-  .option('--as <instance>', '插件模式：实例名（默认取包名，去掉 zhin-plugin- 前缀）')
+  .option('--as <instance>', '插件模式：实例名（默认取包名，去掉 zhin.js- / zhin-plugin- 前缀）')
   .option('--no-install', '源码仓库模式：只改清单，不执行 pnpm install')
   .action((target: string, options: { project: string; as?: string; install: boolean }) => run(async () => {
     const resolved = path.resolve(target);

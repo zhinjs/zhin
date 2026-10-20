@@ -120,13 +120,49 @@ If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same
 
 Run `pnpm install` afterwards and use the commands from section 1 to confirm each package has a single resolved path.
 
+To temporarily disable an instance, add its alias to `disable_plugins`. Keep its package dependency, `plugins` mapping and top-level business configuration. Removing a declaration deletes the instance; disabling does not uninstall it.
+
+## 5. Trying a standalone plugin in a bot {#standalone-plugin}
+
+A plugin repository created with `zhin new <name> --standalone` has its own `zhin.js` / `@zhin.js/*` dev dependencies for tests and type checks. To try it in a bot, **do not** run `pnpm add <plugin dir>`:
+
+- a `link:` dependency resolves `@zhin.js/tool` and friends from the plugin's **own** `node_modules`, a different physical location from the bot's copy, so startup fails with `Multiple package locations for @zhin.js/tool are not supported in one generation` (section 1);
+- packages resolved through `node_modules` are not watched, so edits do not hot reload;
+- a bot created with `pnpm create zhin-app` is itself a pnpm workspace, so `pnpm add` would also need `-w`.
+
+Pick one:
+
+| Goal | How | Hot reload |
+| --- | --- | --- |
+| Check the published artifact | `pnpm pack` in the plugin, `pnpm add -w <plugin dir>/<name>-<version>.tgz` in the bot root, then `plugins: { <instance>: <package> }` in the main config | No; pack and install again after changes |
+| Edit and try | `zhin dev link <plugin dir>` (see [hot-reload a standalone plugin](#dev-link-plugin) below); or link the plugin directory into the bot's `plugins/` by hand and mount it by its `./` local path | Yes |
+
+Manual steps without the command, in the bot root:
+
+```bash
+ln -s /path/to/my-plugin plugins/my-plugin   # Windows: mklink /J plugins\my-plugin C:\path\to\my-plugin
+pnpm install                                 # the plugin becomes a workspace member; its dev deps link to the bot's store
+npx zhin doctor                              # "Zhin 包单实例" (single instance) should pass
+```
+
+```yaml
+# zhin.config.yml
+configVersion: 2
+plugins:
+  my-plugin: ./plugins/my-plugin
+```
+
+Then `pnpm dev`. Editing files in convention directories such as `commands/` or `tools/` reloads that capability (log `hmr_reload | scope: capability`). Editing a shared `src/` helper logs `restartRequired`, and dev mode restarts the process. If the plugin's zhin versions differ from the bot's, pnpm installs two copies and `zhin doctor` reports it; align the versions first.
+
+Afterwards remove the `plugins/my-plugin` link and the `plugins` entry, then run `pnpm install`.
+
 ### Hot-reload a standalone plugin in a bot {#dev-link-plugin}
 
 A plugin from `zhin new --standalone` is developed and unit-tested in its own directory. To try it in a real bot while you edit, pass the plugin directory to the same command:
 
 ```bash
 cd my-bot
-zhin dev link ../zhin-plugin-glossary            # instance name defaults to the package name without zhin-plugin-: glossary
+zhin dev link ../zhin-plugin-glossary            # instance name defaults to the package name without zhin.js- / zhin-plugin-: glossary
 zhin dev link ../zhin-plugin-glossary --as terms # pick the instance name
 pnpm dev                                          # edits in the plugin directory hot-reload
 zhin dev unlink glossary                          # undo
@@ -146,42 +182,6 @@ Notes:
 - running `pnpm install` in the plugin restores its own dependencies; run `zhin dev link` again afterwards (idempotent);
 - keep the bot's zhin versions inside the plugin's `peerDependencies` ranges; while linked, the plugin's unit tests also use the bot's copies;
 - editing a shared `src/` module restarts the runtime (`restartRequired`); editing a convention file reloads just that capability.
-
-To temporarily disable an instance, add its alias to `disable_plugins`. Keep its package dependency, `plugins` mapping and top-level business configuration. Removing a declaration deletes the instance; disabling does not uninstall it.
-
-## 5. Trying a standalone plugin in a bot {#standalone-plugin}
-
-A plugin repository created with `zhin new <name> --standalone` has its own `zhin.js` / `@zhin.js/*` dev dependencies for tests and type checks. To try it in a bot, **do not** run `pnpm add <plugin dir>`:
-
-- a `link:` dependency resolves `@zhin.js/tool` and friends from the plugin's **own** `node_modules`, a different physical location from the bot's copy, so startup fails with `Multiple package locations for @zhin.js/tool are not supported in one generation` (section 1);
-- packages resolved through `node_modules` are not watched, so edits do not hot reload;
-- a bot created with `pnpm create zhin-app` is itself a pnpm workspace, so `pnpm add` would also need `-w`.
-
-`zhin dev link` only switches **framework** packages; it does not handle plugin directories. Pick one:
-
-| Goal | How | Hot reload |
-| --- | --- | --- |
-| Check the published artifact | `pnpm pack` in the plugin, `pnpm add -w <plugin dir>/<name>-<version>.tgz` in the bot root, then `plugins: { <instance>: <package> }` in the main config | No; pack and install again after changes |
-| Edit and try | Link the plugin directory into the bot's `plugins/` (the bot's `pnpm-workspace.yaml` includes `plugins/*`) and mount it by its `./` local path | Yes |
-
-Edit-and-try steps, in the bot root:
-
-```bash
-ln -s /path/to/my-plugin plugins/my-plugin   # Windows: mklink /J plugins\my-plugin C:\path\to\my-plugin
-pnpm install                                 # the plugin becomes a workspace member; its dev deps link to the bot's store
-npx zhin doctor                              # "Zhin 包单实例" (single instance) should pass
-```
-
-```yaml
-# zhin.config.yml
-configVersion: 2
-plugins:
-  my-plugin: ./plugins/my-plugin
-```
-
-Then `pnpm dev`. Editing files in convention directories such as `commands/` or `tools/` reloads that capability (log `hmr_reload | scope: capability`). Editing a shared `src/` helper logs `restartRequired`, and dev mode restarts the process. If the plugin's zhin versions differ from the bot's, pnpm installs two copies and `zhin doctor` reports it; align the versions first.
-
-Afterwards remove the `plugins/my-plugin` link and the `plugins` entry, then run `pnpm install`.
 
 ## 6. Ports and clean exit
 
