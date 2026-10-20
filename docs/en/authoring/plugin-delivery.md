@@ -76,7 +76,7 @@ npx @zhin.js/cli pub --dry-run   # build and preview the tarball, without publis
 npx @zhin.js/cli pub             # publish after confirming; add --yes in CI and other non-interactive shells
 ```
 
-Write `npx @zhin.js/cli`, not `npx zhin`: without `@zhin.js/cli` installed in the plugin directory, `npx zhin` downloads a different, unmaintained npm package with that name (`zhin@3.x`). Only inside a bot project, where `@zhin.js/cli` is installed, does `npx zhin` mean the zhin CLI.
+Prefer `npx @zhin.js/cli`: without `@zhin.js/cli` installed in the plugin directory, `npx zhin` downloads the npm package named `zhin`. Since `zhin@4` that is an alias of `@zhin.js/cli`, but a `zhin@3.x` left in the npx cache or a lockfile is the old, unmaintained framework package. Inside a bot project, where `@zhin.js/cli` is installed, `npx zhin` uses it directly.
 
 ## Done when
 
