@@ -335,6 +335,7 @@ describe('CLI new command integration', () => {
     expect(readme).toContain('configVersion: 2')
     expect(readme).not.toContain(`pnpm add ../${pluginName}`)
     expect(readme).toContain('local-dev#standalone-plugin')
+    expect(readme).toContain('npx @zhin.js/cli pub --dry-run')
     expect(readme).toContain(`./plugins/${pluginName}`)
   }, 30000)
 
