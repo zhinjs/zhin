@@ -5,7 +5,7 @@ import { defineAdapter, type AdapterDefinition, type AdapterSegmentPolicy,
 import { ImRuntime, type ConversationAddress, type MessageDispatchResult,
   type RuntimeMessageDiagnosticsReader, type SendContent } from '@zhin.js/core/runtime';
 import { type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
-import { rootPluginId, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import { rootPluginId, type ConfigDocumentPort, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { NativeDevelopmentModuleRuntime, NodePackageResolver, RootRuntime,
   type ModuleRuntime, type RootResourceInstaller } from '@zhin.js/runtime';
 import { captureDeliveryValue } from './delivery-capture.js';
@@ -22,7 +22,11 @@ export { createFakeMessage, createCommandContext, runCommand, runMiddleware, run
 export interface PluginTestKitOptions {
   /** A real, disposable test app with its own package.json, plugin entry, dependencies and mounts. */
   readonly projectRoot: string;
-  readonly config?: RuntimeConfigDocument;
+  /**
+   * A v2 document, or a file-backed document such as `createConfigDocument(path)` from
+   * `@zhin.js/config-file` when the test must share the same file authority as `zhin start`.
+   */
+  readonly config?: RuntimeConfigDocument | ConfigDocumentPort;
   /** Adapter names reserved for synthetic transports, default: ['test']. */
   readonly endpoints?: readonly string[];
   /** Default endpoint renders HTML and buttons as text; override to verify negotiated capabilities. */
