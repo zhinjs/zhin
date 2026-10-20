@@ -1,0 +1,23 @@
+basic/cli/src/plugin-runtime/migrate/instance-declarations.ts
+  s_a467b02185c88e::t_ad25bf086f4417 3,12,47-52,188-189,210-211,213,217-329
+basic/cli/tests/cli-write-side.test.ts
+  s_a467b02185c88e::t_22b25dee1a231b 22,136,143-181,195
+basic/cli/tests/migrate-install.test.ts
+  s_a467b02185c88e::t_eae2d8bc65a754 87-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6c9a4def16126162ea685b37dee91b21c6911926",
+  "prompts": {},
+  "sessions": {
+    "s_a467b02185c88e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0319c-34d0-7a61-a360-f3203f30d70a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
