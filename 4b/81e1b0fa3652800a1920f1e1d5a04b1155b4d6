@@ -1,0 +1,62 @@
+.changeset/dx2-exports-zhin-entry.md
+  h_b680f75345178a 1-5
+.changeset/group-suite-checkin-aliases.md
+  h_b680f75345178a 1-5
+.changeset/qq-menu-markdown-merge.md
+  h_b680f75345178a 1-5
+.changeset/zhin-new-lib-layout.md
+  h_b680f75345178a 1-13
+basic/cli/src/commands/new-plugin-manifest.ts
+  h_b680f75345178a 177-226,229-286,293-294,319-321,323,326-327,331,334-336,358-359,363,380-381,388-391,394-395
+basic/cli/src/commands/new.ts
+  h_b680f75345178a 13-15,192,252,256-272,289,301,322,331,338,348,368,380,500-501,516-517,520-521,572,579
+basic/cli/tests/new-integration.test.ts
+  h_b680f75345178a 55-56,66-68,71,73,75-76,108-111,132,261,310,312-315,339
+basic/cli/tests/new-plugin-manifest.test.ts
+  h_b680f75345178a 4,11-12,121-122,125-126,129-164,166,168,171
+docs/authoring/define-plugin.md
+  h_b680f75345178a 345,354-374
+docs/cli/index.md
+  h_b680f75345178a 160-165
+docs/en/authoring/define-plugin.md
+  h_b680f75345178a 345,354-374
+docs/en/cli/index.md
+  h_b680f75345178a 160-165
+packages/im/runtime/src/manifest.ts
+  h_b680f75345178a 66,109-142,147-148,153-157,252-256
+packages/im/runtime/tests/manifest-exports-entry.test.ts
+  h_b680f75345178a 1-88
+plugins/adapters/qq/src/endpoint.ts
+  h_b680f75345178a 21,163-166,171-186,423-426,431-446
+plugins/adapters/qq/src/image-size.ts
+  h_b680f75345178a 1-110
+plugins/adapters/qq/src/index.ts
+  h_b680f75345178a 28-30,36-37
+plugins/adapters/qq/src/outbound.ts
+  h_b680f75345178a 11-13,21,85-86,91-95,189-192,196-199,202-216,220-221,255-261,288,294-392
+plugins/adapters/qq/tests/menu-pagination.test.ts
+  h_b680f75345178a 1-236
+plugins/utils/group-suite/README.md
+  h_b680f75345178a 64,69
+plugins/utils/group-suite/commands/checkin/index.ts
+  h_b680f75345178a 9
+plugins/utils/group-suite/commands/mypoints/index.ts
+  h_b680f75345178a 9
+plugins/utils/group-suite/commands/rank/index.ts
+  h_b680f75345178a 9
+plugins/utils/group-suite/tests/command-aliases.test.ts
+  h_b680f75345178a 1-110
+scripts/check-plugin-scaffold.mjs
+  h_b680f75345178a 15,35-44,62-65,143,145-151,156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4b81e1b0fa3652800a1920f1e1d5a04b1155b4d6",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
