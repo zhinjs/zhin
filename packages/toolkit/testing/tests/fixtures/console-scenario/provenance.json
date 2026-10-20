@@ -1,0 +1,6 @@
+{
+  "generator": "console-ui/src/pages/scenario-lab/scenario-model.mjs",
+  "generatorSha256": "dc654e21c1697be95418109c0c725e4b2d02e63a3cdeeafff52ffb66dc05af7d",
+  "contractVersion": 1,
+  "evidence": "Actual exporter output. Runtime execution is verified independently by the Zhin testing fixture; exporting alone does not establish plugin behavior."
+}
