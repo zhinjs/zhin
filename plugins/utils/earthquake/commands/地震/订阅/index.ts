@@ -1,18 +1,20 @@
 import { defineCommand } from 'zhin.js/command';
 import { conversationError, extractConversation } from '../../../src/conversation.js';
+import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../manage-permission.js';
 import { earthquakeServiceToken } from '../../../src/runtime.js';
 import { parseSubscribeArgs } from '../../../src/subscribe-args.js';
 import { SubscriptionLimitError } from '../../../src/subscriptions.js';
 
 export default defineCommand({
-  description: '在当前会话订阅地震速报：地震 订阅 [最小震级] [地区...]',
+  description: '在当前会话订阅地震速报：地震 订阅 [最小震级] [地区...]（群聊限群主、管理员或机器人主人）',
   params: {
     filters: { type: 'word', rest: true, description: '可选：最小震级与地区关键词，如 5 四川 云南' },
   },
-  async execute({ params, input, use }) {
+  async execute({ params, input, use, adapter, scene, sender }) {
     const service = use(earthquakeServiceToken);
     const target = extractConversation(input);
     if (!target) return conversationError(input);
+    if (!canManageSubscription({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
     const parsed = parseSubscribeArgs(params.filters ?? []);
     if ('error' in parsed) return parsed.error;
 

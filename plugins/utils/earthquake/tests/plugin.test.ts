@@ -12,6 +12,7 @@ import recentTool from '../skills/earthquake/tools/recent_earthquakes/index.ts';
 import { DEFAULT_EARTHQUAKE_CONFIG, resolveEarthquakeConfig } from '../src/config.js';
 import { extractConversation } from '../src/conversation.js';
 import { earthquakeServiceToken } from '../src/runtime.js';
+import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../commands/地震/manage-permission.ts';
 import { jsonResponse, MIRROR_URL, mirrorBody, OFFICIAL_URL, statusResponse, USGS_URL, usgsBody, type QuakeSpec } from './fixtures.js';
 
 function liveQuake(id: string, minutesAgo: number, overrides: Partial<QuakeSpec> = {}): QuakeSpec {
@@ -98,7 +99,7 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
     stubFeeds({ cenc: () => cenc, usgs: () => usgs });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const message = createFakeMessage();
+      const message = createFakeMessage({ sender: { id: 'admin-1', name: 'Admin', roles: ['admin'] } });
       const subscribed = await runCommand(fake, subscribeCommand, { input: message, params: { filters: ['5', '中国'] } });
       expect(String(subscribed)).toContain('已订阅：M5.0 以上，地区：中国');
 
@@ -147,7 +148,7 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
     stubFeeds({ cenc: () => [], usgs: () => [] });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
-      const reply = await runCommand(fake, subscribeCommand, { input: createFakeMessage(), params: { filters: ['四川', '5'] } });
+      const reply = await runCommand(fake, subscribeCommand, { input: createFakeMessage({ conversation: { kind: 'private', id: 'u1' } }), params: { filters: ['四川', '5'] } });
       expect(String(reply)).toContain('最小震级请写在地区之前');
       const noConversation = await runCommand(fake, unsubscribeCommand, {
         input: { ...createFakeMessage(), conversation: { kind: 'group', id: 'g', threadId: 't', endpoint: { id: 'e', adapter: 'a' } } } as never,
@@ -156,5 +157,69 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
     } finally {
       await fake.dispose();
     }
+  });
+});
+
+describe('@zhin.js/plugin-earthquake subscription permissions', () => {
+  function groupMessage(roles: string[]) {
+    return createFakeMessage({ conversation: { kind: 'group', id: 'g-perm' }, sender: { id: `user-${roles.join('-') || 'member'}`, roles } });
+  }
+
+  it('denies ordinary group members with a clear message and leaves no subscription', async () => {
+    stubFeeds({ cenc: () => [], usgs: () => [] });
+    const fake = await runPluginSetup(plugin, { config: {} });
+    try {
+      const member = groupMessage([]);
+      expect(await runCommand(fake, subscribeCommand, { input: member, params: { filters: ['5'] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+      expect(await runCommand(fake, unsubscribeCommand, { input: member })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+      const trusted = groupMessage(['trusted']);
+      expect(await runCommand(fake, subscribeCommand, { input: trusted, params: { filters: [] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+      expect(await fake.resources.use(earthquakeServiceToken).store.list()).toEqual([]);
+    } finally {
+      await fake.dispose();
+    }
+  });
+
+  it.each([['owner'], ['admin'], ['master']])('allows the group %s to subscribe and unsubscribe', async (role) => {
+    stubFeeds({ cenc: () => [], usgs: () => [] });
+    const fake = await runPluginSetup(plugin, { config: {} });
+    try {
+      const message = groupMessage([role]);
+      expect(String(await runCommand(fake, subscribeCommand, { input: message, params: { filters: ['6'] } }))).toContain('已订阅');
+      expect(await runCommand(fake, unsubscribeCommand, { input: message })).toBe('已取消本会话的地震速报订阅');
+    } finally {
+      await fake.dispose();
+    }
+  });
+
+  it('lets anyone subscribe their own private chat', async () => {
+    stubFeeds({ cenc: () => [], usgs: () => [] });
+    const fake = await runPluginSetup(plugin, { config: {} });
+    try {
+      const message = createFakeMessage({ conversation: { kind: 'private', id: 'u-private' }, sender: { id: 'u-private', roles: [] } });
+      expect(String(await runCommand(fake, subscribeCommand, { input: message, params: { filters: [] } }))).toContain('已订阅');
+      expect(await runCommand(fake, unsubscribeCommand, { input: message })).toBe('已取消本会话的地震速报订阅');
+    } finally {
+      await fake.dispose();
+    }
+  });
+
+  it('keeps query and status unrestricted for group members', async () => {
+    stubFeeds({ cenc: () => [liveQuake('CD.q', 5)], usgs: () => [] });
+    const fake = await runPluginSetup(plugin, { config: {} });
+    try {
+      const member = groupMessage([]);
+      expect(String(await runCommand(fake, queryCommand, { input: member, params: {}, options: {} }))).toContain('四川绵阳市北川县');
+      expect(String(await runCommand(fake, statusCommand, { input: member }))).toContain('本会话未订阅');
+    } finally {
+      await fake.dispose();
+    }
+  });
+
+  it('evaluates the rule with the built-in permit checker', () => {
+    expect(canManageSubscription({ scene: { id: 'u', type: 'private' }, sender: { id: 'u', role: [] } })).toBe(true);
+    expect(canManageSubscription({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['user'] } })).toBe(false);
+    expect(canManageSubscription({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['admin'] } })).toBe(true);
+    expect(canManageSubscription({ scene: { id: 'g', type: 'group' } })).toBe(false);
   });
 });
