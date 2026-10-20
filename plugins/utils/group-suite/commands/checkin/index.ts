@@ -6,6 +6,7 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
   description: '每日签到获得积分',
+  alias: ['checkin do', '签到'],
   execute({ config, input, owner, use }) {
     return doCheckin(input ?? {}, resolveGroupSuiteConfig(config), resolveGroupSuiteRuntime({ owner, use }));
   },
