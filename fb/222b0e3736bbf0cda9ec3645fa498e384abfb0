@@ -1,0 +1,27 @@
+plugins/utils/ledger/src/identity.ts
+  s_e6f5f09d5890ba::t_4b550950ee5b3b 1-50
+plugins/utils/ledger/src/index.ts
+  s_e6f5f09d5890ba::t_152bd1bc7ab380 1-29
+plugins/utils/ledger/src/runtime.ts
+  s_e6f5f09d5890ba::t_ec751c0f64c781 1-4
+plugins/utils/ledger/src/service.ts
+  s_e6f5f09d5890ba::t_a549e92d35f3c4 1-187
+plugins/utils/ledger/tests/ledger.test.ts
+  s_e6f5f09d5890ba::t_c1cd7d78c4147a 1-403
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb222b0e3736bbf0cda9ec3645fa498e384abfb0",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
