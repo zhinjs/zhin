@@ -222,10 +222,13 @@ zhin build [plugin] [--clean] [--production] [--analyze]
 ### pub: Publish a Plugin
 
 ```bash
-zhin pub [plugin-name] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build]
+zhin pub [plugin-name|plugin-dir] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build] [--yes]
 ```
 
-Run from a project root that contains `plugins/`; without a name it asks which plugin to publish. `--dry-run` goes through the flow without publishing. Full release flow: [Complete plugin delivery](../authoring/plugin-delivery.md).
+- Inside a standalone plugin from `zhin new --standalone`, run it without arguments to publish the current directory: `npx @zhin.js/cli pub --dry-run` to preview, `npx @zhin.js/cli pub` to publish. (Don't use `npx zhin` in a plugin directory: it downloads a different, unmaintained npm package with the same name.)
+- The argument can also be any plugin directory (its `package.json` has a `zhin` field), e.g. `zhin pub ../my-plugin`.
+- In a bot project root, the argument is a path relative to `plugins/`; without it a single plugin is picked automatically, several are offered interactively.
+- `--dry-run` goes through the flow without publishing. Non-interactive shells (CI) need `--yes` to skip the publish confirmation. Packages with `private: true` are rejected, and a `zhin.entry` pointing at `.ts` gets a hint to publish the built `.js`. Full release flow: [Complete plugin delivery](../authoring/plugin-delivery.md).
 
 ### packages: Plugin Status and Extension Packages
 
