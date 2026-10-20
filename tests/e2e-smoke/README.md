@@ -8,6 +8,9 @@ platform or a real model.
 | --- | --- |
 | `scenarios/install-migrate-boot-diagnose.mjs` | v1 project → `configVersion: 2` migration → boot → commands and a group welcome → `GET /api/messages/diagnostics` |
 | `scenarios/scenario-lab-export.mjs` | A scenario-lab (#843) export runs against the smoke bot; a wrong expectation fails |
+| `scenarios/admission-and-welcome.mjs` | Command `execution` cooldown and concurrency (reply text, other members unaffected, diagnostics `limit`) → `welcomeConversations` applied as new generations: omitted, exact entry, topic mismatch, invalid entry rejected, `[]` |
+| `scenarios/reminders-task-center.mjs` | `remind create 10分钟后 喝水` → preview with absolute time and timezone → “确认” → delivery on a fake clock → administrator create / pause / resume through the real `/api/tasks` routes |
+| `scenarios/rss-quiet-hours.mjs` | Two admin RSS subscriptions via `/api/tasks` against a local feed server: baseline, overnight updates held for the quiet one and pushed for the normal one, one morning digest, no repeat |
 
 ## How it runs
 
@@ -19,6 +22,10 @@ platform or a real model.
   module graph. `smoke-loop.test.ts` starts each scenario in a child process and checks the
   `SMOKE_STEP` lines it printed.
 - Each step is wrapped in `smokeStep()`, so a failure names the user-visible step that broke.
+- Time-based loops use the kit's `FakeClock` with `FakeScheduleRootHost`; `harness/fake-wall-clock.mjs`
+  points `Date.now` at the same clock inside the scenario process. `harness/smoke-hosts.mjs` installs a
+  SQLite Database Host, the fake-clock Schedule Host and an Outbound Host that sends through the kit's
+  real unified send chain, so proactive sends land in `kit.deliveries` like replies.
 
 Run locally after `pnpm build`:
 
