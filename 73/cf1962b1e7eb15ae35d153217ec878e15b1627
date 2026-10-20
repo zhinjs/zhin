@@ -1,0 +1,21 @@
+docs/contributing/user-experience-roadmap.md
+  s_079f1dc5e6308d::t_1b8b8c9eaf6460 17-21,75,77-79,89,103-105,107,123-125,127,129,135-139,147-149,157,161-163,169-171,179-183,187
+  s_079f1dc5e6308d::t_c5260d761f0163 159
+  s_079f1dc5e6308d::t_fd5e84bee1caf8 160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "73cf1962b1e7eb15ae35d153217ec878e15b1627",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
