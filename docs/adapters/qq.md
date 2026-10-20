@@ -1,0 +1,227 @@
+---
+title: "@zhin.js/adapter-qq"
+package: "@zhin.js/adapter-qq"
+tier: Advanced
+---
+
+::: info 文档同步
+本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
+:::
+
+<!-- sync-adapter-docs:sha256=ef0c7e8d1a530071 -->
+
+# @zhin.js/adapter-qq
+
+Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSocket Gateway**（`qq-official-bot`）收发消息（无需 host-router / host-http）。
+
+## 功能
+
+- WebSocket Gateway 入站（默认；无需公网 HTTPS / host）
+- 解析私聊 / 群 / 频道消息
+- 出站 `send({ conversation, payload })` → QQ API（`conversation.kind`/`id`/`parent` 结构化寻址）
+- 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
+- Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
+- AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
+- 群事件：机器人进群/退群、群成员加入/退出、入群申请（支持 `$approve()` / `$reject()`）
+- 完整 SDK 业务 API：通过 `qqClient.get(context, endpoint).api` 使用群管理、禁言、自动审批策略、自定义菜单、指令面板等 `qq-official-bot` 能力
+
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-qq
+```
+
+## Plugin Runtime
+
+- `@zhin.js/adapter` — 约定式 `adapters/qq/index.ts`（`defineAdapter`）
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `zhin.js` — `plugin.ts`（`definePlugin`）
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
+- **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（WebSocket 路径）
+
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（ConversationRef 结构化寻址）  
+出站：`send({ conversation, payload })` → `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
+
+## 前置条件
+
+| 要求 | 说明 |
+|------|------|
+| **AppID / Secret** | [QQ 开放平台](https://q.qq.com/) 创建机器人应用并获取 |
+| **WebSocket（默认）** | `qq-official-bot` 正向连接；无需公网回调 |
+| **host-http** | WebSocket **不需要**；Webhook / middleware 模式需要（经 `httpHostToken`） |
+
+必填字段（`endpoints[i]`）：`id`、`appid`、`secret`。
+
+## 最小配置
+
+```yaml
+configVersion: 2
+# zhin.config.yml（Plugin Runtime）
+plugins:
+  qq: "@zhin.js/adapter-qq"
+qq:
+  # mode: websocket   # 默认
+  endpoints:
+    - id: my-qq-bot
+      appid: ${QQ_APPID}
+      secret: ${QQ_SECRET}
+      # botKind / intents 可由向导写入；`qq endpoint add` 扫码后会追问公域/私域再写入
+```
+
+### botKind 与 intents
+
+WebSocket Identify 的 `intents` **必须与开放平台已开通的权限一致**，否则会断连。
+群聊无公/私域之分，两类都订阅 `GROUP_AND_C2C_EVENT` 和 `GROUP_MEMBER`；差异只在频道消息 intent：
+
+| `botKind` | 频道消息 intent | 共用 intents |
+|-----------|-----------------|--------------|
+| `public`（默认，公域） | `PUBLIC_GUILD_MESSAGES`（仅 @） | `GROUP_AND_C2C_EVENT`, `GROUP_MEMBER`, `GUILDS`, `GUILD_MEMBERS`, `DIRECT_MESSAGE` |
+| `private`（私域） | `GUILD_MESSAGES`（频道全量） | 同上 |
+
+公域机器人订阅 `GUILD_MESSAGES` 会 Identify 失败断连。显式配置 `intents` 时优先于 `botKind`。
+`create-zhin` / `zhin setup` 会询问公/私域并写入；`qq endpoint add` 扫码成功后在同一会话追问 `public`/`private`（或 `公域`/`私域`），确认后一次性写 `.env` 与 yaml。
+
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
+
+```yaml
+configVersion: 2
+plugins:
+  qq: "@zhin.js/adapter-qq"
+qq:
+  mode: websocket
+  endpoints:
+    - id: main-bot
+      appid: ${QQ_APPID}
+      secret: ${QQ_SECRET}
+      botKind: public
+      intents:
+        - GROUP_AND_C2C_EVENT
+        - GROUP_MEMBER
+        - GUILDS
+        - GUILD_MEMBERS
+        - DIRECT_MESSAGE
+        - PUBLIC_GUILD_MESSAGES
+    - id: private-bot
+      appid: ${QQ_APPID_2}
+      secret: ${QQ_SECRET_2}
+      botKind: private
+      intents:
+        - GROUP_AND_C2C_EVENT
+        - GROUP_MEMBER
+        - GUILDS
+        - GUILD_MEMBERS
+        - DIRECT_MESSAGE
+        - GUILD_MESSAGES
+```
+
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-qq`（`instanceKey: qq`）。
+
+## Endpoint 管理命令
+
+适配器自带 `qq endpoint` 命令组（聊天内直接使用，默认无前缀；受 `commandPrefix` 影响）：
+
+| 命令 | 说明 |
+|------|------|
+| `qq endpoint add [name]` | 手机 QQ 扫码绑定 → **追问公域/私域** → 一次性写入 `.env` + `qq.endpoints`（重启生效） |
+| `qq endpoint cancel` | 取消进行中的扫码绑定或待确认的公域/私域选择 |
+| `qq endpoint list` | 列出运行中与配置中的 endpoints |
+| `qq endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |
+
+add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i].master`）时仅
+master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoint 的 `master`）。二维码当前以链接文本下发
+（出站富媒体待迁移），用手机 QQ 打开链接即可扫码。
+
+## 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `QQ_APPID` | YAML 示例中 `appid` 引用的应用 AppID |
+| `QQ_SECRET` | YAML 示例中 `secret` 引用的应用 Secret |
+
+## Webhook / middleware
+
+`mode: webhook` 或 `mode: middleware` 经 `httpHostToken` 注册 POST 路由（默认 `/qq/webhook`），使用 qq-official-bot Middleware 接收器验签并入站；出站仍走 QQ HTTP API。Host 需注入 `httpHostToken`。
+
+## AI 工具（Skill）
+
+| 类别 | 路径 |
+|------|------|
+| Permit 词汇 | `PERMITS.md` |
+| 平台工具 | `tools/`（频道、角色等） |
+| 技能说明 | `agents/qq/skills/qq/SKILL.md` |
+
+## 平台 Client 与 QQ API
+
+`qqClient` 返回当前 endpoint 的传输 client。常用发送、撤回、频道查询仍有顶层快捷方法；
+`client.api` 暴露完整的 `qq-official-bot` 1.3 业务 Service 与实体入口；连接启停仍由 Endpoint 生命周期统一管理：
+
+```ts
+import { qqClient } from '@zhin.js/adapter-qq';
+
+const client = qqClient.get(context, 'my-qq-bot');
+
+const group = await client.api.groupService.getInfo(groupOpenid);
+const requests = await client.api.groupService.getJoinRequests(groupOpenid);
+await client.api.groupService.setMemberMute(groupOpenid, [
+  { op: 'add', member_openid: memberOpenid, mute_expire_at: expiresAt },
+]);
+
+const menu = await client.api.menuPanelService.getCustomMenu();
+const panels = await client.api.menuPanelService.getCommandPanels({ scope: 'group' });
+```
+
+群管理接口中有部分是白名单能力，入群审批和禁言还要求机器人具备群管理员权限；
+具体可用范围以 QQ 开放平台为准。
+
+## 平台权限（platform permit）
+
+platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；`@zhin.js/tool` descriptor 保留 `platforms` / `scopes` / `permissions`，CapabilityIngress 与 ToolSystem 统一经 Core `canAccessTool()` 执行门禁。
+
+## Markdown 与交互输出
+
+QQ Endpoint 声明原生 `markdown` / `keyboard` 能力。普通 AI Markdown 会保留为 QQ Markdown
+消息；命令或 Agent 通过 `UserInteraction.ask()` 发起 `confirm` / `select` 时，会生成
+Markdown + 指令按钮组。按钮值与手动输入共用同一解析入口，不维护 QQ 专用交互状态。
+
+不支持原生按钮的 Adapter 会在 Core 中把同一 keyboard 语义降级为编号列表，并保存数字到
+payload 的回跳映射。图片、音频、视频和文件仍沿 canonical `MediaRef` 出站链投递。
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| Gateway Identify 后断线 | 检查 `botKind` 与 intents；公域机器人不要订阅受限 intent |
+| 二维码绑定后仍离线 | 在 Console 登录待办确认结果，并检查 App ID、Secret 与 Token |
+| Webhook 无事件 | 检查 HTTP Host、公网路径、平台回调与签名参数 |
+| Markdown/按钮发送失败 | 检查平台模板与权限，并按 Endpoint 能力降级 |
+
+## 许可证
+
+MIT License
+
+### 发送回执与未知结果
+
+发送成功回执只接受平台真实消息 ID。网络超时、断线、缺少消息 ID 的响应会报告 `deliveryUnknown`，框架不会自动重发；手动重发可能重复发送。
+
+QQ 返回 `message_audit.audit_id` 仅表示审核任务，不能用作消息 ID，不能据此声明消息已投递。
+
+QQ SDK 启动须在 30 秒内完成，否则端点启动失败并清理该客户端；迟到就绪会再次清理旧客户端。超时不表示凭据错误，应结合网关、认证网络与权限检查。
+
+`qq-official-bot` 1.3.1 已包含 SDK Session.start 的 async Promise executor 修复：认证/接收器启动异常由启动 Promise 正确拒绝，ready 监听先于启动注册，启动结束清理临时监听。已实际验证本机 dummy 403 认证失败经完整 CLI 退出 1，无未处理 rejection；不等价于真实 QQ 账号联网验收。
+
+原生按钮按腾讯协议编码：type=0 URL 跳转、type=1 回调、type=2 指令。默认订阅包含 INTERACTION（1<<26）；用户显式 intents 保留原值，需自行加入 INTERACTION 才能收到回调。SDK notice.*.action 映射为 canonical action，并独立 PUT ACK解除loading；ACK不代表业务处理成功。私聊/群聊平台不提供源消息ID，metadata 明确 sourceMessageIdAvailable=false，以唯一payload、完整端点/会话与操作者关联；频道提供源ID时严格保留。参考：[腾讯官方消息按钮协议](https://github.com/tencent-connect/bot-docs/blob/main/docs/develop/api-v2/server-inter/message/trans/msg-btn.md)。
+
+QQ 当前未实现 canonical `share` 的标题/描述/URL 消息卡片。适配器显式 supported 不含 share，探针及正常统一发送均整体返回 unsupported；不会仅发送旁边的样本文字并记分享成功。直接 endpoint 编码也明确 not_sent，避免绕过能力检查后静默丢失。
+
+分片上传兼容平台返回的完整连续 0-based 或 1-based 序号。字节偏移使用
+`(index - base) * block_size`，分片完成通知保留平台原序号；重复、缺片、异常大小或空
+分片集合会在 PUT 前拒绝。官方文档示例为 0-based，实机曾返回单片 `index: 1`。
+当前官方预上传合同未说明 `parts: []` 是合法秒传响应，因此未将空集合视为已上传；
+若后续取得该合同证据，应补独立回归后支持。debug 诊断仅记录数值和匹配状态，SDK
+原始 debug 继续关闭，避免输出凭据及上传地址。
+
+### WebSocket 受控故障入口
+
+可选 `streamProxy: { port: 18443, serverName: "实际网关 hostname" }` 将 WSS 的 TCP 连接导向 `127.0.0.1:port`。需代理固定转发到相同官方网关的 443 端口；SDK 每次仍动态调用 `getWsUrl()`，hostname/443 不匹配会拒绝连接并只记录 hostname，不能自动绕过代理。原始 URL、HTTP Host、TLS SNI 保留，证书验证始终开启。不要填带 query 的 URL。
+
+仅 WSS 入站、心跳和会话认证经过此代理；AppSecret 换 token、网关发现 HTTP、消息 API 和媒体上传仍直连。故障恢复由 `createEndpointLifecycle` 负责，SDK 内置重连关闭，避免双重重连。此入口用于受控网络验收，不提供全局代理或 TLS 验证绕过。

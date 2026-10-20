@@ -1,0 +1,57 @@
+{
+  "name": "minimal-bot",
+  "private": true,
+  "version": "0.0.37",
+  "description": "Zhin.js Plugin Runtime Stable golden path",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "daemon": "zhin runtime start --daemon",
+    "build": "tsc --noEmit",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../.. examples/minimal-bot/tests"
+  },
+  "dependencies": {
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3",
+    "@zhin.js/components": "workspace:*",
+    "@zhin.js/middleware": "workspace:*"
+  },
+  "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  }
+}

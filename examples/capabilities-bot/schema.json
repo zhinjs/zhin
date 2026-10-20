@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "greeting": {
+      "type": "string",
+      "default": "你好",
+      "description": "stats 命令的问候语前缀"
+    },
+    "heartbeatCron": {
+      "type": "string",
+      "default": "0 */5 * * * *",
+      "description": "心跳定时任务（6 段 cron）；空串关闭"
+    }
+  }
+}

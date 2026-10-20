@@ -1,0 +1,252 @@
+/**
+ * agent_sessions CRUD — epoch-aware session metadata (ADR 0009 D4).
+ */
+
+import { randomUUID } from 'node:crypto';
+import type {
+  AgentSessionRecord,
+  CreateAgentSessionInput,
+} from './agent-db-models.js';
+import { SessionWriteLock } from './session-write-lock.js';
+import { persistenceFailure } from './persistence-error.js';
+
+export interface AgentSessionStoreConfig {
+  sessionIdleArchiveMs?: number;
+}
+
+/** Session lifecycle authority shared by persistent and in-memory adapters. */
+export interface AgentSessionRepository {
+  findActive(sessionKey: string): Promise<AgentSessionRecord | null>;
+  getOrCreateActive(input: CreateAgentSessionInput): Promise<AgentSessionRecord>;
+  touch(sessionId: string): Promise<void>;
+  getBySessionId(sessionId: string): Promise<AgentSessionRecord | null>;
+  setActiveLeafMessageId(sessionId: string, messageId: number | null): Promise<void>;
+  archiveByKey(sessionKey: string): Promise<boolean>;
+  archiveIdleForKey(sessionKey: string): Promise<number>;
+}
+
+interface DbModel {
+  select(...fields: string[]): {
+    where(condition: Record<string, unknown>): Promise<AgentSessionRecord[]>;
+  };
+  create(data: Record<string, unknown>): Promise<unknown>;
+  update(data: Record<string, unknown>): {
+    where(condition: Record<string, unknown>): Promise<unknown>;
+  };
+}
+
+function createSessionEpochId(sessionKey: string): string {
+  return `${sessionKey}#${randomUUID()}`;
+}
+
+export class AgentSessionStore implements AgentSessionRepository {
+  private readonly creationLock = new SessionWriteLock();
+  private readonly model: DbModel;
+  private readonly config: Required<Pick<AgentSessionStoreConfig, 'sessionIdleArchiveMs'>>;
+
+  constructor(model: DbModel, config: AgentSessionStoreConfig = {}) {
+    this.model = model;
+    this.config = {
+      sessionIdleArchiveMs: config.sessionIdleArchiveMs ?? 7 * 24 * 60 * 60 * 1000,
+    };
+  }
+
+  async findActive(sessionKey: string): Promise<AgentSessionRecord | null> {
+    try {
+      const rows = await this.model
+        .select()
+        .where({ session_key: sessionKey, status: 'active' });
+      if (!rows?.length) return null;
+      return rows.sort((a, b) => b.updated_at - a.updated_at)[0] ?? null;
+    } catch (err) {
+      throw persistenceFailure('agent_session.find_active', err);
+    }
+  }
+
+  async getOrCreateActive(input: CreateAgentSessionInput): Promise<AgentSessionRecord> {
+    return this.creationLock.run(input.session_key, async () => {
+      const existing = await this.findActive(input.session_key);
+      if (existing) {
+        await this.touch(existing.session_id);
+        return existing;
+      }
+      await this.archiveIdleForKey(input.session_key);
+      const now = Date.now();
+      const record: AgentSessionRecord = {
+        session_id: createSessionEpochId(input.session_key),
+        session_key: input.session_key,
+        model: input.model ?? '',
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+      };
+      try {
+        await this.model.create(record as unknown as Record<string, unknown>);
+      } catch (err) {
+        throw persistenceFailure('agent_session.create', err);
+      }
+      return record;
+    });
+  }
+
+  async touch(sessionId: string): Promise<void> {
+    try {
+      await this.model.update({ updated_at: Date.now() }).where({ session_id: sessionId });
+    } catch (err) {
+      throw persistenceFailure('agent_session.touch', err);
+    }
+  }
+
+  async getBySessionId(sessionId: string): Promise<AgentSessionRecord | null> {
+    try {
+      const rows = await this.model.select().where({ session_id: sessionId });
+      return rows?.[0] ?? null;
+    } catch (err) {
+      throw persistenceFailure('agent_session.get_by_id', err);
+    }
+  }
+
+  async setActiveLeafMessageId(sessionId: string, messageId: number | null): Promise<void> {
+    try {
+      await this.model
+        .update({ active_leaf_message_id: messageId, updated_at: Date.now() })
+        .where({ session_id: sessionId });
+    } catch (err) {
+      throw persistenceFailure('agent_session.set_active_leaf', err);
+    }
+  }
+
+  async archiveByKey(sessionKey: string): Promise<boolean> {
+    try {
+      const rows = await this.model
+        .select()
+        .where({ session_key: sessionKey, status: 'active' });
+      if (!rows?.length) return false;
+      const now = Date.now();
+      for (const row of rows) {
+        await this.model.update({ status: 'archived', updated_at: now }).where({ session_id: row.session_id });
+      }
+      return true;
+    } catch (err) {
+      throw persistenceFailure('agent_session.archive', err);
+    }
+  }
+
+  async archiveIdleForKey(sessionKey: string): Promise<number> {
+    const idleMs = this.config.sessionIdleArchiveMs;
+    if (idleMs <= 0) return 0;
+    const cutoff = Date.now() - idleMs;
+    try {
+      const rows = await this.model
+        .select()
+        .where({ session_key: sessionKey, status: 'active' });
+      let n = 0;
+      for (const row of rows) {
+        if (row.updated_at < cutoff) {
+          await this.model.update({ status: 'archived', updated_at: Date.now() }).where({ session_id: row.session_id });
+          n++;
+        }
+      }
+      return n;
+    } catch (err) {
+      throw persistenceFailure('agent_session.archive_idle', err);
+    }
+  }
+}
+
+export class MemoryAgentSessionStore implements AgentSessionRepository {
+  private readonly creationLock = new SessionWriteLock();
+  private sessions = new Map<string, AgentSessionRecord>();
+  private static readonly MAX_SESSIONS = 2000;
+  private static readonly IDLE_ARCHIVE_MS = 7 * 24 * 60 * 60 * 1000;
+
+  private evictIfNeeded(): void {
+    if (this.sessions.size <= MemoryAgentSessionStore.MAX_SESSIONS) return;
+    const cutoff = Date.now() - MemoryAgentSessionStore.IDLE_ARCHIVE_MS;
+    for (const [id, s] of this.sessions) {
+      if (s.status !== 'active' || s.updated_at < cutoff) {
+        this.sessions.delete(id);
+        if (this.sessions.size <= MemoryAgentSessionStore.MAX_SESSIONS * 0.8) break;
+      }
+    }
+  }
+
+  async findActive(sessionKey: string): Promise<AgentSessionRecord | null> {
+    for (const s of this.sessions.values()) {
+      if (s.session_key === sessionKey && s.status === 'active') return s;
+    }
+    return null;
+  }
+
+  async getOrCreateActive(input: CreateAgentSessionInput): Promise<AgentSessionRecord> {
+    return this.creationLock.run(input.session_key, async () => {
+      const existing = await this.findActive(input.session_key);
+      if (existing) {
+        existing.updated_at = Date.now();
+        return existing;
+      }
+      const now = Date.now();
+      const record: AgentSessionRecord = {
+        session_id: createSessionEpochId(input.session_key),
+        session_key: input.session_key,
+        model: input.model ?? '',
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+      };
+      this.sessions.set(record.session_id, record);
+      this.evictIfNeeded();
+      return record;
+    });
+  }
+
+  async touch(sessionId: string): Promise<void> {
+    const s = this.sessions.get(sessionId);
+    if (s) s.updated_at = Date.now();
+  }
+
+  async getBySessionId(sessionId: string): Promise<AgentSessionRecord | null> {
+    return this.sessions.get(sessionId) ?? null;
+  }
+
+  async setActiveLeafMessageId(sessionId: string, messageId: number | null): Promise<void> {
+    const s = this.sessions.get(sessionId);
+    if (s) {
+      s.active_leaf_message_id = messageId;
+      s.updated_at = Date.now();
+    }
+  }
+
+  async archiveByKey(sessionKey: string): Promise<boolean> {
+    let ok = false;
+    for (const s of this.sessions.values()) {
+      if (s.session_key === sessionKey && s.status === 'active') {
+        s.status = 'archived';
+        s.updated_at = Date.now();
+        ok = true;
+      }
+    }
+    return ok;
+  }
+
+  async archiveIdleForKey(sessionKey: string): Promise<number> {
+    const cutoff = Date.now() - MemoryAgentSessionStore.IDLE_ARCHIVE_MS;
+    let n = 0;
+    for (const [id, s] of this.sessions) {
+      if (s.session_key === sessionKey && s.status === 'active' && s.updated_at < cutoff) {
+        s.status = 'archived';
+        s.updated_at = Date.now();
+        n++;
+      }
+    }
+    return n;
+  }
+
+  dispose(): void {
+    this.sessions.clear();
+  }
+
+  get sessionCount(): number {
+    return this.sessions.size;
+  }
+}

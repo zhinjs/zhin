@@ -1,0 +1,212 @@
+# @zhin.js/agent-feature
+
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [064b06d]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/feature-kit@1.1.6
+  - @zhin.js/plugin-runtime@1.1.15
+
+## 1.1.6
+
+### Patch Changes
+
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- fdc2148: Unblock external plugin authors.
+
+  - Published manifests no longer expose the source-only `development` export condition (it pointed at `./src/*.ts`, which is not in the tarball, so Vitest 4 and other tools that enable `development` failed to import Zhin packages). Each package now carries `publishConfig.exports` without that condition; `pnpm publish` swaps it in when packing, and the monorepo keeps source-level development.
+  - `zhin new` no longer crashes without arguments (uses inquirer `select` instead of the removed `list` prompt; same fix for `zhin onboard` and `zhin pub`). The generated package.json uses `^x.y.z` ranges derived from installed versions instead of `latest`, declares capability packages as optional peers (plus devDependencies for local tests) instead of dependencies, sets `zhin.entry` to `./plugin.js` and builds sibling JavaScript on `prepack`, fixes the adapter template test, and adds `--package-name`. `--skip-install` now also skips the project-root install.
+
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/feature-kit@1.1.5
+  - @zhin.js/plugin-runtime@1.1.14
+
+## 1.1.5
+
+### Patch Changes
+
+- Updated dependencies [386150d]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+  - @zhin.js/plugin-runtime@1.1.13
+  - @zhin.js/feature-kit@1.1.4
+
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/feature-kit@1.1.3
+  - @zhin.js/plugin-runtime@1.1.12
+
+## 1.1.3
+
+### Patch Changes
+
+- b9b3953: Recognize versioned Tool, MCP, Skill and Agent projections across native generation module identities, so protocol ingress retains visible capabilities and fixed-generation execution guards. Keep MCP tools/list available with an empty tool set and reject unknown calls explicitly instead of advertising an unavailable method.
+
+  Bind reused Tool projections to the explicit operation snapshot: new requests read current generation config, resources and projections, while in-flight requests keep their leased generation and retirement guards.
+
+## 1.1.2
+
+### Patch Changes
+
+- Updated dependencies [36c2eb9]
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/feature-kit@1.1.2
+
+## 1.1.1
+
+### Patch Changes
+
+- 63d1f7a: Require `$`-prefixed Markdown Agent entries and generate `$`-prefixed plugin Agent skills. Unprefixed files in both directories remain ordinary colocated documentation and support files.
+
+  This completes the explicit convention-entry rule across file-discovered framework capabilities; `skills/<name>/SKILL.md` remains a directory-bundle convention whose supporting files are already ignored.
+
+- 2fd8017: Make root `AGENTS.md` the main Agent contract and `agents/<name>/agent.json` plus `system.md`, `boundaries.md`, and `conventions.md` the only named sub-agent authoring shape. Standardize Agent and Skill private Tools, Skills, and Hooks as nested named directories, enforce access predicates and governed Tool activation, and keep supporting-file changes on Agent Slot hot reloads.
+- Updated dependencies [13f7301]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [8740059]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [65d0391]
+- Updated dependencies [2fd8017]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/feature-kit@1.1.1
+
+## 1.1.0
+
+### Minor Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+
+### Patch Changes
+
+- Updated dependencies [1fc6270]
+  - @zhin.js/feature-kit@1.1.0
+  - @zhin.js/plugin-runtime@1.1.9
+
+## 1.0.13
+
+### Patch Changes
+
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/plugin-runtime@1.1.8
+  - @zhin.js/feature-kit@1.0.13
+
+## 1.0.12
+
+### Patch Changes
+
+- Updated dependencies [67ef8c4]
+  - @zhin.js/plugin-runtime@1.1.7
+  - @zhin.js/feature-kit@1.0.12
+
+## 1.0.11
+
+### Patch Changes
+
+- Updated dependencies [d3920e9]
+  - @zhin.js/feature-kit@1.0.11
+
+## 1.0.10
+
+### Patch Changes
+
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/feature-kit@1.0.10
+
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [63253bb]
+  - @zhin.js/plugin-runtime@1.1.6
+  - @zhin.js/feature-kit@1.0.9
+
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies [c106ecc]
+- Updated dependencies [daffd4c]
+- Updated dependencies [e40b048]
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/feature-kit@1.0.8
+
+## 1.0.7
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/feature-kit@1.0.7
+  - @zhin.js/plugin-runtime@1.1.4
+
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/feature-kit@1.0.6
+
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/feature-kit@1.0.5
+
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [d5cd4aa]
+  - @zhin.js/feature-kit@1.0.4
+
+## 1.0.3
+
+### Patch Changes
+
+- fa66c4c: Add transactional setup-time Feature registration through `PluginSetupContext.addFeature`, with
+  typed shortcuts for Adapter, Command, Component, Middleware, Agent, Skill, Tool, and MCP Features.
+  Setup definitions now share provider validation, projections, conflicts, ownership, and generation
+  lifecycle with convention-discovered capability files. Feature providers can declare their own
+  shortcut through `authoring.setupMethod`.
+- Updated dependencies [cdf64e7]
+- Updated dependencies [078e3f7]
+- Updated dependencies [fa66c4c]
+  - @zhin.js/plugin-runtime@1.1.1
+  - @zhin.js/feature-kit@1.0.3
+
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [3ea84a0]
+- Updated dependencies [1ddcd70]
+  - @zhin.js/plugin-runtime@1.1.0
+  - @zhin.js/feature-kit@1.0.2
+
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [447f3e2]
+  - @zhin.js/plugin-runtime@1.0.1
+  - @zhin.js/feature-kit@1.0.1

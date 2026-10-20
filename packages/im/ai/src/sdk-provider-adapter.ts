@@ -1,0 +1,314 @@
+/**
+ * SdkProviderAdapter — AIProvider-shaped runtime handle over AI SDK transport (ADR 0018).
+ */
+
+import type {
+  AIProvider,
+  ProviderConfig,
+  TextCompleteOptions,
+  TextCompleteResult,
+} from './types.js';
+import type { ProviderInstanceConfig } from './llm/types/model.js';
+import {
+  createLanguageModel,
+  formatAuthorizationHeader,
+  normalizeGoogleBaseUrl,
+  normalizeOpenAiBaseUrl,
+  resolveOpenAiCompatibleBaseUrl,
+  type SdkId,
+} from './llm/sdk-registry.js';
+import {
+  resolveSdkProviderModels,
+  SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
+} from './llm/sdk-default-models.js';
+
+import { generateTextViaAiSdk } from './llm/bridge/ai-sdk-stream.js';
+import { generateImageViaAiSdk } from './llm/bridge/ai-sdk-image.js';
+import { createContext } from './llm/types/context.js';
+import { createUserMessage } from './llm/types/agent-message.js';
+import { assistantAnswerText } from './llm/convert/openai-bridge.js';
+import {
+  createResilientCompletionPort,
+  resolveProviderResilienceConfig,
+  type ProviderResilienceEvent,
+} from './llm/provider-resilience.js';
+import type { LlmCompletionPort } from './llm/llm-api-runtime.js';
+import type { Model } from './llm/types/model.js';
+import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import type { ImageGenerateRequest, ImageGenerateResult } from './image-generation.js';
+import { createLlmTransportModel } from './llm/llm-api-runtime.js';
+import { AiHttpTransport, createAiHttpTransport } from './llm/http-transport.js';
+
+function stripTrailingSlashes(s: string): string {
+  let i = s.length;
+  while (i > 0 && s[i - 1] === '/') i--;
+  return s.slice(0, i);
+}
+
+async function fetchOpenAiCompatibleModels(
+  config: ProviderInstanceConfig,
+  fetchFn: typeof globalThis.fetch,
+): Promise<string[]> {
+  // openai-compatible chat requests go to the normalized base (see normalizeOpenAiCompatibleBaseUrl);
+  // discovery must hit the same `/models` next to `/chat/completions`.
+  let baseUrl = config.sdk === 'openai-compatible'
+    ? resolveOpenAiCompatibleBaseUrl(config)
+    : config.sdk === 'openai'
+      ? normalizeOpenAiBaseUrl(config.baseUrl, config.compat?.appendV1)
+      : config.baseUrl?.trim();
+  if (!baseUrl && config.host?.trim()) {
+    const host = stripTrailingSlashes(config.host);
+    baseUrl = host.endsWith('/v1') ? host : `${host}/v1`;
+  }
+  if (!baseUrl && config.accountId) {
+    baseUrl = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/ai/v1`;
+  }
+  if (!baseUrl) return [];
+
+  const headers: Record<string, string> = { ...config.headers };
+  // Same rule as chat requests (sdk-registry buildHeaders), with Bearer as the default scheme.
+  const authorization = formatAuthorizationHeader(config.authScheme ?? 'Bearer', config.apiKey);
+  if (authorization) headers.Authorization = authorization;
+
+  const res = await fetchFn(`${stripTrailingSlashes(baseUrl)}/models`, { headers });
+  if (!res.ok) return [];
+  const json = await res.json() as { data?: Array<{ id?: string }> };
+  return (json.data ?? []).map((m) => m.id).filter((id): id is string => !!id?.trim());
+}
+
+interface GoogleModelsListResponse {
+  models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+  nextPageToken?: string;
+}
+
+function hasExplicitYamlModels(config: ProviderInstanceConfig): boolean {
+  return (config.models ?? []).some((m) => m.trim().length > 0);
+}
+
+function parseGoogleModelId(name: string): string {
+  return name.startsWith('models/') ? name.slice('models/'.length) : name;
+}
+
+/** Google Gemini API: GET /v1beta/models (x-goog-api-key) */
+export async function fetchGoogleModels(
+  config: ProviderInstanceConfig,
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
+): Promise<string[]> {
+  const apiKey = config.apiKey?.trim();
+  if (!apiKey) return [];
+
+  const base = normalizeGoogleBaseUrl(config.baseUrl)
+    ?? 'https://generativelanguage.googleapis.com/v1beta';
+  const headers: Record<string, string> = {
+    ...config.headers,
+    'x-goog-api-key': apiKey,
+  };
+
+  const ids: string[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL(`${base}/models`);
+    url.searchParams.set('pageSize', '100');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const res = await fetchFn(url.toString(), { headers });
+    if (!res.ok) return ids.length > 0 ? ids : [];
+
+    const json = await res.json() as GoogleModelsListResponse;
+    for (const entry of json.models ?? []) {
+      const name = entry.name?.trim();
+      if (!name) continue;
+      const methods = entry.supportedGenerationMethods ?? [];
+      if (methods.length > 0 && !methods.includes('generateContent')) continue;
+      ids.push(parseGoogleModelId(name));
+    }
+    pageToken = json.nextPageToken;
+  } while (pageToken);
+
+  const seen = new Set<string>();
+  return ids.filter((id) => {
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+const logger = getLogger('ai-provider');
+
+function logResilienceEvent(provider: string, event: ProviderResilienceEvent): void {
+  const { type, error, ...fields } = event;
+  logger.warn(formatCompact({ op: `complete_text_${type}`, provider, ...fields, error: truncatePreview(error, 200) }));
+}
+
+export class SdkProviderAdapter implements AIProvider {
+  name: string;
+  readonly sdk: SdkId;
+  readonly config: ProviderInstanceConfig;
+  models: string[];
+  contextWindow?: number;
+  imageGenerationDefaults: ProviderInstanceConfig['imageGeneration'];
+  readonly #transport: AiHttpTransport;
+
+  constructor(
+    alias: string,
+    sdk: SdkId,
+    config: ProviderInstanceConfig,
+    initialModels: string[] = [],
+    transport: AiHttpTransport = createAiHttpTransport(),
+  ) {
+    this.name = alias;
+    this.sdk = sdk;
+    this.config = config;
+    this.#transport = transport;
+    this.models = initialModels.length > 0
+      ? [...initialModels]
+      : resolveSdkProviderModels(sdk, config);
+    this.contextWindow = config.contextWindow;
+    this.imageGenerationDefaults = config.imageGeneration;
+  }
+
+  /**
+   * 纯文本补全（compaction / 话题判定 / 上下文摘要等轻量场景）：
+   * system + user → assistant 文本，走 ai-sdk 传输。
+   *
+   * 与主对话路径对齐（S13）：经 {@link createResilientCompletionPort} 做错误分类、
+   * 退避重试、单次超时和同 provider 模型 fallback；`signal` 中止后立即抛出；
+   * 只返回正文，绝不把 thinking 当结果；内容安全 / 长度失败抛 `CompletionFailureError`。
+   */
+  async completeText(
+    system: string,
+    user: string,
+    opts: TextCompleteOptions = {},
+  ): Promise<string> {
+    return (await this.completeTextResult(system, user, opts)).text;
+  }
+
+  /** {@link completeText} plus the model that answered and its usage. */
+  async completeTextResult(
+    system: string,
+    user: string,
+    opts: TextCompleteOptions = {},
+  ): Promise<TextCompleteResult> {
+    const modelId = opts.model ?? this.defaultModelId();
+    const primary = createLlmTransportModel(this.name, this.config, modelId);
+    const fallbackModels = (opts.fallbackModels ?? [])
+      .filter((id) => id && id !== modelId)
+      .map((id) => createLlmTransportModel(this.name, this.config, id));
+    const config = resolveProviderResilienceConfig(
+      opts.resilience,
+      opts.timeoutMs !== undefined ? { requestTimeoutMs: opts.timeoutMs } : undefined,
+    );
+    const port = createResilientCompletionPort(this.#textCompletionPort(), {
+      config,
+      fallbackModels,
+      onEvent: (event) => logResilienceEvent(this.name, event),
+    });
+    const ctx = createContext(system, [createUserMessage(user)]);
+    const assistant = await port.completeSimple(primary, ctx, {
+      temperature: opts.temperature,
+      maxTokens: opts.maxTokens,
+      signal: opts.signal,
+    });
+    return { text: assistantAnswerText(assistant), model: assistant.model || modelId, usage: assistant.usage };
+  }
+
+  /** YAML `defaultModel` when it is listed (or no list is known), else the first model. */
+  private defaultModelId(): string {
+    const configured = this.config.defaultModel?.trim();
+    if (configured && (this.models.length === 0 || this.models.includes(configured))) return configured;
+    return this.models[0] ?? configured ?? '';
+  }
+
+  /** Single-attempt port over `generateText`; the resilient wrapper owns retries. */
+  #textCompletionPort(): LlmCompletionPort {
+    const complete = (model: Model, context: Parameters<LlmCompletionPort['complete']>[1], options?: Parameters<LlmCompletionPort['complete']>[2]) =>
+      generateTextViaAiSdk(
+        createLanguageModel(this.sdk, this.config, model.id, this.#transport.fetch, this.name),
+        model,
+        context,
+        options,
+      );
+    return { complete, completeSimple: complete };
+  }
+
+  async listModels(): Promise<string[]> {
+    if (this.sdk === 'google' && !hasExplicitYamlModels(this.config)) {
+      const discovered = await fetchGoogleModels(this.config, this.#transport.fetch);
+      if (discovered.length > 0) {
+        this.models = discovered;
+        return this.models;
+      }
+    }
+
+    if (this.models.length > 0 && !SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY.has(this.sdk)) {
+      return this.models;
+    }
+    if (SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY.has(this.sdk)) {
+      const discovered = await fetchOpenAiCompatibleModels(this.config, this.#transport.fetch);
+      if (discovered.length > 0) {
+        this.models = discovered;
+        return this.models;
+      }
+    }
+    if (this.models.length > 0) return this.models;
+    this.models = resolveSdkProviderModels(this.sdk, this.config);
+    return this.models;
+  }
+
+  async generateImage(request: ImageGenerateRequest): Promise<ImageGenerateResult> {
+    return generateImageViaAiSdk(
+      this.sdk,
+      this.config,
+      request,
+      this.imageGenerationDefaults,
+      this.#transport.fetch,
+    );
+  }
+
+  get fetch(): typeof globalThis.fetch {
+    return this.#transport.fetch;
+  }
+
+  async dispose(): Promise<void> {
+    await this.#transport.dispose();
+  }
+}
+
+export function createSdkProviderAdapter(
+  alias: string,
+  config: ProviderInstanceConfig,
+  transport?: AiHttpTransport,
+): SdkProviderAdapter | null {
+  if (config.sdk === 'ollama') {
+    // Ollama does not require apiKey
+  } else if (config.sdk === 'openai-compatible') {
+    if (!config.baseUrl?.trim() && !config.accountId?.trim()) return null;
+    if (!config.apiKey?.trim() && !config.accountId?.trim()) return null;
+  } else if (!config.apiKey?.trim()) {
+    return null;
+  }
+
+  const models = resolveSdkProviderModels(config.sdk, config);
+  return new SdkProviderAdapter(
+    alias,
+    config.sdk,
+    config,
+    models,
+    transport ?? createAiHttpTransport(),
+  );
+}
+
+export function sdkEntryFromProvider(provider: AIProvider): import('./llm/llm-runtime-factory.js').SdkProviderEntry {
+  if (provider instanceof SdkProviderAdapter) {
+    return {
+      alias: provider.name,
+      config: provider.config,
+      models: [...provider.models],
+      fetch: provider.fetch,
+    };
+  }
+  throw new TypeError(
+    `AIProvider "${provider.name}" is not an SdkProviderAdapter; `
+    + 'providers must be created via createSdkProviderAdapter to join the ai-sdk transport registry',
+  );
+}

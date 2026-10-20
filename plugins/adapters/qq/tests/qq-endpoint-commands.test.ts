@@ -1,0 +1,333 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { QqBindCallbacks } from '../src/qq-bind-flow.js';
+import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
+import {
+  completeQqPendingBotKind,
+  extractQqCommandReply,
+  isQqEndpointOperator,
+  runQqEndpointAdd,
+  runQqEndpointCancel,
+  runQqEndpointList,
+  runQqEndpointRemove,
+} from '../commands/qq/endpoint/definition.js';
+import { createQqRuntimeState } from '../src/qq-runtime-state.js';
+
+const { startQqBindFlowMock } = vi.hoisted(() => ({
+  startQqBindFlowMock: vi.fn(),
+}));
+
+vi.mock('../src/qq-bind-flow.js', () => ({
+  startQqBindFlow: startQqBindFlowMock,
+}));
+
+let store: MemoryEndpointConfigurationStore;
+
+beforeEach(() => {
+  store = new MemoryEndpointConfigurationStore();
+  startQqBindFlowMock.mockReset();
+});
+
+function lastCallbacks(): QqBindCallbacks {
+  return startQqBindFlowMock.mock.calls.at(-1)![0] as QqBindCallbacks;
+}
+
+function collectReplies(): { replies: string[]; reply: (text: string) => Promise<void> } {
+  const replies: string[] = [];
+  return {
+    replies,
+    reply: async (text: string) => {
+      replies.push(text);
+    },
+  };
+}
+
+describe('extractQqCommandReply', () => {
+  it('从消息 input 提取 $reply；非消息输入降级 no-op', async () => {
+    const calls: string[] = [];
+    const message = { $reply: async (content: string) => void calls.push(content) };
+
+    const reply = extractQqCommandReply(message);
+    await reply('hello');
+    expect(calls).toEqual(['hello']);
+
+    await expect(extractQqCommandReply(undefined)('x')).resolves.toBeUndefined();
+    await expect(extractQqCommandReply({})('x')).resolves.toBeUndefined();
+  });
+});
+
+describe('isQqEndpointOperator', () => {
+  const message = (sender: string) => ({ sender: { id: sender } });
+
+  it('未配置 master 时放行（首个绑定者即 owner）', () => {
+    expect(isQqEndpointOperator({}, message('alice'))).toBe(true);
+    expect(isQqEndpointOperator({ endpoints: [{ id: 'a' }] }, message('alice'))).toBe(true);
+  });
+
+  it('顶层 master 命中放行，不命中拒绝', () => {
+    const config = { master: '1659488338' };
+    expect(isQqEndpointOperator(config, message('1659488338'))).toBe(true);
+    expect(isQqEndpointOperator(config, message('8596238'))).toBe(false);
+  });
+
+  it('endpoints[i].master 逐项命中同样放行', () => {
+    const config = { endpoints: [{ id: 'a', master: 8596238 }] };
+    expect(isQqEndpointOperator(config, message('8596238'))).toBe(true);
+    expect(isQqEndpointOperator(config, message('111'))).toBe(false);
+  });
+
+  it('sender 缺失时拒绝（已配置 master）', () => {
+    expect(isQqEndpointOperator({ master: '1' }, {})).toBe(false);
+    expect(isQqEndpointOperator({ master: '1' }, undefined)).toBe(false);
+  });
+});
+
+describe('runQqEndpointAdd', () => {
+  const chatInput = {
+    conversation: {
+      endpoint: { adapter: 'sandbox', id: 'host' },
+      kind: 'private' as const,
+      id: 'u1',
+    },
+    sender: 'u1',
+  };
+
+  it('二维码就绪后 resolve 链接；扫码成功暂存凭据并追问公域/私域（不写文件）', async () => {
+    const state = createQqRuntimeState();
+    const stop = vi.fn();
+    startQqBindFlowMock.mockReturnValue(stop);
+    const { replies, reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, store, chatInput);
+    expect(state.bindFlow).not.toBeNull();
+
+    lastCallbacks().onQrDisplayed?.('https://q.qq.com/connect?task_id=t1');
+    const firstReply = await firstReplyPromise;
+    expect(firstReply).toContain('https://q.qq.com/connect?task_id=t1');
+
+    await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
+
+    expect(state.bindFlow).toBeNull();
+    expect(state.pendingBotKind).toMatchObject({
+      endpointId: 'newbot',
+      appId: '102000009',
+      appSecret: 'sec-9',
+    });
+    expect(store.entries.size).toBe(0);
+    expect(store.environment.size).toBe(0);
+    expect(replies.some((text) => text.includes('扫码成功') && text.includes('public'))).toBe(true);
+  });
+
+  it('用户选择 private 后一次性写 .env 与配置', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, store, chatInput);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+    await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
+
+    const text = await completeQqPendingBotKind(state.pendingBotKind!, 'private', store);
+    state.pendingBotKind = null;
+
+    expect(text).toContain('botKind=private');
+    expect(text).toContain('GUILD_MESSAGES');
+    expect(store.environment.get('QQ_NEWBOT_APPID')).toBe('102000009');
+    expect(store.environment.get('QQ_NEWBOT_SECRET')).toBe('sec-9');
+    await expect(store.list('qq')).resolves.toEqual([
+      expect.objectContaining({
+        id: 'newbot',
+        botKind: 'private',
+        intents: expect.arrayContaining(['GUILD_MESSAGES']),
+      }),
+    ]);
+  });
+
+  it('无会话上下文时直接按 public 一次性写入', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { replies, reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, store);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+    await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
+
+    expect(state.pendingBotKind).toBeNull();
+    expect(store.environment.has('QQ_NEWBOT_APPID')).toBe(true);
+    expect((await store.list('qq'))[0]).toMatchObject({ botKind: 'public' });
+    expect(replies.some((text) => text.includes('无法交互'))).toBe(true);
+  });
+
+  it('未指定 name 时使用 appId 作为 endpoint 名', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, undefined, reply, store, chatInput);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+    await lastCallbacks().onSuccess([{ appId: '102000010', appSecret: 's' }]);
+
+    expect(store.environment.size).toBe(0);
+    expect(state.pendingBotKind?.endpointId).toBe('102000010');
+  });
+
+  it('已有进行中的绑定时拒绝并发', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { reply } = collectReplies();
+
+    const pending = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await pending;
+
+    const second = await runQqEndpointAdd(state, 'b', reply, store, chatInput);
+    expect(second).toContain('已有进行中');
+    expect(startQqBindFlowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('绑定失败时回复失败原因并释放单例', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { replies, reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+
+    lastCallbacks().onFailure(new Error('network down'));
+
+    expect(state.bindFlow).toBeNull();
+    expect(replies.some((text) => text.includes('network down'))).toBe(true);
+  });
+
+  it('后续 reply 抛 Message reply scope has ended 时不让进程崩溃', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const reply = async () => {
+      throw new Error('Message reply scope has ended');
+    };
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    lastCallbacks().onQrDisplayed?.('https://example/qr');
+    await firstReplyPromise;
+
+    await expect(
+      lastCallbacks().onSuccess?.([{ appId: '102000011', appSecret: 's' }]),
+    ).resolves.toBeUndefined();
+    expect(state.bindFlow).toBeNull();
+    expect(state.pendingBotKind).not.toBeNull();
+  });
+
+  it('二维码尚未就绪就失败时，失败原因作为首条回复', async () => {
+    const state = createQqRuntimeState();
+    startQqBindFlowMock.mockReturnValue(vi.fn());
+    const { reply } = collectReplies();
+
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    lastCallbacks().onFailure(new Error('获取绑定任务失败: boom'));
+
+    await expect(firstReplyPromise).resolves.toContain('获取绑定任务失败');
+    expect(state.bindFlow).toBeNull();
+  });
+});
+
+describe('runQqEndpointCancel', () => {
+  it('有进行中流程时 stop 并释放单例', () => {
+    const state = createQqRuntimeState();
+    const stop = vi.fn();
+    state.bindFlow = { id: 'a', stop };
+
+    expect(runQqEndpointCancel(state)).toContain('已取消');
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(state.bindFlow).toBeNull();
+  });
+
+  it('可取消待确认的公域/私域选择', () => {
+    const state = createQqRuntimeState();
+    state.pendingBotKind = {
+      endpointId: 'x',
+      appId: '1',
+      appSecret: '2',
+      sessionKey: 'k',
+    };
+
+    expect(runQqEndpointCancel(state)).toContain('尚未写入');
+    expect(state.pendingBotKind).toBeNull();
+  });
+
+  it('无流程时提示', () => {
+    const state = createQqRuntimeState();
+    expect(runQqEndpointCancel(state)).toContain('没有进行中');
+  });
+});
+
+describe('runQqEndpointRemove', () => {
+  it('存在时从配置移除并提示重启', async () => {
+    store.entries.set('qq', [{ id: 'a', appid: '1', secret: '2' }]);
+    const state = createQqRuntimeState();
+
+    const text = await runQqEndpointRemove(state, 'a', store);
+
+    expect(text).toContain('移除');
+    expect(text).toContain('重启');
+    await expect(store.list('qq')).resolves.toEqual([]);
+  });
+
+  it('不存在时提示未找到', async () => {
+    const state = createQqRuntimeState();
+
+    await expect(runQqEndpointRemove(state, 'ghost', store)).resolves.toContain('不存在');
+  });
+});
+
+describe('runQqEndpointList', () => {
+  it('同时列出运行中与配置中的 endpoints', async () => {
+    const state = createQqRuntimeState();
+    state.endpoints.set('running-bot', { id: 'running-bot', mode: 'websocket' });
+    store.entries.set('qq', [{
+      id: 'conf-bot',
+      appid: '${QQ_CONF_BOT_APPID}',
+      secret: '${QQ_CONF_BOT_SECRET}',
+    }]);
+
+    const text = await runQqEndpointList(state, store);
+
+    expect(text).toContain('running-bot');
+    expect(text).toContain('conf-bot');
+    expect(text).toContain('${QQ_CONF_BOT_APPID}');
+  });
+
+  it('空列表时占位提示', async () => {
+    const state = createQqRuntimeState();
+
+    const text = await runQqEndpointList(state, store);
+
+    expect(text).toContain('（无）');
+  });
+
+  it('有进行中绑定时 footer 提示 qq endpoint cancel', async () => {
+    const state = createQqRuntimeState();
+    state.bindFlow = { id: 'a', stop: vi.fn() };
+
+    const text = await runQqEndpointList(state, store);
+
+    expect(text).toContain('qq endpoint cancel');
+  });
+
+  it('待选 botKind 时 footer 提示', async () => {
+    const state = createQqRuntimeState();
+    state.pendingBotKind = {
+      endpointId: 'wait-bot',
+      appId: '1',
+      appSecret: '2',
+      sessionKey: 'k',
+    };
+
+    const text = await runQqEndpointList(state, store);
+
+    expect(text).toContain('wait-bot');
+    expect(text).toContain('公域/私域');
+  });
+});

@@ -1,0 +1,4 @@
+configVersion: 2
+plugin:
+  stateDirectory: ./.zhin/self-delivery-issues
+plugins: {}

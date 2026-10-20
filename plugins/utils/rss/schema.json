@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "pollCron": {
+      "type": "string",
+      "default": "0 */5 * * * *",
+      "description": "轮询频率 (6 段 Cron 表达式)"
+    },
+    "maxPerGroup": {
+      "type": "number",
+      "default": 30,
+      "minimum": 1,
+      "maximum": 200
+    },
+    "maxItems": {
+      "type": "number",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 20
+    },
+    "timeout": {
+      "type": "number",
+      "default": 15000,
+      "minimum": 1000,
+      "maximum": 60000
+    }
+  }
+}

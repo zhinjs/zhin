@@ -1,0 +1,45 @@
+import { createToken, type Token } from 'zhin.js';
+import type { GroupSuiteMemoryDb } from './memory-store.js';
+
+export interface PendingStatsIncrement {
+  user_id: string;
+  user_name: string;
+  group_id: string;
+  date: string;
+  count: number;
+  recorded: number;
+  flushed: number;
+}
+
+/** All mutable state owned by one group-suite plugin instance. */
+export interface GroupSuiteRuntime {
+  readonly db: GroupSuiteMemoryDb;
+  readonly keywords: Map<string, Map<string, string>>;
+  readonly teachCooldowns: Map<string, number>;
+  readonly statsBuffer: Map<string, PendingStatsIncrement>;
+  /** Serialized finite batches shared by admitted queries and scheduler calls. */
+  statsFlush?: Promise<void>;
+  readonly checkinChains: Map<string, Promise<unknown>>;
+}
+
+export const groupSuiteRuntimeToken = createToken<GroupSuiteRuntime>(
+  'zhin.group-suite.runtime',
+  'Owner-scoped Group Suite database and ephemeral state',
+);
+
+export function createGroupSuiteRuntime(db: GroupSuiteMemoryDb): GroupSuiteRuntime {
+  return {
+    db,
+    keywords: new Map(),
+    teachCooldowns: new Map(),
+    statsBuffer: new Map(),
+    checkinChains: new Map(),
+  };
+}
+
+export function resolveGroupSuiteRuntime(context: {
+  readonly owner?: unknown;
+  use<T>(token: Token<T>): T;
+}): GroupSuiteRuntime {
+  return context.use(groupSuiteRuntimeToken);
+}

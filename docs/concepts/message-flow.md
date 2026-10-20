@@ -1,0 +1,204 @@
+---
+title: "消息流"
+description: "一条消息从平台进入 Bot、经过中间件和命令、再回到平台的完整路径，以及插件为什么不能绕过它直接发消息"
+---
+
+# 消息流
+
+用户在群里发一条 `/ping`，到 Bot 的回复出现在群里，中间的每一步都在一条**单向管道**上：
+
+```text
+入站：平台 → 适配器 → 中间件 → 命令（没匹配时交给 AI）
+出站：回复 → 渲染（组件、JSX）→ 出站中间件 → 适配器 → 平台
+```
+
+## 对插件作者意味着什么
+
+- **只面对统一的消息。** 不管来自 QQ 还是 Discord，插件拿到的都是同一种 `Message`：`content`、`segments`、`sender`、`conversation`。
+- **发消息只走一条路。** 回复用 `message.$reply()` 或命令的返回值；主动推送用 `outboundHostToken`。**不要直接调用平台 SDK 发消息**，否则会跳过渲染、出站中间件（审核、过滤）和日志。
+- **热重载安全。** 每条消息从进入到回复都使用同一个版本的插件代码，切换版本时不会出现"一半新一半旧"。
+
+下面逐段展开这条管道的实现，适合想深入理解或开发适配器的读者。实现上，`ImRuntime` 同时承担唯一的入站边界 `EndpointEventGateway` 和出站服务 `OutboundMessageService`，两边都从当前操作持有的 generation 快照取数。
+
+## 入站：Adapter → 中间件 → 命令 → AI 兜底
+
+```mermaid
+flowchart LR
+    P[平台 SDK / 协议事件<br/>WS / HTTP] --> C[Platform Client]
+    C --> E[Endpoint]
+    E -->|"emit(name, payload)"| G[EndpointEventGateway / ImRuntime]
+    G --> L[acquire 快照租约]
+    L --> M["new Message(...)"]
+    M --> MW["中间件 inbound<br/>before-dispatch → after-dispatch"]
+    MW --> D{MessageDispatcher}
+    D -->|"前缀不匹配 / 无此命令"| U{snapshot IngressRoute?}
+    U -->|"已装 Agent"| AI[AI 兜底回复]
+    U -->|"未装"| N[静默丢弃]
+    D -->|"命令命中：返回匹配事实与待回复内容"| W["中间件链回卷：透传或替换结果"]
+    MW -->|"return JSX"| W
+    W -->|"pending content"| R["$replyFrom(owner, value)"]
+    R --> O[出站管道]
+    AI --> O
+```
+
+各环节的真实代码位置：
+
+1. **Client 与 Endpoint 分工**。Client 是真实平台 SDK 或干净的协议 Client，负责平台 API 与原始事件；Endpoint 负责账号、Transport、热重载生命周期和框架边界。所有 Endpoint 继承 `Endpoint<TClient>`，并通过唯一的 `emit(name, payload)` 入站。每个事件统一包装为：
+
+   ```ts
+   interface EndpointEvent<TPayload, TClient> {
+     readonly name: string;
+     readonly payload: TPayload;
+     readonly endpoint: { id: CapabilityId; adapter: string };
+     readonly client: TClient;
+   }
+   ```
+
+   原生事件先以 `platform.receive` 无损上送（payload 为 `{ name, event }`），已知事件再可选投影为 `message.receive`、`notice.receive`、`request.receive`、`system.receive`。因此消息、入群申请、成员变动、上线/离线和平台扩展事件都能在插件中访问同一个 Client。候选 generation 在 `start()` 期间产生的首批事件由 Endpoint 基座暂存，提交时按序回放；退役代的迟到事件被丢弃。
+
+2. **消息归一化**。对于 `message.receive`，Endpoint 把平台消息投影为以下 payload：
+
+   ```ts
+   interface IncomingMessage {
+     readonly conversation: ConversationRef; // 结构化会话（endpoint/kind/id/parent/threadId）
+     readonly message?: MessageRef;   // 平台消息身份（原生消息 id）
+     readonly content: string;
+     readonly segments?: readonly Segment[];
+     readonly sender?: { id: string; name?: string; roles?: readonly string[] };
+     readonly replyTo?: { id: string }; // 显式平台引用，不从 metadata 猜测
+     readonly metadata?: Readonly<Record<string, unknown>>;
+   }
+   ```
+
+3. **租约与 Message**。`ImRuntime.endpointEvents.receive` 是唯一公开入站端口，并把事件委托给实例私有的 `InboundRuntime`。后者在事件所属 generation 上取得租约（在途事件不被重载打断，见 [generation 与生命周期](./generation-lifecycle.md)），统一拥有消息构造、入站中间件、handler、交互、命令与 Agent fallback 路由，以及 notice/request/system side event 的 action scope。消息事件构造 `Message`，并注入按需读取当前平台 SDK 实例的 `$client` getter、`$reply(content)` 与 `$replyFrom(owner, content)`；dispatch 结束后作用域关闭，之后再读取 `$client` 或调用 `$reply` 都会失败。旧的平铺 `ImRuntime.receiveEndpointEvent()` 已删除。
+
+4. **入站中间件**。`MiddlewareIndex` 按 `phase`（`before-dispatch` 先、`after-dispatch` 后）与 `order` 排序，逐个包住终端动作：
+
+   ```ts
+   defineMiddleware({
+     phase: 'before-dispatch',   // 默认
+     target: 'inbound',          // 默认；'outbound' 拦截出站
+     order: 0,
+     async handle(context, next) {
+       // context.input 是 Message（inbound）或 OutboundEnvelope（outbound）
+       await next();             // 不调用 next() 即拦截
+     },
+   });
+   ```
+
+5. **命令分发**。`MessageDispatcher` 先解析命令前缀（默认按消息所属适配器实例的配置：`endpoints[i].commandPrefix` 覆盖顶层 `commandPrefix`，默认 `''` 无前缀，见 [配置即数据](./config-as-data.md)），前缀不匹配直接 miss；命中前缀则剥离后交给 `CommandIndex.dispatch`。分发器返回匹配事实与待回复内容；入站中间件可以透传或替换结果。整个链回卷结束后，ImRuntime 用最终内容作者的 `$replyFrom(owner, value)` 自动回复一次。命令返回 void 仍是 matched。
+
+6. **AI 兜底**。命令 miss（或无前缀文本）时，`ImRuntime` 从当前消息所持 snapshot 的 root resources 解析 generation-owned `IngressRoute`。装了 `@zhin.js/agent` 的 composition root 会在 generation setup 提供该内部 route；未安装则消息安静丢弃。它不是 `OutboundMessageService` 上可变的插件 setter。
+
+   Core 只把干净正文交给该 route，不把发送者编码进文本。Agent ingress 将可信的 sender、角色和 scene scope 一次性投影为 `UserMessage.actor`；AI 持久层保存 actor，并仅在 LLM 边界渲染参与者标签。`agent_messages.extra` 只承载引用展示上下文，不能成为第二套身份来源。
+
+7. **事件广播**。dispatch 完成后向 `onMessage` 订阅者发出 `RuntimeMessageEvent`（含方向、conversation、sender、≤200 字的 `contentPreview`、时间戳），Console 的实时消息流就是消费它。
+
+## 出站：$reply → 渲染 → 中间件 → Endpoint
+
+```mermaid
+flowchart LR
+    A["$reply(content) / $replyFrom / gateway.send"] --> R[OutboundRenderer<br/>component → JSX 排版为 Segment<br/>raw 透传 / 数组展开]
+    R --> N[normalizeOutboundPayload<br/>html 段 → 图片/文本<br/>Adapter 声明 direct 保留 HTML]
+    N --> V["createOutboundEnvelope<br/>conversation·requester·generation"]
+    V --> MW["中间件 outbound<br/>可 envelope.replace(payload)"]
+    MW --> S[AdapterIndex.send<br/>校验 outbound 能力与在线状态]
+    S --> E["endpoint.send({conversation, payload})"]
+```
+
+- **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；消息 JSX（默认映射 Segment，仅 `<html>` / `<Html>` 子树转 HTML）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
+- **Envelope** 携带 `conversation`（结构化会话寻址 `ConversationRef`，`@zhin.js/im-contract`）、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
+- **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
+- **运行时所有权**集中在 `OutboundDeliveryRuntime`：它独占渲染、媒体与交互策略投影、出站中间件、Endpoint 投递、会话事实记账和消息观察事件发布。`ImRuntime` 只负责取得正确的 generation 租约并委托投递。
+- **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后调用 `endpoint.send()` 落到平台。
+
+普通消息发送都应走这条统一管道（`$reply` / `$replyFrom` / `OutboundMessageService.send`），避免绕过渲染、中间件与事件广播。入群审批、角色管理、平台查询等非消息业务则应从当前事件/命令/工具 operation 解析 Client，直接调用平台 SDK；不要把 Client 缓存到 operation 之外。
+
+## 多模态：双向 Segment 一贯制
+
+全框架只有一种媒体表达——`@zhin.js/im-contract` 的 canonical `Segment` + `MediaRef`：
+
+```ts
+interface MediaRef {
+  kind: 'url' | 'path' | 'base64' | 'file';  // file = 平台不透明引用（Telegram file_id 等）
+  value: string;
+  mime_type?: string;
+  file_name?: string;
+  size?: number;
+}
+// image / audio / video / file 段的 data 一律为 { media: MediaRef, alt?/duration?/name? }
+```
+
+`share` 是另一种严格 canonical 段：`data.url` 和 `data.title` 必填，可选提供
+`description`、`image`、`audio`、`content`、`artist`、`duration` 与应用 `config`。
+Core 会在 `$reply`、Agent 结构化输出和 Console IM 视图中保留它，Adapter
+在 `send()` 边界转换为平台原生分享结构；不支持的 Adapter 应显式拒绝，不得静默丢弃。
+
+**入站**：适配器把平台载荷归一为 `Segment[]` 随 `emit('message.receive', { segments })` 上送。不透明平台 id 必须经当前 generation 的 `EndpointContentPort` 物化；引用解析期间快照租约一直持有。所有 URL、path 与 base64 随后进入同一条流水线：HTTPS/SSRF 与重定向检查 → 字节上限 → 文件魔数识别 → 声明 MIME/实际类型一致性检查 → `UserMessage.media`。框架不信任扩展名或 Adapter 声明的 MIME，也不把二进制/base64 写入会话事实源。每项媒体恰好产生 `accepted | derived | unsupported | rejected | failed` 终态；失败以明确的不可信 user-context 文本呈现，绝不伪装成“模型已看到图片”。Provider 必须显式声明 `text/image/audio/video/file` 输入能力，缺省仅 `text`；不支持的类型不会猜测放行。
+
+## 会话事实、引用与通知
+
+`ConversationEventStore` 是 IM 上下文的唯一事实源。入站/出站消息、撤回 tombstone、回应、成员加入/退出、禁言/解禁和角色变化按会话幂等追加；不再维护 `im_transcripts` 或文本型 `chat_history` 双轨。合并转发条目使用中性 `actor`，不映射成模型 `user/assistant/system` role。
+
+每个 `ImRuntime` 私有持有一个 `ConversationRuntime`，由它独占 Store 替换、事件规范化、消息记账、上下文聚合与 consumer cursor。消息网关只把已经确定的入站、出站和 notice 交给它；CLI 与 Agent 通过 `ImRuntime` 的只读 Store 视图和上下文方法消费事实，不直接更换所有者状态。
+
+会话中尚未被 Agent session 消费的入站消息也从该 Store 按游标读取，作为不可信 `user-context` 投影；当前触发 Turn 的消息会被排除，避免重复。不存在进程级 passive buffer，失败 Turn 不推进游标，HMR 与多 Root 也不会共享旁路状态。
+
+当前 Turn 把 `replyTo`、forward 与媒体注册为 scoped `TurnReference`。Agent 只暴露 `inspect_conversation_reference(reference, depth?)`：先查本地事实源，再通过持租约的 Endpoint 回源；跨会话、跨 Endpoint、过期 Turn 均 fail-closed。尚未消费的重要 notice 会作为明确标注的“不可信会话数据”附在下一次用户 Turn，永远不进入 system/developer prompt；只有 Turn 成功提交才推进 session cursor，失败会保留。高频 reaction/poke 会聚合，登录、二维码、断线等 process 事件只进入诊断日志。
+
+**出站**：AI 回复 → `OutputElement[]` → canonical `Segment[]`（`publishOutboundElements`）→ `$reply`（Segment 是一等 `SendContent`）→ `normalizeOutboundPayload`（html→image/文本、keyboard、媒体协商）→ endpoint。媒体协商按 adapter definition 的 `segments.outboundMedia` 声明驱动（`'url' | 'path' | 'base64' | 'upload'`）：仅 `url-or-text` 端点会在中央把非 URL 媒体降级为文本；其余由 adapter 按平台最优路径自物化（URL 直发 / base64 直发 / 平台上传 / 读盘），无 `data.media` 的段会被 warn 丢弃——legacy `data.url/file/base64` 形状已不存在。
+
+## 用户交互：确认、选择与输入
+
+用户交互与 LLM prompt assembly 是两个不同概念。命令创作面使用 `context.interaction`
+（`UserInteraction`），通过 `ask()` 的 `type` 表达 `text` / `number` / `confirm` /
+`select` / `multiselect` / `list`，通过 `sequence()` 声明连续交互。
+
+每个请求都可以声明 `title`、`description` 与 `tip`。`UserInteraction` 隐藏呈现和回复解析：
+确认与小规模单选先转换为平台无关的
+`UserInteractionView`，再统一渲染为 `markdown` + canonical `keyboard`。声明
+`segments.interactive: native` 的 Adapter（如 QQ）编码为原生按钮；其他 Adapter 在 Core
+中降级为编号列表，点击按钮和手动回复最终进入同一文本解析入口。多选和过多选项直接使用
+列表，避免平台按钮数量限制。
+
+`ImRuntime` 把交互职责委托给实例私有的 `RuntimeInteractionCoordinator`：它统一拥有待回复
+claim、超时与取消、连续问答、action handler 和编号 fallback。状态同时按用户、generation
+和会话隔离；热重载后的新 generation 不会消费旧键盘映射，多 Root 也不会共享按钮状态。
+消息网关只决定何时交给 coordinator，不再实现交互状态机。
+
+问题在发送提示前登记，因此发送尚未完成时收到的回复也会保留；只有拿到 `sent` 回执后，
+答案才会交给调用方。这个回执表示端点已确认发送，不表示远端已经展示。发送失败或结果未知时
+撤销等待，不自动重发。每题原生按钮使用独立 callback token，不能替另一道问题作答；
+显式 `mode: 'command'` 按钮的语义保持不变。
+
+等待绑定完整 Endpoint、会话、父容器、话题和发送者，并随运行代退休或调用方 `signal` 取消。
+超时、发送失败、取消和被新问题替换会清理计时器及监听；`default` 只用于正常超时。
+同一 `ask()` 的无效输入不会延长总等待时间，`sequence()` 的各步仍各自计时。
+
+AI 工具 `ask_user` 也复用这一模块，因此工具审批、命令向导和 AI 追问不会各自维护一套
+平台按钮逻辑。
+
+## Endpoint 运行时所有权
+
+每个 `ImRuntime` 公开一个实例私有的 `EndpointRuntime`，作为 generation-owned
+`AdapterIndex` 的唯一运行时入口。Endpoint 列表、能力查询、Console 定向发送、回应、撤回、
+编辑、typing 与管理操作都由它取得并释放当前快照租约；上层 Host 只依赖所需操作组成的窄端口。
+`ImRuntime` 继续拥有统一入站网关，并把所有发送委托给实例私有的 `OutboundDeliveryRuntime`；
+因此 Console 定向发送同样经过 `render → before.sendMessage → AdapterIndex.send`，不会绕过
+渲染与中间件。
+
+旧的 `ImRuntime.listEndpoints()`、`sendEndpointMessage()` 等平铺入口已删除。内部装配统一使用
+`im.endpoints.*`，不保留转发别名或双重 Endpoint 权威。
+
+消息观察面通过只读 `im.messageEvents.subscribe()` 暴露。Console 与 Inbox 只能订阅截断后的
+消息投影，不能发布或伪造 Core 运行时事件；旧的平铺 `im.onMessage()` 已删除。
+
+## Endpoint 1:N 展开
+
+一个适配器插件实例配置里声明 `endpoints: [{name, ...}]` 时，`AdapterIndex` 把它展开成 N 条独立 endpoint 记录（配置合并规则见 [配置即数据](./config-as-data.md)）：
+
+- 每条记录的能力 id 形如 `<slot id>~<name>`，拥有自己的生命周期（start/open/close/stop）与在线状态；
+- 消息上的 `$adapter` 携带展开后的标识（如 `icqq~8596238`），回复沿原路返回对应账号；
+- Console 侧按 `(adapter, endpointId)` 寻址，`AdapterIndex.resolve` 依次匹配本地名、能力 id、owner 路径段和 Endpoint 的运行时名（如 ICQQ 的 uin），多匹配时优先精确的 endpoint 名。
+
+因此"两个 QQ 号各收各的消息、各发各的回复"不需要任何特殊代码——配两个 endpoint entry 即可。

@@ -1,0 +1,19 @@
+{
+  "name": "vision",
+  "version": "1.0.0",
+  "description": "Inbound image analysis—describe, OCR, answer what is visible.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "image",
+      "vision",
+      "OCR"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "max_iterations": 8
+}

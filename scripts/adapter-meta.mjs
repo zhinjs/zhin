@@ -1,0 +1,91 @@
+/**
+ * 平台适配器档位 SSOT（单一来源）。
+ * 由 sync-adapter-docs / check-platform-tiers-ssot / 文档生成共享。
+ *
+ * 升档证据见 docs/contributing/platform-acceptance.md；候选与 Platform Stable 自动进入 Stable smoke。
+ * 当前诚实状态：仅 Sandbox 为 Stable；无 Platform Stable；其余 Advanced / Experimental。
+ */
+
+/** @typedef {'Stable' | 'PlatformStable' | 'Advanced' | 'Experimental'} AdapterTier */
+
+/**
+ * `management` is the published EndpointManagement promise used by generated
+ * docs; runtime capabilities are still derived from live methods.
+ * @type {Record<string, { tier: AdapterTier, label: string, packageName: string, stabilityCandidate?: boolean, management?: string[] }>}
+ */
+export const ADAPTER_META = {
+  sandbox: { tier: 'Stable', label: 'Sandbox', packageName: '@zhin.js/adapter-sandbox' },
+  icqq: {
+    tier: 'Advanced',
+    label: 'ICQQ (QQ)',
+    packageName: '@zhin.js/adapter-icqq',
+    management: [
+      'listFriends', 'listGroups', 'listChannels', 'listGroupMembers',
+      'listRequests',
+      'approveRequest', 'rejectRequest', 'kickGroupMember', 'muteGroupMember',
+      'setGroupAdmin', 'deleteFriend',
+    ],
+  },
+  qq: {
+    tier: 'Advanced',
+    stabilityCandidate: true,
+    label: 'QQ 官方',
+    packageName: '@zhin.js/adapter-qq',
+    management: ['listChannels'],
+  },
+  napcat: { tier: 'Experimental', stabilityCandidate: true, label: 'NapCat', packageName: '@zhin.js/adapter-napcat' },
+  onebot11: { tier: 'Advanced', stabilityCandidate: true, label: 'OneBot v11', packageName: '@zhin.js/adapter-onebot11' },
+  onebot12: { tier: 'Experimental', label: 'OneBot v12', packageName: '@zhin.js/adapter-onebot12' },
+  milky: { tier: 'Experimental', label: 'Milky', packageName: '@zhin.js/adapter-milky' },
+  kook: { tier: 'Advanced', label: 'KOOK', packageName: '@zhin.js/adapter-kook' },
+  discord: { tier: 'Advanced', label: 'Discord', packageName: '@zhin.js/adapter-discord' },
+  telegram: { tier: 'Advanced', stabilityCandidate: true, label: 'Telegram', packageName: '@zhin.js/adapter-telegram' },
+  slack: { tier: 'Advanced', label: 'Slack', packageName: '@zhin.js/adapter-slack' },
+  dingtalk: { tier: 'Advanced', label: '钉钉', packageName: '@zhin.js/adapter-dingtalk' },
+  lark: { tier: 'Advanced', label: '飞书', packageName: '@zhin.js/adapter-lark' },
+  'wechat-mp': { tier: 'Advanced', label: '微信公众号', packageName: '@zhin.js/adapter-wechat-mp' },
+  email: { tier: 'Experimental', label: 'Email', packageName: '@zhin.js/adapter-email' },
+  github: { tier: 'Experimental', label: 'GitHub', packageName: '@zhin.js/adapter-github' },
+  satori: { tier: 'Experimental', label: 'Satori', packageName: '@zhin.js/adapter-satori' },
+  line: { tier: 'Experimental', label: 'LINE', packageName: '@zhin.js/adapter-line' },
+  wecom: { tier: 'Experimental', label: '企业微信', packageName: '@zhin.js/adapter-wecom' },
+  'weixin-ilink': { tier: 'Experimental', label: '微信 iLink', packageName: '@zhin.js/adapter-weixin-ilink' },
+};
+
+/** @type {Record<AdapterTier, number>} */
+export const TIER_ORDER = {
+  Stable: 0,
+  PlatformStable: 1,
+  Advanced: 2,
+  Experimental: 3,
+};
+
+/** Frontmatter / docs 展示名（PlatformStable → Platform Stable） */
+export function tierDisplayName(tier) {
+  if (tier === 'PlatformStable') return 'Platform Stable';
+  return tier;
+}
+
+/** Keep a promoted platform's page tier consistent with its index and SSOT. */
+export function tierForFrontmatter(tier) {
+  return tierDisplayName(tier);
+}
+
+/**
+ * @param {AdapterTier} tier
+ * @returns {string[]}
+ */
+export function slugsForTier(tier) {
+  return Object.entries(ADAPTER_META)
+    .filter(([, m]) => m.tier === tier)
+    .sort((a, b) => a[1].label.localeCompare(b[1].label, 'zh'))
+    .map(([slug]) => slug);
+}
+
+/** Candidates accumulate Stable CI history before their public tier is promoted. */
+export function platformSmokeSuites(meta = ADAPTER_META) {
+  return Object.entries(meta)
+    .filter(([, entry]) => entry.stabilityCandidate || entry.tier === 'PlatformStable')
+    .map(([slug]) => `plugins/adapters/${slug}/tests`)
+    .sort();
+}

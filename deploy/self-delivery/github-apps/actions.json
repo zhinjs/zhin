@@ -1,0 +1,14 @@
+{
+  "name": "Zhin self-delivery actions",
+  "url": "https://github.com/zhinjs/zhin",
+  "description": "Single-repository actions identity for governed Zhin delivery",
+  "public": false,
+  "hook_attributes": {
+    "active": false
+  },
+  "default_permissions": {
+    "contents": "read",
+    "actions": "write"
+  },
+  "default_events": []
+}

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable this decision provider.",
+      "x-descriptionZh": "启用该决策服务。"
+    },
+    "apiKey": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "writeOnly": true,
+      "description": "TypeSafe API key; reference TYPESAFE_API_KEY from the environment.",
+      "x-descriptionZh": "通过环境变量 TYPESAFE_API_KEY 引用密钥。"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "default": "jev-latest",
+      "description": "Model name; pin a model version for calibrated policies.",
+      "x-descriptionZh": "模型名称；校准后的策略应固定模型版本。"
+    },
+    "baseUrl": {
+      "type": "string",
+      "default": "https://api.typesafe.ai",
+      "description": "API root URL without query, credentials or fragment.",
+      "x-descriptionZh": "API 根地址，不包含凭据、查询或片段。",
+      "pattern": "^https?://[^/?#@\\s]+(?:/[^?#\\s]*)?$"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647,
+      "default": 10000,
+      "description": "Total budget including all requests and retry delays.",
+      "x-descriptionZh": "包含全部请求与重试等待的总超时。"
+    },
+    "maxRetries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 2,
+      "description": "Maximum SDK retries after the first attempt.",
+      "x-descriptionZh": "首次请求后的最大重试次数。"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": false
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "then": {},
+      "else": {
+        "required": [
+          "apiKey"
+        ],
+        "properties": {
+          "apiKey": {}
+        }
+      }
+    }
+  ]
+}

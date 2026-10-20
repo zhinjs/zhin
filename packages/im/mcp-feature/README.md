@@ -1,0 +1,70 @@
+# @zhin.js/mcp-feature
+
+下一代 MCP Client Feature。它从 `mcps/<name>/index.ts` 发现 provider-neutral client definition，并将连接实例的创建、启动、调用和销毁绑定到 Plugin owner 与 generation lease。
+
+## 目录约定
+
+```text
+mcps/
+├── filesystem/index.ts
+└── memory/index.ts
+```
+
+只发现一级命名目录中的 `index.ts`；同目录其他文件都是该连接的 helper。连接参数、URL、command 和 secret 应从 owner config/resource 读取，不写入另一份全局 MCP 配置 registry。
+
+## 定义 MCP Client
+
+```ts
+import { defineMcp } from '@zhin.js/mcp-feature';
+import { mcpTransportFactoryToken } from '../plugin.js';
+
+export default defineMcp({
+  description: 'Workspace filesystem tools',
+  create(context) {
+    const client = context.use(mcpTransportFactoryToken).create(context.config);
+    return {
+      start: () => client.connect(),
+      stop: () => client.close(),
+      listTools: () => client.listTools(),
+      callTool: (name, input) => client.callTool(name, input),
+    };
+  },
+});
+```
+
+`create()` 在 projection prepare 中执行，只能构造 inert client；网络连接必须放在 `start()`。具体 stdio/HTTP transport 和 MCP SDK 由 Plugin Resource 或可选 adapter 提供，本包没有相关第三方依赖。
+
+单文件插件可用 `setup({ addMcp })` 注册 `defineMcp(...)`。它仍走相同的连接 handoff、
+owner 继承和 generation 回收。
+
+## 生命周期
+
+```text
+prepare candidate: create()
+before commit:     candidate.start()
+commit:            publish new McpIndex
+old lease = 0:     previous.stop()
+rollback:          candidate.stop()
+```
+
+MCP 候选连接不会触碰旧 client。旧 turn 继续通过旧 projection 与 snapshot lease 完成在途调用；新 turn 只看到已启动并已提交的新 client。要求排他连接时，连接必须由 Process Host 持有，并让 generation 只原子切换逻辑路由，不能在 shadow prepare 中抢占旧连接。
+
+`McpIndex` 对连接使用 owner inheritance。动态工具名由 client 返回；orchestrator 可投影为 `{connection}__{tool}`，但该模型命名不改变 Capability identity。
+
+## 验证
+
+```bash
+pnpm --filter @zhin.js/mcp-feature test
+pnpm --filter @zhin.js/mcp-feature build
+```
+
+
+### Transport 创建上下文
+
+`create(context)` 只提供 `owner`、`config`、`generation`、`signal` 和 `use(token)`；
+Adapter 还提供端点的 `id`、`endpointId` 和 `name`。这些值属于 owner 的创建生命周期，
+不是每次消息或工具调用的 operation snapshot。未改 owner 的连接可跨局部热重载保留。
+
+创建上下文不提供 `project()`，类型和实际对象都如此；JavaScript 强行调用会抛出
+`TypeError`，不会悄悄读取旧代投影。需要跨 Feature 的业务执行放在 command、handler、
+middleware 或 tool 中，通过它们当前 operation 的上下文解析。

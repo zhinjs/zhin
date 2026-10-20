@@ -1,0 +1,20 @@
+{
+  "name": "QQ Platform Agent",
+  "version": "1.0.0",
+  "description": "Handles qq platform-specific operations and progressively loads only the required platform Skill.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "qq",
+      "adapter:qq"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "platforms": [
+    "qq"
+  ]
+}

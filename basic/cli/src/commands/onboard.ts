@@ -1,0 +1,363 @@
+/**
+ * onboard — 引导与配置向导（借鉴 OpenClaw onboard）
+ *
+ * - 在 Zhin 项目内：检测现有配置 → 保持 / 重新配置（回显当前值）/ 重置
+ * - 非项目内：创建新项目 / 仅显示快速开始
+ * - 重新配置或重置时复用现有配置文件、.env、data 目录，并调用配置向导
+ */
+
+import { Command } from 'commander';
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import fs from 'fs-extra';
+import path from 'path';
+import { execSync, spawnSync } from 'child_process';
+import { loadProjectConfig } from '@zhin.js/scaffold-wizard';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import { logger } from '../utils/logger.js';
+import { saveConfig } from '../utils/config-file.js';
+import {
+  CREATE_PROJECT_COMMAND,
+  spawnCreateProject,
+} from '../utils/create-project.js';
+import {
+  formatNodeRequirementMessage,
+  isNodeVersionSupported,
+  NODE_ENGINES_HINT,
+} from '../utils/node-requirements.js';
+
+const cwd = process.cwd();
+
+// ---------------------------------------------------------------------------
+// 环境检查
+// ---------------------------------------------------------------------------
+
+function checkEnvironment(): { node: boolean; pnpm: boolean; git: boolean } {
+  const checks = { node: false, pnpm: false, git: false };
+  checks.node = isNodeVersionSupported(process.version);
+  try {
+    execSync('pnpm -v', { encoding: 'utf-8' });
+    checks.pnpm = true;
+  } catch {}
+  try {
+    execSync('git --version', { encoding: 'utf-8' });
+    checks.git = true;
+  } catch {}
+  return checks;
+}
+
+function printEnvironmentCheck(checks: ReturnType<typeof checkEnvironment>): void {
+  console.log(chalk.bold.blue('📋 环境检查'));
+  console.log('');
+  console.log(
+    checks.node
+      ? chalk.green(`  ✓ Node.js (${NODE_ENGINES_HINT})`)
+      : chalk.red(`  ✗ Node.js（需要 ${NODE_ENGINES_HINT}，当前 ${process.version}）`),
+  );
+  console.log(checks.pnpm ? chalk.green('  ✓ pnpm') : chalk.red('  ✗ pnpm (推荐: npm install -g pnpm)'));
+  console.log(checks.git ? chalk.green('  ✓ Git') : chalk.yellow('  ○ Git (可选)'));
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// 项目与配置检测
+// ---------------------------------------------------------------------------
+
+function isZhinProject(dir: string): boolean {
+  const pkgPath = path.join(dir, 'package.json');
+  if (!fs.existsSync(pkgPath)) return false;
+  try {
+    const pkg = fs.readJsonSync(pkgPath);
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    return 'zhin.js' in deps || 'zhin' in deps;
+  } catch {
+    return false;
+  }
+}
+
+function parseEnvFile(content: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const eq = t.indexOf('=');
+    if (eq <= 0) continue;
+    const key = t.slice(0, eq).trim();
+    const val = t.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
+    out[key] = val;
+  }
+  return out;
+}
+
+async function loadExistingState(dir: string): Promise<{
+  configPath: string;
+  config: any;
+  configFormat: string;
+  env: Record<string, string>;
+  hasDataDir: boolean;
+} | null> {
+  const loaded = loadProjectConfig(dir);
+  if (loaded.status === 'unsupported') {
+    throw new Error(loaded.message ?? '现有配置不符合当前 Runtime 契约');
+  }
+  if (loaded.status !== 'loaded' || !loaded.configPath || !loaded.format) return null;
+  const configPath = loaded.configPath;
+  const config = loaded.config;
+  const configFormat = loaded.format;
+  const envPath = path.join(dir, '.env');
+  let env: Record<string, string> = {};
+  if (fs.existsSync(envPath)) {
+    env = parseEnvFile(await fs.readFile(envPath, 'utf-8'));
+  }
+  const dataDir = path.join(dir, 'data');
+  return {
+    configPath,
+    config,
+    configFormat,
+    env,
+    hasDataDir: fs.existsSync(dataDir),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 最小默认配置（重置时使用）
+// ---------------------------------------------------------------------------
+
+function getMinimalConfig(): any {
+  // 新 Plugin Runtime 形态：plugins 为 instanceKey → 配置 映射；
+  // Console Host 由 CLI composition root 装配，无需 services/hostApi/plugin_dirs
+  return {
+    log_level: 1,
+    database: { dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' },
+    configVersion: 2,
+    plugins: {sandbox: '@zhin.js/adapter-sandbox'},
+    disable_plugins: [],
+    sandbox: {},
+    http: { port: 8086, token: '${HTTP_TOKEN}', base: '/api' },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 欢迎与摘要
+// ---------------------------------------------------------------------------
+
+function printWelcome(): void {
+  console.log('');
+  console.log(chalk.bold.cyan('  ╔═══════════════════════════════════════════════════════════════╗'));
+  console.log(chalk.bold.cyan('  ║') + chalk.bold.white('           Zhin.js 引导与配置向导 (onboard)                    ') + chalk.bold.cyan('║'));
+  console.log(chalk.bold.cyan('  ╚═══════════════════════════════════════════════════════════════╝'));
+  console.log('');
+}
+
+function printSummary(state: NonNullable<Awaited<ReturnType<typeof loadExistingState>>>): void {
+  console.log(chalk.bold.blue('📄 当前配置摘要'));
+  console.log('');
+  console.log(chalk.gray('  配置文件: ') + chalk.cyan(path.basename(state.configPath)));
+  if (state.config.database?.dialect) {
+    console.log(chalk.gray('  数据库: ') + chalk.cyan(state.config.database.dialect + (state.config.database.filename ? ` (${state.config.database.filename})` : '')));
+  }
+  const instanceKeys = Object.keys(readPluginConfigurationMap(state.config));
+  if (instanceKeys.length > 0) {
+    console.log(chalk.gray('  插件: ') + chalk.cyan(instanceKeys.join(', ')));
+  }
+  if (state.config.ai?.enabled !== false) {
+    const provider = state.config.ai?.agents?.zhin?.provider
+      ?? '未指定';
+    console.log(chalk.gray('  AI: ') + chalk.cyan(provider));
+  }
+  if (state.hasDataDir) {
+    console.log(chalk.gray('  data 目录: ') + chalk.green('已存在'));
+  }
+  console.log('');
+}
+
+function printNextSteps(): void {
+  console.log(chalk.bold.blue('🎯 下一步'));
+  console.log('');
+  console.log(chalk.cyan('  pnpm dev') + chalk.gray('          # 开发模式（热重载）'));
+  console.log(chalk.cyan('  zhin doctor') + chalk.gray('        # 检查项目健康'));
+  console.log(chalk.cyan('  zhin setup') + chalk.gray('         # 再次打开配置向导'));
+  console.log(chalk.gray('  Remote Console: ') + chalk.cyan('https://console.zhin.dev'));
+  console.log(chalk.gray('  Host API Base: ') + chalk.cyan('http://127.0.0.1:8086'));
+  console.log('');
+}
+
+function printQuickStart(): void {
+  console.log(chalk.bold.blue('🚀 快速开始'));
+  console.log('');
+  console.log(chalk.white('  1. 创建项目: ') + chalk.cyan(CREATE_PROJECT_COMMAND + ' my-bot'));
+  console.log(chalk.white('  2. 进入目录: ') + chalk.cyan('cd my-bot'));
+  console.log(chalk.white('  3. 启动开发: ') + chalk.cyan('pnpm dev'));
+  console.log(chalk.white('  4. 控制台:   ') + chalk.cyan('https://console.zhin.dev （API → 127.0.0.1:8086）'));
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// 主流程：在项目内
+// ---------------------------------------------------------------------------
+
+async function runInProject(_checks: ReturnType<typeof checkEnvironment>): Promise<void> {
+  let state: Awaited<ReturnType<typeof loadExistingState>>;
+  try {
+    state = await loadExistingState(cwd);
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
+  const hasExistingConfig = state !== null;
+
+  if (hasExistingConfig && state) {
+    console.log(chalk.green('✓ 检测到 Zhin 项目与现有配置'));
+    printSummary(state);
+  } else {
+    console.log(chalk.green('✓ 检测到 Zhin 项目'));
+    console.log(chalk.gray('  未找到 zhin.config.*，将使用配置向导创建默认配置。'));
+    console.log('');
+  }
+
+  type Action = 'keep' | 'modify' | 'reset';
+  let action: Action = 'modify';
+
+  if (hasExistingConfig) {
+    const { choice } = await inquirer.prompt([
+      {
+        type: 'select',
+        name: 'choice',
+        message: '选择操作（重新运行向导不会自动覆盖，除非选择重置）:',
+        choices: [
+          { name: '保持现有配置（仅查看摘要与下一步）', value: 'keep' },
+          { name: '重新配置（以当前配置为默认值，逐步修改）', value: 'modify' },
+          { name: '重置配置（恢复为最小默认，再运行向导）', value: 'reset' },
+        ],
+      },
+    ]);
+    action = choice;
+  }
+
+  if (action === 'keep') {
+    if (hasExistingConfig && state) printSummary(state);
+    printNextSteps();
+    return;
+  }
+
+  if (action === 'reset' && hasExistingConfig && state) {
+    const minimal = getMinimalConfig();
+    await saveConfig(state.configPath, minimal);
+    console.log(chalk.yellow('已写入最小默认配置，接下来运行配置向导。'));
+    console.log('');
+  }
+
+  // 复用现有配置、.env、data 目录：由 setup 读取当前 config 并合并
+  console.log(chalk.blue('🔧 启动配置向导（zhin setup）'));
+  console.log(chalk.gray('  将复用当前配置文件、.env 与 data 目录；修改后保存会合并回原配置。'));
+  console.log('');
+
+  const result = spawnSync('zhin', ['setup'], { stdio: 'inherit', shell: true, cwd });
+  if (result.status !== 0) {
+    logger.error('配置向导未正常结束');
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log('');
+  console.log(chalk.bold.green('✅ onboard 完成'));
+  printNextSteps();
+
+  const { runDoctor } = await inquirer.prompt([
+    { type: 'confirm', name: 'runDoctor', message: '是否运行 zhin doctor 检查项目？', default: true },
+  ]);
+  if (runDoctor) {
+    spawnSync('zhin', ['doctor'], { stdio: 'inherit', shell: true, cwd });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 主流程：非项目内
+// ---------------------------------------------------------------------------
+
+async function runOutsideProject(checks: ReturnType<typeof checkEnvironment>): Promise<void> {
+  console.log(chalk.yellow('当前目录不是 Zhin 项目（无 package.json 或未依赖 zhin.js）'));
+  console.log('');
+
+  const { choice } = await inquirer.prompt([
+    {
+      type: 'select',
+      name: 'choice',
+      message: '选择操作:',
+      choices: [
+        { name: `创建新项目（${CREATE_PROJECT_COMMAND}）`, value: 'create' },
+        { name: '仅显示快速开始步骤', value: 'quick' },
+        { name: '退出', value: 'exit' },
+      ],
+    },
+  ]);
+
+  if (choice === 'quick') {
+    printQuickStart();
+    return;
+  }
+
+  if (choice === 'exit') {
+    console.log(chalk.gray('可随时在项目目录下运行 zhin onboard 进行配置。'));
+    return;
+  }
+
+  const { projectName } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'projectName',
+      message: '项目名称:',
+      default: 'my-bot',
+      validate: (input: string) => {
+        if (!input.trim()) return '项目名称不能为空';
+        if (!/^[a-z0-9-_]+$/.test(input)) return '只能包含小写字母、数字、- 和 _';
+        return true;
+      },
+    },
+  ]);
+
+  console.log('');
+  const exitCode = spawnCreateProject(projectName);
+  if (exitCode === 0) {
+    console.log('');
+    console.log(chalk.bold.green('✅ 项目已创建'));
+    console.log(chalk.cyan(`  cd ${projectName}`));
+    console.log(chalk.cyan('  zhin onboard') + chalk.gray('  # 在项目内继续配置'));
+    console.log(chalk.cyan('  pnpm dev'));
+  } else {
+    logger.error('创建项目失败，可手动运行: ' + CREATE_PROJECT_COMMAND + ' ' + projectName);
+    process.exitCode = exitCode ?? 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Command
+// ---------------------------------------------------------------------------
+
+export const onboardCommand = new Command('onboard')
+  .description('引导与配置向导：在项目内复用现有配置/环境变量/data，保持或重新配置')
+  .option('-q, --quick', '仅显示快速开始（不进入向导）')
+  .option('--flow <flow>', '配置流程: quickstart（少问）| full（默认）', 'full')
+  .action(async (options) => {
+    printWelcome();
+    const checks = checkEnvironment();
+    printEnvironmentCheck(checks);
+
+    if (options.quick) {
+      printQuickStart();
+      return;
+    }
+
+    if (!checks.node || !checks.pnpm) {
+      console.log(chalk.yellow(`请先安装 Node.js (${NODE_ENGINES_HINT}) 与 pnpm 后重试。`));
+      process.exitCode = 1;
+      return;
+    }
+
+    if (isZhinProject(cwd)) {
+      await runInProject(checks);
+    } else {
+      await runOutsideProject(checks);
+    }
+  });

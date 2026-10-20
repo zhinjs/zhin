@@ -1,0 +1,63 @@
+import type { ActivityFeedbackConfig } from '@zhin.js/agent';
+
+/** Plugin Runtime 实例配置（`plugins.<instanceKey>`，与 Adapter endpoint 配置解耦）。 */
+export interface ActivityFeedbackServiceConfig {
+  enabled?: boolean;
+  defaults?: ActivityFeedbackConfig;
+  platforms?: Record<string, ActivityFeedbackConfig>;
+  endpoints?: Record<string, ActivityFeedbackConfig>;
+  /** Schedule turn 专用相位配置 */
+  schedule?: {
+    phases?: Partial<Record<'start' | 'error' | 'finish', import('@zhin.js/agent').ActivityFeedbackScenePhases>>;
+  };
+}
+
+function mergePhaseScene(
+  base: ActivityFeedbackConfig['phases'],
+  override: ActivityFeedbackConfig['phases'],
+): ActivityFeedbackConfig['phases'] {
+  if (!base && !override) return undefined;
+  const phases = new Set([
+    ...Object.keys(base ?? {}),
+    ...Object.keys(override ?? {}),
+  ]) as Set<keyof NonNullable<ActivityFeedbackConfig['phases']>>;
+
+  const merged: NonNullable<ActivityFeedbackConfig['phases']> = {};
+  for (const phase of phases) {
+    merged[phase] = {
+      ...base?.[phase],
+      ...override?.[phase],
+      private: { ...base?.[phase]?.private, ...override?.[phase]?.private },
+      group: { ...base?.[phase]?.group, ...override?.[phase]?.group },
+      channel: { ...base?.[phase]?.channel, ...override?.[phase]?.channel },
+    };
+  }
+  return merged;
+}
+
+export function mergeActivityFeedbackLayers(
+  ...layers: (ActivityFeedbackConfig | undefined)[]
+): ActivityFeedbackConfig | undefined {
+  let result: ActivityFeedbackConfig | undefined;
+  for (const layer of layers) {
+    if (!layer) continue;
+    if (!result) {
+      result = { ...layer, phases: layer.phases ? { ...layer.phases } : undefined };
+      continue;
+    }
+    if (layer.enabled !== undefined) result.enabled = layer.enabled;
+    if (layer.phases) {
+      result.phases = mergePhaseScene(result.phases, layer.phases);
+    }
+  }
+  return result;
+}
+
+export function loadActivityFeedbackServiceConfig(
+  raw: ActivityFeedbackServiceConfig | undefined,
+): ActivityFeedbackServiceConfig {
+  return {
+    enabled: true,
+    ...raw,
+  };
+}

@@ -1,0 +1,21 @@
+import { asRecord, asString } from '../api.js';
+import type { SixtySClient } from '../client.js';
+
+export default async function (client: SixtySClient, args: { province?: string }) {
+  const params: Record<string, string> | undefined = args.province
+    ? { province: args.province }
+    : undefined;
+  const data = await client.fetch('/fuel-price', params);
+  const lines = ['⛽ 今日油价', ''];
+  if (data.region) lines.push(`📍 ${data.region}`);
+  if (data.items && Array.isArray(data.items)) {
+    data.items.forEach((item: Record<string, unknown>) => {
+      lines.push(`${item.name}: ${item.price_desc || `¥${item.price}/升`}`);
+    });
+  }
+  if (data.trend) {
+    const trend = asRecord(data.trend);
+    lines.push('', `📊 ${asString(trend.description)}`);
+  }
+  return lines.join('\n');
+}

@@ -1,0 +1,153 @@
+# Public API Surface
+
+This checklist is the SSOT (single source of truth) for determining whether an API is public or internal. The goal: a maintainer can make a judgment on any symbol within 10 minutes without reading the implementation.
+
+Three tiers:
+
+| Tier | Label | Meaning |
+|------|-------|---------|
+| Stable Public | `stable` / `experimental` | User-facing authoring surface, commits to semver (`experimental` may be adjusted in minor releases, with prior notice in the changelog) |
+| Internal | `internal` | Framework internals. Readable and debuggable, but **no guarantee against breaking changes** -- may change in any version |
+| Deprecated | `deprecated` | Migrated/no longer recommended. Kept for compatibility for one minor cycle then removed |
+
+> Annotation location: source JSDoc (`@public` / `@internal`) should be annotated in entry files first; this checklist is the complete list. When they conflict, this checklist takes precedence and a PR should be filed to correct the source.
+
+## Stable Public (semver commitment)
+
+### define\* Authoring Functions
+
+> App authors should import from **`zhin.js/*` facade subpaths** (depending on `zhin.js` is enough). The "Implementation package" column is the Feature provider / `platformFeatures` mount name — **do not** separately `pnpm add` those packages.
+
+| API | Stability | Author import | Implementation | One-liner |
+|-----|-----------|---------------|----------------|-----------|
+| `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | Convention-based plugin entry, default export from `plugin.ts` |
+| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | Command module (default export in `commands/`) |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | Adapter module (default export in `adapters/`); `create(context)` normally returns `{ client, connect, activate?, send }`, while complex protocols may return an Endpoint subclass |
+| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
+| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | Middleware module (default export in `middlewares/`) |
+| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle event handler (default export in `handlers/`; `/` → `.` event inference) |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool` (`tools/<name>/index.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
+| `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | Generation-owned Prompt section with layer, retention budget, and profile scope |
+
+> Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`skills/<name>/SKILL.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
+
+### Convention Directories and Files
+
+| Convention | Stability | Consumer | One-liner |
+|------------|-----------|----------|-----------|
+| `plugin.ts` | `stable` | `zhin.js` | Plugin root entry, default exports `definePlugin(...)` |
+| `commands/` | `stable` | `@zhin.js/command` (author import: `zhin.js/command`) | Command module directory, supports `[name]` / `[[name]]` / `[...name]` dynamic parameter segments |
+| `adapters/` | `stable` | `@zhin.js/adapter` (author import: `zhin.js/adapter`) | Adapter module directory |
+| `middlewares/` | `stable` | `@zhin.js/middleware` (author import: `zhin.js/middleware`) | Middleware module directory |
+| `handlers/` | `stable` | `@zhin.js/handler` (author import: `zhin.js/handler`) | Lifecycle event handler directory (`/` localName segments; omit `event` → `.` event; runtime currently wires `message.receive`) |
+| `tools/` | `experimental` | `@zhin.js/tool` | `tools/<name>/index.ts` is public; Agent/Skill-private Tools use the same nested `tools/` shape |
+| `hooks/` | `experimental` | `zhin.js/agent/hooks` | `hooks/<name>/index.ts`; Agent/Skill-private Hooks use the same nested `hooks/` shape |
+| `skills/<name>/SKILL.md` | `experimental` | `@zhin.js/skill` / Agent discovery | Skill Markdown with colocated references and scripts (published with npm packages) |
+| `pages/` | `experimental` | `@zhin.js/console-page` | Console page module directory |
+
+### Host Tokens (consumed via `context.resources.use(token)`)
+
+| Token | Stability | Source Package | One-liner |
+|-------|-----------|----------------|-----------|
+| `databaseHostToken` | `stable` | `zhin.js` | Database Host capability |
+| `scheduleHostToken` | `stable` | `zhin.js` | Scheduled task Host capability |
+| `outboundHostToken` | `stable` | `zhin.js` | Cross-platform outbound message capability |
+| `outboundMessageToken` | `stable` | `@zhin.js/core` (`zhin.js/core/runtime`) | Inbound message delivery gateway (used by adapters) |
+| `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host capability (used by Console, Webhooks) |
+
+### Agent Capability Resources
+
+| API | Stability | Source Package | One-liner |
+|-----|-----------|----------------|-----------|
+| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | Generation-scoped Skill/SubAgent/MCP/Hook support resources; Tools enter `ToolIndex` only through `context.addTool()` |
+
+### Removed Legacy Hooks
+
+| API | Stability | Source Package | One-liner |
+|-----|-----------|----------------|-----------|
+| `usePlugin()` / `getPlugin()` | `removed` | none (no longer exported) | The only entry is `definePlugin` + `zhin runtime start` |
+| `MessageCommand` / `CommandFeature` | `removed` | none (no longer exported) | Commands use `defineCommand` and Runtime `CommandIndex` |
+| `bootstrapNode` / `zhin.js/node` | `removed` | none (subpath deleted) | The only startup entry is `zhin runtime start` |
+| `AgentMessageSenderExtra` / `SenderScope` | `removed` | none (no longer exported) | Participant identity lives only in `UserMessage.actor` |
+| `buildSenderPrefix` / `applySenderExtraToUserMessage` / `stripSenderPrefixFromText` | `removed` | none (no longer exported) | The AI boundary renders participant labels from actor and never infers identity from text or extra |
+| `buildSenderPrefixForMessage` | `removed` | none (no longer exported) | Core triggers return user content without encoding Agent identity |
+
+### `zhin.config.yml` Top-Level Keys
+
+| Key | Stability | Consumer | One-liner |
+|-----|-----------|----------|-----------|
+| `plugins.<key>` | `stable` | `@zhin.js/cli` assembly layer | Plugin enablement and plugin-level config |
+| `endpoints[i]` | `stable` | `@zhin.js/cli` assembly layer | Adapter instance list (includes `master` / `trusted` / `commandPrefix`) |
+| `commandPrefix` | `stable` | `MessageDispatcher` | Command prefix, top-level instance + per-endpoint override |
+| `ai` | `stable` | `@zhin.js/cli` AI Host assembly | AI/Agent configuration |
+| `http` | `stable` | `@zhin.js/host-http` assembly | HTTP Host configuration |
+| `database` | `stable` | database Host assembly | Database configuration |
+| `speech` | `stable` | speech Host assembly | Speech configuration |
+| `log_level` | `stable` | `@zhin.js/cli` | Log level (`ZHIN_LOG_LEVEL` can override) |
+
+> Other Host-level keys (`mcp` / `a2a` / `htmlRenderer` / `assistant`) are also stable top-level keys; see [Configuration Overview](../configuration/index.md) for the complete table.
+
+### CLI Commands
+
+| Command | Stability | Source Package | One-liner |
+|---------|-----------|----------------|-----------|
+| `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime entry point (composition root) |
+| `zhin setup` | `stable` | `@zhin.js/cli` | Incremental configuration wizard for existing projects |
+| `zhin doctor` | `stable` | `@zhin.js/cli` | Environment/config health check |
+| `pnpm create zhin-app` | `stable` | `create-zhin-app` | New project scaffold |
+
+## Internal (Readable but No Stability Guarantee)
+
+| API | Stability | Source Package | One-liner |
+|-----|-----------|----------------|-----------|
+| `RootRuntime` / `RootController` | `internal` | `@zhin.js/plugin-runtime` | Root controller for plugin tree and generations |
+| `CapabilitySlot` | `internal` | `@zhin.js/plugin-runtime` | Capability slot, carrier between features and projections |
+| `SnapshotStore` / `RuntimeSnapshot` | `internal` | `@zhin.js/plugin-runtime` | Atomic snapshot store, input for projections |
+| `AdapterIndex` | `internal` | `@zhin.js/adapter` | Adapter projection, snapshot -> Endpoint assembly |
+| `CommandIndex` | `internal` | `@zhin.js/command` | Command projection, snapshot -> command routing table |
+| `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex`, etc. | `internal` | Various feature packages | Other projections, all internal mechanisms |
+| `defineFeatureProvider` (Feature Provider protocol) | `internal` | `@zhin.js/feature-kit` | Protocol for adding new feature types, aimed at framework extenders, not plugin authors |
+| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `InboundRuntime` |
+| `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | Generation-leased Endpoint directory, control, and management boundary exposed as `ImRuntime.endpoints` |
+| `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | Read-only message observation port exposed as `ImRuntime.messageEvents`; publication remains inside Core |
+| `@zhin.js/workroom/remote` remote dispatch / callback / assignment | `internal` | `@zhin.js/workroom` | A2A extension; moved out of the package root and frozen; default assembly still creates the Remote Callback Runtime / Remote Assignment Authority (legacy Kernel/runtime path, deferred until after C2); only the A2A transport wiring is lazily loaded when configured |
+| `@zhin.js/workroom/scheduler` scheduler / preemption / priority authority | `internal` | `@zhin.js/workroom` | Moved out of the package root and frozen (C4b); only the root export was removed, the default (legacy Kernel) assembly still creates the scheduler / preemption runtimes, deferred until after C2 |
+| `@zhin.js/workroom/portfolio` portfolio journal / admission / capacity outbox / sponsor | `internal` | `@zhin.js/workroom` | Moved out of the package root and frozen (C4b); only the root export was removed, the default (legacy Kernel) assembly still creates the portfolio runtimes, deferred until after C2 |
+| `@zhin.js/workroom/data-governance` payload vault / disclosure manifest & authority / payload lifecycle / workroom-data-* & workroom-payload-* runtime | `internal` | `@zhin.js/workroom` | Moved out of the package root and frozen (C4c); only the root export was removed, the default (legacy Kernel) assembly still creates the data-governance runtime, deferred until after C2 |
+| `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | Generation-owned Host assembly mechanisms, not plugin-author APIs for obtaining Run state-writing authority |
+| `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host installers (database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol); assembly details may change at any time |
+
+## Deprecated / Migrated
+
+| Item | Stability | Status | One-liner |
+|------|-----------|--------|-----------|
+| Legacy `usePlugin()` / `getPlugin()` plugin system | `removed` | Deleted from source and the public surface | The only entry is `definePlugin` + `zhin runtime start` |
+| `MessageCommand` / classic `CommandFeature` | `removed` | Deleted from source and the public surface | Commands use `defineCommand` and Runtime `CommandIndex` |
+| Core `ToolFeature` / `SkillFeature` | `removed` | Deleted from source and the public surface | Tool / Skill use Feature providers, generation projections, and Agent `CapabilityIngress` |
+| Agent `FeatureCapabilityIngress` | `removed` | Deleted from source and the public surface | Agent retains only the `CapabilityIngress` that reads Runtime snapshots |
+| `@zhin.js/tools` and the Agent authoring Tool bridge | `removed` | The subpath and duplicate definition/context/discovery were deleted | Author Tools through `@zhin.js/tool` and `tools/<name>/index.ts` |
+| `@zhin.js/core/tool-zod` | `removed` | The Core subpath and Zod 3 structural compatibility were deleted | `@zhin.js/tool` owns the single Zod 4 / JSON Schema input contract |
+| Classic Core `Adapter` / `Endpoint` runtime | `removed` | Classes, capability state, lifecycle helpers, and dedicated tests were deleted | Adapters use `defineAdapter`, `Endpoint<TClient>`, and the generation-owned `AdapterIndex` from `zhin.js/adapter` |
+| Classic Core `Plugin` runtime | `removed` | The Plugin class, Context ALS, duplicate Dispatcher, and inbound pipeline were deleted | Plugin lifecycle belongs to generation snapshots; IM dispatch only uses `ImRuntime` |
+| Kernel `PluginBase` / mutable `Feature` registry | `removed` | The Plugin tree, string DI, prototype extension registry, and self-tests were deleted | Lifecycle belongs to `@zhin.js/plugin-runtime`; discovery and projection belong to `@zhin.js/feature-kit` |
+| Kernel global Schedule getters/setters | `removed` | `get/setScheduleEngine` and `get/setScheduler` were deleted | Each `ScheduleJobEngine` owns and disposes its scheduler; Host scheduling uses a generation-owned token |
+| `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
+| `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; Workroom orchestration uses the Kernel and dedicated typed ports |
+| "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |
+| `examples/test-bot` as a user path | `deprecated` | Maintainer kitchen sink | User paths are minimal-bot (Stable) -> full-bot (L4); do not use test-bot config as a template |
+| `plugin.yml` / Core `PluginManifest` | `removed` | Build detection, source types, and the duplicate repository manifest were deleted | Plugin identity and metadata come only from strictly validated `package.json#zhin` |
+
+## Decision Rules (Which Tier for New APIs)
+
+Ask three questions in order:
+
+1. **Is this something a plugin author/user would write directly?** (define\* functions, convention directories, config keys, CLI commands, Host tokens)
+   -> Yes: default to **Stable Public**. AI/Console and other surfaces that haven't converged yet should be labeled `experimental` first, then promoted to `stable` after convergence.
+2. **Is this a mechanism in the snapshot -> projection -> assembly pipeline?** (`*Index`, `SnapshotStore`, `CapabilitySlot`, installer, dispatcher, Feature Provider protocol)
+   -> Yes: default to **Internal**. Internal mechanisms do not become public just because they are exported (for cross-package reuse).
+3. **Removing/replacing an existing public API?**
+   -> First label `deprecated` (JSDoc `@deprecated` + move in this checklist + note in changelog), **keep for at least one minor cycle** before removal; removal itself is a breaking change, handled via major bump or per the repo's release conventions.
+
+Fallback: when in doubt, treat it as **Internal** -- promoting from internal to public does not break anyone; the reverse is a breaking change.
+
+Related docs: [Code Conventions](./conventions.md), [Development Workflow & CI Gates](./development.md), [Plugin Model](../concepts/plugin-model.md).

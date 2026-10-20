@@ -1,0 +1,114 @@
+# @zhin.js/adapter-satori
+
+Zhin.js [Satori](https://satori.chat/zh-CN/introduction.html) **聊天协议**适配器（Plugin Runtime）。支持 **WebSocket 正向客户端**（`connection: ws`）与 **Webhook 入站**（`connection: webhook`，经 `httpHostToken` POST 路由）。
+
+> Satori 是聊天协议；图片渲染统一使用 `@zhin.js/html-renderer`（`@pixel.js/shotium`），与本适配器无关。
+
+## 功能特性
+
+- 🔌 [Satori 协议](https://satori.chat/zh-CN/introduction.html) 兼容
+- 🌐 **WebSocket 正向**（`connection: ws`，默认）：应用连 SDK `ws(s)://baseUrl`，IDENTIFY + 心跳
+- 🔐 Bearer Token 鉴权（API 与 WS IDENTIFY）
+- 📨 频道 / 私聊消息收发，消息 id 格式为 `channelId:messageId`
+- 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
+- **Webhook**（`connection: webhook`）：SDK POST `Satori-Opcode: 0` 事件到 `path`
+
+## 安装
+
+```bash
+pnpm add @zhin.js/adapter-satori
+```
+
+## Plugin Runtime
+
+- `@zhin.js/adapter` — 约定式 `adapters/satori/index.ts`（`defineAdapter`）
+- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `zhin.js` — `plugin.ts`（`definePlugin`）
+- `@zhin.js/host-http` — Webhook 模式需 `httpHostToken` 注册 POST 路由
+- 配置经插件 `schema.json` 落到顶层 `<instanceKey>`（`baseUrl` / `token` / …）
+
+入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef：DIRECT 频道 → kind `private`，其余 → kind `group`、所属 guild 进 `parent`）  
+出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
+
+入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
+
+每个 Endpoint 的 `$client` 是 `@imhelper/satori-v1` 的 `SatoriV1Client`。业务代码直接调用
+`$client.call(resource, method, params)` 或其公开便捷方法；Client 负责协议事件变换，Endpoint
+只负责 Satori IDENTIFY/心跳、Webhook 鉴权和 Zhin 投影。
+
+## 前置条件
+
+1. 准备兼容 Satori 的服务端，记录 API Base、平台标识和用户标识。
+2. 正向 WS 需 Zhin 可达 Satori 服务；Webhook 需服务端可达 Zhin HTTP Host。
+3. 若服务启用鉴权，在两端配置相同的 Bearer token。
+
+## 最小配置
+
+```yaml
+configVersion: 2
+# zhin.config.yml（Plugin Runtime）
+plugins:
+  satori: "@zhin.js/adapter-satori"
+satori:
+  connection: ws
+  heartbeat_interval: 10000
+  endpoints:
+    - id: satori-bot
+      baseUrl: "http://127.0.0.1:5140"
+      token: "${SATORI_TOKEN}"
+```
+
+主配置 `plugins` 映射需引用 `@zhin.js/adapter-satori`（`instanceKey: satori`）。
+
+### 可选字段
+
+| 字段 | 说明 |
+|------|------|
+| `heartbeat_interval` | WS PING 间隔（毫秒），默认 `10000` |
+| `token` | Bearer；可在 YAML 中引用 `${SATORI_TOKEN}` |
+
+### Webhook
+
+```yaml
+configVersion: 2
+plugins:
+  satori: "@zhin.js/adapter-satori"
+satori:
+  connection: webhook
+  endpoints:
+    - id: satori-bot
+      baseUrl: "http://127.0.0.1:5140"
+      path: "/satori/webhook"
+      token: "${SATORI_TOKEN}"
+```
+
+SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适配器从首个事件的 `login` 取得 platform / userId 用于后续 API 调用。
+
+## 鉴权
+
+- **API**：请求头 `Authorization: Bearer {token}`
+- **WebSocket**：IDENTIFY 时 body 中传 `token`
+
+## 消息 id 与撤回
+
+- 消息 id 格式为 `channelId:messageId`，便于发消息 / 撤回时解析。
+- 撤回时需 `channel_id` + `message_id`，适配器已按上述格式解析。
+
+## AI 工具
+
+技能说明见 `skills/satori/SKILL.md`。
+
+## 协议文档
+
+- [介绍](https://satori.chat/zh-CN/introduction.html)
+- [总览](https://satori.chat/zh-CN/protocol/overview.html)
+- [API](https://satori.chat/zh-CN/protocol/api.html)
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| WS IDENTIFY 失败 | 检查 `baseUrl`、平台/用户标识与 token |
+| Webhook 无事件 | 确认路径、`Satori-Opcode: 0` 与 HTTP Host |
+| 401 | 检查 API、WS IDENTIFY 与 Webhook 使用的 token 是否一致 |
+| 发送目标错误 | 核对 `channel_id` 与 Conversation kind；DIRECT 才映射为 private |

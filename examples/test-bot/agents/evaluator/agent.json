@@ -1,0 +1,21 @@
+{
+  "name": "evaluator",
+  "version": "1.0.0",
+  "description": "五角色评估，基于事实设计方案",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "evaluate",
+      "评估",
+      "方案"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "role": "evaluator",
+  "context_mode": "fresh",
+  "max_iterations": 8
+}

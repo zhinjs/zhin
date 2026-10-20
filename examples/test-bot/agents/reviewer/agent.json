@@ -1,0 +1,21 @@
+{
+  "name": "reviewer",
+  "version": "1.0.0",
+  "description": "代码与设计审查，只读分析，不修改文件或执行 shell",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "review",
+      "审查",
+      "代码评审"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "role": "reviewer",
+  "context_mode": "fresh",
+  "max_iterations": 8
+}

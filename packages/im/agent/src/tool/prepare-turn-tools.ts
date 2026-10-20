@@ -1,0 +1,106 @@
+import type { AgentTool } from '@zhin.js/ai';
+import type { Message } from '@zhin.js/core';
+import {
+  ensureMcpConnectionsForBinding,
+  getMcpToolsForBinding,
+} from '../resource-hub/mcp-lifecycle.js';
+import { rehydrateTurnActiveSkills } from '../assistant/schedule-skills.js';
+import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from '../internal/turn-context.js';
+import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
+import { defaultToolSystem } from '../tool/tool-system.js';
+import type { ResolvedToolsForTurn } from './deferred-resolution.js';
+
+function listSpawnableAgentNames(host: ZhinAgentPrivate): string[] {
+  const presets = host.resourceHub?.subagents.getAllPresets().map((p) => p.name) ?? [];
+  return [...new Set(presets.filter(Boolean))].sort();
+}
+
+export interface TurnToolsPrep {
+  contextForTools: Message;
+  allTools: AgentTool[];
+  resolved: ResolvedToolsForTurn;
+  resolvedTools: AgentTool[];
+  deferredStats?: string;
+  catalog: ResolvedToolsForTurn['catalog'];
+  sessionSnapshot: ResolvedToolsForTurn['sessionSnapshot'];
+}
+
+export async function prepareTurnTools(
+  host: ZhinAgentPrivate,
+  opts: {
+    content: string;
+    commMessage: Message;
+    externalTools: Tool[];
+    sessionId: string;
+    userId: string;
+    mcpServerNames: string[];
+  },
+): Promise<TurnToolsPrep> {
+  const userId = opts.userId;
+  const contextForTools = opts.commMessage;
+
+  if (host.resourceHub && opts.mcpServerNames.length > 0) {
+    await ensureMcpConnectionsForBinding(host.resourceHub.mcps, opts.mcpServerNames, (event) => {
+      const payload = host.emitter.createPayload(opts.sessionId, contextForTools, 'text', {
+        path: 'agent',
+        serverName: event.serverName,
+        loadedToolNames: event.toolNames,
+        reason: event.connected === false ? 'disconnected' : undefined,
+        error: event.error,
+      });
+      if (event.phase === 'start') {
+        host.emitter.emit('ai.mcp.connect.start', payload);
+      } else if (event.phase === 'finish') {
+        host.emitter.emit('ai.mcp.connect.finish', payload);
+      } else {
+        host.emitter.emit('ai.mcp.connect.error', payload);
+      }
+    });
+  }
+
+  const mcpTools = host.resourceHub && opts.mcpServerNames.length > 0
+    ? getMcpToolsForBinding(host.resourceHub.mcps, opts.mcpServerNames)
+    : [];
+
+  const toolSystem = host.toolSystem ?? defaultToolSystem;
+  const allTools = await toolSystem.collectForTurn({
+    host,
+    message: contextForTools,
+    content: opts.content,
+    sessionId: opts.sessionId,
+    userId,
+    config: host.config,
+    skillRegistry: host.skillRegistry,
+    externalTools: opts.externalTools,
+    externalRegistered: host.externalTools,
+    userProfiles: host.userProfiles,
+    mcpTools,
+    spawnableAgentNames: host.subagentSystem ? listSpawnableAgentNames(host) : undefined,
+  });
+
+  const resolved = await toolSystem.resolveForTurn(
+    host,
+    allTools,
+    opts.sessionId,
+    String(contextForTools.clientAdapter ?? contextForTools.conversation.endpoint.adapter),
+  );
+  const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot: initialSnapshot } = resolved;
+
+  const sessionSnapshot = initialSnapshot;
+  captureDeferredSnapshotBefore(sessionSnapshot);
+  host.deferred.lastSnapshotBefore = cloneDeferredSnapshot(sessionSnapshot);
+  await rehydrateTurnActiveSkills(host, opts.sessionId, host.getAlwaysSkillsBaseline());
+  host.deferred.lastSessionSnapshot = sessionSnapshot;
+  host.deferred.lastCatalog = catalog;
+  host.deferred.lastToolSearchStats = deferredStats;
+
+  return {
+    contextForTools,
+    allTools,
+    resolved,
+    resolvedTools,
+    deferredStats,
+    catalog,
+    sessionSnapshot,
+  };
+}

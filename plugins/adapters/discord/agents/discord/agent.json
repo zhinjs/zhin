@@ -1,0 +1,20 @@
+{
+  "name": "DISCORD Platform Agent",
+  "version": "1.0.0",
+  "description": "Handles discord platform-specific operations and progressively loads only the required platform Skill.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "discord",
+      "adapter:discord"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "platforms": [
+    "discord"
+  ]
+}

@@ -1,0 +1,128 @@
+import type { AIEventName, AIEventPayload, AIEventSource } from './ai-event-contract.js';
+export type { AIEventName, AIEventPayload } from './ai-event-contract.js';
+
+export interface AIEventFilter {
+  sessionId?: string;
+  platform?: string;
+  endpointKey?: string;
+  sceneId?: string;
+  source?: AIEventSource;
+}
+
+export interface AIEventHandlers {
+  onAny?: (event: AIEventName, payload: AIEventPayload) => void;
+  onProcessingStart?: (payload: AIEventPayload) => void;
+  onProcessingFinish?: (payload: AIEventPayload) => void;
+  onProcessingError?: (payload: AIEventPayload) => void;
+  onAgentStart?: (payload: AIEventPayload) => void;
+  onAgentFinish?: (payload: AIEventPayload) => void;
+  onThinking?: (payload: AIEventPayload) => void;
+  onToolCall?: (payload: AIEventPayload) => void;
+  onToolResult?: (payload: AIEventPayload) => void;
+  onResponse?: (payload: AIEventPayload) => void;
+  onTypingStart?: (payload: AIEventPayload) => void;
+  onTypingStop?: (payload: AIEventPayload) => void;
+  onQueuedStart?: (payload: AIEventPayload) => void;
+  onQueuedClear?: (payload: AIEventPayload) => void;
+  onSubagentSpawn?: (payload: AIEventPayload) => void;
+  onSubagentStart?: (payload: AIEventPayload) => void;
+  onSubagentFinish?: (payload: AIEventPayload) => void;
+  onDeferredStart?: (payload: AIEventPayload) => void;
+  onDeferredFinish?: (payload: AIEventPayload) => void;
+  onMcpConnectStart?: (payload: AIEventPayload) => void;
+  onMcpConnectFinish?: (payload: AIEventPayload) => void;
+  onMcpConnectError?: (payload: AIEventPayload) => void;
+  onSessionNew?: (payload: AIEventPayload) => void;
+  onSessionCompact?: (payload: AIEventPayload) => void;
+  onHook?: (payload: AIEventPayload) => void;
+  onScheduleStart?: (payload: AIEventPayload) => void;
+  onScheduleFinish?: (payload: AIEventPayload) => void;
+  onScheduleError?: (payload: AIEventPayload) => void;
+}
+
+const EVENT_HANDLER_MAP: Record<AIEventName, keyof AIEventHandlers | undefined> = {
+  'ai.processing.start': 'onProcessingStart',
+  'ai.processing.finish': 'onProcessingFinish',
+  'ai.processing.error': 'onProcessingError',
+  'ai.agent.start': 'onAgentStart',
+  'ai.agent.finish': 'onAgentFinish',
+  'ai.thinking': 'onThinking',
+  'ai.tool.call': 'onToolCall',
+  'ai.tool.result': 'onToolResult',
+  'ai.response': 'onResponse',
+  'ai.typing.start': 'onTypingStart',
+  'ai.typing.stop': 'onTypingStop',
+  'ai.activity.queued.start': 'onQueuedStart',
+  'ai.activity.queued.clear': 'onQueuedClear',
+  'ai.subagent.spawn': 'onSubagentSpawn',
+  'ai.subagent.start': 'onSubagentStart',
+  'ai.subagent.finish': 'onSubagentFinish',
+  'ai.deferred.start': 'onDeferredStart',
+  'ai.deferred.finish': 'onDeferredFinish',
+  'ai.mcp.connect.start': 'onMcpConnectStart',
+  'ai.mcp.connect.finish': 'onMcpConnectFinish',
+  'ai.mcp.connect.error': 'onMcpConnectError',
+  'ai.session.new': 'onSessionNew',
+  'ai.session.compact': 'onSessionCompact',
+  'ai.hook': 'onHook',
+  'schedule.start': 'onScheduleStart',
+  'schedule.finish': 'onScheduleFinish',
+  'schedule.error': 'onScheduleError',
+};
+
+export const AI_EVENT_NAMES = Object.keys(EVENT_HANDLER_MAP) as AIEventName[];
+
+function matchesFilter(payload: AIEventPayload, filter?: AIEventFilter): boolean {
+  if (!filter) return true;
+  if (filter.sessionId && payload.sessionId !== filter.sessionId) return false;
+  if (filter.platform && payload.platform !== filter.platform) return false;
+  if (filter.endpointKey && payload.endpointKey !== filter.endpointKey) return false;
+  if (filter.sceneId && payload.sceneId !== filter.sceneId) return false;
+  if (filter.source && payload.source !== filter.source) return false;
+  return true;
+}
+
+/** Plugin-agnostic on/off target (no AsyncLocalStorage). */
+export interface AIEventTarget {
+  on(event: string, listener: (payload: AIEventPayload) => void | Promise<void>): unknown;
+  off(event: string, listener: (payload: AIEventPayload) => void | Promise<void>): unknown;
+}
+
+function invokeHandlers(
+  eventName: AIEventName,
+  payload: AIEventPayload,
+  handlers: AIEventHandlers,
+): Promise<void> {
+  return (async () => {
+    handlers.onAny?.(eventName, payload);
+    const handlerName = EVENT_HANDLER_MAP[eventName];
+    const handler = handlerName ? handlers[handlerName] : undefined;
+    if (typeof handler === 'function') {
+      await (handler as (payload: AIEventPayload) => void | Promise<void>)(payload);
+    }
+  })();
+}
+
+/**
+ * Subscribe AI lifecycle handlers on any `{ on, off }` target.
+ * Does **not** restore Plugin ALS — safe for Plugin Runtime setup.
+ */
+export function subscribeAIEventsOnTarget(
+  target: AIEventTarget,
+  handlers: AIEventHandlers,
+  filter?: AIEventFilter,
+): () => void {
+  const disposers = AI_EVENT_NAMES.map((eventName) => {
+    const listener = (payload: AIEventPayload) => {
+      if (!matchesFilter(payload, filter)) return;
+      return invokeHandlers(eventName, payload, handlers);
+    };
+    target.on(eventName, listener);
+    return () => {
+      target.off(eventName, listener);
+    };
+  });
+  return () => {
+    for (const dispose of disposers) dispose();
+  };
+}

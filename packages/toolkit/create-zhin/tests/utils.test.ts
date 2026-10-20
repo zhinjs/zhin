@@ -1,0 +1,90 @@
+import { describe, it, expect } from 'vitest'
+import {
+  generateToken,
+  getDatabaseDisplayName,
+  getDatabasePersistenceLabel,
+  isValidProjectName,
+} from '../src/utils'
+
+describe('create-zhin utils', () => {
+  describe('generateToken', () => {
+    it('should generate token with default bytes (32 hex chars)', () => {
+      const token = generateToken()
+      expect(token).toBeDefined()
+      expect(typeof token).toBe('string')
+      expect(token.length).toBe(32)
+    })
+
+    it('should generate token with custom bytes', () => {
+      const token = generateToken(8)
+      expect(token.length).toBe(16)
+    })
+
+    it('should generate different tokens', () => {
+      const token1 = generateToken()
+      const token2 = generateToken()
+      expect(token1).toBeDefined()
+      expect(token2).toBeDefined()
+    })
+
+    it('should only contain hex characters', () => {
+      const token = generateToken(32)
+      const validChars = /^[0-9a-f]+$/
+      expect(validChars.test(token)).toBe(true)
+    })
+  })
+
+  describe('isValidProjectName', () => {
+    it('accepts letters, digits, dashes and underscores', () => {
+      expect(isValidProjectName('my-zhin-bot')).toBe(true)
+      expect(isValidProjectName('bot_01')).toBe(true)
+      expect(isValidProjectName('Bot')).toBe(true)
+    })
+
+    it('rejects names with spaces or special characters', () => {
+      expect(isValidProjectName('my bot')).toBe(false)
+      expect(isValidProjectName('bot!')).toBe(false)
+      expect(isValidProjectName('bot$name')).toBe(false)
+      expect(isValidProjectName('../bot')).toBe(false)
+      expect(isValidProjectName('')).toBe(false)
+    })
+  })
+
+  describe('getDatabaseDisplayName', () => {
+    it('should return SQLite for sqlite', () => {
+      expect(getDatabaseDisplayName('sqlite')).toBe('SQLite')
+    })
+
+    it('should return MySQL for mysql', () => {
+      expect(getDatabaseDisplayName('mysql')).toBe('MySQL')
+    })
+
+    it('should return PostgreSQL for pg', () => {
+      expect(getDatabaseDisplayName('pg')).toBe('PostgreSQL')
+    })
+
+    it('should return MongoDB for mongodb', () => {
+      expect(getDatabaseDisplayName('mongodb')).toBe('MongoDB')
+    })
+
+    it('should return Redis for redis', () => {
+      expect(getDatabaseDisplayName('redis')).toBe('Redis')
+    })
+
+    it('should return original name for unknown dialect', () => {
+      expect(getDatabaseDisplayName('unknown')).toBe('unknown')
+    })
+  })
+
+  describe('getDatabasePersistenceLabel', () => {
+    it('uses the selected durable database name', () => {
+      expect(getDatabasePersistenceLabel('sqlite')).toBe('SQLite 持久化')
+      expect(getDatabasePersistenceLabel('pg')).toBe('PostgreSQL 持久化')
+      expect(getDatabasePersistenceLabel('mysql')).toBe('MySQL 持久化')
+    })
+
+    it('does not claim that the in-memory dialect is durable', () => {
+      expect(getDatabasePersistenceLabel('memory')).toBe('Memory（仅进程内，不持久化）')
+    })
+  })
+})

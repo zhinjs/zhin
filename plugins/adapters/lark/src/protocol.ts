@@ -1,0 +1,450 @@
+import { validateLarkWebApiProxy } from './web-api-proxy.js';
+/**
+ * Lark/Feishu protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
+ * Canonicalization is owned by gateway/core before endpoint.send.
+ */
+
+import { createHash, timingSafeEqual } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
+import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+import { formatLarkCard } from './cards.js';
+
+const logger = getLogger('lark');
+
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface LarkEndpointConfig {
+  readonly webApiProxy?: import('./web-api-proxy.js').LarkWebApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').LarkStreamProxy;
+  readonly id: string;
+  readonly mode?: 'webhook' | 'websocket';
+  readonly appId: string;
+  readonly appSecret: string;
+  readonly encryptKey?: string;
+  readonly verificationToken?: string;
+  readonly webhookPath?: string;
+  readonly apiBaseUrl?: string;
+  readonly isFeishu?: boolean;
+}
+
+export interface ResolvedLarkConfig {
+  readonly webApiProxy?: import('./web-api-proxy.js').LarkWebApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').LarkStreamProxy;
+  readonly context: 'lark';
+  readonly id: string;
+  readonly mode: 'webhook' | 'websocket';
+  readonly appId: string;
+  readonly appSecret: string;
+  readonly encryptKey?: string;
+  readonly verificationToken?: string;
+  readonly webhookPath: string;
+  readonly apiBaseUrl: string;
+  readonly isFeishu: boolean;
+}
+
+export interface LarkMessage {
+  readonly message_id?: string;
+  readonly root_id?: string;
+  readonly parent_id?: string;
+  readonly create_time?: string;
+  readonly update_time?: string;
+  readonly chat_id?: string;
+  /** 事件携带的会话类型（'p2p' | 'group'）；p2p 的 chat_id 也是 oc_ 开头。 */
+  readonly chat_type?: string;
+  readonly sender?: {
+    readonly sender_id?: {
+      readonly user_id?: string;
+      readonly open_id?: string;
+      readonly union_id?: string;
+    };
+    readonly sender_type?: string;
+    readonly tenant_key?: string;
+  };
+  readonly message_type?: string;
+  readonly content?: string;
+  readonly mentions?: ReadonlyArray<{
+    readonly key?: string;
+    readonly id?: {
+      readonly user_id?: string;
+      readonly open_id?: string;
+      readonly union_id?: string;
+    };
+    readonly name?: string;
+    readonly tenant_key?: string;
+  }>;
+}
+
+export interface LarkEventBody {
+  readonly uuid?: string;
+  readonly token?: string;
+  readonly ts?: string;
+  readonly type?: string;
+  readonly challenge?: string;
+  readonly event?: {
+    readonly sender?: LarkMessage['sender'];
+    readonly message?: LarkMessage;
+    readonly [key: string]: unknown;
+  };
+}
+
+export interface AccessToken {
+  token: string;
+  expires_in: number;
+  timestamp: number;
+}
+
+export interface LarkApiResponse {
+  readonly code: number;
+  readonly msg?: string;
+  readonly tenant_access_token?: string;
+  readonly expire?: number;
+  readonly data?: Record<string, unknown>;
+  readonly [key: string]: unknown;
+}
+
+export interface LarkWireSegment {
+  readonly type: string;
+  readonly data?: Record<string, unknown>;
+}
+
+export interface LarkSendBody {
+  readonly replyTo?: string;
+  readonly msg_type: string;
+  readonly content: string;
+}
+
+export function resolveLarkConfig(config: LarkEndpointConfig): ResolvedLarkConfig {
+  if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
+    || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName))) throw new TypeError('Invalid Lark streamProxy port/serverName');
+  if (config.webApiProxy) validateLarkWebApiProxy(config.webApiProxy);
+  const id = requiredEndpointField(config.id, 'id');
+  const appId = requiredEndpointField(config.appId, 'appId');
+  const appSecret = requiredEndpointField(config.appSecret, 'appSecret');
+  const mode = config.mode ?? 'webhook';
+  if (mode !== 'webhook' && mode !== 'websocket') throw new TypeError('Lark mode must be webhook or websocket');
+  const isFeishu = config.isFeishu ?? true;
+  const webhookPath = normalizeWebhookPath(config.webhookPath ?? '/lark/webhook');
+  const defaultBase = isFeishu
+    ? 'https://open.feishu.cn/open-apis'
+    : 'https://open.larksuite.com/open-apis';
+  const apiBaseUrl = (
+    config.apiBaseUrl ?? defaultBase
+  ).replace(/\/$/, '');
+  if (config.webApiProxy && (!isFeishu || apiBaseUrl !== 'https://open.feishu.cn/open-apis')) throw new TypeError('Lark webApiProxy requires the official Feishu API origin');
+  const encryptKey = config.encryptKey;
+  const verificationToken = config.verificationToken;
+  return {
+    ...(config.webApiProxy ? { webApiProxy: config.webApiProxy } : {}),
+    ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
+    context: 'lark',
+    mode,
+    id,
+    appId,
+    appSecret,
+    ...(encryptKey ? { encryptKey } : {}),
+    ...(verificationToken ? { verificationToken } : {}),
+    webhookPath,
+    apiBaseUrl,
+    isFeishu,
+  };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'appId' | 'appSecret',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Lark endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
+}
+
+export function normalizeWebhookPath(path: string): string {
+  const trimmed = path.trim() || '/lark/webhook';
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+export function resolveChatType(chatId?: string, chatType?: string): 'group' | 'private' {
+  // 优先使用事件里的 chat_type：p2p 会话的 chat_id 同样以 oc_ 开头，不能靠前缀判断
+  if (chatType === 'group') return 'group';
+  if (chatType === 'p2p') return 'private';
+  return chatId?.startsWith('oc_') ? 'group' : 'private';
+}
+
+/**
+ * 入站归一化 → ConversationRef：`chat_type` 为 'group' 的会话映射为 group，
+ * p2p 单聊映射为 private；id 一律为平台 chat_id。Lark 无 guild/频道容器，
+ * 不产生 `parent`。
+ */
+export function larkInboundConversation(endpointKey: string, msg: LarkMessage): ConversationRef {
+  return {
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
+    kind: resolveChatType(msg.chat_id, msg.chat_type),
+    id: msg.chat_id || 'unknown',
+  };
+}
+
+export function resolveSender(msg: LarkMessage): string {
+  return msg.sender?.sender_id?.open_id
+    || msg.sender?.sender_id?.user_id
+    || 'unknown';
+}
+
+export function generateMessageId(msg: LarkMessage): string {
+  return msg.message_id || `${msg.create_time ?? Date.now()}`;
+}
+
+/** Build inbound text for OutboundMessageService.receive. */
+export function formatInboundContent(msg: LarkMessage): string {
+  if (!msg.content || !msg.message_type) return '';
+  try {
+    const parsed = JSON.parse(msg.content) as Record<string, unknown>;
+    switch (msg.message_type) {
+      case 'text':
+        return typeof parsed.text === 'string' ? parsed.text : '';
+      case 'image':
+        return '[image]';
+      case 'file': {
+        const name = typeof parsed.file_name === 'string' ? parsed.file_name : '';
+        return name ? `[file: ${name}]` : '[file]';
+      }
+      case 'audio':
+        return '[audio]';
+      case 'video':
+        return '[video]';
+      case 'sticker':
+        return '[sticker]';
+      case 'post':
+      case 'interactive':
+        return `[${msg.message_type}]`;
+      case 'rich_text':
+        return '[rich_text]';
+      default:
+        return `[${msg.message_type}]`;
+    }
+  } catch {
+    return '[消息解析失败]';
+  }
+}
+
+/** 验签时间戳时效窗口（防重放）。 */
+export const LARK_SIGNATURE_MAX_AGE_MS = 5 * 60_000;
+
+export function verifySignature(
+  encryptKey: string,
+  timestamp: string,
+  nonce: string,
+  body: string,
+  signature: string,
+  nowMs: number = Date.now(),
+): boolean {
+  try {
+    // 时效窗口 ±5min，超出直接拒绝（timestamp 为秒）
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(nowMs - ts * 1000) > LARK_SIGNATURE_MAX_AGE_MS) {
+      return false;
+    }
+    const stringToSign = `${timestamp}${nonce}${encryptKey}${body}`;
+    const calculated = createHash('sha256').update(stringToSign).digest('hex');
+    const a = Buffer.from(calculated);
+    const b = Buffer.from(signature);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+/** timing-safe 比较 webhook verification token（长度不同快速失败）。 */
+export function verifyToken(token: string, expected: string): boolean {
+  try {
+    const a = Buffer.from(token);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Wire-encode an already-rendered outbound payload into Lark im/v1 message body.
+ * Segment canonicalization is intentionally not done here.
+ */
+export function formatOutboundBody(payload: unknown): LarkSendBody {
+  if (typeof payload === 'string') {
+    return {
+      msg_type: 'text',
+      content: JSON.stringify({ text: payload }),
+    };
+  }
+
+  const items: Array<string | LarkWireSegment> = Array.isArray(payload)
+    ? payload as Array<string | LarkWireSegment>
+    : payload && typeof payload === 'object' && 'type' in (payload as object)
+      ? [payload as LarkWireSegment]
+      : [];
+  if (items.some(item => typeof item !== 'string' && ['markdown', 'share', 'keyboard'].includes(item.type))) return formatLarkCard(items);
+  const hasMarkdown = items.some((item) => typeof item !== 'string' && item.type === 'markdown');
+
+  if (items.length === 0) {
+    const text = payload == null
+      ? ''
+      : typeof payload === 'object'
+        ? JSON.stringify(payload)
+        : String(payload);
+    return {
+      msg_type: 'text',
+      content: JSON.stringify({ text }),
+    };
+  }
+
+  const textParts: string[] = [];
+  let media: LarkSendBody | null = null;
+  let replyTo: string | undefined;
+
+  for (const item of items) {
+    if (typeof item === 'string') {
+      textParts.push(item);
+      continue;
+    }
+    const data = item.data ?? {};
+    switch (item.type) {
+      case 'share':
+      case 'keyboard':
+        throw new EndpointDeliveryError('unsupported_operation', 'Lark canonical share cards and native keyboards are not implemented', 'not_sent');
+      case 'reply':
+        if (typeof data.message_id === 'string' && data.message_id.trim()) replyTo = data.message_id;
+        break;
+      case 'text':
+        textParts.push(String(data.content ?? data.text ?? ''));
+        break;
+      case 'markdown':
+        textParts.push(String(data.content ?? data.text ?? ''));
+        break;
+      case 'at':
+        textParts.push(
+          `<at user_id="${String(data.id ?? '')}">${String(data.name || data.id || '')}</at>`,
+        );
+        break;
+      case 'image':
+        if (!media) {
+          // image_key 唯一来源：canonical MediaRef kind=file（endpoint 上传物化产物或调用方既有平台引用）
+          const ref = data.media;
+          if (isMediaRef(ref) && ref.kind === 'file') {
+            media = {
+              msg_type: 'image',
+              content: JSON.stringify({ image_key: ref.value }),
+            };
+          } else {
+            logger.warn(formatCompact({
+              op: 'lark_outbound_media_dropped',
+              type: 'image',
+              reason: isMediaRef(ref) ? 'unmaterialized_media' : 'missing_media_ref',
+            }));
+          }
+        }
+        break;
+      case 'file':
+        if (!media) {
+          const ref = data.media;
+          if (isMediaRef(ref) && ref.kind === 'file') {
+            media = {
+              msg_type: 'file',
+              content: JSON.stringify({ file_key: ref.value }),
+            };
+          } else {
+            logger.warn(formatCompact({
+              op: 'lark_outbound_media_dropped',
+              type: 'file',
+              reason: isMediaRef(ref) ? 'unmaterialized_media' : 'missing_media_ref',
+            }));
+          }
+        }
+        break;
+      case 'card':
+        if (!media) {
+          media = {
+            msg_type: 'interactive',
+            content: JSON.stringify(data),
+          };
+        }
+        break;
+      default:
+        textParts.push(`[${item.type}]`);
+    }
+  }
+
+  const imageCount = items.filter((item) => typeof item !== 'string' && item.type === 'image').length;
+  if (imageCount > 0 && (textParts.some((text) => text.length > 0) || imageCount > 1)
+    && !items.some((item) => typeof item !== 'string' && (item.type === 'file' || item.type === 'card'))) {
+    const rows: Record<string, string>[][] = [];
+    for (const item of items) {
+      if (typeof item === 'string') { if (item) rows.push([{ tag: 'text', text: item }]); continue; }
+      const data = item.data ?? {};
+      if (item.type === 'reply') continue;
+      if (item.type === 'image') {
+        const ref = data.media;
+        if (isMediaRef(ref) && ref.kind === 'file') rows.push([{ tag: 'img', image_key: ref.value }]);
+      } else if (item.type === 'at' || item.type === 'mention') {
+        rows.push([{ tag: 'at', user_id: String(data.target ?? data.id ?? ''), user_name: String(data.name ?? data.target ?? data.id ?? '') }]);
+      } else {
+        const text = item.type === 'text' || item.type === 'markdown'
+          ? String(data.content ?? data.text ?? '') : `[${item.type}]`;
+        if (text) rows.push([{ tag: 'text', text }]);
+      }
+    }
+    return {
+      ...(replyTo ? { replyTo } : {}),
+      msg_type: 'post',
+      content: JSON.stringify({ zh_cn: { title: '', content: rows } }),
+    };
+  }
+  if (media) return { ...media, ...(replyTo ? { replyTo } : {}) };
+  if (hasMarkdown) {
+    return {
+      ...(replyTo ? { replyTo } : {}),
+      msg_type: 'interactive',
+      content: JSON.stringify({
+        elements: [{
+          tag: 'div',
+          text: { tag: 'lark_md', content: textParts.join('') },
+        }],
+      }),
+    };
+  }
+  return {
+    ...(replyTo ? { replyTo } : {}),
+    msg_type: 'text',
+    content: JSON.stringify({ text: textParts.join('') }),
+  };
+}
+
+export function headerValue(
+  headers: IncomingMessage['headers'],
+  name: string,
+): string {
+  const value = headers[name] ?? headers[name.toLowerCase()];
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
+}
+
+export async function readTextBody(
+  request: IncomingMessage,
+  options: { readonly limit?: number } = {},
+): Promise<string> {
+  const limit = options.limit ?? 1_048_576;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limit) {
+      request.destroy();
+      throw new Error(`Request body exceeds ${limit} bytes`);
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}

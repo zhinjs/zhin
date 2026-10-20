@@ -1,0 +1,644 @@
+import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { createHash } from 'node:crypto';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
+import { createHttpHost } from '@zhin.js/host-http';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
+import { LarkEndpoint } from '../src/endpoint.js';
+import {
+  formatInboundContent,
+  formatOutboundBody,
+  resolveChatType,
+  resolveLarkConfig,
+  verifySignature,
+  type LarkMessage,
+} from '../src/protocol.js';
+import { larkClient } from '../src/client.js';
+import defineLarkAdapter from '../adapters/lark/index.js';
+
+const adapterFeature = featureId('zhin.adapter');
+const hosts: ReturnType<typeof createHttpHost>[] = [];
+const ENCRYPT_KEY = 'test-encrypt-key';
+
+const baseConfig = resolveLarkConfig({
+  id: 'test-lark-bot',
+  appId: 'cli_test',
+  appSecret: 'secret-test',
+  webhookPath: '/lark/webhook',
+  encryptKey: ENCRYPT_KEY,
+  apiBaseUrl: 'https://open.feishu.cn/open-apis',
+  isFeishu: true,
+});
+
+function signBody(
+  body: string,
+  timestamp: string,
+  nonce: string,
+  key = ENCRYPT_KEY,
+): string {
+  return createHash('sha256').update(`${timestamp}${nonce}${key}${body}`).digest('hex');
+}
+
+function textMessage(overrides: Partial<LarkMessage> = {}): LarkMessage {
+  return {
+    message_id: 'om_1',
+    create_time: '1700000000000',
+    chat_id: 'oc_group1',
+    sender: { sender_id: { open_id: 'ou_user1' } },
+    message_type: 'text',
+    content: JSON.stringify({ text: 'hello' }),
+    ...overrides,
+  };
+}
+
+const groupConversation = {
+  endpoint: { id: 'test-endpoint', adapter: 'lark' },
+  kind: 'group' as const,
+  id: 'oc_group1',
+};
+
+function mockFetchOk(messageId = 'sent-1'): ReturnType<typeof vi.fn> {
+  return vi.fn(async (url: string) => {
+    if (String(url).includes('/auth/v3/tenant_access_token/internal')) {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({
+          code: 0,
+          tenant_access_token: 'tok',
+          expire: 7200,
+        }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () => '',
+      json: async () => ({
+        code: 0,
+        data: { message_id: messageId },
+      }),
+    };
+  });
+}
+
+afterEach(async () => {
+  await Promise.all(hosts.splice(0).map((host) => host.close()));
+});
+
+describe('lark protocol helpers', () => {
+  it('resolves plugin config with defaults', () => {
+    const resolved = resolveLarkConfig({
+      id: 'lark-bot',
+      appId: 'cli_x',
+      appSecret: 'sec',
+    });
+    expect(resolved.webhookPath).toBe('/lark/webhook');
+    expect(resolved.apiBaseUrl).toBe('https://open.feishu.cn/open-apis');
+    expect(resolved.id).toBe('lark-bot');
+    expect(resolved.isFeishu).toBe(true);
+  });
+
+  it('requires expanded endpoint identity and app credentials', () => {
+    expect(() => resolveLarkConfig({
+      id: ' ',
+      appId: 'cli_x',
+      appSecret: 'sec',
+    })).toThrow('Lark endpoint requires a non-empty id');
+    expect(() => resolveLarkConfig({
+      id: 'lark-bot',
+      appId: ' ',
+      appSecret: 'sec',
+    })).toThrow('Lark endpoint requires a non-empty appId');
+    expect(() => resolveLarkConfig({
+      id: 'lark-bot',
+      appId: 'cli_x',
+      appSecret: ' ',
+    })).toThrow('Lark endpoint requires a non-empty appSecret');
+  });
+
+  it('verifies SHA256 signatures', () => {
+    const body = '{"type":"event_callback"}';
+    const timestamp = '1700000000';
+    const nonce = 'n1';
+    const nowMs = Number(timestamp) * 1000;
+    const signature = signBody(body, timestamp, nonce);
+    expect(verifySignature(ENCRYPT_KEY, timestamp, nonce, body, signature, nowMs)).toBe(true);
+    expect(verifySignature(ENCRYPT_KEY, timestamp, nonce, body, 'bad', nowMs)).toBe(false);
+  });
+
+  it('rejects signatures outside the ±5min freshness window', () => {
+    const body = '{"type":"event_callback"}';
+    const nonce = 'n1';
+    const fresh = String(Math.floor(Date.now() / 1000));
+    expect(verifySignature(ENCRYPT_KEY, fresh, nonce, body, signBody(body, fresh, nonce))).toBe(true);
+    const stale = String(Math.floor(Date.now() / 1000) - 600);
+    expect(verifySignature(ENCRYPT_KEY, stale, nonce, body, signBody(body, stale, nonce))).toBe(false);
+    expect(verifySignature(ENCRYPT_KEY, 'not-a-number', nonce, body, signBody(body, 'not-a-number', nonce))).toBe(false);
+  });
+
+  it('resolves chat type from event chat_type (p2p chat_id also starts with oc_)', () => {
+    expect(resolveChatType('oc_p2pchat', 'p2p')).toBe('private');
+    expect(resolveChatType('oc_group1', 'group')).toBe('group');
+    // 无 chat_type 时回退旧前缀启发式
+    expect(resolveChatType('oc_group1')).toBe('group');
+    expect(resolveChatType('ou_user1')).toBe('private');
+  });
+
+  it('formats inbound content by message type', () => {
+    expect(formatInboundContent(textMessage())).toBe('hello');
+    expect(formatInboundContent(textMessage({
+      message_type: 'image',
+      content: JSON.stringify({ image_key: 'img_1' }),
+    }))).toBe('[image]');
+    expect(formatInboundContent(textMessage({
+      message_type: 'file',
+      content: JSON.stringify({ file_name: 'a.pdf' }),
+    }))).toBe('[file: a.pdf]');
+  });
+
+  it('formats outbound string and segment payloads', () => {
+    expect(defineLarkAdapter.segments?.markdown).toBe('native');
+    expect(formatOutboundBody('pong')).toEqual({
+      msg_type: 'text',
+      content: JSON.stringify({ text: 'pong' }),
+    });
+    expect(formatOutboundBody([
+      { type: 'text', data: { text: 'hi' } },
+      { type: 'at', data: { id: 'ou_1', name: 'Bob' } },
+    ])).toEqual({
+      msg_type: 'text',
+      content: JSON.stringify({ text: 'hi<at user_id="ou_1">Bob</at>' }),
+    });
+    // 平台不透明引用（image_key/file_key）以 canonical MediaRef kind=file 承载
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'file', value: 'img_k' } } },
+    ])).toEqual({
+      msg_type: 'image',
+      content: JSON.stringify({ image_key: 'img_k' }),
+    });
+    // endpoint 上传物化后回写 MediaRef kind=file
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'file', value: 'img_v3_up' } } },
+    ])).toEqual({
+      msg_type: 'image',
+      content: JSON.stringify({ image_key: 'img_v3_up' }),
+    });
+    expect(formatOutboundBody([
+      { type: 'file', data: { media: { kind: 'file', value: 'file_k' } } },
+    ])).toEqual({
+      msg_type: 'file',
+      content: JSON.stringify({ file_key: 'file_k' }),
+    });
+    expect(formatOutboundBody([
+      { type: 'markdown', data: { content: '# 标题\n\n**重点**' } },
+      { type: 'text', data: { text: '\n1. 确认\n2. 取消' } },
+    ])).toEqual({
+      msg_type: 'interactive',
+      content: JSON.stringify({
+        schema: '2.0',
+        body: { elements: [{ tag: 'markdown', content: '# 标题\n\n**重点**' },
+          { tag: 'markdown', content: '\n1\\. 确认\n2\\. 取消' }] },
+      }),
+    });
+    // 无 canonical MediaRef 的媒体段 warn + 丢弃（legacy 字段不再读取）
+    expect(formatOutboundBody([
+      { type: 'image', data: { url: 'https://legacy.example/a.png' } },
+    ])).toEqual({
+      msg_type: 'text',
+      content: JSON.stringify({ text: '' }),
+    });
+  });
+});
+
+describe('lark plugin runtime adapter', () => {
+  it('responds to url_verification challenge', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: { ...baseConfig, encryptKey: undefined },
+      fetch: mockFetchOk(),
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const body = JSON.stringify({ type: 'url_verification', challenge: 'c-123' });
+    const res = await fetch(`http://127.0.0.1:${port}/lark/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ challenge: 'c-123' });
+    await endpoint.stop();
+  });
+
+  it('POST webhook with valid signature admits via OutboundMessageService when open', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway,
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    }), gateway, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const payload = {
+      type: 'event_callback',
+      event: { message: textMessage() },
+    };
+    const body = JSON.stringify(payload);
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = 'n1';
+    const res = await fetch(`http://127.0.0.1:${port}/lark/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-lark-request-timestamp': timestamp,
+        'x-lark-request-nonce': nonce,
+        'x-lark-signature': signBody(body, timestamp, nonce),
+      },
+      body,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ code: 0, msg: 'success' });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      conversation: expect.objectContaining({ kind: 'group', id: 'oc_group1' }),
+      message: expect.objectContaining({ id: 'om_1' }),
+      content: 'hello',
+      sender: expect.objectContaining({ id: 'ou_user1' }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('rejects webhook with invalid signature', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const body = JSON.stringify({
+      type: 'event_callback',
+      event: { message: textMessage() },
+    });
+    const res = await fetch(`http://127.0.0.1:${port}/lark/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-lark-request-timestamp': '1',
+        'x-lark-request-nonce': 'n',
+        'x-lark-signature': 'bad',
+      },
+      body,
+    });
+    expect(res.status).toBe(403);
+    expect(receive).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('rejects webhook with a stale signature timestamp', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const body = JSON.stringify({
+      type: 'event_callback',
+      event: { message: textMessage() },
+    });
+    // 签名本身正确，但时间戳是 10 分钟前（超出 ±5min 窗口）
+    const timestamp = String(Math.floor(Date.now() / 1000) - 600);
+    const res = await fetch(`http://127.0.0.1:${port}/lark/webhook`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-lark-request-timestamp': timestamp,
+        'x-lark-request-nonce': 'n',
+        'x-lark-signature': signBody(body, timestamp, 'n'),
+      },
+      body,
+    });
+    expect(res.status).toBe(403);
+    expect(receive).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('checks verification token with timing-safe compare', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const config = resolveLarkConfig({
+      id: 'token-lark',
+      appId: 'cli_test',
+      appSecret: 'secret-test',
+      verificationToken: 'vt-secret',
+    });
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config,
+      fetch: mockFetchOk(),
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const { port } = await http.listen();
+
+    const body = JSON.stringify({ type: 'url_verification', challenge: 'c-9' });
+    const bad = await fetch(`http://127.0.0.1:${port}/lark/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-lark-request-token': 'vt-wrong' },
+      body,
+    });
+    expect(bad.status).toBe(403);
+    const good = await fetch(`http://127.0.0.1:${port}/lark/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-lark-request-token': 'vt-secret' },
+      body,
+    });
+    expect(good.status).toBe(200);
+    expect(await good.json()).toEqual({ challenge: 'c-9' });
+    await endpoint.stop();
+  });
+
+  it('warns loudly at start when neither encryptKey nor verificationToken is configured', async () => {
+    const { getAdapterLogger } = await import('@zhin.js/logger');
+    const warnSpy = vi.spyOn(getAdapterLogger('lark', 'noauth-lark'), 'warn');
+    try {
+      const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+      hosts.push(http);
+      const endpoint = bindTestEndpoint(new LarkEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+        gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
+        http,
+        config: resolveLarkConfig({ id: 'noauth-lark', appId: 'cli_test', appSecret: 'secret-test' }),
+        fetch: mockFetchOk(),
+      }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
+      await endpoint.start();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unauthenticated'));
+      await endpoint.stop();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('marks p2p chats as private in admit metadata', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    endpoint.admit(textMessage({ chat_id: 'oc_p2pchat', chat_type: 'p2p' }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      conversation: expect.objectContaining({ kind: 'private', id: 'oc_p2pchat' }),
+      metadata: expect.objectContaining({ chatType: 'private' }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not admit inbound while closed', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    await http.listen();
+    endpoint.admit(textMessage());
+    expect(receive).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('send posts im/v1/messages with access token', async () => {
+    const fetchMock = mockFetchOk('out-42');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({ conversation: groupConversation, payload: 'pong' });
+    expect(id).toBe('out-42');
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/im/v1/messages'),
+      expect.objectContaining({ method: 'POST' }),
+    );
+    await endpoint.stop();
+  });
+
+  it('send image 段经 /im/v1/images 物化为 image_key', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/auth/v3/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 0, tenant_access_token: 'tok', expire: 7200 }),
+        };
+      }
+      if (String(url).includes('/im/v1/images')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 0, data: { image_key: 'img_v3_up' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ code: 0, data: { message_id: 'om_out' } }),
+      };
+    });
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
+    await endpoint.start();
+    await http.listen();
+    const id = await endpoint.send({
+      conversation: groupConversation,
+      payload: [
+        {
+          type: 'image',
+          data: {
+            media: {
+              kind: 'base64',
+              value: Buffer.from('png-bytes').toString('base64'),
+              mime_type: 'image/png',
+            },
+          },
+        },
+      ],
+    });
+    expect(id).toBe('om_out');
+    const uploadCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/im/v1/images'));
+    expect(uploadCall).toBeDefined();
+    expect(uploadCall![1]).toMatchObject({
+      method: 'POST',
+      headers: { Authorization: 'Bearer tok' },
+    });
+    expect(uploadCall![1]!.body).toBeInstanceOf(FormData);
+    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/im/v1/messages'));
+    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
+    expect(sendBody).toMatchObject({
+      receive_id: 'oc_group1',
+      msg_type: 'image',
+      content: JSON.stringify({ image_key: 'img_v3_up' }),
+    });
+    await endpoint.stop();
+  });
+
+  it('图片上传失败保留拒绝，不发送丢图的文字替代品', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/auth/v3/tenant_access_token/internal')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 0, tenant_access_token: 'tok', expire: 7200 }),
+        };
+      }
+      if (String(url).includes('/im/v1/images')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 230001, msg: 'upload denied' }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ code: 0, data: { message_id: 'om_out2' } }),
+      };
+    });
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: fetchMock,
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
+    await endpoint.start();
+    await http.listen();
+    await expect(endpoint.send({
+      conversation: groupConversation,
+      payload: [
+        {
+          type: 'image',
+          data: {
+            media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' },
+            alt: '架构图',
+          },
+        },
+      ],
+    })).rejects.toMatchObject({ disposition: 'rejected', platformCode: 230001 });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/im/v1/messages'))).toBe(false);
+    await endpoint.stop();
+  });
+
+  it('registers agent endpoint on start', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      http,
+      config: baseConfig,
+      fetch: mockFetchOk(),
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
+    await endpoint.start();
+    await http.listen();
+    expect(larkClient.get(endpointClientContext(endpoint), 'test-lark-bot'))
+      .toBe(endpoint.client);
+    await endpoint.stop();
+  });
+});

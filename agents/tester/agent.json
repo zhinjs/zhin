@@ -1,0 +1,39 @@
+{
+  "name": "tester",
+  "version": "1.0.0",
+  "description": "测试工程师（Tester/QA）角色：负责测试方案设计、Bug 验证与报告、 PR 功能验收、回归测试跟踪。监听 pull_request 和标签变更事件， 对待合并的 PR 进行功能验证。",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "tester",
+      "QA",
+      "测试",
+      "test",
+      "bug",
+      "验证",
+      "regression",
+      "回归",
+      "质量",
+      "quality",
+      "verify"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "tools": [
+    "bash",
+    "read_file",
+    "grep",
+    "glob",
+    "todo_write"
+  ],
+  "tags": [
+    "github",
+    "testing",
+    "quality"
+  ],
+  "max_iterations": 15
+}

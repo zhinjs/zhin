@@ -1,0 +1,9 @@
+name: Set up rendering fonts
+description: Install CJK fonts required by real Chromium component tests on Linux
+runs:
+  using: composite
+  steps:
+    - name: Install CJK fonts
+      if: runner.os == 'Linux'
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk

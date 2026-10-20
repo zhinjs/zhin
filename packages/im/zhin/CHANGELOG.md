@@ -1,0 +1,1899 @@
+# zhin.js
+
+## 1.1.11
+
+> **⚠️ 升级须知（configVersion 2）**：随本版本发布的 `@zhin.js/cli` 1.1.14 起，Runtime 只接受 `configVersion: 2`，旧配置会被拒绝启动。先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移（自动备份），最后 `zhin config check` 后启动。指南：https://zhin.js.org/operations/upgrades#configversion-2
+
+### Patch Changes
+
+- Updated dependencies [c407bd2]
+- Updated dependencies [064b06d]
+- Updated dependencies [a50fc8a]
+- Updated dependencies [b58548a]
+- Updated dependencies [e914a93]
+- Updated dependencies [e914a93]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/core@1.1.46
+  - @zhin.js/permission@1.1.7
+  - @zhin.js/plugin-runtime@1.1.15
+
+## 1.1.10
+
+### Patch Changes
+
+- Updated dependencies [dd7f25f]
+  - @zhin.js/core@1.1.45
+
+## 1.1.9
+
+### Patch Changes
+
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- fdc2148: Unblock external plugin authors.
+
+  - Published manifests no longer expose the source-only `development` export condition (it pointed at `./src/*.ts`, which is not in the tarball, so Vitest 4 and other tools that enable `development` failed to import Zhin packages). Each package now carries `publishConfig.exports` without that condition; `pnpm publish` swaps it in when packing, and the monorepo keeps source-level development.
+  - `zhin new` no longer crashes without arguments (uses inquirer `select` instead of the removed `list` prompt; same fix for `zhin onboard` and `zhin pub`). The generated package.json uses `^x.y.z` ranges derived from installed versions instead of `latest`, declares capability packages as optional peers (plus devDependencies for local tests) instead of dependencies, sets `zhin.entry` to `./plugin.js` and builds sibling JavaScript on `prepack`, fixes the adapter template test, and adds `--package-name`. `--skip-install` now also skips the project-root install.
+
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/core@1.1.44
+  - @zhin.js/permission@1.1.6
+  - @zhin.js/plugin-runtime@1.1.14
+  - @zhin.js/logger@1.1.2
+
+## 1.1.8
+
+### Patch Changes
+
+- 386150d: Unify command parameters, options, validation and help; provide IM middleware defaults, exact persistent delivery targets and owner-scoped atomic state. Derive plugin configuration types, defaults, validation and Console metadata from one declaration, preserve plugin ownership and generation admission, and keep process database, scheduler and outbound resources private to the root. Reject inline configuration in isolated plugins inside their own realm; isolated configuration uses schema.json.
+
+  Reject ambiguous optional/rest routes and undefined dynamic defaults, preserve optional parameter types and help handling, and validate Console edits with the Runtime configuration engine. Keep unrelated plugin entries cached during helper reloads, expose initial configuration metadata before login completes, and drain admitted Host operations while rejecting retired or failed-generation access.
+
+  Keep schedule activation and hot reload atomic, preserving published jobs when a candidate fails; preserve immutable database query branches and path-only command parameters. Report background unhandled rejections for the Runtime Process Host, observe ICQQ heartbeat and reconnect login failures through the SDK reconnect policy, and normalize inline image data URLs before ICQQ file or base64 delivery.
+
+- 9891e66: 入站消息 `origin` 标签（self / member / peer_bot / human）与出站 ledger 兜底：
+
+  - 新增 `Message.origin`（仅由 InboundRuntime 经 Peer Registry、出站 ledger 与 `roomMembershipToken` 端口可信判定，绝不读取正文或 metadata）。
+  - self / member / peer_bot 来源的消息只记录（self 不重复记录），不触发命令、handlers、middleware、ingressRoute 或 agent turn；无法判定时 fail closed 为 peer_bot。
+  - `[sender:...]` 标签增加 `origin=`（缺省时输出不变）；`createRuntimeTurnAccess` 对非 human 来源抛错。
+  - `stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造的 `[sender:` / `[origin:` 标签（全角 `［`），不再剥离开头。
+  - 新增 `roomMembershipToken` 端口；Room 成员端口的实现、“Registry 未就绪的 Room 不开始协作”以及背景上下文块中 peer_bot 消息的标签留给后续条目（Room 激活 / Room Bus）。
+
+- 9891e66: Move the Workroom runtime composition (`workroom-runtime`) from `@zhin.js/agent` into `@zhin.js/workroom`; the dependency direction is now `@zhin.js/workroom` -> `@zhin.js/agent`.
+
+  - Workroom exports were removed from `@zhin.js/agent`, `@zhin.js/agent/runtime` and `zhin.js/agent`; the `zhin.js/agent` re-export surface shrank, so users who imported Workroom exports through `zhin.js/agent` must import them from `@zhin.js/workroom` instead (the export names are unchanged). `@zhin.js/agent` no longer depends on `@zhin.js/workroom`.
+  - The `Local*` assignment authority types declared by the authority provider module (`WorkroomLocalAssignmentAuthorityInput`, `WorkroomLocalAssignmentResolvedAuthority`, `WorkroomLocalAssignmentAuthorityPort`) clash with the domain contracts of the same name in a single barrel; the provider variants are exported with a `WorkroomProvider` prefix.
+  - Compatibility stubs at the old internal agent paths and the `./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js` deep exports of `@zhin.js/workroom` are removed. Use the package root.
+  - `@zhin.js/agent` gains three narrow host-integration exports: `collectAgentLoopTurnRun` and type `ZhinAgentPrivate` (`@zhin.js/agent/core`; `ZhinAgentPrivate` is an internal host-integration type, not a stable API), and `runWithAgentTurnConfiguration` (`@zhin.js/agent/turn`).
+  - `@zhin.js/cli` and `@zhin.js/a2a` declare `@zhin.js/workroom` as an optional/dev + peer dependency (like `@zhin.js/agent`), so installing the core no longer pulls in agent/workroom.
+
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [386150d]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+  - @zhin.js/core@1.1.43
+  - @zhin.js/permission@1.1.5
+  - @zhin.js/plugin-runtime@1.1.13
+
+## 1.1.7
+
+### Patch Changes
+
+- 5ab6307: 修正 JSX 的默认语义为消息排版：内置小写标签无需导入并提供属性类型，标签与属性映射为 Segment；只有显式 html / Html 子树序列化为 HTML。支持注册组件标签、原生 share 与平台 card，以及 Button onClick 回跳与返回值自动回复；同步脚手架、示例和文档。
+
+  运行实例统一分配递增、不重复的按钮降级编号，会话交错发送时允许跳号，回调有效期为一小时，发送确认前的点击可正常执行；等待文字输入不会吞掉 JSX 按钮事件。修复 Card 原生 key 载荷、带 MIME 参数的图片 data URI、注册组件递归深度和媒体/HTML 类型约束。原有裸 HTML 布局需要显式包裹 `<html>` / `<Html>`。
+
+- Updated dependencies [5ab6307]
+  - @zhin.js/core@1.1.42
+
+## 1.1.6
+
+### Patch Changes
+
+- badcc1f: Unify lazy JSX and HTML delivery across commands, inbound middleware and registered components. Remove the former JSX/template component runtimes, respect declared adapter HTML policies, and preserve author/generation ownership for automatic and explicit replies.
+
+  Add the optional @zhin.js/components library with composable JSXRenderable display props, shared themes, symmetric spacing and local style/text overrides. Include tables, lists, Markdown with highlighted code blocks, and display-only checkbox, radio, switch and button states; provide a reusable preview gallery. Update scaffolds, examples and public authoring documentation together.
+
+  Add optional official Tailwind static-utility compilation to inline styles. Consolidate raster rendering on @pixel.js/shotium, remove the Satori image toolkit, and align raster format contracts with actual PNG/JPEG/WebP results.
+
+  Reject cascade-dependent Tailwind values including unset, track the installed Tailwind version in the bundled theme provenance, and preserve both repository and upstream MIT attribution. Keep optional gallery dependency failures visible and document asynchronous Tailwind initialization.
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/core@1.1.41
+  - @zhin.js/plugin-runtime@1.1.12
+  - @zhin.js/permission@1.1.4
+
+## 1.1.5
+
+### Patch Changes
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/core@1.1.40
+
+## 1.1.4
+
+### Patch Changes
+
+- 43eda99: Unify Notice and Request payloads with their public types and runtime exports. Use camelCase fields, preserve native data under metadata, and bind canonical endpoint identity and request actions to the held generation. Remove legacy data aliases and from factories.
+
+  Keep login and lifecycle signals as independent SystemEvent payloads on system.receive, without chat conversation fields or user interaction. Update built-in adapter projections and authoring guidance.
+
+- 0de4836: Expose the canonical Plugin Runtime `Message` contract from `@zhin.js/core`, `@zhin.js/core/runtime`, and the `zhin.js` root entries, and migrate Agent, permission, and GitHub integrations to the fields middleware actually receives. Document and lock the `EndpointEvent<Notice | Request>` handler boundary so side-event payload fields match editor inference.
+- Updated dependencies [43eda99]
+- Updated dependencies [0de4836]
+  - @zhin.js/core@1.1.39
+  - @zhin.js/permission@1.1.3
+
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [5b5d270]
+- Updated dependencies [36c2eb9]
+  - @zhin.js/core@1.1.38
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/permission@1.1.2
+
+## 1.1.2
+
+### Patch Changes
+
+- c861789: Own the Agent lifecycle event contract inside the Agent package and remove the
+  classic Plugin event subscription bridges. Runtime consumers now subscribe
+  through explicit event targets instead of Plugin AsyncLocalStorage. Agent event
+  publication no longer double-writes into `Plugin.dispatch()`, and Core no longer
+  declares Agent or Schedule events in `Plugin.Lifecycle`. Replace the process-global
+  activity bus with a generation-owned Resource, and remove concrete Plugin objects
+  from ZhinAgent and its tool security path.
+- cd54131: Remove the deleted `usePlugin`, `getPlugin`, and host-root registry signatures
+  from the public runtime instead of retaining throwing or no-op compatibility
+  exports. Remove the module-global `registerAIHook` compatibility registry;
+  Agent hooks now belong to generation-owned resources and canonical stream events.
+- a9e4a40: Derive Command user routes only from explicit `commands/**/*/index.ts(x)` entry paths instead of prepending the plugin owner. Child plugins can now publish top-level static or dynamic commands, while duplicate routes across owners fail during generation construction. Adapter endpoint commands move to explicit paths such as `commands/qq/endpoint/list/index.ts` and are invoked as `qq endpoint list`.
+- 5855db7: Decouple canonical Message, Side Event, and middleware contracts from the classic Adapter class registry. Adapter identity now follows the Plugin Runtime string contract, and the unused `RegisteredAdapters`, adapter-message inference, and classic Endpoint config aliases are removed.
+- 8740059: Standardize TypeScript capabilities on named module directories such as `commands/foo/index.ts`, `middlewares/audit/index.ts`, `handlers/message-receive/index.ts`, `pages/workroom/index.tsx`, and `mcps/filesystem/index.ts`. Only the fixed `index` entry is discovered; sibling files remain private helpers.
+
+  Command route segments come from directories, while `[name]`, `[[name]]`, `[...name]`, and `[[...name]]` directories declare dynamic parameters. Plugin owners do not enter the route unless their config explicitly sets `commandNamespace`; Endpoint `commandPrefix` remains platform-owned and defaults to an empty string.
+
+  Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
+
+  Make Tool ownership and progressive disclosure explicit across all four supported locations: plugin-public `tools/`, Agent-private `agents/<name>/tools/`, Skill-private `skills/<name>/tools/`, and Agent-Skill-private `agents/<name>/skills/<name>/tools/`. Move adapter and group-suite operations that require domain instructions into their owning Skills so `load_skill` is the only path that unlocks their schemas.
+
+  Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, schedules use `schedules/<name>/index.ts` or `plugin.ts` injection, MCP connections use `mcps/<name>/index.ts`, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.
+
+- 9110ab8: Move optional Speech loading and pipeline ownership into the CLI composition root. Agent media handling now depends on an explicitly injected `AudioTranscriptionPort`; Core no longer exposes a process-global Speech loader, and Logger no longer exposes the process-global warn-once registry.
+- b853dba: Remove process-global ScheduleEngine and Scheduler getters and setters. Each assistant ScheduleJobEngine now owns and disposes an isolated scheduler, preventing cross-runtime job collisions and stale timers.
+- f4387ef: Publish `generate_image` as a generation-owned native Tool Feature for both main and subagent turns. Provider lookup and image defaults now stay with the Host-owned `AIService`, execution follows the canonical `ToolIndex` and `TurnToolRuntime` path, and the detached class-based implementation is removed.
+- 5a7a7f7: Remove the duplicate classic interactive handler registry and process-global keyboard fallback store. `ImRuntime` now owns one encapsulated interactive router whose handlers and fallback mappings are isolated by runtime instance, generation, and conversation.
+- 75920c4: Replace the process-global LLM provider, transport, live-model resolver, and language-model caches with owner-scoped `LlmApiRuntime` instances. Agent loops and compaction now require an explicit completion port; AIService, ZhinAgent, subagents, deferred workers, and the CLI composition root retain and inject their own runtime. Remove the global registration, lookup, resolver, cache-reset, and test-reset APIs.
+- 5c1ea6c: Replace the process-global Owner approval helpers with `OwnerApprovalRuntime`, owned by each `ZhinAgent` and injected into command handling and exec policy evaluation. Remove classic `Plugin` lookup wrappers, the unreachable pending-approval map and shorthand, and its misleading stability metric.
+
+  Split strict V2 persistence into a private store that validates complete documents and writes atomically. V1 files are rejected without online migration or rewriting; retained approvals must be recreated explicitly.
+
+- cd4f240: Replace the detached class-based `knowledge_search` implementation with a generation-owned Tool Feature backed by the explicit `KnowledgeIndex` contract and encapsulated `MarkdownKnowledgeIndex`. The CLI publishes it to main and subagent turns only when `ai.knowledge.baseDir` is explicitly configured inside the project root. Knowledge indexing is bounded, abort-aware, deterministic, and shared by both execution paths.
+- 1cb1163: Remove the unused process-global `Adapter.Registry`, `Adapter.register`, and `Adapter.Factory` APIs. Adapter definitions and live instances are now discovered and owned only by the current generation's `AdapterIndex`.
+- be3061e: Remove the classic Core `Adapter` class, Core `Endpoint` compatibility type, capability WeakMap, and their connection and lifecycle helpers. Platform integrations now have one model: `defineAdapter`, `Endpoint<TClient>`, and the current generation's `AdapterIndex` from `zhin.js/adapter`.
+- 98dbc85: Remove classic `*.tool.md` and standalone Skill directory discovery from the Agent runtime. Tools now enter through Plugin Runtime `tools/<name>/index.ts` features, Skills use `skills/<name>/SKILL.md`, and Group Suite keeps its database and transient state inside its owning plugin runtime.
+- f19d598: Remove the remaining classic Agent Tool rail and the unmounted `install_skill` and retired `activate_skill` protocols. Skill loading now uses the polymorphic `SkillInstructionSource` contract and typed read results, `spawn_task` owns its explicit turn-bound definition, and Web, file, orchestration, spawn, and Skill modules replace the former catch-all `builtin` directory. Remove the unused ToolSelection collector and its compatibility exports so the generation Tool catalog remains the only production selection path.
+- ba0ba3c: Remove the unused classic `createBuiltinTools()` aggregate and the duplicate class-based file, web-fetch, and TODO Tool implementations. These capabilities are now exposed only as generation-owned `@zhin.js/tool` definitions and executed through `ToolIndex` and `TurnToolRuntime`.
+- 75f8332: Remove the classic `MessageCommand` and `CommandFeature` runtime, its Plugin extension, legacy Endpoint command registration, and the command branch in the classic dispatcher. Commands now have one execution model: `defineCommand` definitions projected into the generation-owned `CommandIndex`.
+- 81935e2: Remove the unused classic `ComponentFeature` registry and `Plugin.addComponent` extension. Component definitions are discovered and projected by the generation-owned Component Feature, while Core keeps only the message and JSX rendering primitives it owns.
+- f9ed01b: Remove the unmounted classic Config and Schema Feature registries, schema-driven Endpoint provisioning service, and their service-locator based Adapter hooks. Runtime configuration now has one generation-owned authority through `ConfigComposer`, `ConfigView`, and `primaryConfigToken`; adapter endpoint configuration remains owned by `@zhin.js/adapter` and its explicit command surface.
+- ac0ab50: Remove the closed classic Core Plugin runtime, its duplicate dispatcher and inbound pipeline, and the public types that only described those dead paths. Handler authoring now derives canonical IM event types directly from the generation-owned Runtime contract.
+- 5140ce1: Remove the unmounted classic Database Feature, its `defineModel` extension, and the process-global post-start migration hook. Database tables and lifecycle now have one authority through the generation-owned Database Host. Also remove the inactive online `bot_id` compatibility migration; supported schemas must use `endpoint_id` directly.
+- 522d75f: Remove the classic `Plugin.adapters` directory and `Plugin.injectAdapter()` service-locator helper. Live Endpoint discovery now belongs exclusively to the current generation's `AdapterIndex`.
+- a7611b3: Remove the unmounted classic `ProcessAdapter`, `ProcessEndpoint`, and process stdin runtime helpers. Local interaction is owned by the Sandbox Adapter and CLI Host, so Core no longer exposes a second process-global transport path.
+- 8823044: Remove the disconnected classic Rich Segment class hierarchy, mutable registry, renderer policies, optional-peer loaders, and adapter contract facade. `segment.html`, `segment.markdown`, `segment.qrcode`, and `segment.tts` now create canonical message segments directly; Plugin Runtime's generation-owned outbound normalization remains the sole rendering and media-negotiation path.
+- 379439b: Remove the unmounted classic Core `ToolFeature` and `SkillFeature` registries and the unused Agent bridge that copied them into a mutable resource hub. Tool and Skill authority now comes only from generation-owned Feature projections consumed by Plugin Runtime `CapabilityIngress`; Core retains only the stateless IM access predicate used by the current path.
+- 11c9352: Remove dead deprecated aliases from Core and Agent, including legacy Tool and outbound segment types, the old interactive segment helper, duplicate Session and Schedule names, obsolete log formatters, and the process-global Task Executor drain shim. Current APIs now expose one name and one ownership model for each behavior.
+- 4bc3d3c: Remove the unused IM-specific session store and its Agent injection slot. The persistent and in-memory implementations now share `AgentSessionRepository` as the single origin-neutral session lifecycle contract, and generated epoch IDs no longer depend on process-global counters.
+- 6012e3c: Remove the detached `analyze_media` Tool that reported images as model-ready without injecting them into a model turn. Inbound images now use the canonical media pipeline directly: vision-capable providers receive native image input, while unsupported providers report that limitation explicitly. File tools no longer direct callers to a nonexistent analysis path.
+- 31b42a8: Remove the latest-generation store API and implicit module-global runtime access. Generation-owned state is now provided as snapshot resources and resolved from each command, middleware, component, tool, or scheduled operation's capability context.
+
+  RSS, content moderation, and music now expose owner-scoped runtime tokens. The Agent security, prompt, continuation, typing, anomaly, audit, and sandbox modules require explicit instances instead of selecting a process-global current generation.
+
+- cb61227: Remove the implicit classic `web_search` Tool from standalone `AIService` agents. Standalone capabilities are now explicit through per-agent `tools` or the service-owned registration boundary, while the generation runtime remains the sole owner of native Web Tool Features. Move shared Web search infrastructure into the cohesive `web` module and reject ambiguous duplicate registrations.
+- 135ac91: Remove the unmounted classic Schedule, AgentPreset, and MessageFilter Feature registries. Plugin Runtime scheduling now has one owner-scoped authority through `scheduleHostToken`, Agent presets have one authority in the Agent Feature and Resource Hub, and message admission remains in the active middleware and guardrail pipeline.
+- 140cf0f: Remove the legacy composed side-event mapping aliases in favor of structured `mapNoticeParts` and `mapRequestParts`. Delete unmounted Agent default hook, tool, and subagent modules that exposed no runtime behavior.
+- 203ad34: Remove process-global expression and proxy caches from Kernel evaluation. Every evaluation now compiles independently and owns its proxy identity map for the lifetime of one sandbox, so unrelated runtimes cannot share hidden evaluator state.
+- e6c5113: Remove the unused Kernel PluginBase, mutable Feature registry, string-based dependency injection, and prototype extension registry. Plugin lifecycle now belongs solely to the generation-owned Plugin Runtime, while capability discovery and projection belong to Feature Kit.
+- e0f6478: Remove plugin.yml build detection, package-name heuristics, and the unused Core PluginManifest type. Smart builds now recognize plugins through the canonical package.json zhin manifest and applications through an explicit zhin.js dependency.
+- adecba9: Remove process-global prompt, instruction, bootstrap, and Git status caches. Context readers now observe the current workspace on every request without cross-owner state or cache-reset APIs.
+- 019f5ff: Make the generation `ToolIndex` the sole Agent Tool catalog. Remove the empty ResourceHub Tool registry, its builder and Capability Seam adapter, and stop merging its empty projection into Console introspection. Agent support resources now own only Skill, SubAgent, MCP, and Hook state; plugins register Tools through `tools/<name>/index.ts` or `context.addTool()`.
+- 77d5a46: Remove the retired `tool_search` and `run_deferred_task` orchestration protocol from the Agent and CLI. `discover`, `load_tool`, and `spawn_task` are now the only documented and executable orchestration vocabulary; obsolete config migration, result formatting, prompt redaction, reserved names, subagent filtering, and the detached class-based tool are removed. Config repair now preserves canonical `ai.agent` fields while removing retired model fields.
+- 659b61d: Require the current Agent session database models during generation activation and remove automatic SQLite schema probing, legacy-column deletion, and historical session-tree backfills. Database mode now rejects incomplete schema registration instead of silently retaining in-memory session state.
+- Updated dependencies [c861789]
+- Updated dependencies [1414ccb]
+- Updated dependencies [743d470]
+- Updated dependencies [62dee52]
+- Updated dependencies [13f7301]
+- Updated dependencies [cd54131]
+- Updated dependencies [5855db7]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [ec921d2]
+- Updated dependencies [9110ab8]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [b853dba]
+- Updated dependencies [e561309]
+- Updated dependencies [d4c6175]
+- Updated dependencies [7a0e1ca]
+- Updated dependencies [103b5d3]
+- Updated dependencies [5a7a7f7]
+- Updated dependencies [b076eae]
+- Updated dependencies [4380cf9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [1cb1163]
+- Updated dependencies [be3061e]
+- Updated dependencies [75f8332]
+- Updated dependencies [81935e2]
+- Updated dependencies [f9ed01b]
+- Updated dependencies [ac0ab50]
+- Updated dependencies [5140ce1]
+- Updated dependencies [522d75f]
+- Updated dependencies [a7611b3]
+- Updated dependencies [8823044]
+- Updated dependencies [379439b]
+- Updated dependencies [11c9352]
+- Updated dependencies [31b42a8]
+- Updated dependencies [135ac91]
+- Updated dependencies [140cf0f]
+- Updated dependencies [251e4d2]
+- Updated dependencies [203ad34]
+- Updated dependencies [e6c5113]
+- Updated dependencies [e0f6478]
+- Updated dependencies [65d0391]
+- Updated dependencies [5c3858e]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/core@1.1.37
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/logger@1.1.1
+  - @zhin.js/permission@1.1.1
+
+## 1.1.1
+
+### Patch Changes
+
+- @zhin.js/core@1.1.36
+
+## 1.1.0
+
+### Minor Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+
+### Patch Changes
+
+- Updated dependencies [1fc6270]
+  - @zhin.js/core@1.1.35
+  - @zhin.js/logger@1.1.0
+  - @zhin.js/permission@1.1.0
+  - @zhin.js/plugin-runtime@1.1.9
+
+## 7.0.1
+
+### Patch Changes
+
+- Updated dependencies [f7ee28d]
+  - @zhin.js/runtime@1.0.19
+  - @zhin.js/core@1.5.16
+  - @zhin.js/agent@1.2.1
+  - @zhin.js/html-renderer@3.0.16
+  - @zhin.js/speech@3.0.16
+
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [12325e1]
+- Updated dependencies [d19e976]
+  - @zhin.js/agent@1.2.0
+
+## 6.0.15
+
+### Patch Changes
+
+- Updated dependencies [a5ee497]
+- Updated dependencies [ba7e17a]
+- Updated dependencies [7108d0b]
+  - @zhin.js/agent@1.1.18
+  - @zhin.js/core@1.5.15
+  - @zhin.js/html-renderer@3.0.15
+  - @zhin.js/speech@3.0.15
+  - @zhin.js/ai@1.5.7
+
+## 6.0.14
+
+### Patch Changes
+
+- 09b14d6: Publish clearer package and authoring API documentation for generated references and editor IntelliSense.
+- 1fc78bc: Unify native platform Client access behind the literal `adapter` discriminant. Handlers infer both native events and Clients, while command, inbound/outbound middleware, and both Agent tool authoring surfaces expose the exact operation-scoped Client through a lazy `$client` getter. Definitions without `adapter` keep `$client` typed as `unknown`, and runtime dispatch rejects adapter mismatches before resolving the Client. Bundled platform tools now use this single path instead of model-provided endpoint ids and adapter-specific dependency wrappers. Every adapter registers one Client/EventMap contract, and protocol adapters including NapCat, Milky, OneBot and Satori now produce transport-independent Client objects rather than letting Endpoint instances impersonate Clients.
+- Updated dependencies [e9c6a73]
+- Updated dependencies [2719580]
+- Updated dependencies [902fa35]
+- Updated dependencies [c92286c]
+- Updated dependencies [54bfd6b]
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/agent@1.1.16
+  - @zhin.js/runtime@1.0.14
+  - @zhin.js/core@1.5.14
+  - @zhin.js/plugin-runtime@1.1.8
+  - @zhin.js/ai@1.5.7
+  - @zhin.js/logger@1.0.77
+  - @zhin.js/html-renderer@3.0.14
+  - @zhin.js/speech@3.0.14
+  - @zhin.js/permission@1.0.4
+
+## 6.0.13
+
+### Patch Changes
+
+- Updated dependencies [f2c532f]
+- Updated dependencies [3dbf990]
+  - @zhin.js/core@1.5.13
+  - @zhin.js/agent@1.1.15
+  - @zhin.js/runtime@1.0.13
+  - @zhin.js/html-renderer@3.0.13
+  - @zhin.js/speech@3.0.13
+
+## 6.0.12
+
+### Patch Changes
+
+- 974772e: Replace the user-facing `Prompt` vocabulary with the `UserInteraction` authoring surface for input, confirmation, and selection. Commands and handlers now expose `interaction`; IM Runtime exposes `createInteraction`; schema-driven endpoint collection is named `SchemaInteraction`. The old prompt-named interaction types and properties are removed rather than aliased. User interactions render through one canonical Markdown and keyboard/list presentation module shared by commands and Agent `ask_user` turns.
+
+  Extract the transport-neutral interaction contract into `@zhin.js/interaction`. A discriminated `ask()` API supports text, number, confirmation, single-select, multi-select, and typed lists with structured `title`, `description`, and `tip` content. Typed `sequence()` interactions return one result object keyed by step id, render progress, and retry invalid replies without leaking invalid values to callers.
+
+  Preserve AI Markdown and card command actions through outbound publishing. QQ delivers Markdown with native command buttons; KOOK, Discord, Telegram, DingTalk, and Lark/Feishu now declare and encode their native Markdown dialects while retaining each adapter's interaction policy. Correct QQ callback button action encoding and button style mapping.
+
+- 1312ca0: Replace the legacy mutable orchestration stack with the event-sourced Workroom Kernel.
+
+  - `@zhin.js/agent` now exposes versioned Workroom events, pure replay/decision state transitions, CAS journals, and a read-only runtime projection. The public `OrchestrationService`, mutable repositories, `AgentDispatcher`, executor/workflow APIs, remote Agent registry/poller, old orchestration tools/constants, and five-agent workflow strategy are removed.
+  - `zhin.js/agent` no longer exports the immediate-execution `runPipeline`, `runParallel`, or `route` helpers. Use `AIService.runAgent` for an ordinary one-shot model call; durable multi-Agent collaboration must enter a Workroom Plan and Assignment lifecycle.
+  - `spawn_task` is now only an ordinary chat subtask facility. It no longer accepts Run/Task identifiers, creates Runs from IM sessions, dispatches remote tasks, or writes Workroom state.
+  - `@zhin.js/ai` no longer owns IM Agent orchestration database models or the unused `ai.remoteAgents` configuration. Workroom persistence belongs to `@zhin.js/agent` as `workroom_events` or an atomic file journal.
+  - The Workroom journal backend is fixed for the process lifetime. Changing `ai.sessions.useDatabase` requires a process restart; an unavailable selected database rejects generation activation instead of falling back to another authority.
+  - The CLI exposes the read-only Project-scoped Console API at `/api/agent/workroom/runs`; the old `/api/agent/orchestration/runs` route is removed. No model-writable Workroom compatibility tools are published: future command adapters must hold an authenticated Project capability and dedicated Scheduler/Executor/Acceptance ports.
+  - The Console client now queries Workroom Runs by `projectId` and renders the replayed Task revision/attempt state. `registerOrchestrationConsole`, `OrchestrationRunsPage`, and `/console/orchestration` are removed in favor of the Workroom-named surface.
+
+  Execution completion and acceptance are separate durable facts. All writes use `append(runId, expectedSequence, events)`; no mutable Task projection can act as a second authority.
+
+- Updated dependencies [67ef8c4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [d336a3f]
+- Updated dependencies [0c82a7e]
+- Updated dependencies [b9217e4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+- Updated dependencies [63d89f9]
+- Updated dependencies [71c7cdd]
+- Updated dependencies [3cca0ea]
+- Updated dependencies [1312ca0]
+- Updated dependencies [985fa22]
+- Updated dependencies [04b861d]
+- Updated dependencies [a23d544]
+- Updated dependencies [8cddabf]
+- Updated dependencies [dbe5081]
+  - @zhin.js/plugin-runtime@1.1.7
+  - @zhin.js/runtime@1.0.13
+  - @zhin.js/core@1.5.12
+  - @zhin.js/agent@1.1.14
+  - @zhin.js/ai@1.5.6
+  - @zhin.js/permission@1.0.3
+  - @zhin.js/html-renderer@3.0.12
+  - @zhin.js/speech@3.0.12
+
+## 6.0.11
+
+### Patch Changes
+
+- @zhin.js/core@1.5.11
+- @zhin.js/agent@1.1.13
+- @zhin.js/html-renderer@3.0.11
+- @zhin.js/speech@3.0.11
+
+## 6.0.10
+
+### Patch Changes
+
+- d3920e9: Extract the `handlers/` convention into a dedicated Feature package `@zhin.js/handler`, and mount it as a platform Stable Feature on `@zhin.js/core` (inherited by Roots via `platformFeatures` / `zhin runtime start`).
+
+  Also add the `zhin.js/middleware` facade re-export so Stable Feature authoring is consistent with `zhin.js/command` / `adapter` / `component` / `handler`.
+
+  `@zhin.js/feature-kit` is now kit-only: handler authoring, `HandlerIndex`, and the Feature provider entry are removed. Do not list `@zhin.js/feature-kit` in `zhin.features`.
+
+  **Authoring:** apps and plugins that depend on `zhin.js` should import `definePlugin` from the main entry (`zhin.js`) and other `define*` from facade subpaths (`zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component`) — do not separately install `@zhin.js/plugin-runtime` or the `@zhin.js/*` Feature implementation packages. Workspace plugins/examples/adapters were updated accordingly (imports + deps; child plugins keep `zhin.features` mounts and peer `zhin.js`). CLI `zhin new` / migrate cutover scaffolds follow the same rule.
+
+  BREAKING CHANGE: `@zhin.js/feature-kit` no longer exports handler APIs and is no longer a `type: "feature"` package.
+
+- Updated dependencies [d3920e9]
+  - @zhin.js/core@1.5.10
+  - @zhin.js/runtime@1.0.12
+  - @zhin.js/agent@1.1.11
+  - @zhin.js/html-renderer@3.0.10
+  - @zhin.js/speech@3.0.10
+
+## 6.0.9
+
+### Patch Changes
+
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/runtime@1.0.11
+  - @zhin.js/agent@1.1.10
+  - @zhin.js/core@1.5.9
+  - @zhin.js/ai@1.5.4
+  - @zhin.js/html-renderer@3.0.9
+  - @zhin.js/speech@3.0.9
+
+## 6.0.8
+
+### Patch Changes
+
+- 8e973dc: Delete the classic Node bootstrap and its entire unreachable setup graph. `zhin.js/node`, `bootstrapNode`, classic endpoint/config/service assembly, legacy signal handling, and the duplicate database log transport are no longer published or compiled.
+
+  BREAKING CHANGE: applications must start through `zhin runtime start`; there is no compatibility stub or classic Host bootstrap subpath.
+
+- Updated dependencies [63253bb]
+- Updated dependencies [6fb24dd]
+- Updated dependencies [d162216]
+- Updated dependencies [7427818]
+- Updated dependencies [90da255]
+- Updated dependencies [953cfe1]
+- Updated dependencies [0e73866]
+  - @zhin.js/plugin-runtime@1.1.6
+  - @zhin.js/runtime@1.0.10
+  - @zhin.js/core@1.5.8
+  - @zhin.js/agent@1.1.9
+  - @zhin.js/ai@1.5.3
+  - @zhin.js/permission@1.0.2
+  - @zhin.js/html-renderer@3.0.8
+  - @zhin.js/speech@3.0.8
+
+## 6.0.7
+
+### Patch Changes
+
+- Updated dependencies [36cb1ca]
+  - @zhin.js/core@1.5.7
+  - @zhin.js/agent@1.1.8
+  - @zhin.js/html-renderer@3.0.7
+  - @zhin.js/speech@3.0.7
+
+## 6.0.6
+
+### Patch Changes
+
+- Updated dependencies [7945544]
+  - @zhin.js/agent@1.1.7
+  - @zhin.js/core@1.5.6
+  - @zhin.js/runtime@1.0.9
+  - @zhin.js/html-renderer@3.0.6
+  - @zhin.js/speech@3.0.6
+
+## 6.0.5
+
+### Patch Changes
+
+- @zhin.js/core@1.5.5
+- @zhin.js/runtime@1.0.9
+- @zhin.js/agent@1.1.6
+- @zhin.js/html-renderer@3.0.5
+- @zhin.js/speech@3.0.5
+
+## 6.0.4
+
+### Patch Changes
+
+- ba08a2f: refactor(zhin): replace PermissionFeature with createPermissionHost
+
+  Zhin entry point now creates a standalone PermissionHost and passes it to
+  the message dispatcher, removing the legacy PermissionFeature registration.
+  Command permit checks are unified through the new permission system.
+
+- 92b0dd7: refactor: complete plugin dual-track elimination (Slices 3–4)
+
+  Remove all `getHostRootPlugin()` call sites (30+ occurrences across security,
+  collaboration, media, memory, prompt, and orchestrator modules); dead branches
+  collapse to defaults/fallbacks. Expand harness to ban `getHostRootPlugin()` in
+  all packages.
+
+  Stub `initAgentModule()` and `registerAI()` as throwing — the Plugin Runtime
+  (`zhin runtime start`) is the sole entry path; `basic/cli` assembles the Agent
+  stack directly.
+
+  Mark `PluginBase.provide()` / `.inject()` as `@deprecated @internal`; the
+  service bus is superseded by Scope + Token (introduced in Slice 2).
+
+  Simplify `host-plugin-registry.ts` to minimal no-op signatures. Move
+  `AIServiceRefs` type to `internal/` so live collaboration/orchestrator code
+  no longer depends on dead `init/` modules.
+
+  Clean `setHostRootPlugin` / `getHostRootPlugin` mocks from 8 test files;
+  update agent README to remove `initAgentModule` usage examples.
+
+- Updated dependencies [6f9c366]
+- Updated dependencies [373a56b]
+- Updated dependencies [0de46a8]
+- Updated dependencies [c106ecc]
+- Updated dependencies [b0f37ae]
+- Updated dependencies [c50aca3]
+- Updated dependencies [b08f7fe]
+- Updated dependencies [daffd4c]
+- Updated dependencies [36c7400]
+- Updated dependencies [a9fa72e]
+- Updated dependencies [c8de3ef]
+- Updated dependencies [60f0fc8]
+- Updated dependencies [574c990]
+- Updated dependencies [d096f16]
+- Updated dependencies [3f29623]
+- Updated dependencies [2916852]
+- Updated dependencies [d047869]
+- Updated dependencies [162fa34]
+- Updated dependencies [e62561e]
+- Updated dependencies [3eeeb46]
+- Updated dependencies [85d0f82]
+- Updated dependencies [61bfc1c]
+- Updated dependencies [04bad47]
+- Updated dependencies [e40b048]
+- Updated dependencies [5a5b1bb]
+- Updated dependencies [f1708c3]
+- Updated dependencies [d254a81]
+- Updated dependencies [7123c47]
+- Updated dependencies [05befc1]
+- Updated dependencies [0663b6a]
+- Updated dependencies [f28f9b3]
+- Updated dependencies [9f340f7]
+- Updated dependencies [e53444f]
+- Updated dependencies [5eedd26]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [f919b6f]
+- Updated dependencies [098e411]
+- Updated dependencies [e1b7c01]
+- Updated dependencies [9b94f87]
+- Updated dependencies [a7df753]
+  - @zhin.js/agent@1.1.5
+  - @zhin.js/permission@1.0.1
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/core@1.5.4
+  - @zhin.js/ai@1.5.2
+  - @zhin.js/runtime@1.0.9
+  - @zhin.js/html-renderer@3.0.4
+  - @zhin.js/speech@3.0.4
+
+## 6.0.3
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/agent@1.1.4
+  - @zhin.js/ai@1.5.1
+  - @zhin.js/core@1.5.3
+  - @zhin.js/plugin-runtime@1.1.4
+  - @zhin.js/runtime@1.0.8
+  - @zhin.js/html-renderer@3.0.3
+  - @zhin.js/speech@3.0.3
+
+## 6.0.2
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+- Updated dependencies [2e41ad5]
+  - @zhin.js/core@1.5.2
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/agent@1.1.3
+  - @zhin.js/html-renderer@3.0.2
+  - @zhin.js/speech@3.0.2
+  - @zhin.js/runtime@1.0.7
+
+## 6.0.1
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/agent@1.1.1
+  - @zhin.js/core@1.5.1
+  - @zhin.js/runtime@1.0.6
+  - @zhin.js/html-renderer@3.0.1
+  - @zhin.js/speech@3.0.1
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [1f23bf6]
+- Updated dependencies [4fbff5d]
+- Updated dependencies [5b94d9c]
+  - @zhin.js/ai@1.5.0
+  - @zhin.js/core@1.5.0
+  - @zhin.js/agent@1.1.0
+  - @zhin.js/runtime@1.0.5
+  - @zhin.js/html-renderer@3.0.0
+  - @zhin.js/speech@3.0.0
+
+## 5.0.3
+
+### Patch Changes
+
+- Updated dependencies [45b3256]
+  - @zhin.js/core@1.4.3
+  - @zhin.js/runtime@1.0.5
+  - @zhin.js/agent@1.0.9
+  - @zhin.js/html-renderer@2.0.3
+  - @zhin.js/speech@2.0.3
+
+## 5.0.2
+
+### Patch Changes
+
+- Updated dependencies [d5cd4aa]
+  - @zhin.js/runtime@1.0.4
+  - @zhin.js/core@1.4.2
+  - @zhin.js/agent@1.0.7
+  - @zhin.js/html-renderer@2.0.2
+  - @zhin.js/speech@2.0.2
+
+## 5.0.1
+
+### Patch Changes
+
+- 5691aba: 第二轮全量审计修复批（8 面 ~60 bug）：
+
+  - **安全**：email 附件路径穿越修复（basename + downloadPath 约束）；lark/telegram/satori webhook 鉴权（缺密钥告警、timingSafeEqual、±5min 时效窗、chat_type 修正）；onebot wss/webhook 缺 token 告警；qq webhook 改原始字节验签；renderJsx/JSX 转义注入修复；console runtime token 401 死循环。
+  - **P0 功能**：sandbox 多 endpoint 解析 + WS 路径隔离；short-url expand（undici opaqueredirect）改 follow；AI 压缩摘要失败不再静默丢历史（熔断恢复生效）；console-ui 实时推送事件名归一化 + IndexedDB schema 对齐；process-monitor 热重载不再误判崩溃。
+  - **生命周期**：email IMAP 断线重连 + 在飞锁；onebot11/12 start 失败清理；line replyToken TTL + push 兜底；wechat-mp token 过期重试 + MsgId 去重；weixin-ilink buf 推进/防抖写盘/媒体 TTL/QR abort；satori PONG 看门狗；退避自毁修复。
+  - **游戏**：text-adventure 终局 restart 复活 + requires 服务端校验；tic-tac-toe PvP 占用/restart/队列清理/TTL；idiom-chain/word-riddle 闲聊不扣失误；别名中间件不劫持普通聊天。
+  - **共享库**：schema falsy 默认值/date/tuple/union 修复；database parseCondition Date/未知操作符、sqlite TEXT 往返、query 分派、belongsToMany 方言、migration dry-run；schedule DST 回拨死循环、重复 id 去重、flush 串行化；game-kit fallback 编号/onboarding 提示/尾缀边界/活引用拷贝。
+  - **渲染语音**：fetch 全部超时 + 渲染并发闸；sanitizeHtml form 保文本；STT 扩展名映射 + 删临时文件；TTS 未知 provider 报错；emojiCache LRU 负缓存/fontCache style/clearFonts 恢复；register 错误分类收窄。
+
+- 43485a9: 架构对齐修复（platformFeatures 继承落地）：
+
+  - `zhin.js` 主包 `zhin.plugins` 清空：host-router/host-api 是 legacy 插件包（`usePlugin` 入口），经 graph 加载会崩溃；新 Runtime 的 Console 由 cli 装配，门面保持纯 re-export。
+  - `@zhin.js/runtime` package-resolver：`declaredDependency` 接受 `peerDependencies`（optional peer 是合法声明，未安装时由 `optional` 引用容错）。
+  - `@zhin.js/cli` PackageCutover 检查器适配继承形态：依赖 zhin.js/core 时 manifest `features` 可省略 command/component/middleware（platformFeatures 继承），不再误报 blocked。
+  - 文档：新增 `docs/architecture/package-topology.md`（包结构依赖图与各层 zhin 字段配置指南）。
+
+- 3e925d0: 删除 legacy 插件包 `@zhin.js/host-api` 与 `@zhin.js/host-router`（legacy `usePlugin` 插件栈下线）：
+
+  - **包删除**：`@zhin.js/host-api`、`@zhin.js/host-router` 从仓库移除，后续版本不再发布。Console / HTTP Host 由 `@zhin.js/cli`（composition root）用 `@zhin.js/host-http` + `@zhin.js/pagemanager` 自动装配，用户无需、也不能再安装这两个插件。
+  - **zhin.js**：移除对 host-api / host-router 的 optional peer 依赖；`shutdown.ts` 不再动态导入 host-api 的 `stopSseHub`（SSE Hub 生命周期由 CLI 装配层管理）。
+  - **@zhin.js/mcp / @zhin.js/a2a**：移除对 host-router 的 peer 依赖；legacy `usePlugin` 入口改为本地结构类型（运行时走 `./runtime` 子路径，由 CLI 经 host-http 装配，行为不变）。
+  - **@zhin.js/cli**：`config check` / `doctor` / `setup` 不再检查或写入 host 插件；全局实例（~/.zhin）脚手架不再声明 host-api / host-router。
+  - **@zhin.js/scaffold-wizard**：移除 `CONSOLE_HOST_PLUGINS` 导出与 `ConsoleConfigDiagnosis.missingHostPlugins` 字段；`zhin-stack-deps` 不再含 host 包；`stack-versions.generated.json` 同步移除。
+  - **@zhin.js/agent**：稳定性监控移除 host-api SSE 订阅数采集（`collectStabilityMetrics` 不再支持 `includeSse`，快照不再有 `sseSubscribers`）。
+
+- Updated dependencies [cdf64e7]
+- Updated dependencies [2d0a159]
+- Updated dependencies [5691aba]
+- Updated dependencies [078e3f7]
+- Updated dependencies [43485a9]
+- Updated dependencies [f0ec5ab]
+- Updated dependencies [8c7d03d]
+- Updated dependencies [3e925d0]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [6cb6152]
+  - @zhin.js/runtime@1.0.3
+  - @zhin.js/agent@1.0.6
+  - @zhin.js/plugin-runtime@1.1.1
+  - @zhin.js/ai@1.4.6
+  - @zhin.js/html-renderer@2.0.1
+  - @zhin.js/speech@2.0.1
+  - @zhin.js/core@1.4.1
+
+## 5.0.0
+
+### Patch Changes
+
+- Updated dependencies [7db69c1]
+- Updated dependencies [e5c84ed]
+- Updated dependencies [3ea84a0]
+- Updated dependencies [1ddcd70]
+- Updated dependencies [ac9da66]
+  - @zhin.js/core@1.4.0
+  - @zhin.js/host-router@3.0.0
+  - @zhin.js/agent@1.0.5
+  - @zhin.js/host-api@3.0.0
+  - @zhin.js/html-renderer@2.0.0
+  - @zhin.js/speech@2.0.0
+  - @zhin.js/runtime@1.0.2
+
+## 4.1.3
+
+### Patch Changes
+
+- cc5c94d: 约定式插件运行时迁移（breaking）：插件与适配器由 `usePlugin()` / `extends Adapter` 迁移为 `definePlugin` / `defineAdapter` + `plugin.ts` + 约定目录（`adapters/`、`commands/`、`components/`、`tools/` 等）。
+
+  - 新增约定式运行时包：`@zhin.js/plugin-runtime`、`@zhin.js/adapter`、`@zhin.js/runtime`、`@zhin.js/host-http`（首版 1.0.0 走 init-publish，不在本 changeset 内 bump）。
+  - 全部 20 个平台适配器改为约定式 `defineAdapter`，旧 `usePlugin` / `extends Adapter` / `segment-mapper` 生产入口已删除；onebot11 反向 WSS、onebot12 webhook/wss、milky sse/webhook/wss、satori webhook、kook webhook、qq webhook/middleware 等 slice 1 推迟的连接模式已补齐。
+  - 游戏 / 工具 / 服务插件同步迁移到约定目录结构。
+  - CLI 增加 plugin-runtime host installer（http/database/outbound/schedule/console 等）。
+
+  后续加固（同批）：
+
+  - CLI：`zhin runtime start --daemon`（pidfile/崩溃拉起/风暴保护），orphan watchdog 防僵尸进程；legacy `zhin dev` / `zhin start` 已移除（含 `zhin restart`），`zhin stop` 兼容新 daemon。
+  - 安全：builtin 工具统一走 `security/policy-facade.ts` 的 `runToolPolicies`（声明式策略表，deny 优先）；审计日志 close flush + 背压队列；`splitCompoundCommand` 引号感知、`extractCommandName` 去引号堵绕过。
+  - 日志：Logger 双堆栈修复、本地时区、`getLogger` 挂树（`setLevel` 递归生效）、第三方库（log4js/discord）桥接、启动人读总结。
+  - 结构：`plugins/games/shared` 迁为 `packages/game-kit`（`@zhin.js/game-kit`）；死目录 `plugins/adapters/common` 删除。
+  - 脚手架：`create-zhin-app` / `zhin new` / scaffold-wizard 生成物改为 Plugin Runtime 形态（minimal-bot 同构，新配置格式）。
+  - Console：endpoint.list 真实名称与 phase、schema:get-all 按 instanceKey 映射、db:\* 接 DatabaseHost。
+
+  注：按仓库发布惯例（见 1bb345dd2），本次 breaking 迁移统一使用 patch，避免 zhin.js 5.0 级联。
+
+- Updated dependencies [16ec4e8]
+- Updated dependencies [cc5c94d]
+- Updated dependencies [447f3e2]
+  - @zhin.js/core@1.3.5
+  - @zhin.js/agent@1.0.4
+  - @zhin.js/logger@1.0.75
+  - @zhin.js/host-api@2.0.6
+  - @zhin.js/host-router@2.0.4
+  - @zhin.js/html-renderer@1.0.4
+  - @zhin.js/speech@1.0.4
+  - @zhin.js/kernel@1.0.4
+  - @zhin.js/runtime@1.0.1
+
+## 4.1.2
+
+### Patch Changes
+
+- 872c583: Slack 适配器 Phase 1/2：mrkdwn 出站、长消息切分、斜杠/按钮 ephemeral 反馈、入站 mrkdwn→Markdown、editMessage 对齐 core。
+
+  Logger 表格日志与 string-width 列宽；Agent AI Handler 框线表格与 introspection/MCP 导出；Core side-event 归一化；Schedule 时区规划；多适配器 side-event 与 API surface 更新。
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/agent@1.0.3
+  - @zhin.js/core@1.3.4
+  - @zhin.js/host-api@2.0.5
+  - @zhin.js/host-router@2.0.3
+  - @zhin.js/kernel@1.0.3
+  - @zhin.js/logger@1.0.74
+  - @zhin.js/html-renderer@1.0.3
+  - @zhin.js/speech@1.0.3
+
+## 4.1.1
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- 7700903: fix: 游戏强化
+- Updated dependencies [5b08052]
+- Updated dependencies [5cc9c03]
+- Updated dependencies [36d6db2]
+- Updated dependencies [b9b3881]
+- Updated dependencies [7700903]
+  - @zhin.js/kernel@1.0.2
+  - @zhin.js/agent@1.0.2
+  - @zhin.js/core@1.3.3
+  - @zhin.js/logger@1.0.73
+  - @zhin.js/schema@1.0.71
+  - @zhin.js/host-api@2.0.4
+  - @zhin.js/host-router@2.0.2
+  - @zhin.js/html-renderer@1.0.2
+  - @zhin.js/speech@1.0.2
+
+## 4.1.0
+
+### Minor Changes
+
+- c4575c9: Add optional peer `@zhin.js/speech`: inbound STT (`audio.strategy: transcribe` default), outbound TTS (`segment.tts` + `voice_stt`/`voice_tts` tools), TTS providers edge/openai/azure/custom. Remove `@zhin.js/plugin-voice`; use `speech:` config key instead of `voice:`.
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/host-router@2.0.1
+  - @zhin.js/host-api@2.0.3
+  - @zhin.js/agent@1.0.1
+  - @zhin.js/core@1.3.2
+  - @zhin.js/logger@1.0.72
+  - @zhin.js/speech@1.0.1
+  - @zhin.js/html-renderer@1.0.1
+  - @zhin.js/kernel@1.0.1
+
+## 4.0.1
+
+### Patch Changes
+
+- ae5239c: fix: 核心包瘦身
+- Updated dependencies [609da24]
+- Updated dependencies [7dfafc2]
+- Updated dependencies [93e58d9]
+- Updated dependencies [ae5239c]
+  - @zhin.js/agent@0.3.1
+  - @zhin.js/core@1.3.1
+  - @zhin.js/host-api@2.0.1
+  - @zhin.js/host-router@2.0.0
+
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [db38da4]
+  - @zhin.js/ai@1.3.0
+  - @zhin.js/agent@0.3.0
+  - @zhin.js/core@1.3.0
+  - @zhin.js/host-api@2.0.0
+  - @zhin.js/host-router@2.0.0
+
+## 2.0.1
+
+### Patch Changes
+
+- d8def69: fix: 性能优化
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - @zhin.js/host-router@1.0.1
+  - @zhin.js/host-api@1.0.1
+  - @zhin.js/agent@0.2.1
+  - @zhin.js/core@1.2.1
+  - @zhin.js/ai@1.2.1
+  - @zhin.js/logger@0.1.71
+  - @zhin.js/kernel@0.1.1
+
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [65f4b0a]
+- Updated dependencies [e62c23a]
+  - @zhin.js/kernel@0.1.0
+  - @zhin.js/core@1.2.0
+  - @zhin.js/ai@1.2.0
+  - @zhin.js/agent@0.2.0
+  - @zhin.js/host-api@1.0.0
+  - @zhin.js/host-router@1.0.0
+
+## 1.0.92
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+- Updated dependencies [d8547d2]
+  - @zhin.js/kernel@0.0.50
+  - @zhin.js/agent@0.1.31
+  - @zhin.js/core@1.1.33
+  - @zhin.js/ai@1.1.31
+  - @zhin.js/host-router@0.0.3
+
+## 1.0.91
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/kernel@0.0.49
+  - @zhin.js/host-api@0.0.4
+  - @zhin.js/agent@0.1.30
+  - @zhin.js/core@1.1.32
+  - @zhin.js/ai@1.1.30
+  - @zhin.js/host-router@0.0.3
+
+## 1.0.90
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+- Updated dependencies [a26e496]
+- Updated dependencies [c8f8207]
+  - @zhin.js/logger@0.1.70
+  - @zhin.js/schema@1.0.70
+  - @zhin.js/host-api@0.0.3
+  - @zhin.js/host-router@0.0.3
+  - @zhin.js/agent@0.1.29
+  - @zhin.js/ai@1.1.29
+  - @zhin.js/core@1.1.31
+  - @zhin.js/kernel@0.0.48
+
+## 1.0.89
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - @zhin.js/host-router@0.0.2
+  - @zhin.js/kernel@0.0.47
+  - @zhin.js/agent@0.1.28
+  - @zhin.js/core@1.1.30
+  - @zhin.js/ai@1.1.28
+  - @zhin.js/host-api@0.0.2
+
+## 1.0.88
+
+### Patch Changes
+
+- ccb6e24: fix: zhin.js 瘦身
+
+## 1.0.87
+
+### Patch Changes
+
+- Updated dependencies [90d9efd]
+  - @zhin.js/logger@0.1.69
+  - @zhin.js/schema@1.0.69
+  - @zhin.js/core@1.1.29
+  - @zhin.js/agent@0.1.27
+  - @zhin.js/ai@1.1.27
+  - @zhin.js/kernel@0.0.46
+  - @zhin.js/host-api@0.0.1
+  - @zhin.js/host-router@0.0.1
+
+## 1.0.86
+
+### Patch Changes
+
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- Updated dependencies [6295cbd]
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/agent@0.1.26
+  - @zhin.js/core@1.1.28
+  - @zhin.js/logger@0.1.68
+  - @zhin.js/schema@1.0.68
+  - @zhin.js/ai@1.1.26
+  - @zhin.js/host-router-host@0.1.4
+  - @zhin.js/kernel@0.0.45
+  - @zhin.js/queue-runtime@0.0.4
+  - @zhin.js/storage-port@0.0.2
+  - @zhin.js/adapter-sandbox@3.0.5
+  - @zhin.js/console@3.0.5
+  - @zhin.js/host-router@1.0.79
+
+## 1.0.85
+
+### Patch Changes
+
+- Updated dependencies [b0e0a71]
+  - @zhin.js/agent@0.1.25
+  - @zhin.js/logger@0.1.67
+  - @zhin.js/schema@1.0.67
+  - @zhin.js/adapter-sandbox@3.0.4
+  - @zhin.js/console@3.0.4
+  - @zhin.js/host-router@1.0.78
+  - @zhin.js/core@1.1.27
+  - @zhin.js/ai@1.1.25
+  - @zhin.js/kernel@0.0.44
+  - @zhin.js/queue-runtime@0.0.3
+
+## 1.0.84
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+- Updated dependencies [2d24338]
+  - @zhin.js/adapter-sandbox@3.0.3
+  - @zhin.js/console@3.0.3
+  - @zhin.js/host-router-host@0.1.3
+  - @zhin.js/kernel@0.0.43
+  - @zhin.js/agent@0.1.24
+  - @zhin.js/core@1.1.26
+  - @zhin.js/logger@0.1.66
+  - @zhin.js/ai@1.1.24
+  - @zhin.js/schema@1.0.66
+  - @zhin.js/queue-runtime@0.0.2
+  - @zhin.js/storage-port@0.0.1
+  - @zhin.js/host-router@1.0.77
+
+## 1.0.83
+
+### Breaking Changes
+
+- **移除** `zhin.js/setup` 侧效入口。Node/Bun 请改用 `import { bootstrapNode } from 'zhin.js/node'`（CLI `zhin dev` / `zhin start` 已切换）。Edge（Deno Deploy、Vercel、Cloudflare Workers）请使用 `zhin.js/deno`、`zhin.js/vercel` 或 `zhin.js/cloudflare` 的 `bootstrap*()`。
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- 多运行时 bootstrap：`zhin.js/node`、`zhin.js/deno`、`zhin.js/vercel`、`zhin.js/cloudflare`；共享 `bootstrapEdgeCore`（Fetch HTTP、Console 子集、Sandbox SSE/WS）
+- Updated dependencies [775427e]
+  - @zhin.js/kernel@0.0.42
+  - @zhin.js/agent@0.1.23
+  - @zhin.js/core@1.1.25
+  - @zhin.js/logger@0.1.65
+  - @zhin.js/schema@1.0.65
+  - @zhin.js/ai@1.1.23
+
+## 1.0.82
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/logger@0.1.64
+  - @zhin.js/schema@1.0.64
+  - @zhin.js/agent@0.1.22
+  - @zhin.js/ai@1.1.22
+  - @zhin.js/core@1.1.24
+  - @zhin.js/kernel@0.0.41
+
+## 1.0.81
+
+### Patch Changes
+
+- 8086ccb: fix: ai 增强/优化
+- Updated dependencies [8086ccb]
+  - @zhin.js/agent@0.1.21
+  - @zhin.js/core@1.1.23
+  - @zhin.js/ai@1.1.21
+  - @zhin.js/logger@0.1.63
+  - @zhin.js/schema@1.0.63
+  - @zhin.js/kernel@0.0.40
+
+## 1.0.80
+
+### Patch Changes
+
+- Updated dependencies [3b3e49b]
+  - @zhin.js/agent@0.1.20
+  - @zhin.js/logger@0.1.62
+  - @zhin.js/schema@1.0.62
+  - @zhin.js/core@1.1.22
+  - @zhin.js/ai@1.1.20
+  - @zhin.js/kernel@0.0.39
+
+## 1.0.79
+
+### Patch Changes
+
+- Updated dependencies [92da96d]
+  - @zhin.js/agent@0.1.19
+  - @zhin.js/logger@0.1.61
+  - @zhin.js/schema@1.0.61
+  - @zhin.js/core@1.1.21
+  - @zhin.js/ai@1.1.19
+  - @zhin.js/kernel@0.0.38
+
+## 1.0.78
+
+### Patch Changes
+
+- Updated dependencies [88caeb2]
+  - @zhin.js/agent@0.1.18
+  - @zhin.js/core@1.1.20
+  - @zhin.js/logger@0.1.60
+  - @zhin.js/schema@1.0.60
+  - @zhin.js/ai@1.1.18
+  - @zhin.js/kernel@0.0.37
+
+## 1.0.77
+
+### Patch Changes
+
+- Updated dependencies [fcad030]
+  - @zhin.js/agent@0.1.17
+  - @zhin.js/ai@1.1.17
+  - @zhin.js/core@1.1.19
+  - @zhin.js/logger@0.1.59
+  - @zhin.js/schema@1.0.59
+  - @zhin.js/kernel@0.0.36
+
+## 1.0.76
+
+### Patch Changes
+
+- cb9fbf1: fix: ai 增强
+- Updated dependencies [cb9fbf1]
+  - @zhin.js/agent@0.1.16
+  - @zhin.js/ai@1.1.16
+  - @zhin.js/logger@0.1.58
+  - @zhin.js/schema@1.0.58
+  - @zhin.js/core@1.1.18
+  - @zhin.js/kernel@0.0.35
+
+## 1.0.75
+
+### Patch Changes
+
+- Updated dependencies [efad4ef]
+  - @zhin.js/ai@1.1.15
+  - @zhin.js/agent@0.1.15
+  - @zhin.js/core@1.1.17
+  - @zhin.js/logger@0.1.57
+  - @zhin.js/schema@1.0.57
+  - @zhin.js/kernel@0.0.34
+
+## 1.0.74
+
+### Patch Changes
+
+- c9dec38: fix: ai 架构优化,文档更新
+- Updated dependencies [c9dec38]
+  - @zhin.js/kernel@0.0.33
+  - @zhin.js/agent@0.1.14
+  - @zhin.js/core@1.1.16
+  - @zhin.js/ai@1.1.14
+  - @zhin.js/logger@0.1.56
+  - @zhin.js/schema@1.0.56
+
+## 1.0.73
+
+### Patch Changes
+
+- Updated dependencies [63d0b88]
+  - @zhin.js/agent@0.1.13
+  - @zhin.js/logger@0.1.55
+  - @zhin.js/schema@1.0.55
+  - @zhin.js/core@1.1.15
+  - @zhin.js/ai@1.1.13
+  - @zhin.js/kernel@0.0.32
+
+## 1.0.72
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/logger@0.1.54
+  - @zhin.js/schema@1.0.54
+  - @zhin.js/agent@0.1.12
+  - @zhin.js/ai@1.1.12
+  - @zhin.js/core@1.1.14
+  - @zhin.js/kernel@0.0.31
+
+## 1.0.71
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- Updated dependencies [4304825]
+  - @zhin.js/logger@0.1.53
+  - @zhin.js/schema@1.0.53
+  - @zhin.js/agent@0.1.11
+  - @zhin.js/ai@1.1.11
+  - @zhin.js/core@1.1.13
+  - @zhin.js/kernel@0.0.30
+
+## 1.0.70
+
+### Patch Changes
+
+- Updated dependencies [bcd56d5]
+  - @zhin.js/logger@0.1.53
+  - @zhin.js/schema@1.0.53
+  - @zhin.js/core@1.1.12
+  - @zhin.js/ai@1.1.11
+  - @zhin.js/kernel@0.0.30
+  - @zhin.js/agent@0.1.11
+
+## 1.0.69
+
+### Patch Changes
+
+- Updated dependencies [7b0227a]
+  - @zhin.js/core@1.1.11
+  - @zhin.js/agent@0.1.11
+
+## 1.0.68
+
+### Patch Changes
+
+- Updated dependencies [d0250e8]
+  - @zhin.js/core@1.1.10
+  - @zhin.js/agent@0.1.10
+  - @zhin.js/logger@0.1.52
+  - @zhin.js/schema@1.0.52
+  - @zhin.js/ai@1.1.10
+  - @zhin.js/kernel@0.0.29
+
+## 1.0.67
+
+### Patch Changes
+
+- Updated dependencies [0eba6d6]
+  - @zhin.js/agent@0.1.9
+  - @zhin.js/core@1.1.9
+  - @zhin.js/ai@1.1.9
+  - @zhin.js/logger@0.1.51
+  - @zhin.js/schema@1.0.51
+  - @zhin.js/kernel@0.0.28
+
+## 1.0.66
+
+### Patch Changes
+
+- Updated dependencies [9aa08c3]
+  - @zhin.js/agent@0.1.8
+  - @zhin.js/ai@1.1.8
+  - @zhin.js/core@1.1.8
+  - @zhin.js/logger@0.1.50
+  - @zhin.js/schema@1.0.50
+  - @zhin.js/kernel@0.0.27
+
+## 1.0.65
+
+### Patch Changes
+
+- Updated dependencies [d73a3b7]
+  - @zhin.js/ai@1.1.7
+  - @zhin.js/agent@0.1.7
+  - @zhin.js/core@1.1.7
+  - @zhin.js/logger@0.1.49
+  - @zhin.js/schema@1.0.49
+  - @zhin.js/kernel@0.0.26
+
+## 1.0.64
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - @zhin.js/logger@0.1.48
+  - @zhin.js/schema@1.0.48
+  - @zhin.js/agent@0.1.6
+  - @zhin.js/ai@1.1.6
+  - @zhin.js/core@1.1.6
+  - @zhin.js/kernel@0.0.25
+
+## 1.0.63
+
+### Patch Changes
+
+- Updated dependencies [ba30934]
+  - @zhin.js/agent@0.1.5
+  - @zhin.js/logger@0.1.47
+  - @zhin.js/schema@1.0.47
+  - @zhin.js/core@1.1.5
+  - @zhin.js/ai@1.1.5
+  - @zhin.js/kernel@0.0.24
+
+## 1.0.62
+
+### Patch Changes
+
+- Updated dependencies [bf0dc75]
+  - @zhin.js/agent@0.1.4
+  - @zhin.js/logger@0.1.46
+  - @zhin.js/schema@1.0.46
+  - @zhin.js/core@1.1.4
+  - @zhin.js/ai@1.1.4
+  - @zhin.js/kernel@0.0.23
+
+## 1.0.61
+
+### Patch Changes
+
+- Updated dependencies [a257f3f]
+  - @zhin.js/agent@0.1.3
+  - @zhin.js/logger@0.1.45
+  - @zhin.js/schema@1.0.45
+  - @zhin.js/core@1.1.3
+  - @zhin.js/ai@1.1.3
+  - @zhin.js/kernel@0.0.22
+
+## 1.0.60
+
+### Patch Changes
+
+- 5073d4c: chore: chore: update TypeScript version to ^5.9.3 across all plugins and packages
+  feat: enhance ai-text-as-image output registration with off handler for cleanup
+  fix: remove unnecessary logging in ensureBuiltinFontsCached function
+  refactor: simplify action handlers in html-renderer tools
+  chore: add README files for queue-sandbox-poc and event-delivery packages
+  chore: adjust pnpm workspace configuration to exclude games directory
+  chore: update tsconfig to include plugins directory for TypeScript compilation
+- Updated dependencies [5073d4c]
+  - @zhin.js/kernel@0.0.21
+  - @zhin.js/agent@0.1.2
+  - @zhin.js/core@1.1.2
+  - @zhin.js/logger@0.1.44
+  - @zhin.js/schema@1.0.44
+  - @zhin.js/ai@1.1.2
+
+## 1.0.59
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - @zhin.js/logger@0.1.43
+  - @zhin.js/schema@1.0.43
+  - @zhin.js/agent@0.1.1
+  - @zhin.js/ai@1.1.1
+  - @zhin.js/core@1.1.1
+  - @zhin.js/kernel@0.0.20
+
+## 1.0.58
+
+### Patch Changes
+
+- Updated dependencies [8280fe7]
+  - @zhin.js/agent@0.1.0
+  - @zhin.js/core@1.1.0
+  - @zhin.js/ai@1.1.0
+  - @zhin.js/logger@0.1.42
+  - @zhin.js/schema@1.0.42
+  - @zhin.js/kernel@0.0.19
+
+## 1.0.57
+
+### Patch Changes
+
+- Updated dependencies [c606a57]
+  - @zhin.js/agent@0.0.20
+  - @zhin.js/core@1.0.57
+  - @zhin.js/logger@0.1.41
+  - @zhin.js/schema@1.0.41
+  - @zhin.js/ai@1.0.18
+  - @zhin.js/kernel@0.0.18
+
+## 1.0.56
+
+### Patch Changes
+
+- Updated dependencies [20ab379]
+  - @zhin.js/agent@0.0.19
+  - @zhin.js/ai@1.0.17
+  - @zhin.js/core@1.0.56
+  - @zhin.js/logger@0.1.40
+  - @zhin.js/schema@1.0.40
+  - @zhin.js/kernel@0.0.17
+
+## 1.0.55
+
+### Patch Changes
+
+- Updated dependencies [75709e1]
+  - @zhin.js/agent@0.0.18
+  - @zhin.js/core@1.0.55
+  - @zhin.js/logger@0.1.39
+  - @zhin.js/schema@1.0.39
+  - @zhin.js/ai@1.0.16
+  - @zhin.js/kernel@0.0.16
+
+## 1.0.54
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/logger@0.1.38
+  - @zhin.js/schema@1.0.38
+  - @zhin.js/agent@0.0.17
+  - @zhin.js/ai@1.0.15
+  - @zhin.js/core@1.0.54
+  - @zhin.js/kernel@0.0.15
+
+## 1.0.53
+
+### Patch Changes
+
+- @zhin.js/core@1.0.53
+- @zhin.js/agent@0.0.16
+- @zhin.js/logger@0.1.37
+- @zhin.js/schema@1.0.37
+- @zhin.js/ai@1.0.14
+- @zhin.js/kernel@0.0.14
+
+## 1.0.52
+
+### Patch Changes
+
+- bb6bfa8: feat: MessageDispatcher 双轨分流（指令+AI）、出站润色管道；技能扫描含插件包 `skills/`
+- bb6bfa8: feat: 技能全面文件化——仓库内插件/适配器使用 `skills/<name>/SKILL.md`；Core 已移除 `plugin.declareSkill` / `Adapter.declareSkill` API
+- Updated dependencies [bb6bfa8]
+- Updated dependencies [bb6bfa8]
+  - @zhin.js/core@1.0.52
+  - @zhin.js/agent@0.0.15
+  - @zhin.js/logger@0.1.36
+  - @zhin.js/schema@1.0.36
+  - @zhin.js/ai@1.0.13
+  - @zhin.js/kernel@0.0.13
+
+## 1.0.51
+
+### Patch Changes
+
+- Updated dependencies [607acc4]
+  - @zhin.js/agent@0.0.14
+  - @zhin.js/logger@0.1.35
+  - @zhin.js/schema@1.0.35
+  - @zhin.js/core@1.0.51
+  - @zhin.js/ai@1.0.12
+  - @zhin.js/kernel@0.0.12
+
+## 1.0.50
+
+### Patch Changes
+
+- Updated dependencies [2510365]
+  - @zhin.js/agent@0.0.13
+  - @zhin.js/logger@0.1.34
+  - @zhin.js/schema@1.0.34
+  - @zhin.js/core@1.0.50
+  - @zhin.js/ai@1.0.11
+  - @zhin.js/kernel@0.0.11
+
+## 1.0.49
+
+### Patch Changes
+
+- Updated dependencies [b00b6c9]
+  - @zhin.js/kernel@0.0.10
+  - @zhin.js/core@1.0.49
+  - @zhin.js/agent@0.0.12
+  - @zhin.js/logger@0.1.33
+  - @zhin.js/schema@1.0.33
+  - @zhin.js/ai@1.0.10
+
+## 1.0.48
+
+### Patch Changes
+
+- Updated dependencies [7d09e5e]
+  - @zhin.js/kernel@0.0.9
+  - @zhin.js/core@1.0.48
+  - @zhin.js/agent@0.0.11
+  - @zhin.js/logger@0.1.32
+  - @zhin.js/schema@1.0.32
+  - @zhin.js/ai@1.0.9
+
+## 1.0.47
+
+### Patch Changes
+
+- de3e352: fix: 新增 request 和 notice 抽象,新增消息过滤支持
+- Updated dependencies [de3e352]
+  - @zhin.js/agent@0.0.10
+  - @zhin.js/core@1.0.47
+  - @zhin.js/logger@0.1.31
+  - @zhin.js/schema@1.0.31
+  - @zhin.js/ai@1.0.8
+  - @zhin.js/kernel@0.0.8
+
+## 1.0.46
+
+### Patch Changes
+
+- 7394603: fix: cli 优化, windows 用户体验优化
+  fix: 新增消息过滤系统
+- Updated dependencies [7394603]
+  - @zhin.js/agent@0.0.9
+  - @zhin.js/ai@1.0.7
+  - @zhin.js/core@1.0.46
+  - @zhin.js/logger@0.1.30
+  - @zhin.js/schema@1.0.30
+  - @zhin.js/kernel@0.0.7
+
+## 1.0.45
+
+### Patch Changes
+
+- Updated dependencies [63b83ef]
+  - @zhin.js/core@1.0.45
+  - @zhin.js/ai@1.0.6
+  - @zhin.js/agent@0.0.8
+  - @zhin.js/logger@0.1.29
+  - @zhin.js/schema@1.0.29
+  - @zhin.js/kernel@0.0.6
+
+## 1.0.44
+
+### Patch Changes
+
+- Updated dependencies [4f2fb55]
+  - @zhin.js/agent@0.0.7
+  - @zhin.js/logger@0.1.28
+  - @zhin.js/schema@1.0.28
+  - @zhin.js/core@1.0.44
+  - @zhin.js/ai@1.0.5
+  - @zhin.js/kernel@0.0.5
+
+## 1.0.43
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+- Updated dependencies [72ec4ba]
+  - @zhin.js/core@1.0.43
+  - @zhin.js/agent@0.0.6
+  - @zhin.js/logger@0.1.27
+  - @zhin.js/schema@1.0.27
+  - @zhin.js/ai@1.0.4
+  - @zhin.js/kernel@0.0.4
+
+## 1.0.42
+
+### Patch Changes
+
+- Updated dependencies [0999ca6]
+  - @zhin.js/agent@0.0.5
+  - @zhin.js/ai@1.0.3
+  - @zhin.js/core@1.0.42
+  - @zhin.js/logger@0.1.26
+  - @zhin.js/schema@1.0.26
+  - @zhin.js/kernel@0.0.3
+
+## 1.0.41
+
+### Patch Changes
+
+- Updated dependencies [5a68249]
+  - @zhin.js/core@1.0.41
+  - @zhin.js/agent@0.0.4
+  - @zhin.js/logger@0.1.25
+  - @zhin.js/schema@1.0.25
+  - @zhin.js/ai@1.0.2
+  - @zhin.js/kernel@0.0.2
+
+## 1.0.40
+
+### Patch Changes
+
+- 7ef9057: fix: 架构调整优化
+- Updated dependencies [7ef9057]
+  - @zhin.js/agent@0.0.3
+  - @zhin.js/core@1.0.40
+  - @zhin.js/logger@0.1.24
+  - @zhin.js/schema@1.0.24
+  - @zhin.js/ai@1.0.1
+  - @zhin.js/kernel@0.0.1
+
+## 1.0.39
+
+### Patch Changes
+
+- Updated dependencies [04f76ac]
+  - @zhin.js/agent@0.0.2
+  - @zhin.js/core@1.0.39
+  - @zhin.js/logger@0.1.23
+  - @zhin.js/schema@1.0.23
+
+## 1.0.38
+
+### Patch Changes
+
+- ab5c54a: fix: ai 架构优化
+- Updated dependencies [ab5c54a]
+  - @zhin.js/core@1.0.38
+  - @zhin.js/agent@0.0.1
+  - @zhin.js/logger@0.1.22
+  - @zhin.js/schema@1.0.22
+
+## 1.0.37
+
+### Patch Changes
+
+- Updated dependencies [a8ce720]
+  - @zhin.js/core@1.0.37
+  - @zhin.js/logger@0.1.21
+  - @zhin.js/schema@1.0.21
+
+## 1.0.36
+
+### Patch Changes
+
+- Updated dependencies [6d94111]
+  - @zhin.js/core@1.0.36
+  - @zhin.js/logger@0.1.20
+  - @zhin.js/schema@1.0.20
+
+## 1.0.35
+
+### Patch Changes
+
+- Updated dependencies [8502351]
+  - @zhin.js/core@1.0.35
+  - @zhin.js/logger@0.1.19
+  - @zhin.js/schema@1.0.19
+
+## 1.0.34
+
+### Patch Changes
+
+- Updated dependencies [634e2d7]
+  - @zhin.js/core@1.0.34
+  - @zhin.js/logger@0.1.18
+  - @zhin.js/schema@1.0.18
+
+## 1.0.33
+
+### Patch Changes
+
+- Updated dependencies [4abae79]
+  - @zhin.js/core@1.0.33
+  - @zhin.js/logger@0.1.17
+  - @zhin.js/schema@1.0.17
+
+## 1.0.32
+
+### Patch Changes
+
+- Updated dependencies [10d8bdc]
+  - @zhin.js/core@1.0.32
+  - @zhin.js/logger@0.1.16
+  - @zhin.js/schema@1.0.16
+
+## 1.0.31
+
+### Patch Changes
+
+- Updated dependencies [771706d]
+  - @zhin.js/core@1.0.31
+  - @zhin.js/logger@0.1.15
+  - @zhin.js/schema@1.0.15
+
+## 1.0.30
+
+### Patch Changes
+
+- 460a6c6: fix: unhandleRejection
+  - @zhin.js/logger@0.1.14
+  - @zhin.js/schema@1.0.14
+  - @zhin.js/core@1.0.30
+
+## 1.0.29
+
+### Patch Changes
+
+- Updated dependencies [4ec9176]
+  - @zhin.js/core@1.0.29
+  - @zhin.js/logger@0.1.13
+  - @zhin.js/schema@1.0.13
+
+## 1.0.28
+
+### Patch Changes
+
+- Updated dependencies [05a514d]
+  - @zhin.js/core@1.0.28
+  - @zhin.js/logger@0.1.12
+  - @zhin.js/schema@1.0.12
+
+## 1.0.27
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+- Updated dependencies [b27e633]
+  - @zhin.js/core@1.0.27
+  - @zhin.js/logger@0.1.11
+  - @zhin.js/schema@1.0.11
+
+## 1.0.26
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - @zhin.js/core@1.0.26
+  - @zhin.js/logger@0.1.10
+  - @zhin.js/schema@1.0.10
+
+## 1.0.25
+
+### Patch Changes
+
+- 26d2942: fix: ai
+- 6b02c41: fix: ai
+- Updated dependencies [26d2942]
+- Updated dependencies [6b02c41]
+  - @zhin.js/ai@0.0.2
+  - @zhin.js/logger@0.1.9
+  - @zhin.js/schema@1.0.9
+  - @zhin.js/core@1.0.25
+
+## 1.0.24
+
+### Patch Changes
+
+- Updated dependencies [6108e5d]
+  - @zhin.js/core@1.0.24
+  - @zhin.js/logger@0.1.8
+  - @zhin.js/schema@1.0.8
+
+## 1.0.23
+
+### Patch Changes
+
+- 52ae08a: fix: 更新消息处理流程
+- Updated dependencies [52ae08a]
+  - @zhin.js/core@1.0.23
+  - @zhin.js/logger@0.1.7
+  - @zhin.js/schema@1.0.7
+
+## 1.0.22
+
+### Patch Changes
+
+- 26aba27: fix: error default config
+  - @zhin.js/logger@0.1.6
+  - @zhin.js/schema@1.0.6
+  - @zhin.js/core@1.0.22
+
+## 1.0.21
+
+### Patch Changes
+
+- Updated dependencies [3960e70]
+  - @zhin.js/core@1.0.21
+  - @zhin.js/logger@0.1.5
+  - @zhin.js/schema@1.0.5
+
+## 1.0.20
+
+### Patch Changes
+
+- 5141137: fix: 修复适配器读取配置 bug
+- Updated dependencies [a3b7673]
+- Updated dependencies [5141137]
+  - @zhin.js/logger@0.1.4
+  - @zhin.js/schema@1.0.4
+  - @zhin.js/core@1.0.20
+
+## 1.0.19
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - @zhin.js/logger@0.1.3
+  - @zhin.js/schema@1.0.3
+  - @zhin.js/core@1.0.19
+
+## 1.0.18
+
+### Patch Changes
+
+- d16a69c: fix: test trust publish
+- Updated dependencies [d16a69c]
+  - @zhin.js/logger@0.1.2
+  - @zhin.js/schema@1.0.2
+  - @zhin.js/core@1.0.18
+
+## 1.0.17
+
+### Patch Changes
+
+- Updated dependencies [3bc5d56]
+  - @zhin.js/core@1.0.17
+
+## 1.0.16
+
+### Patch Changes
+
+- Updated dependencies [e733fab]
+  - @zhin.js/core@1.0.16
+
+## 1.0.15
+
+### Patch Changes
+
+- Updated dependencies [f9e75ce]
+- Updated dependencies [e783f90]
+- Updated dependencies [f9e75ce]
+  - @zhin.js/core@1.0.15
+
+## 1.0.14
+
+### Patch Changes
+
+- Updated dependencies [547028f]
+  - @zhin.js/core@1.0.14
+
+## 1.0.13
+
+### Patch Changes
+
+- Updated dependencies [a2e1ebc]
+  - @zhin.js/core@1.0.13
+
+## 1.0.12
+
+### Patch Changes
+
+- Updated dependencies [ff5a7ed]
+  - @zhin.js/core@1.0.12
+
+## 1.0.11
+
+### Patch Changes
+
+- @zhin.js/core@1.0.11
+
+## 1.0.10
+
+### Patch Changes
+
+- Updated dependencies [c8c3996]
+  - @zhin.js/logger@0.1.1
+  - @zhin.js/core@1.0.10
+
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies [c490260]
+  - @zhin.js/core@1.0.9
+
+## 1.0.8
+
+### Patch Changes
+
+- 551c4d2: fix: 插件支持配置文件读取,优化 test 用例
+- Updated dependencies [551c4d2]
+  - @zhin.js/core@1.0.8
+
+## 1.0.7
+
+### Patch Changes
+
+- Updated dependencies [47845fb]
+  - @zhin.js/core@1.0.7
+
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [c2d9047]
+- Updated dependencies [c2d9047]
+  - @zhin.js/core@1.0.6
+
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [f347667]
+  - @zhin.js/core@1.0.5
+
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [15be776]
+  - @zhin.js/core@1.0.4
+
+## 1.0.3
+
+### Patch Changes
+
+- Updated dependencies [89bc676]
+  - @zhin.js/core@1.0.3
+
+## 1.0.2
+
+### Patch Changes
+
+- 15fc934: fix: 支持 jsx
+- Updated dependencies [15fc934]
+- Updated dependencies [3ecd487]
+  - @zhin.js/core@1.0.2
+
+## 1.0.1
+
+### Patch Changes
+
+- efdd58a: fix: init
+- Updated dependencies [efdd58a]
+  - @zhin.js/core@1.0.1

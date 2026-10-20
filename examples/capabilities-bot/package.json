@@ -1,0 +1,37 @@
+{
+  "name": "capabilities-bot",
+  "private": true,
+  "version": "0.1.33",
+  "description": "definePlugin 能力展示样板：一个插件 + 一个 zhin.config.yml 即可启动",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch"
+  },
+  "dependencies": {
+    "@zhin.js/adapter-sandbox": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  },
+  "devDependencies": {
+    "@zhin.js/cli": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
+    "vitest": "^4.1.10"
+  }
+}

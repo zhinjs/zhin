@@ -1,0 +1,129 @@
+# @zhin.js/testing
+
+The kit has two layers: typed **fakes** for fast unit tests (no `as never`, below), and
+`PluginTestKit` for integration tests through the real Plugin Runtime (the rest of this file).
+
+## Fakes for unit tests
+
+```ts
+import { createFakeMessage, fakeOf, fakeResource, runCommand, runPluginSetup } from '@zhin.js/testing';
+
+const fake = await runPluginSetup(plugin, {
+  config: { target: 'g1' },
+  resources: [fakeResource(myToken, myValue)],   // typed by the token
+});
+await fake.clock.advance(60_000);                // runs due cron jobs, in order
+expect(fake.sent).toHaveLength(1);               // recorded outbound calls
+expect(fake.rows('notes')).toEqual([]);          // tables the plugin defined
+await fake.dispose();
+
+const message = createFakeMessage({ sender: { id: 'u1', roles: ['admin'] } });
+await runCommand(fake, commandDefinition, { input: message, params: {} });
+expect(message.replies).toEqual(['ok']);
+```
+
+- `createFakePlugin(options)` / `runPluginSetup(definition, options)` build a `FakePlugin`: a real
+  `Scope`, `DisposeStack` and `GenerationHandoffStack`, plus the real owner-bound
+  `databaseHostToken`, `scheduleHostToken` and `outboundHostToken` facades over in-memory hosts
+  (`FakeDatabaseRootHost`, `FakeScheduleRootHost` driven by a `FakeClock`, `FakeOutboundRootHost`).
+- `runCommand`, `runMiddleware`, `runHandler` execute convention-directory definitions against the
+  fake. `runCommand` calls `execute()` directly: no routing, parameter parsing, `permit` or admission.
+- `fakeOf<T>(partial)` replaces `{ ... } as never` for narrow collaborators and event payloads.
+- The fakes do not run the renderer or outbound middleware; use `PluginTestKit` to verify the send chain.
+
+Full guide: `docs/authoring/testing.md`.
+
+## Integration tests with `PluginTestKit`
+
+Test a disposable Plugin Runtime application through real module discovery, configuration validation,
+command parsing, permissions, generation admission and the unified outbound chain. Synthetic endpoints
+capture the final negotiated platform payload without a platform SDK.
+
+Install the kit as a development dependency. Prepare a separate test application with a real
+`package.json#zhin` manifest, `plugin.ts` and the dependencies/features used by its mounted plugins.
+The kit neither installs packages nor replaces module resolution. Feature providers must be the same
+physical package instance used by the host, as in a normal application.
+
+```ts
+import { PluginTestKit } from '@zhin.js/testing';
+
+const kit = await PluginTestKit.create({
+  projectRoot: '/absolute/path/to/disposable-test-app',
+  endpoints: ['test', 'second'],
+  config: {
+    configVersion: 2,
+    plugins: { suite: './plugins/suite' },
+    suite: { commandNamespace: 'suite' },
+  },
+});
+try {
+  await kit.start();
+  const result = await kit.receive({
+    endpoint: 'test',
+    conversation: { kind: 'group', id: 'test-group' },
+    sender: { id: 'test-member', name: 'Alice', roles: ['admin'] },
+    content: 'suite checkin',
+  });
+  console.log(result?.status, kit.deliveries);
+} finally {
+  await kit.close();
+}
+```
+
+The example requires the mounted plugin to provide `suite checkin`. Roles are supplied explicitly by
+the fixture; this verifies command admission, not a platform's real role projection. `permissions` is
+the real PermissionHost used by the IM runtime.
+
+Pass `createConfigDocument(path)` from `@zhin.js/config-file` as `config` to run on a real configuration file;
+edit the file and call `reloadSource(path)` to apply it, as the CLI's file watcher would. Omitting `config` creates an empty v2 application. The kit does not read a user's configuration file
+or infer instance mounts from `package.json#zhin.plugins`; pass the disposable application's v2
+declaration explicitly when testing child instances.
+
+The test application must contain only trusted test plugins and synthetic endpoints. **This kit is not
+a sandbox:** discovered adapters and `setup()` functions execute normally and can open connections,
+write files or send real messages. Never point it at a production app or include live credentials.
+`emit()` similarly injects an explicit synthetic event; it does not verify an adapter's event contract.
+
+## Operations and lifecycle
+
+- `receive()` enters the synthetic Endpoint event sink, then real ingress/middleware/command dispatch.
+- `send()` runs the real renderer, outbound middleware and segment negotiation; terminal captures are
+  detached, readonly metadata snapshots in `deliveries`. Node/Web streams remain opaque references: captures do not consume or freeze them, so tests may inspect identity and subsequently read the stream. Byte buffers are copied. `clearDeliveries()` clears captures without reusing message IDs.
+- `reloadSource(absolutePath)` submits a changed file to the real HMR coordinator and reports `reloaded`,
+  `unchanged`, `failed` or `restart-required`, with the committed generation. Edit the test app first.
+  A process restart requirement latches the native coordinator; close this kit and create a new one.
+- `messageDiagnostics` is the same bounded, body-free reader the Console serves at
+  `GET /api/messages/diagnostics`; use it to assert route, dispatch status and delivery outcomes.
+- `snapshots` is the committed-snapshot authority the Console routes read (task center, permission
+  explanation). Mount a real route on it to test a Console flow; do not publish through it.
+- `patchConfig()` uses normal composition/validation. Invalid patches reject and keep the prior generation.
+- `installResources()` installs host-owned public resources, such as a Database Host, Schedule Host or
+  a test HTML renderer. The library does not invent storage or a scheduler implementation.
+- `close()` is idempotent and must also run after a failed `start()`. Each kit owns its endpoints,
+  runtime, caches and captures; there is no global active fixture.
+
+Native Node loading is the default. TypeScript/TSX fixtures require the same process loader as the
+application; for example, run the test entry in Node with `--import tsx`. A runner that owns module
+loading may provide its public `ModuleRuntime` via `modules`. Do not mix Vite-loaded and Node-loaded
+copies of a Feature provider: run native integration fixtures in a child Node process.
+
+## Evidence boundary
+
+The repository fixture mounts two real Group Suite instances, uses real Native module loading and
+HMR, and runs the real PluginStateStore over a SQLite compare-exchange test port. It verifies permission
+rejection, invalid configuration rollback, exact endpoint/group isolation, persistent keywords after
+command HMR, plugin HMR and a fresh Node process, welcome messages and HTML rendering/text fallback.
+Its manual clock drives real PluginScheduleHost callbacks and checks retired-generation rejection.
+
+SQLite test-state persistence is real; the fixture's statistics/check-in/teaching model port is volatile.
+The HTML renderer is a stub. These tests do **not** prove browser screenshot fidelity, platform
+login, delivery, role mapping or production database portability. Real-platform acceptance remains a
+separate, explicitly authorized test with an adapter account and harmless target conversation.
+
+## SQLite fixture compatibility
+
+The kit itself requires Node 22.19+ (its `engines`) and does not require SQLite. Its base native integration test
+runs without importing `node:sqlite`. SQLite-specific repository acceptance requires Node 22.5+;
+Node 22.5–22.12 child processes include `--experimental-sqlite`, and Node 20 explicitly skips those
+optional persistence cases. They never substitute memory storage while claiming durable persistence.
+The selected flags also propagate into the fresh-process restart probe.

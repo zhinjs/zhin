@@ -1,0 +1,185 @@
+<script setup lang="ts">
+interface FeatureItem {
+  title: string
+  desc: string
+}
+
+withDefaults(defineProps<{
+  heading?: string
+  features?: FeatureItem[]
+}>(), {
+  heading: '为什么是 Zhin.js',
+  features: () => [
+    { title: '一套代码，20+ 平台', desc: 'QQ、微信、企业微信、钉钉、飞书、Discord、Telegram、Slack、KOOK、LINE……业务代码只面对一种统一消息，平台差异交给适配器。' },
+    { title: '写功能 = 放一个文件', desc: '<code>commands/hello/index.ts</code> 就是 <code>/hello</code> 命令。中间件、组件、定时任务、AI 工具同理，不用手写注册代码。' },
+    { title: '改代码不用重启', desc: '保存即热重载；正在处理的消息用旧版本跑完，新代码报错时旧版本继续服务，Bot 不会因为一次手滑而掉线。' },
+    { title: '零账号也能开发', desc: '内置 Sandbox 模拟聊天窗口，不用申请任何平台账号或模型 Key，就能完整开发和测试。' },
+    { title: '浏览器里管理', desc: '打开 <code>console.zhin.dev</code> 填入地址和 Token：发测试消息、看日志、改配置、管插件，无需部署前端。' },
+    { title: 'AI 按需加装', desc: '默认只有不到 10MB 的 IM 核心。运行 <code>npx zhin setup --ai</code> 即可接入大模型、工具、记忆与 MCP。' },
+  ],
+})
+</script>
+
+<template>
+  <section class="zhin-section">
+    <h2 v-if="heading" class="zhin-section__title">{{ heading }}</h2>
+    <div class="zhin-grid">
+      <div v-for="(feature, index) in features" :key="feature.title" class="zhin-card">
+        <span class="zhin-card__no">{{ String(index + 1).padStart(2, '0') }}</span>
+        <h3>{{ feature.title }}</h3>
+        <p v-html="feature.desc"></p>
+      </div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.zhin-section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 72px 24px 0;
+}
+
+.zhin-section__title {
+  margin: 0 0 32px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--zhin-ink, #1d2b24);
+  border: none;
+}
+
+.dark .zhin-section__title {
+  color: var(--zhin-ink, #e6ede8);
+}
+
+.zhin-section__title::after {
+  content: "";
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin-top: 10px;
+  border-radius: 2px;
+  background: var(--zhin-rainbow, linear-gradient(90deg, var(--vp-c-brand), var(--vp-c-brand-lighter)));
+}
+
+.zhin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 960px) { .zhin-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .zhin-grid { grid-template-columns: 1fr; } }
+
+.zhin-card {
+  position: relative;
+  padding: 22px 22px 20px;
+  border: 1px solid var(--zhin-line, #e2e9e4);
+  border-radius: 12px;
+  background: var(--vp-c-bg);
+  overflow: hidden;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.dark .zhin-card {
+  border-color: var(--zhin-line, #2a352f);
+}
+
+/* 顶部渐变色条（hover 显现） */
+.zhin-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--zhin-accent, var(--zhin-c1));
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.zhin-card:nth-child(6n + 1) { --zhin-accent: var(--zhin-c1); --zhin-accent-bg: var(--zhin-c1-bg); }
+.zhin-card:nth-child(6n + 2) { --zhin-accent: var(--zhin-c2); --zhin-accent-bg: var(--zhin-c2-bg); }
+.zhin-card:nth-child(6n + 3) { --zhin-accent: var(--zhin-c3); --zhin-accent-bg: var(--zhin-c3-bg); }
+.zhin-card:nth-child(6n + 4) { --zhin-accent: var(--zhin-c4); --zhin-accent-bg: var(--zhin-c4-bg); }
+.zhin-card:nth-child(6n + 5) { --zhin-accent: var(--zhin-c5); --zhin-accent-bg: var(--zhin-c5-bg); }
+.zhin-card:nth-child(6n + 6) { --zhin-accent: var(--zhin-c6); --zhin-accent-bg: var(--zhin-c6-bg); }
+
+.zhin-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--zhin-accent);
+  box-shadow: 0 14px 32px var(--zhin-accent-bg);
+}
+
+.zhin-card:hover::before {
+  opacity: 1;
+}
+
+.zhin-card:hover .zhin-card__no {
+  animation: zhin-wiggle 0.5s ease;
+}
+
+@keyframes zhin-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-8deg); }
+  55% { transform: rotate(6deg); }
+  80% { transform: rotate(-3deg); }
+}
+
+.zhin-card__no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--zhin-accent);
+  background: var(--zhin-accent-bg);
+  transform-origin: center;
+}
+
+.zhin-card h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--zhin-ink, #1d2b24);
+  border: none;
+}
+
+.dark .zhin-card h3 {
+  color: var(--zhin-ink, #e6ede8);
+}
+
+.zhin-card p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--zhin-ink-2, #4a5b51);
+}
+
+.zhin-card p :deep(code) {
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.86em;
+  color: var(--vp-c-brand-darker);
+  background: rgba(47, 158, 110, 0.10);
+}
+
+.dark .zhin-card p :deep(code) {
+  color: var(--vp-c-brand-lighter);
+  background: rgba(76, 195, 138, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zhin-card,
+  .zhin-card::before,
+  .zhin-card:hover .zhin-card__no {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+</style>

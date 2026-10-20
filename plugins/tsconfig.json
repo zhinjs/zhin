@@ -1,0 +1,23 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [],
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "zhin.js"
+  },
+  "include": [
+    "adapters/**/*",
+    "services/**/*",
+    "features/**/*",
+    "utils/**/*",
+    "games/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib",
+    "dist",
+    "**/client/**",
+    "**/*.js"
+  ]
+}

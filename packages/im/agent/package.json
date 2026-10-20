@@ -1,0 +1,246 @@
+{
+  "name": "@zhin.js/agent",
+  "version": "1.1.36",
+  "description": "Zhin AI Agent — session, ZhinAgent, init; composes @zhin.js/core providers and tools",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./config": {
+      "types": "./lib/config/index.d.ts",
+      "development": "./src/config/index.ts",
+      "import": "./lib/config/index.js"
+    },
+    "./task-executor": {
+      "types": "./lib/task-executor.d.ts",
+      "development": "./src/task-executor.ts",
+      "import": "./lib/task-executor.js"
+    },
+    "./core": {
+      "types": "./lib/core/index.d.ts",
+      "development": "./src/core/index.ts",
+      "import": "./lib/core/index.js"
+    },
+    "./tool": {
+      "types": "./lib/tool/index.d.ts",
+      "development": "./src/tool/index.ts",
+      "import": "./lib/tool/index.js"
+    },
+    "./session": {
+      "types": "./lib/session/index.d.ts",
+      "development": "./src/session/index.ts",
+      "import": "./lib/session/index.js"
+    },
+    "./event": {
+      "types": "./lib/event/index.d.ts",
+      "development": "./src/event/index.ts",
+      "import": "./lib/event/index.js"
+    },
+    "./skill": {
+      "types": "./lib/skill/index.d.ts",
+      "development": "./src/skill/index.ts",
+      "import": "./lib/skill/index.js"
+    },
+    "./memory": {
+      "types": "./lib/memory/index.d.ts",
+      "development": "./src/memory/index.ts",
+      "import": "./lib/memory/index.js"
+    },
+    "./subagent": {
+      "types": "./lib/subagent/index.d.ts",
+      "development": "./src/subagent/index.ts",
+      "import": "./lib/subagent/index.js"
+    },
+    "./context": {
+      "types": "./lib/context/index.d.ts",
+      "development": "./src/context/index.ts",
+      "import": "./lib/context/index.js"
+    },
+    "./prompt": {
+      "types": "./lib/prompt/index.d.ts",
+      "development": "./src/prompt/index.ts",
+      "import": "./lib/prompt/index.js"
+    },
+    "./turn": {
+      "types": "./lib/turn/index.d.ts",
+      "development": "./src/turn/index.ts",
+      "import": "./lib/turn/index.js"
+    },
+    "./skills": {
+      "types": "./lib/authoring/entries/skills.d.ts",
+      "development": "./src/authoring/entries/skills.ts",
+      "import": "./lib/authoring/entries/skills.js"
+    },
+    "./hooks": {
+      "types": "./lib/authoring/entries/hooks.d.ts",
+      "development": "./src/authoring/entries/hooks.ts",
+      "import": "./lib/authoring/entries/hooks.js"
+    },
+    "./evals": {
+      "types": "./lib/authoring/entries/evals.d.ts",
+      "development": "./src/authoring/entries/evals.ts",
+      "import": "./lib/authoring/entries/evals.js"
+    },
+    "./trace": {
+      "types": "./lib/trace/index.d.ts",
+      "development": "./src/trace/index.ts",
+      "import": "./lib/trace/index.js"
+    },
+    "./security": {
+      "types": "./lib/security/index.d.ts",
+      "development": "./src/security/index.ts",
+      "import": "./lib/security/index.js"
+    },
+    "./runtime": {
+      "types": "./lib/plugin-runtime/index.d.ts",
+      "development": "./src/plugin-runtime/index.ts",
+      "import": "./lib/plugin-runtime/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "eval": "vitest run --config evals/vitest.config.ts",
+    "eval:nightly": "vitest run --config evals/nightly/vitest.config.ts",
+    "clean": "rimraf lib && find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete 2>/dev/null || true"
+  },
+  "dependencies": {
+    "ajv": "^8.18.0",
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/mcp-feature": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
+    "he": "^1.2.0",
+    "js-yaml": "^5.2.2"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/he": "^1.2.3",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^26.1.2",
+    "rimraf": "^6.1.3",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/im/agent"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./config": {
+        "types": "./lib/config/index.d.ts",
+        "import": "./lib/config/index.js"
+      },
+      "./task-executor": {
+        "types": "./lib/task-executor.d.ts",
+        "import": "./lib/task-executor.js"
+      },
+      "./core": {
+        "types": "./lib/core/index.d.ts",
+        "import": "./lib/core/index.js"
+      },
+      "./tool": {
+        "types": "./lib/tool/index.d.ts",
+        "import": "./lib/tool/index.js"
+      },
+      "./session": {
+        "types": "./lib/session/index.d.ts",
+        "import": "./lib/session/index.js"
+      },
+      "./event": {
+        "types": "./lib/event/index.d.ts",
+        "import": "./lib/event/index.js"
+      },
+      "./skill": {
+        "types": "./lib/skill/index.d.ts",
+        "import": "./lib/skill/index.js"
+      },
+      "./memory": {
+        "types": "./lib/memory/index.d.ts",
+        "import": "./lib/memory/index.js"
+      },
+      "./subagent": {
+        "types": "./lib/subagent/index.d.ts",
+        "import": "./lib/subagent/index.js"
+      },
+      "./context": {
+        "types": "./lib/context/index.d.ts",
+        "import": "./lib/context/index.js"
+      },
+      "./prompt": {
+        "types": "./lib/prompt/index.d.ts",
+        "import": "./lib/prompt/index.js"
+      },
+      "./turn": {
+        "types": "./lib/turn/index.d.ts",
+        "import": "./lib/turn/index.js"
+      },
+      "./skills": {
+        "types": "./lib/authoring/entries/skills.d.ts",
+        "import": "./lib/authoring/entries/skills.js"
+      },
+      "./hooks": {
+        "types": "./lib/authoring/entries/hooks.d.ts",
+        "import": "./lib/authoring/entries/hooks.js"
+      },
+      "./evals": {
+        "types": "./lib/authoring/entries/evals.d.ts",
+        "import": "./lib/authoring/entries/evals.js"
+      },
+      "./trace": {
+        "types": "./lib/trace/index.d.ts",
+        "import": "./lib/trace/index.js"
+      },
+      "./security": {
+        "types": "./lib/security/index.d.ts",
+        "import": "./lib/security/index.js"
+      },
+      "./runtime": {
+        "types": "./lib/plugin-runtime/index.d.ts",
+        "import": "./lib/plugin-runtime/index.js"
+      }
+    }
+  },
+  "license": "MIT",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

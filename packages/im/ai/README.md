@@ -1,0 +1,308 @@
+# @zhin.js/ai
+
+框架无关的 AI 引擎，提供 LLM Provider 抽象、Agent 循环、记忆与压缩、成本追踪、性能缓存等能力。
+
+不依赖任何 IM/Endpoint 概念，可独立用于 Web 后端、CLI 工具、自动化脚本等任意 Node.js 应用。
+
+## 核心模块
+
+### Provider（LLM 提供者）
+
+Provider 实例经 **`createSdkProviderAdapter`**（ADR 0018 AI SDK 传输）创建，统一暴露 `AIProvider` 接口（`chat` / `chatStream` / `listModels` / `generateImage`）：
+
+```typescript
+import { createSdkProviderAdapter } from '@zhin.js/ai'
+
+const provider = createSdkProviderAdapter('main', {
+  sdk: 'openai',
+  apiKey: 'sk-...',
+  baseUrl: 'https://api.openai.com/v1',
+  contextWindow: 128000,
+  // models 可省略 — ModelRegistry 自动发现
+  capabilities: { input: ['text', 'image'], streaming: true, toolCalling: true },
+})
+
+const response = await provider.chat({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: '你好' }],
+})
+```
+
+支持的 `sdk` 见 `SDK_IDS`（openai / anthropic / deepseek / moonshot / zhipu / google / ollama / cloudflare / openai-compatible 等，ADR 0018）。
+
+文生图（Provider 方法，由 `@zhin.js/agent` 的 `generate_image` 工具调用，duck-type `hasGenerateImage` 探测）：
+
+```typescript
+import { createSdkProviderAdapter, hasGenerateImage } from '@zhin.js/ai'
+
+const zhipu = createSdkProviderAdapter('zhipu', { sdk: 'zhipu', apiKey: '...' })
+if (hasGenerateImage(zhipu)) {
+  const { base64, mimeType, model } = await zhipu.generateImage({
+    prompt: 'a cat on a windowsill',
+    watermarkEnabled: false, // 智谱：须在开放平台签署去水印声明后生效
+  })
+}
+```
+
+`zhin.config.yml` 可在 `ai.imageGeneration` 或 `ai.providers.<alias>.imageGeneration` 配置默认项（`watermarkEnabled`、`defaultModel`、`defaultSize`；Cloudflare 另有 `numSteps`）。
+
+### agentLoop（推荐 — LLM 统一入口）
+
+IM 栈与 `@zhin.js/agent` 的生产路径均经 **`agentLoop`**（ADR 0009）。Provider 须配置 **`sdk`**（见 [ADR 0018](../../../docs/adr/0018-ai-sdk-transport-layer.md)）。每个宿主创建并持有独立的 `LlmApiRuntime`，其中封装 AI SDK transport、Provider 目录、模型白名单和模型缓存。
+
+```typescript
+import {
+  agentLoop,
+  agentContextFrom,
+  createUserMessage,
+  agentToolsToLlmTools,
+  createLlmApiRuntime,
+  sdkEntryFromProvider,
+} from '@zhin.js/ai'
+
+const runtime = createLlmApiRuntime(
+  [sdkEntryFromProvider(provider)],
+  (alias) => provider.models,
+)
+
+const model = runtime.model(provider.name, 'gpt-4o')
+const context = agentContextFrom({
+  systemPrompt: '你是一个助手',
+  messages: [],
+  tools: agentToolsToLlmTools([weatherTool]),
+})
+
+for await (const event of agentLoop(
+  [createUserMessage('今天北京天气怎么样？')],
+  context,
+  { model, transport: runtime, maxIterations: 5, executeTool: async (tc) => { /* ... */ } },
+)) {
+  if (event.type === 'agent_end') console.log(event.messages)
+}
+```
+
+业务插件通常不直接调用 `agentLoop`，而是通过 **`ZhinAgent`**、**`AIService.runAgent`** 或 **`@zhin.js/agent` 的 turn runner**。
+
+### Agent（已移除 — 改用 `agentLoop`）
+
+::: danger 已删除
+`createAgent` / `Agent` 类已从 `@zhin.js/ai` 中删除。如需直接调用 LLM，请使用 **`agentLoop`** 或 **`@zhin.js/agent`** 的封装。参见上方的 **`agentLoop`（推荐）** 章节。
+:::
+
+### ModelRegistry 与 LlmApiRuntime（模型发现 + agentLoop 白名单）
+
+**两层协作**（IM 主路径由 `@zhin.js/agent` 的 `AIService` / `createZhinAgent` 接线）：
+
+| 层 | 职责 |
+|----|------|
+| **ModelRegistry** | 启动时 `discover()` → `provider.listModels()`；缓存到 `data/model-registry-cache.json`；Tier 评分与 `selectModel` |
+| **LlmApiRuntime**（`runtime.model`） | 在单一宿主边界内校验模型是否可用并执行补全；**未配置 yaml `models` 时**白名单来自发现后的 `provider.models`，而非 Provider 类内硬编码默认列表 |
+
+```typescript
+import { ModelRegistry } from '@zhin.js/ai'
+
+const registry = new ModelRegistry() // 默认 data/model-registry-cache.json
+
+registry.loadCache() // 二次启动可先灌入 provider.models
+
+const models = await registry.discover(provider) // 写回 provider.models 并 saveCache
+
+const best = registry.selectModel(provider.name, 'chat')
+const candidates = registry.selectModels(provider.name, 'chat', 5)
+```
+
+发现来源：
+
+- **Ollama**：`/api/tags`；详情 `/api/show`（参数量、量化）
+- **OpenAI 兼容**（含中转/聚合）：`GET {baseUrl}/models`；名称启发式推断能力
+- **显式 yaml `models`**：跳过自动发现，直接作为 ApiRegistry 白名单（如 Cloudflare Workers AI）
+
+冷启动：发现完成前若 runtime 白名单为空，`runtime.model` 不拦截；发现完成后按 `provider.models` 校验。
+
+### 持久化与上下文（ADR 0009）
+
+Agent 会话数据模型（IM conversation facts 由 `@zhin.js/im-contract` 的 `ConversationEventStore` 拥有）：
+
+| 模块 | 表 / 存储 | 用途 |
+|------|-----------|------|
+| `ContextRepository` | `agent_messages` | epoch 内 LLM `AgentMessage[]`（含 tool 轮） |
+| `AgentSessionStore` | `agent_sessions` | origin-neutral `session_key` → 活跃 `session_id`；`/reset` 归档；不保存 IM platform / endpoint / scene |
+
+共享 group/channel session 的 `UserMessage.actor` 是参与者身份的唯一权威，保存稳定
+`subjectId`、显示名与角色；`agent_messages.extra` 只保存引用等展示上下文。LLM 边界从 actor
+渲染参与者标签，Compaction transcript 也直接读取 actor，并要求摘要保留决定、约束、TODO、
+分歧及 authority 来源的归属。
+
+数据库返回空集合才表示 Not Found；查询或写入异常统一抛出 `PersistenceUnavailableError`。Session/Context 调用方必须 fail closed，禁止把存储故障降级为空历史或新 epoch。
+
+```typescript
+import {
+  createMemoryContextRepository,
+  type ContextRepository,
+} from '@zhin.js/ai'
+
+const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 200 })
+```
+
+### ContextManager（辅助）
+
+`ContextManager`（`context_summaries`）仍可用于独立的场景级摘要实验；**ZhinAgent 生产回合的历史只以 `ContextRepository` 为准**，不再构造第二套话题记忆、定时器或 `ai_messages` 表。
+
+### Compaction（上下文压缩）
+
+管理上下文窗口，防止 token 超限：
+
+```typescript
+import {
+  estimateTokens,
+  evaluateContextWindowGuard,
+  pruneHistoryForContext,
+  compactSession,
+} from '@zhin.js/ai'
+
+const guard = evaluateContextWindowGuard({
+  messages: history,
+  maxContextTokens: 128000,
+  maxHistoryShare: 0.5,
+})
+// guard.status: 'ok' | 'warning' | 'critical'
+```
+
+### Output（输出解析）
+
+将 AI 文本回复解析为结构化元素：
+
+```typescript
+import { parseOutput, renderToPlainText } from '@zhin.js/ai'
+
+const elements = parseOutput(aiResponse)
+const text = renderToPlainText(elements)
+```
+
+支持的元素类型：`TextElement`、`ImageElement`、`AudioElement`、`VideoElement`、`CardElement`、`FileElement`。
+
+#### 结构化输出（outputSchema）
+
+`StreamOptions.outputSchema`（JSON Schema 对象）会在 LLM 调用时转为 AI SDK `Output.object` 约束，模型文本回复即为该 schema 的 JSON；tool-call 中间步自动回退原文本。zhin 出站消息段的 schema SSOT 在 `@zhin.js/core` 的 `segment-contract/json-schema.ts`（`aiOutboundJsonSchema`）；Agent 的 IM 会话默认使用 `ai.agent.outputSchema: segments`，见[结构化回复](../../../docs/ai/structured-replies.md)。隔离/非 IM 调用不继承 IM 预设，自定义 Schema 仍按调用方契约处理。
+
+### RateLimiter（速率限制）
+
+```typescript
+import { RateLimiter } from '@zhin.js/ai'
+
+const limiter = new RateLimiter({
+  maxRequests: 10,
+  windowMs: 60000,
+})
+
+const result = limiter.check('user-123')
+if (!result.allowed) {
+  console.log(`请等待 ${result.retryAfterMs}ms`)
+}
+```
+
+### Storage（存储抽象）
+
+统一存储后端，支持内存和数据库模式，可在运行时热切换：
+
+```typescript
+import { MemoryStorageBackend, createSwappableBackend } from '@zhin.js/ai'
+
+const backend = createSwappableBackend(new MemoryStorageBackend())
+
+// 运行时切换到数据库
+backend.swap(new DatabaseStorageBackend(model))
+```
+
+### CostTracker（成本追踪）
+
+追踪每次 LLM 调用的 token 用量和估算成本，支持按模型/Provider 统计：
+
+```typescript
+import { CostTracker } from '@zhin.js/ai'
+
+const tracker = new CostTracker()
+tracker.record({ model: 'qwen3:14b', inputTokens: 1200, outputTokens: 350 })
+
+console.log(tracker.summary())
+// { totalCalls: 1, totalInputTokens: 1200, totalOutputTokens: 350, estimatedCost: 0.002 }
+```
+
+### FileStateCache（文件状态缓存）
+
+缓存文件 mtime 和内容摘要，避免工具多次读取同一文件时重复访问磁盘：
+
+```typescript
+import { FileStateCache } from '@zhin.js/ai'
+
+const cache = new FileStateCache({ maxEntries: 500, ttlMs: 30000 })
+const content = await cache.getOrRead('/path/to/file.ts')
+```
+
+### microCompactMessages（微压缩）
+
+轻量级上下文压缩，在完整 LLM 摘要之前清理旧工具结果，降低 token 消耗：
+
+```typescript
+import { microCompactMessages } from '@zhin.js/ai'
+
+const { messages: compacted, savedTokens } = microCompactMessages(messages, {
+  keepRecentToolResults: 6,
+})
+```
+
+### CachedToolFilter（工具过滤缓存）
+
+缓存 `filterTools` 结果，避免相同用户消息与工具集重复评分：
+
+```typescript
+import { CachedToolFilter } from '@zhin.js/ai'
+
+const cache = new CachedToolFilter()
+const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
+```
+
+## 配置类型
+
+框架无关的配置形状定义在 [`src/types.ts`](./src/types.ts)：
+
+| 类型 | 用途 |
+|------|------|
+| `ProviderConfig` / `OllamaProviderConfig` | 各 LLM Provider 连接与能力 |
+| `AgentLoopConfig` | `agentLoop`：模型、工具列表、超时、回调等（替代已删除的 `createAgent`） |
+| `SessionConfig` | 会话 `maxHistory`、`expireMs` |
+| `ContextConfig` | `ContextManager` 总结阈值与 token 预算 |
+| `AIConfig` | 应用级 YAML `ai:` 块的 TypeScript 形状（Provider、sessions、context、trigger、`agent.modelHarness` 等） |
+
+完整 AI 模块文档：[zhin.js.org/advanced/ai](https://zhin.js.org/advanced/ai)
+
+## 主要导出
+
+| 导出 | 说明 |
+|------|------|
+| `agentLoop` / `agentContextFrom` / `LlmApiRuntime` | LLM 统一回合引擎与 owner-scoped transport（推荐） |
+| `agentToolsToLlmTools` | Plugin/AgentTool → LlmTool 桥接（agentLoop transport） |
+| `createLlmApiRuntime` / `ModelRegistry` | 独立 transport runtime + `/v1/models` 发现与白名单 |
+| `ContextRepository` / `AgentSessionStore` | Agent 会话持久化原语 |
+| `createSdkProviderAdapter` / `AIProvider` | LLM 提供者（AI SDK 传输，ADR 0018） |
+| `ContextManager` | 场景摘要实验（辅助，不接入 ZhinAgent 生产回合） |
+| `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩库 API；IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010） |
+| `CostTracker` | Token 用量与成本追踪 |
+| `FileStateCache` | 文件状态缓存 |
+| `CachedToolFilter` | 工具过滤缓存 |
+| `parseOutput` / `renderToPlainText` | 输出解析 |
+| `RateLimiter` | 速率限制 |
+| `detectTone` | 情绪检测 |
+| `MemoryStorageBackend` / `createSwappableBackend` | 存储抽象 |
+
+## 安装
+
+```bash
+pnpm add @zhin.js/ai
+```
+
+> 在 Zhin 项目中通常经 `@zhin.js/agent` 依赖引入；也可 `import … from 'zhin.js/ai'`（须已安装 `@zhin.js/ai`，一般由 agent 带入）。
+
+## 许可证
+
+MIT License

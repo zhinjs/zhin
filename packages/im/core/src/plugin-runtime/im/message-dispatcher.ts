@@ -1,0 +1,179 @@
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import {
+  commandFeatureId,
+  isCommandIndex,
+  type CommandMatchInput,
+  type CommandSegment,
+} from '@zhin.js/command';
+import type { UserInteractionFactory } from '@zhin.js/interaction';
+import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { Message, MessageDispatchResult } from './contracts.js';
+import { commandMenuReply } from './command-menu-navigation.js';
+
+const logger = getLogger('command');
+
+/**
+ * 命令前缀解析器：返回该消息要求的命令前缀。
+ * `''` 表示无前缀（任意文本都尝试按命令匹配）。
+ */
+export type CommandPrefixResolver = (message: Message, snapshot: RuntimeSnapshot) => string;
+
+function ownerOfMessage(message: Message, snapshot: RuntimeSnapshot): PluginId | undefined {
+  // adapter is a platform literal (e.g. terminal), not the Plugin owner.
+  const slot = snapshot.capabilities.get(message.conversation.endpoint.id as CapabilityId);
+  if (slot) return slot.owner;
+  // Expanded endpoint records have identities distinct from their source slot.
+  // Resolve their ownership through the generation's canonical AdapterIndex.
+  const adapters = snapshot.projections.get(adapterFeatureId);
+  if (!isAdapterIndex(adapters)) return undefined;
+  try { return adapters.owner(message.conversation.endpoint.id as CapabilityId); } catch { return undefined; }
+}
+
+/**
+ * 默认解析：读消息所属适配器实例 config 的 `commandPrefix`（默认 `''`）；
+ * 实例声明 `endpoints` 数组时，按消息 endpoint 名找 entry，`entry.commandPrefix` 覆盖顶层。
+ */
+export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, snapshot) => {
+  const owner = ownerOfMessage(message, snapshot);
+  const config = (owner ? snapshot.config.get(owner) : undefined) as
+    | { commandPrefix?: unknown; endpoints?: unknown }
+    | undefined;
+  if (!config) return '';
+  const endpointId = message.endpointId;
+  if (endpointId && Array.isArray(config.endpoints)) {
+    const entry = config.endpoints.find((item) =>
+      !!item && typeof item === 'object'
+      && (item as { id?: unknown }).id === endpointId) as
+      | { commandPrefix?: unknown }
+      | undefined;
+    if (typeof entry?.commandPrefix === 'string') return entry.commandPrefix;
+  }
+  return typeof config.commandPrefix === 'string' ? config.commandPrefix : '';
+};
+
+export class MessageDispatcher {
+  constructor(private readonly resolvePrefix: CommandPrefixResolver = defaultCommandPrefixResolver) {}
+
+  async dispatch(
+    message: Message,
+    snapshot: RuntimeSnapshot,
+    interactionFactory?: UserInteractionFactory,
+    observe?: (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => void,
+  ): Promise<MessageDispatchResult> {
+    const note = (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => {
+      try { observe?.(stage, status); } catch { /* Observation never controls dispatch. */ }
+    };
+    const prefix = this.resolvePrefix(message, snapshot);
+    let input = message.content.trim();
+    if (prefix && !input.startsWith(prefix)) {
+      note('prefix', 'mismatch');
+      return Object.freeze({ matched: false });
+    }
+    note('prefix', 'matched');
+    if (prefix) input = input.slice(prefix.length).trim();
+    if (!input) {
+      note('dispatch', 'empty_input');
+      return Object.freeze({ matched: false });
+    }
+    const commands = snapshot.projections.get(commandFeatureId);
+    if (!isCommandIndex(commands)) {
+      note('dispatch', 'commands_unavailable');
+      return Object.freeze({ matched: false });
+    }
+    const structuredInput = message.segments
+      ? stripCommandPrefix(message.segments, prefix)
+      : undefined;
+    const matchInput = structuredInput ?? input;
+    note('dispatch', 'started');
+    const result = await commands.dispatch(matchInput, message, interactionFactory, prefix, snapshot);
+    if (result.status === 'invalid') {
+      return Object.freeze({
+        ...result,
+        value: [...(result.issues ?? []).map((issue) => issue.message), result.help]
+          .filter(Boolean).join('\n'),
+      });
+    }
+    if (result.status === 'denied') {
+      return Object.freeze({ ...result, value: '没有权限执行此指令。' });
+    }
+    if (result.status === 'limited') {
+      const reason = result.limit?.reason;
+      const waitMs = result.limit?.retryAfterMs;
+      const value = reason === 'cooldown'
+        ? typeof waitMs === 'number' && waitMs > 0
+          ? `此指令仍在冷却，约 ${Math.ceil(waitMs / 1000)} 秒后再试。` : '此指令仍在冷却，请稍后再试。'
+        : reason === 'busy' ? '你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。'
+        : reason === 'capacity' ? '当前繁忙，本次指令未被接纳，请稍后再试。'
+        : '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。';
+      return Object.freeze({ ...result, value });
+    }
+    if (result.matched && result.value !== undefined) {
+      if (!result.owner) throw new Error('Matched Command is missing its owner');
+      logger.debug(formatCompact({
+        op: 'dispatch_hit',
+        command: result.command,
+        owner: result.owner,
+      }));
+    } else if (!result.matched) {
+      logger.debug(formatCompact({
+        op: 'dispatch_miss',
+        preview: truncatePreview(input),
+      }));
+    }
+    return result.menu ? Object.freeze({ ...result,
+      value: commandMenuReply(result, commands, snapshot, message.conversation, prefix),
+    }) : result;
+  }
+}
+
+/**
+ * Keep the text and structured views aligned. Falling back to `content` is
+ * intentional when an adapter supplies inconsistent segment data.
+ */
+function stripCommandPrefix(
+  segments: readonly Readonly<CommandSegment>[],
+  prefix: string,
+): CommandMatchInput | undefined {
+  let pendingPrefix = prefix;
+  let atStart = true;
+  let trimLeading = true;
+  const result: CommandSegment[] = [];
+
+  for (const segment of segments) {
+    if (!atStart) {
+      result.push(segment);
+      continue;
+    }
+    if (segment.type !== 'text' || typeof segment.data.text !== 'string') {
+      if (pendingPrefix) return undefined;
+      atStart = false;
+      result.push(segment);
+      continue;
+    }
+
+    let text = segment.data.text;
+    // Match the leading whitespace normalization of message.content without
+    // discarding structured arguments when the prefix follows whitespace.
+    if (trimLeading) {
+      text = text.trimStart();
+      if (text) trimLeading = false;
+    }
+    if (pendingPrefix) {
+      if (text.startsWith(pendingPrefix)) {
+        text = text.slice(pendingPrefix.length);
+        pendingPrefix = '';
+      } else if (pendingPrefix.startsWith(text)) {
+        pendingPrefix = pendingPrefix.slice(text.length);
+        continue;
+      } else {
+        return undefined;
+      }
+    }
+    text = text.trimStart();
+    if (!text) continue;
+    atStart = false;
+    result.push({ ...segment, data: { ...segment.data, text } });
+  }
+  return pendingPrefix ? undefined : result;
+}

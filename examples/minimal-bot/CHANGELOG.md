@@ -1,0 +1,347 @@
+# minimal-bot
+
+## 0.0.37
+
+### Patch Changes
+
+- zhin.js@7.0.1
+
+## 0.0.36
+
+### Patch Changes
+
+- zhin.js@7.0.0
+
+## 0.0.35
+
+### Patch Changes
+
+- zhin.js@6.0.15
+
+## 0.0.34
+
+### Patch Changes
+
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - zhin.js@6.0.14
+
+## 0.0.33
+
+### Patch Changes
+
+- zhin.js@6.0.13
+
+## 0.0.32
+
+### Patch Changes
+
+- Updated dependencies [974772e]
+- Updated dependencies [1312ca0]
+  - zhin.js@6.0.12
+
+## 0.0.31
+
+### Patch Changes
+
+- zhin.js@6.0.11
+
+## 0.0.30
+
+### Patch Changes
+
+- eb84b77: fix: 更新文档,建立正确的依赖关系
+- Updated dependencies [d3920e9]
+  - zhin.js@6.0.10
+
+## 0.0.29
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+  - zhin.js@6.0.9
+
+## 0.0.28
+
+### Patch Changes
+
+- Updated dependencies [8e973dc]
+  - zhin.js@6.0.8
+
+## 0.0.27
+
+### Patch Changes
+
+- zhin.js@6.0.7
+
+## 0.0.26
+
+### Patch Changes
+
+- zhin.js@6.0.6
+
+## 0.0.25
+
+### Patch Changes
+
+- zhin.js@6.0.5
+
+## 0.0.24
+
+### Patch Changes
+
+- Updated dependencies [ba08a2f]
+- Updated dependencies [e53444f]
+- Updated dependencies [92b0dd7]
+  - zhin.js@6.0.4
+  - @zhin.js/satori@1.0.19
+
+## 0.0.23
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - zhin.js@6.0.3
+  - @zhin.js/satori@1.0.18
+
+## 0.0.22
+
+### Patch Changes
+
+- zhin.js@6.0.2
+
+## 0.0.21
+
+### Patch Changes
+
+- zhin.js@6.0.1
+
+## 0.0.20
+
+### Patch Changes
+
+- zhin.js@6.0.0
+
+## 0.0.19
+
+### Patch Changes
+
+- zhin.js@5.0.3
+
+## 0.0.18
+
+### Patch Changes
+
+- zhin.js@5.0.2
+
+## 0.0.17
+
+### Patch Changes
+
+- Updated dependencies [5691aba]
+- Updated dependencies [43485a9]
+- Updated dependencies [3e925d0]
+  - @zhin.js/satori@1.0.17
+  - zhin.js@5.0.1
+
+## 0.0.16
+
+### Patch Changes
+
+- Updated dependencies [7db69c1]
+- Updated dependencies [e5c84ed]
+- Updated dependencies [3ea84a0]
+- Updated dependencies [1ddcd70]
+- Updated dependencies [ac9da66]
+  - @zhin.js/core@1.4.0
+  - @zhin.js/adapter@1.1.0
+  - @zhin.js/plugin-runtime@1.1.0
+  - zhin.js@5.0.0
+  - @zhin.js/runtime@1.0.2
+  - @zhin.js/command@1.0.2
+  - @zhin.js/component@1.0.2
+
+## 0.0.15
+
+### Patch Changes
+
+- Updated dependencies [16ec4e8]
+- Updated dependencies [cc5c94d]
+- Updated dependencies [447f3e2]
+  - @zhin.js/core@1.3.5
+  - zhin.js@4.1.3
+  - @zhin.js/plugin-runtime@1.0.1
+  - @zhin.js/adapter@1.0.1
+  - @zhin.js/command@1.0.1
+  - @zhin.js/component@1.0.1
+  - @zhin.js/runtime@1.0.1
+
+## 0.0.14
+
+### Patch Changes
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/host-api@2.0.5
+  - @zhin.js/host-router@2.0.3
+  - zhin.js@4.1.2
+  - @zhin.js/adapter-sandbox@5.0.5
+  - @zhin.js/cli@1.0.93
+
+## 0.0.13
+
+### Patch Changes
+
+- 5cc9c03: fix: ai 优化
+- Updated dependencies [5cc9c03]
+- Updated dependencies [b9b3881]
+- Updated dependencies [7700903]
+  - @zhin.js/cli@1.0.92
+  - @zhin.js/host-api@2.0.4
+  - @zhin.js/host-router@2.0.2
+  - zhin.js@4.1.1
+  - @zhin.js/satori@1.0.16
+  - @zhin.js/adapter-sandbox@5.0.4
+
+## 0.0.12
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- Updated dependencies [b2c73bd]
+- Updated dependencies [c4575c9]
+- Updated dependencies [c4575c9]
+  - @zhin.js/cli@1.0.91
+  - @zhin.js/adapter-sandbox@5.0.3
+  - @zhin.js/satori@1.0.15
+  - @zhin.js/host-router@2.0.1
+  - @zhin.js/host-api@2.0.3
+  - zhin.js@4.1.0
+
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [384ea11]
+  - @zhin.js/host-api@2.0.2
+  - zhin.js@4.0.1
+  - @zhin.js/adapter-sandbox@5.0.2
+
+## 0.0.10
+
+### Patch Changes
+
+- 7dfafc2: fix: ai 提示词缓存优化
+- ae5239c: fix: 核心包瘦身
+- Updated dependencies [7dfafc2]
+- Updated dependencies [93e58d9]
+- Updated dependencies [ae5239c]
+  - @zhin.js/satori@0.2.14
+  - @zhin.js/cli@1.0.90
+  - @zhin.js/host-api@2.0.1
+  - zhin.js@4.0.1
+  - @zhin.js/host-router@2.0.0
+  - @zhin.js/adapter-sandbox@5.0.1
+
+## 0.0.9
+
+### Patch Changes
+
+- zhin.js@3.0.0
+- @zhin.js/host-api@2.0.0
+- @zhin.js/host-router@2.0.0
+- @zhin.js/adapter-sandbox@5.0.0
+
+## 0.0.8
+
+### Patch Changes
+
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - @zhin.js/adapter-sandbox@4.0.1
+  - @zhin.js/host-router@1.0.1
+  - @zhin.js/host-api@1.0.1
+  - zhin.js@2.0.1
+  - @zhin.js/cli@1.0.89
+
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [65f4b0a]
+  - @zhin.js/host-api@1.0.0
+  - zhin.js@2.0.0
+  - @zhin.js/host-router@1.0.0
+  - @zhin.js/adapter-sandbox@4.0.0
+
+## 0.0.6
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+- Updated dependencies [d8547d2]
+  - zhin.js@1.0.92
+  - @zhin.js/cli@1.0.88
+  - @zhin.js/host-router@0.0.3
+  - @zhin.js/adapter-sandbox@3.0.10
+
+## 0.0.5
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/adapter-sandbox@3.0.9
+  - @zhin.js/host-api@0.0.4
+  - zhin.js@1.0.91
+  - @zhin.js/cli@1.0.87
+  - @zhin.js/host-router@0.0.3
+
+## 0.0.4
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- Updated dependencies [c8f8207]
+  - @zhin.js/cli@1.0.86
+  - @zhin.js/host-api@0.0.3
+  - @zhin.js/host-router@0.0.3
+  - zhin.js@1.0.90
+  - @zhin.js/adapter-sandbox@3.0.8
+
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies [c78d2cd]
+  - @zhin.js/adapter-sandbox@3.0.7
+  - @zhin.js/host-router@0.0.2
+  - zhin.js@1.0.89
+  - @zhin.js/cli@1.0.85
+  - @zhin.js/host-api@0.0.2
+
+## 0.0.2
+
+### Patch Changes
+
+- Updated dependencies [ccb6e24]
+  - zhin.js@1.0.88
+  - @zhin.js/cli@1.0.84
+  - @zhin.js/adapter-sandbox@3.0.6
+
+## 0.0.1
+
+### Patch Changes
+
+- 90d9efd: fix: 处理包名
+- Updated dependencies [90d9efd]
+  - @zhin.js/adapter-sandbox@3.0.6
+  - @zhin.js/cli@1.0.83
+  - zhin.js@1.0.87
+  - @zhin.js/host-api@0.0.1
+  - @zhin.js/host-router@0.0.1

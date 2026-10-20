@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "name": "完整来源身份与原生文本回复",
+  "sourceTarget": {
+    "endpoint": {
+      "id": "root/source\u0000zhin.adapter\u0000example",
+      "adapter": "example"
+    },
+    "kind": "channel",
+    "id": "test-room",
+    "parent": {
+      "kind": "channel",
+      "id": "test-workspace"
+    },
+    "threadId": "test-thread"
+  },
+  "sender": {
+    "id": "test-author",
+    "name": "测试成员",
+    "roles": [
+      "admin"
+    ]
+  },
+  "input": "hello",
+  "preview": [
+    {
+      "type": "text",
+      "data": {
+        "text": "你好，测试成员"
+      }
+    }
+  ],
+  "profile": "text",
+  "fixture": {
+    "syntheticEndpoint": "scenario",
+    "config": {
+      "configVersion": 2
+    }
+  },
+  "assertions": {
+    "dispatchStatus": "executed",
+    "deliveries": [
+      [
+        {
+          "type": "text",
+          "data": {
+            "text": "你好，测试成员"
+          }
+        }
+      ]
+    ]
+  }
+}

@@ -1,0 +1,503 @@
+import { validateDiscordGatewayFaultProxy } from './gateway-fault-proxy.js';
+/** Discord Gateway protocol helpers. Canonicalization is owned by Core. */
+
+import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
+import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import type { Segment } from '@zhin.js/core/runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('discord');
+
+export interface DiscordActivity {
+  readonly name: string;
+  readonly type: 'PLAYING' | 'STREAMING' | 'LISTENING' | 'WATCHING' | 'COMPETING';
+  readonly url?: string;
+}
+
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface DiscordEndpointConfig {
+  readonly id: string;
+  readonly token: string;
+  /** Default `gateway`. `interactions` uses httpHostToken POST + Ed25519 verify. */
+  readonly connection?: 'gateway' | 'interactions';
+  /** Test instance only: ws://127.0.0.1:PORT/ fault proxy. */
+  readonly restApiProxy?: import('./rest-api-proxy.js').DiscordRestApiProxy;
+  readonly gatewayFaultProxyUrl?: string;
+  readonly intents?: readonly number[];
+  readonly enableSlashCommands?: boolean;
+  readonly globalCommands?: boolean;
+  readonly defaultActivity?: DiscordActivity;
+  readonly slashCommands?: readonly Record<string, unknown>[];
+  /** Interactions-only fields. */
+  readonly applicationId?: string;
+  readonly publicKey?: string;
+  readonly interactionsPath?: string;
+}
+
+export interface ResolvedDiscordGatewayConfig {
+  readonly context: 'discord';
+  readonly connection: 'gateway';
+  readonly id: string;
+  readonly token: string;
+  /** Test instance only: ws://127.0.0.1:PORT/ fault proxy. */
+  readonly restApiProxy?: import('./rest-api-proxy.js').DiscordRestApiProxy;
+  readonly gatewayFaultProxyUrl?: string;
+  readonly intents?: readonly number[];
+  readonly enableSlashCommands: boolean;
+  readonly globalCommands: boolean;
+  readonly defaultActivity?: DiscordActivity;
+  readonly slashCommands?: readonly Record<string, unknown>[];
+}
+
+export interface ResolvedDiscordInteractionsConfig {
+  readonly context: 'discord';
+  readonly connection: 'interactions';
+  readonly id: string;
+  readonly token: string;
+  readonly applicationId: string;
+  readonly publicKey: string;
+  readonly interactionsPath: string;
+}
+
+export type ResolvedDiscordConfig =
+  | ResolvedDiscordGatewayConfig
+  | ResolvedDiscordInteractionsConfig;
+
+export interface DiscordInboundAttachment {
+  readonly id?: string;
+  readonly name?: string;
+  readonly url?: string;
+  readonly contentType?: string;
+  readonly size?: number;
+}
+
+export interface DiscordInboundMessage {
+  readonly id: string;
+  readonly content: string;
+  readonly channelId: string;
+  readonly channelKind: 'private' | 'group' | 'channel';
+  readonly authorId: string;
+  readonly authorName: string;
+  readonly authorBot?: boolean;
+  readonly createdTimestamp: number;
+  readonly guildId?: string;
+  readonly isGuildOwner?: boolean;
+  readonly permissionTokens?: readonly string[];
+  readonly attachments?: readonly DiscordInboundAttachment[];
+  readonly embedTitles?: readonly string[];
+  readonly stickerNames?: readonly string[];
+  readonly replyToId?: string;
+  /** 入站 mentions 数组含 bot 用户时由 gateway connect 装配标注（Message.content 纯文本，@ 只能走 metadata）。 */
+  readonly mentionedBot?: boolean;
+}
+
+export interface DiscordButtonInbound {
+  readonly guildId?: string;
+  readonly id: string;
+  readonly customId: string;
+  readonly channelId: string;
+  readonly channelKind: 'private' | 'group' | 'channel';
+  readonly userId: string;
+  readonly userName: string;
+  readonly sourceMessageId?: string;
+}
+
+export interface DiscordWireSegment {
+  readonly type: string;
+  readonly data?: Record<string, unknown>;
+}
+
+export interface DiscordOutboundComponentButton {
+  type: 2;
+  custom_id: string;
+  label: string;
+  style: number;
+  disabled?: boolean;
+}
+
+export interface DiscordOutboundActionRow {
+  type: 1;
+  components: DiscordOutboundComponentButton[];
+}
+
+export interface DiscordOutboundBody {
+  readonly reply?: { readonly messageReference: string; readonly failIfNotExists: boolean };
+  readonly content?: string;
+  readonly embeds?: ReadonlyArray<Record<string, unknown>>;
+  readonly files?: ReadonlyArray<{
+    name: string;
+    url?: string;
+    file?: string;
+    base64?: string;
+  }>;
+  readonly components?: ReadonlyArray<DiscordOutboundActionRow>;
+}
+
+export function resolveDiscordConfig(config: DiscordEndpointConfig): ResolvedDiscordConfig {
+  if (config.restApiProxy && (!Number.isInteger(config.restApiProxy.port) || config.restApiProxy.port < 1 || config.restApiProxy.port > 65535)) throw new TypeError('Invalid Discord restApiProxy port');
+  if (config.restApiProxy && config.connection === 'interactions') throw new TypeError('Discord restApiProxy requires gateway mode');
+  const id = requiredEndpointField(config.id, 'id');
+  const token = requiredEndpointField(config.token, 'token');
+  const connection = config.connection ?? 'gateway';
+
+  if (connection === 'interactions') {
+    const applicationId = requiredEndpointField(config.applicationId, 'applicationId');
+    const publicKey = requiredEndpointField(config.publicKey, 'publicKey');
+    return {
+      context: 'discord',
+      connection: 'interactions',
+      id,
+      token,
+      applicationId,
+      publicKey,
+      interactionsPath: config.interactionsPath || '/discord/interactions',
+    };
+  }
+
+  return {
+    context: 'discord',
+    connection: 'gateway',
+    id,
+    token,
+    ...(config.restApiProxy ? { restApiProxy: config.restApiProxy } : {}),
+    gatewayFaultProxyUrl: config.gatewayFaultProxyUrl ? validateDiscordGatewayFaultProxy(config.gatewayFaultProxyUrl) : undefined,
+    intents: config.intents,
+    enableSlashCommands: config.enableSlashCommands === true,
+    globalCommands: config.globalCommands === true,
+    defaultActivity: config.defaultActivity,
+    slashCommands: config.slashCommands,
+  };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'token' | 'applicationId' | 'publicKey',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Discord endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
+}
+
+export function resolveChannelKind(channelType: number | string | undefined): 'private' | 'group' | 'channel' {
+  // discord.js ChannelType.DM = 1, GroupDM = 3
+  if (channelType === 1 || channelType === 'DM' || channelType === 'private') return 'private';
+  if (channelType === 3 || channelType === 'GroupDM' || channelType === 'group') return 'group';
+  return 'channel';
+}
+
+/**
+ * 入站归一化 → ConversationRef：DM → 'private'；GroupDM → 'group'；
+ * guild 频道 → 'channel' + guild 容器进 parent（guild 是频道容器，kind 'channel'）。
+ * endpoint.adapter = owner PluginId（CapabilityId 以 \0 分隔）。
+ */
+export function discordInboundConversation(
+  endpointKey: string,
+  msg: {
+    readonly channelId: string;
+    readonly channelKind: 'private' | 'group' | 'channel';
+    readonly guildId?: string;
+  },
+): ConversationRef {
+  return {
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
+    kind: msg.channelKind,
+    id: msg.channelId,
+    ...(msg.guildId && msg.channelKind === 'channel'
+      ? { parent: { kind: 'channel' as const, id: msg.guildId } }
+      : {}),
+  };
+}
+
+export function senderDisplayName(msg: DiscordInboundMessage): string {
+  return msg.authorName || msg.authorId;
+}
+
+/** Build inbound text for OutboundMessageService.receive (gateway owns reply routing). */
+export function formatInboundContent(msg: DiscordInboundMessage): string {
+  const parts: string[] = [];
+  if (msg.content?.trim()) parts.push(msg.content.trim());
+  for (const title of msg.embedTitles ?? []) {
+    parts.push(`[embed: ${title}]`);
+  }
+  for (const name of msg.stickerNames ?? []) {
+    parts.push(`[sticker: ${name}]`);
+  }
+  const text = parts.join('\n').trim();
+  return text;
+}
+
+export function formatButtonContent(interaction: DiscordButtonInbound): string {
+  return `[action: ${interaction.customId}]`;
+}
+
+function attachmentMediaKind(contentType: string | undefined): 'image' | 'audio' | 'video' | 'file' {
+  if (contentType?.startsWith('image/')) return 'image';
+  if (contentType?.startsWith('audio/')) return 'audio';
+  if (contentType?.startsWith('video/')) return 'video';
+  return 'file';
+}
+
+/**
+ * 入站消息 → canonical Segment[]；引用与附件不重复编码进文本视图。
+ * 附件 url 是 Discord CDN 真实 http(s) 地址，MediaRef kind=url；
+ * embeds / stickers 仅留在纯文本视图，不进段（最小侵入）。
+ */
+export function formatInboundSegments(msg: DiscordInboundMessage): Segment[] {
+  const out: Segment[] = [];
+  if (msg.replyToId) {
+    out.push({ type: 'reply', data: { message_id: msg.replyToId } });
+  }
+  const text = msg.content?.trim();
+  if (text) out.push({ type: 'text', data: { text } });
+  for (const attachment of msg.attachments ?? []) {
+    if (!attachment.url) continue;
+    const kind = attachmentMediaKind(attachment.contentType);
+    out.push({
+      type: kind,
+      data: {
+        media: {
+          kind: 'url',
+          value: attachment.url,
+          ...(attachment.contentType ? { mime_type: attachment.contentType } : {}),
+        },
+        ...(attachment.name
+          ? kind === 'image'
+            ? { alt: attachment.name }
+            : { name: attachment.name }
+          : {}),
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * button interaction → action 段（Wave 1 C interactive 约定：
+ * {type:'action', data:{id, payload, sourceMessageId?}}），
+ * 与 formatButtonContent / metadata.payload 同源。
+ */
+export function formatButtonSegments(interaction: DiscordButtonInbound): Segment[] {
+  return [{
+    type: 'action',
+    data: {
+      id: interaction.id,
+      payload: interaction.customId,
+      ...(interaction.sourceMessageId
+        ? { sourceMessageId: interaction.sourceMessageId }
+        : {}),
+    },
+  }];
+}
+
+/**
+ * Wire-encode an already-rendered outbound payload into Discord message body.
+ * Segment canonicalization is intentionally not done here.
+ */
+export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
+  if (typeof payload === 'string') {
+    return { content: payload };
+  }
+
+  const segments: Array<string | DiscordWireSegment> = Array.isArray(payload)
+    ? payload as Array<string | DiscordWireSegment>
+    : payload && typeof payload === 'object' && 'type' in (payload as object)
+      ? [payload as DiscordWireSegment]
+      : [];
+
+  if (segments.length === 0) {
+    return {
+      content: payload == null
+        ? ''
+        : typeof payload === 'object'
+          ? JSON.stringify(payload)
+          : String(payload),
+    };
+  }
+
+  let content = '';
+  const embeds: Record<string, unknown>[] = [];
+  const files: Array<{ name: string; url?: string; file?: string; base64?: string }> = [];
+  let components: DiscordOutboundBody['components'];
+  let reply: DiscordOutboundBody['reply'];
+
+  for (const item of segments) {
+    if (typeof item === 'string') {
+      content += item;
+      continue;
+    }
+    const data = item.data ?? {};
+    switch (item.type) {
+      case 'text':
+        content += String(data.text ?? data.content ?? '');
+        break;
+      case 'markdown':
+        content += String(data.content ?? data.text ?? '');
+        break;
+      case 'at':
+        content += `<@${String(data.id ?? '')}>`;
+        break;
+      case 'channel_mention':
+        content += `<#${String(data.id ?? '')}>`;
+        break;
+      case 'role_mention':
+        content += `<@&${String(data.id ?? '')}>`;
+        break;
+      case 'emoji':
+        content += data.animated
+          ? `<a:${String(data.name)}:${String(data.id)}>`
+          : `<:${String(data.name)}:${String(data.id)}>`;
+        break;
+      case 'image':
+      case 'audio':
+      case 'video':
+      case 'file': {
+        // canonical MediaRef 唯一媒体来源（中央 normalizeOutboundPayload 已保证形状）
+        const media = data.media;
+        if (!isMediaRef(media)) {
+          logger.warn(formatCompact({
+            op: 'discord_outbound_media_dropped',
+            type: item.type,
+            reason: 'missing_media_ref',
+          }));
+          break;
+        }
+        const extension = ({
+          'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif',
+          'image/webp': 'webp', 'audio/mpeg': 'mp3', 'audio/ogg': 'ogg',
+          'audio/wav': 'wav', 'video/mp4': 'mp4', 'video/webm': 'webm',
+        } as Record<string, string>)[media.mime_type?.split(';')[0].trim().toLowerCase() ?? ''];
+        const name = media.file_name
+          ?? (typeof data.name === 'string' && data.name ? data.name : `${item.type}${extension ? `.${extension}` : ''}`);
+        if (media.kind === 'url') {
+          files.push({ name, url: media.value });
+        } else if (media.kind === 'base64') {
+          files.push({ name, base64: media.value });
+        } else if (media.kind === 'path') {
+          files.push({ name, file: media.value });
+        } else {
+          // kind=file：Discord 无平台不透明文件引用，无法投递
+          logger.warn(formatCompact({
+            op: 'discord_outbound_media_dropped',
+            type: item.type,
+            reason: 'unsupported_media_kind',
+            kind: media.kind,
+          }));
+        }
+        break;
+      }
+      case 'reply':
+        if (typeof data.message_id === 'string' && data.message_id) {
+          reply = { messageReference: data.message_id, failIfNotExists: true };
+        }
+        break;
+      case 'share':
+        embeds.push({ title: String(data.title ?? ''), url: String(data.url ?? ''), description: String(data.description ?? data.content ?? ''), ...(data.image ? { image: { url: String(data.image) } } : {}) });
+        break;
+      case 'embed':
+        embeds.push({ ...data });
+        break;
+      case 'keyboard': {
+        const rows = (data.rows ?? []) as Array<Array<{
+          label: string;
+          payload: string;
+          disabled?: boolean;
+          style?: string;
+        }>>;
+        components = rows.map((row) => ({
+          type: 1 as const,
+          components: row.map((btn) => ({
+            type: 2 as const,
+            custom_id: String(btn.payload).slice(0, 100),
+            label: btn.label,
+            style: btn.style === 'danger' ? 4 : btn.style === 'primary' ? 1 : 2,
+            disabled: !!btn.disabled,
+          })),
+        }));
+        break;
+      }
+      default:
+        if (data.text != null) content += String(data.text);
+        break;
+    }
+  }
+
+  return {
+    ...(content.trim() ? { content: content.trim() } : {}),
+    ...(embeds.length > 0 ? { embeds: embeds.slice(0, 10) } : {}),
+    ...(files.length > 0 ? { files } : {}),
+    ...(components ? { components } : {}),
+    ...(reply ? { reply } : {}),
+  };
+}
+
+export function activityTypeCode(
+  type: DiscordActivity['type'],
+): number {
+  const map = {
+    PLAYING: 0,
+    STREAMING: 1,
+    LISTENING: 2,
+    WATCHING: 3,
+    COMPETING: 5,
+  } as const;
+  return map[type] ?? 0;
+}
+
+/** interactions 验签时间戳时效窗口（防重放）。 */
+export const DISCORD_SIGNATURE_MAX_AGE_MS = 5 * 60_000;
+
+export function verifyDiscordInteractionSignature(
+  publicKeyHex: string,
+  body: string,
+  signature: string,
+  timestamp: string,
+  nowMs: number = Date.now(),
+): boolean {
+  if (!publicKeyHex || !signature || !timestamp) return false;
+  try {
+    // 时效窗口 ±5min，超出直接拒绝（timestamp 为秒）
+    const ts = Number(timestamp);
+    if (!Number.isFinite(ts) || Math.abs(nowMs - ts * 1000) > DISCORD_SIGNATURE_MAX_AGE_MS) {
+      return false;
+    }
+    const key = createPublicKey({
+      key: Buffer.concat([
+        Buffer.from('302a300506032b6570032100', 'hex'),
+        Buffer.from(publicKeyHex, 'hex'),
+      ]),
+      format: 'der',
+      type: 'spki',
+    });
+    return cryptoVerify(null, Buffer.from(timestamp + body), key, Buffer.from(signature, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+export function formatSlashCommandContent(interaction: Record<string, unknown>): string {
+  const data = interaction.data as {
+    name?: string;
+    options?: Array<{ name: string; value: unknown }>;
+  } | undefined;
+  const parts = [`/${data?.name ?? 'command'}`];
+  for (const opt of data?.options ?? []) {
+    parts.push(`${opt.name}:${String(opt.value)}`);
+  }
+  return parts.join(' ');
+}
+
+export function interactionToInboundMessage(interaction: Record<string, unknown>): DiscordInboundMessage {
+  const user = (interaction.member as { user?: Record<string, unknown> } | undefined)?.user
+    ?? (interaction.user as Record<string, unknown> | undefined);
+  return {
+    id: String(interaction.id),
+    content: formatSlashCommandContent(interaction),
+    channelId: String(interaction.channel_id ?? ''),
+    channelKind: interaction.guild_id ? 'channel' : 'private',
+    authorId: String(user?.id ?? ''),
+    authorName: String(user?.username ?? user?.id ?? ''),
+    createdTimestamp: Date.now(),
+    guildId: interaction.guild_id != null ? String(interaction.guild_id) : undefined,
+  };
+}

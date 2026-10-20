@@ -1,0 +1,159 @@
+---
+title: "分层架构"
+description: "Zhin.js 由哪些包组成、它们如何分层，以及作为插件作者和贡献者分别需要遵守什么"
+---
+
+# 分层架构
+
+Zhin.js 由几十个小包组成，但**写 Bot 和插件时，你几乎只需要安装和导入 `zhin.js`**。本页解释这些包怎样分层、为什么这样分，适合想理解内部原理或参与贡献的读者。
+
+## 先记住三件事
+
+1. **对外只有一个入口。** `zhin.js` 重新导出插件作者需要的 API：`definePlugin` 从 `zhin.js` 导入，`defineCommand` 等从 `zhin.js/command`、`zhin.js/middleware` 等子路径导入。
+2. **AI 是可选的。** 默认安装只有 IM 核心（不到 10MB）；`@zhin.js/agent`、`@zhin.js/ai` 是可选依赖，通过 `zhin.js/agent`、`zhin.js/ai` 使用。
+3. **依赖只能向下。** 上层包可以依赖下层，下层永远不知道上层的存在。这条规则由 `pnpm check:architecture` 在 CI 中强制检查，不是口头约定。
+
+| 你要做的事 | 依赖哪里 |
+| --- | --- |
+| 写 Bot、普通插件 | 只依赖 `zhin.js` |
+| 写 AI 工具 | 再加 `@zhin.js/tool`（`npx zhin setup --ai` 会处理） |
+| 写一种新的能力类型（Feature） | 只依赖 `@zhin.js/feature-kit` / `@zhin.js/plugin-runtime`，不要依赖 `@zhin.js/core` |
+| 给框架本身贡献代码 | 遵守下文的分层规则 |
+
+## 分层总览
+
+```mermaid
+flowchart BT
+    subgraph basic["basic/ 基础层"]
+        logger["@zhin.js/logger"]
+        schema["@zhin.js/schema"]
+        schedule["@zhin.js/schedule"]
+        database["@zhin.js/database"]
+    end
+    subgraph runtime["运行时底座"]
+        interaction["@zhin.js/interaction<br/>用户交互契约"]
+        imc["@zhin.js/im-contract<br/>IM 传输契约"]
+        pr["@zhin.js/plugin-runtime<br/>generation / snapshot / handoff"]
+        fk["@zhin.js/feature-kit<br/>Feature 发现与投影"]
+        rt["@zhin.js/runtime<br/>RootRuntime / ProjectGraph / HMR"]
+    end
+    subgraph kernel["内核"]
+        k["@zhin.js/kernel"]
+    end
+    subgraph features["Feature 层（可组合能力）"]
+        ad["@zhin.js/adapter"]
+        cmd["@zhin.js/command"]
+        comp["@zhin.js/component"]
+        mw["@zhin.js/middleware"]
+        tool["@zhin.js/tool · skill · agent-feature · mcp-feature"]
+    end
+    subgraph im["IM 与 AI"]
+        ai["@zhin.js/ai"]
+        core["@zhin.js/core"]
+        agent["@zhin.js/agent"]
+    end
+    zhin["zhin.js（门面）"]
+    httpContract["HTTP Host 契约"]
+    http["HTTP / WebSocket Host"]
+    protocolHost["MCP / A2A Host"]
+    wire["Console wire 契约"]
+    cli["@zhin.js/cli（composition root）"]
+
+    pr --> fk --> ad & cmd & comp & mw & tool
+    imc --> ad & core & agent
+    interaction --> cmd & core
+    logger & schema & schedule --> k
+    logger --> database
+    logger --> ai
+    ad & cmd & comp & mw & k & database --> core
+    ai & core --> agent
+    core --> zhin
+    agent -. peer .-> zhin
+    pr & fk --> rt
+    pr & logger & schedule & httpContract & wire --> http
+    core & ai & k & httpContract --> protocolHost
+    rt & core & http & protocolHost --> cli
+```
+
+依赖关系以各包的 `package.json` 为准。从下往上读这张图：
+
+底座是三个彼此独立的零依赖契约：`@zhin.js/plugin-runtime` 提供 generation、snapshot、dispose 与 token；`@zhin.js/im-contract` 提供传输中立的身份、消息段、会话事件与投递语义；`@zhin.js/interaction` 描述用户交互的请求与结论。往上一层，`@zhin.js/feature-kit` 只依赖运行时底座，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / handler / tool / skill / …）只依赖这些底层契约，彼此不互相依赖。
+
+再往上，`@zhin.js/core` 把 adapter / command / component / middleware 四个 Feature 和 kernel 组装成 IM 层（Plugin、Adapter、Endpoint、消息收发）。门面包 `zhin.js` 把核心包重新导出为统一入口——插件作者只需 `import { ... } from 'zhin.js'`。`@zhin.js/agent`、`@zhin.js/ai` 等是可选 peer 依赖，默认安装只含 IM 核心，AI 按需加装。
+
+## 各层职责
+
+| 层 | 包 | 职责 |
+|----|----|------|
+| 基础层 | `basic/logger` `schema` `schedule` `database` | 日志、配置校验、定时、数据库，零/近零依赖 |
+| 运行时底座 | `packages/im/plugin-runtime`（用户从 `zhin.js` 导入） | generation 事务、快照租约、handoff、dispose（见 [generation 与生命周期](./generation-lifecycle.md)） |
+| IM 契约 | `@zhin.js/im-contract` | Endpoint、会话、消息段与投递结果；零 Core、零平台 SDK 依赖 |
+| 交互契约 | `@zhin.js/interaction` | `ask` / `sequence` 的结构化请求与类型化结论；零传输、零渲染依赖 |
+| Feature 机制 | `@zhin.js/feature-kit` | 声明 Feature provider、按约定发现能力、投影成运行时索引 |
+| 内核 | `@zhin.js/kernel` | 插件系统与错误体系，无 IM 概念 |
+| Feature 层 | `@zhin.js/adapter` `command` `component` `middleware` … | 一类能力的契约（如 `defineAdapter`）+ 投影索引（如 `AdapterIndex`） |
+| AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆，无 IM 概念 |
+| IM 层 | `@zhin.js/core` | Plugin、消息链路、命令分发（见 [消息流](./message-flow.md)） |
+| Workroom 领域 | `@zhin.js/workroom` | Workroom、Portfolio、Data Governance 领域代码与运行时装配（`src/workroom-runtime/`）；位于 `agent` 之上（workroom → agent，`agent` 不得反向依赖），领域目录仍仅依赖 `im-contract` |
+| Agent | `@zhin.js/agent` | 多模型编排、工具安全策略、MCP client |
+| 门面 | `zhin.js` | 再导出 core 创作面；`zhin.js/agent`、`zhin.js/ai` 子路径按需暴露 |
+| 运行时 | `@zhin.js/runtime` | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR |
+| 装配 | `@zhin.js/cli` | composition root，`zhin runtime start` 把一切装起来 |
+
+图展示主要依赖，完整依赖仍以各包的 `package.json` 为准。允许的分层边界由
+`scripts/check-architecture-layers.mjs` 执行；新增依赖时同时核对文档与门禁，不能只修改其中一处。
+
+## Composition root：`@zhin.js/cli`
+
+框架本身不"启动"任何东西——各层只提供机制。把机制组装成一个可运行进程的代码集中在 `@zhin.js/cli`，这是全仓库唯一允许跨层导入所有包的地方（分层规则的唯一例外）。
+
+`zhin runtime start`（定义在 `basic/cli/src/commands/runtime.ts`，装配逻辑在 `basic/cli/src/plugin-runtime/`）做的事：
+
+1. 用 `createConfigDocument`（`@zhin.js/config-file`）把唯一的 YAML/JSON Root 配置包装成带事务的 `ConfigDocumentPort`；
+2. 创建 `RootRuntime`（`@zhin.js/runtime`），注入模块加载器（开发模式为 `NativeDevelopmentModuleRuntime`）、配置端口和 Root 资源安装器；
+3. 通过 `installResources` 安装 Host 级资源：HTTP Host、数据库、Agent Host（含 AI 兜底处理器）、Console API 等；
+4. 启动后挂上 `HmrCoordinator`，文件变更触发 generation 重载或进程重启。
+
+用户项目的入口因此可以极小。`examples/minimal-bot/package.json`：
+
+```json
+{
+  "name": "minimal-bot",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch"
+  },
+  "dependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": []
+  }
+}
+```
+
+项目本身就是一个插件（Root Plugin），CLI 负责发现并启动它。插件清单字段的完整解释见 [插件模型](./plugin-model.md)，配置的声明与校验见 [配置即数据](./config-as-data.md)。
+
+## 分层规则的推论
+
+写 Feature（新能力类型）时只依赖 `feature-kit` / `plugin-runtime`，不要 import `core`。
+`kernel`、`ai` 不知道群、私聊这些 IM 概念。`im-contract` 定义 IM 契约，Adapter 和 Core 消费这些契约。
+Host 均由 CLI 装配，但不属于同一依赖层：HTTP / WebSocket Host 只依赖基础服务、
+Plugin Runtime、HTTP 契约和 Console wire 契约，不依赖 Core 或 Agent；MCP / A2A Host
+可以消费 Core、AI 与 Kernel，通过 HTTP 契约接入路由，不依赖具体 HTTP Host 实现。
+插件不直接依赖 Host 进程。
+
+`@zhin.js/workroom` 内部遵循单向边界：`workroom/`、`portfolio/`、`data-governance/` 拥有领域值对象、策略和端口，且不得导入任何框架包（仅 `im-contract` 与 Node 内置模块）；`workroom-runtime/` 负责把 `@zhin.js/agent` 的 generation-owned 能力适配到这些端口。`@zhin.js/agent` 不引用 Workroom；该约束由 `pnpm check:architecture` 检查。
+
+## JSX 与展示组件
+
+`@zhin.js/jsx` 提供惰性 JSX tree 与 HTML serializer，仅依赖基础 `im-contract` 的类型。Core 默认把 JSX 排版成有序 Segment；只有 `<html>` / `<Html>` 子树转为 `segment.html`。小写原生标签具有类型提示且无需导入，注册组件可按名字作为标签使用；`zhin.js/jsx` 是作者门面。可选 `@zhin.js/components` 使用 JSX 基础包及 Markdown／代码高亮依赖，展示位接受 `JSXRenderable`，不依赖 Core、React 或图片引擎。图片工具只消费 HTML，平台差异由 Adapter 声明策略承接。
+
+可选 `@zhin.js/tailwind` 使用官方 Tailwind 编译器将静态工具类转换为内联样式，输出可用于 JSX、组件局部样式和共享主题。它不依赖 Core、组件库或渲染引擎；JSX 基础包也不加载它。图片渲染统一由可选 `@zhin.js/html-renderer` 使用 `@pixel.js/shotium` 完成，不再维护 Satori 图片工具包。

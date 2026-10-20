@@ -1,0 +1,88 @@
+database:
+  dialect: sqlite
+  filename: ./data/bot.db
+  mode: wal
+
+endpoints:
+  - context: icqq
+    name: ${ICQQ_ACCOUNT}
+    master: 1659488338
+  - context: github
+    name: zhin-ai
+    app_id: ${GITHUB_APP_ID}
+    private_key: ${GITHUB_PRIVATE_KEY}
+    webhook_secret: ${GITHUB_WEBHOOK_SECRET}
+    webhook_path: /pub/github/webhook
+
+plugins:
+  - example
+  - "@zhin.js/http"
+  - "@zhin.js/console"
+  - "@zhin.js/adapter-sandbox"
+  - "@zhin.js/adapter-icqq"
+  - "@zhin.js/adapter-github"
+
+hostApi:
+  lazyLoad: true
+inbox:
+  enabled: true
+
+# AI：providers（命名实例）+ agents（绑定；IM 消息总是交给 zhin）
+# 编排使用 discover / load_tool 按需加载能力，并通过 spawn_task 委派复杂任务
+ai:
+  providers:
+    openai-main:
+      sdk: openai
+      apiKey: ${AI_API_KEY}
+      baseUrl: ${AI_API_BASE}
+  agents:
+    zhin:
+      provider: openai-main
+      model: mimo-v2.5-pro
+      mcpServers: [icqq]
+  sessions:
+    maxHistory: 200
+    expireMs: 604800000
+    useDatabase: true
+  context:
+    enabled: true
+    maxRecentMessages: 100
+    summaryThreshold: 50
+    keepAfterSummary: 10
+    maxContextTokens: 4000
+  mcpServers:
+    # icqq 守护进程 MCP（地址/令牌：icqq service status / icqq config get mcp）
+    - name: icqq
+      transport: streamable-http
+      url: ${ICQQ_MCP_URL}
+      headers:
+        Authorization: "Bearer ${ICQQ_MCP_TOKEN}"
+  agent:
+    execSecurity: allowlist
+    execPreset: custom
+    execApprovalMode: ask
+    subagentExecApprovalMode: auto
+    workerExecApprovalMode: auto
+    execAllowlist:
+      - echo
+      - sort
+      - uniq
+      - jq
+      - icqq
+      - du
+      - df
+      - uname
+      - which
+  trigger:
+    prefixes:
+      - "AI:"
+    respondToAt: true
+    respondToPrivate: true
+    timeout: 60000
+
+60s:
+  apiBase: https://services.zhin.dev
+
+http:
+  token: ${HTTP_TOKEN}
+  base: /api

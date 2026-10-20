@@ -1,0 +1,43 @@
+services:
+  zhin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-UTC}
+      HTTP_TOKEN: ${HTTP_TOKEN:?set HTTP_TOKEN in .env}
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8068:8068"
+    volumes:
+      - zhin-data:/app/data
+      - zhin-state:/app/.zhin
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:8068/pub/health')
+          .then(response => { if (!response.ok) process.exit(1) })
+          .catch(() => process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  zhin-data:
+  zhin-state:

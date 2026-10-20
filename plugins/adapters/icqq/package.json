@@ -1,0 +1,147 @@
+{
+  "name": "@zhin.js/adapter-icqq",
+  "version": "1.1.11",
+  "description": "Zhin.js ICQQ adapter — direct connection to @icqqjs/icqq",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "icqq",
+    "qq",
+    "tencent",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/icqq"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "pnpm run test:types && NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/icqq/tests",
+    "test:types": "tsc -p tsconfig.type-tests.json",
+    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
+  },
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
+  },
+  "peerDependencies": {
+    "@icqqjs/icqq": "^1.12.2",
+    "@zhin.js/adapter": "workspace:^",
+    "@zhin.js/command": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "@zhin.js/prompt-section": "workspace:^",
+    "zhin.js": "workspace:^",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@icqqjs/icqq": {
+      "optional": true
+    },
+    "@zhin.js/command": {
+      "optional": true
+    },
+    "@zhin.js/prompt-section": {
+      "optional": true
+    },
+    "zhin.js": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@icqqjs/icqq": "^1.12.2",
+    "@types/node": "^26.1.2",
+    "@zhin.js/prompt-section": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "files": [
+    "adapters",
+    "commands",
+    "plugin.js",
+    "schema.json",
+    "src",
+    "lib",
+    "agents",
+    "README.md",
+    "CHANGELOG.md",
+    "PERMITS.md",
+    "prompt-sections"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      }
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.js",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/agent-feature",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  }
+}

@@ -1,0 +1,4090 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "http": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "HTTP, Console, REST/RPC/SSE, and Webhook Host.",
+      "x-descriptionZh": "HTTP、Console、REST/RPC/SSE 与 Webhook Host。",
+      "properties": {
+        "readiness": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Required runtime components for /pub/ready; no external network probes.",
+          "x-descriptionZh": "/pub/ready 要求就绪的运行时组件；不执行外部网络探测。",
+          "properties": {
+            "database": {
+              "type": "boolean",
+              "default": true,
+              "description": "Require an initialized Database Host (not a live database query).",
+              "x-descriptionZh": "要求 Database Host 已初始化（不执行实时数据库查询）。"
+            },
+            "endpoints": {
+              "type": "array",
+              "uniqueItems": true,
+              "description": "Required Endpoint admission slots, selected by exact plugin owner and stable slot name.",
+              "x-descriptionZh": "必须开放入站的 Endpoint，按插件 owner 与稳定槽名精确选择。",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "owner",
+                  "name"
+                ],
+                "properties": {
+                  "owner": {
+                    "type": "string",
+                    "pattern": "^root(?:/[a-z0-9][a-z0-9-]*)*$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^\\u0000]+$"
+                  }
+                }
+              }
+            },
+            "agents": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Required configured Agent bindings; does not verify model credentials or provider reachability.",
+              "x-descriptionZh": "必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。"
+            }
+          }
+        },
+        "host": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "监听地址。"
+        },
+        "port": {
+          "type": [
+            "number",
+            "string",
+            "null"
+          ],
+          "description": "监听端口。"
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "HTTP Host 访问令牌。",
+          "writeOnly": true,
+          "x-zhin-config": {
+            "secret": true
+          }
+        },
+        "tokens": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "token": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "访问令牌。",
+                "writeOnly": true,
+                "x-zhin-config": {
+                  "secret": true
+                }
+              },
+              "scope": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "令牌作用范围。",
+                "x-zhin-config": {
+                  "options": [
+                    {
+                      "label": "完整管理",
+                      "value": "full"
+                    },
+                    {
+                      "label": "只读演示",
+                      "value": "demo"
+                    }
+                  ]
+                }
+              },
+              "principalId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "稳定管理主体身份。"
+              }
+            }
+          }
+        },
+        "corsOrigins": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "base": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "API 路径前缀。"
+        },
+        "tls": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "enabled": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ],
+                  "description": "是否启用 TLS；省略时由 HTTP Host 的 TLS 解析规则决定。"
+                },
+                "keyFile": {
+                  "type": "string",
+                  "description": "TLS 私钥文件路径。"
+                },
+                "certFile": {
+                  "type": "string",
+                  "description": "TLS 证书文件路径。"
+                },
+                "caFile": {
+                  "type": "string",
+                  "description": "CA 证书文件路径。"
+                },
+                "passphrase": {
+                  "type": "string",
+                  "description": "私钥口令。",
+                  "writeOnly": true,
+                  "x-zhin-config": {
+                    "secret": true
+                  }
+                },
+                "minVersion": {
+                  "type": "string",
+                  "description": "最低 TLS 版本。"
+                },
+                "ciphers": {
+                  "type": "string",
+                  "description": "TLS cipher 列表。"
+                }
+              }
+            }
+          ]
+        },
+        "listeners": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "enabled": {
+                "type": [
+                  "boolean",
+                  "string"
+                ],
+                "description": "是否启用此监听器。"
+              },
+              "host": {
+                "type": "string",
+                "description": "监听地址。"
+              },
+              "port": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "监听端口。"
+              },
+              "tls": {
+                "anyOf": [
+                  {
+                    "const": false
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                      "enabled": {
+                        "type": [
+                          "boolean",
+                          "string"
+                        ],
+                        "description": "是否启用 TLS；省略时由 HTTP Host 的 TLS 解析规则决定。"
+                      },
+                      "keyFile": {
+                        "type": "string",
+                        "description": "TLS 私钥文件路径。"
+                      },
+                      "certFile": {
+                        "type": "string",
+                        "description": "TLS 证书文件路径。"
+                      },
+                      "caFile": {
+                        "type": "string",
+                        "description": "CA 证书文件路径。"
+                      },
+                      "passphrase": {
+                        "type": "string",
+                        "description": "私钥口令。",
+                        "writeOnly": true,
+                        "x-zhin-config": {
+                          "secret": true
+                        }
+                      },
+                      "minVersion": {
+                        "type": "string",
+                        "description": "最低 TLS 版本。"
+                      },
+                      "ciphers": {
+                        "type": "string",
+                        "description": "TLS cipher 列表。"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Database Host and dialect connection options.",
+      "x-descriptionZh": "Database Host 与方言连接参数。",
+      "properties": {
+        "dialect": {
+          "type": "string",
+          "description": "数据库方言。",
+          "x-zhin-config": {
+            "options": [
+              {
+                "value": "memory",
+                "label": "memory"
+              },
+              {
+                "value": "sqlite",
+                "label": "sqlite"
+              },
+              {
+                "value": "mysql",
+                "label": "mysql"
+              },
+              {
+                "value": "pg",
+                "label": "pg"
+              },
+              {
+                "value": "mongodb",
+                "label": "mongodb"
+              },
+              {
+                "value": "redis",
+                "label": "redis"
+              }
+            ]
+          }
+        },
+        "filename": {
+          "type": "string",
+          "description": "SQLite 文件路径。"
+        },
+        "mode": {
+          "type": "string",
+          "description": "SQLite 兼容模式字段。"
+        },
+        "host": {
+          "type": "string",
+          "description": "数据库主机。"
+        },
+        "port": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "网络数据库端口。"
+        },
+        "user": {
+          "type": "string",
+          "description": "MySQL / PostgreSQL 用户名。"
+        },
+        "username": {
+          "type": "string",
+          "description": "Redis 用户名。"
+        },
+        "password": {
+          "type": "string",
+          "description": "连接密码。",
+          "writeOnly": true,
+          "x-zhin-config": {
+            "secret": true
+          }
+        },
+        "database": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "description": "MySQL / PostgreSQL 数据库名，或 Redis 数据库索引。"
+        },
+        "uri": {
+          "type": "string",
+          "description": "MySQL 连接 URI（可能含凭据）。",
+          "writeOnly": true,
+          "x-zhin-config": {
+            "secret": true
+          }
+        },
+        "connectionString": {
+          "type": "string",
+          "description": "PostgreSQL 连接串（可能含凭据）。",
+          "writeOnly": true,
+          "x-zhin-config": {
+            "secret": true
+          }
+        },
+        "url": {
+          "type": "string",
+          "description": "MongoDB / Redis 连接 URL（可能含凭据）。",
+          "writeOnly": true,
+          "x-zhin-config": {
+            "secret": true
+          }
+        },
+        "dbName": {
+          "type": "string",
+          "description": "MongoDB 数据库名。"
+        },
+        "pool": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "min": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ],
+              "description": "最少连接数。"
+            },
+            "max": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ],
+              "description": "最多连接数。"
+            },
+            "acquireTimeoutMillis": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ],
+              "description": "获取连接超时毫秒。"
+            },
+            "idleTimeoutMillis": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ],
+              "description": "空闲连接超时毫秒。"
+            }
+          }
+        },
+        "socket": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Redis 主机。"
+            },
+            "port": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Redis 端口。"
+            },
+            "path": {
+              "type": "string",
+              "description": "Unix socket 路径。"
+            },
+            "connectTimeout": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "连接超时毫秒。"
+            },
+            "tls": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "启用 TLS。"
+            },
+            "keepAlive": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "TCP keep-alive 毫秒。"
+            },
+            "noDelay": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "TCP noDelay。"
+            }
+          }
+        },
+        "ssl": {
+          "anyOf": [
+            {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "rejectUnauthorized": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ],
+                  "description": "校验证书。"
+                },
+                "ca": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "驱动可识别的二进制证书；非普通文本编辑项。"
+                    }
+                  ],
+                  "description": "CA 证书内容或路径；由驱动解释。"
+                },
+                "cert": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "驱动可识别的二进制证书；非普通文本编辑项。"
+                    }
+                  ],
+                  "description": "客户端证书。"
+                },
+                "key": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "description": "驱动可识别的二进制证书；非普通文本编辑项。"
+                    }
+                  ],
+                  "description": "客户端私钥。",
+                  "writeOnly": true,
+                  "x-zhin-config": {
+                    "secret": true
+                  }
+                },
+                "passphrase": {
+                  "type": "string",
+                  "description": "私钥口令。",
+                  "writeOnly": true,
+                  "x-zhin-config": {
+                    "secret": true
+                  }
+                },
+                "servername": {
+                  "type": "string",
+                  "description": "TLS server name。"
+                }
+              }
+            }
+          ]
+        },
+        "charset": {
+          "type": "string",
+          "description": "MySQL 字符集。"
+        },
+        "timezone": {
+          "type": "string",
+          "description": "MySQL 时区。"
+        },
+        "connectTimeout": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "MySQL 连接超时毫秒。"
+        },
+        "connectionTimeoutMillis": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "PostgreSQL 连接超时毫秒。"
+        },
+        "query_timeout": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "PostgreSQL 查询超时毫秒。"
+        },
+        "statement_timeout": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "PostgreSQL statement 超时毫秒。"
+        },
+        "application_name": {
+          "type": "string",
+          "description": "PostgreSQL 应用名称。"
+        },
+        "maxPoolSize": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "MongoDB 最大连接池大小。"
+        },
+        "minPoolSize": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "MongoDB 最小连接池大小。"
+        },
+        "serverSelectionTimeoutMS": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "MongoDB server 选择超时毫秒。"
+        },
+        "connectTimeoutMS": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "MongoDB 连接超时毫秒。"
+        },
+        "socketTimeoutMS": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "MongoDB socket 超时毫秒。"
+        },
+        "authSource": {
+          "type": "string",
+          "description": "MongoDB 认证数据库。"
+        },
+        "replicaSet": {
+          "type": "string",
+          "description": "MongoDB 副本集。"
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "username": {
+              "type": "string",
+              "description": "MongoDB 用户名。"
+            },
+            "password": {
+              "type": "string",
+              "description": "MongoDB 密码。",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            }
+          }
+        },
+        "disableOfflineQueue": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "Redis 禁止离线队列。"
+        },
+        "pingInterval": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "Redis 心跳间隔毫秒。"
+        }
+      }
+    },
+    "ai": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Providers, Agents, sessions, memory, tools, and execution security.",
+      "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。",
+      "properties": {
+        "decisions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "provider"
+          ],
+          "description": "Optional structured-decision service. Missing tasks are off; use shadow before active.",
+          "x-descriptionZh": "可选的结构化决策服务。未配置的任务关闭；建议先用 shadow 验证。",
+          "properties": {
+            "provider": {
+              "type": "string",
+              "pattern": "^root(/[a-z0-9][a-z0-9-]*)+$",
+              "description": "Exact enabled DecisionProvider Plugin owner, such as root/typesafe.",
+              "x-descriptionZh": "提供已启用 DecisionProvider 的精确插件身份，例如 root/typesafe。"
+            },
+            "skills": {
+              "$ref": "#/$defs/decisionTask"
+            },
+            "tools": {
+              "$ref": "#/$defs/decisionTask"
+            },
+            "memory": {
+              "$ref": "#/$defs/decisionTask"
+            },
+            "agents": {
+              "$ref": "#/$defs/decisionTask"
+            },
+            "approval": {
+              "$ref": "#/$defs/decisionTask"
+            }
+          }
+        },
+        "workroom": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog.",
+          "x-descriptionZh": "进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。",
+          "properties": {
+            "trustedPackPublishers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true,
+              "description": "Authenticated Console principal ids allowed to publish shared Capability Packs.",
+              "x-descriptionZh": "允许发布共享 Capability Pack 的 Console 认证 principalId。"
+            },
+            "disclosure": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Explicit P12 model processor contracts for Workroom disclosure bootstrap.",
+              "x-descriptionZh": "Workroom 披露初始化使用的显式 P12 模型处理方契约。",
+              "properties": {
+                "tenantId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelProviders": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "endpoint",
+                      "processingRegions",
+                      "maxConfidentiality",
+                      "external",
+                      "noTraining",
+                      "loggingMode",
+                      "maximumRetentionSeconds",
+                      "allowsRedisclosure",
+                      "supportsDeletion"
+                    ],
+                    "properties": {
+                      "endpoint": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "owner": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "trustDomain": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "processingRegions": {
+                        "type": "array",
+                        "minItems": 1,
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "maxConfidentiality": {
+                        "type": "string",
+                        "enum": [
+                          "public",
+                          "project_internal",
+                          "confidential",
+                          "restricted"
+                        ]
+                      },
+                      "external": {
+                        "type": "boolean"
+                      },
+                      "noTraining": {
+                        "type": "boolean"
+                      },
+                      "loggingMode": {
+                        "type": "string",
+                        "enum": [
+                          "disabled",
+                          "metadata_only",
+                          "full"
+                        ]
+                      },
+                      "maximumRetentionSeconds": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "allowsRedisclosure": {
+                        "type": "boolean"
+                      },
+                      "supportsDeletion": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "agent": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Agent execution, queueing, tool, and model policies.",
+          "x-descriptionZh": "Agent 执行、排队、工具与模型策略。",
+          "properties": {
+            "inboundQueue": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Inbound turn queue policy.",
+              "x-descriptionZh": "入站回合排队策略。",
+              "properties": {
+                "groupMode": {
+                  "type": "string",
+                  "enum": [
+                    "supersede",
+                    "fifo"
+                  ],
+                  "description": "supersede (default): a sender's new message replaces their own unanswered turn; fifo: every message waits in arrival order. Other members' messages always queue.",
+                  "x-descriptionZh": "supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。"
+                },
+                "ttlMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 180000,
+                  "description": "A queued turn that waited longer than this is dropped with a short notice. 0 disables expiry.",
+                  "x-descriptionZh": "排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。"
+                },
+                "maxQueuedTurns": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 5,
+                  "description": "Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply.",
+                  "x-descriptionZh": "同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。"
+                },
+                "coalesceWindowMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                }
+              }
+            },
+            "execSecurity": {
+              "type": "string",
+              "enum": [
+                "deny",
+                "allowlist",
+                "full"
+              ],
+              "description": "Shell command security boundary.",
+              "x-descriptionZh": "Shell 命令安全边界。"
+            },
+            "execPreset": {
+              "type": "string",
+              "enum": [
+                "readonly",
+                "network",
+                "development",
+                "custom"
+              ],
+              "description": "Command allowlist preset used outside full mode.",
+              "x-descriptionZh": "非 full 模式使用的命令白名单预设。"
+            },
+            "network": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Network access for IM turns (web_fetch / web_search and networked commands). Off by default; enabled allows HTTPS egress, optionally limited to allowedDomains. When enabled is unset, execPreset: network still enables it for compatibility.",
+              "x-descriptionZh": "IM 回合的出网权限（web_fetch / web_search 与联网命令）。默认关闭；enabled 开启 HTTPS 出网，allowedDomains 非空时只允许这些域名。未设置 enabled 时兼容旧配置：execPreset: network 视为开启。",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Allow HTTPS egress for IM turns.",
+                  "x-descriptionZh": "是否允许 IM 回合 HTTPS 出网。"
+                },
+                "allowedDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "When non-empty, only these domains (and their subdomains) are reachable.",
+                  "x-descriptionZh": "非空时只允许访问这些域名（含子域名）。"
+                }
+              }
+            },
+            "masterShell": {
+              "type": "string",
+              "enum": [
+                "off",
+                "isolated"
+              ],
+              "default": "off",
+              "description": "Shell access for the master in IM private chats. off: no bash in IM turns. isolated: master DMs run bash inside a Docker container (workspace writable, no network, development allowlist, approval for anything else); fails closed when Docker is unavailable.",
+              "x-descriptionZh": "IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。"
+            },
+            "toolBudget": {
+              "type": "object",
+              "description": "Progress-aware tool-call budget. maxIterations is a soft budget extended while the turn makes progress; hard caps always apply.",
+              "x-descriptionZh": "进度感知的工具调用预算。maxIterations 为软上限，回合有进展时自动延长；硬上限始终生效。",
+              "properties": {
+                "extendBy": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 10,
+                  "description": "Steps added per extension when progressing; 0 disables.",
+                  "x-descriptionZh": "有进展时每次延长的步数；0 关闭。"
+                },
+                "progressWindow": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 5,
+                  "description": "Progress must have happened within this many recent steps.",
+                  "x-descriptionZh": "最近多少步内有进展才延长。"
+                },
+                "maxTotalIterations": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 40,
+                  "description": "Hard step cap per turn segment.",
+                  "x-descriptionZh": "每段回合的硬步数上限。"
+                },
+                "maxSubagentTotalIterations": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 30,
+                  "description": "Hard step cap for an in-turn sub-agent.",
+                  "x-descriptionZh": "回合内子 Agent 的硬步数上限。"
+                },
+                "maxWallClockMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 600000,
+                  "description": "Wall-clock cap for the whole turn in ms; 0 disables.",
+                  "x-descriptionZh": "整个回合的时间上限（毫秒）；0 关闭。"
+                },
+                "maxTotalTokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 0,
+                  "description": "Token cap for the whole turn; 0 disables.",
+                  "x-descriptionZh": "整个回合的 Token 上限；0 关闭。"
+                },
+                "failureStreakLimit": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 3,
+                  "description": "Consecutive tool failures that stop extensions.",
+                  "x-descriptionZh": "连续失败多少次后不再延长。"
+                },
+                "repeatLimit": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 2,
+                  "description": "Consecutive identical repeated calls that stop extensions.",
+                  "x-descriptionZh": "连续重复相同调用多少次后不再延长。"
+                },
+                "autoContinue": {
+                  "type": "string",
+                  "enum": [
+                    "off",
+                    "master_dm",
+                    "on"
+                  ],
+                  "default": "master_dm",
+                  "description": "Auto-continue a progressing turn that hit its budget: off, only in the master's private chat, or always. Continuations reuse the same turn (same policy and approvals).",
+                  "x-descriptionZh": "回合有进展但预算用尽时自动续跑：off 关闭；master_dm 仅主人私聊；on 总是。续跑沿用同一回合的策略与审批。"
+                },
+                "maxContinuations": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 2,
+                  "description": "Maximum automatic continuations per turn.",
+                  "x-descriptionZh": "每回合最多自动续跑次数。"
+                },
+                "progressUpdates": {
+                  "type": "string",
+                  "enum": [
+                    "off",
+                    "private",
+                    "all"
+                  ],
+                  "default": "private",
+                  "description": "Brief natural-language progress updates during long turns: off, private chats only, or all chats (groups opt in).",
+                  "x-descriptionZh": "长回合中的简短进度更新：off 关闭；private 仅私聊；all 包括群聊（群聊需显式开启）。"
+                },
+                "progressMinIntervalMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 45000,
+                  "description": "Minimum time between progress updates in ms.",
+                  "x-descriptionZh": "两次进度更新的最小间隔（毫秒）。"
+                },
+                "progressMaxUpdates": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 3,
+                  "description": "Maximum progress updates per turn; 0 disables.",
+                  "x-descriptionZh": "每回合最多进度更新次数；0 关闭。"
+                }
+              }
+            },
+            "injectionGuard": {
+              "type": "object",
+              "description": "Prompt-injection defences. After lower-trust content (tool results, web pages, files, sub-agent reports, background messages) enters a turn, high-risk actions (shell, messaging other conversations, config changes, scheduling) need approval; replies are checked for system-prompt, secret and other-session memory leaks.",
+              "x-descriptionZh": "注入防护。外部内容（工具结果、网页、文件、子 agent 报告、群聊背景消息）进入回合后，高危动作（执行命令、向其他会话发消息、改配置、定时任务）必须审批；出站回复检查系统提示、密钥与其他会话记忆泄露。",
+              "properties": {
+                "confirmHighRisk": {
+                  "type": "string",
+                  "enum": [
+                    "external_content",
+                    "off"
+                  ],
+                  "default": "external_content",
+                  "description": "external_content: high-risk actions after external content always ask for approval (denied in unattended turns). off: disabled.",
+                  "x-descriptionZh": "external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。"
+                },
+                "outboundCheck": {
+                  "type": "string",
+                  "enum": [
+                    "redact",
+                    "off"
+                  ],
+                  "default": "redact",
+                  "description": "redact: mask leaked system-prompt lines, secrets and other sessions' memory in replies and outbound tool messages. off: disabled.",
+                  "x-descriptionZh": "redact：在回复和外发工具消息中屏蔽泄露的系统提示、密钥和其他会话记忆；off：关闭。"
+                },
+                "trustedOutputTools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": [],
+                  "description": "Tools whose results do not count as external content.",
+                  "x-descriptionZh": "结果不算外部内容的工具。"
+                }
+              }
+            },
+            "usageQuota": {
+              "type": "object",
+              "description": "Per-user and per-group token quotas and a per-group rate limit. All limits are off (0) by default; the owner is exempt by default. Counters are kept in memory.",
+              "x-descriptionZh": "按用户 / 按群的 token 配额与群速率限制。默认全部关闭（0），主人默认不受限；计数保存在内存中。",
+              "properties": {
+                "windowMs": {
+                  "type": "integer",
+                  "minimum": 60000,
+                  "default": 86400000,
+                  "description": "Quota window in ms.",
+                  "x-descriptionZh": "配额周期（毫秒）。"
+                },
+                "perUserTokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 0,
+                  "description": "Tokens one user may use per window; 0 = unlimited.",
+                  "x-descriptionZh": "每个用户每周期可用的 token；0 不限。"
+                },
+                "perGroupTokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 0,
+                  "description": "Tokens one group may use per window; 0 = unlimited.",
+                  "x-descriptionZh": "每个群每周期可用的 token；0 不限。"
+                },
+                "perGroupRequestsPerMinute": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 0,
+                  "description": "Turns one group may start per minute; 0 = unlimited.",
+                  "x-descriptionZh": "每个群每分钟可发起的回合数；0 不限。"
+                },
+                "exemptOwner": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "The owner is never limited.",
+                  "x-descriptionZh": "主人不受限制。"
+                }
+              }
+            },
+            "subagentTurnMode": {
+              "type": "string",
+              "enum": [
+                "off",
+                "sync"
+              ],
+              "default": "off",
+              "description": "Sub-agents in IM turns. off: no spawn_task. sync: spawn_task runs a sub-agent inside the current turn with at most the parent's permissions (never wider; no bash unless the parent could run it) and approvals routed to the same conversation.",
+              "x-descriptionZh": "IM 回合中的子 Agent。off：不提供 spawn_task；sync：spawn_task 在当前回合内同步运行子 Agent，权限不超过父回合（父回合不能运行 bash 时子 Agent 也没有），审批发往同一会话。"
+            },
+            "execApprovalMode": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "bypass",
+                "auto"
+              ],
+              "description": "Approval policy for main Agent commands.",
+              "x-descriptionZh": "主 Agent 命令的审批策略。"
+            },
+            "subagentExecApprovalMode": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "bypass",
+                "auto"
+              ],
+              "description": "Approval policy for sub-Agent commands.",
+              "x-descriptionZh": "子 Agent 命令的审批策略。"
+            },
+            "workerExecApprovalMode": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "bypass",
+                "auto"
+              ],
+              "description": "Approval policy for worker commands.",
+              "x-descriptionZh": "Worker 命令的审批策略。"
+            },
+            "toolExecution": {
+              "type": "string",
+              "enum": [
+                "parallel",
+                "sequential",
+                "tiered"
+              ],
+              "description": "How tool calls in one model step are scheduled.",
+              "x-descriptionZh": "同一模型步骤中的工具调用调度方式。"
+            },
+            "modelSizeHint": {
+              "type": "string",
+              "enum": [
+                "",
+                "small",
+                "medium",
+                "large"
+              ],
+              "description": "Optional model-size hint; an empty string clears the hint.",
+              "x-descriptionZh": "可选模型尺寸提示；空字符串表示清除提示。"
+            },
+            "promptCacheRetention": {
+              "type": "string",
+              "enum": [
+                "in_memory",
+                "24h"
+              ],
+              "description": "Provider prompt-cache retention policy.",
+              "x-descriptionZh": "Provider Prompt Cache 保留策略。"
+            },
+            "steeringMode": {
+              "type": "string",
+              "enum": [
+                "one-at-a-time",
+                "all"
+              ],
+              "description": "Process steering messages one at a time or drain all pending messages together.",
+              "x-descriptionZh": "逐条处理 Steering 消息，或一次取出全部待处理消息。"
+            },
+            "followUpMode": {
+              "type": "string",
+              "enum": [
+                "one-at-a-time",
+                "all"
+              ],
+              "description": "Process follow-up messages one at a time or drain all pending messages together.",
+              "x-descriptionZh": "逐条处理 Follow-up 消息，或一次取出全部待处理消息。"
+            },
+            "outputSchema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "segments"
+                  ]
+                },
+                {
+                  "type": "object"
+                }
+              ],
+              "description": "Final-output mode: defaults to segments for IM conversations; false for text, true or segments for ordered canonical segments, or a custom JSON Schema object. Detached and non-IM turns do not inherit the IM preset.",
+              "x-descriptionZh": "最终输出默认在 IM 会话使用 segments：false 显式使用文本，true 或 segments 使用有序规范消息段，也可传入自定义 JSON Schema。隔离及非 IM 调用不应用 IM 预设。"
+            },
+            "schedule": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Unattended Schedule execution policy.",
+              "x-descriptionZh": "无人值守 Schedule 执行策略。",
+              "properties": {
+                "security": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Schedule command security policy.",
+                  "x-descriptionZh": "Schedule 命令安全策略。",
+                  "properties": {
+                    "execPreset": {
+                      "type": "string",
+                      "enum": [
+                        "readonly",
+                        "network"
+                      ],
+                      "description": "Schedule Jobs may use only the read-only or network preset.",
+                      "x-descriptionZh": "Schedule Job 只能使用只读或网络预设。"
+                    },
+                    "allowedDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "budget": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "maxTokens": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "maxToolCalls": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    },
+                    "timeoutMs": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "execAllowlist": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "allowlist 模式下允许的命令（支持正则字符串，如 \"^ls \"、\"^cat \"），与 preset 合并"
+            },
+            "phaseTrace": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启）"
+            },
+            "modelHarness": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "models": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                      "maxIterations": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "explorationBudget": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "连续只读探索调用达到该次数时注入提示；0 关闭"
+                      },
+                      "explorationGuidance": {
+                        "type": [
+                          "boolean",
+                          "string"
+                        ],
+                        "description": "在系统提示中加入\"先规划、限定目标文件\"的探索纪律"
+                      },
+                      "iterationExtension": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "每次有进展时延长的步数（覆盖 toolBudget.extendBy）"
+                      },
+                      "maxTotalIterations": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations）"
+                      },
+                      "emptyReplyRetries": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "空回复（无文本且无工具调用）时额外重试次数；默认 0"
+                      },
+                      "requestTimeoutMs": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "单次模型请求超时（毫秒）；0 关闭"
+                      }
+                    }
+                  },
+                  "description": "模型级覆盖：支持 \"gpt-4o\" 或 \"openai:gpt-4o\""
+                },
+                "providerPatterns": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                      "maxIterations": {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      "explorationBudget": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "连续只读探索调用达到该次数时注入提示；0 关闭"
+                      },
+                      "explorationGuidance": {
+                        "type": [
+                          "boolean",
+                          "string"
+                        ],
+                        "description": "在系统提示中加入\"先规划、限定目标文件\"的探索纪律"
+                      },
+                      "iterationExtension": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "每次有进展时延长的步数（覆盖 toolBudget.extendBy）"
+                      },
+                      "maxTotalIterations": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations）"
+                      },
+                      "emptyReplyRetries": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "空回复（无文本且无工具调用）时额外重试次数；默认 0"
+                      },
+                      "requestTimeoutMs": {
+                        "type": [
+                          "number",
+                          "string"
+                        ],
+                        "description": "单次模型请求超时（毫秒）；0 关闭"
+                      }
+                    }
+                  },
+                  "description": "provider 模式覆盖（支持 * 通配符）"
+                }
+              },
+              "description": "按模型 / provider 模式覆盖 model harness"
+            },
+            "providerResilience": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "maxRetries": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Retries per model after the first attempt. Default 2. `0` disables retry."
+                },
+                "baseDelayMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "First backoff delay in ms; doubles each retry. Default 1000."
+                },
+                "maxDelayMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Upper bound for one backoff delay in ms. Default 10000."
+                },
+                "maxRetryAfterMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "A `Retry-After` longer than this skips retry and goes to fallback. Default 30000."
+                },
+                "requestTimeoutMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables."
+                },
+                "emptyReplyRetries": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Extra attempts when the model returns neither text nor tool calls (or a tool call\nwithout a name). Default 0: the reply is passed through unchanged. Quirk presets\n(see model harness) raise this for models known to emit spurious empty replies."
+                },
+                "fallback": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ],
+                  "description": "Try the next entry of `modelCandidates` after retries are exhausted. Default true."
+                }
+              },
+              "description": "Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守）"
+            },
+            "deferredTools": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "maxLoadedPerSession": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "discoverTopK": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "alwaysLoadedTools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "额外常驻工具；默认在内置常驻集合基础上追加"
+                },
+                "alwaysLoadedMode": {
+                  "type": "string",
+                  "x-zhin-config": {
+                    "options": [
+                      {
+                        "label": "extend",
+                        "value": "extend"
+                      },
+                      {
+                        "label": "replace",
+                        "value": "replace"
+                      }
+                    ]
+                  },
+                  "description": "`extend`（默认）追加到内置常驻集合；`replace` 完全替换"
+                },
+                "mcpServers": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                      "alwaysLoaded": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "description": "工具 schema 按需加载"
+            },
+            "workerBaseTools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Deferred Worker 基础工具"
+            },
+            "persona": {
+              "type": "string"
+            },
+            "maxIterations": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "timeout": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "preExecTimeout": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "maxTools": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "contextTailMessageLimit": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "rateLimit": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "maxRequestsPerMinute": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "每分钟最大请求数（默认 20）"
+                },
+                "cooldownSeconds": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "冷却时间（秒），超限后需等待（默认 10）"
+                }
+              }
+            },
+            "toneAwareness": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "contextTokens": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "maxHistoryShare": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "compaction": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "enabled": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ]
+                },
+                "auto": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ]
+                },
+                "keepRecentTokens": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "minKeepCount": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "thresholdRatio": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Share of the model context window (system prompt and tools included) at\nwhich auto-compaction runs. Default 0.7 (#730)."
+                }
+              }
+            },
+            "disabledTools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "allowedTools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "maxParallelSubagents": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "subagentAutoContinue": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "subagentDirectImDelivery": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "maxSubagentIterations": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "subagentTools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "subagentTurnWaitMs": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "skillInstructionMaxChars": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "promptTrace": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "promptTraceVerbose": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "promptCache": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "promptCacheKeyPrefix": {
+              "type": "string"
+            },
+            "deferredAutoContinue": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "deferredAutoContinueMaxDepth": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "gitStatus": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "§1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过）"
+            },
+            "contextPaths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "追加的上下文文件路径（支持 ~ 与相对路径；默认另加载 ~/.config/zhin/AGENTS.md 等全局路径）"
+            },
+            "systemPromptMaxChars": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "系统提示词总字符上限；按 retention/order 让出预算，required 内容放不下则失败。"
+            },
+            "thinkingPreview": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "Activity feedback 展示 LLM 实际 thinking 内容（截断），而非静态 \"思考中...\"。"
+            },
+            "thinkingPreviewMaxLength": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "thinkingPreview 展示的最大字符数。"
+            }
+          }
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "providers": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "sdk": {
+                "type": "string",
+                "x-zhin-config": {
+                  "options": [
+                    {
+                      "label": "openai",
+                      "value": "openai"
+                    },
+                    {
+                      "label": "anthropic",
+                      "value": "anthropic"
+                    },
+                    {
+                      "label": "google",
+                      "value": "google"
+                    },
+                    {
+                      "label": "deepseek",
+                      "value": "deepseek"
+                    },
+                    {
+                      "label": "minimax",
+                      "value": "minimax"
+                    },
+                    {
+                      "label": "ollama",
+                      "value": "ollama"
+                    },
+                    {
+                      "label": "openai-compatible",
+                      "value": "openai-compatible"
+                    }
+                  ]
+                }
+              },
+              "apiKey": {
+                "type": "string",
+                "writeOnly": true,
+                "x-zhin-config": {
+                  "secret": true
+                }
+              },
+              "authScheme": {
+                "type": "string",
+                "description": "Authorization 头方案。不写时用各 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）；\n设为 `''` 时 `Authorization: <key>`；设为 `'Bearer'` / `'Token'` 等时 `Authorization: <scheme> <key>`（结尾空格可有可无）。"
+              },
+              "baseUrl": {
+                "type": "string"
+              },
+              "defaultModel": {
+                "type": "string"
+              },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "timeout": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "单次请求超时（ms），覆盖 `ai.providerResilience.requestTimeoutMs`；模型 harness 的 `requestTimeoutMs` 优先。0 关闭。"
+              },
+              "maxRetries": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "每个模型的重试次数，覆盖 `ai.providerResilience.maxRetries`。"
+              },
+              "firstChunkTimeoutMs": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "流式请求首个 chunk 超时（ms，含等待响应头），默认关闭；超时按 timeout 重试 / 切换备用模型。"
+              },
+              "chunkTimeoutMs": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "流式请求两个 chunk 之间的静默超时（ms），默认关闭。"
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "writeOnly": true,
+                  "x-zhin-config": {
+                    "secret": true
+                  }
+                }
+              },
+              "contextWindow": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "上下文窗口大小（token 数），各 Provider 映射到自身参数"
+              },
+              "maxOutputTokens": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "每次请求的输出 token 上限，默认 8192；Gemini/Claude 的思考 token 也计入"
+              },
+              "thinkingLevel": {
+                "type": "string",
+                "x-zhin-config": {
+                  "options": [
+                    {
+                      "label": "off",
+                      "value": "off"
+                    },
+                    {
+                      "label": "low",
+                      "value": "low"
+                    },
+                    {
+                      "label": "medium",
+                      "value": "medium"
+                    },
+                    {
+                      "label": "high",
+                      "value": "high"
+                    }
+                  ]
+                },
+                "description": "思考深度：`off` | `low` | `medium` | `high`；不填用 provider 默认；`providerOptions` 里的思考设置优先"
+              },
+              "capabilities": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "input": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "x-zhin-config": {
+                        "options": [
+                          {
+                            "label": "text",
+                            "value": "text"
+                          },
+                          {
+                            "label": "image",
+                            "value": "image"
+                          },
+                          {
+                            "label": "audio",
+                            "value": "audio"
+                          },
+                          {
+                            "label": "video",
+                            "value": "video"
+                          },
+                          {
+                            "label": "file",
+                            "value": "file"
+                          }
+                        ]
+                      }
+                    },
+                    "description": "Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`)."
+                  },
+                  "streaming": {
+                    "type": [
+                      "boolean",
+                      "string"
+                    ]
+                  },
+                  "toolCalling": {
+                    "type": [
+                      "boolean",
+                      "string"
+                    ]
+                  },
+                  "thinking": {
+                    "type": [
+                      "boolean",
+                      "string"
+                    ]
+                  }
+                },
+                "description": "Provider 能力声明"
+              },
+              "input": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "x-zhin-config": {
+                    "options": [
+                      {
+                        "label": "text",
+                        "value": "text"
+                      },
+                      {
+                        "label": "image",
+                        "value": "image"
+                      },
+                      {
+                        "label": "audio",
+                        "value": "audio"
+                      },
+                      {
+                        "label": "video",
+                        "value": "video"
+                      },
+                      {
+                        "label": "file",
+                        "value": "file"
+                      }
+                    ]
+                  }
+                },
+                "description": "Explicit model input modalities. Prefer this over inferred provider identity."
+              },
+              "providerOptions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": [
+                          "number",
+                          "string"
+                        ]
+                      },
+                      {
+                        "type": [
+                          "boolean",
+                          "string"
+                        ]
+                      },
+                      {
+                        "type": [
+                          "boolean",
+                          "string"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            {
+                              "type": [
+                                "boolean",
+                                "string"
+                              ]
+                            },
+                            {
+                              "type": [
+                                "boolean",
+                                "string"
+                              ]
+                            },
+                            {
+                              "description": "任意 JSON 值；由对应服务解释。"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "description": "任意 JSON 值；由对应服务解释。"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "description": "任意 JSON 值；由对应服务解释。"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "description": "Extra AI SDK `providerOptions`, merged into every request of this provider,\nkeyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...],\nthinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings."
+              },
+              "contextCache": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "x-zhin-config": {
+                      "options": [
+                        {
+                          "label": "implicit",
+                          "value": "implicit"
+                        },
+                        {
+                          "label": "explicit",
+                          "value": "explicit"
+                        }
+                      ]
+                    },
+                    "description": "`implicit` (default) leaves requests untouched. `explicit` creates cachedContents."
+                  },
+                  "ttlSeconds": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Lifetime of each created cache. Default 600."
+                  },
+                  "minPrefixChars": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Prefixes shorter than this (characters of JSON) are not worth a cache. Default 8000 (~2k tokens)."
+                  }
+                },
+                "description": "Gemini context caching (`sdk: google`): `{ mode: 'explicit', ttlSeconds }`. Default implicit."
+              },
+              "imageGeneration": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "watermarkEnabled": {
+                    "type": [
+                      "boolean",
+                      "string"
+                    ],
+                    "description": "智谱 API `watermark_enabled`；默认 true"
+                  },
+                  "defaultModel": {
+                    "type": "string"
+                  },
+                  "defaultSize": {
+                    "type": "string",
+                    "description": "智谱：如 1024x1024、1280x1280"
+                  },
+                  "numSteps": {
+                    "type": [
+                      "number",
+                      "string"
+                    ],
+                    "description": "Cloudflare Flux：推理步数，默认 4"
+                  },
+                  "quality": {
+                    "type": "string",
+                    "description": "OpenAI GPT Image：low | medium | high | auto"
+                  },
+                  "aspectRatio": {
+                    "type": "string",
+                    "description": "Gemini：如 1:1、16:9"
+                  },
+                  "imageSize": {
+                    "type": "string",
+                    "description": "Gemini：如 1K、2K、4K"
+                  },
+                  "promptSuffix": {
+                    "type": "string",
+                    "description": "追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。\n需要动漫风时不要配置，或在工具 prompt 里写明即可。"
+                  }
+                },
+                "description": "文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver）"
+              },
+              "host": {
+                "type": "string"
+              },
+              "num_ctx": {
+                "type": [
+                  "number",
+                  "string"
+                ]
+              }
+            }
+          },
+          "description": "命名 provider 实例"
+        },
+        "agents": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "mcpServers": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                }
+              },
+              "nickname": {
+                "type": "string",
+                "description": "Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。"
+              }
+            }
+          },
+          "description": "per-agent 绑定（协作角色如 researcher 亦用 agents.<role>）；IM 入站总是交给 zhin"
+        },
+        "sessions": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "maxHistory": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "最大历史消息数（数据库模式默认200，内存模式默认100）"
+            },
+            "expireMs": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "会话过期时间（毫秒，数据库模式默认7天，内存模式默认24小时）"
+            },
+            "useDatabase": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "是否使用数据库持久化存储（默认 true）"
+            },
+            "coldStartMaxMessages": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "无摘要时冷启动最多条数（默认 50）"
+            },
+            "coldStartMaxAgeMs": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "冷启动时间窗（毫秒，默认 24h）"
+            },
+            "sessionIdleArchiveMs": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "空闲后自动归档 active 会话（毫秒，默认 7 天；0=关闭）"
+            }
+          }
+        },
+        "context": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "是否启用消息记录（默认 true）"
+            },
+            "maxRecentMessages": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "读取的最近消息数量（默认 100）"
+            },
+            "summaryThreshold": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "触发总结的消息数量阈值（默认 50）"
+            },
+            "keepAfterSummary": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "总结后保留的消息数量（默认 10）"
+            },
+            "maxContextTokens": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "上下文最大 token 估算（默认 4000）"
+            },
+            "summaryPrompt": {
+              "type": "string",
+              "description": "自定义总结提示词"
+            }
+          }
+        },
+        "imageGeneration": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "watermarkEnabled": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "智谱 API `watermark_enabled`；默认 true"
+            },
+            "defaultModel": {
+              "type": "string"
+            },
+            "defaultSize": {
+              "type": "string",
+              "description": "智谱：如 1024x1024、1280x1280"
+            },
+            "numSteps": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "Cloudflare Flux：推理步数，默认 4"
+            },
+            "quality": {
+              "type": "string",
+              "description": "OpenAI GPT Image：low | medium | high | auto"
+            },
+            "aspectRatio": {
+              "type": "string",
+              "description": "Gemini：如 1:1、16:9"
+            },
+            "imageSize": {
+              "type": "string",
+              "description": "Gemini：如 1K、2K、4K"
+            },
+            "promptSuffix": {
+              "type": "string",
+              "description": "追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。\n需要动漫风时不要配置，或在工具 prompt 里写明即可。"
+            }
+          },
+          "description": "文生图全局默认（可被 `providers.<alias>.imageGeneration` 覆盖）。\n智谱：`watermarkEnabled: false` 需先在智谱开放平台签署去水印免责声明。"
+        },
+        "multimodal": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "maxFileBytes": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "inboundDir": {
+              "type": "string"
+            },
+            "outboundDir": {
+              "type": "string"
+            },
+            "image": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "maxDimension": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "preferNativeVision": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ]
+                }
+              }
+            },
+            "audio": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "strategy": {
+                  "type": "string",
+                  "x-zhin-config": {
+                    "options": [
+                      {
+                        "label": "transcribe",
+                        "value": "transcribe"
+                      },
+                      {
+                        "label": "mcp",
+                        "value": "mcp"
+                      },
+                      {
+                        "label": "text-only",
+                        "value": "text-only"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "video": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "strategy": {
+                  "type": "string",
+                  "x-zhin-config": {
+                    "options": [
+                      {
+                        "label": "mcp",
+                        "value": "mcp"
+                      },
+                      {
+                        "label": "text-only",
+                        "value": "text-only"
+                      }
+                    ]
+                  }
+                },
+                "mcpServer": {
+                  "type": "string"
+                },
+                "maxFrames": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                }
+              }
+            },
+            "outbound": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "splitMessages": {
+                  "type": "string",
+                  "x-zhin-config": {
+                    "options": [
+                      {
+                        "label": "auto",
+                        "value": "auto"
+                      },
+                      {
+                        "label": "single",
+                        "value": "single"
+                      },
+                      {
+                        "label": "always_split",
+                        "value": "always_split"
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "perception": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "`ai.providers` alias of the perception model."
+                },
+                "model": {
+                  "type": "string"
+                },
+                "kinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "x-zhin-config": {
+                      "options": [
+                        {
+                          "label": "image",
+                          "value": "image"
+                        },
+                        {
+                          "label": "video",
+                          "value": "video"
+                        },
+                        {
+                          "label": "file",
+                          "value": "file"
+                        }
+                      ]
+                    }
+                  },
+                  "description": "Kinds to describe. Default `['image']`; `file` covers PDFs only."
+                },
+                "maxChars": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Description length cap in characters. Default 800."
+                },
+                "timeoutMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Per-attempt timeout in ms. Default 30000."
+                },
+                "maxItemsPerTurn": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "Media described per turn; the rest keep the placeholder. Default 4."
+                }
+              },
+              "description": "Perception pre-pass: when the turn's model cannot take an image / video / PDF,\nthis media-capable model describes it and the description is injected as\nuntrusted text (`[图片描述] …`). Unset = off (placeholders as before)."
+            }
+          },
+          "description": "入站/出站多模态（base64 契约；平台 adapter 负责编解码与发送）"
+        },
+        "memory": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "semantic": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "enabled": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ]
+                },
+                "autoConsolidate": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ]
+                },
+                "recall": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": true,
+                  "properties": {
+                    "enabled": {
+                      "type": [
+                        "boolean",
+                        "string"
+                      ]
+                    },
+                    "topK": {
+                      "type": [
+                        "number",
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "maxTokens": {
+                      "type": [
+                        "number",
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "description": "Per-turn recall (#734): BM25 top-k entries relevant to the current\nmessage are added to the turn context. Default on when semantic memory\nis enabled; topK 5, maxTokens 400."
+                }
+              },
+              "description": "L4 语义记忆：memory_entries 表 + memory_search/upsert 工具"
+            },
+            "budgets": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "session": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "platform": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "global": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                },
+                "daily": {
+                  "type": [
+                    "number",
+                    "string"
+                  ]
+                }
+              }
+            }
+          },
+          "description": "三层 Markdown 文件记忆（global / platform / session）。\n默认启用；设 enabled: false 可关闭注入。"
+        },
+        "knowledge": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "baseDir": {
+              "type": "string",
+              "description": "项目根目录内的知识库目录路径。配置该段时必须显式声明。"
+            }
+          },
+          "description": "本地知识库（knowledge_search 工具数据源）。\n放置 .md / .txt 文件到 baseDir，Agent 可通过 knowledge_search 工具检索。"
+        },
+        "githubMcp": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "token": {
+              "type": "string",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            },
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具"
+            }
+          },
+          "description": "PAT for adapter-github auto-registered server-github MCP (overrides env when set)."
+        },
+        "mcpServers": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "transport": {
+                "type": "string",
+                "x-zhin-config": {
+                  "options": [
+                    {
+                      "label": "stdio",
+                      "value": "stdio"
+                    },
+                    {
+                      "label": "streamable-http",
+                      "value": "streamable-http"
+                    },
+                    {
+                      "label": "sse",
+                      "value": "sse"
+                    }
+                  ]
+                }
+              },
+              "url": {
+                "type": "string"
+              },
+              "command": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "writeOnly": true,
+                  "x-zhin-config": {
+                    "secret": true
+                  }
+                }
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "writeOnly": true,
+                  "x-zhin-config": {
+                    "secret": true
+                  }
+                }
+              }
+            }
+          },
+          "description": "External MCP servers for the Agent MCP client (global, all bots).\nListed servers are exposed to ZhinAgent tool pool when connected."
+        },
+        "access": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "x-zhin-config": {
+                "options": [
+                  {
+                    "label": "open",
+                    "value": "open"
+                  },
+                  {
+                    "label": "closed",
+                    "value": "closed"
+                  },
+                  {
+                    "label": "whitelist",
+                    "value": "whitelist"
+                  }
+                ]
+              },
+              "description": "open | closed | whitelist，默认 open"
+            },
+            "users": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "允许触发 AI 的 sender.id"
+            },
+            "groups": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "允许触发 AI 的 group/channel id"
+            },
+            "denyMessage": {
+              "type": "string",
+              "description": "私聊拒绝时的回复文案"
+            }
+          },
+          "description": "AI 访问控制（平台 AIGC 合规；Endpoint 可用 aiAccess 覆盖）"
+        },
+        "trigger": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "是否启用（默认 true）"
+            },
+            "prefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "触发前缀列表（默认 ['#', 'AI:']）"
+            },
+            "respondToAt": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "是否响应 @ 机器人（默认 true）"
+            },
+            "respondToPrivate": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "是否响应私聊（默认 true）"
+            },
+            "keywords": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "触发关键词（可选）"
+            },
+            "ignorePrefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "忽略的前缀（命令前缀，避免与命令冲突，默认 ['/', '!', '！']）"
+            },
+            "timeout": {
+              "type": [
+                "number",
+                "string"
+              ],
+              "description": "超时时间（毫秒，默认 60000）"
+            },
+            "thinkingMessage": {
+              "type": "string",
+              "description": "思考中提示语（可选，设置后会在处理前发送）"
+            },
+            "errorTemplate": {
+              "type": "string",
+              "description": "错误提示模板（默认 '❌ AI 处理失败: {error}'）"
+            }
+          },
+          "description": "AI 触发配置"
+        }
+      }
+    },
+    "menuKeyword": {
+      "type": [
+        "string",
+        "boolean"
+      ],
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "const": false
+        }
+      ],
+      "description": "Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu.",
+      "x-descriptionZh": "内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。"
+    },
+    "menuStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Command menu appearance when an HTML renderer is available; plain text fallback remains available.",
+      "x-descriptionZh": "HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Menu title.",
+          "x-descriptionZh": "菜单标题。"
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "Menu subtitle.",
+          "x-descriptionZh": "菜单副标题。"
+        },
+        "accentColor": {
+          "type": "string",
+          "description": "Six-digit hex accent color; invalid values use the renderer default.",
+          "x-descriptionZh": "六位十六进制强调色；无效值使用渲染器默认值。"
+        },
+        "backgroundImage": {
+          "type": "string",
+          "description": "HTTP(S) image or PNG/JPEG/WebP data URL; unsupported values use the renderer default.",
+          "x-descriptionZh": "HTTP(S) 图片或 PNG/JPEG/WebP data URL；不支持的值使用渲染器默认值。"
+        }
+      }
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Expose Bot tools through an MCP Server.",
+      "x-descriptionZh": "把 Bot 工具公开为 MCP Server。",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "writeOnly": true,
+          "x-zhin-config": {
+            "secret": true
+          }
+        },
+        "allowUnauthenticatedLocalhost": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        }
+      }
+    },
+    "a2a": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "A2A Agent Card, remote execution, and Workroom callbacks.",
+      "x-descriptionZh": "A2A Agent Card、远程执行与 Workroom 回调。",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "string"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "writeOnly": true,
+          "x-zhin-config": {
+            "secret": true
+          }
+        },
+        "publicUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workroomCallbacks": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "description": "Must remain outside the ordinary `/a2a/{agent}/*` route tree."
+            },
+            "maxBodyBytes": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "maxSequenceGap": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "bindings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "endpointId": {
+                    "type": "string"
+                  },
+                  "tenantId": {
+                    "type": "string"
+                  },
+                  "cardDigest": {
+                    "type": "string"
+                  },
+                  "authBindingId": {
+                    "type": "string"
+                  },
+                  "trustDomain": {
+                    "type": "string"
+                  },
+                  "extensionDigest": {
+                    "type": "string"
+                  },
+                  "credentialId": {
+                    "type": "string"
+                  },
+                  "credential": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "source": {
+                            "anyOf": [
+                              {
+                                "const": "config"
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                              }
+                            ]
+                          },
+                          "value": {
+                            "type": "string",
+                            "writeOnly": true,
+                            "x-zhin-config": {
+                              "secret": true
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "source": {
+                            "anyOf": [
+                              {
+                                "const": "secure_provider"
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                              }
+                            ]
+                          },
+                          "secretRef": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "enabled": {
+                    "type": [
+                      "boolean",
+                      "string"
+                    ]
+                  },
+                  "expiresAt": {
+                    "type": [
+                      "number",
+                      "string"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "workroomRemoteExecutors": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "maxResponseBytes": {
+              "type": [
+                "number",
+                "string"
+              ]
+            },
+            "bindings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "endpointId": {
+                    "type": "string"
+                  },
+                  "cardDigest": {
+                    "type": "string"
+                  },
+                  "authBindingId": {
+                    "type": "string"
+                  },
+                  "dispatchUrl": {
+                    "type": "string"
+                  },
+                  "pollUrl": {
+                    "type": "string"
+                  },
+                  "credential": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "source": {
+                            "anyOf": [
+                              {
+                                "const": "config"
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                              }
+                            ]
+                          },
+                          "value": {
+                            "type": "string",
+                            "writeOnly": true,
+                            "x-zhin-config": {
+                              "secret": true
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "source": {
+                            "anyOf": [
+                              {
+                                "const": "secure_provider"
+                              },
+                              {
+                                "type": "string",
+                                "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                              }
+                            ]
+                          },
+                          "secretRef": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "authority": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "properties": {
+                      "workroomExtension": {
+                        "anyOf": [
+                          {
+                            "const": "https://zhin.dev/extensions/workroom-executor/v1"
+                          },
+                          {
+                            "type": "string",
+                            "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                          }
+                        ]
+                      },
+                      "idempotentDispatch": {
+                        "type": [
+                          "boolean",
+                          "string"
+                        ]
+                      },
+                      "typedCompletionEnvelope": {
+                        "type": [
+                          "boolean",
+                          "string"
+                        ]
+                      },
+                      "workspaceProviders": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "enabled": {
+                    "type": [
+                      "boolean",
+                      "string"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "description": "Transport endpoints only. Project/Workroom topology remains in the persistent Catalog."
+        }
+      }
+    },
+    "speech": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Speech-to-text and text-to-speech Host.",
+      "x-descriptionZh": "语音识别与语音合成 Host。",
+      "properties": {
+        "stt": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "provider": {
+              "type": "string",
+              "x-zhin-config": {
+                "options": [
+                  {
+                    "label": "openai",
+                    "value": "openai"
+                  },
+                  {
+                    "label": "ollama",
+                    "value": "ollama"
+                  }
+                ]
+              }
+            },
+            "model": {
+              "type": "string"
+            },
+            "host": {
+              "type": "string"
+            },
+            "apiKey": {
+              "type": "string",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            }
+          }
+        },
+        "tts": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "provider": {
+              "type": "string",
+              "x-zhin-config": {
+                "options": [
+                  {
+                    "label": "openai",
+                    "value": "openai"
+                  },
+                  {
+                    "label": "custom",
+                    "value": "custom"
+                  },
+                  {
+                    "label": "edge",
+                    "value": "edge"
+                  },
+                  {
+                    "label": "azure",
+                    "value": "azure"
+                  }
+                ]
+              }
+            },
+            "voice": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "host": {
+              "type": "string"
+            },
+            "apiKey": {
+              "type": "string",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            },
+            "rate": {
+              "type": "string",
+              "description": "edge-tts"
+            },
+            "pitch": {
+              "type": "string"
+            },
+            "edgeTtsCommand": {
+              "type": "string"
+            },
+            "region": {
+              "type": "string",
+              "description": "azure"
+            },
+            "subscriptionKey": {
+              "type": "string",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "description": "custom OpenAI-compatible"
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "writeOnly": true,
+                "x-zhin-config": {
+                  "secret": true
+                }
+              }
+            },
+            "speed": {
+              "type": [
+                "number",
+                "string"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "htmlRenderer": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "HTML and image rendering options backed by Shotium.",
+      "x-descriptionZh": "基于 Shotium 的 HTML/图片渲染参数。",
+      "properties": {
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 30000,
+          "description": "Default layout width in CSS pixels.",
+          "x-descriptionZh": "默认排版宽度（CSS 像素）。"
+        },
+        "defaultWidth": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 30000,
+          "description": "Legacy alias of width.",
+          "x-descriptionZh": "width 的旧别名。"
+        },
+        "viewport": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Default viewport for Shotium rendering.",
+          "x-descriptionZh": "Shotium 渲染默认视窗。",
+          "properties": {
+            "width": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 30000,
+              "description": "Viewport width in CSS pixels.",
+              "x-descriptionZh": "视窗宽度（CSS 像素）。"
+            },
+            "height": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 30000,
+              "description": "Viewport height in CSS pixels.",
+              "x-descriptionZh": "视窗高度（CSS 像素）。"
+            }
+          }
+        },
+        "backgroundColor": {
+          "type": "string",
+          "description": "Fragment background color.",
+          "x-descriptionZh": "HTML 片段背景色。"
+        },
+        "defaultBackgroundColor": {
+          "type": "string",
+          "description": "Legacy alias of backgroundColor.",
+          "x-descriptionZh": "backgroundColor 的旧别名。"
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 8,
+          "description": "Device scale factor.",
+          "x-descriptionZh": "设备像素比。"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg",
+            "webp"
+          ],
+          "description": "Default raster output format.",
+          "x-descriptionZh": "默认位图输出格式。"
+        },
+        "quality": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Quality for jpeg/webp output.",
+          "x-descriptionZh": "jpeg/webp 输出质量。"
+        },
+        "timeout": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 600000,
+          "description": "Navigation timeout in milliseconds.",
+          "x-descriptionZh": "导航超时（毫秒）。"
+        },
+        "waitUntil": {
+          "type": "string",
+          "enum": [
+            "load",
+            "networkidle"
+          ],
+          "description": "Navigation wait strategy.",
+          "x-descriptionZh": "导航等待策略。"
+        },
+        "fontFamily": {
+          "type": "string",
+          "description": "Default font-family for fragments.",
+          "x-descriptionZh": "HTML 片段默认字体栈。"
+        },
+        "maxImageHeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "Split overly tall PNGs above this height; 0 disables splitting.",
+          "x-descriptionZh": "超过该高度时切分 PNG；0 表示不切分。"
+        },
+        "sliceCompression": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 9,
+          "description": "Compression level used when splitting PNGs.",
+          "x-descriptionZh": "PNG 切片时使用的压缩级别。"
+        },
+        "allowFileAccess": {
+          "type": "boolean",
+          "description": "Allow local file subresources.",
+          "x-descriptionZh": "允许访问本地文件子资源。"
+        },
+        "takeOverHtmlSegments": {
+          "type": "boolean",
+          "description": "Take over html/markdown rich-segment image rendering.",
+          "x-descriptionZh": "接管 html/markdown 富媒体段转图。"
+        },
+        "cacheDir": {
+          "type": "string",
+          "description": "HTTP cache directory; use off to disable.",
+          "x-descriptionZh": "HTTP 缓存目录；off 表示关闭。"
+        },
+        "cacheMaxBytes": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum HTTP cache size in bytes.",
+          "x-descriptionZh": "HTTP 缓存最大字节数。"
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "Custom user agent string.",
+          "x-descriptionZh": "自定义 User-Agent。"
+        },
+        "idleTimeoutMs": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 86400000,
+          "description": "Daemon idle-exit timeout in milliseconds.",
+          "x-descriptionZh": "daemon 空闲退出超时（毫秒）。"
+        },
+        "logStats": {
+          "type": "boolean",
+          "description": "Log render timing statistics.",
+          "x-descriptionZh": "记录渲染耗时统计。"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "inprocess",
+            "daemon"
+          ],
+          "description": "Whether Shotium runs in-process or as a daemon.",
+          "x-descriptionZh": "Shotium 在进程内运行还是以 daemon 运行。"
+        },
+        "aiTextAsImage": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Convert plain text output to an image before send.",
+              "x-descriptionZh": "发送前将纯文本输出转成图片。",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable text-to-image conversion.",
+                  "x-descriptionZh": "启用文本转图片。"
+                },
+                "onlyAdapters": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "uniqueItems": true,
+                  "description": "Only apply to these adapter names.",
+                  "x-descriptionZh": "仅对这些适配器名称生效。"
+                },
+                "minLength": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "Minimum plain-text length to trigger conversion; defaults to 1 at runtime.",
+                  "x-descriptionZh": "触发转换的最小纯文本长度；运行时默认为 1。"
+                },
+                "maxLength": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "Maximum plain-text length to convert; defaults to 12000 at runtime.",
+                  "x-descriptionZh": "允许转换的最大纯文本长度；运行时默认为 12000。"
+                },
+                "skipIfRich": {
+                  "type": "boolean",
+                  "description": "Skip when content already contains rich segments; defaults to true at runtime.",
+                  "x-descriptionZh": "内容已包含富媒体段时跳过；运行时默认为 true。"
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 30000,
+                  "description": "Image width in CSS pixels.",
+                  "x-descriptionZh": "图片宽度（CSS 像素）。"
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 30000,
+                  "description": "Image height in CSS pixels.",
+                  "x-descriptionZh": "图片高度（CSS 像素）。"
+                },
+                "backgroundColor": {
+                  "type": "string",
+                  "description": "Image background color.",
+                  "x-descriptionZh": "图片背景色。"
+                },
+                "fontSize": {
+                  "type": "number",
+                  "minimum": 1,
+                  "description": "Font size in CSS pixels.",
+                  "x-descriptionZh": "字体大小（CSS 像素）。"
+                },
+                "color": {
+                  "type": "string",
+                  "description": "Text color.",
+                  "x-descriptionZh": "文字颜色。"
+                },
+                "padding": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Image padding in CSS pixels.",
+                  "x-descriptionZh": "图片内边距（CSS 像素）。"
+                },
+                "scale": {
+                  "type": "number",
+                  "minimum": 0.01,
+                  "maximum": 8,
+                  "description": "Device scale factor.",
+                  "x-descriptionZh": "设备像素比。"
+                },
+                "fileName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Image file name.",
+                  "x-descriptionZh": "图片文件名。"
+                }
+              }
+            }
+          ],
+          "description": "Optional plain-text to image conversion before send.",
+          "x-descriptionZh": "发送前可选的纯文本转图片。"
+        }
+      }
+    },
+    "assistant": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Scheduled jobs, event ingress, and failure notifications.",
+      "x-descriptionZh": "调度任务、事件入口和失败通知。",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "启用统一 JobStore（默认 false，Stable 行为不变）"
+        },
+        "queue": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "maxConcurrency": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ],
+              "description": "Schedule execution 并发上限"
+            },
+            "maxRetries": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ]
+            },
+            "defaultTimeoutMs": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ]
+            }
+          },
+          "description": "Schedule execution queue（重试 / 并发 / 死信）"
+        },
+        "defaults": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "notify": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "channel": {
+                      "anyOf": [
+                        {
+                          "const": "im"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                        }
+                      ]
+                    },
+                    "target": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "properties": {
+                        "channel": {
+                          "anyOf": [
+                            {
+                              "const": "im"
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                            }
+                          ]
+                        },
+                        "scene": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "properties": {
+                            "platform": {
+                              "type": "string"
+                            },
+                            "endpointKey": {
+                              "type": "string"
+                            },
+                            "sceneId": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string",
+                              "x-zhin-config": {
+                                "options": [
+                                  {
+                                    "label": "private",
+                                    "value": "private"
+                                  },
+                                  {
+                                    "label": "group",
+                                    "value": "group"
+                                  },
+                                  {
+                                    "label": "channel",
+                                    "value": "channel"
+                                  }
+                                ]
+                              }
+                            },
+                            "senderId": {
+                              "type": "string"
+                            },
+                            "parent": {
+                              "type": "object",
+                              "additionalProperties": true,
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "x-zhin-config": {
+                                    "options": [
+                                      {
+                                        "label": "group",
+                                        "value": "group"
+                                      },
+                                      {
+                                        "label": "guild",
+                                        "value": "guild"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "sceneId": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "threadId": {
+                          "type": "string"
+                        },
+                        "quoteId": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "channel": {
+                      "anyOf": [
+                        {
+                          "const": "silent"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "channel": {
+                      "anyOf": [
+                        {
+                          "const": "log"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "channel": {
+                      "anyOf": [
+                        {
+                          "const": "ha"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\$\\{[A-Za-z_][A-Za-z0-9_]*(?::[-=][^}]*)?\\}$"
+                        }
+                      ]
+                    },
+                    "service": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "description": "任意 JSON 值；由对应服务解释。"
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "未显式指定 notify 时的默认投递目标（M3）"
+            },
+            "notifyOnFailure": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "Job 失败时是否通知（默认 false）"
+            }
+          }
+        },
+        "profile": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "启用 Profile 覆盖 Bootstrap（默认 false）"
+            },
+            "file": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "相对项目根路径，默认 assistant.profile.yml"
+            }
+          }
+        },
+        "home": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ]
+            },
+            "restUrl": {
+              "type": "string",
+              "description": "HA REST 基址，如 http://homeassistant.local:8123"
+            },
+            "restToken": {
+              "type": "string",
+              "description": "HA 长期访问令牌",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            },
+            "mcpServer": {
+              "type": "string",
+              "description": "可选：ai.mcpServers 中的名称（REST 为主，MCP 仅校验）"
+            },
+            "aliases": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "中文/友好名 → entity_id"
+            },
+            "policy": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "requireMaster": {
+                  "type": [
+                    "boolean",
+                    "string"
+                  ],
+                  "description": "仅 master 可调用 home_*（默认 true）"
+                },
+                "confirmServices": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "写操作需 Owner 审批的 HA domain（默认 lock、alarm_control_panel）"
+                },
+                "allowedServiceDomains": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "home_call_service 允许的 domain 白名单（默认 light/climate/scene/cover/script）"
+                }
+              }
+            },
+            "watch": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "description": "要通过 HA WebSocket 订阅状态变化的设备别名列表"
+            },
+            "debounceMs": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ],
+              "description": "同实体状态变化推送的防抖间隔（毫秒，默认 5000）"
+            }
+          }
+        },
+        "events": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "type": [
+                "boolean",
+                "string"
+              ],
+              "description": "启用 POST /api/assistant/events（需 assistant.enabled）"
+            },
+            "token": {
+              "type": "string",
+              "description": "可选专用 Bearer；未设时复用 http.token（路由仍在 /api 下受全局鉴权保护）。",
+              "writeOnly": true,
+              "x-zhin-config": {
+                "secret": true
+              }
+            },
+            "allowedSources": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "允许的来源白名单；空数组表示不限制"
+            },
+            "rateLimitPerMinute": {
+              "type": [
+                "number",
+                "string",
+                "null"
+              ],
+              "description": "每来源每分钟最大请求数（默认 60）"
+            }
+          }
+        }
+      }
+    },
+    "log_level": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "Runtime log level.",
+      "x-descriptionZh": "Runtime 日志级别。"
+    },
+    "plugin": {
+      "type": "object",
+      "description": "Root Plugin configuration; replaced by its project schema during composition.",
+      "x-descriptionZh": "Root Plugin 配置；组合时由项目 Schema 替换。"
+    }
+  },
+  "$defs": {
+    "decisionTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "shadow",
+            "active"
+          ]
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "minConfidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "topK": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "maxCandidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "maxSelections": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      }
+    }
+  }
+}

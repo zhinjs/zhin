@@ -1,0 +1,20 @@
+{
+  "name": "ICQQ Platform Agent",
+  "version": "1.0.0",
+  "description": "Handles icqq platform-specific operations and progressively loads only the required platform Skill.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "icqq",
+      "adapter:icqq"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "platforms": [
+    "icqq"
+  ]
+}

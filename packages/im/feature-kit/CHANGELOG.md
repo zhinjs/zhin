@@ -1,0 +1,250 @@
+# @zhin.js/feature-kit
+
+## 1.1.6
+
+### Patch Changes
+
+- 064b06d: 通过中立的 operation input 生命周期 hook 将真实入站运行代的退休信号传给 CommandContext.signal，使补问与确认能及时取消。
+  保留旧 lease 普通操作和已开始发送的正常排空语义，不全局拦截回复。
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/plugin-runtime@1.1.15
+
+## 1.1.5
+
+### Patch Changes
+
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- fdc2148: Unblock external plugin authors.
+
+  - Published manifests no longer expose the source-only `development` export condition (it pointed at `./src/*.ts`, which is not in the tarball, so Vitest 4 and other tools that enable `development` failed to import Zhin packages). Each package now carries `publishConfig.exports` without that condition; `pnpm publish` swaps it in when packing, and the monorepo keeps source-level development.
+  - `zhin new` no longer crashes without arguments (uses inquirer `select` instead of the removed `list` prompt; same fix for `zhin onboard` and `zhin pub`). The generated package.json uses `^x.y.z` ranges derived from installed versions instead of `latest`, declares capability packages as optional peers (plus devDependencies for local tests) instead of dependencies, sets `zhin.entry` to `./plugin.js` and builds sibling JavaScript on `prepack`, fixes the adapter template test, and adds `--package-name`. `--skip-install` now also skips the project-root install.
+
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/plugin-runtime@1.1.14
+
+## 1.1.4
+
+### Patch Changes
+
+- 4778587: 补齐 Console 安装配置闭环所需的精确配置路径、端点身份、平台就绪与验证计划失效语义，并保存历史消息的方向及实际投递诊断。
+
+  修复真实 ICQQ 入站目标保存了插件 owner 而非平台标识、导致提醒投递被身份校验拒绝的问题；无关插件配置变更保留原有适配器连接。
+
+  保证候选事件在当前代快照发布后准入，并避免安装过程中依赖文件变动提前中断插件管理操作。
+
+  明确 Adapter/MCP 客户端创建仅提供所属 owner 的配置与资源，跨 Feature 查询由当前 operation 上下文负责；入站诊断记录接收时刻，避免慢指令的回复在历史中先于指令。
+
+- Updated dependencies [386150d]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+  - @zhin.js/plugin-runtime@1.1.13
+
+## 1.1.3
+
+### Patch Changes
+
+- badcc1f: Unify lazy JSX and HTML delivery across commands, inbound middleware and registered components. Remove the former JSX/template component runtimes, respect declared adapter HTML policies, and preserve author/generation ownership for automatic and explicit replies.
+
+  Add the optional @zhin.js/components library with composable JSXRenderable display props, shared themes, symmetric spacing and local style/text overrides. Include tables, lists, Markdown with highlighted code blocks, and display-only checkbox, radio, switch and button states; provide a reusable preview gallery. Update scaffolds, examples and public authoring documentation together.
+
+  Add optional official Tailwind static-utility compilation to inline styles. Consolidate raster rendering on @pixel.js/shotium, remove the Satori image toolkit, and align raster format contracts with actual PNG/JPEG/WebP results.
+
+  Reject cascade-dependent Tailwind values including unset, track the installed Tailwind version in the bundled theme provenance, and preserve both repository and upstream MIT attribution. Keep optional gallery dependency failures visible and document asynchronous Tailwind initialization.
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/plugin-runtime@1.1.12
+
+## 1.1.2
+
+### Patch Changes
+
+- Updated dependencies [36c2eb9]
+  - @zhin.js/plugin-runtime@1.1.11
+
+## 1.1.1
+
+### Patch Changes
+
+- 8740059: Standardize TypeScript capabilities on named module directories such as `commands/foo/index.ts`, `middlewares/audit/index.ts`, `handlers/message-receive/index.ts`, `pages/workroom/index.tsx`, and `mcps/filesystem/index.ts`. Only the fixed `index` entry is discovered; sibling files remain private helpers.
+
+  Command route segments come from directories, while `[name]`, `[[name]]`, `[...name]`, and `[[...name]]` directories declare dynamic parameters. Plugin owners do not enter the route unless their config explicitly sets `commandNamespace`; Endpoint `commandPrefix` remains platform-owned and defaults to an empty string.
+
+  Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
+
+  Make Tool ownership and progressive disclosure explicit across all four supported locations: plugin-public `tools/`, Agent-private `agents/<name>/tools/`, Skill-private `skills/<name>/tools/`, and Agent-Skill-private `agents/<name>/skills/<name>/tools/`. Move adapter and group-suite operations that require domain instructions into their owning Skills so `load_skill` is the only path that unlocks their schemas.
+
+  Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, schedules use `schedules/<name>/index.ts` or `plugin.ts` injection, MCP connections use `mcps/<name>/index.ts`, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.
+
+- 2fd8017: Make root `AGENTS.md` the main Agent contract and `agents/<name>/agent.json` plus `system.md`, `boundaries.md`, and `conventions.md` the only named sub-agent authoring shape. Standardize Agent and Skill private Tools, Skills, and Hooks as nested named directories, enforce access predicates and governed Tool activation, and keep supporting-file changes on Agent Slot hot reloads.
+- Updated dependencies [13f7301]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [65d0391]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+
+## 1.1.0
+
+### Minor Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+
+### Patch Changes
+
+- Updated dependencies [1fc6270]
+  - @zhin.js/plugin-runtime@1.1.9
+
+## 1.0.13
+
+### Patch Changes
+
+- 1fc78bc: Unify native platform Client access behind the literal `adapter` discriminant. Handlers infer both native events and Clients, while command, inbound/outbound middleware, and both Agent tool authoring surfaces expose the exact operation-scoped Client through a lazy `$client` getter. Definitions without `adapter` keep `$client` typed as `unknown`, and runtime dispatch rejects adapter mismatches before resolving the Client. Bundled platform tools now use this single path instead of model-provided endpoint ids and adapter-specific dependency wrappers. Every adapter registers one Client/EventMap contract, and protocol adapters including NapCat, Milky, OneBot and Satori now produce transport-independent Client objects rather than letting Endpoint instances impersonate Clients.
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+  - @zhin.js/plugin-runtime@1.1.8
+
+## 1.0.12
+
+### Patch Changes
+
+- Updated dependencies [67ef8c4]
+  - @zhin.js/plugin-runtime@1.1.7
+
+## 1.0.11
+
+### Patch Changes
+
+- d3920e9: Extract the `handlers/` convention into a dedicated Feature package `@zhin.js/handler`, and mount it as a platform Stable Feature on `@zhin.js/core` (inherited by Roots via `platformFeatures` / `zhin runtime start`).
+
+  Also add the `zhin.js/middleware` facade re-export so Stable Feature authoring is consistent with `zhin.js/command` / `adapter` / `component` / `handler`.
+
+  `@zhin.js/feature-kit` is now kit-only: handler authoring, `HandlerIndex`, and the Feature provider entry are removed. Do not list `@zhin.js/feature-kit` in `zhin.features`.
+
+  **Authoring:** apps and plugins that depend on `zhin.js` should import `definePlugin` from the main entry (`zhin.js`) and other `define*` from facade subpaths (`zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component`) — do not separately install `@zhin.js/plugin-runtime` or the `@zhin.js/*` Feature implementation packages. Workspace plugins/examples/adapters were updated accordingly (imports + deps; child plugins keep `zhin.features` mounts and peer `zhin.js`). CLI `zhin new` / migrate cutover scaffolds follow the same rule.
+
+  BREAKING CHANGE: `@zhin.js/feature-kit` no longer exports handler APIs and is no longer a `type: "feature"` package.
+
+## 1.0.10
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+
+## 1.0.9
+
+### Patch Changes
+
+- 63253bb: Restrict Root consumers to the read-only `SnapshotReader` lease interface and
+  remove public `RootRuntime.controller` access. Generation commit, transaction,
+  close, and stop authority now remain inside the Root lifecycle.
+
+  Close Root admission when rollback cleanup or retired-generation disposal can
+  no longer prove lifecycle integrity. Existing leases may drain, but new
+  operations and generation transactions fail closed until the Process Host
+  stops the Root.
+
+  Bind externally driven capability resources to lifecycle-owned generation admission gates.
+  Adapter candidates can establish Endpoint connections during readiness while their IM ingress
+  remains invisible; snapshot commit atomically retires the old ingress and publishes the new one,
+  without closing the old Endpoint before the transaction succeeds.
+  Admitted HTTP, WebSocket, IM, isolated-RPC, Endpoint control, and Endpoint management operations
+  now retain their exact generation until settlement instead of escaping with a live object.
+
+  Remove inert unconfigured Endpoints and deferred soft-start. Configured Endpoint creation,
+  connection readiness, and local admission are required generation prerequisites; any failure
+  disposes the complete candidate set and leaves the previous generation serving traffic.
+
+  Move the HTTP listener to Process Host ownership. Generation scopes now receive only an
+  `HttpHost` routing port (without `listen`/`close` authority), and HTTP/WS registrations are tagged
+  with generation admission so candidate routes cannot shadow committed routes before publish.
+
+  Remove the fallible post-commit `openNext` phase and all pre-commit old-generation
+  quiesce/resume hooks. Handoff now performs candidate readiness and reversible candidate cleanup
+  only; the previous generation remains untouched until the single synchronous snapshot/admission
+  publish point, then drains through its existing leases.
+  Candidate setup, Feature projection, Endpoint readiness, MCP connection, isolation activation,
+  database activation, and config commit now receive the Root transaction `AbortSignal`; Root Stop
+  fails closed and awaits candidate cancellation cleanup.
+
+- Updated dependencies [63253bb]
+  - @zhin.js/plugin-runtime@1.1.6
+
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies [c106ecc]
+- Updated dependencies [daffd4c]
+- Updated dependencies [e40b048]
+  - @zhin.js/plugin-runtime@1.1.5
+
+## 1.0.7
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/plugin-runtime@1.1.4
+
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [afc0e66]
+  - @zhin.js/plugin-runtime@1.1.3
+
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+
+## 1.0.4
+
+### Patch Changes
+
+- d5cd4aa: Publish Plugin Runtime entry points and convention modules as JavaScript so
+  installed npm plugins load on Node without TypeScript stripping. Workspace
+  development continues to prefer TypeScript sources for local HMR.
+
+  Remove the unconsumed legacy game hub APIs from game-kit; game navigation and
+  records now use ordinary convention commands owned by the game hub plugin.
+
+## 1.0.3
+
+### Patch Changes
+
+- fa66c4c: Add transactional setup-time Feature registration through `PluginSetupContext.addFeature`, with
+  typed shortcuts for Adapter, Command, Component, Middleware, Agent, Skill, Tool, and MCP Features.
+  Setup definitions now share provider validation, projections, conflicts, ownership, and generation
+  lifecycle with convention-discovered capability files. Feature providers can declare their own
+  shortcut through `authoring.setupMethod`.
+- Updated dependencies [cdf64e7]
+- Updated dependencies [078e3f7]
+- Updated dependencies [fa66c4c]
+  - @zhin.js/plugin-runtime@1.1.1
+
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [3ea84a0]
+- Updated dependencies [1ddcd70]
+  - @zhin.js/plugin-runtime@1.1.0
+
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies [447f3e2]
+  - @zhin.js/plugin-runtime@1.0.1

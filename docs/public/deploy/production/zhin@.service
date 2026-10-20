@@ -1,0 +1,39 @@
+[Unit]
+Description=Zhin.js Bot (%i)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=%i
+Group=%i
+WorkingDirectory=/srv/zhin/%i
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/srv/zhin/%i/.env
+ExecStart=/usr/bin/env pnpm start
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/srv/zhin/%i/.zhin /srv/zhin/%i/data
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=zhin-%i
+
+[Install]
+WantedBy=multi-user.target

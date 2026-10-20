@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "GitHub Enterprise hostname (default github.com)"
+    },
+    "webhook_path": {
+      "type": "string",
+      "default": "/github/webhook"
+    },
+    "auto_reply_repos": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Repos whose Issue/PR comments auto-trigger AI without @bot"
+    },
+    "bot_login": {
+      "type": "string",
+      "description": "Override App bot login (default {slug}[bot])"
+    },
+    "workspace_root": {
+      "type": "string",
+      "description": "Managed git workspace root"
+    },
+    "master": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖"
+    },
+    "trusted": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ],
+        "description": "Trusted GitHub user login or id"
+      },
+      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
+    },
+    "endpoints": {
+      "type": "array",
+      "minItems": 1,
+      "description": "多账号：一个插件实例挂多个 endpoint",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "master": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master"
+          },
+          "trusted": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Trusted GitHub user login or id"
+            },
+            "description": "本 endpoint 的 trusted 列表"
+          },
+          "app_id": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "GitHub App ID"
+          },
+          "private_key": {
+            "type": "string",
+            "description": "GitHub App private key (PEM content or file path)"
+          },
+          "webhook_secret": {
+            "type": "string",
+            "description": "Webhook HMAC secret; enables httpHostToken POST route"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "GitHub App bot name"
+          },
+          "host": {
+            "type": "string",
+            "description": "GitHub Enterprise hostname"
+          },
+          "webhook_path": {
+            "type": "string",
+            "description": "Webhook route path"
+          },
+          "auto_reply_repos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Repos whose comments auto-trigger AI"
+          },
+          "bot_login": {
+            "type": "string",
+            "description": "Override App bot login"
+          },
+          "workspace_root": {
+            "type": "string",
+            "description": "Managed git workspace root"
+          },
+          "commandPrefix": {
+            "type": "string",
+            "description": "本 endpoint 的命令前缀"
+          }
+        },
+        "required": [
+          "id",
+          "app_id",
+          "private_key"
+        ]
+      }
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+    }
+  },
+  "required": [
+    "endpoints"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "WECOM Platform Agent",
+  "version": "1.0.0",
+  "description": "Handles wecom platform-specific operations and progressively loads only the required platform Skill.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "wecom",
+      "adapter:wecom"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "platforms": [
+    "wecom"
+  ]
+}

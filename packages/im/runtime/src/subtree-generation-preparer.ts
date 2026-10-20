@@ -1,0 +1,255 @@
+import {
+  DisposeStack,
+  createSnapshotView,
+  rootPluginId,
+  type Dispose,
+  type FeatureId,
+  type PluginId,
+  type RuntimeSnapshot,
+  type RuntimeConfigDocument,
+} from '@zhin.js/plugin-runtime';
+import { FeatureDiscovery } from '@zhin.js/feature-kit';
+import type { RuntimeEnvironment } from './environment.js';
+import type { EnvironmentLayers } from './environment-store.js';
+import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
+import type { IsolatedPluginRuntimePort } from './isolation.js';
+import type { ModuleRuntime } from './module-runtime.js';
+import { NodeDiscoveryHost } from './node-discovery-host.js';
+import {
+  PluginScopeAssembler,
+  type PluginConfigResolver,
+  type RootResourceInstaller,
+} from './plugin-scope-assembler.js';
+import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
+import {
+  prepareRuntimeGeneration,
+  type PreparedRuntimeGeneration,
+  type RuntimeGenerationModel,
+} from './runtime-generation.js';
+import { SourceOwnershipIndex } from './source-ownership.js';
+import {
+  addCapabilitySlot,
+  featureSetupAliases,
+  mergeSetupCapabilities,
+} from './setup-capabilities.js';
+
+export class SubtreeTopologyChangedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SubtreeTopologyChangedError';
+  }
+}
+
+/** Replaces selected Plugin forests while retaining all other Scope lifetimes. */
+export class SubtreeGenerationPreparer {
+  constructor(
+    private readonly modules: ModuleRuntime,
+    private readonly model: RuntimeGenerationModel,
+    private readonly graph: ProjectGraph,
+    private readonly configResolver: PluginConfigResolver,
+    private readonly primaryConfigDocument: RuntimeConfigDocument,
+    private readonly environment: RuntimeEnvironment,
+    private readonly installResources?: RootResourceInstaller,
+    private readonly environmentLayers: EnvironmentLayers = {},
+    private readonly isolation?: IsolatedPluginRuntimePort,
+  ) {}
+
+  async prepare(
+    current: RuntimeSnapshot,
+    roots: readonly PluginId[],
+    signal: AbortSignal,
+  ): Promise<PreparedRuntimeGeneration> {
+    signal.throwIfAborted();
+    const nodes = indexGraph(this.graph);
+    assertCompatibleTopology(indexGraph(this.model.graph), nodes, roots);
+    const plugins = new PluginScopeAssembler(
+      this.modules,
+      this.configResolver,
+      this.environment,
+      this.primaryConfigDocument,
+      current.generation + 1,
+      this.installResources,
+      this.environmentLayers,
+      {
+        scopes: this.model.scopes,
+        tree: current.tree,
+        config: current.config,
+        resources: current.resources,
+      },
+      this.isolation,
+    );
+    plugins.installSetupFeatureAliases(featureSetupAliases(this.model.providers.values()));
+    plugins.removeSubtrees(roots);
+
+    const projectionDisposers = new Map<FeatureId, Dispose>();
+    try {
+      for (const root of roots) {
+        const node = nodes.get(root);
+        if (!node) throw new SubtreeTopologyChangedError(`Missing subtree root: ${root}`);
+        await plugins.setupTree(node, signal);
+      }
+
+      const capabilities = new Map(current.capabilities);
+      for (const [id, slot] of capabilities) {
+        if (roots.some((root) => isWithin(slot.owner, root))) capabilities.delete(id);
+      }
+      mergeSetupCapabilities(
+        capabilities,
+        plugins.setupCapabilities(),
+        this.model.providers,
+        this.model.rootsByFeature,
+      );
+      const discovery = new FeatureDiscovery(new NodeDiscoveryHost(this.modules));
+      for (const provider of this.model.providers.values()) {
+        const affectedRoots = (this.model.rootsByFeature.get(provider.id) ?? [])
+          .filter((root) => roots.some((owner) => isWithin(root.owner, owner)));
+        if (affectedRoots.length === 0) continue;
+        const slots = await discovery.discover(provider, affectedRoots);
+        signal.throwIfAborted();
+        for (const slot of slots) addCapabilitySlot(capabilities, slot);
+      }
+
+      // Most indexes capture a complete construction snapshot and must rebuild.
+      // Only an explicitly shareable projection may retain unchanged transports.
+      const affectedFeatures = new Set<FeatureId>([...this.model.providers.values()]
+        .filter((provider) => provider.runtime.retain !== 'when-owner-unchanged')
+        .map((provider) => provider.id));
+      for (const [feature, featureRoots] of this.model.rootsByFeature) {
+        if (featureRoots.some((entry) => roots.some((root) => isWithin(entry.owner, root)))) {
+          affectedFeatures.add(feature);
+        }
+      }
+      for (const slot of [...current.capabilities.values(), ...capabilities.values()]) {
+        if (roots.some((root) => isWithin(slot.owner, root))) affectedFeatures.add(slot.feature);
+      }
+      const providers = [...this.model.providers.values()].filter((provider) => affectedFeatures.has(provider.id));
+      const projected = await new FeatureProjector(providers).project(
+        current.generation + 1,
+        {
+          root: current.root,
+          tree: plugins.tree,
+          config: plugins.config,
+          resources: plugins.resources,
+          capabilities,
+        },
+        signal,
+        current.projections,
+      );
+      for (const [feature, dispose] of projected.disposers) {
+        projectionDisposers.set(feature, dispose);
+      }
+
+      const snapshot = createSnapshotView(current.generation + 1, projected.state);
+      plugins.bindCandidateSnapshot(snapshot);
+      const ownership = SourceOwnershipIndex.fromGeneration(
+        this.graph,
+        snapshot,
+        this.model.featureIdsByPackageRoot,
+      );
+      const replacements = new Map(plugins.createdScopeDisposers());
+      // Local prepare still commits a complete immutable generation. The
+      // replacement map controls lifetime ownership, not snapshot granularity.
+      const assets = this.model.assets.replaceScopes(
+        [...nodes.keys()],
+        replacements,
+        affectedFeatures,
+        projectionDisposers,
+      );
+      return prepareRuntimeGeneration(
+        {
+          snapshot: projected.state,
+          dispose: () => assets.dispose(),
+          handoff: composeGenerationHandoffs(
+            plugins.generationHandoff(),
+            projected.handoff,
+          ),
+        },
+        ownership,
+        {
+          ...this.model,
+          graph: this.graph,
+          scopes: new Map(plugins.scopes),
+          assets,
+        },
+      );
+    } catch (error) {
+      await rollback(
+        plugins.createdScopeDisposers().map(([, dispose]) => dispose),
+        [...projectionDisposers.values()],
+        error,
+      );
+      throw error;
+    }
+  }
+}
+
+function indexGraph(graph: ProjectGraph): ReadonlyMap<PluginId, PluginGraphNode> {
+  const result = new Map<PluginId, PluginGraphNode>();
+  const visit = (node: PluginGraphNode): void => {
+    result.set(node.id, node);
+    for (const child of node.children) visit(child);
+  };
+  visit(graph.root);
+  return result;
+}
+
+function assertCompatibleTopology(
+  previousNodes: ReadonlyMap<PluginId, PluginGraphNode>,
+  nextNodes: ReadonlyMap<PluginId, PluginGraphNode>,
+  roots: readonly PluginId[],
+): void {
+  if (roots.includes(rootPluginId())) {
+    throw new SubtreeTopologyChangedError('Root changes require a full generation');
+  }
+  if (previousNodes.size !== nextNodes.size) {
+    throw new SubtreeTopologyChangedError('Plugin tree size changed');
+  }
+  for (const [id, previous] of previousNodes) {
+    const next = nextNodes.get(id);
+    if (
+      !next
+      || next.parent !== previous.parent
+      || next.instanceKey !== previous.instanceKey
+      || next.package.root !== previous.package.root
+      || next.package.name !== previous.package.name
+      || !sameValues(
+        next.children.map((child) => child.id),
+        previous.children.map((child) => child.id),
+      )
+      || !sameValues(featureRoots(next), featureRoots(previous))
+    ) {
+      throw new SubtreeTopologyChangedError(`Plugin topology changed at ${id}`);
+    }
+  }
+}
+
+function featureRoots(node: PluginGraphNode): readonly string[] {
+  return node.features.map((feature) => feature.package.root);
+}
+
+function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function isWithin(plugin: PluginId, root: PluginId): boolean {
+  return plugin === root || plugin.startsWith(`${root}/`);
+}
+
+async function rollback(
+  scopeDisposers: readonly Dispose[],
+  projectionDisposers: readonly Dispose[],
+  prepareError: unknown,
+): Promise<void> {
+  const disposers = new DisposeStack();
+  for (const dispose of scopeDisposers) disposers.add(dispose);
+  for (const dispose of projectionDisposers) disposers.add(dispose);
+  try {
+    await disposers.dispose();
+  } catch (disposeError) {
+    throw new AggregateError(
+      [prepareError, disposeError],
+      'Subtree generation prepare and rollback both failed',
+      { cause: disposeError },
+    );
+  }
+}

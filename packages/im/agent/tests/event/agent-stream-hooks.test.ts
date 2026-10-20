@@ -1,0 +1,57 @@
+import { describe, expect, it, vi } from 'vitest';
+import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
+import { HookRegistry, AgentResourceHub } from '../../src/resource-hub/index.js';
+import {
+  agentStreamEventToAIHookEvent,
+  isAgentStreamHookEventName,
+} from '../../src/event/agent-stream-hooks.js';
+
+describe('HookRegistry stream vocabulary (ADR 0039 P0)', () => {
+  it('triggerStream invokes hooks subscribed to Eve-aligned event names', async () => {
+    const registry = new HookRegistry();
+    const handler = vi.fn();
+    registry.add({
+      name: 'on-turn-start',
+      event: AgentStreamEventType.TURN_STARTED,
+      handler,
+    });
+
+    await registry.triggerStream({
+      type: AgentStreamEventType.TURN_STARTED,
+      data: { sessionId: 'ses_1', turnId: 'turn_1' },
+    }, undefined, 'ses_1', { skipBus: true });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler.mock.calls[0][0].type).toBe('turn');
+    expect(handler.mock.calls[0][0].action).toBe('started');
+    expect(handler.mock.calls[0][0].context.streamType).toBe(AgentStreamEventType.TURN_STARTED);
+  });
+
+  it('bus events only invoke hooks using canonical stream names', async () => {
+    const resourceHub = new AgentResourceHub();
+    const streamHandler = vi.fn();
+    resourceHub.hooks.add({ name: 'stream', event: AgentStreamEventType.MESSAGE_RECEIVED, handler: streamHandler });
+
+    await resourceHub.agentStreamBus.publish({
+      type: AgentStreamEventType.MESSAGE_RECEIVED,
+      data: { message: 'hi' },
+    }, { sessionId: 'ses_1' });
+
+    expect(streamHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('isAgentStreamHookEventName recognizes contract vocabulary', () => {
+    expect(isAgentStreamHookEventName('session.waiting')).toBe(true);
+    expect(isAgentStreamHookEventName('message:received')).toBe(false);
+  });
+
+  it('agentStreamEventToAIHookEvent splits dotted stream type', () => {
+    const hookEvent = agentStreamEventToAIHookEvent({
+      type: AgentStreamEventType.ACTION_RESULT,
+      data: { toolName: 'bash' },
+    }, 'ses_9');
+    expect(hookEvent.type).toBe('action');
+    expect(hookEvent.action).toBe('result');
+    expect(hookEvent.sessionId).toBe('ses_9');
+  });
+});

@@ -1,0 +1,249 @@
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { setImmediate as waitForImmediate } from 'node:timers/promises';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  createToken,
+  definePlugin,
+  type RuntimeSnapshot,
+} from '@zhin.js/plugin-runtime';
+import commandFeature, {
+  CommandIndex,
+  commandFeatureId,
+  defineCommand,
+} from '@zhin.js/command';
+import { RootRuntime, type ModuleRuntime } from '../src/index.js';
+
+const temporary: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporary.splice(0).map((path) => rm(path, { recursive: true })));
+});
+
+describe('Plugin subtree HMR', () => {
+  it('replaces one subtree while retaining its ancestor and sibling lifetimes', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    const shared = createToken<string>('test.shared');
+    const childValue = createToken<string>('test.child-value');
+    const siblingValue = createToken<string>('test.sibling-value');
+    const setupCalls = { root: 0, child: 0, sibling: 0 };
+    const disposed: string[] = [];
+    const handoffs: string[] = [];
+    const rootSource = join(project, 'plugin.ts');
+    const childSource = join(project, 'plugins/child/plugin.ts');
+    const siblingSource = join(project, 'plugins/sibling/plugin.ts');
+    const featureSource = join(project, 'packages/command/index.ts');
+
+    modules.set(rootSource, {
+      default: definePlugin({
+        name: 'root',
+        setup({ handoff }) {
+          setupCalls.root += 1;
+          handoff.add(recordHandoff('root'));
+        },
+      }),
+    });
+    modules.set(childSource, childPlugin('v1'));
+    modules.set(siblingSource, {
+      default: definePlugin({
+        name: 'sibling',
+        requires: [shared],
+        setup({ resources, handoff }) {
+          setupCalls.sibling += 1;
+          resources.provide(siblingValue, 'sibling', () => { disposed.push('sibling'); });
+          handoff.add(recordHandoff('sibling'));
+        },
+      }),
+    });
+    modules.set(featureSource, { default: commandFeature });
+    modules.set(join(project, 'plugins/child/commands/child/status/index.ts'), {
+      default: defineCommand({ execute: ({ use }) => use(childValue) }),
+    });
+    modules.set(join(project, 'plugins/sibling/commands/sibling/status/index.ts'), {
+      default: defineCommand({ execute: ({ use }) => use(siblingValue) }),
+    });
+
+    const runtime = new RootRuntime({ config: { configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"} },
+      projectRoot: project,
+      modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      installResources({ resources }) {
+        resources.provide(shared, 'shared', () => { disposed.push('root'); });
+      },
+    });
+    const first = await runtime.start();
+    const oldLease = runtime.snapshots.acquire();
+    await expect(commandIndex(first).execute('child status')).resolves.toBe('v1');
+    await expect(commandIndex(first).execute('child inline')).resolves.toBe('inline:v1');
+    expect(handoffs).toEqual([
+      'root:activate',
+      'child-v1:activate',
+      'sibling:activate',
+    ]);
+
+    modules.set(childSource, childPlugin('v2'));
+    const errors: unknown[] = [];
+    const hmr = runtime.createHmrCoordinator({
+      onRestartRequired() {},
+      onError(error) { errors.push(error); },
+    });
+    await hmr.enqueue(childSource);
+    const second = runtime.snapshot;
+
+    expect(second.generation).toBe(2);
+    await expect(commandIndex(second).execute('child status')).resolves.toBe('v2');
+    await expect(commandIndex(second).execute('child inline')).resolves.toBe('inline:v2');
+    await expect(commandIndex(second).execute('sibling status')).resolves.toBe('sibling');
+    expect(setupCalls).toEqual({ root: 1, child: 2, sibling: 1 });
+    // Config preflight rereads cached module declarations without rerunning setup.
+    expect(modules.loadCount(rootSource)).toBe(3);
+    expect(modules.loadCount(siblingSource)).toBe(3);
+    expect(disposed).toEqual([]);
+    expect(handoffs.slice(3)).toEqual([
+      'child-v2:activate',
+    ]);
+
+    modules.set(childSource, {
+      default: definePlugin({
+        name: 'child-broken',
+        setup({ resources }) {
+          resources.provide(childValue, 'broken', () => { disposed.push('broken'); });
+          throw new Error('child setup failed');
+        },
+      }),
+    });
+    await expect(hmr.enqueue(childSource)).rejects.toThrow('child setup failed');
+    expect(runtime.snapshot).toBe(second);
+    expect(disposed).toEqual(['broken']);
+    await expect(commandIndex(runtime.snapshot).execute('child status')).resolves.toBe('v2');
+    expect(errors).toHaveLength(1);
+
+    oldLease.release();
+    await waitForImmediate();
+    expect(disposed).toEqual(['broken', 'child-v1']);
+
+    await runtime.stop();
+    expect(disposed).toEqual([
+      'broken',
+      'child-v1',
+      'sibling',
+      'child-v2',
+      'root',
+    ]);
+
+    function childPlugin(version: string): { readonly default: unknown } {
+      return {
+        default: definePlugin({
+          name: `child-${version}`,
+          requires: [shared],
+          setup({ resources, handoff, addCommand }) {
+            setupCalls.child += 1;
+            addCommand('child/inline', defineCommand({ execute: () => `inline:${version}` }));
+            resources.provide(childValue, version, () => {
+              disposed.push(`child-${version}`);
+            });
+            handoff.add(recordHandoff(`child-${version}`));
+          },
+        }),
+      };
+    }
+
+    function recordHandoff(name: string) {
+      return {
+        activateNext() { handoffs.push(`${name}:activate`); },
+        deactivateNext() { handoffs.push(`${name}:deactivate`); },
+      };
+    }
+  });
+});
+
+function commandIndex(snapshot: RuntimeSnapshot): CommandIndex {
+  const index = snapshot.projections.get(commandFeatureId);
+  if (!(index instanceof CommandIndex)) throw new Error('Missing Command projection');
+  return index;
+}
+
+class FakeModuleRuntime implements ModuleRuntime {
+  readonly #modules = new Map<string, unknown>();
+  readonly #loads = new Map<string, number>();
+
+  set(source: string, value: unknown): void {
+    this.#modules.set(source, value);
+  }
+
+  async load<T>(source: string): Promise<T> {
+    if (!this.#modules.has(source)) throw new Error(`Missing fake module: ${source}`);
+    this.#loads.set(source, (this.#loads.get(source) ?? 0) + 1);
+    return this.#modules.get(source) as T;
+  }
+
+  loadCount(source: string): number {
+    return this.#loads.get(source) ?? 0;
+  }
+
+  affectedSources(source: string): readonly string[] {
+    return [source];
+  }
+
+  invalidate(): void {}
+
+  async close(): Promise<void> {}
+}
+
+async function createProject(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-subtree-'));
+  temporary.push(root);
+  await writeJson(join(root, 'package.json'), {
+    name: '@test/root',
+    dependencies: {
+      '@test/child': 'workspace:*',
+      '@test/sibling': 'workspace:*',
+    },
+    zhin: {
+      protocol: 1,
+      type: 'plugin',
+      entry: './plugin.ts',
+      plugins: [],
+    },
+  });
+  await pluginPackage(root, 'child', '@test/child');
+  await pluginPackage(root, 'sibling', '@test/sibling');
+  await writeJson(join(root, 'packages/command/package.json'), {
+    name: '@test/command',
+    zhin: { protocol: 1, type: 'feature', entry: './index.ts' },
+  });
+  for (const file of [
+    'plugin.ts',
+    'plugins/child/plugin.ts',
+    'plugins/child/commands/child/status/index.ts',
+    'plugins/sibling/plugin.ts',
+    'plugins/sibling/commands/sibling/status/index.ts',
+    'packages/command/index.ts',
+  ]) await touch(join(root, file));
+  return realpath(root);
+}
+
+async function pluginPackage(root: string, directory: string, name: string): Promise<void> {
+  await writeJson(join(root, `plugins/${directory}/package.json`), {
+    name,
+    dependencies: { '@test/command': 'workspace:*' },
+    zhin: {
+      protocol: 1,
+      type: 'plugin',
+      entry: './plugin.ts',
+      features: [{ package: '@test/command' }],
+    },
+  });
+}
+
+async function writeJson(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function touch(path: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, '');
+}

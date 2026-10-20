@@ -1,0 +1,22 @@
+{
+  "name": "draw",
+  "version": "1.0.0",
+  "description": "Text-to-image only—call generate_image and return a short caption; image delivery is automatic.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "draw",
+      "画",
+      "生图",
+      "画图",
+      "image generation",
+      "generate_image"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "max_iterations": 8
+}

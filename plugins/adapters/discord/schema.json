@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "connection": {
+      "type": "string",
+      "enum": [
+        "gateway",
+        "interactions"
+      ],
+      "default": "gateway",
+      "description": "Gateway WebSocket (default). interactions uses httpHostToken POST + Ed25519 verify."
+    },
+    "intents": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "enableSlashCommands": {
+      "type": "boolean",
+      "default": false
+    },
+    "globalCommands": {
+      "type": "boolean",
+      "default": false
+    },
+    "defaultActivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "PLAYING",
+            "STREAMING",
+            "LISTENING",
+            "WATCHING",
+            "COMPETING"
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "slashCommands": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "applicationId": {
+      "type": "string",
+      "description": "Required when connection is interactions."
+    },
+    "publicKey": {
+      "type": "string",
+      "description": "Required when connection is interactions (hex Ed25519 public key)."
+    },
+    "interactionsPath": {
+      "type": "string",
+      "default": "/discord/interactions",
+      "description": "POST path on httpHostToken when connection is interactions."
+    },
+    "master": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖"
+    },
+    "trusted": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ],
+        "description": "Trusted Discord user snowflake"
+      },
+      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
+    },
+    "endpoints": {
+      "type": "array",
+      "minItems": 1,
+      "description": "多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "master": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master"
+          },
+          "trusted": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Trusted Discord user snowflake"
+            },
+            "description": "本 endpoint 的 trusted 列表"
+          },
+          "token": {
+            "type": "string",
+            "description": "Discord bot token"
+          },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "gateway",
+              "interactions"
+            ]
+          },
+          "intents": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "enableSlashCommands": {
+            "type": "boolean"
+          },
+          "globalCommands": {
+            "type": "boolean"
+          },
+          "defaultActivity": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "PLAYING",
+                  "STREAMING",
+                  "LISTENING",
+                  "WATCHING",
+                  "COMPETING"
+                ]
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ]
+          },
+          "slashCommands": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "publicKey": {
+            "type": "string"
+          },
+          "interactionsPath": {
+            "type": "string"
+          },
+          "commandPrefix": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "description": "Discord bot name"
+          },
+          "gatewayFaultProxyUrl": {
+            "type": "string",
+            "pattern": "^(?:ws://127\\.0\\.0\\.1:[0-9]+/?|\\$\\{[A-Za-z_][A-Za-z0-9_]*\\})$",
+            "description": "Isolated acceptance only: loopback Gateway fault proxy; REST unchanged."
+          },
+          "restApiProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "required": [
+              "port"
+            ],
+            "description": "Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理"
+          }
+        },
+        "required": [
+          "id",
+          "token"
+        ]
+      }
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+    },
+    "gatewayFaultProxyUrl": {
+      "type": "string",
+      "pattern": "^(?:ws://127\\.0\\.0\\.1:[0-9]+/?|\\$\\{[A-Za-z_][A-Za-z0-9_]*\\})$",
+      "description": "Isolated acceptance only: loopback Gateway fault proxy; REST unchanged."
+    }
+  },
+  "required": [
+    "endpoints"
+  ]
+}

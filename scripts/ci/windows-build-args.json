@@ -1,0 +1,11 @@
+[
+  "--recursive",
+  "--workspace-concurrency=1",
+  "--sort",
+  "--fail-if-no-match",
+  "--filter=./basic/**",
+  "--filter=./packages/**",
+  "--filter=./plugins/**",
+  "run",
+  "build"
+]

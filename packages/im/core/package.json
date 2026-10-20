@@ -1,0 +1,197 @@
+{
+  "name": "@zhin.js/core",
+  "version": "1.1.46",
+  "description": "Zhin机器人核心框架",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./queue-im-field-contract": {
+      "types": "./lib/built/queue-im-field-contract.d.ts",
+      "development": "./src/built/queue-im-field-contract.ts",
+      "import": "./lib/built/queue-im-field-contract.js"
+    },
+    "./runtime": {
+      "types": "./lib/plugin-runtime/im/index.d.ts",
+      "development": "./src/plugin-runtime/im/index.ts",
+      "import": "./lib/plugin-runtime/im/index.js"
+    },
+    "./jsx": {
+      "types": "./lib/jsx.d.ts",
+      "development": "./src/jsx.ts",
+      "import": "./lib/jsx.js"
+    },
+    "./jsx-runtime": {
+      "types": "./lib/jsx-runtime.d.ts",
+      "development": "./src/jsx-runtime.ts",
+      "import": "./lib/jsx-runtime.js"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./lib/jsx-dev-runtime.d.ts",
+      "development": "./src/jsx-dev-runtime.ts",
+      "import": "./lib/jsx-dev-runtime.js"
+    },
+    "./feature/adapter": {
+      "types": "./lib/feature/adapter.d.ts",
+      "development": "./src/feature/adapter.ts",
+      "import": "./lib/feature/adapter.js"
+    },
+    "./feature/command": {
+      "types": "./lib/feature/command.d.ts",
+      "development": "./src/feature/command.ts",
+      "import": "./lib/feature/command.js"
+    },
+    "./feature/component": {
+      "types": "./lib/feature/component.d.ts",
+      "development": "./src/feature/component.ts",
+      "import": "./lib/feature/component.js"
+    },
+    "./feature/middleware": {
+      "types": "./lib/feature/middleware.d.ts",
+      "development": "./src/feature/middleware.ts",
+      "import": "./lib/feature/middleware.js"
+    },
+    "./feature/handler": {
+      "types": "./lib/feature/handler.d.ts",
+      "development": "./src/feature/handler.ts",
+      "import": "./lib/feature/handler.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "rimraf lib && tsc",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/handler": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/interaction": "workspace:*",
+    "@zhin.js/kernel": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/schedule-feature": "workspace:*",
+    "@zhin.js/schema": "workspace:*",
+    "qrcode": "^1.5.4",
+    "segment-matcher": "^1.0.5",
+    "@zhin.js/jsx": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/qrcode": "^1.5.6",
+    "@zhin.js/ai": "workspace:*",
+    "ajv": "8.18.0",
+    "typescript": "^6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/im/core"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./queue-im-field-contract": {
+        "types": "./lib/built/queue-im-field-contract.d.ts",
+        "import": "./lib/built/queue-im-field-contract.js"
+      },
+      "./runtime": {
+        "types": "./lib/plugin-runtime/im/index.d.ts",
+        "import": "./lib/plugin-runtime/im/index.js"
+      },
+      "./jsx": {
+        "types": "./lib/jsx.d.ts",
+        "import": "./lib/jsx.js"
+      },
+      "./jsx-runtime": {
+        "types": "./lib/jsx-runtime.d.ts",
+        "import": "./lib/jsx-runtime.js"
+      },
+      "./jsx-dev-runtime": {
+        "types": "./lib/jsx-dev-runtime.d.ts",
+        "import": "./lib/jsx-dev-runtime.js"
+      },
+      "./feature/adapter": {
+        "types": "./lib/feature/adapter.d.ts",
+        "import": "./lib/feature/adapter.js"
+      },
+      "./feature/command": {
+        "types": "./lib/feature/command.d.ts",
+        "import": "./lib/feature/command.js"
+      },
+      "./feature/component": {
+        "types": "./lib/feature/component.d.ts",
+        "import": "./lib/feature/component.js"
+      },
+      "./feature/middleware": {
+        "types": "./lib/feature/middleware.d.ts",
+        "import": "./lib/feature/middleware.js"
+      },
+      "./feature/handler": {
+        "types": "./lib/feature/handler.d.ts",
+        "import": "./lib/feature/handler.js"
+      }
+    }
+  },
+  "license": "MIT",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./lib/index.js",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/handler",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/schedule-feature",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  }
+}

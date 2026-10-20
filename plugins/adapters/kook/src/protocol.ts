@@ -1,0 +1,475 @@
+/** KOOK protocol helpers. Canonicalization is owned by Core. */
+
+import { createDecipheriv, timingSafeEqual } from 'node:crypto';
+import { inflateSync } from 'node:zlib';
+import type { IncomingMessage } from 'node:http';
+import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('kook');
+
+export type LogLevel =
+  | 'trace'
+  | 'debug'
+  | 'info'
+  | 'warn'
+  | 'error'
+  | 'fatal'
+  | 'mark'
+  | 'off';
+
+export enum KookPermission {
+  Normal = 1,
+  Admin = 2,
+  Owner = 4,
+  ChannelAdmin = 5,
+}
+
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface KookEndpointConfig {
+  readonly apiProxy?: import('./api-proxy.js').KookApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').KookStreamProxy;
+  readonly id: string;
+  readonly token: string;
+  /** Default `websocket`. `webhook` requires httpHostToken + verify_token. */
+  readonly connection?: 'websocket' | 'webhook';
+  readonly webhookPath?: string;
+  readonly verify_token?: string;
+  readonly encrypt_key?: string;
+  readonly data_dir?: string;
+  readonly timeout?: number;
+  readonly max_retry?: number;
+  readonly ignore?: 'bot' | 'self';
+  readonly logLevel?: LogLevel;
+}
+
+export interface ResolvedKookWebsocketConfig {
+  readonly apiProxy?: import('./api-proxy.js').KookApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').KookStreamProxy;
+  readonly context: 'kook';
+  readonly connection: 'websocket';
+  readonly id: string;
+  readonly token: string;
+  readonly data_dir?: string;
+  readonly timeout: number;
+  readonly max_retry: number;
+  readonly ignore: 'bot' | 'self';
+  readonly logLevel: LogLevel;
+}
+
+export interface ResolvedKookWebhookConfig {
+  readonly apiProxy?: import('./api-proxy.js').KookApiProxy;
+  readonly context: 'kook';
+  readonly connection: 'webhook';
+  readonly id: string;
+  readonly token: string;
+  readonly webhookPath: string;
+  readonly verifyToken: string;
+  readonly encryptKey?: string;
+  readonly ignore: 'bot' | 'self';
+  readonly logLevel: LogLevel;
+}
+
+export interface KookWebhookEventData {
+  readonly channel_type?: string;
+  readonly type?: number;
+  readonly target_id?: string;
+  readonly author_id?: string;
+  readonly content?: string;
+  readonly msg_id?: string;
+  readonly msg_timestamp?: number;
+  readonly verify_token?: string;
+  readonly challenge?: string;
+  readonly extra?: {
+    readonly type?: string | number;
+    readonly body?: {
+      readonly user_id?: string;
+      readonly channel_id?: string;
+      readonly msg_id?: string;
+      readonly author_id?: string;
+      readonly target_id?: string;
+      readonly chat_code?: string;
+      readonly value?: string;
+      readonly emoji?: { readonly id?: string; readonly name?: string };
+    };
+    readonly guild_id?: string;
+    readonly author?: {
+      readonly id?: string;
+      readonly username?: string;
+      readonly bot?: boolean;
+      readonly roles?: number[];
+    };
+  };
+}
+
+export interface KookWebhookFrame {
+  readonly s?: number;
+  readonly sn?: number;
+  readonly d?: KookWebhookEventData;
+  readonly encrypt?: string;
+}
+
+export type ResolvedKookConfig = ResolvedKookWebsocketConfig | ResolvedKookWebhookConfig;
+
+export interface KookInboundMessage {
+  readonly id: string;
+  readonly content: string;
+  readonly channelKind: 'private' | 'channel';
+  readonly channelId: string;
+  readonly authorId: string;
+  readonly authorName: string;
+  readonly authorBot?: boolean;
+  readonly authorRoles?: number[];
+  readonly timestamp: number;
+  readonly guildId?: string;
+  readonly rawMessage?: string;
+}
+
+export interface KookWireSegment {
+  readonly type: string;
+  readonly data?: Record<string, unknown>;
+}
+
+export function resolveKookConfig(config: KookEndpointConfig): ResolvedKookConfig {
+  if (config.apiProxy && (!Number.isInteger(config.apiProxy.port) || config.apiProxy.port < 1 || config.apiProxy.port > 65535)) throw new TypeError('Invalid KOOK apiProxy port');
+  if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
+    || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName))) throw new TypeError('Invalid KOOK streamProxy port/serverName');
+  const id = requiredEndpointField(config.id, 'id');
+  const token = requiredEndpointField(config.token, 'token');
+  const connection = config.connection ?? 'websocket';
+
+  if (connection === 'webhook') {
+    const verifyToken = requiredEndpointField(config.verify_token, 'verify_token');
+    const encryptKey = config.encrypt_key;
+    return {
+      context: 'kook',
+      connection: 'webhook',
+      ...(config.apiProxy ? { apiProxy: config.apiProxy } : {}),
+      id,
+      token,
+      webhookPath: normalizeWebhookPath(
+        config.webhookPath ?? '/kook/webhook',
+      ),
+      verifyToken,
+      encryptKey: typeof encryptKey === 'string' && encryptKey ? encryptKey : undefined,
+      ignore: config.ignore ?? 'bot',
+      logLevel: config.logLevel ?? 'info',
+    };
+  }
+
+  return {
+    context: 'kook',
+    connection: 'websocket',
+    ...(config.apiProxy ? { apiProxy: config.apiProxy } : {}),
+    ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
+    id,
+    token,
+    data_dir: config.data_dir,
+    timeout: config.timeout ?? 10_000,
+    max_retry: config.max_retry ?? 3,
+    ignore: config.ignore ?? 'bot',
+    logLevel: config.logLevel ?? 'info',
+  };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'token' | 'verify_token',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`KOOK endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
+}
+
+/**
+ * 入站归一化 → ConversationRef：频道消息的所属 guild 进 `parent`（guild 容器
+ * 映射为 channel 容器）；私聊（PERSON）无容器，直接 kind 'private'。
+ */
+export function kookInboundConversation(endpointKey: string, msg: KookInboundMessage): ConversationRef {
+  return {
+    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
+    kind: msg.channelKind,
+    id: msg.channelId,
+    ...(msg.guildId && msg.channelKind === 'channel'
+      ? { parent: { kind: 'channel' as const, id: msg.guildId } }
+      : {}),
+  };
+}
+
+export function senderDisplayName(msg: KookInboundMessage): string {
+  return msg.authorName || msg.authorId;
+}
+
+/** Build inbound text for OutboundMessageService.receive */
+export function formatInboundContent(msg: KookInboundMessage): string {
+  const text = (msg.content || msg.rawMessage || '').trim();
+  return text || '(Empty message)';
+}
+
+/**
+ * KOOK @ 用户标记为 `(met)<userId>(met)`；content 含 `(met)<botId>(met)` 时视为 @ 机器人。
+ * botId 取 client 缓存的 self_id（/me 类接口），拿不到则不标注。
+ */
+export function isKookBotMentioned(msg: KookInboundMessage, selfId?: string): boolean {
+  if (!selfId) return false;
+  const marker = `(met)${selfId}(met)`;
+  return (msg.content || '').includes(marker) || (msg.rawMessage || '').includes(marker);
+}
+
+/**
+ * 解析 image/audio/video/file 段的投递 URL（canonical MediaRef 唯一来源）。
+ * KOOK KMarkdown 媒体只能消费远程 URL；base64 / path / file 引用无法经
+ * KMarkdown 投递，warn 后丢弃（返回 undefined）。
+ */
+function resolveOutboundMediaUrl(seg: KookWireSegment): string | undefined {
+  const media = (seg.data ?? {}).media;
+  if (!isMediaRef(media)) {
+    logger.warn(formatCompact({
+      op: 'kook_outbound_media_dropped',
+      type: seg.type,
+      reason: 'missing_media_ref',
+    }));
+    return undefined;
+  }
+  if (media.kind !== 'url') {
+    logger.warn(formatCompact({
+      op: 'kook_outbound_media_dropped',
+      type: seg.type,
+      reason: 'unsupported_media_kind',
+      kind: media.kind,
+    }));
+    return undefined;
+  }
+  return media.value;
+}
+
+/**
+ * Wire-encode an already-rendered outbound payload into KOOK KMarkdown.
+ * Segment canonicalization is intentionally not done here.
+ */
+export function formatOutboundKmarkdown(payload: unknown): string {
+  if (typeof payload === 'string') return payload;
+
+  const segments: Array<string | KookWireSegment> = Array.isArray(payload)
+    ? payload as Array<string | KookWireSegment>
+    : payload && typeof payload === 'object' && 'type' in (payload as object)
+      ? [payload as KookWireSegment]
+      : [];
+
+  if (segments.length === 0) {
+    return payload == null
+      ? ''
+      : typeof payload === 'object'
+        ? JSON.stringify(payload)
+        : String(payload);
+  }
+
+  return segments
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      const data = item.data ?? {};
+      switch (item.type) {
+        case 'text':
+          return String(data.text ?? data.content ?? '');
+        case 'markdown':
+          return String(data.content ?? data.text ?? '');
+        case 'share':
+        case 'keyboard':
+          throw new EndpointDeliveryError('unsupported_operation', 'KOOK share cards and native keyboards are not implemented', 'not_sent');
+        case 'at': {
+          const id = String(data.user_id ?? data.qq ?? data.id ?? '');
+          return id === 'all' ? '(met)all(met)' : `(met)${id}(met)`;
+        }
+        case 'image': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `![${String(data.alt || '图片')}](${url})` : '';
+        }
+        case 'face':
+          return `(emj)${String(data.name || 'emoji')}(emj)[${String(data.id ?? '')}]`;
+        case 'link':
+          return `[${String(data.text || data.url || '')}](${String(data.url || '')})`;
+        case 'video': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `[视频](${url})` : '';
+        }
+        case 'audio': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `[音频](${url})` : '';
+        }
+        case 'file': {
+          const url = resolveOutboundMediaUrl(item);
+          return url ? `[文件: ${String(data.name || '未命名')}](${url})` : '';
+        }
+        case 'bold':
+          return `**${String(data.text ?? '')}**`;
+        case 'italic':
+          return `*${String(data.text ?? '')}*`;
+        case 'code':
+          return `\`${String(data.text ?? '')}\``;
+        case 'code_block':
+          return `\`\`\`${String(data.language || '')}\n${String(data.text ?? '')}\n\`\`\``;
+        case 'reply':
+          return '';
+        default:
+          return data.text != null ? String(data.text) : '';
+      }
+    })
+    .filter(Boolean)
+    .join('');
+}
+
+export function normalizeWebhookPath(path: string): string {
+  const trimmed = path.trim() || '/kook/webhook';
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
+export async function readTextBody(
+  request: IncomingMessage,
+  options: { readonly limit?: number } = {},
+): Promise<string> {
+  const limit = options.limit ?? 1_048_576;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limit) {
+      request.destroy();
+      throw new Error(`Request body exceeds ${limit} bytes`);
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+export async function readRequestBody(
+  request: IncomingMessage,
+  options: { readonly limit?: number } = {},
+): Promise<Buffer> {
+  const limit = options.limit ?? 1_048_576;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limit) {
+      request.destroy();
+      throw new Error(`Request body exceeds ${limit} bytes`);
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
+export function padKookEncryptKey(key: string): Buffer {
+  const buf = Buffer.alloc(32, 0);
+  Buffer.from(key, 'utf8').copy(buf, 0, 0, Math.min(32, Buffer.byteLength(key, 'utf8')));
+  return buf;
+}
+
+export function decryptKookWebhookPayload(encrypted: string, encryptKey: string): Buffer {
+  const decoded = Buffer.from(encrypted, 'base64');
+  const iv = decoded.subarray(0, 16);
+  const ciphertext = decoded.subarray(16);
+  const decipher = createDecipheriv('aes-256-cbc', padKookEncryptKey(encryptKey), iv);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+}
+
+export function parseKookWebhookBody(rawBody: Buffer, encryptKey?: string): KookWebhookFrame {
+  let text = rawBody.toString('utf8').trim();
+  if (!text.startsWith('{')) {
+    text = inflateSync(rawBody).toString('utf8');
+  }
+  let parsed: KookWebhookFrame;
+  try {
+    parsed = JSON.parse(text) as KookWebhookFrame;
+  } catch {
+    throw new TypeError('Invalid KOOK webhook JSON body');
+  }
+  if (parsed.encrypt) {
+    if (!encryptKey) {
+      throw new TypeError('KOOK webhook payload is encrypted but encrypt_key is not configured');
+    }
+    const decrypted = decryptKookWebhookPayload(parsed.encrypt, encryptKey);
+    // 在字节层面判断：明文 JSON 以 '{' 开头，否则按 zlib 压缩数据处理。
+    // 不能先 toString('utf8') 再转回 Buffer —— 压缩二进制会被替换字符损坏。
+    let offset = 0;
+    while (
+      offset < decrypted.length
+      && (decrypted[offset] === 0x20 || decrypted[offset] === 0x09
+        || decrypted[offset] === 0x0a || decrypted[offset] === 0x0d)
+    ) {
+      offset += 1;
+    }
+    const decryptedText = decrypted[offset] === 0x7b // '{'
+      ? decrypted.toString('utf8')
+      : inflateSync(decrypted).toString('utf8');
+    parsed = JSON.parse(decryptedText) as KookWebhookFrame;
+  }
+  return parsed;
+}
+
+export function isKookWebhookChallenge(event: KookWebhookEventData): boolean {
+  return event.type === 255 && event.channel_type === 'WEBHOOK_CHALLENGE';
+}
+
+export function verifyKookWebhookToken(expected: string, actual?: string): boolean {
+  if (!actual) return false;
+  const left = Buffer.from(expected, 'utf8');
+  const right = Buffer.from(actual, 'utf8');
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+}
+
+export function normalizeKookWebhookEvent(
+  event: KookWebhookEventData,
+  options: { readonly ignore?: 'bot' | 'self'; readonly selfId?: string } = {},
+): KookInboundMessage | null {
+  if (isKookWebhookChallenge(event)) return null;
+  if (event.msg_id == null || event.author_id == null) return null;
+
+  const authorBot = event.extra?.author?.bot === true;
+  if (authorBot && options.ignore === 'bot') return null;
+  if (options.selfId && String(event.author_id) === options.selfId && options.ignore === 'self') {
+    return null;
+  }
+
+  const channelKind = event.channel_type === 'GROUP' ? 'channel' : 'private';
+  const channelId = channelKind === 'channel'
+    ? String(event.target_id ?? '')
+    : String(event.author_id);
+  if (!channelId) return null;
+
+  return {
+    id: String(event.msg_id),
+    content: event.content ?? '',
+    channelKind,
+    channelId,
+    authorId: String(event.author_id),
+    authorName: event.extra?.author?.username
+      || event.extra?.author?.id
+      || String(event.author_id),
+    authorBot,
+    authorRoles: event.extra?.author?.roles,
+    timestamp: event.msg_timestamp ?? Date.now(),
+    guildId: event.extra?.guild_id,
+  };
+}
+
+/** Native Card return-val events; routing and actor must come from the click event. */
+export function normalizeKookButtonEvent(raw: unknown): { id: string; sourceMessageId: string; payload: string; userId: string; channelKind: 'private' | 'channel'; channelId: string; timestamp: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const event = raw as KookWebhookEventData;
+  if (event.extra?.type !== 'message_btn_click') return null;
+  const body = event.extra.body;
+  if (!body || typeof body.value !== 'string' || !body.value || !body.user_id || !body.msg_id) return null;
+  // Button system notifications can use PERSON even for a channel card.
+  // body.target_id identifies the original channel; envelope target_id is the recipient.
+  const bodyTarget = body.channel_id || body.target_id;
+  const channelKind = (bodyTarget && String(bodyTarget) !== String(body.user_id)) || event.channel_type === 'GROUP' ? 'channel' : 'private';
+  const channelId = channelKind === 'private' ? String(body.user_id) : String(bodyTarget || event.target_id || '');
+  if (!channelId) return null;
+  const timestamp = event.msg_timestamp ?? Date.now();
+  return { id: String(event.msg_id || `button:${body.msg_id}:${timestamp}`), sourceMessageId: String(body.msg_id), payload: body.value, userId: String(body.user_id), channelKind, channelId, timestamp };
+}

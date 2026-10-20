@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "botAgent": {
+      "type": "string"
+    },
+    "baseUrl": {
+      "type": "string",
+      "default": "https://ilinkai.weixin.qq.com"
+    },
+    "cdnBaseUrl": {
+      "type": "string",
+      "default": "https://novac2c.cdn.weixin.qq.com/c2c"
+    },
+    "longPollTimeoutMs": {
+      "type": "number",
+      "default": 35000
+    },
+    "dataDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "data/weixin-ilink",
+      "description": "Endpoint state root for credentials, cursors, context tokens, and media"
+    },
+    "master": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖"
+    },
+    "trusted": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ],
+        "description": "Trusted Weixin user id"
+      },
+      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
+    },
+    "endpoints": {
+      "type": "array",
+      "minItems": 1,
+      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "master": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master"
+          },
+          "trusted": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ],
+              "description": "Trusted Weixin user id"
+            },
+            "description": "本 endpoint 的 trusted 列表"
+          },
+          "botToken": {
+            "type": "string",
+            "description": "iLink bot token; omit to load endpoint state or start QR login"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "description": "Weixin iLink bot name"
+          },
+          "botAgent": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "cdnBaseUrl": {
+            "type": "string"
+          },
+          "longPollTimeoutMs": {
+            "type": "number"
+          },
+          "dataDir": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Endpoint state root"
+          },
+          "commandPrefix": {
+            "type": "string",
+            "description": "本 endpoint 的命令前缀"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    "commandPrefix": {
+      "type": "string",
+      "default": "",
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+    }
+  },
+  "required": [
+    "endpoints"
+  ]
+}

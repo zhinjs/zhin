@@ -1,0 +1,63 @@
+{
+  "name": "@zhin.js/game-kit",
+  "version": "1.1.11",
+  "description": "Zhin.js 游戏插件通用工具包",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "development": "./src/index.ts",
+      "import": "./lib/index.js",
+      "types": "./lib/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "zhin.js": "workspace:^",
+    "@zhin.js/html-renderer": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/html-renderer": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "zhin.js": "workspace:*"
+  },
+  "files": [
+    "lib",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "import": "./lib/index.js",
+        "types": "./lib/index.d.ts"
+      }
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/game-kit"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "feature",
+    "entry": "./lib/provider.js",
+    "engine": "^1.0.0",
+    "featureApi": "1.0.0"
+  }
+}

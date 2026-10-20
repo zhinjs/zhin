@@ -1,0 +1,821 @@
+import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { ProtocolError } from '@imhelper/onebot-v11';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
+import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
+import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
+import { capabilityId, featureId, rootPluginId } from 'zhin.js';
+import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
+import { OneBot11WssEndpoint } from '../src/wss-endpoint.js';
+import type { OneBot11WsSocket } from '../src/ws-types.js';
+import {
+  buildSendAction,
+  extractQuoteId,
+  formatInboundContent,
+  formatOutboundSegments,
+  isOneBot11BotMentioned,
+  onebot11InboundConversation,
+  resolveOneBot11Config,
+  senderNickname,
+  senderUserId,
+  type OneBot11EndpointConfig,
+  type OneBot11Event,
+  type OneBot11WsConfig,
+} from '../src/protocol.js';
+
+const adapterFeature = featureId('zhin.adapter');
+
+const endpointCapabilityId = capabilityId(rootPluginId(), adapterFeature, 'onebot11');
+const endpointRef = {
+  id: String(endpointCapabilityId),
+  adapter: String(endpointCapabilityId).split('\0')[0],
+};
+
+const baseConfig: OneBot11WsConfig = resolveOneBot11Config({
+  connection: 'ws',
+  id: 'test-ob11',
+  url: 'ws://127.0.0.1:6700',
+  access_token: 'secret',
+  reconnect_interval: 50,
+  heartbeat_interval: 60_000,
+}) as OneBot11WsConfig;
+
+function createMockWs(): OneBot11WsSocket & {
+  emitOpen: () => void;
+  emitMessage: (data: string) => void;
+  emitClose: (code?: number, reason?: string) => void;
+  emitError: (error: Error) => void;
+  sent: string[];
+} {
+  const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  const sent: string[] = [];
+  const on = (event: string, listener: (...args: unknown[]) => void) => {
+    const list = listeners.get(event) ?? [];
+    list.push(listener);
+    listeners.set(event, list);
+  };
+  const emit = (event: string, ...args: unknown[]) => {
+    for (const listener of listeners.get(event) ?? []) listener(...args);
+  };
+  return {
+    readyState: 1,
+    sent,
+    send: vi.fn((data: string) => {
+      sent.push(data);
+    }),
+    close: vi.fn(),
+    ping: vi.fn(),
+    on,
+    emitOpen() {
+      emit('open');
+    },
+    emitMessage(data: string) {
+      emit('message', data);
+    },
+    emitClose(code = 1000, reason = 'bye') {
+      emit('close', code, reason);
+    },
+    emitError(error: Error) {
+      emit('error', error);
+    },
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
+
+describe('onebot11 protocol helpers', () => {
+  it('resolves ws config from plugin config', () => {
+    const resolved = resolveOneBot11Config({
+      connection: 'ws',
+      id: 'bot',
+      url: 'ws://localhost:1',
+    });
+    expect(resolved).toMatchObject({
+      connection: 'ws',
+      id: 'bot',
+      url: 'ws://localhost:1',
+      reconnect_interval: 5000,
+      heartbeat_interval: 30_000,
+    });
+  });
+
+  it('resolves wss config from the expanded endpoint config', () => {
+    const resolved = resolveOneBot11Config({
+      connection: 'wss',
+      id: 'rev',
+      path: '/onebot/ws',
+    });
+    expect(resolved).toMatchObject({
+      connection: 'wss',
+      id: 'rev',
+      path: '/onebot/ws',
+    });
+  });
+
+  it('does not infer endpoint config from process state or legacy endpoint rows', () => {
+    vi.stubEnv('ONEBOT11_BOT_NAME', 'environment-bot');
+    const legacy = {
+      endpoints: [{
+        context: 'onebot11',
+        type: 'ws_reverse',
+        id: 'legacy-bot',
+        path: '/onebot/ws',
+      }],
+    } as unknown as OneBot11EndpointConfig;
+
+    expect(() => resolveOneBot11Config(legacy)).toThrow('non-empty id');
+    expect(() => resolveOneBot11Config({ id: ' ', url: 'ws://localhost:1' }))
+      .toThrow('non-empty id');
+  });
+
+  it('normalizes inbound events to ConversationRef and extracts content', () => {
+    const ev: OneBot11Event = {
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 1,
+      group_id: 100,
+      user_id: 9,
+      raw_message: 'hello',
+      message: [{ type: 'text', data: { text: 'hello' } }],
+      time: 1,
+    };
+    expect(onebot11InboundConversation(String(endpointCapabilityId), ev)).toEqual({
+      endpoint: endpointRef,
+      kind: 'group',
+      id: '100',
+    });
+    expect(onebot11InboundConversation(String(endpointCapabilityId), {
+      post_type: 'message',
+      message_type: 'private',
+      message_id: 2,
+      user_id: 42,
+    })).toEqual({
+      endpoint: endpointRef,
+      kind: 'private',
+      id: '42',
+    });
+    expect(formatInboundContent(ev)).toBe('hello');
+  });
+
+  it('strips complete CQ codes without dropping malformed text', () => {
+    expect(formatInboundContent({
+      post_type: 'message',
+      raw_message: 'hello[CQ:image,file=test.jpg]world[CQ:at,qq=1]',
+    })).toBe('helloworld');
+    expect(formatInboundContent({
+      post_type: 'message',
+      raw_message: 'hello[CQ:image,file=test.jpg',
+    })).toBe('hello[CQ:image,file=test.jpg');
+  });
+
+  it('builds send_*_msg actions from conversation', () => {
+    expect(buildSendAction(
+      { endpoint: endpointRef, kind: 'private', id: '1' },
+      [{ type: 'text', data: { text: 'hi' } }],
+    )).toEqual({
+      action: 'send_private_msg',
+      params: {
+        user_id: 1,
+        message: [{ type: 'text', data: { text: 'hi' } }],
+      },
+    });
+    expect(buildSendAction(
+      { endpoint: endpointRef, kind: 'group', id: '2' },
+      [{ type: 'text', data: { text: 'hi' } }],
+    )).toEqual({
+      action: 'send_group_msg',
+      params: {
+        group_id: 2,
+        message: [{ type: 'text', data: { text: 'hi' } }],
+      },
+    });
+  });
+
+  it('formats outbound string and segment payloads', () => {
+    expect(formatOutboundSegments('pong')).toEqual([{ type: 'text', data: { text: 'pong' } }]);
+    expect(formatOutboundSegments([
+      { type: 'text', data: { text: 'see' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
+    ])).toEqual([
+      { type: 'text', data: { text: 'see' } },
+      { type: 'image', data: { file: 'https://x/a.png' } },
+    ]);
+  });
+
+  it('drops media segments without canonical data.media', () => {
+    // legacy 形状（裸 file/url/base64）与无 media 的媒体段一律丢弃，不再兼容透传
+    expect(formatOutboundSegments([
+      { type: 'text', data: { text: 'see' } },
+      { type: 'image', data: { file: 'https://x/a.png' } },
+      { type: 'image', data: { url: 'https://x/b.png' } },
+      { type: 'audio', data: { base64: 'QUJD' } },
+      { type: 'video', data: {} },
+      { type: 'file', data: { media: { kind: 'url', value: 'https://x/a.zip' } } },
+    ])).toEqual([
+      { type: 'text', data: { text: 'see' } },
+    ]);
+  });
+
+  it('maps canonical segments to OneBot wire segments', () => {
+    expect(formatOutboundSegments([
+      { type: 'mention', data: { target: '10001' } },
+      { type: 'reply', data: { message_id: '42' } },
+      { type: 'face', data: { id: 14, name: '微笑' } },
+    ])).toEqual([
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'reply', data: { id: '42' } },
+      { type: 'face', data: { id: 14 } },
+    ]);
+    expect(formatOutboundSegments([
+      { type: 'image', data: { media: { kind: 'base64', value: 'QUJD', mime_type: 'image/png' } } },
+      { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' } } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://x/a.mp3' } } },
+      { type: 'video', data: { media: { kind: 'url', value: 'https://x/a.mp4' } } },
+      { type: 'image', data: { media: { kind: 'file', value: 'opaque-file-id' } } },
+    ])).toEqual([
+      { type: 'image', data: { file: 'base64://QUJD' } },
+      { type: 'image', data: { file: 'file:///tmp/a.png' } },
+      { type: 'record', data: { file: 'https://x/a.mp3' } },
+      { type: 'video', data: { file: 'https://x/a.mp4' } },
+      { type: 'image', data: { file: 'opaque-file-id' } },
+    ]);
+  });
+
+  it('resolves sender as user id and nickname separately', () => {
+    const ev: OneBot11Event = {
+      post_type: 'message',
+      message_id: 1,
+      user_id: 42,
+      sender: { card: '群名片', nickname: 'nick' },
+    };
+    expect(senderUserId(ev)).toBe('42');
+    expect(senderNickname(ev)).toBe('群名片');
+    expect(senderUserId({ post_type: 'message', message_id: 1 })).toBe('');
+    expect(senderNickname({
+      post_type: 'message',
+      message_id: 1,
+      user_id: 7,
+      sender: { nickname: 'nick' },
+    })).toBe('nick');
+  });
+
+  it('extracts quote id from reply segment or top-level reply', () => {
+    expect(extractQuoteId({
+      post_type: 'message',
+      message_id: 1,
+      message: [{ type: 'reply', data: { id: 555 } }],
+    })).toBe('555');
+    expect(extractQuoteId({ post_type: 'message', message_id: 1, reply: 777 })).toBe('777');
+    expect(extractQuoteId({
+      post_type: 'message',
+      message_id: 1,
+      reply: { message_id: 'm-9' },
+    })).toBe('m-9');
+    expect(extractQuoteId({ post_type: 'message', message_id: 1 })).toBeUndefined();
+  });
+
+  it('detects bot mention by self_id, excluding @all', () => {
+    const message = [
+      { type: 'at', data: { qq: '10001' } },
+      { type: 'text', data: { text: ' hi' } },
+    ];
+    expect(isOneBot11BotMentioned({ selfId: '10001', message })).toBe(true);
+    expect(isOneBot11BotMentioned({ selfId: '10002', message })).toBe(false);
+    expect(isOneBot11BotMentioned({
+      selfId: '10001',
+      message: [{ type: 'at', data: { qq: 'all' } }],
+    })).toBe(false);
+    expect(isOneBot11BotMentioned({ selfId: undefined, message })).toBe(false);
+    expect(isOneBot11BotMentioned({ selfId: '10001' })).toBe(false);
+  });
+});
+
+describe('onebot11 plugin runtime adapter', () => {
+  it('routes admitted message events through OutboundMessageService when open', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway,
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), gateway, undefined);
+
+    await endpoint.start();
+    endpoint.open();
+    endpoint.client.ingest({
+      post_type: 'message',
+      message_type: 'private',
+      message_id: 42,
+      user_id: 10001,
+      raw_message: '你好',
+      message: [{ type: 'text', data: { text: '你好' } }],
+      sender: { nickname: 'Alice' },
+      time: 1_700_000_000,
+    });
+
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      conversation: { endpoint: endpointRef, kind: 'private', id: '10001' },
+      message: { conversation: { endpoint: endpointRef, kind: 'private', id: '10001' }, id: '42' },
+      content: '你好',
+      sender: expect.objectContaining({ id: '10001' }),
+      metadata: expect.objectContaining({ nickname: 'Alice' }),
+    }));
+
+    await endpoint.stop();
+    expect(ws.close).toHaveBeenCalled();
+  });
+
+  it('marks mentioned when a group message @s the bot self_id', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    endpoint.client.ingest({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 100,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      raw_message: '在吗',
+      message: [
+        { type: 'at', data: { qq: '10001' } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+      sender: { nickname: 'bob', role: 'member' },
+      time: 1_700_000_000,
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
+      sender: expect.objectContaining({ id: '9' }),
+      mentioned: true, metadata: expect.objectContaining({ nickname: 'bob' }),
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not mark mentioned when @ targets someone else or @all', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+
+    endpoint.client.ingest({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 101,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      message: [
+        { type: 'at', data: { qq: '10002' } },
+        { type: 'text', data: { text: ' 在吗' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+    let metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
+
+    endpoint.client.ingest({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 102,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      message: [
+        { type: 'at', data: { qq: 'all' } },
+        { type: 'text', data: { text: ' 通知' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
+    expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
+    await endpoint.stop();
+  });
+
+  it('forwards reply segment id as replyTo', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    endpoint.client.ingest({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 103,
+      self_id: 10001,
+      group_id: 200,
+      user_id: 9,
+      raw_message: '引用回复',
+      message: [
+        { type: 'reply', data: { id: 555 } },
+        { type: 'text', data: { text: '引用回复' } },
+      ],
+    });
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      replyTo: { id: '555' },
+    }));
+    await endpoint.stop();
+  });
+
+  it('does not admit inbound while closed', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.client.ingest({
+      post_type: 'message',
+      message_type: 'private',
+      message_id: 1,
+      user_id: 1,
+      raw_message: 'nope',
+    });
+    expect(receive).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('sends outbound payloads via WS send_private_msg action', async () => {
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), {
+        receive: vi.fn(async () => Object.freeze({ matched: false })),
+        send: vi.fn(async () => 'sent'),
+      }, undefined);
+    await endpoint.start();
+    endpoint.open();
+
+    const sendPromise = endpoint.send({
+      conversation: { endpoint: endpointRef, kind: 'private', id: '10001' },
+      payload: 'pong',
+    });
+
+    await vi.waitFor(() => expect(ws.sent.length).toBeGreaterThan(0));
+    const req = JSON.parse(ws.sent[0]!) as {
+      action: string;
+      params: Record<string, unknown>;
+      echo: string;
+    };
+    expect(req.action).toBe('send_private_msg');
+    expect(req.params).toMatchObject({
+      user_id: 10001,
+      message: [{ type: 'text', data: { text: 'pong' } }],
+    });
+
+    ws.emitMessage(JSON.stringify({
+      status: 'ok',
+      retcode: 0,
+      data: { message_id: 99 },
+      echo: req.echo,
+    }));
+
+    await expect(sendPromise).resolves.toBe('99');
+    await endpoint.stop();
+  });
+
+  it('exposes failed status, data and echo through ProtocolError', async () => {
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+
+    const call = endpoint.client.call('get_status');
+    await vi.waitFor(() => expect(ws.sent).toHaveLength(1));
+    const request = JSON.parse(ws.sent[0]!) as { echo: string };
+    const response = {
+      status: 'failed' as const,
+      retcode: 1404,
+      message: 'unsupported',
+      data: { action: 'get_status' },
+      echo: request.echo,
+    };
+    ws.emitMessage(JSON.stringify(response));
+
+    const error = await call.catch((cause) => cause);
+    expect(error).toMatchObject({
+      protocol: 'onebot-v11',
+      operation: 'get_status',
+      kind: 'protocol',
+      code: 1404,
+      response,
+    });
+    expect(error).toBeInstanceOf(ProtocolError);
+    await endpoint.stop();
+  });
+
+  it('projects non-message requests through the Client public event map', () => {
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => createMockWs(),
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const request = vi.fn();
+    endpoint.client.on('request.group', request);
+
+    endpoint.client.ingest({
+      time: 1,
+      self_id: 1,
+      post_type: 'request',
+      request_type: 'group',
+      sub_type: 'add',
+      flag: 'request-7',
+      group_id: 200,
+      user_id: 42,
+      comment: 'please',
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      flag: 'request-7',
+      group_id: 200,
+      user_id: 42,
+      sub_type: 'add',
+    }));
+  });
+
+  it('admits inbound events received over the socket when open', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        queueMicrotask(() => ws.emitOpen());
+        return ws;
+      },
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    ws.emitMessage(JSON.stringify({
+      post_type: 'message',
+      message_type: 'group',
+      message_id: 7,
+      group_id: 200,
+      user_id: 9,
+      raw_message: 'from-ws',
+      message: [{ type: 'text', data: { text: 'from-ws' } }],
+    }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalled());
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
+      conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
+      content: 'from-ws',
+    }));
+    await endpoint.stop();
+  });
+
+  it('creates reverse-wss endpoint when httpHostToken provided', async () => {
+    const { default: adapter } = await import('../adapters/onebot11/index.js');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    const endpoint = adapter.create({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      name: 'onebot11',
+      config: { connection: 'wss', id: 'rev', path: '/onebot/ws' },
+      use: (token: unknown) => {
+        if (token === httpHostToken) return http;
+        if (token === outboundMessageToken) {
+          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
+        }
+        if (token === sideEventGatewayToken) {
+          return {
+            receiveNotice: vi.fn(async () => {}),
+            receiveRequest: vi.fn(async () => {}),
+            receiveSystem: vi.fn(async () => {}),
+          };
+        }
+        if (token === onebot11RuntimeStateToken) return createEndpointRuntimeState();
+        throw new Error(`unexpected token: ${String(token)}`);
+      },
+    } as never);
+    expect(endpoint).toBeDefined();
+  });
+});
+
+describe('onebot11 ws lifecycle', () => {
+  it('does not arm reconnect when the initial connect closes before open', async () => {
+    let creates = 0;
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig, // reconnect_interval: 50
+      createWebSocket: () => {
+        creates += 1;
+        const ws = createMockWs();
+        queueMicrotask(() => ws.emitClose(1006, 'refused'));
+        return ws;
+      },
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+
+    await expect(endpoint.start()).rejects.toThrow('OneBot11 WS 关闭');
+    // 等超过一个 reconnect_interval，不应有幽灵重连发生
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(creates).toBe(1);
+  });
+
+  it('settles start() silently when stop() races the initial connect', async () => {
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => createMockWs(), // 永不 open，模拟连接挂起
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+
+    const startPromise = endpoint.start();
+    await endpoint.stop();
+    // stop-during-connect 视为主动停止：start() 静默 resolve，不拒绝、不武装重连
+    await expect(startPromise).resolves.toBeUndefined();
+  });
+
+  it('reconnects only after an established connection closes', async () => {
+    const sockets: Array<ReturnType<typeof createMockWs>> = [];
+    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      config: baseConfig,
+      createWebSocket: () => {
+        const ws = createMockWs();
+        sockets.push(ws);
+        queueMicrotask(() => {
+          if (sockets.length === 1) ws.emitOpen();
+        });
+        return ws;
+      },
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+
+    await endpoint.start();
+    sockets[0]!.emitClose(1006, 'lost');
+    await vi.waitFor(() => expect(sockets.length).toBe(2));
+    await endpoint.stop();
+  });
+
+  it('warns loudly when wss starts without access_token', async () => {
+    const { getAdapterLogger } = await import('@zhin.js/logger');
+    const warnSpy = vi.spyOn(getAdapterLogger('onebot11', 'wss-noauth'), 'warn');
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    try {
+      const endpoint = bindTestEndpoint(new OneBot11WssEndpoint({
+        id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+        gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+        http,
+        config: resolveOneBot11Config({
+          connection: 'wss',
+          id: 'wss-noauth',
+          path: '/ob11/ws',
+        }) as import('../src/protocol.js').OneBot11WssConfig,
+      }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+      await endpoint.start();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
+      await endpoint.stop();
+    } finally {
+      warnSpy.mockRestore();
+      await http.close().catch(() => undefined);
+    }
+  });
+});
+
+describe('onebot11 reverse ws lifecycle', () => {
+  function createReverseEndpoint(heartbeatInterval = 20) {
+    let acceptConnection: ((connection: unknown) => void) | undefined;
+    const releaseRoute = vi.fn();
+    const http = {
+      ws: vi.fn(() => ({
+        onConnection(listener: (connection: unknown) => void) {
+          acceptConnection = listener;
+          return releaseRoute;
+        },
+        close: vi.fn(),
+      })),
+    };
+    const endpoint = bindTestEndpoint(new OneBot11WssEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      http: http as never,
+      config: resolveOneBot11Config({
+        connection: 'wss',
+        id: 'reverse-bot',
+        path: '/onebot/ws',
+        access_token: 'secret',
+        heartbeat_interval: heartbeatInterval,
+      }) as never,
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    return { endpoint, releaseRoute, get acceptConnection() { return acceptConnection; } };
+  }
+
+  function reverseConnection(socket: OneBot11WsSocket) {
+    return {
+      socket,
+      request: {
+        headers: { authorization: 'Bearer secret' },
+        url: '/',
+        socket: { remoteAddress: '127.0.0.1' },
+      },
+      authScope: 'full',
+    };
+  }
+
+  it('owns the accepted connection heartbeat and closes it on stop', async () => {
+    const harness = createReverseEndpoint();
+    const ws = createMockWs();
+
+    await harness.endpoint.start();
+    harness.endpoint.open();
+    harness.acceptConnection?.(reverseConnection(ws));
+    await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+
+    await harness.endpoint.stop();
+    const pingsAfterStop = (ws.ping as ReturnType<typeof vi.fn>).mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBe(pingsAfterStop);
+    expect(ws.close).toHaveBeenCalled();
+    expect(harness.releaseRoute).toHaveBeenCalledOnce();
+  });
+
+  it('rejects messages from a replaced reverse socket', async () => {
+    const harness = createReverseEndpoint();
+    const ingest = vi.spyOn(harness.endpoint.client, 'ingest');
+    const first = createMockWs();
+    const second = createMockWs();
+    const event = JSON.stringify({
+      post_type: 'message',
+      message_type: 'private',
+      message_id: 1,
+      user_id: 42,
+      raw_message: 'hello',
+    });
+
+    await harness.endpoint.start();
+    harness.acceptConnection?.(reverseConnection(first));
+    await vi.waitFor(() => expect((first.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    harness.acceptConnection?.(reverseConnection(second));
+    await vi.waitFor(() => expect(first.close).toHaveBeenCalled());
+
+    first.emitMessage(event);
+    expect(ingest).not.toHaveBeenCalled();
+    second.emitMessage(event);
+    expect(ingest).toHaveBeenCalledOnce();
+
+    await harness.endpoint.stop();
+  });
+});

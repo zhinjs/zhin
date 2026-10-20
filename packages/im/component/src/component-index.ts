@@ -1,0 +1,95 @@
+import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { createCapabilityContext } from '@zhin.js/feature-kit';
+import type { ComponentContext, ComponentDefinition } from './definition.js';
+
+export interface ComponentDescriptor {
+  readonly owner: PluginId;
+  readonly name: string;
+  readonly source: string;
+  readonly previewProps?: unknown;
+}
+
+interface ComponentRecord extends ComponentDescriptor {
+  readonly slot: Readonly<CapabilitySlot<ComponentDefinition>>;
+}
+
+export class ComponentIndex {
+  readonly $projection = 'zhin.component-index/1' as const;
+  readonly #components = new Map<string, ComponentRecord>();
+  readonly #descriptors: readonly ComponentDescriptor[];
+
+  constructor(
+    slots: readonly Readonly<CapabilitySlot<ComponentDefinition>>[],
+    private readonly snapshot: RuntimeSnapshot,
+  ) {
+    const descriptors: ComponentDescriptor[] = [];
+    for (const slot of slots) {
+      const key = componentKey(slot.owner, slot.localName);
+      if (this.#components.has(key)) {
+        throw new Error(`Duplicate Component ${slot.localName} for ${slot.owner}`);
+      }
+      const record = Object.freeze({
+        owner: slot.owner,
+        name: slot.localName,
+        source: slot.source,
+        ...(slot.definition.previewProps === undefined ? {} : { previewProps: slot.definition.previewProps }),
+        slot,
+      });
+      this.#components.set(key, record);
+      descriptors.push(record);
+    }
+    this.#descriptors = Object.freeze(descriptors
+      .sort((left, right) => componentKey(left.owner, left.name)
+        .localeCompare(componentKey(right.owner, right.name)))
+      .map(({ owner, name, source, previewProps }) => Object.freeze({ owner, name, source, ...(previewProps === undefined ? {} : { previewProps }) })));
+  }
+
+  list(): readonly ComponentDescriptor[] {
+    return this.#descriptors;
+  }
+
+  has(requester: PluginId, name: string): boolean {
+    return this.#resolve(requester, name) !== undefined;
+  }
+
+  async render<TProps = unknown, TResult = unknown>(
+    requesterId: PluginId,
+    name: string,
+    props: TProps,
+    options: Readonly<{ signal?: AbortSignal; snapshot?: RuntimeSnapshot }> = {},
+  ): Promise<TResult> {
+    options.signal?.throwIfAborted();
+    const snapshot = options.snapshot ?? this.snapshot;
+    const requester = snapshot.tree.get(requesterId);
+    if (!requester) throw new Error(`Unknown Component requester: ${requesterId}`);
+    const record = this.#resolve(requesterId, name, snapshot);
+    if (!record) throw new Error(`Unknown Component ${name} for ${requesterId}`);
+    const context: ComponentContext = Object.freeze({
+      ...createCapabilityContext(snapshot, record.owner),
+      requester,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    const result = await record.slot.definition.render(props, context) as TResult;
+    options.signal?.throwIfAborted();
+    return result;
+  }
+
+  #resolve(requester: PluginId, name: string, snapshot: RuntimeSnapshot = this.snapshot): ComponentRecord | undefined {
+    let owner: PluginId | undefined = requester;
+    while (owner) {
+      const component = this.#components.get(componentKey(owner, name));
+      if (component) return component;
+      owner = snapshot.tree.get(owner)?.parent;
+    }
+    return undefined;
+  }
+}
+
+export function isComponentIndex(value: unknown): value is ComponentIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.component-index/1';
+}
+
+function componentKey(owner: PluginId, name: string): string {
+  return `${owner}\0${name}`;
+}

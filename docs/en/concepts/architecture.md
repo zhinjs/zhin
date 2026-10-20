@@ -1,0 +1,141 @@
+---
+title: "Layered Architecture"
+description: "Which packages make up Zhin.js, how they are layered, and what plugin authors and contributors each need to respect"
+---
+
+# Layered architecture
+
+Zhin.js is made of dozens of small packages, but **to write bots and plugins you almost only install and import `zhin.js`**. This page explains how the packages are layered and why — for readers who want to understand the internals or contribute.
+
+## Three things to remember
+
+1. **There is one public entry.** `zhin.js` re-exports what plugin authors need: `definePlugin` from `zhin.js`, `defineCommand` and friends from subpaths such as `zhin.js/command` and `zhin.js/middleware`.
+2. **AI is optional.** The default install is the IM core only (under 10MB); `@zhin.js/agent` and `@zhin.js/ai` are optional and used through `zhin.js/agent` / `zhin.js/ai`.
+3. **Dependencies only point down.** Upper packages may depend on lower ones; lower packages never know upper ones exist. `pnpm check:architecture` enforces this in CI — it isn't just a convention.
+
+| You are… | Depend on |
+| --- | --- |
+| Writing a bot or a regular plugin | `zhin.js` only |
+| Writing AI tools | plus `@zhin.js/tool` (`npx zhin setup --ai` handles it) |
+| Writing a new kind of capability (a Feature) | only `@zhin.js/feature-kit` / `@zhin.js/plugin-runtime` — not `@zhin.js/core` |
+| Contributing to the framework itself | the layering rules below |
+
+## Layer overview
+
+```mermaid
+flowchart BT
+    subgraph basic["basic/ Foundation layer"]
+        logger["@zhin.js/logger"]
+        schema["@zhin.js/schema"]
+        schedule["@zhin.js/schedule"]
+        database["@zhin.js/database"]
+    end
+    subgraph runtime["Runtime base"]
+        interaction["@zhin.js/interaction<br/>User interaction contract"]
+        imc["@zhin.js/im-contract<br/>IM transport contract"]
+        pr["@zhin.js/plugin-runtime<br/>generation / snapshot / handoff"]
+        fk["@zhin.js/feature-kit<br/>Feature discovery & projection"]
+        rt["@zhin.js/runtime<br/>RootRuntime / ProjectGraph / HMR"]
+    end
+    subgraph kernel["Kernel"]
+        k["@zhin.js/kernel"]
+    end
+    subgraph features["Feature layer (composable capabilities)"]
+        ad["@zhin.js/adapter"]
+        cmd["@zhin.js/command"]
+        comp["@zhin.js/component"]
+        mw["@zhin.js/middleware"]
+        tool["@zhin.js/tool · skill · agent-feature · mcp-feature"]
+    end
+    subgraph im["IM & AI"]
+        ai["@zhin.js/ai"]
+        core["@zhin.js/core"]
+        agent["@zhin.js/agent"]
+    end
+    zhin["zhin.js (facade)"]
+    host["packages/host/* (http / mcp / a2a)"]
+    cli["@zhin.js/cli (composition root)"]
+
+    pr --> fk --> ad & cmd & comp & mw & tool
+    imc --> ad & core & agent
+    interaction --> cmd & core
+    logger & schema & schedule --> k
+    logger --> database
+    logger --> ai
+    ad & cmd & comp & mw & k & database --> core
+    ai & core --> agent
+    core --> zhin
+    agent -. peer .-> zhin
+    pr & fk --> rt
+    zhin --> host
+    rt & core & host --> cli
+```
+
+Dependencies are defined by each package's `package.json`. Read the diagram from the bottom up:
+
+The foundation consists of three independent zero-dependency contracts: `@zhin.js/plugin-runtime` owns generation, snapshots, disposal, and tokens; `@zhin.js/im-contract` owns transport-neutral identities, segments, conversation events, and delivery semantics; `@zhin.js/interaction` owns typed user-interaction requests and conclusions. One layer up, `@zhin.js/feature-kit` depends only on the runtime base and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / handler / tool / skill / ...) depend only on these foundation contracts and do not depend on each other.
+
+Moving further up, `@zhin.js/core` assembles the adapter / command / component / middleware Features together with the kernel into the IM layer (Plugin, Adapter, Endpoint, message send/receive). The facade package `zhin.js` re-exports core packages as a unified entry -- plugin authors only need `import { ... } from 'zhin.js'`. `@zhin.js/agent`, `@zhin.js/ai`, etc. are optional peer dependencies, so the default installation contains only the IM core, with AI added on demand.
+
+## Layer responsibilities
+
+| Layer | Package | Responsibility |
+|-------|---------|---------------|
+| Foundation | `basic/logger` `schema` `schedule` `database` | Logging, config validation, scheduling, database -- zero/near-zero dependencies |
+| Runtime base | `packages/im/plugin-runtime` (users import from `zhin.js`) | Generation transactions, snapshot leases, handoff, dispose (see [Generation & lifecycle](./generation-lifecycle.md)) |
+| IM contract | `@zhin.js/im-contract` | Endpoint, conversation, segment, and delivery contracts with no Core or platform SDK dependency |
+| Feature mechanism | `@zhin.js/feature-kit` | Declare Feature providers, discover capabilities by convention, project into runtime indexes |
+| Kernel | `@zhin.js/kernel` | Plugin system and error hierarchy, no IM concepts |
+| Feature layer | `@zhin.js/adapter` `command` `component` `middleware` ... | Contract for a capability type (e.g. `defineAdapter`) + projection index (e.g. `AdapterIndex`) |
+| AI engine | `@zhin.js/ai` | Provider, agentLoop, sessions, memory -- no IM concepts |
+| IM layer | `@zhin.js/core` | Plugin, message pipeline, command dispatch (see [Message flow](./message-flow.md)) |
+| Agent | `@zhin.js/agent` | Multi-model orchestration, tool security policies, MCP client |
+| Facade | `zhin.js` | Re-exports the core authoring surface; `zhin.js/agent`, `zhin.js/ai` sub-paths exposed on demand |
+| Runtime | `@zhin.js/runtime` | `RootRuntime`: scans the project graph, composes configuration, executes generation transactions, HMR |
+| Assembly | `@zhin.js/cli` | Composition root -- `zhin runtime start` wires everything together |
+
+## Composition root: `@zhin.js/cli`
+
+The framework itself does not "start" anything -- each layer only provides mechanisms. The code that assembles these mechanisms into a runnable process is concentrated in `@zhin.js/cli`, the only place in the entire repo allowed to import across all layers (the sole exception to the layering rules).
+
+`zhin runtime start` (defined in `basic/cli/src/commands/runtime.ts`, assembly logic in `basic/cli/src/plugin-runtime/`) does the following:
+
+1. Wraps the single YAML/JSON Root config with `createConfigDocument` (`@zhin.js/config-file`) into a transactional `ConfigDocumentPort`;
+2. Creates `RootRuntime` (`@zhin.js/runtime`), injecting the module loader (in dev mode: `NativeDevelopmentModuleRuntime`), config port, and Root resource installer;
+3. Installs Host-level resources via `installResources`: HTTP Host, database, Agent Host (including AI fallback handler), Console API, etc.;
+4. After startup, attaches `HmrCoordinator` -- file changes trigger generation reloads or process restarts.
+
+A user project's entry point can therefore be minimal. `examples/minimal-bot/package.json`:
+
+```json
+{
+  "name": "minimal-bot",
+  "type": "module",
+  "scripts": {
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch"
+  },
+  "dependencies": {
+    "zhin.js": "workspace:*"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [],
+    "plugins": []
+  }
+}
+```
+
+The project itself is a plugin (Root Plugin), and the CLI is responsible for discovering and starting it. For a full explanation of manifest fields, see [Plugin model](./plugin-model.md); for config declaration and validation, see [Config as data](./config-as-data.md).
+
+## Corollaries of the layering rules
+
+When writing a Feature (a new capability type), depend only on `feature-kit` / `plugin-runtime` -- do not import `core`. `kernel` and `ai` know nothing about IM concepts like "group" or "direct message"; IM concepts only appear in `core` and above. Host packages (`packages/host/http`, `mcp`, `a2a`) sit above `core` and are assembled by the CLI; plugins do not depend on Host processes directly.
+
+## JSX and visual components
+
+`@zhin.js/jsx` owns lazy JSX trees and an HTML serializer, depending only on the canonical IM contract types. Core lays out JSX as ordered Segments; only `<html>` / `<Html>` children become `segment.html`. Native lowercase tags are typed without imports, and registered components can be used as named tags; `zhin.js/jsx` is the authoring facade. Optional `@zhin.js/components` uses this base plus Markdown parsing and syntax highlighting dependencies, accepts `JSXRenderable` display props and does not depend on Core, React or image engines. Render tools consume HTML; adapters declare platform policies.

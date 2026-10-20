@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 文档
+    url: https://zhin.js.org
+    about: 查看 zhin.js 的完整文档
+  - name: 💬 讨论
+    url: https://github.com/zhinjs/zhin/discussions
+    about: 在讨论区提问或分享想法
+  - name: 🐛 Bug 报告
+    url: https://github.com/zhinjs/zhin/issues/new?assignees=&labels=bug&template=bug_report.yml
+    about: 报告 bug 或问题
+  - name: ✨ 功能请求
+    url: https://github.com/zhinjs/zhin/issues/new?assignees=&labels=enhancement&template=feature_request.yml
+    about: 建议新功能或改进

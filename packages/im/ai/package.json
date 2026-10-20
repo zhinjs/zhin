@@ -1,0 +1,158 @@
+{
+  "name": "@zhin.js/ai",
+  "version": "1.1.41",
+  "description": "Framework-agnostic AI engine: providers, agent loop, sessions, memory, compaction",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./agent-stream": {
+      "types": "./lib/agent-stream.d.ts",
+      "development": "./src/agent-stream.ts",
+      "import": "./lib/agent-stream.js"
+    },
+    "./agent-stream-consumer": {
+      "types": "./lib/agent-stream-consumer.d.ts",
+      "development": "./src/agent-stream-consumer.ts",
+      "import": "./lib/agent-stream-consumer.js"
+    },
+    "./agent-step-checkpoint": {
+      "types": "./lib/agent-step-checkpoint.d.ts",
+      "development": "./src/agent-step-checkpoint.ts",
+      "import": "./lib/agent-step-checkpoint.js"
+    },
+    "./tool-policy": {
+      "types": "./lib/tool-policy.d.ts",
+      "development": "./src/tool-policy.ts",
+      "import": "./lib/tool-policy.js"
+    },
+    "./mcp-qualified-name": {
+      "types": "./lib/mcp-qualified-name.d.ts",
+      "development": "./src/mcp-qualified-name.ts",
+      "import": "./lib/mcp-qualified-name.js"
+    },
+    "./authorization-events": {
+      "types": "./lib/authorization-events.d.ts",
+      "development": "./src/authorization-events.ts",
+      "import": "./lib/authorization-events.js"
+    },
+    "./journal-store": {
+      "types": "./lib/journal-store.d.ts",
+      "development": "./src/journal-store.ts",
+      "import": "./lib/journal-store.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --config ../../vitest.config.ts"
+  },
+  "dependencies": {
+    "@zhin.js/logger": "workspace:*",
+    "undici": "^8.9.0"
+  },
+  "peerDependencies": {
+    "@ai-sdk/anthropic": "^4.0.9",
+    "@ai-sdk/deepseek": "^3.0.5",
+    "@ai-sdk/google": "^4.0.9",
+    "@ai-sdk/minimax": "^3.0.15",
+    "@ai-sdk/openai": "^4.0.8",
+    "@ai-sdk/openai-compatible": "^3.0.5",
+    "ai": "^7.0.0",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@ai-sdk/anthropic": {
+      "optional": true
+    },
+    "@ai-sdk/deepseek": {
+      "optional": true
+    },
+    "@ai-sdk/google": {
+      "optional": true
+    },
+    "@ai-sdk/minimax": {
+      "optional": true
+    },
+    "@ai-sdk/openai": {
+      "optional": true
+    },
+    "@ai-sdk/openai-compatible": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^4.0.25",
+    "@ai-sdk/deepseek": "^3.0.17",
+    "@ai-sdk/google": "^4.0.29",
+    "@ai-sdk/minimax": "^3.0.15",
+    "@ai-sdk/openai": "^4.0.25",
+    "@ai-sdk/openai-compatible": "^3.0.18",
+    "@types/node": "^26.1.2",
+    "@zhin.js/database": "workspace:*",
+    "ai": "^7.0.44",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zod": "^4.4.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/im/ai"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./agent-stream": {
+        "types": "./lib/agent-stream.d.ts",
+        "import": "./lib/agent-stream.js"
+      },
+      "./agent-stream-consumer": {
+        "types": "./lib/agent-stream-consumer.d.ts",
+        "import": "./lib/agent-stream-consumer.js"
+      },
+      "./agent-step-checkpoint": {
+        "types": "./lib/agent-step-checkpoint.d.ts",
+        "import": "./lib/agent-step-checkpoint.js"
+      },
+      "./tool-policy": {
+        "types": "./lib/tool-policy.d.ts",
+        "import": "./lib/tool-policy.js"
+      },
+      "./mcp-qualified-name": {
+        "types": "./lib/mcp-qualified-name.d.ts",
+        "import": "./lib/mcp-qualified-name.js"
+      },
+      "./authorization-events": {
+        "types": "./lib/authorization-events.d.ts",
+        "import": "./lib/authorization-events.js"
+      },
+      "./journal-store": {
+        "types": "./lib/journal-store.d.ts",
+        "import": "./lib/journal-store.js"
+      }
+    }
+  },
+  "license": "MIT",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

@@ -1,0 +1,12 @@
+import { createToken, type Token } from 'zhin.js';
+import type { SessionService } from './session-service.js';
+
+export const gameServicesToken = createToken<SessionService>(
+  'zhin.game.dungeon-expedition.services',
+);
+
+export function resolveGameServices(
+  context: { use<T>(token: Token<T>): T },
+): SessionService {
+  return context.use(gameServicesToken);
+}

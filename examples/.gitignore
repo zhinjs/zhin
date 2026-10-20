@@ -1,0 +1,2 @@
+# 勿在 examples/ 下放 zhin.config.yml（会干扰 deno-deploy-playground 等子项目）
+/zhin.config.yml

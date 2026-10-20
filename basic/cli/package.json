@@ -1,0 +1,118 @@
+{
+  "name": "@zhin.js/cli",
+  "version": "1.1.14",
+  "description": "Command-line interface for Zhin.js bot framework",
+  "type": "module",
+  "main": "./lib/index.js",
+  "bin": {
+    "zhin": "./bin/zhin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
+    "@zhin.js/permission": "workspace:*",
+    "@zhin.js/config-file": "workspace:*",
+    "@zhin.js/console-protocol": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/database": "workspace:*",
+    "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/interaction": "workspace:*",
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
+    "@zhin.js/pagemanager": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/prompt-section": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
+    "@zhin.js/scaffold-wizard": "workspace:*",
+    "@zhin.js/schedule": "workspace:*",
+    "chalk": "^5.6.2",
+    "commander": "^15.0.0",
+    "cross-spawn": "^7.0.6",
+    "dotenv": "^17.4.2",
+    "esbuild": "^0.28.1",
+    "fs-extra": "^11.4.0",
+    "glob": "^13.0.6",
+    "inquirer": "^14.0.2",
+    "open": "^11.0.0",
+    "ora": "^9.4.1",
+    "tsx": "^4.23.1",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "^6.0.6",
+    "@types/fs-extra": "^11.0.4",
+    "@types/inquirer": "^9.0.10",
+    "@types/node": "^26.1.2",
+    "@zhin.js/a2a": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/mcp": "workspace:*",
+    "@zhin.js/speech": "workspace:*",
+    "@zhin.js/workroom": "workspace:*",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/a2a": {
+      "optional": true
+    },
+    "@zhin.js/agent": {
+      "optional": true
+    },
+    "@zhin.js/speech": {
+      "optional": true
+    },
+    "@zhin.js/workroom": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    }
+  },
+  "peerDependencies": {
+    "@zhin.js/a2a": "workspace:^",
+    "@zhin.js/agent": "workspace:^",
+    "@zhin.js/speech": "workspace:^",
+    "@zhin.js/workroom": "workspace:^",
+    "typescript": ">=5.8.0 <7.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "basic/cli"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      }
+    }
+  },
+  "keywords": [
+    "zhin",
+    "bot",
+    "cli",
+    "command-line",
+    "tool"
+  ]
+}

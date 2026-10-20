@@ -1,0 +1,211 @@
+{
+  "source": "https://www.cubic.dev/wikis/zhinjs/zhin",
+  "source_commit": "368db14caa4aa91311fb090f07bd792fe4b22fe7",
+  "captured_at": "2026-09-23T04:39:39+00:00",
+  "body_hash_scope": "Complete normalized Cubic Markdown from the source-files details block onward, excluding frontmatter and warning/correction banners",
+  "pages": [
+    {
+      "id": "page-intro",
+      "title": "Introduction to Zhin.js",
+      "file": "intro.md",
+      "body_sha256": "caa99d02511aa16a5fa2dcc2e0e01311b018cbc16e86aafc237ab4acff48a668",
+      "source_body_sha256": "f1fa3472deb63e903b698e0a704349ea1886e0dc3a2394bf1d5cc1ec04310eb9"
+    },
+    {
+      "id": "page-quickstart",
+      "title": "Quick Start & Setup",
+      "file": "quickstart.md",
+      "body_sha256": "fe3f1c124730b6b4dd2949d022de15fdf766883015d271a035c19496d3f73b42",
+      "source_body_sha256": "0bd155505d07b8d04facbcf52f8ca9fd654a93143b5a6c28af851c43b8d1c60c"
+    },
+    {
+      "id": "page-arch-core",
+      "title": "System Architecture & Layering",
+      "file": "arch-core.md",
+      "body_sha256": "18e33ceb353961723b0b5aa9bc601f4ca35d5b013daac916d08f0a399ce86296",
+      "source_body_sha256": "4f498ac12d1ed88c9f1a149382404acd27f00bdb6d0c08db8996a191b477e715"
+    },
+    {
+      "id": "page-plugin-runtime",
+      "title": "Plugin Runtime & Conventions",
+      "file": "plugin-runtime.md",
+      "body_sha256": "9ca29a5e43fd0dda6da2c2b67314dea052ad36dc1e38c83963734e9228d43dab",
+      "source_body_sha256": "1e4f4aeca281707532244dc04691881027d212da5f628f296f17af9c604a0f73"
+    },
+    {
+      "id": "page-message-flow",
+      "title": "Inbound & Outbound Message Pipeline",
+      "file": "message-flow.md",
+      "body_sha256": "986af78b734a18af44a55bd575dd8a8aba5076f9f4f423b21ed7a6d5ba1d5729",
+      "source_body_sha256": "43d9eaa6ac65fd38664d05bae4bf47f4a84215b7740e87bab05ca7fabcb12f43"
+    },
+    {
+      "id": "page-hmr-generation",
+      "title": "Generations & Hot Module Replacement",
+      "file": "hmr-generation.md",
+      "body_sha256": "df76a5a7b94ed77f466c24d37f73b9e530d6b85317dd569251806b573f576a12",
+      "source_body_sha256": "12a82570282f33eda3ee7c7c755aadee2a834733e19651f1133c456c20a75da0"
+    },
+    {
+      "id": "page-commands",
+      "title": "Commands, Handlers & Middlewares",
+      "file": "commands.md",
+      "body_sha256": "6eb6bec52e07af16f80d89569a1ef1b6a1e3a80e5f9dda6591fc4d1c6d2c9f87",
+      "source_body_sha256": "086a06e74237ff977f3c47420fafb85881d505b76b058a9e90868bc842ee6bb9"
+    },
+    {
+      "id": "page-messaging",
+      "title": "Universal Segments & Components",
+      "file": "messaging.md",
+      "body_sha256": "ed94406bf691f13b28a7fd27b8e73fe275f791c39f4e39335b4299859b7ad783",
+      "source_body_sha256": "98e7fa45ba201147bd728199c96c95ad85cea30409aaa9746f744bf41326f188"
+    },
+    {
+      "id": "page-database",
+      "title": "Database Abstraction & Persistence",
+      "file": "database.md",
+      "body_sha256": "8081dbf41539bb1bd5ec03fbd65de511abf8b29de8521ef5bf50889c42dc861e",
+      "source_body_sha256": "e00819f291f3501051a6f5f6752582eecd3ec494cdf18aecb041aab23ddacb2e"
+    },
+    {
+      "id": "page-scheduling",
+      "title": "Schedule Engine & Cron Jobs",
+      "file": "scheduling.md",
+      "body_sha256": "142bdde0da635f98a113bb9b60d5fd0738c8c6c15c5b8cb2e6d7bdc9957f09d7",
+      "source_body_sha256": "04aae570962e2ac006648228302ff42fdc7153ab4251417c437dade7249c9b26"
+    },
+    {
+      "id": "page-logging",
+      "title": "Logging & Telemetry",
+      "file": "logging.md",
+      "body_sha256": "43a151224dc394ca18958fa1230bea58bbc3e33edd907ce028fa8274564dff5b",
+      "source_body_sha256": "38198865d60f3329c99e7495a1993a4d92635003516b779e1271e946a3646c22"
+    },
+    {
+      "id": "page-ai-orchestration",
+      "title": "Agent Orchestration & ZhinAgent",
+      "file": "ai-orchestration.md",
+      "body_sha256": "ef074b382900ac23e5f4d750e6292adcf757caf28623c4358cad96214d661e0a",
+      "source_body_sha256": "3bf9610351943a19fce8b8421bcd4afd3c228dc391ecf1a9179413fcf1dc8539"
+    },
+    {
+      "id": "page-ai-providers",
+      "title": "LLM Providers & SDK Bridging",
+      "file": "ai-providers.md",
+      "body_sha256": "21bc2b14f79946b28ef04bee354170d8c7eb533a9d0709c146bf1d34afe24c62",
+      "source_body_sha256": "5a6f5540a06b6e58d2b765b0628362e04267068cf5ac0d447e53d31b4860c5c1"
+    },
+    {
+      "id": "page-tools-caps",
+      "title": "Agent Tools & Capabilities",
+      "file": "tools-caps.md",
+      "body_sha256": "144857d6d2262dedbc9828595c9c4f0ad2ec68a4218247282765d87e2eb9688c",
+      "source_body_sha256": "10815270a41666b72f2f2bd4f340c80dddc14c792e0ed95b0cf15ac2ec7f0862"
+    },
+    {
+      "id": "page-skills",
+      "title": "Skills & Progressive Disclosure",
+      "file": "skills.md",
+      "body_sha256": "fc208c1ce00766743c6f08cbad45a62a0946028850c878eb44b07a558e38b0d0",
+      "source_body_sha256": "adb2f79acaee3c4a0be6aa92541264ec5046600119e93bce88b5e35f646238d0"
+    },
+    {
+      "id": "page-memory",
+      "title": "Memory, Context & Compaction",
+      "file": "memory.md",
+      "body_sha256": "d56772bb026b40a80e7f46f744df6ddbbcbe8f9a7c8955b00f26c2c15603559d",
+      "source_body_sha256": "b9d303128a3b2d2fd191e44a133731e505ecfd571a448befadfc80788ec8b9dc"
+    },
+    {
+      "id": "page-security-sandbox",
+      "title": "Security Policies & Sandbox",
+      "file": "security-sandbox.md",
+      "body_sha256": "753f3ac4dbe13e7e7c5e473b8ef107205ffe26e5df34a9ef789ce1e6d51df677",
+      "source_body_sha256": "676e67fa524a8560b3f62f3ffbfa37b41c1c842387924bf72c2fefa8d4095676"
+    },
+    {
+      "id": "page-mcp",
+      "title": "Model Context Protocol (MCP)",
+      "file": "mcp.md",
+      "body_sha256": "2b3161230960008c8ba41a8b82e40fc17149abeece46c0f7ae30194b5e83252e",
+      "source_body_sha256": "87c4b7a5513e4233facfe59249ef0c59cfbb66a7bfa6fe07e68e03c76abe91b5"
+    },
+    {
+      "id": "page-adapters-core",
+      "title": "Adapter Core & Endpoint Lifecycle",
+      "file": "adapters-core.md",
+      "body_sha256": "d8638e739637060ffd504b3f4d55270e5860b11fac6b97a5b7b837b86795d35e",
+      "source_body_sha256": "91ed9e4c3a94bcd2a27b9e28a2a7e6cd9b98de17f88bd293c8cbc940f2b2547b"
+    },
+    {
+      "id": "page-adapters-platforms",
+      "title": "Platform Integrations (QQ, Discord, Slack...)",
+      "file": "adapters-platforms.md",
+      "body_sha256": "55a5cfe9814163628e89a8bb3fd811e9794ba0f3fae8b2fdbbdbc0431d9fb9b4",
+      "source_body_sha256": "399d02d636bd2313ce4b339864562bc8ac46512fad140d3643fdd3749f492a46"
+    },
+    {
+      "id": "page-satori",
+      "title": "Rich Media with Satori",
+      "file": "satori.md",
+      "body_sha256": "658c035b347701924fbba1b6c057a7eb31ec51b3c6fbe514bffd788c84a27d18",
+      "source_body_sha256": "0b19398c0f789f248df7eb9ff957c922e4f58a8035d283a2d62d523067fc5056"
+    },
+    {
+      "id": "page-speech",
+      "title": "Speech Pipeline (STT & TTS)",
+      "file": "speech.md",
+      "body_sha256": "d12faabefc25d56b6c2f1eec187ef7b451c77e1b396c1409fc36072d436e9b10",
+      "source_body_sha256": "85e3431737f99656236b34ebedba4d9c65b5a45c01eaf21b222e1cb32b4f9830"
+    },
+    {
+      "id": "page-console-arch",
+      "title": "Remote Console Architecture",
+      "file": "console-arch.md",
+      "body_sha256": "396cc09234aa40e52ac8af16615bb07a4ccc2a776e111db58ef54fd401ee9e56",
+      "source_body_sha256": "cba15108b4988909f5cd0b2e257bd62474da031df28548ddefec69d89eaa0766"
+    },
+    {
+      "id": "page-console-pages",
+      "title": "Authoring Console Pages",
+      "file": "console-pages.md",
+      "body_sha256": "4a3e9d647d40225eac398151c0f13a67e8133149662adbeef1975bb84ed2f670",
+      "source_body_sha256": "76c15a3895f8ce72ec6d80d1907a78477895bc2d663b67805fd07d0ff40f497c"
+    },
+    {
+      "id": "page-config",
+      "title": "Configuration Management",
+      "file": "config.md",
+      "body_sha256": "78a88486cba079bb8b7c4a88adf477c5d46fb041d29d8f6e36a7f5a20056ccc6",
+      "source_body_sha256": "190c9644674b4d2fca369e36987165677b8a651ab1a3ecb0576ce7660dcbc249"
+    },
+    {
+      "id": "page-docker-prod",
+      "title": "Production Deployment",
+      "file": "docker-prod.md",
+      "body_sha256": "cc887c0801044788ce30b994a3c004bdac4f75d50eddcb5cd2934a8a78fbc7b3",
+      "source_body_sha256": "2b5ed58b9c0238d2a4bbe7885fedfad9a1dd238248486c02a4a1bcd4e3141640"
+    },
+    {
+      "id": "page-security-policy",
+      "title": "Security Policy & Best Practices",
+      "file": "security-policy.md",
+      "body_sha256": "71abb0ff27b6483e3626069fa39848f011f9c8d6f15f9951bfba55fba273afe1",
+      "source_body_sha256": "8e4d2315c173d3f35855ebff4f447f85493843a63ac6cfd7fd3a2a03fff04647"
+    },
+    {
+      "id": "page-cli-tools",
+      "title": "CLI Commands & Tooling",
+      "file": "cli-tools.md",
+      "body_sha256": "851154691dbaca943463d541fdaffb86ed537dc0a245c5cf74f4f5474115f420",
+      "source_body_sha256": "d0b6d0287cd831b2575438f04405573b1093a6ae7dbee65880032ce5f7c58cfe"
+    },
+    {
+      "id": "page-testing",
+      "title": "Testing & CI Harness",
+      "file": "testing.md",
+      "body_sha256": "00f2358e82cde566f0596724928fc5f335b29d9f680341d25179558f514a6e46",
+      "source_body_sha256": "b5369ba476e53d197a143ef4f01c9235d667e9e25f54597e37fc475457e1bbe6"
+    }
+  ]
+}

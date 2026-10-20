@@ -1,0 +1,26 @@
+{
+  "name": "home",
+  "version": "1.0.0",
+  "description": "Smart home control via configured aliases only—no raw entity_id.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "home",
+      "light",
+      "灯",
+      "智能家居"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "tools": [
+    "home_list_aliases",
+    "home_get_state",
+    "home_turn_on",
+    "home_turn_off"
+  ],
+  "max_iterations": 6
+}

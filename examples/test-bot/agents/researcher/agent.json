@@ -1,0 +1,21 @@
+{
+  "name": "researcher",
+  "version": "1.0.0",
+  "description": "五角色调研，检索与核实信息",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "research",
+      "调研",
+      "搜索"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "role": "researcher",
+  "context_mode": "fresh",
+  "max_iterations": 8
+}

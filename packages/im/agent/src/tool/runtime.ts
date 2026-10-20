@@ -1,0 +1,46 @@
+import type { AgentTool } from '@zhin.js/ai';
+import type { Tool, Message } from '../resource-hub/types.js';
+import type { SkillRegistry } from '../resource-hub/skill-registry.js';
+import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
+import type { UserProfileStore } from '../user-profile.js';
+import type { RegisteredAgentTool } from './contracts.js';
+import {
+  createDefaultToolSources,
+  defaultToolSystem,
+  type CollectToolsContext,
+  type ToolRunPlan,
+  type ToolSystem,
+} from './tool-system.js';
+export interface CollectRuntimeToolsOptions {
+  content: string;
+  commMessage: Message;
+  externalTools: Tool[];
+  config: Required<ZhinAgentConfig>;
+  skillRegistry: SkillRegistry | null;
+  externalRegistered: Map<string, RegisteredAgentTool>;
+  sessionId: string;
+  userId: string;
+  userProfiles: UserProfileStore;
+  mcpTools?: AgentTool[];
+  toolSystem?: ToolSystem;
+}
+
+export async function collectRuntimeTools(options: CollectRuntimeToolsOptions): Promise<AgentTool[]> {
+  const toolSystem = options.toolSystem ?? defaultToolSystem;
+  const ctx: CollectToolsContext = {
+    message: options.commMessage,
+    content: options.content,
+    sessionId: options.sessionId,
+    userId: options.userId,
+    config: options.config,
+    skillRegistry: options.skillRegistry,
+    externalTools: options.externalTools,
+    externalRegistered: options.externalRegistered,
+    userProfiles: options.userProfiles,
+    mcpTools: options.mcpTools,
+  };
+  return toolSystem.collectTools(ctx, createDefaultToolSources(ctx));
+}
+
+export type { ToolRunPlan };
+export { planToolRun, buildPreExecFastPathPrompt } from './tool-system.js';

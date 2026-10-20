@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "prompt": "给 greet 命令写 vitest 测试",
+    "expected": "command.handle + msg() 辅助、zhin.js 导入、无 _action 私有字段"
+  },
+  {
+    "id": 2,
+    "prompt": "插件只有 start/stop 测试，要加中间件测试",
+    "expected": "middlewares.test.ts 洋葱顺序 + 拦截不 next 用例"
+  }
+]

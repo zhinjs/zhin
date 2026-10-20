@@ -1,0 +1,38 @@
+{
+  "name": "pm",
+  "version": "1.0.0",
+  "description": "产品经理（PM）角色：负责需求分析、Issue 拆分与优先级管理、Sprint 规划、 跨角色协调与验收。监听 issues.opened 事件，自动评审需求并拆分为可执行任务。",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "pm",
+      "产品经理",
+      "需求",
+      "requirement",
+      "sprint",
+      "规划",
+      "优先级",
+      "backlog",
+      "roadmap",
+      "评审"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "tools": [
+    "bash",
+    "ask_user",
+    "todo_write",
+    "read_file",
+    "write_file"
+  ],
+  "tags": [
+    "github",
+    "management",
+    "planning"
+  ],
+  "max_iterations": 12
+}

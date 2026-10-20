@@ -1,0 +1,106 @@
+name: ❓ Question
+description: 询问问题或寻求帮助
+title: "[Question]: "
+labels: ["question", "needs-triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎提问！请详细描述你的问题，我们会尽力帮助你。
+
+  - type: textarea
+    id: question
+    attributes:
+      label: ❓ 问题描述
+      description: 请详细描述你的问题
+      placeholder: 描述你的问题...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: question-type
+    attributes:
+      label: 📝 问题类型
+      description: 选择问题类型
+      options:
+        - 使用问题 - 如何使用某个功能
+        - 配置问题 - 如何配置或设置
+        - 集成问题 - 如何与其他工具集成
+        - 性能问题 - 关于性能的疑问
+        - 最佳实践 - 询问最佳实践
+        - 其他 - 其他类型的问题
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: 🧩 相关组件
+      description: 选择相关的组件或模块
+      options:
+        - 核心 (Core)
+        - 适配器 (Adapters)
+        - 插件 (Plugins)
+        - 数据库 (Database)
+        - 日志 (Logger)
+        - 热重载 (HMR)
+        - 类型定义 (Types)
+        - 文档 (Documentation)
+        - 其他 (Other)
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 📋 背景信息
+      description: 提供问题的背景信息
+      placeholder: 描述你的使用场景、目标等...
+
+  - type: textarea
+    id: what-tried
+    attributes:
+      label: 🔍 已尝试的方法
+      description: 描述你已经尝试过的方法
+      placeholder: 描述你已经尝试过的解决方案...
+
+  - type: textarea
+    id: code-example
+    attributes:
+      label: 💻 代码示例
+      description: 如果有相关代码，请提供示例
+      placeholder: 提供相关的代码示例...
+
+  - type: input
+    id: version
+    attributes:
+      label: 📦 版本信息
+      description: 你使用的 zhin.js 版本
+      placeholder: 例如: 1.0.0
+
+  - type: input
+    id: node-version
+    attributes:
+      label: 🟢 Node.js 版本
+      description: 你使用的 Node.js 版本
+      placeholder: 例如: 20.19.0
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 📋 额外信息
+      description: 任何其他相关信息
+      placeholder: 添加任何其他相关信息...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: 确认
+      description: 请确认以下信息
+      options:
+        - label: 我已经搜索了现有的 issues 和文档
+          required: true
+        - label: 我同意在需要时提供更多信息来帮助解决问题
+          required: true

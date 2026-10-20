@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "types": ["node"], "noEmit": true, "rootDir": "." },
+  "include": ["plugin.ts", "commands/**/*.ts", "adapters/**/*.ts"],
+  "exclude": ["node_modules", "lib"]
+}

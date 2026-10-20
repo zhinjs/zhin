@@ -1,0 +1,55 @@
+configVersion: 2
+log_level: 1
+
+plugin: {}
+
+# 三个 Bot 账号（Endpoint）同群协作：coordinator / researcher / writer。
+# Room 核心在示例内组装（src/team.ts），默认运行时尚未接入（C1/C2）。
+plugins:
+  sandbox: "@zhin.js/adapter-sandbox"
+
+http:
+  token: ${HTTP_TOKEN:-multi-agent-room-dev-token}
+  port: 8788
+
+database:
+  dialect: sqlite
+  filename: .zhin/data.sqlite
+
+ai:
+  enabled: true
+  sessions:
+    useDatabase: true
+  providers:
+    ollama:
+      sdk: ollama
+      host: ${OLLAMA_HOST:-http://127.0.0.1:11434}
+  agents:
+    zhin:
+      provider: ollama
+      model: qwen3:8b
+    coordinator:
+      provider: ollama
+      model: qwen3:8b
+    researcher:
+      provider: ollama
+      model: qwen3:8b
+    writer:
+      provider: ollama
+      model: qwen3:8b
+  agent:
+    execSecurity: allowlist
+    execPreset: readonly
+  trigger:
+    prefixes:
+      - "ai:"
+    respondToAt: true
+    respondToPrivate: true
+sandbox:
+  endpoints:
+    - id: coordinator-bot
+      owner: planner-user
+    - id: researcher-bot
+      owner: planner-user
+    - id: writer-bot
+      owner: planner-user

@@ -1,0 +1,33 @@
+import { defineAgentTool } from '@zhin.js/tool';
+import { searchMusic } from '../../../../src/music-lib.js';
+import type { MusicSource } from '../../../../src/types.js';
+import { musicRuntimeToken } from '../../../../src/runtime.js';
+
+export default defineAgentTool<{
+  keyword: string;
+  source?: MusicSource;
+  limit?: number;
+}>({
+  description: '搜索音乐并返回结果列表（支持QQ/网易云/酷我/酷狗）',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      keyword: { type: 'string', description: '搜索关键词' },
+      source: {
+        type: 'string',
+        enum: ['qq', 'netease', 'kuwo', 'kugou'],
+        description: '音乐源（默认 qq）',
+      },
+      limit: { type: 'number', description: '返回结果数量（默认 5）' },
+    },
+    required: ['keyword'],
+  },
+  requiresApproval: 'never',
+  execute: ({ keyword, source, limit }, context) =>
+    searchMusic(
+      context.use(musicRuntimeToken),
+      String(keyword),
+      source,
+      typeof limit === 'number' ? limit : 5,
+    ),
+});

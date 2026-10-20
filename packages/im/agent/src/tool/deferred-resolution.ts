@@ -1,0 +1,131 @@
+import { type AgentTool, type LlmTool, getLoadedToolNamesFromSnapshot, addSkillToSnapshot, touchToolsInSnapshot, type DeferredToolSessionSnapshot } from '@zhin.js/ai';
+import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
+import { agentToolToLlmTool } from '../tool-bridge.js';
+import {
+  buildDeferredStats,
+  buildToolCatalog,
+  resolveDeferredApiTools,
+} from '../tool-catalog/tool-catalog.js';
+import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
+import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
+import type { ZhinAgentPrivate } from '../internal/agent-host.js';
+import { createDeferredTurnController, type DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
+import { buildSkillInstructionReaderForAgent } from '../skill/skill-instruction-reader-factory.js';
+export interface ResolvedToolsForTurn {
+  tools: AgentTool[];
+  catalog: ToolCatalogItem[];
+  deferred: boolean;
+  deferredStats?: string;
+  sessionSnapshot: DeferredToolSessionSnapshot;
+  controller?: DeferredTurnController;
+}
+
+function buildMcpServerMap(tools: AgentTool[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const tool of tools) {
+    const connection = resolveMcpConnectionFromToolName(tool.name, tool.source);
+    if (connection) map.set(tool.name, connection);
+  }
+  return map;
+}
+
+export async function resolveAgentToolsForTurn(
+  agent: ZhinAgentPrivate,
+  allTools: AgentTool[],
+  sessionId: string,
+  platform?: string,
+): Promise<ResolvedToolsForTurn> {
+  const deferredCfg = resolveDeferredToolsConfig(agent.config);
+  const alwaysLoaded = new Set(deferredCfg.alwaysLoadedTools);
+  const baseTools = allTools.filter(tool => !DEFERRED_META_TOOL_NAMES.has(tool.name));
+  const mcpServerByTool = buildMcpServerMap(baseTools);
+
+  const baseCatalog = buildToolCatalog({
+    tools: baseTools,
+    mcpServerByTool,
+    alwaysLoaded,
+  });
+
+  let sessionSnapshot = await agent.contextRepository.getDeferredToolSnapshot(sessionId);
+  let touched = false;
+  const alwaysSkills = agent.skillSystem?.getAlwaysSkills()
+    ?? agent.skillRegistry?.getAlwaysSkills?.()
+    ?? [];
+  if (alwaysSkills.length > 0) {
+    for (const skill of alwaysSkills) {
+      sessionSnapshot = addSkillToSnapshot(sessionSnapshot, skill.name);
+      sessionSnapshot = touchToolsInSnapshot(
+        sessionSnapshot,
+        skill.tools.map(t => t.name).filter(name => !alwaysLoaded.has(name)),
+        deferredCfg.maxLoadedPerSession,
+      );
+      touched = true;
+    }
+  }
+  if (touched) {
+    await persistDeferredToolSnapshot(agent, sessionId, sessionSnapshot);
+  }
+  const controller = createDeferredTurnController({
+    sessionId,
+    platform,
+    catalog: baseCatalog,
+    skillRegistry: agent.skillRegistry,
+    snapshot: sessionSnapshot,
+    maxLoadedPerSession: deferredCfg.maxLoadedPerSession,
+    pinnedTools: alwaysLoaded,
+    discoverTopK: deferredCfg.discoverTopK,
+    persistSnapshot: async (snapshot) => {
+      agent.deferred.lastSessionSnapshot = snapshot;
+      await persistDeferredToolSnapshot(agent, sessionId, snapshot);
+    },
+    onSkillLoaded: (_name, instructions) => agent.appendActiveSkillsContext(instructions),
+    skillInstructions: buildSkillInstructionReaderForAgent(agent),
+  });
+  const turnTools = [...baseTools, ...controller.tools as unknown as AgentTool[]];
+  const catalog = buildToolCatalog({
+    tools: turnTools,
+    mcpServerByTool,
+    alwaysLoaded,
+  });
+  const sessionLoaded = getLoadedToolNamesFromSnapshot(sessionSnapshot);
+  const apiTools = resolveDeferredApiTools(catalog, alwaysLoaded, sessionLoaded);
+  const deferredStats = buildDeferredStats(catalog, apiTools);
+
+  agent.deferred.catalog = catalog.map(c => c.fullTool);
+
+  return {
+    tools: apiTools,
+    catalog,
+    deferred: true,
+    deferredStats,
+    sessionSnapshot,
+    controller,
+  };
+}
+
+export async function persistDeferredToolSnapshot(
+  agent: ZhinAgentPrivate,
+  sessionId: string,
+  snapshot: DeferredToolSessionSnapshot,
+): Promise<void> {
+  await agent.contextRepository.setDeferredToolSnapshot(sessionId, snapshot);
+}
+
+export function buildLlmToolsForProvider(
+  sdk: string | undefined,
+  catalog: ToolCatalogItem[],
+  apiTools: AgentTool[],
+  alwaysLoaded: Set<string>,
+  sessionLoadedNames: string[],
+): LlmTool[] {
+  const loaded = new Set([...alwaysLoaded, ...sessionLoadedNames]);
+  if (sdk === 'anthropic') {
+    return catalog
+      .filter(item => item.source !== 'meta')
+      .map(item => ({
+        ...agentToolToLlmTool(item.fullTool),
+        deferLoading: !loaded.has(item.name),
+      }));
+  }
+  return apiTools.map(t => agentToolToLlmTool(t));
+}

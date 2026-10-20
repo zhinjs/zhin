@@ -1,0 +1,60 @@
+name: Prepare workspace
+description: Install pnpm, Node.js and dependencies (and optionally build) for a CI job that has already checked out the repository
+inputs:
+  node-version:
+    description: Node.js version
+    default: '24'
+  npm-token:
+    description: Existing credential for the cross-organization @icqqjs packages; only the script-free install receives it
+    required: true
+  build:
+    description: Run `pnpm build` after installing
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: setup pnpm
+      uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+      with:
+        version: 9.0.2
+
+    - name: setup node.js
+      uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+      with:
+        node-version: ${{ inputs.node-version }}
+
+    - name: restore pnpm store
+      uses: ./.github/actions/restore-pnpm-store
+
+    # changesets `baseBranch: main` compares against a **local** `main` ref.
+    - name: sync local main ref for changesets
+      if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+      shell: bash
+      run: git fetch origin main:main
+
+    - name: install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      env:
+        NPM_TOKEN: ${{ inputs.npm-token }}
+
+    - name: run dependency lifecycle scripts without registry credentials
+      shell: bash
+      run: pnpm rebuild
+
+    # Turbo's local cache (lib/** / dist/** per package task hash) is shared through the
+    # Actions cache: jobs of one run restore what another job built, and a new commit
+    # only rebuilds the packages whose inputs changed since the previous run.
+    - name: restore turbo build cache
+      if: inputs.build == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .turbo/cache
+        key: turbo-${{ runner.os }}-${{ github.sha }}
+        restore-keys: |
+          turbo-${{ runner.os }}-
+
+    - name: build packages
+      if: inputs.build == 'true'
+      shell: bash
+      run: pnpm build --cache-dir=.turbo/cache

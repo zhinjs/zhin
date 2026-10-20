@@ -1,0 +1,1983 @@
+# @zhin.js/core
+
+## 1.1.46
+
+### Patch Changes
+
+- c407bd2: 安装 HTML 渲染能力时，内置指令菜单通过统一发送链生成菜单图；渲染失败或平台无法投递图片时保留原有文本菜单。菜单采用可自定义标题、配色与背景的三列主题，每页最多 30 项，支持根菜单与插件菜单翻页。平台同时支持原生 Markdown 与按钮时自动附加上一页、下一页控件，在边界禁用；其他平台保留文本导航。Telegram 禁用按钮映射为 Bot API 10.3 DisabledButton。补充中英文文档。
+- 064b06d: 通过中立的 operation input 生命周期 hook 将真实入站运行代的退休信号传给 CommandContext.signal，使补问与确认能及时取消。
+  保留旧 lease 普通操作和已开始发送的正常排空语义，不全局拦截回复。
+- b58548a: 为命令增加可选冷却、并发准入与一次进度提示，以真实发送者和完整会话身份隔离；Root 预算跨热更新共用，并在业务、渲染、中间件和已启动发送真正结束后释放。准入拒绝通过 limited 状态与有界原因进入消息诊断，避免回落到 AI。
+- e914a93: 新增按消息查看的有界运行诊断，关联真实入站决策与发送结果，保留平台降级原因且不存储消息正文或原始异常。
+- e914a93: 改善跨平台富消息的文本降级：保留安全链接、列表层级、表格列和图片描述，避免输出嵌入媒体与链接凭据；代码内容和作者指定的 HTML 备用文本继续保留。
+
+  文本键盘降级不再为禁用按钮注册可执行编号或别名；启用按钮的显示编号与当前会话、generation 的实际映射保持一致。
+
+- 064b06d: 提供只读 SnapshotLease.retirementSignal，在运行代退休时及时结束交互等待，同时保留旧操作的 lease 排空语义。
+  问答在发送提示前建立精确会话与发送者约束，发送异常撤销等待；原生回答使用每题独立的短 callback token，避免旧按钮回答新问题。
+- Updated dependencies [c407bd2]
+- Updated dependencies [064b06d]
+- Updated dependencies [a50fc8a]
+- Updated dependencies [b58548a]
+- Updated dependencies [9816c18]
+- Updated dependencies [064b06d]
+- Updated dependencies [7edd04c]
+  - @zhin.js/command@1.1.8
+  - @zhin.js/feature-kit@1.1.6
+  - @zhin.js/permission@1.1.7
+  - @zhin.js/plugin-runtime@1.1.15
+  - @zhin.js/handler@1.1.6
+  - @zhin.js/adapter@1.1.20
+  - @zhin.js/component@1.1.7
+  - @zhin.js/middleware@1.1.7
+  - @zhin.js/schedule-feature@1.1.6
+
+## 1.1.45
+
+### Patch Changes
+
+- dd7f25f: Agent 的 IM 最终回复默认使用统一的 segments JSON Schema，贯通校验、终态事件与统一发送链路，支持文字、Markdown、真实用户 mention 与图片等媒体段。拒绝非法结构并保留媒体策略、泄漏检查和非 IM 调用边界。
+
+## 1.1.44
+
+### Patch Changes
+
+- 75e26a6: Raise the supported Node.js range to `>=22.19.0` (was `^20.19.0 || >=22.12.0`). `@zhin.js/ai` depends on undici 8, whose `engines` require Node >=22.19.0; on Node 20 it crashes at import (`webidl.util.markAsUncloneable is not a function`). CI already tests only Node 22 / 24 / 26. `zhin doctor`, `zhin new`, `zhin migrate` and `create-zhin-app` now check for and write the same range.
+- fdc2148: Unblock external plugin authors.
+
+  - Published manifests no longer expose the source-only `development` export condition (it pointed at `./src/*.ts`, which is not in the tarball, so Vitest 4 and other tools that enable `development` failed to import Zhin packages). Each package now carries `publishConfig.exports` without that condition; `pnpm publish` swaps it in when packing, and the monorepo keeps source-level development.
+  - `zhin new` no longer crashes without arguments (uses inquirer `select` instead of the removed `list` prompt; same fix for `zhin onboard` and `zhin pub`). The generated package.json uses `^x.y.z` ranges derived from installed versions instead of `latest`, declares capability packages as optional peers (plus devDependencies for local tests) instead of dependencies, sets `zhin.entry` to `./plugin.js` and builds sibling JavaScript on `prepack`, fixes the adapter template test, and adds `--package-name`. `--skip-install` now also skips the project-root install.
+
+- Updated dependencies [75e26a6]
+- Updated dependencies [fdc2148]
+  - @zhin.js/adapter@1.1.19
+  - @zhin.js/command@1.1.7
+  - @zhin.js/component@1.1.6
+  - @zhin.js/database@1.1.4
+  - @zhin.js/feature-kit@1.1.5
+  - @zhin.js/handler@1.1.5
+  - @zhin.js/im-contract@1.1.4
+  - @zhin.js/interaction@1.1.2
+  - @zhin.js/jsx@1.1.3
+  - @zhin.js/kernel@1.1.4
+  - @zhin.js/middleware@1.1.6
+  - @zhin.js/permission@1.1.6
+  - @zhin.js/plugin-runtime@1.1.14
+  - @zhin.js/schedule-feature@1.1.5
+  - @zhin.js/logger@1.1.2
+  - @zhin.js/schema@1.1.3
+
+## 1.1.43
+
+### Patch Changes
+
+- bf52b40: 修复 IM 会话事件背景污染当前回复：机器人撤回自己发出的消息（如活动指示「正在处理中...」的 autoRemove）不再进入下一轮的会话事件上下文；超过 30 分钟的积压消息不再注入；事件块明确标注为背景、不要直接回答，并提示下一条用户消息才是需要回复的当前消息。
+- bf52b40: Harness 组合修复：直接调用被策略移除的 bash 不再被自动加载进会话；standalone 子 loop 支持传入父 turn 策略以同样隐藏 bash；交互提示的回答（如审批回复 y）不再作为背景事件进入下一轮上下文。
+- bf52b40: 修复 IM 审批静默拒绝：审批结果区分「用户拒绝 / 审核器拒绝 / 超时 / 无审批通道」，并以不诱导重试的文案返回给模型；审批提示支持回复 y/同意、n/拒绝；超时不再被当作用户拒绝记忆；owner 读取工作区内 package.json、锁文件等非机密项目文件不再需要确认（.env、密钥等仍需确认，写入审批不变）。
+- 386150d: Unify command parameters, options, validation and help; provide IM middleware defaults, exact persistent delivery targets and owner-scoped atomic state. Derive plugin configuration types, defaults, validation and Console metadata from one declaration, preserve plugin ownership and generation admission, and keep process database, scheduler and outbound resources private to the root. Reject inline configuration in isolated plugins inside their own realm; isolated configuration uses schema.json.
+
+  Reject ambiguous optional/rest routes and undefined dynamic defaults, preserve optional parameter types and help handling, and validate Console edits with the Runtime configuration engine. Keep unrelated plugin entries cached during helper reloads, expose initial configuration metadata before login completes, and drain admitted Host operations while rejecting retired or failed-generation access.
+
+  Keep schedule activation and hot reload atomic, preserving published jobs when a candidate fails; preserve immutable database query branches and path-only command parameters. Report background unhandled rejections for the Runtime Process Host, observe ICQQ heartbeat and reconnect login failures through the SDK reconnect policy, and normalize inline image data URLs before ICQQ file or base64 delivery.
+
+- 9891e66: 入站消息 `origin` 标签（self / member / peer_bot / human）与出站 ledger 兜底：
+
+  - 新增 `Message.origin`（仅由 InboundRuntime 经 Peer Registry、出站 ledger 与 `roomMembershipToken` 端口可信判定，绝不读取正文或 metadata）。
+  - self / member / peer_bot 来源的消息只记录（self 不重复记录），不触发命令、handlers、middleware、ingressRoute 或 agent turn；无法判定时 fail closed 为 peer_bot。
+  - `[sender:...]` 标签增加 `origin=`（缺省时输出不变）；`createRuntimeTurnAccess` 对非 human 来源抛错。
+  - `stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造的 `[sender:` / `[origin:` 标签（全角 `［`），不再剥离开头。
+  - 新增 `roomMembershipToken` 端口；Room 成员端口的实现、“Registry 未就绪的 Room 不开始协作”以及背景上下文块中 peer_bot 消息的标签留给后续条目（Room 激活 / Room Bus）。
+
+- 9891e66: 入站来源判定的摘要兜底仅用于 group/channel 会话；Registry 就绪且账号已知的发送者不再走摘要匹配；摘要命中最多映射为 peer_bot / member（只记录），不再映射为被丢弃的 self，修复真人复读 Bot 文本被静默丢弃。plugin-runtime/im 入口改为具名导出 MessageOrigin、isMessageOrigin、RoomMembershipPort、roomMembershipToken，来源分类器实现细节标 @internal。
+- 4778587: 补齐 Console 安装配置闭环所需的精确配置路径、端点身份、平台就绪与验证计划失效语义，并保存历史消息的方向及实际投递诊断。
+
+  修复真实 ICQQ 入站目标保存了插件 owner 而非平台标识、导致提醒投递被身份校验拒绝的问题；无关插件配置变更保留原有适配器连接。
+
+  保证候选事件在当前代快照发布后准入，并避免安装过程中依赖文件变动提前中断插件管理操作。
+
+  明确 Adapter/MCP 客户端创建仅提供所属 owner 的配置与资源，跨 Feature 查询由当前 operation 上下文负责；入站诊断记录接收时刻，避免慢指令的回复在历史中先于指令。
+
+- 40537e3: 修正 Console 配置 Schema 的本地包、实例别名和嵌套插件解析，按 Runtime 的包解析规则定位；合并继承插件后检查重复实例。缺失 Schema 与非法 Schema 分别反馈。校验 required 元数据，递归拒绝插件文件中表单不支持的引用、组合、动态字段与 JSON Schema 元组，避免丢弃约束后展示不完整表单。内置 Host 配置保留既有字段投影，复杂配置仍可使用配置文件或源码编辑器；不将该投影视为完整 JSON Schema 编辑器。
+
+  业务 Outbound Host 发送会拒绝失败、拦截、不支持或结果未知的投递，避免转为成功的空消息 ID；回执保留明确的平台拒绝状态与未知状态，不凭错误码覆盖投递证据。可选状态提示仍由调用方处理发送失败。
+
+  RSS 从公开 Message 字段提取会话，以端点隔离订阅，拒绝缺失或不支持的父频道/线程地址，避免改投其他会话。无效来源的 extractChannelInfo 返回 null，移除伪造会话的 SMOKE_CHANNEL 导出。修正实用插件的安装命令与实例配置示例。
+
+- 681abf3: 补齐 ScheduleContext，保留命名目录定时任务并使用现有持久状态保存业务数据。
+
+  新增持久提醒与公开插件测试夹具，完善群运营的关键词、欢迎和状态卡片；统一 CLI 与 Console Host 的安装状态、应用计划和显式业务验证。
+
+  增加目标端点渲染预览、实际出站降级诊断与过期交互反馈，修复已加载插件入口变更被误判为进程重启的问题。
+
+  收紧验证计划与 Console 凭据的访问边界，修复插件安装计划、更新校验、handler 打包、跨进程配置锁及预览取消；完善流式测试载荷、词库容量、线程查询和重叠统计刷新回归。
+
+- 9891e66: `RoomMembershipPort` 新增可选 `hasRoom(conversation)`：返回 true 时，同一会话的多个 Endpoint 收到的同一条人类消息（按平台+会话+发送者+消息 id）只路由一次，其余只记录；不实现 `hasRoom`（目前没有实现）则行为不变，普通群、私聊、无消息 id 的消息仍由每个 Endpoint 各自处理。去重判定出错时 fail-closed：记录并 publish、告警、不路由。
+- 9891e66: Room Router 与 Room Bus（B2b）。`@zhin.js/core`：`RoomMembershipPort` 新增可选 `route(input)`，必须与 `hasRoom` 成对实现（同步、无副作用，按消息缓存决策，返回目标 Endpoint 与按优先级排序的 `fallbackEndpointIds`）；Room 会话中处理消息的目标 Endpoint 改由 Router 决定，目标副本强制 `mentioned=true`，其余副本只记录。core 无法预知哪个 Endpoint 会收到副本（例如隐私模式），目标没收到副本时，非目标成员副本在宽限期（默认 2s）后按 fallback 优先级接管，保证消息恰好处理一次、不静默丢失；`route` 抛错退化为先到先得。带 action 段的平台按钮回调只由接收它的 Endpoint 处理，绕过 Room 路由和去重；无消息 id / 无发送者 / 私聊（unkeyed）保持逐 Endpoint 处理；待回答探测仅在本条消息能解析到该 Endpoint 的按钮或有该发送者的待回答 claim 时为 true。没有 `route` 时保持 B2 的先到先得去重。`ImRuntimeOptions` 新增 `inboundClaimPending`。`@zhin.js/workroom`：新增 Room Registry、Room Router（待回答 > @ > 回复 > coordinator > 按角色匹配，@alias 使用 Unicode 边界）、`createRoomMembershipPort`、Room Bus（handoff 事件 + 经正常发送链的群内可见投影）。
+
+  `hasRoom` 按“会话 + 接收 Endpoint”判定，只对成员 Endpoint 的副本为 true，非成员 Bot 按普通群处理（不 claim、不强制 mentioned）；decision 之外已投递副本的成员作为最低优先级接管候选（带 `room_unlisted_member_takeover` 告警），不再静默丢弃。
+
+- Updated dependencies [9891e66]
+- Updated dependencies [bf52b40]
+- Updated dependencies [386150d]
+- Updated dependencies [2dfe5fa]
+- Updated dependencies [2dfe5fa]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+  - @zhin.js/adapter@1.1.18
+  - @zhin.js/interaction@1.1.1
+  - @zhin.js/schema@1.1.2
+  - @zhin.js/command@1.1.6
+  - @zhin.js/middleware@1.1.5
+  - @zhin.js/permission@1.1.5
+  - @zhin.js/plugin-runtime@1.1.13
+  - @zhin.js/schedule-feature@1.1.4
+  - @zhin.js/kernel@1.1.3
+  - @zhin.js/feature-kit@1.1.4
+  - @zhin.js/handler@1.1.4
+  - @zhin.js/component@1.1.5
+
+## 1.1.42
+
+### Patch Changes
+
+- 5ab6307: 修正 JSX 的默认语义为消息排版：内置小写标签无需导入并提供属性类型，标签与属性映射为 Segment；只有显式 html / Html 子树序列化为 HTML。支持注册组件标签、原生 share 与平台 card，以及 Button onClick 回跳与返回值自动回复；同步脚手架、示例和文档。
+
+  运行实例统一分配递增、不重复的按钮降级编号，会话交错发送时允许跳号，回调有效期为一小时，发送确认前的点击可正常执行；等待文字输入不会吞掉 JSX 按钮事件。修复 Card 原生 key 载荷、带 MIME 参数的图片 data URI、注册组件递归深度和媒体/HTML 类型约束。原有裸 HTML 布局需要显式包裹 `<html>` / `<Html>`。
+
+- Updated dependencies [36f1d02]
+- Updated dependencies [5ab6307]
+  - @zhin.js/database@1.1.3
+  - @zhin.js/jsx@1.1.2
+
+## 1.1.41
+
+### Patch Changes
+
+- badcc1f: Unify lazy JSX and HTML delivery across commands, inbound middleware and registered components. Remove the former JSX/template component runtimes, respect declared adapter HTML policies, and preserve author/generation ownership for automatic and explicit replies.
+
+  Add the optional @zhin.js/components library with composable JSXRenderable display props, shared themes, symmetric spacing and local style/text overrides. Include tables, lists, Markdown with highlighted code blocks, and display-only checkbox, radio, switch and button states; provide a reusable preview gallery. Update scaffolds, examples and public authoring documentation together.
+
+  Add optional official Tailwind static-utility compilation to inline styles. Consolidate raster rendering on @pixel.js/shotium, remove the Satori image toolkit, and align raster format contracts with actual PNG/JPEG/WebP results.
+
+  Reject cascade-dependent Tailwind values including unset, track the installed Tailwind version in the bundled theme provenance, and preserve both repository and upstream MIT attribution. Keep optional gallery dependency failures visible and document asynchronous Tailwind initialization.
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/command@1.1.5
+  - @zhin.js/component@1.1.4
+  - @zhin.js/feature-kit@1.1.3
+  - @zhin.js/jsx@1.1.1
+  - @zhin.js/plugin-runtime@1.1.12
+  - @zhin.js/middleware@1.1.4
+  - @zhin.js/adapter@1.1.17
+  - @zhin.js/handler@1.1.3
+  - @zhin.js/schedule-feature@1.1.3
+  - @zhin.js/permission@1.1.4
+
+## 1.1.40
+
+### Patch Changes
+
+- b9b3953: Fix adapter connection races, transport health reporting, candidate rollback and delivery acknowledgement boundaries. Separate generation admission from locally observed connectivity, reject unconfirmed message receipts, and mark uncertain delivery results without recommending automatic replay.
+
+  Class and compact endpoints should expose a `transportState` getter to report physical connection or local listener health. Unobserved endpoints now report an unknown transport and remain offline in diagnostics. Platform stability tiers remain unchanged until real account acceptance evidence is available.
+
+- b9b3953: Resolve command permissions and command/component contexts from the current operation snapshot when unchanged projections are reused after hot reload. Preserve old snapshots for draining operations.
+- b9b3953: Validate persisted Workroom Endpoint bindings against the exact projected candidate generation, including adapters authored by the project root. Defer file-backed Endpoint validation until candidate activation. Resolve Console Endpoint package aliases consistently with discovery and reject ambiguous aliases instead of selecting an account.
+
+  Resolve Workroom human ingress from the canonical Endpoint capability identity and the operation Endpoint projection so root-local adapters use the same Catalog address as Console discovery. Unknown or duplicate canonical identities cannot select another account.
+
+- b9b3953: 修复框架生命周期与消息处理的竞态：HMR 停止等待异步 watcher 清理，并在清理失败时仍等待在途 reload；命令前缀通过端点能力所属插件读取配置，前导空白不再丢失结构化参数；工具在异步策略检查后再次检查取消信号；文件缓存遇到超限替换时删除旧内容并保持字节计数一致。
+- b9b3953: Bind reused middleware projections to the current operation snapshot after capability hot reload, while retaining the old snapshot for draining operations.
+- b9b3953: Bound QQ startup to 30 seconds with cancellation and late-client cleanup, own asynchronous CLI startup failures, and patch qq-official-bot session startup so authentication/receiver failures reject the returned promise without orphan rejection or lost synchronous readiness.
+
+  Encode native QQ callback buttons with official action type 1, subscribe to interaction events by default, and map SDK action notices into canonical clicks with platform ACK and honest source-message association metadata.
+
+  Reject outbound messages containing segments excluded by an explicit adapter supported policy, and reject unimplemented QQ share cards instead of silently dropping title/description/URL while confirming neighboring text.
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/command@1.1.4
+  - @zhin.js/component@1.1.3
+  - @zhin.js/middleware@1.1.3
+  - @zhin.js/kernel@1.1.2
+
+## 1.1.39
+
+### Patch Changes
+
+- 43eda99: Unify Notice and Request payloads with their public types and runtime exports. Use camelCase fields, preserve native data under metadata, and bind canonical endpoint identity and request actions to the held generation. Remove legacy data aliases and from factories.
+
+  Keep login and lifecycle signals as independent SystemEvent payloads on system.receive, without chat conversation fields or user interaction. Update built-in adapter projections and authoring guidance.
+
+- 0de4836: Expose the canonical Plugin Runtime `Message` contract from `@zhin.js/core`, `@zhin.js/core/runtime`, and the `zhin.js` root entries, and migrate Agent, permission, and GitHub integrations to the fields middleware actually receives. Document and lock the `EndpointEvent<Notice | Request>` handler boundary so side-event payload fields match editor inference.
+- Updated dependencies [0de4836]
+- Updated dependencies [fa542a2]
+  - @zhin.js/permission@1.1.3
+  - @zhin.js/schema@1.1.1
+  - @zhin.js/command@1.1.3
+  - @zhin.js/adapter@1.1.15
+
+## 1.1.38
+
+### Patch Changes
+
+- 5b5d270: Complete the canonical share segment contract and preserve native ICQQ share delivery through Core and AI outbound pipelines.
+- Updated dependencies [5b5d270]
+- Updated dependencies [36c2eb9]
+- Updated dependencies [a417170]
+  - @zhin.js/im-contract@1.1.2
+  - @zhin.js/database@1.1.2
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/adapter@1.1.15
+  - @zhin.js/command@1.1.2
+  - @zhin.js/component@1.1.2
+  - @zhin.js/handler@1.1.2
+  - @zhin.js/middleware@1.1.2
+  - @zhin.js/permission@1.1.2
+  - @zhin.js/schedule-feature@1.1.2
+
+## 1.1.37
+
+### Patch Changes
+
+- c861789: Own the Agent lifecycle event contract inside the Agent package and remove the
+  classic Plugin event subscription bridges. Runtime consumers now subscribe
+  through explicit event targets instead of Plugin AsyncLocalStorage. Agent event
+  publication no longer double-writes into `Plugin.dispatch()`, and Core no longer
+  declares Agent or Schedule events in `Plugin.Lifecycle`. Replace the process-global
+  activity bus with a generation-owned Resource, and remove concrete Plugin objects
+  from ZhinAgent and its tool security path.
+- 1414ccb: Make `UserMessage.actor` the sole participant identity authority across IM trigger, Agent ingress, persistence, LLM rendering, session-tree previews, and compaction. Remove sender identity from `agent_messages.extra`, delete text-based sender recovery and duplicate sender types/helpers, and keep Core AI trigger results limited to canonical user content.
+- 743d470: Make `@zhin.js/tool` the sole owner of Agent Tool input Schema admission, JSON Schema projection, and pre-execution parsing. Require an object-root JSON Schema or the public Zod 4 `safeParse` plus `toJSONSchema` contract, remove Zod 3 structural compatibility, and delete the duplicate `@zhin.js/core/tool-zod` entry point.
+- 62dee52: Rename the Agent Tool policy field from `approval` to `requiresApproval`, so values such as `never` and `always` state when human approval is required. Remove the old field without a compatibility alias and migrate built-in, adapter, feature, and utility Tools to the canonical contract.
+- cd54131: Remove the deleted `usePlugin`, `getPlugin`, and host-root registry signatures
+  from the public runtime instead of retaining throwing or no-op compatibility
+  exports. Remove the module-global `registerAIHook` compatibility registry;
+  Agent hooks now belong to generation-owned resources and canonical stream events.
+- 5855db7: Decouple canonical Message, Side Event, and middleware contracts from the classic Adapter class registry. Adapter identity now follows the Plugin Runtime string contract, and the unused `RegisteredAdapters`, adapter-message inference, and classic Endpoint config aliases are removed.
+- ec921d2: Move conversational claims, typed question sequences, action routing, and keyboard fallback state into a dedicated runtime-owned interaction coordinator. `ImRuntime` now delegates interaction behavior instead of implementing a second state machine inside the message gateway.
+- 9110ab8: Move optional Speech loading and pipeline ownership into the CLI composition root. Agent media handling now depends on an explicitly injected `AudioTranscriptionPort`; Core no longer exposes a process-global Speech loader, and Logger no longer exposes the process-global warn-once registry.
+- b853dba: Remove process-global ScheduleEngine and Scheduler getters and setters. Each assistant ScheduleJobEngine now owns and disposes an isolated scheduler, preventing cross-runtime job collisions and stale timers.
+- e561309: Give each IM runtime one dedicated conversation owner for event-store replacement, inbound and outbound fact recording, notice normalization, reference lookup, context aggregation, and consumer cursors. Split the conversation contract into reader and writer ports so Agent and CLI receive only the read capability while Core retains mutation authority.
+- d4c6175: Move generation-leased Endpoint discovery, capability lookup, Console delivery, controls, and management into a dedicated `EndpointRuntime`. Remove the flat Endpoint methods from `ImRuntime`, migrate Host composition to `im.endpoints`, and narrow the outbound Host dependency to its required runtime port.
+- 7a0e1ca: Move Endpoint ingress normalization, generation leases, inbound middleware, handlers, interaction and command routing, Agent fallback, and side-event action scopes into one `InboundRuntime`. Remove the flat `ImRuntime.receiveEndpointEvent()` entry and require Adapter ingress through the canonical `endpointEvents.receive()` gateway.
+- 103b5d3: Move rendering, outbound policy projection, middleware execution, Endpoint delivery, conversation recording, and observer publication into one `OutboundDeliveryRuntime`. Replace the flat `ImRuntime.onMessage()` method with a read-only `messageEvents` subscription source and narrow Console message and Inbox dependencies to explicit ports.
+- 5a7a7f7: Remove the duplicate classic interactive handler registry and process-global keyboard fallback store. `ImRuntime` now owns one encapsulated interactive router whose handlers and fallback mappings are isolated by runtime instance, generation, and conversation.
+- b076eae: Replace the permission host factory with an explicitly owned `PermissionHost` class. Each IM runtime now holds a private permission registry, so platform and custom checkers cannot leak between roots or generations.
+
+  Remove Core's duplicate permit parser, checker, legacy `PermissionFeature`, and process-global platform permit registry. Permit syntax and evaluation now have one owner in `@zhin.js/permission`, and scene-management tool construction no longer mutates global authorization state.
+
+- 1cb1163: Remove the unused process-global `Adapter.Registry`, `Adapter.register`, and `Adapter.Factory` APIs. Adapter definitions and live instances are now discovered and owned only by the current generation's `AdapterIndex`.
+- be3061e: Remove the classic Core `Adapter` class, Core `Endpoint` compatibility type, capability WeakMap, and their connection and lifecycle helpers. Platform integrations now have one model: `defineAdapter`, `Endpoint<TClient>`, and the current generation's `AdapterIndex` from `zhin.js/adapter`.
+- 75f8332: Remove the classic `MessageCommand` and `CommandFeature` runtime, its Plugin extension, legacy Endpoint command registration, and the command branch in the classic dispatcher. Commands now have one execution model: `defineCommand` definitions projected into the generation-owned `CommandIndex`.
+- 81935e2: Remove the unused classic `ComponentFeature` registry and `Plugin.addComponent` extension. Component definitions are discovered and projected by the generation-owned Component Feature, while Core keeps only the message and JSX rendering primitives it owns.
+- f9ed01b: Remove the unmounted classic Config and Schema Feature registries, schema-driven Endpoint provisioning service, and their service-locator based Adapter hooks. Runtime configuration now has one generation-owned authority through `ConfigComposer`, `ConfigView`, and `primaryConfigToken`; adapter endpoint configuration remains owned by `@zhin.js/adapter` and its explicit command surface.
+- ac0ab50: Remove the closed classic Core Plugin runtime, its duplicate dispatcher and inbound pipeline, and the public types that only described those dead paths. Handler authoring now derives canonical IM event types directly from the generation-owned Runtime contract.
+- 5140ce1: Remove the unmounted classic Database Feature, its `defineModel` extension, and the process-global post-start migration hook. Database tables and lifecycle now have one authority through the generation-owned Database Host. Also remove the inactive online `bot_id` compatibility migration; supported schemas must use `endpoint_id` directly.
+- 522d75f: Remove the classic `Plugin.adapters` directory and `Plugin.injectAdapter()` service-locator helper. Live Endpoint discovery now belongs exclusively to the current generation's `AdapterIndex`.
+- a7611b3: Remove the unmounted classic `ProcessAdapter`, `ProcessEndpoint`, and process stdin runtime helpers. Local interaction is owned by the Sandbox Adapter and CLI Host, so Core no longer exposes a second process-global transport path.
+- 8823044: Remove the disconnected classic Rich Segment class hierarchy, mutable registry, renderer policies, optional-peer loaders, and adapter contract facade. `segment.html`, `segment.markdown`, `segment.qrcode`, and `segment.tts` now create canonical message segments directly; Plugin Runtime's generation-owned outbound normalization remains the sole rendering and media-negotiation path.
+- 379439b: Remove the unmounted classic Core `ToolFeature` and `SkillFeature` registries and the unused Agent bridge that copied them into a mutable resource hub. Tool and Skill authority now comes only from generation-owned Feature projections consumed by Plugin Runtime `CapabilityIngress`; Core retains only the stateless IM access predicate used by the current path.
+- 11c9352: Remove dead deprecated aliases from Core and Agent, including legacy Tool and outbound segment types, the old interactive segment helper, duplicate Session and Schedule names, obsolete log formatters, and the process-global Task Executor drain shim. Current APIs now expose one name and one ownership model for each behavior.
+- 135ac91: Remove the unmounted classic Schedule, AgentPreset, and MessageFilter Feature registries. Plugin Runtime scheduling now has one owner-scoped authority through `scheduleHostToken`, Agent presets have one authority in the Agent Feature and Resource Hub, and message admission remains in the active middleware and guardrail pipeline.
+- 140cf0f: Remove the legacy composed side-event mapping aliases in favor of structured `mapNoticeParts` and `mapRequestParts`. Delete unmounted Agent default hook, tool, and subagent modules that exposed no runtime behavior.
+- 251e4d2: Remove the unused Plugin Runtime service tokens that referenced classic Core Feature registries. Runtime capabilities are exposed through their generation snapshot projections and owned resources instead of inert compatibility tokens.
+- 203ad34: Remove process-global expression and proxy caches from Kernel evaluation. Every evaluation now compiles independently and owns its proxy identity map for the lifetime of one sandbox, so unrelated runtimes cannot share hidden evaluator state.
+- e6c5113: Remove the unused Kernel PluginBase, mutable Feature registry, string-based dependency injection, and prototype extension registry. Plugin lifecycle now belongs solely to the generation-owned Plugin Runtime, while capability discovery and projection belong to Feature Kit.
+- e0f6478: Remove plugin.yml build detection, package-name heuristics, and the unused Core PluginManifest type. Smart builds now recognize plugins through the canonical package.json zhin manifest and applications through an explicit zhin.js dependency.
+- 5c3858e: Make `@zhin.js/im-contract` the explicit zero-dependency owner of transport identities, canonical segments, media guards, conversation facts, stores, and delivery contracts. Platform adapters now read media contracts from that foundation instead of reaching through Core.
+- Updated dependencies [13f7301]
+- Updated dependencies [a9e4a40]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [8740059]
+- Updated dependencies [9110ab8]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [eb3227a]
+- Updated dependencies [b853dba]
+- Updated dependencies [e561309]
+- Updated dependencies [b076eae]
+- Updated dependencies [73a24b7]
+- Updated dependencies [4380cf9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [203ad34]
+- Updated dependencies [e6c5113]
+- Updated dependencies [65d0391]
+- Updated dependencies [5c3858e]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/command@1.1.1
+  - @zhin.js/adapter@1.1.14
+  - @zhin.js/middleware@1.1.1
+  - @zhin.js/handler@1.1.1
+  - @zhin.js/component@1.1.1
+  - @zhin.js/schedule-feature@1.1.1
+  - @zhin.js/logger@1.1.1
+  - @zhin.js/kernel@1.1.1
+  - @zhin.js/im-contract@1.1.1
+  - @zhin.js/permission@1.1.1
+  - @zhin.js/database@1.1.1
+
+## 1.1.36
+
+### Patch Changes
+
+- Updated dependencies [769e67f]
+  - @zhin.js/adapter@1.1.13
+
+## 1.1.35
+
+### Patch Changes
+
+- 1fc6270: Reset all 88 published official packages onto the owner-governed 1.1.x stable line. Packages whose historical 1.1.0 version is still available publish as 1.1.0; packages where npm permanently reserves that version use the next available 1.1.x patch. Historical higher version lines remain installable but are superseded, and routine releases after this reset are patch-only.
+- Updated dependencies [1fc6270]
+  - @zhin.js/adapter@1.1.12
+  - @zhin.js/command@1.1.0
+  - @zhin.js/component@1.1.0
+  - @zhin.js/database@1.1.0
+  - @zhin.js/handler@1.1.0
+  - @zhin.js/im-contract@1.1.0
+  - @zhin.js/interaction@1.1.0
+  - @zhin.js/kernel@1.1.0
+  - @zhin.js/logger@1.1.0
+  - @zhin.js/middleware@1.1.0
+  - @zhin.js/permission@1.1.0
+  - @zhin.js/plugin-runtime@1.1.9
+  - @zhin.js/schema@1.1.0
+
+## 1.5.16
+
+### Patch Changes
+
+- Updated dependencies [f7ee28d]
+  - @zhin.js/adapter@1.2.2
+
+## 1.5.15
+
+### Patch Changes
+
+- ba7e17a: Prevent concurrent Workroom discussions from losing their Orchestrator handoff, route those handoffs before ordinary commands, resolve cross-Endpoint projection replies through their canonical message reference, respect the global AI trigger switch, and reject unknown canonical Console session keys when the durable inbox is available.
+- 7108d0b: Resolve uniquely mentioned Workroom members to their active Assignment, isolate Orchestrator turns from ordinary room sessions and conversation tails, remove classic subagent delegation from Workroom capabilities, deliver replies through the canonical Orchestrator Endpoint, reject untrusted bot identity metadata, and recognize implicit default Endpoints during Catalog validation.
+- Updated dependencies [a5ee497]
+  - @zhin.js/database@1.0.81
+
+## 1.5.14
+
+### Patch Changes
+
+- 54bfd6b: Introduce Prompt Sections as a generation-owned Plugin Runtime Feature. Projects can declare typed context under `agent/prompt-sections/`, select interactive or scheduled profiles and IM platforms, and govern presentation order separately from required/preferred/opportunistic budget retention. In-flight turns remain pinned to their original generation across hot reloads, required policy fails explicitly when it cannot fit, duplicate identities are rejected, and the previous mutable Agent-local discovery and platform contributor APIs are removed. ICQQ and GitHub platform guidance now use the same Feature instead of a module-global registry.
+
+  Expose a content-free Prompt Section catalog through Console introspection, including owner, source, generation, profiles, and budget policy without disclosing prompt text. New AI projects mount the Feature automatically, and the full-bot example plus Chinese and English product documentation demonstrate the supported configuration.
+
+- 12025ee: Project exact Endpoint control capabilities through the outbound Host and connect native typing, editable progress, ordered Agent/subagent/tool events, and transient Schedule completion states to IM activity feedback. Gate event ingress by the committed Runtime generation, pin Endpoint operations and retirement cleanup to that generation's IM snapshot, and guarantee terminal cleanup across public Agent error and cancellation paths.
+- 09b14d6: Publish clearer package and authoring API documentation for generated references and editor IntelliSense.
+- 1fc78bc: Unify native platform Client access behind the literal `adapter` discriminant. Handlers infer both native events and Clients, while command, inbound/outbound middleware, and both Agent tool authoring surfaces expose the exact operation-scoped Client through a lazy `$client` getter. Definitions without `adapter` keep `$client` typed as `unknown`, and runtime dispatch rejects adapter mismatches before resolving the Client. Bundled platform tools now use this single path instead of model-provided endpoint ids and adapter-specific dependency wrappers. Every adapter registers one Client/EventMap contract, and protocol adapters including NapCat, Milky, OneBot and Satori now produce transport-independent Client objects rather than letting Endpoint instances impersonate Clients.
+- Updated dependencies [4e8117c]
+- Updated dependencies [12025ee]
+- Updated dependencies [09b14d6]
+- Updated dependencies [1fc78bc]
+  - @zhin.js/adapter@1.2.1
+  - @zhin.js/plugin-runtime@1.1.8
+  - @zhin.js/command@1.0.16
+  - @zhin.js/component@1.0.13
+  - @zhin.js/handler@1.0.4
+  - @zhin.js/logger@1.0.77
+  - @zhin.js/middleware@1.0.13
+  - @zhin.js/permission@1.0.4
+  - @zhin.js/database@1.0.80
+  - @zhin.js/kernel@1.0.8
+
+## 1.5.13
+
+### Patch Changes
+
+- f2c532f: Expose exact per-Endpoint message operations through one validated Adapter capability model, route Core control calls through declared active capabilities, and connect existing recall, edit, reaction, and typing implementations across platform adapters.
+- Updated dependencies [f2c532f]
+  - @zhin.js/adapter@1.2.0
+
+## 1.5.12
+
+### Patch Changes
+
+- 5969c5b: Remove legacy compound-string message targets and Endpoint control probing. Endpoint control and outbound Host operations now carry structured `MessageRef` identities. Endpoint send has one exact result contract (a platform message id), which IM Runtime projects into `DeliveryReceipt.message`; arbitrary result guessing is removed.
+- 5969c5b: Wire ICQQ login challenges (QR / slider / SMS / auth) through LoginAssist so pending tasks survive Console refresh; add login.list/submit/cancel RPC and TTY stdin consumer.
+- 974772e: Replace the user-facing `Prompt` vocabulary with the `UserInteraction` authoring surface for input, confirmation, and selection. Commands and handlers now expose `interaction`; IM Runtime exposes `createInteraction`; schema-driven endpoint collection is named `SchemaInteraction`. The old prompt-named interaction types and properties are removed rather than aliased. User interactions render through one canonical Markdown and keyboard/list presentation module shared by commands and Agent `ask_user` turns.
+
+  Extract the transport-neutral interaction contract into `@zhin.js/interaction`. A discriminated `ask()` API supports text, number, confirmation, single-select, multi-select, and typed lists with structured `title`, `description`, and `tip` content. Typed `sequence()` interactions return one result object keyed by step id, render progress, and retry invalid replies without leaking invalid values to callers.
+
+  Preserve AI Markdown and card command actions through outbound publishing. QQ delivers Markdown with native command buttons; KOOK, Discord, Telegram, DingTalk, and Lark/Feishu now declare and encode their native Markdown dialects while retaining each adapter's interaction policy. Correct QQ callback button action encoding and button style mapping.
+
+- 5969c5b: Add SideEventGateway so adapters forward notice/request/system into HandlerIndex. HandlerContext now exposes only generation-safe capabilities and prompt ports; live Endpoint escape hatches are removed.
+- 2f786bd: Replace text-only IM context and metadata-based quote handling with canonical
+  conversation events, scoped reference resolution, explicit Endpoint content
+  ports, and typed multimedia outcomes. Conversation notices are projected as
+  untrusted context data rather than model-authority system instructions.
+  The process-global passive-group buffer is removed: prior inbound conversation messages
+  are now consumed from the same event store and cursor, with the current Turn
+  message excluded from its own context projection.
+  The unused `ConversationMemory` topic-memory runtime, its timers, legacy tables,
+  and topic-window configuration are removed; `ContextRepository` is the only
+  Agent conversation-history authority.
+- Updated dependencies [67ef8c4]
+- Updated dependencies [5969c5b]
+- Updated dependencies [5969c5b]
+- Updated dependencies [974772e]
+- Updated dependencies [5969c5b]
+- Updated dependencies [2f786bd]
+  - @zhin.js/plugin-runtime@1.1.7
+  - @zhin.js/im-contract@1.0.4
+  - @zhin.js/adapter@1.1.11
+  - @zhin.js/command@1.0.15
+  - @zhin.js/handler@1.0.3
+  - @zhin.js/interaction@1.0.1
+  - @zhin.js/component@1.0.12
+  - @zhin.js/middleware@1.0.12
+  - @zhin.js/permission@1.0.3
+
+## 1.5.11
+
+### Patch Changes
+
+- Updated dependencies [b9e6302]
+  - @zhin.js/handler@1.0.2
+
+## 1.5.10
+
+### Patch Changes
+
+- d3920e9: Extract the `handlers/` convention into a dedicated Feature package `@zhin.js/handler`, and mount it as a platform Stable Feature on `@zhin.js/core` (inherited by Roots via `platformFeatures` / `zhin runtime start`).
+
+  Also add the `zhin.js/middleware` facade re-export so Stable Feature authoring is consistent with `zhin.js/command` / `adapter` / `component` / `handler`.
+
+  `@zhin.js/feature-kit` is now kit-only: handler authoring, `HandlerIndex`, and the Feature provider entry are removed. Do not list `@zhin.js/feature-kit` in `zhin.features`.
+
+  **Authoring:** apps and plugins that depend on `zhin.js` should import `definePlugin` from the main entry (`zhin.js`) and other `define*` from facade subpaths (`zhin.js/command`, `zhin.js/middleware`, `zhin.js/handler`, `zhin.js/adapter`, `zhin.js/component`) — do not separately install `@zhin.js/plugin-runtime` or the `@zhin.js/*` Feature implementation packages. Workspace plugins/examples/adapters were updated accordingly (imports + deps; child plugins keep `zhin.features` mounts and peer `zhin.js`). CLI `zhin new` / migrate cutover scaffolds follow the same rule.
+
+  BREAKING CHANGE: `@zhin.js/feature-kit` no longer exports handler APIs and is no longer a `type: "feature"` package.
+
+- Updated dependencies [d3920e9]
+  - @zhin.js/handler@1.0.1
+  - @zhin.js/adapter@1.1.10
+  - @zhin.js/command@1.0.14
+  - @zhin.js/component@1.0.11
+  - @zhin.js/middleware@1.0.11
+
+## 1.5.9
+
+### Patch Changes
+
+- e4757a8: fix: bump
+- c3c0ebf: fix: jiagouyouhau
+- Updated dependencies [e4757a8]
+- Updated dependencies [c3c0ebf]
+  - @zhin.js/feature-kit@1.0.10
+  - @zhin.js/command@1.0.13
+  - @zhin.js/adapter@1.1.9
+  - @zhin.js/component@1.0.10
+  - @zhin.js/middleware@1.0.10
+
+## 1.5.8
+
+### Patch Changes
+
+- 63253bb: Restrict Root consumers to the read-only `SnapshotReader` lease interface and
+  remove public `RootRuntime.controller` access. Generation commit, transaction,
+  close, and stop authority now remain inside the Root lifecycle.
+
+  Close Root admission when rollback cleanup or retired-generation disposal can
+  no longer prove lifecycle integrity. Existing leases may drain, but new
+  operations and generation transactions fail closed until the Process Host
+  stops the Root.
+
+  Bind externally driven capability resources to lifecycle-owned generation admission gates.
+  Adapter candidates can establish Endpoint connections during readiness while their IM ingress
+  remains invisible; snapshot commit atomically retires the old ingress and publishes the new one,
+  without closing the old Endpoint before the transaction succeeds.
+  Admitted HTTP, WebSocket, IM, isolated-RPC, Endpoint control, and Endpoint management operations
+  now retain their exact generation until settlement instead of escaping with a live object.
+
+  Remove inert unconfigured Endpoints and deferred soft-start. Configured Endpoint creation,
+  connection readiness, and local admission are required generation prerequisites; any failure
+  disposes the complete candidate set and leaves the previous generation serving traffic.
+
+  Move the HTTP listener to Process Host ownership. Generation scopes now receive only an
+  `HttpHost` routing port (without `listen`/`close` authority), and HTTP/WS registrations are tagged
+  with generation admission so candidate routes cannot shadow committed routes before publish.
+
+  Remove the fallible post-commit `openNext` phase and all pre-commit old-generation
+  quiesce/resume hooks. Handoff now performs candidate readiness and reversible candidate cleanup
+  only; the previous generation remains untouched until the single synchronous snapshot/admission
+  publish point, then drains through its existing leases.
+  Candidate setup, Feature projection, Endpoint readiness, MCP connection, isolation activation,
+  database activation, and config commit now receive the Root transaction `AbortSignal`; Root Stop
+  fails closed and awaits candidate cancellation cleanup.
+
+- 953cfe1: Remove the obsolete Collaboration Scene/Cell domain after Agent coordination
+  moved to the Orchestration Kernel. This deletes `/collab`, the initialization
+  wizard, Scene identity and membership repositories, archived Cell pipeline
+  state, seven Collaboration database tables, and their public exports.
+
+  The top-level `collaboration` configuration key is no longer accepted and now
+  fails schema validation. Agent startup is selected only by `ai` or `assistant`.
+
+  Keep the optional Five-Agent workflow as an independent Agent module with
+  `FiveAgentRole`, role binding, and role capability policy interfaces. It no
+  longer depends on IM scenes, Bot membership, or text handback conventions.
+
+  Remove `StructuredOutboundDetectInput.collaborationCell`; structured outbound
+  selection is based only on tool, handoff, and Adapter capability requirements.
+
+- 0e73866: Remove the classic Message-based Collaboration Cell execution seam. IM now
+  serves only as canonical turn ingress and reply delivery; Agent-to-Agent work is
+  executed by the Orchestration Kernel through `local` Agent bindings or
+  `remote_mesh` A2A agents.
+
+  Remove peer mention routing, synthetic Message bridging, Cell prompt injection,
+  IM projection executors, `internal_room`, and the dead Collaboration outbound
+  parser APIs. Orchestration executor and persisted source parsing now fail closed
+  for removed legacy shapes instead of silently changing execution domains.
+
+  `AITriggerConfig.peerMode` and the public `internal_room` / `im_projection`
+  executor variants are removed. Local task `assignedTo` values now name an Agent
+  binding; remote tasks name an A2A Agent.
+
+- Updated dependencies [63253bb]
+  - @zhin.js/plugin-runtime@1.1.6
+  - @zhin.js/adapter@1.1.8
+  - @zhin.js/command@1.0.12
+  - @zhin.js/component@1.0.9
+  - @zhin.js/middleware@1.0.9
+  - @zhin.js/permission@1.0.2
+
+## 1.5.7
+
+### Patch Changes
+
+- 36cb1ca: fix(core): 入站 Message 的 sender.roles 携带 master/trusted 框架角色
+
+  ImRuntime 新增 `enrichSender` 选项，在构造 Message 前由组合根（start-command）注入，
+  从 config 的 `ai.trigger.masters`/`ai.trigger.trusted` 及 endpoint 级 master/trusted 判定后
+  将框架角色合并进 `sender.roles`。整个下游链路（命令分发、agent ingress）均可直接读取。
+
+## 1.5.6
+
+### Patch Changes
+
+- Updated dependencies [7945544]
+  - @zhin.js/command@1.0.11
+  - @zhin.js/adapter@1.1.7
+
+## 1.5.5
+
+### Patch Changes
+
+- Updated dependencies [2d0a622]
+  - @zhin.js/command@1.0.10
+  - @zhin.js/adapter@1.1.7
+
+## 1.5.4
+
+### Patch Changes
+
+- b0f37ae: refactor(core): integrate permission host and canonical endpoint control
+
+  Adapter now routes recall/edit operations through the canonical EndpointControl
+  port, with classic $-prefixed methods bridged via resolveEndpointControl.
+  CommandFeature and MessageCommand accept PermissionHost for declarative
+  permit checks. Dispatcher accepts an optional permissionHost option.
+  ImRuntime provides the permission host via DI. MessageCommand uses
+  toPermissionSubject for duck-typed subject projection.
+
+- 36c7400: Replace `AgentPromptBuildContext.commMessage` with an authenticated platform projection and make Agent prompt assembly consume canonical Turn identity. Platform contributors and prompt hooks no longer receive a classic IM `Message`.
+
+  Remove the unused Message field and active-context escape hatch from PromptController; turn scheduling is keyed only by canonical session identity.
+
+- 162fa34: Publish `ask_user` as a generation-owned ToolFeature backed by a Root-owned, origin-neutral InteractionRouter.
+
+  Tool execution now receives an optional turn-scoped QuestionPort. The IM composition root binds that port to the canonical session and authenticated sender, and ImRuntime can claim pending interaction replies before middleware, commands, or Agent fallback. Invalid replies use the current message's delivery authority; the router never retains an expired Runtime Message or Adapter handle. Missing interactive authority, ambiguous sessions, delivery failures, cancellation, and Root shutdown fail closed.
+
+  BREAKING CHANGE: canonical Agent turns no longer rely on Plugin Prompt middleware or mutable global ask-user registries for `ask_user`. Ingress adapters that support interactive questions must provide a QuestionPort; unattended turns cannot expose one.
+
+- e40b048: Require generation leases at the IM ingress route instead of exposing a bare
+  snapshot. Snapshot leases are store-owned, expose their active state, and can
+  be rejected when presented to an Agent Runtime attached to another Root.
+
+  Project configured MCP clients into the generation lifecycle. Configured
+  servers must become ready during candidate activation; activation failure is
+  fail-closed and leaves the previous generation serving traffic. Agent bindings
+  filter the MCP servers visible to a turn, and MCP tools use owner-qualified
+  `${qualifiedServer}__${tool}` names with fail-closed approval metadata.
+
+- f1708c3: 将彩票 Agent 工具迁入正式 `tools/*.ts` ToolFeature 约定目录。
+
+  删除已移除的 `AgentToolsHost` 动态注册桥与 `agent/runtime-tools` 中间层；工具现在由 Plugin Runtime 在候选 generation 中发现，并由标准 prepack 构建器生成可发布的 JavaScript 入口。
+
+  Agent capability catalog 现在发布全树、owner-qualified 的 Tool identity（例如 `lottery__history`），避免子插件工具不可见及跨 owner 同名碰撞；执行边界会运行 Zod-like `safeParse` schema，非法输入在进入工具前 fail-closed。
+
+  Lottery 的 Tool、Command、pipeline 与 outbound 全部从 owner capability runtime 读取资源；删除进程级 DB、Agent deps、push 注册表和 fallback，多实例与跨 generation 执行因此保持隔离。插件将 `zod` 声明为真实运行时依赖，保证 ToolFeature 在不安装 Agent 的合法部署中也可被发现。
+
+  Tool approval 的 `on-risk` 语义现在完整贯穿 Core transport 与 Agent approval gate，不再在 Plugin Runtime capability 投影中丢失。
+
+- e53444f: refactor!: 架构债第二轮（asPrivate 零强转、窄接口域拆分、JSX 全局冲突根治、测试面真迁移）
+
+  - **agent**：`asPrivate` 强转彻底去除——门面类与 `ZhinAgentPrivate` 全量对齐，编译期校验恢复；接口按域拆窄（`AgentSessionHost` / `AgentContextHost` / `AgentTurnLifecycleHost` / `AgentEmitterHost`）；`HostPromptController.schedule` 伪泛型修正（toolCalls 收紧为 `ToolCallRecord[]`）；零调用门面成员删除。
+  - **core + satori**：两处全局 `JSX.Element` 声明改为模块作用域 `export namespace JSX`（语义不同的两套 JSX 模型不再互斥），`zhin.js/jsx-runtime` 类型前转补齐；examples components 回归 type-check 编译面。
+  - **ai**：OpenAI wire 类型（`ChatCompletionRequest/Response/Choice`、`ToolDefinition`/`ChatToolDefinition`）与 **`ContentPart` 本体及全部 shim**（`processMultimodal`、`normalizeContentPartsToPayloads`、`summarizeContentParts`、`prepareMultimodalBlocks`、`createInboundTurnPipeline` 兼容门面）从公共面彻底删除——agent 测试 mock 已迁 ai-sdk 原生面（`wireMockLlmApi` 直注册 ai-sdk stream，断言面收敛到 AgentMessage 层）；`ChatMessage.content` 收窄为 `string`；891 行死沙箱 `sandbox-enhanced.ts` 连文件删除；init 镜像入口的 `as unknown as` 强转消除。
+
+  BREAKING CHANGE：上述公共导出收窄项；JSX 全局命名空间不再由 `@zhin.js/core`/`@zhin.js/satori` 提供（经 jsxImportSource 的消费链不受影响）。
+
+- 92b0dd7: refactor: complete plugin dual-track elimination (Slices 3–4)
+
+  Remove all `getHostRootPlugin()` call sites (30+ occurrences across security,
+  collaboration, media, memory, prompt, and orchestrator modules); dead branches
+  collapse to defaults/fallbacks. Expand harness to ban `getHostRootPlugin()` in
+  all packages.
+
+  Stub `initAgentModule()` and `registerAI()` as throwing — the Plugin Runtime
+  (`zhin runtime start`) is the sole entry path; `basic/cli` assembles the Agent
+  stack directly.
+
+  Mark `PluginBase.provide()` / `.inject()` as `@deprecated @internal`; the
+  service bus is superseded by Scope + Token (introduced in Slice 2).
+
+  Simplify `host-plugin-registry.ts` to minimal no-op signatures. Move
+  `AIServiceRefs` type to `internal/` so live collaboration/orchestrator code
+  no longer depends on dead `init/` modules.
+
+  Clean `setHostRootPlugin` / `getHostRootPlugin` mocks from 8 test files;
+  update agent README to remove `initAgentModule` usage examples.
+
+- a7df753: refactor!: Wave 2 架构债清理（ContentPart 终结 + 死面清剿 + agent 结构收敛）
+
+  **AI 层**
+
+  - `preprocessInboundMedia` / `buildSubagentInboundTask` 入参收窄为 canonical 单形态（ContentPart union 臂删除）。
+  - 删除死面：`INBOUND_MEDIA_PARTS_EXTRA_KEY`、`userMessageToFilterText`、tool-policy `always/once/never` 别名、ContentPart `face` 变体、`describeVisionPartsAsText`；`processMultimodal` 等公网 shim 标 `@deprecated`（下个大版本删除）。
+  - 测试桥归位：`createOpenAiCompletionsStreamFn` 及 wire 转换器移出公共 API（入 agent 测试目录）；`openai-bridge` 只剩 `assistantText`；`legacy-tool-bridge.ts` 正名 `tool-bridge.ts`。
+  - 类型修复：`ModelApi = 'ai-sdk' | (string & {})`；`AgentTool.execute` 与实现对齐为三参（删 `as` 强转）。
+
+  **core 层**
+
+  - 死导出整批删除（均零引用）：`AITool`、撞名 `ToolDefinition`、`NoticeType/RequestType`、Interactive 别名全簇、`PermissionService`/`ConfigService` 别名、`getLiveEndpoint`、`qrcode-segment` 整文件；热路径不再自用 deprecated 别名（`resolveInteractiveSegments` 删除，改 `resolveKeyboardSegments`）。
+  - im-contract 双 legacy 格式化函数二合一（`formatLegacyMessageRef` 为唯一公开 API）；ai-outbound 的 legacy `kind` 回退分支删除。
+
+  **agent 层**
+
+  - `ZhinAgentPrivate` 58 → 43 成员：死成员/零读取成员删除，deferred 族收敛为 `DeferredTurnState` 模块，三份手工镜像改为权威接口 Pick，`readonly` 名不副实纠偏，AutoContinueHost 单参化。
+  - 4 个值导入循环解环（纯函数下沉 collab-utils / ask-user-format / memory-layers）；prompt 双轨收敛（3 个零调用导出 + 死分支删除）；死文件删除；`sandbox-enhanced` 挂 `@deprecated` 摘出公共导出；`tokenUsageToLegacy` 合一、`AGENT_ROLE_CONFIGS` 拆表。
+
+  BREAKING CHANGE：上述删除项均为公共导出面的收窄，详见各条。
+
+- Updated dependencies [c106ecc]
+- Updated dependencies [ca92e03]
+- Updated dependencies [daffd4c]
+- Updated dependencies [e40b048]
+- Updated dependencies [92b0dd7]
+- Updated dependencies [a7df753]
+  - @zhin.js/permission@1.0.1
+  - @zhin.js/im-contract@1.0.3
+  - @zhin.js/adapter@1.1.7
+  - @zhin.js/plugin-runtime@1.1.5
+  - @zhin.js/command@1.0.9
+  - @zhin.js/kernel@1.0.7
+  - @zhin.js/component@1.0.8
+  - @zhin.js/middleware@1.0.8
+
+## 1.5.3
+
+### Patch Changes
+
+- f8c7a54: fix: im
+- Updated dependencies [f8c7a54]
+  - @zhin.js/database@1.0.79
+  - @zhin.js/logger@1.0.76
+  - @zhin.js/schema@1.0.73
+  - @zhin.js/adapter@1.1.6
+  - @zhin.js/command@1.0.8
+  - @zhin.js/component@1.0.7
+  - @zhin.js/im-contract@1.0.2
+  - @zhin.js/kernel@1.0.6
+  - @zhin.js/middleware@1.0.7
+  - @zhin.js/plugin-runtime@1.1.4
+
+## 1.5.2
+
+### Patch Changes
+
+- afc0e66: feat!: IM 寻址全量统一为 ConversationRef（BREAKING，无兼容双轨）
+
+  - `SendRequest` / `IncomingMessage` / `OutboundEnvelope` / `EndpointSendRequest` / `RuntimeMessageEvent` 全部收敛为 `conversation: ConversationRef` 单一寻址；`adapter` / `target` / `parent`（ChannelParent）/ `DeliveryMessageGateway` / `synthesizeConversation` / `parseLegacyConversationTarget`（core 侧）全部删除。
+  - 20 个平台适配器入站直接构造 `ConversationRef`（endpoint/kind/id/parent，guild 容器与群临时会话归位）；`endpoint.send` 改读 `request.conversation`，legacy 字符串仅存在于平台 SDK 边界内部。
+  - `Message` 类改为 conversation 原生（`adapter`/`target` 字段删除，`id` 为 `message?.id` getter）；owner 判定、interactive 频道键、CommandMessage 鸭式契约同步统一。
+  - OutboundHost / sendEndpointMessage / console RPC / inbox / activity-feedback / 游戏插件全部 conversation 化；`MessageGateway.send` 返回 `DeliveryReceipt`。
+
+  迁移：自定义适配器/插件的 `gateway.receive` 传 `{ conversation: { endpoint: { id, adapter }, kind, id }, content }`；发消息处 `conversation` 替代 `target`+`channelType`。
+
+- Updated dependencies [afc0e66]
+- Updated dependencies [2e41ad5]
+- Updated dependencies [9f57124]
+  - @zhin.js/adapter@1.1.5
+  - @zhin.js/im-contract@1.0.1
+  - @zhin.js/plugin-runtime@1.1.3
+  - @zhin.js/command@1.0.7
+  - @zhin.js/component@1.0.6
+  - @zhin.js/middleware@1.0.6
+
+## 1.5.1
+
+### Patch Changes
+
+- Updated dependencies [c8f4d45]
+  - @zhin.js/plugin-runtime@1.1.2
+  - @zhin.js/adapter@1.1.4
+  - @zhin.js/command@1.0.6
+  - @zhin.js/component@1.0.5
+  - @zhin.js/middleware@1.0.5
+
+## 1.5.0
+
+### Minor Changes
+
+- 5b94d9c: refactor!: 清除 AI 双栈残留（BREAKING，无兼容层）
+
+  - **删除 legacy 直连 HTTP Provider 栈**：`@zhin.js/ai` 的 `providers/` 目录（OpenAI/Anthropic/Ollama/DeepSeek/Google/Cloudflare/Zhipu/Moonshot 及 openai-sse/base）整体移除。生产 provider 实例早已统一经 `createSdkProviderAdapter`（AI SDK 传输）创建，旧栈为零调用死代码；Provider 类与 `OpenAIConfig` 等配置类型导出同步删除。图像生成走 `SdkProviderAdapter.generateImage`（ai-sdk-image 桥）。
+  - **删除已死的 collaboration 入站管线**：`createInboundTurnPipeline` 及其 enrich/route/execute/outbound-stage、`registerAiTrigger`、`extractMediaParts`（旧 `$content` 形状读取）、`processMultimodalTurn` 主实现。`ZhinAgent.processMultimodal` 保留为薄 shim（委托 canonical 路径）；`createInboundTurnPipeline` 保留薄门面（内部走 `agent.process`）。
+  - **媒体面统一到 canonical MediaRef**：新增 `normalizeMediaRefsToPayloads`（url fetch / path 读盘 / base64 直取 / 大小预检），orchestrator（bootstrap-executors）、subagent-inbound、analyze-media-tool 全部改吃 canonical refs；`payloadToVisionPart` 产出 `MediaContentBlock`；`normalizeMatchRules` 拆分为独立模块 `routing/match-rules`（行为不变）。
+
+  迁移：若仍从 `@zhin.js/ai` import 具体 Provider 类（如 `OpenAIProvider`），改为配置驱动（`ai.providers` + `createSdkProviderAdapter`）。
+
+### Patch Changes
+
+- 4fbff5d: feat!: 多模态双向 Segment 一贯制（BREAKING，无兼容层）
+
+  全框架唯一媒体表达统一为 canonical `Segment` + `MediaRef{kind: url|path|base64|file, value, mime_type?, file_name?, size?}`，新增 audio/video/file 段类型；所有第二形状（legacy `data.url/file/base64` 字段、`mediaRefFromLegacyData`/`mediaRefToLegacyFields` 桥、双写）全部删除。
+
+  - **core**：`SendContent` 一等支持 `Segment[]`；endpoint 出站载荷只含 canonical 段；`resolveOutboundMediaPolicy` 改为纯声明驱动（adapter definition `segments.outboundMedia`），内置策略表删除，未声明回退 `url-or-text`；`ImageContent` 旧桥删除。
+  - **ai**：新增 `MediaContentBlock`/`MediaBlockRef`（Segment 同构）与 `UserMessage.media`（当前 turn 媒体，**不持久化**——存储层自动剥离）；`createUserMessage(text, media?)` 签名变更（`ImageContent` 删除）；provider 边界序列化器 `filterMediaBlocksForProvider` + 能力表（缺省 image-only，不支持类型降级占位文本）；ai-sdk 桥媒体块 → SDK image/file parts。
+  - **agent**：入站 turn 注入（`turn/inbound-media.ts`）——commMessage 媒体段 → 当前 turn `UserMessage.media`；图片 path 物化、音频默认 STT（`@zhin.js/speech` 可选，失败降级占位）、视频/文件占位；`publishOutboundElements` 产出 canonical Segment；`transcribeAudioPayload` 导出。
+  - **cli**：`bridgeRuntimeMessage` 回复链路媒体段透传，不再压平为文本（`$reply` 直达 normalize → adapter）。
+  - **全部 20 个平台适配器**：出站媒体只消费 `data.media`（url 直发 / base64 直发 / 平台上传 / 读盘），入站媒体产出 canonical `data.media`；`segments.outboundMedia` 声明与实际消费逐一核对修正；QQ 入站新增 canonical segments（image/audio/video/file/mention/face/reply），图片/语音/视频不再丢失。
+
+  迁移：适配器/插件产媒体一律用 `{ type, data: { media: MediaRef } }`；发送 legacy `data.url/file/base64` 形状的段会被 warn 丢弃。
+
+- Updated dependencies [7c1e63a]
+- Updated dependencies [4fbff5d]
+  - @zhin.js/command@1.0.5
+  - @zhin.js/adapter@1.1.3
+
+## 1.4.3
+
+### Patch Changes
+
+- 45b3256: fix: resolve master/trusted identity from plugins.\<adapter\> config
+
+  Authorization previously only checked a top-level `endpoints[]` array for
+  master/trusted fields. When `master` was declared at the adapter level
+  (e.g. `plugins.icqq.master`), the sender was never recognized as master.
+
+  Two changes:
+
+  1. **authorization.ts** — `findEndpointEntryFromConfig` now also reads
+     `plugins.<adapter>` and merges adapter-level `master`/`trusted` onto the
+     matched endpoint entry so `resolveSenderRoles` sees them.
+
+  2. **config-composer.ts** — Adapter plugins (schemas with array-typed
+     `endpoints`) automatically receive `master` and `trusted` schema
+     properties when not already declared, so all adapters accept these
+     framework-level fields without needing to manually add them to their
+     own `schema.json`.
+
+## 1.4.2
+
+### Patch Changes
+
+- Updated dependencies [d5cd4aa]
+  - @zhin.js/command@1.0.4
+  - @zhin.js/adapter@1.1.2
+  - @zhin.js/component@1.0.4
+  - @zhin.js/middleware@1.0.4
+
+## 1.4.1
+
+### Patch Changes
+
+- f0ec5ab: 五分钟首跑闭环（P1-2.1）。
+
+  - `create-zhin-app`：依赖安装完成后自动运行项目内 `zhin doctor` 做安装后自检（Node 版本 / pnpm / 配置文件 / Console 登录条件 / 端口占用），自检失败不阻断创建流程。
+  - `@zhin.js/cli`：`zhin runtime start` 启动成功后输出醒目的首跑指引（Remote Console 地址、Host `http://127.0.0.1:<port>`、token 在 `.env` 的 `HTTP_TOKEN`、Sandbox 页发送 hello），新增 `--open` / `ZHIN_OPEN=1` 自动打开浏览器（CI 与无显示环境自动跳过）；`zhin doctor` 的 pnpm 修复提示补充 corepack 方式、端口占用提示补充 `http.port` 换端口方案，AI 引导文件（SOUL/TOOLS/AGENTS）检查改为仅在启用 AI 时执行，避免 IM-only 首跑项目收到误导性警告。
+  - `@zhin.js/core`：`MessageGateway` 接口新增 `setUnmatchedHandler`（此前仅 `ImRuntime` 实现类上有，Host AI 回退同款钩子），支撑单文件 bot 在无 `commands/` 约定目录时响应消息。
+  - 新增 `examples/single-file-bot`：一个 `bot.ts` 即完整机器人（definePlugin + defineCommand + sandbox adapter），附 README 说明单文件与约定目录布局的取舍。
+
+- fa66c4c: Use `segment-matcher` as the CommandIndex engine, add typed canonical segment parameters and
+  expose unmatched structured segments through CommandContext. Preserve structured command input
+  while stripping adapter command prefixes in the Core message dispatcher.
+- 6cb6152: 统一消息元素通道（UNI-Channel）落地：
+
+  - **入站契约**：`IncomingMessage.segments`（canonical Segment[]，与 content 纯文本视图同源双轨），Message 透传；AI 兜底链路经 `collectSegmentMedia` 把图片/语音/视频/文件 MediaRef 写入会话 extra——多模态输入不再丢失。
+  - **出站协商**：`normalizeOutboundPayload` 升级全量 canonical 归一（复用 generic-segment-mapper），html→image 按端点 `segments.outboundMedia` 声明降级（base64 直发 / url-or-text / passthrough 自行物化）；`MediaRef.kind` 新增 `'file'` 承载平台不透明引用（file_id/resource_id）。
+  - **能力声明**：`defineAdapter.segments` policy（outboundMedia / interactive），三道段门禁复活（探测点改 adapters/\*.ts，豁免名单渐进收敛）。
+  - **首批迁移**：icqq 全保真出入站（CQ ↔ canonical，quote→reply 段）；milky/telegram/discord 入站媒体段恢复（附件/贴纸/callback action）；napcat/onebot11/onebot12 出站 canonical→OneBot 数组段；wechat-mp/wecom `/cgi-bin/media/upload` 与 lark `/im/v1/images` 上传通路（base64/URL 图片不再静默丢图，失败降级文本）。
+
+- Updated dependencies [cdf64e7]
+- Updated dependencies [5691aba]
+- Updated dependencies [078e3f7]
+- Updated dependencies [50497a5]
+- Updated dependencies [9c997b2]
+- Updated dependencies [09d4f25]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [fa66c4c]
+- Updated dependencies [6cb6152]
+  - @zhin.js/command@1.0.3
+  - @zhin.js/plugin-runtime@1.1.1
+  - @zhin.js/schema@1.0.72
+  - @zhin.js/database@1.0.78
+  - @zhin.js/adapter@1.1.1
+  - @zhin.js/component@1.0.3
+  - @zhin.js/middleware@1.0.3
+  - @zhin.js/kernel@1.0.5
+
+## 1.4.0
+
+### Minor Changes
+
+- 7db69c1: 命令前缀改为适配器配置项：`MessageDispatcher` 不再硬编码 `/`，默认按消息所属适配器实例 config 的 `commandPrefix` 解析（默认 `''` 无前缀，任意文本按命令匹配），`endpoints[i].commandPrefix` 逐项覆盖；`ImRuntime({ commandPrefix })` 仍可设全局静态前缀。全部 20 个平台适配器 schema 新增 `commandPrefix` 属性。
+
+  BREAKING（行为变化）：未配置时命令不再需要 `/` 前缀——原 `/zt` 写法不再命中，直接发 `zt` 即可；需要斜杠风格的适配器请在配置里显式设 `commandPrefix: '/'`。
+
+- ac9da66: 深化 Remote Console wire contract：统一 canonical Endpoint RPC/SSE 名称与旧别名规范化，新增共享 `ConsoleEndpointSummary`、EndpointManagement 能力词汇和方法派生能力清单。Plugin Runtime Host 与 legacy Host 现在都会在 `endpoint.list` / `endpoint.info` 返回 `managementCapabilities`，Console SDK 与官方 UI 不再按适配器名称猜测管理能力。
+
+  发布时必须同时发布 `@zhin.js/console-protocol` 与 `@zhin.js/client`；Client 从既有 protocol 运行时依赖重导出协议常量、规范化函数和 Endpoint wire 类型。
+
+### Patch Changes
+
+- Updated dependencies [e5c84ed]
+- Updated dependencies [3ea84a0]
+- Updated dependencies [1ddcd70]
+- Updated dependencies [ac9da66]
+  - @zhin.js/adapter@1.1.0
+  - @zhin.js/plugin-runtime@1.1.0
+  - @zhin.js/command@1.0.2
+  - @zhin.js/component@1.0.2
+  - @zhin.js/middleware@1.0.2
+
+## 1.3.5
+
+### Patch Changes
+
+- 16ec4e8: Harden Plugin Runtime migration boundaries: make process-level registries, the game
+  catalog, and game-record storage generation-owned so HMR replacement cannot unregister the
+  active generation, discover workspace agents without mutating `process.cwd()`, and
+  require authentication for production A2A endpoints.
+
+  Game SessionServices and Group Suite mutable state now live in owner-scoped
+  resources. Lottery database, Agent dependencies, and outbound push bindings use
+  generation registrations with rollback-safe disposal.
+
+  The Plugin Runtime Console demo scope now follows ADR 0016 and rejects project
+  file, environment, and database RPCs, closing both direct and file-manager paths
+  that could expose `.env` values.
+
+- cc5c94d: 约定式插件运行时迁移（breaking）：插件与适配器由 `usePlugin()` / `extends Adapter` 迁移为 `definePlugin` / `defineAdapter` + `plugin.ts` + 约定目录（`adapters/`、`commands/`、`components/`、`tools/` 等）。
+
+  - 新增约定式运行时包：`@zhin.js/plugin-runtime`、`@zhin.js/adapter`、`@zhin.js/runtime`、`@zhin.js/host-http`（首版 1.0.0 走 init-publish，不在本 changeset 内 bump）。
+  - 全部 20 个平台适配器改为约定式 `defineAdapter`，旧 `usePlugin` / `extends Adapter` / `segment-mapper` 生产入口已删除；onebot11 反向 WSS、onebot12 webhook/wss、milky sse/webhook/wss、satori webhook、kook webhook、qq webhook/middleware 等 slice 1 推迟的连接模式已补齐。
+  - 游戏 / 工具 / 服务插件同步迁移到约定目录结构。
+  - CLI 增加 plugin-runtime host installer（http/database/outbound/schedule/console 等）。
+
+  后续加固（同批）：
+
+  - CLI：`zhin runtime start --daemon`（pidfile/崩溃拉起/风暴保护），orphan watchdog 防僵尸进程；legacy `zhin dev` / `zhin start` 已移除（含 `zhin restart`），`zhin stop` 兼容新 daemon。
+  - 安全：builtin 工具统一走 `security/policy-facade.ts` 的 `runToolPolicies`（声明式策略表，deny 优先）；审计日志 close flush + 背压队列；`splitCompoundCommand` 引号感知、`extractCommandName` 去引号堵绕过。
+  - 日志：Logger 双堆栈修复、本地时区、`getLogger` 挂树（`setLevel` 递归生效）、第三方库（log4js/discord）桥接、启动人读总结。
+  - 结构：`plugins/games/shared` 迁为 `packages/game-kit`（`@zhin.js/game-kit`）；死目录 `plugins/adapters/common` 删除。
+  - 脚手架：`create-zhin-app` / `zhin new` / scaffold-wizard 生成物改为 Plugin Runtime 形态（minimal-bot 同构，新配置格式）。
+  - Console：endpoint.list 真实名称与 phase、schema:get-all 按 instanceKey 映射、db:\* 接 DatabaseHost。
+
+  注：按仓库发布惯例（见 1bb345dd2），本次 breaking 迁移统一使用 patch，避免 zhin.js 5.0 级联。
+
+- 447f3e2: 迁移缺口修复（legacy 功能对齐）：
+
+  - html 段出站规范化：经 `@zhin.js/html-renderer` 渲染为 image 段（sandbox 豁免、无渲染器时降级文本），修复真实平台 `[object Object]`。
+  - 群聊 @ 触发 AI：适配器入站标注 `metadata.mentioned`（icqq/qq/slack/onebot11/onebot12/napcat/milky/discord/telegram/kook/dingtalk/satori），`matchAiTrigger` 补齐 ignorePrefixes/respondToAt/respondToPrivate/keywords（默认值与 legacy 对齐）。
+  - im_transcripts 全量流水恢复写入（chat_history 工具可用）；群聊旁听上下文回迁。
+  - `ai.trigger.timeout/thinkingMessage/errorTemplate` 生效；masters/trusted 角色解析对齐 legacy。
+  - `Message.sender` 统一为用户 ID（onebot11/12、napcat、milky 原误传显示名）；quote_id 经 metadata 接入 AI 引用上下文。
+
+- Updated dependencies [cc5c94d]
+- Updated dependencies [447f3e2]
+  - @zhin.js/logger@1.0.75
+  - @zhin.js/database@1.0.77
+  - @zhin.js/plugin-runtime@1.0.1
+  - @zhin.js/kernel@1.0.4
+  - @zhin.js/adapter@1.0.1
+  - @zhin.js/command@1.0.1
+  - @zhin.js/component@1.0.1
+  - @zhin.js/middleware@1.0.1
+
+## 1.3.4
+
+### Patch Changes
+
+- 872c583: Slack 适配器 Phase 1/2：mrkdwn 出站、长消息切分、斜杠/按钮 ephemeral 反馈、入站 mrkdwn→Markdown、editMessage 对齐 core。
+
+  Logger 表格日志与 string-width 列宽；Agent AI Handler 框线表格与 introspection/MCP 导出；Core side-event 归一化；Schedule 时区规划；多适配器 side-event 与 API surface 更新。
+
+- 872c583: fix: 代码格式优化
+- Updated dependencies [872c583]
+- Updated dependencies [872c583]
+  - @zhin.js/kernel@1.0.3
+  - @zhin.js/logger@1.0.74
+  - @zhin.js/database@1.0.76
+
+## 1.3.3
+
+### Patch Changes
+
+- 5b08052: fix: 架构优化
+- 5cc9c03: fix: ai 优化
+- 36d6db2: fix: agent 互联
+- b9b3881: fix: 增加游戏引擎以及部分游戏
+- 7700903: fix: 游戏强化
+- Updated dependencies [5b08052]
+- Updated dependencies [5cc9c03]
+  - @zhin.js/kernel@1.0.2
+  - @zhin.js/database@1.0.75
+  - @zhin.js/logger@1.0.73
+  - @zhin.js/schema@1.0.71
+
+## 1.3.2
+
+### Patch Changes
+
+- c4575c9: fix: 输入输出优化,文档优化
+- c4575c9: Add optional peer `@zhin.js/speech`: inbound STT (`audio.strategy: transcribe` default), outbound TTS (`segment.tts` + `voice_stt`/`voice_tts` tools), TTS providers edge/openai/azure/custom. Remove `@zhin.js/plugin-voice`; use `speech:` config key instead of `voice:`.
+- Updated dependencies [c4575c9]
+  - @zhin.js/logger@1.0.72
+  - @zhin.js/kernel@1.0.1
+
+## 1.3.1
+
+### Patch Changes
+
+- 609da24: fix: 规范安全开发
+- 93e58d9: refactor: 网络策略统一、core 导出整理、Disposable 接口、Bot 图标修复
+
+  - 新增 `security/network-policy.ts` 统一 SSRF 防护、域名匹配、网络命令检测
+  - `core/index.ts` 移除死导出、统一结构
+  - 新增 `Disposable` 接口替代 `as any` dispose 调用
+  - `bridge.ts` MCP inputSchema 类型安全
+  - 脚手架依赖版本锁定（latest → ^major.minor.0）
+  - 修复 icqq/sandbox 客户端缺失 Bot 图标导入
+
+- ae5239c: fix: 核心包瘦身
+
+## 1.3.0
+
+### Minor Changes
+
+- db38da4: refactor: remove legacy Agent class (1199 lines), migrate ChatMessage → AgentMessage, extract plugin-context.ts
+
+  - Delete legacy `Agent` class and its tests from `@zhin.js/ai`
+  - Extract `userMessageToFilterText()` as standalone utility
+  - Migrate `ChatMessage` → `AgentMessage` in prompt, session-io, task-continuation modules
+  - Remove Agent-related re-exports from ai/agent/core/zhin packages
+  - Extract AsyncLocalStorage + getPlugin into `plugin-context.ts` in core
+
+### Patch Changes
+
+- Updated dependencies [db38da4]
+  - @zhin.js/ai@1.3.0
+
+## 1.2.1
+
+### Patch Changes
+
+- d8def69: fix: 性能优化
+- 2ef4896: fix: 更新概念 Bot=>Endpoint,已适配后续更多的业务场景;统一角色权限
+- Updated dependencies [d8def69]
+- Updated dependencies [2ef4896]
+  - @zhin.js/database@1.0.74
+  - @zhin.js/ai@1.2.1
+  - @zhin.js/logger@0.1.71
+  - @zhin.js/kernel@0.1.1
+
+## 1.2.0
+
+### Minor Changes
+
+- 65f4b0a: 架构优化、类型安全提升与构建系统清理
+
+  **kernel** (minor)
+
+  - PluginBase.start() 提取 `mountAllContexts()` / `mountContext()` 可覆盖钩子
+
+  **core** (minor)
+
+  - Plugin.start() 覆盖 `mountAllContexts()` 支持 Context 挂载失败回滚
+  - Plugin.stop() 委托 `super.stop()` 消除重复代码
+  - Lifecycle 事件类型化：message.receive → Message, request.receive → Request, notice.receive → Notice
+
+  **ai** (minor)
+
+  - BaseProvider 提取 `request()` 公共方法，消除 fetch/fetchText/fetchStream 80% 重复代码
+  - 修复 fetch/fetchText 的 AbortController 泄漏
+
+  **agent** (minor)
+
+  - 为 7 个模块级单例添加 reset() 函数支持测试隔离
+  - 修复 8 处 `catch (e: any)` → `catch (e: unknown)`
+
+  **host-api / plugins** (patch)
+
+  - handlers-db.ts 移除 11 处 `as never` cast，修复 11 处 catch 类型标注
+  - adapter-github / plugin-group-suite / plugin-rss 移除 inject() 的 `as any` cast
+
+### Patch Changes
+
+- e62c23a: fix: update pnpm-lock.yaml and vitest configurations- Added new dependencies for the full-bot example, including multiple Zhin.js adapters and TypeScript.- Updated the test-bot example to include '@puniyu/system-info' and other necessary packages.- Modified vitest configuration to include additional module directories for better dependency resolution.- Enhanced documentation for the KOOK adapter, including new features like typing indicators and system notifications.- Removed unused test assets and scripts from the test-bot example to streamline the project.
+- Updated dependencies [65f4b0a]
+- Updated dependencies [e62c23a]
+  - @zhin.js/kernel@0.1.0
+  - @zhin.js/ai@1.2.0
+
+## 1.1.33
+
+### Patch Changes
+
+- d8547d2: fix: ai 串行改并行
+- Updated dependencies [d8547d2]
+  - @zhin.js/kernel@0.0.50
+  - @zhin.js/ai@1.1.31
+
+## 1.1.32
+
+### Patch Changes
+
+- 3735e96: fix: 智能家居控制
+- Updated dependencies [3735e96]
+- Updated dependencies [238de62]
+  - @zhin.js/kernel@0.0.49
+  - @zhin.js/ai@1.1.30
+
+## 1.1.31
+
+### Patch Changes
+
+- c8f8207: fix: 修复内存泄露问题
+- a26e496: fix: 增加群旁听模式
+- Updated dependencies [c8f8207]
+- Updated dependencies [a26e496]
+  - @zhin.js/database@1.0.73
+  - @zhin.js/logger@0.1.70
+  - @zhin.js/schema@1.0.70
+  - @zhin.js/ai@1.1.29
+  - @zhin.js/kernel@0.0.48
+
+## 1.1.30
+
+### Patch Changes
+
+- c78d2cd: fix: cli 更新,文档更新
+- Updated dependencies [c78d2cd]
+  - @zhin.js/kernel@0.0.47
+  - @zhin.js/ai@1.1.28
+
+## 1.1.29
+
+### Patch Changes
+
+- Updated dependencies [90d9efd]
+  - @zhin.js/database@1.0.72
+  - @zhin.js/logger@0.1.69
+  - @zhin.js/schema@1.0.69
+  - @zhin.js/ai@1.1.27
+  - @zhin.js/kernel@0.0.46
+
+## 1.1.28
+
+### Patch Changes
+
+- 6295cbd: fix: @优化
+- 7e14f8d: fix: 统一发个版,优化一些列安全问题
+- 996ebb3: fix: ai 优化
+- Updated dependencies [7e14f8d]
+- Updated dependencies [996ebb3]
+  - @zhin.js/database@1.0.71
+  - @zhin.js/logger@0.1.68
+  - @zhin.js/schema@1.0.68
+  - @zhin.js/ai@1.1.26
+  - @zhin.js/kernel@0.0.45
+
+## 1.1.27
+
+### Patch Changes
+
+- @zhin.js/database@1.0.70
+- @zhin.js/logger@0.1.67
+- @zhin.js/schema@1.0.67
+- @zhin.js/ai@1.1.25
+- @zhin.js/kernel@0.0.44
+
+## 1.1.26
+
+### Patch Changes
+
+- 0db9fed: fix: deno deploy
+- f19d2e0: fix: remove multiple runtime support
+- 2d24338: fix: ai 优化
+- Updated dependencies [0db9fed]
+- Updated dependencies [f19d2e0]
+- Updated dependencies [2d24338]
+  - @zhin.js/kernel@0.0.43
+  - @zhin.js/database@1.0.69
+  - @zhin.js/logger@0.1.66
+  - @zhin.js/ai@1.1.24
+  - @zhin.js/schema@1.0.66
+
+## 1.1.25
+
+### Patch Changes
+
+- 775427e: fix: edge 支持
+- Updated dependencies [775427e]
+  - @zhin.js/kernel@0.0.42
+  - @zhin.js/database@1.0.68
+  - @zhin.js/logger@0.1.65
+  - @zhin.js/schema@1.0.65
+  - @zhin.js/ai@1.1.23
+
+## 1.1.24
+
+### Patch Changes
+
+- 32049f5: fix: init publish
+- Updated dependencies [32049f5]
+  - @zhin.js/database@1.0.67
+  - @zhin.js/logger@0.1.64
+  - @zhin.js/schema@1.0.64
+  - @zhin.js/ai@1.1.22
+  - @zhin.js/kernel@0.0.41
+
+## 1.1.23
+
+### Patch Changes
+
+- 8086ccb: fix: ai 增强/优化
+- Updated dependencies [8086ccb]
+  - @zhin.js/ai@1.1.21
+  - @zhin.js/database@1.0.66
+  - @zhin.js/logger@0.1.63
+  - @zhin.js/schema@1.0.63
+  - @zhin.js/kernel@0.0.40
+
+## 1.1.22
+
+### Patch Changes
+
+- @zhin.js/database@1.0.65
+- @zhin.js/logger@0.1.62
+- @zhin.js/schema@1.0.62
+- @zhin.js/ai@1.1.20
+- @zhin.js/kernel@0.0.39
+
+## 1.1.21
+
+### Patch Changes
+
+- @zhin.js/database@1.0.64
+- @zhin.js/logger@0.1.61
+- @zhin.js/schema@1.0.61
+- @zhin.js/ai@1.1.19
+- @zhin.js/kernel@0.0.38
+
+## 1.1.20
+
+### Patch Changes
+
+- 88caeb2: fix: ask user 护栏
+  - @zhin.js/database@1.0.63
+  - @zhin.js/logger@0.1.60
+  - @zhin.js/schema@1.0.60
+  - @zhin.js/ai@1.1.18
+  - @zhin.js/kernel@0.0.37
+
+## 1.1.19
+
+### Patch Changes
+
+- Updated dependencies [fcad030]
+  - @zhin.js/ai@1.1.17
+  - @zhin.js/database@1.0.62
+  - @zhin.js/logger@0.1.59
+  - @zhin.js/schema@1.0.59
+  - @zhin.js/kernel@0.0.36
+
+## 1.1.18
+
+### Patch Changes
+
+- Updated dependencies [cb9fbf1]
+  - @zhin.js/ai@1.1.16
+  - @zhin.js/database@1.0.61
+  - @zhin.js/logger@0.1.58
+  - @zhin.js/schema@1.0.58
+  - @zhin.js/kernel@0.0.35
+
+## 1.1.17
+
+### Patch Changes
+
+- Updated dependencies [efad4ef]
+  - @zhin.js/ai@1.1.15
+  - @zhin.js/database@1.0.60
+  - @zhin.js/logger@0.1.57
+  - @zhin.js/schema@1.0.57
+  - @zhin.js/kernel@0.0.34
+
+## 1.1.16
+
+### Patch Changes
+
+- c9dec38: fix: ai 架构优化,文档更新
+- Updated dependencies [c9dec38]
+  - @zhin.js/kernel@0.0.33
+  - @zhin.js/ai@1.1.14
+  - @zhin.js/database@1.0.59
+  - @zhin.js/logger@0.1.56
+  - @zhin.js/schema@1.0.56
+
+## 1.1.15
+
+### Patch Changes
+
+- @zhin.js/database@1.0.58
+- @zhin.js/logger@0.1.55
+- @zhin.js/schema@1.0.55
+- @zhin.js/ai@1.1.13
+- @zhin.js/kernel@0.0.32
+
+## 1.1.14
+
+### Patch Changes
+
+- e28fd7c: fix: 重新发版
+- Updated dependencies [e28fd7c]
+  - @zhin.js/database@1.0.57
+  - @zhin.js/logger@0.1.54
+  - @zhin.js/schema@1.0.54
+  - @zhin.js/ai@1.1.12
+  - @zhin.js/kernel@0.0.31
+
+## 1.1.13
+
+### Patch Changes
+
+- 4304825: fix: 重新发版
+- Updated dependencies [4304825]
+  - @zhin.js/database@1.0.56
+  - @zhin.js/logger@0.1.53
+  - @zhin.js/schema@1.0.53
+  - @zhin.js/ai@1.1.11
+  - @zhin.js/kernel@0.0.30
+
+## 1.1.12
+
+### Patch Changes
+
+- Updated dependencies [bcd56d5]
+  - @zhin.js/database@1.0.56
+  - @zhin.js/logger@0.1.53
+  - @zhin.js/schema@1.0.53
+  - @zhin.js/ai@1.1.11
+  - @zhin.js/kernel@0.0.30
+
+## 1.1.11
+
+### Patch Changes
+
+- 7b0227a: fix: ai 优化,定时任务优化
+
+## 1.1.10
+
+### Patch Changes
+
+- d0250e8: fix: 修复 onebot11 的反向 bug,优化 cli
+  - @zhin.js/database@1.0.55
+  - @zhin.js/logger@0.1.52
+  - @zhin.js/schema@1.0.52
+  - @zhin.js/ai@1.1.10
+  - @zhin.js/kernel@0.0.29
+
+## 1.1.9
+
+### Patch Changes
+
+- 0eba6d6: fix: 完善生命周期,确保生产稳定
+- Updated dependencies [0eba6d6]
+  - @zhin.js/ai@1.1.9
+  - @zhin.js/database@1.0.54
+  - @zhin.js/logger@0.1.51
+  - @zhin.js/schema@1.0.51
+  - @zhin.js/kernel@0.0.28
+
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [9aa08c3]
+  - @zhin.js/ai@1.1.8
+  - @zhin.js/database@1.0.53
+  - @zhin.js/logger@0.1.50
+  - @zhin.js/schema@1.0.50
+  - @zhin.js/kernel@0.0.27
+
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [d73a3b7]
+  - @zhin.js/ai@1.1.7
+  - @zhin.js/database@1.0.52
+  - @zhin.js/logger@0.1.49
+  - @zhin.js/schema@1.0.49
+  - @zhin.js/kernel@0.0.26
+
+## 1.1.6
+
+### Patch Changes
+
+- 9577eba: fix: tool 收集 bug,升级 ts 到 6.0.2
+- Updated dependencies [9577eba]
+  - @zhin.js/database@1.0.51
+  - @zhin.js/logger@0.1.48
+  - @zhin.js/schema@1.0.48
+  - @zhin.js/ai@1.1.6
+  - @zhin.js/kernel@0.0.25
+
+## 1.1.5
+
+### Patch Changes
+
+- @zhin.js/database@1.0.50
+- @zhin.js/logger@0.1.47
+- @zhin.js/schema@1.0.47
+- @zhin.js/ai@1.1.5
+- @zhin.js/kernel@0.0.24
+
+## 1.1.4
+
+### Patch Changes
+
+- @zhin.js/database@1.0.49
+- @zhin.js/logger@0.1.46
+- @zhin.js/schema@1.0.46
+- @zhin.js/ai@1.1.4
+- @zhin.js/kernel@0.0.23
+
+## 1.1.3
+
+### Patch Changes
+
+- @zhin.js/database@1.0.48
+- @zhin.js/logger@0.1.45
+- @zhin.js/schema@1.0.45
+- @zhin.js/ai@1.1.3
+- @zhin.js/kernel@0.0.22
+
+## 1.1.2
+
+### Patch Changes
+
+- 5073d4c: chore: chore: update TypeScript version to ^5.9.3 across all plugins and packages
+  feat: enhance ai-text-as-image output registration with off handler for cleanup
+  fix: remove unnecessary logging in ensureBuiltinFontsCached function
+  refactor: simplify action handlers in html-renderer tools
+  chore: add README files for queue-sandbox-poc and event-delivery packages
+  chore: adjust pnpm workspace configuration to exclude games directory
+  chore: update tsconfig to include plugins directory for TypeScript compilation
+- Updated dependencies [5073d4c]
+  - @zhin.js/kernel@0.0.21
+  - @zhin.js/database@1.0.47
+  - @zhin.js/logger@0.1.44
+  - @zhin.js/schema@1.0.44
+  - @zhin.js/ai@1.1.2
+
+## 1.1.1
+
+### Patch Changes
+
+- c212bf7: fix: 适配器优化
+- Updated dependencies [c212bf7]
+  - @zhin.js/database@1.0.46
+  - @zhin.js/logger@0.1.43
+  - @zhin.js/schema@1.0.43
+  - @zhin.js/ai@1.1.1
+  - @zhin.js/kernel@0.0.20
+
+## 1.1.0
+
+### Minor Changes
+
+- 8280fe7: feat: ModelRegistry 模型自动发现与智能选择
+
+  - 新增 ModelRegistry：自动发现 Provider 可用模型，Tier 评分（0-100）智能排序
+  - 支持 Ollama 详细元数据（参数量、量化）和 OpenAI 兼容 API 启发式推断
+  - 支持 API 聚合/中转服务的 prefix/model-name 格式（如 9router）
+  - providers.models 配置现为可选 — 框架自动发现并按评分排序
+  - 新增 chatModel / visionModel 配置项，留空自动选择最优模型
+  - 自动模型降级：Chat / Vision / Agent 三条路径均支持失败自动切换
+  - Agent 新增 modelFallbacks 配置和 chatWithFallback() 降级引擎
+
+### Patch Changes
+
+- Updated dependencies [8280fe7]
+  - @zhin.js/ai@1.1.0
+  - @zhin.js/database@1.0.45
+  - @zhin.js/logger@0.1.42
+  - @zhin.js/schema@1.0.42
+  - @zhin.js/kernel@0.0.19
+
+## 1.0.57
+
+### Patch Changes
+
+- c606a57: fix: ask_user 优化
+  - @zhin.js/database@1.0.44
+  - @zhin.js/logger@0.1.41
+  - @zhin.js/schema@1.0.41
+  - @zhin.js/ai@1.0.18
+  - @zhin.js/kernel@0.0.18
+
+## 1.0.56
+
+### Patch Changes
+
+- Updated dependencies [20ab379]
+  - @zhin.js/ai@1.0.17
+  - @zhin.js/database@1.0.43
+  - @zhin.js/logger@0.1.40
+  - @zhin.js/schema@1.0.40
+  - @zhin.js/kernel@0.0.17
+
+## 1.0.55
+
+### Patch Changes
+
+- 75709e1: fix: ai 强化,文档梳理
+  - @zhin.js/database@1.0.42
+  - @zhin.js/logger@0.1.39
+  - @zhin.js/schema@1.0.39
+  - @zhin.js/ai@1.0.16
+  - @zhin.js/kernel@0.0.16
+
+## 1.0.54
+
+### Patch Changes
+
+- 16c8f92: fix: 统一发一次版
+- Updated dependencies [16c8f92]
+  - @zhin.js/database@1.0.41
+  - @zhin.js/logger@0.1.38
+  - @zhin.js/schema@1.0.38
+  - @zhin.js/ai@1.0.15
+  - @zhin.js/kernel@0.0.15
+
+## 1.0.53
+
+### Patch Changes
+
+- Updated dependencies [daee7f6]
+  - @zhin.js/database@1.0.40
+  - @zhin.js/logger@0.1.37
+  - @zhin.js/schema@1.0.37
+  - @zhin.js/ai@1.0.14
+  - @zhin.js/kernel@0.0.14
+
+## 1.0.52
+
+### Patch Changes
+
+- bb6bfa8: feat: MessageDispatcher 双轨分流（指令+AI）、出站润色管道；技能扫描含插件包 `skills/`
+- bb6bfa8: feat: 技能全面文件化——仓库内插件/适配器使用 `skills/<name>/SKILL.md`；Core 已移除 `plugin.declareSkill` / `Adapter.declareSkill` API
+  - @zhin.js/database@1.0.39
+  - @zhin.js/logger@0.1.36
+  - @zhin.js/schema@1.0.36
+  - @zhin.js/ai@1.0.13
+  - @zhin.js/kernel@0.0.13
+
+## 1.0.51
+
+### Patch Changes
+
+- @zhin.js/database@1.0.38
+- @zhin.js/logger@0.1.35
+- @zhin.js/schema@1.0.35
+- @zhin.js/ai@1.0.12
+- @zhin.js/kernel@0.0.12
+
+## 1.0.50
+
+### Patch Changes
+
+- @zhin.js/database@1.0.37
+- @zhin.js/logger@0.1.34
+- @zhin.js/schema@1.0.34
+- @zhin.js/ai@1.0.11
+- @zhin.js/kernel@0.0.11
+
+## 1.0.49
+
+### Patch Changes
+
+- b00b6c9: fix: 代码逃逸拦截增强
+- Updated dependencies [b00b6c9]
+  - @zhin.js/kernel@0.0.10
+  - @zhin.js/database@1.0.36
+  - @zhin.js/logger@0.1.33
+  - @zhin.js/schema@1.0.33
+  - @zhin.js/ai@1.0.10
+
+## 1.0.48
+
+### Patch Changes
+
+- 7d09e5e: fix: 代码安全漏洞修复
+- Updated dependencies [7d09e5e]
+  - @zhin.js/kernel@0.0.9
+  - @zhin.js/database@1.0.35
+  - @zhin.js/logger@0.1.32
+  - @zhin.js/schema@1.0.32
+  - @zhin.js/ai@1.0.9
+
+## 1.0.47
+
+### Patch Changes
+
+- de3e352: fix: 新增 request 和 notice 抽象,新增消息过滤支持
+  - @zhin.js/database@1.0.34
+  - @zhin.js/logger@0.1.31
+  - @zhin.js/schema@1.0.31
+  - @zhin.js/ai@1.0.8
+  - @zhin.js/kernel@0.0.8
+
+## 1.0.46
+
+### Patch Changes
+
+- 7394603: fix: cli 优化, windows 用户体验优化
+  fix: 新增消息过滤系统
+- Updated dependencies [7394603]
+  - @zhin.js/ai@1.0.7
+  - @zhin.js/database@1.0.33
+  - @zhin.js/logger@0.1.30
+  - @zhin.js/schema@1.0.30
+  - @zhin.js/kernel@0.0.7
+
+## 1.0.45
+
+### Patch Changes
+
+- 63b83ef: fix: 自定义 schema
+- Updated dependencies [63b83ef]
+  - @zhin.js/ai@1.0.6
+  - @zhin.js/database@1.0.32
+  - @zhin.js/logger@0.1.29
+  - @zhin.js/schema@1.0.29
+  - @zhin.js/kernel@0.0.6
+
+## 1.0.44
+
+### Patch Changes
+
+- @zhin.js/database@1.0.31
+- @zhin.js/logger@0.1.28
+- @zhin.js/schema@1.0.28
+- @zhin.js/ai@1.0.5
+- @zhin.js/kernel@0.0.5
+
+## 1.0.43
+
+### Patch Changes
+
+- 72ec4ba: fix: 新增插件,控制台调优
+  - @zhin.js/database@1.0.30
+  - @zhin.js/logger@0.1.27
+  - @zhin.js/schema@1.0.27
+  - @zhin.js/ai@1.0.4
+  - @zhin.js/kernel@0.0.4
+
+## 1.0.42
+
+### Patch Changes
+
+- Updated dependencies [0999ca6]
+  - @zhin.js/ai@1.0.3
+  - @zhin.js/database@1.0.29
+  - @zhin.js/logger@0.1.26
+  - @zhin.js/schema@1.0.26
+  - @zhin.js/kernel@0.0.3
+
+## 1.0.41
+
+### Patch Changes
+
+- 5a68249: fix: 文档优化
+  - @zhin.js/database@1.0.28
+  - @zhin.js/logger@0.1.25
+  - @zhin.js/schema@1.0.25
+  - @zhin.js/ai@1.0.2
+  - @zhin.js/kernel@0.0.2
+
+## 1.0.40
+
+### Patch Changes
+
+- 7ef9057: fix: 架构调整优化
+  - @zhin.js/database@1.0.27
+  - @zhin.js/logger@0.1.24
+  - @zhin.js/schema@1.0.24
+  - @zhin.js/ai@1.0.1
+  - @zhin.js/kernel@0.0.1
+
+## 1.0.39
+
+### Patch Changes
+
+- 04f76ac: fix: 工具命名格式优化
+  - @zhin.js/database@1.0.26
+  - @zhin.js/logger@0.1.23
+  - @zhin.js/schema@1.0.23
+
+## 1.0.38
+
+### Patch Changes
+
+- ab5c54a: fix: ai 架构优化
+  - @zhin.js/database@1.0.25
+  - @zhin.js/logger@0.1.22
+  - @zhin.js/schema@1.0.22
+
+## 1.0.37
+
+### Patch Changes
+
+- a8ce720: fix: ai 优化,github 优化
+  - @zhin.js/database@1.0.24
+  - @zhin.js/logger@0.1.21
+  - @zhin.js/schema@1.0.21
+
+## 1.0.36
+
+### Patch Changes
+
+- 6d94111: fix: 增加 github 适配器,更改 auth 为 token auth
+  - @zhin.js/database@1.0.23
+  - @zhin.js/logger@0.1.20
+  - @zhin.js/schema@1.0.20
+
+## 1.0.35
+
+### Patch Changes
+
+- 8502351: fix: token 优化
+  - @zhin.js/database@1.0.22
+  - @zhin.js/logger@0.1.19
+  - @zhin.js/schema@1.0.19
+
+## 1.0.34
+
+### Patch Changes
+
+- 634e2d7: fix: ai 强化
+  - @zhin.js/database@1.0.21
+  - @zhin.js/logger@0.1.18
+  - @zhin.js/schema@1.0.18
+
+## 1.0.33
+
+### Patch Changes
+
+- 4abae79: fix: msg compile
+  - @zhin.js/database@1.0.20
+  - @zhin.js/logger@0.1.17
+  - @zhin.js/schema@1.0.17
+
+## 1.0.32
+
+### Patch Changes
+
+- 10d8bdc: fix: win 下 dev 错误
+  - @zhin.js/database@1.0.19
+  - @zhin.js/logger@0.1.16
+  - @zhin.js/schema@1.0.16
+
+## 1.0.31
+
+### Patch Changes
+
+- 771706d: fix: 技能优化
+  - @zhin.js/database@1.0.18
+  - @zhin.js/logger@0.1.15
+  - @zhin.js/schema@1.0.15
+
+## 1.0.30
+
+### Patch Changes
+
+- @zhin.js/database@1.0.17
+- @zhin.js/logger@0.1.14
+- @zhin.js/schema@1.0.14
+
+## 1.0.29
+
+### Patch Changes
+
+- 4ec9176: fix: ai
+  - @zhin.js/database@1.0.16
+  - @zhin.js/logger@0.1.13
+  - @zhin.js/schema@1.0.13
+
+## 1.0.28
+
+### Patch Changes
+
+- 05a514d: fix: ai 增强,cli 增强
+  - @zhin.js/database@1.0.15
+  - @zhin.js/logger@0.1.12
+  - @zhin.js/schema@1.0.12
+
+## 1.0.27
+
+### Patch Changes
+
+- b27e633: fix: cli 优化
+  - @zhin.js/database@1.0.14
+  - @zhin.js/logger@0.1.11
+  - @zhin.js/schema@1.0.11
+
+## 1.0.26
+
+### Patch Changes
+
+- 106d357: fix: ai
+- Updated dependencies [106d357]
+  - @zhin.js/database@1.0.13
+  - @zhin.js/logger@0.1.10
+  - @zhin.js/schema@1.0.10
+
+## 1.0.25
+
+### Patch Changes
+
+- 26d2942: fix: ai
+- 6b02c41: fix: ai
+- Updated dependencies [26d2942]
+- Updated dependencies [6b02c41]
+  - @zhin.js/database@1.0.12
+  - @zhin.js/logger@0.1.9
+  - @zhin.js/schema@1.0.9
+
+## 1.0.24
+
+### Patch Changes
+
+- 6108e5d: fix: component
+  - @zhin.js/database@1.0.11
+  - @zhin.js/logger@0.1.8
+  - @zhin.js/schema@1.0.8
+
+## 1.0.23
+
+### Patch Changes
+
+- 52ae08a: fix: 更新消息处理流程
+  - @zhin.js/database@1.0.10
+  - @zhin.js/logger@0.1.7
+  - @zhin.js/schema@1.0.7
+
+## 1.0.22
+
+### Patch Changes
+
+- @zhin.js/database@1.0.9
+- @zhin.js/logger@0.1.6
+- @zhin.js/schema@1.0.6
+
+## 1.0.21
+
+### Patch Changes
+
+- 3960e70: fix: runtime err
+  - @zhin.js/database@1.0.8
+  - @zhin.js/logger@0.1.5
+  - @zhin.js/schema@1.0.5
+
+## 1.0.20
+
+### Patch Changes
+
+- 5141137: fix: 修复适配器读取配置 bug
+- Updated dependencies [a3b7673]
+  - @zhin.js/dependency@1.0.5
+  - @zhin.js/database@1.0.7
+  - @zhin.js/logger@0.1.4
+  - @zhin.js/schema@1.0.4
+
+## 1.0.19
+
+### Patch Changes
+
+- f9faa1d: fix: test release
+- Updated dependencies [f9faa1d]
+  - @zhin.js/database@1.0.6
+  - @zhin.js/dependency@1.0.4
+  - @zhin.js/logger@0.1.3
+  - @zhin.js/schema@1.0.3
+
+## 1.0.18
+
+### Patch Changes
+
+- d16a69c: fix: test trust publish
+- Updated dependencies [d16a69c]
+  - @zhin.js/database@1.0.5
+  - @zhin.js/dependency@1.0.3
+  - @zhin.js/logger@0.1.2
+  - @zhin.js/schema@1.0.2
+
+## 1.0.17
+
+### Patch Changes
+
+- 3bc5d56: fix: 内存优化
+- Updated dependencies [3bc5d56]
+  - @zhin.js/hmr@1.0.8
+
+## 1.0.16
+
+### Patch Changes
+
+- e733fab: fix: 异步组件优化
+
+## 1.0.15
+
+### Patch Changes
+
+- f9e75ce: fix: 一致性调整,文档调整
+- e783f90: fix:保护 bun
+- f9e75ce: fix: recall,文档统一,mcp,githubnotifiy
+
+## 1.0.14
+
+### Patch Changes
+
+- 547028f: fix: 优化包结构,优化客户端支持
+- Updated dependencies [547028f]
+  - @zhin.js/database@1.0.4
+  - @zhin.js/hmr@1.0.7
+
+## 1.0.13
+
+### Patch Changes
+
+- a2e1ebc: fix: 优化监听
+- Updated dependencies [a2e1ebc]
+  - @zhin.js/hmr@1.0.6
+
+## 1.0.12
+
+### Patch Changes
+
+- ff5a7ed: fix: 文件监听
+- Updated dependencies [ff5a7ed]
+  - @zhin.js/hmr@1.0.5
+
+## 1.0.11
+
+### Patch Changes
+
+- Updated dependencies [ae680db]
+  - @zhin.js/hmr@1.0.4
+
+## 1.0.10
+
+### Patch Changes
+
+- c8c3996: fix: 修复 segment-matcher
+- Updated dependencies [c8c3996]
+  - @zhin.js/logger@0.1.1
+  - @zhin.js/hmr@1.0.3
+
+## 1.0.9
+
+### Patch Changes
+
+- c490260: fix: 更新脚手架结构,优化包依赖
+
+## 1.0.8
+
+### Patch Changes
+
+- 551c4d2: fix: 插件支持配置文件读取,优化 test 用例
+- Updated dependencies [551c4d2]
+  - @zhin.js/database@1.0.3
+  - @zhin.js/hmr@1.0.2
+
+## 1.0.7
+
+### Patch Changes
+
+- 47845fb: fix: err
+- Updated dependencies [47845fb]
+  - @zhin.js/database@1.0.2
+
+## 1.0.6
+
+### Patch Changes
+
+- c2d9047: fix: 重复插件 bug
+- c2d9047: fix: 优化中间件逻辑
+
+## 1.0.5
+
+### Patch Changes
+
+- f347667: fix: runtime error
+
+## 1.0.4
+
+### Patch Changes
+
+- 15be776: fix: 修改 cli 错误,增加 permit
+
+## 1.0.3
+
+### Patch Changes
+
+- 89bc676: fix: 类型反射优化
+- Updated dependencies [727963c]
+  - @zhin.js/database@1.0.1
+  - @zhin.js/hmr@1.0.1
+
+## 1.0.2
+
+### Patch Changes
+
+- 15fc934: fix: 支持 jsx
+- 3ecd487: fix: 函数式组件,更新文档
+
+## 1.0.1
+
+### Patch Changes
+
+- efdd58a: fix: init
+- Updated dependencies [efdd58a]
+  - @zhin.js/hmr@1.0.1
