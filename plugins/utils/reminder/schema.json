@@ -1,0 +1,69 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "timezone": {
+      "type": "string",
+      "description": "解释 create 自然时间并显示提醒的 IANA 时区；ISO 绝对时间仍须显式 offset",
+      "default": "UTC",
+      "x-zhin-config": {
+        "effect": "reload"
+      }
+    },
+    "maxTasks": {
+      "type": "number",
+      "description": "每实例聊天个人提醒池的活跃任务上限；与管理员池独立，降低上限不删除既有任务",
+      "default": 20,
+      "minimum": 1,
+      "maximum": 32,
+      "multipleOf": 1,
+      "x-zhin-config": {
+        "effect": "reload"
+      }
+    },
+    "adminMaxTasks": {
+      "type": "number",
+      "description": "每实例管理员提醒池的活跃任务上限（待执行、暂停或未确认）；与聊天池独立，两池总量可达上限之和",
+      "default": 20,
+      "minimum": 1,
+      "maximum": 32,
+      "multipleOf": 1,
+      "x-zhin-config": {
+        "effect": "reload"
+      }
+    },
+    "maxTasksPerSender": {
+      "type": "number",
+      "description": "同一发送者在同一会话的任务上限",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 10,
+      "multipleOf": 1,
+      "x-zhin-config": {
+        "effect": "reload"
+      }
+    },
+    "batchSize": {
+      "type": "number",
+      "description": "每次扫描最多投递的任务数",
+      "default": 5,
+      "minimum": 1,
+      "maximum": 5,
+      "multipleOf": 1,
+      "x-zhin-config": {
+        "effect": "reload"
+      }
+    },
+    "missedGraceSeconds": {
+      "type": "number",
+      "description": "周期轮次超过此延迟后跳过；停机期间不补历史轮次",
+      "default": 15,
+      "minimum": 5,
+      "maximum": 60,
+      "multipleOf": 1,
+      "x-zhin-config": {
+        "effect": "reload"
+      }
+    }
+  }
+}

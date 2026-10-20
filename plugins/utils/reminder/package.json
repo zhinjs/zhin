@@ -19,7 +19,8 @@
     "plugin.js",
     "schedules",
     "skills",
-    "src"
+    "src",
+    "schema.json"
   ],
   "scripts": {
     "build": "tsc",

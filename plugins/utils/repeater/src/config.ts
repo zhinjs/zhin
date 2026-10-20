@@ -6,7 +6,7 @@ export const DEFAULT_REPEATER_CONFIG = Object.freeze({
   maxLength: 200,
 });
 
-/** Runtime validation, inferred types and Console forms share this declaration. */
+/** Authoring declaration; scripts/sync-plugin-config-schemas.mjs generates the packaged schema.json for Runtime and Console. */
 export const repeaterConfig = Schema.object({
   threshold: Schema.number().min(2).max(10).step(1).default(DEFAULT_REPEATER_CONFIG.threshold).description('触发复读的最少人数').effect('reload'),
   cooldown: Schema.number().min(5_000).max(300_000).default(DEFAULT_REPEATER_CONFIG.cooldown).description('同一群冷却时间 (ms)').effect('reload'),

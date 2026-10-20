@@ -175,9 +175,7 @@ export class ConsoleConfigurationStore {
 
   async #listKeys(document: RuntimeConfigDocument): Promise<string[]> {
     const keys = new Set<string>(Object.keys(readPluginConfigurationMap(document)));
-    for (const key of HOST_CONFIG_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(document, key)) keys.add(key);
-    }
+    for (const key of HOST_CONFIG_KEYS) keys.add(key);
     for (const key of (await readPluginPackageMap(this.#projectRoot, document)).keys()) keys.add(key);
     return [...keys].sort((left, right) => left.localeCompare(right));
   }

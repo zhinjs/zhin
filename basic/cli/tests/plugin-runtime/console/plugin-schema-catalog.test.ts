@@ -51,7 +51,7 @@ async function createProject(): Promise<string> {
 }
 
 function expectField(field: string): unknown {
-  return { type: 'object', object: { [field]: { type: 'string', key: field, required: true } } };
+  return { type: 'object', additional: { type: 'any' }, object: { [field]: { type: 'string', key: field, required: true } } };
 }
 
 describe('PluginSchemaCatalog', () => {
@@ -169,12 +169,12 @@ describe('PluginSchemaCatalog', () => {
     expect(reads).toBe(2);
   });
 
-  it('rejects unsupported committed schemas before displaying a partial form', async () => {
+  it('projects committed union declarations without rejecting the entire form', async () => {
     const root = await realpath(await createProject());
     const catalog = new PluginSchemaCatalog(root, () => new Map([[root, {
       type: 'object', properties: { value: { anyOf: [{ type: 'string' }, { type: 'number' }] } },
     }]]));
-    await expect(catalog.read('plugin')).rejects.toThrow('not supported by Console forms');
+    await expect(catalog.read('plugin')).resolves.toMatchObject({ object: { value: { type: 'union', list: [{ type: 'string' }, { type: 'number' }] } } });
   });
 
   it('does not let the root alias shadow a declared root child instance', async () => {
@@ -320,62 +320,33 @@ describe('PluginSchemaCatalog', () => {
     await expect(new PluginSchemaCatalog(root).read('plugin')).resolves.toEqual(schema);
   });
 
-  it.each(['$ref', 'anyOf', 'oneOf', 'allOf', 'prefixItems'])(
-    'rejects unsupported %s even beside supported properties and at nested locations', async (keyword) => {
-      const root = await createProject();
-      const catalog = new PluginSchemaCatalog(root);
-      const unsupported = keyword === '$ref' ? '#/$defs/token' : [{ type: 'string' }];
-      const simple = { type: 'object', properties: { token: { type: 'string' } } };
-      for (const schema of [
-        { ...simple, [keyword]: unsupported },
-        { ...simple, properties: { token: { type: 'string', [keyword]: unsupported } } },
-        { ...simple, properties: { targets: { type: 'array', items: { [keyword]: unsupported } } } },
-        { type: 'object', object: { token: { type: 'string', [keyword]: unsupported } } },
-      ]) {
-        await writeFile(join(root, 'schema.json'), JSON.stringify(schema));
-        await expect(catalog.read('plugin')).rejects.toThrow(`${keyword} is not supported by Console forms`);
-        await expect(catalog.readAll(['plugin'])).rejects.toThrow(`${keyword} is not supported by Console forms`);
-      }
-    },
-  );
-
-  it('rejects JSON Schema tuple prefixItems instead of converting the array to an unconstrained list', async () => {
+  it('keeps cyclic and external references local to the affected field', async () => {
     const root = await createProject();
-    await writeFile(join(root, 'schema.json'), JSON.stringify({
-      type: 'object', properties: {
-        pair: { type: 'array', prefixItems: [{ type: 'string' }, { type: 'number' }] },
-      },
-    }));
-    await expect(new PluginSchemaCatalog(root).read('plugin')).rejects.toThrow(
-      'schema.json for plugin.properties.pair.prefixItems is not supported by Console forms',
-    );
+    await writeFile(join(root, 'schema.json'), JSON.stringify({ type: 'object', properties: {
+      okay: { type: 'string' }, external: { $ref: 'https://example.invalid/schema' }, recursive: { $ref: '#/$defs/loop' },
+    }, $defs: { loop: { $ref: '#/$defs/loop' } } }));
+    await expect(new PluginSchemaCatalog(root).read('plugin')).resolves.toMatchObject({ object: {
+      okay: { type: 'string' }, external: { type: 'any', reason: 'external-reference' }, recursive: { type: 'any', reason: 'cyclic-reference' },
+    } });
   });
 
-  it('rejects legacy tuple items instead of presenting arbitrary list values as valid', async () => {
-    const root = await createProject();
-    await writeFile(join(root, 'schema.json'), JSON.stringify({
-      type: 'object', properties: {
-        pair: { type: 'array', items: [{ type: 'string' }, { type: 'number' }] },
-      },
-    }));
-    const catalog = new PluginSchemaCatalog(root);
-    await expect(catalog.read('plugin')).rejects.toThrow(
-      'schema.json for plugin.properties.pair.items tuple schemas are not supported by Console forms',
-    );
-    await expect(catalog.readAll(['plugin'])).rejects.toThrow('.items tuple schemas are not supported');
+  it.each([false, true])('supports JSON Schema tuple forms, legacy=%j', async legacy => {
+    const root = await createProject(), list = [{ type: 'string' }, { type: 'number' }];
+    await writeFile(join(root, 'schema.json'), JSON.stringify({ type: 'object', properties: {
+      pair: { type: 'array', ...(legacy ? { items: list, additionalItems: false } : { prefixItems: list, items: false }) },
+    } }));
+    await expect(new PluginSchemaCatalog(root).read('plugin')).resolves.toMatchObject({ object: {
+      pair: { type: 'tuple', list, inner: false },
+    } });
   });
 
-  it.each([false, true])('rejects patternProperties alongside ordinary fields, nested=%j', async (nested) => {
+  it.each([false, true])('keeps unsupported dynamic-key semantics at their own field, nested=%j', async nested => {
     const root = await createProject();
-    const constrained = {
-      type: 'object', properties: { token: { type: 'string' } },
-      patternProperties: { '^extra_': { type: 'string' } },
-    };
-    await writeFile(join(root, 'schema.json'), JSON.stringify(nested
-      ? { type: 'object', properties: { config: constrained } } : constrained));
-    const catalog = new PluginSchemaCatalog(root);
-    await expect(catalog.read('plugin')).rejects.toThrow('patternProperties is not supported by Console forms');
-    await expect(catalog.readAll(['plugin'])).rejects.toThrow('patternProperties is not supported by Console forms');
+    const constrained = { type: 'object', properties: { token: { type: 'string' } }, patternProperties: { '^extra_': { type: 'string' } } };
+    await writeFile(join(root, 'schema.json'), JSON.stringify(nested ? { type: 'object', properties: { config: constrained, okay: { type: 'number' } } } : constrained));
+    await expect(new PluginSchemaCatalog(root).read('plugin')).resolves.toMatchObject(nested ? { object: {
+      config: { type: 'any', reason: 'unsupported-construct' }, okay: { type: 'number' },
+    } } : { type: 'any', reason: 'unsupported-construct' });
   });
 
   it.each([true, false])('rejects JSON Schema required boolean %j while native flags remain supported', async (required) => {
@@ -413,10 +384,9 @@ describe('PluginSchemaCatalog', () => {
   );
 
   it.each([
-    '{', 'null', '[]', 'true', '{"type":"string"}', '{"properties":[]}', '{"$ref":"#/$defs/config"}',
+    '{', 'null', '[]', 'true', '{"type":"string"}', '{"properties":[]}', '{"$ref":42}',
     '{"properties":{"requiredField":42},"required":["requiredField"]}',
     '{"properties":{"secret":[]}}',
-    '{"properties":{"secret":false}}',
     '{"properties":{"nested":{"type":"object","properties":{"secret":42}}}}',
     '{"properties":{"list":{"type":"array","items":42}}}',
     '{"additionalProperties":42}',

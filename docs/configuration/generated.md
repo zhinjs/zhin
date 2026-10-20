@@ -23,7 +23,65 @@ outline: [2, 3]
 | `http.readiness.endpoints[].owner` | string | 是 | — | — |
 | `http.readiness.endpoints[].name` | string | 是 | — | — |
 | `http.readiness.agents` | array&lt;string&gt; | 否 | — | 必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。 |
+| `http.host` | string \| null | 否 | — | 监听地址。 |
+| `http.port` | number \| string \| null | 否 | — | 监听端口。 |
+| `http.token` | string \| null | 否 | — | HTTP Host 访问令牌。 |
+| `http.tokens` | array \| null | 否 | — | — |
+| `http.corsOrigins` | array \| null | 否 | — | — |
+| `http.base` | string \| null | 否 | — | API 路径前缀。 |
+| `http.tls` | `false` \| null \| object | 否 | — | — |
+| `http.listeners` | array&lt;object&gt; | 否 | — | — |
+| `http.listeners[].enabled` | boolean \| string | 否 | — | 是否启用此监听器。 |
+| `http.listeners[].host` | string | 否 | — | 监听地址。 |
+| `http.listeners[].port` | number \| string | 否 | — | 监听端口。 |
+| `http.listeners[].tls` | `false` \| null \| object | 否 | — | — |
 | `database` | object | 否 | — | Database Host 与方言连接参数。 |
+| `database.dialect` | string | 否 | — | 数据库方言。 |
+| `database.filename` | string | 否 | — | SQLite 文件路径。 |
+| `database.mode` | string | 否 | — | SQLite 兼容模式字段。 |
+| `database.host` | string | 否 | — | 数据库主机。 |
+| `database.port` | number \| string | 否 | — | 网络数据库端口。 |
+| `database.user` | string | 否 | — | MySQL / PostgreSQL 用户名。 |
+| `database.username` | string | 否 | — | Redis 用户名。 |
+| `database.password` | string | 否 | — | 连接密码。 |
+| `database.database` | string \| number | 否 | — | MySQL / PostgreSQL 数据库名，或 Redis 数据库索引。 |
+| `database.uri` | string | 否 | — | MySQL 连接 URI（可能含凭据）。 |
+| `database.connectionString` | string | 否 | — | PostgreSQL 连接串（可能含凭据）。 |
+| `database.url` | string | 否 | — | MongoDB / Redis 连接 URL（可能含凭据）。 |
+| `database.dbName` | string | 否 | — | MongoDB 数据库名。 |
+| `database.pool` | object \| null | 否 | — | — |
+| `database.pool.min` | number \| string \| null | 否 | — | 最少连接数。 |
+| `database.pool.max` | number \| string \| null | 否 | — | 最多连接数。 |
+| `database.pool.acquireTimeoutMillis` | number \| string \| null | 否 | — | 获取连接超时毫秒。 |
+| `database.pool.idleTimeoutMillis` | number \| string \| null | 否 | — | 空闲连接超时毫秒。 |
+| `database.socket` | object | 否 | — | — |
+| `database.socket.host` | string | 否 | — | Redis 主机。 |
+| `database.socket.port` | number \| string | 否 | — | Redis 端口。 |
+| `database.socket.path` | string | 否 | — | Unix socket 路径。 |
+| `database.socket.connectTimeout` | number \| string | 否 | — | 连接超时毫秒。 |
+| `database.socket.tls` | boolean \| string | 否 | — | 启用 TLS。 |
+| `database.socket.keepAlive` | number \| string | 否 | — | TCP keep-alive 毫秒。 |
+| `database.socket.noDelay` | boolean \| string | 否 | — | TCP noDelay。 |
+| `database.ssl` | boolean \| string \| object | 否 | — | — |
+| `database.charset` | string | 否 | — | MySQL 字符集。 |
+| `database.timezone` | string | 否 | — | MySQL 时区。 |
+| `database.connectTimeout` | number \| string | 否 | — | MySQL 连接超时毫秒。 |
+| `database.connectionTimeoutMillis` | number \| string | 否 | — | PostgreSQL 连接超时毫秒。 |
+| `database.query_timeout` | number \| string | 否 | — | PostgreSQL 查询超时毫秒。 |
+| `database.statement_timeout` | number \| string | 否 | — | PostgreSQL statement 超时毫秒。 |
+| `database.application_name` | string | 否 | — | PostgreSQL 应用名称。 |
+| `database.maxPoolSize` | number \| string | 否 | — | MongoDB 最大连接池大小。 |
+| `database.minPoolSize` | number \| string | 否 | — | MongoDB 最小连接池大小。 |
+| `database.serverSelectionTimeoutMS` | number \| string | 否 | — | MongoDB server 选择超时毫秒。 |
+| `database.connectTimeoutMS` | number \| string | 否 | — | MongoDB 连接超时毫秒。 |
+| `database.socketTimeoutMS` | number \| string | 否 | — | MongoDB socket 超时毫秒。 |
+| `database.authSource` | string | 否 | — | MongoDB 认证数据库。 |
+| `database.replicaSet` | string | 否 | — | MongoDB 副本集。 |
+| `database.auth` | object | 否 | — | — |
+| `database.auth.username` | string | 否 | — | MongoDB 用户名。 |
+| `database.auth.password` | string | 否 | — | MongoDB 密码。 |
+| `database.disableOfflineQueue` | boolean \| string | 否 | — | Redis 禁止离线队列。 |
+| `database.pingInterval` | number \| string | 否 | — | Redis 心跳间隔毫秒。 |
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
 | `ai.decisions` | object | 否 | — | 可选的结构化决策服务。未配置的任务关闭；建议先用 shadow 验证。 |
 | `ai.decisions.provider` | string | 是 | — | 提供已启用 DecisionProvider 的精确插件身份，例如 root/typesafe。 |
@@ -83,6 +141,7 @@ outline: [2, 3]
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。 |
 | `ai.agent.inboundQueue.ttlMs` | integer | 否 | `180000` | 排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。 |
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | 否 | `5` | 同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。 |
+| `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | 否 | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
 | `ai.agent.network` | object | 否 | — | IM 回合的出网权限（web_fetch / web_search 与联网命令）。默认关闭；enabled 开启 HTTPS 出网，allowedDomains 非空时只允许这些域名。未设置 enabled 时兼容旧配置：execPreset: network 视为开启。 |
@@ -126,6 +185,221 @@ outline: [2, 3]
 | `ai.agent.schedule` | object | 否 | — | 无人值守 Schedule 执行策略。 |
 | `ai.agent.schedule.security` | object | 否 | — | Schedule 命令安全策略。 |
 | `ai.agent.schedule.security.execPreset` | string: `"readonly"`, `"network"` | 否 | — | Schedule Job 只能使用只读或网络预设。 |
+| `ai.agent.schedule.security.allowedDomains` | array&lt;string&gt; | 否 | — | — |
+| `ai.agent.schedule.budget` | object | 否 | — | — |
+| `ai.agent.schedule.budget.maxTokens` | number \| string | 否 | — | — |
+| `ai.agent.schedule.budget.maxToolCalls` | number \| string | 否 | — | — |
+| `ai.agent.schedule.budget.timeoutMs` | number \| string | 否 | — | — |
+| `ai.agent.execAllowlist` | array&lt;string&gt; | 否 | — | allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 |
+| `ai.agent.taskExecApprovalMode` | string | 否 | — | — |
+| `ai.agent.phaseTrace` | boolean \| string | 否 | — | 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） |
+| `ai.agent.modelHarness` | object | 否 | — | 按模型 / provider 模式覆盖 model harness |
+| `ai.agent.modelHarness.models` | object | 否 | — | 模型级覆盖：支持 "gpt-4o" 或 "openai:gpt-4o" |
+| `ai.agent.modelHarness.models.<key>.maxIterations` | number \| string | 否 | — | — |
+| `ai.agent.modelHarness.models.<key>.explorationBudget` | number \| string | 否 | — | 连续只读探索调用达到该次数时注入提示；0 关闭 |
+| `ai.agent.modelHarness.models.<key>.explorationGuidance` | boolean \| string | 否 | — | 在系统提示中加入"先规划、限定目标文件"的探索纪律 |
+| `ai.agent.modelHarness.models.<key>.iterationExtension` | number \| string | 否 | — | 每次有进展时延长的步数（覆盖 toolBudget.extendBy） |
+| `ai.agent.modelHarness.models.<key>.maxTotalIterations` | number \| string | 否 | — | 单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations） |
+| `ai.agent.modelHarness.models.<key>.emptyReplyRetries` | number \| string | 否 | — | 空回复（无文本且无工具调用）时额外重试次数；默认 0 |
+| `ai.agent.modelHarness.models.<key>.requestTimeoutMs` | number \| string | 否 | — | 单次模型请求超时（毫秒）；0 关闭 |
+| `ai.agent.modelHarness.providerPatterns` | object | 否 | — | provider 模式覆盖（支持 * 通配符） |
+| `ai.agent.modelHarness.providerPatterns.<key>.maxIterations` | number \| string | 否 | — | — |
+| `ai.agent.modelHarness.providerPatterns.<key>.explorationBudget` | number \| string | 否 | — | 连续只读探索调用达到该次数时注入提示；0 关闭 |
+| `ai.agent.modelHarness.providerPatterns.<key>.explorationGuidance` | boolean \| string | 否 | — | 在系统提示中加入"先规划、限定目标文件"的探索纪律 |
+| `ai.agent.modelHarness.providerPatterns.<key>.iterationExtension` | number \| string | 否 | — | 每次有进展时延长的步数（覆盖 toolBudget.extendBy） |
+| `ai.agent.modelHarness.providerPatterns.<key>.maxTotalIterations` | number \| string | 否 | — | 单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations） |
+| `ai.agent.modelHarness.providerPatterns.<key>.emptyReplyRetries` | number \| string | 否 | — | 空回复（无文本且无工具调用）时额外重试次数；默认 0 |
+| `ai.agent.modelHarness.providerPatterns.<key>.requestTimeoutMs` | number \| string | 否 | — | 单次模型请求超时（毫秒）；0 关闭 |
+| `ai.agent.providerResilience` | object | 否 | — | Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守） |
+| `ai.agent.providerResilience.maxRetries` | number \| string | 否 | — | Retries per model after the first attempt. Default 2. `0` disables retry. |
+| `ai.agent.providerResilience.baseDelayMs` | number \| string | 否 | — | First backoff delay in ms; doubles each retry. Default 1000. |
+| `ai.agent.providerResilience.maxDelayMs` | number \| string | 否 | — | Upper bound for one backoff delay in ms. Default 10000. |
+| `ai.agent.providerResilience.maxRetryAfterMs` | number \| string | 否 | — | A `Retry-After` longer than this skips retry and goes to fallback. Default 30000. |
+| `ai.agent.providerResilience.requestTimeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. |
+| `ai.agent.providerResilience.emptyReplyRetries` | number \| string | 否 | — | Extra attempts when the model returns neither text nor tool calls (or a tool call without a name). Default 0: the reply is passed through unchanged. Quirk presets (see model harness) raise this for models known to emit spurious empty replies. |
+| `ai.agent.providerResilience.fallback` | boolean \| string | 否 | — | Try the next entry of `modelCandidates` after retries are exhausted. Default true. |
+| `ai.agent.deferredToolMaxResults` | number \| string | 否 | — | — |
+| `ai.agent.deferredTools` | object | 否 | — | 工具 schema 按需加载 |
+| `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | 否 | — | — |
+| `ai.agent.deferredTools.discoverTopK` | number \| string | 否 | — | — |
+| `ai.agent.deferredTools.alwaysLoadedTools` | array&lt;string&gt; | 否 | — | 额外常驻工具；默认在内置常驻集合基础上追加 |
+| `ai.agent.deferredTools.alwaysLoadedMode` | string | 否 | — | `extend`（默认）追加到内置常驻集合；`replace` 完全替换 |
+| `ai.agent.deferredTools.mcpServers` | object | 否 | — | — |
+| `ai.agent.deferredTools.mcpServers.<key>.alwaysLoaded` | array&lt;string&gt; | 否 | — | — |
+| `ai.agent.workerBaseTools` | array&lt;string&gt; | 否 | — | Deferred Worker 基础工具 |
+| `ai.agent.persona` | string | 否 | — | — |
+| `ai.agent.maxIterations` | number \| string | 否 | — | — |
+| `ai.agent.timeout` | number \| string | 否 | — | — |
+| `ai.agent.preExecTimeout` | number \| string | 否 | — | — |
+| `ai.agent.maxSkills` | number \| string | 否 | — | — |
+| `ai.agent.maxTools` | number \| string | 否 | — | — |
+| `ai.agent.contextTailMessageLimit` | number \| string | 否 | — | — |
+| `ai.agent.rateLimit` | object | 否 | — | — |
+| `ai.agent.rateLimit.maxRequestsPerMinute` | number \| string | 否 | — | 每分钟最大请求数（默认 20） |
+| `ai.agent.rateLimit.cooldownSeconds` | number \| string | 否 | — | 冷却时间（秒），超限后需等待（默认 10） |
+| `ai.agent.toneAwareness` | boolean \| string | 否 | — | — |
+| `ai.agent.chatModel` | string | 否 | — | — |
+| `ai.agent.visionModel` | string | 否 | — | — |
+| `ai.agent.contextTokens` | number \| string | 否 | — | — |
+| `ai.agent.maxHistoryShare` | number \| string | 否 | — | — |
+| `ai.agent.compaction` | object | 否 | — | — |
+| `ai.agent.compaction.enabled` | boolean \| string | 否 | — | — |
+| `ai.agent.compaction.auto` | boolean \| string | 否 | — | — |
+| `ai.agent.compaction.keepRecentTokens` | number \| string | 否 | — | — |
+| `ai.agent.compaction.minKeepCount` | number \| string | 否 | — | — |
+| `ai.agent.compaction.thresholdRatio` | number \| string | 否 | — | Share of the model context window (system prompt and tools included) at which auto-compaction runs. Default 0.7 (#730). |
+| `ai.agent.disabledTools` | array&lt;string&gt; | 否 | — | — |
+| `ai.agent.allowedTools` | array&lt;string&gt; | 否 | — | — |
+| `ai.agent.maxParallelSubagents` | number \| string | 否 | — | — |
+| `ai.agent.subagentAutoContinue` | boolean \| string | 否 | — | — |
+| `ai.agent.subagentDirectImDelivery` | boolean \| string | 否 | — | — |
+| `ai.agent.maxSubagentIterations` | number \| string | 否 | — | — |
+| `ai.agent.subagentTools` | array&lt;string&gt; | 否 | — | — |
+| `ai.agent.subagentTurnWaitMs` | number \| string | 否 | — | — |
+| `ai.agent.skillInstructionMaxChars` | number \| string | 否 | — | — |
+| `ai.agent.promptTrace` | boolean \| string | 否 | — | — |
+| `ai.agent.promptTraceVerbose` | boolean \| string | 否 | — | — |
+| `ai.agent.promptCache` | boolean \| string | 否 | — | — |
+| `ai.agent.promptCacheKeyPrefix` | string | 否 | — | — |
+| `ai.agent.policyDenialStopAfter` | number \| string | 否 | — | — |
+| `ai.agent.deferredAutoContinue` | boolean \| string | 否 | — | — |
+| `ai.agent.deferredAutoContinueMaxDepth` | number \| string | 否 | — | — |
+| `ai.agent.gitStatus` | boolean \| string | 否 | — | §1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过） |
+| `ai.agent.contextPaths` | array&lt;string&gt; | 否 | — | 追加的上下文文件路径（支持 ~ 与相对路径；默认另加载 ~/.config/zhin/AGENTS.md 等全局路径） |
+| `ai.agent.systemPromptMaxChars` | number \| string | 否 | — | 系统提示词总字符上限；按 retention/order 让出预算，required 内容放不下则失败。 |
+| `ai.agent.thinkingPreview` | boolean \| string | 否 | — | Activity feedback 展示 LLM 实际 thinking 内容（截断），而非静态 "思考中..."。 |
+| `ai.agent.thinkingPreviewMaxLength` | number \| string | 否 | — | thinkingPreview 展示的最大字符数。 |
+| `ai.enabled` | boolean \| string | 否 | — | — |
+| `ai.providers` | object \| null | 否 | — | 命名 provider 实例 |
+| `ai.providers.<key>.sdk` | string | 否 | — | — |
+| `ai.providers.<key>.apiKey` | string | 否 | — | — |
+| `ai.providers.<key>.authScheme` | string | 否 | — | Authorization 头方案。不写时用各 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）； 设为 `''` 时 `Authorization: &lt;key&gt;`；设为 `'Bearer'` / `'Token'` 等时 `Authorization: &lt;scheme&gt; &lt;key&gt;`（结尾空格可有可无）。 |
+| `ai.providers.<key>.baseUrl` | string | 否 | — | — |
+| `ai.providers.<key>.defaultModel` | string | 否 | — | — |
+| `ai.providers.<key>.models` | array&lt;string&gt; | 否 | — | — |
+| `ai.providers.<key>.timeout` | number \| string | 否 | — | 单次请求超时（ms），覆盖 `ai.providerResilience.requestTimeoutMs`；模型 harness 的 `requestTimeoutMs` 优先。0 关闭。 |
+| `ai.providers.<key>.maxRetries` | number \| string | 否 | — | 每个模型的重试次数，覆盖 `ai.providerResilience.maxRetries`。 |
+| `ai.providers.<key>.firstChunkTimeoutMs` | number \| string | 否 | — | 流式请求首个 chunk 超时（ms，含等待响应头），默认关闭；超时按 timeout 重试 / 切换备用模型。 |
+| `ai.providers.<key>.chunkTimeoutMs` | number \| string | 否 | — | 流式请求两个 chunk 之间的静默超时（ms），默认关闭。 |
+| `ai.providers.<key>.headers` | object | 否 | — | — |
+| `ai.providers.<key>.contextWindow` | number \| string | 否 | — | 上下文窗口大小（token 数），各 Provider 映射到自身参数 |
+| `ai.providers.<key>.maxOutputTokens` | number \| string | 否 | — | 每次请求的输出 token 上限，默认 8192；Gemini/Claude 的思考 token 也计入 |
+| `ai.providers.<key>.thinkingLevel` | string | 否 | — | 思考深度：`off` \| `low` \| `medium` \| `high`；不填用 provider 默认；`providerOptions` 里的思考设置优先 |
+| `ai.providers.<key>.capabilities` | object | 否 | — | Provider 能力声明 |
+| `ai.providers.<key>.capabilities.input` | array&lt;string&gt; | 否 | — | Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`). |
+| `ai.providers.<key>.capabilities.streaming` | boolean \| string | 否 | — | — |
+| `ai.providers.<key>.capabilities.toolCalling` | boolean \| string | 否 | — | — |
+| `ai.providers.<key>.capabilities.thinking` | boolean \| string | 否 | — | — |
+| `ai.providers.<key>.input` | array&lt;string&gt; | 否 | — | Explicit model input modalities. Prefer this over inferred provider identity. |
+| `ai.providers.<key>.providerOptions` | object | 否 | — | Extra AI SDK `providerOptions`, merged into every request of this provider, keyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...], thinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings. |
+| `ai.providers.<key>.contextCache` | object | 否 | — | Gemini context caching (`sdk: google`): `{ mode: 'explicit', ttlSeconds }`. Default implicit. |
+| `ai.providers.<key>.contextCache.mode` | string | 否 | — | `implicit` (default) leaves requests untouched. `explicit` creates cachedContents. |
+| `ai.providers.<key>.contextCache.ttlSeconds` | number \| string | 否 | — | Lifetime of each created cache. Default 600. |
+| `ai.providers.<key>.contextCache.minPrefixChars` | number \| string | 否 | — | Prefixes shorter than this (characters of JSON) are not worth a cache. Default 8000 (~2k tokens). |
+| `ai.providers.<key>.imageGeneration` | object | 否 | — | 文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver） |
+| `ai.providers.<key>.imageGeneration.watermarkEnabled` | boolean \| string | 否 | — | 智谱 API `watermark_enabled`；默认 true |
+| `ai.providers.<key>.imageGeneration.defaultModel` | string | 否 | — | — |
+| `ai.providers.<key>.imageGeneration.defaultSize` | string | 否 | — | 智谱：如 1024x1024、1280x1280 |
+| `ai.providers.<key>.imageGeneration.numSteps` | number \| string | 否 | — | Cloudflare Flux：推理步数，默认 4 |
+| `ai.providers.<key>.imageGeneration.quality` | string | 否 | — | OpenAI GPT Image：low \| medium \| high \| auto |
+| `ai.providers.<key>.imageGeneration.aspectRatio` | string | 否 | — | Gemini：如 1:1、16:9 |
+| `ai.providers.<key>.imageGeneration.imageSize` | string | 否 | — | Gemini：如 1K、2K、4K |
+| `ai.providers.<key>.imageGeneration.promptSuffix` | string | 否 | — | 追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。 需要动漫风时不要配置，或在工具 prompt 里写明即可。 |
+| `ai.providers.<key>.host` | string | 否 | — | — |
+| `ai.providers.<key>.num_ctx` | number \| string | 否 | — | — |
+| `ai.agents` | object \| null | 否 | — | per-agent 绑定（协作角色如 researcher 亦用 agents.&lt;role&gt;）；IM 入站总是交给 zhin |
+| `ai.agents.<key>.provider` | string | 否 | — | — |
+| `ai.agents.<key>.model` | string | 否 | — | — |
+| `ai.agents.<key>.mcpServers` | array \| null | 否 | — | — |
+| `ai.agents.<key>.priority` | number \| string | 否 | — | — |
+| `ai.agents.<key>.match` | object | 否 | — | — |
+| `ai.agents.<key>.match.adapter` | string | 否 | — | — |
+| `ai.agents.<key>.match.endpoint` | string | 否 | — | — |
+| `ai.agents.<key>.match.scene` | string | 否 | — | — |
+| `ai.agents.<key>.match.hasMedia` | array&lt;string&gt; | 否 | — | — |
+| `ai.agents.<key>.match.contentContains` | string | 否 | — | — |
+| `ai.agents.<key>.nickname` | string | 否 | — | Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 |
+| `ai.sessions` | object \| null | 否 | — | — |
+| `ai.sessions.maxHistory` | number \| string | 否 | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
+| `ai.sessions.expireMs` | number \| string | 否 | — | 会话过期时间（毫秒，数据库模式默认7天，内存模式默认24小时） |
+| `ai.sessions.useDatabase` | boolean \| string | 否 | — | 是否使用数据库持久化存储（默认 true） |
+| `ai.sessions.coldStartMaxMessages` | number \| string | 否 | — | 无摘要时冷启动最多条数（默认 50） |
+| `ai.sessions.coldStartMaxAgeMs` | number \| string | 否 | — | 冷启动时间窗（毫秒，默认 24h） |
+| `ai.sessions.sessionIdleArchiveMs` | number \| string | 否 | — | 空闲后自动归档 active 会话（毫秒，默认 7 天；0=关闭） |
+| `ai.context` | object \| null | 否 | — | — |
+| `ai.context.enabled` | boolean \| string | 否 | — | 是否启用消息记录（默认 true） |
+| `ai.context.maxRecentMessages` | number \| string | 否 | — | 读取的最近消息数量（默认 100） |
+| `ai.context.summaryThreshold` | number \| string | 否 | — | 触发总结的消息数量阈值（默认 50） |
+| `ai.context.keepAfterSummary` | number \| string | 否 | — | 总结后保留的消息数量（默认 10） |
+| `ai.context.maxContextTokens` | number \| string | 否 | — | 上下文最大 token 估算（默认 4000） |
+| `ai.context.summaryPrompt` | string | 否 | — | 自定义总结提示词 |
+| `ai.imageGeneration` | object \| null | 否 | — | 文生图全局默认（可被 `providers.&lt;alias&gt;.imageGeneration` 覆盖）。 智谱：`watermarkEnabled: false` 需先在智谱开放平台签署去水印免责声明。 |
+| `ai.imageGeneration.watermarkEnabled` | boolean \| string | 否 | — | 智谱 API `watermark_enabled`；默认 true |
+| `ai.imageGeneration.defaultModel` | string | 否 | — | — |
+| `ai.imageGeneration.defaultSize` | string | 否 | — | 智谱：如 1024x1024、1280x1280 |
+| `ai.imageGeneration.numSteps` | number \| string | 否 | — | Cloudflare Flux：推理步数，默认 4 |
+| `ai.imageGeneration.quality` | string | 否 | — | OpenAI GPT Image：low \| medium \| high \| auto |
+| `ai.imageGeneration.aspectRatio` | string | 否 | — | Gemini：如 1:1、16:9 |
+| `ai.imageGeneration.imageSize` | string | 否 | — | Gemini：如 1K、2K、4K |
+| `ai.imageGeneration.promptSuffix` | string | 否 | — | 追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。 需要动漫风时不要配置，或在工具 prompt 里写明即可。 |
+| `ai.multimodal` | object \| null | 否 | — | 入站/出站多模态（base64 契约；平台 adapter 负责编解码与发送） |
+| `ai.multimodal.enabled` | boolean \| string | 否 | — | — |
+| `ai.multimodal.maxFileBytes` | number \| string | 否 | — | — |
+| `ai.multimodal.inboundDir` | string | 否 | — | — |
+| `ai.multimodal.outboundDir` | string | 否 | — | — |
+| `ai.multimodal.image` | object | 否 | — | — |
+| `ai.multimodal.image.maxDimension` | number \| string | 否 | — | — |
+| `ai.multimodal.image.preferNativeVision` | boolean \| string | 否 | — | — |
+| `ai.multimodal.audio` | object | 否 | — | — |
+| `ai.multimodal.audio.strategy` | string | 否 | — | — |
+| `ai.multimodal.video` | object | 否 | — | — |
+| `ai.multimodal.video.strategy` | string | 否 | — | — |
+| `ai.multimodal.video.mcpServer` | string | 否 | — | — |
+| `ai.multimodal.video.maxFrames` | number \| string | 否 | — | — |
+| `ai.multimodal.outbound` | object | 否 | — | — |
+| `ai.multimodal.outbound.splitMessages` | string | 否 | — | — |
+| `ai.multimodal.perception` | object \| null | 否 | — | Perception pre-pass: when the turn's model cannot take an image / video / PDF, this media-capable model describes it and the description is injected as untrusted text (`[图片描述] …`). Unset = off (placeholders as before). |
+| `ai.multimodal.perception.provider` | string | 否 | — | `ai.providers` alias of the perception model. |
+| `ai.multimodal.perception.model` | string | 否 | — | — |
+| `ai.multimodal.perception.kinds` | array&lt;string&gt; | 否 | — | Kinds to describe. Default `['image']`; `file` covers PDFs only. |
+| `ai.multimodal.perception.maxChars` | number \| string | 否 | — | Description length cap in characters. Default 800. |
+| `ai.multimodal.perception.timeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms. Default 30000. |
+| `ai.multimodal.perception.maxItemsPerTurn` | number \| string | 否 | — | Media described per turn; the rest keep the placeholder. Default 4. |
+| `ai.memory` | object \| null | 否 | — | 三层 Markdown 文件记忆（global / platform / session）。 默认启用；设 enabled: false 可关闭注入。 |
+| `ai.memory.enabled` | boolean \| string | 否 | — | — |
+| `ai.memory.semantic` | object \| null | 否 | — | L4 语义记忆：memory_entries 表 + memory_search/upsert 工具 |
+| `ai.memory.semantic.enabled` | boolean \| string | 否 | — | — |
+| `ai.memory.semantic.autoConsolidate` | boolean \| string | 否 | — | — |
+| `ai.memory.semantic.recall` | object \| null | 否 | — | Per-turn recall (#734): BM25 top-k entries relevant to the current message are added to the turn context. Default on when semantic memory is enabled; topK 5, maxTokens 400. |
+| `ai.memory.semantic.recall.enabled` | boolean \| string | 否 | — | — |
+| `ai.memory.semantic.recall.topK` | number \| string \| null | 否 | — | — |
+| `ai.memory.semantic.recall.maxTokens` | number \| string \| null | 否 | — | — |
+| `ai.memory.budgets` | object | 否 | — | — |
+| `ai.memory.budgets.session` | number \| string | 否 | — | — |
+| `ai.memory.budgets.platform` | number \| string | 否 | — | — |
+| `ai.memory.budgets.global` | number \| string | 否 | — | — |
+| `ai.memory.budgets.daily` | number \| string | 否 | — | — |
+| `ai.knowledge` | object | 否 | — | 本地知识库（knowledge_search 工具数据源）。 放置 .md / .txt 文件到 baseDir，Agent 可通过 knowledge_search 工具检索。 |
+| `ai.knowledge.baseDir` | string | 否 | — | 项目根目录内的知识库目录路径。配置该段时必须显式声明。 |
+| `ai.githubMcp` | object | 否 | — | PAT for adapter-github auto-registered server-github MCP (overrides env when set). |
+| `ai.githubMcp.token` | string | 否 | — | — |
+| `ai.githubMcp.enabled` | boolean \| string | 否 | — | 为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具 |
+| `ai.mcpServers` | array \| null | 否 | — | External MCP servers for the Agent MCP client (global, all bots). Listed servers are exposed to ZhinAgent tool pool when connected. |
+| `ai.access` | object \| null | 否 | — | AI 访问控制（平台 AIGC 合规；Endpoint 可用 aiAccess 覆盖） |
+| `ai.access.mode` | string | 否 | — | open \| closed \| whitelist，默认 open |
+| `ai.access.users` | array&lt;string&gt; | 否 | — | 允许触发 AI 的 sender.id |
+| `ai.access.groups` | array&lt;string&gt; | 否 | — | 允许触发 AI 的 group/channel id |
+| `ai.access.denyMessage` | string | 否 | — | 私聊拒绝时的回复文案 |
+| `ai.trigger` | object \| null | 否 | — | AI 触发配置 |
+| `ai.trigger.enabled` | boolean \| string | 否 | — | 是否启用（默认 true） |
+| `ai.trigger.prefixes` | array&lt;string&gt; | 否 | — | 触发前缀列表（默认 ['#', 'AI:']） |
+| `ai.trigger.respondToAt` | boolean \| string | 否 | — | 是否响应 @ 机器人（默认 true） |
+| `ai.trigger.respondToPrivate` | boolean \| string | 否 | — | 是否响应私聊（默认 true） |
+| `ai.trigger.keywords` | array&lt;string&gt; | 否 | — | 触发关键词（可选） |
+| `ai.trigger.ignorePrefixes` | array&lt;string&gt; | 否 | — | 忽略的前缀（命令前缀，避免与命令冲突，默认 ['/', '!', '！']） |
+| `ai.trigger.timeout` | number \| string | 否 | — | 超时时间（毫秒，默认 60000） |
+| `ai.trigger.thinkingMessage` | string | 否 | — | 思考中提示语（可选，设置后会在处理前发送） |
+| `ai.trigger.errorTemplate` | string | 否 | — | 错误提示模板（默认 '❌ AI 处理失败: {error}'） |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
 | `menuStyle.title` | string | 否 | — | 菜单标题。 |
@@ -133,8 +407,69 @@ outline: [2, 3]
 | `menuStyle.accentColor` | string | 否 | — | 六位十六进制强调色；无效值使用渲染器默认值。 |
 | `menuStyle.backgroundImage` | string | 否 | — | HTTP(S) 图片或 PNG/JPEG/WebP data URL；不支持的值使用渲染器默认值。 |
 | `mcp` | object | 否 | — | 把 Bot 工具公开为 MCP Server。 |
+| `mcp.enabled` | boolean \| string | 否 | — | — |
+| `mcp.path` | string \| null | 否 | — | — |
+| `mcp.token` | string \| null | 否 | — | — |
+| `mcp.allowUnauthenticatedLocalhost` | boolean \| string | 否 | — | — |
 | `a2a` | object | 否 | — | A2A Agent Card、远程执行与 Workroom 回调。 |
+| `a2a.enabled` | boolean \| string | 否 | — | — |
+| `a2a.path` | string \| null | 否 | — | — |
+| `a2a.token` | string \| null | 否 | — | — |
+| `a2a.publicUrl` | string \| null | 否 | — | — |
+| `a2a.workroomCallbacks` | object \| null | 否 | — | — |
+| `a2a.workroomCallbacks.enabled` | boolean \| string | 否 | — | — |
+| `a2a.workroomCallbacks.path` | string | 否 | — | Must remain outside the ordinary `/a2a/{agent}/*` route tree. |
+| `a2a.workroomCallbacks.maxBodyBytes` | number \| string | 否 | — | — |
+| `a2a.workroomCallbacks.maxSequenceGap` | number \| string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings` | array&lt;object&gt; | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].endpointId` | string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].tenantId` | string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].cardDigest` | string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].authBindingId` | string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].trustDomain` | string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].extensionDigest` | string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].credentialId` | string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].credential` | object \| object | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].enabled` | boolean \| string | 否 | — | — |
+| `a2a.workroomCallbacks.bindings[].expiresAt` | number \| string | 否 | — | — |
+| `a2a.workroomRemoteExecutors` | object \| null | 否 | — | Transport endpoints only. Project/Workroom topology remains in the persistent Catalog. |
+| `a2a.workroomRemoteExecutors.enabled` | boolean \| string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.maxResponseBytes` | number \| string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings` | array&lt;object&gt; | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].endpointId` | string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].cardDigest` | string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].authBindingId` | string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].dispatchUrl` | string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].pollUrl` | string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].credential` | object \| object | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].authority` | object | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].authority.workroomExtension` | `"https://zhin.dev/extensions/workroom-executor/v1"` \| string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].authority.idempotentDispatch` | boolean \| string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].authority.typedCompletionEnvelope` | boolean \| string | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].authority.workspaceProviders` | array&lt;string&gt; | 否 | — | — |
+| `a2a.workroomRemoteExecutors.bindings[].enabled` | boolean \| string | 否 | — | — |
 | `speech` | object | 否 | — | 语音识别与语音合成 Host。 |
+| `speech.stt` | object \| null | 否 | — | — |
+| `speech.stt.enabled` | boolean \| string | 否 | — | — |
+| `speech.stt.provider` | string | 否 | — | — |
+| `speech.stt.model` | string | 否 | — | — |
+| `speech.stt.host` | string | 否 | — | — |
+| `speech.stt.apiKey` | string | 否 | — | — |
+| `speech.tts` | object \| null | 否 | — | — |
+| `speech.tts.enabled` | boolean \| string | 否 | — | — |
+| `speech.tts.provider` | string | 否 | — | — |
+| `speech.tts.voice` | string | 否 | — | — |
+| `speech.tts.model` | string | 否 | — | — |
+| `speech.tts.host` | string | 否 | — | — |
+| `speech.tts.apiKey` | string | 否 | — | — |
+| `speech.tts.rate` | string | 否 | — | edge-tts |
+| `speech.tts.pitch` | string | 否 | — | — |
+| `speech.tts.edgeTtsCommand` | string | 否 | — | — |
+| `speech.tts.region` | string | 否 | — | azure |
+| `speech.tts.subscriptionKey` | string | 否 | — | — |
+| `speech.tts.baseUrl` | string | 否 | — | custom OpenAI-compatible |
+| `speech.tts.headers` | object | 否 | — | — |
+| `speech.tts.speed` | number \| string | 否 | — | — |
 | `htmlRenderer` | object | 否 | — | 基于 Shotium 的 HTML/图片渲染参数。 |
 | `htmlRenderer.width` | number | 否 | — | 默认排版宽度（CSS 像素）。 |
 | `htmlRenderer.defaultWidth` | number | 否 | — | width 的旧别名。 |
@@ -161,6 +496,34 @@ outline: [2, 3]
 | `htmlRenderer.mode` | string: `"inprocess"`, `"daemon"` | 否 | — | Shotium 在进程内运行还是以 daemon 运行。 |
 | `htmlRenderer.aiTextAsImage` | boolean \| object | 否 | — | 发送前可选的纯文本转图片。 |
 | `assistant` | object | 否 | — | 调度任务、事件入口和失败通知。 |
+| `assistant.enabled` | boolean \| string | 否 | — | 启用统一 JobStore（默认 false，Stable 行为不变） |
+| `assistant.queue` | object \| null | 否 | — | Schedule execution queue（重试 / 并发 / 死信） |
+| `assistant.queue.maxConcurrency` | number \| string \| null | 否 | — | Schedule execution 并发上限 |
+| `assistant.queue.maxRetries` | number \| string \| null | 否 | — | — |
+| `assistant.queue.defaultTimeoutMs` | number \| string \| null | 否 | — | — |
+| `assistant.defaults` | object \| null | 否 | — | — |
+| `assistant.defaults.notify` | object \| object \| object \| object \| null | 否 | — | 未显式指定 notify 时的默认投递目标（M3） |
+| `assistant.defaults.notifyOnFailure` | boolean \| string | 否 | — | Job 失败时是否通知（默认 false） |
+| `assistant.profile` | object \| null | 否 | — | — |
+| `assistant.profile.enabled` | boolean \| string | 否 | — | 启用 Profile 覆盖 Bootstrap（默认 false） |
+| `assistant.profile.file` | string \| null | 否 | — | 相对项目根路径，默认 assistant.profile.yml |
+| `assistant.home` | object \| null | 否 | — | — |
+| `assistant.home.enabled` | boolean \| string | 否 | — | — |
+| `assistant.home.restUrl` | string | 否 | — | HA REST 基址，如 http://homeassistant.local:8123 |
+| `assistant.home.restToken` | string | 否 | — | HA 长期访问令牌 |
+| `assistant.home.mcpServer` | string | 否 | — | 可选：ai.mcpServers 中的名称（REST 为主，MCP 仅校验） |
+| `assistant.home.aliases` | object \| null | 否 | — | 中文/友好名 → entity_id |
+| `assistant.home.policy` | object \| null | 否 | — | — |
+| `assistant.home.policy.requireMaster` | boolean \| string | 否 | — | 仅 master 可调用 home_*（默认 true） |
+| `assistant.home.policy.confirmServices` | array \| null | 否 | — | 写操作需 Owner 审批的 HA domain（默认 lock、alarm_control_panel） |
+| `assistant.home.policy.allowedServiceDomains` | array \| null | 否 | — | home_call_service 允许的 domain 白名单（默认 light/climate/scene/cover/script） |
+| `assistant.home.watch` | array \| null | 否 | — | 要通过 HA WebSocket 订阅状态变化的设备别名列表 |
+| `assistant.home.debounceMs` | number \| string \| null | 否 | — | 同实体状态变化推送的防抖间隔（毫秒，默认 5000） |
+| `assistant.events` | object \| null | 否 | — | — |
+| `assistant.events.enabled` | boolean \| string | 否 | — | 启用 POST /api/assistant/events（需 assistant.enabled） |
+| `assistant.events.token` | string | 否 | — | 可选专用 Bearer；未设时复用 http.token（路由仍在 /api 下受全局鉴权保护）。 |
+| `assistant.events.allowedSources` | array&lt;string&gt; | 否 | — | 允许的来源白名单；空数组表示不限制 |
+| `assistant.events.rateLimitPerMinute` | number \| string \| null | 否 | — | 每来源每分钟最大请求数（默认 60） |
 | `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
 
@@ -1333,7 +1696,7 @@ _该 Schema 没有声明字段。_
 
 ### calendar
 
-[`plugins/utils/calendar/plugin.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/plugin.ts)
+[`plugins/utils/calendar/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/schema.json)
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -1488,7 +1851,7 @@ _该 Schema 没有声明字段。_
 
 ### reminder
 
-[`plugins/utils/reminder/src/config.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/src/config.ts)
+[`plugins/utils/reminder/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/schema.json)
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -1501,7 +1864,7 @@ _该 Schema 没有声明字段。_
 
 ### repeater
 
-[`plugins/utils/repeater/src/config.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/src/config.ts)
+[`plugins/utils/repeater/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/schema.json)
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
@@ -1522,6 +1885,6 @@ _该 Schema 没有声明字段。_
 
 ### short-url
 
-[`plugins/utils/short-url/plugin.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/plugin.ts)
+[`plugins/utils/short-url/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/schema.json)
 
 _该 Schema 没有声明字段。_

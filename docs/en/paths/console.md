@@ -82,6 +82,14 @@ A token is a password: keep it out of URLs, screenshots, and public frontend con
 Set `http.corsOrigins` to allow Console's origin. Behind a reverse proxy, forward the API, SSE, WebSocket, and page assets together; proxying ordinary HTTP alone breaks live messages or page loading. See [Production](../operations/production.md).
 :::
 
+## Edit configuration with forms
+
+Configuration opens with all fields described by the Host Schema, including Host sections that are not yet saved. Nested objects, arrays, dictionaries, unions and scalar sections retain saved values and environment references. Calendar, reminder, repeater and short-url publish static Schemas, so disabled instances can be configured without executing their code.
+
+Each section has an optional highlighted JSON source view sharing its form draft. Invalid JSON stays visible and blocks saving until corrected. Switching sections preserves drafts. The separate full YAML/JSON source editor uses the saved file and does not silently combine unsaved section drafts.
+
+Arbitrary JSON and unresolved recursive or external references use a field-level JSON editor; other fields remain forms. Missing third-party Schemas are reported explicitly instead of inferring types from saved values. Manage instance declarations such as `plugins` and `disable_plugins` through plugin management.
+
 ## Check whether configuration was applied
 
 A plugin form shows the file revision it read. Edited values are drafts, not evidence that the file or Runtime changed. After saving, the actual receipt distinguishes system changes requiring a restart from plugin changes awaiting verification. It never declares the business feature ready. The full-source editor also shows the actual revision without claiming every change requires a restart.

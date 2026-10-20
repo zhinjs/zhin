@@ -13,7 +13,6 @@ import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { createConfigDocument } from '@zhin.js/config-file';
 import { findConfigFile } from '../../utils/config-file.js';
 import { isConsoleSchemaJson, jsonSchemaToConsoleSchema } from './console-schema.js';
-import { readStringLiteralOptions } from './string-literal-options.js';
 
 const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
 
@@ -59,16 +58,15 @@ export class PluginSchemaCatalog {
     currentDocument?: RuntimeConfigDocument,
   ): Promise<unknown> {
     if (HOST_CONFIG_KEY_SET.has(pluginName)) {
-      // These allowlisted sections belong to the versioned Runtime contract, not
-      // third-party schema files. Preserve their existing form projection: it is
-      // not a complete JSON Schema editor; Runtime remains the config validator.
+      // Host sections share the Runtime schema and its local definition scope.
+      // This is only a display projection; Runtime remains the config validator.
       const raw = pluginName === 'plugin'
         ? declarations?.get(await realpath(this.#projectRoot)) ?? await readOwnSchema(this.#projectRoot, 'plugin', !rawSchema)
         : HOST_CONFIG_SCHEMA.properties[pluginName as keyof typeof HOST_CONFIG_SCHEMA.properties];
       if (rawSchema) return raw && pluginName !== 'plugin'
         ? { ...raw, $defs: HOST_CONFIG_SCHEMA.$defs } : raw ?? null;
       if (raw && pluginName === 'plugin') assertSchemaStructure(raw, 'config declaration for plugin');
-      return jsonSchemaToConsoleSchema(raw);
+      return jsonSchemaToConsoleSchema(raw && pluginName !== 'plugin' ? { ...raw, $defs: HOST_CONFIG_SCHEMA.$defs } : raw);
     }
     if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u.test(pluginName)
       && !pluginName.split('/').every((key) => /^[a-z0-9][a-z0-9-]*$/u.test(key))) {
@@ -147,18 +145,13 @@ async function readOwnSchema(root: string, name: string, forForm = true): Promis
 
 /** Reject malformed child definitions before the form converter can silently omit them. */
 function assertSchemaStructure(value: unknown, location: string): void {
+  if (typeof value === 'boolean') return;
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${location} must contain a supported schema object`);
   }
   const schema = value as Record<string, unknown>;
-  // The form converter does not resolve references or compose JSON Schemas.
-  // Reject these even beside supported properties, instead of displaying a partial form.
-  for (const key of ['$ref', 'anyOf', 'oneOf', 'allOf', 'prefixItems', 'patternProperties']) {
-    if (schema[key] !== undefined) {
-      if (key === 'anyOf' && readStringLiteralOptions(schema)) continue;
-      throw new Error(`${location}.${key} is not supported by Console forms`);
-    }
-  }
+  if (schema.$ref !== undefined && typeof schema.$ref !== 'string') throw new Error(`${location}.$ref must be a string`);
+  if (schema.type !== undefined && !(typeof schema.type === 'string' || Array.isArray(schema.type) && schema.type.every(type => typeof type === 'string'))) throw new Error(`${location}.type must be a string or string array`);
   if (schema.required !== undefined) {
     const nativeFlag = typeof schema.required === 'boolean' && isConsoleSchemaJson(schema);
     if (!nativeFlag && (!Array.isArray(schema.required)
@@ -167,7 +160,7 @@ function assertSchemaStructure(value: unknown, location: string): void {
       throw new Error(`${location}.required must be a unique string array or a native Schema boolean`);
     }
   }
-  for (const key of ['properties', '$defs', 'definitions', 'object']) {
+  for (const key of ['properties', '$defs', 'definitions', 'object', 'patternProperties', 'dependentSchemas']) {
     const children = schema[key];
     if (children === undefined) continue;
     if (!children || typeof children !== 'object' || Array.isArray(children)) {
@@ -177,18 +170,19 @@ function assertSchemaStructure(value: unknown, location: string): void {
       assertSchemaStructure(child, `${location}.${key}.${name}`);
     }
   }
-  for (const key of ['items', 'inner', 'additionalProperties']) {
+  for (const key of ['items', 'inner', 'additionalProperties', 'additional', 'additionalItems', 'contains', 'not', 'if', 'then', 'else']) {
     const child = schema[key];
     if (child === undefined || (key === 'additionalProperties' && typeof child === 'boolean')) continue;
     if (key === 'items' && Array.isArray(child)) {
-      throw new Error(`${location}.items tuple schemas are not supported by Console forms`);
+      child.forEach((item, index) => assertSchemaStructure(item, `${location}.items[${index}]`));
+      continue;
     }
     assertSchemaStructure(child, `${location}.${key}`);
   }
-  for (const key of ['list']) {
+  for (const key of ['list', 'anyOf', 'oneOf', 'allOf', 'prefixItems']) {
     const children = schema[key];
     if (children === undefined) continue;
-    if (!Array.isArray(children)) throw new Error(`${location}.${key} must be an array`);
+    if (!Array.isArray(children) || ['anyOf', 'oneOf', 'allOf'].includes(key) && children.length === 0) throw new Error(`${location}.${key} must be a non-empty schema array`);
     children.forEach((child, index) => assertSchemaStructure(child, `${location}.${key}[${index}]`));
   }
 }
