@@ -2,6 +2,18 @@
 
 > **说明**：4.x 起，本仓库采用 changesets 逐包发布，逐版本的发布记录维护在各包目录的 `CHANGELOG.md` 中（如主包 [packages/im/zhin/CHANGELOG.md](./packages/im/zhin/CHANGELOG.md)、全仓 changeset 摘要 [docs/CHANGELOG.md](./docs/CHANGELOG.md)）。本文件只记录跨版本的重要里程碑。
 
+## 📣 预告：下一个大版本不再发布冗余的 `.ts` 源码
+
+目前很多 `@zhin.js/*` 发布包里同时带着 TypeScript 源码和编译产物，例如大部分适配器，以及 `command`、`component`、`handler`、`middleware`、`tool`、`skill`、`permission`、`host-http` 等包里的 `src/**/*.ts`，还有插件包约定目录里与 `index.js` 并排的 `index.ts`。这些 `.ts` 在 `node_modules` 里不会被运行时加载（发布清单里已经没有 `development` 条件，约定目录也只读 `.js`），也没有 source map 引用，纯属冗余。
+
+- **现在**：不做任何改动，已发布的路径保持不变。
+- **下一个大版本**：发布包里只保留 `lib/**/*.js` + `.d.ts`、包根的 `plugin.js` 和约定目录的 `index.js`，以及 `schema.json`、`skills/`、`agents/`、README、CHANGELOG 等资源。冗余的 `.ts` 会被移除，规范见 [发布包目录规范](./docs/contributing/publishing.md)。
+- **你需要做的**：如果代码里深导入了某个包的 `.ts` 文件（例如 `@zhin.js/command/src/xxx.ts`），请改成从包的 `exports` 入口导入。通过 `import '@zhin.js/xxx'` 使用的代码不受影响。
+
+另外，`@zhin.js/agent`、`@zhin.js/workroom`、`@zhin.js/cli`、`@zhin.js/ai`、`@zhin.js/pagemanager`、`create-zhin-app` 的 source map 之前指向未发布的 `src/`，调试时无法定位源码。现在这几个包把源码内联进 `.js.map`（`inlineSources`），不再生成指不到源码的 `.d.ts.map`（#857 Q5）。
+
+**Heads-up (next major):** redundant published TypeScript sources (`src/**/*.ts` in many packages, and convention-directory `index.ts` next to `index.js` in plugin packages) will be removed. They are not loaded at runtime and no source map refers to them. If you deep-import a package's `.ts` file, switch to the package's `exports` entry. Nothing changes until the next major.
+
 ## [4.1.x] - 2026-06 ~ 2026-07
 
 当前主线。4.1.0 引入语音管线，4.1.3 完成约定式插件运行时（Plugin Runtime）迁移。
