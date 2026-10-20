@@ -1,0 +1,84 @@
+packages/im/runtime/tests/host-config-schema-coverage.test.ts
+  s_079f1dc5e6308d::t_4388e4a3f52e91 1-29,31-43,45-114,145
+  s_079f1dc5e6308d::t_01181f40538dbd 118,130-132
+  s_079f1dc5e6308d::t_871c461a79ab49 44
+  s_079f1dc5e6308d::t_8c5b22d0a061d2 30
+  s_079f1dc5e6308d::t_4a9962ed0aea3f 115-117,119-129,133-144
+basic/cli/tests/plugin-runtime/host-config-null-compatibility.test.ts
+  s_079f1dc5e6308d::t_4a9962ed0aea3f 1-25,27-53,57-58
+  s_079f1dc5e6308d::t_01181f40538dbd 26,54-56
+packages/im/runtime/src/host-config-schema.json
+  s_079f1dc5e6308d::t_319578b8b759d6 7-8,13-14,19-20,25-26,30-35,37-45,50-55,60-696,709-711,715-735,746-749,760-763,769-779,781-834,856-859,876-881,887-891,897-902,920-922,930-933,943-1041,1049-1077,1085-1118,1123-1126,1131-1160,1163-1167,1173-1178,1184-1187,1193-1196,1202-1205,1211-1222,1241-1244,1247-1552,1556-1727,1729-1815,1818-2301,2304-2345,2348-2392,2394-2399,2401-3313,3316-4124,4130-4132,4134-4166
+.changeset/literal-config-options.md
+  s_079f1dc5e6308d::t_028308c81f7bba 3-7,10
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_079f1dc5e6308d::t_3e8dd32d0cd5fa 178
+basic/cli/src/plugin-runtime/console/console-schema.ts
+  s_079f1dc5e6308d::t_de82dc157a2de7 3-41,43-50,52-53,55-61,63-70,72-74,76-84,87-89,91-92,94-110,113-116,119-130
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_079f1dc5e6308d::t_521ba7bf5c61cb 61-62,69,148,153-154,163,173,177-178,182,185
+basic/cli/tests/plugin-runtime/console/console-schema-coverage.test.ts
+  s_079f1dc5e6308d::t_1a47cd75072886 1-119
+basic/cli/tests/plugin-runtime/console/console-schema.test.ts
+  s_079f1dc5e6308d::t_8bdf655ddb939c 7-19,22-23,27,31-32,34-37,42,44,47-48,53-57,60-91
+basic/cli/tests/plugin-runtime/console/disabled-plugin-schema.test.ts
+  s_079f1dc5e6308d::t_6d05b1de112824 1-42
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_079f1dc5e6308d::t_e724d894e96f98 54,172,177,323,325-330,333-340,343,345-349,387
+docs/configuration/generated.md
+  s_079f1dc5e6308d::t_9caef8803b59de 26-37,39-84,144,188-402,410-413,415-450,452-472,499-526,1699,1854,1867,1888
+docs/en/configuration/generated.md
+  s_079f1dc5e6308d::t_bca9725fee6fe3 26-37,39-84,144,188-402,410-413,415-450,452-472,499-526,1699,1854,1867,1888
+docs/en/paths/console.md
+  s_079f1dc5e6308d::t_35283f3590c1ae 85-92
+docs/paths/console.md
+  s_079f1dc5e6308d::t_ae90b6ce9961ae 85-92
+plugins/utils/calendar/package.json
+  s_079f1dc5e6308d::t_a1d847d6424322 26-27
+plugins/utils/calendar/plugin.ts
+  s_079f1dc5e6308d::t_21e37490ddba9a 10,28
+plugins/utils/calendar/schema.json
+  s_079f1dc5e6308d::t_42ca6f1fd227bf 1-209
+plugins/utils/reminder/package.json
+  s_079f1dc5e6308d::t_0a5c428fb0ee78 22-23
+plugins/utils/reminder/plugin.ts
+  s_079f1dc5e6308d::t_e24f3787b6c9aa 4,8-9
+plugins/utils/reminder/schema.json
+  s_079f1dc5e6308d::t_e6cf36e5189863 1-69
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_079f1dc5e6308d::t_522afbee8f550a 13,417
+plugins/utils/repeater/package.json
+  s_079f1dc5e6308d::t_d4315cd96bc16e 23-24
+plugins/utils/repeater/schema.json
+  s_079f1dc5e6308d::t_4df1ae65e1ad8e 1-38
+plugins/utils/repeater/src/config.ts
+  s_079f1dc5e6308d::t_9f24d46560de46 9
+plugins/utils/repeater/tests/repeater-runtime.test.ts
+  s_079f1dc5e6308d::t_0ae518d8fea0a5 2,24,33
+plugins/utils/short-url/package.json
+  s_079f1dc5e6308d::t_52ab39b617667f 23-24
+plugins/utils/short-url/plugin.ts
+  s_079f1dc5e6308d::t_75fd339a1f2133 1
+plugins/utils/short-url/schema.json
+  s_079f1dc5e6308d::t_5d65d7250a7c79 1-5
+scripts/sync-plugin-config-schemas.mjs
+  s_079f1dc5e6308d::t_61d26b0086a23c 1-16
+tests/docs/generated-config-reference.test.ts
+  s_079f1dc5e6308d::t_a0af735f5fa514 27-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ebca4c4ece53977d6f303cab900cb8df7ebe5a0e",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
