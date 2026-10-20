@@ -112,4 +112,14 @@ describe('testing fakes', () => {
     await fake.scheduleHost.trigger(fake.scheduleHost.list()[0]!.id);
     expect(runs).toBe(4);
   });
+
+  it('a job fired by advance() sees the instant it fired at, not the time advance() started from', async () => {
+    const clock = new FakeClock(0);
+    const fake = createFakePlugin({ clock });
+    const observedTimes: number[] = [];
+    fake.schedule.register({ id: 'minute', cron: '0 * * * * *', execute: () => { observedTimes.push(clock.now()); } });
+    await clock.advance(3 * 60_000);
+    expect(observedTimes).toEqual([60_000, 120_000, 180_000]);
+    expect(clock.now()).toBe(3 * 60_000);
+  });
 });

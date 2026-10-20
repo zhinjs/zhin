@@ -23,4 +23,22 @@ describe('#829 user-experience loop smoke suite', () => {
     expect(result.steps).toHaveLength(3);
     expect(result.stdout).toContain('E2E_SMOKE_SCENARIO_LAB_OK');
   }, 105_000);
+
+  it('applies command cooldown/concurrency and the exact welcome scope, and members see the result', async () => {
+    const result = await runSmokeScenario('admission-and-welcome.mjs', 60_000);
+    expect(result.steps).toHaveLength(10);
+    expect(result.stdout).toContain('E2E_SMOKE_ADMISSION_WELCOME_OK');
+  }, 65_000);
+
+  it('creates a natural-time reminder, delivers it on a fake clock and drives the task center API', async () => {
+    const result = await runSmokeScenario('reminders-task-center.mjs', 60_000);
+    expect(result.steps).toHaveLength(5);
+    expect(result.stdout).toContain('E2E_SMOKE_REMINDERS_TASK_CENTER_OK');
+  }, 65_000);
+
+  it('holds quiet-hours RSS updates overnight and sends one morning digest', async () => {
+    const result = await runSmokeScenario('rss-quiet-hours.mjs', 60_000);
+    expect(result.steps).toHaveLength(5);
+    expect(result.stdout).toContain('E2E_SMOKE_RSS_QUIET_HOURS_OK');
+  }, 65_000);
 });
