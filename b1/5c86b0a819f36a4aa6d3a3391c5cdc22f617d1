@@ -1,0 +1,26 @@
+.changeset/e2e-smoke-config-loop.md
+  h_b680f75345178a 1-5
+packages/im/agent/evals/cases/smoke-structured-reply-mentions-asker.case.ts
+  h_b680f75345178a 1-25
+packages/toolkit/testing/README.md
+  h_b680f75345178a 77-78
+packages/toolkit/testing/src/index.ts
+  h_b680f75345178a 8,25-29
+tests/e2e-smoke/README.md
+  h_b680f75345178a 14-23
+tests/e2e-smoke/scenarios/config-explain-and-enum.mjs
+  h_b680f75345178a 1-168
+tests/e2e-smoke/smoke-loop.test.ts
+  h_b680f75345178a 44-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b15c86b0a819f36a4aa6d3a3391c5cdc22f617d1",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
