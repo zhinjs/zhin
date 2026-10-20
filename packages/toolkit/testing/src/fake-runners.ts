@@ -142,12 +142,15 @@ export interface RunToolOptions {
   readonly signal?: AbortSignal;
 }
 
-/** Map an inbound message to the Agent tool origin shape (`platform` / `endpoint` / `scope` / `sceneId`). */
+/**
+ * Map an inbound message to the Agent tool origin shape (`platform` / `endpoint` / `scope` / `sceneId`),
+ * with the same rules as the Agent's IM turn context (`clientAdapter` wins over the endpoint adapter).
+ */
 export function toolOriginFromMessage(message: CommandMessage): ToolInvocationOrigin {
   const { conversation } = message;
   return Object.freeze({
     kind: 'im' as const,
-    platform: conversation.endpoint.adapter,
+    platform: message.clientAdapter ?? conversation.endpoint.adapter,
     endpoint: conversation.endpoint.id,
     scope: conversation.kind,
     sceneId: conversation.id,

@@ -75,6 +75,7 @@ describe('runTool', () => {
       kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'private', sceneId: 'u1', messageId: 'm1',
     });
     expect(await runTool(fake, echo, { text: 'x' })).toBe('> x@test/test-group by test-user');
+    expect(toolOriginFromMessage({ ...message, clientAdapter: 'napcat' })).toMatchObject({ platform: 'napcat' });
   });
 
   it('parses executable input schemas and reports invalid input like the Runtime', async () => {
