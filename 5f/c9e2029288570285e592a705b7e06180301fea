@@ -1,0 +1,14 @@
+.changeset/qq-menu-markdown-merge.md
+  h_b680f75345178a 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5fc9e2029288570285e592a705b7e06180301fea",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
