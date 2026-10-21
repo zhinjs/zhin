@@ -127,6 +127,16 @@ export interface AgentToolDefinition<
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
   readonly hidden?: boolean;
+  /**
+   * Keep this tool's schema in the model's tool list on every turn instead of
+   * behind `discover` / `load_tool` (same meaning as the Agent's
+   * `deferredTools.alwaysLoadedTools`). Default `false`: plugin tools are
+   * deferred. Every resident schema costs context tokens on every turn, so only
+   * opt in for a small number of tools the model needs in most conversations.
+   * Operators keep the final say: `alwaysLoadedMode: replace` ignores this flag,
+   * and a hidden (placement-bound) tool is never made resident by it.
+   */
+  readonly alwaysLoaded?: boolean;
   /** @internal Filesystem-derived private capability binding. */
   readonly placement?: ToolPlacement;
   execute(
@@ -213,6 +223,9 @@ export function defineAgentTool<
   if (definition.scopes !== undefined && !Array.isArray(definition.scopes)) {
     throw new TypeError('Agent Tool scopes must be an array');
   }
+  if (definition.alwaysLoaded !== undefined && typeof definition.alwaysLoaded !== 'boolean') {
+    throw new TypeError('Agent Tool alwaysLoaded must be a boolean');
+  }
   if (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel')) {
     throw new TypeError('Agent Tool scopes must be private, group, or channel');
   }
@@ -253,6 +266,7 @@ export function parseAgentToolDefinition(
     || (definition.scopes !== undefined && !Array.isArray(definition.scopes))
     || (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel') ?? false)
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
+    || (definition.alwaysLoaded !== undefined && typeof definition.alwaysLoaded !== 'boolean')
   ) throw invalidTool();
   const placement = context?.localName
     ? placementFromLocalName(context.localName)

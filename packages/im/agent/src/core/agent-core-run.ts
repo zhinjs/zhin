@@ -29,7 +29,7 @@ import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.j
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
 import { resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
-import { resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
+import { resolveDeferredApiTools, residentToolNames } from '../tool-catalog/tool-catalog.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import {
@@ -572,9 +572,11 @@ export async function* runAgentLoopTextTurnRun(
     throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
   }
 
+  // Config names plus tools the capability plan pinned (platform tools, `alwaysLoaded` plugin tools).
+  const turnResidentTools = () => residentToolNames(catalog, resolveAlwaysLoadedSet(host.config));
   const refreshResolvedTools = () => {
     if (directTools) return resolvedTools;
-    const alwaysLoaded = resolveAlwaysLoadedSet(host.config);
+    const alwaysLoaded = turnResidentTools();
     const loaded = deferredController!.loadedToolNames();
     return resolveDeferredApiTools(catalog, alwaysLoaded, loaded);
   };
@@ -638,7 +640,7 @@ export async function* runAgentLoopTextTurnRun(
         llmModel.sdk,
         catalog,
         agentTools,
-        resolveAlwaysLoadedSet(host.config),
+        turnResidentTools(),
         deferredController?.loadedToolNames() ?? [],
       );
   if (hasTools) {
@@ -693,7 +695,7 @@ export async function* runAgentLoopTextTurnRun(
           llmModel.sdk,
           catalog,
           nextAgentTools,
-          resolveAlwaysLoadedSet(host.config),
+          turnResidentTools(),
           deferredController?.loadedToolNames() ?? [],
         );
     return llmTools;

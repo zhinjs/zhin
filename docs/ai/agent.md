@@ -97,6 +97,8 @@ ai:
 
 `bash` 不常驻，因为它能不能用取决于本回合的 shell 隔离策略。配置 `alwaysLoadedTools` 会在默认列表上**追加**；如需完全替换默认列表，设置 `alwaysLoadedMode: replace`。
 
+插件工具默认延迟加载。插件作者可以在 `defineAgentTool` 里写 `alwaysLoaded: true` 让个别高频工具常驻（每轮最多 8 个，`alwaysLoadedMode: replace` 时忽略），详见[让工具常驻](../authoring/agent-tools.md#让工具常驻)。常驻工具的参数定义每轮都会发送，集合越小越省上下文和 token。
+
 其余工具不发送参数定义，只在系统提示的 `## Deferred tools` 段里列出名称和一句不超过 60 字符的说明，最多 40 个，超出部分提示用 `discover` 检索。模型可以先 `load_tool(name)` 拿到参数定义；直接调用也会自动加载。这份索引只包含本回合有权使用的工具，被策略拿掉的工具（例如没有 shell 权限时的 `bash`）不会出现。
 
 技能采用渐进披露：系统提示只列出技能名称和第一行触发说明（最多 96 字符，最多 40 个），专家 agent 目录同样如此。技能正文在 `load_skill` 之后，或意图匹配自动激活后才进入上下文。

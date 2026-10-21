@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { AgentCapabilities, ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
+import { residentToolNames, resolveDeferredApiTools } from '../../src/tool-catalog/tool-catalog.js';
 import {
   createDeferredCapabilityPlan,
+  declaredResidentToolNames,
   isReservedControlToolName,
+  MAX_DECLARED_RESIDENT_TOOLS,
   primeAgentSkillForIntent,
   RESERVED_CONTROL_TOOL_PREFIX,
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
@@ -222,6 +225,78 @@ describe('DeferredCapabilityPlan', () => {
     expect(plan.resolvedTools.map((entry) => entry.name)).toEqual([
       'discover', 'load_tool', 'load_skill', 'icqq__send_user_like',
     ]);
+  });
+
+  describe('author-declared resident plugin tools (#857 P1-10)', () => {
+    const META = ['discover', 'load_tool', 'load_skill'];
+    const residentTool = (owner: ReturnType<typeof rootPluginId>, name: string, extra: Partial<ToolCapability> = {}) =>
+      Object.freeze({ ...tool(owner, name, name), alwaysLoaded: true, ...extra }) as ToolCapability;
+    const planFor = (
+      tools: readonly ToolCapability[],
+      deferredTools: Record<string, unknown> = { alwaysLoadedTools: META },
+    ) => createDeferredCapabilityPlan({
+      capabilities: bareCapabilities(rootPluginId(), tools),
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools },
+      persistSnapshot: async () => undefined,
+    });
+
+    it('keeps plugin tools deferred by default', () => {
+      const owner = rootPluginId();
+      const plan = planFor([tool(owner, 'weather', 'Weather'), Object.freeze({ ...tool(owner, 'news', 'News'), alwaysLoaded: false })]);
+      expect(plan.resolvedTools.map(entry => entry.name)).toEqual(META);
+      expect(plan.catalog.find(item => item.name === 'weather')?.deferDefault).toBe(true);
+      expect(plan.catalog.find(item => item.name === 'news')?.deferDefault).toBe(true);
+    });
+
+    it('makes opted-in tools resident without counting them against the session budget', async () => {
+      const owner = rootPluginId();
+      const plan = planFor([tool(owner, 'weather', 'Weather'), residentTool(owner, 'translate')]);
+      expect(plan.resolvedTools.map(entry => entry.name)).toEqual([...META, 'translate']);
+      expect(plan.catalog.find(item => item.name === 'translate')?.deferDefault).toBe(false);
+      await execute(plan.capabilities, 'load_tool', { name: 'translate' });
+      expect(plan.controller.loadedToolNames()).toEqual([]);
+    });
+
+    it('lets the operator replace mode override author declarations', () => {
+      const owner = rootPluginId();
+      const plan = planFor([residentTool(owner, 'translate')], { alwaysLoadedTools: META, alwaysLoadedMode: 'replace' });
+      expect(plan.resolvedTools.map(entry => entry.name)).toEqual(META);
+    });
+
+    it('never makes a hidden tool resident', () => {
+      const owner = rootPluginId();
+      const plan = planFor([residentTool(owner, 'internal_lookup', { hidden: true })]);
+      expect(plan.resolvedTools.map(entry => entry.name)).not.toContain('internal_lookup');
+      expect(plan.catalog.map(entry => entry.name)).not.toContain('internal_lookup');
+    });
+
+    it('caps declared resident tools and leaves the rest deferred', () => {
+      const owner = rootPluginId();
+      const names = Array.from({ length: MAX_DECLARED_RESIDENT_TOOLS + 2 }, (_, index) => `tool_${index}`);
+      const plan = planFor(names.map(name => residentTool(owner, name)));
+      const resolved = plan.resolvedTools.map(entry => entry.name);
+      expect(resolved).toEqual([...META, ...names.slice(0, MAX_DECLARED_RESIDENT_TOOLS)]);
+      expect(plan.catalog.map(entry => entry.name)).toEqual(expect.arrayContaining(names));
+      expect(declaredResidentToolNames(names.map(name => ({ name, alwaysLoaded: true })), {}))
+        .toHaveLength(MAX_DECLARED_RESIDENT_TOOLS);
+    });
+
+    it('keeps pinned tools resident when the turn rebuilds its tool list after load_tool', async () => {
+      const owner = rootPluginId();
+      const plan = planFor([
+        tool(owner, 'weather', 'Weather'),
+        residentTool(owner, 'translate'),
+        Object.freeze({ ...tool(owner, 'icqq__poke', 'Poke'), platforms: Object.freeze(['icqq']) }),
+      ]);
+      await execute(plan.capabilities, 'load_tool', { name: 'weather' });
+      // Mirrors AgentCore's mid-turn rebuild: config names alone would drop the pinned tools.
+      const resident = residentToolNames(plan.catalog, new Set(META));
+      const rebuilt = resolveDeferredApiTools([...plan.catalog], resident, plan.controller.loadedToolNames());
+      expect(rebuilt.map(entry => entry.name)).toEqual(expect.arrayContaining(['translate', 'icqq__poke', 'weather']));
+      expect(resolveDeferredApiTools([...plan.catalog], new Set(META), plan.controller.loadedToolNames())
+        .map(entry => entry.name)).not.toContain('translate');
+    });
   });
 
   it('keeps hidden capabilities callable internally but out of model catalogs', () => {

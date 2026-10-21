@@ -135,6 +135,30 @@ export default definePlugin({
 
 根目录 `tools/` 只放通用、高频、不需要额外说明的工具。只在某个平台、工作流或角色下才有意义的工具，应放进对应的 Skill 或 Agent，避免平时占用提示词。所有工具都会在启动时校验，即使暂时不提供给模型。
 
+### 让工具常驻
+
+插件工具默认**延迟加载**：模型只在系统提示的工具索引里看到名称和一句说明，要用时通过 `discover` / `load_tool` 拿到参数定义（直接调用也会自动加载）。几乎每轮对话都要用的工具，可以声明 `alwaysLoaded: true`，让它的参数定义每轮都直接发给模型：
+
+```ts
+export default defineAgentTool({
+  description: '把文本翻译成指定语言',
+  alwaysLoaded: true,
+  execute: async (input) => { /* ... */ },
+})
+```
+
+::: warning 常驻集合要尽量小
+每个常驻工具的参数定义每次调用模型都会发送，会占用上下文、增加 token 费用，也会让模型在更多工具之间犹豫。只给真正高频的一两个工具开启；其余保持默认，由模型按需加载。
+:::
+
+规则：
+
+- 不写或写 `false` 都是延迟加载，已有插件的行为不变。
+- 这个开关只决定“是否常驻”，不放宽准入：`platforms`、`scopes`、`permissions` 不满足时工具仍然不可见，`hidden` 或放在 Skill / Agent 目录下的私有工具也不会因此常驻。
+- 每轮最多 8 个插件工具能通过这个开关常驻，超出的按工具顺序保持延迟加载（仍可 `discover`），日志会提示一次。
+- 运维方说了算：`ai.agent.deferredTools.alwaysLoadedMode: replace` 时，常驻集合完全由 `alwaysLoadedTools` 决定，插件声明被忽略；也可以把工具名写进 `alwaysLoadedTools` 让它常驻，不受 8 个的限制。
+- 只在某个平台提供的工具（设置了 `platforms`）通过准入后本来就常驻，不需要再声明。
+
 ### 给 AI 补充业务背景
 
 用 Prompt Section 告诉 AI 产品术语、回答规范或工具使用约束：
@@ -255,6 +279,7 @@ my-plugin/
 | `scopes` | 否 | 限定场景 `'private' \| 'group' \| 'channel'`；为空表示全部 |
 | `permissions` | 否 | 权限规则列表，全部满足才提供 |
 | `hidden` | 否 | 注册但不提供给模型，仍可按名字调用 |
+| `alwaysLoaded` | 否 | 设为 `true` 时参数定义每轮常驻给模型；默认 `false`（延迟加载），见[让工具常驻](#让工具常驻) |
 | `execute(input, context)` | 是 | 执行函数，`context` 见上文 |
 
 ### 权限规则
@@ -300,7 +325,7 @@ flowchart LR
 ```
 
 1. **准入。** 每轮对话开始时，框架按消息的平台、场景和发送者筛选工具；不满足条件的工具对模型不可见。
-2. **按需加载。** 默认只向模型暴露 `alwaysLoadedTools`。模型通过 `discover` 搜索工具和 Skill（返回名称与简介），用 `load_tool` 加载工具的参数定义，用 `load_skill` 加载 Skill 全文并解锁其工具。已加载的状态按会话保存，超过上限会逐出。并发的对话和子任务彼此隔离。Anthropic 通道会把未加载的工具以 `deferLoading` 标记下发，其他通道只下发已加载的工具。
+2. **按需加载。** 默认只向模型暴露 `alwaysLoadedTools`、通过准入的平台专属工具，以及声明了 `alwaysLoaded: true` 的插件工具。模型通过 `discover` 搜索工具和 Skill（返回名称与简介），用 `load_tool` 加载工具的参数定义，用 `load_skill` 加载 Skill 全文并解锁其工具。已加载的状态按会话保存，超过上限会逐出。并发的对话和子任务彼此隔离。Anthropic 通道会把未加载的工具以 `deferLoading` 标记下发，其他通道只下发已加载的工具。
 3. **审批与执行。** 通过准入后、执行前判断 `requiresApproval`；执行时绑定工具所属插件的配置和资源。
 
 ::: details 实现细节
