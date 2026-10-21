@@ -1,4 +1,4 @@
-import { assistantAnswerText, createUserMessage, type AssistantMessage, type LlmCompletionPort, type Model, type UserMessage } from '@zhin.js/ai';
+import { assistantAnswerText, createUserMessage, type AssistantMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
 import { aiOutboundJsonSchema } from '@zhin.js/core';
 import { decodeStructuredReply, STRUCTURED_REPLY_INSTRUCTION } from '../outbound/structured-reply.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
@@ -12,7 +12,15 @@ export async function recoverStructuredReply(input: {
   raw: string;
   error: Error;
   signal?: AbortSignal;
-}): Promise<{ output: AgentOutputElement[]; exchange?: [UserMessage, AssistantMessage] }> {
+}): Promise<{
+  output: AgentOutputElement[];
+  /**
+   * The corrected assistant message, the only part of the exchange safe to persist: the correction
+   * prompt embeds the rejected (model / injection influenced) text and must never become history.
+   * Absent when recovery failed; `output` is then the failure text.
+   */
+  assistant?: AssistantMessage;
+}> {
   // Do not silently truncate a reply and accidentally change its meaning.
   if (input.raw.length <= 32_000 && !input.signal?.aborted) {
     try {
@@ -35,7 +43,7 @@ export async function recoverStructuredReply(input: {
       });
       const text = assistantAnswerText(assistant);
       const output = decodeStructuredReply(text);
-      return { output, exchange: [correction, { ...assistant, content: [{ type: 'text', text }] }] };
+      return { output, assistant: { ...assistant, content: [{ type: 'text', text }] } };
     } catch {
       // Invalid or missing output stays private, including provider reasoning.
     }

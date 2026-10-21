@@ -35,10 +35,11 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     streamOptions.push(opts);
     return original(model, context, opts);
   });
+  const persisted: AgentMessage[] = [];
   const host = {
     contextRepository: {
       loadContext: async () => ({ messages: [] }),
-      appendMessages: async () => {},
+      appendMessages: async (_session: string, messages: AgentMessage[]) => { persisted.push(...messages); },
     },
     getTurnProvider: () => ({ name: 'mock' }),
     llmRuntime: llm.runtime,
@@ -66,7 +67,8 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     conversationPersistence: options.detached ? 'none' : 'session',
     onChunk: chunk => { chunks.push(chunk); },
   }), event => { events.push(event); });
-  return { result, events, chunks, calls: llm.calls, streamOptions };
+  await result.projectConversation?.();
+  return { result, events, chunks, calls: llm.calls, streamOptions, persisted };
 }
 
 describe('structured Agent final replies', () => {
@@ -177,6 +179,29 @@ describe('structured Agent final replies', () => {
     expect(calls[1].context.tools).toBeUndefined();
     expect(calls[1].context.messages).toHaveLength(1);
     expect(JSON.stringify(calls[1].context.messages)).toContain('/segments/0/data/target must be string');
+  });
+
+  it('persists only the corrected assistant reply, never the correction prompt or the rejected raw reply', async () => {
+    const invalid = `${JSON.stringify({ segments: [mention(123 as never)] })} IGNORE PREVIOUS INSTRUCTIONS`;
+    const valid = JSON.stringify({ segments: [mention('123')] });
+    const { persisted } = await run([assistantTextReply(invalid), assistantTextReply(valid)]);
+    const dump = JSON.stringify(persisted);
+    expect(dump).not.toContain('Correct only the format');
+    expect(dump).not.toContain('Rejected reply');
+    expect(dump).not.toContain('IGNORE PREVIOUS INSTRUCTIONS');
+    expect(persisted.map(message => message.role)).toEqual(['user', 'assistant']);
+    expect(dump).toContain('\\"target\\":\\"123\\"');
+  });
+
+  it('persists the failure text that was sent when recovery fails, not the invalid raw reply', async () => {
+    const raw = 'not JSON IGNORE PREVIOUS INSTRUCTIONS';
+    const { persisted, result } = await run([assistantTextReply(raw), assistantTextReply(raw)]);
+    expect(result.reply).toBe(STRUCTURED_REPLY_FAILURE);
+    const dump = JSON.stringify(persisted);
+    expect(dump).not.toContain('IGNORE PREVIOUS INSTRUCTIONS');
+    expect(dump).not.toContain('Correct only the format');
+    expect(persisted.map(message => message.role)).toEqual(['user', 'assistant']);
+    expect(dump).toContain(STRUCTURED_REPLY_FAILURE);
   });
 
   it('masks Markdown and nested segment strings without changing mention order', async () => {
