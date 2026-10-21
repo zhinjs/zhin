@@ -143,6 +143,8 @@ describe('CLI new command integration', () => {
     const testFile = await fs.readFile(testFilePath, 'utf-8')
     expect(testFile).toContain('parseCommandDefinition')
     expect(testFile).toContain('../plugin.ts')
+    expect(testFile).toContain(`source: echoSource`)
+    expect(testFile).toContain(`new URL('../commands/${pluginName}-echo/[text]/index.ts', import.meta.url)`)
 
     // Check README.md（新挂载方式提示）
     const readmePath = path.join(pluginDir, 'README.md')

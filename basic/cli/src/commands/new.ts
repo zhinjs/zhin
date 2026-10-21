@@ -678,6 +678,11 @@ import plugin from '../plugin.ts';
 import mainCommand from '../commands/${pluginName}/index.ts';
 import echoCommand from '../commands/${pluginName}-echo/[text]/index.ts';
 
+// source: runCommand first applies the Runtime's convention-path rules, so a directory layout the
+// Runtime would reject (e.g. commands/a/[x]/[...y]) fails here instead of only at startup.
+const mainSource = new URL('../commands/${pluginName}/index.ts', import.meta.url);
+const echoSource = new URL('../commands/${pluginName}-echo/[text]/index.ts', import.meta.url);
+
 describe('${packageName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('${pluginName}');
@@ -692,7 +697,7 @@ describe('${packageName}', () => {
   // It skips routing, parameter parsing and permit; use PluginTestKit for those (docs/authoring/testing.md).
   it('main command returns greeting text', async () => {
     const fake = await runPluginSetup(plugin);
-    const result = await runCommand(fake, mainCommand, { input: createFakeMessage() });
+    const result = await runCommand(fake, mainCommand, { source: mainSource, input: createFakeMessage() });
     expect(String(result)).toContain('运行中');
     await fake.dispose();
   });
@@ -700,6 +705,7 @@ describe('${packageName}', () => {
   it('echo command echoes the dynamic segment', async () => {
     const fake = await runPluginSetup(plugin);
     const result = await runCommand(fake, echoCommand, {
+      source: echoSource,
       input: createFakeMessage({ content: '${pluginName}-echo 你好' }),
       args: ['你好'],
       params: { text: '你好' },
