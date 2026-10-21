@@ -52,14 +52,33 @@ describe('command execution policy', () => {
     f.setNow(1100);
     const next = f.open(); expect(f.admit(next.source, policy)).toBeUndefined(); await next.control.finish();
   });
-  it('does not evict active or cooling identities to make capacity', async () => {
+  it('never evicts running identities, but reports capacity only when every entry is running', async () => {
     const f = setup(1); const first = f.open();
     expect(f.admit(first.source, { cooldownMs: 1000 })).toBeUndefined();
     expect(f.admit(f.open('bob').source)).toEqual({ reason: 'capacity' });
     await first.control.finish();
-    expect(f.admit(f.open('bob').source)).toEqual({ reason: 'capacity' });
-    f.setNow(1100);
     const next = f.open('bob'); expect(f.admit(next.source)).toBeUndefined(); await next.control.finish();
+  });
+  it('evicts the oldest idle cooling identity when full so new identities are not locked out', async () => {
+    const f = setup(2); const policy = { cooldownMs: 100_000 };
+    const [a, b] = ['a', 'b'].map(name => f.open(name));
+    expect(f.admit(a.source, policy)).toBeUndefined();
+    expect(f.admit(b.source, policy)).toBeUndefined();
+    await a.control.finish(); await b.control.finish();
+    // Table full of idle identities that are all still cooling down.
+    const c = f.open('c'); expect(f.admit(c.source, policy)).toBeUndefined();
+    // "b" (newer) keeps its cooldown; "a" (oldest) lost it and is no longer tracked.
+    expect(f.admit(f.open('b').source, policy)).toEqual({ reason: 'cooldown', retryAfterMs: expect.any(Number) });
+    await c.control.finish();
+  });
+  it('rejects with capacity when the only evictable identities are running', async () => {
+    const f = setup(2); const a = f.open('a'), b = f.open('b');
+    expect(f.admit(a.source, { cooldownMs: 1000 })).toBeUndefined();
+    expect(f.admit(b.source, { cooldownMs: 1000 })).toBeUndefined();
+    expect(f.admit(f.open('c').source)).toEqual({ reason: 'capacity' });
+    await a.control.finish();
+    const c = f.open('c'); expect(f.admit(c.source)).toBeUndefined();
+    await b.control.finish(); await c.control.finish();
   });
   it('separates capabilities, adapters and accounts without weakening identical identities', async () => {
     const f = setup();
@@ -96,13 +115,45 @@ describe('command execution policy', () => {
     await first.control.finish();
     const next = f.open(); expect(f.admit(next.source)).toBeUndefined(); await next.control.finish();
   });
-  it('keeps direct execution unchanged without policy and explicitly rejects policy without an operation', async () => {
+  it('keeps direct execution unchanged without policy and applies policy per command without an operation', async () => {
     const f = setup();
-    const slots = [false, true].map(enabled => createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: enabled ? 'limited' : 'plain', source: '/command/index.ts',
-      definition: defineCommand({ ...(enabled ? { execution: { maxConcurrent: 1 } } : {}), execute: () => 'ok' }) }));
-    const index = new CommandIndex(slots, f.snapshot);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const slot = (localName: string, execution: CommandExecutionPolicy | undefined, run: () => unknown) => createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName,
+      source: '/command/index.ts', definition: defineCommand({ ...(execution ? { execution } : {}), execute: run as never }) });
+    const index = new CommandIndex([
+      slot('plain', undefined, () => 'ok'),
+      slot('limited', { maxConcurrent: 1 }, () => 'limited-ok'),
+      slot('slow', { maxConcurrent: 1 }, () => gate.then(() => 'slow-ok')),
+      slot('cool', { cooldownMs: 1000, progressAfterMs: 50 }, () => 'cool-ok'),
+      slot('boom', { maxConcurrent: 1 }, () => { throw new Error('boom'); }),
+    ], f.snapshot);
     expect(await index.execute('plain')).toBe('ok');
-    await expect(index.execute('limited')).rejects.toBeInstanceOf(CommandExecutionLimitedError);
+    expect(await index.execute('limited')).toBe('limited-ok');
+    expect(await index.execute('limited')).toBe('limited-ok');
+    // concurrency is enforced per command and released when the execution settles
+    const first = index.execute('slow');
+    await expect(index.execute('slow')).rejects.toMatchObject({ limit: { reason: 'busy' } });
+    release();
+    expect(await first).toBe('slow-ok');
+    expect(await index.execute('slow')).toBe('slow-ok');
+    // a failing execution releases its slot
+    await expect(index.execute('boom')).rejects.toThrow('boom');
+    await expect(index.execute('boom')).rejects.toThrow('boom');
+    // cooldown applies per command
+    expect(await index.execute('cool')).toBe('cool-ok');
+    await expect(index.execute('cool')).rejects.toMatchObject({ limit: { reason: 'cooldown', retryAfterMs: 1000 } });
+    f.setNow(1100);
+    expect(await index.execute('cool')).toBe('cool-ok');
+  });
+  it('still refuses policy-bearing dispatch without a bound operation and without the budget resource', async () => {
+    const f = setup();
+    const index = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'limited', source: '/command/index.ts',
+      definition: defineCommand({ execution: { maxConcurrent: 1 }, execute: () => 'ok' }) })], f.snapshot);
     expect(await index.dispatch('limited', {})).toMatchObject({ matched: true, status: 'limited', limit: { reason: 'operation_unavailable' } });
+    const bare = createSnapshotView(0, { ...f.snapshot, resources: new Map() } as unknown as SnapshotState);
+    const bareIndex = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'limited', source: '/command/index.ts',
+      definition: defineCommand({ execution: { maxConcurrent: 1 }, execute: () => 'ok' }) })], bare);
+    await expect(bareIndex.execute('limited')).rejects.toMatchObject({ limit: { reason: 'service_unavailable' } });
   });
 });

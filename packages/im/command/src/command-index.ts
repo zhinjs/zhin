@@ -19,7 +19,7 @@ import {
 import { commandAdapterMatches, toCommandPermissionSubject } from './permission-explanation.js';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
-import { admitCommandExecution } from './execution-runtime.js';
+import { admitCommandExecution, admitDirectCommandExecution } from './execution-runtime.js';
 import { CommandExecutionLimitedError, normalizeExecutionPolicy, type CommandExecutionLimit } from './execution-policy.js';
 export { CommandExecutionLimitedError } from './execution-policy.js';
 import {
@@ -275,10 +275,15 @@ export class CommandIndex {
     const supplied = [...match.remaining, ...(args.length > 0 ? [{ type: 'text', data: { text: args.join(' ') } }] : [])];
     const parsed = parseCommandArguments(definition, supplied, resolveDynamicParams(match.params, undefined), {});
     if (parsed.issues.length > 0) throw new CommandArgumentValidationError(parsed.issues, commandHelp(match.command.name, definition));
-    const limit = admitCommandExecution(undefined, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
-    if (limit) throw new CommandExecutionLimitedError(limit);
-    return definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
-      textArgs(parsed.remaining), parsed.params, undefined, parsed.remaining, undefined, definition.adapter, parsed.options));
+    // No inbound source: execution policy applies per command, never as a blanket refusal.
+    const admission = admitDirectCommandExecution(match.command.slot.id, match.command.execution, operationSnapshot);
+    if (admission.limit) throw new CommandExecutionLimitedError(admission.limit);
+    try {
+      return await definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
+        textArgs(parsed.remaining), parsed.params, undefined, parsed.remaining, undefined, definition.adapter, parsed.options));
+    } finally {
+      admission.release();
+    }
   }
 
   async dispatch(

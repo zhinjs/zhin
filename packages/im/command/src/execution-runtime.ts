@@ -12,7 +12,15 @@ interface ConversationIdentity {
 
 interface AdmissionReader {
   admit(source: unknown, capability: string, owner: PluginId, policy: CommandExecutionPolicy, snapshot: RuntimeSnapshot): CommandExecutionLimit | undefined;
+  /**
+   * Programmatic call with no inbound source (e.g. `CommandIndex.execute`). The policy is keyed by command only:
+   * there is no sender or conversation to budget, and no reply channel for progress feedback.
+   * On success the caller must invoke `release` once the execution settles.
+   */
+  admitDirect(capability: string, policy: CommandExecutionPolicy): DirectAdmission;
 }
+
+type DirectAdmission = { readonly limit: CommandExecutionLimit; readonly release?: undefined } | { readonly limit?: undefined; readonly release: () => void };
 
 /** @internal Admission-only Root resource; no bind or finish authority is published. */
 export const commandExecutionAdmissionToken = createToken<AdmissionReader>('zhin.command.execution-admission');
@@ -56,7 +64,8 @@ export class CommandExecutionBudget {
     this.#clock = options.clock ?? (() => performance.now());
     this.#capacity = options.capacity ?? 10_000;
     if (!Number.isSafeInteger(this.#capacity) || this.#capacity < 1) throw new TypeError('Invalid command budget capacity');
-    this.admission = Object.freeze<AdmissionReader>({ admit: (source, capability, owner, policy, snapshot) => this.#admit(source, capability, owner, policy, snapshot) });
+    this.admission = Object.freeze<AdmissionReader>({ admit: (source, capability, owner, policy, snapshot) => this.#admit(source, capability, owner, policy, snapshot),
+      admitDirect: (capability, policy) => this.#admitDirect(capability, policy) });
   }
 
   openOperation(input: {
@@ -110,6 +119,43 @@ export class CommandExecutionBudget {
     });
   }
 
+  #admitDirect(capability: string, policy: CommandExecutionPolicy): DirectAdmission {
+    return this.#acquire(JSON.stringify([capability, 'direct']), policy);
+  }
+
+  /** Shared entry accounting: concurrency, cooldown and capacity. Returns a one-shot release on success. */
+  #acquire(key: string, policy: CommandExecutionPolicy): DirectAdmission {
+    const now = this.#clock();
+    let entry = this.#entries.get(key);
+    if (entry && policy.maxConcurrent !== undefined && entry.active >= policy.maxConcurrent) return { limit: limited('busy') };
+    if (entry && entry.cooldownUntil > now) return { limit: Object.freeze({ reason: 'cooldown', retryAfterMs: Math.ceil(entry.cooldownUntil - now) }) };
+    if (!entry) {
+      if (this.#entries.size >= this.#capacity) {
+        for (const [oldKey, old] of this.#entries) if (old.active === 0 && old.cooldownUntil <= now) this.#entries.delete(oldKey);
+        if (this.#entries.size >= this.#capacity) {
+          // Still full of cooling identities: drop the oldest idle one. Forgetting a cooldown is acceptable;
+          // refusing every new identity is not. Only entries with running operations are never evicted.
+          for (const [oldKey, old] of this.#entries) if (old.active === 0) { this.#entries.delete(oldKey); break; }
+        }
+        if (this.#entries.size >= this.#capacity) return { limit: limited('capacity') };
+      }
+      entry = { active: 0, cooldownUntil: 0 };
+      this.#entries.set(key, entry);
+    }
+    entry.active++;
+    entry.cooldownUntil = now + (policy.cooldownMs ?? 0);
+    const acceptedEntry = entry;
+    let released = false;
+    return {
+      release: () => {
+        if (released) return;
+        released = true;
+        acceptedEntry.active--;
+        if (acceptedEntry.active === 0 && acceptedEntry.cooldownUntil <= this.#clock()) this.#entries.delete(key);
+      },
+    };
+  }
+
   #admit(source: unknown, capability: string, owner: PluginId, policy: CommandExecutionPolicy, snapshot: RuntimeSnapshot): CommandExecutionLimit | undefined {
     const binding = source !== null && typeof source === 'object' ? this.#views.get(source) : undefined;
     const operation = binding?.operation;
@@ -117,26 +163,10 @@ export class CommandExecutionBudget {
     if (!operation.key) return limited('identity_unavailable');
     const key = JSON.stringify([capability, ...operation.key]);
     // Re-entering the same capability is a second attempt, rather than a second free execution.
-    const now = this.#clock();
-    let entry = this.#entries.get(key);
-    if (entry && policy.maxConcurrent !== undefined && entry.active >= policy.maxConcurrent) return limited('busy');
-    if (entry && entry.cooldownUntil > now) return Object.freeze({ reason: 'cooldown', retryAfterMs: Math.ceil(entry.cooldownUntil - now) });
-    if (!entry) {
-      if (this.#entries.size >= this.#capacity) {
-        for (const [oldKey, old] of this.#entries) if (old.active === 0 && old.cooldownUntil <= now) this.#entries.delete(oldKey);
-        if (this.#entries.size >= this.#capacity) return limited('capacity');
-      }
-      entry = { active: 0, cooldownUntil: 0 };
-      this.#entries.set(key, entry);
-    }
-    entry.active++;
+    const acquired = this.#acquire(key, policy);
+    if (acquired.limit) return acquired.limit;
     operation.admitted = true;
-    entry.cooldownUntil = now + (policy.cooldownMs ?? 0);
-    const acceptedEntry = entry;
-    operation.releases.push(() => {
-      acceptedEntry.active--;
-      if (acceptedEntry.active === 0 && acceptedEntry.cooldownUntil <= this.#clock()) this.#entries.delete(key);
-    });
+    operation.releases.push(acquired.release);
     if (policy.progressAfterMs !== undefined && !operation.progressStopped && !operation.accepted.has(capability)) {
       const timer = setTimeout(() => {
         operation.timers.delete(timer);
@@ -162,4 +192,11 @@ export function admitCommandExecution(source: unknown, capability: string, owner
   if (!policy) return undefined;
   const reader = snapshot.resources.get(snapshot.root)?.get(commandExecutionAdmissionToken.id) as AdmissionReader | undefined;
   return reader ? reader.admit(source, capability, owner, policy, snapshot) : limited('service_unavailable');
+}
+
+/** @internal Programmatic (source-less) admission: keyed by command only, never refused for lacking a source. */
+export function admitDirectCommandExecution(capability: string, policy: CommandExecutionPolicy | undefined, snapshot: RuntimeSnapshot): DirectAdmission {
+  if (!policy) return { release: () => {} };
+  const reader = snapshot.resources.get(snapshot.root)?.get(commandExecutionAdmissionToken.id) as AdmissionReader | undefined;
+  return reader ? reader.admitDirect(capability, policy) : { limit: limited('service_unavailable') };
 }
