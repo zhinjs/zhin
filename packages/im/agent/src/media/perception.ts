@@ -22,6 +22,7 @@ import {
   type UserMessage,
 } from '@zhin.js/ai';
 import type { MediaBinaryPayload } from './media-types.js';
+import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 
 import type { PerceptionMediaKind, ResolvedPerceptionConfig } from '../config/perception-config.js';
 
@@ -92,6 +93,28 @@ export function truncatePerceptionText(text: string, maxChars: number): string {
   const chars = Array.from(normalized);
   if (chars.length <= maxChars) return normalized;
   return `${chars.slice(0, Math.max(1, maxChars - 1)).join('')}…`;
+}
+
+/**
+ * Conservative per-item media cost (tokens) charged when a perception call fails after it
+ * was sent: the provider may already have billed the input, and the reply that would report
+ * the real usage never arrived.
+ */
+const FAILED_PERCEPTION_MEDIA_TOKENS: Readonly<Record<string, number>> = Object.freeze({
+  image: 1_000,
+  video: 4_000,
+  file: 2_000,
+});
+
+/** A perception call that failed after reaching the provider; `usage` is a conservative estimate. */
+export class MediaPerceptionFailedError extends Error {
+  readonly usage: Usage;
+
+  constructor(cause: unknown, usage: Usage) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'MediaPerceptionFailedError';
+    this.usage = usage;
+  }
 }
 
 function perceptionUsageOf(raw: { input?: number; output?: number; totalTokens?: number } | undefined): Usage | undefined {
@@ -171,11 +194,20 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
         media: [block],
         timestamp: Date.now(),
       };
-      const reply = await port.complete(model, { systemPrompt: PERCEPTION_SYSTEM_PROMPT, messages: [user] }, { signal });
-      const text = truncatePerceptionText(assistantAnswerText(reply), config.maxChars);
-      if (!text) return undefined;
-      remember(key, text);
+      let reply: Awaited<ReturnType<typeof port.complete>>;
+      let text: string;
+      try {
+        reply = await port.complete(model, { systemPrompt: PERCEPTION_SYSTEM_PROMPT, messages: [user] }, { signal });
+        text = truncatePerceptionText(assistantAnswerText(reply), config.maxChars);
+      } catch (error) {
+        const prompt = estimatePromptTokens(`${PERCEPTION_SYSTEM_PROMPT}\n${PERCEPTION_INSTRUCTIONS[payload.kind]}`)
+          + (FAILED_PERCEPTION_MEDIA_TOKENS[payload.kind] ?? 1_000);
+        throw new MediaPerceptionFailedError(error, { prompt_tokens: prompt, completion_tokens: 0, total_tokens: prompt });
+      }
       const usage = perceptionUsageOf(reply.usage);
+      // An empty description still spent tokens: report the usage with no text.
+      if (!text) return { text: '', provider: config.provider, model: config.model, cached: false, ...(usage ? { usage } : {}) };
+      remember(key, text);
       return { text, provider: config.provider, model: config.model, cached: false, ...(usage ? { usage } : {}) };
     },
   });
