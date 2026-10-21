@@ -1,11 +1,11 @@
 import { realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { defineAdapter, type AdapterDefinition, type AdapterSegmentPolicy,
-  type EndpointIdentity, type EndpointEventSink, type EndpointIncomingMessage, type EndpointSendRequest } from '@zhin.js/adapter';
+  type EndpointIdentity, type EndpointEventSink, type EndpointIncomingMessage, type EndpointSendRequest } from 'zhin.js/adapter';
 import { ImRuntime, type ConversationAddress, type MessageDispatchResult,
-  type RuntimeMessageDiagnosticsReader, type SendContent } from '@zhin.js/core/runtime';
-import { type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
-import { rootPluginId, type ConfigDocumentPort, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+  type RuntimeMessageDiagnosticsReader, type SendContent } from 'zhin.js/core/runtime';
+import { type ConversationRef, type DeliveryReceipt } from 'zhin.js';
+import { rootPluginId, type ConfigDocumentPort, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from 'zhin.js/plugin-runtime';
 import { NativeDevelopmentModuleRuntime, NodePackageResolver, RootRuntime,
   type ModuleRuntime, type RootResourceInstaller } from '@zhin.js/runtime';
 import { captureDeliveryValue } from './delivery-capture.js';

@@ -6,7 +6,9 @@
  *   → generated vitest + tsc → `pnpm pack` ships plugin.js → `zhin plugin check --strict` passes.
  *
  * Also asserts no packed @zhin.js/* manifest still has the source-only
- * `development` → ./src/*.ts condition.
+ * `development` → ./src/*.ts condition, that @zhin.js/testing takes the zhin.js
+ * stack only through peers, and that the scaffolded install holds exactly one
+ * copy of every zhin.js / @zhin.js/* package (#899).
  *
  * Usage: node scripts/check-plugin-scaffold.mjs [--no-build] [--keep]
  */
@@ -78,6 +80,38 @@ function publishProblems(name, { manifest }) {
   return hasSourceConditions(manifest.exports) ? [`${name}: exports still has a development condition`] : [];
 }
 
+/**
+ * #899: a hard (exact) zhin.js / @zhin.js/* dependency in the test kit installs a
+ * second stack next to the plugin's own zhin.js whenever their versions drift.
+ * Tarball overrides below would hide that drift, so the manifest is asserted directly.
+ */
+function testingManifestProblems(name, { manifest }) {
+  if (name !== '@zhin.js/testing') return [];
+  const pinned = Object.keys(manifest.dependencies ?? {}).filter(isStackPackage);
+  return pinned.length ? [`${name}: zhin.js stack must be peerDependencies, not dependencies: ${pinned.join(', ')}`] : [];
+}
+
+function isStackPackage(name) {
+  return name === 'zhin.js' || name.startsWith('@zhin.js/');
+}
+
+/**
+ * Every zhin.js / @zhin.js/* package must resolve to one location: a second
+ * version or a second peer-resolution variant is a second module instance,
+ * which the Runtime rejects ("Multiple package locations …").
+ */
+async function duplicateStackProblems(root) {
+  const locations = new Map();
+  for (const dir of await readdir(path.join(root, 'node_modules/.pnpm'))) {
+    const name = dir.startsWith('@') ? dir.slice(0, dir.indexOf('@', 1)).replace('+', '/') : dir.slice(0, dir.indexOf('@'));
+    if (!isStackPackage(name)) continue;
+    locations.set(name, [...(locations.get(name) ?? []), dir]);
+  }
+  if (locations.size === 0) return ['no zhin.js / @zhin.js/* package found under node_modules/.pnpm'];
+  return [...locations].filter(([, dirs]) => dirs.length > 1)
+    .map(([name, dirs]) => `${name} is installed ${dirs.length} times: ${dirs.join(', ')}`);
+}
+
 const temp = await mkdtemp(path.join(tmpdir(), 'zhin-plugin-scaffold-'));
 try {
   const packs = path.join(temp, 'packs');
@@ -104,9 +138,10 @@ try {
     if (created.length !== 1) throw new Error(`Expected one tarball for ${entry.name}`);
     const file = path.join(packs, created[0]);
     packed.set(entry.name, { tarball: file });
-    problems.push(...publishProblems(entry.name, await tarball(file)));
+    const packedTarball = await tarball(file);
+    problems.push(...publishProblems(entry.name, packedTarball), ...testingManifestProblems(entry.name, packedTarball));
   }
-  if (problems.length > 0) throw new Error(`Packed manifests still publish source-only conditions:\n  ${problems.join('\n  ')}`);
+  if (problems.length > 0) throw new Error(`Packed manifests are not publishable:\n  ${problems.join('\n  ')}`);
 
   // Host workspace = an author's repo: plugins/* are scaffolded by the built CLI.
   await writeFile(path.join(host, 'package.json'), `${JSON.stringify({ name: 'scaffold-host', private: true, type: 'module' }, null, 2)}\n`);
@@ -118,6 +153,12 @@ try {
     await run(process.execPath, [cli, 'new', plugin.name, '--standalone', '--type', plugin.type, '--skip-install'], path.join(host, 'plugins'));
   }
   const hostManifest = JSON.parse(await readFile(path.join(host, 'package.json'), 'utf8'));
+  // pnpm overrides do not reach auto-installed peers, so the test kit's peers that the
+  // scaffold does not declare itself (@zhin.js/runtime, @zhin.js/tool) are declared at the
+  // host root (resolve-peers-from-workspace-root) to come from the candidate tarballs too.
+  const testingPeers = Object.keys(workspace.find((entry) => entry.name === '@zhin.js/testing').manifest.peerDependencies ?? {})
+    .filter((name) => name !== 'zhin.js');
+  hostManifest.devDependencies = Object.fromEntries(testingPeers.map((name) => [name, `file:${packed.get(name).tarball}`]));
   const candidates = [...packed.keys()].map((name) => ({ name }));
   await writeFile(
     path.join(host, 'package.json'),
@@ -126,6 +167,8 @@ try {
 
   console.log('Installing scaffolded plugins against packed tarballs…');
   await run('pnpm', ['install', '--no-frozen-lockfile'], host);
+  const duplicates = await duplicateStackProblems(host);
+  if (duplicates.length > 0) throw new Error(`Scaffolded plugins install duplicate zhin.js packages:\n  ${duplicates.join('\n  ')}`);
 
   for (const plugin of PLUGINS) {
     const dir = path.join(host, 'plugins', plugin.name);
@@ -156,7 +199,7 @@ try {
     console.log(`${plugin.name}: zhin plugin check --strict`);
     await run(process.execPath, [cli, 'plugin', 'check', '--strict'], dir);
   }
-  console.log(`PASS: built CLI → zhin new --standalone (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js + lib/ (.d.ts), no sources/tests/configs → zhin plugin check --strict; no development condition in ${closure.length} packed manifests.`);
+  console.log(`PASS: built CLI → zhin new --standalone (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js + lib/ (.d.ts), no sources/tests/configs → zhin plugin check --strict; one copy of each zhin.js package; no development condition in ${closure.length} packed manifests.`);
 } finally {
   if (keep) console.log(`kept ${temp}`);
   else await rm(temp, { recursive: true, force: true });
