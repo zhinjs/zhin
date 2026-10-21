@@ -189,7 +189,15 @@ const CAPTION_LABEL: Readonly<Record<PerceptionMediaKind, string>> = Object.free
 
 /** Strip markers a description could use to fake the end of its own frame. */
 function neutralizeFrameMarkers(text: string): string {
-  return text.replace(/\[(?:\/?\s*)?(?:End of media description|Untrusted media description)[^\]]*\]/gi, '');
+  const marker = /\[(?:\/?\s*)?(?:End of media description|Untrusted media description)[^\]]*\]/gi;
+  // Repeat until stable: removing an inner marker can splice the halves of an
+  // outer one back together ("[End of [End of media description]media description]").
+  let current = text;
+  for (;;) {
+    const next = current.replace(marker, '');
+    if (next === current) return next;
+    current = next;
+  }
 }
 
 /**
