@@ -249,7 +249,16 @@ async function createPluginPackage(
               description: 'Endpoint 唯一标识',
             },
           }
-        : {},
+        : kind === 'normal'
+          ? {
+              // 与 src/index.ts 的 ${capitalizedName}Config 保持一致
+              echoPrefix: {
+                type: 'string',
+                default: '你说：',
+                description: '回显命令的前缀',
+              },
+            }
+          : {},
   };
   await fs.writeJson(path.join(pluginDir, 'schema.json'), schemaJson, { spaces: 2 });
 
@@ -268,9 +277,17 @@ async function createPluginPackage(
  */
 export const displayName = '${capitalizedName}${kind === 'adapter' ? ' Adapter' : ''}';
 ${kind === 'normal' ? `
+/**
+ * 插件配置（app 配置 <instanceKey>）的类型，与 schema.json 保持一致。
+ * 约定目录里用 defineCommand.withConfig<${capitalizedName}Config>()({...}) 拿到有类型的 config。
+ */
+export interface ${capitalizedName}Config {
+  readonly echoPrefix?: string;
+}
+
 /** 回显命令的文本格式（commands/${pluginName}-echo/[text] 使用）。 */
-export function formatEcho(text: string): string {
-  return \`你说：\${text}\`;
+export function formatEcho(text: string, prefix = '你说：'): string {
+  return \`\${prefix}\${text}\`;
 }
 ` : ''}`;
   await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), libraryTs, 'utf8');
@@ -372,19 +389,20 @@ export default defineCommand({
     await fs.outputFile(path.join(pluginDir, 'commands', pluginName, 'index.ts'), commandTs, 'utf8');
 
     const echoCommandTs = `import { defineCommand } from 'zhin.js/command';
-import { formatEcho } from '../../../src/index.js';
+import { formatEcho, type ${capitalizedName}Config } from '../../../src/index.js';
 
 /**
  * 动态段命令：目录名 [text] 声明一个必需参数，类型在 params 中定义。
  * 聊天中发送 \`${pluginName}-echo 你好\` 即可触发，params.text 为「你好」。
+ * defineCommand.withConfig<Config>() 先固定 config 类型，params 仍从定义推断（params.text: string）。
  */
-export default defineCommand({
+export default defineCommand.withConfig<${capitalizedName}Config>()({
   description: '回显一段文本（动态段示例）',
   params: {
     text: { type: 'string', description: '要回显的文本' },
   },
-  execute({ params }) {
-    return formatEcho(String(params.text ?? ''));
+  execute({ params, config }) {
+    return formatEcho(params.text, config.echoPrefix);
   },
 });
 `;
@@ -718,6 +736,18 @@ describe('${packageName}', () => {
       params: { text: '你好' },
     });
     expect(String(result)).toContain('你好');
+    await fake.dispose();
+  });
+
+  it('echo command reads the typed plugin config', async () => {
+    const fake = await runPluginSetup(plugin, { config: { echoPrefix: '> ' } });
+    const result = await runCommand(fake, echoCommand, {
+      source: echoSource,
+      input: createFakeMessage({ content: '${pluginName}-echo 你好' }),
+      args: ['你好'],
+      params: { text: '你好' },
+    });
+    expect(result).toBe('> 你好');
     await fake.dispose();
   });
 });

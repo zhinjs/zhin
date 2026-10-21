@@ -56,6 +56,14 @@ describe('Tool Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['weather']);
   });
 
+  it('defineAgentTool.withConfig<Config>() validates and brands like the direct form', () => {
+    const define = defineAgentTool.withConfig<{ apiKey: string }>();
+    const tool = define<{ city: string }>({ description: 'Weather', execute: ({ city }, { config }) => `${config.apiKey}:${city}` });
+    expect(parseAgentToolDefinition(tool)).toBe(tool);
+    expect(tool.requiresApproval).toBe('on-risk');
+    expect(() => define({ description: '  ', execute() {} })).toThrow('Agent Tool description cannot be empty');
+  });
+
   it('ignores removed package-root tools directories', async () => {
     const definition = defineAgentTool({
       description: '给用户点赞',

@@ -188,6 +188,17 @@ type AgentToolAuthoringDefinition<TInput, TResult, TConfig> =
       }
     }[RegisteredAdapterName];
 
+/**
+ * Returned by `defineAgentTool.withConfig<Config>()`: the plugin config type is fixed, while the
+ * input (from an executable `inputSchema`, or given explicitly) and the result stay generic.
+ *
+ * @public
+ * @experimental
+ */
+export type AgentToolDefiner<TConfig> = <TInput = unknown, TResult = unknown>(
+  definition: AgentToolAuthoringDefinition<TInput, TResult, TConfig>,
+) => Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>>;
+
 export function defineAgentTool<
   TInput = unknown,
   TResult = unknown,
@@ -240,6 +251,23 @@ export function defineAgentTool<
     requiresApproval,
   }) as Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>>;
 }
+
+/**
+ * Fix the plugin config type first, then define the tool.
+ *
+ * ```ts
+ * export default defineAgentTool.withConfig<Config>()<{ city: string }>({
+ *   description: 'Weather', inputSchema: { ... },
+ *   execute({ city }, { config }) { ... },
+ * })
+ * ```
+ *
+ * `defineAgentTool<Input, Result, Config>({...})` keeps working. A property rather than a
+ * `defineAgentTool()` overload, so passing `defineAgentTool` as a value keeps one signature.
+ */
+defineAgentTool.withConfig = function withConfig<TConfig = unknown>(): AgentToolDefiner<TConfig> {
+  return (definition) => defineAgentTool(definition);
+};
 
 /** @internal Runtime validation for convention-discovered modules. */
 export function parseAgentToolDefinition(

@@ -360,6 +360,19 @@ type TypedCommandContext<TConfig, TInput extends CommandMessage, TAdapter extend
     readonly options: InferCommandOptions<O>;
   };
 
+/**
+ * `defineCommand.withConfig<Config>()` 返回的定义函数：config 类型已固定，params / options / 返回值
+ * 仍从定义推断。
+ * @public
+ */
+export type CommandDefiner<TConfig, TInput extends CommandMessage = CommandMessage> = <
+  TResult = unknown,
+  const P extends CommandParams = {},
+  const O extends CommandOptions = {},
+>(
+  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
+) => Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>>;
+
 export function defineCommand<
   TConfig = unknown,
   TResult = unknown,
@@ -393,6 +406,28 @@ export function defineCommand<
     CommandDefinition<TConfig, TResult, TInput, string | undefined>
   >;
 }
+
+/**
+ * 先固定插件 config 类型，再定义命令；params / options / 返回值仍从定义推断。
+ *
+ * ```ts
+ * export default defineCommand.withConfig<Config>()({
+ *   params: { count: { type: 'integer' } },
+ *   execute({ params, config }) { params.count; config.prefix },
+ * })
+ * ```
+ *
+ * `defineCommand<Config>({...})` 仍然可用，但 TypeScript 不支持部分推断，显式写了
+ * 类型参数后 params 会退化成 `Record<string, CommandParameterValue>`。
+ * 这里是独立的属性而不是 `defineCommand()` 重载：`defineCommand` 常被当作值传给
+ * `createEndpointCommands(spec, defineCommand)` 这类工厂，重载会让它推断错签名。
+ */
+defineCommand.withConfig = function withConfig<
+  TConfig = unknown,
+  TInput extends CommandMessage = CommandMessage,
+>(): CommandDefiner<TConfig, TInput> {
+  return (definition) => defineCommand(definition);
+};
 
 function validateAdapterName(adapter: string | undefined): void {
   if (adapter !== undefined && (typeof adapter !== 'string' || adapter.trim() === '')) {

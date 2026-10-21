@@ -118,6 +118,20 @@ export default definePlugin({
 
 请始终通过这个参数取用依赖，而不是在执行时查找其他插件。这样工具在热重载期间也能使用正确版本的资源。
 
+`config` 默认是 `unknown`。要给它加类型，用 `defineAgentTool.withConfig` 先固定配置类型，第二次调用再写输入类型（`inputSchema` 用 Zod 时输入类型会自动推断）：
+
+```ts
+export default defineAgentTool.withConfig<WeatherConfig>()<{ city: string }>({
+  description: '查询天气',
+  inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
+  execute({ city }, { config }) {
+    return fetchWeather(city, config.apiKey); // config: WeatherConfig
+  },
+});
+```
+
+`defineAgentTool<Input, Result, Config>({...})` 的写法不变。
+
 ### 在工具里向用户提问
 
 需要用户补充信息时使用 `context.question`。定时任务等无人值守的场景不会提供它，所以必须处理它不存在的情况。框架内置的 `ask_user` 工具也基于同一机制，会按会话和用户身份匹配回复。

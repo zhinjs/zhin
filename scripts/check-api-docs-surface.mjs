@@ -18,7 +18,7 @@ const expectedSurface = new Map([
   ]],
   ['@zhin.js/skill', ['SkillDefinition', 'SkillScope', 'parseSkillMarkdown']],
   ['@zhin.js/tool', [
-    'AgentToolDefinition', 'ToolExecutionContext', 'ToolInvocationContext',
+    'AgentToolDefiner', 'AgentToolDefinition', 'ToolExecutionContext', 'ToolInvocationContext',
     'ToolInvocationPolicy', 'ToolQuestionPort', 'ToolQuestionRequest', 'ToolApproval',
     'ToolInvocationOrigin', 'ToolQuestionAnswer', 'ToolQuestionType', 'ToolScope',
     'defineAgentTool',
@@ -55,7 +55,7 @@ const expectedSurface = new Map([
     'ToolScope', 'ToolToModelOutputFn', 'ToolToModelOutputInput',
   ]],
   ['zhin.js/command', [
-    'CommandContext', 'CommandConversation', 'CommandDefinition', 'CommandMessage',
+    'CommandContext', 'CommandConversation', 'CommandDefiner', 'CommandDefinition', 'CommandMessage',
     'CommandParameterDefinition', 'CommandParamSchema', 'CommandScene', 'CommandSegment',
     'CommandSender', 'CommandSession', 'CommandDynamicValue', 'CommandParameterType',
     'CommandParameterValue', 'defineCommand',
