@@ -14,6 +14,7 @@ import {
 } from './module-dependency-index.js';
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 import { withToolPackageInstallHint } from './missing-tool-package.js';
+import { isEditorTempFile } from './editor-temp-file.js';
 import { ensureTypeScriptSpecifierRemap } from './typescript-specifier-remap.js';
 
 export interface NativeDevelopmentModuleRuntimeOptions {
@@ -368,8 +369,11 @@ function sourceSnapshot(roots: readonly string[]): ReadonlyMap<string, number> {
   return result;
 }
 
+/** Shared by the native watcher and the polling fallback, so both skip the same files. */
 function isWatchedSource(source: string): boolean {
   const name = source.slice(source.lastIndexOf(sep) + 1);
+  // Editor temp/backup files (e.g. `.!97910!index.ts`, `.env.swp`) never reload (#857).
+  if (isEditorTempFile(name)) return false;
   return watchedExtensions.has(extname(source)) || name.startsWith('.env');
 }
 

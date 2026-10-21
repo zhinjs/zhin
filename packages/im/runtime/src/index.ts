@@ -5,6 +5,7 @@ export * from './config-patch-planner.js';
 export * from './package-contract.js';
 export * from './environment.js';
 export * from './environment-store.js';
+export { isEditorTempFile } from './editor-temp-file.js';
 export * from './hmr-coordinator.js';
 export * from './invalidation-planner.js';
 export * from './isolation.js';

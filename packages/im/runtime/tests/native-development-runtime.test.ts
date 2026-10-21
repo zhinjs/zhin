@@ -495,6 +495,43 @@ process.stdout.write(JSON.stringify({ first, second }));
       await runtime.close();
     }
   });
+
+  it('ignores editor temp and backup files next to a real source (#857)', async () => {
+    const root = await fixture();
+    const directory = join(root, 'commands/status');
+    const ignored = ['.!97910!index.ts', '.index.ts.swp', 'index.ts~', 'index.ts___jb_tmp___']
+      .map((name) => join(directory, name));
+    const source = join(directory, 'index.ts');
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
+    const reported: string[] = [];
+    const observed = new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('watch timeout')), 15_000);
+      const dispose = runtime.watch((changed) => {
+        reported.push(changed);
+        if (changed !== source) return;
+        clearTimeout(timeout);
+        dispose();
+        resolve();
+      });
+    });
+
+    // Temp files are written before the real source on every tick, so any
+    // event for them would be reported before the source event resolves.
+    const writeAll = async (): Promise<void> => {
+      for (const path of ignored) await writeFile(path, `export default ${Date.now()};\n`).catch(() => {});
+      await writeFile(source, `export default ${Date.now()};\n`).catch(() => {});
+    };
+    const writer = setInterval(() => { void writeAll(); }, 200);
+    try {
+      await writeAll();
+      await observed;
+      expect(reported).toContain(source);
+      for (const path of ignored) expect(reported).not.toContain(path);
+    } finally {
+      clearInterval(writer);
+      await runtime.close();
+    }
+  });
 });
 
 async function fixture(): Promise<string> {

@@ -394,6 +394,34 @@ describe('HmrCoordinator', () => {
   });
 });
 
+describe('HmrCoordinator editor temp files (#857)', () => {
+  it('drops watcher events for editor temp files but still reloads the real source', async () => {
+    const source = '/project/commands/status/index.ts';
+    const modules = new WatchingFakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    let reloaded!: () => void;
+    const done = new Promise<void>((resolve) => { reloaded = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownershipFor(source, '/project'),
+      runtime: { async reload(plan) { plans.push(plan); } },
+      onRestartRequired() {},
+      onError() {},
+      onReload() { reloaded(); },
+    });
+    const stop = coordinator.start();
+    modules.emit('/project/commands/status/.!97910!index.ts');
+    modules.emit('/project/commands/status/.index.ts.swp');
+    modules.emit('/project/commands/status/4913');
+    modules.emit(source);
+    await done;
+    await stop();
+
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.changed).toEqual([source]);
+  });
+});
+
 class FakeModules implements ModuleRuntime {
   readonly invalidated: string[] = [];
   readonly processSources = new Set<string>();
@@ -448,4 +476,17 @@ function ownershipFor(source: string, watchRoot: string): SourceOwnershipIndex {
   });
   ownership.addWatchRoot({ root: watchRoot, source: 'workspace' });
   return ownership;
+}
+
+class WatchingFakeModules extends FakeModules {
+  #listener?: (source: string) => void;
+
+  watch(listener: (source: string) => void): () => void {
+    this.#listener = listener;
+    return () => { this.#listener = undefined; };
+  }
+
+  emit(source: string): void {
+    this.#listener?.(source);
+  }
 }

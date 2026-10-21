@@ -7,6 +7,7 @@ import {
   type ProcessInvalidationPlan,
 } from './invalidation-planner.js';
 import type { ModuleRuntime } from './module-runtime.js';
+import { isEditorTempFile } from './editor-temp-file.js';
 import type { SourceOwnershipIndex } from './source-ownership.js';
 
 export interface HmrReloadPort {
@@ -48,6 +49,8 @@ export class HmrCoordinator {
     }
     this.#syncModuleState();
     this.#unwatch = this.options.modules.watch((source) => {
+      // Any ModuleRuntime watcher may report editor temp/backup files; they never reload (#857).
+      if (isEditorTempFile(source)) return;
       void this.enqueue(source).catch(() => undefined);
     });
     return () => this.stop();
