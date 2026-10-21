@@ -154,11 +154,17 @@ describe('CLI new command integration', () => {
     expect(echoTs).toContain('params.text')
     expect(echoTs).toContain("from '../../../src/index.js'")
     expect(echoTs).toContain("text: { type: 'string', description: '要回显的文本' }")
+    // Typed config without losing params inference (#857)
+    expect(echoTs).toContain(`defineCommand<TestNormalPluginConfig>()({`)
+    expect(echoTs).toContain('config.echoPrefix')
+    const libraryTs = await fs.readFile(path.join(pluginDir, 'src', 'index.ts'), 'utf-8')
+    expect(libraryTs).toContain(`export interface TestNormalPluginConfig`)
 
-    // Check schema.json（空对象 schema）
+    // Check schema.json（与 src/index.ts 的 Config 一致）
     const schema = await fs.readJson(path.join(pluginDir, 'schema.json'))
     expect(schema.type).toBe('object')
-    expect(schema.properties).toEqual({})
+    expect(Object.keys(schema.properties)).toEqual(['echoPrefix'])
+    expect(schema.properties.echoPrefix).toMatchObject({ type: 'string', default: '你说：' })
 
     // Check tests/<name>-runtime.test.ts（repeater 形态的契约测试）
     const testFilePath = path.join(pluginDir, 'tests', `${pluginName}-runtime.test.ts`)
