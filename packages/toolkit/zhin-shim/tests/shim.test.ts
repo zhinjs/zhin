@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, realpathSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, existsSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -48,5 +49,52 @@ describe('zhin (alias of @zhin.js/cli)', () => {
       expect(viaShim.stderr).toBe(direct.stderr);
     }
     expect(run(shimBin, ['definitely-not-a-command']).status).not.toBe(0);
+  });
+
+  describe('project-local @zhin.js/cli', () => {
+    const resolveFrom = (cwd: string) => spawnSync(process.execPath, [
+      '--input-type=module',
+      '-e',
+      `const { findCliBin } = await import(${JSON.stringify(join(packageRoot, 'bin/resolve-cli.js'))}); process.stdout.write(findCliBin());`,
+    ], { cwd, encoding: 'utf8' });
+
+    function fakeProject(exportsField?: unknown) {
+      const dir = mkdtempSync(join(tmpdir(), 'zhin-shim-'));
+      const cli = join(dir, 'node_modules/@zhin.js/cli');
+      mkdirSync(join(cli, 'bin'), { recursive: true });
+      writeFileSync(join(cli, 'package.json'), JSON.stringify({
+        name: '@zhin.js/cli', version: '0.0.1-local', type: 'module', bin: { zhin: './bin/zhin.js' },
+        ...(exportsField ? { exports: exportsField } : {}),
+      }));
+      writeFileSync(join(cli, 'bin/zhin.js'), '');
+      return { dir, bin: join(cli, 'bin/zhin.js') };
+    }
+
+    it('prefers the CLI installed in the working directory over the shim dependency', () => {
+      const project = fakeProject();
+      try {
+        const result = resolveFrom(project.dir);
+        expect(result.stderr).toBe('');
+        expect(realpathSync(result.stdout)).toBe(realpathSync(project.bin));
+      } finally { rmSync(project.dir, { recursive: true, force: true }); }
+    });
+
+    it('finds a project CLI whose exports hide package.json', () => {
+      const project = fakeProject({ '.': './bin/zhin.js' });
+      try {
+        const result = resolveFrom(project.dir);
+        expect(result.stderr).toBe('');
+        expect(realpathSync(result.stdout)).toBe(realpathSync(project.bin));
+      } finally { rmSync(project.dir, { recursive: true, force: true }); }
+    });
+
+    it('falls back to the shim dependency when the project has no CLI', () => {
+      const empty = mkdtempSync(join(tmpdir(), 'zhin-shim-empty-'));
+      try {
+        const result = resolveFrom(empty);
+        expect(result.stderr).toBe('');
+        expect(realpathSync(result.stdout)).toBe(realpathSync(cliBin));
+      } finally { rmSync(empty, { recursive: true, force: true }); }
+    });
   });
 });
