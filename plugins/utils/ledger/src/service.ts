@@ -76,8 +76,7 @@ export class LedgerService {
 
   async #privateTargetOf(caller: LedgerCaller): Promise<DeliveryTarget> {
     if (caller.isPrivate) return caller.conversation;
-    const user = await this.#store.getUser(caller.ownerKey);
-    return user?.privateTarget ?? caller.privateTarget;
+    return (await this.#store.getPrivateTarget(caller.ownerKey)) ?? caller.privateTarget;
   }
 
   async addEntry(caller: LedgerCaller, text: string): Promise<string> {

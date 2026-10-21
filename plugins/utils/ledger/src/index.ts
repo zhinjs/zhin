@@ -26,4 +26,4 @@ export {
 } from './report-format.js';
 export { ledgerServiceToken } from './runtime.js';
 export { LedgerService, type DailyReportAction, type LedgerServiceOptions } from './service.js';
-export { defineLedgerTables, LedgerStore, ENTRY_TABLE, USER_TABLE, type LedgerEntry, type LedgerUserRecord } from './store.js';
+export { defineLedgerTables, LedgerStore, ENTRY_TABLE, USER_TABLE, PRIVATE_TARGET_TABLE, type LedgerEntry, type LedgerUserRecord } from './store.js';

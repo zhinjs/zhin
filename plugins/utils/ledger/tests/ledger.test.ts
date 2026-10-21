@@ -1,5 +1,5 @@
 import { createFakePlugin, FakeClock, type FakePlugin } from '@zhin.js/testing';
-import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from 'zhin.js';
+import { createCapabilitySlot, outboundHostToken, rootPluginId, type RuntimeSnapshot } from 'zhin.js';
 import { CommandIndex, commandFeatureId, parseCommandDefinition, type CommandDefinition, type CommandMessage } from 'zhin.js/command';
 import plugin from '../plugin.js';
 import addCommand from '../commands/ledger-add/index.js';
@@ -16,6 +16,9 @@ import { formatCents, parseAmountToCents } from '../src/money.js';
 import { isInPeriod, localDateKey, weekStartKey } from '../src/period.js';
 import { resolveLedgerConfig, type LedgerConfig } from '../src/config.js';
 import { ledgerServiceToken } from '../src/runtime.js';
+import { LedgerService } from '../src/service.js';
+import { ledgerCaller } from '../src/identity.js';
+import { USER_TABLE } from '../src/store.js';
 
 const COMMANDS: Readonly<Record<string, CommandDefinition>> = {
   'ledger-add': addCommand,
@@ -414,5 +417,43 @@ describe('opt-in daily report (FakeClock)', () => {
   it('refuses to opt in without proactive outbound', async () => {
     const created = await fixture({ outbound: false });
     expect(await created.run('记账日报 开启', privateMessage('alice'))).toContain('不支持主动私信');
+  });
+});
+
+describe('databases created before the private target table existed', () => {
+  const LEGACY_USER_COLUMNS = ['owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date'];
+
+  it('never touches columns that `ledger_users` does not have on existing deployments', async () => {
+    const created = await fixture();
+    const database = created.fake.database;
+    const check = (names: readonly string[]) => {
+      const unknown = names.filter((name) => !LEGACY_USER_COLUMNS.includes(name));
+      if (unknown.length > 0) throw new Error(`no such column: ${unknown.join(', ')}`);
+    };
+    const strict = {
+      define: (name: string, definition: Record<string, unknown>) => database.define(name, definition),
+      models: {
+        get(name: string) {
+          const model = database.models.get(name);
+          if (!model || name !== USER_TABLE) return model;
+          return {
+            select: (...columns: string[]) => { check(columns); return model.select(...columns); },
+            insert: (row: Record<string, unknown>) => { check(Object.keys(row)); return model.insert(row); },
+            update: (patch: Record<string, unknown>) => { check(Object.keys(patch)); return model.update(patch); },
+            delete: () => model.delete(),
+          };
+        },
+      },
+    } as unknown as ConstructorParameters<typeof LedgerService>[0];
+    const outbound = created.fake.resources.use(outboundHostToken);
+    const service = new LedgerService(strict, outbound, resolveLedgerConfig({ timezone: 'Asia/Shanghai', reportTime: '22:00' }));
+    const dm = { conversation: { endpoint: ENDPOINT, kind: 'private', id: 'dm-7' }, sender: { id: 'alice' }, content: '' } as CommandMessage;
+    const group = groupMessage('alice');
+
+    await service.dailyReport(ledgerCaller(dm), 'on');
+    await service.addEntry(ledgerCaller(dm), '午饭 18.5');
+    expect(await service.periodSummary(ledgerCaller(group), 'week')).toBe('🔒 本周消费已私信发送给你');
+    const target = (created.fake.sent.at(-1)!.input as { target: unknown }).target;
+    expect(target).toEqual({ endpoint: ENDPOINT, kind: 'private', id: 'dm-7' });
   });
 });
