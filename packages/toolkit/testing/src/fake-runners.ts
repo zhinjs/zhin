@@ -1,6 +1,5 @@
-import {
-  bindCommandSource,
-  type CommandContext, type CommandDefinition, type CommandMessage, type CommandParameterValue,
+import type {
+  CommandContext, CommandDefinition, CommandMessage, CommandParameterValue,
 } from 'zhin.js/command';
 import type { HandlerContext, HandlerDefinition } from 'zhin.js/handler';
 import type {
@@ -97,15 +96,20 @@ export async function runCommand<TConfig, TResult, TInput extends CommandMessage
   definition: CommandDefinition<TConfig, TResult, TInput, string | undefined>,
   options?: RunCommandOptions<TInput>,
 ): Promise<TResult> {
-  const command = options?.source === undefined ? definition : bindSource(definition, options.source);
+  const command = options?.source === undefined ? definition : await bindSource(definition, options.source);
   return command.execute(createCommandContext(fake, options));
 }
 
-function bindSource<T extends CommandDefinition<never, unknown, never, string | undefined>>(
+async function bindSource<T extends CommandDefinition<never, unknown, never, string | undefined>>(
   definition: T, source: string | URL,
-): T {
+): Promise<T> {
   const path = source instanceof URL || source.startsWith('file:') ? fileURLToPath(source) : source;
-  return bindCommandSource(definition as never, path).definition as unknown as T;
+  // Loaded on demand, so an older zhin.js (unmet peer) only fails here, with an actionable message.
+  const command: Partial<typeof import('zhin.js/command')> = await import('zhin.js/command');
+  if (typeof command.bindCommandSource !== 'function') {
+    throw new Error('runCommand({ source }) needs a newer zhin.js whose zhin.js/command exports bindCommandSource; upgrade zhin.js');
+  }
+  return command.bindCommandSource(definition as never, path).definition as unknown as T;
 }
 
 export interface RunMiddlewareResult {
