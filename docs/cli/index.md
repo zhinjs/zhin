@@ -29,6 +29,7 @@ npx zhin --help        # 查看全部命令
 | 安装一个社区插件 | `npx zhin install <插件名>` |
 | 按功能查找插件和配置步骤 | `npx zhin use-cases` |
 | 创建一个可独立发布的新插件 | `npx @zhin.js/cli new my-plugin --standalone` |
+| 发布前检查插件 | `npx @zhin.js/cli plugin check` |
 | 在已有 Bot 项目里加一个本地插件 | `npx zhin new my-plugin` |
 | 升级 Zhin | `npx zhin migrate --dry-run`，确认后去掉 `--dry-run` |
 | 安装为开机自启的系统服务 | `npx zhin service install` |
@@ -234,6 +235,18 @@ zhin build [plugin] [--clean] [--production] [--analyze]
 ```
 
 `plugin` 是相对于 `plugins/` 的路径（如 `adapters/icqq`）；省略时在插件目录内构建当前包，或在 workspace 根目录批量构建 `plugins/*`。`src/` 用 tsc 编译，`client/` 用 esbuild 打包；`--clean` 先清理 `lib/` 与 `dist/`；`--production`（默认开启）压缩 client 产物。
+
+### plugin check：发布前检查插件
+
+```bash
+zhin plugin check [插件目录] [--no-pack] [--json] [--strict]
+```
+
+在插件目录（默认当前目录）检查能否正确发布，发布前跑一次即可：`npx @zhin.js/cli plugin check`。
+
+- **清单与目录**：`package.json` 的 `name`、`zhin` 清单、`zhin.entry` 指向 JavaScript 且有对应源文件；`files` 白名单覆盖入口、约定目录（`commands/`、`tools/` 等编译出的 `.js`，以及 `skills/`、`agents/`）与 `schema.json`；`prepack` / `postpack` 会生成并清理运行时入口。缺少 README 或测试只给警告。
+- **发布包**：实际运行插件的 `npm pack`（会执行 `prepack` 构建），在临时目录解包后检查入口与 `main` / `exports` 是否打包、打包的 JavaScript 里相对 import 能否解析、测试与构建配置有没有混入，以及约定目录里的每个 `.ts` 都有打包的 `.js`。规则与仓库的 `pnpm check:pack-imports` 相同。`--no-pack` 跳过这一步。
+- 有错误时退出码为 1；`--strict` 把警告也视为失败；`--json` 输出结构化结果，便于在 CI 中使用。
 
 ### pub：发布插件
 

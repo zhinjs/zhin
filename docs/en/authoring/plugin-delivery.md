@@ -67,11 +67,12 @@ pnpm check:plugin-runtime-api
 pnpm check:plugin-capability-publish
 ```
 
-Before publishing, check `files`, the ESM entry, peer dependencies, the generated JavaScript in convention directories, and the changeset. **Install the packed tarball** into a fresh project and run the full Sandbox flow again — don't test only the workspace source.
+Before publishing, check `files`, the ESM entry, peer dependencies, the generated JavaScript in convention directories, and the changeset. `npx @zhin.js/cli plugin check` checks the entry, `files` and the packed layout for you (see the [CLI reference](../cli/index.md#plugin-check-check-a-plugin-before-publishing)). **Install the packed tarball** into a fresh project and run the full Sandbox flow again — don't test only the workspace source.
 
 A standalone plugin from `zhin new --standalone` publishes from its own directory:
 
 ```bash
+npx @zhin.js/cli plugin check    # check the entry, files, convention directories and the packed result
 npx @zhin.js/cli pub --dry-run   # build and preview the tarball, without publishing
 npx @zhin.js/cli pub             # publish after confirming; add --yes in CI and other non-interactive shells
 ```
