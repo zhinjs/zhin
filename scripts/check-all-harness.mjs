@@ -254,6 +254,11 @@ const checks = [
     description: '检查 public API surface 快照',
   },
   {
+    name: 'Plugin Config Schemas',
+    command: 'pnpm check:plugin-config-schemas',
+    description: '由 Schema 声明生成的插件 schema.json 与 src/config.ts 保持同步',
+  },
+  {
     name: 'Plugin Runtime API',
     command: 'pnpm check:plugin-runtime-api',
     description: '检查约定式插件运行时 API surface 快照',

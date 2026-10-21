@@ -65,6 +65,7 @@
     "check:dependency-policy": "node scripts/check-dependency-policy.mjs",
     "check:release-plan": "node scripts/check-release-plan.mjs",
     "check:api-surface": "node scripts/check-api-surface.mjs",
+    "check:plugin-config-schemas": "node scripts/sync-plugin-config-schemas.mjs --check",
     "check:plugin-runtime-api": "node scripts/check-plugin-runtime-api.mjs",
     "check:doc-orphans": "node scripts/check-doc-orphans.mjs",
     "check:readme-exports": "node scripts/check-readme-exports.mjs",
