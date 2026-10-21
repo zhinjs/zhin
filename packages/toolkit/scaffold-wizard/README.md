@@ -3,7 +3,7 @@
 Zhin 项目脚手架的**共享交互向导**库。适配器、AI、数据库的分步引导与配置合并逻辑集中在此，供 `create-zhin-app` 与 `@zhin.js/cli` 的 `zhin setup` 共用，避免两套实现漂移。
 
 ::: warning 依赖版本策略
-脚手架写入的 `@zhin.js/*` / `zhin.js` 版本是与本包同一次发布的真实版本范围（如 `^1.1.11`），AI 栈的第三方包（`ai`、`zod`、`@ai-sdk/*`、`@modelcontextprotocol/sdk`）使用 Zhin 自身 `peerDependencies` 声明的范围，不再写 `latest`。范围在打包时由 `prepack` 写入 `lib/stack-version-ranges.json`；在 zhin 仓库内运行时直接读取工作区版本；只有拿不到版本的包（如第三方适配器依赖）才保留 `latest`（见 `stack-version-ranges.ts` 与 `check:dependency-policy`）。doctor / config check 的诊断基线仍接受任意已声明的版本。生产环境请提交 lockfile。
+脚手架写入的 `@zhin.js/*` / `zhin.js` 版本是与本包同一次发布的真实版本范围（如 `^1.1.11`），AI 栈的第三方包（`ai`、`zod`、`@ai-sdk/*`、`@modelcontextprotocol/sdk`）使用 Zhin 自身 `peerDependencies` 声明的范围，不再写 `latest`。范围在打包时由 `prepack` 写入 `lib/stack-version-ranges.json`；在 zhin 仓库内运行时直接读取工作区版本；只有拿不到版本的包（如第三方适配器依赖）才保留 `latest`（见 `stack-version-ranges.ts` 与 `check:dependency-policy`）。`zhin doctor --fix` 补写依赖与 `~/.zhin` 全局实例初始化也使用同一套范围。doctor / config check 的诊断基线仍接受任意已声明的版本。生产环境请提交 lockfile。
 :::
 
 ## 消费者

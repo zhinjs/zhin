@@ -121,7 +121,7 @@ zhin config check [--fix] [--json] [--strict]
 zhin doctor [--fix] [--upgrade-l4]
 ```
 
-Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack.
+Checks Node, ports, tokens, config and other environment issues; `--fix` repairs what it can; `--upgrade-l4` diagnoses what's needed to go from a minimal project to the full AI stack. When `--fix` adds dependencies it writes the real version ranges released alongside the CLI (e.g. `^1.1.11`), never `latest`; run `pnpm install` afterwards.
 
 ### dev: Develop Against a Local zhin Checkout or a Standalone Plugin
 

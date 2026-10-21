@@ -10,6 +10,39 @@ vi.mock('child_process', () => ({
 }));
 
 describe('doctor console diagnostics', () => {
+  it.each([
+    ['--upgrade-l4 --fix', ['--upgrade-l4', '--fix']],
+    ['--fix', ['--fix']],
+  ])('writes release ranges, not latest, for missing AI dependencies (%s)', async (_label, flags) => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-fix-ranges-'));
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('doctor exited'); });
+    try {
+      fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({
+        name: 'doctor-fix-ranges', private: true, dependencies: { 'zhin.js': '^1.0.0' },
+      }));
+      fs.writeFileSync(path.join(directory, 'zhin.config.json'), JSON.stringify({
+        configVersion: 2, plugins: { sandbox: '@zhin.js/adapter-sandbox' }, sandbox: {},
+        http: { token: 'test-token', corsOrigins: ['https://console.zhin.dev'] },
+        ai: { enabled: true, providers: { ollama: { sdk: 'ollama', host: 'http://127.0.0.1:11434' } } },
+      }));
+      const { doctorCommand } = await import('../src/commands/doctor.js');
+      await doctorCommand.parseAsync(['node', 'zhin', ...flags]).catch(() => {});
+
+      const pkg = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));
+      const written = Object.entries(pkg.dependencies as Record<string, string>);
+      expect(written.some(([name]) => name === '@zhin.js/agent')).toBe(true);
+      expect(pkg.dependencies['@zhin.js/agent']).toMatch(/^\^\d+\.\d+\.\d+/u);
+      expect(written.filter(([, range]) => range === 'latest')).toEqual([]);
+    } finally {
+      cwd.mockRestore();
+      log.mockRestore();
+      exit.mockRestore();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it.each([false, true])('keeps Console and Sandbox diagnostics when package.json is malformed (decisions: %s)', async decisions => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-malformed-package-'));
     const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);

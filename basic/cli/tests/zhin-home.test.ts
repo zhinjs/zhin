@@ -81,14 +81,17 @@ describe('zhin-home', () => {
     expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf8')).toBe('custom: true\n');
   });
 
-  it('scaffoldGlobalHome uses latest runtime dependencies', async () => {
+  it('scaffoldGlobalHome writes release ranges for runtime dependencies', async () => {
     const { scaffoldGlobalHome } = await import('../src/utils/global-home-init.js');
+    const { scaffoldDependencyRange } = await import('@zhin.js/scaffold-wizard');
 
     const root = scaffoldGlobalHome({ homeDir: fakeHome });
     const pkg = await fs.readJson(path.join(root, 'package.json'));
 
-    expect(pkg.dependencies['zhin.js']).toBe('latest');
-    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest');
+    expect(pkg.dependencies['zhin.js']).toBe(scaffoldDependencyRange('zhin.js'));
+    expect(pkg.dependencies['zhin.js']).toMatch(/^\^\d+\.\d+\.\d+/u);
+    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe(scaffoldDependencyRange('@zhin.js/adapter-sandbox'));
+    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).not.toBe('latest');
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api');
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router');
   });
