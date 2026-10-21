@@ -1,0 +1,23 @@
+.changeset/857-command-param-directory-errors.md
+  s_e6f5f09d5890ba::t_1280c01e3fe9c0 1-5
+.changeset/857-create-mask-http-token.md
+  s_e6f5f09d5890ba::t_329a8cfb8c7ecb 1-5
+.changeset/857-plugin-config-source-conflict.md
+  s_e6f5f09d5890ba::t_77db76949f23f4 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "83027015dac68822f525fcee5f5815ccdbdafafa",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
