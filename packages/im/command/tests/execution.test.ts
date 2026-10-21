@@ -96,13 +96,45 @@ describe('command execution policy', () => {
     await first.control.finish();
     const next = f.open(); expect(f.admit(next.source)).toBeUndefined(); await next.control.finish();
   });
-  it('keeps direct execution unchanged without policy and explicitly rejects policy without an operation', async () => {
+  it('keeps direct execution unchanged without policy and applies policy per command without an operation', async () => {
     const f = setup();
-    const slots = [false, true].map(enabled => createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: enabled ? 'limited' : 'plain', source: '/command/index.ts',
-      definition: defineCommand({ ...(enabled ? { execution: { maxConcurrent: 1 } } : {}), execute: () => 'ok' }) }));
-    const index = new CommandIndex(slots, f.snapshot);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const slot = (localName: string, execution: CommandExecutionPolicy | undefined, run: () => unknown) => createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName,
+      source: '/command/index.ts', definition: defineCommand({ ...(execution ? { execution } : {}), execute: run as never }) });
+    const index = new CommandIndex([
+      slot('plain', undefined, () => 'ok'),
+      slot('limited', { maxConcurrent: 1 }, () => 'limited-ok'),
+      slot('slow', { maxConcurrent: 1 }, () => gate.then(() => 'slow-ok')),
+      slot('cool', { cooldownMs: 1000, progressAfterMs: 50 }, () => 'cool-ok'),
+      slot('boom', { maxConcurrent: 1 }, () => { throw new Error('boom'); }),
+    ], f.snapshot);
     expect(await index.execute('plain')).toBe('ok');
-    await expect(index.execute('limited')).rejects.toBeInstanceOf(CommandExecutionLimitedError);
+    expect(await index.execute('limited')).toBe('limited-ok');
+    expect(await index.execute('limited')).toBe('limited-ok');
+    // concurrency is enforced per command and released when the execution settles
+    const first = index.execute('slow');
+    await expect(index.execute('slow')).rejects.toMatchObject({ limit: { reason: 'busy' } });
+    release();
+    expect(await first).toBe('slow-ok');
+    expect(await index.execute('slow')).toBe('slow-ok');
+    // a failing execution releases its slot
+    await expect(index.execute('boom')).rejects.toThrow('boom');
+    await expect(index.execute('boom')).rejects.toThrow('boom');
+    // cooldown applies per command
+    expect(await index.execute('cool')).toBe('cool-ok');
+    await expect(index.execute('cool')).rejects.toMatchObject({ limit: { reason: 'cooldown', retryAfterMs: 1000 } });
+    f.setNow(1100);
+    expect(await index.execute('cool')).toBe('cool-ok');
+  });
+  it('still refuses policy-bearing dispatch without a bound operation and without the budget resource', async () => {
+    const f = setup();
+    const index = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'limited', source: '/command/index.ts',
+      definition: defineCommand({ execution: { maxConcurrent: 1 }, execute: () => 'ok' }) })], f.snapshot);
     expect(await index.dispatch('limited', {})).toMatchObject({ matched: true, status: 'limited', limit: { reason: 'operation_unavailable' } });
+    const bare = createSnapshotView(0, { ...f.snapshot, resources: new Map() } as unknown as SnapshotState);
+    const bareIndex = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'limited', source: '/command/index.ts',
+      definition: defineCommand({ execution: { maxConcurrent: 1 }, execute: () => 'ok' }) })], bare);
+    await expect(bareIndex.execute('limited')).rejects.toMatchObject({ limit: { reason: 'service_unavailable' } });
   });
 });
