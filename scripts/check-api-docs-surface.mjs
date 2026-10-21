@@ -55,7 +55,7 @@ const expectedSurface = new Map([
     'ToolScope', 'ToolToModelOutputFn', 'ToolToModelOutputInput',
   ]],
   ['zhin.js/command', [
-    'CommandContext', 'CommandConversation', 'CommandDefinition', 'CommandMessage',
+    'CommandContext', 'CommandConversation', 'CommandDefiner', 'CommandDefinition', 'CommandMessage',
     'CommandParameterDefinition', 'CommandParamSchema', 'CommandScene', 'CommandSegment',
     'CommandSender', 'CommandSession', 'CommandDynamicValue', 'CommandParameterType',
     'CommandParameterValue', 'defineCommand',
