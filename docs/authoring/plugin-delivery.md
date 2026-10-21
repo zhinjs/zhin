@@ -73,7 +73,7 @@ pnpm check:plugin-capability-publish
 
 ```bash
 npx @zhin.js/cli plugin check    # 检查入口、files、约定目录与打包结果
-npx @zhin.js/cli pub --dry-run   # 构建并预览 tarball 内容，不发布
+npx @zhin.js/cli pub --dry-run   # 先自动运行 plugin check，再构建并预览 tarball 内容，不发布
 npx @zhin.js/cli pub             # 确认后发布；CI 等非交互环境加 --yes
 ```
 

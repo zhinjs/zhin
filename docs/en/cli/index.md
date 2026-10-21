@@ -245,11 +245,18 @@ zhin plugin check [plugin-dir] [--no-pack] [--json] [--strict]
 Checks whether the plugin in a directory (the current one by default) will publish correctly. Run it once before publishing: `npx @zhin.js/cli plugin check`.
 
 - **Manifest and layout**: checks the `package.json` `name` and `zhin` manifest, and that `zhin.entry` points at JavaScript with a matching source file. It also checks that the `files` whitelist covers the entry, the convention directories (the `.js` built from `commands/`, `tools/` and so on, plus `skills/` and `agents/`) and `schema.json`, and that `prepack` / `postpack` generate and clean the runtime entries. A missing README or missing tests only produce warnings.
+- **zhin manifest and dependencies**:
+  - the `zhin` manifest (`protocol`, `type`, `entry`, `runtime`, `features`, `plugins`) is validated with the same parser the Runtime uses at load time;
+  - `zhin.engine` must be a semver range the current Runtime engine satisfies, and `features[].api` must be a valid range;
+  - packages referenced by `features` / `plugins` must be listed in `dependencies` or `peerDependencies`;
+  - `peerDependencies` must declare `zhin.js` with real semver ranges: `latest`, `*` and `file:` / `link:` are errors, and a locally installed version outside the range is a warning;
+  - Zhin stack packages in `dependencies` produce a warning.
 - **Published package**: runs the plugin's real `npm pack` (its `prepack` build included) and unpacks the tarball in a temporary directory. It then checks that:
   - the entry and `main` / `exports` are packed;
   - relative imports in packed JavaScript resolve;
   - no tests or build configuration slipped in;
-  - every `.ts` in a convention directory has a packed `.js`.
+  - every `.ts` in a convention directory has a packed `.js`;
+  - the packed `zhin.entry` can be imported: it is loaded in a child process using the plugin's own `node_modules` (skipped with a warning when dependencies are not installed).
 
   These are the same rules as the repository's `pnpm check:pack-imports`. `--no-pack` skips this step.
 - Exits with code 1 on errors; `--strict` also fails on warnings; `--json` prints a structured result for CI.
@@ -257,13 +264,15 @@ Checks whether the plugin in a directory (the current one by default) will publi
 ### pub: Publish a Plugin
 
 ```bash
-zhin pub [plugin-name|plugin-dir] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build] [--yes]
+zhin pub [plugin-name|plugin-dir] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build] [--skip-check] [--yes]
 ```
 
 - Inside a standalone plugin from `zhin new --standalone`, run it without arguments to publish the current directory: `npx @zhin.js/cli pub --dry-run` to preview, `npx @zhin.js/cli pub` to publish. (`npx @zhin.js/cli` is reliable with every version; `npx zhin` only means the same CLI from `zhin@4` on, see the tip at the top of this page.)
 - The argument can also be any plugin directory (its `package.json` has a `zhin` field), e.g. `zhin pub ../my-plugin`.
 - In a bot project root, the argument is a path relative to `plugins/`; without it a single plugin is picked automatically, several are offered interactively.
-- `--dry-run` goes through the flow without publishing. Non-interactive shells (CI) need `--yes` to skip the publish confirmation. Packages with `private: true` are rejected, and a `zhin.entry` pointing at `.ts` gets a hint to publish the built `.js`. Full release flow: [Complete plugin delivery](../authoring/plugin-delivery.md).
+- `--dry-run` goes through the flow without publishing. Non-interactive shells (CI) need `--yes` to skip the publish confirmation. Packages with `private: true` are rejected, and a `zhin.entry` pointing at `.ts` gets a hint to publish the built `.js`.
+- Before publishing it runs [`zhin plugin check`](#plugin-check-check-a-plugin-before-publishing) automatically (`npm pack` included). Errors stop the publish; warnings alone let it continue. Use `--skip-check` to skip it if you really must.
+- Full release flow: [Complete plugin delivery](../authoring/plugin-delivery.md).
 
 ### packages: Plugin Status and Extension Packages
 

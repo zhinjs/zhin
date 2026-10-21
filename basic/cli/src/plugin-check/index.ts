@@ -3,6 +3,7 @@
  * tarball goes through the same rules as `pnpm check:pack-imports`.
  */
 import path from 'node:path';
+import { checkPeerDependencies, checkZhinManifest } from './manifest-checks.js';
 import { checkPluginPack } from './pack-checks.js';
 import { checkPluginSource, readPluginManifest, type PluginCheckProblems } from './source-checks.js';
 
@@ -21,6 +22,11 @@ export interface PluginCheckReport {
   warningCount: number;
 }
 
+function hasZhinManifestObject(manifest: Record<string, unknown>): boolean {
+  const zhinManifest = manifest.zhin;
+  return Boolean(zhinManifest) && typeof zhinManifest === 'object' && !Array.isArray(zhinManifest);
+}
+
 export async function checkPlugin(directory: string, options: PluginCheckOptions = {}): Promise<PluginCheckReport> {
   const pluginDirectory = path.resolve(directory);
   const source: PluginCheckProblems = { errors: [], warnings: [] };
@@ -30,6 +36,10 @@ export async function checkPlugin(directory: string, options: PluginCheckOptions
     const sourceProblems = checkPluginSource(pluginDirectory, manifest);
     source.errors.push(...sourceProblems.errors);
     source.warnings.push(...sourceProblems.warnings);
+    if (hasZhinManifestObject(manifest)) {
+      checkZhinManifest(pluginDirectory, manifest, source);
+      checkPeerDependencies(pluginDirectory, manifest, source);
+    }
     if (options.pack !== false) {
       try {
         pack = await checkPluginPack(pluginDirectory, manifest);
