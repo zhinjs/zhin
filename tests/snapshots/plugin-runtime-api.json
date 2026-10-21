@@ -78,7 +78,7 @@
     "export * from './definition.js';",
     "export * from './permission-explanation.js';",
     "export type{CommandValidationIssue}from './arguments.js';",
-    "export{assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
+    "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
     "export{bindCommandSource,CommandPathSyntaxError,commandFeatureId,type BoundCommandSource,default as commandFeature,}from './provider.js';",
     "export{default}from './provider.js';"
   ],
