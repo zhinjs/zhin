@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { createProviderHarness, geminiGenerate, openaiChat } from '../../../ai/tests/helpers/provider-harness/index.js';
 import {
+  MediaPerceptionFailedError,
   createLlmMediaPerceptionPort,
   perceptionCacheKey,
   renderPerceptionCaption,
@@ -71,6 +72,23 @@ describe('createLlmMediaPerceptionPort (Gemini over mocked HTTP)', () => {
     expect(again?.usage).toBeUndefined();
   });
 
+  it('reports usage for an empty description instead of dropping it', async () => {
+    const h = createProviderHarness({ sdk: 'google' });
+    h.reply(geminiGenerate.reply({ text: '', usageMetadata: { promptTokenCount: 250, candidatesTokenCount: 0, totalTokenCount: 250 } }));
+    const port = createLlmMediaPerceptionPort({ runtime: h.runtime, config: config(), resilience: NO_RETRY });
+    const result = await port.describe(image());
+    expect(result).toMatchObject({ text: '', cached: false, usage: { total_tokens: 250 } });
+  });
+
+  it('a call that fails after it was sent rejects with an estimated usage to bill', async () => {
+    const h = createProviderHarness({ sdk: 'google' });
+    h.reply(geminiGenerate.error(503, { message: 'overloaded', status: 'UNAVAILABLE' }));
+    const port = createLlmMediaPerceptionPort({ runtime: h.runtime, config: config(), resilience: NO_RETRY });
+    const error = await port.describe(image()).catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(MediaPerceptionFailedError);
+    expect((error as MediaPerceptionFailedError).usage.total_tokens).toBeGreaterThan(1_000);
+  });
+
   it('caches by content hash: the same sticker is described once', async () => {
     const h = createProviderHarness({ sdk: 'google' });
     h.reply(geminiGenerate.reply({ text: '一只猫的表情包' }));
@@ -121,7 +139,9 @@ describe('createLlmMediaPerceptionPort (Gemini over mocked HTTP)', () => {
       config: config({ model: 'text-only' }),
       resilience: NO_RETRY,
     });
-    await expect(port.describe(image())).rejects.toThrow('does not declare image input');
+    const refused = await port.describe(image()).catch((reason: unknown) => reason);
+    expect(String(refused)).toContain('does not declare image input');
+    expect(refused).not.toBeInstanceOf(MediaPerceptionFailedError);
     expect(h.requests).toHaveLength(0);
   });
 
