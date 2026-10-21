@@ -12,6 +12,7 @@ import {
 } from '@zhin.js/tool';
 import type { OperationClientPort } from '@zhin.js/feature-kit';
 import type { FakePlugin } from './fake-plugin.js';
+import { fileURLToPath } from 'node:url';
 
 /** Inbound message with recorded replies. */
 export interface FakeMessage extends CommandMessage {
@@ -51,6 +52,14 @@ export interface RunCommandOptions<TInput extends CommandMessage = FakeMessage> 
   readonly options?: Readonly<Record<string, CommandParameterValue>>;
   readonly segments?: CommandContext['segments'];
   readonly interaction?: CommandContext['interaction'];
+  /**
+   * Where the command lives: its `commands/.../index.ts` file (or directory), as a path or a
+   * `file:` URL such as `new URL('../commands/echo/[text]/index.ts', import.meta.url)`. When set,
+   * the definition first goes through the Runtime's convention-path check (`bindCommandSource`
+   * from `@zhin.js/command`): a layout the Runtime would reject, e.g. `commands/term/[word]/[...rest]`,
+   * throws here too, and the directory parameter is bound as in the Runtime.
+   */
+  readonly source?: string | URL;
 }
 
 /** Build the context a command receives from the fake plugin; usable for direct `execute()` calls. */
@@ -80,13 +89,27 @@ export function createCommandContext<TConfig, TInput extends CommandMessage = Fa
 /**
  * Execute a command definition against the fake. This calls `execute()` directly: it does NOT run
  * route matching, parameter parsing, `permit`, or admission. Use `PluginTestKit` for those.
+ * Pass `source` to apply the Runtime's convention-path check first.
  */
 export async function runCommand<TConfig, TResult, TInput extends CommandMessage = FakeMessage>(
   fake: FakePlugin<TConfig>,
   definition: CommandDefinition<TConfig, TResult, TInput, string | undefined>,
   options?: RunCommandOptions<TInput>,
 ): Promise<TResult> {
-  return definition.execute(createCommandContext(fake, options));
+  const command = options?.source === undefined ? definition : await bindSource(definition, options.source);
+  return command.execute(createCommandContext(fake, options));
+}
+
+async function bindSource<T extends CommandDefinition<never, unknown, never, string | undefined>>(
+  definition: T, source: string | URL,
+): Promise<T> {
+  const path = source instanceof URL || source.startsWith('file:') ? fileURLToPath(source) : source;
+  // Loaded on demand: the plugin's own @zhin.js/command (a peer) provides the Runtime's rules.
+  const command: Partial<typeof import('@zhin.js/command')> = await import('@zhin.js/command');
+  if (typeof command.bindCommandSource !== 'function') {
+    throw new Error('runCommand({ source }) needs a newer @zhin.js/command that exports bindCommandSource; upgrade @zhin.js/command');
+  }
+  return command.bindCommandSource(definition as never, path).definition as unknown as T;
 }
 
 export interface RunMiddlewareResult {

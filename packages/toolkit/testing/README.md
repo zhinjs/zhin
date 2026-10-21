@@ -35,6 +35,9 @@ expect(message.replies).toEqual(['ok']);
   Runtime, with `origin`/`principal` derived from a fake message. No approval or policy enforcement.
 - `runCommand`, `runMiddleware`, `runHandler` execute convention-directory definitions against the
   fake. `runCommand` calls `execute()` directly: no routing, parameter parsing, `permit` or admission.
+  Pass `source` (the command's `index.ts` path or `new URL('../commands/echo/[text]/index.ts', import.meta.url)`)
+  to apply the Runtime's convention-path check first: a layout the Runtime rejects, such as
+  `commands/term/[word]/[...definition]`, throws instead of passing.
 - `fakeOf<T>(partial)` replaces `{ ... } as never` for narrow collaborators and event payloads.
 - The fakes do not run the renderer or outbound middleware; use `PluginTestKit` to verify the send chain.
 

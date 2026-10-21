@@ -25,7 +25,6 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
-    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/handler": "workspace:*",
@@ -35,7 +34,11 @@
     "@zhin.js/runtime": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
+  "peerDependencies": {
+    "@zhin.js/command": "workspace:^"
+  },
   "devDependencies": {
+    "@zhin.js/command": "workspace:*",
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
