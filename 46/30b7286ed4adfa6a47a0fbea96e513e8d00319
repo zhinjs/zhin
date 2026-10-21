@@ -1,0 +1,26 @@
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 32,575-576,579,643,698
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  h_b680f75345178a 15,23-24,173-176,230-269
+packages/im/agent/src/tool-catalog/tool-catalog.ts
+  h_b680f75345178a 108-125
+packages/im/agent/tests/plugin-runtime/deferred-capability-plan.test.ts
+  h_b680f75345178a 5,8,10,230-301
+packages/im/tool/src/definition.ts
+  h_b680f75345178a 130-139,226-228,269
+packages/im/tool/src/tool-index.ts
+  h_b680f75345178a 35-36,142-143
+packages/im/tool/tests/tool.test.ts
+  h_b680f75345178a 170-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4630b7286ed4adfa6a47a0fbea96e513e8d00319",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
