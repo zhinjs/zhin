@@ -37,6 +37,7 @@ import {
   type LarkMessage,
   type ResolvedLarkConfig,
 } from './protocol.js';
+import { normalizeLarkSenderForPermit } from './platform-permit.js';
 import { registerLarkWebhookRoutes } from './webhook.js';
 import { createLarkLongConnection, type LarkLongConnectionFactory } from './long-connection.js';
 
@@ -100,6 +101,8 @@ export class LarkClient implements LarkClientApi {
   removeChatManagers = (id: string, users: string[]) => this.api.removeChatManagers(id, users);
 }
 
+const LARK_CHAT_MANAGER_CACHE_TTL_MS = 60_000;
+
 export class LarkEndpoint extends Endpoint<LarkClient> {
   readonly client = new LarkClient({
     getUserInfo: (id, type) => this.getUserInfo(id, type),
@@ -154,6 +157,7 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
   readonly #lifecycle: EndpointLifecycle;
   readonly #cardSources = new Map<string, { conversation: ConversationRef; time: number }>();
   readonly #seen = new Map<string, number>();
+  readonly #chatManagers = new Map<string, { at: number; owner?: string; admins: ReadonlySet<string> }>();
   #startupGeneration = 0;
   readonly #pendingInbound: LarkMessage[] = [];
 
@@ -353,23 +357,60 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
       if (this.#seen.size > 10_000) this.#seen.delete(this.#seen.keys().next().value!);
     }
     const conversation = larkInboundConversation(String(this.#options.id), msg);
-    void this.emit('message.receive', {
-      conversation,
-      message: { conversation, id: generateMessageId(msg) },
-      content: formatInboundContent(msg),
-      sender: { id: resolveSender(msg) },
-      endpointId: this.#options.config.id,
-      metadata: Object.freeze({
-        messageType: msg.message_type,
-        chatType: resolveChatType(msg.chat_id, msg.chat_type),
-      }),
-    }).catch((err) => {
+    void this.#emitInbound(msg, conversation).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'lark_gateway_receive_failed',
         conversation: conversation.id,
         error: err instanceof Error ? err.message : String(err),
       }));
     });
+  }
+
+  async #emitInbound(msg: LarkMessage, conversation: ConversationRef): Promise<void> {
+    const chatType = resolveChatType(msg.chat_id, msg.chat_type);
+    const senderId = resolveSender(msg);
+    const permit = chatType === 'group' && msg.chat_id
+      ? normalizeLarkSenderForPermit(await this.#resolveChatRole(msg.chat_id, senderId))
+      : undefined;
+    // 规范角色 owner / admin 进 roles；细粒度能力放 senderPermissions
+    const role = permit?.role === 'owner' || permit?.role === 'admin' ? permit.role : undefined;
+    await this.emit('message.receive', {
+      conversation,
+      message: { conversation, id: generateMessageId(msg) },
+      content: formatInboundContent(msg),
+      sender: { id: senderId, ...(role ? { roles: [role] } : {}) },
+      endpointId: this.#options.config.id,
+      metadata: Object.freeze({
+        messageType: msg.message_type,
+        chatType,
+        ...(role ? { senderRole: role } : {}),
+        ...(role && permit?.permissions?.length ? { senderPermissions: [...permit.permissions] } : {}),
+      }),
+    });
+  }
+
+  /** 群主 / 群管理员来自 chat.get（owner_id + 管理员列表），按群缓存；失败时保守地视为普通成员。 */
+  async #resolveChatRole(chatId: string, senderId: string): Promise<{ isOwner: boolean; isAdmin: boolean }> {
+    const now = Date.now();
+    for (const [id, entry] of this.#chatManagers) if (now - entry.at > LARK_CHAT_MANAGER_CACHE_TTL_MS) this.#chatManagers.delete(id);
+    let entry = this.#chatManagers.get(chatId);
+    if (!entry) {
+      const info = await this.getChatInfo(chatId) as {
+        owner_id?: unknown;
+        user_manager_id_list?: unknown;
+      } | null;
+      const admins = Array.isArray(info?.user_manager_id_list) ? info.user_manager_id_list.map(String) : [];
+      entry = {
+        at: now,
+        ...(typeof info?.owner_id === 'string' && info.owner_id ? { owner: info.owner_id } : {}),
+        admins: new Set(admins),
+      };
+      this.#chatManagers.set(chatId, entry);
+    }
+    return {
+      isOwner: entry.owner !== undefined && entry.owner === senderId,
+      isAdmin: entry.admins.has(senderId),
+    };
   }
 
   /** Only correlate callbacks to a card actually sent by this endpoint. */

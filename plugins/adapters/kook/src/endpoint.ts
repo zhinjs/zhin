@@ -37,12 +37,43 @@ import {
   type KookClientTransport,
 } from './ws.js';
 import { recallKookMessage, sendKookOutbound } from './outbound.js';
+import { KookSenderRoleResolver, type KookSenderRoleProjection } from './sender-roles.js';
 import { receiveKookSideEvent } from './side-event-dispatch.js';
 
 export interface KookEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedKookWebsocketConfig;
   readonly createClient?: CreateKookClient;
+}
+
+/** 入站 message.receive 载荷：规范角色 owner/admin 进 roles，原始角色 id 进 permissions。 */
+function kookInboundPayload(
+  endpointId: string,
+  conversation: ConversationRef,
+  msg: KookInboundMessage,
+  projection: KookSenderRoleProjection,
+  selfId: string | undefined,
+) {
+  return {
+    conversation,
+    message: { conversation, id: msg.id },
+    content: formatInboundContent(msg),
+    sender: {
+      id: msg.authorId,
+      name: senderDisplayName(msg) || undefined,
+      ...(projection.role ? { roles: [projection.role] } : {}),
+      ...(projection.permissions.length ? { permissions: [...projection.permissions] } : {}),
+    },
+    endpointId,
+    ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
+    metadata: Object.freeze({
+      channelKind: msg.channelKind,
+      userId: msg.authorId,
+      guildId: msg.guildId,
+      authorRoleIds: msg.authorRoles,
+      ...(projection.role ? { senderRole: projection.role } : {}),
+    }),
+  };
 }
 
 export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
@@ -52,6 +83,7 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
   readonly #options: KookEndpointOptions;
   readonly #createClient: CreateKookClient;
   #client: KookClientTransport | null = null;
+  readonly #roles = new KookSenderRoleResolver(() => this.#client);
   #open = false;
   #started = false;
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
@@ -137,24 +169,9 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
     if (msg.authorBot) return;
     const conversation = kookInboundConversation(String(this.#options.id), msg);
     const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
-    void this.emit('message.receive', {
-      conversation,
-      message: { conversation, id: msg.id },
-      content: formatInboundContent(msg),
-      sender: {
-        id: msg.authorId,
-        name: senderDisplayName(msg) || undefined,
-        ...(msg.authorRoles?.length ? { roles: msg.authorRoles.map(String) } : {}),
-      },
-      endpointId: this.#options.config.id,
-      ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
-      metadata: Object.freeze({
-        channelKind: msg.channelKind,
-        userId: msg.authorId,
-        guildId: msg.guildId,
-        roles: msg.authorRoles,
-      }),
-    }).catch((err) => {
+    void this.#roles.resolve(msg).then((projection) => this.emit('message.receive',
+      kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId),
+    )).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'kook_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,
@@ -223,6 +240,7 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
   readonly #options: KookWebhookEndpointOptions;
   readonly #createClient: CreateKookClient;
   #client: KookClientTransport | null = null;
+  readonly #roles = new KookSenderRoleResolver(() => this.#client);
   #routeReleases: HttpRouteRegistration[] = [];
   #processedSn = new Set<number>();
   #open = false;
@@ -348,24 +366,9 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
     if (msg.authorBot) return;
     const conversation = kookInboundConversation(String(this.#options.id), msg);
     const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
-    void this.emit('message.receive', {
-      conversation,
-      message: { conversation, id: msg.id },
-      content: formatInboundContent(msg),
-      sender: {
-        id: msg.authorId,
-        name: senderDisplayName(msg) || undefined,
-        ...(msg.authorRoles?.length ? { roles: msg.authorRoles.map(String) } : {}),
-      },
-      endpointId: this.#options.config.id,
-      ...(isKookBotMentioned(msg, selfId) ? { mentioned: true } : {}),
-      metadata: Object.freeze({
-        channelKind: msg.channelKind,
-        userId: msg.authorId,
-        guildId: msg.guildId,
-        roles: msg.authorRoles,
-      }),
-    }).catch((err) => {
+    void this.#roles.resolve(msg).then((projection) => this.emit('message.receive',
+      kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId),
+    )).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'kook_gateway_receive_failed',
         target: `${conversation.kind}:${conversation.id}`,

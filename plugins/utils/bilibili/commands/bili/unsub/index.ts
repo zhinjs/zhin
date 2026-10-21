@@ -1,9 +1,9 @@
-import { defineCommand } from 'zhin.js/command';
+import { canManageConversation, defineCommand } from 'zhin.js/command';
 import { parseUid } from '../../../src/api.js';
 import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
 import type { BilibiliConfig } from '../../../src/config.js';
 import { bilibiliRuntimeToken } from '../../../src/runtime.js';
-import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../../../src/permission.js';
+import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../../../src/permission.js';
 import { getBiliState, getBiliSubs } from '../../../src/store.js';
 
 export default defineCommand<BilibiliConfig>({
@@ -17,7 +17,7 @@ export default defineCommand<BilibiliConfig>({
     if (!uid) return '请提供 UP 主 UID，格式：bili unsub <uid>';
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input);
-    if (!canManageSubscription({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
+    if (!canManageConversation({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
 
     const scope = subscriptionScope(channel);
     const existing = await Subs.select().where({ uid, ...scope });

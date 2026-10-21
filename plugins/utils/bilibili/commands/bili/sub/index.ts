@@ -1,9 +1,9 @@
-import { defineCommand } from 'zhin.js/command';
+import { canManageConversation, defineCommand } from 'zhin.js/command';
 import { BiliApiError, parseUid } from '../../../src/api.js';
 import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
 import type { BilibiliConfig } from '../../../src/config.js';
 import { bilibiliRuntimeToken } from '../../../src/runtime.js';
-import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../../../src/permission.js';
+import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../../../src/permission.js';
 import { getBiliSubs, parseKinds } from '../../../src/store.js';
 
 const KIND_TEXT = { all: '开播 + 动态', live: '开播', dynamic: '动态' } as const;
@@ -26,7 +26,7 @@ export default defineCommand<BilibiliConfig>({
 
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input);
-    if (!canManageSubscription({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
+    if (!canManageConversation({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
     const scope = subscriptionScope(channel);
 
     const existing = await Subs.select().where({ uid, ...scope });

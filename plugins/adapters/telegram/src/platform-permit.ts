@@ -1,5 +1,8 @@
 /**
  * Telegram platform permit — ChatMember 状态 + 细粒度权限
+ *
+ * `role` 使用跨平台规范名 owner / admin（原生 creator / administrator 仅作兼容输入）；
+ * 细粒度能力放在 `permissions`。
  */
 import type { PermissionSubject } from '@zhin.js/permission';
 
@@ -29,7 +32,7 @@ export function normalizeTelegramChatMember(member: {
   const status = member.status;
   if (status === 'creator') {
     permissions.push('chat_creator', 'chat_administrator', 'restrict_members', 'pin_messages');
-    return { role: 'creator', permissions };
+    return { role: 'owner', permissions };
   }
   if (status === 'administrator') {
     permissions.push('chat_administrator');
@@ -37,7 +40,7 @@ export function normalizeTelegramChatMember(member: {
     if (member.can_pin_messages) permissions.push('pin_messages');
     if (member.can_delete_messages) permissions.push('delete_messages');
     if (member.can_manage_chat) permissions.push('manage_chat');
-    return { role: 'administrator', permissions };
+    return { role: 'admin', permissions };
   }
   return { role: 'member', permissions };
 }
@@ -49,15 +52,15 @@ export function checkTelegramPlatformPermit(perm: string, subject: PermissionSub
 
   switch (perm) {
     case 'chat_creator':
-      return role === 'creator' || has('chat_creator');
+      return role === 'owner' || role === 'creator' || has('chat_creator');
     case 'chat_administrator':
-      return role === 'creator' || role === 'administrator' || has('chat_administrator');
+      return role === 'owner' || role === 'admin' || role === 'creator' || role === 'administrator' || has('chat_administrator');
     case 'restrict_members':
-      return has('restrict_members') || role === 'creator';
+      return has('restrict_members') || role === 'owner' || role === 'creator';
     case 'pin_messages':
-      return has('pin_messages') || role === 'creator';
+      return has('pin_messages') || role === 'owner' || role === 'creator';
     case 'manage_chat':
-      return has('manage_chat') || role === 'creator';
+      return has('manage_chat') || role === 'owner' || role === 'creator';
     default:
       return false;
   }

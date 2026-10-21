@@ -1,6 +1,6 @@
-import { defineCommand } from 'zhin.js/command';
+import { canManageConversation, defineCommand } from 'zhin.js/command';
 import { conversationError, extractConversation } from '../../../src/conversation.js';
-import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../manage-permission.js';
+import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../../../src/permission.js';
 import { earthquakeServiceToken } from '../../../src/runtime.js';
 import { parseSubscribeArgs } from '../../../src/subscribe-args.js';
 import { SubscriptionLimitError } from '../../../src/subscriptions.js';
@@ -14,7 +14,7 @@ export default defineCommand({
     const service = use(earthquakeServiceToken);
     const target = extractConversation(input);
     if (!target) return conversationError(input);
-    if (!canManageSubscription({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
+    if (!canManageConversation({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
     const parsed = parseSubscribeArgs(params.filters ?? []);
     if ('error' in parsed) return parsed.error;
 

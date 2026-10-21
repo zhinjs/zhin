@@ -1,4 +1,5 @@
 import { installQqUploadDiagnostics } from './upload-diagnostics.js';
+import { projectQqGuildSenderRoles } from './platform-permit.js';
 import { qqDeliveryFailure } from './delivery-error.js';
 import { normalizeQqInteraction } from './interaction.js';
 import { awaitQqStartup } from './start-deadline.js';
@@ -222,6 +223,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
+    const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
     void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
@@ -230,7 +232,8 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(msg.authorRoles?.length ? { roles: msg.authorRoles } : {}),
+        ...(roleProjection.role ? { roles: [roleProjection.role] } : {}),
+        ...(roleProjection.permissions.length ? { permissions: roleProjection.permissions } : {}),
       },
       endpointId: this.#options.config.id,
       ...(msg.mentioned ? { mentioned: true } : {}),
@@ -238,7 +241,8 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,
-        roles: msg.authorRoles,
+        authorRoleIds: msg.authorRoles,
+        ...(roleProjection.role ? { senderRole: roleProjection.role } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -481,6 +485,7 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
       + (msg.mentioned ? ' (mentioned)' : '')
       + ` | ${truncatePreview(content, 80)}`,
     );
+    const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
     void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
@@ -489,7 +494,8 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
       sender: {
         id: msg.authorId,
         name: senderDisplayName(msg) || undefined,
-        ...(msg.authorRoles?.length ? { roles: msg.authorRoles } : {}),
+        ...(roleProjection.role ? { roles: [roleProjection.role] } : {}),
+        ...(roleProjection.permissions.length ? { permissions: roleProjection.permissions } : {}),
       },
       endpointId: this.#options.config.id,
       ...(msg.mentioned ? { mentioned: true } : {}),
@@ -497,7 +503,8 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
         channelKind: msg.channelKind,
         userId: msg.authorId,
         guildId: msg.guildId,
-        roles: msg.authorRoles,
+        authorRoleIds: msg.authorRoles,
+        ...(roleProjection.role ? { senderRole: roleProjection.role } : {}),
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

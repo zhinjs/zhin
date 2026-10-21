@@ -22,7 +22,7 @@ function mockMsg(roleIds: string[]) {
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'kook', id: 'bot1' }, kind: 'group', id: 'g1' },
     sender: { id: 'u1', roles: roleIds },
-    metadata: { roles: roleIds.map(Number) },
+    metadata: { authorRoleIds: roleIds.map(Number) },
   } as any;
 }
 

@@ -1,4 +1,5 @@
 import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
@@ -346,6 +347,50 @@ describe('kook plugin runtime adapter', () => {
     });
     expect(privateId).toBe('sent-2');
     expect(mock.sent[1]).toEqual({ kind: 'private', id: 'user-1', message: 'dm' });
+    await endpoint.stop();
+  });
+
+  it('projects guild owner / admin-role holders as canonical roles and keeps role ids out of roles', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const mock = createMockClient();
+    mock.getGuildInfo = vi.fn(async () => ({ user_id: 'owner-1' }));
+    mock.pickGuild = vi.fn(() => ({
+      kick: vi.fn(async () => true),
+      getRoleList: vi.fn(async () => [
+        { role_id: 11, name: 'Admin', permissions: 1 },
+        { role_id: 12, name: 'Cosmetic', permissions: 0 },
+      ]),
+      createRole: vi.fn(async (name: string) => ({ role_id: 'x', name })),
+      deleteRole: vi.fn(async () => true),
+    }));
+    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+      gateway,
+      config: baseConfig,
+      createClient: () => mock,
+    }), gateway, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const cases: Array<[string, number[], boolean]> = [
+      ['owner-1', [], true],
+      ['admin-1', [11], true],
+      ['member-1', [12], false],
+      ['member-2', [], false],
+    ];
+    for (const [index, [authorId, authorRoles]] of cases.entries()) {
+      endpoint.admit(textMessage({ id: `m-${index}`, authorId, authorRoles, guildId: 'guild-1' }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
+    }
+    const results = receive.mock.calls.map((call) =>
+      checkBuiltinPermit('role(owner,admin,master)', toPermissionSubject(call[0])));
+    expect(results).toEqual(cases.map(([, , expected]) => expected));
+    const adminPayload = receive.mock.calls[1]![0] as { sender: { roles: string[]; permissions: string[] } };
+    expect(adminPayload.sender.roles).toEqual(['admin']);
+    expect(adminPayload.sender.permissions).toContain('role:11');
+    const memberPayload = receive.mock.calls[2]![0] as { sender: { roles?: string[] } };
+    expect(memberPayload.sender.roles).toBeUndefined();
+    expect(mock.getGuildInfo).toHaveBeenCalledTimes(1);
     await endpoint.stop();
   });
 

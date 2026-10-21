@@ -12,7 +12,8 @@ import recentTool from '../skills/earthquake/tools/recent_earthquakes/index.ts';
 import { DEFAULT_EARTHQUAKE_CONFIG, resolveEarthquakeConfig } from '../src/config.js';
 import { extractConversation } from '../src/conversation.js';
 import { earthquakeServiceToken } from '../src/runtime.js';
-import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../commands/地震/manage-permission.ts';
+import { canManageConversation } from '@zhin.js/command';
+import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../src/permission.ts';
 import { jsonResponse, MIRROR_URL, mirrorBody, OFFICIAL_URL, statusResponse, USGS_URL, usgsBody, type QuakeSpec } from './fixtures.js';
 
 function liveQuake(id: string, minutesAgo: number, overrides: Partial<QuakeSpec> = {}): QuakeSpec {
@@ -172,6 +173,9 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
       const member = groupMessage([]);
       expect(await runCommand(fake, subscribeCommand, { input: member, params: { filters: ['5'] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
       expect(await runCommand(fake, unsubscribeCommand, { input: member })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+      // Adapters project ordinary Telegram / Lark members as `member`; KOOK role ids are no longer in roles.
+      const adapterMember = groupMessage(['member']);
+      expect(await runCommand(fake, subscribeCommand, { input: adapterMember, params: { filters: [] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
       const trusted = groupMessage(['trusted']);
       expect(await runCommand(fake, subscribeCommand, { input: trusted, params: { filters: [] } })).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
       expect(await fake.resources.use(earthquakeServiceToken).store.list()).toEqual([]);
@@ -217,9 +221,9 @@ describe('@zhin.js/plugin-earthquake subscription permissions', () => {
   });
 
   it('evaluates the rule with the built-in permit checker', () => {
-    expect(canManageSubscription({ scene: { id: 'u', type: 'private' }, sender: { id: 'u', role: [] } })).toBe(true);
-    expect(canManageSubscription({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['user'] } })).toBe(false);
-    expect(canManageSubscription({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['admin'] } })).toBe(true);
-    expect(canManageSubscription({ scene: { id: 'g', type: 'group' } })).toBe(false);
+    expect(canManageConversation({ scene: { id: 'u', type: 'private' }, sender: { id: 'u', role: [] } })).toBe(true);
+    expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['user'] } })).toBe(false);
+    expect(canManageConversation({ scene: { id: 'c', type: 'channel' }, sender: { id: 'u', role: ['admin'] } })).toBe(true);
+    expect(canManageConversation({ scene: { id: 'g', type: 'group' } })).toBe(false);
   });
 });
