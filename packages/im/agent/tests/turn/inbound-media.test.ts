@@ -7,8 +7,7 @@ import {
   applyInboundMediaInjection,
   resolveTurnMediaInjection,
 } from '../../src/turn/inbound-media.js';
-import { MediaPerceptionFailedError } from '../../src/media/perception.js';
-import type { MediaPerceptionPort } from '../../src/media/perception.js';
+import { MediaPerceptionFailedError, type MediaPerceptionPort } from '../../src/media/perception.js';
 
 let root: string;
 
