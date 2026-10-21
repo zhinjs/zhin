@@ -2,9 +2,11 @@ import { agentHostToken } from '@zhin.js/agent/runtime';
 import { ingressRouteToken } from '@zhin.js/core/runtime';
 import { workroomHostToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const seedPresets = vi.fn(async () => 3);
+// Real ZhinAgent so the test exercises its actual SessionSystem persistence latch.
+const agentRef: { current?: InstanceType<typeof import('@zhin.js/agent/runtime').ZhinAgent> } = {};
 
 vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
   AgentRuntimeFoundation: {
@@ -15,7 +17,7 @@ vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
         }),
         listProviders: () => [],
       },
-      agent: { getSubagentSystem: () => undefined },
+      agent: agentRef.current,
       knowledgeIndex: undefined,
       semanticMemory: null,
       scheduleTools: [],
@@ -38,6 +40,8 @@ vi.mock('../../../src/plugin-runtime/agent/publication-coordinator.js', () => ({
 }));
 
 const { installAgentHost } = await import('../../../src/plugin-runtime/agent/host-installer.js');
+const { ZhinAgent } = await import('@zhin.js/agent/runtime');
+const { SdkProviderAdapter } = await import('@zhin.js/ai');
 
 function context(resources: Scope) {
   return {
@@ -62,7 +66,12 @@ function install(workroom?: unknown) {
 }
 
 describe('installAgentHost optional Workroom', () => {
-  beforeEach(() => seedPresets.mockClear());
+  beforeEach(() => {
+    seedPresets.mockClear();
+    // Offline provider: never called, the installer only composes the Agent.
+    agentRef.current = new ZhinAgent(new SdkProviderAdapter('mock', 'openai', { sdk: 'openai', apiKey: 'test-key' }, ['m']), {});
+  });
+  afterEach(() => { vi.useRealTimers(); });
 
   it('starts the Agent without Workroom: no Workroom Host port, presets still seeded', async () => {
     const resources = new Scope(rootPluginId());
@@ -72,6 +81,31 @@ describe('installAgentHost optional Workroom', () => {
     expect(resources.has(ingressRouteToken)).toBe(true);
     expect(resources.has(workroomHostToken)).toBe(false);
     expect(seedPresets).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks Agent persistence ready without Workroom so the first turn does not wait for the timeout (#857)', async () => {
+    const resources = new Scope(rootPluginId());
+    await install()(context(resources));
+
+    // Before the fix nothing opened the latch: this wait only settled when the
+    // SessionSystem fallback timer fired (5 s in production) and logged a warning.
+    vi.useFakeTimers();
+    let settled = false;
+    void agentRef.current!.waitForMemoryPersistence().then(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('leaves the persistence latch to the Workroom coordinator when Workroom is installed', async () => {
+    const markReady = vi.spyOn(agentRef.current!, 'markMemoryPersistenceReady');
+    const workroom = {
+      WorkroomHostAssembly: {
+        begin: vi.fn(() => ({ compose: vi.fn(async () => ({ presetCount: 0, persistence: { pendingActivation: true } })) })),
+      },
+    };
+    await install(workroom)(context(new Scope(rootPluginId())));
+    expect(markReady).not.toHaveBeenCalled();
   });
 
   it('fails closed when an installed Workroom fails to compose (not downgraded to not-installed)', async () => {
