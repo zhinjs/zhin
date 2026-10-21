@@ -1,0 +1,24 @@
+packages/im/command/src/definition.ts
+  h_b680f75345178a 364,385,410-431
+packages/im/command/tests/command.test.ts
+  h_b680f75345178a 90-91
+packages/im/command/tests/types/config.ts
+  h_b680f75345178a 8-9,27,62-65
+packages/im/tool/src/definition.ts
+  h_b680f75345178a 192,209,255-271
+packages/im/tool/tests/tool.test.ts
+  h_b680f75345178a 59-60
+packages/im/tool/tests/types/config.ts
+  h_b680f75345178a 9-10,23-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4a4fc643dc98317396ccb8523a45000291a9e098",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
