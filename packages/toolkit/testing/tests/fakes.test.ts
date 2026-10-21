@@ -122,4 +122,17 @@ describe('testing fakes', () => {
     expect(observedTimes).toEqual([60_000, 120_000, 180_000]);
     expect(clock.now()).toBe(3 * 60_000);
   });
+
+  it('advance() ends at the target time when a job throws and skips the remaining due jobs', async () => {
+    const clock = new FakeClock(0);
+    const fake = createFakePlugin({ clock });
+    const runs: number[] = [];
+    fake.schedule.register({ id: 'boom', cron: '0 * * * * *', execute: () => { runs.push(clock.now()); if (runs.length === 2) throw new Error('job failed'); } });
+    await expect(clock.advance(5 * 60_000)).rejects.toThrow('job failed');
+    expect(runs).toEqual([60_000, 120_000]);
+    expect(clock.now()).toBe(5 * 60_000);
+    // The next advance continues from the target, so the skipped window is not replayed.
+    await clock.advance(60_000);
+    expect(runs).toEqual([60_000, 120_000, 360_000]);
+  });
 });
