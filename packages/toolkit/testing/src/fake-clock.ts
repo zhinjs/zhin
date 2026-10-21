@@ -15,13 +15,21 @@ export class FakeClock {
   /** Jump without firing anything (like setting the system time). */
   set(time: number | Date): void { this.#now = typeof time === 'number' ? time : time.getTime(); }
 
-  /** Move forward and run every cron job that became due, in time order. */
+  /**
+   * Move forward and run every cron job that became due, in time order.
+   *
+   * The clock always ends at the target time, even when a job throws. After a failure the error
+   * is rethrown and the remaining jobs due inside the same window are NOT run (they are skipped, not deferred).
+   */
   async advance(ms: number): Promise<void> {
     if (!(ms >= 0)) throw new RangeError('FakeClock.advance requires a non-negative duration');
     const from = this.#now;
     const to = from + ms;
-    for (const listener of [...this.#listeners]) await listener(from, to);
-    this.#now = to;
+    try {
+      for (const listener of [...this.#listeners]) await listener(from, to);
+    } finally {
+      this.#now = to;
+    }
   }
 
   /** @internal */
