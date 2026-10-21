@@ -129,6 +129,46 @@ describe('dev link manifest transformation', () => {
   });
 });
 
+describe('dev link failure recovery', () => {
+  const failingPack = () => ({ ...opts(), pack: () => { throw new Error('pack boom'); } });
+
+  it('leaves no partial state when the first link fails while packing', () => {
+    expect(() => devLink(project, failingPack())).toThrow(/pack boom/);
+    expect(fs.existsSync(path.join(project, STATE_DIR))).toBe(false);
+    expect(fs.existsSync(path.join(project, '.gitignore'))).toBe(false);
+    expect(read('package.json')).toBe(original);
+    devLink(project, opts());
+    expect(devUnlink(project, opts())).toBe(true);
+  });
+
+  it('keeps an existing link intact when a refresh fails while packing', () => {
+    devLink(project, opts());
+    const linked = read('package.json');
+    expect(() => devLink(project, failingPack())).toThrow(/pack boom/);
+    expect(read('package.json')).toBe(linked);
+    expect(fs.existsSync(path.join(project, STATE_DIR, 'packs', 'zhin.js-0.0.0.tgz'))).toBe(true);
+    expect(devUnlink(project, opts())).toBe(true);
+    expect(read('package.json')).toBe(original);
+  });
+
+  it('unlink cleans a state dir that has a backup but no state.json', () => {
+    const backup = path.join(project, STATE_DIR, 'backup');
+    fs.mkdirSync(backup, { recursive: true });
+    fs.writeFileSync(path.join(backup, 'package.json'), original);
+    expect(devUnlink(project, opts())).toBe(true);
+    expect(fs.existsSync(path.join(project, STATE_DIR))).toBe(false);
+    expect(read('package.json')).toBe(original);
+  });
+
+  it('unlink refuses a stateless dir when package.json differs from the backup', () => {
+    const backup = path.join(project, STATE_DIR, 'backup');
+    fs.mkdirSync(backup, { recursive: true });
+    fs.writeFileSync(path.join(backup, 'package.json'), '{"name":"other"}');
+    expect(() => devUnlink(project, opts())).toThrow(/state\.json/);
+    expect(fs.existsSync(backup)).toBe(true);
+  });
+});
+
 describe('duplicate zhin instance detection', () => {
   const pkg = (dir: string, manifest: Record<string, unknown>) => {
     fs.mkdirSync(dir, { recursive: true });

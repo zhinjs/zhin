@@ -259,34 +259,72 @@ export function devLink(projectArg: string, options: DevLinkOptions): LinkState 
   const closure = resolveWorkspaceClosure(workspace, known);
   o.log(`构建并打包 ${closure.length} 个包…`);
   o.build(known, repo);
-  if (!state) {
-    fs.mkdirSync(backupDir, { recursive: true });
-    fs.writeFileSync(path.join(backupDir, 'package.json'), current);
-    if (fs.existsSync(lockFile)) fs.copyFileSync(lockFile, path.join(backupDir, 'pnpm-lock.yaml'));
+  const firstLink = !state;
+  const stagingDir = `${packDir}.new`;
+  let gitignore: GitignoreRecord | undefined;
+  try {
+    // 先打包到临时目录：任何一步失败都不会留下半成品状态，也不会破坏已有 link 的 tarball
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    fs.mkdirSync(stagingDir, { recursive: true });
+    const names = new Map(closure.map((e) => [e.name, o.pack(e, stagingDir)]));
+    if (firstLink) {
+      fs.mkdirSync(backupDir, { recursive: true });
+      fs.writeFileSync(path.join(backupDir, 'package.json'), current);
+      if (fs.existsSync(lockFile)) fs.copyFileSync(lockFile, path.join(backupDir, 'pnpm-lock.yaml'));
+    }
+    fs.rmSync(packDir, { recursive: true, force: true });
+    fs.renameSync(stagingDir, packDir);
+    const tarballs = new Map([...names].map(([name, file]) => [name, `./${STATE_DIR}/packs/${file}`]));
+    const next = applyLinkOverrides(original, closure, tarballs);
+    const indent = /^\{\n(\s+)/.exec(current)?.[1] ?? '  ';
+    const text = JSON.stringify(next, null, indent) + (current.endsWith('\n') ? '\n' : '');
+    fs.writeFileSync(pkgFile, text);
+    fs.writeFileSync(path.join(stateDir, 'linked-package.json'), text);
+    gitignore = ensureGitignore(project, o.log);
+    state = {
+      version: 1,
+      repo,
+      roots: known,
+      packages: closure.map((e) => e.name),
+      hadLockfile: state ? state.hadLockfile : fs.existsSync(path.join(backupDir, 'pnpm-lock.yaml')),
+      linkedSha: sha(text),
+      gitignore: state?.gitignore?.added ? state.gitignore : gitignore,
+      linkedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2) + '\n');
+  } catch (error) {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
+    if (firstLink) {
+      // 首次 link 失败：回滚到 link 之前的状态，避免留下缺少 state.json 的目录
+      try { fs.writeFileSync(pkgFile, current); } catch { /* best effort */ }
+      try { restoreGitignore(project, gitignore); } catch { /* best effort */ }
+      fs.rmSync(stateDir, { recursive: true, force: true });
+    }
+    throw error;
   }
-  fs.rmSync(packDir, { recursive: true, force: true });
-  fs.mkdirSync(packDir, { recursive: true });
-  const tarballs = new Map(closure.map((e) => [e.name, `./${STATE_DIR}/packs/${o.pack(e, packDir)}`]));
-  const next = applyLinkOverrides(original, closure, tarballs);
-  const indent = /^\{\n(\s+)/.exec(current)?.[1] ?? '  ';
-  const text = JSON.stringify(next, null, indent) + (current.endsWith('\n') ? '\n' : '');
-  fs.writeFileSync(pkgFile, text);
-  fs.writeFileSync(path.join(stateDir, 'linked-package.json'), text);
-  const gitignore = ensureGitignore(project, o.log);
-  state = {
-    version: 1,
-    repo,
-    roots: known,
-    packages: closure.map((e) => e.name),
-    hadLockfile: state ? state.hadLockfile : fs.existsSync(path.join(backupDir, 'pnpm-lock.yaml')),
-    linkedSha: sha(text),
-    gitignore: state?.gitignore?.added ? state.gitignore : gitignore,
-    linkedAt: new Date().toISOString(),
-  };
-  fs.writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2) + '\n');
   if (!o.noInstall) o.install(project);
   o.log(`已 link：${known.join(', ')}（共 ${closure.length} 个 tarball）。恢复：zhin dev unlink`);
   return state;
+}
+
+/**
+ * 清理 link 中途失败留下的、缺少 state.json 的 .zhin-local/。
+ * 仅当 package.json 仍等于备份（或等于已写出的 linked-package.json，此时先还原）时才安全清理；否则返回 false。
+ */
+function cleanupPartialState(project: string, stateDir: string, backupDir: string, log: (m: string) => void): boolean {
+  const backupFile = path.join(backupDir, 'package.json');
+  if (!fs.existsSync(backupFile)) return false;
+  const pkgFile = path.join(project, 'package.json');
+  const backup = fs.readFileSync(backupFile, 'utf8');
+  const current = fs.readFileSync(pkgFile, 'utf8');
+  if (current !== backup) {
+    const linkedFile = path.join(stateDir, 'linked-package.json');
+    if (!fs.existsSync(linkedFile) || fs.readFileSync(linkedFile, 'utf8') !== current) return false;
+    fs.writeFileSync(pkgFile, backup);
+  }
+  fs.rmSync(stateDir, { recursive: true, force: true });
+  log(`已清理未完成 link 留下的 ${STATE_DIR}/`);
+  return true;
 }
 
 export function devUnlink(projectArg: string, options: Partial<DevLinkOptions> = {}): boolean {
@@ -296,7 +334,10 @@ export function devUnlink(projectArg: string, options: Partial<DevLinkOptions> =
   const state = readState(project);
   const stateDir = path.join(project, STATE_DIR), backupDir = path.join(stateDir, 'backup');
   if (!state) {
-    if (fs.existsSync(stateDir)) fail(`${STATE_DIR}/ 已存在但缺少 state.json，状态未知，请检查后手动处理`);
+    if (fs.existsSync(stateDir)) {
+      if (cleanupPartialState(project, stateDir, backupDir, o.log)) return true;
+      fail(`${STATE_DIR}/ 已存在但缺少 state.json，状态未知，请检查后手动处理`);
+    }
     o.log('未处于 link 状态，无需恢复');
     return false;
   }
