@@ -462,7 +462,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
                       outputElements: output.length,
                       outputPreview: flattenOutputElements(output).trim() || '(empty)',
                     }));
-                    const content = await publishOutboundElements([...output], effectiveAdapter || undefined);
+                    // Model output may name local files or URLs: hold them to this Turn's own authority.
+                    const content = await publishOutboundElements([...output], effectiveAdapter || undefined, undefined, {
+                      filesystem: turnPolicy.filesystem,
+                      ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
+                    });
                     logger.debug(formatCompact({
                       op: 'replychain_publish_outbound',
                       segments: content.length,

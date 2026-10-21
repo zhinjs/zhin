@@ -28,7 +28,7 @@
     "export type{ApprovalDecision,ApprovalDecisionMemory,ApprovalDecisionPort,ApprovalOutcome,ApprovalOutcomePort,ApprovalPort,ApprovalRequestInput,}from './session/approval-port.js';",
     "export type{ApprovalReviewAgentOptions,ApprovalReviewDecision,}from './session/approval-review-agent.js';",
     "export type{AssistantConfig,AssistantDefaultsConfig,AssistantEventsConfig,AssistantProfileConfig,AssistantProfile,NotificationRouter,BootstrapAssistantHomeResult,HomeToolRegistration,ScheduleJob,ScheduleJobFile,ScheduleJobCreator,ScheduleJobExecutionPlan,ScheduleInvocationContext,AssistantEventRequest,AssistantEventResult,}from './assistant/index.js';",
-    "export type{AudioTranscriptionPort,MediaBinaryPayload,MultimodalConfig,OutboundMediaCapabilities}from './media/index.js';",
+    "export type{AudioTranscriptionPort,MediaBinaryPayload,MultimodalConfig,OutboundMediaAuthority,OutboundMediaCapabilities}from './media/index.js';",
     "export type{AuthoringSkillDefinition,AuthoringHookDefinition,AuthoringEvalDefinition,AuthoringEvalContext,DiscoveredPluginAgentSurface,}from './authoring/index.js';",
     "export type{BootstrapFile,ContextFile}from './bootstrap.js';",
     "export type{DeliverScheduleToAdapterInput}from './assistant/deliver-schedule-to-adapter.js';",

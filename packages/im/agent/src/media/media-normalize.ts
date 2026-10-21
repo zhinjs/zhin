@@ -4,6 +4,44 @@ import type { MediaRef } from '@zhin.js/im-contract';
 import type { MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
 import { checkUrlNetworkAccess } from '../security/network-policy.js';
+import { authorizeTurnFileInput } from '../security/turn-file-authority.js';
+
+/**
+ * Turn authority for media that model output references by local path or URL.
+ * With it, a path must pass the same check as `read_file` and a URL needs the
+ * Turn's network authority (domain allowlist applied to every redirect hop).
+ * Omitted only by trusted host callers that already own the media.
+ */
+export interface OutboundMediaAuthority {
+  readonly filesystem?: Readonly<{ workspaceRoot: string; workingDirectory?: string }>;
+  readonly network?: Readonly<{ enabled: boolean; httpsOnly?: boolean; allowedDomains?: readonly string[] }>;
+}
+
+/** Canonical path the Turn may read, or null when the Turn has no authority over it. */
+export async function authorizeOutboundMediaPath(
+  rawPath: string,
+  authority: OutboundMediaAuthority | undefined,
+): Promise<string | null> {
+  if (!authority) return rawPath;
+  const filesystem = authority.filesystem;
+  if (!filesystem?.workspaceRoot) return null;
+  const decision = await authorizeTurnFileInput(
+    'read_file', { file_path: rawPath }, filesystem.workspaceRoot, filesystem.workingDirectory,
+  );
+  return decision.allowed ? String(decision.input.file_path) : null;
+}
+
+/** Network options for fetching model-referenced media, or null when the Turn has no network authority. */
+export function authorizeOutboundMediaUrl(
+  url: string,
+  authority: OutboundMediaAuthority | undefined,
+): { readonly allowedDomains: readonly string[] } | null {
+  if (!authority) return { allowedDomains: [] };
+  const network = authority.network;
+  if (!network?.enabled) return null;
+  const allowedDomains = [...(network.allowedDomains ?? [])];
+  return checkUrlNetworkAccess(url, { httpsOnly: true, allowedDomains }).allowed ? { allowedDomains } : null;
+}
 
 function kindFromSegmentType(type: string): MediaKind | null {
   if (type === 'image') return 'image';
@@ -96,12 +134,13 @@ export async function fetchUrlAsBase64(
   maxBytes: number,
   expectedKind?: MediaKind,
   signal?: AbortSignal,
+  allowedDomains: readonly string[] = [],
 ): Promise<MediaBinaryPayload | null> {
   try {
     let current = url;
     let res: Response | undefined;
     for (let redirects = 0; redirects <= 5; redirects += 1) {
-      if (!checkUrlNetworkAccess(current, { httpsOnly: true, allowedDomains: [] }).allowed) return null;
+      if (!checkUrlNetworkAccess(current, { httpsOnly: true, allowedDomains: [...allowedDomains] }).allowed) return null;
       res = await fetch(current, {
         redirect: 'manual',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
@@ -154,6 +193,7 @@ export async function normalizeMediaRefsToPayloads(
   refs: readonly { type: string; media: MediaRef }[],
   maxBytes: number,
   signal?: AbortSignal,
+  authority?: OutboundMediaAuthority,
 ): Promise<MediaBinaryPayload[]> {
   const out: MediaBinaryPayload[] = [];
 
@@ -174,12 +214,16 @@ export async function normalizeMediaRefsToPayloads(
     }
 
     if (media.kind === 'path') {
-      const local = await readLocalFileAsBase64(media.value, maxBytes, wantKind ?? undefined);
+      const authorized = await authorizeOutboundMediaPath(media.value, authority);
+      if (!authorized) continue;
+      const local = await readLocalFileAsBase64(authorized, maxBytes, wantKind ?? undefined);
       if (local) out.push({ ...local, ...fileName });
       continue;
     }
 
-    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal);
+    const network = authorizeOutboundMediaUrl(media.value, authority);
+    if (!network) continue;
+    const fetched = await fetchUrlAsBase64(media.value, maxBytes, wantKind ?? undefined, signal, network.allowedDomains);
     if (fetched) out.push({ ...fetched, ...fileName });
   }
 
