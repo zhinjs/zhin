@@ -727,7 +727,11 @@ function exactMessageText(input: CommandMatchInput): string | undefined {
   return trimmed || undefined;
 }
 
-function assertParameterSegment(
+/**
+ * Route-shape rule for a convention command: at most one dynamic segment, and it is the final one.
+ * Shared by the runtime index and {@link bindCommandSource}.
+ */
+export function assertParameterSegment(
   segments: readonly string[],
   parameter: CommandParameterDefinition | undefined,
   source: string,

@@ -18,8 +18,10 @@ export {
   type PermitKind,
 } from './permit.js';
 export {
+  bindCommandSource,
   CommandPathSyntaxError,
   commandFeatureId,
+  type BoundCommandSource,
   default as commandFeature,
 } from './provider.js';
 export { default } from './provider.js';

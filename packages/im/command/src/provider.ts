@@ -6,7 +6,7 @@ import {
   type DiscoveredSource,
   type SourceConvention,
 } from '@zhin.js/feature-kit';
-import { CommandIndex } from './command-index.js';
+import { CommandIndex, assertParameterSegment } from './command-index.js';
 import {
   bindCommandParameter,
   parseCommandDefinition,
@@ -164,6 +164,46 @@ function preferredCommandIndex(
     .filter((entry) => entry.kind === 'file' && /^index\.(?:tsx?|[cm]?js)$/u.test(entry.name))
     .sort((left, right) => commandFilePriority(left.name, preferJavaScript)
       - commandFilePriority(right.name, preferJavaScript))[0]?.name;
+}
+
+export interface BoundCommandSource<TDefinition> {
+  /** Plugin-local name the runtime registers, e.g. `term/$word`. */
+  readonly localName: string;
+  /** The definition with `$parameter` bound from the directory shape, as the runtime loads it. */
+  readonly definition: TDefinition;
+}
+
+/**
+ * Apply the runtime's convention-path rules to one command module: directory syntax
+ * (`[name]`, `[[name]]`, `[...name]`, `[[...name]]`), the `params` declaration the directory
+ * implies, and the route shape (one dynamic segment, last). `source` is the command's `index`
+ * file or its directory; everything after the last `commands` directory is the command path.
+ * Throws the same errors discovery, loading and the command index throw.
+ */
+export function bindCommandSource<TDefinition extends CommandDefinition>(
+  value: TDefinition,
+  source: string,
+): BoundCommandSource<TDefinition>;
+export function bindCommandSource(value: unknown, source: string): BoundCommandSource<CommandDefinition>;
+export function bindCommandSource(value: unknown, source: string): BoundCommandSource<CommandDefinition> {
+  const directory = /^index\.(?:tsx?|[cm]?js)$/u.test(basename(source)) ? dirname(source) : source;
+  const parts = directory.split(/[\\/]/u).filter(Boolean);
+  const commandsAt = parts.lastIndexOf('commands');
+  if (commandsAt < 0 || commandsAt === parts.length - 1) {
+    throw new CommandPathSyntaxError(source, 'expected a path under commands/, e.g. commands/foo/index.ts');
+  }
+  const segments = parts.slice(commandsAt + 1).map((name) => {
+    const segment = parseCommandDirectory(name);
+    if (!segment) {
+      throw new CommandPathSyntaxError(source, `"${name}" is not a command directory name, so the runtime does not discover it`);
+    }
+    return segment;
+  });
+  const definition = parseCommandDefinition(value);
+  const bound = bindCommandParameter(definition, resolveParameter(definition, segments.at(-1), source));
+  const localName = segments.map((segment) => segment.localSegment).join('/');
+  assertParameterSegment(localName.split('/'), bound.$parameter, source);
+  return Object.freeze({ localName, definition: bound });
 }
 
 export class CommandPathSyntaxError extends TypeError {
