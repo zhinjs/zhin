@@ -1,0 +1,16 @@
+.changeset/899-core-contract-types.md
+  h_b680f75345178a 1-6
+.changeset/899-testing-peer-stack.md
+  h_b680f75345178a 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5be09aea9baf80974142852ddf81946ac657d213",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
