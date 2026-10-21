@@ -279,7 +279,7 @@ export const displayName = '${capitalizedName}${kind === 'adapter' ? ' Adapter' 
 ${kind === 'normal' ? `
 /**
  * 插件配置（app 配置 <instanceKey>）的类型，与 schema.json 保持一致。
- * 约定目录里用 defineCommand<${capitalizedName}Config>()({...}) 拿到有类型的 config。
+ * 约定目录里用 defineCommand.withConfig<${capitalizedName}Config>()({...}) 拿到有类型的 config。
  */
 export interface ${capitalizedName}Config {
   readonly echoPrefix?: string;
@@ -394,9 +394,9 @@ import { formatEcho, type ${capitalizedName}Config } from '../../../src/index.js
 /**
  * 动态段命令：目录名 [text] 声明一个必需参数，类型在 params 中定义。
  * 聊天中发送 \`${pluginName}-echo 你好\` 即可触发，params.text 为「你好」。
- * defineCommand<Config>() 先固定 config 类型，params 仍从定义推断（params.text: string）。
+ * defineCommand.withConfig<Config>() 先固定 config 类型，params 仍从定义推断（params.text: string）。
  */
-export default defineCommand<${capitalizedName}Config>()({
+export default defineCommand.withConfig<${capitalizedName}Config>()({
   description: '回显一段文本（动态段示例）',
   params: {
     text: { type: 'string', description: '要回显的文本' },

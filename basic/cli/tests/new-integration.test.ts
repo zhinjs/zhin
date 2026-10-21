@@ -155,7 +155,7 @@ describe('CLI new command integration', () => {
     expect(echoTs).toContain("from '../../../src/index.js'")
     expect(echoTs).toContain("text: { type: 'string', description: '要回显的文本' }")
     // Typed config without losing params inference (#857)
-    expect(echoTs).toContain(`defineCommand<TestNormalPluginConfig>()({`)
+    expect(echoTs).toContain(`defineCommand.withConfig<TestNormalPluginConfig>()({`)
     expect(echoTs).toContain('config.echoPrefix')
     const libraryTs = await fs.readFile(path.join(pluginDir, 'src', 'index.ts'), 'utf-8')
     expect(libraryTs).toContain(`export interface TestNormalPluginConfig`)

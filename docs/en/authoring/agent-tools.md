@@ -118,10 +118,10 @@ The second argument to `execute` gives access to plugin services and the current
 
 Always get dependencies through this argument rather than looking up other plugins at execution time, so the tool uses the right version of each resource during hot reloads.
 
-`config` is `unknown` by default. To type it, use the curried form: fix the config type first and give the input type on the second call (with a Zod `inputSchema` the input type is inferred):
+`config` is `unknown` by default. To type it, use `defineAgentTool.withConfig`: fix the config type first and give the input type on the second call (with a Zod `inputSchema` the input type is inferred):
 
 ```ts
-export default defineAgentTool<WeatherConfig>()<{ city: string }>({
+export default defineAgentTool.withConfig<WeatherConfig>()<{ city: string }>({
   description: 'Look up the weather',
   inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
   execute({ city }, { config }) {

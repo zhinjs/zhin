@@ -138,7 +138,7 @@ interface PingPongConfig {
   reply: string;
 }
 
-export default defineCommand<PingPongConfig>()({
+export default defineCommand.withConfig<PingPongConfig>()({
   description: '回复配置的文案',
   execute({ config }) {
     return config.reply;
@@ -148,7 +148,7 @@ export default defineCommand<PingPongConfig>()({
 
 **目录路径就是命令名**：`commands/ping/index.ts` 对应 `/ping`，`commands/admin/ban/index.ts` 对应 `/admin ban`。只有 `index.ts` 是命令入口，同目录下的其他文件可以作为辅助模块被引用。
 
-`execute` 收到的 `config` 与 `setup` 里读到的是同一份配置。`defineCommand<PingPongConfig>()` 先固定配置类型，再在第二次调用里写命令，这样 `params` / `options` 的类型照样自动推断（见 [命令 · 给 config 加类型](../authoring/commands.md#typed-config)）。命令的参数、选项和权限写法见 [命令](../authoring/commands.md)。
+`execute` 收到的 `config` 与 `setup` 里读到的是同一份配置。`defineCommand.withConfig<PingPongConfig>()` 先固定配置类型，再在第二次调用里写命令，这样 `params` / `options` 的类型照样自动推断（见 [命令 · 给 config 加类型](../authoring/commands.md#typed-config)）。命令的参数、选项和权限写法见 [命令](../authoring/commands.md)。
 
 ## 4. 配置项：schema.json
 

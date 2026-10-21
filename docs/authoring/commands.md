@@ -308,13 +308,13 @@ export default defineCommand({
 
 ### 给 config 加类型 {#typed-config}
 
-约定目录里的命令不知道自己属于哪个插件，`config` 默认是 `unknown`。用柯里化写法先固定配置类型，再定义命令：
+约定目录里的命令不知道自己属于哪个插件，`config` 默认是 `unknown`。用 `defineCommand.withConfig` 先固定配置类型，再定义命令：
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
 import type { EchoConfig } from '../../../src/index.js'; // 与 schema.json 保持一致
 
-export default defineCommand<EchoConfig>()({
+export default defineCommand.withConfig<EchoConfig>()({
   params: { text: { type: 'string' } },
   execute({ params, config }) {
     return `${config.prefix ?? ''}${params.text}`; // params.text: string，config: EchoConfig
@@ -322,9 +322,9 @@ export default defineCommand<EchoConfig>()({
 });
 ```
 
-`defineCommand<EchoConfig>()` 返回的函数可以复用：在 `src/` 里写一次 `export const defineEchoCommand = defineCommand<EchoConfig>()`，各个命令文件直接调用它即可。
+`defineCommand.withConfig<EchoConfig>()` 返回的函数可以复用：在 `src/` 里写一次 `export const defineEchoCommand = defineCommand.withConfig<EchoConfig>()`，各个命令文件直接调用它即可。
 
-旧写法 `defineCommand<EchoConfig>({...})` 仍然有效，但 TypeScript 不支持只写一部分类型参数、其余自动推断，`params` 会退化成 `Record<string, CommandParameterValue>`。需要 `params` / `options` 推断时请用柯里化写法。
+旧写法 `defineCommand<EchoConfig>({...})` 仍然有效，但 TypeScript 不支持只写一部分类型参数、其余自动推断，`params` 会退化成 `Record<string, CommandParameterValue>`。需要 `params` / `options` 推断时请用 `withConfig`。
 
 ### 子命令
 

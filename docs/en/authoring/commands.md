@@ -306,13 +306,13 @@ export default defineCommand({
 
 ### Type the config {#typed-config}
 
-A command in a convention folder does not know which plugin it belongs to, so `config` is `unknown` by default. Use the curried form: fix the config type first, then define the command:
+A command in a convention folder does not know which plugin it belongs to, so `config` is `unknown` by default. Use `defineCommand.withConfig`: fix the config type first, then define the command:
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
 import type { EchoConfig } from '../../../src/index.js'; // keep in sync with schema.json
 
-export default defineCommand<EchoConfig>()({
+export default defineCommand.withConfig<EchoConfig>()({
   params: { text: { type: 'string' } },
   execute({ params, config }) {
     return `${config.prefix ?? ''}${params.text}`; // params.text: string, config: EchoConfig
@@ -320,9 +320,9 @@ export default defineCommand<EchoConfig>()({
 });
 ```
 
-The function `defineCommand<EchoConfig>()` returns can be reused: write `export const defineEchoCommand = defineCommand<EchoConfig>()` once in `src/` and call it from each command file.
+The function `defineCommand.withConfig<EchoConfig>()` returns can be reused: write `export const defineEchoCommand = defineCommand.withConfig<EchoConfig>()` once in `src/` and call it from each command file.
 
-The older `defineCommand<EchoConfig>({...})` still works, but TypeScript cannot infer the remaining type arguments once one is given explicitly, so `params` falls back to `Record<string, CommandParameterValue>`. Use the curried form when you want `params` and `options` inferred.
+The older `defineCommand<EchoConfig>({...})` still works, but TypeScript cannot infer the remaining type arguments once one is given explicitly, so `params` falls back to `Record<string, CommandParameterValue>`. Use `withConfig` when you want `params` and `options` inferred.
 
 ### Subcommands
 

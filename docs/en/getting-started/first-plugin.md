@@ -138,7 +138,7 @@ interface PingPongConfig {
   reply: string;
 }
 
-export default defineCommand<PingPongConfig>()({
+export default defineCommand.withConfig<PingPongConfig>()({
   description: 'Reply with the configured text',
   execute({ config }) {
     return config.reply;
@@ -148,7 +148,7 @@ export default defineCommand<PingPongConfig>()({
 
 **The folder path is the command name**: `commands/ping/index.ts` is `/ping`, and `commands/admin/ban/index.ts` is `/admin ban`. Only `index.ts` is the command entry; other files in the same folder can be imported as helpers.
 
-The `config` passed to `execute` is the same config `setup` reads. `defineCommand<PingPongConfig>()` fixes the config type first and the second call defines the command, so `params` and `options` are still inferred (see [Commands · Type the config](../authoring/commands.md#typed-config)). For params, options and permissions, see [Commands](../authoring/commands.md).
+The `config` passed to `execute` is the same config `setup` reads. `defineCommand.withConfig<PingPongConfig>()` fixes the config type first and the second call defines the command, so `params` and `options` are still inferred (see [Commands · Type the config](../authoring/commands.md#typed-config)). For params, options and permissions, see [Commands](../authoring/commands.md).
 
 ## 4. Config options: schema.json
 
