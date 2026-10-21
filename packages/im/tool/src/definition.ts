@@ -188,14 +188,48 @@ type AgentToolAuthoringDefinition<TInput, TResult, TConfig> =
       }
     }[RegisteredAdapterName];
 
+/**
+ * Returned by `defineAgentTool<Config>()`: the plugin config type is fixed, while the
+ * input (from an executable `inputSchema`, or given explicitly) and the result stay generic.
+ *
+ * @public
+ * @experimental
+ */
+export type AgentToolDefiner<TConfig> = <TInput = unknown, TResult = unknown>(
+  definition: AgentToolAuthoringDefinition<TInput, TResult, TConfig>,
+) => Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>>;
+
+/**
+ * Curried form: fix the plugin config type first, then define the tool.
+ *
+ * ```ts
+ * export default defineAgentTool<Config>()<{ city: string }>({
+ *   description: 'Weather', inputSchema: { ... },
+ *   execute({ city }, { config }) { ... },
+ * })
+ * ```
+ *
+ * `defineAgentTool<Input, Result, Config>({...})` keeps working.
+ */
+export function defineAgentTool<TConfig = unknown>(): AgentToolDefiner<TConfig>;
 export function defineAgentTool<
   TInput = unknown,
   TResult = unknown,
   TConfig = unknown,
 >(
   definition: AgentToolAuthoringDefinition<TInput, TResult, TConfig>,
+): Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>>;
+export function defineAgentTool(...args: readonly unknown[]): unknown {
+  if (args.length === 0) return (definition: unknown) => createAgentToolDefinition(definition as never);
+  return createAgentToolDefinition(args[0] as never);
+}
+
+function createAgentToolDefinition<TInput, TResult, TConfig>(
+  definition: AgentToolAuthoringDefinition<TInput, TResult, TConfig>,
 ): Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>> {
-  if (!definition.description.trim()) throw new TypeError('Agent Tool description cannot be empty');
+  if (typeof definition?.description !== 'string' || !definition.description.trim()) {
+    throw new TypeError('Agent Tool description cannot be empty');
+  }
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Agent Tool execute must be a function');
   }
