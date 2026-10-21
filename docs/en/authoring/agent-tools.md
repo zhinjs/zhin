@@ -135,6 +135,30 @@ Where a tool lives decides **when** the model can see it:
 
 Keep root `tools/` for general, frequent tools that need no extra explanation. Tools that only make sense for one platform, workflow or role belong in that Skill or Agent so they don't take up prompt space otherwise. Every tool is still validated at startup, even when not yet offered.
 
+### Keep a tool resident
+
+Plugin tools are **deferred** by default: the model only sees their name and a one-line description in the system prompt's tool index, and gets the parameter schema through `discover` / `load_tool` when it needs one (calling the tool directly also loads it). For a tool needed in almost every conversation, declare `alwaysLoaded: true` so its schema is sent to the model on every turn:
+
+```ts
+export default defineAgentTool({
+  description: 'Translate text into a target language',
+  alwaysLoaded: true,
+  execute: async (input) => { /* ... */ },
+})
+```
+
+::: warning Keep the resident set small
+Every resident tool's schema is sent on every model call. It uses context, adds token cost, and gives the model more tools to hesitate between. Only opt in for the one or two tools that are truly frequent; leave the rest deferred.
+:::
+
+Rules:
+
+- Leaving it out or setting `false` keeps the tool deferred, so existing plugins behave exactly as before.
+- The flag only decides whether a tool is resident; it never widens admission. A tool that fails `platforms`, `scopes` or `permissions` stays invisible, and `hidden` tools or private tools under a Skill / Agent directory are never made resident by it.
+- At most 8 plugin tools per turn become resident through this flag. Extra tools stay deferred in tool order (still reachable with `discover`), and a warning is logged once.
+- Operators have the final say: with `ai.agent.deferredTools.alwaysLoadedMode: replace`, the resident set is exactly `alwaysLoadedTools` and plugin declarations are ignored. Listing a tool name in `alwaysLoadedTools` also makes it resident, without the limit of 8.
+- Platform-only tools (with `platforms` set) are already resident once they pass admission, so they don't need the flag.
+
 ### Give the AI business context
 
 Use a Prompt Section for product terms, answer conventions or tool-use constraints:
@@ -255,6 +279,7 @@ my-plugin/
 | `scopes` | No | Restrict to `'private' \| 'group' \| 'channel'`; empty means all |
 | `permissions` | No | Permission rules; all must pass |
 | `hidden` | No | Registered but not offered to the model; still callable by name |
+| `alwaysLoaded` | No | `true` sends the schema to the model on every turn; default `false` (deferred). See [Keep a tool resident](#keep-a-tool-resident) |
 | `execute(input, context)` | Yes | The function; `context` described above |
 
 ### Permission rules
@@ -300,7 +325,7 @@ flowchart LR
 ```
 
 1. **Admission.** At the start of each turn, tools are filtered by the message's platform, scope and sender; tools that don't qualify are invisible to the model.
-2. **On-demand loading.** Only `alwaysLoadedTools` are exposed by default. The model searches tools and Skills with `discover` (names and summaries), loads a tool's parameter schema with `load_tool`, and loads a Skill's full text — unlocking its tools — with `load_skill`. Loaded state is kept per conversation and evicted past the limit; concurrent turns and sub-tasks are isolated. The Anthropic channel sends unloaded tools with a `deferLoading` flag; other channels send only loaded ones.
+2. **On-demand loading.** By default only `alwaysLoadedTools`, platform-only tools that passed admission, and plugin tools declared `alwaysLoaded: true` are exposed. The model searches tools and Skills with `discover` (names and summaries), loads a tool's parameter schema with `load_tool`, and loads a Skill's full text — unlocking its tools — with `load_skill`. Loaded state is kept per conversation and evicted past the limit; concurrent turns and sub-tasks are isolated. The Anthropic channel sends unloaded tools with a `deferLoading` flag; other channels send only loaded ones.
 3. **Approval and execution.** After admission and before execution, `requiresApproval` is checked; execution is bound to the owning plugin's config and resources.
 
 ::: details Implementation details

@@ -181,7 +181,8 @@ Notes:
 - Neither side's `package.json` or lockfile changes, and no `pnpm install` runs;
 - running `pnpm install` in the plugin restores its own dependencies; run `zhin dev link` again afterwards (idempotent);
 - keep the bot's zhin versions inside the plugin's `peerDependencies` ranges; while linked, the plugin's unit tests also use the bot's copies;
-- editing a shared `src/` module restarts the runtime (`restartRequired`); editing a convention file reloads just that capability.
+- editing a shared `src/` module restarts the runtime (`restartRequired`); editing a convention file reloads just that capability;
+- temp, swap, lock and backup files that editors write while saving never trigger a reload: `.!<digits>!*` (e.g. `.!97910!index.ts`), `*.swp` / `*.swo` / `*.swx`, Vim's `4913` probe file, `*~`, Emacs `.#*`, `*.tmp`, and JetBrains `*___jb_tmp___` / `*___jb_old___`. Only the file name is checked, so ordinary sources such as `tmp.ts` or `foo.tmp.ts` still reload.
 
 ## 6. Ports and clean exit
 

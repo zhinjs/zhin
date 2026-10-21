@@ -181,7 +181,8 @@ zhin dev unlink glossary                          # 撤销
 - 两边的 `package.json`、锁文件都不改，也不执行 `pnpm install`；
 - 在插件目录重新 `pnpm install` 会恢复它自己的依赖，之后再执行一次 `zhin dev link`（幂等）；
 - 插件与 bot 的 zhin 版本应在插件 `peerDependencies` 声明的范围内，链接后插件单测跑的也是 bot 那一份；
-- 改插件共享的 `src/` 模块时运行时会整体重启（`restartRequired`），改约定目录里的文件只重载对应能力。
+- 改插件共享的 `src/` 模块时运行时会整体重启（`restartRequired`），改约定目录里的文件只重载对应能力；
+- 编辑器保存时产生的临时、交换、锁和备份文件不会触发重载：`.!<数字>!*`（如 `.!97910!index.ts`）、`*.swp` / `*.swo` / `*.swx`、Vim 的探测文件 `4913`、`*~`、Emacs 的 `.#*`、`*.tmp`、JetBrains 的 `*___jb_tmp___` / `*___jb_old___`。只看文件名本身，`tmp.ts`、`foo.tmp.ts` 这类普通源码照常重载。
 
 ## 6. 端口与干净退出
 
