@@ -1,0 +1,23 @@
+basic/cli/src/utils/dev-link.ts
+  s_9477e63ef5cee5::t_a445c9a3946573 262-303,310-329,337-340
+basic/cli/tests/dev-link.test.ts
+  s_9477e63ef5cee5::t_29184fefd033a2 132-171
+.changeset/fix-dev-link-partial-state.md
+  s_9477e63ef5cee5::t_24626d57e8e146 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d56350f7c4c32d5815b22c9699387f096f168ea1",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
