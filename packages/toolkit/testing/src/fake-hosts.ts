@@ -3,7 +3,7 @@ import type {
   DatabaseHost, DatabaseHostModel, DatabaseHostSelection, DeliveryTarget, JsonValue,
   OutboundEditInput, OutboundReactionInput, OutboundRecallInput, OutboundRootHost, OutboundSendInput,
   OutboundTypingInput, PersistentStatePort, PluginId, StateRecord, StateScope,
-} from '@zhin.js/plugin-runtime';
+} from 'zhin.js/plugin-runtime';
 
 type Row = Record<string, unknown>;
 const matches = (row: Row, query: Row): boolean => Object.entries(query).every(([k, v]) => row[k] === v);

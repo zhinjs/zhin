@@ -1,4 +1,4 @@
-import type { PluginId, ScheduleHost, ScheduleJobRegistration } from '@zhin.js/plugin-runtime';
+import type { PluginId, ScheduleHost, ScheduleJobRegistration } from 'zhin.js/plugin-runtime';
 
 /** Controllable wall clock. It never touches the real `Date` or timers. */
 export class FakeClock {

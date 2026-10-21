@@ -23,25 +23,23 @@
     "test": "vitest run --root ../../.. packages/toolkit/testing/tests",
     "prepublishOnly": "pnpm run build"
   },
-  "dependencies": {
+  "peerDependencies": {
+    "zhin.js": "workspace:^",
+    "@zhin.js/runtime": "workspace:^",
+    "@zhin.js/tool": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/command": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/feature-kit": "workspace:*",
-    "@zhin.js/handler": "workspace:*",
-    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "@zhin.js/tool": "workspace:*"
-  },
-  "peerDependencies": {
-    "@zhin.js/command": "workspace:^"
-  },
-  "devDependencies": {
-    "@zhin.js/command": "workspace:*",
-    "@types/node": "^26.1.2",
+    "@zhin.js/tool": "workspace:*",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
   },
   "engines": {
     "node": ">=22.19.0"
