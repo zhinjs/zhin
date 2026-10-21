@@ -1,0 +1,124 @@
+docs/plans/workroom-group-collaboration-redesign.md
+  s_edfbde385730f9::t_db1cdf5ebec064 151
+  s_edfbde385730f9::t_95255c523d9737 153
+  s_edfbde385730f9::t_94d45c85992881 193
+  s_edfbde385730f9::t_a36c320343ec58 199
+basic/cli/src/plugin-runtime/agent/room-port.ts
+  s_edfbde385730f9::t_a84ee03efb380c 1-84
+  s_edfbde385730f9::t_fd69d9741ea7ab 85-111
+packages/im/workroom/src/room/room-tool-actions.ts
+  s_edfbde385730f9::t_421c9a5ff8f74f 161-165
+packages/im/workroom/README.md
+  s_edfbde385730f9::t_83d74a1030ac6c 64
+  s_edfbde385730f9::t_5049b08fb9586a 62-63,85-94
+packages/im/workroom/src/room/room-turn-coordinator.ts
+  s_edfbde385730f9::t_f5a214bb2ead8d 1-596
+  s_edfbde385730f9::t_597150f9c3bd2f 597-602
+basic/cli/src/plugin-runtime/workroom/room-turn-host.ts
+  s_edfbde385730f9::t_b368f5835fe12b 1-218
+basic/cli/tests/plugin-runtime/agent/turn/room-ingress.test.ts
+  s_edfbde385730f9::t_8bb998c396a778 1-227
+  s_edfbde385730f9::t_202f456c8cb97a 228-229
+.changeset/room-turn-admission-memory.md
+  s_edfbde385730f9::t_85ce1f51dbf633 1-15
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_edfbde385730f9::t_289e4b2d0e58f9 211,223-237
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_edfbde385730f9::t_ee7a3c3c93e8ea 1,11,79-84,120-127,261-277,593-802,891-902
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_edfbde385730f9::t_e20e66fb995656 20,22,94-98,200-201
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_edfbde385730f9::t_44a61fcbe7b47b 111-112
+basic/cli/src/plugin-runtime/workroom/module.ts
+  s_edfbde385730f9::t_f1711cdc044035 22-26
+basic/cli/tests/plugin-runtime/workroom/room-host-scope.test.ts
+  s_edfbde385730f9::t_e6435115aa5e3a 1-106
+docs/configuration/index.md
+  s_edfbde385730f9::t_7f9c471b0b83b6 349-350
+docs/plans/workroom-group-collaboration-progress.md
+  s_edfbde385730f9::t_66aec6f451c9b3 129-132,485-491,547
+examples/multi-agent-room/README.md
+  s_edfbde385730f9::t_a738725708b490 46,74
+examples/multi-agent-room/src/team.ts
+  s_edfbde385730f9::t_bd29ceb6e53a0c 11-14,20,26,34-35,124-126,128-129,148-154,184-190,215-223,364-405,410-411,414-415,436,439,455,475,479-486,493-494,496,507
+examples/multi-agent-room/tests/room-collaboration.e2e.test.ts
+  s_edfbde385730f9::t_3fe0890d82b25c 198,208-210,214-215,218-228,230,233-238,240,256-282,325,349,482-483
+packages/im/agent/src/core/agent-core-run.ts
+  s_edfbde385730f9::t_9539f5be328603 236-242,1021-1025
+packages/im/agent/src/memory/memory-write-policy.ts
+  s_edfbde385730f9::t_6ca29c839f268e 15-16,43-44,53-55
+packages/im/agent/src/memory/semantic-recall.ts
+  s_edfbde385730f9::t_ee264d94f911fd 20-24,27-30,34,47-51,67-68,75-79,92-94,96-104,108-110,121
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_edfbde385730f9::t_c90142b7f99e7d 1,92-93,115,120-132,140,149,156-194,286-288,397-399,445,835,840,845
+packages/im/agent/src/plugin-runtime/native-semantic-memory-tools.ts
+  s_edfbde385730f9::t_99f711916c338d 180-181,254-255,260-271,275,285,296-310
+packages/im/agent/src/turn/turn-admission-gate.ts
+  s_edfbde385730f9::t_5257d286c6bf8c 2,18-23,194-221
+packages/im/agent/src/turn/turn-ingress.ts
+  s_edfbde385730f9::t_090dcca6a046ab 349-351,380-390
+packages/im/agent/tests/memory/memory-write-policy.test.ts
+  s_edfbde385730f9::t_9665f2a8108538 1-19
+packages/im/agent/tests/memory/semantic-recall.test.ts
+  s_edfbde385730f9::t_69b7353b521b05 4,100-137
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_edfbde385730f9::t_15b59aba37945f 3-4,9,736-744,754-759,784-789,882,888,890-891,895-949,954,961-976
+packages/im/agent/tests/plugin-runtime/native-semantic-memory-tools.test.ts
+  s_edfbde385730f9::t_90f81cfefa27aa 178-245
+packages/im/agent/tests/turn/turn-admission-gate.test.ts
+  s_edfbde385730f9::t_8c013ab8ffa1ae 229-285
+packages/im/agent/tests/turn/turn-ingress.test.ts
+  s_edfbde385730f9::t_29f18a5d5ca49d 205-213
+packages/im/ai/src/types.ts
+  s_edfbde385730f9::t_7b507d89ba0f34 493-500
+packages/im/tool/src/definition.ts
+  s_edfbde385730f9::t_c7867265fe22f9 75-84
+packages/im/workroom/plugin.ts
+  s_edfbde385730f9::t_14ef288797bfbd 4,6,12,17-18,30-31,48,58-73,76,80,90,95-111
+packages/im/workroom/schema.json
+  s_edfbde385730f9::t_ff5e95be1d7d1e 187
+packages/im/workroom/src/room/index.ts
+  s_edfbde385730f9::t_5be56c3c7fb183 18
+packages/im/workroom/src/room/room-guards.ts
+  s_edfbde385730f9::t_89e11419961143 7-10,24,37,89-91,93,218,223
+packages/im/workroom/src/room/room-runtime.ts
+  s_edfbde385730f9::t_8be9a372bf4d08 9,14,29-33,49-53,76-84,91,104-109,138-147,149,155-159
+packages/im/workroom/src/room/room-task-authorizer.ts
+  s_edfbde385730f9::t_4471e2dc7c9336 1,10-14,56,61,82-125
+packages/im/workroom/src/room/room-task-service.ts
+  s_edfbde385730f9::t_65143cea918add 48-54,64-67,88,125-133,139-140
+packages/im/workroom/src/room/room-task.ts
+  s_edfbde385730f9::t_d86226cb300b91 19-22,82-89,108-115,131-132,184-198,221-222,313,397-401,412-415
+packages/im/workroom/src/room/room-tokens.ts
+  s_edfbde385730f9::t_5e56b2811c28ac 2,9,43-66
+packages/im/workroom/tests/room/room-guards.test.ts
+  s_edfbde385730f9::t_7cea25bf3830b4 59,61,64,66,68,71-72,74,77,80-82,86,88-90,93,95-98,100,102-103,105-107,132
+packages/im/workroom/tests/room/room-plugin.test.ts
+  s_edfbde385730f9::t_afa58e42d40bfe 18,20-21,24,59,89-94,103-106
+packages/im/workroom/tests/room/room-task-authorizer.test.ts
+  s_edfbde385730f9::t_011097dd44dc4c 2-7,16-17,24,32-35,43-48,50-51,54,56-68,70,75-99
+packages/im/workroom/tests/room/room-task-journal-contract.test.ts
+  s_edfbde385730f9::t_36a5c3b2d9e505 30-38
+packages/im/workroom/tests/room/room-task.test.ts
+  s_edfbde385730f9::t_6d48b9fd58775f 181-217
+packages/im/workroom/tests/room/room-turn-coordinator.test.ts
+  s_edfbde385730f9::t_a41ce5a1992fa2 1-502
+packages/im/workroom/tests/room/validate-room.test.ts
+  s_edfbde385730f9::t_227219d6e10b78 269-270
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df0d617062fbff2a782df2c301974dcbb179d518",
+  "prompts": {},
+  "sessions": {
+    "s_edfbde385730f9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "def705f9-96a9-4546-9aca-ca5d97123a15",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

@@ -1,0 +1,79 @@
+.changeset/c1e-room-trace-chain.md
+  s_4486a2320ce470::t_91ea0e943eca88 1-8
+basic/cli/src/commands/trace.ts
+  s_4486a2320ce470::t_a9dd6752dfb7af 16-17,38-56,63-64,81-90,108-117
+basic/cli/src/plugin-runtime/console/trace-archive-routes.ts
+  s_4486a2320ce470::t_72d796466a556e 76-81,84,96,101-113
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_4486a2320ce470::t_a2f00be17575ea 696-735
+basic/cli/tests/trace-command.test.ts
+  s_4486a2320ce470::t_31ca1c3aee9c07 1-3,5,23-72
+docs/cli/index.md
+  s_4486a2320ce470::t_6c0d3907be6cb1 369,377,389
+docs/plans/workroom-group-collaboration-progress.md
+  s_4486a2320ce470::t_62e713fadbb43d 139-140,524-530,595
+docs/plans/workroom-group-collaboration-redesign.md
+  s_4486a2320ce470::t_61ae26932723dd 209,286,292
+packages/console/client/client/agent-trace/TraceArchivePage.tsx
+  s_4486a2320ce470::t_5471f35f5cc5e4 3,27-29,62-69,73,89-112,154
+packages/console/client/client/agent-trace/traceView.test.ts
+  s_4486a2320ce470::t_0e9e10e067018f 2,43-63
+packages/console/client/client/agent-trace/traceView.ts
+  s_4486a2320ce470::t_ad7c3a11f58e69 4,6-14,19,103-131
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_4486a2320ce470::t_7a42a934838b1e 329,335-347
+packages/im/agent/src/trace/index.ts
+  s_4486a2320ce470::t_a864e5327e022e 16,50-51
+packages/im/agent/src/trace/turn-trace-archive.ts
+  s_4486a2320ce470::t_18f357d63dfb6d 25-28,142-143
+packages/im/agent/src/trace/turn-trace-format.ts
+  s_4486a2320ce470::t_ef2b599c213783 2,55,84-85,112-132
+packages/im/agent/src/trace/turn-trace-room.ts
+  s_4486a2320ce470::t_75c5e534728a17 1-99
+packages/im/agent/src/trace/turn-trace.ts
+  s_4486a2320ce470::t_a7f1f618869349 57-75,109-110,156-169,182,190,218-239,246,322-323,420,537-543
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_4486a2320ce470::t_4d4d7035c1abca 408-470
+packages/im/agent/tests/trace/turn-trace-archive.test.ts
+  s_4486a2320ce470::t_3f7497752d149b 105-124
+packages/im/agent/tests/trace/turn-trace-room.test.ts
+  s_4486a2320ce470::t_adc983294a987c 1-110
+packages/im/agent/tests/trace/turn-trace.test.ts
+  s_4486a2320ce470::t_d15a5c2484e61f 236-283
+packages/im/workroom/README.md
+  s_4486a2320ce470::t_3296ffd5f78a9f 104,106
+packages/im/workroom/src/room/room-task-service.ts
+  s_4486a2320ce470::t_206295d17cdf24 26-30,150-154,160-164
+packages/im/workroom/src/room/room-task.ts
+  s_4486a2320ce470::t_540a2304549131 79-80,107-108,329,354,383,406,462,470-477
+packages/im/workroom/src/room/room-tool-actions.ts
+  s_4486a2320ce470::t_69d0a7aec95f77 50-51,67,84,100-101,109,117,290,306,315
+packages/im/workroom/src/room/room-turn-coordinator.ts
+  s_4486a2320ce470::t_a921da058f2613 163,249-277,440-442,495,531,714-715,725
+packages/im/workroom/tests/room/room-task-journal-contract.test.ts
+  s_4486a2320ce470::t_c048110d283de8 39-51
+packages/im/workroom/tests/room/room-task-service.test.ts
+  s_4486a2320ce470::t_338de2cf035b60 171-183
+packages/im/workroom/tests/room/room-task.test.ts
+  s_4486a2320ce470::t_f58bb796015743 8,233-279
+packages/im/workroom/tests/room/room-tool-actions.test.ts
+  s_4486a2320ce470::t_8b4b769264530b 1,346-408
+packages/im/workroom/tests/room/room-turn-coordinator.test.ts
+  s_4486a2320ce470::t_b0042024aa994c 176-206,459-511
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4c1e179d45fdbb541556b404e54fd0eeb473ed71",
+  "prompts": {},
+  "sessions": {
+    "s_4486a2320ce470": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c5bd22f7-5bb3-4311-b1e3-490456c538da",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
