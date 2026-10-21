@@ -228,6 +228,21 @@ describe('group privacy', () => {
     expect(target).toEqual({ endpoint: ENDPOINT, kind: 'private', id: 'alice' });
   });
 
+  it('delivers to the saved private conversation when its id differs from the user id', async () => {
+    const created = await fixture();
+    const dm = { conversation: { endpoint: ENDPOINT, kind: 'private', id: 'dm-channel-9' }, sender: { id: 'alice' }, content: '' } as CommandMessage;
+    await created.run('记 午饭 18.5', dm);
+
+    expect(await created.run('本周消费', groupMessage('alice'))).toBe('🔒 本周消费已私信发送给你');
+    const target = (created.fake.sent.at(-1)!.input as { target: unknown }).target;
+    expect(target).toEqual({ endpoint: ENDPOINT, kind: 'private', id: 'dm-channel-9' });
+
+    expect(await created.run('记账日报 开启', groupMessage('alice'))).toContain('已开启记账日报');
+    await created.clock.advance(12 * 3_600_000);
+    const reportTarget = (created.fake.sent.at(-1)!.input as { target: unknown }).target;
+    expect(reportTarget).toEqual({ endpoint: ENDPOINT, kind: 'private', id: 'dm-channel-9' });
+  });
+
   it('falls back to masked amounts when the private message cannot be delivered', async () => {
     const created = await fixture();
     await created.run('记 午饭 18.5', groupMessage('alice'));

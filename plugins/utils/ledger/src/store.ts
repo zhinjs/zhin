@@ -20,6 +20,8 @@ export interface LedgerUserRecord {
   readonly reportEnabled: boolean;
   readonly reportTarget: DeliveryTarget | undefined;
   readonly lastReportDate: string;
+  /** The user's real private conversation, saved when they talk to the bot in private. */
+  readonly privateTarget: DeliveryTarget | undefined;
 }
 
 /** Registers both tables; called from `setup()` before the database starts. */
@@ -38,6 +40,7 @@ export function defineLedgerTables(database: Pick<PluginDatabaseHost, 'define'>)
     report_enabled: { type: 'integer', default: 0 },
     report_target: { type: 'text', default: '' },
     last_report_date: { type: 'text', default: '' },
+    private_target: { type: 'text', default: '' },
   });
 }
 
@@ -68,6 +71,7 @@ function toUser(row: Record<string, unknown>): LedgerUserRecord {
     reportEnabled: Number(row.report_enabled ?? 0) === 1,
     reportTarget: parseTarget(row.report_target),
     lastReportDate: String(row.last_report_date ?? ''),
+    privateTarget: parseTarget(row.private_target),
   };
 }
 
@@ -91,7 +95,7 @@ export class LedgerStore {
 
   async getUser(ownerKey: string): Promise<LedgerUserRecord | undefined> {
     const rows = await this.#model(USER_TABLE)
-      .select('owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date')
+      .select('owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date', 'private_target')
       .where({ owner_key: ownerKey });
     const first = rows[0];
     return first ? toUser(first) : undefined;
@@ -106,8 +110,16 @@ export class LedgerStore {
       report_enabled: 0,
       report_target: '',
       last_report_date: '',
+      private_target: '',
     });
-    return { ownerKey, nextSeq: 1, reportEnabled: false, reportTarget: undefined, lastReportDate: '' };
+    return {
+      ownerKey,
+      nextSeq: 1,
+      reportEnabled: false,
+      reportTarget: undefined,
+      lastReportDate: '',
+      privateTarget: undefined,
+    };
   }
 
   /** Reserves the next per-user entry number. Callers serialise per user (see LedgerService). */
@@ -157,9 +169,19 @@ export class LedgerStore {
     }).where({ owner_key: ownerKey });
   }
 
+  /** Saves the real private conversation; an enabled daily report follows it. */
+  async setPrivateTarget(ownerKey: string, target: DeliveryTarget): Promise<void> {
+    const user = await this.#ensureUser(ownerKey);
+    const raw = JSON.stringify(target);
+    await this.#model(USER_TABLE).update({
+      private_target: raw,
+      ...(user.reportEnabled ? { report_target: raw } : {}),
+    }).where({ owner_key: ownerKey });
+  }
+
   async listReportSubscribers(): Promise<LedgerUserRecord[]> {
     const rows = await this.#model(USER_TABLE)
-      .select('owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date')
+      .select('owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date', 'private_target')
       .where({ report_enabled: 1 });
     return rows.map(toUser);
   }
