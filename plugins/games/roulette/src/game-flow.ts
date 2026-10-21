@@ -46,7 +46,7 @@ export interface ExpiredSessionNotice {
 }
 
 const DEADLINE_ACTOR = 'deadline';
-const MANAGER_ROLES: readonly string[] = ['master', 'trusted'];
+const MANAGER_ROLES: readonly string[] = ['master', 'trusted', 'owner', 'admin'];
 const NO_GAME_TEXT = '本群没有进行中的轮盘，发送「轮盘 开局」创建一局。';
 
 export async function runRouletteAction(
@@ -108,7 +108,7 @@ async function handleGameAction(
   if (!session) return NO_GAME_TEXT;
   if (action === 'status') return describeStatus(stateOf(session), flow.config);
   if (action === 'cancel' && !mayCancel(session, message, actor.roles)) {
-    return '只有开局的人或机器人管理员可以取消本局。';
+    return '只有开局的人、群主、群管理员或机器人管理员可以取消本局。';
   }
   const gameAction = toGameAction(action, message);
   if (!gameAction) return NO_GAME_TEXT;
@@ -236,7 +236,7 @@ async function handlePenaltySetting(
     const enabled = await settings.isMutePenaltyEnabled(key);
     return describePenaltyStatus(enabled, support === 'supported', flow.config);
   }
-  if (!isManager(actor.roles)) return '只有机器人主人或受信任用户可以修改禁言惩罚。';
+  if (!isManager(actor.roles)) return '只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。';
   if (action === 'penalty-off') {
     await settings.setMutePenalty(key, false, message.$sender.id);
     return '已关闭禁言惩罚，本群轮盘只计分。';

@@ -227,9 +227,16 @@ describe('roulette gameplay', () => {
   it('cancelling needs the host or a bot manager and records nothing', async () => {
     await seatThreeAndStart();
 
-    expect(await say('bob', '取消')).toBe('只有开局的人或机器人管理员可以取消本局。');
+    expect(await say('bob', '取消')).toBe('只有开局的人、群主、群管理员或机器人管理员可以取消本局。');
     expect(await say('dave', '取消', { roles: ['master'] })).toContain('已取消');
     expect(fake.rows('game_records')).toHaveLength(0);
+  });
+
+  it.each([['owner'], ['admin']])('lets the platform group %s cancel the game', async (role) => {
+    await seatThreeAndStart();
+
+    expect(await say('bob', '取消', { roles: ['member'] })).toBe('只有开局的人、群主、群管理员或机器人管理员可以取消本局。');
+    expect(await say('dave', '取消', { roles: [role] })).toContain('已取消');
   });
 
   it('leaving a running round is a forfeit', async () => {
@@ -251,8 +258,11 @@ describe('mute penalty', () => {
   });
 
   it('only a bot manager may switch it, and a platform without muting refuses to enable it', async () => {
-    expect(await say('bob', '开启禁言')).toBe('只有机器人主人或受信任用户可以修改禁言惩罚。');
+    expect(await say('bob', '开启禁言')).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
+    expect(await say('bob', '开启禁言', { roles: ['member'] })).toBe('只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。');
     expect(await say('owner', '开启禁言', { roles: ['master'] })).toContain('当前平台不支持禁言');
+    expect(await say('carol', '开启禁言', { roles: ['admin'] })).toContain('当前平台不支持禁言');
+    expect(await say('dave', '开启禁言', { roles: ['owner'] })).toContain('当前平台不支持禁言');
     expect(await say('bob', '禁言')).toContain('本群禁言惩罚：关闭。当前平台不支持禁言');
   });
 
