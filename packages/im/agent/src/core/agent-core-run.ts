@@ -18,7 +18,7 @@ import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
-import { recoverStructuredReply } from './structured-reply-recovery.js';
+import { recoverStructuredReply, STRUCTURED_REPLY_FAILURE } from './structured-reply-recovery.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
@@ -1140,10 +1140,13 @@ export async function* runAgentLoopTextTurnRun(
         error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
       });
       output = recovery.output;
-      const lastBatch = conversationBatches.at(-1);
-      if (recovery.exchange) {
-        lastBatch?.messages.push(...recovery.exchange);
-        lastBatch?.messageExtras.push(undefined, undefined);
+      // History must match what the user saw: the corrected reply, or the failure text. Never the
+      // correction prompt (it embeds the rejected raw text) and never the rejected raw reply.
+      const messages = conversationBatches.at(-1)?.messages;
+      const rejected = messages?.at(-1);
+      if (messages && rejected?.role === 'assistant') {
+        messages[messages.length - 1] = recovery.assistant
+          ?? { ...rejected, content: [{ type: 'text', text: STRUCTURED_REPLY_FAILURE }] };
       }
     }
   }
