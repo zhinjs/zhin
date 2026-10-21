@@ -1,0 +1,23 @@
+packages/im/command/tests/types/config.ts
+  s_e6f5f09d5890ba::t_9f5b72370df17b 1-61
+packages/im/command/tests/types/tsconfig.json
+  s_e6f5f09d5890ba::t_2575ef3650df13 4
+tsconfig.typecheck.json
+  s_e6f5f09d5890ba::t_b35d01f2ca1b85 328-329
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cec6d9c241755dbacfb3c4c1e4daaecfad258e23",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
