@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
-import { definePlugin, type PluginDefinition } from '@zhin.js/plugin-runtime';
-import type { AdapterDefinition } from '@zhin.js/adapter';
+import { definePlugin, type PluginDefinition } from 'zhin.js/plugin-runtime';
+import type { AdapterDefinition } from 'zhin.js/adapter';
 import type { ModuleRuntime } from '@zhin.js/runtime';
 
 /** Only the test application's setup is decorated; discovery and module caching stay native. */

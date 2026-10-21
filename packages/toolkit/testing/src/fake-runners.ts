@@ -1,16 +1,16 @@
 import type {
   CommandContext, CommandDefinition, CommandMessage, CommandParameterValue,
-} from '@zhin.js/command';
-import type { HandlerContext, HandlerDefinition } from '@zhin.js/handler';
+} from 'zhin.js/command';
+import type { HandlerContext, HandlerDefinition } from 'zhin.js/handler';
 import type {
   MiddlewareContext, MiddlewareDefinition, MiddlewareNext,
-} from '@zhin.js/middleware';
+} from 'zhin.js/middleware';
 import {
   parseToolInputSchema,
   type AgentToolDefinition, type ToolExecutionContext, type ToolInvocationOrigin,
   type ToolInvocationPolicy, type ToolQuestionPort,
 } from '@zhin.js/tool';
-import type { OperationClientPort } from '@zhin.js/feature-kit';
+import type { OperationClientPort } from 'zhin.js';
 import type { FakePlugin } from './fake-plugin.js';
 import { fileURLToPath } from 'node:url';
 
@@ -56,7 +56,7 @@ export interface RunCommandOptions<TInput extends CommandMessage = FakeMessage> 
    * Where the command lives: its `commands/.../index.ts` file (or directory), as a path or a
    * `file:` URL such as `new URL('../commands/echo/[text]/index.ts', import.meta.url)`. When set,
    * the definition first goes through the Runtime's convention-path check (`bindCommandSource`
-   * from `@zhin.js/command`): a layout the Runtime would reject, e.g. `commands/term/[word]/[...rest]`,
+   * from `zhin.js/command`): a layout the Runtime would reject, e.g. `commands/term/[word]/[...rest]`,
    * throws here too, and the directory parameter is bound as in the Runtime.
    */
   readonly source?: string | URL;
@@ -104,10 +104,10 @@ async function bindSource<T extends CommandDefinition<never, unknown, never, str
   definition: T, source: string | URL,
 ): Promise<T> {
   const path = source instanceof URL || source.startsWith('file:') ? fileURLToPath(source) : source;
-  // Loaded on demand: the plugin's own @zhin.js/command (a peer) provides the Runtime's rules.
-  const command: Partial<typeof import('@zhin.js/command')> = await import('@zhin.js/command');
+  // Loaded on demand, so an older zhin.js (unmet peer) only fails here, with an actionable message.
+  const command: Partial<typeof import('zhin.js/command')> = await import('zhin.js/command');
   if (typeof command.bindCommandSource !== 'function') {
-    throw new Error('runCommand({ source }) needs a newer @zhin.js/command that exports bindCommandSource; upgrade @zhin.js/command');
+    throw new Error('runCommand({ source }) needs a newer zhin.js whose zhin.js/command exports bindCommandSource; upgrade zhin.js');
   }
   return command.bindCommandSource(definition as never, path).definition as unknown as T;
 }

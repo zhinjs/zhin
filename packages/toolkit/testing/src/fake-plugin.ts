@@ -3,8 +3,8 @@ import {
   Scope, databaseHostToken, outboundHostToken, qualifyPluginResourceName, rootPluginId, scheduleHostToken,
   type Dispose, type FeatureId, type PluginDefinition, type PluginId, type PluginNodeSnapshot,
   type PluginSetupContext, type Token,
-} from '@zhin.js/plugin-runtime';
-import type { CapabilityContext } from '@zhin.js/feature-kit';
+} from 'zhin.js/plugin-runtime';
+import type { CapabilityContext } from 'zhin.js';
 import { parsePluginConfigSchema } from '@zhin.js/runtime';
 import { FakeClock, FakeScheduleRootHost } from './fake-clock.js';
 import { FakeDatabaseRootHost, FakeOutboundRootHost, type FakeOutboundCall } from './fake-hosts.js';

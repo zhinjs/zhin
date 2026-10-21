@@ -3,6 +3,18 @@
 The kit has two layers: typed **fakes** for fast unit tests (no `as never`, below), and
 `PluginTestKit` for integration tests through the real Plugin Runtime (the rest of this file).
 
+## Install
+
+```sh
+pnpm add -D @zhin.js/testing
+```
+
+`zhin.js`, `@zhin.js/runtime` and `@zhin.js/tool` are peer dependencies; the kit ships no
+`@zhin.js/*` copy of its own and resolves core, commands, adapters and the Plugin Runtime through the
+plugin's `zhin.js`, so tests run on the same single stack as a real bot. pnpm and npm install
+missing peers; with yarn 1 run `yarn add -D zhin.js @zhin.js/runtime @zhin.js/tool @zhin.js/testing`.
+Upgrade it together with `zhin.js`.
+
 ## Fakes for unit tests
 
 ```ts
