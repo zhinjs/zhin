@@ -1,0 +1,29 @@
+packages/im/agent/tests/turn/inbound-media.test.ts
+  s_9477e63ef5cee5::t_55ec685ac0bac5 10,218-222
+  s_9477e63ef5cee5::t_3c1ce91a37316a 223-224
+packages/im/agent/tests/media/perception.test.ts
+  s_9477e63ef5cee5::t_55ec685ac0bac5 8,75-91,142-144
+packages/im/agent/src/media/perception.ts
+  s_9477e63ef5cee5::t_66b38505c0a5b5 25,98-119,197-206,208-210
+packages/im/agent/src/turn/inbound-media.ts
+  s_9477e63ef5cee5::t_66b38505c0a5b5 209-210
+  s_9477e63ef5cee5::t_00540ee765ba49 21
+.changeset/perception-failed-usage.md
+  s_9477e63ef5cee5::t_849f3981aff0fd 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "12d9a03793df9efe8feb99b52a250086a7dfc85d",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
