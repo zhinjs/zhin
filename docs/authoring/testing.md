@@ -16,7 +16,9 @@ description: "用 @zhin.js/testing 的假运行环境测试插件：不再手工
 pnpm add -D @zhin.js/testing
 ```
 
-`@zhin.js/command` 是它的 peer 依赖：用的是插件自己（经 `zhin.js`）装的那一份，不会再装出第二份。插件没有直接依赖它时，pnpm / npm 会自动补装；yarn 1 等不自动安装 peer 的包管理器需要手动 `add -D @zhin.js/command`。
+`zhin.js`、`@zhin.js/runtime`、`@zhin.js/tool` 是它的 peer 依赖，自己不带任何一份 `@zhin.js/*`：core、命令、适配器、Plugin Runtime 等都经插件自己装的 `zhin.js` 解析，所以和真实 bot 用的是同一套，不会因为版本对不上装出第二份（运行时会报 `Multiple package locations`）。pnpm / npm 会自动补装缺的 peer；yarn 1 等不自动安装 peer 的包管理器需要一起装上：`yarn add -D zhin.js @zhin.js/runtime @zhin.js/tool @zhin.js/testing`。
+
+升级时让 `@zhin.js/testing` 和 `zhin.js` 一起升：`@zhin.js/testing` 要求 `zhin.js` 不低于与它同批发布的版本，`zhin.js` 太旧时 npm 会直接报 `ERESOLVE`，pnpm 会提示 unmet peer。
 
 ## 跑 setup
 
@@ -106,7 +108,7 @@ await runHandler(fake, onReceive, createFakeMessage()); // this 即能力上下�
 `runCommand` 直接调用 `execute()`：不做路由匹配、参数解析、`permit` 校验和准入检查，`params` 需要你自己给出已解析的值。要验证这些，用下面的真实运行时。
 :::
 
-给了 `source` 时，`runCommand` 会先用运行时同一套约定路径规则（`@zhin.js/command` 的 `bindCommandSource`）检查目录：括号写法、目录隐含的 `params` 声明，以及“只能有一个动态段且必须在最后”。像 `commands/term/[word]/[...definition]` 这种运行时会拒绝加载的布局，在单测里同样报错；不传 `source` 则不检查。`zhin new` 生成的测试默认传了 `source`。
+给了 `source` 时，`runCommand` 会先用运行时同一套约定路径规则（`zhin.js/command` 的 `bindCommandSource`）检查目录：括号写法、目录隐含的 `params` 声明，以及“只能有一个动态段且必须在最后”。像 `commands/term/[word]/[...definition]` 这种运行时会拒绝加载的布局，在单测里同样报错；不传 `source` 则不检查。`zhin new` 生成的测试默认传了 `source`。
 
 ## 跑 Agent 工具
 
