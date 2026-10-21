@@ -1460,6 +1460,67 @@ describe('IM Runtime', () => {
       .resolves.toMatchObject({ matched: false });
   });
 
+  it('matches a command typed after a quoted message (leading reply segment)', async () => {
+    const root = rootPluginId();
+    const command = createCapabilitySlot({
+      owner: root,
+      feature: commandFeatureId,
+      localName: '同意',
+      source: '/commands/同意/index.ts',
+      definition: defineCommand({ execute: (context) => `approved:${context.message?.replyTo?.id ?? 'none'}` }),
+    });
+    const makeSnapshot = (config: Record<string, unknown>) => {
+      const state: SnapshotState = {
+        root,
+        tree: new Map([[root, {
+          id: root,
+          instanceKey: 'root',
+          packageName: '@test/root',
+          packageRoot: '/project',
+          children: [],
+        }]]),
+        config: new Map([[root, config]]),
+        resources: new Map([[root, new Map()]]),
+        capabilities: new Map([[command.id, command], memoryEndpointSlot(root)]),
+        projections: new Map(),
+      };
+      const base = createSnapshotView(1, state);
+      return createSnapshotView(1, {
+        ...state,
+        projections: new Map([[commandFeatureId, new CommandIndex([command], base)]]),
+      });
+    };
+    // A platform quote comes first, the typed text second; replyTo carries the quoted id.
+    const quoted = (text: string) => new Message(
+      {
+        endpoint: {
+          id: String(capabilityId(root, adapterFeatureId, 'memory')),
+          adapter: String(root),
+        },
+        kind: 'private',
+        id: 'room',
+      },
+      text,
+      1,
+      async () => ({ status: 'sent' as const }),
+      undefined,
+      undefined,
+      [{ type: 'reply', data: { id: 'notice-1' } }, { type: 'text', data: { text } }],
+      undefined,
+      undefined,
+      undefined,
+      { id: 'notice-1' },
+    );
+
+    await expect(new MessageDispatcher().dispatch(quoted('同意'), makeSnapshot({})))
+      .resolves.toMatchObject({ matched: true, command: '同意' });
+    await expect(new MessageDispatcher().dispatch(quoted('/同意'), makeSnapshot({ commandPrefix: '/' })))
+      .resolves.toMatchObject({ matched: true, command: '同意' });
+    // The prefix is still required after the quote.
+    await expect(new MessageDispatcher().dispatch(quoted('同意'), makeSnapshot({ commandPrefix: '/' })))
+      .resolves.toMatchObject({ matched: false });
+  });
+
   it('菜单输出带上当前 endpoint 的 commandPrefix', async () => {
     const root = rootPluginId();
     const echo = createCapabilitySlot({
