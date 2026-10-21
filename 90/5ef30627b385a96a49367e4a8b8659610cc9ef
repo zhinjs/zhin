@@ -1,0 +1,29 @@
+docs/authoring/agent-tools.md
+  s_e6f5f09d5890ba::t_6770c720895c4c 121-134
+docs/authoring/commands.md
+  s_e6f5f09d5890ba::t_31d14a7042bd37 309-328
+docs/en/authoring/agent-tools.md
+  s_e6f5f09d5890ba::t_5966d4b7edf575 121-134
+docs/en/authoring/commands.md
+  s_e6f5f09d5890ba::t_2bed11d98fc113 307-326
+docs/en/getting-started/first-plugin.md
+  s_e6f5f09d5890ba::t_6eafaac67875cd 141,151
+docs/getting-started/first-plugin.md
+  s_e6f5f09d5890ba::t_a4321b65d7be14 141,151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "905ef30627b385a96a49367e4a8b8659610cc9ef",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
