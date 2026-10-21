@@ -1,0 +1,24 @@
+.changeset/fix-ai-completion-quota.md
+  s_9477e63ef5cee5::t_c719574b89dc01 1-5
+packages/im/agent/tests/plugin-runtime/ai-completion.test.ts
+  s_9477e63ef5cee5::t_9f4cb59f1cc6f6 40,51,108-152
+  s_9477e63ef5cee5::t_d12960e4f85c99 153
+packages/im/agent/src/plugin-runtime/ai-completion.ts
+  s_9477e63ef5cee5::t_9f4cb59f1cc6f6 9-11,23,88-90,93-97,117-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3224ba3b80dccfed8541075093406ef59ba56c16",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
