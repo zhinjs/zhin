@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execSync } from 'node:child_process';
+import { checkPlugin, formatPluginCheckReport } from '../plugin-check/index.js';
 
 interface PublishOptions {
   tag?: string;
@@ -12,6 +13,8 @@ interface PublishOptions {
   registry?: string;
   dryRun?: boolean;
   skipBuild?: boolean;
+  /** commander maps `--skip-check` to `skipCheck`. */
+  skipCheck?: boolean;
   yes?: boolean;
 }
 
@@ -129,6 +132,22 @@ function resolvePublishCandidate(
   return undefined;
 }
 
+/**
+ * Runs `zhin plugin check` (pack included) before publishing. Errors stop the publish; warnings are
+ * shown and the publish continues. Returns whether publishing may proceed.
+ */
+export async function runPrePublishCheck(pluginDir: string): Promise<boolean> {
+  logger.info(formatCompact({ cmd: 'pub', op: 'check' }));
+  const report = await checkPlugin(pluginDir);
+  logger.log(formatPluginCheckReport(report));
+  logger.log('');
+  if (report.errorCount > 0) {
+    logger.error('发布前检查未通过：修复上面的错误后重试；确需跳过可加 --skip-check');
+    return false;
+  }
+  return true;
+}
+
 export const pubCommand = new Command('pub')
   .description('发布插件到 npm（在 zhin new --standalone 生成的插件目录内可直接运行：npx @zhin.js/cli pub）')
   .argument(
@@ -140,6 +159,7 @@ export const pubCommand = new Command('pub')
   .option('--registry <url>', '自定义 npm registry')
   .option('--dry-run', '试运行，不实际发布', false)
   .option('--skip-build', '跳过构建步骤', false)
+  .option('--skip-check', '跳过发布前的 zhin plugin check（不推荐）', false)
   .option('-y, --yes', '跳过发布确认（非交互环境需要）', false)
   .action(async (pluginName: string, options: PublishOptions) => {
     try {
@@ -222,6 +242,13 @@ export const pubCommand = new Command('pub')
       const entry = packageJson.zhin?.entry;
       if (typeof entry === 'string' && /\.tsx?$/u.test(entry)) {
         logger.warn(`zhin.entry 是 ${entry}：从 npm 安装的插件会优先加载 JavaScript，发布包请把入口写成 .js 并在 prepack 构建`);
+      }
+
+      if (options.skipCheck) {
+        logger.warn('已跳过发布前检查（--skip-check）');
+      } else {
+        const passed = await runPrePublishCheck(pluginDir);
+        if (!passed) process.exit(1);
       }
 
       // 确认发布

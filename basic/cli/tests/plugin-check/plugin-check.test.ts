@@ -7,7 +7,12 @@ import { checkPluginSource, readPluginManifest } from '../../src/plugin-check/so
 import { findMissingConventionFiles, loadSpecifierScanner } from '../../src/plugin-check/pack-checks.js';
 import { checkPlugin, formatPluginCheckReport } from '../../src/plugin-check/index.js';
 import { scanRelativeSpecifiers } from '../../shared/pack-rules.mjs';
-import { createPluginManifest, runtimeEntryJsGlobs } from '../../src/commands/new-plugin-manifest.js';
+import {
+  createPluginManifest,
+  PLUGIN_STACK_PACKAGES,
+  runtimeEntryJsGlobs,
+  type PluginStackRanges,
+} from '../../src/commands/new-plugin-manifest.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -26,7 +31,7 @@ function createPluginDirectory(files: Record<string, string>): string {
 }
 
 function scaffoldManifest(): Record<string, unknown> {
-  const ranges = { 'zhin.js': '^1.0.0', '@zhin.js/testing': '^1.0.0' } as Record<string, string>;
+  const ranges = Object.fromEntries(PLUGIN_STACK_PACKAGES.map((name) => [name, '^1.0.0'])) as PluginStackRanges;
   return createPluginManifest({
     pluginName: 'example',
     kind: 'normal',
@@ -35,7 +40,7 @@ function scaffoldManifest(): Record<string, unknown> {
     keywords: ['zhin.js'],
     peerRanges: ranges,
     devRanges: ranges,
-  } as Parameters<typeof createPluginManifest>[0]);
+  });
 }
 
 function healthyPlugin(manifest: Record<string, unknown> = scaffoldManifest()): string {
