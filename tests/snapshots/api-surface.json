@@ -161,6 +161,8 @@
     "export * from '@zhin.js/logger'",
     "export type * from '@zhin.js/interaction'",
     "export type{AgentTurnMessage,SyntheticMessageInput}from './built/message-enrich.js'",
+    "export type{CapabilityContext,OperationClientPort}from '@zhin.js/feature-kit'",
+    "export type{ConversationRef,DeliveryReceipt}from '@zhin.js/im-contract'",
     "export type{MessageChannel,MessageType}from './message.js'",
     "export type{Schedule,JobPayload,JobState,ScheduledJob,JobStore,JobCallback,AddJobOptions,IScheduler,SchedulerOptions,ScheduleFireCallback,MemoryScheduleRegistration,ScheduleEngineOptions,JobContext,ResolvedJob,ScheduleKind,}from '@zhin.js/kernel'",
     "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
