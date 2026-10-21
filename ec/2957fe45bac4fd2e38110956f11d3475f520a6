@@ -1,0 +1,21 @@
+packages/toolkit/testing/package.json
+  s_e6f5f09d5890ba::t_42e20c1291faf8 37-39,41
+pnpm-lock.yaml
+  s_e6f5f09d5890ba::t_19d41275919a44 2076-2078
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ec2957fe45bac4fd2e38110956f11d3475f520a6",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
