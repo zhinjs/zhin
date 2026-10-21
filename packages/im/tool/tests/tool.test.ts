@@ -167,6 +167,39 @@ describe('Tool Feature', () => {
     expect(Object.isFrozen(definition.permissions)).toBe(true);
   });
 
+  it('keeps tools deferred unless alwaysLoaded is explicitly true (#857)', () => {
+    const root = rootPluginId();
+    const slotFor = (localName: string, definition: ReturnType<typeof defineAgentTool>) => createCapabilitySlot({
+      owner: root,
+      feature: toolFeatureId,
+      localName,
+      source: `/tools/${localName}/index.ts`,
+      definition,
+    });
+    const plain = slotFor('plain', defineAgentTool({ description: 'Plain', execute: () => 'ok' }));
+    const resident = slotFor('resident', defineAgentTool({ description: 'Resident', alwaysLoaded: true, execute: () => 'ok' }));
+    const optOut = slotFor('opt_out', defineAgentTool({ description: 'Opt out', alwaysLoaded: false, execute: () => 'ok' }));
+    const snapshot = createSnapshot([plain, resident, optOut], createToken('unused').id);
+    const byName = new Map(new ToolIndex([plain, resident, optOut], snapshot).visible(root)
+      .map((descriptor) => [descriptor.name, descriptor]));
+
+    expect('alwaysLoaded' in byName.get('plain')!).toBe(false);
+    expect(byName.get('resident')?.alwaysLoaded).toBe(true);
+    expect('alwaysLoaded' in byName.get('opt_out')!).toBe(false);
+  });
+
+  it('rejects a non-boolean alwaysLoaded flag', () => {
+    expect(() => defineAgentTool({
+      description: 'Bad flag',
+      alwaysLoaded: 'yes' as unknown as boolean,
+      execute: () => 'ok',
+    })).toThrow('Agent Tool alwaysLoaded must be a boolean');
+    const valid = defineAgentTool({ description: 'Valid', execute: () => 'ok' });
+    expect(() => parseAgentToolDefinition({ ...valid, alwaysLoaded: 1 }))
+      .toThrow('Tool module must default-export defineAgentTool(...)');
+    expect(parseAgentToolDefinition({ ...valid, alwaysLoaded: true }).alwaysLoaded).toBe(true);
+  });
+
   it('rejects non-array scopes instead of throwing a bare TypeError', () => {
     // defineAgentTool: 对象 / 字符串形式的 scopes 走统一校验错误
     expect(() => defineAgentTool({

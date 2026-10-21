@@ -12,12 +12,15 @@ import {
   type ToolInputSchema,
 } from '@zhin.js/tool';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { getLogger } from '@zhin.js/logger';
 import { rankDecisionCandidates } from '../decision/rank.js';
 import type { AgentDecisionRuntime } from '../decision/types.js';
 import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
+
+const logger = getLogger('DeferredCapabilityPlan');
 
 /**
  * Injected capability ceiling. It must return a subset of the given projection
@@ -167,6 +170,10 @@ export function createDeferredCapabilityPlan(
   for (const tool of publicCapabilities) {
     if (tool.platforms?.length) alwaysLoaded.add(tool.name);
   }
+  // Plugin authors may opt a tool into the resident set (#857 P1-10).
+  for (const name of declaredResidentToolNames(publicCapabilities, options.config)) {
+    alwaysLoaded.add(name);
+  }
   const publicTools = publicCapabilities.map(capabilityAsAgentTool);
   const publicCatalog = buildToolCatalog({ tools: publicTools, alwaysLoaded });
   let snapshot = projectSessionSnapshot(options.sessionSnapshot, projected);
@@ -218,6 +225,46 @@ export function createDeferredCapabilityPlan(
     deferredStats: buildDeferredStats(catalog, resolvedTools),
     controller,
   });
+}
+
+/**
+ * Upper bound on plugin tools that may become resident through their own
+ * `alwaysLoaded: true` flag in one turn. Each resident schema is sent on every
+ * model call, so a misbehaving plugin set must not silently flood the context.
+ * Tools past the limit stay deferred (still reachable via `discover` /
+ * `load_tool`) and a warning names them once. Operators who need more can list
+ * tools in `deferredTools.alwaysLoadedTools`, which this limit does not touch.
+ */
+export const MAX_DECLARED_RESIDENT_TOOLS = 8;
+
+const warnedOverLimitTools = new Set<string>();
+
+/**
+ * Names of public tools whose author set `alwaysLoaded: true`, in projection
+ * order and capped at {@link MAX_DECLARED_RESIDENT_TOOLS}.
+ *
+ * - Absent or `false` keeps the tool deferred (the default for every plugin).
+ * - `deferredTools.alwaysLoadedMode: replace` means the operator's list is the
+ *   complete resident set, so author declarations are ignored.
+ * - Only public (non-hidden) capabilities that already passed ingress and the
+ *   capability ceiling are considered; the flag never grants access.
+ */
+export function declaredResidentToolNames(
+  tools: readonly Pick<ToolCapability, 'name' | 'alwaysLoaded'>[],
+  config: DeferredCapabilityPlanOptions['config'],
+): string[] {
+  if (config.deferredTools?.alwaysLoadedMode === 'replace') return [];
+  const declared = tools.filter(tool => tool.alwaysLoaded === true).map(tool => tool.name);
+  const overLimit = declared.slice(MAX_DECLARED_RESIDENT_TOOLS)
+    .filter(name => !warnedOverLimitTools.has(name));
+  if (overLimit.length > 0) {
+    for (const name of overLimit) warnedOverLimitTools.add(name);
+    logger.warn(
+      `${declared.length} plugin tools declare alwaysLoaded; only the first ${MAX_DECLARED_RESIDENT_TOOLS} are resident. `
+      + `Still deferred: ${overLimit.join(', ')}. List them in ai.agent.deferredTools.alwaysLoadedTools to keep them loaded.`,
+    );
+  }
+  return declared.slice(0, MAX_DECLARED_RESIDENT_TOOLS);
 }
 
 function projectCapabilities(

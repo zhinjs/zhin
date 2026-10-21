@@ -105,6 +105,24 @@ export function discoverInCatalog(options: DiscoverInCatalogOptions): DiscoverRe
   return results.slice(0, topK * (kind === 'all' ? 2 : 1));
 }
 
+/**
+ * The resident set for a turn: the operator's configured names plus every
+ * catalog item the capability plan already pinned (`deferDefault: false`), such
+ * as platform-scoped adapter tools and plugin tools declared `alwaysLoaded`.
+ * Rebuilding the tool list from config alone would drop those pinned tools
+ * after the first `load_tool` in a turn.
+ */
+export function residentToolNames(
+  catalog: readonly ToolCatalogItem[],
+  configured: ReadonlySet<string>,
+): Set<string> {
+  const names = new Set(configured);
+  for (const item of catalog) {
+    if (!item.deferDefault && !DEFERRED_META_TOOL_NAMES.has(item.name)) names.add(item.name);
+  }
+  return names;
+}
+
 export function resolveDeferredApiTools(
   catalog: ToolCatalogItem[],
   alwaysLoaded: Set<string>,
