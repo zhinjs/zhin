@@ -1,0 +1,14 @@
+scripts/check-plugin-scaffold.mjs
+  h_b680f75345178a 9-11,83-114,141-142,144,156-161,170-171,199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4cb28936404dba29a17a329fe414c7491cd9adf4",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
