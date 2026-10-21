@@ -1,5 +1,5 @@
 import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { CommandIndex, commandFeatureId, defineCommand, explainCommandPermissions, toCommandPermissionSubject } from '../src/index.js';
+import { CommandIndex, canManageConversation, commandFeatureId, defineCommand, explainCommandPermissions, toCommandPermissionSubject } from '../src/index.js';
 
 const target = { endpoint: { id: 'endpoint-1', adapter: 'qq' }, kind: 'group', id: 'g1', parent: { kind: 'channel', id: 'parent' }, threadId: 'topic' };
 const source = { conversation: target, content: '', clientAdapter: 'qq', sender: { id: 'u1', roles: ['master'] }, metadata: { roles: ['admin'], senderPermissions: ['manage'] } };
@@ -50,4 +50,18 @@ it('adds authority ids and owners without running command defaults, validation o
   const [command] = new CommandIndex([slot], snapshot).list(); expect(command).toMatchObject({ id: slot.id, owner: root, name: 'demo' });
   expect(explainCommandPermissions(command!, { source, permissionHost: 'present' }).summary.outcome).toBe('match');
   expect(execute).not.toHaveBeenCalled(); expect(factory).not.toHaveBeenCalled(); expect(validate).not.toHaveBeenCalled();
+});
+
+describe('canManageConversation', () => {
+  const scene = (type: string) => ({ id: 's1', type });
+  it('allows private chat and owner / admin / master only', () => {
+    expect(canManageConversation({ scene: scene('private'), sender: { id: 'u', role: [] } })).toBe(true);
+    for (const role of ['owner', 'admin', 'master']) {
+      expect(canManageConversation({ scene: scene('group'), sender: { id: 'u', role: [role] } })).toBe(true);
+    }
+    for (const roles of [[], ['member'], ['trusted'], ['creator'], ['administrator'], ['12345']]) {
+      expect(canManageConversation({ scene: scene('channel'), sender: { id: 'u', role: roles } })).toBe(false);
+    }
+    expect(canManageConversation({ scene: scene('group') })).toBe(false);
+  });
 });

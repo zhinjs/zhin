@@ -77,6 +77,8 @@ describe('@zhin.js/plugin-bilibili commands', () => {
 
     const member = asRole([]);
     expect(String(await subCommand.execute({ ...member, params: { uid: '1', kind: 'all' } }))).toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
+    expect(String(await subCommand.execute({ ...asRole(['member']), params: { uid: '1', kind: 'all' } })))
+      .toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
     expect(String(await subCommand.execute({ ...asRole(['user', 'trusted']), params: { uid: '1', kind: 'all' } })))
       .toBe(SUBSCRIPTION_PERMISSION_DENIED_MESSAGE);
     expect(String(await subCommand.execute({ ...asRole([], 'channel'), params: { uid: '1', kind: 'all' } })))

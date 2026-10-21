@@ -8,6 +8,8 @@ export * from './command-index.js';
 export * from './definition.js';
 export * from './permission-explanation.js';
 export {
+  CONVERSATION_MANAGER_PERMIT,
+  canManageConversation,
   assertBuiltinPermits,
   checkBuiltinPermit,
   checkBuiltinPermitList,

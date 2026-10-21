@@ -1,6 +1,6 @@
-import { defineCommand } from 'zhin.js/command';
+import { canManageConversation, defineCommand } from 'zhin.js/command';
 import { conversationError, extractConversation } from '../../../src/conversation.js';
-import { canManageSubscription, SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../manage-permission.js';
+import { SUBSCRIPTION_PERMISSION_DENIED_MESSAGE } from '../../../src/permission.js';
 import { earthquakeServiceToken } from '../../../src/runtime.js';
 import { subscriptionKey } from '../../../src/subscriptions.js';
 
@@ -10,7 +10,7 @@ export default defineCommand({
     const service = use(earthquakeServiceToken);
     const target = extractConversation(input);
     if (!target) return conversationError(input);
-    if (!canManageSubscription({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
+    if (!canManageConversation({ adapter, scene, sender })) return SUBSCRIPTION_PERMISSION_DENIED_MESSAGE;
     const removed = await service.store.remove(subscriptionKey(target));
     return removed ? '已取消本会话的地震速报订阅' : '本会话没有地震速报订阅';
   },
