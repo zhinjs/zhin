@@ -111,6 +111,11 @@ export class BilibiliWatcher {
     this.#backoff.delete(key);
   }
 
+  /** Drop per-UP state once nobody subscribes to that UP any more. */
+  forget(uid: string): void {
+    this.#backoff.delete(`dynamic:${uid}`);
+  }
+
   /** Human readable list of sources currently backing off. */
   backoffStatus(): string[] {
     const now = this.#now;

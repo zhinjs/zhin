@@ -50,6 +50,26 @@ describe('@zhin.js/plugin-bilibili commands', () => {
     expect(String(await unsubCommand.execute({ ...ctx, params: { uid: '1' } }))).toContain('没有订阅');
   });
 
+  it('unsub prunes the dynamic backoff entry only once the last subscriber is gone', async () => {
+    const h = harness();
+    h.client.liveStatus.set('1', live('1', 0));
+    h.client.dynamics.set('1', [dyn('old', 10)]);
+    const first = commandContext(h.runtime);
+    const second = commandContext(h.runtime, {}, biliMessage('group', '20002'));
+    await subCommand.execute({ ...first, params: { uid: '1', kind: 'dynamic' } });
+    await subCommand.execute({ ...second, params: { uid: '1', kind: 'dynamic' } });
+
+    h.client.dynamicError = new BiliApiError('http', 'boom', 500);
+    await h.watcher.tick();
+    expect(h.watcher.backoffStatus()).toHaveLength(1);
+
+    await unsubCommand.execute({ ...first, params: { uid: '1' } });
+    expect(h.watcher.backoffStatus()).toHaveLength(1);
+
+    await unsubCommand.execute({ ...second, params: { uid: '1' } });
+    expect(h.watcher.backoffStatus()).toEqual([]);
+  });
+
   it('group sub/unsub are limited to the group owner, admins and the bot master', async () => {
     const h = harness();
     const asRole = (roles: string[], kind: 'group' | 'channel' = 'group') =>
