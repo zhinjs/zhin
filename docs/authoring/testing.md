@@ -16,6 +16,8 @@ description: "用 @zhin.js/testing 的假运行环境测试插件：不再手工
 pnpm add -D @zhin.js/testing
 ```
 
+`@zhin.js/command` 是它的 peer 依赖：用的是插件自己（经 `zhin.js`）装的那一份，不会再装出第二份。插件没有直接依赖它时，pnpm / npm 会自动补装；yarn 1 等不自动安装 peer 的包管理器需要手动 `add -D @zhin.js/command`。
+
 ## 跑 setup
 
 假环境用的是**真正的** `Scope`、`DisposeStack`、`GenerationHandoffStack`，以及真正的按插件隔离的 `databaseHostToken` / `scheduleHostToken` / `outboundHostToken` 外观，底层换成内存实现。
@@ -91,6 +93,9 @@ const message = createFakeMessage({ sender: { id: 'u1', name: 'Ann', roles: ['ad
 await runCommand(fake, checkin, { input: message, params: { days: 3 } });
 expect(message.replies).toEqual(['签到成功']);          // $reply 被记录在 replies
 
+// 传 source（命令的 index 文件或所在目录）时，先按运行时的约定路径规则校验
+await runCommand(fake, checkin, { source: new URL('../commands/checkin/index.ts', import.meta.url) });
+
 const { continued } = await runMiddleware(fake, gate, createFakeMessage({ content: 'skip' }));
 expect(continued).toBe(false);                          // 中间件是否调用了 next()
 
@@ -100,6 +105,8 @@ await runHandler(fake, onReceive, createFakeMessage()); // this 即能力上下�
 ::: warning 这不是完整的派发
 `runCommand` 直接调用 `execute()`：不做路由匹配、参数解析、`permit` 校验和准入检查，`params` 需要你自己给出已解析的值。要验证这些，用下面的真实运行时。
 :::
+
+给了 `source` 时，`runCommand` 会先用运行时同一套约定路径规则（`@zhin.js/command` 的 `bindCommandSource`）检查目录：括号写法、目录隐含的 `params` 声明，以及“只能有一个动态段且必须在最后”。像 `commands/term/[word]/[...definition]` 这种运行时会拒绝加载的布局，在单测里同样报错；不传 `source` 则不检查。`zhin new` 生成的测试默认传了 `source`。
 
 ## 跑 Agent 工具
 
