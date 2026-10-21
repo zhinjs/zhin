@@ -23,6 +23,8 @@ import {
   loadProjectConfig,
   diagnoseConsoleConfig,
   diagnoseDecisionConfig,
+  scaffoldDependencyRange,
+  withScaffoldVersionRanges,
   type ConsoleConfigDiagnosis,
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
@@ -111,14 +113,16 @@ export const doctorCommand = new Command('doctor')
       if (options.fix && upgrade.fixCommand) {
         const deps: Record<string, string> = {};
         for (const name of upgrade.missingAiDeps) {
-          deps[name] = 'latest';
+          deps[name] = scaffoldDependencyRange(name);
         }
         if (Object.keys(deps).length > 0) {
           await mergeDependenciesIntoPackageJson(cwd, deps);
         }
         for (const peer of [upgrade.optionalPeers.speech, upgrade.optionalPeers.htmlRenderer]) {
           if (peer && peer.missingFromPackageJson.length > 0) {
-            await mergeDependenciesIntoPackageJson(cwd, { [peer.packageName]: 'latest' });
+            await mergeDependenciesIntoPackageJson(cwd, {
+              [peer.packageName]: scaffoldDependencyRange(peer.packageName),
+            });
           }
         }
         console.log(chalk.green('已写入 package.json，请运行 pnpm install'));
@@ -390,7 +394,7 @@ export const doctorCommand = new Command('doctor')
             fix: options.fix ? '将写入 package.json' : fixCmd,
           });
           if (options.fix) {
-            const changed = await mergeDependenciesIntoPackageJson(cwd, zhinDiagnosis.required);
+            const changed = await mergeDependenciesIntoPackageJson(cwd, withScaffoldVersionRanges(zhinDiagnosis.required));
             if (changed) {
               logger.info(formatCompact({
                 cmd: 'doctor',
@@ -454,7 +458,7 @@ export const doctorCommand = new Command('doctor')
                 fix: options.fix ? '将写入 package.json' : fixCmd,
               });
               if (options.fix) {
-                const changed = await mergeDependenciesIntoPackageJson(cwd, aiDiagnosis.required);
+                const changed = await mergeDependenciesIntoPackageJson(cwd, withScaffoldVersionRanges(aiDiagnosis.required));
                 if (changed) {
                   logger.info(formatCompact({
                     cmd: 'doctor',
@@ -514,7 +518,7 @@ export const doctorCommand = new Command('doctor')
           });
           if (options.fix && peer.missingFromPackageJson.length > 0) {
             await mergeDependenciesIntoPackageJson(cwd, {
-              [peer.packageName]: 'latest',
+              [peer.packageName]: scaffoldDependencyRange(peer.packageName),
             });
           }
         }

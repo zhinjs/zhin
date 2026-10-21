@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { withScaffoldVersionRanges } from '@zhin.js/scaffold-wizard';
 import { globalZhinHome } from './zhin-home.js';
 import { NODE_ENGINES_HINT } from './node-requirements.js';
 
@@ -15,10 +16,11 @@ const GLOBAL_PACKAGE_JSON = {
     dev: 'zhin runtime start',
     start: 'zhin runtime start --mode production --no-watch',
   },
-  dependencies: {
+  // `latest` is only the fallback: written as the release ranges @zhin.js/scaffold-wizard shipped with (#857).
+  dependencies: withScaffoldVersionRanges({
     'zhin.js': 'latest',
     '@zhin.js/adapter-sandbox': 'latest',
-  },
+  }),
   devDependencies: {
     tsx: '^4.22.4',
   },

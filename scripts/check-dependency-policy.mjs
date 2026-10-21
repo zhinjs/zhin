@@ -27,11 +27,20 @@ const sourceRoots = [
 
 for (const sourceRoot of sourceRoots) {
   for (const file of walk(path.join(root, sourceRoot))) {
-    if (file.endsWith('stack-versions.generated.json')) continue;
     const text = fs.readFileSync(file, 'utf8');
     if (text.includes('stack-versions.generated')) {
       failures.push(`${path.relative(root, file)} imports stack-versions.generated.json`);
     }
+  }
+}
+
+// The old publish-time snapshot was replaced by stack-version-ranges (#857); keep it gone.
+for (const removed of [
+  'packages/toolkit/scaffold-wizard/src/stack-versions.generated.json',
+  'scripts/sync-scaffold-deps.mjs',
+]) {
+  if (fs.existsSync(path.join(root, removed))) {
+    failures.push(`${removed} was removed in favour of stack-version-ranges; do not restore it`);
   }
 }
 
@@ -103,6 +112,8 @@ for (const rel of policyFiles) {
 const scaffoldWritePaths = [
   'packages/toolkit/create-zhin/src/workspace.ts',
   'packages/toolkit/scaffold-wizard/src/apply.ts',
+  'basic/cli/src/utils/global-home-init.ts',
+  'basic/cli/src/commands/doctor.ts',
 ];
 for (const rel of scaffoldWritePaths) {
   const text = fs.readFileSync(path.join(root, rel), 'utf8');

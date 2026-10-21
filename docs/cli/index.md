@@ -121,7 +121,7 @@ zhin config check [--fix] [--json] [--strict]
 zhin doctor [--fix] [--upgrade-l4]
 ```
 
-检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。
+检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。`--fix` 补写依赖时使用与 CLI 同一次发布的真实版本范围（如 `^1.1.11`），不写 `latest`；写入后运行 `pnpm install`。
 
 ### dev：联调本地 zhin 源码与独立插件
 
