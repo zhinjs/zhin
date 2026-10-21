@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=df55f2243544ad81 -->
+<!-- sync-adapter-docs:sha256=487f5c4cd2a38b80 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -91,17 +91,100 @@ sandbox:
 
 浏览器客户端连接到默认 `sandbox-bot`，也可以通过多个显式 endpoint 使用不同 WebSocket 路径。
 
-通过 `Router.ws("/sandbox")`（插件 `useContext("router")` 自动挂载）建立连接。
+每个 endpoint 通过 Root 提供的 HTTP Host（`httpHostToken`）挂载一个 WebSocket 路径，协议见下文「消息格式（wire 协议）」。
 
-## 消息格式
+## 消息格式（wire 协议）
 
-Sandbox 使用 JSON 消息格式：
+Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSocket 文本帧是一个 UTF-8 JSON 对象。
+
+### 连接
+
+- **地址**：`ws://<host>:<port>/sandbox`。同一个 HTTP Host 上的第一个 Sandbox endpoint 挂在 `/sandbox`，其余 endpoint 挂在 `/sandbox/<endpoint id>`（重名时依次加 `-2`、`-3`），启动日志会打印 `ws mounted <path>`。
+- **鉴权**：Host 配置了 token 时，握手请求需带 `Authorization: Bearer <token>` 或查询参数 `?token=<token>`，否则返回 `401`。demo 权限的 token 只能连 `/sandbox`，而且是只读的：消息会被接收，但不会进入命令和 Agent，服务端回一条 `type: "error"`。
+- **单连接**：endpoint 使用固定名称（默认），同一 endpoint 只保留最新的浏览器连接。新连接接入时，旧连接以关闭码 `4000`（`replaced by new sandbox client`）断开；endpoint 停止时以 `1001` 断开；插件热重载使当前 generation 退役时，Host 以 `1012` 断开，客户端重连即可。
+
+### 客户端 → 服务端：发送消息
 
 ```json
 {
-  "type": "message",
-  "id": "msg-001",
-  "content": "你好",
+  "type": "group",
+  "id": "test-group",
+  "content": [{ "type": "text", "data": { "text": "/hello" } }],
+  "messageId": "client-msg-001",
+  "timestamp": 1700000000000
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `type` | `private` \| `group` \| `channel` \| `direct` \| `guild` | 会话类型，默认 `private`。`direct` 按 `private` 处理，`guild` 按 `channel` 处理 |
+| `id` | string | 会话 id，默认使用 endpoint 的 `owner`（默认 `sandbox-user`） |
+| `content` | string 或消息段数组 | 消息段格式为 `{ "type": string, "data": object }`；字符串等同于一个 `text` 段 |
+| `text` | string | 可选。没有 `content` 时作为纯文本；`content` 里没有文本段时也用它作为消息文本 |
+| `messageId` | string | 可选。客户端生成的消息 id，须匹配 `^[A-Za-z0-9._:-]{1,160}$`，不匹配时忽略；填写后作为这条入站消息的 id，引用回复时可据此定位 |
+| `timestamp` | number | 可选。毫秒时间戳，默认取服务端收到的时间 |
+| `agentRun` | object | 可选。Agent 试验台运行配置，见下表 |
+
+- 帧内容不是 JSON 时，整段文本按一条纯文本消息处理。
+- 消息的发送者固定为 endpoint 的 `owner`。
+- **按钮回传**：`content` 中的 `{ "type": "action", "data": { "id": "...", "payload": "..." } }` 段会作为交互动作交给命令或 Agent；只填 `id` 或 `payload` 时，另一个取相同的值。消息里没有文本时，`payload` 作为消息文本。
+
+`agentRun` 字段：
+
+| 字段 | 取值 | 默认 |
+| --- | --- | --- |
+| `workingDirectory` | string，最长 4096 字符 | `""` |
+| `safetyMode` | `read-only` \| `workspace-write` \| `danger-full-access` | `workspace-write` |
+| `approvalMode` | `ask` \| `auto` \| `bypass` | `ask` |
+| `networkAccess` | boolean | `false`；`safetyMode` 为 `danger-full-access` 时恒为 `true` |
+
+无法识别的取值按默认值处理。
+
+### 服务端 → 客户端
+
+**连接就绪**：每次连接成功后发送一次。
+
+```json
+{
+  "type": "ready",
+  "id": "sandbox-user",
+  "endpoint": "sandbox-bot",
+  "workingDirectory": "/path/to/bot",
+  "canExecute": true,
+  "shellIsolation": { "available": false, "provider": "docker", "message": "Docker daemon is unavailable" },
+  "content": [{ "type": "text", "data": { "text": "已连接 Sandbox「sandbox-bot」…" } }],
+  "timestamp": 1700000000000
+}
+```
+
+`canExecute` 表示当前连接是否为 full 权限（能运行命令和 Agent 任务）；`shellIsolation` 是 Docker 隔离环境的探测结果，仅供展示。
+
+**回复消息**：
+
+```json
+{
+  "type": "group",
+  "id": "test-group",
+  "bot": "sandbox-bot",
+  "endpoint": "sandbox-bot",
+  "content": [{ "type": "text", "data": { "text": "Hello!" } }],
+  "timestamp": 1700000000001
+}
+```
+
+- `type` / `id` 是回复所在的会话（`direct` 已归一为 `private`，`guild` 已归一为 `channel`），客户端按这两个字段把消息放进对应会话；`bot` 是 endpoint id，`endpoint` 是收到消息的连接名。
+- `content` 是消息段数组。文本、`html`（JSX 卡片，见上文 `html: direct`）、按钮等段原样透传。
+- `image` / `audio` / `video` / `file` 段只读 `data.media`（MediaRef）：`url` 原样透传；`base64` 补上 `base64://` 前缀后内联；`path` 由服务端读取文件后转成 `base64` 内联；其他类型和缺少 `data.media` 的媒体段会被丢弃，并在日志中记录 `sandbox_outbound_media_dropped`。
+- 插件直接发送完整消息对象时，其他字段会原样保留。
+
+**只读连接的提示**：demo 权限的连接发送消息后，服务端回复：
+
+```json
+{
+  "type": "error",
+  "id": "sandbox-user",
+  "endpoint": "sandbox-bot",
+  "content": [{ "type": "text", "data": { "text": "当前连接是只读演示权限，不能运行 Agent 任务。" } }],
   "timestamp": 1700000000000
 }
 ```

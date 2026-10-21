@@ -36,13 +36,14 @@ zhin runtime start --once --mode test
 | Option | Description |
 | --- | --- |
 | `--mode <mode>` | Run mode: `development` (default) / `test` / `production` |
-| `--environment <name>` | Environment name, default `development`; determines which `.env.<name>` is loaded, must match `/^[a-z0-9][a-z0-9-]*$/` |
+| `--environment <name>` | Environment name, defaults to the `--mode` value; determines which `.env.<name>` is loaded, must match `/^[a-z0-9][a-z0-9-]*$/` |
 | `--no-watch` | Disable file watching and hot reloading |
 | `--once` | Output a JSON snapshot after completing one startup, then exit |
+| `--open` | Open Remote Console in the browser after a successful start in a terminal (TTY); `ZHIN_OPEN=1` does the same |
 | `-d, --daemon` | Daemon mode: writes a pid file, redirects logs, auto-restarts on crash |
 | `--log-file <path>` | Daemon log file, default `<project-root>/.zhin/runtime.log` |
 
-Unknown options cause an immediate error before startup (fail fast), and will not enter a restart loop.
+`zhin runtime start --help` lists these options with common examples. Unknown options cause an immediate error before startup (fail fast), and will not enter a restart loop.
 
 ## Native TypeScript (strip-types)
 

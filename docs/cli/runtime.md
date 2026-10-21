@@ -36,13 +36,14 @@ zhin runtime start --once --mode test
 | 选项 | 说明 |
 | --- | --- |
 | `--mode <mode>` | 运行模式：`development`（默认）/ `test` / `production` |
-| `--environment <name>` | 环境名，默认 `development`；决定加载 `.env.<name>`，须匹配 `/^[a-z0-9][a-z0-9-]*$/` |
+| `--environment <name>` | 环境名，默认与 `--mode` 相同；决定加载 `.env.<name>`，须匹配 `/^[a-z0-9][a-z0-9-]*$/` |
 | `--no-watch` | 关闭文件监听与热重载 |
 | `--once` | 完成一次启动后输出 JSON 快照并退出 |
+| `--open` | 在终端（TTY）启动成功后用浏览器打开 Remote Console；也可设置 `ZHIN_OPEN=1` |
 | `-d, --daemon` | 守护进程模式：写 pid 文件、日志重定向、崩溃自动重启 |
 | `--log-file <path>` | daemon 日志文件，默认 `<项目根>/.zhin/runtime.log` |
 
-未知选项会在启动前直接报错（fail fast），不会进入重启循环。
+`zhin runtime start --help` 会列出以上选项和常用示例。未知选项会在启动前直接报错（fail fast），不会进入重启循环。
 
 ## 原生 TypeScript（strip-types）
 

@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
 import { NativeTypeScriptSupervisor, parseStartOptions } from '../plugin-runtime/start/module.js';
+import { formatStartOptionHelp } from '../plugin-runtime/start/options.js';
 
 export const runtimeCommand = new Command('runtime')
   .description('管理约定式 Plugin Runtime 项目');
@@ -16,6 +17,9 @@ runtimeCommand.command('inspect')
   });
 
 runtimeCommand.command('start')
+  .description('启动 Bot（pnpm dev 即本命令）；选项见下方 Start options')
+  .usage('[options]')
+  .addHelpText('after', formatStartOptionHelp())
   .allowUnknownOption(true)
   .allowExcessArguments(true)
   .action(async (_options, command) => {
