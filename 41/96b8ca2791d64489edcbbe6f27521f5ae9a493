@@ -1,0 +1,26 @@
+packages/im/runtime/src/editor-temp-file.ts
+  h_b680f75345178a 1-50
+packages/im/runtime/src/hmr-coordinator.ts
+  h_b680f75345178a 10,52-53
+packages/im/runtime/src/index.ts
+  h_b680f75345178a 8
+packages/im/runtime/src/native-development-runtime.ts
+  h_b680f75345178a 17,372,375-376
+packages/im/runtime/tests/editor-temp-file.test.ts
+  h_b680f75345178a 1-64
+packages/im/runtime/tests/hmr-coordinator.test.ts
+  h_b680f75345178a 397-424,480-492
+packages/im/runtime/tests/native-development-runtime.test.ts
+  h_b680f75345178a 498-534
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4196b8ca2791d64489edcbbe6f27521f5ae9a493",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
