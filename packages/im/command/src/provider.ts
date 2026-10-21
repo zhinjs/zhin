@@ -1,4 +1,4 @@
-import { basename, dirname, join, sep } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { featureId, isCapabilityLocalSegment } from '@zhin.js/plugin-runtime';
 import {
   defineFeatureProvider,
@@ -32,6 +32,8 @@ const commandFiles: SourceConvention = {
   async load(source, context) {
     const module = await context.host.loadModule<{ default?: unknown }>(source.source);
     const definition = parseCommandDefinition(module.default);
+    const commandDirectories = commandDirectoriesOf(context.packageRoot, source.source);
+    assertSingleTrailingParameterDirectory(commandDirectories, source.source);
     const file = parseCommandDirectory(basename(dirname(source.source)));
     return bindCommandParameter(definition, resolveParameter(definition, file, source.source));
   },
@@ -109,6 +111,76 @@ function parseCommandDirectory(value: string): ParsedCommandFile | undefined {
   return undefined;
 }
 
+/** Directory segments between `commands/` and the command's `index.*` file. */
+function commandDirectoriesOf(packageRoot: string, source: string): string[] {
+  const commandsRoot = join(packageRoot, 'commands');
+  const commandDirectory = dirname(source);
+  return relative(commandsRoot, commandDirectory)
+    .split(sep)
+    .filter((segment) => segment !== '');
+}
+
+interface ParameterDirectory {
+  readonly position: number;
+  readonly directory: string;
+  readonly hint: CommandParameterHint;
+}
+
+/**
+ * A command path may contain at most one parameter directory, and it must be the
+ * last directory before `index.*`. Further arguments belong in `defineCommand({ params })`.
+ */
+function assertSingleTrailingParameterDirectory(directories: readonly string[], source: string): void {
+  const parameterDirectories: ParameterDirectory[] = [];
+  directories.forEach((directory, position) => {
+    const hint = parseCommandDirectory(directory)?.parameter;
+    if (hint) parameterDirectories.push({ position, directory, hint });
+  });
+  const [keptDirectory, ...movedDirectories] = parameterDirectories;
+  if (!keptDirectory) return;
+  const lastPosition = directories.length - 1;
+  if (movedDirectories.length === 0 && keptDirectory.position === lastPosition) return;
+  throw new CommandPathSyntaxError(
+    source,
+    describeParameterDirectoryRule(directories, keptDirectory, movedDirectories),
+  );
+}
+
+function describeParameterDirectoryRule(
+  directories: readonly string[],
+  keptDirectory: ParameterDirectory,
+  movedDirectories: readonly ParameterDirectory[],
+): string {
+  const parameterDirectories = [keptDirectory, ...movedDirectories];
+  const currentPath = `commands/${directories.join('/')}/index.ts`;
+  const foundDirectories = parameterDirectories.map((entry) => entry.directory).join(', ');
+  const staticDirectories = directories.filter((_directory, position) =>
+    !parameterDirectories.some((entry) => entry.position === position));
+  const suggestedPath = `commands/${[...staticDirectories, keptDirectory.directory].join('/')}/index.ts`;
+  const suggestedParams = parameterDirectories
+    .map((entry) => describeParamDeclaration(entry.hint))
+    .join(', ');
+  const movedNote = movedDirectories.length > 0
+    ? `move ${movedDirectories.map((entry) => entry.directory).join(', ')} into defineCommand({ params })`
+    : 'move the parameter directory to the end of the path';
+  return `only the last directory of a command path may be a parameter directory `
+    + `([name], [[name]], [...name] or [[...name]]), and a command may have at most one; `
+    + `found ${foundDirectories} in ${currentPath}. `
+    + `Fix: ${movedNote}, e.g. ${suggestedPath} with `
+    + `defineCommand({ params: { ${suggestedParams} } }) `
+    + `(the directory parameter must be listed first). `
+    + 'See https://zhin.js.org/authoring/commands#目录参数规则';
+}
+
+function describeParamDeclaration(hint: CommandParameterHint): string {
+  const type = hint.rest ? 'text' : 'string';
+  const flags: string[] = [];
+  if (hint.optional) flags.push('optional: true');
+  if (hint.rest) flags.push('rest: true');
+  const flagText = flags.map((flag) => `, ${flag}`).join('');
+  return `${hint.name}: { type: '${type}'${flagText} }`;
+}
+
 /** 把文件名形态与 `definition.params` 合并成完整参数定义。 */
 function resolveParameter(
   definition: CommandDefinition,
@@ -124,8 +196,16 @@ function resolveParameter(
       `missing params.${hint.name} declaration in defineCommand({ params })`,
     );
   }
-  if (Object.keys(definition.params ?? {})[0] !== hint.name) {
-    throw new CommandPathSyntaxError(source, `params.${hint.name} must be the first parameter declaration`);
+  const declaredNames = Object.keys(definition.params ?? {});
+  if (declaredNames[0] !== hint.name) {
+    const reorderedNames = [hint.name, ...declaredNames.filter((name) => name !== hint.name)];
+    throw new CommandPathSyntaxError(
+      source,
+      `params.${hint.name} must be the first parameter declaration: the parameter directory `
+        + `binds the first argument after the command name, so it has to come first in `
+        + `defineCommand({ params }). Current order: { ${declaredNames.join(', ')} }; `
+        + `reorder to { ${reorderedNames.join(', ')} }`,
+    );
   }
   if (schema.rest !== undefined && schema.rest !== hint.rest
     || schema.optional !== undefined && schema.optional !== hint.optional) {

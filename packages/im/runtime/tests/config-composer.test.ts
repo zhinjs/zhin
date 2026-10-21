@@ -78,6 +78,16 @@ describe('hierarchical Plugin config', () => {
     await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { count: 0 } })).rejects.toBeInstanceOf(ConfigValidationError);
     await writeFile(join(root, 'schema.json'), '{}');
     await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' } })).rejects.toThrow('declares both plugin config and schema.json');
+    const conflict = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' } })
+      .then(() => undefined, (reason: unknown) => reason);
+    expect(conflict).toBeInstanceOf(TypeError);
+    expect((conflict as Error).name).toBe('PluginConfigSourceConflictError');
+    const conflictMessage = (conflict as Error).message;
+    expect(conflictMessage).toContain(join(root, 'schema.json'));
+    expect(conflictMessage).toContain(join(graph.root.package.root, graph.root.package.packageJson.zhin.entry));
+    expect(conflictMessage).toContain('Zhin does not pick one for you');
+    expect(conflictMessage).toContain('delete schema.json');
+    expect(conflictMessage).toContain('remove config from definePlugin');
   });
 
   it('composes child schemas, applies defaults, and exposes owner-only views', async () => {

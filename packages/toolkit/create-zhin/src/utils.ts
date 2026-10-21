@@ -15,6 +15,19 @@ export function generateToken(bytes: number = 16): string {
   return randomBytes(bytes).toString('hex');
 }
 
+/**
+ * 终端里展示密钥时只说明长度，不显示任何字符：create 的输出常被 CI 日志收集。
+ * 完整值只写入 `.env`。
+ */
+export function maskSecret(secret: string): string {
+  return `********（${secret.length} 位，已隐藏）`;
+}
+
+/** Remote Console 登录提示里的 Token 行：打码，并指出完整值的存放位置。 */
+export function describeStoredHttpToken(httpToken: string): string {
+  return `${maskSecret(httpToken)}，完整值见项目根目录 .env 的 HTTP_TOKEN`;
+}
+
 // 获取数据库显示名称
 export function getDatabaseDisplayName(dialect: string): string {
   const names = {

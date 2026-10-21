@@ -7,6 +7,7 @@ import chalk from 'chalk';
 
 import { InitOptions } from './types.js';
 import {
+  describeStoredHttpToken,
   generateToken,
   getDatabaseDisplayName,
   getDatabasePersistenceLabel,
@@ -252,7 +253,7 @@ async function main() {
     console.log(chalk.blue('🔐 Remote Console 登录信息：'));
     console.log(`  ${chalk.gray('UI:')} ${chalk.cyan('https://console.zhin.dev')}`);
     console.log(`  ${chalk.gray('API Base:')} ${chalk.cyan(`http://127.0.0.1:${DEFAULT_CREATE_BOT_HTTP_PORT}`)}`);
-    console.log(`  ${chalk.gray('Token:')} ${chalk.cyan(options.httpToken)}`);
+    console.log(`  ${chalk.gray('Token:')} ${chalk.cyan(describeStoredHttpToken(options.httpToken ?? ''))}`);
     console.log(`  ${chalk.gray('Sandbox:')} ${chalk.cyan('打开 Console 后进入 Sandbox / 沙盒页，连接后发送 /hello')}`);
     console.log(`  ${chalk.yellow('⚠ Token 已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件，用于 Bearer Token 或 Console 登录页')}`);
     

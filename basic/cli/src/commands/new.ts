@@ -231,6 +231,10 @@ async function createPluginPackage(
 
   await fs.writeJson(path.join(pluginDir, 'package.json'), packageJson, { spaces: 2 });
 
+  // 模板只用一种配置来源：schema.json。definePlugin({ config }) 与 schema.json 同时存在会拒绝启动。
+  const configSourceNote = ' * 配置来源：根目录 schema.json（模板唯一的配置声明）。如改用 definePlugin({ config: Schema.object(...) })，'
+    + '请先删除 schema.json，两者同时存在会拒绝启动（见 https://zhin.js.org/authoring/define-plugin#choose-a-config-source）。';
+
   // schema.json：<instanceKey> 配置的 JSON Schema；适配器带稳定的 endpoint id
   const schemaJson: Record<string, unknown> = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -294,6 +298,7 @@ import { displayName } from './src/index.js';
  * - databaseHostToken：结构化存储（db.define / select / insert ...）
  * - scheduleHostToken / outboundHostToken 等同理（参考 plugins/features/process-monitor、plugins/utils/rss）
  * 清理回调统一注册到 context.lifecycle.add(dispose)。
+${configSourceNote}
  */
 export default definePlugin({
   name: '${pluginName}',
@@ -324,6 +329,7 @@ import { displayName } from './src/index.js';
 /**
  * 适配器约定插件入口：适配器定义在 adapters/ 目录（defineAdapter），
  * Endpoint 实例配置来自 app 配置 <instanceKey>（见 schema.json）。
+${configSourceNote}
  */
 export default definePlugin({
   name: '${pluginName}',
@@ -341,6 +347,7 @@ import { displayName } from './src/index.js';
  * 约定式插件入口（Plugin Runtime）：
  * - commands/ 下的 defineCommand 模块即命令（文件名即命令名，支持 [param] 动态段目录）
  * - 如需初始化 / 清理逻辑，添加 setup(context)（参考 zhin new --type service）
+${configSourceNote}
  */
 export default definePlugin({
   name: '${pluginName}',
@@ -499,7 +506,7 @@ ${readmeUse}
 
 - \`plugin.ts\`：插件入口（\`definePlugin\`）。\`zhin.entry\` 写的是 \`./plugin.js\`：本地运行时自动回退到 \`plugin.ts\`，npm 包里是打包时生成的 \`plugin.js\`
 - \`src/\`：库代码，\`pnpm build\` 编译到 \`lib/\`（\`.js\` + \`.d.ts\`），也是 \`import '${packageName}'\` 的入口；\`plugin.ts\` 和约定目录用 \`./src/xxx.js\` 这样的相对路径引用
-- \`schema.json\`：实例配置（\`<instanceKey>\`）的 JSON Schema
+- \`schema.json\`：实例配置（\`<instanceKey>\`）的 JSON Schema，也是本插件唯一的配置声明。如改用 \`definePlugin({ config: Schema.object(...) })\` 获得自动推导的配置类型，请先删除 \`schema.json\`：两者同时存在会拒绝启动，Zhin 不会替你挑一个（见 https://zhin.js.org/authoring/define-plugin#choose-a-config-source）
 ${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
 

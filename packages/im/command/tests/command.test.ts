@@ -1321,6 +1321,90 @@ describe('Command Feature', () => {
     }])).rejects.toThrow('missing params.query declaration');
   });
 
+  it('explains the single trailing parameter directory rule for nested parameter directories', async () => {
+    const owner = rootPluginId();
+    const source = '/project/commands/term/[word]/[...definition]/index.ts';
+    const command = defineCommand({
+      params: {
+        word: { type: 'string' },
+        definition: { type: 'text', rest: true },
+      },
+      execute: () => 'ok',
+    });
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: 'term', kind: 'directory' }],
+      '/project/commands/term': [{ name: '[word]', kind: 'directory' }],
+      '/project/commands/term/[word]': [{ name: '[...definition]', kind: 'directory' }],
+      '/project/commands/term/[word]/[...definition]': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([[source, { default: command }]]));
+
+    const discovery = new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }]);
+    const error = await discovery.then(() => undefined, (reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(CommandPathSyntaxError);
+    const message = (error as Error).message;
+    expect(message).toContain(source);
+    expect(message).toContain('only the last directory of a command path may be a parameter directory');
+    expect(message).toContain('found [word], [...definition] in commands/term/[word]/[...definition]/index.ts');
+    expect(message).toContain('commands/term/[word]/index.ts');
+    expect(message).toContain("word: { type: 'string' }, definition: { type: 'text', rest: true }");
+    expect(message).not.toContain('must be the first parameter declaration');
+  });
+
+  it('rejects a parameter directory followed by a static directory with a corrected path', async () => {
+    const owner = rootPluginId();
+    const source = '/project/commands/[name]/info/index.ts';
+    const command = defineCommand({
+      params: { name: { type: 'string' } },
+      execute: () => 'ok',
+    });
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: '[name]', kind: 'directory' }],
+      '/project/commands/[name]': [{ name: 'info', kind: 'directory' }],
+      '/project/commands/[name]/info': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([[source, { default: command }]]));
+
+    const discovery = new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }]);
+
+    await expect(discovery).rejects.toThrow(CommandPathSyntaxError);
+    await expect(new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }])).rejects.toThrow('e.g. commands/info/[name]/index.ts');
+  });
+
+  it('explains how to reorder params when the directory parameter is not declared first', async () => {
+    const owner = rootPluginId();
+    const source = '/project/commands/term/[word]/index.ts';
+    const command = defineCommand({
+      params: {
+        language: { type: 'string' },
+        word: { type: 'string' },
+      },
+      execute: () => 'ok',
+    });
+    const host = new MemoryDiscoveryHost({
+      '/project/commands': [{ name: 'term', kind: 'directory' }],
+      '/project/commands/term': [{ name: '[word]', kind: 'directory' }],
+      '/project/commands/term/[word]': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([[source, { default: command }]]));
+
+    const discovery = new FeatureDiscovery(host).discover(commandFeature, [{
+      owner,
+      packageRoot: '/project',
+    }]);
+
+    await expect(discovery).rejects.toThrow(
+      'Current order: { language, word }; reorder to { word, language }',
+    );
+  });
+
   it('rejects a required filename whose params entry declares a default', async () => {
     const owner = rootPluginId();
     const source = '/project/commands/search/[query]/index.ts';

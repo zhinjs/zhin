@@ -21,6 +21,29 @@ describe('CLI new command integration', () => {
     }
   })
 
+  it('keeps schema.json as the only config source in every template', async () => {
+    for (const type of ['normal', 'service', 'adapter']) {
+      const pluginName = `config-source-${type}`
+      try {
+        execSync(
+          `node "${cliPath}" new ${pluginName} --type ${type} --skip-install`,
+          { cwd: testDir, stdio: 'ignore', timeout: 10000 }
+        )
+      } catch {
+        // Files are still created when the command exits non-zero outside a bot project.
+      }
+      const pluginDir = path.join(testDir, 'plugins', pluginName)
+      const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf8')
+      const readme = await fs.readFile(path.join(pluginDir, 'README.md'), 'utf8')
+
+      expect(await fs.pathExists(path.join(pluginDir, 'schema.json'))).toBe(true)
+      expect(pluginTs).not.toMatch(/^\s*config\s*:/mu)
+      expect(pluginTs).toContain('请先删除 schema.json，两者同时存在会拒绝启动')
+      expect(readme).toContain('也是本插件唯一的配置声明')
+      expect(readme).toContain('两者同时存在会拒绝启动')
+    }
+  })
+
   it('should create normal plugin with convention-based structure', async () => {
     const pluginName = 'test-normal-plugin'
 
