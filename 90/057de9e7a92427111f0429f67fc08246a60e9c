@@ -1,0 +1,37 @@
+.changeset/857-doctor-global-ranges.md
+  s_8ecde7caf687e9::t_254af44d87cfd3 1-5
+.changeset/857-remove-stack-versions-snapshot.md
+  s_8ecde7caf687e9::t_ed275e981ac84e 1-5
+basic/cli/src/commands/doctor.ts
+  s_8ecde7caf687e9::t_16627a79f51670 26-27,116,123-125,397,461,521
+basic/cli/src/utils/global-home-init.ts
+  s_8ecde7caf687e9::t_5951b519f1cd08 5,19-20,23
+basic/cli/tests/doctor.test.ts
+  s_8ecde7caf687e9::t_8dfcfd6aaf6032 13-45
+basic/cli/tests/zhin-home.test.ts
+  s_8ecde7caf687e9::t_213264e6e90ec6 84,86,91-94
+docs/cli/index.md
+  s_8ecde7caf687e9::t_688ccde59bf5b8 124
+docs/en/cli/index.md
+  s_8ecde7caf687e9::t_c3ba314be53cd8 124
+packages/toolkit/scaffold-wizard/README.md
+  s_8ecde7caf687e9::t_70514c823a5a4e 6
+scripts/check-dependency-policy.mjs
+  s_8ecde7caf687e9::t_bb74816a3e864e 37-46,115-116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "90057de9e7a92427111f0429f67fc08246a60e9c",
+  "prompts": {},
+  "sessions": {
+    "s_8ecde7caf687e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15d7d-fd53-7212-bcec-b99ba70a313f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
