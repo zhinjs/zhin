@@ -1,0 +1,44 @@
+.changeset/899-core-contract-types.md
+  h_b680f75345178a 1-6
+.changeset/899-testing-peer-stack.md
+  h_b680f75345178a 1-7
+docs/authoring/testing.md
+  h_b680f75345178a 19-21,111
+docs/en/authoring/testing.md
+  h_b680f75345178a 19-21,111
+packages/im/core/src/index.ts
+  h_b680f75345178a 71-74
+packages/toolkit/testing/README.md
+  h_b680f75345178a 6-17
+packages/toolkit/testing/package.json
+  h_b680f75345178a 26-32,34,39,41-42
+packages/toolkit/testing/src/fake-clock.ts
+  h_b680f75345178a 1
+packages/toolkit/testing/src/fake-hosts.ts
+  h_b680f75345178a 6
+packages/toolkit/testing/src/fake-plugin.ts
+  h_b680f75345178a 6-7
+packages/toolkit/testing/src/fake-runners.ts
+  h_b680f75345178a 3-4,7,13,59,107-108,110
+packages/toolkit/testing/src/index.ts
+  h_b680f75345178a 4,6-8
+packages/toolkit/testing/src/test-module-runtime.ts
+  h_b680f75345178a 2-3
+pnpm-lock.yaml
+  h_b680f75345178a 2044-2047,2051-2053,2075-2077
+scripts/check-plugin-scaffold.mjs
+  h_b680f75345178a 9-11,83-114,141-142,144,156-161,170-171,202
+tests/snapshots/api-surface.json
+  h_b680f75345178a 164-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "256e61a68a336c55318f31e84acb07d076c72e63",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
