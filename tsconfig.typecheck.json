@@ -325,6 +325,8 @@
     "basic/schema/tests/config-types.fixture.ts",
     "packages/im/core/tests/middleware-types.fixture.ts",
     "packages/im/command/tests/types/declarations.ts",
+    "packages/im/command/tests/types/config.ts",
+    "packages/im/tool/tests/types/config.ts",
     "packages/im/plugin-runtime/tests/types/persistent-state.ts",
     "packages/toolkit/testing/tests/types/public.ts",
     "packages/im/schedule-feature/tests/types/config.ts",

@@ -360,6 +360,36 @@ type TypedCommandContext<TConfig, TInput extends CommandMessage, TAdapter extend
     readonly options: InferCommandOptions<O>;
   };
 
+/**
+ * `defineCommand<Config>()` 返回的定义函数：config 类型已固定，params / options / 返回值
+ * 仍从定义推断。
+ * @public
+ */
+export type CommandDefiner<TConfig, TInput extends CommandMessage = CommandMessage> = <
+  TResult = unknown,
+  const P extends CommandParams = {},
+  const O extends CommandOptions = {},
+>(
+  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
+) => Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>>;
+
+/**
+ * 柯里化写法：先固定插件 config 类型，再定义命令，params / options 推断不受影响。
+ *
+ * ```ts
+ * export default defineCommand<Config>()({
+ *   params: { count: { type: 'integer' } },
+ *   execute({ params, config }) { params.count; config.prefix },
+ * })
+ * ```
+ *
+ * `defineCommand<Config>({...})` 仍然可用，但 TypeScript 不支持部分推断，显式写了
+ * 类型参数后 params 会退化成 `Record<string, CommandParameterValue>`。
+ */
+export function defineCommand<
+  TConfig = unknown,
+  TInput extends CommandMessage = CommandMessage,
+>(): CommandDefiner<TConfig, TInput>;
 export function defineCommand<
   TConfig = unknown,
   TResult = unknown,
@@ -368,8 +398,22 @@ export function defineCommand<
   const O extends CommandOptions = {},
 >(
   definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
+): Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>>;
+export function defineCommand(...args: readonly unknown[]): unknown {
+  if (args.length === 0) return (definition: unknown) => createCommandDefinition(definition as never);
+  return createCommandDefinition(args[0] as never);
+}
+
+function createCommandDefinition<
+  TConfig,
+  TResult,
+  TInput extends CommandMessage,
+  P extends CommandParams,
+  O extends CommandOptions,
+>(
+  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
 ): Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>> {
-  if (typeof definition.execute !== 'function') {
+  if (typeof definition?.execute !== 'function') {
     throw new TypeError('Command execute must be a function');
   }
   validateAdapterName(definition.adapter);
