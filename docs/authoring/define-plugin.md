@@ -115,7 +115,22 @@ export default definePlugin({
 
 - `.default()` 或 `.required()` 的字段在类型上一定存在，其余字段可选。
 - `.secret()` 会让 Console 隐藏输入内容。密钥的值仍然写在 `zhin.config.yml` 里引用环境变量，例如 `apiKey: ${SUBSCRIPTION_API_KEY}`。
-- `schema.json` 和内联 `config` 只能二选一，同时存在会拒绝启动。
+- `schema.json` 和内联 `config` 只能二选一，同时存在会拒绝启动，见下文 [选择配置来源](#choose-a-config-source)。
+
+#### 选择配置来源 {#choose-a-config-source}
+
+| | `schema.json`（`zhin new` 模板的默认写法） | 内联 `config: Schema...` |
+| --- | --- | --- |
+| 适用场景 | 只需要一份 JSON 配置契约；`isolated` 插件；希望不执行插件代码也能读到 Schema | trusted 插件，想让 `config.get()` 自动推导 TypeScript 类型，或使用 `.secret()`、`.component()`、`.effect('reload')` 等构建器 |
+| Zhin 如何读取 | 直接读取包根目录的文件 | 配置预检时加载入口文件（不执行 `setup`），调用 `config.toJsonSchema()` |
+| `isolated` 插件 | 唯一可用的方式 | 不可用，隔离进程会拒绝 |
+
+两者**没有优先级**，Zhin 不会替你挑一个：
+
+- trusted 插件同时有内联 `config` 和 `schema.json` 时，配置预检和启动都会失败，错误信息会列出入口文件和 `schema.json` 的路径。想保留带类型的内联 Schema，就删掉 `schema.json`；想保留 `schema.json`，就删掉 `definePlugin` 里的 `config`。
+- `isolated` 插件的入口不会在宿主进程执行，宿主只读取 `schema.json`；入口里再写 `config` 会在隔离进程里报错。
+
+`zhin new` 生成的插件只带 `schema.json`。改用内联 `config` 时先删掉 `schema.json`（也可以顺手从 `package.json#files` 里去掉它）。
 
 更多规则见页尾 [配置声明细则](#配置声明细则)。
 

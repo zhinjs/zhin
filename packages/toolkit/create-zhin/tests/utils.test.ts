@@ -1,6 +1,9 @@
+import { readFile } from 'node:fs/promises'
 import { describe, it, expect } from 'vitest'
 import {
+  describeStoredHttpToken,
   generateToken,
+  maskSecret,
   getDatabaseDisplayName,
   getDatabasePersistenceLabel,
   isValidProjectName,
@@ -85,6 +88,35 @@ describe('create-zhin utils', () => {
 
     it('does not claim that the in-memory dialect is durable', () => {
       expect(getDatabasePersistenceLabel('memory')).toBe('Memory（仅进程内，不持久化）')
+    })
+  })
+
+  describe('HTTP token output', () => {
+    const fakeHttpToken = 'fake-http-token-for-tests-0000'
+
+    it('masks every character of a secret and only reports its length', () => {
+      const masked = maskSecret(fakeHttpToken)
+
+      expect(masked).toBe(`********（${fakeHttpToken.length} 位，已隐藏）`)
+      expect(masked).not.toContain('fake')
+      expect(masked).not.toContain('0000')
+    })
+
+    it('points to the .env location instead of printing the token', () => {
+      const line = describeStoredHttpToken(fakeHttpToken)
+
+      expect(line).not.toContain(fakeHttpToken)
+      expect(line).toContain('.env')
+      expect(line).toContain('HTTP_TOKEN')
+    })
+
+    it('never prints options.httpToken directly in the create summary', async () => {
+      const source = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8')
+      const consoleLines = source.split('\n').filter((line) => line.includes('console.log'))
+      const leakingLines = consoleLines.filter((line) =>
+        line.includes('options.httpToken') && !line.includes('describeStoredHttpToken(options.httpToken'))
+
+      expect(leakingLines).toEqual([])
     })
   })
 })

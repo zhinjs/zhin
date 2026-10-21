@@ -67,6 +67,21 @@ export default defineCommand({
 
 嵌套目录就是子命令：`commands/admin/ban/index.ts` 对应 `/admin ban`。参数可以写成目录：`[name]` 必填、`[[name]]` 可选、`[...name]` 捕获剩余所有内容。参数、选项、权限的完整写法见 [命令](./commands.md)。
 
+一条命令最多只有一个参数目录，而且必须是 `index.ts` 前的最后一层目录。`commands/term/[word]/[...definition]/index.ts` 会报 `CommandPathSyntaxError`；应写成 `commands/term/[word]/index.ts`，其余参数在 `defineCommand({ params })` 里接在目录参数后面声明：
+
+```ts
+// commands/term/[word]/index.ts  →  /term <word> <...definition>
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  params: {
+    word: { type: 'string' },                    // 目录参数，必须放在第一项
+    definition: { type: 'text', rest: true },    // 剩余输入
+  },
+  execute: ({ params }) => ({ word: params.word, definition: params.definition }),
+});
+```
+
 ### middlewares/：中间件
 
 ```ts
@@ -222,7 +237,7 @@ tools:
 | `schedules/` | 一级命名目录 | `schedules/daily-report/index.ts` → `daily-report` |
 | `pages/` | 一级命名目录；`nav` / `footer` 是布局槽 | `pages/workroom/index.tsx` → `workroom`；`pages/nav/index.tsx` → `nav` |
 
-命令参数目录的方括号写错会抛 `CommandPathSyntaxError`；参数有默认值时目录名必须用双方括号，且 `params` 中必须声明对应参数，否则同样报错。
+命令参数目录的方括号写错会抛 `CommandPathSyntaxError`；参数有默认值时目录名必须用双方括号，且 `params` 中必须声明对应参数，否则同样报错。一条命令出现多个参数目录、或参数目录后面还有静态目录（如 `commands/[name]/info/`）时也会报错，错误信息会列出文件路径和改正后的写法；目录参数没有放在 `params` 第一项时，错误信息会给出调整后的顺序。
 :::
 
 ## 它是怎么工作的

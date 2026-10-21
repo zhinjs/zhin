@@ -19,12 +19,14 @@ export async function readPluginConfigSchema(
   // Isolated plugin code never executes in the composition process.
   const manifest = pkg.packageJson.zhin;
   let declaration: PluginDefinition['config'];
+  let entryFile: string | undefined;
   if (modules && manifest.type === 'plugin' && manifest.runtime !== 'isolated') {
-    const module = await modules.load<{ default?: PluginDefinition }>(resolve(pkg.root, manifest.entry));
+    entryFile = resolve(pkg.root, manifest.entry);
+    const module = await modules.load<{ default?: PluginDefinition }>(entryFile);
     declaration = module.default?.config;
   }
   if (declaration && fileSchema !== undefined) {
-    throw new TypeError(`${pkg.name} declares both plugin config and schema.json; choose one configuration schema`);
+    throw new PluginConfigSourceConflictError(pkg.name, entryFile ?? manifest.entry, file);
   }
   const schema: unknown = declaration ? declaration.toJsonSchema() : fileSchema;
   if (schema === undefined) return null;
@@ -44,4 +46,26 @@ export function immutableConfigSchema(schema: Readonly<Record<string, unknown>>)
   };
   freeze(copy);
   return copy;
+}
+
+/**
+ * Thrown when a trusted plugin declares both `definePlugin({ config })` and a root `schema.json`.
+ * Neither source wins: startup stops so the two schemas cannot silently drift apart.
+ */
+export class PluginConfigSourceConflictError extends TypeError {
+  constructor(
+    readonly packageName: string,
+    readonly entryFile: string,
+    readonly schemaFile: string,
+  ) {
+    super(
+      `${packageName} declares both plugin config and schema.json; choose one configuration schema. `
+        + `Inline config: definePlugin({ config }) in ${entryFile}. JSON Schema: ${schemaFile}. `
+        + 'Zhin does not pick one for you. To keep the typed inline Schema, delete schema.json; '
+        + 'to keep schema.json (required for isolated plugins, readable without running the plugin), '
+        + 'remove config from definePlugin. '
+        + 'See https://zhin.js.org/authoring/define-plugin#choose-a-config-source',
+    );
+    this.name = 'PluginConfigSourceConflictError';
+  }
 }

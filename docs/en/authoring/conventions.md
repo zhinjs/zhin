@@ -67,6 +67,21 @@ export default defineCommand({
 
 Nested folders are subcommands: `commands/admin/ban/index.ts` is `/admin ban`. Params can be folders too: `[name]` required, `[[name]]` optional, `[...name]` captures the rest. Full params, options and permissions: [Commands](./commands.md).
 
+A command has at most one param folder, and it must be the last folder before `index.ts`. `commands/term/[word]/[...definition]/index.ts` throws `CommandPathSyntaxError`; write `commands/term/[word]/index.ts` instead and declare the remaining params after the folder param in `defineCommand({ params })`:
+
+```ts
+// commands/term/[word]/index.ts  →  /term <word> <...definition>
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  params: {
+    word: { type: 'string' },                    // folder param, must come first
+    definition: { type: 'text', rest: true },    // the rest of the input
+  },
+  execute: ({ params }) => ({ word: params.word, definition: params.definition }),
+});
+```
+
 ### middlewares/: middleware
 
 ```ts
@@ -222,7 +237,7 @@ tools:
 | `schedules/` | One named folder level | `schedules/daily-report/index.ts` → `daily-report` |
 | `pages/` | One named folder level; `nav` / `footer` are layout slots | `pages/workroom/index.tsx` → `workroom`; `pages/nav/index.tsx` → `nav` |
 
-Malformed brackets in command param folders throw `CommandPathSyntaxError`. A param with a default must use double brackets and be declared in `params`, or the same error is thrown.
+Malformed brackets in command param folders throw `CommandPathSyntaxError`. A param with a default must use double brackets and be declared in `params`, or the same error is thrown. The same error is thrown when a command has more than one param folder or a static folder after a param folder (such as `commands/[name]/info/`); the message names the file and shows the corrected path. When the folder param is not the first entry in `params`, the message shows the reordered list.
 :::
 
 ## How it works

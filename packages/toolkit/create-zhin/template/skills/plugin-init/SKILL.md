@@ -60,7 +60,7 @@ tags:
 ```
 plugins/{name}/
 ├── package.json          # 含 "zhin" manifest
-├── schema.json           # 可选：插件配置
+├── schema.json           # 可选：插件配置（与 definePlugin({ config }) 二选一，同时存在会拒绝启动）
 ├── plugin.ts             # definePlugin 入口（只做装配）
 ├── tsconfig.json
 ├── README.md
