@@ -1,0 +1,33 @@
+plugins/games/roulette/src/game-flow.ts
+  s_9477e63ef5cee5::t_0441a90a45a44e 79,84-95,169-173,182,195,197,206,210-211
+plugins/games/roulette/src/deadline-job.ts
+  s_9477e63ef5cee5::t_0441a90a45a44e 16-18
+plugins/games/roulette/tests/roulette-runtime.test.ts
+  s_51b231dc717440::t_1eaed0626cf14b 20,352-378
+.changeset/roulette-deadline-sweep.md
+  s_51b231dc717440::t_d76576c9592418 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "37f79a1139a068510b6f1ab3e07efeb69f6b6d2a",
+  "prompts": {},
+  "sessions": {
+    "s_51b231dc717440": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a5394de34b5b053be",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
