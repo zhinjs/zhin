@@ -35,6 +35,8 @@ export interface KookClientTransport {
   uploadMedia?(data: Buffer): Promise<string>;
   recallChannelMsg?(channelId: string, messageId: string): Promise<boolean>;
   recallPrivateMsg?(userId: string, messageId: string): Promise<boolean>;
+  /** GET /api/v3/guild/view（群主 id）。 */
+  getGuildInfo?(guildId: string): Promise<{ user_id?: string | number }>;
   pickGuild(guildId: string): {
     kick(userId: string): Promise<boolean>;
     getRoleList(): Promise<Array<{
