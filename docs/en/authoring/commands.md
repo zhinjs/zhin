@@ -304,6 +304,26 @@ export default defineCommand({
 
 `use` throws when the service is missing. See [definePlugin · Provide resources to your own commands and tools](./define-plugin.md).
 
+### Type the config {#typed-config}
+
+A command in a convention folder does not know which plugin it belongs to, so `config` is `unknown` by default. Use the curried form: fix the config type first, then define the command:
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+import type { EchoConfig } from '../../../src/index.js'; // keep in sync with schema.json
+
+export default defineCommand<EchoConfig>()({
+  params: { text: { type: 'string' } },
+  execute({ params, config }) {
+    return `${config.prefix ?? ''}${params.text}`; // params.text: string, config: EchoConfig
+  },
+});
+```
+
+The function `defineCommand<EchoConfig>()` returns can be reused: write `export const defineEchoCommand = defineCommand<EchoConfig>()` once in `src/` and call it from each command file.
+
+The older `defineCommand<EchoConfig>({...})` still works, but TypeScript cannot infer the remaining type arguments once one is given explicitly, so `params` falls back to `Record<string, CommandParameterValue>`. Use the curried form when you want `params` and `options` inferred.
+
 ### Subcommands
 
 Nested folders are subcommands; segments are joined with spaces:
