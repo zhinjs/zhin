@@ -3,7 +3,7 @@
  * External plugin author acceptance:
  *   locally built CLI → `zhin new` (normal / service / adapter, non-interactive)
  *   → install against locally packed tarballs (simulates npm)
- *   → generated vitest + tsc → `pnpm pack` ships plugin.js.
+ *   → generated vitest + tsc → `pnpm pack` ships plugin.js → `zhin plugin check --strict` passes.
  *
  * Also asserts no packed @zhin.js/* manifest still has the source-only
  * `development` → ./src/*.ts condition, that @zhin.js/testing takes the zhin.js
@@ -195,8 +195,11 @@ try {
     if (!files.has(packedManifest.zhin.entry.replace(/^\.\//u, ''))) {
       throw new Error(`${plugin.name}: zhin.entry ${packedManifest.zhin.entry} is not in the tarball`);
     }
+    // The author-facing check must accept what `zhin new` generates, warnings included.
+    console.log(`${plugin.name}: zhin plugin check --strict`);
+    await run(process.execPath, [cli, 'plugin', 'check', '--strict'], dir);
   }
-  console.log(`PASS: built CLI → zhin new --standalone (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js + lib/ (.d.ts), no sources/tests/configs; one copy of each zhin.js package; no development condition in ${closure.length} packed manifests.`);
+  console.log(`PASS: built CLI → zhin new --standalone (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js + lib/ (.d.ts), no sources/tests/configs → zhin plugin check --strict; one copy of each zhin.js package; no development condition in ${closure.length} packed manifests.`);
 } finally {
   if (keep) console.log(`kept ${temp}`);
   else await rm(temp, { recursive: true, force: true });

@@ -29,6 +29,7 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 | Install a community plugin | `npx zhin install <plugin>` |
 | Find plugins and setup steps by purpose | `npx zhin use-cases` |
 | Create a new, publishable plugin | `npx @zhin.js/cli new my-plugin --standalone` |
+| Check a plugin before publishing | `npx @zhin.js/cli plugin check` |
 | Add a local plugin to an existing bot project | `npx zhin new my-plugin` |
 | Upgrade Zhin | `npx zhin migrate --dry-run`, then again without `--dry-run` |
 | Install as a start-on-boot system service | `npx zhin service install` |
@@ -234,6 +235,24 @@ zhin build [plugin] [--clean] [--production] [--analyze]
 ```
 
 `plugin` is a path relative to `plugins/` (e.g. `adapters/icqq`); when omitted it builds the current package from inside a plugin folder, or every `plugins/*` from the workspace root. `src/` is compiled with tsc and `client/` bundled with esbuild; `--clean` clears `lib/` and `dist/` first; `--production` (on by default) minifies client output.
+
+### plugin check: Check a Plugin Before Publishing
+
+```bash
+zhin plugin check [plugin-dir] [--no-pack] [--json] [--strict]
+```
+
+Checks whether the plugin in a directory (the current one by default) will publish correctly. Run it once before publishing: `npx @zhin.js/cli plugin check`.
+
+- **Manifest and layout**: checks the `package.json` `name` and `zhin` manifest, and that `zhin.entry` points at JavaScript with a matching source file. It also checks that the `files` whitelist covers the entry, the convention directories (the `.js` built from `commands/`, `tools/` and so on, plus `skills/` and `agents/`) and `schema.json`, and that `prepack` / `postpack` generate and clean the runtime entries. A missing README or missing tests only produce warnings.
+- **Published package**: runs the plugin's real `npm pack` (its `prepack` build included) and unpacks the tarball in a temporary directory. It then checks that:
+  - the entry and `main` / `exports` are packed;
+  - relative imports in packed JavaScript resolve;
+  - no tests or build configuration slipped in;
+  - every `.ts` in a convention directory has a packed `.js`.
+
+  These are the same rules as the repository's `pnpm check:pack-imports`. `--no-pack` skips this step.
+- Exits with code 1 on errors; `--strict` also fails on warnings; `--json` prints a structured result for CI.
 
 ### pub: Publish a Plugin
 

@@ -67,11 +67,12 @@ pnpm check:plugin-runtime-api
 pnpm check:plugin-capability-publish
 ```
 
-发布前检查 `files`、ESM 入口、peer dependency、约定目录生成的 JavaScript 以及 changeset。**用打包后的产物**安装到一个新项目里，再跑一次 Sandbox 的完整流程——不要只测试 workspace 里的源码。
+发布前检查 `files`、ESM 入口、peer dependency、约定目录生成的 JavaScript 以及 changeset；`npx @zhin.js/cli plugin check` 会自动检查其中的入口、`files` 与发布包结构（见 [CLI 参考](../cli/index.md#plugin-check-发布前检查插件)）。**用打包后的产物**安装到一个新项目里，再跑一次 Sandbox 的完整流程——不要只测试 workspace 里的源码。
 
 `zhin new --standalone` 生成的独立插件在自己的目录里发布：
 
 ```bash
+npx @zhin.js/cli plugin check    # 检查入口、files、约定目录与打包结果
 npx @zhin.js/cli pub --dry-run   # 构建并预览 tarball 内容，不发布
 npx @zhin.js/cli pub             # 确认后发布；CI 等非交互环境加 --yes
 ```

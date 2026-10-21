@@ -16,7 +16,8 @@
   },
   "files": [
     "bin",
-    "lib"
+    "lib",
+    "shared"
   ],
   "scripts": {
     "build": "tsc",
