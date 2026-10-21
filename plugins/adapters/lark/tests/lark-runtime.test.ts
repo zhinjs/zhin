@@ -1,5 +1,6 @@
 import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
 import { createHash } from 'node:crypto';
+import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
@@ -437,6 +438,49 @@ describe('lark plugin runtime adapter', () => {
       conversation: expect.objectContaining({ kind: 'private', id: 'oc_p2pchat' }),
       metadata: expect.objectContaining({ chatType: 'private' }),
     }));
+    await endpoint.stop();
+  });
+
+  it('projects group owner / admin as canonical roles satisfying role(owner,admin,master)', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const base = mockFetchOk();
+    const fetch = vi.fn(async (url: string, init?: unknown) => {
+      if (String(url).endsWith('/im/v1/chats/oc_group1')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({
+            code: 0,
+            data: { owner_id: 'ou_owner', user_manager_id_list: ['ou_admin'] },
+          }),
+        };
+      }
+      return base(url, init as never);
+    });
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch,
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const results: Record<string, boolean> = {};
+    for (const [index, openId] of ['ou_owner', 'ou_admin', 'ou_member'].entries()) {
+      endpoint.admit(textMessage({ message_id: `om_${index}`, sender: { sender_id: { open_id: openId } } }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
+      const inbound = receive.mock.calls[index]![0] as unknown;
+      results[openId] = checkBuiltinPermit('role(owner,admin,master)', toPermissionSubject(inbound));
+    }
+    expect(results).toEqual({ ou_owner: true, ou_admin: true, ou_member: false });
+    expect(receive.mock.calls[0]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ roles: ['owner'] }) }));
+    expect(receive.mock.calls[1]![0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ roles: ['admin'] }) }));
+    // chat.get 按群缓存，只调用一次
+    expect(fetch.mock.calls.filter(([u]) => String(u).endsWith('/im/v1/chats/oc_group1'))).toHaveLength(1);
     await endpoint.stop();
   });
 
