@@ -7,6 +7,7 @@ import {
   createLlmMediaPerceptionPort,
   discoverWorkspaceAgents,
   publishOutboundElements,
+  NO_MEDIA_AUTHORITY,
   type ApprovalPort,
   type AudioTranscriptionPort,
   type ProactiveOutboundService,
@@ -205,7 +206,8 @@ export function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutbound
       return result.messageId || 'ok';
     },
     async sendElements(ctx, elements) {
-      const content = await publishOutboundElements(elements, ctx.scene.platform);
+      // Proactive sends carry no Turn policy: only inline media, no model-referenced paths or URLs.
+      const content = await publishOutboundElements(elements, ctx.scene.platform, undefined, NO_MEDIA_AUTHORITY);
       if (content.length === 0) return [];
       const id = await this.send(ctx, content);
       return [id];

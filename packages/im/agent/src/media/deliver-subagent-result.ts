@@ -9,6 +9,7 @@ import type { SubagentOrigin } from '../subagent/index.js';
 import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 import { mergeToolOutboundElements } from './media-tool-bridge.js';
 import { publishOutboundElements } from './media-publisher.js';
+import { NO_MEDIA_AUTHORITY } from './media-normalize.js';
 
 export interface SubagentOutboundDelivery {
   /** 面向用户的说明文本（含任务摘要时由调用方组装） */
@@ -42,9 +43,13 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
       parseOutput(delivery.text),
       delivery.toolCalls ?? [],
     );
+  // The result carries no Turn policy: tool media arrive inline, so model-referenced
+  // local paths and URLs are refused rather than read or fetched unchecked.
   const segments = await publishOutboundElements(
     elements,
     String(message.clientAdapter ?? message.conversation.endpoint.adapter),
+    undefined,
+    NO_MEDIA_AUTHORITY,
   );
   if (!segments.length) {
     await send({ ...base, content: delivery.text });
