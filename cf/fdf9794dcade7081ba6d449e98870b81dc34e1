@@ -1,0 +1,14 @@
+packages/toolkit/testing/src/fake-runners.ts
+  h_b680f75345178a 1-2,99,103,105,107-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cffdf9794dcade7081ba6d449e98870b81dc34e1",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
