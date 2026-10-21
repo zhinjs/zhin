@@ -59,6 +59,8 @@ describe('files whitelist matching', () => {
     expect(filesWhitelistIncludes(['commands/*.js'], 'commands/nested/hello.js')).toBe(false);
     expect(filesWhitelistIncludes(['lib', '!lib/**/*.test.js'], 'lib/a.test.js')).toBe(false);
     expect(filesWhitelistIncludes(['lib'], 'plugin.js')).toBe(false);
+    expect(filesWhitelistIncludes(['plugin.js'], 'pluginXjs')).toBe(false);
+    expect(filesWhitelistIncludes(['(a)+[b]'], '(a)+[b]')).toBe(true);
   });
 
   it('covers every runtime entry the zhin new template generates', () => {

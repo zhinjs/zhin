@@ -24,7 +24,7 @@ function globToRegExp(pattern: string): RegExp {
     } else if (character === '?') {
       expression += '[^/]';
     } else {
-      expression += character.replace(/[.+^${}()|[\]\\]/u, '\\$&');
+      expression += character.replace(/[.+^${}()|[\]\\]/gu, '\\$&');
     }
     index += 1;
   }
