@@ -5,9 +5,11 @@ import { DATABASE_DRIVER_VERSIONS, DATABASE_PACKAGES } from './types.js';
 import { findMissingPackageDependencies, findUnresolvedPackageInstalls, isAiEnabledInConfig, type PackageJsonLike } from './project-deps.js';
 
 /**
- * User project dependency policy: scaffolded Zhin packages intentionally float to latest.
+ * Diagnostic baseline for doctor / config check: any declared version of these packages is accepted
+ * (`latest`), so existing projects are never flagged because of a newer release.
+ * Scaffolds do not write these values as-is: `withScaffoldVersionRanges()` replaces `latest` with the
+ * caret range of the version released together with this package (see stack-version-ranges.ts).
  * Database drivers use the live-tested ranges declared by the database definitions.
- * WARNING: `latest` is not reproducible; pin Zhin package versions for production.
  */
 export const ZHIN_STACK_VERSIONS = {
   'zhin.js': 'latest',

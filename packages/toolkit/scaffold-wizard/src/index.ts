@@ -71,6 +71,13 @@ export {
 export type { AiStackIncompatibility } from './project-deps.js';
 
 export {
+  FALLBACK_DEPENDENCY_RANGE,
+  scaffoldDependencyRange,
+  withScaffoldVersionRanges,
+} from './stack-version-ranges.js';
+export type { StackVersionRanges } from './stack-version-ranges.js';
+
+export {
   ZHIN_STACK_VERSIONS,
   DEFAULT_CREATE_BOT_HTTP_PORT,
   CREATE_BOT_PACKAGE_MANAGER,

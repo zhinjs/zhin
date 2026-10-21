@@ -15,6 +15,7 @@ import {
   getCreateBotBaseDependencies,
   CREATE_BOT_PACKAGE_MANAGER,
   getCreateBotPnpmWorkspaceConfig,
+  withScaffoldVersionRanges,
   type AdapterSetupResult,
   type DatabaseConfig,
   type InitOptions,
@@ -166,20 +167,21 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'pm2:logs': 'pm2 logs',
       'pm2:monit': 'pm2 monit'
     },
-    dependencies: {
+    // Zhin packages get the caret range of the release this scaffold ships with, not `latest`.
+    dependencies: withScaffoldVersionRanges({
       ...getCreateBotBaseDependencies(),
       ...adapterDeps,
       ...databaseDeps,
       ...aiDeps,
       ...cardDeps,
       ...consoleFeatureDeps,
-    },
-    devDependencies: {
+    }),
+    devDependencies: withScaffoldVersionRanges({
       '@zhin.js/cli': ZHIN_STACK_VERSIONS['@zhin.js/cli'],
       '@types/node': '^25.0.0',
       'typescript': '^6.0.0',
       'pm2': '^6.0.0'
-    },
+    }),
     engines: {
       node: CREATE_NODE_REQUIREMENT
     },

@@ -5,7 +5,9 @@ import type { AISetupConfig } from './ai.js';
 import type { InitOptions } from './types.js';
 
 /**
- * User project dependency policy: scaffolded dependencies intentionally float to latest.
+ * Diagnostic baseline for the AI stack (any declared version is accepted).
+ * Scaffolds write derived ranges instead of `latest`: `withScaffoldVersionRanges()` uses the
+ * `@zhin.js/agent` release version and the third-party ranges Zhin declares as peers.
  */
 export const AI_STACK_VERSIONS = {
   '@zhin.js/agent': 'latest',

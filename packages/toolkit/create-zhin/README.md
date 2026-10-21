@@ -1,7 +1,7 @@
 # create-zhin-app
 
 ::: warning 依赖版本
-向导默认将 `zhin.js` / `@zhin.js/*` 写成 **`latest`**（政策：`pnpm check:dependency-policy`）。开箱可跟上游，但**不保证**可复现构建；生产环境请在生成后 pin 到已知好版本。
+向导将 `zhin.js` / `@zhin.js/*` 写成与 `@zhin.js/scaffold-wizard` 同一次发布的真实版本范围（如 `^1.1.11`），AI 栈第三方包使用 Zhin 声明的 peer 范围，不再写 `latest`（政策：`pnpm check:dependency-policy`）。caret 范围仍会接收补丁与次版本；生产环境请提交 lockfile。
 :::
 
 快速创建 Zhin 机器人 workspace 项目的脚手架工具，提供一键创建和配置新项目的能力。
