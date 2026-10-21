@@ -1,4 +1,4 @@
-import { getLogger, type OutboundHost, type PluginDatabaseHost } from 'zhin.js';
+import { getLogger, type DeliveryTarget, type OutboundHost, type PluginDatabaseHost } from 'zhin.js';
 import type { ResolvedLedgerConfig } from './config.js';
 import { parseEntryInput } from './entry-input.js';
 import type { LedgerCaller } from './identity.js';
@@ -36,6 +36,8 @@ export class LedgerService {
   readonly #now: () => number;
   /** Serialises writes per user so two quick `记` commands never share an `#id`. */
   readonly #userQueues = new Map<string, Promise<unknown>>();
+  /** Private targets already saved this process, to skip redundant writes. */
+  readonly #knownPrivate = new Map<string, string>();
 
   constructor(database: PluginDatabaseHost, outbound: OutboundHost | undefined, config: ResolvedLedgerConfig, options: LedgerServiceOptions = {}) {
     this.#store = new LedgerStore(database);
@@ -55,7 +57,30 @@ export class LedgerService {
     return next;
   }
 
+  /**
+   * Some platforms (Discord, Lark, Slack, ...) address a private chat by a conversation id that is
+   * not the user id. When the user talks to the bot in private we save that real conversation and
+   * use it for later private deliveries; until then the user id is the best available guess.
+   */
+  async #rememberPrivate(caller: LedgerCaller): Promise<void> {
+    if (!caller.isPrivate) return;
+    const raw = JSON.stringify(caller.conversation);
+    if (this.#knownPrivate.get(caller.ownerKey) === raw) return;
+    try {
+      await this.#store.setPrivateTarget(caller.ownerKey, caller.conversation);
+      this.#knownPrivate.set(caller.ownerKey, raw);
+    } catch (error) {
+      logger.warn(`saving private target failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  async #privateTargetOf(caller: LedgerCaller): Promise<DeliveryTarget> {
+    if (caller.isPrivate) return caller.conversation;
+    return (await this.#store.getPrivateTarget(caller.ownerKey)) ?? caller.privateTarget;
+  }
+
   async addEntry(caller: LedgerCaller, text: string): Promise<string> {
+    await this.#rememberPrivate(caller);
     const parsed = parseEntryInput(text);
     if (!parsed.ok) return parsed.reason;
     const { category, amountCents, note } = parsed.entry;
@@ -77,6 +102,7 @@ export class LedgerService {
   }
 
   async deleteEntry(caller: LedgerCaller, seq: number): Promise<string> {
+    await this.#rememberPrivate(caller);
     return this.#withUserLock(caller.ownerKey, async () => {
       const entry = await this.#store.findEntry(caller.ownerKey, seq);
       if (!entry) return `没有找到你的账目 #${seq}（只能删除自己的记账，可用「账单」查看编号）`;
@@ -112,7 +138,10 @@ export class LedgerService {
 
   /** Private chat: full reply. Group/channel: try a private message, else the masked reply. */
   async #deliver(caller: LedgerCaller, reply: LedgerReply, title: string): Promise<string> {
-    if (caller.isPrivate) return reply.full;
+    if (caller.isPrivate) {
+      await this.#rememberPrivate(caller);
+      return reply.full;
+    }
     if (reply.full === reply.masked) return reply.full;
     const delivered = await this.#sendPrivately(caller, reply.full);
     if (delivered) return `🔒 ${title}已私信发送给你`;
@@ -123,7 +152,7 @@ export class LedgerService {
     const sendTarget = this.#outbound?.sendTarget;
     if (!sendTarget) return false;
     try {
-      await sendTarget.call(this.#outbound, caller.privateTarget, content);
+      await sendTarget.call(this.#outbound, await this.#privateTargetOf(caller), content);
       return true;
     } catch (error) {
       logger.debug(`private delivery unavailable: ${error instanceof Error ? error.message : String(error)}`);
@@ -132,6 +161,7 @@ export class LedgerService {
   }
 
   async dailyReport(caller: LedgerCaller, action: DailyReportAction): Promise<string> {
+    await this.#rememberPrivate(caller);
     const reportTime = this.#config.reportTime;
     const user = await this.#store.getUser(caller.ownerKey);
     if (action === 'status') {
@@ -152,7 +182,7 @@ export class LedgerService {
     const today = localDateKey(nowMs, this.#config.timezone);
     const alreadyPastReportTime = localTimeKey(nowMs, this.#config.timezone) >= reportTime;
     const lastReportDate = alreadyPastReportTime ? today : '';
-    await this.#store.setReport(caller.ownerKey, true, caller.privateTarget, lastReportDate);
+    await this.#store.setReport(caller.ownerKey, true, await this.#privateTargetOf(caller), lastReportDate);
     return caller.isPrivate ? confirmation : '🔒 已开启记账日报，确认消息已私信发送给你';
   }
 

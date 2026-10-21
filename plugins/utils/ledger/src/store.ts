@@ -2,6 +2,8 @@ import type { DatabaseHostModel, DeliveryTarget, PluginDatabaseHost } from 'zhin
 
 export const ENTRY_TABLE = 'ledger_entries';
 export const USER_TABLE = 'ledger_users';
+/** Separate table: existing databases only run CREATE TABLE IF NOT EXISTS, so new columns on `ledger_users` would never appear. */
+export const PRIVATE_TARGET_TABLE = 'ledger_private_targets';
 
 /** One expense. `seq` is the per-user number shown as `#id`; amounts are integer cents. */
 export interface LedgerEntry {
@@ -38,6 +40,10 @@ export function defineLedgerTables(database: Pick<PluginDatabaseHost, 'define'>)
     report_enabled: { type: 'integer', default: 0 },
     report_target: { type: 'text', default: '' },
     last_report_date: { type: 'text', default: '' },
+  });
+  database.define(PRIVATE_TARGET_TABLE, {
+    owner_key: { type: 'text', nullable: false },
+    target: { type: 'text', nullable: false },
   });
 }
 
@@ -155,6 +161,25 @@ export class LedgerStore {
       report_target: target ? JSON.stringify(target) : '',
       last_report_date: lastReportDate,
     }).where({ owner_key: ownerKey });
+  }
+
+  /** The real private conversation saved when the user talked to the bot in private. */
+  async getPrivateTarget(ownerKey: string): Promise<DeliveryTarget | undefined> {
+    const rows = await this.#model(PRIVATE_TARGET_TABLE).select('owner_key', 'target').where({ owner_key: ownerKey });
+    return parseTarget(rows[0]?.target);
+  }
+
+  /** Saves the real private conversation; an enabled daily report follows it. */
+  async setPrivateTarget(ownerKey: string, target: DeliveryTarget): Promise<void> {
+    const raw = JSON.stringify(target);
+    const model = this.#model(PRIVATE_TARGET_TABLE);
+    const existing = await model.select('owner_key', 'target').where({ owner_key: ownerKey });
+    if (existing.length > 0) await model.update({ target: raw }).where({ owner_key: ownerKey });
+    else await model.insert({ owner_key: ownerKey, target: raw });
+    const user = await this.getUser(ownerKey);
+    if (user?.reportEnabled) {
+      await this.#model(USER_TABLE).update({ report_target: raw }).where({ owner_key: ownerKey });
+    }
   }
 
   async listReportSubscribers(): Promise<LedgerUserRecord[]> {
