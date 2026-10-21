@@ -49,21 +49,34 @@ export class SessionSystem {
     });
   }
 
+  /**
+   * Waits until the host's persistence owner calls {@link markPersistenceReady}.
+   * The timeout is only a safety net for a host that never marks readiness: it
+   * logs a warning and continues with the in-memory session/history. Reaching
+   * it means the composition root forgot to mark readiness (#857), so the
+   * timeout must not be raised to hide that.
+   */
   async waitForPersistence(): Promise<void> {
     if (this.persistenceDone) return;
     const timeoutMs = process.env.NODE_ENV === 'test' ? 50 : 5_000;
-    await Promise.race([
-      this.persistenceReady,
-      new Promise<void>((resolve) => {
-        setTimeout(() => {
-          if (!this.persistenceDone) {
-            logger.warn('waitForPersistence: timeout, proceeding with in-memory session/history');
-            this.markPersistenceReady();
-          }
-          resolve();
-        }, timeoutMs);
-      }),
-    ]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        this.persistenceReady,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(() => {
+            if (!this.persistenceDone) {
+              logger.warn(`waitForPersistence: persistence was not marked ready within ${timeoutMs} ms; proceeding with in-memory session/history`);
+              this.markPersistenceReady();
+            }
+            resolve();
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      // Do not leave one pending timer per waiting turn once readiness arrives.
+      clearTimeout(timer);
+    }
   }
 
   markPersistenceReady(): void {

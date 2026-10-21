@@ -206,6 +206,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       : undefined;
     // Without Workroom there is no persistence to prepare; only project preset files are seeded.
     const presetCount = workroom ? workroom.presetCount : await agentFoundation.seedPresets();
+    // The Workroom persistence coordinator is the only other owner of this latch
+    // (file mode in prepare, database mode after activateNext). Without Workroom
+    // nothing else would open it, so every new Agent generation's first turn
+    // stalled for the 5 s SessionSystem.waitForPersistence fallback (#857).
+    if (!workroom) zhinAgent.markMemoryPersistenceReady();
     const binding = service.getBindingRegistry().requireZhinBinding();
 
     resources.provide(ingressRouteToken, new AgentTurnIngressRoute({

@@ -95,8 +95,9 @@ export function createRuntimeZhinAgent(
     getParentContextSnapshot: (origin) => agent.buildParentContextSnapshotForSubagent(origin),
   });
 
-  // Persistence readiness is latched after DatabaseHost activateNext (or
-  // immediately when sessions.useDatabase === false / no DatabaseHost).
+  // Persistence readiness is latched by the Workroom persistence coordinator
+  // (database mode: after DatabaseHost activateNext; file mode: in prepare), or
+  // by installAgentHost right after composition when Workroom is not installed.
   return {
     agent,
     events,
