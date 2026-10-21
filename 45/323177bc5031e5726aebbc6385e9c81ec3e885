@@ -1,0 +1,35 @@
+.changeset/857-typed-convention-config.md
+  s_8ecde7caf687e9::t_00a2129179089b 7,9
+basic/cli/src/commands/new.ts
+  s_8ecde7caf687e9::t_27570816d5bb85 282,397,399
+basic/cli/tests/new-integration.test.ts
+  s_8ecde7caf687e9::t_99d0ecffc68edb 158
+docs/authoring/agent-tools.md
+  s_8ecde7caf687e9::t_1a461e2ee1638c 121,124
+docs/authoring/commands.md
+  s_8ecde7caf687e9::t_b061423e734dcc 311,317,325,327
+docs/en/authoring/agent-tools.md
+  s_8ecde7caf687e9::t_48bea47799dc41 121,124
+docs/en/authoring/commands.md
+  s_8ecde7caf687e9::t_5f2293e087839f 309,315,323,325
+docs/en/getting-started/first-plugin.md
+  s_8ecde7caf687e9::t_3eac921ef6abb6 141,151
+docs/getting-started/first-plugin.md
+  s_8ecde7caf687e9::t_5ed4bff2653550 141,151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45323177bc5031e5726aebbc6385e9c81ec3e885",
+  "prompts": {},
+  "sessions": {
+    "s_8ecde7caf687e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15d7d-fd53-7212-bcec-b99ba70a313f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
