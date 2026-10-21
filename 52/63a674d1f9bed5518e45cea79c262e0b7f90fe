@@ -1,0 +1,55 @@
+.changeset/workroom-c1g-1-outsider-mention.md
+  s_491bf1a3f9630f::t_a9a4e173aaeeb2 1-6
+basic/cli/src/plugin-runtime/agent/room-port.ts
+  s_e6f5f09d5890ba::t_3ba9b3a229664a 1,3,30-35,39,63-79
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_e6f5f09d5890ba::t_d6b81d66196102 269-271
+basic/cli/tests/plugin-runtime/agent/turn/room-ingress.test.ts
+  s_491bf1a3f9630f::t_68098be73ba0b8 273-287
+docs/plans/workroom-group-collaboration-progress.md
+  s_491bf1a3f9630f::t_1caa352fed43c1 157-158,547-551,619
+packages/im/agent/evals/framework/driver.ts
+  s_491bf1a3f9630f::t_fd876400d5c3cf 342
+packages/im/agent/evals/nightly/extra-seed-modules.ts
+  s_491bf1a3f9630f::t_835906783ec944 5-6,18-33,49-51,56-58
+packages/im/agent/evals/nightly/nightly.test.ts
+  s_491bf1a3f9630f::t_9ad787608cab70 246,257,261-274
+packages/im/workroom/evals/cases/03-who-answers.case.ts
+  s_491bf1a3f9630f::t_f3717b5018e619 39-40,57
+packages/im/workroom/evals/cases/11-append-or-new.case.ts
+  s_491bf1a3f9630f::t_a200023b2ccf90 88
+packages/im/workroom/evals/harness/room-eval-harness.ts
+  s_491bf1a3f9630f::t_7bab1084d148ed 310-320,324-329
+packages/im/workroom/src/room/room-router.ts
+  s_491bf1a3f9630f::t_6b425751804342 71-87,131
+packages/im/workroom/src/room/room-turn-coordinator.ts
+  s_e6f5f09d5890ba::t_8b1d608fa008f8 18,110-119,578-586
+packages/im/workroom/tests/room/room-router.test.ts
+  s_491bf1a3f9630f::t_ac1c6c2fbe3ebd 1,163-186
+packages/im/workroom/tests/room/room-turn-coordinator.test.ts
+  s_491bf1a3f9630f::t_c0590a5a8b8e4c 529-543
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5263a674d1f9bed5518e45cea79c262e0b7f90fe",
+  "prompts": {},
+  "sessions": {
+    "s_491bf1a3f9630f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b382c2e-e1d0-4d6e-a5ed-4ed9a1f989e1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
