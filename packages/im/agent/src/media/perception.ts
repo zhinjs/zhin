@@ -18,6 +18,7 @@ import {
   type ProviderResilienceConfig,
   type ProviderResilienceEvent,
   type ProviderTimers,
+  type Usage,
   type UserMessage,
 } from '@zhin.js/ai';
 import type { MediaBinaryPayload } from './media-types.js';
@@ -40,6 +41,8 @@ export interface MediaPerception {
   readonly model: string;
   /** The description came from the per-port cache (same bytes seen before). */
   readonly cached: boolean;
+  /** Tokens the perception call spent. Absent for cache hits or when the provider reported none. */
+  readonly usage?: Usage;
 }
 
 /** Host-owned boundary that describes media the turn's model cannot take. */
@@ -89,6 +92,15 @@ export function truncatePerceptionText(text: string, maxChars: number): string {
   const chars = Array.from(normalized);
   if (chars.length <= maxChars) return normalized;
   return `${chars.slice(0, Math.max(1, maxChars - 1)).join('')}…`;
+}
+
+function perceptionUsageOf(raw: { input?: number; output?: number; totalTokens?: number } | undefined): Usage | undefined {
+  if (!raw) return undefined;
+  const prompt = Math.max(0, raw.input ?? 0);
+  const completion = Math.max(0, raw.output ?? 0);
+  const total = Math.max(0, raw.totalTokens ?? 0) || prompt + completion;
+  if (total <= 0) return undefined;
+  return { prompt_tokens: prompt, completion_tokens: completion, total_tokens: total };
 }
 
 function isPdf(payload: MediaBinaryPayload): boolean {
@@ -163,7 +175,8 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
       const text = truncatePerceptionText(assistantAnswerText(reply), config.maxChars);
       if (!text) return undefined;
       remember(key, text);
-      return { text, provider: config.provider, model: config.model, cached: false };
+      const usage = perceptionUsageOf(reply.usage);
+      return { text, provider: config.provider, model: config.model, cached: false, ...(usage ? { usage } : {}) };
     },
   });
 }

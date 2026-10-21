@@ -201,6 +201,19 @@ describe('resolveTurnMediaInjection — perception pre-pass', () => {
     }]);
   });
 
+  it('sums perception usage across items (including empty descriptions) into perceptionUsage', async () => {
+    const usage = { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 };
+    const perception = fakePerception(async () => ({ text: '图', provider: 'g', model: 'm', cached: false, usage }));
+    const empty = fakePerception(async () => ({ text: ' ', provider: 'g', model: 'm', cached: false, usage }));
+    const cached = fakePerception(async () => ({ text: '图', provider: 'g', model: 'm', cached: true }));
+    const two = await resolveTurnMediaInjection([pngTurn(), pngTurn()], { providerInput: ['text'], perception });
+    expect(two.perceptionUsage).toEqual({ prompt_tokens: 200, completion_tokens: 40, total_tokens: 240 });
+    const spent = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception: empty });
+    expect(spent.perceptionUsage?.total_tokens).toBe(120);
+    const none = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception: cached });
+    expect(none.perceptionUsage).toBeUndefined();
+  });
+
   it('a model that takes images gets the image itself; perception is not called', async () => {
     const perception = fakePerception(async () => ({ text: 'x', provider: 'g', model: 'm', cached: false }));
     const injection = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text', 'image'], perception });

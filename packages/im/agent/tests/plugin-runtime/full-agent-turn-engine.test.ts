@@ -402,6 +402,121 @@ describe('FullAgentTurnEngine', () => {
     expect(order).toEqual(['reply', 'touch', 'finalize']);
   });
 
+  it('bills the media perception pre-pass to the turn quota subject and usage totals', async () => {
+    const order: string[] = [];
+    const record = vi.fn();
+    const turn = createTurnIngress({
+    intent: { kind: 'new' },
+      identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
+      origin: { kind: 'im', platform: 'icqq', endpoint: '210723495', scope: 'group', sceneId: '1048877509', messageId: 'm-1' },
+      principal: { subjectId: 'user', roles: ['user'] },
+      input: { text: '你好呀', media: [{ kind: 'image', source: { kind: 'base64', value: 'iVBORw0KGgo=' }, mimeType: 'image/png' }] },
+      session: { key: 'im:icqq:210723495:group:1048877509' },
+      policy: { permissions: ['user'], unattended: false },
+      capabilities: { tools: [], skills: [] },
+      signal: new AbortController().signal,
+      ports: {
+        journal: { append: async () => undefined },
+        reply: { send: async () => { order.push('reply'); return { status: 'sent' as const }; } },
+      },
+    });
+    const core = {
+      runText() {
+        return (async function* () {
+          yield {
+            type: 'turn_end' as const,
+            output: [{ type: 'text' as const, content: '你好' }],
+            usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          };
+          return {
+            reply: '你好',
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+            path: 'agent' as const,
+            iterations: 1,
+            model: 'model',
+            toolCalls: [],
+          };
+        })();
+      },
+    };
+    const finalizeActiveTurn = vi.fn(async () => { order.push('finalize'); });
+    const host = {
+      emitter,
+      config: { deferredTools: {} },
+      rateLimiter: { check: () => ({ allowed: true }) },
+      usageQuota: { check: () => ({ allowed: true }), record },
+      contextRepository: {
+        getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
+        setDeferredToolSnapshot: async () => undefined,
+      },
+      promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
+      activeBinding: { providerAlias: 'provider', model: 'model', nickname: 'bot' },
+      mediaPerception: {
+        kinds: ['image'],
+        maxItemsPerTurn: 4,
+        accepts: () => true,
+        describe: async () => ({
+          text: '一个红圈', provider: 'g', model: 'm', cached: false,
+          usage: { prompt_tokens: 300, completion_tokens: 12, total_tokens: 312 },
+        }),
+      },
+      finalizeActiveTurn,
+    };
+    const contextSystem = {
+      buildTextTurnContext: vi.fn(async () => ({
+        userMessages: [createUserMessage('你好呀')],
+        personaEnhanced: 'persona',
+        modelCandidates: ['model'],
+        modelId: 'model',
+        providerAlias: 'provider',
+        turnEnvelope: null,
+      })),
+    };
+    const sessionSystem = {
+      prepareIngressTurn: vi.fn(async () => ({
+        sessionKey: turn.session.key,
+        userId: 'user',
+        sessionId: 'session-id',
+        isNewSession: false,
+        turnUser: { rawContent: '你好呀', promptMessages: [createUserMessage('你好呀')] },
+      })),
+      touchAfterTurn: vi.fn(async () => { order.push('touch'); }),
+    };
+    const engine = createFullAgentTurnEngine({
+      host: host as never,
+      core: core as never,
+      sessionSystem: sessionSystem as never,
+      contextSystem: contextSystem as never,
+    });
+    const stream = engine.run({
+      turn,
+      capabilities: {
+        generation: 7,
+        owner: rootPluginId(),
+        tools: [],
+        skills: [],
+        agents: [],
+        mcp: [],
+        promptSections: [],
+      },
+      toolCapabilities: [],
+      tools: new TurnToolRuntime(turn, []),
+      selection: selection(),
+    });
+    while (true) {
+      const step = await stream.next();
+      if (step.done) {
+        await step.value?.project();
+        break;
+      }
+    }
+
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 314);
+    expect(finalizeActiveTurn).toHaveBeenCalledWith(expect.objectContaining({
+      usage: { prompt_tokens: 301, completion_tokens: 13, total_tokens: 314 },
+    }));
+  });
+
   it('falls back to result.reply when terminal output is empty', async () => {
     const send = vi.fn(async () => ({ status: 'sent' as const }));
     const turn = createTurnIngress({
