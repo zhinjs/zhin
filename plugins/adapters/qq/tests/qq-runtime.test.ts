@@ -1,4 +1,5 @@
 import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
@@ -299,6 +300,31 @@ describe('qq plugin runtime adapter', () => {
     } finally {
       await Promise.all(endpoints.map((endpoint) => endpoint.stop()));
     }
+  });
+
+  it('projects official guild owner / admin role ids as canonical roles', async () => {
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway,
+      config: baseConfig,
+      createBot: () => createMockBot(),
+    }), gateway, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const cases: Array<[string[], boolean]> = [[['1', '4'], true], [['1', '2'], true], [['1', '5'], false], [['1'], false]];
+    for (const [index, [authorRoles]] of cases.entries()) {
+      endpoint.admit(textMessage({ id: `m-${index}`, channelKind: 'channel', channelId: 'c1', guildId: 'g1', authorRoles }));
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
+    }
+    expect(receive.mock.calls.map((call) =>
+      checkBuiltinPermit('role(owner,admin,master)', toPermissionSubject(call[0]))))
+      .toEqual(cases.map(([, expected]) => expected));
+    const ownerPayload = receive.mock.calls[0]![0] as { sender: { roles: string[]; permissions: string[] } };
+    expect(ownerPayload.sender.roles).toEqual(['owner']);
+    expect(ownerPayload.sender.permissions).toContain('role:4');
+    await endpoint.stop();
   });
 
   it('routes admitted messages through OutboundMessageService when open', async () => {
