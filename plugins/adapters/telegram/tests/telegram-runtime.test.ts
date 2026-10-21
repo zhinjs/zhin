@@ -891,9 +891,9 @@ describe('telegram permission lookup isolation', () => {
   it('keeps group permissions separate for two accounts sharing chat and user IDs', async () => {
     const endpoints: TelegramEndpoint[] = [];
     try {
-      for (const [account, role] of [['admin-bot', 'administrator'], ['member-bot', 'member']]) {
+      for (const [account, status, role] of [['admin-bot', 'administrator', 'admin'], ['member-bot', 'member', 'member']]) {
         const receive = vi.fn(async () => Object.freeze({ matched: false }));
-        const fetch = mockApiFetch({ getChatMember: { status: role } });
+        const fetch = mockApiFetch({ getChatMember: { status } });
         const endpoint = bindTestEndpoint(new TelegramEndpoint({
           id: capabilityId(rootPluginId(), adapterFeature, account!),
           config: { ...baseConfig, id: account!, token: `test-${account}` }, fetch,
@@ -909,6 +909,7 @@ describe('telegram permission lookup isolation', () => {
         expect(fetch.calls.filter((call) => call.method === 'getChatMember')).toHaveLength(1);
         expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
           metadata: expect.objectContaining({ senderRole: role }),
+          sender: expect.objectContaining({ roles: [role] }),
         }));
       }
     } finally {
