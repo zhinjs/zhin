@@ -19,6 +19,8 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
+    "prepack": "node scripts/write-stack-version-ranges.mjs",
+    "postpack": "node scripts/write-stack-version-ranges.mjs --clean",
     "test": "vitest run --root ../../.. packages/toolkit/scaffold-wizard/tests"
   },
   "dependencies": {

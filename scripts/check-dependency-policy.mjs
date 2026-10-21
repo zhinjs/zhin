@@ -99,6 +99,18 @@ for (const rel of policyFiles) {
   }
 }
 
+// Scaffolds write release ranges, not `latest` (#857): every package.json write path resolves them.
+const scaffoldWritePaths = [
+  'packages/toolkit/create-zhin/src/workspace.ts',
+  'packages/toolkit/scaffold-wizard/src/apply.ts',
+];
+for (const rel of scaffoldWritePaths) {
+  const text = fs.readFileSync(path.join(root, rel), 'utf8');
+  if (!text.includes('withScaffoldVersionRanges(')) {
+    failures.push(`${rel} must resolve scaffold dependency ranges with withScaffoldVersionRanges()`);
+  }
+}
+
 if (failures.length > 0) {
   console.error('Dependency policy check failed:');
   for (const failure of failures) {

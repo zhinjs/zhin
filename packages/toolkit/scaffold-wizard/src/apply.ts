@@ -14,6 +14,7 @@ import { generateDatabaseEnvVars, mergeEnvText } from './env.js';
 import { getDatabaseDialectDefinition } from './database-definitions.js';
 import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } from './project-deps.js';
 import { DEFAULT_CREATE_BOT_HTTP_PORT, ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
+import { withScaffoldVersionRanges } from './stack-version-ranges.js';
 
 export function applyDatabaseToConfig(config: Record<string, unknown>, database: DatabaseConfig): void {
   // 物化为可落盘对象：非 SQLite 连接参数引用 .env（${VAR}），明文密码不进配置文件
@@ -134,7 +135,7 @@ export function collectWizardDependencies(
   const databaseDriver = options.database
     ? getDatabaseDialectDefinition(options.database.dialect)?.driver
     : undefined;
-  return {
+  return withScaffoldVersionRanges({
     ...(options.adapters ? getAdapterDependencies(options.adapters) : {}),
     ...(databaseDriver ? { [databaseDriver.package]: databaseDriver.version } : {}),
     ...getAIDependencies(options.ai),
@@ -143,7 +144,7 @@ export function collectWizardDependencies(
       '@zhin.js/tool': ZHIN_STACK_VERSIONS['@zhin.js/tool'],
       '@zhin.js/prompt-section': ZHIN_STACK_VERSIONS['@zhin.js/prompt-section'],
     } : {}),
-  };
+  });
 }
 
 /** 向导结果需要合并进 package.json zhin.features 的条目（与 create-zhin 路径对齐） */

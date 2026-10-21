@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import { scaffoldDependencyRange } from '../src/stack-version-ranges.js';
 import {
   appendWizardEnvVars,
   applyAdaptersToConfig,
@@ -272,9 +273,12 @@ describe('collectWizardDependencies / collectWizardFeatures', () => {
     };
 
     const deps = collectWizardDependencies({ ai });
-    expect(deps['@zhin.js/agent']).toBe('latest');
-    expect(deps['@zhin.js/tool']).toBe('latest');
-    expect(deps['@zhin.js/prompt-section']).toBe('latest');
+    expect(deps['@zhin.js/agent']).toBe(scaffoldDependencyRange('@zhin.js/agent'));
+    expect(deps['@zhin.js/agent']).not.toBe('latest');
+    expect(deps['@zhin.js/tool']).toBe(scaffoldDependencyRange('@zhin.js/tool'));
+    expect(deps['@zhin.js/tool']).not.toBe('latest');
+    expect(deps['@zhin.js/prompt-section']).toBe(scaffoldDependencyRange('@zhin.js/prompt-section'));
+    expect(deps['@zhin.js/prompt-section']).not.toBe('latest');
     expect(collectWizardFeatures({ ai })).toEqual([
       { package: '@zhin.js/tool', api: '^1.0.0' },
       { package: '@zhin.js/prompt-section', api: '^1.0.0' },

@@ -5,6 +5,7 @@ import { parse } from 'yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
 import type { InitOptions } from '../src/types'
+import { scaffoldDependencyRange } from '@zhin.js/scaffold-wizard'
 
 const tmpRoots: string[] = []
 
@@ -78,13 +79,16 @@ describe('createWorkspace', () => {
     expect(pkg.scripts.start).toBe('zhin runtime start --mode production --no-watch')
 
     // 依赖：用户面只直列 zhin.js + 适配器 +（卡片示例）components；无 legacy host
-    expect(pkg.dependencies['zhin.js']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/components']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/console-contract']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/page']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/layout']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/skill']).toBe('latest')
+    expect(pkg.dependencies['zhin.js']).toBe(scaffoldDependencyRange('zhin.js'))
+    // Real release ranges, never `latest` (#857)
+    expect(pkg.dependencies['zhin.js']).toMatch(/^\^\d+\.\d+\.\d+/u)
+    expect(JSON.stringify({ ...pkg.dependencies, ...pkg.devDependencies })).not.toContain('"latest"')
+    expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe(scaffoldDependencyRange('@zhin.js/adapter-sandbox'))
+    expect(pkg.dependencies['@zhin.js/components']).toBe(scaffoldDependencyRange('@zhin.js/components'))
+    expect(pkg.dependencies['@zhin.js/console-contract']).toBe(scaffoldDependencyRange('@zhin.js/console-contract'))
+    expect(pkg.dependencies['@zhin.js/page']).toBe(scaffoldDependencyRange('@zhin.js/page'))
+    expect(pkg.dependencies['@zhin.js/layout']).toBe(scaffoldDependencyRange('@zhin.js/layout'))
+    expect(pkg.dependencies['@zhin.js/skill']).toBe(scaffoldDependencyRange('@zhin.js/skill'))
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/agent')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/client')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/pagemanager')
@@ -96,7 +100,7 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/command')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-api')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/host-router')
-    expect(pkg.devDependencies['@zhin.js/cli']).toBe('latest')
+    expect(pkg.devDependencies['@zhin.js/cli']).toBe(scaffoldDependencyRange('@zhin.js/cli'))
     expect(pkg.engines.node).toBe('>=22.19.0')
 
     // zhin 清单：Stable Features 随 zhin.js 默认挂载；Console Feature 显式声明
@@ -229,13 +233,13 @@ describe('createWorkspace', () => {
       },
     })
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
-    expect(pkg.dependencies['@zhin.js/agent']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/agent']).toBe(scaffoldDependencyRange('@zhin.js/agent'))
     expect(pkg.dependencies).not.toHaveProperty('@modelcontextprotocol/sdk')
-    expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/tool']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/prompt-section']).toBe('latest')
-    expect(pkg.dependencies.zod).toBe('latest')
-    expect(pkg.dependencies.ai).toBe('latest')
+    expect(pkg.dependencies['@ai-sdk/openai-compatible']).toBe(scaffoldDependencyRange('@ai-sdk/openai-compatible'))
+    expect(pkg.dependencies['@zhin.js/tool']).toBe(scaffoldDependencyRange('@zhin.js/tool'))
+    expect(pkg.dependencies['@zhin.js/prompt-section']).toBe(scaffoldDependencyRange('@zhin.js/prompt-section'))
+    expect(pkg.dependencies.zod).toBe(scaffoldDependencyRange('zod'))
+    expect(pkg.dependencies.ai).toBe(scaffoldDependencyRange('ai'))
     expect(pkg.zhin.features).toEqual([
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },

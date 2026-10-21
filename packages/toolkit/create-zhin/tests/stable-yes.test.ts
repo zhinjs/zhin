@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkspace } from '../src/workspace.js';
 import { applyStableYesDefaults } from '../src/stable-yes-defaults.js';
 import type { InitOptions } from '../src/types.js';
+import { scaffoldDependencyRange } from '@zhin.js/scaffold-wizard';
 import { parse } from 'yaml';
 import Ajv2020 from 'ajv/dist/2020.js';
 
@@ -97,7 +98,8 @@ describe('create-zhin -y Stable 默认值', () => {
 
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'));
     expect(pkg.dependencies['@zhin.js/agent']).toBeUndefined();
-    expect(pkg.dependencies['@zhin.js/skill']).toBe('latest');
+    expect(pkg.dependencies['@zhin.js/skill']).toBe(scaffoldDependencyRange('@zhin.js/skill'));
+    expect(pkg.dependencies['@zhin.js/skill']).toMatch(/^\^\d+\.\d+\.\d+/u);
     expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBeUndefined();
     expect(pkg.dependencies.ai).toBeUndefined();
     expect(pkg.dependencies.zod).toBeUndefined();
