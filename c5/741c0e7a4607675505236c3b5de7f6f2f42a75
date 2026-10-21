@@ -1,0 +1,16 @@
+.changeset/dx2-testing-command-peer.md
+  h_b680f75345178a 1-5
+.changeset/dx2-testing-command-source.md
+  h_b680f75345178a 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c5741c0e7a4607675505236c3b5de7f6f2f42a75",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
