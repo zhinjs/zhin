@@ -24,9 +24,12 @@ export default defineCommand<BilibiliConfig>({
     if (existing.length === 0) return '当前会话没有订阅该 UP 主';
     await Subs.delete().where({ uid, ...scope });
 
-    // Drop the watcher cursor once nobody watches this UP any more.
+    // Drop the watcher cursor and backoff once nobody watches this UP any more.
     const remaining = await Subs.select().where({ uid });
-    if (remaining.length === 0) await getBiliState(runtime.db)?.delete().where({ uid });
+    if (remaining.length === 0) {
+      await getBiliState(runtime.db)?.delete().where({ uid });
+      runtime.watcher.forget(uid);
+    }
     return `已取消订阅：${String(existing[0]!.uname || uid)}`;
   },
 });
