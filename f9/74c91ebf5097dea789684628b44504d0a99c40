@@ -1,0 +1,53 @@
+packages/toolkit/create-zhin/src/workspace.ts
+  s_e6f5f09d5890ba::t_273356c2062319 18,170-171,178-179,184
+packages/toolkit/create-zhin/tests/stable-yes.test.ts
+  s_8ecde7caf687e9::t_711b6dbb2b1108 9,101-102
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_8ecde7caf687e9::t_8d8d0cfb5cd0ff 8,82-91,103,236,238-242
+packages/toolkit/scaffold-wizard/README.md
+  s_e6f5f09d5890ba::t_300f4a02ec907d 6
+packages/toolkit/scaffold-wizard/package.json
+  s_8ecde7caf687e9::t_b03bc4af39cdec 22-23
+packages/toolkit/scaffold-wizard/scripts/write-stack-version-ranges.mjs
+  s_8ecde7caf687e9::t_bcb18cab5505b9 1-27
+packages/toolkit/scaffold-wizard/src/apply.ts
+  s_e6f5f09d5890ba::t_8a699e436c9545 17,138,147
+packages/toolkit/scaffold-wizard/src/index.ts
+  s_e6f5f09d5890ba::t_ca2e31b1811f72 73-79
+packages/toolkit/scaffold-wizard/src/project-deps.ts
+  s_e6f5f09d5890ba::t_6a5f494e85f2cf 8-10
+packages/toolkit/scaffold-wizard/src/stack-version-ranges.ts
+  s_8ecde7caf687e9::t_b78ae5face8efe 1-160
+packages/toolkit/scaffold-wizard/src/zhin-stack-deps.ts
+  s_e6f5f09d5890ba::t_7575c24f4d3987 8-11
+packages/toolkit/scaffold-wizard/tests/apply.test.ts
+  s_8ecde7caf687e9::t_07f8cd2d2ca50a 5,276-281
+packages/toolkit/scaffold-wizard/tests/stack-version-ranges.test.ts
+  s_8ecde7caf687e9::t_cd3dc8c62a6263 1-104
+scripts/check-dependency-policy.mjs
+  s_e6f5f09d5890ba::t_4ceec2af8c7a1f 102-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f974c91ebf5097dea789684628b44504d0a99c40",
+  "prompts": {},
+  "sessions": {
+    "s_8ecde7caf687e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15d7d-fd53-7212-bcec-b99ba70a313f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
