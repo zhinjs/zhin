@@ -17,6 +17,13 @@ export interface OutboundMediaAuthority {
   readonly network?: Readonly<{ enabled: boolean; httpsOnly?: boolean; allowedDomains?: readonly string[] }>;
 }
 
+/**
+ * No filesystem and no network authority: model-referenced paths and URLs are refused,
+ * while inline (base64) media — including tool-produced images and audio — still pass.
+ * For delivery paths that carry no Turn policy of their own.
+ */
+export const NO_MEDIA_AUTHORITY: OutboundMediaAuthority = Object.freeze({});
+
 /** Canonical path the Turn may read, or null when the Turn has no authority over it. */
 export async function authorizeOutboundMediaPath(
   rawPath: string,
