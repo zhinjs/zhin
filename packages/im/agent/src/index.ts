@@ -303,7 +303,7 @@ export {
   resolveMultimodalConfig,
   resolveOutboundCapabilities,
 } from './media/index.js';
-export type { AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig, OutboundMediaCapabilities } from './media/index.js';
+export type { AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig, OutboundMediaAuthority, OutboundMediaCapabilities } from './media/index.js';
 export { createLlmMediaPerceptionPort, resolvePerceptionConfig } from './media/index.js';
 export type { MediaPerception, MediaPerceptionPort, PerceptionMediaKind, ResolvedPerceptionConfig } from './media/index.js';
 

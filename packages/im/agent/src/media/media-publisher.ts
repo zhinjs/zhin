@@ -7,7 +7,13 @@ import { type OutputElement, renderToPlainText } from '@zhin.js/ai';
 import type { Segment, MediaRef } from '@zhin.js/im-contract';
 import type { OutboundMediaCapabilities, MediaBinaryPayload, MediaKind } from './media-types.js';
 import { resolveOutboundCapabilities } from './media-capabilities.js';
-import { fetchUrlAsBase64, normalizeMediaRefsToPayloads } from './media-normalize.js';
+import {
+  authorizeOutboundMediaPath,
+  authorizeOutboundMediaUrl,
+  fetchUrlAsBase64,
+  normalizeMediaRefsToPayloads,
+  type OutboundMediaAuthority,
+} from './media-normalize.js';
 /** 超过此长度的 base64 先落盘，避免出站 segment.toString→from 模板超 400KB */
 const OUTBOUND_SPOOL_B64_CHARS = 32_000;
 
@@ -77,8 +83,17 @@ async function readFileAsBase64(
 async function elementToPayload(
   el: OutputElement,
   maxBytes: number,
+  authority?: OutboundMediaAuthority,
 ): Promise<MediaBinaryPayload | null> {
   if (el.type === 'text') return null;
+  const readPath = async (raw: string, forcedKind?: MediaKind) => {
+    const authorized = await authorizeOutboundMediaPath(raw, authority);
+    return authorized ? readFileAsBase64(authorized, maxBytes, forcedKind) : null;
+  };
+  const fetchUrl = (url: string) => {
+    const network = authorizeOutboundMediaUrl(url, authority);
+    return network ? fetchUrlAsBase64(url, maxBytes, undefined, undefined, network.allowedDomains) : null;
+  };
 
   if (el.type === 'image') {
     if (el.base64) {
@@ -89,10 +104,10 @@ async function elementToPayload(
       if (m) return { kind: 'image', base64: m[2], mimeType: m[1], meta: { alt: el.alt } };
     }
     if (el.url && !el.url.startsWith('http')) {
-      return readFileAsBase64(el.url, maxBytes);
+      return readPath(el.url);
     }
     if (el.url?.startsWith('http')) {
-      return fetchUrlAsBase64(el.url, maxBytes);
+      return fetchUrl(el.url);
     }
   }
 
@@ -104,18 +119,18 @@ async function elementToPayload(
       const m = /^data:([^;]+);base64,(.+)$/i.exec(el.url);
       if (m) return { kind: 'audio', base64: m[2], mimeType: m[1] };
     }
-    if (el.url) return readFileAsBase64(el.url, maxBytes);
+    if (el.url) return readPath(el.url);
   }
 
   if (el.type === 'video') {
     if (el.base64) {
       return { kind: 'video', base64: el.base64, mimeType: 'video/mp4' };
     }
-    if (el.url) return readFileAsBase64(el.url, maxBytes);
+    if (el.url) return readPath(el.url);
   }
 
   if (el.type === 'file' && el.url) {
-    return readFileAsBase64(el.url, maxBytes, 'file');
+    return readPath(el.url, 'file');
   }
 
   return null;
@@ -295,6 +310,7 @@ async function publishMessageSegment(
   segment: Segment,
   caps: OutboundMediaCapabilities,
   platform?: string,
+  authority?: OutboundMediaAuthority,
 ): Promise<Segment | null> {
   const kind = segment.type;
   if (kind !== 'image' && kind !== 'audio' && kind !== 'video' && kind !== 'file') return segment;
@@ -303,7 +319,7 @@ async function publishMessageSegment(
   // Opaque platform references are already hosted; their bytes are not available locally.
   if (media.kind === 'file') return segment;
   const maxBytes = caps.maxAttachmentBytes ?? 26_214_400;
-  const [payload] = await normalizeMediaRefsToPayloads([{ type: kind, media }], maxBytes);
+  const [payload] = await normalizeMediaRefsToPayloads([{ type: kind, media }], maxBytes, undefined, authority);
   if (!payload) return { type: 'text', data: { text: `[${kind}: 附件不可用、格式不符或超过大小限制]` } };
   return payloadToCanonicalSegment({ ...payload, kind }, caps, platform);
 }
@@ -315,6 +331,8 @@ export async function publishOutboundElements(
   elements: readonly AgentOutputElement[],
   platform?: string,
   capsOverride?: OutboundMediaCapabilities,
+  /** The Turn's file / network authority; model-referenced paths and URLs are checked against it. */
+  authority?: OutboundMediaAuthority,
 ): Promise<Segment[]> {
   const caps = capsOverride ?? resolveOutboundCapabilities(platform);
   const segments: Segment[] = [];
@@ -322,7 +340,7 @@ export async function publishOutboundElements(
   for (const el of elements) {
     if (el.type === 'message') {
       for (const segment of el.segments) {
-        const published = await publishMessageSegment(segment, caps, platform);
+        const published = await publishMessageSegment(segment, caps, platform, authority);
         if (published) segments.push(published);
       }
       continue;
@@ -337,7 +355,7 @@ export async function publishOutboundElements(
       continue;
     }
 
-    const payload = await elementToPayload(el, caps.maxAttachmentBytes ?? 26_214_400);
+    const payload = await elementToPayload(el, caps.maxAttachmentBytes ?? 26_214_400, authority);
     if (!payload) {
       segments.push(elementToTextSegment(el));
       continue;
