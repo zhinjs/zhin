@@ -76,12 +76,23 @@ export async function runRouletteAction(
 export async function expireOverdueSessions(
   flow: RouletteFlow,
   now: number,
+  onNotice?: (notice: ExpiredSessionNotice) => Promise<void> | void,
 ): Promise<readonly ExpiredSessionNotice[]> {
   const overdue = await flow.services.sessions.listOverdue(now);
   const notices: ExpiredSessionNotice[] = [];
   for (const session of overdue) {
-    const text = await expireSession(flow, session);
-    if (text) notices.push({ session, text });
+    try {
+      const text = await expireSession(flow, session);
+      if (!text) continue;
+      const notice = { session, text };
+      notices.push(notice);
+      // Announce as soon as the result is stored, so a later failure cannot drop it.
+      if (onNotice) await onNotice(notice);
+    } catch (error) {
+      // The session stays active when anything before the commit failed; the next sweep retries it.
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`[roulette] 处理超时对局 ${session.id} 失败，下次扫描重试：${reason}`);
+    }
   }
   return notices;
 }
@@ -155,6 +166,11 @@ async function describeResult(
 }
 
 async function expireSession(flow: RouletteFlow, session: RouletteSessionRow): Promise<string> {
+  // Read everything that can fail before the state transition is committed: once the
+  // session is stored as finished it is no longer overdue and would never be retried.
+  const penaltyEnabled = stateOf(session).phase === 'playing'
+    ? await flow.services.settings.isMutePenaltyEnabled(session.channel_key)
+    : false;
   try {
     const result = await flow.services.sessions.applyAction(
       session,
@@ -163,7 +179,7 @@ async function expireSession(flow: RouletteFlow, session: RouletteSessionRow): P
       flow.config,
     );
     if (!result.applied) return '';
-    if (result.state.phase === 'finished') return finishText(flow, result.session, result.state);
+    if (result.state.phase === 'finished') return finishText(flow, result.session, result.state, penaltyEnabled);
     return describeAbort(result.state);
   } catch (error) {
     // A player acted on the session in the meantime; the next sweep re-reads it.
@@ -176,8 +192,9 @@ async function finishText(
   flow: RouletteFlow,
   session: RouletteSessionRow,
   state: RouletteState,
+  penaltyEnabled?: boolean,
 ): Promise<string> {
-  const penalty = await applyLoserPenalty(flow, session, state);
+  const penalty = await applyLoserPenalty(flow, session, state, penaltyEnabled);
   return [describeEnding(state), penalty].filter(Boolean).join('\n');
 }
 
@@ -186,10 +203,12 @@ async function applyLoserPenalty(
   flow: RouletteFlow,
   session: RouletteSessionRow,
   state: RouletteState,
+  penaltyEnabled?: boolean,
 ): Promise<string> {
   const loser = loserOf(state);
   if (!loser) return '';
-  const enabled = await flow.services.settings.isMutePenaltyEnabled(session.channel_key);
+  const enabled = penaltyEnabled
+    ?? await flow.services.settings.isMutePenaltyEnabled(session.channel_key);
   if (!enabled) return '';
   const conversation = conversationOfSession(session);
   if (flow.penalty.support(conversation) !== 'supported') {

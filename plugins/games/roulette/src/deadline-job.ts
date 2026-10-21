@@ -12,12 +12,10 @@ export const DEADLINE_CRON = '*/5 * * * * *';
  */
 export async function runDeadlineSweep(context: RouletteCapabilityContext, now: number): Promise<void> {
   const flow = resolveRouletteFlow(context);
-  const notices = await expireOverdueSessions(flow, now);
   const outbound = readOutbound(context);
-  if (!outbound) return;
-  for (const notice of notices) {
-    await announce(outbound, notice);
-  }
+  await expireOverdueSessions(flow, now, (notice) => {
+    if (outbound) return announce(outbound, notice);
+  });
 }
 
 function readOutbound(context: RouletteCapabilityContext): OutboundHost | undefined {

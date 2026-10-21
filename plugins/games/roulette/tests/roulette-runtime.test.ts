@@ -17,6 +17,7 @@ import fireMiddleware from '../middlewares/roulette-fire/index.ts';
 import type { RouletteConfig } from '../src/config.js';
 import { decodeRouletteState, type RouletteState } from '../src/engine.js';
 import { rouletteServicesToken } from '../src/runtime.js';
+import { RouletteGroupSettings } from '../src/session-service.js';
 
 const bulletChamber = vi.hoisted(() => ({ next: 5 }));
 
@@ -346,6 +347,33 @@ describe('timeouts (FakeClock)', () => {
     expect(sentTexts().at(-1)).toContain('⌛ BOB 超时没有开枪，判负');
     expect(muteCalls()).toEqual([expect.objectContaining({ userId: 'bob', durationSeconds: 90 })]);
     expect(fake.rows('game_records').find((record) => record.user_id === 'bob')?.result).toBe('lost');
+  });
+
+  it('a failing penalty-setting read leaves the session active, still announces the others, and retries', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await seatThreeAndStart('g1');
+    await seatThreeAndStart('g2');
+    const real = RouletteGroupSettings.prototype.isMutePenaltyEnabled;
+    const read = vi.spyOn(RouletteGroupSettings.prototype, 'isMutePenaltyEnabled')
+      .mockImplementation(async function (this: RouletteGroupSettings, key: string) {
+        if (key.endsWith(':g1')) throw new Error('db down');
+        return real.call(this, key);
+      });
+    const sentBefore = sentTexts().length;
+
+    await clock.advance(35_000);
+
+    expect((await activeState('g1'))?.phase).toBe('playing');
+    expect((await activeState('g2'))?.phase).toBe('finished');
+    expect(sentTexts().length - sentBefore).toBe(1);
+    expect(fake.rows('game_records')).toHaveLength(3);
+
+    read.mockImplementation(real);
+    await clock.advance(5_000);
+
+    expect([(await activeState('g1'))?.phase, (await activeState('g2'))?.phase]).toEqual(['finished', 'finished']);
+    expect(sentTexts().length - sentBefore).toBe(2);
+    expect(fake.rows('game_records')).toHaveLength(6);
   });
 
   it('each shot restarts the turn timer', async () => {
