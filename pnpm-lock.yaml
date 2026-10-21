@@ -2045,9 +2045,6 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../im/adapter
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../im/core
@@ -2076,6 +2073,9 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../im/command
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
