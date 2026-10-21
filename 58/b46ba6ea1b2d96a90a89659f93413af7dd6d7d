@@ -1,0 +1,47 @@
+.changeset/857-plugin-check-manifest-pub.md
+  s_e6f5f09d5890ba::t_d75dd8d4ea6ccd 1-5
+basic/cli/package.json
+  s_e6f5f09d5890ba::t_dcbc244369a8e7 57
+basic/cli/src/commands/pub.ts
+  s_e6f5f09d5890ba::t_c99271789f7041 8,16-17,135-150,162,247-253
+basic/cli/src/plugin-check/index.ts
+  s_e6f5f09d5890ba::t_594bee9b6f9cc2 6,25-29,39-42
+basic/cli/src/plugin-check/manifest-checks.ts
+  s_e6f5f09d5890ba::t_ca8e14c2b12e4b 1-132
+basic/cli/src/plugin-check/pack-checks.ts
+  s_e6f5f09d5890ba::t_45c7bdc2cb0ad6 10,117-118,124,153-223
+basic/cli/src/plugin-check/semver.ts
+  s_e6f5f09d5890ba::t_0dde09bcb65926 1-15
+basic/cli/tests/plugin-check/manifest-checks.test.ts
+  s_e6f5f09d5890ba::t_8d12f12c8af1ef 1-172
+basic/cli/tests/plugin-check/plugin-check.test.ts
+  s_e6f5f09d5890ba::t_c8afbe4e43d33a 10-15,34,43
+basic/cli/tests/pub-check.test.ts
+  s_e6f5f09d5890ba::t_d86b7a1e0fe149 1-55
+docs/authoring/plugin-delivery.md
+  s_e6f5f09d5890ba::t_bf068e34873f5d 76
+docs/cli/index.md
+  s_e6f5f09d5890ba::t_9d1f29e9257d15 248-249,255,261-262
+docs/en/authoring/plugin-delivery.md
+  s_e6f5f09d5890ba::t_d47fedd12385bd 76
+docs/en/cli/index.md
+  s_e6f5f09d5890ba::t_eb75f9beb3f32f 248-253,258-259,267,273-275
+pnpm-lock.yaml
+  s_e6f5f09d5890ba::t_6e82c1e9e53c2b 215-217
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "58b46ba6ea1b2d96a90a89659f93413af7dd6d7d",
+  "prompts": {},
+  "sessions": {
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
