@@ -130,6 +130,10 @@ export class MessageDispatcher {
 /**
  * Keep the text and structured views aligned. Falling back to `content` is
  * intentional when an adapter supplies inconsistent segment data.
+ *
+ * Platforms put a quote (`reply`) segment before the text ("quote a message, then type the
+ * command"). Leading quotes are moved after the command text so the command name still
+ * matches and a `reply` parameter can still read the quote; `message.replyTo` is untouched.
  */
 function stripCommandPrefix(
   segments: readonly Readonly<CommandSegment>[],
@@ -139,10 +143,15 @@ function stripCommandPrefix(
   let atStart = true;
   let trimLeading = true;
   const result: CommandSegment[] = [];
+  const leadingQuotes: CommandSegment[] = [];
 
   for (const segment of segments) {
     if (!atStart) {
       result.push(segment);
+      continue;
+    }
+    if (segment.type === 'reply') {
+      leadingQuotes.push(segment);
       continue;
     }
     if (segment.type !== 'text' || typeof segment.data.text !== 'string') {
@@ -175,5 +184,5 @@ function stripCommandPrefix(
     atStart = false;
     result.push({ ...segment, data: { ...segment.data, text } });
   }
-  return pendingPrefix ? undefined : result;
+  return pendingPrefix ? undefined : [...result, ...leadingQuotes];
 }
