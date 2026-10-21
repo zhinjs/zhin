@@ -86,17 +86,100 @@ sandbox:
 
 The Sandbox plugin creates one endpoint from each configured entry. With an empty endpoint list, it creates the stable `sandbox-bot` default.
 
-The connection is established via `Router.ws("/sandbox")` (auto-mounted by the plugin's `useContext("router")`).
+Each endpoint mounts one WebSocket path on the HTTP Host provided by the Root (`httpHostToken`); the protocol is described under "Message Format (wire protocol)" below.
 
-## Message Format
+## Message Format (wire protocol)
 
-Sandbox uses a JSON message format:
+The Console Sandbox page and any test client you write use this protocol. Every WebSocket text frame is one UTF-8 JSON object.
+
+### Connecting
+
+- **URL**: `ws://<host>:<port>/sandbox`. On one HTTP Host the first Sandbox endpoint mounts `/sandbox`; the others mount `/sandbox/<endpoint id>` (with `-2`, `-3`… on a name clash). The startup log prints `ws mounted <path>`.
+- **Auth**: when the Host has a token, the handshake must carry `Authorization: Bearer <token>` or the `?token=<token>` query parameter, otherwise it gets `401`. A demo-scope token can only connect to `/sandbox` and is read-only: messages are received but never reach commands or the Agent, and the server answers with `type: "error"`.
+- **One connection**: with a fixed endpoint name (the default) an endpoint keeps only the newest browser connection. A new connection closes the old one with close code `4000` (`replaced by new sandbox client`); stopping the endpoint closes with `1001`; when a hot reload retires the current generation the Host closes with `1012` — just reconnect.
+
+### Client → server: send a message
 
 ```json
 {
-  "type": "message",
-  "id": "msg-001",
-  "content": "Hello",
+  "type": "group",
+  "id": "test-group",
+  "content": [{ "type": "text", "data": { "text": "/hello" } }],
+  "messageId": "client-msg-001",
+  "timestamp": 1700000000000
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `type` | `private` \| `group` \| `channel` \| `direct` \| `guild` | Conversation kind, default `private`. `direct` is treated as `private`, `guild` as `channel` |
+| `id` | string | Conversation id; defaults to the endpoint `owner` (default `sandbox-user`) |
+| `content` | string or segment array | Segments are `{ "type": string, "data": object }`; a string equals one `text` segment |
+| `text` | string | Optional. Plain text when `content` is missing; also used as the message text when `content` has no text segment |
+| `messageId` | string | Optional client-generated id matching `^[A-Za-z0-9._:-]{1,160}$` (ignored otherwise). It becomes the id of this inbound message, so a quoted reply can find it |
+| `timestamp` | number | Optional. Milliseconds; defaults to the time the server received it |
+| `agentRun` | object | Optional Agent playground run config, see below |
+
+- A frame that is not JSON is handled as one plain-text message.
+- The sender is always the endpoint `owner`.
+- **Button callbacks**: an `{ "type": "action", "data": { "id": "...", "payload": "..." } }` segment in `content` reaches commands or the Agent as an interaction; if only `id` or `payload` is set, the other takes the same value. When the message has no text, `payload` becomes the message text.
+
+`agentRun` fields:
+
+| Field | Values | Default |
+| --- | --- | --- |
+| `workingDirectory` | string, up to 4096 characters | `""` |
+| `safetyMode` | `read-only` \| `workspace-write` \| `danger-full-access` | `workspace-write` |
+| `approvalMode` | `ask` \| `auto` \| `bypass` | `ask` |
+| `networkAccess` | boolean | `false`; always `true` when `safetyMode` is `danger-full-access` |
+
+Unrecognised values fall back to the defaults.
+
+### Server → client
+
+**Ready**: sent once after every successful connection.
+
+```json
+{
+  "type": "ready",
+  "id": "sandbox-user",
+  "endpoint": "sandbox-bot",
+  "workingDirectory": "/path/to/bot",
+  "canExecute": true,
+  "shellIsolation": { "available": false, "provider": "docker", "message": "Docker daemon is unavailable" },
+  "content": [{ "type": "text", "data": { "text": "已连接 Sandbox「sandbox-bot」…" } }],
+  "timestamp": 1700000000000
+}
+```
+
+`canExecute` tells whether the connection has full scope (can run commands and Agent tasks); `shellIsolation` is the Docker isolation probe result, for display only.
+
+**Replies**:
+
+```json
+{
+  "type": "group",
+  "id": "test-group",
+  "bot": "sandbox-bot",
+  "endpoint": "sandbox-bot",
+  "content": [{ "type": "text", "data": { "text": "Hello!" } }],
+  "timestamp": 1700000000001
+}
+```
+
+- `type` / `id` identify the conversation of the reply (`direct` already normalised to `private`, `guild` to `channel`); clients file the message under that conversation. `bot` is the endpoint id and `endpoint` the name of the connection that received the message.
+- `content` is a segment array. Text, `html` (JSX cards, see `html: direct` above), buttons and other segments pass through unchanged.
+- `image` / `audio` / `video` / `file` segments read only `data.media` (MediaRef): `url` passes through; `base64` is inlined with a `base64://` prefix; `path` is read by the server and inlined as `base64`; other kinds and media segments without `data.media` are dropped and logged as `sandbox_outbound_media_dropped`.
+- When a plugin sends a complete message object, its other fields are kept as they are.
+
+**Read-only notice**: after a demo-scope connection sends a message, the server replies:
+
+```json
+{
+  "type": "error",
+  "id": "sandbox-user",
+  "endpoint": "sandbox-bot",
+  "content": [{ "type": "text", "data": { "text": "当前连接是只读演示权限，不能运行 Agent 任务。" } }],
   "timestamp": 1700000000000
 }
 ```
