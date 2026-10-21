@@ -6,7 +6,9 @@
  * tools such as file access while it reads untrusted group chat. This port does
  * one completion with **no tools at all** — the request carries no tool
  * definitions, so nothing the model writes can be executed — and reuses the
- * provider resilience chain (retry, backoff, timeout, same-provider fallback).
+ * provider resilience chain (retry, backoff, timeout). There is no automatic model
+ * fallback: a plugin call must never silently fail over to a pricier model, and no
+ * per-binding fallback list exists to opt in to.
  *
  * Untrusted text is rendered as `external_content` data blocks (#726), and a
  * call made on behalf of an IM user counts against that user's / group's usage
@@ -18,6 +20,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIService } from '../service.js';
 import { renderExternalContent } from '../security/trust-level.js';
 import type { UsageQuota } from '../security/usage-quota.js';
+import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 
 /**
  * The contract (types and token) lives in `@zhin.js/core` (#877) so plugins can import it from the
@@ -82,9 +85,16 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         maxTokens: input.maxTokens,
         timeoutMs: input.timeoutMs,
         signal: input.signal,
-        fallbackModels: provider.models.filter(id => id && id !== model),
+        // No automatic fallback: provider.models is every model of the provider, including the
+        // most expensive one, and bindings have no fallback list of their own.
+        fallbackModels: [] as string[],
         resilience: options.service.getAgentConfig()?.providerResilience as ProviderResilienceConfig | undefined,
       };
+      // Reserve the prompt estimate before the call: concurrent calls then see each other's
+      // spend at `check`, and a call that fails after reaching the provider is still billed.
+      const quotaSubject = input.onBehalfOf && options.usageQuota ? input.onBehalfOf : undefined;
+      const reserved = quotaSubject ? estimatePromptTokens(`${input.system ?? ''}\n${user}`) : 0;
+      if (quotaSubject && reserved > 0) options.usageQuota!.record(quotaSubject, reserved);
       const started = now();
       let result: TextCompleteResult;
       try {
@@ -104,9 +114,12 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         throw error;
       }
       const durationMs = now() - started;
-      const totalTokens = result.usage?.totalTokens;
-      if (input.onBehalfOf && options.usageQuota && totalTokens) {
-        options.usageQuota.record(input.onBehalfOf, totalTokens);
+      const reportedTokens = result.usage?.totalTokens;
+      const totalTokens = reportedTokens || undefined;
+      if (quotaSubject) {
+        // Reported usage settles the reservation; without it, estimate the answer on top of the prompt.
+        const settled = totalTokens ?? reserved + estimatePromptTokens(result.text);
+        if (settled > reserved) options.usageQuota!.record(quotaSubject, settled - reserved);
       }
       logger.info(formatCompact({
         op: 'ai_completion',

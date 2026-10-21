@@ -37,7 +37,7 @@ function fixture(provider: Partial<AIProvider> = {}, agentConfig: Record<string,
 }
 
 describe('aiCompletion.completeText', () => {
-  it('runs one tool-free completion on the zhin binding with same-provider fallback', async () => {
+  it('runs one tool-free completion on the zhin binding without automatic model fallback', async () => {
     const { calls, service } = fixture({}, { providerResilience: { maxRetries: 1 } });
     const result = await createAiCompletion({ service }).completeText({
       purpose: 'summarize',
@@ -48,7 +48,7 @@ describe('aiCompletion.completeText', () => {
     expect(result).toMatchObject({ text: 'answer', model: 'main', usage: { totalTokens: 15 } });
     expect(calls).toHaveLength(1);
     const { opts } = calls[0]!;
-    expect(opts).toMatchObject({ model: 'main', maxTokens: 200, fallbackModels: ['backup'], resilience: { maxRetries: 1 } });
+    expect(opts).toMatchObject({ model: 'main', maxTokens: 200, fallbackModels: [], resilience: { maxRetries: 1 } });
     // The provider port has no tools parameter at all; nothing beyond these options is forwarded.
     expect(Object.keys(opts).sort()).toEqual(['fallbackModels', 'maxTokens', 'model', 'resilience', 'signal', 'temperature', 'timeoutMs']);
   });
@@ -103,6 +103,52 @@ describe('aiCompletion.completeText', () => {
       .rejects.toBeInstanceOf(AiCompletionQuotaError);
     // Calls without onBehalfOf are not attributed to anyone.
     await expect(completion.completeText({ purpose: 'x', prompt: 'hi' })).resolves.toMatchObject({ text: 'answer' });
+  });
+
+  it('estimates usage when the provider reports none', async () => {
+    const completeText = vi.fn(async () => 'x'.repeat(400));
+    const { service } = fixture({ completeTextResult: undefined, completeText });
+    const usageQuota = new UsageQuota({ perUserTokens: 50 });
+    const completion = createAiCompletion({ service, usageQuota });
+    const subject = { userId: 'u1', owner: false };
+    await completion.completeText({ purpose: 'x', prompt: 'hi', onBehalfOf: subject });
+    // ~100 estimated answer tokens exceeds the 50 limit even though the provider said nothing.
+    await expect(completion.completeText({ purpose: 'x', prompt: 'hi', onBehalfOf: subject }))
+      .rejects.toBeInstanceOf(AiCompletionQuotaError);
+  });
+
+  it('bills the prompt estimate when the call fails after reaching the provider', async () => {
+    const { service } = fixture({ completeTextResult: async () => { throw new Error('provider down'); } });
+    const usageQuota = new UsageQuota({ perUserTokens: 50 });
+    const completion = createAiCompletion({ service, usageQuota });
+    const subject = { userId: 'u1', owner: false };
+    const prompt = 'x'.repeat(400);
+    await expect(completion.completeText({ purpose: 'x', prompt, onBehalfOf: subject })).rejects.toThrow('provider down');
+    await expect(completion.completeText({ purpose: 'x', prompt, onBehalfOf: subject }))
+      .rejects.toBeInstanceOf(AiCompletionQuotaError);
+  });
+
+  it('concurrent calls see each other\'s reserved spend', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let started = 0;
+    const { service } = fixture({
+      completeTextResult: async (_s, _u, opts = {}) => {
+        started += 1;
+        await gate;
+        return { text: 'ok', model: opts.model ?? 'main' };
+      },
+    });
+    const usageQuota = new UsageQuota({ perUserTokens: 50 });
+    const completion = createAiCompletion({ service, usageQuota });
+    const subject = { userId: 'u1', owner: false };
+    const prompt = 'x'.repeat(400);
+    const first = completion.completeText({ purpose: 'x', prompt, onBehalfOf: subject });
+    await vi.waitFor(() => expect(started).toBe(1));
+    await expect(completion.completeText({ purpose: 'x', prompt, onBehalfOf: subject }))
+      .rejects.toBeInstanceOf(AiCompletionQuotaError);
+    release();
+    await first;
   });
 
   it('propagates provider failures', async () => {
