@@ -53,11 +53,22 @@ describe('createLlmMediaPerceptionPort (Gemini over mocked HTTP)', () => {
 
     const result = await port.describe(image());
 
-    expect(result).toEqual({ text: '白底上一个红色圆形。', provider: 'mock', model: 'gemini-3.8-flash', cached: false });
+    expect(result).toMatchObject({ text: '白底上一个红色圆形。', provider: 'mock', model: 'gemini-3.8-flash', cached: false });
     const body = h.lastRequest().body as { contents: Array<{ parts: Array<Record<string, unknown>> }> };
     const parts = body.contents.flatMap((content) => content.parts);
     expect(parts.some((part) => JSON.stringify(part).includes(PNG))).toBe(true);
     expect(JSON.stringify(body)).toContain('Describe this image');
+  });
+
+  it('returns the model usage so the host can bill it; cache hits carry none', async () => {
+    const h = createProviderHarness({ sdk: 'google' });
+    h.reply(geminiGenerate.reply({ text: '一个红圈', usageMetadata: { promptTokenCount: 300, candidatesTokenCount: 12, totalTokenCount: 312 } }));
+    const port = createLlmMediaPerceptionPort({ runtime: h.runtime, config: config(), resilience: NO_RETRY });
+    const first = await port.describe(image());
+    expect(first?.usage).toEqual({ prompt_tokens: 300, completion_tokens: 12, total_tokens: 312 });
+    const again = await port.describe(image());
+    expect(again).toMatchObject({ cached: true });
+    expect(again?.usage).toBeUndefined();
   });
 
   it('caches by content hash: the same sticker is described once', async () => {

@@ -10,7 +10,7 @@
  * `ai.multimodal.perception` 时，图片 / 视频 / PDF 由感知模型描述后以
  * untrusted 文本注入（`[图片描述]` 等），失败或超出单回合上限时保持原占位。
  */
-import { isMediaBlockRef, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
+import { isMediaBlockRef, type Usage, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   normalizeMediaRefsToPayloads,
@@ -30,6 +30,8 @@ export interface InboundMediaInjection {
   readonly textAppends: string[];
   /** 与输入媒体一一对应的终态。 */
   readonly outcomes: InboundMediaOutcome[];
+  /** Tokens spent by the perception pre-pass (not part of the turn's own completion usage). */
+  readonly perceptionUsage?: Usage;
 }
 
 export interface InboundMediaOutcome {
@@ -115,6 +117,7 @@ export async function resolveTurnMediaInjection(
   const textAppends: string[] = [];
   const outcomes: InboundMediaOutcome[] = [];
   let perceived = 0;
+  let perceptionUsage: Usage | undefined;
 
   for (const { entry, type, media: initialMedia } of refs) {
     let media = initialMedia;
@@ -186,6 +189,7 @@ export async function resolveTurnMediaInjection(
           perceived += 1;
           try {
             const result = await perception.describe(payload, signal);
+            if (result?.usage) perceptionUsage = addUsage(perceptionUsage, result.usage);
             if (result?.text.trim()) {
               textAppends.push(renderPerceptionCaption(type, result.text));
               outcomes.push({
@@ -220,7 +224,15 @@ export async function resolveTurnMediaInjection(
   }
 
   if (blocks.length === 0 && textAppends.length === 0 && outcomes.length === 0) return EMPTY_INJECTION;
-  return { blocks, textAppends, outcomes };
+  return { blocks, textAppends, outcomes, ...(perceptionUsage ? { perceptionUsage } : {}) };
+}
+
+function addUsage(a: Usage | undefined, b: Usage): Usage {
+  return {
+    prompt_tokens: (a?.prompt_tokens ?? 0) + b.prompt_tokens,
+    completion_tokens: (a?.completion_tokens ?? 0) + b.completion_tokens,
+    total_tokens: (a?.total_tokens ?? 0) + b.total_tokens,
+  };
 }
 
 /**

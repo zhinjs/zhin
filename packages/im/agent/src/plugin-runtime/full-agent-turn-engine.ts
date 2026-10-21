@@ -298,7 +298,8 @@ async function* runInteractiveTurn(
   return {
     project: async () => {
       try {
-        host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens);
+        // The perception pre-pass is billed to the same subject as the turn itself.
+        host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
         if (completion.terminal.type === 'turn_end' && reply) {
           const outbound = completion.terminal.output.length > 0
             ? completion.terminal.output
@@ -334,7 +335,13 @@ async function* runInteractiveTurn(
           await context.turn.ports.conversationContext.commit(pendingContext.cursor);
         }
         await host.finalizeActiveTurn({
-          usage: completion.result.usage,
+          usage: media.perceptionUsage
+            ? {
+                prompt_tokens: completion.result.usage.prompt_tokens + media.perceptionUsage.prompt_tokens,
+                completion_tokens: completion.result.usage.completion_tokens + media.perceptionUsage.completion_tokens,
+                total_tokens: completion.result.usage.total_tokens + media.perceptionUsage.total_tokens,
+              }
+            : completion.result.usage,
           path: completion.result.path,
           iterations: completion.result.iterations,
           model: completion.result.model,
