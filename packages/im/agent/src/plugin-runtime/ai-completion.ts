@@ -14,6 +14,7 @@
  * call made on behalf of an IM user counts against that user's / group's usage
  * quota (#727).
  */
+import { resolveModelCandidates } from '../context/model-resolver.js';
 import type { AIProvider, ProviderResilienceConfig, TextCompleteResult } from '@zhin.js/ai';
 import type { AiCompletion, AiCompletionInput, AiCompletionResult } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -51,7 +52,8 @@ export class AiCompletionQuotaError extends Error {
 }
 
 export interface AiCompletionOptions {
-  readonly service: Pick<AIService, 'getBindingRegistry' | 'getProvider' | 'getAgentConfig'>;
+  readonly service: Pick<AIService, 'getBindingRegistry' | 'getProvider' | 'getAgentConfig'>
+    & Partial<Pick<AIService, 'getModelRegistry'>>;
   readonly usageQuota?: Pick<UsageQuota, 'check' | 'record'>;
   readonly now?: () => number;
 }
@@ -85,9 +87,16 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         maxTokens: input.maxTokens,
         timeoutMs: input.timeoutMs,
         signal: input.signal,
-        // No automatic fallback: provider.models is every model of the provider, including the
-        // most expensive one, and bindings have no fallback list of their own.
-        fallbackModels: [] as string[],
+        // Same candidates as the conversation path (bound model, registry picks, then the
+        // provider's models); whether they are tried is up to `providerResilience.fallback`.
+        fallbackModels: resolveModelCandidates(
+          provider.models,
+          options.service.getModelRegistry?.() ?? null,
+          binding.providerAlias,
+          { chatModel: binding.model },
+          'chat',
+          model,
+        ).filter(id => id && id !== model),
         resilience: options.service.getAgentConfig()?.providerResilience as ProviderResilienceConfig | undefined,
       };
       // Reserve the prompt estimate before the call: concurrent calls then see each other's
