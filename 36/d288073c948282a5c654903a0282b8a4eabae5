@@ -1,0 +1,27 @@
+basic/cli/src/cli.ts
+  s_8ecde7caf687e9::t_facd638a385a9f 26,43
+basic/cli/src/commands/plugin.ts
+  s_8ecde7caf687e9::t_c58dbc28969901 1-35
+basic/cli/src/plugin-check/index.ts
+  s_8ecde7caf687e9::t_bdfc6fcffecde7 1-71
+basic/cli/src/plugin-check/pack-checks.ts
+  s_8ecde7caf687e9::t_9bcd97df9522d9 1-150
+basic/cli/src/plugin-check/source-checks.ts
+  s_8ecde7caf687e9::t_947c2b5067b676 1-210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "36d288073c948282a5c654903a0282b8a4eabae5",
+  "prompts": {},
+  "sessions": {
+    "s_8ecde7caf687e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15d7d-fd53-7212-bcec-b99ba70a313f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
