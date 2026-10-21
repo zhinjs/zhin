@@ -132,6 +132,11 @@ export class CommandExecutionBudget {
     if (!entry) {
       if (this.#entries.size >= this.#capacity) {
         for (const [oldKey, old] of this.#entries) if (old.active === 0 && old.cooldownUntil <= now) this.#entries.delete(oldKey);
+        if (this.#entries.size >= this.#capacity) {
+          // Still full of cooling identities: drop the oldest idle one. Forgetting a cooldown is acceptable;
+          // refusing every new identity is not. Only entries with running operations are never evicted.
+          for (const [oldKey, old] of this.#entries) if (old.active === 0) { this.#entries.delete(oldKey); break; }
+        }
         if (this.#entries.size >= this.#capacity) return { limit: limited('capacity') };
       }
       entry = { active: 0, cooldownUntil: 0 };

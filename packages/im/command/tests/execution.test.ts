@@ -52,14 +52,33 @@ describe('command execution policy', () => {
     f.setNow(1100);
     const next = f.open(); expect(f.admit(next.source, policy)).toBeUndefined(); await next.control.finish();
   });
-  it('does not evict active or cooling identities to make capacity', async () => {
+  it('never evicts running identities, but reports capacity only when every entry is running', async () => {
     const f = setup(1); const first = f.open();
     expect(f.admit(first.source, { cooldownMs: 1000 })).toBeUndefined();
     expect(f.admit(f.open('bob').source)).toEqual({ reason: 'capacity' });
     await first.control.finish();
-    expect(f.admit(f.open('bob').source)).toEqual({ reason: 'capacity' });
-    f.setNow(1100);
     const next = f.open('bob'); expect(f.admit(next.source)).toBeUndefined(); await next.control.finish();
+  });
+  it('evicts the oldest idle cooling identity when full so new identities are not locked out', async () => {
+    const f = setup(2); const policy = { cooldownMs: 100_000 };
+    const [a, b] = ['a', 'b'].map(name => f.open(name));
+    expect(f.admit(a.source, policy)).toBeUndefined();
+    expect(f.admit(b.source, policy)).toBeUndefined();
+    await a.control.finish(); await b.control.finish();
+    // Table full of idle identities that are all still cooling down.
+    const c = f.open('c'); expect(f.admit(c.source, policy)).toBeUndefined();
+    // "b" (newer) keeps its cooldown; "a" (oldest) lost it and is no longer tracked.
+    expect(f.admit(f.open('b').source, policy)).toEqual({ reason: 'cooldown', retryAfterMs: expect.any(Number) });
+    await c.control.finish();
+  });
+  it('rejects with capacity when the only evictable identities are running', async () => {
+    const f = setup(2); const a = f.open('a'), b = f.open('b');
+    expect(f.admit(a.source, { cooldownMs: 1000 })).toBeUndefined();
+    expect(f.admit(b.source, { cooldownMs: 1000 })).toBeUndefined();
+    expect(f.admit(f.open('c').source)).toEqual({ reason: 'capacity' });
+    await a.control.finish();
+    const c = f.open('c'); expect(f.admit(c.source)).toBeUndefined();
+    await b.control.finish(); await c.control.finish();
   });
   it('separates capabilities, adapters and accounts without weakening identical identities', async () => {
     const f = setup();
