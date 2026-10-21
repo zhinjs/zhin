@@ -6,8 +6,8 @@ import { defineAgentTool } from '../../src/index.js';
 
 interface Config { readonly apiKey: string }
 
-// Curried, executable schema: config typed, input and result inferred.
-const inferred = defineAgentTool<Config>()({
+// withConfig, executable schema: config typed, input and result inferred.
+const inferred = defineAgentTool.withConfig<Config>()({
   description: 'Weather',
   inputSchema: z.object({ city: z.string(), days: z.number().optional() }),
   execute(input, { config }) {
@@ -20,8 +20,8 @@ const inferred = defineAgentTool<Config>()({
 });
 expectTypeOf(inferred.execute).returns.toEqualTypeOf<{ city: string } | Promise<{ city: string }>>();
 
-// Curried, JSON Schema: give the input type on the second call.
-const explicit = defineAgentTool<Config>()<{ city: string }>({
+// withConfig, JSON Schema: give the input type on the second call.
+const explicit = defineAgentTool.withConfig<Config>()<{ city: string }>({
   description: 'Weather',
   inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
   execute({ city }, { config }) {

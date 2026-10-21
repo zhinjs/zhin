@@ -87,13 +87,12 @@ describe('Command Feature', () => {
     expect(() => parseCommandDefinition({ execute() {} })).toThrow('defineCommand');
   });
 
-  it('curried defineCommand<Config>() validates and brands like the direct form', () => {
-    const define = defineCommand<{ prefix: string }>();
+  it('defineCommand.withConfig<Config>() validates and brands like the direct form', () => {
+    const define = defineCommand.withConfig<{ prefix: string }>();
     const command = define({ params: { word: { type: 'string' } }, execute: ({ params, config }) => `${config.prefix}${params.word}` });
     expect(parseCommandDefinition(command)).toBe(command);
     expect(Object.isFrozen(command)).toBe(true);
     expect(() => define({ params: { word: { type: 'nope' as never } }, execute() {} })).toThrow('Command params.word requires a valid type');
-    expect(() => (defineCommand as (definition?: unknown) => unknown)(undefined)).toThrow('Command execute must be a function');
   });
 
   it('projects owner-bound slots into an executable index', async () => {

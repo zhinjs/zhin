@@ -5,8 +5,8 @@ import { defineCommand, type CommandParameterValue } from '../../src/index.js';
 
 interface Config { readonly prefix: string; readonly limit: number }
 
-// Curried: config is typed and params / options / result are still inferred.
-const curried = defineCommand<Config>()({
+// withConfig: config is typed and params / options / result are still inferred.
+const curried = defineCommand.withConfig<Config>()({
   params: { count: { type: 'integer', min: 1 }, name: { type: 'string', optional: true } },
   options: { loud: { type: 'boolean' } },
   execute({ params, options, config }) {
@@ -24,7 +24,7 @@ const curried = defineCommand<Config>()({
 expectTypeOf(curried.execute).returns.toEqualTypeOf<string | Promise<string>>();
 
 // The definer is reusable across files of one plugin.
-const definePluginCommand = defineCommand<Config>();
+const definePluginCommand = defineCommand.withConfig<Config>();
 definePluginCommand({
   params: { word: { type: 'string' } },
   execute({ params, config }) {
@@ -59,3 +59,7 @@ defineCommand<Config>({
 
 // @ts-expect-error the definer still requires execute
 definePluginCommand({ description: 'no execute' });
+
+// defineCommand stays a single-signature value for factories such as createEndpointCommands.
+declare function acceptsDefiner<T>(define: (definition: { execute(context: never): unknown }) => T): T;
+expectTypeOf(acceptsDefiner(defineCommand)).toEqualTypeOf<Readonly<import('../../src/index.js').CommandDefinition<unknown, unknown, import('../../src/index.js').CommandMessage, string | undefined>>>();

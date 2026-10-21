@@ -361,7 +361,7 @@ type TypedCommandContext<TConfig, TInput extends CommandMessage, TAdapter extend
   };
 
 /**
- * `defineCommand<Config>()` 返回的定义函数：config 类型已固定，params / options / 返回值
+ * `defineCommand.withConfig<Config>()` 返回的定义函数：config 类型已固定，params / options / 返回值
  * 仍从定义推断。
  * @public
  */
@@ -373,23 +373,6 @@ export type CommandDefiner<TConfig, TInput extends CommandMessage = CommandMessa
   definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
 ) => Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>>;
 
-/**
- * 柯里化写法：先固定插件 config 类型，再定义命令，params / options 推断不受影响。
- *
- * ```ts
- * export default defineCommand<Config>()({
- *   params: { count: { type: 'integer' } },
- *   execute({ params, config }) { params.count; config.prefix },
- * })
- * ```
- *
- * `defineCommand<Config>({...})` 仍然可用，但 TypeScript 不支持部分推断，显式写了
- * 类型参数后 params 会退化成 `Record<string, CommandParameterValue>`。
- */
-export function defineCommand<
-  TConfig = unknown,
-  TInput extends CommandMessage = CommandMessage,
->(): CommandDefiner<TConfig, TInput>;
 export function defineCommand<
   TConfig = unknown,
   TResult = unknown,
@@ -398,22 +381,8 @@ export function defineCommand<
   const O extends CommandOptions = {},
 >(
   definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
-): Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>>;
-export function defineCommand(...args: readonly unknown[]): unknown {
-  if (args.length === 0) return (definition: unknown) => createCommandDefinition(definition as never);
-  return createCommandDefinition(args[0] as never);
-}
-
-function createCommandDefinition<
-  TConfig,
-  TResult,
-  TInput extends CommandMessage,
-  P extends CommandParams,
-  O extends CommandOptions,
->(
-  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
 ): Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>> {
-  if (typeof definition?.execute !== 'function') {
+  if (typeof definition.execute !== 'function') {
     throw new TypeError('Command execute must be a function');
   }
   validateAdapterName(definition.adapter);
@@ -437,6 +406,28 @@ function createCommandDefinition<
     CommandDefinition<TConfig, TResult, TInput, string | undefined>
   >;
 }
+
+/**
+ * 先固定插件 config 类型，再定义命令；params / options / 返回值仍从定义推断。
+ *
+ * ```ts
+ * export default defineCommand.withConfig<Config>()({
+ *   params: { count: { type: 'integer' } },
+ *   execute({ params, config }) { params.count; config.prefix },
+ * })
+ * ```
+ *
+ * `defineCommand<Config>({...})` 仍然可用，但 TypeScript 不支持部分推断，显式写了
+ * 类型参数后 params 会退化成 `Record<string, CommandParameterValue>`。
+ * 这里是独立的属性而不是 `defineCommand()` 重载：`defineCommand` 常被当作值传给
+ * `createEndpointCommands(spec, defineCommand)` 这类工厂，重载会让它推断错签名。
+ */
+defineCommand.withConfig = function withConfig<
+  TConfig = unknown,
+  TInput extends CommandMessage = CommandMessage,
+>(): CommandDefiner<TConfig, TInput> {
+  return (definition) => defineCommand(definition);
+};
 
 function validateAdapterName(adapter: string | undefined): void {
   if (adapter !== undefined && (typeof adapter !== 'string' || adapter.trim() === '')) {

@@ -56,8 +56,8 @@ describe('Tool Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['weather']);
   });
 
-  it('curried defineAgentTool<Config>() validates and brands like the direct form', () => {
-    const define = defineAgentTool<{ apiKey: string }>();
+  it('defineAgentTool.withConfig<Config>() validates and brands like the direct form', () => {
+    const define = defineAgentTool.withConfig<{ apiKey: string }>();
     const tool = define<{ city: string }>({ description: 'Weather', execute: ({ city }, { config }) => `${config.apiKey}:${city}` });
     expect(parseAgentToolDefinition(tool)).toBe(tool);
     expect(tool.requiresApproval).toBe('on-risk');
