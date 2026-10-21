@@ -18,7 +18,7 @@ import {
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
 import { resolveMultimodalConfig } from '../media/resolve-config.js';
-import { renderPerceptionCaption, type MediaPerceptionPort } from '../media/perception.js';
+import { MediaPerceptionFailedError, renderPerceptionCaption, type MediaPerceptionPort } from '../media/perception.js';
 import type { ReferencePort, TurnMedia } from './turn-ingress.js';
 
 const logger = getLogger('ZhinAgent');
@@ -206,6 +206,8 @@ export async function resolveTurnMediaInjection(
               continue;
             }
           } catch (error) {
+            // A call that failed after reaching the provider still counts against the quota.
+            if (error instanceof MediaPerceptionFailedError) perceptionUsage = addUsage(perceptionUsage, error.usage);
             signal.throwIfAborted();
             logger.warn(formatCompact({
               op: 'inbound_perception_failed',

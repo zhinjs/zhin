@@ -484,6 +484,43 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('shares one chat.get across concurrent messages on a cold cache', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const base = mockFetchOk();
+    const fetch = vi.fn(async (url: string, init?: unknown) => {
+      if (String(url).endsWith('/im/v1/chats/oc_group1')) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+          json: async () => ({ code: 0, data: { owner_id: 'ou_owner', user_manager_id_list: [] } }),
+        };
+      }
+      return base(url, init as never);
+    });
+    const endpoint = bindTestEndpoint(new LarkEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
+      gateway: { receive, send: vi.fn(async () => 'sent') },
+      http,
+      config: baseConfig,
+      fetch,
+    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    await endpoint.start();
+    endpoint.open();
+    for (const index of [0, 1, 2]) {
+      endpoint.admit(textMessage({ message_id: `om_c${index}`, sender: { sender_id: { open_id: 'ou_owner' } } }));
+    }
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(3));
+    expect(fetch.mock.calls.filter(([u]) => String(u).endsWith('/im/v1/chats/oc_group1'))).toHaveLength(1);
+    for (const call of receive.mock.calls) {
+      expect(call[0]).toEqual(expect.objectContaining({ sender: expect.objectContaining({ roles: ['owner'] }) }));
+    }
+    await endpoint.stop();
+  });
+
   it('does not admit inbound while closed', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);

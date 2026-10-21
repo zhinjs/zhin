@@ -298,6 +298,7 @@ export { getFileMemoryContext, getMemoryDir } from './memory-layers.js';
 export type { BootstrapFile, ContextFile } from './bootstrap.js';
 
 export {
+  NO_MEDIA_AUTHORITY,
   preprocessInboundMedia,
   publishOutboundElements,
   resolveMultimodalConfig,

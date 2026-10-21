@@ -32,4 +32,30 @@ describe('deliverSubagentResult', () => {
     const segments = Array.isArray(content) ? content : [content];
     expect(segments.some(s => typeof s === 'object' && s !== null && 'type' in s && s.type === 'image')).toBe(true);
   });
+
+  it('does not read a local file or fetch a URL that the result text references', async () => {
+    const send = vi.fn(async () => 'msg-2');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      await deliverSubagentResult({
+        origin: {
+          message: mockCommMessage({ adapter: 'sandbox', endpoint: 'b1', senderId: 'u1', scope: 'group', sceneId: 's1' }),
+        },
+        delivery: {
+          text: '',
+          elements: [
+            { type: 'file', url: '/etc/hosts' } as never,
+            { type: 'image', url: 'https://example.com/a.png?leak=1' } as never,
+          ],
+        },
+        send,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      const sent = JSON.stringify(send.mock.calls);
+      expect(sent).not.toContain('localhost');
+      expect(sent).not.toMatch(/"type":"file"/);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });

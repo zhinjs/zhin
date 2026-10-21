@@ -7,7 +7,7 @@ import {
   applyInboundMediaInjection,
   resolveTurnMediaInjection,
 } from '../../src/turn/inbound-media.js';
-import type { MediaPerceptionPort } from '../../src/media/perception.js';
+import { MediaPerceptionFailedError, type MediaPerceptionPort } from '../../src/media/perception.js';
 
 let root: string;
 
@@ -212,6 +212,13 @@ describe('resolveTurnMediaInjection — perception pre-pass', () => {
     expect(spent.perceptionUsage?.total_tokens).toBe(120);
     const none = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception: cached });
     expect(none.perceptionUsage).toBeUndefined();
+  });
+
+  it('bills a perception call that failed after it was sent', async () => {
+    const usage = { prompt_tokens: 1_050, completion_tokens: 0, total_tokens: 1_050 };
+    const failing = fakePerception(async () => { throw new MediaPerceptionFailedError(new Error('503'), usage); });
+    const result = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception: failing });
+    expect(result.perceptionUsage).toEqual(usage);
   });
 
   it('a model that takes images gets the image itself; perception is not called', async () => {

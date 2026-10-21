@@ -6,18 +6,22 @@
  * tools such as file access while it reads untrusted group chat. This port does
  * one completion with **no tools at all** — the request carries no tool
  * definitions, so nothing the model writes can be executed — and reuses the
- * provider resilience chain (retry, backoff, timeout, same-provider fallback).
+ * provider resilience chain (retry, backoff, timeout). There is no automatic model
+ * fallback: a plugin call must never silently fail over to a pricier model, and no
+ * per-binding fallback list exists to opt in to.
  *
  * Untrusted text is rendered as `external_content` data blocks (#726), and a
  * call made on behalf of an IM user counts against that user's / group's usage
  * quota (#727).
  */
+import { resolveModelCandidates } from '../context/model-resolver.js';
 import type { AIProvider, ProviderResilienceConfig, TextCompleteResult } from '@zhin.js/ai';
 import type { AiCompletion, AiCompletionInput, AiCompletionResult } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIService } from '../service.js';
 import { renderExternalContent } from '../security/trust-level.js';
 import type { UsageQuota } from '../security/usage-quota.js';
+import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 
 /**
  * The contract (types and token) lives in `@zhin.js/core` (#877) so plugins can import it from the
@@ -48,7 +52,8 @@ export class AiCompletionQuotaError extends Error {
 }
 
 export interface AiCompletionOptions {
-  readonly service: Pick<AIService, 'getBindingRegistry' | 'getProvider' | 'getAgentConfig'>;
+  readonly service: Pick<AIService, 'getBindingRegistry' | 'getProvider' | 'getAgentConfig'>
+    & Partial<Pick<AIService, 'getModelRegistry'>>;
   readonly usageQuota?: Pick<UsageQuota, 'check' | 'record'>;
   readonly now?: () => number;
 }
@@ -82,9 +87,23 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         maxTokens: input.maxTokens,
         timeoutMs: input.timeoutMs,
         signal: input.signal,
-        fallbackModels: provider.models.filter(id => id && id !== model),
+        // Same candidates as the conversation path (bound model, registry picks, then the
+        // provider's models); whether they are tried is up to `providerResilience.fallback`.
+        fallbackModels: resolveModelCandidates(
+          provider.models,
+          options.service.getModelRegistry?.() ?? null,
+          binding.providerAlias,
+          { chatModel: binding.model },
+          'chat',
+          model,
+        ).filter(id => id && id !== model),
         resilience: options.service.getAgentConfig()?.providerResilience as ProviderResilienceConfig | undefined,
       };
+      // Reserve the prompt estimate before the call: concurrent calls then see each other's
+      // spend at `check`, and a call that fails after reaching the provider is still billed.
+      const quotaSubject = input.onBehalfOf && options.usageQuota ? input.onBehalfOf : undefined;
+      const reserved = quotaSubject ? estimatePromptTokens(`${input.system ?? ''}\n${user}`) : 0;
+      if (quotaSubject && reserved > 0) options.usageQuota!.record(quotaSubject, reserved);
       const started = now();
       let result: TextCompleteResult;
       try {
@@ -104,9 +123,12 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         throw error;
       }
       const durationMs = now() - started;
-      const totalTokens = result.usage?.totalTokens;
-      if (input.onBehalfOf && options.usageQuota && totalTokens) {
-        options.usageQuota.record(input.onBehalfOf, totalTokens);
+      const reportedTokens = result.usage?.totalTokens;
+      const totalTokens = reportedTokens || undefined;
+      if (quotaSubject) {
+        // Reported usage settles the reservation; without it, estimate the answer on top of the prompt.
+        const settled = totalTokens ?? reserved + estimatePromptTokens(result.text);
+        if (settled > reserved) options.usageQuota!.record(quotaSubject, settled - reserved);
       }
       logger.info(formatCompact({
         op: 'ai_completion',

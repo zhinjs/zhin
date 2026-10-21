@@ -26,6 +26,8 @@ interface GuildSnapshot {
 
 export class KookSenderRoleResolver {
   readonly #guilds = new Map<string, GuildSnapshot>();
+  /** One lookup per guild at a time: concurrent messages on a cache miss share it. */
+  readonly #lookups = new Map<string, Promise<GuildSnapshot | undefined>>();
 
   constructor(private readonly getClient: () => KookClientTransport | null) {}
 
@@ -34,7 +36,6 @@ export class KookSenderRoleResolver {
     readonly authorId: string;
     readonly authorRoles?: readonly number[];
   }): Promise<KookSenderRoleProjection> {
-    if (!input.guildId) return { permissions: (input.authorRoles ?? []).map((id) => `role:${id}`) };
     const roleIds = (input.authorRoles ?? []).map(String);
     const permissions = roleIds.map((id) => `role:${id}`);
     if (!input.guildId) return { permissions };
@@ -50,9 +51,18 @@ export class KookSenderRoleResolver {
   }
 
   async #snapshot(guildId: string): Promise<GuildSnapshot | undefined> {
-    const now = Date.now();
     const cached = this.#guilds.get(guildId);
-    if (cached && now - cached.at < CACHE_TTL_MS) return cached;
+    if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached;
+    let lookup = this.#lookups.get(guildId);
+    if (!lookup) {
+      lookup = this.#fetch(guildId).finally(() => this.#lookups.delete(guildId));
+      this.#lookups.set(guildId, lookup);
+    }
+    return lookup;
+  }
+
+  async #fetch(guildId: string): Promise<GuildSnapshot | undefined> {
+    const now = Date.now();
     const client = this.getClient();
     if (!client) return undefined;
     let ownerId: string | undefined;

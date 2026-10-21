@@ -158,6 +158,8 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
   readonly #cardSources = new Map<string, { conversation: ConversationRef; time: number }>();
   readonly #seen = new Map<string, number>();
   readonly #chatManagers = new Map<string, { at: number; owner?: string; admins: ReadonlySet<string> }>();
+  /** One chat.get per chat at a time: concurrent messages on a cache miss share the lookup. */
+  readonly #chatManagerLookups = new Map<string, Promise<{ at: number; owner?: string; admins: ReadonlySet<string> }>>();
   #startupGeneration = 0;
   readonly #pendingInbound: LarkMessage[] = [];
 
@@ -395,17 +397,25 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
     for (const [id, entry] of this.#chatManagers) if (now - entry.at > LARK_CHAT_MANAGER_CACHE_TTL_MS) this.#chatManagers.delete(id);
     let entry = this.#chatManagers.get(chatId);
     if (!entry) {
-      const info = await this.getChatInfo(chatId) as {
-        owner_id?: unknown;
-        user_manager_id_list?: unknown;
-      } | null;
-      const admins = Array.isArray(info?.user_manager_id_list) ? info.user_manager_id_list.map(String) : [];
-      entry = {
-        at: now,
-        ...(typeof info?.owner_id === 'string' && info.owner_id ? { owner: info.owner_id } : {}),
-        admins: new Set(admins),
-      };
-      this.#chatManagers.set(chatId, entry);
+      let lookup = this.#chatManagerLookups.get(chatId);
+      if (!lookup) {
+        lookup = (async () => {
+          const info = await this.getChatInfo(chatId) as {
+            owner_id?: unknown;
+            user_manager_id_list?: unknown;
+          } | null;
+          const admins = Array.isArray(info?.user_manager_id_list) ? info.user_manager_id_list.map(String) : [];
+          const fetched = {
+            at: Date.now(),
+            ...(typeof info?.owner_id === 'string' && info.owner_id ? { owner: info.owner_id } : {}),
+            admins: new Set(admins) as ReadonlySet<string>,
+          };
+          this.#chatManagers.set(chatId, fetched);
+          return fetched;
+        })().finally(() => this.#chatManagerLookups.delete(chatId));
+        this.#chatManagerLookups.set(chatId, lookup);
+      }
+      entry = await lookup;
     }
     return {
       isOwner: entry.owner !== undefined && entry.owner === senderId,
