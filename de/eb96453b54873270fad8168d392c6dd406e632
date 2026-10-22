@@ -1,0 +1,24 @@
+packages/im/agent/src/outbound/structured-reply.ts
+  s_9477e63ef5cee5::t_0fbe78e060ec81 1,79-81,93-103
+  s_9477e63ef5cee5::t_52a8b6073af556 104-105
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_9477e63ef5cee5::t_84027781593431 164,194-202,213
+.changeset/coerce-numeric-ids.md
+  s_9477e63ef5cee5::t_b58437674914f9 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "deeb96453b54873270fad8168d392c6dd406e632",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
