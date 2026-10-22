@@ -55,9 +55,31 @@ describe('AmbientEngagement', () => {
     }
   });
 
-  it('cools down after the bot spoke, addressed or not', async () => {
-    const h = harness(yes, { cooldownMs: 60_000 });
+  it('answers someone talking with the bot without any cooldown', async () => {
+    const h = harness(yes, { cooldownMs: 60_000, maxPerHour: 0 });
     h.engagement.noteSpoke('icqq:1048877509');
+    h.advance(30_000);
+    const reply = h.consider();
+    await h.release();
+    await expect(reply).resolves.toMatchObject({ kind: 'engage' });
+    expect(h.judge.judge.mock.calls[0]![0]).toMatchObject({ inConversation: true, minutesSinceBotSpoke: 1 });
+  });
+
+  it('treats the group as idle again once the conversation window has passed', async () => {
+    const h = harness(yes, { conversationWindowMs: 180_000, maxPerHour: 0 });
+    h.engagement.noteSpoke('icqq:1048877509');
+    h.advance(181_000);
+    const decision = h.consider();
+    await h.release();
+    await expect(decision).resolves.toEqual({ kind: 'skipped', reason: 'hourly_cap' });
+  });
+
+  it('spaces unprompted interjections by the cooldown', async () => {
+    const h = harness(yes, { cooldownMs: 60_000, conversationWindowMs: 0 });
+    const first = h.consider();
+    await h.release();
+    await expect(first).resolves.toMatchObject({ kind: 'engage' });
+    expect(h.judge.judge.mock.calls[0]![0]).toMatchObject({ inConversation: false });
     h.advance(30_000);
     const early = h.consider();
     await h.release();
@@ -66,11 +88,10 @@ describe('AmbientEngagement', () => {
     const later = h.consider();
     await h.release();
     await expect(later).resolves.toMatchObject({ kind: 'engage' });
-    expect(h.judge.judge.mock.calls[0]![0]).toMatchObject({ minutesSinceBotSpoke: 1 });
   });
 
-  it('caps unprompted replies per rolling hour', async () => {
-    const h = harness(yes, { cooldownMs: 0, maxPerHour: 2 });
+  it('caps unprompted interjections per rolling hour', async () => {
+    const h = harness(yes, { cooldownMs: 0, maxPerHour: 2, conversationWindowMs: 0 });
     const kinds: string[] = [];
     for (let i = 0; i < 3; i++) {
       const decision = h.consider();
@@ -83,6 +104,20 @@ describe('AmbientEngagement', () => {
     const afterHour = h.consider();
     await h.release();
     await expect(afterHour).resolves.toMatchObject({ kind: 'engage' });
+  });
+
+  it('keeps a safety ceiling on replies inside a conversation', async () => {
+    const h = harness(yes);
+    h.engagement.noteSpoke('icqq:1048877509');
+    const kinds: string[] = [];
+    for (let i = 0; i < 31; i++) {
+      const decision = h.consider();
+      await h.release();
+      kinds.push((await decision).kind);
+      h.advance(10_000);
+    }
+    expect(kinds.filter(kind => kind === 'engage')).toHaveLength(30);
+    expect(kinds.at(-1)).toBe('skipped');
   });
 
   it('logs only in shadow mode and does not start a cooldown', async () => {

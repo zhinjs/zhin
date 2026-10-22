@@ -675,10 +675,15 @@ export interface AmbientEngagementConfig {
   judge?: string;
   /** Wait for the group to be quiet this long before judging a burst of messages (default 4000). */
   quietMs?: number;
-  /** Minimum gap after the bot last spoke in the group (default 120000). */
+  /** Minimum gap between two unprompted interjections in a group (default 120000). */
   cooldownMs?: number;
-  /** Unprompted replies per group per rolling hour (default 3). */
+  /** Unprompted interjections per group per rolling hour (default 3). */
   maxPerHour?: number;
+  /**
+   * After the bot spoke (addressed or not) the group is in a conversation with it for this long
+   * (default 180000): replies there skip the interjection cooldown and hourly cap; the judge still decides.
+   */
+  conversationWindowMs?: number;
   /** Judge confidence required to engage, 0..1 (default 0.7). */
   minConfidence?: number;
   /** `shadow` logs the judgment without replying (default `active`). */

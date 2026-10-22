@@ -300,15 +300,18 @@ ai:
       conversations: ["icqq:1048877509"]  # platform:groupId; "*" for every group
       judge: gemini/gemini-2.5-flash      # judge model, defaults to the main Agent model; prefer a cheap, fast one
       quietMs: 4000                       # wait until the group is quiet, then judge the burst once
-      cooldownMs: 120000                  # gap after the bot last spoke in the group
-      maxPerHour: 3                       # unprompted replies per group per hour
+      cooldownMs: 120000                  # minimum gap between two unprompted interjections
+      maxPerHour: 3                       # unprompted interjections per group per hour
+      conversationWindowMs: 180000        # after the bot speaks, the group is in a conversation for this long
       minConfidence: 0.7                  # judge confidence required to engage
       mode: active                        # shadow: log the judgment without replying
 ```
 
 How it works:
 1. After a new message, wait `quietMs` for the group to go quiet; messages in that window are judged together.
-2. If the cooldown and hourly cap allow, the judge reads the last 20 messages and returns whether to engage and how confident it is.
+2. The judge reads the last 20 messages (the bot's own lines are labeled `You (this bot)`) and returns whether to engage and how confident it is.
+   - **In a conversation** (the bot spoke within `conversationWindowMs`, addressed or not): replies to it depend only on the judge, not on the cooldown or hourly cap, with a safety ceiling of 30 per hour.
+   - **Otherwise**: unprompted interjections are limited by `cooldownMs` and `maxPerHour`.
 3. Above the threshold, the main Agent handles the message as usual. Its context says nobody called it, and it can still stay quiet.
 
 Each judgment logs an `ambient_engagement` line (decision, confidence, reason). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.

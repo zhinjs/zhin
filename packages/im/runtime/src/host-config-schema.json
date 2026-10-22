@@ -2884,14 +2884,21 @@
                     "number",
                     "string"
                   ],
-                  "description": "机器人在群里说话后的冷却时间（毫秒，默认 120000）"
+                  "description": "两次主动插话之间的最短间隔（毫秒，默认 120000）；对话进行中不受限制"
                 },
                 "maxPerHour": {
                   "type": [
                     "number",
                     "string"
                   ],
-                  "description": "每个群每小时最多主动接话次数（默认 3）"
+                  "description": "每个群每小时最多主动插话次数（默认 3）；对话进行中不计入"
+                },
+                "conversationWindowMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "机器人说话后，这段时间内算作对话进行中：群友接它的话只由判断模型决定，不受冷却和每小时次数限制（毫秒，默认 180000）"
                 },
                 "minConfidence": {
                   "type": [
