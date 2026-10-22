@@ -363,10 +363,12 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
 });
 
 describe('UNI-Channel defineAdapter segments policy', () => {
-  it('声明 base64/url/path 媒体能力与 text 交互降级', () => {
+  it('声明编码器支持的段、base64/url/path 媒体能力与 text 交互降级', () => {
     expect(defineIcqqAdapter.segments).toEqual({
+      supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps', 'share'],
       outboundMedia: ['base64', 'url', 'path'],
       interactive: 'text',
+      model: { share: { fields: ['description', 'image', 'audio'], hint: expect.stringContaining('QQ link card') } },
     });
   });
 });

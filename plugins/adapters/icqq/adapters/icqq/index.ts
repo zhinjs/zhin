@@ -23,8 +23,16 @@ export default defineAdapter<IcqqEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall', 'reaction'],
   segments: {
+    // Canonical types formatOutboundBody encodes; markdown / keyboard degrade to text first.
+    supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps', 'share'],
     outboundMedia: ['base64', 'url', 'path'],
     interactive: 'text',
+    model: {
+      share: {
+        fields: ['description', 'image', 'audio'],
+        hint: 'renders as a QQ link card. For a song, set audio to the playable link, image to the cover and description to the artist, copied from tool results; leave a field "" when you have no real value.',
+      },
+    },
   },
   create(context) {
     const config = resolveIcqqConfig(context.config);

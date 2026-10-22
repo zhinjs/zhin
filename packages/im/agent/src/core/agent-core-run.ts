@@ -2,7 +2,7 @@
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
 
-import type { AiOutboundSegmentType } from '@zhin.js/core';
+import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchema } from '../outbound/structured-reply.js';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
@@ -206,8 +206,8 @@ export interface AgentLoopTurnInput {
   rawContent: string;
   promptProfile: AgentPromptProfile;
   turnContext: TurnContextView;
-  /** Segment types the IM reply endpoint delivers (ReplyPort.segmentTypes). */
-  replySegmentTypes?: readonly AiOutboundSegmentType[];
+  /** What the IM reply endpoint lets the model author (ReplyPort.segments). */
+  replySegments?: AiOutboundSegmentProfile;
   allTools: AgentTool[];
   resolvedTools: AgentTool[];
   toolExecution: ToolExecutionAuthority;
@@ -520,7 +520,7 @@ export async function* runAgentLoopTextTurnRun(
   const messagePreset = configuredSchema === true || configuredSchema === 'segments';
   const imReply = messagePreset && input.turnContext.origin.kind === 'im'
     && input.conversationPersistence !== 'none';
-  const outputSchema = imReply ? structuredReplySchema(input.replySegmentTypes)
+  const outputSchema = imReply ? structuredReplySchema(input.replySegments)
     : messagePreset || !configuredSchema ? undefined : configuredSchema;
   const turnShellPolicy = input.turnContext.policy?.shell;
   const execPolicyConfig = turnShellPolicy
@@ -546,7 +546,7 @@ export async function* runAgentLoopTextTurnRun(
     : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile, input.promptRuntime);
   const proseSystemPrompt = systemPrompt;
   if (imReply) {
-    systemPrompt = `${systemPrompt}\n\n${structuredReplyInstruction(input.replySegmentTypes)}`;
+    systemPrompt = `${systemPrompt}\n\n${structuredReplyInstruction(input.replySegments)}`;
   }
 
   const agentTools = hasTools
@@ -1124,12 +1124,12 @@ export async function* runAgentLoopTextTurnRun(
   let output: AgentOutputElement[] = delegatedOnly || structuredReply ? [] : parseOutput(textReply);
   if (!delegatedOnly && structuredReply) {
     try {
-      output = decodeStructuredReply(rawReply, input.replySegmentTypes);
+      output = decodeStructuredReply(rawReply, input.replySegments);
     } catch (error) {
       const recovery = await recoverStructuredReply({
         transport: completionUsage.transport, model: llmModel, raw: rawReply,
         error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
-        segmentTypes: input.replySegmentTypes,
+        segments: input.replySegments,
       });
       output = recovery.output;
       // History must match what the user saw: the corrected reply, or the failure text. Never the

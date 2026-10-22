@@ -20,7 +20,9 @@ import {
   AI_OUTBOUND_SEGMENT_TYPES,
   DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
   isMediaRef,
+  type AiOutboundSegmentProfile,
   type AiOutboundSegmentType,
+  type AiSegmentExtension,
   type Segment,
 } from '../../built/segment-contract/index.js';
 import { markdownToPlainText } from '../../built/rich-segments/markdown-to-text.js';
@@ -161,20 +163,28 @@ export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot
 }
 
 /**
- * Segment types a model may author for this endpoint: everything the outbound
- * projection would deliver rather than reject. Markdown and keyboards outside the
- * declared list still qualify when the endpoint degrades them to text.
+ * What a model may author for this endpoint: every segment type the outbound
+ * projection would deliver rather than reject (markdown and keyboards outside the
+ * declared list still qualify when the endpoint degrades them to text), plus the
+ * adapter's `segments.model` extensions for those types.
  */
-export function resolveAiOutboundSegmentTypes(
+export function resolveAiOutboundSegments(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
-): readonly AiOutboundSegmentType[] {
+): AiOutboundSegmentProfile {
   const supported = resolveOutboundSupportedSegments(adapter, snapshot);
-  if (!supported) return DEFAULT_AI_OUTBOUND_SEGMENT_TYPES;
   const degradesToText = (type: AiOutboundSegmentType) =>
     (type === 'markdown' && resolveOutboundMarkdownPolicy(adapter, snapshot) !== 'native')
     || (type === 'keyboard' && resolveOutboundInteractivePolicy(adapter, snapshot) !== 'native');
-  return AI_OUTBOUND_SEGMENT_TYPES.filter(type => type === 'text' || degradesToText(type) || supported.includes(type));
+  const types = supported
+    ? AI_OUTBOUND_SEGMENT_TYPES.filter(type => type === 'text' || degradesToText(type) || supported.includes(type))
+    : DEFAULT_AI_OUTBOUND_SEGMENT_TYPES;
+  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  const declared = (slot?.definition as { segments?: { model?: Record<string, AiSegmentExtension> } } | undefined)?.segments?.model;
+  const extensions = declared
+    ? Object.fromEntries(types.filter(type => declared[type]).map(type => [type, declared[type]!]))
+    : {};
+  return Object.keys(extensions).length ? { types, extensions } : { types };
 }
 
 /** Preserve semantic Markdown only when the endpoint explicitly declares native consumption. */
