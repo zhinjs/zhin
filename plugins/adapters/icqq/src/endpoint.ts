@@ -389,18 +389,47 @@ export class IcqqEndpoint extends Endpoint<Client> {
     }
   }
 
+  /**
+   * ICQQ's share API returns no message id; a resolved call only means the server accepted it.
+   * The card is the bot's own newest card message in the conversation history, so read the id
+   * from there (once more after a short wait, history can lag). Undefined keeps the delivery
+   * unconfirmed rather than inventing an id.
+   */
+  async #findOwnCard(
+    history: () => Promise<readonly { message_id?: unknown; time?: number; message?: readonly { type?: string }[]; sender?: { user_id?: number }; user_id?: number }[]>,
+    sentAt: number,
+  ): Promise<string | undefined> {
+    const self = Number(this.client.uin);
+    for (const wait of [0, 500]) {
+      if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+      // A missing or throwing history API must not turn an accepted share into a send failure.
+      const messages = await Promise.resolve().then(history).catch(() => []);
+      const card = [...messages].reverse().find(item => Number(item.sender?.user_id ?? item.user_id) === self
+        && (item.time ?? 0) >= sentAt - 2
+        && (item.message ?? []).some(element => element.type === 'json' || element.type === 'xml' || element.type === 'share'));
+      if (card && card.message_id != null && String(card.message_id).trim()) return String(card.message_id);
+    }
+    return undefined;
+  }
+
   async #sendNative(
     target: ReturnType<typeof icqqOutboundTarget>,
     message: Sendable,
   ): Promise<{ message_id?: unknown }> {
     if (isIcqqShareElement(message)) {
       switch (target.kind) {
-        case 'private':
-          await this.client.pickFriend(target.userId).share(message);
-          return {};
-        case 'group':
-          await this.client.pickGroup(target.groupId).share(message);
-          return {};
+        case 'private': {
+          const sentAt = Math.floor(Date.now() / 1000);
+          const friend = this.client.pickFriend(target.userId);
+          await friend.share(message);
+          return { message_id: await this.#findOwnCard(() => friend.getChatHistory(), sentAt) };
+        }
+        case 'group': {
+          const sentAt = Math.floor(Date.now() / 1000);
+          const group = this.client.pickGroup(target.groupId);
+          await group.share(message);
+          return { message_id: await this.#findOwnCard(() => group.getChatHistory(), sentAt) };
+        }
         case 'temp':
           await this.client.pickMember(target.groupId, target.userId).share(message);
           return {};
