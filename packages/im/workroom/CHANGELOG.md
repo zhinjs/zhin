@@ -1,5 +1,13 @@
 # @zhin.js/workroom
 
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [db06de8]
+  - @zhin.js/core@1.1.48
+  - @zhin.js/agent@1.1.38
+
 ## 0.0.6
 
 ### Patch Changes
