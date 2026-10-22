@@ -1,0 +1,29 @@
+basic/cli/tests/plugin-runtime/runtime-log-level.test.ts
+  s_9477e63ef5cee5::t_061d179bc3a85d 1-36
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_9477e63ef5cee5::t_f1784ffa88829c 23,388,394-396
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9477e63ef5cee5::t_d8c8620c517f04 756-757,760-761
+  s_9477e63ef5cee5::t_05879d3e7f4d1e 758-759
+  s_9477e63ef5cee5::t_061d179bc3a85d 751-752
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_9477e63ef5cee5::t_d8c8620c517f04 20-29,86,140-142
+.changeset/log-silent-outbound-rejection.md
+  s_9477e63ef5cee5::t_4ec1dbd76bc9f4 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "db06de8f38f5f1dec89f2488fb807d8eb918b7a6",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
