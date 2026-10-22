@@ -3,7 +3,31 @@ description: Install CJK fonts required by real Chromium component tests on Linu
 runs:
   using: composite
   steps:
+    # apt-get update plus a 61 MB download from the Ubuntu mirror often stalls for
+    # ten minutes or more; cache the extracted font files and only fetch on a miss.
+    - name: Restore CJK fonts
+      id: fonts
+      if: runner.os == 'Linux'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.local/share/fonts/noto-cjk
+        key: fonts-noto-cjk-${{ runner.os }}-v1
+
     - name: Install CJK fonts
       if: runner.os == 'Linux'
       shell: bash
-      run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+      env:
+        CACHE_HIT: ${{ steps.fonts.outputs.cache-hit }}
+      run: |
+        target="$HOME/.local/share/fonts/noto-cjk"
+        if [ "$CACHE_HIT" != 'true' ] || ! ls "$target"/*.ttc >/dev/null 2>&1; then
+          work="$(mktemp -d)"
+          # The runner's package index is usually fresh enough; refresh it only if the download fails.
+          (cd "$work" && (apt-get download fonts-noto-cjk || (sudo apt-get update && apt-get download fonts-noto-cjk)))
+          dpkg-deb -x "$work"/fonts-noto-cjk_*.deb "$work/root"
+          mkdir -p "$target"
+          find "$work/root" -name '*.ttc' -exec cp {} "$target/" \;
+          rm -rf "$work"
+        fi
+        fc-cache -f "$HOME/.local/share/fonts"
+        fc-list :lang=zh family | head -3

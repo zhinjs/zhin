@@ -18,10 +18,17 @@ describe('rendering test environments', () => {
     }
   );
 
-  it('installs Chinese glyph coverage only on Linux', () => {
-    const step = load('.github/actions/setup-rendering-fonts/action.yml').runs.steps[0];
-    expect(step.if).toBe("runner.os == 'Linux'");
-    expect(step.shell).toBe('bash');
-    expect(step.run).toContain('fonts-noto-cjk');
+  it('installs Chinese glyph coverage only on Linux, from a cache when possible', () => {
+    const [restore, install] = load('.github/actions/setup-rendering-fonts/action.yml').runs.steps;
+    expect(restore.if).toBe("runner.os == 'Linux'");
+    expect(restore.uses).toMatch(/^actions\/cache@[0-9a-f]{40}$/);
+    expect(restore.with.path).toBe('~/.local/share/fonts/noto-cjk');
+    expect(install.if).toBe("runner.os == 'Linux'");
+    expect(install.shell).toBe('bash');
+    expect(install.env.CACHE_HIT).toBe('${{ steps.fonts.outputs.cache-hit }}');
+    expect(install.run).toContain('fonts-noto-cjk');
+    expect(install.run).toContain('fc-cache');
+    // apt-get update only as the fallback when the cached index cannot download the package.
+    expect(install.run).toMatch(/apt-get download fonts-noto-cjk \|\| \(sudo apt-get update/);
   });
 });
