@@ -52,7 +52,7 @@ import {
 } from './outbound-media.js';
 import {
   formatInboundContent,
-  formatOutboundBody,
+  formatOutboundMessages,
   normalizeIcqqImageMedia,
   icqqInboundConversation,
   icqqOutboundTarget,
@@ -350,29 +350,39 @@ export class IcqqEndpoint extends Endpoint<Client> {
       ? prepareIcqqOutboundMedia(normalizeIcqqImageMedia(payload), mediaMode)
       : { content: payload, dispose() {} };
     try {
-      const message = formatOutboundBody(prepared.content);
-      const preview = formatIcqqSendablePreview(message);
+      // Standalone elements (share / file / …) are split into ordered messages.
+      const messages = formatOutboundMessages(prepared.content);
       const parsed = icqqOutboundTarget(conversation);
-      let result: { message_id?: unknown };
-      try {
-        result = await this.#sendNative(parsed, message);
-      } catch (error) {
-        this.#logger.warn(formatCompact({
-          op: 'icqq_send_failed',
-          target: `${conversation.kind}:${conversation.id}`,
-          error: describeUnknownError(error),
-          preview: truncatePreview(preview, 120),
-        }));
-        throw error;
+      let messageId: string | undefined;
+      for (const [index, message] of messages.entries()) {
+        const preview = formatIcqqSendablePreview(message);
+        let result: { message_id?: unknown };
+        try {
+          result = await this.#sendNative(parsed, message);
+        } catch (error) {
+          this.#logger.warn(formatCompact({
+            op: 'icqq_send_failed',
+            target: `${conversation.kind}:${conversation.id}`,
+            part: messages.length > 1 ? `${index + 1}/${messages.length}` : undefined,
+            error: describeUnknownError(error),
+            preview: truncatePreview(preview, 120),
+          }));
+          if (index === 0) throw error;
+          // Earlier parts are already delivered: a retry would duplicate them.
+          throw new EndpointDeliveryError('partial_delivery', `ICQQ delivered ${index} of ${messages.length} message parts`, 'unknown', { cause: error });
+        }
+        const rawId = result?.message_id;
+        const id = (typeof rawId === 'string' || (typeof rawId === 'number' && Number.isFinite(rawId))) && String(rawId).trim() !== ''
+          ? String(rawId) : undefined;
+        messageId ??= id;
+        this.#logger.info(
+          `send ${conversation.kind}:${conversation.id} | id: ${id ?? '-'} | ${truncatePreview(preview, 80)}`,
+        );
       }
-      const rawId = result?.message_id;
-      if ((typeof rawId !== 'string' && typeof rawId !== 'number') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
+      // Native share / file APIs return no id; the reply is confirmed by any part that has one.
+      if (!messageId) {
         throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: ICQQ returned no message_id', 'unknown');
       }
-      const messageId = String(rawId);
-      this.#logger.info(
-        `send ${conversation.kind}:${conversation.id} | id: ${messageId} | ${truncatePreview(preview, 80)}`,
-      );
       return messageId;
     } finally {
       prepared.dispose();

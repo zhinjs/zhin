@@ -2,6 +2,7 @@ export {
   Actions,
   formatInboundContent,
   formatOutboundBody,
+  formatOutboundMessages,
   icqqInboundConversation,
   icqqOutboundTarget,
   type ActionResult,

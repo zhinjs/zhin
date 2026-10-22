@@ -435,7 +435,43 @@ export function formatOutboundBody(payload: unknown): Sendable {
     const text = String(payload).trim();
     return text || '\u200b';
   }
-  const elements = payload.flatMap<string | MessageElem>((seg) => {
+  const elements = formatOutboundElements(payload);
+  if (elements.length === 0) return '\u200b';
+  const standalone = elements.find(isStandaloneElement);
+  if (standalone && elements.length !== 1) {
+    throw new TypeError(`ICQQ ${standalone.type} element must be sent as a standalone message`);
+  }
+  return elements.length === 1 ? elements[0]! : elements;
+}
+
+/**
+ * Like formatOutboundBody, but a payload mixing standalone elements (share,
+ * file, record, video, json, long_msg) with other content becomes several
+ * messages in the original order instead of an error. Groups left with only a
+ * quote or whitespace are dropped: a standalone element cannot carry the quote.
+ */
+export function formatOutboundMessages(payload: unknown): Sendable[] {
+  if (!Array.isArray(payload)) {
+    return isWireSegment(payload) ? formatOutboundMessages([payload]) : [formatOutboundBody(payload)];
+  }
+  const groups: (string | MessageElem)[][] = [[]];
+  for (const element of formatOutboundElements(payload)) {
+    if (isStandaloneElement(element)) groups.push([element], []);
+    else groups.at(-1)!.push(element);
+  }
+  const messages = groups.filter(group => group.some(element => typeof element === 'string'
+    ? element.trim() !== ''
+    : element.type !== 'reply'));
+  if (messages.length === 0) return ['\u200b'];
+  return messages.map(group => group.length === 1 ? group[0]! : group);
+}
+
+function isStandaloneElement(element: string | MessageElem): element is MessageElem {
+  return typeof element !== 'string' && ICQQ_STANDALONE_ELEMENTS.has(element.type as never);
+}
+
+function formatOutboundElements(payload: readonly unknown[]): (string | MessageElem)[] {
+  return payload.flatMap<string | MessageElem>((seg) => {
     if (typeof seg === 'string') return seg;
     const item = seg as IcqqWireSegment;
     switch (item.type) {
@@ -503,16 +539,6 @@ export function formatOutboundBody(payload: unknown): Sendable {
       }
     }
   }).filter((element) => typeof element !== 'string' || element.length > 0);
-
-  if (elements.length === 0) return '\u200b';
-  const standalone = elements.find(
-    (element): element is MessageElem =>
-      typeof element !== 'string' && ICQQ_STANDALONE_ELEMENTS.has(element.type as never),
-  );
-  if (standalone && elements.length !== 1) {
-    throw new TypeError(`ICQQ ${standalone.type} element must be sent as a standalone message`);
-  }
-  return elements.length === 1 ? elements[0]! : elements;
 }
 
 export function formatInboundContent(rawMessage: string): string {
