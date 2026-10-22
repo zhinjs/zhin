@@ -1,5 +1,11 @@
 # @zhin.js/components
 
+## 1.1.4
+
+### Patch Changes
+
+- @zhin.js/jsx@1.1.4
+
 ## 1.1.3
 
 ### Patch Changes

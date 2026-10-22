@@ -1,5 +1,29 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.12
+
+### Patch Changes
+
+- a3ab153: Adapters can declare `segments.model` per segment type (extra optional string fields the model may fill, plus a prompt hint) that only that platform's Agent replies see. icqq now declares the segment types its encoder supports and a share extension, so the Agent can send music share cards from tool results.
+- fe6555c: Messages mixing text with standalone ICQQ elements (share, file, voice, video, JSON card, forward) are now sent as ordered separate messages instead of failing with "must be sent as a standalone message". A failure after the first part is reported as `partial_delivery` with an unknown outcome so it is never resent.
+- fbfefb7: Share segments accept `data.platform` (the song's music service: qq, netease, kugou, kuwo, migu). icqq maps it to the matching music app id when `config.appid` is absent and offers it to the Agent; adapters that cannot render share app metadata reject it like `audio` and `config`.
+- Updated dependencies [1a11207]
+- Updated dependencies [9943df6]
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/tool@1.1.8
+  - @zhin.js/core@1.1.47
+  - @zhin.js/adapter@1.1.21
+  - @zhin.js/feature-kit@1.1.7
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/agent-feature@1.1.8
+  - @zhin.js/skill@1.1.8
+
 ## 1.1.11
 
 ### Patch Changes

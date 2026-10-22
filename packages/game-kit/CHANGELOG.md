@@ -1,5 +1,21 @@
 # @zhin.js/game-shared
 
+## 1.1.12
+
+### Patch Changes
+
+- 53d5bd7: `messageFromCommandInput` reads the structured Runtime `Message.sender` (`{ id, name }`). Previously the object was stringified, so every player in a multi-player game became the same `[object Object]` user. A bare sender id string is still accepted.
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/core@1.1.47
+  - @zhin.js/feature-kit@1.1.7
+  - @zhin.js/middleware@1.1.8
+
 ## 1.1.11
 
 ### Patch Changes

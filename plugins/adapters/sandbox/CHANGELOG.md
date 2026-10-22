@@ -1,5 +1,27 @@
 # @zhin.js/adapter-process
 
+## 1.1.13
+
+### Patch Changes
+
+- b8317b0: Document the full Sandbox WebSocket wire protocol in the README: connection paths, token and demo-scope rules, close codes, every inbound field (including `messageId`, button `action` segments and `agentRun`), and the `ready`, reply and read-only `error` frames with media segment handling.
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [f30be42]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/core@1.1.47
+  - @zhin.js/adapter@1.1.21
+  - @zhin.js/client@1.1.15
+  - @zhin.js/feature-kit@1.1.7
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/page@1.1.8
+  - @zhin.js/skill@1.1.8
+  - @zhin.js/host-http@1.1.8
+
 ## 1.1.12
 
 ### Patch Changes

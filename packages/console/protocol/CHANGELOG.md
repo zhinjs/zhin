@@ -1,5 +1,14 @@
 # @zhin.js/console-protocol
 
+## 1.1.11
+
+### Patch Changes
+
+- d13b1d7: `config:explain` now explains a list of scalars (`{ type: 'array', items: <scalar or literal choice> }`) as a single field compared as a whole, instead of refusing the whole plugin as `complex-schema`. This keeps every plugin explainable now that the framework injects the `disabledCommands` string list next to `commandNamespace`. Arrays of objects, tuples, nested arrays, dictionaries, other unions and references are still reported as `complex-schema`.
+- 1971e0c: `config:explain` now explains fixed string-literal choice fields (the `anyOf` of string `const`s the Console form edits as options) as string scalars, instead of refusing the whole plugin as `complex-schema`. Other unions, arrays, dictionaries and references are still reported as `complex-schema`.
+
+  The `@zhin.js/console-protocol` README documents that literal-choice fields are explainable.
+
 ## 1.1.10
 
 ### Patch Changes

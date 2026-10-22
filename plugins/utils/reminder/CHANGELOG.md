@@ -1,5 +1,16 @@
 # @zhin.js/plugin-reminder
 
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [1a11207]
+- Updated dependencies [9943df6]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/tool@1.1.8
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/skill@1.1.8
+
 ## 1.0.3
 
 ### Patch Changes

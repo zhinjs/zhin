@@ -1,5 +1,22 @@
 # @zhin.js/command
 
+## 1.1.9
+
+### Patch Changes
+
+- 8302701: Explain the parameter directory rule when a command path is invalid. Nested parameter directories such as `commands/term/[word]/[...definition]/index.ts`, or a static directory after a parameter directory, now fail with a message that states the rule (one parameter directory per command, and it must be the last directory), names the file and shows the corrected path and `params` declaration. A directory parameter that is not the first `params` entry now gets the reordered list in the error.
+- 9943df6: Type the plugin config in convention commands and tools without losing inference (#857). `defineCommand.withConfig<Config>()({...})` fixes the config type and still infers `params`, `options` and the result; `defineAgentTool.withConfig<Config>()({...})` (or `defineAgentTool.withConfig<Config>()<Input>({...})` with a JSON Schema) does the same for tools. The returned definer can be shared across a plugin's files. The existing forms are unchanged: `defineCommand({...})`, `defineCommand<Config>({...})` (whose `params` still fall back to `Record<string, CommandParameterValue>`, because TypeScript has no partial type-argument inference) and `defineAgentTool<Input, Result, Config>({...})`. To get `params` inferred together with a typed config, change `defineCommand<Config>({` to `defineCommand.withConfig<Config>()({`.
+
+  `zhin new` normal plugins now declare an `echoPrefix` option in `schema.json` and a matching `<Name>Config` type in `src/index.ts`, and use it in the echo command through `defineCommand.withConfig<<Name>Config>()`; the generated tests cover the typed config.
+
+- de5b2a1: Plugin instances accept a framework-owned `disabledCommands` list (like `commandNamespace`). Listed commands, given by their local path without namespace or parameters (`fanyi`, `netease login`; a parent path covers its subcommands), are left out of routing, so an application can drop the few commands that overlap with another plugin instead of prefixing every command of the plugin.
+- c5741c0: `runCommand(fake, definition, { source })`：传入命令的 `commands/.../index.ts`（路径或 `new URL(..., import.meta.url)`）时，先走运行时同一套约定路径校验（新导出的 `bindCommandSource`），`commands/term/[word]/[...definition]` 这类运行时会拒绝的布局在单测里也会报错；不传 `source` 行为不变。`zhin new` 生成的测试默认传 `source`。
+- 584161e: 命令执行预算表满时，淘汰最旧的空闲（无运行中操作）条目，即使其冷却尚未结束，不再让所有新身份对带 `execution` 策略的命令一律得到 `capacity`；只有所有条目都在运行时才拒绝。
+- 2a1a3d9: `CommandIndex.execute()` 不再因为没有入站来源而对声明了 `execution` 的命令一律返回 `operation_unavailable`：程序化调用按命令维度应用 `maxConcurrent` / `cooldownMs`（不做发送者预算，也不发送进度提示），并在执行结束时释放。权限 permit 检查仍保持 fail-closed，`dispatch` 行为不变。
+- e40899f: Adapters now project group owners and admins onto the canonical `sender.roles` names `owner` / `admin` (Telegram creator/administrator, KOOK guild owner and admin-permission roles, Lark chat owner/managers, QQ official guild owner/admin identities). KOOK numeric role ids moved from `roles` to `permissions` (`role:<id>`). `@zhin.js/command` exports `canManageConversation` ("private chat or owner/admin/master"), now shared by the Bilibili and earthquake subscription commands; Roulette lets owners and admins toggle the mute penalty and cancel a game.
+- Updated dependencies [d3563d9]
+  - @zhin.js/feature-kit@1.1.7
+
 ## 1.1.8
 
 ### Patch Changes

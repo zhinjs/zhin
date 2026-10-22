@@ -1,5 +1,59 @@
 # @zhin.js/agent
 
+## 1.1.37
+
+### Patch Changes
+
+- 6fdd30b: Fix the occasional 5 s stall on an Agent turn (`SessionSystem waitForPersistence: timeout`) when `@zhin.js/workroom` is not installed. Only the Workroom persistence coordinator marked Agent persistence ready, so in Agent-only setups the first turn of every new Agent generation waited for the fallback timer. The Agent host now marks readiness itself when Workroom is absent, and `waitForPersistence` clears its fallback timer once readiness arrives (#857).
+- 1a11207: HMR no longer reloads on editor temp, swap, lock and backup files (`.!<digits>!*`, `*.swp`/`*.swo`/`*.swx`, `4913`, `*~`, `.#*`, `*.tmp`, JetBrains `*___jb_tmp___`/`*___jb_old___`); matching uses the file name only (#857).
+
+  Plugin tools can opt into the resident tool set with `defineAgentTool({ alwaysLoaded: true })`. The default stays deferred (`discover` / `load_tool`), at most 8 declared tools are resident per turn, `alwaysLoadedMode: replace` ignores the flag, and pinned tools now stay resident when a turn rebuilds its tool list after `load_tool` (#857).
+
+- a3ab153: Adapters can declare `segments.model` per segment type (extra optional string fields the model may fill, plus a prompt hint) that only that platform's Agent replies see. icqq now declares the segment types its encoder supports and a share extension, so the Agent can send music share cards from tool results.
+- 61cca0b: AI 回复里引用的本地文件和 URL 媒体现在受本轮权限约束：`path` 必须通过与 `read_file` 相同的工作区与敏感路径检查，`url` 需要本轮出网权限并在每一跳都遵守 `allowedDomains`；不满足时以「附件不可用」占位。此前结构化回复可在禁止出网的回合里下载任意 https 地址，旧的 `<audio>` / `<video>` / `<file>` 写法还能把任意本地文件作为附件发出。`publishOutboundElements` 新增可选 `authority` 参数，IM 回合的回复入口已传入本轮权限。
+- e8f7309: Agent structured replies now offer only the segment types the reply endpoint delivers (derived from the adapter's `segments.supported`), and the model can send quick-reply keyboard buttons. reply / forward / face are no longer offered to the model because it has no reliable source for their platform IDs.
+- ade0f33: Export the `UsageSubject` type used by `completeText({ onBehalfOf })` and document its `groupId` format.
+- d3563d9: Plugins can now import the AI completion contract from the `zhin.js` main entry without depending on `@zhin.js/agent` (#877). `@zhin.js/core` defines `aiCompletionToken` (same id, and `@zhin.js/agent` re-exports the same object), the `AiCompletion*` / `UsageSubject` types, `usageSubjectFromMessage(message)` (same quota key rules as Agent turns; returns `undefined` when the message has no sender), `isAiCompletionQuotaError(error)` and `hasResource(context, token)`. Construction and capability contexts gain an optional `has(token)` member (the built-in ones and the `@zhin.js/testing` fake plugin implement it), so plugins can check for optional resources without try/catch.
+- b15c86b: `PluginTestKit` accepts a file-backed configuration (`createConfigDocument(path)`) as `config`, so tests share the same file authority as `zhin start` (saved vs applied config, `config:explain`, reload of the config file). Adds end-to-end smoke scenarios for literal-choice config forms, `config:explain` and structured replies.
+
+  `@zhin.js/agent` evals gain a structured-reply seed case (mention + text segments) that the nightly real-model run replays under the existing request budget.
+
+- 3224ba3: `aiCompletion.completeText`：用量配额在调用前预留提示词估算量（并发调用互相可见），调用失败或 provider 未返回 usage 时按估算计费。
+
+  模型降级与主对话路径一致：候选为绑定模型、模型注册表推荐、该 provider 其余模型，是否实际降级由 `ai.agent.providerResilience.fallback` 决定。
+
+- f91cc89: 修复媒体感知描述中嵌套的帧标记在单次剥离后被重新拼出的问题（循环剥离直至稳定）。
+- 1148821: 媒体感知预处理（perception pre-pass）的模型用量不再丢失：`describe` 返回 `usage`，并计入本回合的 `usageQuota` 与回合 token 汇总。
+- 4dd081c: 结构化回复格式修正不再把「修正指令 + 被拒绝的原文」写入会话历史：成功时只持久化修正后的助手消息，失败时持久化实际发送给用户的失败文案。
+- c618eb7: IM conversation turns now get a chat prompt: the workspace persona (SOUL.md) leads, a chat style section replaces the report-style one, and the coding-workflow sections are reduced to a short "workspace tasks" note; critical rules no longer claim to override the persona. Structured replies become `{"messages":[{"segments":[...]}]}` so the model can send several short messages, delivered in order with a short pause; a legacy single `{segments}` reply is still accepted. Workspace prompt files may use a `{{nickname}}` slot filled from `ai.agents.<name>.nickname` (default `Zhin`).
+- a383380: 修复 source map：这些包之前的 `.js.map` / `.d.ts.map` 指向没有发布的 `src/`，调试和"跳转到定义"都找不到源码。现在 `.js.map` 内联了源码（`inlineSources`），也不再生成指不到源码的 `.d.ts.map`。运行时行为不变。
+
+  预告：下一个大版本会移除发布包里冗余的 `.ts` 源码（很多包里的 `src/**/*.ts`，以及插件约定目录里与 `index.js` 并排的 `index.ts`），本次不做改动。深导入 `.ts` 文件的代码请改用包的 `exports` 入口，详见根目录 `CHANGELOG.md`。
+
+  Source maps now embed their sources (`inlineSources`); dangling `.d.ts.map` files are no longer emitted. Heads-up: redundant published `.ts` sources will be removed in the next major. Switch any deep `.ts` imports to the package's `exports` entry.
+
+- b3bbada: 子 agent 结果投递与主动出站（`sendElements`）也不再读取或下载模型在文本中引用的本地路径和 URL（新增 `NO_MEDIA_AUTHORITY`）；工具生成的图片 / 语音是内联 base64，不受影响。补齐 #892 只覆盖 IM 回合回复入口的缺口。
+- 12d9a03: 识图预处理在模型返回空描述时仍上报用量；请求发出后失败（服务端错误、超时）时按提示词加媒体的保守估算计入用户配额与本轮用量。请求发出前就被拒（如识图模型不支持该媒体）不计费。
+- Updated dependencies [1a11207]
+- Updated dependencies [9943df6]
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [a383380]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/tool@1.1.8
+  - @zhin.js/core@1.1.47
+  - @zhin.js/adapter@1.1.21
+  - @zhin.js/ai@1.1.42
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/agent-feature@1.1.8
+  - @zhin.js/mcp-feature@1.1.8
+  - @zhin.js/prompt-section@1.1.7
+  - @zhin.js/skill@1.1.8
+
 ## 1.1.36
 
 ### Patch Changes

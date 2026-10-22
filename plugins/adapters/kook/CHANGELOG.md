@@ -1,5 +1,30 @@
 # @zhin.js/adapter-kook
 
+## 1.1.12
+
+### Patch Changes
+
+- e40899f: Adapters now project group owners and admins onto the canonical `sender.roles` names `owner` / `admin` (Telegram creator/administrator, KOOK guild owner and admin-permission roles, Lark chat owner/managers, QQ official guild owner/admin identities). KOOK numeric role ids moved from `roles` to `permissions` (`role:<id>`). `@zhin.js/command` exports `canManageConversation` ("private chat or owner/admin/master"), now shared by the Bilibili and earthquake subscription commands; Roulette lets owners and admins toggle the mute penalty and cancel a game.
+- 9e1d1a6: 飞书 / KOOK 查询群主与管理员时，缓存失效那一刻同一个群（服务器）的并发消息共用一次查询，不再各自调用一次接口。
+- fbfefb7: Share segments accept `data.platform` (the song's music service: qq, netease, kugou, kuwo, migu). icqq maps it to the matching music app id when `config.appid` is absent and offers it to the Agent; adapters that cannot render share app metadata reject it like `audio` and `config`.
+- Updated dependencies [1a11207]
+- Updated dependencies [9943df6]
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/tool@1.1.8
+  - @zhin.js/core@1.1.47
+  - @zhin.js/adapter@1.1.21
+  - @zhin.js/feature-kit@1.1.7
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/agent-feature@1.1.8
+  - @zhin.js/skill@1.1.8
+  - @zhin.js/host-http@1.1.8
+
 ## 1.1.11
 
 ### Patch Changes

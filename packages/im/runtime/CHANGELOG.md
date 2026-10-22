@@ -1,5 +1,19 @@
 # @zhin.js/runtime
 
+## 1.1.10
+
+### Patch Changes
+
+- 1a11207: HMR no longer reloads on editor temp, swap, lock and backup files (`.!<digits>!*`, `*.swp`/`*.swo`/`*.swx`, `4913`, `*~`, `.#*`, `*.tmp`, JetBrains `*___jb_tmp___`/`*___jb_old___`); matching uses the file name only (#857).
+
+  Plugin tools can opt into the resident tool set with `defineAgentTool({ alwaysLoaded: true })`. The default stays deferred (`discover` / `load_tool`), at most 8 declared tools are resident per turn, `alwaysLoadedMode: replace` ignores the flag, and pinned tools now stay resident when a turn rebuilds its tool list after `load_tool` (#857).
+
+- 8302701: Make the plugin config source conflict actionable. When a trusted plugin declares both `definePlugin({ config })` and a root `schema.json`, startup still stops (Zhin never picks one), and the error now names the entry file and the `schema.json` path and explains which file to delete for each choice. `zhin new` templates keep `schema.json` as their only config source and say so in `plugin.ts` and the README.
+- de5b2a1: Plugin instances accept a framework-owned `disabledCommands` list (like `commandNamespace`). Listed commands, given by their local path without namespace or parameters (`fanyi`, `netease login`; a parent path covers its subcommands), are left out of routing, so an application can drop the few commands that overlap with another plugin instead of prefixing every command of the plugin.
+- 29d0be9: Recognise `package.json#exports["./zhin"]` (conditions `zhin` → `import` → `default`) as the runtime entry when `zhin.entry` is omitted. `zhin.entry` stays fully supported and wins when both are declared.
+- Updated dependencies [d3563d9]
+  - @zhin.js/feature-kit@1.1.7
+
 ## 1.1.9
 
 ### Patch Changes

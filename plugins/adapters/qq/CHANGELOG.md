@@ -1,5 +1,29 @@
 # @zhin.js/adapter-qq
 
+## 1.1.12
+
+### Patch Changes
+
+- e40899f: Adapters now project group owners and admins onto the canonical `sender.roles` names `owner` / `admin` (Telegram creator/administrator, KOOK guild owner and admin-permission roles, Lark chat owner/managers, QQ official guild owner/admin identities). KOOK numeric role ids moved from `roles` to `permissions` (`role:<id>`). `@zhin.js/command` exports `canManageConversation` ("private chat or owner/admin/master"), now shared by the Bilibili and earthquake subscription commands; Roulette lets owners and admins toggle the mute penalty and cancel a game.
+- 5fc9e20: 修复 QQ 官方机器人分页「菜单」只显示标题和翻页按钮、指令列表丢失的问题：一条 QQ 消息只能携带一个 markdown，按钮消息或含内联 markdown 的消息中，文本与内联 markdown 现按顺序合并为同一 markdown 段（模板 markdown 与纯文本消息不变）。图片与 markdown/按钮同时出现时（如菜单渲染成图片），公网 URL 图片按 `![图片 #宽px #高px](url)` 嵌入 markdown（尺寸读取图片文件头获得）；base64/本地图片（QQ 上传接口只返回 file_info，拿不到 URL）或尺寸未知时，降级为先发独立图片消息、再发 markdown 与按钮，避免 msg_type 冲突导致图片丢失。新增导出 `formatOutboundMessages`、`collectOutboundImageSizes`、`probeImageSize`、`imageSizeFromBytes`。
+- Updated dependencies [1a11207]
+- Updated dependencies [9943df6]
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/tool@1.1.8
+  - @zhin.js/core@1.1.47
+  - @zhin.js/adapter@1.1.21
+  - @zhin.js/feature-kit@1.1.7
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/agent-feature@1.1.8
+  - @zhin.js/skill@1.1.8
+  - @zhin.js/host-http@1.1.8
+
 ## 1.1.11
 
 ### Patch Changes

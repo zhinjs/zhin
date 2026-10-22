@@ -1,5 +1,15 @@
 # @zhin.js/client
 
+## 1.1.15
+
+### Patch Changes
+
+- f30be42: Stop publishing unit test files (`src/**/*.test.ts`, `client/**/*.test.ts`) in the npm tarball.
+- Updated dependencies [d13b1d7]
+- Updated dependencies [1971e0c]
+  - @zhin.js/console-protocol@1.1.11
+  - @zhin.js/contract@1.1.10
+
 ## 1.1.14
 
 ### Patch Changes

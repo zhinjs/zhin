@@ -1,5 +1,20 @@
 # @zhin.js/plugin-tic-tac-toe
 
+## 1.1.12
+
+### Patch Changes
+
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [53d5bd7]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/core@1.1.47
+  - @zhin.js/game-kit@1.1.12
+
 ## 1.1.11
 
 ### Patch Changes

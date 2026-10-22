@@ -1,5 +1,94 @@
 # @zhin.js/cli
 
+## 1.1.15
+
+### Patch Changes
+
+- 6fdd30b: Fix the occasional 5 s stall on an Agent turn (`SessionSystem waitForPersistence: timeout`) when `@zhin.js/workroom` is not installed. Only the Workroom persistence coordinator marked Agent persistence ready, so in Agent-only setups the first turn of every new Agent generation waited for the fallback timer. The Agent host now marks readiness itself when Workroom is absent, and `waitForPersistence` clears its fallback timer once readiness arrives (#857).
+- 90057de: `zhin doctor --fix`（含 `--upgrade-l4 --fix`）补写依赖和 `~/.zhin` 全局实例初始化不再写 `latest`，改为使用 `@zhin.js/scaffold-wizard` 随发布生成的真实版本范围（如 `^1.1.11`）；拿不到版本的包仍保留 `latest`。
+- 58b46ba: `zhin plugin check` 新增三项检查：用 Runtime 同一解析器校验 `zhin` 清单（protocol / engine / runtime / features / plugins，engine 需被当前 Runtime 满足，features 引用的包必须已声明依赖）；`peerDependencies` 策略与范围（需声明 `zhin.js`，禁止 `latest` / `*` / `file:`，本地安装版本不在范围时警告）；借用插件 `node_modules` 对打包后的 `zhin.entry` 做 import 冒烟测试。`zhin pub` 发布前自动运行 `zhin plugin check`，有错误时停止发布，可用 `--skip-check` 跳过。
+- 36d2880: 新增 `zhin plugin check [dir]`：在插件目录检查 `package.json` / `zhin.entry` / `files` 白名单 / 约定目录与 prepack 脚本，并默认实际 `npm pack` 后按 `check:pack-imports` 的同一套规则检查发布包（入口与 exports 已打包、相对 import 可解析、无测试与配置、约定目录 `.ts` 均有 `.js`）。支持 `--no-pack`、`--json`、`--strict`。
+- 8302701: Make the plugin config source conflict actionable. When a trusted plugin declares both `definePlugin({ config })` and a root `schema.json`, startup still stops (Zhin never picks one), and the error now names the entry file and the `schema.json` path and explains which file to delete for each choice. `zhin new` templates keep `schema.json` as their only config source and say so in `plugin.ts` and the README.
+- b8317b0: `zhin runtime start --help` now lists the start options (`--mode`, `--environment`, `--no-watch`, `--once`, `--open`, `-d, --daemon`, `--log-file`) with common examples. Argument parsing is unchanged.
+- 9943df6: Type the plugin config in convention commands and tools without losing inference (#857). `defineCommand.withConfig<Config>()({...})` fixes the config type and still infers `params`, `options` and the result; `defineAgentTool.withConfig<Config>()({...})` (or `defineAgentTool.withConfig<Config>()<Input>({...})` with a JSON Schema) does the same for tools. The returned definer can be shared across a plugin's files. The existing forms are unchanged: `defineCommand({...})`, `defineCommand<Config>({...})` (whose `params` still fall back to `Record<string, CommandParameterValue>`, because TypeScript has no partial type-argument inference) and `defineAgentTool<Input, Result, Config>({...})`. To get `params` inferred together with a typed config, change `defineCommand<Config>({` to `defineCommand.withConfig<Config>()({`.
+
+  `zhin new` normal plugins now declare an `echoPrefix` option in `schema.json` and a matching `<Name>Config` type in `src/index.ts`, and use it in the echo command through `defineCommand.withConfig<<Name>Config>()`; the generated tests cover the typed config.
+
+- a3ab153: Adapters can declare `segments.model` per segment type (extra optional string fields the model may fill, plus a prompt hint) that only that platform's Agent replies see. icqq now declares the segment types its encoder supports and a share extension, so the Agent can send music share cards from tool results.
+- 61cca0b: AI 回复里引用的本地文件和 URL 媒体现在受本轮权限约束：`path` 必须通过与 `read_file` 相同的工作区与敏感路径检查，`url` 需要本轮出网权限并在每一跳都遵守 `allowedDomains`；不满足时以「附件不可用」占位。此前结构化回复可在禁止出网的回合里下载任意 https 地址，旧的 `<audio>` / `<video>` / `<file>` 写法还能把任意本地文件作为附件发出。`publishOutboundElements` 新增可选 `authority` 参数，IM 回合的回复入口已传入本轮权限。
+- e8f7309: Agent structured replies now offer only the segment types the reply endpoint delivers (derived from the adapter's `segments.supported`), and the model can send quick-reply keyboard buttons. reply / forward / face are no longer offered to the model because it has no reliable source for their platform IDs.
+- d87ada2: `zhin dev link <plugin-dir>` connects a standalone plugin to a bot for hot-reload development: links it under `plugins/`, declares `./plugins/<instance>`, and points the plugin's own `zhin.js` / `@zhin.js/*` at the bot's copies; `zhin dev unlink <instance>` reverts exactly that.
+- 53a3f35: `zhin pub` works inside a standalone plugin (`npx @zhin.js/cli pub`), accepts a plugin directory argument, recognises plugins by their `zhin` manifest, needs `--yes` instead of hanging in non-interactive shells, rejects `private: true`, and `zhin --version` reports the real CLI version. The standalone template README and hints use `npx @zhin.js/cli pub`.
+- a2ed9ce: `zhin new` templates use `@zhin.js/testing` (no `as never`) and ship every convention directory (`tools/`, `middlewares/`, …) without extra `files`/tsconfig edits; missing arguments fail fast without a TTY; standalone hints no longer suggest `pnpm add <plugin dir>`, which creates duplicate zhin package instances; `zhin search` links to npm instead of a 404 page.
+- c5741c0: `runCommand(fake, definition, { source })`：传入命令的 `commands/.../index.ts`（路径或 `new URL(..., import.meta.url)`）时，先走运行时同一套约定路径校验（新导出的 `bindCommandSource`），`commands/term/[word]/[...definition]` 这类运行时会拒绝的布局在单测里也会报错；不传 `source` 行为不变。`zhin new` 生成的测试默认传 `source`。
+- a13029a: `zhin new --standalone` 的提示与 README 模板：`npx zhin` 从 `zhin@4` 起等同 `npx @zhin.js/cli`，不再称其为"另一个旧包"，只提醒残留的 `zhin@3.x`。
+- d13b1d7: `config:explain` now explains a list of scalars (`{ type: 'array', items: <scalar or literal choice> }`) as a single field compared as a whole, instead of refusing the whole plugin as `complex-schema`. This keeps every plugin explainable now that the framework injects the `disabledCommands` string list next to `commandNamespace`. Arrays of objects, tuples, nested arrays, dictionaries, other unions and references are still reported as `complex-schema`.
+- 1971e0c: `config:explain` now explains fixed string-literal choice fields (the `anyOf` of string `const`s the Console form edits as options) as string scalars, instead of refusing the whole plugin as `complex-schema`. Other unions, arrays, dictionaries and references are still reported as `complex-schema`.
+
+  The `@zhin.js/console-protocol` README documents that literal-choice fields are explainable.
+
+- f7c7bdc: `zhin dev link` 先打包到临时目录再写入备份与状态，首次 link 失败时回滚且不留下缺少 `state.json` 的 `.zhin-local/`；`zhin dev unlink` 能安全清理只有 backup 没有 state.json 的残留目录。
+- c618eb7: IM conversation turns now get a chat prompt: the workspace persona (SOUL.md) leads, a chat style section replaces the report-style one, and the coding-workflow sections are reduced to a short "workspace tasks" note; critical rules no longer claim to override the persona. Structured replies become `{"messages":[{"segments":[...]}]}` so the model can send several short messages, delivered in order with a short pause; a legacy single `{segments}` reply is still accepted. Workspace prompt files may use a `{{nickname}}` slot filled from `ai.agents.<name>.nickname` (default `Zhin`).
+- a383380: 修复 source map：这些包之前的 `.js.map` / `.d.ts.map` 指向没有发布的 `src/`，调试和"跳转到定义"都找不到源码。现在 `.js.map` 内联了源码（`inlineSources`），也不再生成指不到源码的 `.d.ts.map`。运行时行为不变。
+
+  预告：下一个大版本会移除发布包里冗余的 `.ts` 源码（很多包里的 `src/**/*.ts`，以及插件约定目录里与 `index.js` 并排的 `index.ts`），本次不做改动。深导入 `.ts` 文件的代码请改用包的 `exports` 入口，详见根目录 `CHANGELOG.md`。
+
+  Source maps now embed their sources (`inlineSources`); dangling `.d.ts.map` files are no longer emitted. Heads-up: redundant published `.ts` sources will be removed in the next major. Switch any deep `.ts` imports to the package's `exports` entry.
+
+- b3bbada: 子 agent 结果投递与主动出站（`sendElements`）也不再读取或下载模型在文本中引用的本地路径和 URL（新增 `NO_MEDIA_AUTHORITY`）；工具生成的图片 / 语音是内联 base64，不受影响。补齐 #892 只覆盖 IM 回合回复入口的缺口。
+- 2264a99: **从 1.1.13 及更早版本升级（configVersion 2）**：先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移配置，最后 `zhin config check` 后重新启动。指南：https://zhin.js.org/operations/upgrades#configversion-2
+
+  降低 v1 配置升级成本：启动、`zhin config check` 和 `zhin doctor` 检测到 v1 配置（缺少 `configVersion: 2` 或仍有 `package.json#zhin.plugins`）时，直接说明是 v1 配置，并给出停机与迁移命令和文档链接，不再报通用解析错误。`zhin migrate instances` 默认输出按键名列出的可读预览（不含任何配置值，`--json` 保留机器输出）；`--apply` 写入前把原文件复制到 `.zhin/backups/config-v2-<时间戳>/` 并打印路径与恢复方式。`zhin migrate` 默认保留精确版本、`link:`、`file:` 等锁定依赖（`--include-pinned` 才改为 latest），dry-run 结束时明确提示未做任何改动，帮助文本指向配置迁移并区分 `zhin runtime migrate`。
+
+- c9087a9: `zhin new` 生成的插件改为按发布包目录规范构建：
+
+  - `src/` 是库代码，编译到 `lib/`（`.js` + `.d.ts`），`main`、`types`、`exports` 都指向 `lib/`。
+  - `plugin.ts` 和约定目录在打包时（`prepack`）由自带的 `scripts/build-runtime-entries.mjs` 编译成同目录 `.js`，其中对 `src/` 的导入改写为 `lib/`；`postpack` 清除这些生成文件。
+  - `files` 改为白名单，不再发布 `.ts` 源码、测试和配置。
+
+  已生成的插件不受影响。如果想迁移，可以用新版 `zhin new` 生成一个同类型的插件，对照它的 `package.json`（`main`、`types`、`exports`、`files`、`scripts`）、`tsconfig.build.json` 和 `scripts/build-runtime-entries.mjs` 修改。
+
+  `zhin new` plugins now build `src/` into `lib/` with `.d.ts`, generate runtime-entry JavaScript at pack time, and whitelist only built files in `files`.
+
+- Updated dependencies [8302701]
+- Updated dependencies [f974c91]
+- Updated dependencies [1a11207]
+- Updated dependencies [8302701]
+- Updated dependencies [90057de]
+- Updated dependencies [9943df6]
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [de5b2a1]
+- Updated dependencies [5afc18f]
+- Updated dependencies [29d0be9]
+- Updated dependencies [c5741c0]
+- Updated dependencies [d3563d9]
+- Updated dependencies [d13b1d7]
+- Updated dependencies [1971e0c]
+- Updated dependencies [584161e]
+- Updated dependencies [2a1a3d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [a383380]
+- Updated dependencies [e40899f]
+- Updated dependencies [33fa6d3]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/command@1.1.9
+  - @zhin.js/scaffold-wizard@1.1.7
+  - @zhin.js/runtime@1.1.10
+  - @zhin.js/core@1.1.47
+  - @zhin.js/adapter@1.1.21
+  - @zhin.js/console-protocol@1.1.11
+  - @zhin.js/workroom@0.0.6
+  - @zhin.js/ai@1.1.42
+  - @zhin.js/pagemanager@1.1.11
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/config-file@1.1.7
+  - @zhin.js/component@1.1.8
+  - @zhin.js/middleware@1.1.8
+  - @zhin.js/prompt-section@1.1.7
+  - @zhin.js/host-http@1.1.8
+
 ## 1.1.14
 
 > **⚠️ 升级须知（configVersion 2）**：本版本起 Runtime 只接受 `configVersion: 2`，旧配置会被拒绝启动。先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移（自动备份），最后 `zhin config check` 后启动。恢复：`zhin migrate instances --recover rollback`。指南：https://zhin.js.org/operations/upgrades#configversion-2
