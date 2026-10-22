@@ -1,5 +1,15 @@
 # @zhin.js/adapter
 
+## 1.1.21
+
+### Patch Changes
+
+- a3ab153: Adapters can declare `segments.model` per segment type (extra optional string fields the model may fill, plus a prompt hint) that only that platform's Agent replies see. icqq now declares the segment types its encoder supports and a share extension, so the Agent can send music share cards from tool results.
+- Updated dependencies [d3563d9]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/feature-kit@1.1.7
+  - @zhin.js/im-contract@1.1.5
+
 ## 1.1.20
 
 ### Patch Changes

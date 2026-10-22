@@ -1,5 +1,36 @@
 # @zhin.js/core
 
+## 1.1.47
+
+### Patch Changes
+
+- 5be09ae: Re-export the `ConversationRef`, `DeliveryReceipt`, `CapabilityContext` and `OperationClientPort` types from `@zhin.js/core` and `zhin.js`, so toolkits such as `@zhin.js/testing` can type against the app's single `zhin.js` tree instead of depending on `@zhin.js/im-contract` and `@zhin.js/feature-kit` directly (#899). Type-only and additive.
+- a3ab153: Adapters can declare `segments.model` per segment type (extra optional string fields the model may fill, plus a prompt hint) that only that platform's Agent replies see. icqq now declares the segment types its encoder supports and a share extension, so the Agent can send music share cards from tool results.
+- e8f7309: Agent structured replies now offer only the segment types the reply endpoint delivers (derived from the adapter's `segments.supported`), and the model can send quick-reply keyboard buttons. reply / forward / face are no longer offered to the model because it has no reliable source for their platform IDs.
+- 5afc18f: 引用一条消息再发送指令（例如引用入群申请通知回复「同意」）现在能正常匹配指令。平台把引用段放在文本之前，此前没有指令前缀时引用段挡在指令名前面导致不匹配、消息落到 AI；现在开头的引用段会移到指令文本之后参与参数解析，`message.replyTo` 不变。
+- d3563d9: Plugins can now import the AI completion contract from the `zhin.js` main entry without depending on `@zhin.js/agent` (#877). `@zhin.js/core` defines `aiCompletionToken` (same id, and `@zhin.js/agent` re-exports the same object), the `AiCompletion*` / `UsageSubject` types, `usageSubjectFromMessage(message)` (same quota key rules as Agent turns; returns `undefined` when the message has no sender), `isAiCompletionQuotaError(error)` and `hasResource(context, token)`. Construction and capability contexts gain an optional `has(token)` member (the built-in ones and the `@zhin.js/testing` fake plugin implement it), so plugins can check for optional resources without try/catch.
+- c618eb7: IM conversation turns now get a chat prompt: the workspace persona (SOUL.md) leads, a chat style section replaces the report-style one, and the coding-workflow sections are reduced to a short "workspace tasks" note; critical rules no longer claim to override the persona. Structured replies become `{"messages":[{"segments":[...]}]}` so the model can send several short messages, delivered in order with a short pause; a legacy single `{segments}` reply is still accepted. Workspace prompt files may use a `{{nickname}}` slot filled from `ai.agents.<name>.nickname` (default `Zhin`).
+- fbfefb7: Share segments accept `data.platform` (the song's music service: qq, netease, kugou, kuwo, migu). icqq maps it to the matching music app id when `config.appid` is absent and offers it to the Agent; adapters that cannot render share app metadata reject it like `audio` and `config`.
+- Updated dependencies [8302701]
+- Updated dependencies [9943df6]
+- Updated dependencies [a3ab153]
+- Updated dependencies [de5b2a1]
+- Updated dependencies [c5741c0]
+- Updated dependencies [d3563d9]
+- Updated dependencies [584161e]
+- Updated dependencies [2a1a3d9]
+- Updated dependencies [e40899f]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/command@1.1.9
+  - @zhin.js/adapter@1.1.21
+  - @zhin.js/feature-kit@1.1.7
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/component@1.1.8
+  - @zhin.js/handler@1.1.7
+  - @zhin.js/middleware@1.1.8
+  - @zhin.js/schedule-feature@1.1.7
+  - @zhin.js/jsx@1.1.4
+
 ## 1.1.46
 
 ### Patch Changes

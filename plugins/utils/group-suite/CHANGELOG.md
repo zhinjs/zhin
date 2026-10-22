@@ -1,5 +1,25 @@
 # @zhin.js/plugin-group-suite
 
+## 1.1.12
+
+### Patch Changes
+
+- a3a6b5f: group-suite: add compatibility aliases `checkin do` / `签到` (→ `checkin`), `checkin streak` (→ `mypoints`) and `checkin rank` (→ `rank`), so `checkin rank` no longer falls through to a check-in. 为签到命令增加兼容别名，方便从本地 `checkin <子命令>` 插件迁移。
+- Updated dependencies [1a11207]
+- Updated dependencies [9943df6]
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/tool@1.1.8
+  - @zhin.js/core@1.1.47
+  - @zhin.js/skill@1.1.8
+  - @zhin.js/jsx@1.1.4
+  - @zhin.js/components@1.1.4
+
 ## 1.1.11
 
 ### Patch Changes

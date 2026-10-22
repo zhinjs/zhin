@@ -1,5 +1,11 @@
 # @zhin.js/im-contract
 
+## 1.1.5
+
+### Patch Changes
+
+- fbfefb7: Share segments accept `data.platform` (the song's music service: qq, netease, kugou, kuwo, migu). icqq maps it to the matching music app id when `config.appid` is absent and offers it to the Agent; adapters that cannot render share app metadata reject it like `audio` and `config`.
+
 ## 1.1.4
 
 ### Patch Changes

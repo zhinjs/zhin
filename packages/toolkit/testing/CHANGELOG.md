@@ -1,5 +1,32 @@
 # @zhin.js/plugin-test-kit
 
+## 1.0.5
+
+### Patch Changes
+
+- 5be09ae: Stop installing a second Zhin stack next to the plugin's own `zhin.js` (#899). `@zhin.js/testing` no longer pins exact versions of `@zhin.js/core`, `@zhin.js/runtime`, `@zhin.js/plugin-runtime`, `@zhin.js/adapter` and the other `@zhin.js/*` packages. It resolves them through the plugin's `zhin.js` (`zhin.js`, `zhin.js/plugin-runtime`, `zhin.js/core/runtime`, `zhin.js/command`, …) and declares `zhin.js`, `@zhin.js/runtime` and `@zhin.js/tool` as peer dependencies. A standalone plugin with both `zhin.js` and `@zhin.js/testing` now installs every `@zhin.js/*` package once with pnpm and npm, so the Runtime no longer fails with `Multiple package locations … are not supported in one generation`, and tests run on the same stack as a real bot. `@zhin.js/command` is no longer a separate peer; it comes from `zhin.js`.
+
+  Migration: pnpm and npm (7+) install the peers automatically, so nothing changes there. With a package manager that does not install peers (yarn 1, or pnpm with `auto-install-peers=false`), add them yourself: `yarn add -D zhin.js @zhin.js/runtime @zhin.js/tool @zhin.js/testing`. Upgrade `@zhin.js/testing` together with `zhin.js`: the kit requires a `zhin.js` at least as new as the one released with it, and with an older one npm stops with `ERESOLVE` while pnpm reports an unmet peer.
+
+- c5741c0: `@zhin.js/command` 从 `dependencies` 改为 `peerDependencies`：测试工具使用插件自己（经 `zhin.js`）安装的那一份，独立插件不再装出第二份。pnpm / npm 会自动安装 peer，无需改动；yarn 1 等不自动安装 peer 的项目需要执行一次 `yarn add -D @zhin.js/command`。
+- c5741c0: `runCommand(fake, definition, { source })`：传入命令的 `commands/.../index.ts`（路径或 `new URL(..., import.meta.url)`）时，先走运行时同一套约定路径校验（新导出的 `bindCommandSource`），`commands/term/[word]/[...definition]` 这类运行时会拒绝的布局在单测里也会报错；不传 `source` 行为不变。`zhin new` 生成的测试默认传 `source`。
+- d3563d9: Plugins can now import the AI completion contract from the `zhin.js` main entry without depending on `@zhin.js/agent` (#877). `@zhin.js/core` defines `aiCompletionToken` (same id, and `@zhin.js/agent` re-exports the same object), the `AiCompletion*` / `UsageSubject` types, `usageSubjectFromMessage(message)` (same quota key rules as Agent turns; returns `undefined` when the message has no sender), `isAiCompletionQuotaError(error)` and `hasResource(context, token)`. Construction and capability contexts gain an optional `has(token)` member (the built-in ones and the `@zhin.js/testing` fake plugin implement it), so plugins can check for optional resources without try/catch.
+- b15c86b: `PluginTestKit` accepts a file-backed configuration (`createConfigDocument(path)`) as `config`, so tests share the same file authority as `zhin start` (saved vs applied config, `config:explain`, reload of the config file). Adds end-to-end smoke scenarios for literal-choice config forms, `config:explain` and structured replies.
+
+  `@zhin.js/agent` evals gain a structured-reply seed case (mention + text segments) that the nightly real-model run replays under the existing request budget.
+
+- 37dc280: `PluginTestKit` exposes `messageDiagnostics`, the same body-free reader the Console serves at `GET /api/messages/diagnostics`, so integration tests can assert route, dispatch status and delivery outcomes. Adds the first end-to-end smoke scenarios for the #829 loop (v1 → v2 migration, boot, diagnostics API, scenario-lab export).
+- 8822cae: `PluginTestKit` exposes `snapshots`, the committed-snapshot authority Console routes read, so integration tests can mount real Console routes such as the task center. Adds end-to-end smoke scenarios for command admission, `welcomeConversations`, natural-time reminders with the task center, and RSS quiet hours on a fake clock.
+- ec1dea1: `FakeClock.advance()` now moves the clock to each firing instant before running the jobs due at that instant, so a scheduled job that reads `clock.now()` sees the time it fired at instead of the time `advance()` started from.
+- e9e10ce: `FakeClock.advance()` 在某个 cron 任务抛错时仍会把时钟停在目标时间（try/finally）；该窗口内剩余未执行的任务会被跳过而不是延后补跑，错误照常向上抛出。
+- 6f05209: 新增 `runTool` / `createToolContext` / `toolOriginFromMessage`，可以在单元测试里运行 Agent 工具。执行方式与运行时的工具索引一致：可执行 `inputSchema` 先解析输入，绑定 `adapter` 的工具必须传匹配的 `client`。传 `message` 时，`origin` 和 `principal` 从假消息推导。
+
+  **行为变化**：插件声明了 `config` schema 时，`runPluginSetup` 现在会像运行时一样校验 `config`、填充默认值，并且只保留 schema 顶层声明的字段。不合法时抛出 `PluginConfigValidationError`。新增 `resolvePluginConfig(definition, input)`。
+
+  迁移：如果某个测试故意传了不合法或不完整的配置，先补齐配置；或者给这个测试加上 `runPluginSetup(plugin, { config, validateConfig: false })`，恢复原来"原样传入"的行为。没有声明 `config` 的插件，以及 `createFakePlugin` / `fake.setup()`，都不受影响。
+
+  Added `runTool` / `createToolContext` / `toolOriginFromMessage` for unit-testing Agent tools. Behaviour change: when the plugin declares a `config` schema, `runPluginSetup` now validates and defaults `config` like the Runtime does (throws `PluginConfigValidationError`). To keep the old verbatim behaviour, pass `validateConfig: false`.
+
 ## 1.0.4
 
 ### Patch Changes

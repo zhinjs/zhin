@@ -1,5 +1,20 @@
 # @zhin.js/a2a
 
+## 1.1.13
+
+### Patch Changes
+
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [a383380]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/core@1.1.47
+  - @zhin.js/workroom@0.0.6
+
 ## 1.1.12
 
 ### Patch Changes

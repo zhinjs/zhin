@@ -1,5 +1,13 @@
 # @zhin.js/host-http
 
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [d13b1d7]
+- Updated dependencies [1971e0c]
+  - @zhin.js/console-protocol@1.1.11
+
 ## 1.1.7
 
 ### Patch Changes

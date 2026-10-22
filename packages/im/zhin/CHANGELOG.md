@@ -1,5 +1,24 @@
 # zhin.js
 
+## 1.1.12
+
+### Patch Changes
+
+- 5be09ae: Re-export the `ConversationRef`, `DeliveryReceipt`, `CapabilityContext` and `OperationClientPort` types from `@zhin.js/core` and `zhin.js`, so toolkits such as `@zhin.js/testing` can type against the app's single `zhin.js` tree instead of depending on `@zhin.js/im-contract` and `@zhin.js/feature-kit` directly (#899). Type-only and additive.
+- d3563d9: Plugins can now import the AI completion contract from the `zhin.js` main entry without depending on `@zhin.js/agent` (#877). `@zhin.js/core` defines `aiCompletionToken` (same id, and `@zhin.js/agent` re-exports the same object), the `AiCompletion*` / `UsageSubject` types, `usageSubjectFromMessage(message)` (same quota key rules as Agent turns; returns `undefined` when the message has no sender), `isAiCompletionQuotaError(error)` and `hasResource(context, token)`. Construction and capability contexts gain an optional `has(token)` member (the built-in ones and the `@zhin.js/testing` fake plugin implement it), so plugins can check for optional resources without try/catch.
+- 2264a99: **从 1.1.13 及更早版本升级（configVersion 2）**：先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移配置，最后 `zhin config check` 后重新启动。指南：https://zhin.js.org/operations/upgrades#configversion-2
+
+  降低 v1 配置升级成本：启动、`zhin config check` 和 `zhin doctor` 检测到 v1 配置（缺少 `configVersion: 2` 或仍有 `package.json#zhin.plugins`）时，直接说明是 v1 配置，并给出停机与迁移命令和文档链接，不再报通用解析错误。`zhin migrate instances` 默认输出按键名列出的可读预览（不含任何配置值，`--json` 保留机器输出）；`--apply` 写入前把原文件复制到 `.zhin/backups/config-v2-<时间戳>/` 并打印路径与恢复方式。`zhin migrate` 默认保留精确版本、`link:`、`file:` 等锁定依赖（`--include-pinned` 才改为 latest），dry-run 结束时明确提示未做任何改动，帮助文本指向配置迁移并区分 `zhin runtime migrate`。
+
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [d3563d9]
+- Updated dependencies [c618eb7]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/core@1.1.47
+
 ## 1.1.11
 
 > **⚠️ 升级须知（configVersion 2）**：随本版本发布的 `@zhin.js/cli` 1.1.14 起，Runtime 只接受 `configVersion: 2`，旧配置会被拒绝启动。先停止 Bot，再升级依赖，然后运行 `zhin migrate instances` 预览、`zhin migrate instances --apply` 迁移（自动备份），最后 `zhin config check` 后启动。指南：https://zhin.js.org/operations/upgrades#configversion-2

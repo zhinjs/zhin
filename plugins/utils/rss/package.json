@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-rss",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "RSS/Atom feed subscription plugin for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

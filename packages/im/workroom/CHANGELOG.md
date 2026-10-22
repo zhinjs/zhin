@@ -1,5 +1,42 @@
 # @zhin.js/workroom
 
+## 0.0.6
+
+### Patch Changes
+
+- a383380: 修复 source map：这些包之前的 `.js.map` / `.d.ts.map` 指向没有发布的 `src/`，调试和"跳转到定义"都找不到源码。现在 `.js.map` 内联了源码（`inlineSources`），也不再生成指不到源码的 `.d.ts.map`。运行时行为不变。
+
+  预告：下一个大版本会移除发布包里冗余的 `.ts` 源码（很多包里的 `src/**/*.ts`，以及插件约定目录里与 `index.js` 并排的 `index.ts`），本次不做改动。深导入 `.ts` 文件的代码请改用包的 `exports` 入口，详见根目录 `CHANGELOG.md`。
+
+  Source maps now embed their sources (`inlineSources`); dangling `.d.ts.map` files are no longer emitted. Heads-up: redundant published `.ts` sources will be removed in the next major. Switch any deep `.ts` imports to the package's `exports` entry.
+
+- Updated dependencies [6fdd30b]
+- Updated dependencies [1a11207]
+- Updated dependencies [9943df6]
+- Updated dependencies [5be09ae]
+- Updated dependencies [a3ab153]
+- Updated dependencies [61cca0b]
+- Updated dependencies [e8f7309]
+- Updated dependencies [5afc18f]
+- Updated dependencies [ade0f33]
+- Updated dependencies [d3563d9]
+- Updated dependencies [b15c86b]
+- Updated dependencies [3224ba3]
+- Updated dependencies [f91cc89]
+- Updated dependencies [1148821]
+- Updated dependencies [4dd081c]
+- Updated dependencies [c618eb7]
+- Updated dependencies [a383380]
+- Updated dependencies [b3bbada]
+- Updated dependencies [12d9a03]
+- Updated dependencies [fbfefb7]
+  - @zhin.js/agent@1.1.37
+  - @zhin.js/tool@1.1.8
+  - @zhin.js/core@1.1.47
+  - @zhin.js/ai@1.1.42
+  - @zhin.js/im-contract@1.1.5
+  - @zhin.js/skill@1.1.8
+
 ## 0.0.5
 
 ### Patch Changes

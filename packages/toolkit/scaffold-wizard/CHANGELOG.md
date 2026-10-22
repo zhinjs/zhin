@@ -1,5 +1,19 @@
 # @zhin.js/scaffold-wizard
 
+## 1.1.7
+
+### Patch Changes
+
+- f974c91: 新建项目写入真实依赖版本范围（如 `zhin.js: ^1.1.11`），不再写 `latest`：范围在 scaffold-wizard 打包时由 `prepack` 从工作区版本生成，AI 栈第三方包沿用 Zhin 自身 peer 范围；拿不到版本的依赖仍保留 `latest`。doctor / config check 诊断基线不变。
+- 90057de: 删除已不再使用的旧版本快照 `src/stack-versions.generated.json`（及仓库脚本 `scripts/sync-scaffold-deps.mjs`）；脚手架版本范围统一由 `stack-version-ranges` 在打包时生成。
+- 33fa6d3: 数据库选项中 MongoDB 的实机验收版本改为 MongoDB 7，与 CI 实测版本一致（MongoDB 8.x 在 Linux 6.19+ 内核上无法启动，CI 暂时改用 7.x）。
+- Updated dependencies [1a11207]
+- Updated dependencies [8302701]
+- Updated dependencies [de5b2a1]
+- Updated dependencies [29d0be9]
+  - @zhin.js/runtime@1.1.10
+  - @zhin.js/config-file@1.1.7
+
 ## 1.1.6
 
 ### Patch Changes

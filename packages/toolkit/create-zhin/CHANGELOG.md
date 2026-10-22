@@ -1,5 +1,22 @@
 # create-zhin-app
 
+## 1.1.8
+
+### Patch Changes
+
+- 8302701: Stop printing the full HTTP token when a project is created. The summary now shows a masked value with its length and points to `HTTP_TOKEN` in the project `.env`, so the token no longer ends up in CI logs.
+- f974c91: 新建项目写入真实依赖版本范围（如 `zhin.js: ^1.1.11`），不再写 `latest`：范围在 scaffold-wizard 打包时由 `prepack` 从工作区版本生成，AI 栈第三方包沿用 Zhin 自身 peer 范围；拿不到版本的依赖仍保留 `latest`。doctor / config check 诊断基线不变。
+- a383380: 修复 source map：这些包之前的 `.js.map` / `.d.ts.map` 指向没有发布的 `src/`，调试和"跳转到定义"都找不到源码。现在 `.js.map` 内联了源码（`inlineSources`），也不再生成指不到源码的 `.d.ts.map`。运行时行为不变。
+
+  预告：下一个大版本会移除发布包里冗余的 `.ts` 源码（很多包里的 `src/**/*.ts`，以及插件约定目录里与 `index.js` 并排的 `index.ts`），本次不做改动。深导入 `.ts` 文件的代码请改用包的 `exports` 入口，详见根目录 `CHANGELOG.md`。
+
+  Source maps now embed their sources (`inlineSources`); dangling `.d.ts.map` files are no longer emitted. Heads-up: redundant published `.ts` sources will be removed in the next major. Switch any deep `.ts` imports to the package's `exports` entry.
+
+- Updated dependencies [f974c91]
+- Updated dependencies [90057de]
+- Updated dependencies [33fa6d3]
+  - @zhin.js/scaffold-wizard@1.1.7
+
 ## 1.1.7
 
 ### Patch Changes
