@@ -41,7 +41,7 @@ export type {
 export type { HolidayInput, ScatterInput, FestivalName } from '@zhin.js/schedule';
 
 // ── Scheduler ──
-export { Scheduler } from './scheduler/index.js';
+export { Scheduler, isHeartbeatEmpty } from './scheduler/index.js';
 export type {
   Schedule,
   JobPayload,

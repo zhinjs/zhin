@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScheduleJobEngine } from '../../src/assistant/job-engine.js';
@@ -7,6 +7,7 @@ import { createNotificationRouter } from '../../src/assistant/notification-route
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import { JobWorker } from '../../src/assistant/job-worker.js';
 import type { TaskExecutor } from '../../src/task-executor.js';
+import { DEFAULT_HEARTBEAT_PROMPT } from '../../src/assistant/profile-types.js';
 
 describe('ScheduleJobEngine', () => {
   const router = createNotificationRouter({ resolveAdapter: () => undefined });
@@ -131,6 +132,45 @@ describe('ScheduleJobEngine', () => {
       }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    engine.unload();
+  });
+
+  it.each([
+    ['missing', undefined, 0],
+    ['only headings and empty checkboxes', '# Heartbeat\n\n<!-- add tasks -->\n- [ ]\n', 0],
+    ['an actionable task', '# Heartbeat\n- check the build every morning\n', 1],
+  ])('runs the default heartbeat only when HEARTBEAT.md has a task (%s)', async (_label, content, calls) => {
+    const execute = vi.fn(async () => ({ success: true, responseText: 'HEARTBEAT_OK', durationMs: 1 }));
+    const store = new ScheduleJobStore({ dataDir });
+    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
+    const engine = new ScheduleJobEngine({ store, worker, router, workspaceDir: dataDir });
+    if (content !== undefined) await writeFile(join(dataDir, 'HEARTBEAT.md'), content);
+    await engine.addJob({
+      id: 'heartbeat',
+      enabled: true,
+      schedule: { kind: 'every', everyMs: 60_000 },
+      action: { kind: 'heartbeat', prompt: DEFAULT_HEARTBEAT_PROMPT },
+      notify: { channel: 'silent' },
+    });
+    await engine.runJobNow('heartbeat');
+    expect(execute).toHaveBeenCalledTimes(calls);
+    engine.unload();
+  });
+
+  it('runs a heartbeat with a custom prompt even without HEARTBEAT.md', async () => {
+    const execute = vi.fn(async () => ({ success: true, responseText: 'ok', durationMs: 1 }));
+    const store = new ScheduleJobStore({ dataDir });
+    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
+    const engine = new ScheduleJobEngine({ store, worker, router, workspaceDir: dataDir });
+    await engine.addJob({
+      id: 'heartbeat',
+      enabled: true,
+      schedule: { kind: 'every', everyMs: 60_000 },
+      action: { kind: 'heartbeat', prompt: 'Check the group for unanswered questions.' },
+      notify: { channel: 'silent' },
+    });
+    await engine.runJobNow('heartbeat');
+    expect(execute).toHaveBeenCalledTimes(1);
     engine.unload();
   });
 });

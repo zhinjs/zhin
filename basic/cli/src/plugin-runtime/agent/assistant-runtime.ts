@@ -124,6 +124,7 @@ export function createAssistantScheduleRuntime(
     notifyOnFailure: defaults.notifyOnFailure,
     router: notificationRouter,
     defaultNotify,
+    workspaceDir: projectRoot,
   });
 
   const scheduleManager = {

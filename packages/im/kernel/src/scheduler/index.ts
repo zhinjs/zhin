@@ -12,5 +12,5 @@ export type {
   AddJobOptions,
   IScheduler,
 } from './types.js';
-export { Scheduler } from './scheduler.js';
+export { Scheduler, isHeartbeatEmpty } from './scheduler.js';
 export type { SchedulerOptions } from './scheduler.js';
