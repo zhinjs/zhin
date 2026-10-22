@@ -2,6 +2,7 @@ import type { AiOutboundCapabilities, AiOutboundExtensionDefinition } from './ty
 
 export const AI_OUTBOUND_JSON_EXAMPLE = '{"mentions":["researcher","210723495"],"text":"正文"}';
 
+/** @deprecated Legacy `{mentions,text}` format; Agent replies use the canonical `{segments}` contract (`buildAiOutboundJsonSchema`). */
 export function buildCoreAiOutboundPromptHint(
   capabilities?: AiOutboundCapabilities,
 ): string {
@@ -20,6 +21,7 @@ export function buildCoreAiOutboundPromptHint(
   return lines.join('\n');
 }
 
+/** @deprecated Legacy `{mentions,text}` format; Agent replies use the canonical `{segments}` contract (`buildAiOutboundJsonSchema`). */
 export function buildAiOutboundPromptHint(input: {
   capabilities?: AiOutboundCapabilities;
   extensions?: readonly AiOutboundExtensionDefinition[];

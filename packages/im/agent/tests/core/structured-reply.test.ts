@@ -1,10 +1,10 @@
 import { RED_CIRCLE_PNG } from '../../evals/fixtures/images.js';
 import { describe, expect, it, vi } from 'vitest';
-import { aiOutboundJsonSchema } from '@zhin.js/core';
+import { aiOutboundJsonSchema, buildAiOutboundJsonSchema, DEFAULT_AI_OUTBOUND_SEGMENT_TYPES, type AiOutboundSegmentType } from '@zhin.js/core';
 import type { AgentMessage, AgentTool, StreamOptions } from '@zhin.js/ai';
 import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recovery.js';
 import { formatToolCallsForUser } from '../../src/core/tool-calls-user-format.js';
-import { decodeStructuredReply } from '../../src/outbound/structured-reply.js';
+import { decodeStructuredReply, structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
 import { OutboundLeakInspector, guardReplyPort } from '../../src/security/outbound-leak-guard.js';
@@ -27,6 +27,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   outputSchema?: false | Record<string, unknown>;
   detached?: boolean;
   emptyReplyRetries?: number;
+  replySegmentTypes?: readonly AiOutboundSegmentType[];
 } = {}) {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => responses.shift()! });
   const streamOptions: (StreamOptions | undefined)[] = [];
@@ -61,6 +62,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
       origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'g' },
       principal: { subjectId: '123', roles: ['user'] }, session: { key: 's' },
     },
+    replySegmentTypes: options.replySegmentTypes,
     allTools: tools, resolvedTools: tools,
     toolExecution: { execute: async () => ({ status: 'completed', output: { id: '456', name: 'Alice' }, durationMs: 1 }) } as never,
     personaEnhanced: '', modelId: 'm', modelCandidates: ['m'], toolLoading: 'direct',
@@ -209,7 +211,7 @@ describe('structured Agent final replies', () => {
     const port = guardReplyPort({ send: async output => {
       sent.push(await publishOutboundElements(output)); return { status: 'sent' };
     } }, new OutboundLeakInspector({ secretValues: ['secret-1234567890'] }));
-    const output = decodeStructuredReply(JSON.stringify({ segments: [mention('123'), { type: 'markdown', data: { content: 'secret-1234567890' } }, { type: 'share', data: { title: 'secret-1234567890', url: 'https://example.com' } }] }));
+    const output = decodeStructuredReply(JSON.stringify({ segments: [mention('123'), { type: 'markdown', data: { content: 'secret-1234567890' } }, { type: 'share', data: { title: 'secret-1234567890', url: 'https://example.com' } }] }), [...DEFAULT_AI_OUTBOUND_SEGMENT_TYPES, 'share']);
     await port.send(output);
     expect(sent).toEqual([[mention('123'), { type: 'markdown', data: { content: '[已隐藏：密钥]' } }, { type: 'share', data: { title: '[已隐藏：密钥]', url: 'https://example.com' } }]]);
     expect(renderAgentOutput(output)).toContain('secret-1234567890'); // input was not mutated
@@ -240,5 +242,38 @@ describe('structured Agent final replies', () => {
     expect(calls).toHaveLength(2);
     expect(streamOptions.every(options => options?.outputSchema === aiOutboundJsonSchema)).toBe(true);
     expect(result.reply).toBe('@456，找到你了');
+  });
+
+  it('offers the reply endpoint\'s segment types in the schema, instruction and validator', async () => {
+    const segments = [text('点个链接'), { type: 'share', data: { url: 'https://example.com', title: '链接' } }];
+    const { result, streamOptions, calls } = await run(
+      [assistantTextReply(JSON.stringify({ segments }))],
+      { replySegmentTypes: ['text', 'share'] },
+    );
+    expect(streamOptions[0]?.outputSchema).toEqual(buildAiOutboundJsonSchema(['text', 'share']));
+    expect(calls[0].context.systemPrompt).toContain('Segment types available on this platform: text, share.');
+    expect(calls[0].context.systemPrompt).not.toContain('mention:');
+    expect(result.reply).toContain('链接');
+    expect(() => decodeStructuredReply(JSON.stringify({ segments }))).toThrow(/message schema/);
+  });
+
+  it('documents only the offered segment types', () => {
+    const instruction = structuredReplyInstruction(['text', 'keyboard', 'dice']);
+    expect(instruction).toContain('keyboard:');
+    expect(instruction).toContain('dice / rps:');
+    expect(instruction).not.toContain('image / audio / video / file:');
+  });
+
+  it('completes model quick-reply buttons into a canonical keyboard with a text fallback', async () => {
+    const output = decodeStructuredReply(JSON.stringify({ segments: [text('选一个'),
+      { type: 'keyboard', data: { rows: [[{ label: '详情', payload: '/detail 1' }, { label: '取消', payload: '取消' }]] } },
+      { type: 'keyboard', data: { rows: [[]] } }] }));
+    expect(await publishOutboundElements(output)).toEqual([text('选一个'), { type: 'keyboard', data: {
+      rows: [[
+        { id: 'reply-1', label: '详情', payload: '/detail 1', mode: 'command', command: { enter: true, reply: false }, style: 'primary' },
+        { id: 'reply-2', label: '取消', payload: '取消', mode: 'command', command: { enter: true, reply: false }, style: 'primary' },
+      ]],
+      fallback: { hint: '也可以直接发送对应指令。', map: { '1': '/detail 1', '2': '取消' } },
+    } }]);
   });
 });

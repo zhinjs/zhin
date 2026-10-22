@@ -9,6 +9,7 @@ import type {
 } from '@zhin.js/tool';
 import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ConversationContextBlock } from '@zhin.js/im-contract';
+import type { AiOutboundSegmentType } from '@zhin.js/core';
 
 export type TurnScope = 'private' | 'group' | 'channel';
 
@@ -146,6 +147,8 @@ export type DeliveryOutcome =
 
 export interface ReplyPort {
   send(output: readonly AgentOutputElement[]): Promise<DeliveryOutcome>;
+  /** Segment types the reply endpoint delivers; absent means the core default set. */
+  readonly segmentTypes?: readonly AiOutboundSegmentType[];
 }
 
 export interface ActivityPort {
