@@ -129,12 +129,16 @@ jobs:
           # - npm first tries trusted publishing (OIDC) for each package. That
           #   works for every package with a trusted publisher on npmjs.com and
           #   always attaches provenance.
-          # - If a package has no trusted publisher yet, npm falls back to the
-          #   token below. Set the repository variable
-          #   NPM_TRUSTED_PUBLISHING_ONLY=true to drop the token once every
-          #   package has a trusted publisher.
-          NPM_TOKEN: ${{ vars.NPM_TRUSTED_PUBLISHING_ONLY != 'true' && (secrets.NPM_TOKEN || secrets.PERSONAL_TOKEN) || '' }}
-          NODE_AUTH_TOKEN: ${{ vars.NPM_TRUSTED_PUBLISHING_ONLY != 'true' && (secrets.NPM_TOKEN || secrets.PERSONAL_TOKEN) || '' }}
+          # - If a package has no trusted publisher yet (or the OIDC exchange
+          #   fails), npm falls back to the npm token below. Set the repository
+          #   variable NPM_TRUSTED_PUBLISHING_ONLY=true to drop the token once
+          #   every package has a trusted publisher.
+          # - The fallback is only ever an npm token. PERSONAL_TOKEN is a GitHub
+          #   token for GitHub Packages installs; npmjs.com rejects it (401/404).
+          #   changesets/action writes NPM_TOKEN into the npmjs .npmrc, so it is
+          #   overridden here too, not just NODE_AUTH_TOKEN.
+          NPM_TOKEN: ${{ vars.NPM_TRUSTED_PUBLISHING_ONLY != 'true' && secrets.NPM_TOKEN || '' }}
+          NODE_AUTH_TOKEN: ${{ vars.NPM_TRUSTED_PUBLISHING_ONLY != 'true' && secrets.NPM_TOKEN || '' }}
           # Token-based publishes get provenance too (needs id-token: write).
           NPM_CONFIG_PROVENANCE: 'true'
 

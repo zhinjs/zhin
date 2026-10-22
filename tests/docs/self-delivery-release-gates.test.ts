@@ -13,6 +13,14 @@ describe('formal release isolation from self delivery', () => {
     expect(config.jobs.publish.permissions['id-token']).toBe('write');
   });
 
+  it('falls back only to an npm token, never to the GitHub PERSONAL_TOKEN', () => {
+    const step = workflow('publish').jobs.publish.steps.find((s: { id?: string }) => s.id === 'changesets');
+    const npmOnly = "${{ vars.NPM_TRUSTED_PUBLISHING_ONLY != 'true' && secrets.NPM_TOKEN || '' }}";
+    // changesets/action writes NPM_TOKEN into the npmjs .npmrc, so both must stay npm-only.
+    expect(step.env.NPM_TOKEN).toBe(npmOnly);
+    expect(step.env.NODE_AUTH_TOKEN).toBe(npmOnly);
+  });
+
   it('limits Pages deployment rights to the separately gated main deployment job', () => {
     const config = workflow('deploy-docs');
     expect(config.permissions).toEqual({ contents: 'read' });

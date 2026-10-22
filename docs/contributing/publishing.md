@@ -11,7 +11,7 @@ title: npm 发布与可信发布
 发布步骤对每个包按下面的顺序认证，由 npm CLI 自己完成，不需要脚本判断：
 
 1. **可信发布（OIDC）**：job 有 `id-token: write`，npm CLI 用 GitHub 签发的短期 OIDC token 向 npmjs.com 换取只对该包有效的发布凭据。只要这个包在 npmjs.com 配置了匹配的可信发布者，就走这条路。
-2. **token 回退**：包还没有可信发布者（或配置已过期）时，换取失败，npm 继续使用 `NODE_AUTH_TOKEN`。它取 `secrets.NPM_TOKEN`，没有则取 `secrets.PERSONAL_TOKEN`。
+2. **token 回退**：包还没有可信发布者（或配置已过期、OIDC 换取临时失败）时，换取失败，npm 继续使用 `NODE_AUTH_TOKEN`。它**只取** `secrets.NPM_TOKEN`（npm 的 Granular Access Token，需对 `@zhin.js` 作用域有发布权限）；没有配置时为空，该包发布失败。不会拿 `PERSONAL_TOKEN`：那是 GitHub 的 token，npmjs.com 会拒绝（401 / 404），只会让每个包白白等待后失败。`changesets/action` 会把 `NPM_TOKEN` 写进 npmjs 的 `.npmrc`，所以发布步骤里 `NPM_TOKEN` 和 `NODE_AUTH_TOKEN` 都只取这个 secret。
 
 所有发布都带 [provenance](https://docs.npmjs.com/generating-provenance-statements)：OIDC 发布由 npm 自动生成；token 发布由 `NPM_CONFIG_PROVENANCE=true` 打开。provenance 要求 `package.json` 的 `repository.url` 指向 `github.com/zhinjs/zhin`，由 `pnpm check:publish-repository` 门禁保证。
 
@@ -29,7 +29,7 @@ title: npm 发布与可信发布
 
 确认全部包都配置好可信发布者、并且至少一次真实发版走通 OIDC 后，在仓库 **Settings → Secrets and variables → Actions → Variables** 新建变量 `NPM_TRUSTED_PUBLISHING_ONLY = true`。之后发布步骤不再拿到任何 npm token，未配置可信发布者的包会直接发布失败。删除这个变量即可恢复回退。
 
-在此之前不要删除 `PERSONAL_TOKEN`：它同时用于安装 GitHub Packages 上的 `@icqqjs/*` 依赖。
+不要删除 `PERSONAL_TOKEN`：它用于安装 GitHub Packages 上的 `@icqqjs/*` 依赖，与 npm 发布认证无关。
 
 ## 新包首次发布
 
