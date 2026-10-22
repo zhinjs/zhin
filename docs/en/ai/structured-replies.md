@@ -26,8 +26,19 @@ and mentions as segments instead of embedding image syntax or literal `@name` in
 
 ## Supported content and identity
 
-The model schema supports text, mention, markdown, image, audio, video, file,
-reply, forward, face, dice, rps and share. It derives the required fields from the
+The segment types offered to the model depend on the **endpoint the reply goes to**;
+the schema, the instruction and the validator are generated from that one set:
+
+- Adapter without a `segments.supported` list: text, mention, markdown, image,
+  audio, video, file and keyboard.
+- Adapter with `segments.supported`: only the listed types (mention, media,
+  keyboard, share, dice, rps). Text is always offered; markdown and keyboard are
+  also offered when the endpoint degrades them to text (`markdown: 'text'` /
+  `interactive: 'text'`).
+
+reply, forward and face are never offered: they need platform message, forward or
+emoji IDs the model has no reliable source for. A type the model picks is therefore
+never rejected later as unsupported by the adapter. The schema derives the required fields from the
 Core canonical contract, with a closed Markdown content shape for the renderer
 extension. All objects are closed and all exposed properties are required.
 | Segment | Required `data` fields |
@@ -36,11 +47,14 @@ extension. All objects are closed and all exposed properties are required.
 | `markdown` | `content: string` |
 | `mention` | `target: string` |
 | `image / audio / video / file` | `media: { kind, value }` |
-| `reply` | `message_id: string` |
-| `forward` | `forward_id: string` |
-| `face` | `id: string` or `number` |
+| `keyboard` | `rows: [[{ label, payload }]]`: quick-reply buttons, at most 5 per row; tapping sends the payload as the user's next message |
 | `dice / rps` | Empty object |
 | `share` | `url: string`, `title: string` |
+
+Model keyboards carry only `label` and `payload`. Publishing fills in button IDs,
+the `command` interaction mode and the text fallback (a numbered list where replying
+with the number equals a tap), using the same builder as card buttons. Empty
+keyboards are dropped.
 
 Media `kind` is `url / path / base64 / file`; its value is respectively a URL,
 local path, inline base64 or opaque platform file reference. Reuse references

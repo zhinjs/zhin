@@ -27,6 +27,7 @@ import {
   runWithAgentDecisionTurn,
 } from '@zhin.js/agent/runtime';
 import {
+  resolveAiOutboundSegmentTypes,
   type ImRuntime,
   type IngressRoute,
   type Message,
@@ -35,6 +36,7 @@ import {
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   rootPluginId,
+  type CapabilityId,
   type PluginId,
   type RuntimeSnapshot,
   type SnapshotLease,
@@ -456,6 +458,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 }),
                 question: createRuntimeQuestionPort(options.im, message),
                 reply: {
+                  segmentTypes: resolveAiOutboundSegmentTypes(
+                    (workroomReplyConversation ?? message.conversation).endpoint.id as CapabilityId,
+                    snapshot,
+                  ),
                   send: async (output) => {
                     logger.debug(formatCompact({
                       op: 'replychain_port_send',

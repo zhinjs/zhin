@@ -2,8 +2,8 @@
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
 
-import { aiOutboundJsonSchema } from '@zhin.js/core';
-import { decodeStructuredReply, STRUCTURED_REPLY_INSTRUCTION } from '../outbound/structured-reply.js';
+import type { AiOutboundSegmentType } from '@zhin.js/core';
+import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchema } from '../outbound/structured-reply.js';
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
@@ -176,15 +176,6 @@ function logAssistantIterationFailure(
   }));
 }
 
-/** ai.agent.outputSchema 配置 → 传给 LLM 的 JSON Schema（true/'segments' 用 zhin 出站契约）。 */
-function resolveAgentOutputSchema(
-  value: boolean | 'segments' | Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (!value) return undefined;
-  if (value === true || value === 'segments') return aiOutboundJsonSchema;
-  return value;
-}
-
 function toolResultToAgentMessage(
   toolCall: ParsedToolCall,
   result: unknown,
@@ -215,6 +206,8 @@ export interface AgentLoopTurnInput {
   rawContent: string;
   promptProfile: AgentPromptProfile;
   turnContext: TurnContextView;
+  /** Segment types the IM reply endpoint delivers (ReplyPort.segmentTypes). */
+  replySegmentTypes?: readonly AiOutboundSegmentType[];
   allTools: AgentTool[];
   resolvedTools: AgentTool[];
   toolExecution: ToolExecutionAuthority;
@@ -522,15 +515,13 @@ export async function* runAgentLoopTextTurnRun(
   const preData = toolRun.preExecution.data;
   // IM conversations get a message contract. Detached/programmatic turns keep
   // their text/custom-schema contract and never inherit the IM preset.
+  // ai.agent.outputSchema: true / 'segments' → zhin message contract; an object → caller's own schema.
   const configuredSchema = host.config.outputSchema ?? 'segments';
-  const imReply = input.turnContext.origin.kind === 'im'
-    && input.conversationPersistence !== 'none'
-    && (configuredSchema === true || configuredSchema === 'segments');
-  const outputSchema = resolveAgentOutputSchema(
-    configuredSchema === true || configuredSchema === 'segments'
-      ? (imReply ? 'segments' : false)
-      : configuredSchema,
-  );
+  const messagePreset = configuredSchema === true || configuredSchema === 'segments';
+  const imReply = messagePreset && input.turnContext.origin.kind === 'im'
+    && input.conversationPersistence !== 'none';
+  const outputSchema = imReply ? structuredReplySchema(input.replySegmentTypes)
+    : messagePreset || !configuredSchema ? undefined : configuredSchema;
   const turnShellPolicy = input.turnContext.policy?.shell;
   const execPolicyConfig = turnShellPolicy
     ? {
@@ -555,7 +546,7 @@ export async function* runAgentLoopTextTurnRun(
     : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile, input.promptRuntime);
   const proseSystemPrompt = systemPrompt;
   if (imReply) {
-    systemPrompt = `${systemPrompt}\n\n${STRUCTURED_REPLY_INSTRUCTION}`;
+    systemPrompt = `${systemPrompt}\n\n${structuredReplyInstruction(input.replySegmentTypes)}`;
   }
 
   const agentTools = hasTools
@@ -1133,11 +1124,12 @@ export async function* runAgentLoopTextTurnRun(
   let output: AgentOutputElement[] = delegatedOnly || structuredReply ? [] : parseOutput(textReply);
   if (!delegatedOnly && structuredReply) {
     try {
-      output = decodeStructuredReply(rawReply);
+      output = decodeStructuredReply(rawReply, input.replySegmentTypes);
     } catch (error) {
       const recovery = await recoverStructuredReply({
         transport: completionUsage.transport, model: llmModel, raw: rawReply,
         error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
+        segmentTypes: input.replySegmentTypes,
       });
       output = recovery.output;
       // History must match what the user saw: the corrected reply, or the failure text. Never the

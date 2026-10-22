@@ -1,6 +1,6 @@
 import { assistantAnswerText, createUserMessage, type AssistantMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
-import { aiOutboundJsonSchema } from '@zhin.js/core';
-import { decodeStructuredReply, STRUCTURED_REPLY_INSTRUCTION } from '../outbound/structured-reply.js';
+import type { AiOutboundSegmentType } from '@zhin.js/core';
+import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchema } from '../outbound/structured-reply.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 
 export const STRUCTURED_REPLY_FAILURE = '模型未能生成符合消息格式的回复，本次未发送模型内容。请重试。';
@@ -12,6 +12,7 @@ export async function recoverStructuredReply(input: {
   raw: string;
   error: Error;
   signal?: AbortSignal;
+  segmentTypes?: readonly AiOutboundSegmentType[];
 }): Promise<{
   output: AgentOutputElement[];
   /**
@@ -31,18 +32,18 @@ export async function recoverStructuredReply(input: {
         `Rejected reply: ${input.raw}`,
       ].join('\n'));
       const assistant = await input.transport.complete(input.model, {
-        systemPrompt: STRUCTURED_REPLY_INSTRUCTION,
+        systemPrompt: structuredReplyInstruction(input.segmentTypes),
         messages: [correction],
         tools: undefined,
       }, {
-        outputSchema: aiOutboundJsonSchema,
+        outputSchema: structuredReplySchema(input.segmentTypes),
         maxRetries: 0,
         signal: input.signal
           ? AbortSignal.any([input.signal, AbortSignal.timeout(30_000)])
           : AbortSignal.timeout(30_000),
       });
       const text = assistantAnswerText(assistant);
-      const output = decodeStructuredReply(text);
+      const output = decodeStructuredReply(text, input.segmentTypes);
       return { output, assistant: { ...assistant, content: [{ type: 'text', text }] } };
     } catch {
       // Invalid or missing output stays private, including provider reasoning.

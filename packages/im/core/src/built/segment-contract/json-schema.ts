@@ -202,28 +202,66 @@ function requiredFieldsOnly(schema: JsonSchemaObject): JsonSchemaObject {
   return schema;
 }
 
-/** One ordered message, including plain replies. No text/mentions shorthand. */
-export const aiOutboundJsonSchema: JsonSchemaObject = {
-  type: 'object',
-  properties: {
-    segments: {
+/**
+ * Segment types a model may author in a final reply. reply / forward / face are
+ * left out: they carry platform ids (message, forward, emoji) the model has no
+ * reliable source for.
+ */
+export const AI_OUTBOUND_SEGMENT_TYPES = [
+  'text', 'mention', 'image', 'audio', 'video', 'file', 'markdown', 'keyboard', 'share', 'dice', 'rps',
+] as const;
+export type AiOutboundSegmentType = typeof AI_OUTBOUND_SEGMENT_TYPES[number];
+
+/** Offered when the adapter declares no `segments.supported` list. */
+export const DEFAULT_AI_OUTBOUND_SEGMENT_TYPES: readonly AiOutboundSegmentType[] = [
+  'text', 'mention', 'image', 'audio', 'video', 'file', 'markdown', 'keyboard',
+];
+
+// Concrete closed shapes for renderer extensions; the publisher fills in ids,
+// interaction mode and the text fallback for keyboards.
+const aiExtensionBranches: Partial<Record<AiOutboundSegmentType, JsonSchemaObject>> = {
+  markdown: strictBranch('markdown', dataObject({
+    content: { type: 'string', description: 'Markdown source; rendered by the unified outbound pipeline' },
+  }, ['content'])),
+  keyboard: strictBranch('keyboard', dataObject({
+    rows: {
       type: 'array',
+      description: 'Quick-reply buttons, at most 5 per row; tapping one sends its payload as the user\'s next message',
       items: {
-        anyOf: (outboundSegmentJsonSchema.anyOf as JsonSchemaObject[])
-          .filter(branch => {
-            const type = (branch.properties as Record<string, { const?: string }>).type?.const;
-            return type && STRICT_OUTBOUND_SEGMENT_TYPES.includes(type as typeof STRICT_OUTBOUND_SEGMENT_TYPES[number]);
-          })
-          .map(requiredFieldsOnly)
-          // Markdown is a renderer extension in the general segment contract;
-          // give the model its concrete, closed content shape.
-          .concat(requiredFieldsOnly(strictBranch('markdown', dataObject({
-            content: { type: 'string', description: 'Markdown source; rendered by the unified outbound pipeline' },
-          }, ['content'])))),
+        type: 'array',
+        items: dataObject({
+          label: { type: 'string', description: 'Button text' },
+          payload: { type: 'string', description: 'Message sent when tapped, e.g. a command' },
+        }, ['label', 'payload']),
       },
-      description: 'Ordered canonical message segments. Use an empty array only when no reply is needed.',
     },
-  },
-  required: ['segments'],
-  additionalProperties: false,
+  }, ['rows'])),
 };
+
+/** One ordered message, including plain replies. No text/mentions shorthand. */
+export function buildAiOutboundJsonSchema(
+  types: readonly AiOutboundSegmentType[] = DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
+): JsonSchemaObject {
+  const branches = (outboundSegmentJsonSchema.anyOf as JsonSchemaObject[]).filter(branch => {
+    const type = (branch.properties as Record<string, { const?: string }>).type?.const;
+    return type !== undefined && !(type in aiExtensionBranches) && types.includes(type as AiOutboundSegmentType);
+  });
+  for (const type of types) {
+    const branch = aiExtensionBranches[type];
+    if (branch) branches.push(branch);
+  }
+  return {
+    type: 'object',
+    properties: {
+      segments: {
+        type: 'array',
+        items: { anyOf: branches.map(requiredFieldsOnly) },
+        description: 'Ordered canonical message segments. Use an empty array only when no reply is needed.',
+      },
+    },
+    required: ['segments'],
+    additionalProperties: false,
+  };
+}
+
+export const aiOutboundJsonSchema: JsonSchemaObject = buildAiOutboundJsonSchema();

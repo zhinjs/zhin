@@ -37,7 +37,11 @@ export {
   mediaRefJsonSchema,
   outboundSegmentJsonSchema,
   aiOutboundJsonSchema,
+  buildAiOutboundJsonSchema,
+  AI_OUTBOUND_SEGMENT_TYPES,
+  DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
   STRICT_OUTBOUND_SEGMENT_TYPES,
+  type AiOutboundSegmentType,
 } from './json-schema.js';
 export { segmentsForImDelivery } from './delivery.js';
 export {

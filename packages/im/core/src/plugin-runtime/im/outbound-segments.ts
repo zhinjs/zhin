@@ -16,7 +16,13 @@ import {
   type InteractivePolicy,
   type KeyboardSegmentData,
 } from '../../built/interactive-segments/types.js';
-import { isMediaRef, type Segment } from '../../built/segment-contract/index.js';
+import {
+  AI_OUTBOUND_SEGMENT_TYPES,
+  DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
+  isMediaRef,
+  type AiOutboundSegmentType,
+  type Segment,
+} from '../../built/segment-contract/index.js';
 import { markdownToPlainText } from '../../built/rich-segments/markdown-to-text.js';
 import type { OutboundFallbackReason } from './message-events.js';
 
@@ -152,6 +158,23 @@ export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot
   if (!slot?.definition || typeof slot.definition !== 'object') return undefined;
   const segments = (slot.definition as { segments?: { supported?: unknown } }).segments;
   return Array.isArray(segments?.supported) && segments.supported.every(type => typeof type === 'string') ? segments.supported : undefined;
+}
+
+/**
+ * Segment types a model may author for this endpoint: everything the outbound
+ * projection would deliver rather than reject. Markdown and keyboards outside the
+ * declared list still qualify when the endpoint degrades them to text.
+ */
+export function resolveAiOutboundSegmentTypes(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+): readonly AiOutboundSegmentType[] {
+  const supported = resolveOutboundSupportedSegments(adapter, snapshot);
+  if (!supported) return DEFAULT_AI_OUTBOUND_SEGMENT_TYPES;
+  const degradesToText = (type: AiOutboundSegmentType) =>
+    (type === 'markdown' && resolveOutboundMarkdownPolicy(adapter, snapshot) !== 'native')
+    || (type === 'keyboard' && resolveOutboundInteractivePolicy(adapter, snapshot) !== 'native');
+  return AI_OUTBOUND_SEGMENT_TYPES.filter(type => type === 'text' || degradesToText(type) || supported.includes(type));
 }
 
 /** Preserve semantic Markdown only when the endpoint explicitly declares native consumption. */

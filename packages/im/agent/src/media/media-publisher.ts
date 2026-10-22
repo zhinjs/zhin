@@ -279,30 +279,39 @@ function cardToSegments(el: Extract<OutputElement, { type: 'card' }>): Segment[]
   const segments: Segment[] = [{ type: 'markdown', data: { content: lines.join('\n') } }];
   const commands = el.buttons?.filter((button) => button.command);
   if (commands?.length) {
-    const buttons = commands.map((button, index) => ({
-      id: `card-${index + 1}`,
-      label: button.text,
-      payload: button.command!,
-      mode: 'command' as const,
-      command: { enter: true, reply: false },
-      style: 'primary' as const,
-    }));
-    const rows = Array.from(
+    const buttons = commands.map((button) => ({ label: button.text, payload: button.command! }));
+    segments.push(commandKeyboard(Array.from(
       { length: Math.ceil(buttons.length / 5) },
       (_, index) => buttons.slice(index * 5, index * 5 + 5),
-    );
-    segments.push({
-      type: 'keyboard',
-      data: {
-        rows,
-        fallback: {
-          hint: '也可以直接发送对应指令。',
-          map: Object.fromEntries(buttons.map((button, index) => [String(index + 1), button.payload])),
-        },
-      },
-    });
+    ), 'card'));
   }
   return segments;
+}
+
+/** Quick-reply buttons: tapping sends the payload as the user's next message; text platforms get a numbered list. */
+function commandKeyboard(
+  rows: readonly (readonly { label: string; payload: string }[])[],
+  idPrefix: string,
+): Segment {
+  let index = 0;
+  const buttonRows = rows.map(row => row.slice(0, 5).map(button => ({
+    id: `${idPrefix}-${++index}`,
+    label: button.label,
+    payload: button.payload,
+    mode: 'command' as const,
+    command: { enter: true, reply: false },
+    style: 'primary' as const,
+  }))).filter(row => row.length > 0);
+  return {
+    type: 'keyboard',
+    data: {
+      rows: buttonRows,
+      fallback: {
+        hint: '也可以直接发送对应指令。',
+        map: Object.fromEntries(buttonRows.flat().map((button, i) => [String(i + 1), button.payload])),
+      },
+    },
+  };
 }
 
 /** Canonical model media goes through the same capability/size gate as tool media. */
@@ -313,6 +322,10 @@ async function publishMessageSegment(
   authority?: OutboundMediaAuthority,
 ): Promise<Segment | null> {
   const kind = segment.type;
+  if (kind === 'keyboard') {
+    const rows = segment.data.rows as { label: string; payload: string }[][];
+    return rows.some(row => row.length > 0) ? commandKeyboard(rows, 'reply') : null;
+  }
   if (kind !== 'image' && kind !== 'audio' && kind !== 'video' && kind !== 'file') return segment;
   if (!caps[kind]) return { type: 'text', data: { text: `[${kind}]` } };
   const media = segment.data.media as MediaRef;

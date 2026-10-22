@@ -51,7 +51,14 @@ Skill、Tool 和权限边界控制。不会把 peer role、Bot Endpoint ID 自�
 Schema 从 Core 的 canonical 消息段契约派生，Markdown 渲染扩展使用封闭的 `data.content` 结构。
 模型只看到消息段的必填字段，所有对象
 关闭额外属性且列出的字段均必填，满足严格结构化输出 Provider 的对象要求。
-支持 text、mention、markdown、image、audio、video、file、reply、forward、face、dice、rps、share。
+模型可用的段类型按**本轮回复的 Endpoint** 决定，Schema、提示词与校验器都由同一份类型集合生成：
+
+- Adapter 未声明 `segments.supported` 时：text、mention、markdown、image、audio、video、file、keyboard。
+- 声明了 `segments.supported` 时：只提供其中出现的类型（可选 mention、媒体、keyboard、share、dice、rps）；
+  text 总是可用，markdown 与 keyboard 在 Endpoint 会降级为文字（`markdown: 'text'` / `interactive: 'text'`）时也可用。
+
+reply、forward、face 不提供给模型：它们需要平台消息 ID、转发 ID 或表情 ID，模型没有可靠来源。
+这样模型选出的段不会在出站投影因“Adapter 不支持该段”被拒发。
 可选展示字段、平台扩展和交互回调由工具/渲染器提供，不由最终回复模型制造。
 插件和工具的完整消息段契约不变。
 
@@ -61,11 +68,12 @@ Schema 从 Core 的 canonical 消息段契约派生，Markdown 渲染扩展使�
 | `markdown` | `{ content: string }` | 标题、列表、强调、代码块等排版 |
 | `mention` | `{ target: string }` | @ 真实平台用户 ID |
 | `image / audio / video / file` | `{ media: { kind, value } }` | 图片、语音/音频、视频、文件 |
-| `reply` | `{ message_id: string }` | 引用平台消息 |
-| `forward` | `{ forward_id: string }` | 已有平台转发引用 |
-| `face` | `{ id: string \| number }` | 平台表情 |
+| `keyboard` | `{ rows: [[{ label, payload }]] }` | 快捷回复按钮，每行最多 5 个；点击即把 payload 作为用户下一条消息发出 |
 | `dice / rps` | `{}` | 平台骰子、猜拳 |
 | `share` | `{ url: string, title: string }` | 链接分享 |
+
+模型的 keyboard 只写 `label` 与 `payload`；发布时补齐按钮 id、`command` 交互模式和文字降级
+（编号列表，回复编号等同点击），与卡片按钮同一套构造。空 keyboard 被丢弃。
 
 媒体 `kind` 为 `url / path / base64 / file`，`value` 分别为链接、本地路径、内联 base64、
 平台不透明文件引用。使用已有上下文或工具产出的引用，不编造附件地址。可读取媒体经既有

@@ -4,6 +4,7 @@ import {
   applyOutboundInteractivePolicy,
   applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
+  resolveAiOutboundSegmentTypes,
   resolveOutboundInteractivePolicy,
   resolveOutboundMarkdownPolicy,
   resolveOutboundMediaPolicy,
@@ -469,5 +470,21 @@ describe('outbound Markdown policy', () => {
     expect(applyOutboundMarkdownPolicy(input, 'text')).toEqual([
       { type: 'text', data: { text: '完成' } },
     ]);
+  });
+});
+
+describe('AI outbound segment types', () => {
+  const resolve = (segments: Record<string, unknown>) =>
+    resolveAiOutboundSegmentTypes('adapter:test' as never, mockSnapshot({ definition: { segments } }));
+
+  it('offers the default set when the adapter declares no supported list', () => {
+    expect(resolve({ outboundMedia: ['url'] })).toEqual(['text', 'mention', 'image', 'audio', 'video', 'file', 'markdown', 'keyboard']);
+  });
+
+  it('offers only declared types, keeping markdown and keyboards that degrade to text', () => {
+    expect(resolve({ supported: ['text', 'mention', 'image', 'reply', 'markdown', 'keyboard'], markdown: 'native', interactive: 'native' }))
+      .toEqual(['text', 'mention', 'image', 'markdown', 'keyboard']);
+    expect(resolve({ supported: ['text', 'share', 'dice'] })).toEqual(['text', 'markdown', 'keyboard', 'share', 'dice']);
+    expect(resolve({ supported: ['text'], markdown: 'native', interactive: 'native' })).toEqual(['text']);
   });
 });

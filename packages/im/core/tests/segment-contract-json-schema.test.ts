@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import Ajv from 'ajv';
 import {
   aiOutboundJsonSchema,
+  buildAiOutboundJsonSchema,
   outboundSegmentJsonSchema,
   STRICT_OUTBOUND_SEGMENT_TYPES,
 } from '../src/built/segment-contract/json-schema.js';
@@ -109,5 +110,29 @@ describe('aiOutboundJsonSchema', () => {
     expect(validateOutbound({ segments: [{ type: 'text', data: {} }] })).toBe(false);
     expect(validateOutbound({ segments: 'not-an-array' })).toBe(false);
     expect(validateOutbound({ mentions: 'not-an-array' })).toBe(false);
+  });
+});
+
+describe('buildAiOutboundJsonSchema', () => {
+  const validate = (types: Parameters<typeof buildAiOutboundJsonSchema>[0]) => ajv.compile(buildAiOutboundJsonSchema(types));
+  const share = { type: 'share', data: { url: 'https://example.com', title: '链接' } };
+  const quickReply = { type: 'keyboard', data: { rows: [[{ label: '详情', payload: '/detail 1' }]] } };
+
+  it('accepts exactly the requested segment types', () => {
+    expect(validateOutbound({ segments: [share] })).toBe(false);
+    expect(validate(['text', 'share'])({ segments: [share] })).toBe(true);
+    expect(validate(['text'])({ segments: [quickReply] })).toBe(false);
+    expect(validateOutbound({ segments: [quickReply] })).toBe(true);
+  });
+
+  it('never offers ids the model cannot know', () => {
+    const all = validate(['text', 'mention', 'image', 'audio', 'video', 'file', 'markdown', 'keyboard', 'share', 'dice', 'rps']);
+    for (const segment of [
+      { type: 'reply', data: { message_id: '1' } },
+      { type: 'forward', data: { forward_id: '1' } },
+      { type: 'face', data: { id: '1' } },
+      { type: 'keyboard', data: { rows: [[{ id: 'x', label: 'a', payload: 'b' }]] } },
+    ]) expect(all({ segments: [segment] })).toBe(false);
+    expect(all({ segments: [{ type: 'dice', data: {} }, { type: 'rps', data: {} }] })).toBe(true);
   });
 });

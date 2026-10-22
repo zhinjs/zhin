@@ -44,7 +44,10 @@ describe('interactive structured outbound schema and parser agreement', () => {
     expect(validateSegment(segment), JSON.stringify(validateSegment.errors)).toBe(true);
     expect(isCanonicalSegment(segment)).toBe(true);
     const payload = { segments: [segment] };
-    expect(validatePayload(payload)).toBe(false); // callbacks are supplied by tools, not model replies
+    // Model keyboards are {label,payload} quick replies; canonical buttons and callbacks come from tools.
+    if (segment.type === 'action' || (segment.data as { rows: unknown[][] }).rows.flat().length > 0) {
+      expect(validatePayload(payload)).toBe(false);
+    }
     expect(parseAiOutboundJson(JSON.stringify(payload))?.segments).toEqual([segment]);
   });
 
