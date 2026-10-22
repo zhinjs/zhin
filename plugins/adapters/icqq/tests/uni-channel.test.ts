@@ -368,7 +368,7 @@ describe('UNI-Channel defineAdapter segments policy', () => {
       supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps', 'share'],
       outboundMedia: ['base64', 'url', 'path'],
       interactive: 'text',
-      model: { share: { fields: ['description', 'image', 'audio'], hint: expect.stringContaining('QQ link card') } },
+      model: { share: { fields: ['description', 'image', 'audio', 'platform'], hint: expect.stringContaining('QQ link card') } },
     });
   });
 });

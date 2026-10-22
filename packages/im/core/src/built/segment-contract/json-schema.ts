@@ -157,6 +157,7 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
       content: { type: 'string', description: '消息列表中的显示文字' },
       artist: { type: 'string', description: '音乐分享的艺术家' },
       duration: { type: 'number', description: '音频时长（秒）' },
+      platform: { type: 'string', description: '歌曲所属音乐平台：qq / netease / kugou / kuwo / migu' },
       config: dataObject({
         appid: { type: 'number' },
         package: { type: 'string' },

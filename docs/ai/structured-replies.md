@@ -64,7 +64,7 @@ segments: {
   supported: ['text', 'mention', 'image', 'share' /* … */],
   model: {
     share: {
-      fields: ['description', 'image', 'audio'],   // 允许模型填写的可选字符串字段
+      fields: ['description', 'image', 'audio', 'platform'],   // 允许模型填写的可选字符串字段
       hint: 'renders as a QQ link card. For a song, set audio to the playable link …',
     },
   },
@@ -73,7 +73,8 @@ segments: {
 
 `fields` 在模型 Schema 中变为必填字符串，模型没有真实值时写 `""`，校验后这些空字段被移除。
 `hint` 以 `- share on this platform: …` 追加到该平台的回复提示词。icqq 用它让模型把音乐搜索
-工具的结果发成带播放链接与封面的分享卡片。
+工具的结果发成带播放链接与封面的分享卡片；`platform`（qq / netease / kugou / kuwo / migu）由 icqq
+映射成对应音乐应用的 appid，模型不需要也不应该填写 `config.appid`。
 
 reply、forward、face 不提供给模型：它们需要平台消息 ID、转发 ID 或表情 ID，模型没有可靠来源。
 这样模型选出的段不会在出站投影因“Adapter 不支持该段”被拒发。

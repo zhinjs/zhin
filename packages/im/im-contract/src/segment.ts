@@ -66,6 +66,8 @@ export interface ShareSegment extends SegmentBase {
     content?: string;
     artist?: string;
     duration?: number;
+    /** Music service of a song share (e.g. qq, netease, kugou, kuwo, migu); adapters map it to their app config. */
+    platform?: string;
     config?: Readonly<{
       appid: number;
       package?: string;
