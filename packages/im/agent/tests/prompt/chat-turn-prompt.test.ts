@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
-import { buildRichSystemPrompt, describePromptSectionsForDebug } from '../../src/prompt/system-prompt.js';
+import { buildRichSystemPrompt, describePromptSectionsForDebug, fillPromptSlots } from '../../src/prompt/system-prompt.js';
 import type { TurnContextView } from '../../src/context/turn-envelope.js';
 
 const SOUL = '## SOUL.md\n\n你是群里的老朋友，说话随意。';
@@ -39,5 +39,13 @@ describe('chat turn prompt', () => {
     expect(task).toContain('§5b_editing');
     expect(task.at(-1)).toBe('§11_bootstrap');
     expect(buildRichSystemPrompt({ ...base, turn: httpTurn })).toContain('<workflow>');
+  });
+
+  it('fills the {{nickname}} slot of workspace prompt files from the agent binding', () => {
+    const soul = '## SOUL.md\n\n我是 {{nickname}}，大家叫我{{ nickname }}就行。';
+    expect(buildRichSystemPrompt({ ...base, bootstrapContext: soul, turn: imTurn, agentNickname: '小凉' }))
+      .toContain('我是 小凉，大家叫我小凉就行。');
+    expect(fillPromptSlots(soul, undefined)).toContain('我是 Zhin，大家叫我Zhin就行。');
+    expect(fillPromptSlots('{{nick}}', '小凉')).toBe('{{nick}}');
   });
 });

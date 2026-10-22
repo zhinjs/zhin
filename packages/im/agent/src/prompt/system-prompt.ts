@@ -191,6 +191,17 @@ function buildResourceHubSkillsCatalog(
   return lines.join('\n');
 }
 
+/** Name used for `{{nickname}}` when the agent binding configures no nickname. */
+export const DEFAULT_AGENT_NICKNAME = 'Zhin';
+
+/**
+ * Workspace prompt files (SOUL.md, AGENTS.md, …) may write `{{nickname}}` so one
+ * persona serves every agent binding; it becomes `ai.agents.<name>.nickname`.
+ */
+export function fillPromptSlots(text: string, nickname: string | undefined): string {
+  return text.replace(/\{\{\s*nickname\s*\}\}/g, nickname?.trim() || DEFAULT_AGENT_NICKNAME);
+}
+
 function bootstrapHasSoul(bootstrapContext: string | undefined): boolean {
   if (!bootstrapContext?.trim()) return false;
   return /##\s*SOUL\.md/i.test(bootstrapContext) || /\n#\s*Soul\b/i.test(bootstrapContext);
@@ -467,7 +478,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     // In chat the workspace persona (SOUL.md) leads, right after the identity line.
     chatOrder: 155,
     retention: 'preferred',
-    content: (ctx) => ctx.bootstrapContext?.trim() ? ctx.bootstrapContext : null,
+    content: (ctx) => ctx.bootstrapContext?.trim() ? fillPromptSlots(ctx.bootstrapContext, ctx.agentNickname) : null,
   },
   {
     // Volatile: kept last so the stable prefix above stays cacheable.

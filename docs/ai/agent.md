@@ -374,6 +374,15 @@ assistant:
     notifyOnFailure: false
 ```
 
+工作区的引导文件（`SOUL.md`、`AGENTS.md`、`TOOLS.md`）可以写 `{{nickname}}` 插槽，拼提示词时替换成当前 Agent 的
+`ai.agents.<名字>.nickname`；未配置时为 `Zhin`。这样同一份 SOUL 可以给多个昵称不同的机器人共用：
+
+```md
+# 我是谁
+
+我是 {{nickname}}，混在这几个群里的老成员。
+```
+
 `assistant.profile.yml` 声明人设与例行任务（routines），启动时同步为定时任务：
 
 ```yaml
