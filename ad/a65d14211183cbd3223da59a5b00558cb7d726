@@ -1,0 +1,69 @@
+packages/im/agent/src/outbound/structured-reply.ts
+  s_e6f5f09d5890ba::t_db658f90e7f339 14-18,52-53,58-59,72-75,78,86-87
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_e6f5f09d5890ba::t_616819e5874b17 9,291,299-313
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_e6f5f09d5890ba::t_c6298fcdcacd31 282-286,304,306-318,321
+.changeset/im-chat-persona-multi-message.md
+  s_9477e63ef5cee5::t_43c3856683cbd9 1-7
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_529bcf7b525d7a 37,472-488
+basic/cli/src/plugin-runtime/agent/turn/reply-messages.ts
+  s_9477e63ef5cee5::t_d2fcc9a2a7153a 1-34
+basic/cli/tests/plugin-runtime/agent/turn/reply-messages.test.ts
+  s_9477e63ef5cee5::t_873260d8a063f9 1-42
+docs/ai/agent.md
+  s_9477e63ef5cee5::t_0bf3cd26c5bd3d 377-385
+docs/ai/structured-replies.md
+  s_9477e63ef5cee5::t_c667ca6fb95548 9-10,14-20,25-28,31,50
+docs/en/ai/agent.md
+  s_9477e63ef5cee5::t_2ded12a5b14f8a 303-313
+docs/en/ai/structured-replies.md
+  s_9477e63ef5cee5::t_e041ca3e977eba 9-10,14-20,25-30,32
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  s_9477e63ef5cee5::t_99bd50c1b72c30 14
+packages/im/agent/src/index.ts
+  s_9477e63ef5cee5::t_1f50c4d820cb94 546
+packages/im/agent/src/outbound/agent-output.ts
+  s_9477e63ef5cee5::t_4b06fbb0a35cf8 21-33
+packages/im/agent/src/prompt/assembly.ts
+  s_9477e63ef5cee5::t_94c3287616728f 6,33
+packages/im/agent/src/prompt/rules/chat-rules.ts
+  s_9477e63ef5cee5::t_48d8f55328f716 1-20
+packages/im/agent/src/prompt/rules/critical-rules.ts
+  s_9477e63ef5cee5::t_2c83110ef8a0cd 3,5
+packages/im/agent/src/prompt/rules/index.ts
+  s_9477e63ef5cee5::t_9f9f801a3d3c53 8
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9477e63ef5cee5::t_b0d5bb2ce5ccee 23-24,194-204,215,343-344,348-357,382,390,414,422,430,438,446,454,478-479,481,502
+packages/im/agent/tests/prompt/chat-turn-prompt.test.ts
+  s_9477e63ef5cee5::t_6d75361007539a 1-51
+packages/im/core/tests/segment-contract-json-schema.test.ts
+  s_9477e63ef5cee5::t_f79ce83f003df2 81-83,85-86,88,91-94,96-97,118-120,130-133,143-144
+tests/snapshots/api-surface.json
+  s_9477e63ef5cee5::t_da2f10255675b7 127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ada65d14211183cbd3223da59a5b00558cb7d726",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e6f5f09d5890ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ec5d-69a3-7ed0-aeed-e35b1591e19d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
