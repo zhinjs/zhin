@@ -300,6 +300,17 @@ assistant:
     notifyOnFailure: false
 ```
 
+Workspace bootstrap files (`SOUL.md`, `AGENTS.md`, `TOOLS.md`) may write a
+`{{nickname}}` slot; prompt assembly replaces it with the current agent's
+`ai.agents.<name>.nickname`, or `Zhin` when none is configured, so one SOUL can
+serve several bots with different nicknames:
+
+```md
+# Who I am
+
+I'm {{nickname}}, a long-time member of these groups.
+```
+
 `assistant.profile.yml` declares the persona and routines, synced into scheduled jobs at startup:
 
 ```yaml

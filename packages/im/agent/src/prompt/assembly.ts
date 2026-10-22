@@ -3,6 +3,7 @@ import {
   buildLiteSystemPrompt,
   buildUserMessageWithHistory,
   FIXED_DISCIPLINE_RULES,
+  fillPromptSlots,
   describePromptSectionsForDebug,
   type PromptSectionDebugInfo,
 } from './system-prompt.js';
@@ -29,7 +30,7 @@ function scheduleSystemPrompt(
     security: profile.security,
     platformContext,
     skillContext: agent.getTurnActiveSkills(),
-    bootstrapContext: [agent.globalContext, agent.bootstrapContext].filter(Boolean).join('\n\n'),
+    bootstrapContext: fillPromptSlots([agent.globalContext, agent.bootstrapContext].filter(Boolean).join('\n\n'), agent.activeBinding?.nickname),
   }).systemPrompt;
   return mergeRequiredBasePrompt(
     base,

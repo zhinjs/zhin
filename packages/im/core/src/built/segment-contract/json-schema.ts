@@ -238,7 +238,11 @@ const aiExtensionBranches: Partial<Record<AiOutboundSegmentType, JsonSchemaObjec
   }, ['rows'])),
 };
 
-/** One ordered message, including plain replies. No text/mentions shorthand. */
+/**
+ * The model's final reply: one or more chat messages, sent in order. Each message
+ * is an ordered segment array; the model decides how to split, like a person
+ * sending a few short messages. No text/mentions shorthand.
+ */
 export function buildAiOutboundJsonSchema(
   types: readonly AiOutboundSegmentType[] = DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
 ): JsonSchemaObject {
@@ -253,13 +257,24 @@ export function buildAiOutboundJsonSchema(
   return {
     type: 'object',
     properties: {
-      segments: {
+      messages: {
         type: 'array',
-        items: { anyOf: branches.map(requiredFieldsOnly) },
-        description: 'Ordered canonical message segments. Use an empty array only when no reply is needed.',
+        items: {
+          type: 'object',
+          properties: {
+            segments: {
+              type: 'array',
+              items: { anyOf: branches.map(requiredFieldsOnly) },
+              description: 'Ordered canonical segments of one chat message.',
+            },
+          },
+          required: ['segments'],
+          additionalProperties: false,
+        },
+        description: 'Chat messages sent in order. Use an empty array only when no reply is needed.',
       },
     },
-    required: ['segments'],
+    required: ['messages'],
     additionalProperties: false,
   };
 }
