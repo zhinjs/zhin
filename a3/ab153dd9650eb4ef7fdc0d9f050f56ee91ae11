@@ -1,0 +1,64 @@
+.changeset/adapter-segment-model-extensions.md
+  s_9477e63ef5cee5::t_df0a7a475491f6 1-9
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_9477e63ef5cee5::t_572108adb4c22b 226-231
+  s_9477e63ef5cee5::t_52c80cd5a11b22 215-225,258-280,284,286-290
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_9477e63ef5cee5::t_572108adb4c22b 23,25,166-169,171,174,179-187
+packages/im/agent/src/outbound/structured-reply.ts
+  s_9477e63ef5cee5::t_b5dfbc3243daf3 6,15-16,18-19,22-24,26,41-46,52,63,67,69,77-83,87
+  s_9477e63ef5cee5::t_bc550137b99818 84-86
+packages/im/adapter/tests/adapter.test.ts
+  s_9477e63ef5cee5::t_ae51cdae720603 1325-1337
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_b5dfbc3243daf3 30,461
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_9477e63ef5cee5::t_1ba53a998fd76c 26-27
+  s_9477e63ef5cee5::t_ced48a9c0e6631 30-35
+scripts/check-api-docs-surface.mjs
+  s_9477e63ef5cee5::t_71340452d71ace 40
+packages/im/core/src/built/segment-contract/index.ts
+  s_9477e63ef5cee5::t_572108adb4c22b 47
+  s_9477e63ef5cee5::t_52c80cd5a11b22 45-46
+packages/im/core/tests/plugin-runtime/outbound-segments.test.ts
+  s_9477e63ef5cee5::t_c8ecf7bb63eb42 7,477-479,491-496
+  s_9477e63ef5cee5::t_cc0eb54416d401 497
+packages/im/agent/src/core/structured-reply-recovery.ts
+  s_9477e63ef5cee5::t_b5dfbc3243daf3 2,15,35,39,46
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_9477e63ef5cee5::t_4a76cc16f5f591 290
+  s_9477e63ef5cee5::t_c8ecf7bb63eb42 3,30,65,214,251,261,279-289,291-297
+  s_9477e63ef5cee5::t_b521d343e8e2bf 298
+docs/ai/structured-replies.md
+  s_9477e63ef5cee5::t_df0a7a475491f6 60-77
+docs/en/ai/structured-replies.md
+  s_9477e63ef5cee5::t_df0a7a475491f6 39-59
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_b5dfbc3243daf3 5,209-210,523,549,1127,1132
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9477e63ef5cee5::t_b5dfbc3243daf3 268,450
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9477e63ef5cee5::t_b5dfbc3243daf3 12,150-151
+plugins/adapters/icqq/tests/uni-channel.test.ts
+  s_9477e63ef5cee5::t_ced48a9c0e6631 371
+  s_9477e63ef5cee5::t_751e9f374399c6 366,368
+packages/im/adapter/src/definition.ts
+  s_9477e63ef5cee5::t_9d87a27d1b15ed 97-106,286,295,299-315
+  s_9477e63ef5cee5::t_1d2de53073274c 316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a3ab153dd9650eb4ef7fdc0d9f050f56ee91ae11",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
