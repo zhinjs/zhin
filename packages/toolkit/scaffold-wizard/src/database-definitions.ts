@@ -101,7 +101,7 @@ export const DATABASE_DIALECT_DEFINITIONS: readonly DatabaseDialectDefinition[] 
     dialect: 'mongodb',
     name: 'MongoDB',
     description: '文档数据库',
-    verifiedServer: 'MongoDB 8',
+    verifiedServer: 'MongoDB 7',
     driver: { package: 'mongodb', version: '^7.5.0' },
     schema: {
       type: 'object',
