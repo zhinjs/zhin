@@ -84,6 +84,7 @@ describe('ConversationRuntime context hygiene', () => {
     const runtime = new ConversationRuntime(store);
     const now = Date.now();
     await store.append(message('prompt', '操作确认 回复 y / 同意 允许一次', now));
+    runtime.markInteractionAnswer({ conversation, id: 'prompt' } as never);
     await store.append(message('answer', 'y', now, 'user-1'));
     runtime.markInteractionAnswer({ conversation, id: 'answer' } as never);
     await store.append(message('later', '顺便看下 README', now, 'user-1'));
@@ -92,6 +93,41 @@ describe('ConversationRuntime context hygiene', () => {
     const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
 
     expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1): 顺便看下 README']);
+  });
+
+  it("labels the bot's own messages so the model can tell them from members'", async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    const now = Date.now();
+    await store.append(message('q', '谁会配代理', now, 'user-1'));
+    await runtime.recordOutbound(
+      { conversation, content: [{ type: 'text', data: { text: '我会，发我报错' } }] } as never,
+      { status: 'sent', message: { conversation, id: 'bot-1' } } as never,
+    );
+    await runtime.recordIncoming(
+      { conversation, content: '匿名消息', message: { conversation, id: 'anon' } } as never,
+      undefined,
+    );
+    const current = await store.append(message('current', '好', now, 'user-1'));
+    const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
+    expect(context.blocks.map((block) => block.text)).toEqual([
+      'User (user-1): 谁会配代理',
+      'You (this bot): 我会，发我报错',
+      'Unknown sender (unknown): 匿名消息',
+    ]);
+  });
+
+  it('drops an own message the bot later recalled, such as an activity indicator', async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    await runtime.recordOutbound(
+      { conversation, content: [{ type: 'text', data: { text: '思考中...' } }] } as never,
+      { status: 'sent', message: { conversation, id: 'thinking' } } as never,
+    );
+    await store.append({ eventId: 'recall:thinking', conversation, timestamp: Date.now(), type: 'message.recalled', message: { conversation, id: 'thinking' } } as never);
+    const current = await store.append(message('current', 'hi', Date.now(), 'user-1'));
+    const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
+    expect(JSON.stringify(context.blocks)).not.toContain('思考中');
   });
 
   it('keeps own outbound progress updates out of background events', async () => {

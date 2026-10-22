@@ -75,16 +75,21 @@ export class ConversationRuntime {
     );
     const notBefore = Date.now() - CONVERSATION_CONTEXT_MAX_AGE_MS;
     const relevant: SequencedConversationEvent[] = [];
+    // The bot's own messages it later recalled (an activity indicator) never were part of the chat.
+    const excluded = new Set<string>(excludeMessageId ? [excludeMessageId] : []);
     for (const entry of events) {
       // Only message timestamps are runtime-assigned; notice clocks are adapter-defined.
       if (entry.event.type === 'message.created' && entry.event.timestamp < notBefore) continue;
-      if (await this.#isOwnRecall(entry.event)) continue;
+      if (await this.#isOwnRecall(entry.event)) {
+        if (entry.event.type === 'message.recalled') excluded.add(entry.event.message.id);
+        continue;
+      }
       if (entry.event.type === 'message.created'
         && this.#interactionAnswers.has(messageRefKey(entry.event.message.ref))) continue;
       relevant.push(entry);
     }
     return Object.freeze({
-      blocks: aggregateConversationContext(relevant, excludeMessageId),
+      blocks: aggregateConversationContext(relevant, excluded),
       cursor: Math.max(cursor, throughSequence),
     });
   }
@@ -131,10 +136,10 @@ export class ConversationRuntime {
       type: 'message.created',
       message: Object.freeze({
         ref: input.message,
-        ...(sender ? { actor: Object.freeze({
-          id: sender.id,
-          ...(sender.name ? { displayName: sender.name } : {}),
-        }) } : {}),
+        // An actor-less message means the bot's own outbound; never leave an inbound one without.
+        actor: sender
+          ? Object.freeze({ id: sender.id, ...(sender.name ? { displayName: sender.name } : {}) })
+          : UNKNOWN_SENDER,
         segments: Object.freeze(input.segments?.length
           ? [...input.segments]
           : [{ type: 'text', data: { text: input.content } }]),
@@ -266,13 +271,13 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
 
 function aggregateConversationContext(
   events: readonly SequencedConversationEvent[],
-  excludeMessageId?: string,
+  excluded: ReadonlySet<string>,
 ): readonly ConversationContextBlock[] {
   const ordinary: ConversationContextBlock[] = [];
   const noisy = new Map<string, { sequence: number; event: ConversationEvent; count: number }>();
   for (const { sequence, event } of events) {
     if (event.type === 'message.created') {
-      if (event.message.ref.id === excludeMessageId) continue;
+      if (excluded.has(event.message.ref.id)) continue;
       const text = describeConversationMessage(event.message);
       if (!text) continue;
       ordinary.push(Object.freeze({
@@ -336,12 +341,21 @@ function describeConversationEvent(event: ConversationEvent): string {
   }
 }
 
+/**
+ * Label of the bot's own messages. Outbound messages are recorded without an actor; without
+ * them the model cannot tell its own words from the members' or follow the order of the chat.
+ */
+export const OWN_MESSAGE_LABEL = 'You (this bot)';
+const UNKNOWN_SENDER = Object.freeze({ id: 'unknown', displayName: 'Unknown sender' });
+/** In-turn progress updates (the Agent's `⏳ ` marker) are not part of the conversation. */
+const OWN_PROGRESS_PREFIX = /^⏳\s*/u;
+
 function describeConversationMessage(message: ConversationMessage): string {
+  const text = segmentsToPlainText(message.segments).trim();
+  if (!message.actor && OWN_PROGRESS_PREFIX.test(text)) return '';
   const actor = message.actor
     ? `${message.actor.displayName ?? message.actor.id} (${message.actor.id})`
-    : undefined;
-  if (!actor) return '';
-  const text = segmentsToPlainText(message.segments).trim();
+    : OWN_MESSAGE_LABEL;
   const attachmentTypes = [...new Set(message.segments
     .filter((segment) => segment.type !== 'text' && segment.type !== 'mention' && segment.type !== 'at')
     .map((segment) => segment.type))];

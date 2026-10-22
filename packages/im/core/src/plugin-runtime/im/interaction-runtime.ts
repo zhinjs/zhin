@@ -1,4 +1,4 @@
-import { conversationRefKey, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
+import { conversationRefKey, type ConversationRef, type DeliveryReceipt, type MessageRef } from '@zhin.js/im-contract';
 import type {
   UserInteraction,
   UserInteractionRequest,
@@ -69,9 +69,12 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   readonly #router: RuntimeInteractiveRouter<Admission>;
   readonly #claims = new Map<string, UserInteractionClaim>();
   readonly #buttons = new JsxButtonRegistry();
+  readonly #markPrompt: ((message: MessageRef) => void) | undefined;
 
-  constructor(router = new RuntimeInteractiveRouter<Admission>()) {
+  /** `markPrompt` keeps a delivered prompt out of conversation context, like its answer. */
+  constructor(router = new RuntimeInteractiveRouter<Admission>(), markPrompt?: (message: MessageRef) => void) {
     this.#router = router;
+    this.#markPrompt = markPrompt;
   }
 
   register(
@@ -197,6 +200,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
           assertLifetime();
           if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
           claim.delivered();
+          if (receipt.message) this.#markPrompt?.(receipt.message);
           const raw = await claim.answer;
           claim.check();
           const result = parseUserInteractionAnswer(request, raw);

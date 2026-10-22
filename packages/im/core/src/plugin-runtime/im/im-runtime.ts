@@ -110,7 +110,10 @@ export class ImRuntime implements OutboundMessageService {
     subscribe: (listener: (event: RuntimeMessageEvent) => void) =>
       this.#messageEventStream.subscribe(listener),
   });
-  readonly #interactions = new RuntimeInteractionCoordinator<GenerationAdmissionGate>();
+  readonly #interactions = new RuntimeInteractionCoordinator<GenerationAdmissionGate>(
+    undefined,
+    (message) => this.#conversations.markInteractionAnswer(message),
+  );
   readonly #conversations: ConversationRuntime;
   readonly #outbound: OutboundDeliveryRuntime;
   readonly #inbound: InboundRuntime;

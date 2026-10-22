@@ -228,6 +228,24 @@ describe('UserInteraction via ImRuntime', () => {
     expect(getResult()).toBe('张三');
   });
 
+  it('keeps the prompt and its answer out of conversation context, but not the result', async () => {
+    const { im, sent } = await createInteractionFixture();
+    const withId = (content: string, id: string) => {
+      const input = incomingMessage(content);
+      return { ...input, message: { conversation: input.conversation, id } };
+    };
+    const commandPromise = receive(im, withId('/ask', 'm-ask'));
+    await vi.waitFor(() => expect(sent.length).toBeGreaterThanOrEqual(1));
+    await receive(im, withId('张三', 'm-answer'));
+    await commandPromise;
+    await vi.waitFor(() => expect(sent.length).toBeGreaterThanOrEqual(2));
+    const context = await im.readConversationContext(incomingMessage('').conversation, 'test', Number.MAX_SAFE_INTEGER, 50);
+    expect(context.blocks.map(block => block.text)).toEqual([
+      'user-1 (user-1): /ask',
+      'You (this bot): 你好 张三',
+    ]);
+  });
+
   it('immediately cancels an old question when HMR retains its owner and Endpoint', async () => {
     const { im, sent, store } = await createInteractionFixture();
     const pending = receive(im, incomingMessage('/ask')).catch(error => error);
