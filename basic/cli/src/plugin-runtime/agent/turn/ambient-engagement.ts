@@ -69,7 +69,8 @@ export class LlmEngagementJudge implements EngagementJudge {
         ...(input.minutesSinceBotSpoke === undefined ? {} : { minutesSinceBotSpoke: input.minutesSinceBotSpoke }),
         recentMessages: input.recent,
       }))]),
-      { signal: input.signal, temperature: 0, maxTokens: 200, outputSchema: JUDGMENT_SCHEMA },
+      // Reasoning judges (gpt-oss, GLM flash) spend most of the budget thinking before the JSON.
+      { signal: input.signal, temperature: 0, maxTokens: 1024, outputSchema: JUDGMENT_SCHEMA },
     );
     if (response.errorMessage) throw new Error(response.errorMessage);
     return parseJudgment(assistantText(response));
