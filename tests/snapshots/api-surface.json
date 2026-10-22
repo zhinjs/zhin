@@ -124,7 +124,7 @@
     "export{originFromMessage}from './spawn/spawn-task-tool.js';",
     "export{pluginToolToAgentTool,agentToolToLlmTool,agentToolsToLlmTools,}from './tool-bridge.js';",
     "export{promptAssemblyToken}from './prompt/tokens.js';",
-    "export{renderAgentOutput}from './outbound/agent-output.js';",
+    "export{renderAgentOutput,splitOutputMessages}from './outbound/agent-output.js';",
     "export{resolveWorkspacePrompt,}from './prompt/workspace-prompt.js';",
     "export{stampToolGeneration,}from './tool/tool-system.js';"
   ],

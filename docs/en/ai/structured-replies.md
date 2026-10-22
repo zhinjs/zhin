@@ -6,21 +6,30 @@ description: JSON Schema for rich IM replies, mentions and ordered message segme
 # Structured Agent replies
 
 IM conversations default to `ai.agent.outputSchema: segments`. The model returns
-one JSON object for every final answer, including plain text:
+one JSON object for every final answer, including plain text. Each item of
+`messages` is one chat message, sent in order, made of an ordered `segments` array:
 
 ```json
 {
-  "segments": [
-    { "type": "markdown", "data": { "content": "**Result**\n" } },
-    { "type": "mention", "data": { "target": "123456789" } },
-    { "type": "text", "data": { "text": ", please take a look." } },
-    { "type": "image", "data": { "media": { "kind": "url", "value": "https://example.com/result.png" } } }
+  "messages": [
+    { "segments": [{ "type": "text", "data": { "text": "Had a look" } }] },
+    { "segments": [
+      { "type": "mention", "data": { "target": "123456789" } },
+      { "type": "text", "data": { "text": " it's the cache, clear it and you're fine" } },
+      { "type": "image", "data": { "media": { "kind": "url", "value": "https://example.com/result.png" } } }
+    ] }
   ]
 }
 ```
 
+The model decides how to split: usually one message, two or three when a person
+would send a quick reaction before the answer. Follow-up messages wait a short,
+length-based pause (0.4–1.5 s). A failure after the first message is reported as
+`partial_delivery` and delivered messages are never resent. A legacy single
+`{"segments":[...]}` reply (for example from history) is still accepted as one message.
+
 The JSON is a transport contract, not user-visible text. Segment order is
-preserved. An empty `segments` array means no reply is needed. Markdown uses
+preserved. An empty `messages` array means no reply is needed. Markdown uses
 `data.content`; attachments use canonical `data.media` references. Keep attachments
 and mentions as segments instead of embedding image syntax or literal `@name` in Markdown.
 

@@ -34,6 +34,7 @@ import {
   type SendContent,
 } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { sendOutputMessages } from './reply-messages.js';
 import {
   rootPluginId,
   type CapabilityId,
@@ -468,20 +469,24 @@ export class AgentTurnIngressRoute implements IngressRoute {
                       outputElements: output.length,
                       outputPreview: flattenOutputElements(output).trim() || '(empty)',
                     }));
-                    // Model output may name local files or URLs: hold them to this Turn's own authority.
-                    const content = await publishOutboundElements([...output], effectiveAdapter || undefined, undefined, {
-                      filesystem: turnPolicy.filesystem,
-                      ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
+                    const outcome = await sendOutputMessages(output, {
+                      render: messageOutput => flattenOutputElements([...messageOutput]),
+                      send: async (messageOutput) => {
+                        // Model output may name local files or URLs: hold them to this Turn's own authority.
+                        const content = await publishOutboundElements([...messageOutput], effectiveAdapter || undefined, undefined, {
+                          filesystem: turnPolicy.filesystem,
+                          ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
+                        });
+                        logger.debug(formatCompact({
+                          op: 'replychain_publish_outbound',
+                          segments: content.length,
+                        }));
+                        if (content.length === 0) return { status: 'suppressed' as const };
+                        const sent = deliveryOutcomeFromReceipt(await reply(content));
+                        if (sent.status === 'sent') admission?.markDelivered();
+                        return sent;
+                      },
                     });
-                    logger.debug(formatCompact({
-                      op: 'replychain_publish_outbound',
-                      segments: content.length,
-                    }));
-                    if (content.length === 0) return { status: 'suppressed' as const };
-                    const outcome = deliveryOutcomeFromReceipt(
-                      await reply(content),
-                    );
-                    if (outcome.status === 'sent') admission?.markDelivered();
                     logger.debug(formatCompact({
                       op: 'replychain_delivery_outcome',
                       status: outcome.status,

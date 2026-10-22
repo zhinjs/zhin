@@ -78,15 +78,23 @@ describe('outboundSegmentJsonSchema', () => {
   });
 });
 
+/** One-message reply envelope. */
+const reply = (segments: unknown) => ({ messages: [{ segments }] });
+
 describe('aiOutboundJsonSchema', () => {
-  it('accepts only an ordered canonical segments envelope', () => {
-    expect(validateOutbound({ segments: [
+  it('accepts ordered chat messages of canonical segments', () => {
+    expect(validateOutbound(reply([
       { type: 'mention', data: { target: '1001' } },
-      { type: 'text', data: { text: '，请查收' } },
+      { type: 'text', data: { text: '看这个' } },
       { type: 'markdown', data: { content: '**说明**' } },
       { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.png' } } },
+    ]))).toBe(true);
+    expect(validateOutbound({ messages: [
+      { segments: [{ type: 'text', data: { text: '调好了' } }] },
+      { segments: [{ type: 'text', data: { text: '你再试试' } }] },
     ] })).toBe(true);
-    expect(validateOutbound({ segments: [] })).toBe(true);
+    expect(validateOutbound({ messages: [] })).toBe(true);
+    expect(validateOutbound({ segments: [{ type: 'text', data: { text: '旧单条格式' } }] })).toBe(false);
     expect(validateOutbound({ text: '你好' })).toBe(false);
     expect(validateOutbound({ mentions: ['1001'], text: '请查收' })).toBe(false);
     expect(validateOutbound({})).toBe(false);
@@ -107,9 +115,9 @@ describe('aiOutboundJsonSchema', () => {
   });
 
   it('rejects malformed segments inside the payload', () => {
-    expect(validateOutbound({ segments: [{ type: 'text', data: {} }] })).toBe(false);
-    expect(validateOutbound({ segments: 'not-an-array' })).toBe(false);
-    expect(validateOutbound({ mentions: 'not-an-array' })).toBe(false);
+    expect(validateOutbound(reply([{ type: 'text', data: {} }]))).toBe(false);
+    expect(validateOutbound(reply('not-an-array'))).toBe(false);
+    expect(validateOutbound({ messages: 'not-an-array' })).toBe(false);
   });
 });
 
@@ -119,10 +127,10 @@ describe('buildAiOutboundJsonSchema', () => {
   const quickReply = { type: 'keyboard', data: { rows: [[{ label: '详情', payload: '/detail 1' }]] } };
 
   it('accepts exactly the requested segment types', () => {
-    expect(validateOutbound({ segments: [share] })).toBe(false);
-    expect(validate(['text', 'share'])({ segments: [share] })).toBe(true);
-    expect(validate(['text'])({ segments: [quickReply] })).toBe(false);
-    expect(validateOutbound({ segments: [quickReply] })).toBe(true);
+    expect(validateOutbound(reply([share]))).toBe(false);
+    expect(validate(['text', 'share'])(reply([share]))).toBe(true);
+    expect(validate(['text'])(reply([quickReply]))).toBe(false);
+    expect(validateOutbound(reply([quickReply]))).toBe(true);
   });
 
   it('never offers ids the model cannot know', () => {
@@ -132,7 +140,7 @@ describe('buildAiOutboundJsonSchema', () => {
       { type: 'forward', data: { forward_id: '1' } },
       { type: 'face', data: { id: '1' } },
       { type: 'keyboard', data: { rows: [[{ id: 'x', label: 'a', payload: 'b' }]] } },
-    ]) expect(all({ segments: [segment] })).toBe(false);
-    expect(all({ segments: [{ type: 'dice', data: {} }, { type: 'rps', data: {} }] })).toBe(true);
+    ]) expect(all(reply([segment]))).toBe(false);
+    expect(all(reply([{ type: 'dice', data: {} }, { type: 'rps', data: {} }]))).toBe(true);
   });
 });

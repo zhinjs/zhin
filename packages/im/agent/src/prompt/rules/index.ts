@@ -5,3 +5,4 @@ export { TASK_COMPLETION_RULES } from './task-completion.js';
 export { EDITING_RULES } from './editing.js';
 export { MEMORY_INSTRUCTIONS } from './memory.js';
 export { CODE_REFERENCE_RULES } from './code-references.js';
+export { CHAT_STYLE_RULES, CHAT_WORKSPACE_TASK_RULES } from './chat-rules.js';
