@@ -17,6 +17,16 @@ import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 
 const logger = getLogger('im.outbound');
 
+/** A payload that cannot be rendered is not sent; say why, or the failure is invisible to the operator. */
+function logRejectedPayload(conversation: ConversationRef, stage: 'render' | 'middleware_render', error: unknown): void {
+  logger.warn(formatCompact({
+    op: 'outbound_payload_rejected',
+    stage,
+    conv: formatConversationLog(conversation),
+    error: error instanceof Error ? error.message : String(error),
+  }));
+}
+
 interface OutboundDeliveryContext {
   readonly diagnostics?: RuntimeMessageDiagnostics;
   prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
@@ -73,6 +83,7 @@ export class OutboundDeliveryRuntime {
       initialPayload = initialProjection.payload;
     } catch (error) {
       if (error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent') return receiptFromEndpointError(error, false);
+      logRejectedPayload(request.conversation, 'render', error);
       return rejectedDeliveryReceipt('outbound_payload_rejected');
     }
 
@@ -126,8 +137,9 @@ export class OutboundDeliveryRuntime {
             observeRendering(projection.rendering);
             for (const value of collectButtonPayloads(payload)) buttonPayloads.add(value);
           } catch (error) {
-            receipt = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent'
-              ? receiptFromEndpointError(error, false) : rejectedDeliveryReceipt('outbound_payload_rejected');
+            const unsupported = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent';
+            if (!unsupported) logRejectedPayload(request.conversation, 'middleware_render', error);
+            receipt = unsupported ? receiptFromEndpointError(error as EndpointDeliveryError, false) : rejectedDeliveryReceipt('outbound_payload_rejected');
             return;
           }
 

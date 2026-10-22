@@ -20,6 +20,7 @@ import {
 } from '@zhin.js/adapter';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '@zhin.js/middleware';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { getLogger } from '@zhin.js/logger';
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
 import { OutboundDeliveryRuntime } from '../../src/plugin-runtime/im/outbound-delivery-runtime.js';
@@ -384,11 +385,15 @@ describe('JSX outbound delivery through a real Endpoint', () => {
   it('rejects a JSX evaluation failure without sending its error or stack to chat', async () => {
     const renderer = rasterRenderer();
     const f = await fixture({ segments: { html: 'image' }, renderer });
+    const warn = vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
     const render = vi.fn(async () => { throw new Error('private component diagnostic'); });
     const receipt = await f.send(jsx(render, {}));
     expect(receipt.status).toBe('rejected');
     expect(receipt.failure?.code).toBe('outbound_payload_rejected');
     expect(JSON.stringify(receipt)).not.toContain('private component diagnostic');
+    // The operator still learns why: the reason goes to the log, never to chat.
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/outbound_payload_rejected.*stage: render.*private component diagnostic/s));
+    warn.mockRestore();
     expect(render).toHaveBeenCalledTimes(1);
     expect(renderer.render).not.toHaveBeenCalled();
     expect(f.sent).toEqual([]);

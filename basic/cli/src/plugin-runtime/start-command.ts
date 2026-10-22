@@ -748,16 +748,17 @@ async function createSenderEnricher(
   };
 }
 
-async function applyRuntimeLogLevel(
+/** @internal Exported for tests. */
+export async function applyRuntimeLogLevel(
   config: RuntimeConfigDocument | ConfigDocumentPort,
 ): Promise<void> {
   const document = await readConfigDocumentValue(config);
-  if (!document || typeof document !== 'object') return;
-  const raw = (document as Record<string, unknown>).log_level;
-  if (raw === undefined || raw === null) return;
-  // Prefer config; allow ZHIN_LOG_LEVEL / LOG_LEVEL to override for one-shot debug.
-  const envLevel = process.env.ZHIN_LOG_LEVEL ?? process.env.LOG_LEVEL;
-  setLevel((envLevel ?? raw) as LogLevelInput, undefined, true);
+  const raw = document && typeof document === 'object' ? (document as Record<string, unknown>).log_level : undefined;
+  // ZHIN_LOG_LEVEL / LOG_LEVEL override config for one-shot debugging, also when config sets none.
+  // An empty variable counts as unset.
+  const level = process.env.ZHIN_LOG_LEVEL || process.env.LOG_LEVEL || raw;
+  if (level === undefined || level === null || level === '') return;
+  setLevel(level as LogLevelInput, undefined, true);
 }
 
 async function readConfigDocumentValue(
