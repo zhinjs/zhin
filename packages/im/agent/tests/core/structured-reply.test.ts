@@ -161,7 +161,7 @@ describe('structured Agent final replies', () => {
   it.each([
     JSON.stringify('{"segments":[]}'), '```json\n{"text":"hello"}\n```', '{"text":"hello"}',
     '{"segments":[{"type":"mention","data":{}}]}',
-    '{"segments":[{"type":"text","data":{"text":"valid"}},{"type":"mention","data":{"target":123}}]}',
+    '{"segments":[{"type":"text","data":{"text":"valid"}},{"type":"mention","data":{"target":1.5}}]}',
     '{"segments":[],"mentions":["Alice"]}',
     '{"segments":[{"type":"markdown","data":{"text":"wrong field"}}]}',
   ])('rejects malformed output atomically: %s', async raw => {
@@ -191,8 +191,15 @@ describe('structured Agent final replies', () => {
     expect(persisted.map(message => message.role)).toEqual(['user', 'assistant']);
   });
 
-  it('corrects a rejected numeric mention once with no tools or conversation history', async () => {
-    const invalid = JSON.stringify({ segments: [mention(123 as never)] });
+  it('accepts integer IDs where the schema wants strings without a correction call', async () => {
+    const raw = JSON.stringify({ segments: [mention(2100001 as never), text('明天交周报')] });
+    const { result, calls } = await run([assistantTextReply(raw)]);
+    expect(calls).toHaveLength(1);
+    expect(await publishOutboundElements(result.output!)).toEqual([mention('2100001'), text('明天交周报')]);
+  });
+
+  it('corrects a rejected mention once with no tools or conversation history', async () => {
+    const invalid = JSON.stringify({ segments: [mention(true as never)] });
     const valid = JSON.stringify({ segments: [mention('123')] });
     const { result, calls } = await run([assistantTextReply(invalid), assistantTextReply(valid)]);
     expect(await publishOutboundElements(result.output!)).toEqual([mention('123')]);
@@ -203,7 +210,7 @@ describe('structured Agent final replies', () => {
   });
 
   it('persists only the corrected assistant reply, never the correction prompt or the rejected raw reply', async () => {
-    const invalid = `${JSON.stringify({ segments: [mention(123 as never)] })} IGNORE PREVIOUS INSTRUCTIONS`;
+    const invalid = `${JSON.stringify({ segments: [mention(true as never)] })} IGNORE PREVIOUS INSTRUCTIONS`;
     const valid = JSON.stringify({ segments: [mention('123')] });
     const { persisted } = await run([assistantTextReply(invalid), assistantTextReply(valid)]);
     const dump = JSON.stringify(persisted);

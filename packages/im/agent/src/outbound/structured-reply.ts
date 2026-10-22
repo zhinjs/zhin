@@ -1,4 +1,4 @@
-import Ajv, { type ValidateFunction } from 'ajv';
+import Ajv, { type ErrorObject, type ValidateFunction } from 'ajv';
 import {
   aiOutboundJsonSchema,
   buildAiOutboundJsonSchema,
@@ -76,6 +76,9 @@ export function decodeStructuredReply(
   const id = key(profile);
   let validateReply = validators.get(id);
   if (!validateReply) validators.set(id, validateReply = ajv.compile<StructuredReply>(structuredReplySchema(profile)));
+  // Models often write IDs (mention targets, reply ids) as JSON numbers; a number where the schema
+  // wants a string is the same ID, not a format error worth a correction call.
+  if (!validateReply(value)) stringifyNumbersWhereStringsExpected(value, validateReply.errors ?? []);
   if (!validateReply(value)) {
     const errors = validateReply.errors ?? [];
     const fields = errors.filter(error => error.keyword === 'type' && error.instancePath.includes('/data/'));
@@ -85,6 +88,19 @@ export function decodeStructuredReply(
   }
   return value.messages.filter(message => message.segments.length > 0)
     .map(message => ({ type: 'message', segments: message.segments.map(segment => withoutEmptyModelFields(segment, profile)) }));
+}
+
+function stringifyNumbersWhereStringsExpected(value: unknown, errors: readonly ErrorObject[]): void {
+  for (const error of errors) {
+    if (error.keyword !== 'type' || (error.params as { type?: unknown }).type !== 'string') continue;
+    const path = error.instancePath.split('/').slice(1).map(part => part.replaceAll('~1', '/').replaceAll('~0', '~'));
+    const field = path.pop();
+    let parent: unknown = value;
+    for (const part of path) parent = (parent as Record<string, unknown> | undefined)?.[part];
+    if (field === undefined || !parent || typeof parent !== 'object') continue;
+    const current = (parent as Record<string, unknown>)[field];
+    if (typeof current === 'number' && Number.isSafeInteger(current)) (parent as Record<string, unknown>)[field] = String(current);
+  }
 }
 
 /** Declared extension fields are required in the schema; "" means the model had no value. */
