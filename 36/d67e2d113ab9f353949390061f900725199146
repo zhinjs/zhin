@@ -1,0 +1,368 @@
+basic/cli/CHANGELOG.md
+  h_b680f75345178a 3-91
+basic/cli/package.json
+  h_b680f75345178a 3
+packages/console/client/CHANGELOG.md
+  h_b680f75345178a 3-12
+packages/console/client/package.json
+  h_b680f75345178a 3
+packages/console/contract/CHANGELOG.md
+  h_b680f75345178a 3-12
+packages/console/contract/package.json
+  h_b680f75345178a 3
+packages/console/layout/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/console/layout/package.json
+  h_b680f75345178a 3
+packages/console/page/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/console/page/package.json
+  h_b680f75345178a 3
+packages/console/pagemanager/CHANGELOG.md
+  h_b680f75345178a 3-16
+packages/console/pagemanager/package.json
+  h_b680f75345178a 3
+packages/console/protocol/CHANGELOG.md
+  h_b680f75345178a 3-11
+packages/console/protocol/package.json
+  h_b680f75345178a 3
+packages/game-kit/CHANGELOG.md
+  h_b680f75345178a 3-18
+packages/game-kit/package.json
+  h_b680f75345178a 3
+packages/host/a2a/CHANGELOG.md
+  h_b680f75345178a 3-17
+packages/host/a2a/package.json
+  h_b680f75345178a 3
+packages/host/http/CHANGELOG.md
+  h_b680f75345178a 3-10
+packages/host/http/package.json
+  h_b680f75345178a 3
+packages/host/mcp/CHANGELOG.md
+  h_b680f75345178a 3-18
+packages/host/mcp/package.json
+  h_b680f75345178a 3
+packages/im/adapter/CHANGELOG.md
+  h_b680f75345178a 3-12
+packages/im/adapter/package.json
+  h_b680f75345178a 3
+packages/im/agent-feature/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/agent-feature/package.json
+  h_b680f75345178a 3
+packages/im/agent/CHANGELOG.md
+  h_b680f75345178a 3-56
+packages/im/agent/package.json
+  h_b680f75345178a 3
+packages/im/ai/CHANGELOG.md
+  h_b680f75345178a 3-12
+packages/im/ai/package.json
+  h_b680f75345178a 3
+packages/im/command/CHANGELOG.md
+  h_b680f75345178a 3-19
+packages/im/command/package.json
+  h_b680f75345178a 3
+packages/im/component/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/component/package.json
+  h_b680f75345178a 3
+packages/im/core/CHANGELOG.md
+  h_b680f75345178a 3-33
+packages/im/core/package.json
+  h_b680f75345178a 3
+packages/im/feature-kit/CHANGELOG.md
+  h_b680f75345178a 3-8
+packages/im/feature-kit/package.json
+  h_b680f75345178a 3
+packages/im/handler/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/handler/package.json
+  h_b680f75345178a 3
+packages/im/im-contract/CHANGELOG.md
+  h_b680f75345178a 3-8
+packages/im/im-contract/package.json
+  h_b680f75345178a 3
+packages/im/isolate/CHANGELOG.md
+  h_b680f75345178a 3-12
+packages/im/isolate/package.json
+  h_b680f75345178a 3
+packages/im/jsx/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/jsx/package.json
+  h_b680f75345178a 3
+packages/im/mcp-feature/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/mcp-feature/package.json
+  h_b680f75345178a 3
+packages/im/middleware/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/middleware/package.json
+  h_b680f75345178a 3
+packages/im/prompt-section/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/prompt-section/package.json
+  h_b680f75345178a 3
+packages/im/runtime/CHANGELOG.md
+  h_b680f75345178a 3-16
+packages/im/runtime/package.json
+  h_b680f75345178a 3
+packages/im/schedule-feature/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/schedule-feature/package.json
+  h_b680f75345178a 3
+packages/im/skill/CHANGELOG.md
+  h_b680f75345178a 3-9
+packages/im/skill/package.json
+  h_b680f75345178a 3
+packages/im/tool/CHANGELOG.md
+  h_b680f75345178a 3-17
+packages/im/tool/package.json
+  h_b680f75345178a 3
+packages/im/workroom/CHANGELOG.md
+  h_b680f75345178a 3-39
+packages/im/workroom/package.json
+  h_b680f75345178a 3
+packages/im/zhin/CHANGELOG.md
+  h_b680f75345178a 3-21
+packages/im/zhin/package.json
+  h_b680f75345178a 3
+packages/toolkit/components/CHANGELOG.md
+  h_b680f75345178a 3-8
+packages/toolkit/components/package.json
+  h_b680f75345178a 3
+packages/toolkit/create-zhin/CHANGELOG.md
+  h_b680f75345178a 3-19
+packages/toolkit/create-zhin/package.json
+  h_b680f75345178a 3
+packages/toolkit/scaffold-wizard/CHANGELOG.md
+  h_b680f75345178a 3-16
+packages/toolkit/scaffold-wizard/package.json
+  h_b680f75345178a 3
+packages/toolkit/testing/CHANGELOG.md
+  h_b680f75345178a 3-29
+packages/toolkit/testing/package.json
+  h_b680f75345178a 3
+packages/toolkit/zhin-shim/CHANGELOG.md
+  h_b680f75345178a 1-33
+packages/toolkit/zhin-shim/package.json
+  h_b680f75345178a 3
+plugins/adapters/dingtalk/CHANGELOG.md
+  h_b680f75345178a 3-25
+plugins/adapters/dingtalk/package.json
+  h_b680f75345178a 3
+plugins/adapters/discord/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/adapters/discord/package.json
+  h_b680f75345178a 3
+plugins/adapters/email/CHANGELOG.md
+  h_b680f75345178a 3-20
+plugins/adapters/email/package.json
+  h_b680f75345178a 3
+plugins/adapters/github/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/adapters/github/package.json
+  h_b680f75345178a 3
+plugins/adapters/icqq/CHANGELOG.md
+  h_b680f75345178a 3-26
+plugins/adapters/icqq/package.json
+  h_b680f75345178a 3
+plugins/adapters/kook/CHANGELOG.md
+  h_b680f75345178a 3-27
+plugins/adapters/kook/package.json
+  h_b680f75345178a 3
+plugins/adapters/lark/CHANGELOG.md
+  h_b680f75345178a 3-26
+plugins/adapters/lark/package.json
+  h_b680f75345178a 3
+plugins/adapters/line/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/adapters/line/package.json
+  h_b680f75345178a 3
+plugins/adapters/milky/CHANGELOG.md
+  h_b680f75345178a 3-20
+plugins/adapters/milky/package.json
+  h_b680f75345178a 3
+plugins/adapters/napcat/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/adapters/napcat/package.json
+  h_b680f75345178a 3
+plugins/adapters/onebot11/CHANGELOG.md
+  h_b680f75345178a 3-25
+plugins/adapters/onebot11/package.json
+  h_b680f75345178a 3
+plugins/adapters/onebot12/CHANGELOG.md
+  h_b680f75345178a 3-20
+plugins/adapters/onebot12/package.json
+  h_b680f75345178a 3
+plugins/adapters/qq/CHANGELOG.md
+  h_b680f75345178a 3-26
+plugins/adapters/qq/package.json
+  h_b680f75345178a 3
+plugins/adapters/sandbox/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/adapters/sandbox/package.json
+  h_b680f75345178a 3
+plugins/adapters/satori/CHANGELOG.md
+  h_b680f75345178a 3-20
+plugins/adapters/satori/package.json
+  h_b680f75345178a 3
+plugins/adapters/slack/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/adapters/slack/package.json
+  h_b680f75345178a 3
+plugins/adapters/telegram/CHANGELOG.md
+  h_b680f75345178a 3-26
+plugins/adapters/telegram/package.json
+  h_b680f75345178a 3
+plugins/adapters/wechat-mp/CHANGELOG.md
+  h_b680f75345178a 3-20
+plugins/adapters/wechat-mp/package.json
+  h_b680f75345178a 3
+plugins/adapters/wecom/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/adapters/wecom/package.json
+  h_b680f75345178a 3
+plugins/adapters/weixin-ilink/CHANGELOG.md
+  h_b680f75345178a 3-19
+plugins/adapters/weixin-ilink/package.json
+  h_b680f75345178a 3
+plugins/features/process-monitor/CHANGELOG.md
+  h_b680f75345178a 3-11
+plugins/features/process-monitor/package.json
+  h_b680f75345178a 3
+plugins/games/blackjack/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/blackjack/package.json
+  h_b680f75345178a 3
+plugins/games/dice-duel/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/dice-duel/package.json
+  h_b680f75345178a 3
+plugins/games/dungeon-expedition/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/dungeon-expedition/package.json
+  h_b680f75345178a 3
+plugins/games/guess-number/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/guess-number/package.json
+  h_b680f75345178a 3
+plugins/games/hub/CHANGELOG.md
+  h_b680f75345178a 3-9
+plugins/games/hub/package.json
+  h_b680f75345178a 3
+plugins/games/idiom-chain/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/idiom-chain/package.json
+  h_b680f75345178a 3
+plugins/games/roulette/CHANGELOG.md
+  h_b680f75345178a 1-19
+plugins/games/roulette/package.json
+  h_b680f75345178a 3
+plugins/games/rps/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/rps/package.json
+  h_b680f75345178a 3
+plugins/games/text-adventure/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/text-adventure/package.json
+  h_b680f75345178a 3
+plugins/games/tic-tac-toe/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/tic-tac-toe/package.json
+  h_b680f75345178a 3
+plugins/games/word-riddle/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/games/word-riddle/package.json
+  h_b680f75345178a 3
+plugins/services/activity-feedback/CHANGELOG.md
+  h_b680f75345178a 3-24
+plugins/services/activity-feedback/package.json
+  h_b680f75345178a 3
+plugins/services/typesafe/CHANGELOG.md
+  h_b680f75345178a 3-9
+plugins/services/typesafe/package.json
+  h_b680f75345178a 3
+plugins/utils/60s/CHANGELOG.md
+  h_b680f75345178a 3-11
+plugins/utils/60s/package.json
+  h_b680f75345178a 3
+plugins/utils/answers/CHANGELOG.md
+  h_b680f75345178a 1-15
+plugins/utils/answers/package.json
+  h_b680f75345178a 3
+plugins/utils/bilibili/CHANGELOG.md
+  h_b680f75345178a 1-13
+plugins/utils/bilibili/package.json
+  h_b680f75345178a 3
+plugins/utils/calendar/CHANGELOG.md
+  h_b680f75345178a 3-14
+plugins/utils/calendar/package.json
+  h_b680f75345178a 3
+plugins/utils/code-runner/CHANGELOG.md
+  h_b680f75345178a 3-11
+plugins/utils/code-runner/package.json
+  h_b680f75345178a 3
+plugins/utils/content-moderation/CHANGELOG.md
+  h_b680f75345178a 3-15
+plugins/utils/content-moderation/package.json
+  h_b680f75345178a 3
+plugins/utils/earthquake/CHANGELOG.md
+  h_b680f75345178a 1-12
+plugins/utils/earthquake/package.json
+  h_b680f75345178a 3
+plugins/utils/group-suite/CHANGELOG.md
+  h_b680f75345178a 3-22
+plugins/utils/group-suite/package.json
+  h_b680f75345178a 3
+plugins/utils/ledger/CHANGELOG.md
+  h_b680f75345178a 1-8
+plugins/utils/ledger/package.json
+  h_b680f75345178a 3
+plugins/utils/link-poster/CHANGELOG.md
+  h_b680f75345178a 3-17
+plugins/utils/link-poster/package.json
+  h_b680f75345178a 3
+plugins/utils/lottery/CHANGELOG.md
+  h_b680f75345178a 3-11
+plugins/utils/lottery/package.json
+  h_b680f75345178a 3
+plugins/utils/music/CHANGELOG.md
+  h_b680f75345178a 3-19
+plugins/utils/music/package.json
+  h_b680f75345178a 3
+plugins/utils/nettools/CHANGELOG.md
+  h_b680f75345178a 1,3-11
+plugins/utils/nettools/package.json
+  h_b680f75345178a 3
+plugins/utils/qrcode/CHANGELOG.md
+  h_b680f75345178a 3-19
+plugins/utils/qrcode/package.json
+  h_b680f75345178a 3
+plugins/utils/reminder/CHANGELOG.md
+  h_b680f75345178a 3-13
+plugins/utils/reminder/package.json
+  h_b680f75345178a 3
+plugins/utils/repeater/CHANGELOG.md
+  h_b680f75345178a 3-16
+plugins/utils/repeater/package.json
+  h_b680f75345178a 3
+plugins/utils/rss/CHANGELOG.md
+  h_b680f75345178a 3-13
+plugins/utils/rss/package.json
+  h_b680f75345178a 3
+plugins/utils/short-url/CHANGELOG.md
+  h_b680f75345178a 3-11
+plugins/utils/short-url/package.json
+  h_b680f75345178a 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "36d67e2d113ab9f353949390061f900725199146",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
