@@ -51,6 +51,7 @@ import {
   preprocessInboundTurn,
 } from './content.js';
 import {
+  hasIgnoredTriggerPrefix,
   renderTriggerError,
   resolveRuntimeAgentTrigger,
   resolveTriggerTimeoutMs,
@@ -78,9 +79,14 @@ import {
   type RuntimeSenderRoles,
 } from './request.js';
 import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
+import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
+import { AmbientEngagement, LlmEngagementJudge } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 
 const logger = getLogger('agent');
+/** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */
+const AMBIENT_CONTEXT_CONSUMER = 'zhin.ambient-engagement';
+const AMBIENT_CONTEXT_MESSAGES = 20;
 
 export interface AgentTurnIngressRouteOptions {
   readonly projectRoot: string;
@@ -103,6 +109,7 @@ export interface AgentTurnIngressRouteOptions {
 export class AgentTurnIngressRoute implements IngressRoute {
 
   #admissionGate: TurnAdmissionGate | undefined;
+  #ambient: AmbientEngagement | null | undefined;
   private readonly workroomPort: AgentWorkroomPort;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
@@ -123,6 +130,59 @@ export class AgentTurnIngressRoute implements IngressRoute {
       });
     }
     return this.#admissionGate;
+  }
+
+  /** Ambient engagement of this generation; null when no group is configured for it. */
+  #ambientEngagement(): AmbientEngagement | null {
+    if (this.#ambient !== undefined) return this.#ambient;
+    const service = this.options.agent.service;
+    const config = service.getTriggerConfig()?.ambient;
+    if (!config?.conversations?.length) return this.#ambient = null;
+    const binding = service.getBindingRegistry().requireZhinBinding();
+    const [alias, ...model] = config.judge?.trim() ? config.judge.trim().split('/') : [binding.providerAlias, binding.model];
+    const llm = service.getLlmRuntime();
+    return this.#ambient = new AmbientEngagement({
+      config,
+      judge: new LlmEngagementJudge(llm, llm.model(alias!, model.join('/'))),
+    });
+  }
+
+  /** For a group message nobody addressed: wait for the burst, throttle, then let the judge decide. */
+  async #considerAmbient(
+    message: Message,
+    conversationSequence: number | undefined,
+    platform: string,
+    botName: string,
+  ): Promise<{ content: string } | null> {
+    if (message.conversation.kind !== 'group' || conversationSequence === undefined) return null;
+    const text = message.content.trim();
+    const trigger = this.options.agent.service.getTriggerConfig();
+    if (!text || trigger?.enabled === false || hasIgnoredTriggerPrefix(text, trigger)) return null;
+    const engagement = this.#ambientEngagement();
+    if (!engagement?.enabledFor(platform, message.conversation.id)) return null;
+    const key = `${platform}:${message.conversation.id}`;
+    const decision = await engagement.consider({
+      key,
+      botName,
+      readRecent: async () => (await this.options.im.readConversationContext(
+        message.conversation,
+        AMBIENT_CONTEXT_CONSUMER,
+        conversationSequence,
+        AMBIENT_CONTEXT_MESSAGES,
+      )).blocks.map(block => block.text),
+    });
+    if (decision.kind !== 'skipped' || decision.reason !== 'superseded') {
+      logger.info(formatCompact({
+        op: 'ambient_engagement',
+        conv: key,
+        decision: decision.kind,
+        ...(decision.kind === 'skipped' ? { reason: decision.reason } : {
+          confidence: decision.judgment.confidence,
+          reason: decision.judgment.reason,
+        }),
+      }));
+    }
+    return decision.kind === 'engage' ? { content: text } : null;
   }
 
   async preRoute(
@@ -159,7 +219,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
       const workroomAgentTurn = workroom.takeAgentTurn(message);
-      const matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
+      let matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
 
       const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
       const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
@@ -246,8 +306,20 @@ export class AgentTurnIngressRoute implements IngressRoute {
         }
       }
 
+      const platform = turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '';
+      const ambientKey = message.conversation.kind === 'group' ? `${platform}:${message.conversation.id}` : undefined;
+      let ambient = false;
       if (!matched) {
-        return false;
+        matched = workroomAgentTurn ? null : await this.#considerAmbient(
+          message,
+          conversationSequence,
+          platform,
+          binding.nickname?.trim() || 'Zhin',
+        );
+        if (!matched) return false;
+        ambient = true;
+      } else if (ambientKey) {
+        this.#ambientEngagement()?.noteSpoke(ambientKey);
       }
 
       // #732: a message in a session with an active background task may stop
@@ -336,7 +408,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
         // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
-        if (trigger.thinkingMessage) {
+        if (trigger.thinkingMessage && !ambient) {
           message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
             logger.debug(formatCompact({
               op: 'agent_host_thinking_reply_failed',
@@ -411,6 +483,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     orchestratorAgentDefinitionId: workroomAgentTurn.agentDefinitionId,
                   }),
                 }),
+              } : ambient ? {
+                trustedMetadata: Object.freeze({ [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' }),
               } : {}),
               // The gate already serialized (and, if needed, superseded) this
               // session, so the coordinator only has to queue behind it.

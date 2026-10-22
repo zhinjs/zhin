@@ -659,7 +659,30 @@ export interface AIConfig {
     thinkingMessage?: string;
     /** 错误提示模板（默认 '❌ AI 处理失败: {error}'） */
     errorTemplate?: string;
+    /** 群聊旁听：没人叫机器人时，由判断模型决定是否接话 */
+    ambient?: AmbientEngagementConfig;
   };
+}
+
+/**
+ * Ambient group engagement: for a group message that did not address the bot, a judge model
+ * decides whether the bot would naturally chime in. Addressed messages always reach the Agent.
+ */
+export interface AmbientEngagementConfig {
+  /** Groups that may be joined unprompted, as `platform:groupId`; `*` for every group. Default: none. */
+  conversations?: string[];
+  /** Judge model as `providerAlias/model`. Default: the main Agent's model. */
+  judge?: string;
+  /** Wait for the group to be quiet this long before judging a burst of messages (default 4000). */
+  quietMs?: number;
+  /** Minimum gap after the bot last spoke in the group (default 120000). */
+  cooldownMs?: number;
+  /** Unprompted replies per group per rolling hour (default 3). */
+  maxPerHour?: number;
+  /** Judge confidence required to engage, 0..1 (default 0.7). */
+  minConfidence?: number;
+  /** `shadow` logs the judgment without replying (default `active`). */
+  mode?: 'active' | 'shadow';
 }
 
 /** Consumer policy; the decision transport itself remains independent of Agent/IM. */

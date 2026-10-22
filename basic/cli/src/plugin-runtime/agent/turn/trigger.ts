@@ -74,6 +74,14 @@ export function routeSpecialistAgent(
   return platformAgents[0] ? { userText, agent: platformAgents[0] } : { userText };
 }
 
+/** Messages starting with a command prefix are never AI turns, addressed or not. */
+export function hasIgnoredTriggerPrefix(text: string, trigger: AITriggerConfig | undefined): boolean {
+  const ignorePrefixes = trigger?.ignorePrefixes?.length
+    ? trigger.ignorePrefixes
+    : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
+  return ignorePrefixes.some(prefix => prefix && text.startsWith(prefix));
+}
+
 export function matchAiTrigger(
   message: Message,
   trigger: AITriggerConfig | undefined,
@@ -82,12 +90,7 @@ export function matchAiTrigger(
   const text = message.content.trim();
   if (!text) return null;
 
-  const ignorePrefixes = trigger?.ignorePrefixes?.length
-    ? trigger.ignorePrefixes
-    : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
-  for (const prefix of ignorePrefixes) {
-    if (prefix && text.startsWith(prefix)) return null;
-  }
+  if (hasIgnoredTriggerPrefix(text, trigger)) return null;
 
   const isPrivate = message.conversation.kind === 'private';
   const prefixes = trigger?.prefixes?.length ? trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;

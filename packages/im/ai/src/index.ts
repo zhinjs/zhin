@@ -132,6 +132,7 @@ export type { FinishFailureKind, FinishInput, FinishOutcome } from './llm/index.
 // ── Core AI Types ──
 export type {
   AIConfig,
+  AmbientEngagementConfig,
   DecisionTaskConfig,
   AIProvider,
   ProviderConfig,
