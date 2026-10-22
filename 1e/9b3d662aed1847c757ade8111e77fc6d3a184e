@@ -1,0 +1,33 @@
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_9477e63ef5cee5::t_c7a11c96e8ed32 113-116
+packages/im/core/tests/plugin-runtime/conversation-context-hygiene.test.ts
+  s_9477e63ef5cee5::t_101875b88ccbad 87,98-131
+  s_9477e63ef5cee5::t_22dc4e57c066fc 132
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_9477e63ef5cee5::t_101875b88ccbad 1
+  s_9477e63ef5cee5::t_c7a11c96e8ed32 72,74-75,77,203
+packages/im/core/src/plugin-runtime/im/conversation-runtime.ts
+  s_9477e63ef5cee5::t_c640c9886e58fb 78-79,83-86,92,274,280,344-348,350-352,354-355,358
+  s_9477e63ef5cee5::t_5cf21d2a08b0d0 139-142,349
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_9477e63ef5cee5::t_45f0778966a6fe 243-246
+  s_9477e63ef5cee5::t_f5a8ede62da34c 231-242,247-248
+.changeset/context-own-messages.md
+  s_9477e63ef5cee5::t_aa1620a489f251 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1e9b3d662aed1847c757ade8111e77fc6d3a184e",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
