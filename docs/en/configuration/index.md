@@ -177,7 +177,7 @@ The CLI database selector shows both the currently supported, live-tested server
 | `sqlite` | Built-in Node.js `node:sqlite` (Node.js 22.5+) | none |
 | `mysql` | MySQL 8.4 LTS | `mysql2 ^3.23.2` |
 | `pg` | PostgreSQL 17 | `pg ^8.22.0` |
-| `mongodb` | MongoDB 8 | `mongodb ^7.5.0` |
+| `mongodb` | MongoDB 7 | `mongodb ^7.5.0` |
 | `redis` | Redis 8 | `redis ^6.1.0` |
 | `memory` | Built into Zhin | none |
 

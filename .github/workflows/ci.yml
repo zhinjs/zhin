@@ -103,8 +103,10 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=12
+      # mongo:8.x exits at startup on Linux 6.19+ runner kernels (TCMalloc rseq, SERVER-121912, no fix
+      # version yet); 7.x is unaffected. Move back to 8 once a fixed release exists.
       mongodb:
-        image: mongo:8
+        image: mongo:7
         ports:
           - 27017:27017
         options: >-

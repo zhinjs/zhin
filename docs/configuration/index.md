@@ -174,7 +174,7 @@ CLI 的数据库选择项会同时显示当前支持的服务端实机验收版�
 | `sqlite` | Node.js 内置 `node:sqlite`（Node.js 22.5+） | 无 |
 | `mysql` | MySQL 8.4 LTS | `mysql2 ^3.23.2` |
 | `pg` | PostgreSQL 17 | `pg ^8.22.0` |
-| `mongodb` | MongoDB 8 | `mongodb ^7.5.0` |
+| `mongodb` | MongoDB 7 | `mongodb ^7.5.0` |
 | `redis` | Redis 8 | `redis ^6.1.0` |
 | `memory` | Zhin 内置实现 | 无 |
 
