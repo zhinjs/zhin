@@ -176,16 +176,6 @@ function logAssistantIterationFailure(
   }));
 }
 
-/** ai.agent.outputSchema 配置 → 传给 LLM 的 JSON Schema（true/'segments' 用 zhin 出站契约）。 */
-function resolveAgentOutputSchema(
-  value: boolean | 'segments' | Record<string, unknown> | undefined,
-  segmentTypes?: readonly AiOutboundSegmentType[],
-): Record<string, unknown> | undefined {
-  if (!value) return undefined;
-  if (value === true || value === 'segments') return structuredReplySchema(segmentTypes);
-  return value;
-}
-
 function toolResultToAgentMessage(
   toolCall: ParsedToolCall,
   result: unknown,
@@ -525,16 +515,13 @@ export async function* runAgentLoopTextTurnRun(
   const preData = toolRun.preExecution.data;
   // IM conversations get a message contract. Detached/programmatic turns keep
   // their text/custom-schema contract and never inherit the IM preset.
+  // ai.agent.outputSchema: true / 'segments' → zhin message contract; an object → caller's own schema.
   const configuredSchema = host.config.outputSchema ?? 'segments';
-  const imReply = input.turnContext.origin.kind === 'im'
-    && input.conversationPersistence !== 'none'
-    && (configuredSchema === true || configuredSchema === 'segments');
-  const outputSchema = resolveAgentOutputSchema(
-    configuredSchema === true || configuredSchema === 'segments'
-      ? (imReply ? 'segments' : false)
-      : configuredSchema,
-    input.replySegmentTypes,
-  );
+  const messagePreset = configuredSchema === true || configuredSchema === 'segments';
+  const imReply = messagePreset && input.turnContext.origin.kind === 'im'
+    && input.conversationPersistence !== 'none';
+  const outputSchema = imReply ? structuredReplySchema(input.replySegmentTypes)
+    : messagePreset || !configuredSchema ? undefined : configuredSchema;
   const turnShellPolicy = input.turnContext.policy?.shell;
   const execPolicyConfig = turnShellPolicy
     ? {
