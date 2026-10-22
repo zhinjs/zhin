@@ -298,11 +298,14 @@ ai:
   trigger:
     ambient:
       conversations: ["icqq:1048877509"]  # platform:groupId；"*" 表示所有群
-      judge: gemini/gemini-2.5-flash      # 判断模型，默认用主 Agent 的模型；建议用便宜、快的模型
+      judge:                              # 判断模型，默认用主 Agent 的模型；建议用便宜、快的模型
+        - groq/openai/gpt-oss-120b        # 可写成列表：前一个失败或限流时按顺序换下一个
+        - groq/openai/gpt-oss-20b
       quietMs: 4000                       # 群安静这么久之后，对这一串消息判断一次
       cooldownMs: 120000                  # 两次主动插话之间的最短间隔
       maxPerHour: 3                       # 每个群每小时最多主动插话次数
       conversationWindowMs: 180000        # Bot 说话后这段时间内算作对话进行中
+      judgeIntervalMs: 30000              # 没在对话时，同一个群至少隔这么久才判断一次
       minConfidence: 0.7                  # 判断模型的置信度门槛
       mode: active                        # shadow：只记录判断结果，不回复
 ```

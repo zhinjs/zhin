@@ -671,8 +671,13 @@ export interface AIConfig {
 export interface AmbientEngagementConfig {
   /** Groups that may be joined unprompted, as `platform:groupId`; `*` for every group. Default: none. */
   conversations?: string[];
-  /** Judge model as `providerAlias/model`. Default: the main Agent's model. */
-  judge?: string;
+  /**
+   * Judge model as `providerAlias/model`, or a list tried in order when one fails or is rate
+   * limited (free tiers are limited per model). Default: the main Agent's model.
+   */
+  judge?: string | string[];
+  /** Outside a conversation, judge a group at most this often (default 30000), to spare the judge's quota. */
+  judgeIntervalMs?: number;
   /** Wait for the group to be quiet this long before judging a burst of messages (default 4000). */
   quietMs?: number;
   /** Minimum gap between two unprompted interjections in a group (default 120000). */

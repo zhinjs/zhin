@@ -33,7 +33,7 @@ export interface EngagementJudge {
 export type AmbientDecision =
   | { readonly kind: 'engage' | 'shadow'; readonly judgment: EngagementJudgment }
   | { readonly kind: 'declined'; readonly judgment: EngagementJudgment }
-  | { readonly kind: 'skipped'; readonly reason: 'superseded' | 'cooldown' | 'hourly_cap' | 'no_context' | 'judge_failed' };
+  | { readonly kind: 'skipped'; readonly reason: 'superseded' | 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed' };
 
 const JUDGMENT_SCHEMA = Object.freeze({
   type: 'object',
@@ -67,13 +67,44 @@ export class LlmEngagementJudge implements EngagementJudge {
         bot: input.botName,
         ...(input.inConversation ? { botIsInConversation: true } : {}),
         ...(input.minutesSinceBotSpoke === undefined ? {} : { minutesSinceBotSpoke: input.minutesSinceBotSpoke }),
-        recentMessages: input.recent,
+        recentMessages: input.recent.map(line => line.length > MAX_LINE_CHARS ? `${line.slice(0, MAX_LINE_CHARS)}…` : line),
       }))]),
       // Reasoning judges (gpt-oss, GLM flash) spend most of the budget thinking before the JSON.
       { signal: input.signal, temperature: 0, maxTokens: 1024, outputSchema: JUDGMENT_SCHEMA },
     );
     if (response.errorMessage) throw new Error(response.errorMessage);
     return parseJudgment(assistantText(response));
+  }
+}
+
+/** Judges tried in order; one that just failed is passed over for a while instead of retried each time. */
+export class FallbackEngagementJudge implements EngagementJudge {
+  readonly #failedAt = new Map<EngagementJudge, number>();
+
+  constructor(
+    private readonly judges: readonly EngagementJudge[],
+    private readonly now: () => number = Date.now,
+    private readonly backoffMs = 60_000,
+  ) {
+    if (judges.length === 0) throw new Error('FallbackEngagementJudge needs at least one judge');
+  }
+
+  async judge(input: EngagementJudgeInput): Promise<EngagementJudgment> {
+    const now = this.now();
+    const fresh = this.judges.filter(judge => now - (this.#failedAt.get(judge) ?? -Infinity) >= this.backoffMs);
+    let lastError: unknown;
+    for (const judge of fresh.length > 0 ? fresh : this.judges) {
+      input.signal.throwIfAborted();
+      try {
+        const judgment = await judge.judge(input);
+        this.#failedAt.delete(judge);
+        return judgment;
+      } catch (error) {
+        this.#failedAt.set(judge, this.now());
+        lastError = error;
+      }
+    }
+    throw lastError;
   }
 }
 
@@ -98,6 +129,8 @@ export interface AmbientEngagementOptions {
 
 const HOUR_MS = 60 * 60 * 1000;
 const JUDGE_TIMEOUT_MS = 15_000;
+/** A pasted log or essay says nothing more to the judge after this many characters. */
+const MAX_LINE_CHARS = 200;
 /** Safety ceiling for replies inside an ongoing conversation, which skip the interjection limits. */
 const MAX_CONVERSATION_REPLIES_PER_HOUR = 30;
 
@@ -112,6 +145,7 @@ const MAX_CONVERSATION_REPLIES_PER_HOUR = 30;
  */
 export class AmbientEngagement {
   readonly #config: Required<Omit<AmbientEngagementConfig, 'judge' | 'conversations'>> & { conversations: readonly string[] };
+  readonly #lastJudged = new Map<string, number>();
   readonly #judge: EngagementJudge;
   readonly #now: () => number;
   readonly #sleep: (ms: number) => Promise<void>;
@@ -128,6 +162,7 @@ export class AmbientEngagement {
       cooldownMs: nonNegative(config.cooldownMs, 120_000),
       maxPerHour: nonNegative(config.maxPerHour, 3),
       conversationWindowMs: nonNegative(config.conversationWindowMs, 180_000),
+      judgeIntervalMs: nonNegative(config.judgeIntervalMs, 30_000),
       minConfidence: Math.min(1, Math.max(0, config.minConfidence ?? 0.7)),
       mode: config.mode === 'shadow' ? 'shadow' : 'active',
     };
@@ -168,11 +203,14 @@ export class AmbientEngagement {
       const lastInterjection = interjections.at(-1);
       if (lastInterjection !== undefined && now - lastInterjection < this.#config.cooldownMs) return { kind: 'skipped', reason: 'cooldown' };
       if (interjections.length >= this.#config.maxPerHour) return { kind: 'skipped', reason: 'hourly_cap' };
+      const lastJudged = this.#lastJudged.get(input.key);
+      if (lastJudged !== undefined && now - lastJudged < this.#config.judgeIntervalMs) return { kind: 'skipped', reason: 'judge_interval' };
     }
 
     const recent = await input.readRecent().catch(() => []);
     if (recent.length === 0) return { kind: 'skipped', reason: 'no_context' };
     let judgment: EngagementJudgment;
+    this.#lastJudged.set(input.key, now);
     try {
       judgment = await this.#judge.judge({
         botName: input.botName,

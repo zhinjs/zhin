@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AmbientEngagement,
+  FallbackEngagementJudge,
+  LlmEngagementJudge,
   parseJudgment,
   type EngagementJudge,
   type EngagementJudgment,
@@ -120,12 +122,29 @@ describe('AmbientEngagement', () => {
     expect(kinds.at(-1)).toBe('skipped');
   });
 
+  it('judges an idle group at most once per judge interval', async () => {
+    const h = harness({ ...yes, engage: false }, { judgeIntervalMs: 30_000, conversationWindowMs: 0 });
+    const first = h.consider();
+    await h.release();
+    await expect(first).resolves.toMatchObject({ kind: 'declined' });
+    h.advance(10_000);
+    const soon = h.consider();
+    await h.release();
+    await expect(soon).resolves.toEqual({ kind: 'skipped', reason: 'judge_interval' });
+    h.advance(21_000);
+    const later = h.consider();
+    await h.release();
+    await expect(later).resolves.toMatchObject({ kind: 'declined' });
+    expect(h.judge.judge).toHaveBeenCalledTimes(2);
+  });
+
   it('logs only in shadow mode and does not start a cooldown', async () => {
     const h = harness(yes, { mode: 'shadow' });
     for (let i = 0; i < 2; i++) {
       const decision = h.consider();
       await h.release();
       await expect(decision).resolves.toEqual({ kind: 'shadow', judgment: yes });
+      h.advance(31_000);
     }
   });
 
@@ -134,6 +153,39 @@ describe('AmbientEngagement', () => {
     const decision = h.consider();
     await h.release();
     await expect(decision).resolves.toEqual({ kind: 'skipped', reason: 'judge_failed' });
+  });
+});
+
+describe('FallbackEngagementJudge', () => {
+  const input = { botName: '小知', recent: ['a'], signal: new AbortController().signal };
+
+  it('falls through to the next judge and passes over a failed one for a while', async () => {
+    let now = 0;
+    const limited = { judge: vi.fn(async () => { throw new Error('429 rate limited'); }) };
+    const spare = { judge: vi.fn(async () => yes) };
+    const judge = new FallbackEngagementJudge([limited, spare], () => now, 60_000);
+    await expect(judge.judge(input)).resolves.toEqual(yes);
+    await expect(judge.judge(input)).resolves.toEqual(yes);
+    expect(limited.judge).toHaveBeenCalledTimes(1);
+    now = 61_000;
+    await judge.judge(input);
+    expect(limited.judge).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails only when every judge fails', async () => {
+    const down = { judge: vi.fn(async () => { throw new Error('down'); }) };
+    await expect(new FallbackEngagementJudge([down, down]).judge(input)).rejects.toThrow('down');
+  });
+});
+
+describe('LlmEngagementJudge', () => {
+  it('trims long chat lines before sending them to the judge', async () => {
+    const completeSimple = vi.fn(async () => ({ role: 'assistant', content: [{ type: 'text', text: '{"engage":false,"confidence":0.9,"reason":"x"}' }] }));
+    const judge = new LlmEngagementJudge({ completeSimple } as never, {} as never);
+    await judge.judge({ botName: '小知', recent: ['短', '长'.repeat(500)], signal: new AbortController().signal });
+    const sent = JSON.stringify(completeSimple.mock.calls[0]);
+    expect(sent).toContain(`${'长'.repeat(200)}…`);
+    expect(sent).not.toContain('长'.repeat(201));
   });
 });
 

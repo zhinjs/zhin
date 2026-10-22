@@ -298,11 +298,14 @@ ai:
   trigger:
     ambient:
       conversations: ["icqq:1048877509"]  # platform:groupId; "*" for every group
-      judge: gemini/gemini-2.5-flash      # judge model, defaults to the main Agent model; prefer a cheap, fast one
+      judge:                              # judge model, defaults to the main Agent model; prefer a cheap, fast one
+        - groq/openai/gpt-oss-120b        # a list is tried in order when one fails or is rate limited
+        - groq/openai/gpt-oss-20b
       quietMs: 4000                       # wait until the group is quiet, then judge the burst once
       cooldownMs: 120000                  # minimum gap between two unprompted interjections
       maxPerHour: 3                       # unprompted interjections per group per hour
       conversationWindowMs: 180000        # after the bot speaks, the group is in a conversation for this long
+      judgeIntervalMs: 30000              # outside a conversation, judge a group at most this often
       minConfidence: 0.7                  # judge confidence required to engage
       mode: active                        # shadow: log the judgment without replying
 ```
