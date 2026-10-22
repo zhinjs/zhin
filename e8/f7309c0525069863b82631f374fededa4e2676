@@ -1,0 +1,63 @@
+packages/im/agent/src/core/structured-reply-recovery.ts
+  s_9477e63ef5cee5::t_5163257ce45196 2-3,15,35,39,46
+packages/im/core/tests/interactive-json-schema.test.ts
+  s_9477e63ef5cee5::t_f96dcb2952f5a3 47-50
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_9477e63ef5cee5::t_9d3a4676e5a9dc 19-25,163-164,167-173
+  s_9477e63ef5cee5::t_b030d583021d11 165-166,174-177
+  s_9477e63ef5cee5::t_2dd2c3365af639 178-179
+.changeset/agent-reply-segment-types.md
+  s_9477e63ef5cee5::t_55f38437952fe5 1-7
+docs/en/ai/structured-replies.md
+  s_9477e63ef5cee5::t_55f38437952fe5 29-41,50,54-57
+  s_9477e63ef5cee5::t_19b5cf4c3d9945 58
+docs/ai/structured-replies.md
+  s_9477e63ef5cee5::t_55f38437952fe5 54-61,71,75-76
+  s_9477e63ef5cee5::t_e1b960d708f445 77
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9477e63ef5cee5::t_5163257ce45196 12,150-151
+packages/im/core/src/built/segment-contract/index.ts
+  s_9477e63ef5cee5::t_bab1c525b551a8 40-42,44
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_9477e63ef5cee5::t_f96dcb2952f5a3 214
+  s_9477e63ef5cee5::t_7836eff763fac4 3,7,30,65,246-278
+packages/im/core/tests/segment-contract-json-schema.test.ts
+  s_9477e63ef5cee5::t_ea45dcfd3406b0 5,115-137
+  s_9477e63ef5cee5::t_c27f3abe0bb238 138
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_5163257ce45196 5-6,182,185,219-220,536,562,1140,1145
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_9477e63ef5cee5::t_bab1c525b551a8 205-227,229,231-235,238,240-267
+packages/im/core/src/built/ai-outbound/prompt.ts
+  s_9477e63ef5cee5::t_e52ec054b6b553 5,24
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9477e63ef5cee5::t_5163257ce45196 268,450
+packages/im/agent/src/outbound/structured-reply.ts
+  s_9477e63ef5cee5::t_c90ab462c06c39 1-2,4-7,11-13,16-29,39-47,49-54,57-60,63-65
+  s_9477e63ef5cee5::t_2851d3b0846645 3,14,30-31,33-38,48
+  s_9477e63ef5cee5::t_f96dcb2952f5a3 32
+packages/im/agent/src/media/media-publisher.ts
+  s_9477e63ef5cee5::t_b3d36f9cfd2c91 282-283,286,291-316,325-328
+packages/im/core/tests/plugin-runtime/outbound-segments.test.ts
+  s_9477e63ef5cee5::t_ea45dcfd3406b0 7,475-489
+  s_9477e63ef5cee5::t_532917d7e68047 490
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_e94440ff9a88af 30,461-464
+  s_9477e63ef5cee5::t_2bdd5f3bded563 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e8f7309c0525069863b82631f374fededa4e2676",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
