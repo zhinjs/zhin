@@ -4,7 +4,7 @@ import {
   applyOutboundInteractivePolicy,
   applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
-  resolveAiOutboundSegmentTypes,
+  resolveAiOutboundSegments,
   resolveOutboundInteractivePolicy,
   resolveOutboundMarkdownPolicy,
   resolveOutboundMediaPolicy,
@@ -474,8 +474,9 @@ describe('outbound Markdown policy', () => {
 });
 
 describe('AI outbound segment types', () => {
-  const resolve = (segments: Record<string, unknown>) =>
-    resolveAiOutboundSegmentTypes('adapter:test' as never, mockSnapshot({ definition: { segments } }));
+  const profile = (segments: Record<string, unknown>) =>
+    resolveAiOutboundSegments('adapter:test' as never, mockSnapshot({ definition: { segments } }));
+  const resolve = (segments: Record<string, unknown>) => profile(segments).types;
 
   it('offers the default set when the adapter declares no supported list', () => {
     expect(resolve({ outboundMedia: ['url'] })).toEqual(['text', 'mention', 'image', 'audio', 'video', 'file', 'markdown', 'keyboard']);
@@ -486,5 +487,12 @@ describe('AI outbound segment types', () => {
       .toEqual(['text', 'mention', 'image', 'markdown', 'keyboard']);
     expect(resolve({ supported: ['text', 'share', 'dice'] })).toEqual(['text', 'markdown', 'keyboard', 'share', 'dice']);
     expect(resolve({ supported: ['text'], markdown: 'native', interactive: 'native' })).toEqual(['text']);
+  });
+
+  it('carries model extensions only for offered types', () => {
+    const share = { fields: ['audio'], hint: 'music card' };
+    expect(profile({ supported: ['text', 'share'], model: { share, face: { hint: 'not offered' } } }))
+      .toEqual({ types: ['text', 'markdown', 'keyboard', 'share'], extensions: { share } });
+    expect(profile({ model: { share } })).toEqual({ types: expect.not.arrayContaining(['share']) });
   });
 });

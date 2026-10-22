@@ -1322,6 +1322,19 @@ describe('defineAdapter segments policy', () => {
     expect(defineWithSegments({ outboundMedia: ['ftp'] })).toThrow('outboundMedia');
     expect(defineWithSegments({ interactive: 'button' })).toThrow('interactive');
     expect(defineWithSegments({ markdown: 'html' })).toThrow('markdown');
+    expect(defineWithSegments({ model: [] })).toThrow('segments.model');
+    expect(defineWithSegments({ model: { share: { fields: [''] } } })).toThrow('segments.model');
+    expect(defineWithSegments({ model: { share: { hint: ' ' } } })).toThrow('segments.model');
+  });
+
+  it('accepts model extensions per segment type, deduped and frozen', () => {
+    const definition = defineAdapter({
+      capabilities: ['outbound'],
+      segments: { supported: ['text', 'share'], model: { share: { fields: ['audio', 'audio'], hint: ' music card ' } } },
+      create,
+    });
+    expect(definition.segments?.model).toEqual({ share: { fields: ['audio'], hint: 'music card' } });
+    expect(Object.isFrozen(definition.segments?.model?.share)).toBe(true);
   });
 
   it('parseAdapterDefinition rejects invalid segments on hand-built definitions', () => {
