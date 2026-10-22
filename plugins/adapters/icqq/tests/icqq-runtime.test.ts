@@ -831,6 +831,38 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('confirms a share with the id of the bot\'s own card read back from chat history', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+    const self = Number(endpoint.client.uin);
+    const now = Math.floor(Date.now() / 1000);
+    endpoint.client.getChatHistory.mockResolvedValueOnce([
+      { message_id: 'old-card', time: now - 60, sender: { user_id: self }, message: [{ type: 'json' }] },
+      { message_id: 'someone-else', time: now, sender: { user_id: 42 }, message: [{ type: 'json' }] },
+      { message_id: 'own-text', time: now, sender: { user_id: self }, message: [{ type: 'text' }] },
+      { message_id: 'own-card', time: now, sender: { user_id: self }, message: [{ type: 'json' }] },
+    ]);
+    const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
+    await expect(endpoint.send({ conversation, payload: { type: 'share', data: { title: '晴天', url: 'https://y.qq.com/x' } } }))
+      .resolves.toBe('own-card');
+    await endpoint.stop();
+  });
+
+  it('keeps a share unconfirmed when the card cannot be found or history is unavailable', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+    const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
+    const share = { type: 'share', data: { title: '晴天', url: 'https://y.qq.com/x' } };
+    await expect(endpoint.send({ conversation, payload: share })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
+    expect(endpoint.client.getChatHistory).toHaveBeenCalledTimes(2);
+    endpoint.client.getChatHistory.mockImplementation(() => { throw new Error('history api missing'); });
+    await expect(endpoint.send({ conversation, payload: share })).rejects.toMatchObject({ code: 'delivery_unconfirmed' });
+    endpoint.client.getChatHistory.mockReset();
+    await endpoint.stop();
+  });
+
   it('uses artist as the native share summary when description is absent', () => {
     expect(formatOutboundBody({
       type: 'share',
