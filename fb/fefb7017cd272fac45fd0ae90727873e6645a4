@@ -1,0 +1,47 @@
+docs/en/ai/structured-replies.md
+  s_9477e63ef5cee5::t_2245e414791e55 47,58-59
+plugins/adapters/onebot11/src/protocol.ts
+  s_9477e63ef5cee5::t_7723147c5e8410 347
+docs/ai/structured-replies.md
+  s_9477e63ef5cee5::t_2245e414791e55 67,76-77
+packages/im/core/src/built/segment-contract/validate.ts
+  s_9477e63ef5cee5::t_6887677292b02f 135,219
+plugins/adapters/telegram/src/protocol.ts
+  s_9477e63ef5cee5::t_7723147c5e8410 585
+.changeset/share-music-platform.md
+  s_9477e63ef5cee5::t_bdbeb272f65a57 1-12
+plugins/adapters/email/src/protocol.ts
+  s_9477e63ef5cee5::t_7723147c5e8410 376
+plugins/adapters/icqq/tests/uni-channel.test.ts
+  s_9477e63ef5cee5::t_1e9af09d96be7e 371
+plugins/adapters/kook/src/outbound.ts
+  s_9477e63ef5cee5::t_7723147c5e8410 40
+plugins/adapters/icqq/tests/icqq-runtime.test.ts
+  s_9477e63ef5cee5::t_19103456bdc2f3 771-781
+plugins/adapters/dingtalk/src/protocol.ts
+  s_9477e63ef5cee5::t_7723147c5e8410 299
+packages/im/im-contract/src/segment.ts
+  s_9477e63ef5cee5::t_c0f6e1d9f1e3bf 69-70
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_9477e63ef5cee5::t_1e9af09d96be7e 32-33
+plugins/adapters/icqq/src/protocol.ts
+  s_9477e63ef5cee5::t_1e9af09d96be7e 529-537,554
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_9477e63ef5cee5::t_6887677292b02f 160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fbfefb7017cd272fac45fd0ae90727873e6645a4",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
