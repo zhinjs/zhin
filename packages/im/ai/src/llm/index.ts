@@ -179,6 +179,7 @@ export {
 } from './bridge/ai-sdk-messages.js';
 
 export { createAiSdkStreamFn, generateTextViaAiSdk } from './bridge/ai-sdk-stream.js';
+export { parseLenientJsonObject } from './bridge/lenient-json.js';
 export {
   buildPromptCacheKey,
   supportsPromptCacheSdk,

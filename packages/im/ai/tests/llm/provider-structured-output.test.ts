@@ -51,7 +51,25 @@ describe('MiniMax JSON text compatibility', () => {
     expect(message.content.filter(b => b.type === 'text')).toEqual([{ type: 'text', text: '{"answer":"完成"}' }]);
   });
 
-  it.each(['not JSON', '```json\n{"answer":"ok"}\n```', '{"answer":', 'Here is {"answer":"ok"}'])('rejects %j instead of extracting an object', async text => {
+  it.each([
+    ['a leading sentence', '菜单来了，选一个{"answer":"ok"}'],
+    ['a code fence', '```json\n{"answer":"ok"}\n```'],
+    ['a missing closing brace', '{"answer":"ok"'],
+    ['extra closing brackets', '{"answer":"ok"}]}'],
+    ['a stray closer inside', '{"answer":"ok"]}'],
+  ])('repairs JSON text with %s', async (_label, text) => {
+    const h = createProviderHarness({ sdk: 'minimax' }).reply(anthropicMessages.reply({ text }));
+    const message = await h.complete('hello', { outputSchema });
+    expect(message.content.filter(b => b.type === 'text')).toEqual([{ type: 'text', text: '{"answer":"ok"}' }]);
+  });
+
+  it('passes a plain prose answer through as text', async () => {
+    const h = createProviderHarness({ sdk: 'minimax' }).reply(anthropicMessages.reply({ text: '知道了，就这么办。' }));
+    const message = await h.complete('hello', { outputSchema });
+    expect(message.content.filter(b => b.type === 'text')).toEqual([{ type: 'text', text: '知道了，就这么办。' }]);
+  });
+
+  it.each(['{"answer":', '{"answer":"unterminated'])('rejects %j, which cannot be repaired', async text => {
     const h = createProviderHarness({ sdk: 'minimax' }).reply(anthropicMessages.reply({ text }));
     await expect(h.complete('hello', { outputSchema })).rejects.toThrow('requested structured output');
   });

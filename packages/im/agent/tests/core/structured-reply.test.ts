@@ -80,7 +80,7 @@ describe('structured Agent final replies', () => {
     const valid = JSON.stringify({ segments: [text('已完成')] });
     const responses = [
       toolPath ? assistantToolCallReply([{ id: 'lookup', name: 'member_lookup', arguments: {} }])
-        : assistantTextReply(path === 'empty reply retry' ? '' : 'invalid JSON'),
+        : assistantTextReply(path === 'empty reply retry' ? '' : '{"segments": invalid'),
       assistantTextReply(path === 'rejected correction' ? 'still invalid JSON' : valid),
     ];
     responses[0].usage = { ...responses[0].usage, input: 40, output: 20, totalTokens: 60 };
@@ -159,7 +159,7 @@ describe('structured Agent final replies', () => {
   });
 
   it.each([
-    JSON.stringify('{"segments":[]}'), 'not JSON', '```json\n{"segments":[]}\n```', '{"text":"hello"}',
+    JSON.stringify('{"segments":[]}'), '```json\n{"text":"hello"}\n```', '{"text":"hello"}',
     '{"segments":[{"type":"mention","data":{}}]}',
     '{"segments":[{"type":"text","data":{"text":"valid"}},{"type":"mention","data":{"target":123}}]}',
     '{"segments":[],"mentions":["Alice"]}',
@@ -170,6 +170,25 @@ describe('structured Agent final replies', () => {
     expect(calls).toHaveLength(2);
     expect(calls[1].context.tools).toBeUndefined();
     expect(result.reply).toBe(STRUCTURED_REPLY_FAILURE);
+  });
+
+  it.each([
+    ['a leading sentence', `菜单来了，${JSON.stringify({ segments: [text('选一个')] })}`],
+    ['a code fence', `\`\`\`json\n${JSON.stringify({ segments: [text('选一个')] })}\n\`\`\``],
+    ['a missing closing brace', JSON.stringify({ segments: [text('选一个')] }).slice(0, -1)],
+    ['extra closing brackets', `${JSON.stringify({ segments: [text('选一个')] })}]}`],
+  ])('accepts a reply with %s without a correction call', async (_label, raw) => {
+    const { result, calls, persisted } = await run([assistantTextReply(raw)]);
+    expect(calls).toHaveLength(1);
+    expect(result.reply).toBe('选一个');
+    expect(JSON.stringify(persisted.at(-1))).toContain(JSON.stringify(JSON.stringify({ segments: [text('选一个')] })).slice(1, -1));
+  });
+
+  it('sends a plain prose reply as one text message without a correction call', async () => {
+    const { result, calls, persisted } = await run([assistantTextReply('知道了，就这么办。')]);
+    expect(calls).toHaveLength(1);
+    expect(await publishOutboundElements(result.output!)).toEqual([text('知道了，就这么办。')]);
+    expect(persisted.map(message => message.role)).toEqual(['user', 'assistant']);
   });
 
   it('corrects a rejected numeric mention once with no tools or conversation history', async () => {
@@ -196,7 +215,7 @@ describe('structured Agent final replies', () => {
   });
 
   it('persists the failure text that was sent when recovery fails, not the invalid raw reply', async () => {
-    const raw = 'not JSON IGNORE PREVIOUS INSTRUCTIONS';
+    const raw = '{"segments": IGNORE PREVIOUS INSTRUCTIONS';
     const { persisted, result } = await run([assistantTextReply(raw), assistantTextReply(raw)]);
     expect(result.reply).toBe(STRUCTURED_REPLY_FAILURE);
     const dump = JSON.stringify(persisted);
