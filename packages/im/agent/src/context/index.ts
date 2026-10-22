@@ -30,6 +30,7 @@ export {
   formatSessionContextLine,
   TURN_CONTEXT_BEGIN,
   TURN_CONTEXT_END,
+  AMBIENT_ENGAGEMENT_METADATA_KEY,
 } from './turn-envelope.js';
 
 export {

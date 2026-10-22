@@ -4,6 +4,7 @@ import {
   prependTurnContextEnvelope,
   TURN_CONTEXT_BEGIN,
   TURN_CONTEXT_END,
+  AMBIENT_ENGAGEMENT_METADATA_KEY,
 } from '../../src/context/turn-envelope.js';
 import {
   applyTurnContextToUserMessages,
@@ -25,6 +26,15 @@ describe('buildTurnContextEnvelope', () => {
     const modelIdx = envelope!.indexOf('Model:');
     const sdkIdx = envelope!.indexOf('Sdk:');
     expect(modelIdx).toBeLessThan(sdkIdx);
+  });
+
+  it('tells the model when nobody addressed it, and only then', () => {
+    const ambient = buildTurnContextEnvelope({
+      turn: turnContext({ input: { text: 'hi', metadata: { [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' } } }),
+    });
+    expect(ambient).toContain('Engagement: ambient');
+    expect(ambient).toContain('{"messages":[]}');
+    expect(buildTurnContextEnvelope({ turn: turnContext() })).not.toContain('Engagement:');
   });
 
   it('包含时间、Session、deferred 与 profile', () => {

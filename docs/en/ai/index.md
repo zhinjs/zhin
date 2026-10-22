@@ -287,6 +287,32 @@ ai:
 
 Mention triggering relies on the adapter flagging the message as mentioning the bot (CQ codes, Slack `app_mention`, etc.).
 
+Mentions, quotes and DMs always reach the Agent. The Agent may still decide no reply is needed and return an empty reply (`{"messages":[]}`), in which case nothing is sent.
+
+#### Ambient group engagement
+
+When nobody addresses the bot in a group, it can decide by itself whether to chime in:
+
+```yaml
+ai:
+  trigger:
+    ambient:
+      conversations: ["icqq:1048877509"]  # platform:groupId; "*" for every group
+      judge: gemini/gemini-2.5-flash      # judge model, defaults to the main Agent model; prefer a cheap, fast one
+      quietMs: 4000                       # wait until the group is quiet, then judge the burst once
+      cooldownMs: 120000                  # gap after the bot last spoke in the group
+      maxPerHour: 3                       # unprompted replies per group per hour
+      minConfidence: 0.7                  # judge confidence required to engage
+      mode: active                        # shadow: log the judgment without replying
+```
+
+How it works:
+1. After a new message, wait `quietMs` for the group to go quiet; messages in that window are judged together.
+2. If the cooldown and hourly cap allow, the judge reads the last 20 messages and returns whether to engage and how confident it is.
+3. Above the threshold, the main Agent handles the message as usual. Its context says nobody called it, and it can still stay quiet.
+
+Each judgment logs an `ambient_engagement` line (decision, confidence, reason). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.
+
 ### ai.access
 
 Control which conversations may use the AI (e.g. for platform AIGC compliance):

@@ -5,7 +5,13 @@ export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
 
 export type TurnContextView = Pick<TurnRequest, 'origin' | 'principal' | 'session'>
-  & Partial<Pick<TurnRequest, 'policy'>>;
+  & Partial<Pick<TurnRequest, 'policy' | 'input'>>;
+
+/** Trusted turn metadata key the IM ingress sets for a turn nobody addressed. */
+export const AMBIENT_ENGAGEMENT_METADATA_KEY = 'zhinEngagement';
+
+const AMBIENT_ENGAGEMENT_LINE = 'Engagement: ambient. Nobody called you; you are reading the group chat and chose to look. '
+  + 'Reply only if a group member like you would naturally chime in here; otherwise return {"messages":[]} and stay quiet.';
 
 export interface TurnContextEnvelopeInput {
   turn?: TurnContextView;
@@ -55,6 +61,7 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.turn) {
     lines.push(formatSessionContextLine(input.turn));
     lines.push(formatSenderContextLine(input.turn));
+    if (input.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') lines.push(AMBIENT_ENGAGEMENT_LINE);
     if (input.turn.policy?.filesystem) {
       const filesystem = input.turn.policy.filesystem;
       lines.push(`Workspace: ${filesystem.workingDirectory ?? filesystem.workspaceRoot} | access:${filesystem.access ?? 'workspace-write'}`);

@@ -387,6 +387,14 @@ outline: [2, 3]
 | `ai.trigger.timeout` | number \| string | 否 | — | 超时时间（毫秒，默认 60000） |
 | `ai.trigger.thinkingMessage` | string | 否 | — | 思考中提示语（可选，设置后会在处理前发送） |
 | `ai.trigger.errorTemplate` | string | 否 | — | 错误提示模板（默认 '❌ AI 处理失败: {error}'） |
+| `ai.trigger.ambient` | object | 否 | — | 群聊旁听：群里没人叫机器人时，由判断模型决定是否接话。被 @、引用和私聊不经过这里，总会交给 Agent（Agent 也可以选择不回复）。 |
+| `ai.trigger.ambient.conversations` | array&lt;string&gt; | 否 | — | 开启旁听的群，格式 platform:groupId；* 表示所有群。默认为空（关闭） |
+| `ai.trigger.ambient.judge` | string | 否 | — | 判断模型 providerAlias/model；默认用主 Agent 的模型 |
+| `ai.trigger.ambient.quietMs` | number \| string | 否 | — | 群安静多久后才判断一次（毫秒，默认 4000） |
+| `ai.trigger.ambient.cooldownMs` | number \| string | 否 | — | 机器人在群里说话后的冷却时间（毫秒，默认 120000） |
+| `ai.trigger.ambient.maxPerHour` | number \| string | 否 | — | 每个群每小时最多主动接话次数（默认 3） |
+| `ai.trigger.ambient.minConfidence` | number \| string | 否 | — | 判断模型置信度门槛 0..1（默认 0.7） |
+| `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | 否 | — | shadow 只记录判断结果、不回复（默认 active） |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
 | `menuStyle.title` | string | 否 | — | 菜单标题。 |

@@ -287,6 +287,32 @@ ai:
 
 @ 触发依赖适配器标记消息为"提到了 Bot"（例如 CQ 码、Slack 的 app_mention）。
 
+被 @、引用和私聊的消息总会交给 Agent，Agent 也可以判断不需要回复，返回空消息（`{"messages":[]}`）后什么都不发。
+
+#### 群聊旁听（ambient）
+
+群里没人叫 Bot 时，可以让它自己决定要不要接话：
+
+```yaml
+ai:
+  trigger:
+    ambient:
+      conversations: ["icqq:1048877509"]  # platform:groupId；"*" 表示所有群
+      judge: gemini/gemini-2.5-flash      # 判断模型，默认用主 Agent 的模型；建议用便宜、快的模型
+      quietMs: 4000                       # 群安静这么久之后，对这一串消息判断一次
+      cooldownMs: 120000                  # Bot 在群里说过话后的冷却时间
+      maxPerHour: 3                       # 每个群每小时最多主动接话次数
+      minConfidence: 0.7                  # 判断模型的置信度门槛
+      mode: active                        # shadow：只记录判断结果，不回复
+```
+
+流程：
+1. 群里有新消息后等群安静 `quietMs`，期间的新消息合并为一次判断。
+2. 冷却时间和每小时上限都满足时，判断模型读最近 20 条消息，给出要不要接话和置信度。
+3. 达到门槛后交给主 Agent 正常处理。这一轮的上下文会注明"没人叫你"，Agent 仍然可以选择不说话。
+
+每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由）。建议先用 `shadow` 跑一段时间，看判断是否靠谱，再改成 `active`。
+
 ### ai.access
 
 控制哪些会话可以使用 AI（例如为满足平台对 AIGC 的合规要求）：
