@@ -1,9 +1,32 @@
-import { assistantAnswerText, createUserMessage, type AssistantMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
+import { assistantAnswerText, createUserMessage, parseLenientJsonObject, type AssistantMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
 import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchema } from '../outbound/structured-reply.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 
 export const STRUCTURED_REPLY_FAILURE = '模型未能生成符合消息格式的回复，本次未发送模型内容。请重试。';
+
+/**
+ * Accept a reply that missed the strict format without another model call: a JSON object wrapped
+ * in prose or a code fence or with a bracket wrong, or a plain prose answer, sent as one text
+ * message. `text` is the canonical reply to persist. Undefined when only a format correction can help.
+ */
+export function decodeLenientStructuredReply(
+  raw: string,
+  segments?: AiOutboundSegmentProfile,
+): { output: AgentOutputElement[]; text: string } | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const repaired = trimmed.includes('{')
+    ? parseLenientJsonObject(trimmed)
+    : { segments: [{ type: 'text', data: { text: trimmed } }] };
+  if (!repaired) return undefined;
+  const text = JSON.stringify(repaired);
+  try {
+    return { output: decodeStructuredReply(text, segments), text };
+  } catch {
+    return undefined;
+  }
+}
 
 /** One format-only completion: no history, business tools or action replay. */
 export async function recoverStructuredReply(input: {

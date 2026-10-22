@@ -10,6 +10,7 @@ import type { Model } from '../types/model.js';
 import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import { streamPartError } from './stream-error.js';
+import { parseLenientJsonObject } from './lenient-json.js';
 import { toolCallInput } from './tool-call-input.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
@@ -61,11 +62,12 @@ async function readStructuredOutput(
   } catch {
     if (hasToolCalls) return undefined;
     // MiniMax can ignore the SDK's synthetic json tool and return a JSON text
-    // block instead. The SDK hides that block; recover only the complete JSON
-    // value, never thinking, prose extraction or a partially valid response.
-    if (responseText.trim()) {
-      try { return JSON.parse(responseText); } catch { /* contract failure below */ }
-    }
+    // block instead. The SDK hides that block; recover from the answer text
+    // only, never from thinking.
+    const repaired = parseLenientJsonObject(responseText);
+    if (repaired !== undefined) return repaired;
+    // A plain prose answer is still the answer; the caller's schema decides what to do with it.
+    if (responseText.trim() && !responseText.includes('{')) return responseText.trim();
     // SDK errors can include the entire response. Keep the public failure
     // specific to the contract without leaking the response or reasoning.
     throw new Error('Model did not produce the requested structured output');

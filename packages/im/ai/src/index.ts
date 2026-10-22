@@ -30,6 +30,7 @@ export {
   agentContextFrom,
   assistantText,
   assistantAnswerText,
+  parseLenientJsonObject,
   CompletionFailureError,
   createLlmApiRuntime,
   isSdkId,
