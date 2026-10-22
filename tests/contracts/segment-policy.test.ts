@@ -32,7 +32,17 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   discord: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text', markdown: 'native', html: 'direct' },
   github: { outboundMedia: ['url'], interactive: 'text' },
-  icqq: { outboundMedia: ['base64', 'url', 'path'], interactive: 'text' },
+  icqq: {
+    supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps', 'share'],
+    outboundMedia: ['base64', 'url', 'path'],
+    interactive: 'text',
+    model: {
+      share: {
+        fields: ['description', 'image', 'audio', 'platform'],
+        hint: 'renders as a QQ link card. For a song, set audio to the playable link, image to the cover, description to the artist and platform to its music service (qq, netease, kugou, kuwo or migu), copied from tool results; leave a field "" when you have no real value.',
+      },
+    },
+  },
   kook: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   lark: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   line: { outboundMedia: ['url'], interactive: 'text' },

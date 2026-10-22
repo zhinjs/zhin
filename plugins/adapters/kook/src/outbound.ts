@@ -37,7 +37,7 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
         let url: URL;
         try { url = new URL(data.url); } catch { throw new EndpointDeliveryError('invalid_payload', 'KOOK share requires an HTTP(S) URL', 'not_sent'); }
         if (!['http:', 'https:'].includes(url.protocol) || typeof data.title !== 'string' || !data.title.trim()) throw new EndpointDeliveryError('invalid_payload', 'KOOK share requires URL and title', 'not_sent');
-        if (['image', 'audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'KOOK share media/app metadata is not implemented', 'not_sent');
+        if (['image', 'audio', 'artist', 'duration', 'platform', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'KOOK share media/app metadata is not implemented', 'not_sent');
         modules.push({ type: 'section', mode: 'left', text: { type: 'plain-text', content: data.title } });
         for (const value of [data.description, data.content]) if (typeof value === 'string' && value) modules.push({ type: 'section', mode: 'left', text: { type: 'plain-text', content: value } });
         modules.push({ type: 'action-group', elements: [{ type: 'button', theme: 'secondary', click: 'link', value: url.href, text: { type: 'plain-text', content: '打开链接' } }] });

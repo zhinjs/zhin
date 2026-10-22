@@ -45,6 +45,28 @@ the schema, the instruction and the validator are generated from that one set:
   also offered when the endpoint degrades them to text (`markdown: 'text'` /
   `interactive: 'text'`).
 
+An adapter can also declare per-type platform extensions under `segments.model`.
+They only change that platform's prompt and schema, never the global contract:
+
+```ts
+segments: {
+  supported: ['text', 'mention', 'image', 'share' /* … */],
+  model: {
+    share: {
+      fields: ['description', 'image', 'audio', 'platform'],   // optional string fields the model may fill
+      hint: 'renders as a QQ link card. For a song, set audio to the playable link …',
+    },
+  },
+}
+```
+
+`fields` become required strings in the model schema; the model writes `""` when it
+has no real value and those empty fields are removed after validation. `hint` is
+appended to that platform's reply instruction as `- share on this platform: …`.
+icqq uses it so the model can turn music search results into a share card with a
+playable link and cover; icqq maps `platform` (qq / netease / kugou / kuwo /
+migu) to that music app's appid, so the model never fills `config.appid`.
+
 reply, forward and face are never offered: they need platform message, forward or
 emoji IDs the model has no reliable source for. A type the model picks is therefore
 never rejected later as unsupported by the adapter. The schema derives the required fields from the

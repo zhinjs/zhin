@@ -1,5 +1,5 @@
 import { assistantAnswerText, createUserMessage, type AssistantMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
-import type { AiOutboundSegmentType } from '@zhin.js/core';
+import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchema } from '../outbound/structured-reply.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 
@@ -12,7 +12,7 @@ export async function recoverStructuredReply(input: {
   raw: string;
   error: Error;
   signal?: AbortSignal;
-  segmentTypes?: readonly AiOutboundSegmentType[];
+  segments?: AiOutboundSegmentProfile;
 }): Promise<{
   output: AgentOutputElement[];
   /**
@@ -32,18 +32,18 @@ export async function recoverStructuredReply(input: {
         `Rejected reply: ${input.raw}`,
       ].join('\n'));
       const assistant = await input.transport.complete(input.model, {
-        systemPrompt: structuredReplyInstruction(input.segmentTypes),
+        systemPrompt: structuredReplyInstruction(input.segments),
         messages: [correction],
         tools: undefined,
       }, {
-        outputSchema: structuredReplySchema(input.segmentTypes),
+        outputSchema: structuredReplySchema(input.segments),
         maxRetries: 0,
         signal: input.signal
           ? AbortSignal.any([input.signal, AbortSignal.timeout(30_000)])
           : AbortSignal.timeout(30_000),
       });
       const text = assistantAnswerText(assistant);
-      const output = decodeStructuredReply(text, input.segmentTypes);
+      const output = decodeStructuredReply(text, input.segments);
       return { output, assistant: { ...assistant, content: [{ type: 'text', text }] } };
     } catch {
       // Invalid or missing output stays private, including provider reasoning.

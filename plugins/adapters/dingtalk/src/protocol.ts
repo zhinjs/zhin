@@ -296,7 +296,7 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
       case 'reply':
         throw new EndpointDeliveryError('unsupported_operation', 'DingTalk native quoted replies are not implemented', 'not_sent');
       case 'share': {
-        if (['audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) {
+        if (['audio', 'artist', 'duration', 'platform', 'config'].some(key => data[key] !== undefined)) {
           throw new EndpointDeliveryError('unsupported_operation', 'dingtalk rich share metadata is not implemented', 'not_sent');
         }
         let url: URL;

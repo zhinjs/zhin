@@ -552,6 +552,15 @@ function isWireSegment(value: unknown): value is IcqqWireSegment {
     && typeof (value as { type?: unknown }).type === 'string';
 }
 
+/** Music service → ICQQ share app; ICQQ fills appname / appsign from its own table for these ids. */
+const ICQQ_MUSIC_APPIDS: Readonly<Record<string, number>> = {
+  qq: 100497308,
+  netease: 100495085,
+  kugou: 205141,
+  kuwo: 100243533,
+  migu: 1101053067,
+};
+
 function formatShare(data: Record<string, unknown> | undefined): ShareElem {
   if (!data) throw new TypeError('ICQQ share segment requires data');
   const config = data.config as {
@@ -568,7 +577,7 @@ function formatShare(data: Record<string, unknown> | undefined): ShareElem {
     const text = String(value ?? '').trim();
     return text || undefined;
   };
-  const appid = Number(config?.appid);
+  const appid = Number(config?.appid ?? ICQQ_MUSIC_APPIDS[String(data.platform ?? '').trim().toLowerCase()]);
   const appname = optionalString(config?.package);
   const appsign = optionalString(config?.sign);
   const shareConfig = Number.isSafeInteger(appid) && appid > 0

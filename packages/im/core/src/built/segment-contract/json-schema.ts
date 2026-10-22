@@ -157,6 +157,7 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
       content: { type: 'string', description: '消息列表中的显示文字' },
       artist: { type: 'string', description: '音乐分享的艺术家' },
       duration: { type: 'number', description: '音频时长（秒）' },
+      platform: { type: 'string', description: '歌曲所属音乐平台：qq / netease / kugou / kuwo / migu' },
       config: dataObject({
         appid: { type: 'number' },
         package: { type: 'string' },
@@ -212,6 +213,23 @@ export const AI_OUTBOUND_SEGMENT_TYPES = [
 ] as const;
 export type AiOutboundSegmentType = typeof AI_OUTBOUND_SEGMENT_TYPES[number];
 
+/**
+ * Adapter-declared model extension for one segment type (`segments.model`):
+ * optional string fields of the canonical segment the model may fill, and a
+ * platform hint appended to the reply instruction.
+ */
+export interface AiSegmentExtension {
+  readonly fields?: readonly string[];
+  readonly hint?: string;
+}
+export type AiSegmentExtensions = Readonly<Partial<Record<AiOutboundSegmentType, AiSegmentExtension>>>;
+
+/** What one reply endpoint lets the model author: offered types plus their declared extensions. */
+export interface AiOutboundSegmentProfile {
+  readonly types: readonly AiOutboundSegmentType[];
+  readonly extensions?: AiSegmentExtensions;
+}
+
 /** Offered when the adapter declares no `segments.supported` list. */
 export const DEFAULT_AI_OUTBOUND_SEGMENT_TYPES: readonly AiOutboundSegmentType[] = [
   'text', 'mention', 'image', 'audio', 'video', 'file', 'markdown', 'keyboard',
@@ -239,16 +257,42 @@ const aiExtensionBranches: Partial<Record<AiOutboundSegmentType, JsonSchemaObjec
 };
 
 /**
+ * Promote declared optional string fields to required ones; the model writes ""
+ * when it has no value, and the decoder drops those empty fields again.
+ */
+function withModelFields(branch: JsonSchemaObject, fields: readonly string[]): JsonSchemaObject {
+  const branchProperties = branch.properties as Record<string, JsonSchemaObject>;
+  const data = branchProperties.data!;
+  const properties = data.properties as Record<string, JsonSchemaObject>;
+  const extra = fields.filter(field => properties[field]?.type === 'string' && !(data.required as string[]).includes(field));
+  return {
+    ...branch,
+    properties: {
+      ...branchProperties,
+      data: {
+        ...data,
+        properties: Object.fromEntries(Object.entries(properties).map(([key, value]) => [key,
+          extra.includes(key) ? { ...value, description: `${value.description ?? key}; "" when unknown` } : value])),
+        required: [...(data.required as string[]), ...extra],
+      },
+    },
+  };
+}
+
+/**
  * The model's final reply: one or more chat messages, sent in order. Each message
  * is an ordered segment array; the model decides how to split, like a person
  * sending a few short messages. No text/mentions shorthand.
  */
 export function buildAiOutboundJsonSchema(
   types: readonly AiOutboundSegmentType[] = DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
+  extensions: AiSegmentExtensions = {},
 ): JsonSchemaObject {
-  const branches = (outboundSegmentJsonSchema.anyOf as JsonSchemaObject[]).filter(branch => {
-    const type = (branch.properties as Record<string, { const?: string }>).type?.const;
-    return type !== undefined && !(type in aiExtensionBranches) && types.includes(type as AiOutboundSegmentType);
+  const branches = (outboundSegmentJsonSchema.anyOf as JsonSchemaObject[]).flatMap(branch => {
+    const type = (branch.properties as Record<string, { const?: string }>).type?.const as AiOutboundSegmentType | undefined;
+    if (type === undefined || type in aiExtensionBranches || !types.includes(type)) return [];
+    const fields = extensions[type]?.fields;
+    return [fields?.length ? withModelFields(branch, fields) : branch];
   });
   for (const type of types) {
     const branch = aiExtensionBranches[type];

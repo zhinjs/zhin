@@ -94,6 +94,16 @@ export interface AdapterSegmentPolicy {
   readonly interactive?: AdapterInteractiveMode;
   /** `native` preserves Markdown for the endpoint codec; `text` strips formatting in Core. */
   readonly markdown?: AdapterMarkdownMode;
+  /**
+   * Agent 最终回复的平台扩展（按段类型）：`fields` 为该段允许模型填写的可选字符串字段，
+   * `hint` 追加到回复提示词。仅对实际提供给模型的段生效，不声明则不增加任何提示。
+   */
+  readonly model?: Readonly<Record<string, AdapterSegmentModelExtension>>;
+}
+
+export interface AdapterSegmentModelExtension {
+  readonly fields?: readonly string[];
+  readonly hint?: string;
 }
 
 const HTML_OUTBOUND_MODES: readonly HtmlOutboundMode[] = ['direct', 'image', 'text'];
@@ -273,6 +283,7 @@ function normalizeSegmentPolicy(
   ) {
     throw new TypeError("Adapter segments.markdown must be 'native' or 'text'");
   }
+  const model = normalizeSegmentModel(policy.model);
   return Object.freeze({
     ...(policy.supported ? { supported: Object.freeze([...new Set(policy.supported)]) } : {}),
     ...(policy.html ? { html: policy.html } : {}),
@@ -281,7 +292,26 @@ function normalizeSegmentPolicy(
       : {}),
     ...(policy.interactive ? { interactive: policy.interactive } : {}),
     ...(policy.markdown ? { markdown: policy.markdown } : {}),
+    ...(model ? { model } : {}),
   });
+}
+
+function normalizeSegmentModel(
+  model: AdapterSegmentPolicy['model'],
+): AdapterSegmentPolicy['model'] {
+  if (model === undefined) return undefined;
+  const invalid = () => new TypeError('Adapter segments.model must map segment types to { fields?: string[], hint?: string }');
+  if (!model || typeof model !== 'object' || Array.isArray(model)) throw invalid();
+  return Object.freeze(Object.fromEntries(Object.entries(model).map(([type, extension]) => {
+    if (!extension || typeof extension !== 'object') throw invalid();
+    const { fields, hint } = extension;
+    if (fields !== undefined && (!Array.isArray(fields) || fields.some(field => typeof field !== 'string' || !field))) throw invalid();
+    if (hint !== undefined && (typeof hint !== 'string' || !hint.trim())) throw invalid();
+    return [type, Object.freeze({
+      ...(fields ? { fields: Object.freeze([...new Set(fields)]) } : {}),
+      ...(hint ? { hint: hint.trim() } : {}),
+    })];
+  })));
 }
 
 /** @internal Runtime validation for convention-discovered modules. */

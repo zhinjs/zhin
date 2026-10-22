@@ -769,6 +769,17 @@ describe('icqq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('maps the share music platform to the ICQQ app id unless config.appid is given', () => {
+    const song = { title: '晴天', url: 'https://y.qq.com/n/ryqq/songDetail/1', audio: 'https://music.example/1.mp3' };
+    expect(formatOutboundBody({ type: 'share', data: { ...song, platform: 'NetEase' } }))
+      .toMatchObject({ type: 'share', config: { appid: 100495085 } });
+    expect(formatOutboundBody({ type: 'share', data: { ...song, platform: 'qq' } }))
+      .toMatchObject({ config: { appid: 100497308 } });
+    expect(formatOutboundBody({ type: 'share', data: { ...song, platform: 'qq', config: { appid: 205141 } } }))
+      .toMatchObject({ config: { appid: 205141 } });
+    expect(formatOutboundBody({ type: 'share', data: { ...song, platform: 'spotify' } })).not.toHaveProperty('config');
+  });
+
   it('splits standalone elements into ordered messages, keeping the quote with the text', () => {
     const share = { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } };
     expect(formatOutboundMessages([

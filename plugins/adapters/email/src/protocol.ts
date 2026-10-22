@@ -373,7 +373,7 @@ export function formatOutboundMail(
         let url: URL;
         try { url = new URL(String(data.url ?? '')); } catch { throw new EndpointDeliveryError('invalid_payload', 'Email share requires an HTTP(S) URL', 'not_sent'); }
         if (!['http:', 'https:'].includes(url.protocol) || typeof data.title !== 'string' || !data.title.trim()) throw new EndpointDeliveryError('invalid_payload', 'Email share requires URL and title', 'not_sent');
-        if (['image', 'audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'Email share media/app metadata is not implemented', 'not_sent');
+        if (['image', 'audio', 'artist', 'duration', 'platform', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'Email share media/app metadata is not implemented', 'not_sent');
         const description = String(data.description ?? data.content ?? '');
         textParts.push(`${data.title}\n${url.href}${description ? `\n${description}` : ''}`);
         htmlParts.push(`<a href="${escapeMailHtml(url.href)}">${escapeMailHtml(data.title)}</a>${description ? `<p>${escapeMailHtml(description).replace(/\n/g, '<br>')}</p>` : ''}`);

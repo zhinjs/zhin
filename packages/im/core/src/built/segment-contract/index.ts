@@ -42,6 +42,9 @@ export {
   DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
   STRICT_OUTBOUND_SEGMENT_TYPES,
   type AiOutboundSegmentType,
+  type AiSegmentExtension,
+  type AiSegmentExtensions,
+  type AiOutboundSegmentProfile,
 } from './json-schema.js';
 export { segmentsForImDelivery } from './delivery.js';
 export {

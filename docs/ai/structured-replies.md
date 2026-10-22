@@ -63,6 +63,25 @@ Schema 从 Core 的 canonical 消息段契约派生，Markdown 渲染扩展使�
 - 声明了 `segments.supported` 时：只提供其中出现的类型（可选 mention、媒体、keyboard、share、dice、rps）；
   text 总是可用，markdown 与 keyboard 在 Endpoint 会降级为文字（`markdown: 'text'` / `interactive: 'text'`）时也可用。
 
+Adapter 还可以用 `segments.model` 为已提供的段声明平台扩展，只注入该平台的提示词与 Schema，不改变全局契约：
+
+```ts
+segments: {
+  supported: ['text', 'mention', 'image', 'share' /* … */],
+  model: {
+    share: {
+      fields: ['description', 'image', 'audio', 'platform'],   // 允许模型填写的可选字符串字段
+      hint: 'renders as a QQ link card. For a song, set audio to the playable link …',
+    },
+  },
+}
+```
+
+`fields` 在模型 Schema 中变为必填字符串，模型没有真实值时写 `""`，校验后这些空字段被移除。
+`hint` 以 `- share on this platform: …` 追加到该平台的回复提示词。icqq 用它让模型把音乐搜索
+工具的结果发成带播放链接与封面的分享卡片；`platform`（qq / netease / kugou / kuwo / migu）由 icqq
+映射成对应音乐应用的 appid，模型不需要也不应该填写 `config.appid`。
+
 reply、forward、face 不提供给模型：它们需要平台消息 ID、转发 ID 或表情 ID，模型没有可靠来源。
 这样模型选出的段不会在出站投影因“Adapter 不支持该段”被拒发。
 可选展示字段、平台扩展和交互回调由工具/渲染器提供，不由最终回复模型制造。

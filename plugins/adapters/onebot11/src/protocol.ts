@@ -344,7 +344,7 @@ function canonicalToOneBotSegment(segment: OneBot11WireSegment): OneBot11Segment
     case 'keyboard':
       throw new EndpointDeliveryError('unsupported_operation', `OneBot11 standard has no ${segment.type} message segment`, 'not_sent');
     case 'share': {
-      if (['audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) {
+      if (['audio', 'artist', 'duration', 'platform', 'config'].some(key => data[key] !== undefined)) {
         throw new EndpointDeliveryError('unsupported_operation', 'onebot11 rich share metadata is not implemented', 'not_sent');
       }
       if (typeof data.url !== 'string' || !/^https?:\/\//.test(data.url) || typeof data.title !== 'string' || !data.title) {

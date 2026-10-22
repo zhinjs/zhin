@@ -582,7 +582,7 @@ function buildOutboundActions(
         let url: URL;
         try { url = new URL(String(data.url ?? '')); } catch { throw new EndpointDeliveryError('invalid_payload', 'Telegram share requires an HTTP(S) URL', 'not_sent'); }
         if (!['http:', 'https:'].includes(url.protocol) || typeof data.title !== 'string' || !data.title.trim()) throw new EndpointDeliveryError('invalid_payload', 'Telegram share requires an HTTP(S) URL and title', 'not_sent');
-        if (['image', 'audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'Telegram share media and app metadata are not implemented', 'not_sent');
+        if (['image', 'audio', 'artist', 'duration', 'platform', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'Telegram share media and app metadata are not implemented', 'not_sent');
         textContent += `<a href="${escapeTelegramHtml(url.href)}">${escapeTelegramHtml(data.title)}</a>`;
         for (const value of [data.description, data.content]) if (typeof value === 'string' && value) textContent += `\n${escapeTelegramHtml(value)}`;
         break;
