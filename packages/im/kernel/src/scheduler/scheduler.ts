@@ -48,7 +48,8 @@ function createStore(): JobStore {
   return { version: 1, jobs: [] };
 }
 
-function isHeartbeatEmpty(content: string | null): boolean {
+/** True when HEARTBEAT.md has no actionable line (only headings, comments and empty checkboxes). */
+export function isHeartbeatEmpty(content: string | null): boolean {
   if (!content) return true;
   const skipPatterns = new Set(['- [ ]', '* [ ]', '- [x]', '* [x]']);
   for (const line of content.split('\n')) {
