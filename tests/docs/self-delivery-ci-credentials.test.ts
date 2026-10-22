@@ -100,7 +100,7 @@ describe('untrusted candidate CI credential isolation', () => {
     expect(config.jobs['database-live'].services).toMatchObject({
       mysql: { image: 'mysql:8.4' },
       postgres: { image: 'postgres:17' },
-      mongodb: { image: 'mongo:8' },
+      mongodb: { image: 'mongo:7' },
       redis: { image: 'redis:8' },
     });
     expect(config.jobs.test.name).toBeUndefined();
