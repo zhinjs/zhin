@@ -1116,7 +1116,8 @@ export async function* runAgentLoopTextTurnRun(
     hostReply = !summary.assistant;
   }
   const structuredReply = imReply && !hostReply;
-  const continuationPrefix = continuations > 0
+  // A chat member does not announce how many steps a task took; only non-IM callers get the notice.
+  const continuationPrefix = continuations > 0 && input.turnContext.origin.kind !== 'im'
     ? `（任务步骤较多，已自动续跑 ${continuations} 次）\n\n` : '';
   const proseReply = structuredReply ? ''
     : sanitizeAssistantReply(rawReply, { toolSummary: formatToolCallsForUser(toolCalls) });
@@ -1151,9 +1152,6 @@ export async function* runAgentLoopTextTurnRun(
     }
   }
   if (!delegatedOnly) {
-    if (structuredReply && continuationPrefix && output[0]?.type === 'message') {
-      output[0].segments.unshift({ type: 'text', data: { text: continuationPrefix } });
-    }
     output = mergeToolOutboundElements(output, toolCalls);
   }
   const finalReply = imReply ? renderAgentOutput(output) : textReply;

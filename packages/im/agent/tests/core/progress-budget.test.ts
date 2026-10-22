@@ -200,7 +200,7 @@ describe('automatic continuation', () => {
     const notices = appended.filter((message) => message.role === 'user'
       && JSON.stringify(message).includes('Automatic continuation'));
     expect(notices).toHaveLength(2);
-    expect(result.reply).toContain('已自动续跑 2 次');
+    expect(result.reply).not.toContain('已自动续跑');
     // Every step ran through the same Turn authority: no new turn, no wider policy.
     expect(executed.every((name) => name === 'write_file')).toBe(true);
   });
@@ -215,6 +215,26 @@ describe('automatic continuation', () => {
       tools: [tool('write_file')],
       maxIterations: 2,
       toolBudget: { extendBy: 0, autoContinue: 'on' },
+    });
+    expect(result.reply).toBe('全部完成');
+  });
+
+  it('tells only non-chat callers that the turn was continued', async () => {
+    const llm = scripted((index, context) =>
+      lastUserText(context).includes('Automatic continuation') || index >= 3
+        ? (index >= 3 ? { reply: '全部完成' } : { tool: 'write_file', args: { path: `f${index}` } })
+        : { tool: 'write_file', args: { path: `f${index}` } });
+    const { result } = await run({
+      llm,
+      tools: [tool('write_file')],
+      maxIterations: 2,
+      toolBudget: { extendBy: 0, autoContinue: 'on' },
+      turn: {
+        origin: { kind: 'http', sessionId: 'h' },
+        principal: { subjectId: 'u', roles: ['master'] },
+        session: { key: 'k' },
+        policy: { permissions: [], unattended: false },
+      },
     });
     expect(result.reply).toBe('（任务步骤较多，已自动续跑 1 次）\n\n全部完成');
   });
@@ -259,7 +279,7 @@ describe('automatic continuation', () => {
       maxIterations: 2,
       toolBudget: { extendBy: 0, autoContinue: 'on' },
     });
-    expect(result.reply).toBe('（任务步骤较多，已自动续跑 1 次）\n\n子任务都完成了');
+    expect(result.reply).toBe('子任务都完成了');
   });
 });
 
