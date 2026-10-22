@@ -13,6 +13,7 @@ import defineIcqqAdapter from '../adapters/icqq/index.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import {
   formatOutboundBody,
+  formatOutboundMessages,
   icqqInboundConversation,
   icqqOutboundTarget,
   resolveIcqqConfig,
@@ -765,6 +766,57 @@ describe('icqq plugin runtime adapter', () => {
       },
     });
     expect(endpoint.client.sendGroupMsg).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('splits standalone elements into ordered messages, keeping the quote with the text', () => {
+    const share = { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } };
+    expect(formatOutboundMessages([
+      { type: 'reply', data: { message_id: 'm1' } },
+      { type: 'text', data: { text: '找到了：' } },
+      share,
+      { type: 'text', data: { text: ' ' } },
+      { type: 'file', data: { media: { kind: 'url', value: 'https://x/a.pdf' } } },
+      { type: 'text', data: { text: '请查收' } },
+    ])).toEqual([
+      [{ type: 'reply', id: 'm1' }, '找到了：'],
+      { type: 'share', title: '晴天', url: 'https://music.example/1' },
+      { type: 'file', file: 'https://x/a.pdf' },
+      '请查收',
+    ]);
+    expect(formatOutboundMessages([{ type: 'reply', data: { message_id: 'm1' } }, share]))
+      .toEqual([{ type: 'share', title: '晴天', url: 'https://music.example/1' }]);
+    expect(formatOutboundMessages('hi')).toEqual(['hi']);
+    expect(() => formatOutboundBody([{ type: 'text', data: { text: 'x' } }, share])).toThrow('standalone');
+  });
+
+  it('sends text followed by a share as two messages and reports the text id', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+    const id = await endpoint.send({
+      conversation: { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group', id: '100' },
+      payload: [{ type: 'text', data: { text: '找到了：' } }, { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } }],
+    });
+    expect(id).toBe('sent-1');
+    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, '找到了：');
+    expect(endpoint.client.share).toHaveBeenCalledWith({ type: 'share', title: '晴天', url: 'https://music.example/1' });
+    expect(endpoint.client.sendGroupMsg.mock.invocationCallOrder[0]).toBeLessThan(endpoint.client.share.mock.invocationCallOrder[0]!);
+    await endpoint.stop();
+  });
+
+  it('reports a failure after the first delivered part as partial and unknown', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+    endpoint.client.share.mockRejectedValueOnce(new Error('share rejected'));
+    const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
+    const share = { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } };
+    await expect(endpoint.send({ conversation, payload: [{ type: 'text', data: { text: '找到了' } }, share] }))
+      .rejects.toMatchObject({ code: 'partial_delivery', disposition: 'unknown' });
+    endpoint.client.share.mockRejectedValueOnce(new Error('share rejected'));
+    await expect(endpoint.send({ conversation, payload: [share, { type: 'text', data: { text: '找到了' } }] }))
+      .rejects.toThrow('share rejected');
     await endpoint.stop();
   });
 
