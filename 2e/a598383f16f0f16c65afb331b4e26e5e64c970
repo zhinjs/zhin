@@ -1,0 +1,47 @@
+.changeset/workroom-default-room-mode.md
+  s_a9b7f763953239::t_b1fa3833db8a6b 10
+basic/cli/src/commands/agent.ts
+  s_a9b7f763953239::t_12831999695660 45-48
+basic/cli/src/plugin-runtime/agent/config.ts
+  s_a9b7f763953239::t_c2d132f4c3e003 244-247
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_a9b7f763953239::t_a7bd299895e8bf 39-40,139-141
+basic/cli/src/plugin-runtime/room-mode.ts
+  s_a9b7f763953239::t_476e0173a21327 2,12-16,23-24
+basic/cli/src/plugin-runtime/start-command.ts
+  s_a9b7f763953239::t_a54de384a444a6 257
+basic/cli/tests/agent-command.test.ts
+  s_a9b7f763953239::t_5a4056d21cebf8 59-69
+basic/cli/tests/plugin-runtime/agent/config.test.ts
+  s_a9b7f763953239::t_deb9761ef59053 4,224-240
+basic/cli/tests/plugin-runtime/protocol-host-installer-a2a-workroom.test.ts
+  s_a9b7f763953239::t_a6158625457e7d 1,16,24,29-33,45-46,64-76,87-94
+basic/cli/tests/plugin-runtime/protocol-host-installer.test.ts
+  s_a9b7f763953239::t_109d68fa1da723 116
+basic/cli/tests/plugin-runtime/start-command-workroom-mode.test.ts
+  s_a9b7f763953239::t_9538e4198296d1 5-6,9-10,12-46,53-54,59-62,67-68,81-92,99-100,104-106,110-112,116,118,123
+docs/configuration/index.md
+  s_a9b7f763953239::t_4b6586a6fa81e9 244
+docs/en/configuration/index.md
+  s_a9b7f763953239::t_32a1f5cb071ad0 248
+docs/plans/workroom-group-collaboration-progress.md
+  s_a9b7f763953239::t_2527074cfcb9a9 7-8,176-177,603-608,615-616,701
+packages/host/a2a/README.md
+  s_a9b7f763953239::t_8693109fd562ff 51,56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ea598383f16f0f16c65afb331b4e26e5e64c970",
+  "prompts": {},
+  "sessions": {
+    "s_a9b7f763953239": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "26712a6f-19ed-4bc1-83a8-3135f970c1c6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
