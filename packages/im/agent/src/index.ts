@@ -543,4 +543,4 @@ export type {
 } from './plugin-runtime/ai-completion.js';
 
 export type { AgentOutputElement } from './outbound/agent-output.js';
-export { renderAgentOutput } from './outbound/agent-output.js';
+export { renderAgentOutput, splitOutputMessages } from './outbound/agent-output.js';

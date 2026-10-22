@@ -6,23 +6,29 @@ description: 最终回复的 JSON Schema 契约、真实 @ 与统一发送链路
 # Agent 结构化回复
 
 IM 会话中的 Agent 默认使用 `ai.agent.outputSchema: segments`。模型的最终回复是
-受 JSON Schema 约束的对象，普通文字、@ 和媒体使用同一个有序数组：
+受 JSON Schema 约束的对象：`messages` 里每一项是一条聊天消息，按顺序发出；每条消息里
+普通文字、@ 和媒体使用同一个有序 `segments` 数组：
 
 ```json
 {
-  "segments": [
-    { "type": "markdown", "data": { "content": "**处理结果**\n" } },
-    { "type": "text", "data": { "text": "请 " } },
-    { "type": "mention", "data": { "target": "123456789" } },
-    { "type": "text", "data": { "text": " 看看这个问题。" } },
-    { "type": "image", "data": { "media": { "kind": "url", "value": "https://example.com/result.png" } } }
+  "messages": [
+    { "segments": [{ "type": "text", "data": { "text": "看了下" } }] },
+    { "segments": [
+      { "type": "mention", "data": { "target": "123456789" } },
+      { "type": "text", "data": { "text": " 是缓存没清，清掉就好" } },
+      { "type": "image", "data": { "media": { "kind": "url", "value": "https://example.com/result.png" } } }
+    ] }
   ]
 }
 ```
 
+拆成几条由模型决定：通常一条，像人一样先回个反应再说正事时才拆成两三条。后续消息之间
+有一小段停顿（按长度 0.4～1.5 秒）。第一条发出后后面某条失败时报告 `partial_delivery`，
+不会重发已送达的消息。旧的单条 `{"segments":[...]}` 回复（例如历史记录里的）仍被当作一条消息接受。
+
 用户看到的是平台消息，不会看到 JSON。`mention.data.target` 是该平台的用户 ID。
 仅输出文字 `@昵称` 不会产生平台提醒。数组可以交错多个 @、文字和媒体；顺序被保留。
-`{"segments":[]}` 表示本次无需回复。Markdown 使用 `data.content`，附件使用 `data.media`。
+`{"messages":[]}` 表示本次无需回复。Markdown 使用 `data.content`，附件使用 `data.media`。
 Markdown 的图片语法和 `@昵称` 不代替独立的 image / mention 段；Markdown 原文交给现有渲染链路处理。
 
 [English](../en/ai/structured-replies.md)
@@ -41,7 +47,7 @@ Skill、Tool 和权限边界控制。不会把 peer role、Bot Endpoint ID 自�
 
 ```text
 模型（JSON Schema）
-  → Agent 校验完整 { segments } 对象
+  → Agent 校验完整 { messages } 对象，按条依次发送
   → 最终 Turn 事件 + ReplyPort 共用同一份消息输出
   → 媒体能力/大小处理
   → Message.$reply / Adapter.sendMessage

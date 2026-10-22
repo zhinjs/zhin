@@ -10,7 +10,11 @@ import type { AgentOutputElement } from './agent-output.js';
 
 const ajv = new Ajv();
 // Compiled, stateless contract validators keyed by segment set; no generation-owned data.
-const validators = new Map<string, ValidateFunction<{ segments: Segment[] }>>();
+const validators = new Map<string, ValidateFunction<StructuredReply>>();
+
+interface StructuredReply {
+  messages: { segments: Segment[] }[];
+}
 const schemas = new Map<string, Record<string, unknown>>([[key(DEFAULT_AI_OUTBOUND_SEGMENT_TYPES), aiOutboundJsonSchema]]);
 
 function key(types: readonly AiOutboundSegmentType[]): string {
@@ -42,12 +46,13 @@ export function structuredReplyInstruction(
   types: readonly AiOutboundSegmentType[] = DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
 ): string {
   return [
-    'Your final reply must be a JSON object matching the supplied schema: {"segments":[...]} with no Markdown fence or surrounding prose.',
-    'Every reply, including plain text, uses this one ordered array. Example: {"segments":[{"type":"mention","data":{"target":"123"}},{"type":"text","data":{"text":"，请查收。"}}]}.',
+    'Your final reply must be a JSON object matching the supplied schema: {"messages":[{"segments":[...]}]} with no Markdown fence or surrounding prose.',
+    'Each item of messages is one chat message, sent in order. Usually send one; split into two or three only where a person would send separate messages, such as a quick reaction followed by the answer. Example: {"messages":[{"segments":[{"type":"text","data":{"text":"调好了"}}]},{"segments":[{"type":"text","data":{"text":"你再试试"}}]}]}.',
     `Segment types available on this platform: ${types.join(', ')}.`,
     ...SEGMENT_GUIDE.filter(([covers]) => covers.some(type => types.includes(type))).map(([, line]) => `- ${line}`),
     'Do not invent IDs or media references. Plain @name text does not notify anyone. Keep mentions, media and buttons as their own segments and preserve the intended order.',
-    'Business tool calls use their normal tool schemas; this message schema describes only the final user-facing answer, including the json response tool when supplied. Use {"segments":[]} only when no reply is needed.',
+    'The reply already goes to this conversation: mention someone only to call that person in.',
+    'Business tool calls use their normal tool schemas; this message schema describes only the final user-facing answer, including the json response tool when supplied. Use {"messages":[]} only when no reply is needed.',
   ].join('\n');
 }
 
@@ -60,9 +65,13 @@ export function decodeStructuredReply(
 ): AgentOutputElement[] {
   let value: unknown;
   try { value = JSON.parse(raw); } catch { throw new Error('Agent final reply is not valid JSON'); }
+  // Replies persisted before multi-message replies are a single {segments} message; models may echo it.
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'segments' in value && !('messages' in value)) {
+    value = { messages: [value] };
+  }
   const id = key(types);
   let validateReply = validators.get(id);
-  if (!validateReply) validators.set(id, validateReply = ajv.compile<{ segments: Segment[] }>(structuredReplySchema(types)));
+  if (!validateReply) validators.set(id, validateReply = ajv.compile<StructuredReply>(structuredReplySchema(types)));
   if (!validateReply(value)) {
     const errors = validateReply.errors ?? [];
     const fields = errors.filter(error => error.keyword === 'type' && error.instancePath.includes('/data/'));
@@ -70,5 +79,6 @@ export function decodeStructuredReply(
       .map(error => `${error.instancePath || '/'} ${error.message}`).join('; ');
     throw new Error(`Agent final reply does not match the message schema: ${detail}`);
   }
-  return value.segments.length ? [{ type: 'message', segments: value.segments }] : [];
+  return value.messages.filter(message => message.segments.length > 0)
+    .map(message => ({ type: 'message', segments: message.segments }));
 }

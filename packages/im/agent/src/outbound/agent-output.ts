@@ -18,3 +18,16 @@ export function renderAgentOutput(output: readonly AgentOutputElement[]): string
       }).join('')
     : renderToPlainText([element])).join('\n');
 }
+
+/**
+ * Chat messages in send order: every `message` element starts its own message;
+ * other elements (tool media, cards, text) join the message before them.
+ */
+export function splitOutputMessages(output: readonly AgentOutputElement[]): AgentOutputElement[][] {
+  const messages: AgentOutputElement[][] = [];
+  for (const element of output) {
+    if (element.type === 'message' || messages.length === 0) messages.push([element]);
+    else messages.at(-1)!.push(element);
+  }
+  return messages;
+}

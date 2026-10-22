@@ -20,6 +20,8 @@ import {
   EDITING_RULES,
   MEMORY_INSTRUCTIONS,
   CODE_REFERENCE_RULES,
+  CHAT_STYLE_RULES,
+  CHAT_WORKSPACE_TASK_RULES,
 } from './rules/index.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
@@ -199,7 +201,7 @@ const DEFAULT_PERSONA_ZHIN_PREFIX = /^You are Zhin\b/i;
 function applyAgentNicknameToPersona(persona: string, nickname: string): string {
   const p = persona.trim();
   if (!p) {
-    return `You are ${nickname}, an intelligent IM assistant. Answer clearly and act through available tools when needed.`;
+    return `You are ${nickname}, a member of this chat. Talk like the people here and act through available tools when needed.`;
   }
   if (DEFAULT_PERSONA_ZHIN_PREFIX.test(p)) {
     return p.replace(DEFAULT_PERSONA_ZHIN_PREFIX, `You are ${nickname}`);
@@ -327,7 +329,19 @@ interface DefaultPromptSectionDefinition {
   title: string;
   order: number;
   retention: 'required' | 'preferred';
+  /** Position in IM conversation turns when it differs from `order`. */
+  chatOrder?: number;
   content: (ctx: RichSystemPromptContext) => string | null;
+}
+
+/** IM conversation turns talk in a chat; other origins keep the task-agent prompt. */
+function isChatTurn(ctx: RichSystemPromptContext): boolean {
+  return ctx.turn?.origin.kind === 'im';
+}
+
+/** Section content for task-agent turns only. */
+function taskOnly(content: string): (ctx: RichSystemPromptContext) => string | null {
+  return ctx => isChatTurn(ctx) ? null : content;
 }
 
 const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
@@ -354,7 +368,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Workflow',
     order: 140,
     retention: 'required',
-    content: () => WORKFLOW_RULES,
+    content: (ctx) => isChatTurn(ctx) ? CHAT_WORKSPACE_TASK_RULES : WORKFLOW_RULES,
   },
   {
     id: '§1d_model_style',
@@ -362,7 +376,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Style',
     order: 130,
     retention: 'required',
-    content: (ctx) => new ModelAwarePromptBuilder(ctx.modelId).buildStyleSection(),
+    content: (ctx) => isChatTurn(ctx) ? CHAT_STYLE_RULES : new ModelAwarePromptBuilder(ctx.modelId).buildStyleSection(),
   },
   {
     id: '§3_tools',
@@ -386,7 +400,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Error Handling',
     order: 90,
     retention: 'preferred',
-    content: () => ERROR_HANDLING_RULES,
+    content: taskOnly(ERROR_HANDLING_RULES),
   },
   {
     id: '§5b_editing',
@@ -394,7 +408,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Editing',
     order: 80,
     retention: 'preferred',
-    content: () => EDITING_RULES,
+    content: taskOnly(EDITING_RULES),
   },
   {
     id: '§5c_task_completion',
@@ -402,7 +416,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Task Completion',
     order: 70,
     retention: 'preferred',
-    content: () => TASK_COMPLETION_RULES,
+    content: taskOnly(TASK_COMPLETION_RULES),
   },
   {
     id: '§5d_code_references',
@@ -410,7 +424,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Code References',
     order: 60,
     retention: 'preferred',
-    content: () => CODE_REFERENCE_RULES,
+    content: taskOnly(CODE_REFERENCE_RULES),
   },
   {
     id: '§5e_memory_instructions',
@@ -418,7 +432,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Memory Instructions',
     order: 50,
     retention: 'preferred',
-    content: () => MEMORY_INSTRUCTIONS,
+    content: taskOnly(MEMORY_INSTRUCTIONS),
   },
   {
     id: '§5f_context_mode',
@@ -426,7 +440,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Context Mode',
     order: 40,
     retention: 'preferred',
-    content: (ctx) => new ModelAwarePromptBuilder(ctx.modelId)
+    content: (ctx) => isChatTurn(ctx) ? null : new ModelAwarePromptBuilder(ctx.modelId)
       .buildContextModeHint(ctx.contextWindow ?? 128000),
   },
   {
@@ -450,6 +464,8 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     layer: 'context',
     title: 'Bootstrap',
     order: 10,
+    // In chat the workspace persona (SOUL.md) leads, right after the identity line.
+    chatOrder: 155,
     retention: 'preferred',
     content: (ctx) => ctx.bootstrapContext?.trim() ? ctx.bootstrapContext : null,
   },
@@ -472,7 +488,7 @@ export function createDefaultPromptAssemblyRegistry(
     registry.register(definition.id, {
       layer: definition.layer,
       title: definition.title,
-      order: definition.order,
+      order: isChatTurn(ctx) ? definition.chatOrder ?? definition.order : definition.order,
       retention: definition.retention,
       content: definition.content(ctx) ?? '',
     });

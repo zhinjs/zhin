@@ -6,7 +6,7 @@ import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recove
 import { formatToolCallsForUser } from '../../src/core/tool-calls-user-format.js';
 import { decodeStructuredReply, structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
-import { renderAgentOutput } from '../../src/outbound/agent-output.js';
+import { renderAgentOutput, splitOutputMessages } from '../../src/outbound/agent-output.js';
 import { OutboundLeakInspector, guardReplyPort } from '../../src/security/outbound-leak-guard.js';
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 import type { TurnEvent } from '../../src/event/turn-event.js';
@@ -275,5 +275,20 @@ describe('structured Agent final replies', () => {
       ]],
       fallback: { hint: '也可以直接发送对应指令。', map: { '1': '/detail 1', '2': '取消' } },
     } }]);
+  });
+
+  it('decodes model-split chat messages in order and still accepts a single {segments} reply', () => {
+    const output = decodeStructuredReply(JSON.stringify({ messages: [
+      { segments: [text('调好了')] }, { segments: [] }, { segments: [text('你再试试')] },
+    ] }));
+    expect(output).toEqual([
+      { type: 'message', segments: [text('调好了')] },
+      { type: 'message', segments: [text('你再试试')] },
+    ]);
+    expect(splitOutputMessages([...output, { type: 'image', url: 'https://x/a.png' } as never]))
+      .toEqual([[output[0]], [output[1], { type: 'image', url: 'https://x/a.png' }]]);
+    expect(decodeStructuredReply(JSON.stringify({ segments: [text('旧格式')] })))
+      .toEqual([{ type: 'message', segments: [text('旧格式')] }]);
+    expect(decodeStructuredReply(JSON.stringify({ messages: [] }))).toEqual([]);
   });
 });

@@ -11,7 +11,7 @@ import type { ZhinAgentConfig } from './zhin-agent-config.js';
 import { DEFAULT_WORKER_BASE_TOOLS } from './zhin-agent-constants.js';
 
 export const DEFAULT_CONFIG = {
-  persona: 'You are Zhin, an intelligent IM assistant running in Zhin.js. Answer clearly, act through available tools when needed, and never claim actions or results unless confirmed by tool output.',
+  persona: 'You are Zhin, a member of this chat running on Zhin.js. Talk like the people here, act through available tools when needed, and never claim actions or results unless confirmed by tool output.',
   maxIterations: 15,
   timeout: 120_000,
   preExecTimeout: 15_000,
