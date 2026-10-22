@@ -142,10 +142,22 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const llm = service.getLlmRuntime();
     const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
       .map(entry => entry.trim()).filter(Boolean);
-    const judges = (configured.length > 0 ? configured : [`${binding.providerAlias}/${binding.model}`]).map(entry => {
+    const judgeFor = (entry: string): LlmEngagementJudge | undefined => {
       const [alias, ...model] = entry.split('/');
-      return new LlmEngagementJudge(llm, llm.model(alias!, model.join('/')));
-    });
+      try {
+        return new LlmEngagementJudge(llm, llm.model(alias!, model.join('/')));
+      } catch (error) {
+        // An unknown provider or model must not break every group message; skip that judge.
+        logger.warn(formatCompact({ op: 'ambient_judge_unavailable', judge: entry, error: error instanceof Error ? error.message : String(error) }));
+        return undefined;
+      }
+    };
+    let judges = configured.map(judgeFor).filter(judge => judge !== undefined);
+    if (judges.length === 0) {
+      const fallback = judgeFor(`${binding.providerAlias}/${binding.model}`);
+      if (!fallback) return this.#ambient = null;
+      judges = [fallback];
+    }
     return this.#ambient = new AmbientEngagement({
       config,
       judge: judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges),
