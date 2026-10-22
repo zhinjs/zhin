@@ -1,0 +1,73 @@
+.changeset/workroom-c6-docs.md
+  s_82b4abd017dfe4::t_0c9546049bb098 1-6
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_82b4abd017dfe4::t_d6762569edadd7 21
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_82b4abd017dfe4::t_8152625a22e810 11-13,15-16
+basic/cli/src/plugin-runtime/console/data-lifecycle-routes.ts
+  s_82b4abd017dfe4::t_4c3e21b933ae3f 2
+basic/cli/src/plugin-runtime/console/effect-sponsor-routes.ts
+  s_82b4abd017dfe4::t_076b43deddb120 2
+basic/cli/src/plugin-runtime/console/portfolio-sponsor-routes.ts
+  s_82b4abd017dfe4::t_e323a651de20d8 2
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_82b4abd017dfe4::t_e62a2a42ea9062 14-16
+basic/cli/src/plugin-runtime/workroom/acceptance-coordinator.ts
+  s_82b4abd017dfe4::t_31698dbadba935 42
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_82b4abd017dfe4::t_8bda7e8365178b 36,38-41
+basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts
+  s_82b4abd017dfe4::t_88a3e35e0679e1 2-26
+basic/cli/src/plugin-runtime/workroom/execution-coordinator.ts
+  s_82b4abd017dfe4::t_38109a3fbe1018 7
+basic/cli/src/plugin-runtime/workroom/host-assembly.ts
+  s_82b4abd017dfe4::t_01e388d8369e94 7
+basic/cli/src/plugin-runtime/workroom/host-coordinator.ts
+  s_82b4abd017dfe4::t_c2088ba37cfcff 9
+basic/cli/src/plugin-runtime/workroom/human-ingress-coordinator.ts
+  s_82b4abd017dfe4::t_0e55cdb79e3280 25-28
+basic/cli/src/plugin-runtime/workroom/local-portfolio.ts
+  s_82b4abd017dfe4::t_b4c5d17eebae47 4-25
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_82b4abd017dfe4::t_547e10148c8fd9 27,29-33
+basic/cli/src/plugin-runtime/workroom/portfolio-coordinator.ts
+  s_82b4abd017dfe4::t_a62ec746b3dd09 3-25
+basic/cli/src/plugin-runtime/workroom/profile-coordinator.ts
+  s_82b4abd017dfe4::t_ce0cb461145b71 13
+basic/cli/src/plugin-runtime/workroom/publication.ts
+  s_82b4abd017dfe4::t_d7d5aef0ab8f8a 9
+basic/cli/src/plugin-runtime/workroom/runtime-foundation.ts
+  s_82b4abd017dfe4::t_39d4ba091062fe 26,28-31
+basic/cli/tests/plugin-runtime/workroom/local-portfolio.test.ts
+  s_82b4abd017dfe4::t_be0a6f6505b612 5-14
+basic/cli/tests/plugin-runtime/workroom/portfolio-coordinator.test.ts
+  s_82b4abd017dfe4::t_e7a748f0f870e2 2-6
+docs/adr/0035-room-native-multi-bot-collaboration.md
+  s_82b4abd017dfe4::t_2294590963bfc3 1-38
+docs/plans/agent-workroom-orchestration-decision-map.md
+  s_82b4abd017dfe4::t_2a67b95de59c20 11-14,21,25-26,29-31,35-36,142-143,200-201,229-230,324-325,351-352
+docs/plans/workroom-group-collaboration-progress.md
+  s_82b4abd017dfe4::t_8ce14749ccc598 185-187,572-587,659
+examples/multi-agent-room/README.md
+  s_82b4abd017dfe4::t_c59ba8201308c1 9-10
+packages/im/agent/CONTEXT.md
+  s_82b4abd017dfe4::t_5f333397532dda 294-295
+packages/im/workroom/README.md
+  s_82b4abd017dfe4::t_27829d5929e0ac 35-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b0caf5cfdd0a7dbb220fe432b5c9bd489d582db3",
+  "prompts": {},
+  "sessions": {
+    "s_82b4abd017dfe4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b92734a9-29d4-472f-977d-074d51e2e281",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
