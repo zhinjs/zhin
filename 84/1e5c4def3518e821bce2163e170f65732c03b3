@@ -1,0 +1,19 @@
+tests/contracts/segment-policy.test.ts
+  s_9477e63ef5cee5::t_1dff40ba49a0b4 35-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "841e5c4def3518e821bce2163e170f65732c03b3",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
