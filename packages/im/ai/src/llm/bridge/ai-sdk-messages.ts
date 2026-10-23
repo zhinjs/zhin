@@ -270,7 +270,7 @@ export function llmToolsToAiSdk(
 ): ToolSet | undefined {
   if (!tools?.length) return undefined;
   const out: ToolSet = {};
-  for (const llmTool of tools) {
+  for (const llmTool of [...tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
     const base = tool({
       description: llmTool.description,
       inputSchema: toolInputSchema(llmTool, options?.sdk),

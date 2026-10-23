@@ -4,14 +4,14 @@ import { createDefaultContextBuilders } from './default-builders.js';
 import type { BuildContext, ContextBuilder, ContextInjector, ContextSystemConfig, InjectContext } from './contracts.js';
 import type { TurnEnvelopeParts } from './envelope-parts.js';
 import {
-  applyTurnContextToUserMessages,
-  prependEnvelopeToFirstUserText,
+  prependTurnContextBlocks,
 } from './turn-user-message.js';
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
 import {
-  buildTurnContextEnvelope,
+  buildTurnContextBlocks,
   type TurnContextView,
 } from './turn-envelope.js';
+import { getGitStatusLine } from '../prompt/git-context.js';
 import { resolveModelCandidates } from './model-resolver.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
@@ -111,25 +111,28 @@ export class ContextSystem {
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
     const agentsContext = await buildAgentsEnvelopeContext();
 
-    const turnEnvelope = buildTurnContextEnvelope({
+    const turnBlocks = buildTurnContextBlocks({
       turn,
       profileSummary: envelopeParts.profileSummary,
       toneHint: envelopeParts.toneHint,
       deferredStats,
       activeSkillsContext: (input.activeSkillsContext ?? host.getTurnActiveSkills()) || undefined,
+      activeSkillBlocks: input.activeSkillBlocks,
       quoteSystemHint: input.quoteSystemHint,
       modelLine: `${providerAlias}/${modelId}`,
       sdk: llmModel.sdk,
+      gitStatus: !isScheduleTurn && host.config.gitStatus ? await getGitStatusLine(process.cwd()) : undefined,
       agentsContext: agentsContext ?? undefined,
       toldLedger: input.toldLedger,
       relevantMemory: input.relevantMemory,
     });
 
-    let userMessages = isScheduleTurn
-      ? applyTurnContextToUserMessages([createUserMessage(content)], turnEnvelope)
-      : prebuiltMessages?.length
-        ? prependEnvelopeToFirstUserText(prebuiltMessages, turnEnvelope)
-        : applyTurnContextToUserMessages(turnUser.promptMessages, turnEnvelope);
+    const turnEnvelope = turnBlocks.map(block => block.text).join('\n');
+    let userMessages = prependTurnContextBlocks(
+      isScheduleTurn ? [createUserMessage(content)] : prebuiltMessages?.length ? prebuiltMessages : turnUser.promptMessages,
+      turnBlocks,
+      isScheduleTurn ? undefined : turnUser.userMessageExtra,
+    );
 
     if (extraMessages.length > 0) {
       userMessages = [...extraMessages, ...userMessages];
@@ -161,6 +164,7 @@ export interface TextTurnContextInput {
   prebuiltMessages?: AgentMessage[];
   mode?: 'chat' | 'vision';
   activeSkillsContext?: string;
+  activeSkillBlocks?: readonly import('@zhin.js/ai').TextContentBlock[];
   /** Rendered "already told the user" ledger for this session (#730). */
   toldLedger?: string;
   /** BM25-recalled semantic memory for this message (#734). */

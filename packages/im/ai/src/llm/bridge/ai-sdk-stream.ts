@@ -27,6 +27,7 @@ import {
 } from './ai-sdk-messages.js';
 import {
   applyPromptCacheToTools,
+  applyPromptCacheToMessages,
   buildPromptCacheProviderOptions,
   isStreamPromptCacheEnabled,
   resolvePromptCacheApplyInput,
@@ -428,7 +429,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       const result = streamText({
         model: languageModel,
         system,
-        messages,
+        messages: applyPromptCacheToMessages(messages, cacheCtx),
         tools,
         toolChoice: tools ? 'auto' : undefined,
         temperature: options?.temperature,
@@ -590,7 +591,7 @@ export async function generateTextViaAiSdk(
     result = await generateText({
       model: languageModel,
       system,
-      messages,
+      messages: applyPromptCacheToMessages(messages, cacheCtx),
       tools,
       toolChoice: tools ? 'auto' : undefined,
       temperature: options?.temperature,

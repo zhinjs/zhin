@@ -4,6 +4,7 @@ import {
   touchToolInSnapshot,
   touchToolsInSnapshot,
   type AgentTool,
+  type TextContentBlock,
   type DeferredToolSessionSnapshot,
 } from '@zhin.js/ai';
 import {
@@ -19,6 +20,8 @@ import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferre
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
+
+import { skillContextBlock } from '../context/skill-context.js';
 
 const logger = getLogger('DeferredCapabilityPlan');
 
@@ -48,6 +51,9 @@ export function isReservedControlToolName(name: string): boolean {
 export interface DeferredCapabilityController {
   loadedToolNames(): string[];
   loadedSkillInstructions(): string[];
+  loadedSkillBlocks(): TextContentBlock[];
+  /** Marks only a successful, unmodified runtime load_skill result. */
+  modelOutputBlocks(name: string, args: unknown, text: string): TextContentBlock[] | undefined;
   /** Load a public catalog tool into the session. Returns false when it is not in this turn's catalog. */
   load(name: string): Promise<boolean>;
 }
@@ -203,6 +209,16 @@ export function createDeferredCapabilityPlan(
   const controller: DeferredCapabilityController = Object.freeze({
     loadedToolNames: () => getLoadedToolNamesFromSnapshot(snapshot),
     loadedSkillInstructions: () => loadedSkillInstructions(projected.skills, snapshot),
+    loadedSkillBlocks: () => loadedSkills(projected.skills, snapshot).map(skillContextBlock),
+    modelOutputBlocks: (name: string, args: unknown, text: string): TextContentBlock[] | undefined => {
+      if (name !== 'load_skill') return undefined;
+      const skill = resolveSkill(projected.skills, String(recordOf(args).name ?? ''));
+      if (!skill) return undefined;
+      const block = skillContextBlock(skill);
+      const expected = skillLoadResult(skill, executableCapabilities);
+      if (!text.startsWith(expected)) return undefined;
+      return [block, { type: 'text', text: text.slice(block.text.length) }];
+    },
     load: async (name: string) => {
       if (!publicToolNames.has(name)) return false;
       if (!alwaysLoaded.has(name)) {
@@ -407,7 +423,7 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       if (!options.pinned.has(name)) {
         await options.persist(touchToolInSnapshot(options.getSnapshot(), name, options.maxLoaded));
       }
-      return `Loaded tool "${name}".\nParameters schema:\n${JSON.stringify(item.fullTool.parameters, null, 2)}\n__zhin_tools_mutated__`;
+      return `Loaded tool "${name}". Use its tool definition for arguments.\n__zhin_tools_mutated__`;
     }),
     metaCapability(options.owner, 'load_skill', 'Load projected skill instructions into this session.', {
       type: 'object',
@@ -417,12 +433,10 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const name = String(recordOf(raw).name ?? '');
       const skill = resolveSkill(options.skills, name);
       if (!skill) return `Skill '${name}' not found in the active generation.`;
-      const toolNames = resolveSkillTools(skill, options.tools);
       await options.persist(
         activateSkill(options.getSnapshot(), skill, options.tools, options.maxLoaded, options.pinned),
       );
-      const unlocked = toolNames.length > 0 ? `\nUnlocked tools: ${toolNames.join(', ')}` : '';
-      return `${skill.instructions}${unlocked}\n__zhin_tools_mutated__`;
+      return skillLoadResult(skill, options.tools);
     }),
   ]);
 }
@@ -473,12 +487,18 @@ function loadedSkillInstructions(
   skills: readonly SkillDescriptor[],
   snapshot: DeferredToolSessionSnapshot,
 ): string[] {
+  return loadedSkills(skills, snapshot).map(skill => skill.instructions);
+}
+
+function loadedSkills(skills: readonly SkillDescriptor[], snapshot: DeferredToolSessionSnapshot): SkillDescriptor[] {
   const loaded = new Set(snapshot.loadedSkills);
-  return skills
-    .filter((skill) => skill.always === true
-      || loaded.has(skill.qualifiedName)
-      || loaded.has(skill.name))
-    .map((skill) => skill.instructions);
+  return skills.filter(skill => skill.always === true || loaded.has(skill.qualifiedName) || loaded.has(skill.name));
+}
+
+function skillLoadResult(skill: SkillDescriptor, tools: readonly ToolCapability[]): string {
+  const names = resolveSkillTools(skill, tools);
+  const unlocked = names.length ? `\nUnlocked tools: ${names.join(', ')}` : '';
+  return `${skillContextBlock(skill).text}${unlocked}\n__zhin_tools_mutated__`;
 }
 
 function activateSkill(

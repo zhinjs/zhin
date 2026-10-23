@@ -108,8 +108,12 @@ export interface EvalExpectations {
   readonly modelIds?: readonly string[];
   /** Bound on model requests across the case. */
   readonly maxModelSteps?: number;
+  /** All model requests in this fixture must retain exactly the same system prefix. */
+  readonly stableSystemPrompt?: boolean;
   /** Strings that must appear in what the model received (messages and tool results, not the system prompt). */
   readonly modelInputContains?: readonly string[];
+  /** Maximum occurrences of a marker in each individual request, not across the run. */
+  readonly maxInputOccurrences?: Readonly<Record<string, number>>;
   /** Strings that must appear in what one specific model request received (1-based request number → strings). */
   readonly requestInputContains?: Readonly<Record<number, readonly string[]>>;
   /** Strings that must never appear in what the model received. */

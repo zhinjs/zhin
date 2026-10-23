@@ -1,4 +1,4 @@
-import { createUserMessage } from '@zhin.js/ai';
+import { createPromptContextBlock, projectPromptContext, estimateAgentMessagesTokens, createUserMessage } from '@zhin.js/ai';
 import { describe, expect, it } from 'vitest';
 import {
   TurnTraceCollector,
@@ -67,4 +67,20 @@ describe('buildContextBudgetReport', () => {
     expect(text).toContain('技能目录');
     expect(text).not.toContain('Write the weekly report');
   });
+});
+
+it('counts the output schema and projected instruction references without double counting the current catalog', () => {
+  const injected = () => ({ ...createUserMessage('question'), content: [
+    { type: 'text' as const, text: 'question' },
+    createPromptContextBlock('skill:report', 'Skill body '.repeat(30)),
+    createPromptContextBlock('deferred-tools', toolIndex),
+  ] });
+  const historyMessages = [injected()];
+  const userMessages = [injected()];
+  const outputSchema = { type: 'object', properties: { messages: { type: 'array' } } };
+  const budget = buildContextBudgetReport({ systemPrompt: '', loadedTools: [], deferredToolCount: 1, historyMessages, userMessages, outputSchema });
+  expect(budget.segments.output_schema).toBe(estimatePromptTokens(JSON.stringify(outputSchema)));
+  expect(budget.total_tokens).toBe(estimateAgentMessagesTokens(projectPromptContext([...historyMessages, ...userMessages])) + budget.segments.output_schema);
+  expect(budget.fixed_tokens).toBe(budget.segments.output_schema);
+  expect(budget.segments.active_skills).toBeLessThan(estimatePromptTokens('Skill body '.repeat(30)));
 });

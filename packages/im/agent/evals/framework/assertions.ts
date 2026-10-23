@@ -58,9 +58,18 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
       fail('approvalQuestionContains', `no approval question contained "${needle}"`);
     }
   }
+  if (expect.stableSystemPrompt && run.modelRequests.some(request => request.systemPrompt !== run.modelRequests[0]?.systemPrompt)) {
+    fail('stableSystemPrompt', 'the system prefix changed during the conversation');
+  }
   const modelInput = run.modelRequests.map((request) => request.inputText).join('\n');
   for (const needle of expect.modelInputContains ?? []) {
     if (!modelInput.includes(needle)) fail('modelInputContains', `the model never received "${needle}"`);
+  }
+  for (const [needle, max] of Object.entries(expect.maxInputOccurrences ?? {})) {
+    for (const request of run.modelRequests) {
+      const count = request.inputText.split(needle).length - 1;
+      if (count > max) fail('maxInputOccurrences', `request ${request.index + 1}: "${needle}" appeared ${count} times (max ${max})`);
+    }
   }
   for (const [number, needles] of Object.entries(expect.requestInputContains ?? {})) {
     const request = run.modelRequests[Number(number) - 1];

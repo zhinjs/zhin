@@ -286,6 +286,28 @@ function withModelFields(branch: JsonSchemaObject, fields: readonly string[]): J
   };
 }
 
+/** Merge only branches whose complete constraints match apart from the type tag.
+ * Inline enums work across strict output providers without introducing $ref dialects.
+ */
+function mergeEquivalentBranches(branches: JsonSchemaObject[]): JsonSchemaObject[] {
+  const groups = new Map<string, { branch: JsonSchemaObject; types: string[] }>();
+  for (const branch of branches) {
+    const properties = branch.properties as Record<string, JsonSchemaObject>;
+    const tag = properties.type!;
+    const type = tag.const as string;
+    const shape = { ...branch, properties: { ...properties, type: { type: 'string' } } };
+    const key = JSON.stringify(shape);
+    const group = groups.get(key);
+    if (group) {
+      if (!group.types.includes(type)) group.types.push(type);
+    } else groups.set(key, { branch, types: [type] });
+  }
+  return [...groups.values()].map(({ branch, types }) => types.length === 1 ? branch : {
+    ...branch,
+    properties: { ...(branch.properties as object), type: { type: 'string', enum: types } },
+  });
+}
+
 /**
  * The model's final reply: one or more chat messages, sent in order. Each message
  * is an ordered segment array; the model decides how to split, like a person
@@ -316,14 +338,12 @@ export function buildAiOutboundJsonSchema(
           properties: {
             segments: {
               type: 'array',
-              items: { anyOf: branches.map(requiredFieldsOnly) },
-              description: 'Ordered canonical segments of one chat message.',
+              items: { anyOf: mergeEquivalentBranches(branches.map(requiredFieldsOnly)) },
             },
           },
           required: ['segments'],
           additionalProperties: false,
         },
-        description: 'Chat messages sent in order. Use an empty array only when no reply is needed.',
       },
       // Required with "" for none, like extension fields: strict structured outputs reject optional keys.
       ...(reaction ? {

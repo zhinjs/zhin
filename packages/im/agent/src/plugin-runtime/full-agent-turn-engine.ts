@@ -178,6 +178,7 @@ async function* runInteractiveTurn(
     deferredStats: plan.deferredStats,
     mode: context.turn.input.media?.some((item) => item.kind === 'image') ? 'vision' : undefined,
     activeSkillsContext,
+    activeSkillBlocks: plan.controller.loadedSkillBlocks(),
     toldLedger: host.toldLedger?.render(prep.sessionId),
     relevantMemory,
   });

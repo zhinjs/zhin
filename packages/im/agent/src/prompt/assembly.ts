@@ -8,7 +8,6 @@ import {
   type PromptSectionDebugInfo,
 } from './system-prompt.js';
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
-import { getGitStatusLine } from './git-context.js';
 import type { AgentContextHost, ZhinAgentPrivate } from '../internal/agent-host.js';
 import { type AgentMessage } from '@zhin.js/ai';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
@@ -89,9 +88,6 @@ export async function describeAgentPathPromptSections(
     bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
     turn: options.turn,
-    gitStatus: agent.config.gitStatus
-      ? (await getGitStatusLine(process.cwd())) ?? undefined
-      : undefined,
     toolSearchDeferredStats: options.deferredStats,
     orchestratorSdk: options.modelSdk,
     agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
@@ -117,9 +113,6 @@ export async function buildAgentPathSystemPrompt(
   if (options.profile.kind === 'schedule') {
     return scheduleSystemPrompt(agent, options.profile, undefined, options.runtime?.registry);
   }
-  const gitStatus = agent.config.gitStatus
-    ? await getGitStatusLine(process.cwd())
-    : null;
 
   const bindingModel = options.runtime?.modelId ?? agent.activeBinding?.model;
   const providerAlias = options.runtime?.providerAlias
@@ -138,7 +131,6 @@ export async function buildAgentPathSystemPrompt(
     bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
     turn: options.turn,
-    gitStatus: gitStatus ?? undefined,
     toolSearchDeferredStats: deferredStats,
     orchestratorSdk: modelSdk,
     agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,

@@ -20,9 +20,8 @@ export default defineEvalCase({
     { text: '已经加到日历：明天 9:00 会议。' },
   ],
   expect: {
-    systemPromptContains: ['## Deferred tools', '- calendar_add: Add an event to the calendar.'],
     toolsCalled: ['calendar_add'],
-    modelInputContains: ['Loaded tool "calendar_add"'],
+    modelInputContains: ['## Deferred tools', '- calendar_add: Add an event to the calendar.', 'Loaded tool "calendar_add"'],
     outboundContains: ['已经加到日历'],
     modelSteps: 3,
   },
