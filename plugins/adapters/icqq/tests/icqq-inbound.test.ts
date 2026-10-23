@@ -459,3 +459,23 @@ describe("isIcqqBotMentioned", () => {
     expect(isIcqqBotMentioned({ uin: "", rawMessage: "[CQ:at,qq=10001]" })).toBe(false);
   });
 });
+
+describe('ICQQ sticker media', () => {
+  it('keeps asface images on the image path', () => {
+    expect(icqqElementsToSegments([{ type: 'image', asface: true, url: 'https://example.com/sticker.gif' }]))
+      .toMatchObject([{ type: 'image', data: { media: { kind: 'url', value: 'https://example.com/sticker.gif' } } }]);
+  });
+
+  it('maps bface identifiers to a GIF while preserving the label', () => {
+    expect(icqqElementsToSegments([{ type: 'bface', file: 'A'.repeat(32) + 'B'.repeat(32) + '123', text: '不搭理我' }]))
+      .toEqual([
+        { type: 'image', data: { media: { kind: 'url', value: `https://gxh.vip.qq.com/club/item/parcel/item/aa/${'a'.repeat(32)}/raw300.gif`, mime_type: 'image/gif' } } },
+        { type: 'text', data: { text: '不搭理我' } },
+      ]);
+  });
+
+  it.each(['../../secret', 'A'.repeat(32), 'https://example.com/image.gif'])('does not treat malformed bface file %s as a path', (file) => {
+    expect(icqqElementsToSegments([{ type: 'bface', file, text: '表情' }]))
+      .toEqual([{ type: 'text', data: { text: '表情' } }]);
+  });
+});

@@ -2540,6 +2540,25 @@
                     "string"
                   ],
                   "description": "Media described per turn; the rest keep the placeholder. Default 4."
+                },
+                "fallbacks": {
+                  "type": "array",
+                  "description": "主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "provider",
+                      "model"
+                    ],
+                    "properties": {
+                      "provider": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               },
               "description": "Perception pre-pass: when the turn's model cannot take an image / video / PDF,\nthis media-capable model describes it and the description is injected as\nuntrusted text (`[图片描述] …`). Unset = off (placeholders as before)."

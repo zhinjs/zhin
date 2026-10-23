@@ -25,6 +25,12 @@ export function createEdgeTtsProvider(config: TTSConfig): TtsProvider {
         );
         const data = await readFile(tmpFile);
         return { data, format: 'mp3' };
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT'
+          && 'path' in error && error.path === cmd) {
+          throw new Error('未找到 edge-tts。请在 Bot 运行环境安装 edge-tts，并配置 speech.tts.edgeTtsCommand 为可执行文件路径；也可改用 openai / azure / custom TTS。', { cause: error });
+        }
+        throw error;
       } finally {
         await unlink(tmpFile).catch(() => {});
       }

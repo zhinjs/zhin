@@ -1,5 +1,7 @@
 /** Blocking human-in-the-loop security authority. */
 export interface ApprovalRequestInput {
+  /** Fresh human consent: no model reviewer, master shortcut, or remembered grant. */
+  humanOnly?: boolean;
   requestId: string;
   /** Canonical session boundary for approval memory. */
   sessionKey?: string;

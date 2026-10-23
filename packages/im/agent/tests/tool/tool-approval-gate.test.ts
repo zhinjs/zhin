@@ -74,6 +74,18 @@ describe('tool-approval-gate', () => {
     expect(denied).toBe('Error: approval required but ApprovalPort unavailable');
   });
 
+  it('includes the concrete operation when asking for fresh human approval', async () => {
+    const requestApproval = vi.fn(async () => false);
+    await runToolApprovalGate({
+      toolName: 'group_kick', args: { group_id: 100, user_id: 200, reason: 'confirmed reason' },
+      sessionId: 's', commMessage: mockCommMessage(), policy: 'human',
+      port: { requestApproval }, signal: new AbortController().signal,
+    });
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({
+      humanOnly: true, question: expect.stringContaining('confirmed reason'),
+    }));
+  });
+
   it('records approved request and result in the ordered turn journal', async () => {
     const journal = new AgentRunJournal({ sessionId: 'sess-1', turnId: 'turn-1' });
     const events: unknown[] = [];

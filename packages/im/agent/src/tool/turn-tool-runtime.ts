@@ -94,6 +94,7 @@ export class TurnToolRuntime {
       }
       const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
       const approval = await requestApprovalOutcome(this.turn.ports.approval, {
+        ...(tool.requiresApproval === 'human' ? { humanOnly: true } : {}),
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
         ...(this.turn.origin.kind === 'im'
@@ -115,6 +116,7 @@ export class TurnToolRuntime {
         return this.#deny(name, toolUseId, decision.policy, 'approval required but ApprovalPort unavailable', causedBy);
       }
       const approval = await requestApprovalOutcome(this.turn.ports.approval, {
+        ...(tool.requiresApproval === 'human' ? { humanOnly: true } : {}),
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
         ...(this.turn.origin.kind === 'im'

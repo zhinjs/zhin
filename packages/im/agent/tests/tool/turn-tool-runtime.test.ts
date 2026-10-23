@@ -11,6 +11,17 @@ import * as policyFacade from '../../src/security/policy-facade.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 
 describe('TurnToolRuntime', () => {
+  it('preserves fresh human authority on each invocation', async () => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn(async () => true);
+    const { turn } = fixture({ approval: { requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'human')]);
+    await runtime.execute('danger', {}, 'human-1');
+    await runtime.execute('danger', {}, 'human-2');
+    expect(requestApproval).toHaveBeenCalledTimes(2);
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ humanOnly: true }));
+    expect(requestApproval.mock.calls.every(([request]) => request.remember === undefined)).toBe(true);
+  });
   it('records a pre-aborted invocation as cancelled without running policies or the tool', async () => {
     const controller = new AbortController();
     controller.abort('deadline exceeded');

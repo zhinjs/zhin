@@ -394,6 +394,20 @@ export function icqqElementsToSegments(
       case "face":
         out.push({ type: "face", data: { id: Number(el.id) } });
         break;
+      case "bface": {
+        // ICQQ 的原创表情 file 是两个 MD5 加包编号，不是本地文件路径。
+        const file = typeof el.file === "string" ? el.file : "";
+        if (/^[a-f\d]{64}\d+$/i.test(file)) {
+          const md5 = file.slice(0, 32).toLowerCase();
+          out.push({
+            type: "image",
+            data: { media: { kind: "url", value: `https://gxh.vip.qq.com/club/item/parcel/item/${md5.slice(0, 2)}/${md5}/raw300.gif`, mime_type: "image/gif" } },
+          });
+        }
+        // 保留标签：下载或识图失败时仍能读懂表情的文字含义。
+        if (el.text) out.push({ type: "text", data: { text: String(el.text) } });
+        break;
+      }
       case "image": {
         const value = String(el.url ?? el.file ?? "");
         if (!value) break;

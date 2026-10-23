@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   createAutoApprovalPort,
+  createBypassApprovalPort,
   detachedTaskRunnerToken,
   handleDetachedTaskCommand,
   handleRuntimeManagementCommand,
@@ -545,7 +546,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     escalatedApprovalPort,
                     approvalJudgment,
                   ),
-                  bypass: options.agent.bypassApprovalPort,
                   ask: askApprovalPort,
                 }),
                 question: createRuntimeQuestionPort(options.im, message),
@@ -721,10 +721,9 @@ function resolveApprovalPort(input: Readonly<{
   mode: 'ask' | 'auto' | 'bypass';
   ask: ApprovalPort;
   auto: ApprovalPort;
-  bypass: ApprovalPort;
 }>): ApprovalPort {
   if (input.mode === 'auto') return input.auto;
-  if (input.mode === 'bypass') return input.bypass;
+  if (input.mode === 'bypass') return createBypassApprovalPort(input.ask);
   return input.ask;
 }
 
