@@ -1,0 +1,21 @@
+scripts/ci/affected-scope.mjs
+  s_6562bcb6cc0539::t_6307ab4b1bd32e 21-22,28,32-41
+scripts/ci/validation-plan.test.ts
+  s_6562bcb6cc0539::t_207c81a70814da 225-228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "78f9c41a6852c47d9a4f86106e87d2e65f8cd0ec",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
