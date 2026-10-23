@@ -1,4 +1,7 @@
-import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recovery.js';
+import { chatFailureLine } from '../../src/outbound/chat-failure.js';
+
+/** IM turns say a format failure in the chat voice (the host notice is for non-chat callers). */
+const STRUCTURED_REPLY_FAILURE = chatFailureLine('format', { random: 0 });
 import { runEvalCase } from '../../evals/framework/index.js';
 import { mapTurnEventToAgentStreamEvents } from '../../src/event/turn-to-agent-stream.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';

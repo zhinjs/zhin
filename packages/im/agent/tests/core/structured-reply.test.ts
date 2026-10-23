@@ -2,7 +2,11 @@ import { RED_CIRCLE_PNG } from '../../evals/fixtures/images.js';
 import { describe, expect, it, vi } from 'vitest';
 import { aiOutboundJsonSchema, buildAiOutboundJsonSchema, DEFAULT_AI_OUTBOUND_SEGMENT_TYPES, type AiOutboundSegmentProfile } from '@zhin.js/core';
 import type { AgentMessage, AgentTool, StreamOptions } from '@zhin.js/ai';
-import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recovery.js';
+import { chatFailureLine } from '../../src/outbound/chat-failure.js';
+import { describeProviderFailure } from '@zhin.js/ai';
+
+/** IM turns say a format failure in the chat voice (the host notice is for non-chat callers). */
+const STRUCTURED_REPLY_FAILURE = chatFailureLine('format', { random: 0 });
 import { formatToolCallsForUser } from '../../src/core/tool-calls-user-format.js';
 import { decodeStructuredReply, REACTION_SEGMENT_TYPE, structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
@@ -28,6 +32,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   detached?: boolean;
   emptyReplyRetries?: number;
   replySegments?: AiOutboundSegmentProfile;
+  roles?: string[];
 } = {}) {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => responses.shift()! });
   const streamOptions: (StreamOptions | undefined)[] = [];
@@ -60,7 +65,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     promptProfile: { kind: 'interactive' },
     turnContext: {
       origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'g' },
-      principal: { subjectId: '123', roles: ['user'] }, session: { key: 's' },
+      principal: { subjectId: '123', roles: options.roles ?? ['user'] }, session: { key: 's' },
     },
     replySegments: options.replySegments,
     allTools: tools, resolvedTools: tools,
@@ -99,6 +104,19 @@ describe('structured Agent final replies', () => {
     expect(usageEvents).toHaveLength(2);
     expect(usageEvents.reduce((sum, event) => sum + event.usage.totalTokens, 0)).toBe(110);
     expect(result.reply).toBe(path === 'rejected correction' ? STRUCTURED_REPLY_FAILURE : '已完成');
+  });
+
+  it.each([
+    ['rate_limit', '模型限流'],
+    ['quota_exhausted', '模型额度用完了'],
+    ['auth', '模型 API 密钥有问题'],
+  ] as const)('says a %s failure like a member, with the cause only for the owner', async (kind, cause) => {
+    const failed = () => ({ ...assistantTextReply(''), content: [], stopReason: 'error' as const, errorMessage: describeProviderFailure(kind) });
+    const member = await run([failed()]);
+    expect(member.result.reply).not.toMatch(/模型|API|密钥|重试/);
+    expect(member.result.reply).not.toContain(cause);
+    const owner = await run([failed()], { roles: ['master'] });
+    expect(owner.result.reply).toContain(`（${cause}）`);
   });
 
   it.each([false, true])('keeps the existing empty-reply notice without retrying (thinking: %s)', async thinking => {

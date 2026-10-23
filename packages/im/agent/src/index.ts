@@ -545,3 +545,5 @@ export type {
 export type { AgentOutputElement } from './outbound/agent-output.js';
 export { renderAgentOutput, splitOutputMessages } from './outbound/agent-output.js';
 export { REACTION_SEGMENT_TYPE } from './outbound/structured-reply.js';
+export { chatFailureLine, chatFailureKindOf } from './outbound/chat-failure.js';
+export type { ChatFailureKind, ChatFailureOptions } from './outbound/chat-failure.js';

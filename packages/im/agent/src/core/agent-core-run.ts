@@ -18,7 +18,8 @@ import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
-import { decodeLenientStructuredReply, recoverStructuredReply, STRUCTURED_REPLY_FAILURE } from './structured-reply-recovery.js';
+import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
+import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
@@ -75,10 +76,12 @@ function normalizeAssistantMessageText(assistant: AssistantMessage): void {
   }
 }
 
-function resolveAssistantReplyText(assistant: AssistantMessage): string {
+function resolveAssistantReplyText(assistant: AssistantMessage, chat?: ChatFailureOptions): string {
   normalizeAssistantMessageText(assistant);
   const text = assistantText(assistant);
   if (text.trim()) return text;
+  // In a chat the failure is said like a member would say it; operators read the logs.
+  if (assistant.errorMessage && chat) return chatFailureLine(chatFailureKindOf(assistant.errorMessage), chat);
   if (assistant.errorMessage && isProviderFailureMessage(assistant.errorMessage)) {
     return `${assistant.errorMessage}。`;
   }
@@ -520,6 +523,9 @@ export async function* runAgentLoopTextTurnRun(
   const messagePreset = configuredSchema === true || configuredSchema === 'segments';
   const imReply = messagePreset && input.turnContext.origin.kind === 'im'
     && input.conversationPersistence !== 'none';
+  const chatFailure: ChatFailureOptions | undefined = input.turnContext.origin.kind === 'im'
+    ? { master: input.turnContext.principal.roles.includes('master') }
+    : undefined;
   const outputSchema = imReply ? structuredReplySchema(input.replySegments)
     : messagePreset || !configuredSchema ? undefined : configuredSchema;
   const turnShellPolicy = input.turnContext.policy?.shell;
@@ -984,7 +990,7 @@ export async function* runAgentLoopTextTurnRun(
         lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
           || (!lastAssistantHadToolCalls && !answerText.trim());
         lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
-          : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant);
+          : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant, chatFailure);
         logAssistantIterationFailure(assistant, modelId, sessionId);
         const toolNames = assistant.content
           .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
@@ -1120,7 +1126,10 @@ export async function* runAgentLoopTextTurnRun(
   const continuationPrefix = continuations > 0 && input.turnContext.origin.kind !== 'im'
     ? `（任务步骤较多，已自动续跑 ${continuations} 次）\n\n` : '';
   const proseReply = structuredReply ? ''
-    : sanitizeAssistantReply(rawReply, { toolSummary: formatToolCallsForUser(toolCalls) });
+    : sanitizeAssistantReply(rawReply, {
+      toolSummary: formatToolCallsForUser(toolCalls),
+      ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
+    });
   const textReply = delegatedOnly ? '' : proseReply.trim() ? continuationPrefix + proseReply : proseReply;
   let output: AgentOutputElement[] = delegatedOnly || structuredReply ? [] : parseOutput(textReply);
   if (!delegatedOnly && structuredReply) {
@@ -1140,13 +1149,14 @@ export async function* runAgentLoopTextTurnRun(
           transport: completionUsage.transport, model: llmModel, raw: rawReply,
           error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
           segments: input.replySegments,
+          failureText: chatFailureLine('format', { ...chatFailure, random: 0 }),
         });
         output = recovery.output;
         // History must match what the user saw: the corrected reply, or the failure text. Never the
         // correction prompt (it embeds the rejected raw text) and never the rejected raw reply.
         if (messages && rejected?.role === 'assistant') {
           messages[messages.length - 1] = recovery.assistant
-            ?? { ...rejected, content: [{ type: 'text', text: STRUCTURED_REPLY_FAILURE }] };
+            ?? { ...rejected, content: [{ type: 'text', text: renderAgentOutput(recovery.output) }] };
         }
       }
     }
