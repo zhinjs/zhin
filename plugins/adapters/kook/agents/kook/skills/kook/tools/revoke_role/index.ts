@@ -10,6 +10,7 @@ export default defineAgentTool<{ guild_id: string; user_id: string; role_id: str
     role_id: z.string().describe('角色 ID'),
   }),
   adapter: 'kook',
+  scopes: ["channel"],
   tags: ['kook'],
   permissions: [platformPermission('kook', 'manage_roles')],
   async execute({ guild_id, user_id, role_id  }: { guild_id: string; user_id: string; role_id: string }, context) {

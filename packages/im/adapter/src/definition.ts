@@ -116,6 +116,8 @@ export interface AdapterReactionDeclaration {
 export interface AdapterSegmentModelExtension {
   readonly fields?: readonly string[];
   readonly hint?: string;
+  /** Restrict model disclosure to these IM scenes; plain text remains a fallback without its scoped hints. */
+  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
 }
 
 const HTML_OUTBOUND_MODES: readonly HtmlOutboundMode[] = ['direct', 'image', 'text'];
@@ -327,16 +329,19 @@ function normalizeSegmentModel(
   model: AdapterSegmentPolicy['model'],
 ): AdapterSegmentPolicy['model'] {
   if (model === undefined) return undefined;
-  const invalid = () => new TypeError('Adapter segments.model must map segment types to { fields?: string[], hint?: string }');
+  const invalid = () => new TypeError('Adapter segments.model must map segment types to { fields?: string[], hint?: string, scopes?: (private | group | channel)[] }');
   if (!model || typeof model !== 'object' || Array.isArray(model)) throw invalid();
   return Object.freeze(Object.fromEntries(Object.entries(model).map(([type, extension]) => {
     if (!extension || typeof extension !== 'object') throw invalid();
-    const { fields, hint } = extension;
+    const { fields, hint, scopes } = extension;
     if (fields !== undefined && (!Array.isArray(fields) || fields.some(field => typeof field !== 'string' || !field))) throw invalid();
     if (hint !== undefined && (typeof hint !== 'string' || !hint.trim())) throw invalid();
+    if (scopes !== undefined && (!Array.isArray(scopes) || scopes.length === 0
+      || scopes.some(scope => scope !== 'private' && scope !== 'group' && scope !== 'channel'))) throw invalid();
     return [type, Object.freeze({
       ...(fields ? { fields: Object.freeze([...new Set(fields)]) } : {}),
       ...(hint ? { hint: hint.trim() } : {}),
+      ...(scopes ? { scopes: Object.freeze([...new Set(scopes)]) } : {}),
     })];
   })));
 }

@@ -11,6 +11,7 @@ export default defineAgentTool<{ guild_id: string; action: 'add' | 'remove'; use
     remark: z.string().optional().describe('备注（add 可选）'),
   }),
   adapter: 'kook',
+  scopes: ["channel"],
   tags: ['kook'],
   permissions: [platformPermission('kook', 'guild_admin')],
   async execute({ guild_id, action, user_id, remark }: { guild_id: string; action: 'add' | 'remove'; user_id: string; remark?: string }, context) {

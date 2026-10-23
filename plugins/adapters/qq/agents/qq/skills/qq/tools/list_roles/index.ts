@@ -8,6 +8,7 @@ export default defineAgentTool<{ guild_id: string }>({
     guild_id: z.string().describe('频道 ID'),
   }),
   adapter: 'qq',
+  scopes: ["channel"],
   tags: ['qq'],
   permissions: [platformPermission('qq', 'manage_roles')],
   async execute({ guild_id  }: { guild_id: string }, context) {

@@ -354,8 +354,23 @@ describe('structured Agent final replies', () => {
   it('documents only the offered segment types', () => {
     const instruction = structuredReplyInstruction({ types: ['text', 'keyboard', 'dice'] });
     expect(instruction).toContain('keyboard:');
-    expect(instruction).toContain('dice / rps:');
-    expect(instruction).not.toContain('image / audio / video / file:');
+    expect(instruction).toContain('dice:');
+    expect(instruction).not.toContain('rps');
+    expect(instruction).not.toContain('media');
+    expect(instruction).not.toContain('mention');
+  });
+
+  it.each(['image', 'audio', 'video', 'file'] as const)('only describes the offered %s media type', type => {
+    const instruction = structuredReplyInstruction({ types: [type] });
+    expect(instruction).toContain(`- ${type}:`);
+    for (const other of ['image', 'audio', 'video', 'file'].filter(other => other !== type)) {
+      expect(instruction).not.toContain(`"type":"${other}"`);
+      expect(instruction).not.toContain(`${other} /`);
+    }
+    expect(instruction).toContain('url');
+    expect(instruction).toContain('path');
+    expect(instruction).toContain('base64');
+    expect(instruction).not.toContain('keyboard:');
   });
 
   it('completes model quick-reply buttons into a canonical keyboard with a text fallback', async () => {
