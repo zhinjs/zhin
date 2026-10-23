@@ -1,3 +1,5 @@
+import { getLogger } from '@zhin.js/logger';
+import { logTurnUsage, type UsageLogContext } from '../trace/turn-usage-log.js';
 import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { applyTurnTrust } from '../security/trust-level.js';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
@@ -243,6 +245,7 @@ export interface AgentCapabilitySelection {
 
 export class AgentRuntime extends SnapshotAttachedRuntime {
   readonly #ingress = new CapabilityIngress();
+  readonly #usageLogger = getLogger('ai.usage');
 
   constructor(private readonly options: AgentRuntimeOptions) {
     super();
@@ -302,6 +305,12 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     let active = true;
     let activeTrace: TurnTraceCollector | undefined;
     let releaseTrace: (() => void) | undefined;
+    let outcome: TurnOutcome | undefined;
+    const logContext: UsageLogContext = {
+      traceId: request.identity.traceId,
+      scene: request.origin.kind === 'im' ? `${request.origin.platform}/${request.origin.scope}` : request.origin.kind,
+      selectedModel: `${selection.binding.providerAlias}/${selection.binding.model}`,
+    };
     try {
       if (!active) throw new Error('Agent generation operation is not active');
       const discovered = await this.#ingress.read(
@@ -326,7 +335,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const turnRequest = trust.restricted
         ? Object.freeze({ ...request, policy: trust.policy })
         : request;
-      const trace = this.options.turnTraceStore
+      const trace = this.options.turnTraceStore || this.#usageLogger.isLevelEnabled('info')
         ? new TurnTraceCollector({
           turnId: request.identity.turnId,
           sessionKey: request.session.key,
@@ -344,7 +353,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const engine = resolveTurnEngine(lease.value);
       const disabled = Boolean(request.session.key.startsWith('workroom:') || request.input.metadata?.workroom
         || request.principal.roles.includes('workroom_assignment') || request.execution?.kind === 'schedule');
-      return await runWithAgentDecisionTurn(lease.value, request.identity.turnId, decision => runWithAgentTurnConfiguration(
+      outcome = await runWithAgentDecisionTurn(lease.value, request.identity.turnId, decision => runWithAgentTurnConfiguration(
         { activeBinding: selection.binding },
         () => executeAgentTurn(turn, async function* () {
           const stream = engine.run({
@@ -376,17 +385,26 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           }
         }, observe),
       ), { disabled });
+      return outcome;
+    } catch (error) {
+      if (!activeTrace && this.#usageLogger.isLevelEnabled('info')) {
+        activeTrace = new TurnTraceCollector({ turnId: request.identity.turnId, sessionKey: request.session.key });
+      }
+      activeTrace?.finalize({ status: request.signal.aborted ? 'cancelled' : 'failed' });
+      throw error;
     } finally {
       active = false;
       releaseTrace?.();
-      if (activeTrace) this.#saveTrace(activeTrace);
+      if (activeTrace) this.#saveTrace(activeTrace, { ...logContext, status: outcome?.status });
     }
   }
 
-  #saveTrace(trace: TurnTraceCollector): void {
+  #saveTrace(trace: TurnTraceCollector, context: UsageLogContext): void {
     trace.finalize();
+    const snapshot = trace.snapshot();
+    logTurnUsage(this.#usageLogger, snapshot, context);
     // Fire-and-forget: a slow or failing trace write must not delay the reply.
-    void this.options.turnTraceStore?.save(trace.snapshot()).catch(() => undefined);
+    void this.options.turnTraceStore?.save(snapshot).catch(() => undefined);
   }
 }
 

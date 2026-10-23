@@ -36,7 +36,6 @@ import type { TurnEvent } from '../event/turn-event.js';
 import {
   createTurnEventMapperState,
   mapAgentEventToTurnEvents,
-  turnUsageEvent,
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
@@ -948,8 +947,7 @@ export async function* runAgentLoopTextTurnRun(
   // Messages of the running segment, for progress summaries before agent_end.
   let segmentMessages: AgentMessage[] = [];
   function* drainCompletionUsage(): Generator<TurnEvent> {
-    for (const usage of completionUsage.drainUsage()) {
-      const event = turnUsageEvent(usage);
+    for (const event of completionUsage.drainEvents()) {
       emitTurnEvent(event);
       yield event;
     }

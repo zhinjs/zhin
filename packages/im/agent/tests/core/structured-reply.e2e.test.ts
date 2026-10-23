@@ -5,6 +5,7 @@ const STRUCTURED_REPLY_FAILURE = chatFailureLine('format', { random: 0 });
 import { runEvalCase } from '../../evals/framework/index.js';
 import { mapTurnEventToAgentStreamEvents } from '../../src/event/turn-to-agent-stream.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
+import { formatTurnUsageLogs } from '../../src/trace/turn-usage-log.js';
 
 it('keeps trace model calls and total usage aligned with the terminal after an exhausted-turn summary', async () => {
   const result = await runEvalCase({
@@ -24,6 +25,17 @@ it('keeps trace model calls and total usage aligned with the terminal after an e
   expect(terminal.usage.totalTokens).toBe(110);
   expect(result.traces[0].usage.total_tokens).toBe(110);
   expect(result.traces[0].model_calls).toHaveLength(2);
+  const logs = formatTurnUsageLogs(result.traces[0], { traceId: 'summary', scene: 'eval/private' });
+  expect(logs.summary).toContain('calls: 2');
+  expect(logs.summary).toContain(`input: ${terminal.usage.promptTokens}`);
+  // The scripted provider defaults output to zero without reporting its availability.
+  expect(terminal.usage.completionTokens).toBe(0);
+  expect(logs.summary).toContain('output: ?');
+  expect(logs.details.filter(line => line.startsWith('call |'))).toHaveLength(2);
+  expect(result.traces[0].model_calls).toEqual(expect.arrayContaining([
+    expect.objectContaining({ model: expect.any(String), provider: expect.any(String), duration_ms: expect.any(Number) }),
+  ]));
+
 });
 
 it('carries a mixed default-schema reply through the full engine, terminal, publisher and Console preview', async () => {

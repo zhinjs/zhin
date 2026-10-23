@@ -116,7 +116,7 @@ function usageFromAiSdk(usage: {
   outputTokenDetails?: { reasoningTokens?: number };
   reasoningTokens?: number;
 } | undefined): AssistantMessage['usage'] {
-  if (!usage) return { ...EMPTY_TOKEN_USAGE };
+  usage ??= {};
   const input = usage.inputTokens ?? 0;
   const output = usage.outputTokens ?? 0;
   const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
@@ -129,7 +129,15 @@ function usageFromAiSdk(usage: {
     cacheRead,
     cacheWrite,
     totalTokens,
-    ...(reasoning > 0 ? { reasoning } : {}),
+    reported: {
+      input: usage.inputTokens !== undefined,
+      output: usage.outputTokens !== undefined,
+      totalTokens: usage.totalTokens !== undefined || (usage.inputTokens !== undefined && usage.outputTokens !== undefined),
+      cacheRead: (usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens) !== undefined,
+      cacheWrite: usage.inputTokenDetails?.cacheWriteTokens !== undefined,
+      reasoning: (usage.outputTokenDetails?.reasoningTokens ?? usage.reasoningTokens) !== undefined,
+    },
+    ...((usage.outputTokenDetails?.reasoningTokens ?? usage.reasoningTokens) !== undefined ? { reasoning } : {}),
     cost: { ...EMPTY_TOKEN_USAGE.cost },
   };
 }

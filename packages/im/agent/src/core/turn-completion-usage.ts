@@ -1,18 +1,23 @@
 import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type TokenUsage } from '@zhin.js/ai';
 
+import type { UsageEvent } from '../event/turn-event.js';
+import { turnUsageEvent } from './turn-event-mapper.js';
+
 /** Counts completed provider responses before reply validation, including rejected replies and retries. */
 export function trackTurnCompletionUsage(delegate: LlmCompletionPort): {
   transport: LlmCompletionPort;
   readonly usage: TokenUsage;
-  drainUsage(): TokenUsage[];
+  drainEvents(): UsageEvent[];
   hasReported(message: object): boolean;
 } {
   const total: TokenUsage = { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } };
-  const pending: TokenUsage[] = [];
+  const pending: UsageEvent[] = [];
   const reported = new WeakSet<object>();
-  const record = (assistant: AssistantMessage): AssistantMessage => {
+  const record = (assistant: AssistantMessage, durationMs: number): AssistantMessage => {
     const usage = assistant.usage;
-    pending.push({ ...usage, cost: { ...usage.cost } });
+    pending.push(turnUsageEvent(usage, {
+      provider: assistant.provider, model: assistant.model, stopReason: assistant.stopReason, durationMs,
+    }));
     reported.add(assistant);
     total.input += usage.input;
     total.output += usage.output;
@@ -29,11 +34,17 @@ export function trackTurnCompletionUsage(delegate: LlmCompletionPort): {
   };
   return {
     transport: {
-      complete: async (model, context, options) => record(await delegate.complete(model, context, options)),
-      completeSimple: async (model, context, options) => record(await delegate.completeSimple(model, context, options)),
+      complete: async (model, context, options) => {
+        const started = performance.now();
+        return record(await delegate.complete(model, context, options), performance.now() - started);
+      },
+      completeSimple: async (model, context, options) => {
+        const started = performance.now();
+        return record(await delegate.completeSimple(model, context, options), performance.now() - started);
+      },
     },
     get usage() { return { ...total, cost: { ...total.cost } }; },
-    drainUsage: () => pending.splice(0),
+    drainEvents: () => pending.splice(0),
     hasReported: assistant => reported.has(assistant),
   };
 }

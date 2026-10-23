@@ -4,15 +4,21 @@
 import type { AgentEvent, AssistantMessage, TokenUsage } from '@zhin.js/ai';
 import type { TurnEvent, UsageEvent } from '../event/turn-event.js';
 
-export function turnUsageEvent(usage: TokenUsage): UsageEvent {
+export function turnUsageEvent(
+  usage: TokenUsage,
+  details: Pick<UsageEvent, 'provider' | 'model' | 'durationMs' | 'stopReason'> = {},
+): UsageEvent {
   return {
     type: 'usage',
+    ...details,
     usage: {
       promptTokens: usage.input,
       completionTokens: usage.output,
       totalTokens: usage.totalTokens,
-      ...(usage.cacheRead > 0 ? { cacheReadTokens: usage.cacheRead } : {}),
-      ...(usage.reasoning ? { reasoningTokens: usage.reasoning } : {}),
+      ...(usage.reported ? { reported: { ...usage.reported } } : {}),
+      ...(usage.cacheRead > 0 || usage.reported?.cacheRead ? { cacheReadTokens: usage.cacheRead } : {}),
+      ...(usage.cacheWrite > 0 || usage.reported?.cacheWrite ? { cacheWriteTokens: usage.cacheWrite } : {}),
+      ...(usage.reasoning !== undefined ? { reasoningTokens: usage.reasoning } : {}),
     },
   };
 }
@@ -46,8 +52,8 @@ export function* mapAgentEventToTurnEvents(
       break;
     case 'message_end':
       if (event.message.role === 'assistant') {
-        const usage = (event.message as AssistantMessage).usage;
-        yield turnUsageEvent(usage);
+        const message = event.message as AssistantMessage;
+        yield turnUsageEvent(message.usage, { provider: message.provider, model: message.model, stopReason: message.stopReason });
       }
       break;
     case 'message_update':
