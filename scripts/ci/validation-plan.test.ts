@@ -222,6 +222,10 @@ describe('affected PR scope', () => {
         const runner = 'packages/app/lib/index.js';` } });
     expect(scope.builds).toEqual(['app', 'base']);
     expect(scope.tests).toEqual(['scripts/ci/plan.test.ts', selected]);
+    const sourceChange = affectedScope({ changed: ['packages/base/src/index.ts'], packages, tests,
+      testSources: { [selected]: "import { value } from '../../packages/base/src/index.js';" } });
+    expect(sourceChange.tests).toContain(selected);
+    expect(sourceChange.tests).not.toContain('packages/other/tests/c.test.ts');
   });
   it('covers dynamic workflow/doc contracts and global toolchain changes conservatively', () => {
     expect(affectedScope({ changed: ['.github/workflows/ci.yml'], packages, tests }).tests).toEqual(['scripts/ci/plan.test.ts', 'tests/docs/workflow.test.ts']);

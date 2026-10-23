@@ -17,25 +17,28 @@ export function affectedScope({ changed, packages, tests, testSources = {} }) {
       affected.add(pkg.name); grew = true;
     }
   }
-  const infrastructure = changed.some(file => /^(?:\.github\/|scripts\/|tests\/|docs\/)/.test(file));
-  const selected = tests.filter(file => all || affected.has(ownerOf(file)?.name)
-    || infrastructure && /^(?:scripts\/|tests\/docs\/)/.test(file)
-    || changed.includes(file));
   // Root contract tests can import workspace source or launch compiled consumers.
-  // Their package prerequisites do not imply that every downstream test is affected.
-  const buildRoots = new Set(affected);
-  for (const file of selected) {
+  const testRoots = new Map(tests.map(file => {
+    const roots = new Set();
     const source = testSources[file] ?? '';
     for (const match of source.matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)) {
       const specifier = match[1];
       const dependency = specifier.startsWith('.') ? ownerOf(normalize(join(dirname(file), specifier)))
         : packages.find(pkg => specifier === pkg.name || specifier.startsWith(`${pkg.name}/`));
-      if (dependency) buildRoots.add(dependency.name);
+      if (dependency) roots.add(dependency.name);
     }
     for (const pkg of packages) if (source.includes(`${pkg.dir}/lib/`) || source.includes(`${pkg.dir}/dist/`)
       || source.includes(`node_modules/${pkg.name}/`) || source.includes(`node_modules/${pkg.name}'`)
-      || source.includes(`node_modules/${pkg.name}"`)) buildRoots.add(pkg.name);
-  }
+      || source.includes(`node_modules/${pkg.name}"`)) roots.add(pkg.name);
+    return [file, roots];
+  }));
+  const infrastructure = changed.some(file => /^(?:\.github\/|scripts\/|tests\/|docs\/)/.test(file));
+  const selected = tests.filter(file => all || affected.has(ownerOf(file)?.name)
+    || [...testRoots.get(file)].some(name => affected.has(name))
+    || infrastructure && /^(?:scripts\/|tests\/docs\/)/.test(file)
+    || changed.includes(file));
+  // Build prerequisites do not widen the affected test set to unrelated consumers.
+  const buildRoots = new Set([...affected, ...selected.flatMap(file => [...testRoots.get(file)])]);
   const builds = packages.filter(pkg => buildRoots.has(pkg.name) && pkg.dir !== 'docs').map(pkg => pkg.name).sort();
   const lint = changed.filter(file => /\.[cm]?[jt]sx?$/.test(file));
   return { all, builds, tests: selected.sort(), lint };
