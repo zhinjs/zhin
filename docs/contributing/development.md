@@ -57,8 +57,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # 或 pnpm prepare:cli
 
 发布候选还必须通过 `pnpm check:created-project`：脚本打包候选依赖，在临时空目录运行
 已打包的 `create-zhin-app -y --skip-install`，安装后通过真实 Sandbox WebSocket 验证
-`/hello`、命令热重载、生产重启和 `doctor --live`。CI 的 Linux/Node 24 作业及发布
-workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于离线单测。
+`/hello`、命令热重载、生产重启和 `doctor --live`。nightly 全量检查与正式发版批次均执行此项；它需要 npm 网络与本机随机端口，不属于离线单测。
 Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migrate`，重新安装依赖并导入本地包，
 确认显式 `workspace:` 链接、自定义脚本、配置和用户文件保留；这验证当前候选包的升级流程，
 不代表所有历史版本或数据库迁移都已验证。
@@ -67,7 +66,7 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 `pnpm check:platform-candidates` 验证 QQ 官方与 Telegram 的离线契约，
 覆盖范围与实机缺口见[平台稳定认证](./platform-acceptance.md)。离线通过不会自动升档。
 
-提交前最值得跑一次的是 `pnpm check:all`：它运行 `scripts/check-all-harness.mjs` 中登记的全部检查（含 type-check、lint、单测），全部通过才算绿——CI 跑的就是同一套。CI 若另跑 coverage 作业，可设 `HARNESS_SKIP_TEST=1` 跳过其中的 `pnpm test`，避免双跑。
+提交前最值得跑一次的是 `pnpm check:all`：它运行 `scripts/check-all-harness.mjs` 中登记的全部检查（含 type-check、lint、单测），全量验收使用同一套；日常 PR 使用下文的快速范围检查。全量 CI 若另跑 coverage 作业，可设 `HARNESS_SKIP_TEST=1` 跳过其中的 `pnpm test`，避免双跑。
 
 下面按职责分组列出（括号内是单项命令，均可单独运行）。
 
@@ -230,17 +229,29 @@ Git 历史中是否存在消费 patch changeset、提升 patch 版本并新增�
 
 ## 发版（GitHub CI）
 
-发版由 `.github/workflows/publish.yml` 驱动：`push` 到 `main` 或在 Actions 里 **workflow_dispatch 手动运行**。
+日常 PR 与合并队列使用快速 CI，目标是在 **5 分钟内**完成实际检查：验证受影响的包及下游消费者，Linux Node 24 构建一次，四个分片复用构建产物运行选中的单测，同时检查源码契约、发版计划和改动文件的 lint。全局依赖/工具链变化会扩大到全部包；不通过时不会用超时或空测试冒充成功。GitHub runner 的排队时间不受仓库控制。
+
+必需检查为 `checks`：它聚合分流、契约、构建、测试的真实结果，规划失败或任何应运行的任务失败都会阻止合并。合入 main 的**同一 SHA**已有成功的 CI 时复用结果；查询失败、没有证据或不同 SHA 都继续验证。纯版本 PR 必须与从已验证基线重新执行 Changesets 得到的整棵文件树一致；不能只靠标题或分支名跳过检查。
+
+全量 Node 22/24/26 × Linux/Windows、覆盖率、数据库、四个平台安装、打包消费者、脚手架与文档浏览器验收保留在 `.github/workflows/full-validation.yml`，每天 02:00（Asia/Shanghai / Asia/Manila）执行，也可单独手动运行。完整发版批次也调用同一 workflow。nightly 只验证，不消费 changeset、不发布。
+
+### 显式发版批次
+
+1. 在 Actions → **Build and Publish** → **Run workflow**，选择 `main`。日常 main push 不再自动更新版本 PR 或跑全量发版检查。
+2. 主配置仍有 changeset 时，先对这次不可变源码提交跑完整验收。失败或取消时，main 的版本、CHANGELOG 和 changeset 全部保持原样，修复后重新启动批次即可。
+3. 全量验收成功后，才执行 `pnpm bump` 并创建或更新 `chore: update versions` PR。若 main 已前进，拒绝生成旧批次版本，需重新运行。版本 PR 及其合并队列还会核对当前基线的正式全量验收记录。
+4. 合并版本 PR 后，自动核对生成树与验收源，再构建最终版本、验证 tarball 导入和已安装消费者，最后发布 npm。不会对同一份源码再跑一次全量矩阵。
+5. npm 发布开始后的部分失败**不回退版本**：npm 不能覆盖已发布的同版本。保持源码和版本不变，手动重跑同一 workflow 续发；Changesets 跳过已发布包。若源码已变化，拒绝以旧版本续发，需先处理新的批次。
+
+旧流程留下的版本 PR 也需要先运行一次新的正式批次；仅有以前的 push CI 或 nightly 成功记录不授权发布。发布权限、OIDC、首次发布检查和分支保护均保留。
 
 ```mermaid
 flowchart LR
-  trigger["push main / workflow_dispatch"] --> install["pnpm install"] --> build["pnpm build"]
-  build --> harness["pnpm check:all"]
-  harness --> gate["check:unpublished<br/>检测未首次发包"]
-  gate -->|"有新包"| stop["失败并列出包名<br/>请手动首次发包后重跑"]
-  gate -->|"全部已在 npm"| action["changesets/action"]
-  action -->|"有未消费 changeset"| pr["开 version PR<br/>pnpm bump"]
-  action -->|"main 合并 version PR"| pub["pnpm pub<br/>发布 npm"]
+  pr["PR / merge queue"] --> fast["受影响范围快速 CI"]
+  manual["手动启动发版批次"] --> full["全量验收"]
+  full -->|失败| keep["保留 changeset 和原版本"]
+  full -->|通过| versions["生成版本 PR"]
+  versions --> merged["合并后核对版本树"] --> pack["最终构建 / 打包验收"] --> publish["发布 npm"]
 ```
 
 npm 认证优先走可信发布（OIDC），未配置可信发布者的包回退到 npm token，所有发布都带 provenance。配置方法和每个包的 npmjs.com 清单见 [npm 发布与可信发布](./publishing.md)。
@@ -268,10 +279,9 @@ pnpm build
 npm trust github <包名> --repo zhinjs/zhin --file publish.yml --env npm-production --allow-publish --yes
 ```
 
-然后到 Actions → **Build and Publish** → **Run workflow** 重新执行（或再 push `main`）。
+然后到 Actions → **Build and Publish** → **Run workflow** 手动重新执行。
 
-PR 门禁在 `.github/workflows/ci.yml`（Linux / Windows × Node 22/24/26 矩阵）。
-Linux Node 24 额外执行 `pnpm check:all`、文档构建、文档浏览器测试和覆盖率检查；文档浏览器测试与 Pages 部署使用同一组用例，在 PR 阶段验证搜索、隐私、导航和布局。其他 Linux 矩阵执行构建与单测，Windows 矩阵执行构建。
+PR 快速检查在 `.github/workflows/ci.yml`；全量检查在 `.github/workflows/full-validation.yml`，用于 nightly 与正式发版批次。支持平台与 Node 版本的完整覆盖没有删除，只改变执行阶段。
 
 ## 调试
 

@@ -4,12 +4,12 @@ import { parse } from 'yaml';
 const load = (file: string) => parse(readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8'));
 
 describe('rendering test environments', () => {
-  it.each([['ci', 'checks'], ['publish', 'publish']])(
+  it.each([['full-validation', 'checks'], ['publish', 'publish']])(
     'sets up fonts before rendering tests in %s', (workflow, job) => {
       const steps = load(`.github/workflows/${workflow}.yml`).jobs[job].steps;
       const checkout = steps.findIndex((step: { uses?: string }) => step.uses?.startsWith('actions/checkout@'));
       const fonts = steps.findIndex((step: { uses?: string }) => step.uses === './.github/actions/setup-rendering-fonts');
-      const checks = steps.findIndex((step: { run?: string }) => step.run?.includes('pnpm check:all'));
+      const checks = steps.findIndex((step: { run?: string }) => step.run?.includes(workflow === 'publish' ? 'pnpm check:created-project' : 'pnpm check:all'));
       expect(checkout).toBeGreaterThanOrEqual(0);
       expect(checks).toBeGreaterThanOrEqual(0);
       expect(fonts).toBeGreaterThan(checkout);
