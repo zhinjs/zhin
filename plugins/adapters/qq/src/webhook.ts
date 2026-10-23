@@ -100,11 +100,10 @@ export function defaultCreateHttpBot(config: ResolvedQqHttpConfig): QqHttpBotTra
     removeAllListeners: () => {
       bot.removeAllListeners(undefined as never);
     },
-    // SDK 1.3 generates msg_seq itself and has no option for it yet.
-    sendPrivateMessage: (userId, message, source) => bot.sendPrivateMessage(userId, message as Sendable, source),
-    sendGroupMessage: (groupId, message, source) => bot.sendGroupMessage(groupId, message as Sendable, source),
-    sendGuildMessage: (channelId, message, source) => bot.sendGuildMessage(channelId, message as Sendable, source),
-    sendDirectMessage: (guildId, message, source) => bot.sendDirectMessage(guildId, message as Sendable, source),
+    sendPrivateMessage: (userId, message, source, options) => bot.sendPrivateMessage(userId, message as Sendable, source, options),
+    sendGroupMessage: (groupId, message, source, options) => bot.sendGroupMessage(groupId, message as Sendable, source, options),
+    sendGuildMessage: (channelId, message, source, options) => bot.sendGuildMessage(channelId, message as Sendable, source, options),
+    sendDirectMessage: (guildId, message, source, options) => bot.sendDirectMessage(guildId, message as Sendable, source, options),
     recallPrivateMessage: (userId, messageId) => bot.recallPrivateMessage(userId, messageId),
     recallGroupMessage: (groupId, messageId) => bot.recallGroupMessage(groupId, messageId),
     recallGuildMessage: (channelId, messageId) => bot.recallGuildMessage(channelId, messageId),

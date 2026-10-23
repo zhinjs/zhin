@@ -14,10 +14,7 @@ import type { MediaRef, Segment } from '@zhin.js/im-contract';
 import type { QqOutboundMessage } from './outbound.js';
 import type { QqReplySource } from './passive-reply.js';
 
-/**
- * Per-send options. `msgSeq` numbers replies to one passive source. SDK 1.3 generates its own
- * random msg_seq and takes no such option yet, so the transports do not forward it.
- */
+/** Per-send options. `msgSeq` numbers replies to one passive source (qq-official-bot ≥ 1.3.3). */
 export interface QqSendOptions {
   readonly msgSeq?: number;
 }
@@ -335,11 +332,10 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
       for (const entry of receiverListeners.splice(0)) receiver.removeListener(entry.event, entry.listener);
       bot.removeAllListeners(undefined as never);
     },
-    // The websocket Bot takes no send options yet, so msg_seq stays SDK-generated here.
-    sendPrivateMessage: (userId, message, source) => bot.sendPrivateMessage(userId, message as Sendable, source),
-    sendGroupMessage: (groupId, message, source) => bot.sendGroupMessage(groupId, message as Sendable, source),
-    sendGuildMessage: (channelId, message, source) => bot.sendGuildMessage(channelId, message as Sendable, source),
-    sendDirectMessage: (guildId, message, source) => bot.sendDirectMessage(guildId, message as Sendable, source),
+    sendPrivateMessage: (userId, message, source, options) => bot.sendPrivateMessage(userId, message as Sendable, source, options),
+    sendGroupMessage: (groupId, message, source, options) => bot.sendGroupMessage(groupId, message as Sendable, source, options),
+    sendGuildMessage: (channelId, message, source, options) => bot.sendGuildMessage(channelId, message as Sendable, source, options),
+    sendDirectMessage: (guildId, message, source, options) => bot.sendDirectMessage(guildId, message as Sendable, source, options),
     recallPrivateMessage: (userId, messageId) => bot.recallPrivateMessage(userId, messageId),
     recallGroupMessage: (groupId, messageId) => bot.recallGroupMessage(groupId, messageId),
     recallGuildMessage: (channelId, messageId) => bot.recallGuildMessage(channelId, messageId),
