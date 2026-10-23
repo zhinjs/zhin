@@ -1,0 +1,33 @@
+packages/im/agent/src/core/structured-reply-recovery.ts
+  s_9477e63ef5cee5::t_efc523da3469e3 59-62,82
+  s_9477e63ef5cee5::t_5fb8381d303066 3
+  s_9477e63ef5cee5::t_ed14cd3e8e990e 8-17,20-22,29,32
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_9477e63ef5cee5::t_0c1773dfd1a663 194
+  s_9477e63ef5cee5::t_efc523da3469e3 187-193,195-205
+packages/im/agent/src/outbound/structured-reply.ts
+  s_9477e63ef5cee5::t_5fb8381d303066 65-70,95-101
+  s_9477e63ef5cee5::t_b928f5dce1bc2b 102
+.changeset/no-tool-markup-as-chat.md
+  s_9477e63ef5cee5::t_7b50a6f46755c9 1-5
+docs/ai/structured-replies.md
+  s_9477e63ef5cee5::t_698a534ec30589 116
+docs/en/ai/structured-replies.md
+  s_9477e63ef5cee5::t_94a71a6f0ff03d 136-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9bc32854c32e1484dd1194293c05867c2f1c1d61",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
