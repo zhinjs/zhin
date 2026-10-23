@@ -1,0 +1,35 @@
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  s_9622fd28aba994::t_44957a37ab8605 133-138
+  s_9622fd28aba994::t_4f55164f07e444 139-160
+plugins/utils/content-moderation/README.md
+  s_9622fd28aba994::t_7b8cc4086701e6 86-90
+plugins/utils/content-moderation/tests/group-moderation.test.ts
+  s_9622fd28aba994::t_b7ec5ba532090f 160-163,165-175,179,181-185,266-283,351,379-388,393-399,413-438
+  s_9622fd28aba994::t_d50720f118ee1c 224-248
+  s_9622fd28aba994::t_50f7b23ae5b77d 54,164,176-178,180,186-203,207-223,249-265
+  s_9622fd28aba994::t_b3585a682d3198 378,389-392,400-412
+  s_9622fd28aba994::t_d13b2235d6d721 439
+plugins/utils/content-moderation/src/group-moderation.ts
+  s_9622fd28aba994::t_9a2cc3c7216c2c 197,199
+  s_9622fd28aba994::t_d50720f118ee1c 107,147-148,217-218
+  s_9622fd28aba994::t_433fa2aaf8a7ea 27-30,33-37,39-40,45,57,74,76,81-86,143-145
+  s_9622fd28aba994::t_50f7b23ae5b77d 10,95,106,116,125,128-129,132,137,150,153-165,172,202,214-216,219-221
+.changeset/vision-voice-kick-approval.md
+  s_9622fd28aba994::t_7b8cc4086701e6 17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "918f53f0e3d5941e4542f42ebbfeda64e6bfdd05",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
