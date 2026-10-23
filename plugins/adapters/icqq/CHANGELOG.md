@@ -1,5 +1,14 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.14
+
+### Patch Changes
+
+- 860faa0: Group and private share cards are now confirmed with a real message id: ICQQ's share API returns none, so after an accepted share the adapter reads the conversation history for the bot's own newest card (once more after a short wait). When it cannot be found the delivery stays unconfirmed as before; no id is invented.
+- Updated dependencies [974fa85]
+- Updated dependencies [1e9b3d6]
+  - @zhin.js/core@1.1.49
+
 ## 1.1.13
 
 ### Patch Changes

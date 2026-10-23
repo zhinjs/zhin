@@ -1,5 +1,22 @@
 # @zhin.js/cli
 
+## 1.1.17
+
+### Patch Changes
+
+- 974fa85: Add ambient group engagement (`ai.trigger.ambient`): for a group message nobody addressed, wait for the burst to settle, apply a per-group cooldown and hourly cap, and let a judge model decide whether the bot would naturally chime in. Engaged turns tell the Agent nobody called it, so it can still return no messages. Mentions, quotes and DMs are unchanged and always reach the Agent. Off unless groups are listed; `mode: shadow` logs judgments without replying.
+- 070bb6b: Skip the assistant-profile heartbeat while HEARTBEAT.md is missing or has no task, the way the kernel scheduler's own heartbeat already did. The default heartbeat prompt only reads that file, so each idle run was a wasted model turn (about 40k prompt tokens every 30 minutes). Heartbeats with a custom prompt still run.
+- Updated dependencies [974fa85]
+- Updated dependencies [1e9b3d6]
+- Updated dependencies [d9cc732]
+  - @zhin.js/ai@1.1.43
+  - @zhin.js/core@1.1.49
+  - @zhin.js/runtime@1.1.11
+  - @zhin.js/workroom@0.0.8
+  - @zhin.js/pagemanager@1.1.12
+  - @zhin.js/config-file@1.1.7
+  - @zhin.js/scaffold-wizard@1.1.8
+
 ## 1.1.16
 
 ### Patch Changes

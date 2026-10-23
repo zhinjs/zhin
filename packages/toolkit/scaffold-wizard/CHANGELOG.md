@@ -1,5 +1,13 @@
 # @zhin.js/scaffold-wizard
 
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [974fa85]
+  - @zhin.js/runtime@1.1.11
+  - @zhin.js/config-file@1.1.7
+
 ## 1.1.7
 
 ### Patch Changes

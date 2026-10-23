@@ -1,5 +1,14 @@
 # @zhin.js/core
 
+## 1.1.49
+
+### Patch Changes
+
+- 974fa85: Add ambient group engagement (`ai.trigger.ambient`): for a group message nobody addressed, wait for the burst to settle, apply a per-group cooldown and hourly cap, and let a judge model decide whether the bot would naturally chime in. Engaged turns tell the Agent nobody called it, so it can still return no messages. Mentions, quotes and DMs are unchanged and always reach the Agent. Off unless groups are listed; `mode: shadow` logs judgments without replying.
+- 1e9b3d6: Keep the bot's own messages in conversation context, labeled `You (this bot)`, instead of dropping them. Without them the Agent could not tell its own words from the members', missed what it sent outside its reply (command replies, music cards, scheduled notices) and lost the order of the chat. Progress updates (`⏳`), messages the bot later recalled (activity indicators) and interaction prompts with their answers stay out. An inbound message without a sender is now recorded as `Unknown sender` so it is never mistaken for the bot's own.
+- Updated dependencies [070bb6b]
+  - @zhin.js/kernel@1.1.5
+
 ## 1.1.48
 
 ### Patch Changes
