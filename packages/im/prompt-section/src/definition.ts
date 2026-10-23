@@ -29,6 +29,8 @@ export interface AgentPromptSectionDefinition {
   readonly maxChars?: number;
   readonly profiles: readonly PromptProfile[];
   readonly platforms?: readonly string[];
+  /** IM conversation kinds where this section applies; omitted means unrestricted. */
+  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
@@ -79,6 +81,10 @@ export function defineAgentPromptSection(
     throw new TypeError('Prompt Section profiles cannot contain duplicates');
   }
   const platforms = input.platforms?.map((platform) => platform.trim());
+  if (input.scopes !== undefined && (!Array.isArray(input.scopes) || input.scopes.length === 0
+    || input.scopes.some(scope => !SCOPES.has(scope)) || new Set(input.scopes).size !== input.scopes.length)) {
+    throw new TypeError('Prompt Section scopes must contain unique private, group or channel values');
+  }
   if (platforms && (platforms.length === 0
     || platforms.some((platform) => !platform)
     || new Set(platforms).size !== platforms.length)) {
@@ -98,6 +104,7 @@ export function defineAgentPromptSection(
     retention,
     profiles: Object.freeze([...profiles]),
     ...(platforms ? { platforms: Object.freeze(platforms) } : {}),
+    ...(input.scopes ? { scopes: Object.freeze([...input.scopes]) } : {}),
     ...(input.metadata ? { metadata: Object.freeze({ ...input.metadata }) } : {}),
   });
 }
@@ -138,6 +145,7 @@ export function parseAgentPromptSectionDefinition(value: unknown): AgentPromptSe
     maxChars: definition.maxChars,
     profiles: definition.profiles,
     platforms: definition.platforms,
+    scopes: definition.scopes,
     metadata: definition.metadata,
   });
 }
@@ -147,6 +155,7 @@ const LAYERS = new Set<PromptSectionLayer>([
 ]);
 const RETENTIONS = new Set<PromptSectionRetention>(['required', 'preferred', 'opportunistic']);
 const PROFILES = new Set<PromptProfile>(['interactive', 'schedule']);
+const SCOPES = new Set(['private', 'group', 'channel']);
 
 function invalidPromptSection(): TypeError {
   return new TypeError('Prompt Section module must default-export defineAgentPromptSection(...)');

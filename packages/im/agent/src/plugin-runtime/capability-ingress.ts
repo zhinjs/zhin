@@ -114,7 +114,9 @@ export class CapabilityIngress {
       mcp: bindMcp(mcp, owner, isActive),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
         .filter((section) => !section.platforms
-          || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))),
+          || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))
+        .filter((section) => !section.scopes
+          || (turn?.origin.kind === 'im' && section.scopes.includes(turn.origin.scope)))),
     });
   }
 }

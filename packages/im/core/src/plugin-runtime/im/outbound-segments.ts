@@ -179,17 +179,30 @@ export function resolveAiOutboundSegments(
   const degradesToText = (type: AiOutboundSegmentType) =>
     (type === 'markdown' && resolveOutboundMarkdownPolicy(adapter, snapshot) !== 'native')
     || (type === 'keyboard' && resolveOutboundInteractivePolicy(adapter, snapshot) !== 'native');
-  const types = supported
+  const deliverableTypes = supported
     ? AI_OUTBOUND_SEGMENT_TYPES.filter(type => type === 'text' || degradesToText(type) || supported.includes(type))
     : DEFAULT_AI_OUTBOUND_SEGMENT_TYPES;
   const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
   const segments = (slot?.definition as { segments?: {
-    model?: Record<string, AiSegmentExtension>;
+    model?: Record<string, AiSegmentExtension & { scopes?: readonly string[] }>;
     reaction?: AiReactionProfile & { scopes?: readonly string[] };
   } } | undefined)?.segments;
   const declared = segments?.model;
+  const inScene = (type: AiOutboundSegmentType) => {
+    const scopes = declared?.[type]?.scopes;
+    return !scopes || (conversationKind !== undefined && scopes.includes(conversationKind));
+  };
+  // Plain text remains the universal fallback even when its extra hints are scene-specific.
+  const types = deliverableTypes.filter(type => type === 'text' || inScene(type));
   const extensions = declared
-    ? Object.fromEntries(types.filter(type => declared[type]).map(type => [type, declared[type]!]))
+    ? Object.fromEntries(types.flatMap(type => {
+      const extension = declared[type];
+      if (!inScene(type) || !extension || (!extension.fields && !extension.hint)) return [];
+      return [[type, {
+        ...(extension.fields ? { fields: extension.fields } : {}),
+        ...(extension.hint ? { hint: extension.hint } : {}),
+      }]];
+    }))
     : {};
   const reactionDeclared = segments?.reaction;
   const reaction = reactionDeclared && conversationKind

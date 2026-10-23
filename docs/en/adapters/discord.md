@@ -89,7 +89,7 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools (7) | `tools/` (`discord_*`: roles, Embed, reactions, etc.) |
-| Skill documentation | `agents/discord/skills/discord/SKILL.md` |
+| Skill documentation | `agents/discord/skills/discord/SKILL.md`、`agents/discord/skills/discord-guild/SKILL.md` |
 
 Tools use Discord Snowflake IDs to identify `guild_id`, `user_id`, `channel_id`.
 
@@ -112,3 +112,5 @@ Tools use Discord Snowflake IDs to identify `guild_id`, `user_id`, `channel_id`.
 ## License
 
 MIT License
+
+Group/channel-specific Skills and their private Tools are disclosed only in their declared scenes. Common lookup and messaging stay separate. See [Agent capabilities](../authoring/agent-tools.md) for classification.

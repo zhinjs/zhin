@@ -794,7 +794,7 @@ permissions: [role(trusted)]
   });
 
   it('publishes platform prompt sections only to matching IM turns', async () => {
-    const fixture = await createFixture({ promptPlatforms: ['github'] });
+    const fixture = await createFixture({ promptPlatforms: ['github'], promptScopes: ['group'] });
     const ingress = new CapabilityIngress();
 
     expect((await ingress.read(
@@ -809,6 +809,12 @@ permissions: [role(trusted)]
       () => true,
       accessTurn('icqq'),
     )).promptSections).toEqual([]);
+
+    for (const scope of ['private', 'channel'] as const) {
+      expect((await ingress.read(fixture.snapshot, fixture.child, () => true,
+        accessTurn('github', ['trusted'], scope))).promptSections).toEqual([]);
+    }
+    expect((await ingress.read(fixture.snapshot, fixture.child)).promptSections).toEqual([]);
 
     await fixture.mcp.stop();
   });
@@ -837,6 +843,7 @@ async function createFixture(access: {
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
   readonly promptPlatforms?: readonly string[];
+  readonly promptScopes?: readonly ('private' | 'group' | 'channel')[];
   readonly skillMarkdown?: string;
   readonly privateSkillAgent?: string;
 } = {}) {
@@ -917,6 +924,7 @@ async function createFixture(access: {
       title: 'Project rules',
       content: 'Prefer repository-local conventions.',
       platforms: access.promptPlatforms,
+      scopes: access.promptScopes,
     }),
   });
   const slots: readonly CapabilitySlot[] = [tool, skill, agent, mcpSlot, promptSection];
@@ -938,11 +946,11 @@ async function createFixture(access: {
   return { snapshot, child, mcp, journal };
 }
 
-function accessTurn(platform: string, roles: readonly string[] = ['trusted']) {
+function accessTurn(platform: string, roles: readonly string[] = ['trusted'], scope: 'private' | 'group' | 'channel' = 'group') {
   return createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
-    origin: { kind: 'im', platform, endpoint: 'bot', scope: 'group', sceneId: '100' },
+    origin: { kind: 'im', platform, endpoint: 'bot', scope, sceneId: '100' },
     principal: { subjectId: 'trusted-user', roles },
     input: { text: 'lookup' },
     session: { key: `im:${platform}:bot:group:100` },

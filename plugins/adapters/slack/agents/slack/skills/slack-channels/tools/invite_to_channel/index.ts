@@ -12,6 +12,7 @@ export default defineAgentTool<{
     users: z.string().describe('用户 ID 列表（逗号分隔）'),
   }),
   adapter: 'slack',
+  scopes: ["group"],
   tags: ['slack'],
   permissions: [platformPermission('slack', 'channel_manager')],
   async execute({ channel, users }, context) {
