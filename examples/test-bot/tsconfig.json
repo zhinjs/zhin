@@ -3,7 +3,7 @@
   "compilerOptions": {
     "types": ["@types/node", "@types/bun", "zhin.js", "@zhin.js/adapter-sandbox"],
     "noEmit": true,
-    "rootDir": ".",
+    "rootDir": "../..",
     "jsx": "react-jsx",
     "jsxImportSource": "zhin.js"
   },
