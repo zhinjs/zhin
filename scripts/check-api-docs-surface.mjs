@@ -24,7 +24,7 @@ const expectedSurface = new Map([
     'defineAgentTool',
   ]],
   ['zhin.js', [
-    'ConfigView', 'DatabaseHostConsole', 'DatabaseHostModel', 'DatabaseHostSelection',
+    'ConfigView', 'DatabaseHostTransaction', 'DatabaseHostConsole', 'DatabaseHostModel', 'DatabaseHostSelection',
     'DatabaseHostSelectResult', 'DatabaseHostTable', 'OutboundConversation',
     'OutboundEditInput', 'OutboundEndpointCapabilities', 'OutboundEndpointInput',
     'OutboundHost', 'OutboundMessage', 'OutboundReactionInput', 'OutboundRecallInput',
@@ -113,7 +113,7 @@ const expectedMembers = new Map([
   ['zhin.js.PluginDefinition', ['config', 'metadata', 'name', 'requires', 'setup']],
   ['zhin.js.PluginConfigSchema', ['output', 'toJsonSchema']],
   ['zhin.js.PluginDatabaseHost', [
-    'constructor', 'define', 'dialect', 'models', 'owner', 'qualify', 'started', 'state', 'tables', 'unqualify',
+    'constructor', 'define', 'dialect', 'models', 'owner', 'qualify', 'started', 'state', 'tables', 'transaction', 'unqualify',
   ]],
   ['zhin.js.PluginStateStore', ['constructor', 'owner', 'forUser', 'forConversation', 'get', 'set', 'delete', 'update']],
   ['zhin.js.PersistentStatePort', ['read', 'compareExchange']],

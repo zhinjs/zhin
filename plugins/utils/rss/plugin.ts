@@ -1,10 +1,12 @@
 import {
   definePlugin,
+  logger,
   databaseHostToken,
   outboundHostToken,
   scheduleHostToken,
 } from 'zhin.js';
 import { pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
+import { createAdministratorRssState } from './src/storage.js';
 import { AdministratorRssTasks } from './src/admin-tasks.js';
 import { resolveRssConfig, type RssConfig } from './src/feed.js';
 import {
@@ -81,11 +83,13 @@ export default definePlugin<RssConfig>({
     // Keep optional in-memory/chat-only installations working. Administrator tasks
     // must have the real durable state port, exact outbound and an active scheduler.
     let administrator: AdministratorRssTasks | undefined;
-    if (database && outbound?.sendTarget && context.resources.has(scheduleHostToken)) {
+    const structuredTasks = database && ['sqlite', 'mysql', 'pg'].includes(database.dialect);
+    if (database && !structuredTasks) logger.warn('RSS 管理员任务持久化仅支持 SQLite、MySQL、PostgreSQL；聊天订阅保留现有存储方式');
+    if (structuredTasks && database && outbound?.sendTarget && context.resources.has(scheduleHostToken)) {
       let state;
       try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
       if (state) {
-        administrator = new AdministratorRssTasks(state, outbound, config);
+        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config);
         context.resources.provide(pluginTaskProviderToken, administrator);
         context.lifecycle.add(() => administrator?.stop());
       }

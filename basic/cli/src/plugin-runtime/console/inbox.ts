@@ -1,3 +1,4 @@
+import { encodeStorageIdentity } from '@zhin.js/plugin-runtime';
 import type { RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -55,6 +56,11 @@ export function buildInboxMessageRow(
   const endpointId = resolveEndpoint(capabilityId) || localName;
   const channel = conversationToInboxChannel(event.conversation);
   return {
+    direction: event.direction,
+    endpoint_capability_id: encodeStorageIdentity(event.conversation.endpoint.id),
+    endpoint_adapter_id: encodeStorageIdentity(event.conversation.endpoint.adapter),
+    thread_id: event.conversation.threadId === undefined ? null : encodeStorageIdentity(event.conversation.threadId),
+    query_version: 1,
     adapter: adapterName || localName,
     endpoint_id: endpointId,
     platform_message_id: event.messageId != null && event.messageId !== ''

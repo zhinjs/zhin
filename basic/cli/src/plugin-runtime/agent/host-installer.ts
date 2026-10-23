@@ -1,3 +1,4 @@
+import { installAgentPersistence } from './persistence-coordinator.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -116,7 +117,7 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
-  return async ({ generation, signal, resources, lifecycle, handoff, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
+  return async ({ generation, signal, resources, lifecycle, handoff, admission, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
@@ -204,13 +205,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         localDataGovernance: options.workroomLocalDataGovernance,
       })
       : undefined;
-    // Without Workroom there is no persistence to prepare; only project preset files are seeded.
     const presetCount = workroom ? workroom.presetCount : await agentFoundation.seedPresets();
-    // The Workroom persistence coordinator is the only other owner of this latch
-    // (file mode in prepare, database mode after activateNext). Without Workroom
-    // nothing else would open it, so every new Agent generation's first turn
-    // stalled for the 5 s SessionSystem.waitForPersistence fallback (#857).
-    if (!workroom) zhinAgent.markMemoryPersistenceReady();
+    // Workroom validates its authority first; the candidate Agent remains unadmitted until all handoffs finish.
+    installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig);
     const binding = service.getBindingRegistry().requireZhinBinding();
 
     resources.provide(ingressRouteToken, new AgentTurnIngressRoute({

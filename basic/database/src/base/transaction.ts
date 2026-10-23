@@ -45,7 +45,7 @@ class TrxSelection<S extends Record<string, object>, T extends keyof S> implemen
     return this;
   }
   
-  then<R>(onfulfilled?: (value: S[T][]) => R | PromiseLike<R>): Promise<R> {
+  then<R = S[T][], E = never>(onfulfilled?: ((value: S[T][]) => R | PromiseLike<R>) | null, onrejected?: ((reason: unknown) => E | PromiseLike<E>) | null): Promise<R | E> {
     const { query, params } = this.db.buildQuery({
       type: 'select',
       tableName: this.tableName,
@@ -56,7 +56,7 @@ class TrxSelection<S extends Record<string, object>, T extends keyof S> implemen
       offsetCount: this.offsetCount
     });
     
-    return this.trx.query<S[T][]>(query, params).then(onfulfilled!);
+    return this.trx.query<S[T][]>(query, params).then(onfulfilled, onrejected);
   }
 }
 
@@ -78,7 +78,7 @@ class TrxUpdation<S extends Record<string, object>, T extends keyof S> implement
     return this;
   }
   
-  then<R>(onfulfilled?: (value: number) => R | PromiseLike<R>): Promise<R> {
+  then<R = number, E = never>(onfulfilled?: ((value: number) => R | PromiseLike<R>) | null, onrejected?: ((reason: unknown) => E | PromiseLike<E>) | null): Promise<R | E> {
     const { query, params } = this.db.buildQuery({
       type: 'update',
       tableName: this.tableName,
@@ -86,11 +86,9 @@ class TrxUpdation<S extends Record<string, object>, T extends keyof S> implement
       conditions: this.conditions
     });
     
-    return this.trx.query<number | { affectedRows?: number; changes?: number }>(query, params)
-      .then(result => {
-        const affected = affectedRows(result);
-        return onfulfilled ? onfulfilled(affected) : affected as any;
-      });
+    return this.trx.query<number | unknown[] | { affectedRows?: number; changes?: number }>(
+      this.db.dialectName === 'pg' ? `${query} RETURNING 1` : query, params)
+      .then(affectedRows).then(onfulfilled, onrejected);
   }
 }
 
@@ -111,22 +109,21 @@ class TrxDeletion<S extends Record<string, object>, T extends keyof S> implement
     return this;
   }
   
-  then<R>(onfulfilled?: (value: number) => R | PromiseLike<R>): Promise<R> {
+  then<R = number, E = never>(onfulfilled?: ((value: number) => R | PromiseLike<R>) | null, onrejected?: ((reason: unknown) => E | PromiseLike<E>) | null): Promise<R | E> {
     const { query, params } = this.db.buildQuery({
       type: 'delete',
       tableName: this.tableName,
       conditions: this.conditions
     });
     
-    return this.trx.query<number | { affectedRows?: number; changes?: number }>(query, params)
-      .then(result => {
-        const affected = affectedRows(result);
-        return onfulfilled ? onfulfilled(affected) : affected as any;
-      });
+    return this.trx.query<number | unknown[] | { affectedRows?: number; changes?: number }>(
+      this.db.dialectName === 'pg' ? `${query} RETURNING 1` : query, params)
+      .then(affectedRows).then(onfulfilled, onrejected);
   }
 }
 
-function affectedRows(result: number | { affectedRows?: number; changes?: number }): number {
+function affectedRows(result: number | unknown[] | { affectedRows?: number; changes?: number }): number {
+  if (Array.isArray(result)) return result.length;
   return typeof result === 'number'
     ? result
     : result.affectedRows ?? result.changes ?? 0;

@@ -25,8 +25,6 @@ import {
 } from '@zhin.js/workroom/data-governance';
 import { ActivatablePortfolioControlOutboxRepository, DatabasePortfolioControlOutboxRepository, FilePortfolioControlOutboxRepository, portfolioJournalRepositoryToken } from '@zhin.js/workroom/portfolio';
 import {
-  activateAiDatabaseStorage,
-  defineAiDatabaseModels,
   type SemanticMemoryRuntime,
   type ZhinAgent,
 } from '@zhin.js/agent/runtime';
@@ -121,7 +119,6 @@ export class WorkroomPersistenceCoordinator {
         await this.options.resolveConfiguredEndpointKeys?.(),
       );
     } });
-    this.options.agent.markMemoryPersistenceReady();
   }
 
   #prepareDatabaseActivation(): void {
@@ -134,7 +131,7 @@ export class WorkroomPersistenceCoordinator {
       const define = (name: string, definition: Record<string, unknown>) => {
         database.define(name, definition);
       };
-      const tableCount = defineAiDatabaseModels(define) + defineWorkroomDatabaseModels(define);
+      const tableCount = defineWorkroomDatabaseModels(define);
       this.#pendingActivation = true;
       this.options.handoff.add({
         activateNext: async signal => {
@@ -144,12 +141,6 @@ export class WorkroomPersistenceCoordinator {
             if (!raw) throw new Error('Agent persistence requires an active database connection');
             // Validate persisted Workroom authority before any candidate runtime port is mutated.
             const workroomStorage = await prepareWorkroomDatabaseStorage(raw, this.options.journalPayloads);
-            await activateAiDatabaseStorage(
-              raw,
-              { aiService: this.options.service, zhinAgent: this.options.agent },
-              this.options.config,
-              this.options.semanticMemory,
-            );
             workroomStorage.activate(this.options.journal, this.options.catalog);
             await this.#activateDatabaseRepositories(raw, signal);
             await assertWorkroomCatalogMatchesGeneration(
@@ -166,8 +157,6 @@ export class WorkroomPersistenceCoordinator {
             }));
           } catch (error) {
             throw new Error('Agent database persistence activation failed', { cause: error });
-          } finally {
-            this.options.agent.markMemoryPersistenceReady();
           }
         },
       });

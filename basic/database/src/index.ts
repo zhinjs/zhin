@@ -17,3 +17,4 @@ export * from './dialects/sqlite.js';
 export * from './dialects/mongodb.js';
 export * from './migration.js';
 
+export * from './structured-schema.js';

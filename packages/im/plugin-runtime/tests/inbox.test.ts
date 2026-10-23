@@ -30,6 +30,7 @@ function fakeHost(started = false) {
 describe('inbox table definitions', () => {
   it('message table matches the console reader columns', () => {
     expect(Object.keys(INBOX_MESSAGE_DEFINITION)).toEqual([
+      'direction', 'endpoint_capability_id', 'endpoint_adapter_id', 'thread_id', 'query_version',
       'id',
       'adapter',
       'endpoint_id',

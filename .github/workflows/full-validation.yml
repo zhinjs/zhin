@@ -143,14 +143,14 @@ jobs:
 
       - name: install dependencies
         run: >-
-          pnpm --filter @zhin.js/database... --filter @zhin.js/cli...
+          pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss...
           install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --config.dedupe-peer-dependents=false
 
       - name: run dependency lifecycle scripts without registry credentials
-        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... rebuild
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... rebuild
 
       - name: build database acceptance dependencies
-        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... build
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... build
 
       - name: verify live database dialects and conversation storage
         run: >-
@@ -176,6 +176,15 @@ jobs:
           ZHIN_TEST_MONGODB_URL: mongodb://127.0.0.1:27017
           ZHIN_TEST_MONGODB_DATABASE: zhin_test
           ZHIN_TEST_REDIS_URL: redis://127.0.0.1:6379
+
+      - name: verify structured storage across SQL dialects
+        run: >-
+          pnpm exec vitest run basic/cli/tests/plugin-runtime/relational-state.test.ts
+          basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts --no-file-parallelism
+        env:
+          ZHIN_TEST_STRUCTURED_SQL: '1'
+          ZHIN_TEST_MYSQL_PORT: '3306'
+          ZHIN_TEST_PG_PORT: '5432'
 
   test:
     permissions:

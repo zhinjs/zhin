@@ -125,12 +125,11 @@ describe.skipIf(!sqliteAvailable)('RSS quiet digest through real owner Runtime a
 
   it.each(['claim', 'settlement'] as const)('preserves an unknown claim after lost %s write response, never replays after restart', async boundary => {
     const s = await setup(); await queue(s); const { f } = s;
-    const exchange = f.database.state!.compareExchange.bind(f.database.state!);
-    const write = vi.spyOn(f.database.state!, 'compareExchange').mockImplementation(async (...args) => {
-      const committed = await exchange(...args);
-      const value = args[4] as AdministratorRssBook | undefined;
-      if (committed && value?.tasks.some(task => task.state === (boundary === 'claim' ? 'unknown' : 'scheduled') && task.claimId)
-        && (boundary === 'claim' || f.send.mock.calls.length > 0)) throw new Error('lost write response');
+    const exchange = f.database.transaction!.bind(f.database);
+    const write = vi.spyOn(f.database, 'transaction').mockImplementation(async callback => {
+      const committed = await exchange(callback);
+      const rows = await f.storage().models.get('admin_rss_tasks')!.select();
+      if (rows.some(task => task.state === 'unknown' && task.claim_id)) throw new Error('lost write response');
       return committed;
     });
     s.at('2026-10-21T00:00:00Z');
@@ -146,10 +145,11 @@ describe.skipIf(!sqliteAvailable)('RSS quiet digest through real owner Runtime a
 
   it('keeps detection and accumulation atomic when the collection response is lost', async () => {
     const s = await setup(); const { f, provider, load } = s; await createQuiet(provider); await f.tick();
-    const exchange = f.database.state!.compareExchange.bind(f.database.state!); let failed = false;
-    const write = vi.spyOn(f.database.state!, 'compareExchange').mockImplementation(async (...args) => {
-      const committed = await exchange(...args), value = args[4] as AdministratorRssBook | undefined;
-      if (!failed && committed && value?.tasks[0]?.pending) { failed = true; throw new Error('lost accumulation response'); }
+    const exchange = f.database.transaction!.bind(f.database); let failed = false;
+    const write = vi.spyOn(f.database, 'transaction').mockImplementation(async callback => {
+      const committed = await exchange(callback);
+      const row = (await f.storage().models.get('admin_rss_tasks')!.select())[0];
+      if (!failed && Number(row?.pending_count) > 0) { failed = true; throw new Error('lost accumulation response'); }
       return committed;
     });
     s.at('2026-10-20T14:00:00Z'); load.mockResolvedValue(items('one', 'baseline'));

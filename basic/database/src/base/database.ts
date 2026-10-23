@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Dialect } from './dialect.js';
 import { Model } from './model.js';
 import { Definition, QueryParams, AlterDefinition, Condition, BuildQueryResult, Transaction, TransactionOptions, TransactionContext } from '../types.js';
@@ -37,6 +38,19 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
   
   private _logger?: QueryLogger;
   private _logging = false;
+  private readonly transactionContext = new AsyncLocalStorage<{ transaction: Transaction; active: boolean }>();
+  private connectionTail: Promise<void> = Promise.resolve();
+
+  /** 单连接事务独占连接；连接池仍允许不相关操作并行。 */
+  private async acquireConnection(): Promise<() => void> {
+    if (this.dialect.name !== 'sqlite'
+      && (!['mysql', 'pg'].includes(this.dialect.name) || this.config?.pool)) return () => undefined;
+    const previous = this.connectionTail;
+    let release!: () => void;
+    this.connectionTail = new Promise<void>(resolve => { release = resolve; });
+    await previous;
+    return release;
+  }
   
   constructor(
     public readonly dialect: Dialect<D,S,Q>,
@@ -136,14 +150,21 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
     if (!this.isStarted) {
       throw new Error('Database not started');
     }
+    const context = this.transactionContext.getStore();
+    if (context && !context.active) throw new Error('Database transaction is already closed');
+    const release = context ? () => undefined : await this.acquireConnection();
     const start = Date.now();
     try {
-      const result = await this.dialect.query<U>(sql, params);
+      const result = context
+        ? await context.transaction.query<U>(sql as string, params)
+        : await this.dialect.query<U>(sql, params);
       this.log(String(sql), params, Date.now() - start);
       return result;
     } catch (error) {
       this.log(String(sql), params, Date.now() - start, error as Error);
       throw error;
+    } finally {
+      release();
     }
   }
   abstract buildQuery<T extends keyof S>(params: QueryParams<S,T>): BuildQueryResult<Q>;
@@ -241,15 +262,33 @@ export abstract class Database<D=any,S extends Record<string, object>=Record<str
     if (!this.isStarted) {
       throw new Error('Database not started');
     }
-    const trx = await this.dialect.beginTransaction(options);
-    const trxContext = new TransactionContextImpl<S>(this as any, trx);
+    if (this.transactionContext.getStore()) throw new Error('Nested database transactions are not supported');
+    const release = await this.acquireConnection();
     try {
-      const result = await callback(trxContext);
-      await trxContext.commit();
-      return result;
-    } catch (error) {
-      await trxContext.rollback();
-      throw error;
+      const trx = await this.dialect.beginTransaction(options);
+      const frame = { transaction: trx, active: true };
+      // 所有入口（含 model 查询）都绑定同一个事务，禁止异步逃逸后继续访问。
+      const guarded: Transaction = {
+        query: (sql, params) => {
+          if (!frame.active) return Promise.reject(new Error('Database transaction is already closed'));
+          return trx.query(sql, params);
+        },
+        commit: () => trx.commit(),
+        rollback: () => trx.rollback(),
+      };
+      const trxContext = new TransactionContextImpl<S>(this as any, guarded);
+      try {
+        const result = await this.transactionContext.run(frame, () => callback(trxContext));
+        frame.active = false;
+        await trxContext.commit();
+        return result;
+      } catch (error) {
+        frame.active = false;
+        await trxContext.rollback();
+        throw error;
+      }
+    } finally {
+      release();
     }
   }
   

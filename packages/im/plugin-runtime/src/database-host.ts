@@ -44,6 +44,11 @@ export interface DatabaseHostModel {
   count?(where?: Record<string, unknown>): Promise<number>;
 }
 
+/** Callback-scoped transaction models; no raw SQL or administration access. */
+export interface DatabaseHostTransaction {
+  model(name: string): DatabaseHostModel;
+}
+
 export type DatabaseHostType = 'related' | 'document' | 'keyvalue';
 
 export interface DatabaseHostTable {
@@ -104,6 +109,8 @@ export interface DatabaseHost {
   models: {
     get(name: string): DatabaseHostModel | undefined;
   };
+  /** Atomic SQL operations. The callback must await all operations before returning. */
+  transaction?<T>(callback: (transaction: DatabaseHostTransaction) => Promise<T>): Promise<T>;
   /** Root-only management port; absent on lightweight test/memory hosts. */
   readonly console?: DatabaseHostConsole;
   /**
@@ -186,6 +193,23 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
     })));
   }
 
+  async transaction<T>(callback: (transaction: DatabaseHostTransaction) => Promise<T>): Promise<T> {
+    if (!this.#host.transaction) throw new Error('Database Host does not support transactions');
+    return this.#execute(() => this.#host.transaction!(async transaction => {
+      let active = true;
+      const requireActive = () => { if (!active) throw new Error('Database transaction is already closed'); };
+      try {
+        return await callback(Object.freeze({ model: (name: string) => {
+          requireActive();
+          // Reuse the ordinary facade so qualification and generation checks stay identical.
+          const model = transaction.model(this.qualify(name));
+          const guarded = guardTransactionModel(model, requireActive);
+          return this.#bindModel(guarded);
+        } }));
+      } finally { active = false; }
+    }));
+  }
+
   #bindSelection(selection: DatabaseHostSelection): DatabaseHostSelection {
     const modify = (operation: () => DatabaseHostSelection): DatabaseHostSelection => this.#operation.setup(() => {
       const next = operation();
@@ -219,6 +243,22 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
   async #execute<T>(operation: () => Promise<T>): Promise<T> {
     return this.#operation.run(operation);
   }
+}
+
+/** A saved query/model cannot escape the callback and reuse the transaction. */
+export function guardTransactionModel(model: DatabaseHostModel, check: () => void): DatabaseHostModel {
+  const selection = (source: DatabaseHostSelection): DatabaseHostSelection => ({
+    where(query) { check(); return selection(source.where(query)); },
+    orderBy(field, direction) { check(); return selection(source.orderBy(field, direction)); },
+    limit(count) { check(); return selection(source.limit(count)); },
+    then(resolve, reject) { return Promise.resolve().then(() => { check(); return source; }).then(resolve, reject); },
+  });
+  return {
+    select: <Fields extends string[]>(...fields: SelectFields<Fields>) => { check(); return selection(model.select<Fields>(...fields)); },
+    insert: async row => { check(); return model.insert(row); },
+    update: patch => { check(); return { where: async query => { check(); return model.update(patch).where(query); } }; },
+    delete: () => { check(); return { where: async query => { check(); return model.delete().where(query); } }; },
+  };
 }
 
 /**

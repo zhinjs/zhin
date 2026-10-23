@@ -56,7 +56,7 @@ describe('WorkroomPersistenceCoordinator', () => {
     expect(persistence.pendingActivation).toBe(false);
     expect(journal.active).toBe(true);
     expect((await catalog.read()).definitions).toEqual({});
-    expect(markMemoryPersistenceReady).toHaveBeenCalledOnce();
+    expect(markMemoryPersistenceReady).not.toHaveBeenCalled();
   });
 
   it('reopens a persisted local Endpoint and rejects its removal during candidate activation before admission', async () => {
@@ -147,7 +147,7 @@ describe('WorkroomPersistenceCoordinator', () => {
     expect(journal.active).toBe(false);
     await expect(Promise.resolve().then(() => catalog.read())).rejects.toThrow('not active');
     expect(recoverHumanIngress).not.toHaveBeenCalled();
-    expect(agent.markMemoryPersistenceReady).toHaveBeenCalledOnce();
+    expect(agent.markMemoryPersistenceReady).not.toHaveBeenCalled();
   });
 
   it('rejects database mode when the process database Host is absent', async () => {

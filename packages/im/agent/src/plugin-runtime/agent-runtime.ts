@@ -1,3 +1,5 @@
+import type { TurnEvent } from '../event/turn-event.js';
+import { AgentUsageCollector, agentUsageStoreToken, type AgentUsageStore } from '../usage/usage-store.js';
 import { getLogger } from '@zhin.js/logger';
 import { logTurnUsage, type UsageLogContext } from '../trace/turn-usage-log.js';
 import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
@@ -303,6 +305,11 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     admit: () => void = () => undefined,
   ): Promise<TurnOutcome> {
     let active = true;
+    const usageStore = lease.value.resources.get(lease.value.root)?.get(agentUsageStoreToken.id) as AgentUsageStore | undefined;
+    const usage = usageStore ? new AgentUsageCollector(String(owner), request, {
+      provider: selection.binding.providerAlias, model: selection.binding.model,
+    }) : undefined;
+    let usageStatus = 'failed';
     let activeTrace: TurnTraceCollector | undefined;
     let releaseTrace: (() => void) | undefined;
     let outcome: TurnOutcome | undefined;
@@ -344,7 +351,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         : undefined;
       releaseTrace = trace ? registerTurnTrace(trace) : undefined;
       activeTrace = trace;
-      const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace);
+      const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace, usage);
       const catalog = Object.freeze({
         ...capabilities,
         tools: Object.freeze(capabilities.tools.map(({ execute: _execute, ...tool }) => Object.freeze(tool))),
@@ -385,8 +392,10 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           }
         }, observe),
       ), { disabled });
+      usageStatus = outcome.status;
       return outcome;
     } catch (error) {
+      usageStatus = request.signal.aborted ? 'cancelled' : 'failed';
       if (!activeTrace && this.#usageLogger.isLevelEnabled('info')) {
         activeTrace = new TurnTraceCollector({ turnId: request.identity.turnId, sessionKey: request.session.key });
       }
@@ -396,6 +405,13 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       active = false;
       releaseTrace?.();
       if (activeTrace) this.#saveTrace(activeTrace, { ...logContext, status: outcome?.status });
+      if (usage && usageStore) {
+        try { await usageStore.save(usage.finish(usageStatus)); }
+        catch {
+          // No model response, prompt or database error text enters this diagnostic.
+          try { this.#usageLogger.error('op=usage_persist status=failed; 本轮用量未写入数据库'); } catch { /* Transport failure cannot change delivery. */ }
+        }
+      }
     }
   }
 
@@ -480,11 +496,14 @@ function createIngressTurn(
   request: TurnRequest,
   capabilities: AgentCapabilities,
   trace?: TurnTraceCollector,
+  usage?: AgentUsageCollector,
 ) {
   const journal = new PersistentTurnJournal({
     sessionId: request.session.key,
     turnId: request.identity.turnId,
   }, resolveJournalStore(snapshot), request.principal);
+  const traced = trace ? createTracingJournal(journal, trace) : journal;
+  const observed = usage ? { append(event: TurnEvent) { usage.record(event); return traced.append(event); } } : traced;
   return createTurnIngress({
     ...request,
     identity: {
@@ -499,7 +518,7 @@ function createIngressTurn(
     },
     ports: {
       ...request.ports,
-      journal: createJournalFeed(trace ? createTracingJournal(journal, trace) : journal, {
+      journal: createJournalFeed(observed, {
         turnId: request.identity.turnId,
       }),
     },

@@ -196,7 +196,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
   
   formatColumnDefinition(field: string, column: Column<any>): string {
     const name = this.quoteIdentifier(String(field));
-    const type = this.mapColumnType(column.type);
+    const type = column.type === 'text' && column.length ? 'VARCHAR' : this.mapColumnType(column.type);
     const length = column.length ? `(${column.length})` : '';
     const nullable = column.nullable === false ? ' NOT NULL' : '';
     const primary = column.primary ? ' PRIMARY KEY' : '';

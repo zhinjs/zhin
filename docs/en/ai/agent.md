@@ -31,6 +31,8 @@ log_level: debug
 ```
 
 
+SQL databases persist structured usage independently, with a default 30-day retention. See [structured storage and usage queries](../operations/structured-storage.md).
+
 ## Find by question
 
 | I want to know… | See |

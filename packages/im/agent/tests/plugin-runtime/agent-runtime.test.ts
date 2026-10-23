@@ -1,3 +1,4 @@
+import { agentUsageStoreToken } from '../../src/usage/usage-store.js';
 import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -1121,5 +1122,32 @@ describe('automatic usage logs (#957)', () => {
       expect(save.mock.calls[0]).toEqual([expect.objectContaining({ termination: { status: 'completed' } })]);
     }
     finally { info.mockRestore(); await fixture.mcp.stop(); await store.close(); }
+  });
+});
+
+
+describe('structured usage persistence', () => {
+  it.each([false, true])('records usage with INFO disabled; store failure=%s never changes outcome', async failing => {
+    const fixture = await createFixture();
+    const logger = getLogger('ai.usage');
+    const enabled = vi.spyOn(logger, 'isLevelEnabled').mockReturnValue(false);
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const save = vi.fn(async (_record: unknown) => { if (failing) throw new Error('PRIVATE DB FAILURE'); });
+    const state = stateWithEngine(fixture.snapshot, async function* () {
+      yield { type: 'usage', provider: 'p', model: 'm', usage: { promptTokens: 9, completionTokens: 1, totalTokens: 10 } };
+      yield terminalEvent();
+    });
+    const root = new Map(state.resources.get(state.root));
+    root.set(agentUsageStoreToken.id, { save });
+    const store = new SnapshotStore({ ...state, resources: new Map(state.resources).set(state.root, root) });
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      expect((await runtime.execute(fixture.child, { ...externalRequest('persist'), input: { text: 'PRIVATE CHAT BODY' } }, selection([]))).status).toBe('completed');
+      expect(save).toHaveBeenCalledOnce();
+      expect(save.mock.calls[0]![0]).toMatchObject({ turn: { status: 'completed', call_count: 1 }, calls: [{ input_tokens: 9, output_tokens: 1 }] });
+      expect(JSON.stringify(save.mock.calls)).not.toContain('PRIVATE');
+      expect(JSON.stringify(error.mock.calls)).not.toContain('PRIVATE');
+      expect(error).toHaveBeenCalledTimes(failing ? 1 : 0);
+    } finally { enabled.mockRestore(); error.mockRestore(); await fixture.mcp.stop(); await store.close(); }
   });
 });

@@ -110,3 +110,7 @@ schedules/poll/index.ts   # 正式 Schedule Feature 入口
 | `reminder_cancel` | 按 id 取消；需批准                                                |
 
 与原生 `schedule_add` 的区别：本插件到点**向会话发送提醒文案**；`schedule_*` 到点**再次唤醒 Agent**（可带 cron / 工作日等）。绝对时间仍须带 `Z` 或 `±hh:mm`。
+
+### 事务化任务存储
+
+提醒与管理员 RSS 的任务、认领、操作回执和文章明细使用独立数据表，在一个事务中提交；原 CAS JSON 只用于首次迁移。支持 SQLite、MySQL、PostgreSQL，升级须完整重启，不能与旧版本进程混写。`unknown` 投递仍不会自动重试。迁移和字段说明见[结构化存储](../../../docs/operations/structured-storage.md)。

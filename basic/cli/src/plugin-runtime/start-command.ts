@@ -1,3 +1,5 @@
+import { migrateConversationColumns, migrateInboxColumns } from './conversation-migration.js';
+import type { StructuredDatabase } from '@zhin.js/database';
 import { assertNoPendingInstanceMigration } from './migrate/instance-declarations.js';
 import { assertNotLegacyConfig } from '../utils/legacy-config.js';
 import { access, readFile } from 'node:fs/promises';
@@ -216,6 +218,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           if (!events || !cursors) {
             throw new Error('Conversation event database models are unavailable after DatabaseHost activation');
           }
+          await migrateConversationColumns(databaseHost.getRawDatabase() as StructuredDatabase);
+          await migrateInboxColumns(databaseHost.getRawDatabase() as StructuredDatabase);
           im.replaceConversationEventStore(new DatabaseConversationEventStore(
             events as unknown as ConversationDbModel,
             cursors as unknown as ConversationDbModel,
