@@ -87,7 +87,9 @@ export async function reviewGroupBatch(moderator: GroupModerator, inputs: readon
             context: [...context.values()].sort((a, b) => a.sequence - b.sequence),
             batches: batches.map((batch, index) => ({ id: String(index), messages: batch.map(item => item.id) })), messages,
           }) }],
-          maxTokens: 800 * active.length, signal: batchSignal,
+          // Use the configured model output budget: multiplying the single-message cap can
+          // exceed the provider's supported maximum and reject otherwise valid full batches.
+          signal: batchSignal,
           // Never mix unattributed participants into a billed request.
           usageShares: active.every(item => item.input.onBehalfOf)
             ? active.map(({ input }) => ({ subject: input.onBehalfOf!, text: input.text })) : undefined,

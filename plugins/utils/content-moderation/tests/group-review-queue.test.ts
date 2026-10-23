@@ -231,14 +231,19 @@ describe('group review queue and inbound delivery', () => {
     await vi.advanceTimersByTimeAsync(0); expect(f.completeText).toHaveBeenCalledOnce();
   });
 
-  it('prepares a full same-user request without competing updates to its seen row', async () => {
+  it('prepares a full same-user request without CAS contention or overriding the model output budget', async () => {
     const f = fixture(); const first = Promise.withResolvers<ReturnType<typeof answer>>();
+    f.completeText.mockImplementation(async input => {
+      if ((input.maxTokens ?? 8192) > 8192) throw new Error('Requested output exceeds configured model limit');
+      return answer(input);
+    });
     f.completeText.mockImplementationOnce(() => first.promise);
     await f.run({ ...f.message, content: 'first' }); await f.flush();
-    for (let n = 0; n < 32; n++) await f.run({ ...f.message, id: `m${n}`, content: `normal ${n}` });
+    for (let n = 0; n < 32; n++) await f.run({ ...f.message, id: `m${n}`, content: `${advertising} ${n}` });
     first.resolve(answer(f.completeText.mock.calls[0]![0])); await vi.advanceTimersByTimeAsync(0);
     expect(payload(f.completeText.mock.calls[1]![0]).messages).toHaveLength(32);
     expect(f.conflicts).toBe(0);
+    expect(f.sendTarget).toHaveBeenCalledOnce();
   });
 
   it('does not reset the idle deadline when more messages arrive', async () => {
