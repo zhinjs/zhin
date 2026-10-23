@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CONVERSATION_CURSOR_MODEL,
   CONVERSATION_EVENT_MODEL,
+  CONVERSATION_EVENT_QUERY_MODEL,
+  conversationEventQueryFields,
   DatabaseConversationEventStore,
   messageRefKey,
   type ConversationEvent,
@@ -13,6 +15,8 @@ import {
   INBOX_TABLE_REQUEST,
   insertInboxRow,
 } from '@zhin.js/plugin-runtime';
+import type { StructuredDatabase } from '@zhin.js/database';
+import { migrateConversationColumns, migrateInboxColumns } from '../../src/plugin-runtime/conversation-migration.js';
 import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
 
 const live = process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1';
@@ -27,18 +31,31 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
     database: process.env.ZHIN_TEST_PG_DATABASE ?? 'zhin_test',
   } as const;
   const host = createDatabaseHost(config);
+  const legacyConversation = {
+    endpoint: { adapter: 'icqq', id: 'main\0legacy' },
+    kind: 'group' as const,
+    id: 'legacy-group',
+    threadId: 'legacy\0thread',
+  };
+  const legacyEvent: ConversationEvent = {
+    type: 'message.created', eventId: 'legacy-message', conversation: legacyConversation, timestamp: 1,
+    message: {
+      ref: { conversation: legacyConversation, id: 'old-message' }, actor: { id: 'old-user' },
+      segments: [{ type: 'text', data: { text: 'preserve old content' } }], timestamp: 1,
+    },
+  };
 
   beforeAll(async () => {
     const legacy = createDatabaseHost(config);
     try {
       await legacy.start();
-      const legacyDb = legacy.getRawDatabase() as { query(sql: string): Promise<unknown> };
-      await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
-      await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
+      const legacyDb = legacy.getRawDatabase() as { query(sql: string, params?: unknown[]): Promise<unknown> };
+      await legacyDb.query('DROP TABLE IF EXISTS "conversation_events"');
+      await legacyDb.query('DROP TABLE IF EXISTS "conversation_event_cursors"');
       await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
       await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
       await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
-      await legacyDb.query(`CREATE TABLE "zhin_live_conversation_events" (
+      await legacyDb.query(`CREATE TABLE "conversation_events" (
       "id" INTEGER PRIMARY KEY,
       "event_id" TEXT NOT NULL UNIQUE,
       "conversation_key" TEXT NOT NULL,
@@ -46,7 +63,11 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
       "event_json" TEXT NOT NULL,
       "time" INTEGER NOT NULL
     )`);
-      await legacyDb.query(`CREATE TABLE "zhin_live_conversation_cursors" (
+      await legacyDb.query(`INSERT INTO "conversation_events"
+        ("id", "event_id", "conversation_key", "message_key", "event_json", "time")
+        VALUES ($1, $2, $3, $4, $5, $6)`,
+      [1, legacyEvent.eventId, 'legacy-conversation-key', 'legacy-message-key', JSON.stringify(legacyEvent), 1]);
+      await legacyDb.query(`CREATE TABLE "conversation_event_cursors" (
       "id" INTEGER PRIMARY KEY,
       "cursor_key" TEXT NOT NULL UNIQUE,
       "sequence" INTEGER NOT NULL
@@ -108,16 +129,20 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
       await legacy.stop();
     }
 
-    host.define('zhin_live_conversation_events', CONVERSATION_EVENT_MODEL);
-    host.define('zhin_live_conversation_cursors', CONVERSATION_CURSOR_MODEL);
+    host.define('conversation_events', CONVERSATION_EVENT_MODEL);
+    host.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
     for (const [name, definition] of Object.entries(INBOX_TABLE_DEFINITIONS)) {
       host.define(name, definition);
     }
     await host.start();
+    // 与 Runtime 启动顺序一致：安装持久化读写端口前，先补列并回填旧数据。
+    const database = host.getRawDatabase() as StructuredDatabase;
+    await migrateConversationColumns(database);
+    await migrateInboxColumns(database);
     const db = host.getRawDatabase() as { query(sql: string): Promise<unknown> };
     const columns = await db.query(`SELECT column_name, data_type, is_identity
       FROM information_schema.columns
-      WHERE table_name = 'zhin_live_conversation_events' AND column_name IN ('id', 'time')`) as Array<{
+      WHERE table_name = 'conversation_events' AND column_name IN ('id', 'time')`) as Array<{
         column_name: string;
         data_type: string;
         is_identity: string;
@@ -134,14 +159,31 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
     try {
       await cleanup.start();
       const db = cleanup.getRawDatabase() as { query(sql: string): Promise<unknown> };
-      await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
-      await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
+      await db.query('DROP TABLE IF EXISTS "conversation_events"');
+      await db.query('DROP TABLE IF EXISTS "conversation_event_cursors"');
       await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
       await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
       await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
     } finally {
       await cleanup.stop();
     }
+  });
+
+  it('backfills structured conversation fields without changing legacy replay data', async () => {
+    const db = host.getRawDatabase() as StructuredDatabase;
+    const events = host.models.get('conversation_events')!;
+    const [before] = await events.select('id', 'event_id', 'conversation_key', 'message_key', 'event_json', 'time',
+      ...Object.keys(CONVERSATION_EVENT_QUERY_MODEL)).where({ event_id: legacyEvent.eventId });
+    expect(before).toMatchObject({
+      id: 1, event_id: legacyEvent.eventId, conversation_key: 'legacy-conversation-key',
+      message_key: 'legacy-message-key', event_json: JSON.stringify(legacyEvent),
+      ...conversationEventQueryFields(legacyEvent),
+    });
+    expect(Number(before!.time)).toBe(1);
+    await migrateConversationColumns(db);
+    const [after] = await events.select('id', 'event_id', 'conversation_key', 'message_key', 'event_json', 'time',
+      ...Object.keys(CONVERSATION_EVENT_QUERY_MODEL)).where({ event_id: legacyEvent.eventId });
+    expect(after).toEqual(before);
   });
 
   it('migrates legacy inbox millisecond timestamps before the first write', async () => {
@@ -225,8 +267,8 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
   });
 
   it('persists canonical NUL-delimited identities through PostgreSQL text columns', async () => {
-    const events = host.models.get('zhin_live_conversation_events');
-    const cursors = host.models.get('zhin_live_conversation_cursors');
+    const events = host.models.get('conversation_events');
+    const cursors = host.models.get('conversation_event_cursors');
     expect(events).toBeDefined();
     expect(cursors).toBeDefined();
     const store = new DatabaseConversationEventStore(events!, cursors!);
