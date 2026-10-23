@@ -137,6 +137,11 @@ intentionally need plain text can set `ai.agent.outputSchema: false`; literal @ 
 then remains text. Detached subagents and non-IM entry points do not inherit the IM
 preset. Custom schemas retain their caller-owned contract without the IM prompt.
 
+A tool call the model wrote as text (DeepSeek DSML, `<invoke>`, `<tool_call>`) is
+never sent, inside JSON or as prose, and is not reworded by the correction call,
+which would announce an action that never ran; the host failure notice is sent
+instead. `<text>…</text>` wrappers are split into one message each.
+
 Tests use scripted providers to verify schema propagation, lookup followed by a
 mixed reply, ordering, strict rejection, recovery, media policies and leak masking.
 They do not prove real group notifications, client rendering or compatibility with
