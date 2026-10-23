@@ -1,0 +1,75 @@
+name: Plan validation
+description: Reuse exact successful commits or reproduce pure Changesets trees; otherwise validate fully
+inputs:
+  workflow:
+    description: Workflow filename whose prior successful runs may be reused
+    required: true
+  npm-token:
+    description: Existing package credential, used only for a script-free version-proof install
+    required: false
+  release-proof:
+    description: Require an explicit successful release batch before accepting generated versions
+    default: 'false'
+outputs:
+  full:
+    description: Whether complete validation is required
+    value: ${{ steps.result.outputs.full }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+      with:
+        node-version: 24
+    - name: find existing validation evidence
+      id: decide
+      shell: bash
+      run: node scripts/ci/validation-plan.mjs
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VALIDATION_WORKFLOW: ${{ inputs.workflow }}
+        RELEASE_PROOF: ${{ inputs.release-proof }}
+    # Candidate manifests/lockfiles are part of what is being proved. Install the
+    # tool from the already validated baseline, never from candidate dependencies.
+    - name: use validated baseline for version tooling
+      if: steps.decide.outputs.mode == 'version'
+      shell: bash
+      env:
+        VERSION_BASE: ${{ steps.decide.outputs.base }}
+      run: git -c advice.detachedHead=false checkout --detach "$VERSION_BASE"
+    - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+      if: steps.decide.outputs.mode == 'version'
+      with:
+        version: 9.0.2
+    - uses: ./.github/actions/restore-pnpm-store
+      if: steps.decide.outputs.mode == 'version'
+    - name: install version proof tool without lifecycle scripts
+      id: install
+      if: steps.decide.outputs.mode == 'version'
+      continue-on-error: true
+      shell: bash
+      run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+      env:
+        NPM_TOKEN: ${{ inputs.npm-token }}
+    - name: reproduce complete Changesets tree
+      id: version
+      if: steps.decide.outputs.mode == 'version' && steps.install.outcome == 'success'
+      shell: bash
+      run: node scripts/ci/verify-version-tree.mjs
+      env:
+        VERSION_BASE: ${{ steps.decide.outputs.base }}
+        VERSION_HEAD: ${{ steps.decide.outputs.head }}
+        NPM_TOKEN: ''
+    - name: report validation decision
+      id: result
+      shell: bash
+      env:
+        FULL: ${{ steps.decide.outputs.mode == 'full' || (steps.decide.outputs.mode == 'version' && steps.version.outputs.valid != 'true') }}
+        REASON: ${{ steps.version.outputs.reason || steps.decide.outputs.reason }}
+      run: |
+        echo "full=$FULL" >> "$GITHUB_OUTPUT"
+        echo "Complete validation required: $FULL" >> "$GITHUB_STEP_SUMMARY"
+        echo "$REASON" >> "$GITHUB_STEP_SUMMARY"

@@ -23,7 +23,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      full: ${{ steps.plan.outputs.full }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/plan-validation
+        id: plan
+        with:
+          workflow: codeql.yml
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
+
   analyze:
+    needs: plan
+    if: needs.plan.outputs.full == 'true'
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
