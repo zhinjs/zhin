@@ -1,0 +1,23 @@
+plugins/utils/content-moderation/tests/group-review-queue.test.ts
+  s_9622fd28aba994::t_8f6e82e46d6f0b 234,236-239,242,246
+plugins/utils/content-moderation/src/group-review-batch.ts
+  s_9622fd28aba994::t_8f6e82e46d6f0b 90-92
+plugins/utils/content-moderation/README.md
+  s_9622fd28aba994::t_29d4c42b8050e9 94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df7a2d835b3de3c312c55e68af17431655c2cb48",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
