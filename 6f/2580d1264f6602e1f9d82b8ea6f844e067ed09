@@ -1,0 +1,21 @@
+.github/actions/restore-pnpm-store/action.yml
+  s_6562bcb6cc0539::t_19ff1ad92eb125 14-17
+tests/docs/pnpm-store-cache.test.ts
+  s_6562bcb6cc0539::t_bdbe0495ba5c5b 1-4,34,37,47-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6f2580d1264f6602e1f9d82b8ea6f844e067ed09",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
