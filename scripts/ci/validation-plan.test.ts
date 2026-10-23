@@ -215,6 +215,14 @@ describe('affected PR scope', () => {
     expect(scope.builds).toEqual(['app', 'base']);
     expect(scope.tests).toEqual(['packages/app/tests/b.test.ts', 'packages/base/tests/a.test.ts']);
   });
+  it('builds root-test source imports and compiled consumers without widening affected tests', () => {
+    const selected = 'tests/docs/workflow.test.ts';
+    const scope = affectedScope({ changed: ['.github/workflows/ci.yml'], packages, tests,
+      testSources: { [selected]: `import { value } from '../../packages/base/src/index.js';
+        const runner = 'packages/app/lib/index.js';` } });
+    expect(scope.builds).toEqual(['app', 'base']);
+    expect(scope.tests).toEqual(['scripts/ci/plan.test.ts', selected]);
+  });
   it('covers dynamic workflow/doc contracts and global toolchain changes conservatively', () => {
     expect(affectedScope({ changed: ['.github/workflows/ci.yml'], packages, tests }).tests).toEqual(['scripts/ci/plan.test.ts', 'tests/docs/workflow.test.ts']);
     const global = affectedScope({ changed: ['pnpm-lock.yaml'], packages, tests });

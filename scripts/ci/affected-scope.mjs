@@ -1,12 +1,12 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join, normalize } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { readWorkspaceGraph } from '../lib/workspace-graph.mjs';
 import { comparison, writeOutputs } from './validation-plan.mjs';
 
 /** Include runtime, dev, peer and declared Feature edges, not just runtime imports. */
-export function affectedScope({ changed, packages, tests }) {
+export function affectedScope({ changed, packages, tests, testSources = {} }) {
   const ownerOf = file => packages.filter(pkg => file.startsWith(`${pkg.dir}/`)).sort((a, b) => b.dir.length - a.dir.length)[0];
   const all = changed.some(file => /^tests\/(?!docs\/)/.test(file) || !ownerOf(file) && !/^(?:docs\/|\.github\/|scripts\/|tests\/|\.changeset\/|README|LICENSE|\.gitignore)/.test(file));
   const affected = new Set(all ? packages.map(pkg => pkg.name) : changed.flatMap(file => ownerOf(file)?.name ?? []));
@@ -21,7 +21,22 @@ export function affectedScope({ changed, packages, tests }) {
   const selected = tests.filter(file => all || affected.has(ownerOf(file)?.name)
     || infrastructure && /^(?:scripts\/|tests\/docs\/)/.test(file)
     || changed.includes(file));
-  const builds = packages.filter(pkg => affected.has(pkg.name) && pkg.dir !== 'docs').map(pkg => pkg.name).sort();
+  // Root contract tests can import workspace source or launch compiled consumers.
+  // Their package prerequisites do not imply that every downstream test is affected.
+  const buildRoots = new Set(affected);
+  for (const file of selected) {
+    const source = testSources[file] ?? '';
+    for (const match of source.matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"]([^'"]+)['"]/g)) {
+      const specifier = match[1];
+      const dependency = specifier.startsWith('.') ? ownerOf(normalize(join(dirname(file), specifier)))
+        : packages.find(pkg => specifier === pkg.name || specifier.startsWith(`${pkg.name}/`));
+      if (dependency) buildRoots.add(dependency.name);
+    }
+    for (const pkg of packages) if (source.includes(`${pkg.dir}/lib/`) || source.includes(`${pkg.dir}/dist/`)
+      || source.includes(`node_modules/${pkg.name}/`) || source.includes(`node_modules/${pkg.name}'`)
+      || source.includes(`node_modules/${pkg.name}"`)) buildRoots.add(pkg.name);
+  }
+  const builds = packages.filter(pkg => buildRoots.has(pkg.name) && pkg.dir !== 'docs').map(pkg => pkg.name).sort();
   const lint = changed.filter(file => /\.[cm]?[jt]sx?$/.test(file));
   return { all, builds, tests: selected.sort(), lint };
 }
@@ -38,7 +53,8 @@ export function readScope(root, base, head) {
     ])] };
   });
   const tests = git('ls-files', '-z').split('\0').filter(file => file.endsWith('.test.ts') && existsSync(join(root, file)));
-  const scope = affectedScope({ changed, packages, tests });
+  const testSources = Object.fromEntries(tests.map(file => [file, readFileSync(join(root, file), 'utf8')]));
+  const scope = affectedScope({ changed, packages, tests, testSources });
   return { ...scope, base, head, changed };
 }
 

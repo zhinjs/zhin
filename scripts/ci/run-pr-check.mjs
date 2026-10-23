@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, existsSync } from 'node:fs';
+import { writeFileSync, existsSync, unlinkSync } from 'node:fs';
 import { readScope } from './affected-scope.mjs';
 
 const scope = JSON.parse(process.env.PR_SCOPE);
@@ -13,7 +13,8 @@ if (mode === 'build') {
   const graph = (await import('../lib/workspace-graph.mjs')).readWorkspaceGraph();
   const outputs = [...graph.values()].flatMap(pkg => ['lib', 'dist'].map(directory => `${pkg.dir}/${directory}`)).filter(path => existsSync(path));
   writeFileSync('.tmp-pr-outputs', outputs.join('\n'));
-  run('tar', ['-czf', 'pr-build.tgz', '-T', '.tmp-pr-outputs']);
+  try { run('tar', ['-czf', 'pr-build.tgz', '-T', '.tmp-pr-outputs']); }
+  finally { unlinkSync('.tmp-pr-outputs'); }
 } else if (mode === 'test') {
   if (existsSync('pr-build.tgz')) run('tar', ['-xzf', 'pr-build.tgz']);
   // Recompute the same immutable scope locally; do not trust runner file paths from an artifact.
