@@ -3,6 +3,8 @@ import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
 import {
+  renderChatTurnError,
+  TriggerTimeoutError,
   matchAiTrigger,
   resolveRuntimeAgentTrigger,
 } from '../../../../src/plugin-runtime/agent/turn/trigger.js';
@@ -136,5 +138,17 @@ describe('matchAiTrigger（新 Plugin Runtime，对齐 legacy shouldTriggerAI）
 
   it('空白内容不触发', () => {
     expect(matchAiTrigger(privateMessage('   '), undefined)).toBeNull();
+  });
+});
+
+describe('renderChatTurnError', () => {
+  it('says a turn failure like a member, with the cause only for the owner', () => {
+    expect(renderChatTurnError(undefined, new Error('ECONNRESET upstream'), false)).not.toMatch(/AI|失败|ECONNRESET/);
+    expect(renderChatTurnError(undefined, new Error('ECONNRESET upstream'), true)).toContain('（ECONNRESET upstream）');
+    expect(renderChatTurnError(undefined, new TriggerTimeoutError(60_000), true)).toContain('（处理超时）');
+  });
+
+  it('keeps a configured errorTemplate', () => {
+    expect(renderChatTurnError({ errorTemplate: '出错了：{error}' }, new Error('boom'), false)).toBe('出错了：boom');
   });
 });

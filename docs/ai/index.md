@@ -280,12 +280,14 @@ ai:
     keywords: []               # 私聊中包含这些词时触发
     timeout: 60000             # 单轮超时（毫秒）
     thinkingMessage: 思考中…    # 可选：开始处理前的占位回复
-    errorTemplate: "❌ AI 处理失败: {error}"
+    # errorTemplate: "出错了：{error}"   # 可选；不配置时用聊天口吻说"刚卡了一下"，主人会额外看到原因
     masters: ["10001"]         # 有审批权的用户
     trusted: []                # 受信任用户（权限低于 master）
 ```
 
 @ 触发依赖适配器标记消息为"提到了 Bot"（例如 CQ 码、Slack 的 app_mention）。
+
+出错时，Bot 在聊天里像群友一样说"刚卡了一下，你再说一遍？"，不提模型、密钥、重试这些内部细节；发送者是主人（master）时，会在括号里附上简短原因，例如"（模型额度用完了）"。完整错误只写日志。HTTP、Console 等非聊天入口保留原来的精确提示。配置了 `errorTemplate` 时，入口层的报错按模板发送。
 
 被 @、引用和私聊的消息总会交给 Agent，Agent 也可以判断不需要回复，返回空消息（`{"messages":[]}`）后什么都不发。
 

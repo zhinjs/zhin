@@ -544,3 +544,5 @@ export type {
 
 export type { AgentOutputElement } from './outbound/agent-output.js';
 export { renderAgentOutput, splitOutputMessages } from './outbound/agent-output.js';
+export { chatFailureLine, chatFailureKindOf } from './outbound/chat-failure.js';
+export type { ChatFailureKind, ChatFailureOptions } from './outbound/chat-failure.js';

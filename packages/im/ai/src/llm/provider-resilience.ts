@@ -43,7 +43,7 @@
  * key are not detected; that is a configuration choice, and the cost is one extra
  * failed request.
  */
-import { SAFETY_BLOCK_TEXT, finishFailureKind, isFinishFailureMessage } from './bridge/finish-reason.js';
+import { SAFETY_BLOCK_TEXT, finishFailureKind, isFinishFailureMessage, type FinishFailureKind } from './bridge/finish-reason.js';
 import { isContextOverflowError } from './context-overflow.js';
 import type { Context } from './types/context.js';
 import type { Model } from './types/model.js';
@@ -153,6 +153,13 @@ export function describeProviderFailure(kind: ProviderErrorKind): string {
 }
 
 const PROVIDER_FAILURE_MESSAGES = new Set(Object.values(PROVIDER_FAILURE_TEXT));
+const PROVIDER_FAILURE_KINDS = new Map(Object.entries(PROVIDER_FAILURE_TEXT).map(([kind, text]) => [text, kind as ProviderErrorKind]));
+
+/** The failure kind behind a user-safe failure message (provider or finish), if it is one. */
+export function providerFailureKind(text: string | undefined): ProviderErrorKind | FinishFailureKind | undefined {
+  if (!text) return undefined;
+  return PROVIDER_FAILURE_KINDS.get(text) ?? finishFailureKind(text);
+}
 
 /** True when `text` is a {@link ProviderRequestError} message that is safe to show users as-is. */
 export function isProviderFailureMessage(text: string): boolean {

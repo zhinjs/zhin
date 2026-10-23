@@ -657,7 +657,7 @@ export interface AIConfig {
     timeout?: number;
     /** 思考中提示语（可选，设置后会在处理前发送） */
     thinkingMessage?: string;
-    /** 错误提示模板（默认 '❌ AI 处理失败: {error}'） */
+    /** 入口层错误提示模板（可选；不配置时用聊天口吻，主人额外看到原因） */
     errorTemplate?: string;
     /** 群聊旁听：没人叫机器人时，由判断模型决定是否接话 */
     ambient?: AmbientEngagementConfig;
