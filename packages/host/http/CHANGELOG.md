@@ -1,5 +1,12 @@
 # @zhin.js/host-http
 
+## 1.1.9
+
+### Patch Changes
+
+- Updated dependencies [6da2bad]
+  - @zhin.js/plugin-runtime@1.1.16
+
 ## 1.1.8
 
 ### Patch Changes

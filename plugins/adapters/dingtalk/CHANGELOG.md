@@ -1,5 +1,27 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.1.15
+
+### Patch Changes
+
+- 7d68df6: 精简 Agent 内置固定提示词与消息说明，保留工具、审批和结构化回复能力。适配器 Skill 按会话场景拆分，群／频道管理仅向对应场景披露；提示段与模型消息段支持场景声明，沿用当前回合权限和 generation 投影。
+- Updated dependencies [f98025b]
+- Updated dependencies [66ec1a5]
+- Updated dependencies [7d68df6]
+- Updated dependencies [bf0fa9f]
+- Updated dependencies [3326db3]
+- Updated dependencies [e91235e]
+- Updated dependencies [6da2bad]
+- Updated dependencies [3781f1c]
+  - @zhin.js/core@1.1.50
+  - @zhin.js/adapter@1.1.22
+  - @zhin.js/im-contract@1.1.6
+  - @zhin.js/tool@1.1.9
+  - @zhin.js/host-http@1.1.9
+  - @zhin.js/agent-feature@1.1.9
+  - @zhin.js/feature-kit@1.1.8
+  - @zhin.js/skill@1.1.9
+
 ## 1.1.14
 
 ### Patch Changes

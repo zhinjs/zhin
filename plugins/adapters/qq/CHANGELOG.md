@@ -1,5 +1,30 @@
 # @zhin.js/adapter-qq
 
+## 1.1.15
+
+### Patch Changes
+
+- 7d68df6: 精简 Agent 内置固定提示词与消息说明，保留工具、审批和结构化回复能力。适配器 Skill 按会话场景拆分，群／频道管理仅向对应场景披露；提示段与模型消息段支持场景声明，沿用当前回合权限和 generation 投影。
+- e684ade: Upgrade `qq-official-bot` to 1.3.3 and send the passive-reply `msg_seq` the Endpoint assigns per source, so the platform's `msg_id + msg_seq` deduplication protects a retried passive reply.
+- 34c536b: Send QQ replies as passive messages. The Endpoint never passed the user message's `msg_id`, so every reply went out as an active message (quota-limited, blocked when the user turns off active messages). It now records each conversation's recent `msg_id` and interaction `event_id` and replies passively within the platform limits (group 5 min × 5, C2C 60 min × 4, guild 5 min), preferring an explicit reply segment. An expired or exhausted source falls back to one active message; an unknown outcome or a content rejection never does. Conversations that refuse active messages are skipped for an hour, and Markdown the platform does not allow is resent as plain text. Requires `qq-official-bot` 1.3.3, which accepts the Endpoint's per-source `msg_seq` so a retried passive reply is deduplicated by the platform.
+- Updated dependencies [f98025b]
+- Updated dependencies [66ec1a5]
+- Updated dependencies [7d68df6]
+- Updated dependencies [bf0fa9f]
+- Updated dependencies [3326db3]
+- Updated dependencies [e91235e]
+- Updated dependencies [6da2bad]
+- Updated dependencies [3781f1c]
+  - @zhin.js/core@1.1.50
+  - @zhin.js/adapter@1.1.22
+  - @zhin.js/im-contract@1.1.6
+  - @zhin.js/tool@1.1.9
+  - @zhin.js/host-http@1.1.9
+  - @zhin.js/agent-feature@1.1.9
+  - @zhin.js/feature-kit@1.1.8
+  - @zhin.js/permission@1.1.8
+  - @zhin.js/skill@1.1.9
+
 ## 1.1.14
 
 ### Patch Changes

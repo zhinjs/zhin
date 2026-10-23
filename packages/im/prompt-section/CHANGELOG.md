@@ -1,5 +1,14 @@
 # @zhin.js/prompt-section
 
+## 1.1.8
+
+### Patch Changes
+
+- 7d68df6: 精简 Agent 内置固定提示词与消息说明，保留工具、审批和结构化回复能力。适配器 Skill 按会话场景拆分，群／频道管理仅向对应场景披露；提示段与模型消息段支持场景声明，沿用当前回合权限和 generation 投影。
+- Updated dependencies [6da2bad]
+  - @zhin.js/plugin-runtime@1.1.16
+  - @zhin.js/feature-kit@1.1.8
+
 ## 1.1.7
 
 ### Patch Changes

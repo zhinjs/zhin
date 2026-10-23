@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/service-typesafe",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Optional TypeSafe AI Jev decision provider for Zhin",
   "type": "module",
   "main": "./lib/index.js",

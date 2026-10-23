@@ -1,5 +1,21 @@
 # zhin.js
 
+## 1.1.15
+
+### Patch Changes
+
+- Updated dependencies [f98025b]
+- Updated dependencies [66ec1a5]
+- Updated dependencies [7d68df6]
+- Updated dependencies [bf0fa9f]
+- Updated dependencies [3326db3]
+- Updated dependencies [e91235e]
+- Updated dependencies [6da2bad]
+- Updated dependencies [3781f1c]
+  - @zhin.js/core@1.1.50
+  - @zhin.js/plugin-runtime@1.1.16
+  - @zhin.js/permission@1.1.8
+
 ## 1.1.14
 
 ### Patch Changes

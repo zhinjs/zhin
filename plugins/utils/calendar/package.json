@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-calendar",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "CalDAV / Google / Microsoft calendar tools for Zhin Agent",
   "type": "module",
   "main": "./lib/index.js",
