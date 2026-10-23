@@ -1,0 +1,25 @@
+scripts/ci/affected-scope.mjs
+  s_6562bcb6cc0539::t_d22eef0385d6ae 3,9,24-39,56-57
+scripts/ci/run-pr-check.mjs
+  s_6562bcb6cc0539::t_305c7c189c8350 2,16-17
+scripts/ci/validation-plan.test.ts
+  s_6562bcb6cc0539::t_8dd2ceac5a3714 218-225
+tests/docs/self-delivery-release-gates.test.ts
+  s_6562bcb6cc0539::t_39cfdbd73370cf 12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bb393989bc7868b35d2bc74aac187e44a5b0bb66",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
