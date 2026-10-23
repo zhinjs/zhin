@@ -62,6 +62,12 @@ export function structuredReplyInstruction(profile: AiOutboundSegmentProfile = D
 
 export const STRUCTURED_REPLY_INSTRUCTION = structuredReplyInstruction();
 
+/**
+ * Tool-call markup a model wrote as text because the provider did not parse it (DeepSeek DSML,
+ * XML-style function calls). It is never a chat message, whatever else the reply contains.
+ */
+export const TOOL_CALL_MARKUP = /<[｜|]{1,2}\s*DSML|<\/?(?:invoke|tool_call|tool_calls|function_calls?|antml:[a-z_]+)\b/iu;
+
 /** Reject the whole response on mismatch: never deliver raw JSON or partial segments. */
 export function decodeStructuredReply(
   raw: string,
@@ -85,6 +91,14 @@ export function decodeStructuredReply(
     const detail = (fields.length ? fields : errors).slice(0, 8)
       .map(error => `${error.instancePath || '/'} ${error.message}`).join('; ');
     throw new Error(`Agent final reply does not match the message schema: ${detail}`);
+  }
+  for (const message of value.messages) {
+    for (const segment of message.segments) {
+      const data = segment.data as Record<string, unknown>;
+      if ([data.text, data.content].some(field => typeof field === 'string' && TOOL_CALL_MARKUP.test(field))) {
+        throw new Error('Agent final reply contains tool-call markup');
+      }
+    }
   }
   return value.messages.filter(message => message.segments.length > 0)
     .map(message => ({ type: 'message', segments: message.segments.map(segment => withoutEmptyModelFields(segment, profile)) }));
