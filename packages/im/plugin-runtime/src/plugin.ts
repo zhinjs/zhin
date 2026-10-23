@@ -102,6 +102,7 @@ export {
   databaseHostToken,
   type DatabaseHostConsole,
   type DatabaseHostModel,
+  type DatabaseHostTransaction,
   type DatabaseHostSelection,
   type DatabaseHostSelectResult,
   type DatabaseHostTable,

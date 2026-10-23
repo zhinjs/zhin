@@ -47,7 +47,6 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       await ensureDatabaseIndex(raw, 'agent_usage_turns', 'agent_usage_turns_ended', [{ name: 'ended_at' }]);
       await ensureDatabaseIndex(raw, 'agent_usage_calls', 'agent_usage_calls_root', [{ name: 'root_id', text: true }]);
       await ensureDatabaseIndex(raw, 'agent_usage_calls', 'agent_usage_calls_ended', [{ name: 'root_ended_at' }]);
-
     }
     signal.throwIfAborted();
     let stopped = false;

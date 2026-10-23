@@ -1,5 +1,6 @@
 import {
   definePlugin,
+  logger,
   databaseHostToken,
   outboundHostToken,
   scheduleHostToken,
@@ -82,7 +83,9 @@ export default definePlugin<RssConfig>({
     // Keep optional in-memory/chat-only installations working. Administrator tasks
     // must have the real durable state port, exact outbound and an active scheduler.
     let administrator: AdministratorRssTasks | undefined;
-    if (database && outbound?.sendTarget && context.resources.has(scheduleHostToken)) {
+    const structuredTasks = database && ['sqlite', 'mysql', 'pg'].includes(database.dialect);
+    if (database && !structuredTasks) logger.warn('RSS 管理员任务持久化仅支持 SQLite、MySQL、PostgreSQL；聊天订阅保留现有存储方式');
+    if (structuredTasks && database && outbound?.sendTarget && context.resources.has(scheduleHostToken)) {
       let state;
       try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
       if (state) {

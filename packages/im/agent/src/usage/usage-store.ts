@@ -1,4 +1,4 @@
-import { createToken, encodeStorageIdentity, type DatabaseHost } from '@zhin.js/plugin-runtime';
+import { createRootPrivateToken, encodeStorageIdentity, type DatabaseHost } from '@zhin.js/plugin-runtime';
 import { createHash } from 'node:crypto';
 import type { TurnEvent } from '../event/turn-event.js';
 import type { TurnRequest } from '../turn/turn-ingress.js';
@@ -23,7 +23,7 @@ export const AGENT_USAGE_CALL_MODEL = {
 export type UsageRow = Record<string, string | number | null>;
 export interface AgentUsageRecord { readonly turn: UsageRow; readonly calls: readonly UsageRow[] }
 export interface AgentUsageStore { save(record: AgentUsageRecord): Promise<void>; prune(): Promise<void> }
-export const agentUsageStoreToken = createToken<AgentUsageStore>('zhin.agent.usage-store', 'Generation-owned structured usage persistence');
+export const agentUsageStoreToken = createRootPrivateToken<AgentUsageStore>('zhin.agent.usage-store', 'Generation-owned structured usage persistence');
 
 const tokenFields = {
   input_tokens: ['promptTokens', 'input'], output_tokens: ['completionTokens', 'output'], total_tokens: ['totalTokens', 'totalTokens'],

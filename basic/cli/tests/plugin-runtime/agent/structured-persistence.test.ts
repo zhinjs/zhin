@@ -1,8 +1,8 @@
 // Composition-root integration: real SQLite and public Agent storage ports, no model/platform calls.
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Scope, rootPluginId, databaseRootHostToken, GenerationHandoffStack, DisposeStack } from '@zhin.js/plugin-runtime';
+import { Scope, rootPluginId, childPluginId, databaseRootHostToken, GenerationHandoffStack, DisposeStack } from '@zhin.js/plugin-runtime';
 import { AgentUsageCollector, agentUsageStoreToken } from '@zhin.js/agent/runtime';
 import { ScheduleJobStore, type TurnRequest } from '@zhin.js/agent';
 import { createScopedTraceJournal } from '@zhin.js/agent/trace';
@@ -37,6 +37,7 @@ describe('Agent structured persistence without Workroom', () => {
     expect(foundation.schedule.start).not.toHaveBeenCalled(); publish();
     expect(foundation.agent.markMemoryPersistenceReady).toHaveBeenCalledOnce();
     expect(foundation.agent.configure).toHaveBeenCalled(); expect(foundation.schedule.start).toHaveBeenCalledOnce();
+    expect(new Scope(childPluginId(rootPluginId(), 'plugin'), resources).has(agentUsageStoreToken)).toBe(false);
     return { store: resources.use(agentUsageStoreToken), foundation };
   }
 
@@ -56,6 +57,9 @@ describe('Agent structured persistence without Workroom', () => {
     expect(calls.find(row => row.turn_id === 'k1:child')).toMatchObject({ input_tokens: null, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: null });
     expect(JSON.stringify([turns, calls])).not.toContain('MUST_NOT_ENTER_USAGE');
     const stale = Date.now() - 31 * 86_400_000;
+    await host.models.get('agent_usage_calls')!.update({ ended_at: stale }).where({ root_id: record.turn.id });
+    await store.prune(); // A long-running root retains all its calls as one unit.
+    expect(await host.models.get('agent_usage_calls')!.select()).toHaveLength(2);
     await host.models.get('agent_usage_turns')!.update({ ended_at: stale }).where({ id: record.turn.id });
     await host.models.get('agent_usage_calls')!.update({ root_ended_at: stale }).where({ root_id: record.turn.id });
     await store.prune();
@@ -99,4 +103,28 @@ describe('Agent structured persistence without Workroom', () => {
     expect(await restarted.foundation.schedule.store.getJob('job')).toBeUndefined();
     expect((await restarted.foundation.schedule.store.listJobs()).map(job => job.id)).toEqual(['second']);
   });
+  it('refuses a malformed legacy schedule file without completing migration or changing the file', async () => {
+    await mkdir(join(dir, 'data'));
+    const path = join(dir, 'data/schedule-jobs.json');
+    const original = JSON.stringify({ version: 1, jobs: 'broken' });
+    await writeFile(path, original);
+    await expect(activate()).rejects.toThrow('Invalid schedule-jobs file');
+    expect(await readFile(path, 'utf8')).toBe(original);
+    expect(await host.models.get('agent_schedule_migration')!.select()).toEqual([]);
+    expect(await host.models.get('agent_schedule_jobs')!.select()).toEqual([]);
+  });
+
+  it('keeps non-SQL configuration and file scheduling without structured usage tables', () => {
+    const nonSql = createDatabaseHost({ dialect: 'memory' });
+    const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
+    resources.provide(databaseRootHostToken, nonSql);
+    const foundation = { agent: { markMemoryPersistenceReady: vi.fn() }, semanticMemory: null };
+    installAgentPersistence({ resources, handoff, lifecycle: cleanup, admission: {} as never }, foundation as never, { sessions: { useDatabase: false } } as never);
+    expect(nonSql.dialect).toBe('memory');
+    expect(resources.has(agentUsageStoreToken)).toBe(false);
+    expect(nonSql.tables()).not.toContain('agent_usage_turns');
+    expect(nonSql.tables()).not.toContain('agent_schedule_jobs');
+    expect(foundation.agent.markMemoryPersistenceReady).toHaveBeenCalledOnce();
+  });
+
 });

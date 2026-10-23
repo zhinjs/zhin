@@ -18,6 +18,9 @@ export interface RelationalStateCodec {
  * Register in setup. Tables, revision and receipts commit or roll back together.
  */
 export function createRelationalStateStore(database: PluginDatabaseHost, codecs: readonly RelationalStateCodec[]): PluginStateStore {
+  if (!['sqlite', 'mysql', 'pg'].includes(database.dialect)) {
+    throw new Error(`结构化任务持久化仅支持 SQLite、MySQL、PostgreSQL，当前为 ${database.dialect}；不会自动更换数据库`);
+  }
   const legacy = database.state;
   const byKey = new Map(codecs.map(codec => [codec.key, codec]));
   if (byKey.size !== codecs.length) throw new Error('Duplicate relational state key');
