@@ -1,0 +1,231 @@
+packages/im/agent/src/prompt/system-prompt.ts
+  s_079f1dc5e6308d::t_b05b1c45ef1c2c 290-293
+packages/im/prompt-section/src/definition.ts
+  s_079f1dc5e6308d::t_9b797a923d34d1 32-33,84-87,107,148,158
+packages/im/agent/src/prompt/prompts/orchestrator.anthropic.md
+  s_079f1dc5e6308d::t_b05b1c45ef1c2c 3
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_079f1dc5e6308d::t_264dab4cc70564 1-98
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_079f1dc5e6308d::t_2e1189b3b00c9b 357-373
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_079f1dc5e6308d::t_89e6d1239d6934 191-196,200
+  s_079f1dc5e6308d::t_fbd0a2c1044c5f 182,187,198-199,201-205
+packages/im/agent/src/prompt/rules/critical-rules.ts
+  s_079f1dc5e6308d::t_b05b1c45ef1c2c 5-14
+packages/im/agent/src/outbound/structured-reply.ts
+  s_079f1dc5e6308d::t_53aae14857af8d 39-46,57,59-62,64,71-72
+packages/im/agent/src/prompt/rules/chat-rules.ts
+  s_079f1dc5e6308d::t_b05b1c45ef1c2c 7-12,17-18
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_079f1dc5e6308d::t_9b797a923d34d1 117-119
+packages/im/adapter/tests/adapter.test.ts
+  s_079f1dc5e6308d::t_a290bb67cd8ec5 1328-1329,1348,1351-1352
+packages/im/core/tests/plugin-runtime/outbound-segments.test.ts
+  s_079f1dc5e6308d::t_89e6d1239d6934 502-505,509-511
+  s_079f1dc5e6308d::t_a290bb67cd8ec5 499-501,506-508,512-519
+packages/im/adapter/src/definition.ts
+  s_079f1dc5e6308d::t_89e6d1239d6934 119
+  s_079f1dc5e6308d::t_9b797a923d34d1 120
+  s_079f1dc5e6308d::t_fbd0a2c1044c5f 332,336,339-340,344
+packages/im/agent/evals/cases/context-compact-prompt-tool-reply.case.ts
+  s_079f1dc5e6308d::t_2e1189b3b00c9b 1-23
+packages/im/agent/src/security/file-role-policy.ts
+  s_079f1dc5e6308d::t_b05b1c45ef1c2c 324-329
+packages/im/agent/src/prompt/prompts/orchestrator.openai-compatible.md
+  s_079f1dc5e6308d::t_b05b1c45ef1c2c 3
+plugins/adapters/icqq/prompt-sections/platform/index.ts
+  s_079f1dc5e6308d::t_6432569f452f65 6
+packages/im/prompt-section/tests/prompt-section.test.ts
+  s_079f1dc5e6308d::t_a290bb67cd8ec5 37,61-67
+packages/im/agent/tests/prompt/fixed-prompt-cost.test.ts
+  s_079f1dc5e6308d::t_2e1189b3b00c9b 1-35
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_079f1dc5e6308d::t_a290bb67cd8ec5 797,813-818,846,927,949,953
+packages/im/agent/src/prompt/prompts/orchestrator.md
+  s_079f1dc5e6308d::t_b05b1c45ef1c2c 3-5
+.changeset/compact-prompts-scene-capabilities.md
+  s_079f1dc5e6308d::t_a0dbc2c1b01748 1-19
+docs/ai/agent.md
+  s_079f1dc5e6308d::t_6cedce176e08b2 108-109
+docs/authoring/adapters.md
+  s_079f1dc5e6308d::t_2b9339e8248028 124-148
+docs/authoring/agent-tools.md
+  s_079f1dc5e6308d::t_fd515b25e7902c 236-241,319,354
+docs/en/adapters/dingtalk.md
+  s_079f1dc5e6308d::t_d20623d579a1a4 91,112-113
+docs/en/adapters/discord.md
+  s_079f1dc5e6308d::t_eae9d919554a73 92,115-116
+docs/en/adapters/lark.md
+  s_079f1dc5e6308d::t_00dffd7df9e17b 94,115-116
+docs/en/adapters/line.md
+  s_079f1dc5e6308d::t_554ffc21a4a1c9 105,123-124
+docs/en/adapters/qq.md
+  s_079f1dc5e6308d::t_c6c4227b918396 119,141-142
+docs/en/adapters/slack.md
+  s_079f1dc5e6308d::t_23381cf707edfc 138,159-160
+docs/en/ai/agent.md
+  s_079f1dc5e6308d::t_7be331c8357ac0 112-113
+docs/en/authoring/adapters.md
+  s_079f1dc5e6308d::t_6b077a150cff72 124-148
+docs/en/authoring/agent-tools.md
+  s_079f1dc5e6308d::t_d3dbd5ab240ac9 236-241,319,354
+packages/im/prompt-section/README.md
+  s_079f1dc5e6308d::t_559148b566c70e 10-11
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk-group-admin/SKILL.md
+  s_079f1dc5e6308d::t_e58fcbafd25c23 1-18
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk-group-admin/tools/add_chat_members/index.ts
+  s_079f1dc5e6308d::t_d864bf86d7da7a 12
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk-group-admin/tools/update_chat/index.ts
+  s_079f1dc5e6308d::t_bcb3d2de0396bd 13
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk/SKILL.md
+  s_079f1dc5e6308d::t_f7b013e974a3c1 3-15,26
+plugins/adapters/discord/agents/discord/skills/discord-guild/SKILL.md
+  s_079f1dc5e6308d::t_10c82aca3f33e7 1-22
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/add_role/index.ts
+  s_079f1dc5e6308d::t_d8db6e6ec32785 14
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/create_thread/index.ts
+  s_079f1dc5e6308d::t_48c042ec5a9340 15
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/forum_post/index.ts
+  s_079f1dc5e6308d::t_51714fde6178b7 15
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/list_roles/index.ts
+  s_079f1dc5e6308d::t_d15f0da8acf611 12
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/remove_role/index.ts
+  s_079f1dc5e6308d::t_1803ab030ad997 14
+plugins/adapters/discord/agents/discord/skills/discord/SKILL.md
+  s_079f1dc5e6308d::t_f4cc7bf8c902cc 3-12,19
+plugins/adapters/icqq/agents/icqq/skills/icqq-directory/SKILL.md
+  s_079f1dc5e6308d::t_74e44653ceb38c 5,7-10,12-14,18
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/SKILL.md
+  s_079f1dc5e6308d::t_477ca59ca53e18 7-12,14-22
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_invite/index.ts
+  s_079f1dc5e6308d::t_90bf212b8009b1 10
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-directory/SKILL.md
+  s_079f1dc5e6308d::t_9ba480466a267e 1-16
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-interaction/SKILL.md
+  s_079f1dc5e6308d::t_918f0374132763 1-18
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-state/SKILL.md
+  s_079f1dc5e6308d::t_7fc1697d97ac46 7-9,11-14
+plugins/adapters/icqq/agents/icqq/skills/icqq-interaction/SKILL.md
+  s_079f1dc5e6308d::t_5696c41200eb77 5,7-8,10,14
+plugins/adapters/kook/agents/kook/skills/kook/SKILL.md
+  s_079f1dc5e6308d::t_733e6760d76b7e 3-4,6-14,22-23
+plugins/adapters/kook/agents/kook/skills/kook/tools/blacklist/index.ts
+  s_079f1dc5e6308d::t_56f30e343b1609 14
+plugins/adapters/kook/agents/kook/skills/kook/tools/create_role/index.ts
+  s_079f1dc5e6308d::t_640fce274ff9c2 12
+plugins/adapters/kook/agents/kook/skills/kook/tools/delete_role/index.ts
+  s_079f1dc5e6308d::t_65b2761b2a0f8f 12
+plugins/adapters/kook/agents/kook/skills/kook/tools/grant_role/index.ts
+  s_079f1dc5e6308d::t_b8bc5f6294336f 13
+plugins/adapters/kook/agents/kook/skills/kook/tools/list_roles/index.ts
+  s_079f1dc5e6308d::t_6a95cf1deabd88 10
+plugins/adapters/kook/agents/kook/skills/kook/tools/revoke_role/index.ts
+  s_079f1dc5e6308d::t_fa02c57c17d6e4 13
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/SKILL.md
+  s_079f1dc5e6308d::t_388c21a9384e29 1-22
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/add_members/index.ts
+  s_079f1dc5e6308d::t_fa2f0f157a74f9 12
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/dissolve_chat/index.ts
+  s_079f1dc5e6308d::t_497637a4d71384 9
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/remove_managers/index.ts
+  s_079f1dc5e6308d::t_ddaa798940213f 12
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/set_managers/index.ts
+  s_079f1dc5e6308d::t_1ab6daa6efe1e6 12
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/update_chat/index.ts
+  s_079f1dc5e6308d::t_eae66b4a65c5d7 13
+plugins/adapters/lark/agents/lark/skills/lark/SKILL.md
+  s_079f1dc5e6308d::t_20efacfff06465 3-14,22
+plugins/adapters/line/agents/line/skills/line-group-directory/SKILL.md
+  s_079f1dc5e6308d::t_59a009ec13a246 1-16
+plugins/adapters/line/agents/line/skills/line-group-directory/tools/get_group_members/index.ts
+  s_079f1dc5e6308d::t_37f6d5ff652a1f 7
+plugins/adapters/line/agents/line/skills/line/SKILL.md
+  s_079f1dc5e6308d::t_6f3879995a763d 5,15,17,19
+plugins/adapters/napcat/agents/napcat/skills/napcat-files-history/SKILL.md
+  s_079f1dc5e6308d::t_43b95875f21900 5,7-8,10,14
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-content/SKILL.md
+  s_079f1dc5e6308d::t_d0c03dfff5cd08 7-9,11-18
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-files-history/SKILL.md
+  s_079f1dc5e6308d::t_5be081b7448e39 1-20
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-media/SKILL.md
+  s_079f1dc5e6308d::t_13d02219cd6b27 1-18
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/SKILL.md
+  s_079f1dc5e6308d::t_c18971aee18ff0 7-12,14-20
+plugins/adapters/napcat/agents/napcat/skills/napcat-media/SKILL.md
+  s_079f1dc5e6308d::t_46ee1b4a546355 5,7-10,12-14,18
+plugins/adapters/napcat/agents/napcat/skills/napcat-private-history/SKILL.md
+  s_079f1dc5e6308d::t_57525e0f11d6b5 1-16
+plugins/adapters/napcat/agents/napcat/skills/napcat-private-history/tools/get_friend_msg_history/index.ts
+  s_079f1dc5e6308d::t_4fc33818364107 12
+plugins/adapters/onebot11/agents/onebot11/skills/onebot11/SKILL.md
+  s_079f1dc5e6308d::t_e577fb9d388e5a 3-4,6-13,16-17
+plugins/adapters/onebot11/agents/onebot11/skills/onebot11/tools/set_title/index.ts
+  s_079f1dc5e6308d::t_60cca6cf126d1a 11
+plugins/adapters/qq/agents/qq/skills/qq-directory/SKILL.md
+  s_079f1dc5e6308d::t_993e5a11869b2c 1-14
+plugins/adapters/qq/agents/qq/skills/qq/SKILL.md
+  s_079f1dc5e6308d::t_750fd0cd0432d7 3-14,23-24,26,28
+plugins/adapters/qq/agents/qq/skills/qq/tools/add_role/index.ts
+  s_079f1dc5e6308d::t_1930e51c243f82 14
+plugins/adapters/qq/agents/qq/skills/qq/tools/channel_info/index.ts
+  s_079f1dc5e6308d::t_05ee1d54966db3 11
+plugins/adapters/qq/agents/qq/skills/qq/tools/create_role/index.ts
+  s_079f1dc5e6308d::t_63db5b256533e4 13
+plugins/adapters/qq/agents/qq/skills/qq/tools/list_channels/index.ts
+  s_079f1dc5e6308d::t_e371bee608a0c1 11
+plugins/adapters/qq/agents/qq/skills/qq/tools/list_roles/index.ts
+  s_079f1dc5e6308d::t_63af27720985d9 11
+plugins/adapters/qq/agents/qq/skills/qq/tools/member_detail/index.ts
+  s_079f1dc5e6308d::t_5f3784609ae598 12
+plugins/adapters/qq/agents/qq/skills/qq/tools/remove_role/index.ts
+  s_079f1dc5e6308d::t_eb52039d727f71 14
+plugins/adapters/slack/agents/slack/skills/slack-channels/SKILL.md
+  s_079f1dc5e6308d::t_b627317da693a2 5,7-11,13-19,21,23
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/archive_channel/index.ts
+  s_079f1dc5e6308d::t_9e558754ca6b8d 13
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/invite_to_channel/index.ts
+  s_079f1dc5e6308d::t_255ba8e02155f9 15
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/set_purpose/index.ts
+  s_079f1dc5e6308d::t_67d29ee97f1886 15
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/set_topic/index.ts
+  s_079f1dc5e6308d::t_2331320b13bf55 15
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/unarchive/index.ts
+  s_079f1dc5e6308d::t_9db4e6f5cfae0c 13
+plugins/adapters/slack/agents/slack/skills/slack-users/SKILL.md
+  s_079f1dc5e6308d::t_7f605999f3eae2 1-14
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/SKILL.md
+  s_079f1dc5e6308d::t_e1ecca1ccb8dd8 5,7-10,12-20,22,24
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/create_invite/index.ts
+  s_079f1dc5e6308d::t_3f6c5baae467c4 11
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/list_admins/index.ts
+  s_079f1dc5e6308d::t_b5832abe6534b6 10
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/member_count/index.ts
+  s_079f1dc5e6308d::t_309173e4f8aaa9 10
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/pin_message/index.ts
+  s_079f1dc5e6308d::t_d709e27daa9fd4 12
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/set_description/index.ts
+  s_079f1dc5e6308d::t_99c564d87685de 11
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/unpin_message/index.ts
+  s_079f1dc5e6308d::t_85f0f3108a4b02 12
+plugins/adapters/telegram/agents/telegram/skills/telegram-group-permissions/SKILL.md
+  s_079f1dc5e6308d::t_e8f8d942b681cd 1-16
+plugins/adapters/telegram/agents/telegram/skills/telegram-group-permissions/tools/set_permissions/index.ts
+  s_079f1dc5e6308d::t_94ce1f91587f33 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7d68df676b772d11384a98be106f2ffacdde32c6",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
