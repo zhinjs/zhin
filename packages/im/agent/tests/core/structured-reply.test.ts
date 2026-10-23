@@ -8,7 +8,7 @@ import { describeProviderFailure } from '@zhin.js/ai';
 /** IM turns say a format failure in the chat voice (the host notice is for non-chat callers). */
 const STRUCTURED_REPLY_FAILURE = chatFailureLine('format', { random: 0 });
 import { formatToolCallsForUser } from '../../src/core/tool-calls-user-format.js';
-import { decodeStructuredReply, structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
+import { decodeStructuredReply, REACTION_SEGMENT_TYPE, structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
 import { renderAgentOutput, splitOutputMessages } from '../../src/outbound/agent-output.js';
 import { OutboundLeakInspector, guardReplyPort } from '../../src/security/outbound-leak-guard.js';
@@ -128,6 +128,37 @@ describe('structured Agent final replies', () => {
     expect(result.reply).toBe(formatToolCallsForUser([]));
     expect(calls).toHaveLength(1);
   });
+  describe('reactions', () => {
+    const profile = { types: ['text' as const], reaction: { values: [{ value: '76', label: '赞' }, { value: '182', label: '笑哭' }] } };
+
+    it('decodes a reaction as its own message before the words', () => {
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"哈哈"}}]}],"reaction":"182"}', profile)).toEqual([
+        { type: 'message', segments: [{ type: REACTION_SEGMENT_TYPE, data: { emoji: '182' } }] },
+        { type: 'message', segments: [text('哈哈')] },
+      ]);
+      expect(decodeStructuredReply('{"messages":[],"reaction":"76"}', profile)).toEqual([
+        { type: 'message', segments: [{ type: REACTION_SEGMENT_TYPE, data: { emoji: '76' } }] },
+      ]);
+    });
+
+    it('treats a missing or empty reaction as none and rejects values the platform lacks', () => {
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"好"}}]}]}', profile)).toEqual([{ type: 'message', segments: [text('好')] }]);
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"好"}}]}],"reaction":""}', profile)).toHaveLength(1);
+      expect(() => decodeStructuredReply('{"messages":[],"reaction":"999"}', profile)).toThrow();
+    });
+
+    it('drops a reaction where none is offered instead of failing the reply', () => {
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"好"}}]}],"reaction":"76"}')).toEqual([{ type: 'message', segments: [text('好')] }]);
+    });
+
+    it('tells the model the reactions and when a reaction alone is enough', () => {
+      const instruction = structuredReplyInstruction(profile);
+      expect(instruction).toContain('76 赞, 182 笑哭');
+      expect(instruction).toContain('{"messages":[],"reaction":"<value>"}');
+      expect(structuredReplyInstruction({ types: ['text'] })).not.toContain('"reaction"');
+    });
+  });
+
   it('keeps media capability and size policies on structured messages', async () => {
     const output = decodeStructuredReply(JSON.stringify({ segments: [mention('123'),
       { type: 'image', data: { media: { kind: 'base64', value: RED_CIRCLE_PNG.base64 } } }] }));

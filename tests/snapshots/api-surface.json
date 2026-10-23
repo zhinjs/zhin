@@ -80,6 +80,7 @@
     "export{PersistentTurnJournal}from './journal/index.js';",
     "export{PluginAILoopHookRegistry}from './plugin-loop-hooks.js';",
     "export{PromptAssemblyRegistry}from './prompt/prompt-assembly-registry.js';",
+    "export{REACTION_SEGMENT_TYPE}from './outbound/structured-reply.js';",
     "export{RESERVED_TOOL_NAMES,RESERVED_TOOL_NAME_PREFIXES}from './reserved-tools.js';",
     "export{ResourceRegistry,canAccessTool,normalizeTool,SkillRegistry,SubAgentRegistry,McpRegistry,HookRegistry,createAIHookEvent,}from './resource-hub/index.js';",
     "export{SKILL_DISCLOSURE_TOOLS,SKILL_DISCLOSURE_STEPS,SKILL_DISCLOSURE_PROMPT_HINT,}from './skill/progressive-disclosure.js';",
