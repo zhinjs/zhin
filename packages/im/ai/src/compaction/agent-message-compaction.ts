@@ -65,6 +65,8 @@ export interface AgentCompactResult {
   microSavedTokens: number;
   autoSavedTokens: number;
   summary?: string;
+  /** Prefix length in the input array (micro-compaction preserves positions). */
+  compactedCount?: number;
 }
 
 export function createAgentCompactionState(): AgentCompactionState {
@@ -126,11 +128,17 @@ async function summarizeAgentMessages(
   userContent += `New conversation:\n${conversation}\n\nGenerate the updated full summary.`;
 
   try {
+    signal?.throwIfAborted();
     const assistant = await transport.completeSimple(
       model,
       createContext(systemPrompt, [createUserMessage(userContent)]),
       signal ? { signal } : undefined,
     );
+    signal?.throwIfAborted();
+    // 只接纳完整文本摘要，不能把截断片段或请求工具的响应写成历史事实。
+    if (assistant.stopReason !== 'stop' || assistant.content.some(block => block.type === 'toolCall')) {
+      throw new Error(`Summarization did not complete: ${assistant.stopReason}`);
+    }
     const text = assistant.content
       .filter(b => b.type === 'text')
       .map(b => (b.type === 'text' ? b.text : ''))
@@ -206,11 +214,14 @@ export async function compactAgentMessages(params: {
   );
 
   const summaryTokens = estimateAgentMessageTokens(summaryAsAgentUserMessage(summary));
+  if (summaryTokens >= beforeTokens) {
+    throw new Error('Summarization did not reduce context tokens');
+  }
   return {
     summary,
     keptMessages: toKeep,
     compactedCount: toCompact.length,
-    savedTokens: Math.max(0, beforeTokens - summaryTokens),
+    savedTokens: beforeTokens - summaryTokens,
   };
 }
 
@@ -273,6 +284,14 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
       signal: params.signal,
     });
 
+    // 最少保留数或工具配对可能使本次无可压缩前缀；不能宣称摘要成功。
+    if (result.compactedCount === 0) {
+      return {
+        wasCompacted: micro.didCompact, messages, savedTokens: microSavedTokens,
+        microSavedTokens, autoSavedTokens: 0,
+      };
+    }
+
     const compactedMessages: AgentMessage[] = [];
     if (result.summary) {
       compactedMessages.push(summaryAsAgentUserMessage(result.summary));
@@ -288,6 +307,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
       microSavedTokens,
       autoSavedTokens: result.savedTokens,
       summary: result.summary,
+      compactedCount: result.compactedCount,
     };
   } catch (error: unknown) {
     if (state && !params.signal?.aborted) state.consecutiveFailures += 1;

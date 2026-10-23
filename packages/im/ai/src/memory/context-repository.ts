@@ -54,6 +54,16 @@ export interface ContextRepository {
     summary: string,
     anchorOrOptions?: number | SaveSummaryOptions,
   ): Promise<void>;
+  /** Save only a proven prefix from loadContext, under the session write lock.
+   * Returns false for unpersisted/stale input. Custom repositories may omit it;
+   * compaction then affects only the current projection, never a guessed checkpoint.
+   */
+  saveCompactionSummary?(
+    sessionId: string,
+    summary: string,
+    compactedMessages: readonly AgentMessage[],
+    signal?: AbortSignal,
+  ): Promise<boolean>;
   hasBranchSummary(sessionId: string, branchAnchorMessageId: number): Promise<boolean>;
   /** Last row id of messages that would be summarized (for compaction anchor). */
   resolveCompactionAnchorId(
@@ -170,11 +180,44 @@ function resolveSaveSummaryOptions(
   return anchorOrOptions ?? {};
 }
 
+/** Repository-owned provenance; no row IDs leak into provider messages. */
+class CompactionCheckpoints {
+  private readonly sources = new WeakMap<AgentMessage, {
+    snapshot: { sessionId: string; revision: string; anchors: (number | undefined)[] };
+    index: number;
+  }>();
+
+  register(sessionId: string, revision: string, messages: AgentMessage[], anchors: (number | undefined)[]): void {
+    const snapshot = { sessionId, revision, anchors };
+    messages.forEach((message, index) => this.sources.set(message, { snapshot, index }));
+  }
+
+  resolve(sessionId: string, revision: string, prefix: readonly AgentMessage[]): number | undefined {
+    const first = prefix[0] && this.sources.get(prefix[0]);
+    if (!first || first.snapshot.sessionId !== sessionId || first.snapshot.revision !== revision) return undefined;
+    for (let index = 0; index < prefix.length; index += 1) {
+      const source = this.sources.get(prefix[index]!);
+      if (source?.snapshot !== first.snapshot || source.index !== index) return undefined;
+    }
+    const anchor = first.snapshot.anchors[prefix.length - 1];
+    // A branch summary follows its raw anchor. Cutting between them would drop
+    // the retained summary on reload; an unpersisted turn cannot be an anchor.
+    if (anchor == null || anchor <= 0 || first.snapshot.anchors[prefix.length] === anchor) return undefined;
+    return anchor;
+  }
+}
+
+function contextRevision(path: AgentMessageRow[], summaries: AgentSummaryRecord[]): string {
+  // Both stores append immutable rows. IDs identify revisions even when timestamps collide.
+  return JSON.stringify([path.map(row => row.id), summaries.map(row => [row.id, row.anchor_message_id, row.branch_anchor_message_id])]);
+}
+
 export class DatabaseContextRepository implements ContextRepository {
   private readonly messageModel: MessageDbModel;
   private readonly summaryModel: SummaryDbModel;
   private readonly sessionStore: AgentSessionRepository;
   private readonly writeLock = new SessionWriteLock();
+  private readonly checkpoints = new CompactionCheckpoints();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
   private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
 
@@ -197,7 +240,8 @@ export class DatabaseContextRepository implements ContextRepository {
   }
 
   async loadContext(sessionId: string): Promise<Context> {
-    const summary = await this.loadLatestEpochSummary(sessionId);
+    const summaryRows = await this.loadAllSummaryRows(sessionId);
+    const summary = summaryRows.filter(row => row.branch_anchor_message_id == null).at(-1);
     const allRows = await this.loadAllMessageRows(sessionId);
     const session = await this.sessionStore.getBySessionId(sessionId);
     const pathRows = buildActivePathRows(allRows, session?.active_leaf_message_id);
@@ -207,25 +251,31 @@ export class DatabaseContextRepository implements ContextRepository {
     const tail = filtered.length > this.config.tailMessageLimit
       ? filtered.slice(-this.config.tailMessageLimit)
       : filtered;
-    const branchSummaries = await this.loadBranchSummariesForPath(
-      sessionId,
-      new Set(tail.map(r => r.id).filter((id): id is number => id != null)),
-    );
+    const branchSummaries = new Map(summaryRows
+      .filter(row => row.branch_anchor_message_id != null)
+      .map(row => [row.branch_anchor_message_id!, row]));
 
     const messages: AgentMessage[] = [];
+    const anchors: (number | undefined)[] = [];
     if (summary) {
       messages.push(summaryAsUserMessage(summary.summary, summary.created_at));
+      anchors.push(summary.anchor_message_id ?? undefined);
     }
     for (const row of tail) {
       const parsed = agentMessageRowToLlm(row);
-      if (parsed) messages.push(parsed);
+      if (parsed) {
+        messages.push(parsed);
+        anchors.push(row.id);
+      }
       if (row.id != null) {
         const branchSummary = branchSummaries.get(row.id);
         if (branchSummary) {
           messages.push(branchSummaryAsUserMessage(branchSummary.summary, branchSummary.created_at));
+          anchors.push(row.id);
         }
       }
     }
+    this.checkpoints.register(sessionId, contextRevision(pathRows, summaryRows), messages, anchors);
     return createContext('', messages);
   }
 
@@ -276,13 +326,31 @@ export class DatabaseContextRepository implements ContextRepository {
     if (!text) return;
     const opts = resolveSaveSummaryOptions(anchorOrOptions);
     await this.writeLock.run(sessionId, async () => {
-      await this.summaryModel.create({
-        session_id: sessionId,
-        summary: text,
-        anchor_message_id: opts.anchorMessageId ?? null,
-        branch_anchor_message_id: opts.branchAnchorMessageId ?? null,
-        created_at: Date.now(),
-      });
+      await this.insertSummary(sessionId, text, opts);
+    });
+  }
+
+  async saveCompactionSummary(sessionId: string, summary: string, prefix: readonly AgentMessage[], signal?: AbortSignal): Promise<boolean> {
+    return this.writeLock.run(sessionId, async () => {
+      if (signal?.aborted || !summary.trim()) return false;
+      const rows = await this.loadAllMessageRows(sessionId);
+      const summaries = await this.loadAllSummaryRows(sessionId);
+      const session = await this.sessionStore.getBySessionId(sessionId);
+      const path = buildActivePathRows(rows, session?.active_leaf_message_id);
+      const anchor = this.checkpoints.resolve(sessionId, contextRevision(path, summaries), prefix);
+      if (signal?.aborted || anchor == null || !path.some(row => row.id === anchor)) return false;
+      await this.insertSummary(sessionId, summary.trim(), { anchorMessageId: anchor });
+      return true;
+    });
+  }
+
+  private async insertSummary(sessionId: string, text: string, opts: SaveSummaryOptions): Promise<void> {
+    await this.summaryModel.create({
+      session_id: sessionId,
+      summary: text,
+      anchor_message_id: opts.anchorMessageId ?? null,
+      branch_anchor_message_id: opts.branchAnchorMessageId ?? null,
+      created_at: Date.now(),
     });
   }
 
@@ -353,34 +421,15 @@ export class DatabaseContextRepository implements ContextRepository {
     try {
       const probe = this.summaryModel.select().where({ session_id: sessionId });
       if (isSummaryQueryChain(probe)) {
-        return (await probe.orderBy('created_at', 'ASC').limit(500)) as AgentSummaryRecord[];
+        return ((await probe.orderBy('created_at', 'ASC').limit(500)) as AgentSummaryRecord[])
+          .sort((a, b) => a.created_at - b.created_at || (a.id ?? 0) - (b.id ?? 0));
       }
       const rows = (await Promise.resolve(probe as PromiseLike<AgentSummaryRecord[]>)) ?? [];
-      rows.sort((a, b) => a.created_at - b.created_at);
+      rows.sort((a, b) => a.created_at - b.created_at || (a.id ?? 0) - (b.id ?? 0));
       return rows;
     } catch (err) {
       throw persistenceFailure('agent_context.load_summaries', err);
     }
-  }
-
-  private async loadLatestEpochSummary(sessionId: string): Promise<AgentSummaryRecord | null> {
-    const rows = await this.loadAllSummaryRows(sessionId);
-    const epochRows = rows.filter(r => r.branch_anchor_message_id == null);
-    return epochRows[epochRows.length - 1] ?? null;
-  }
-
-  private async loadBranchSummariesForPath(
-    sessionId: string,
-    pathIds: Set<number>,
-  ): Promise<Map<number, AgentSummaryRecord>> {
-    const rows = await this.loadAllSummaryRows(sessionId);
-    const map = new Map<number, AgentSummaryRecord>();
-    for (const row of rows) {
-      const anchor = row.branch_anchor_message_id;
-      if (anchor == null || !pathIds.has(anchor)) continue;
-      map.set(anchor, row);
-    }
-    return map;
   }
 
   private async loadAllMessageRows(sessionId: string): Promise<AgentMessageRow[]> {
@@ -404,6 +453,7 @@ export class MemoryContextRepository implements ContextRepository {
   private readonly summaries = new Map<string, AgentSummaryRecord[]>();
   private readonly sessionStore: AgentSessionRepository;
   private readonly writeLock = new SessionWriteLock();
+  private readonly checkpoints = new CompactionCheckpoints();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
   private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
 
@@ -424,9 +474,9 @@ export class MemoryContextRepository implements ContextRepository {
   }
 
   async loadContext(sessionId: string): Promise<Context> {
-    const summaryList = this.summaries.get(sessionId) ?? [];
+    const summaryList = [...(this.summaries.get(sessionId) ?? [])];
     const epochRows = summaryList.filter(r => r.branch_anchor_message_id == null);
-    const latest = epochRows.sort((a, b) => b.created_at - a.created_at)[0];
+    const latest = epochRows.sort((a, b) => a.created_at - b.created_at || (a.id ?? 0) - (b.id ?? 0)).at(-1);
     const allRows = await this.loadMessageRows(sessionId);
     const session = await this.sessionStore.getBySessionId(sessionId);
     const pathRows = buildActivePathRows(allRows, session?.active_leaf_message_id);
@@ -443,19 +493,26 @@ export class MemoryContextRepository implements ContextRepository {
     }
 
     const messages: AgentMessage[] = [];
+    const anchors: (number | undefined)[] = [];
     if (latest) {
       messages.push(summaryAsUserMessage(latest.summary, latest.created_at));
+      anchors.push(latest.anchor_message_id ?? undefined);
     }
     for (const row of tail) {
       const parsed = agentMessageRowToLlm(row);
-      if (parsed) messages.push(parsed);
+      if (parsed) {
+        messages.push(parsed);
+        anchors.push(row.id);
+      }
       if (row.id != null) {
         const branchSummary = branchMap.get(row.id);
         if (branchSummary) {
           messages.push(branchSummaryAsUserMessage(branchSummary.summary, branchSummary.created_at));
+          anchors.push(row.id);
         }
       }
     }
+    this.checkpoints.register(sessionId, contextRevision(pathRows, summaryList), messages, anchors);
     return createContext('', messages);
   }
 
@@ -503,17 +560,34 @@ export class MemoryContextRepository implements ContextRepository {
     if (!text) return;
     const opts = resolveSaveSummaryOptions(anchorOrOptions);
     await this.writeLock.run(sessionId, async () => {
-      const list = this.summaries.get(sessionId) ?? [];
-      list.push({
-        id: list.length + 1,
-        session_id: sessionId,
-        summary: text,
-        anchor_message_id: opts.anchorMessageId ?? null,
-        branch_anchor_message_id: opts.branchAnchorMessageId ?? null,
-        created_at: Date.now(),
-      });
-      this.summaries.set(sessionId, list);
+      this.insertSummary(sessionId, text, opts);
     });
+  }
+
+  async saveCompactionSummary(sessionId: string, summary: string, prefix: readonly AgentMessage[], signal?: AbortSignal): Promise<boolean> {
+    return this.writeLock.run(sessionId, async () => {
+      if (signal?.aborted || !summary.trim()) return false;
+      const session = await this.sessionStore.getBySessionId(sessionId);
+      const path = buildActivePathRows(this.messages.get(sessionId) ?? [], session?.active_leaf_message_id);
+      const summaries = this.summaries.get(sessionId) ?? [];
+      const anchor = this.checkpoints.resolve(sessionId, contextRevision(path, summaries), prefix);
+      if (signal?.aborted || anchor == null || !path.some(row => row.id === anchor)) return false;
+      this.insertSummary(sessionId, summary.trim(), { anchorMessageId: anchor });
+      return true;
+    });
+  }
+
+  private insertSummary(sessionId: string, text: string, opts: SaveSummaryOptions): void {
+    const list = this.summaries.get(sessionId) ?? [];
+    list.push({
+      id: list.length + 1,
+      session_id: sessionId,
+      summary: text,
+      anchor_message_id: opts.anchorMessageId ?? null,
+      branch_anchor_message_id: opts.branchAnchorMessageId ?? null,
+      created_at: Date.now(),
+    });
+    this.summaries.set(sessionId, list);
   }
 
   async hasBranchSummary(sessionId: string, branchAnchorMessageId: number): Promise<boolean> {

@@ -7,7 +7,7 @@ import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchem
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -60,7 +60,6 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
-import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
 import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
@@ -701,8 +700,16 @@ export async function* runAgentLoopTextTurnRun(
   const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
   // System prompt and tool schemas count against the window too, so the
   // compaction threshold is measured on what is left for messages (#730).
-  const fixedPromptTokens = () => estimatePromptTokens(systemPrompt)
-    + llmTools.reduce((sum, tool) => sum + estimatePromptTokens(`${tool.name} ${tool.description}`), 0);
+  let budgetTools: typeof llmTools | undefined;
+  let fixedBudget: Promise<number> | undefined;
+  const fixedPromptTokens = () => {
+    // 本回合系统提示不变；工具渐进披露替换数组后重新计算完整 Schema。
+    if (!fixedBudget || budgetTools !== llmTools) {
+      budgetTools = llmTools;
+      fixedBudget = estimateContextFixedTokens({ systemPrompt, tools: llmTools, model: llmModel, outputSchema });
+    }
+    return fixedBudget;
+  };
   const loopHooks = input.loopHooks;
   const completionPort = createTurnCompletionPort({
     host,
@@ -764,7 +771,7 @@ export async function* runAgentLoopTextTurnRun(
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
-        reservedTokens: fixedPromptTokens(),
+        reservedTokens: await fixedPromptTokens(),
         toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
         loopHooks,
@@ -777,7 +784,7 @@ export async function* runAgentLoopTextTurnRun(
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
-        reservedTokens: fixedPromptTokens(),
+        reservedTokens: await fixedPromptTokens(),
         toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
         force: true,
