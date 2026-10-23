@@ -1,0 +1,30 @@
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_079f1dc5e6308d::t_5e8746ecf049b4 485-490,561-564
+plugins/adapters/icqq/agents/icqq/skills/icqq-directory/SKILL.md
+  s_079f1dc5e6308d::t_5e8746ecf049b4 18
+.changeset/compact-prompts-scene-capabilities.md
+  s_079f1dc5e6308d::t_5e8746ecf049b4 3
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_079f1dc5e6308d::t_5e8746ecf049b4 71-74
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_079f1dc5e6308d::t_db9f66a6a612b2 31,65
+  s_079f1dc5e6308d::t_6376c70df5722d 4-6,10-30,32-64,66-67
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_079f1dc5e6308d::t_5e8746ecf049b4 175
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "33dcb3322f37f13de5b2581c95851e785cc977ae",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
