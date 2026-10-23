@@ -153,10 +153,10 @@ describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQ
     await createTask(provider); await f.tick(); load.mockResolvedValue(items('new', 'base'));
     // The external send can complete just before a process/storage failure. Throw
     // after the real SQLite claim has committed to exercise that crash boundary.
-    const compareExchange = f.database.state!.compareExchange.bind(f.database.state!);
-    const write = vi.spyOn(f.database.state!, 'compareExchange').mockImplementation(async (...args) => {
+    const transaction = f.database.transaction!.bind(f.database);
+    const write = vi.spyOn(f.database, 'transaction').mockImplementation(async callback => {
       if (f.send.mock.calls.length > 0) throw new Error('simulated failure after external send');
-      return compareExchange(...args);
+      return transaction(callback);
     });
     await expect(f.tick()).rejects.toThrow('simulated failure'); write.mockRestore();
     expect((await provider.read()).tasks[0]!.state).toBe('unknown'); expect(f.send).toHaveBeenCalledTimes(1);
@@ -179,7 +179,8 @@ describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQ
 
   it('fails closed on malformed durable state without overwriting it or calling source/platform', async () => {
     const load = mockFeed(); const f = await setup(); const broken = { version: 99, revision: 'preserve', tasks: [], receipts: [] };
-    await f.state().set(ADMIN_RSS_STATE_KEY, broken);
+    await f.state().get(ADMIN_RSS_STATE_KEY);
+    await f.storage().models.get('admin_rss_book')!.update({ version: broken.version, revision: broken.revision, storage_present: true }).where({ storage_id: 1 });
     await expect(f.provider()!.read()).rejects.toMatchObject({ code: 'unavailable' });
     await expect(f.tick()).rejects.toThrow('持久状态格式无效');
     expect(await f.state().get(ADMIN_RSS_STATE_KEY)).toEqual(broken); expect(load).not.toHaveBeenCalled(); expect(f.send).not.toHaveBeenCalled();
@@ -190,7 +191,8 @@ describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQ
     const load = vi.spyOn(feed, 'fetchFeed').mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const f = await setup();
     await getRssSubs(f.rss().db)!.insert({ url: 'https://example.test/chat', adapter_name: 'sandbox', endpoint_id: 'chat-account', channel_type: 'group', channel_id: 'chat' });
-    await f.state().set(ADMIN_RSS_STATE_KEY, { version: 99, revision: 'preserve', tasks: [], receipts: [] });
+    await f.state().get(ADMIN_RSS_STATE_KEY);
+    await f.storage().models.get('admin_rss_book')!.update({ version: 99, revision: 'preserve', storage_present: true }).where({ storage_id: 1 });
     let settled = false;
     const running = f.tick().then(() => { settled = true; return undefined; }, error => { settled = true; return error; });
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(1));

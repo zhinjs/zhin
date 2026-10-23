@@ -564,6 +564,8 @@ export function createRuntimeTurnAccess(
   return Object.freeze({
     origin: Object.freeze({
       kind: 'im' as const,
+      conversation: message.conversation,
+      ...(message.conversation.threadId ? { threadId: message.conversation.threadId } : {}),
       platform,
       endpoint,
       scope,

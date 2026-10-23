@@ -132,6 +132,8 @@ describe('buildInboxMessageRow', () => {
   it('maps inbound events: sender is the platform user', () => {
     const row = buildInboxMessageRow(inboundEvent(), resolveEndpoint);
     expect(row).toEqual({
+      direction: 'inbound', endpoint_adapter_id: 'k1:root',
+      endpoint_capability_id: 'k1:root%00zhin.adapter%00icqq', thread_id: null, query_version: 1,
       adapter: 'icqq',
       endpoint_id: '1234',
       platform_message_id: 'm-1',

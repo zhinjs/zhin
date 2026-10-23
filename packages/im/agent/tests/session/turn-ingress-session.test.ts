@@ -91,6 +91,7 @@ describe('TurnIngress session projection', () => {
   it('projects the origin-neutral Agent session identity', () => {
     expect(buildTurnSessionCreateInput(turn())).toEqual({
       session_key: 'im:qq:bot-1:group:group-9',
+      source: { kind: 'im', adapter: 'qq', endpoint: 'bot-1', scope: 'group', id: 'group-9' },
     });
   });
 
@@ -103,7 +104,7 @@ describe('TurnIngress session projection', () => {
       principal: { subjectId: 'api-user', roles: ['user'] },
       input: { text: 'hello' },
     });
-    expect(buildTurnSessionCreateInput(http)).toEqual({ session_key: 'http:http-1' });
+    expect(buildTurnSessionCreateInput(http)).toEqual({ session_key: 'http:http-1', source: { kind: 'http', id: 'http-1' } });
   });
 
   it('opens the active session from TurnIngress without a Message adapter', async () => {

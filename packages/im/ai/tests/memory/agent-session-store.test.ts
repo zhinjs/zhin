@@ -1,3 +1,5 @@
+import { ensureDatabaseColumns, type StructuredDatabase } from '@zhin.js/database';
+import { AGENT_SESSION_SOURCE_MODEL } from '../../src/memory/agent-db-models.js';
 import { describe, expect, it, vi } from 'vitest';
 import { Registry } from '@zhin.js/database';
 import {
@@ -125,6 +127,7 @@ describe('AgentSessionStore sqlite leftover IM columns', () => {
       )
     `);
     db.define('agent_sessions', AGENT_SESSION_MODEL);
+    await ensureDatabaseColumns(db as unknown as StructuredDatabase, 'agent_sessions', AGENT_SESSION_SOURCE_MODEL);
     const store = new AgentSessionStore(db.model('agent_sessions'));
 
     await expect(store.getOrCreateActive({ session_key: 'http:session-1' }))

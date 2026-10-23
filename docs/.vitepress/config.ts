@@ -107,6 +107,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('上线运维', [
     { text: '部署与恢复', link: '/operations/production' },
     { text: '版本兼容与迁移', link: '/operations/upgrades' },
+    { text: '存储与用量查询', link: '/operations/structured-storage' },
     { text: '故障排查中心', link: '/troubleshooting/' },
     { text: '消息没有回复', link: '/troubleshooting/messages' },
     { text: '文档内容数据闭环', link: '/operations/docs-insights' },
@@ -254,6 +255,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('Operations', [
     { text: 'Deployment and Recovery', link: '/en/operations/production' },
     { text: 'Compatibility and Migration', link: '/en/operations/upgrades' },
+    { text: 'Storage and Usage Queries', link: '/en/operations/structured-storage' },
     { text: 'Troubleshooting Center', link: '/en/troubleshooting/' },
     { text: 'Find Where a Message Stopped', link: '/en/troubleshooting/messages' },
     { text: 'Documentation Insights', link: '/en/operations/docs-insights' },

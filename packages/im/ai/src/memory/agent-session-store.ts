@@ -7,6 +7,7 @@ import type {
   AgentSessionRecord,
   CreateAgentSessionInput,
 } from './agent-db-models.js';
+import { agentSessionSourceFields } from './agent-db-models.js';
 import { SessionWriteLock } from './session-write-lock.js';
 import { persistenceFailure } from './persistence-error.js';
 
@@ -73,6 +74,7 @@ export class AgentSessionStore implements AgentSessionRepository {
       await this.archiveIdleForKey(input.session_key);
       const now = Date.now();
       const record: AgentSessionRecord = {
+        ...agentSessionSourceFields(input.source),
         session_id: createSessionEpochId(input.session_key),
         session_key: input.session_key,
         model: input.model ?? '',
@@ -187,6 +189,7 @@ export class MemoryAgentSessionStore implements AgentSessionRepository {
       }
       const now = Date.now();
       const record: AgentSessionRecord = {
+        ...agentSessionSourceFields(input.source),
         session_id: createSessionEpochId(input.session_key),
         session_key: input.session_key,
         model: input.model ?? '',

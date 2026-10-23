@@ -1,6 +1,7 @@
 /**
- * Schedule JobStore — schedule-jobs.json 持久化
+ * Schedule JobStore — SQL persistence with the existing file mode as fallback
  */
+import type { DatabaseScheduleJobStorage } from './job-storage.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -25,6 +26,23 @@ export class ScheduleJobStore {
   private filePath: string;
   private defaultNotify?: JobNotify;
   private cache: ScheduleJobFile | null = null;
+  private database?: DatabaseScheduleJobStorage;
+
+  /** Must run before loading the existing scheduler or publishing this generation. */
+  async activateDatabase(database: DatabaseScheduleJobStorage): Promise<void> {
+    if (this.database) throw new Error('Schedule storage already activated');
+    await database.activate(async () => {
+      let raw: string;
+      try { raw = await fs.promises.readFile(this.filePath, 'utf-8'); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return this.emptyStore(); throw error; }
+      const value = JSON.parse(raw) as ScheduleJobFile;
+      if (!value || !Array.isArray(value.jobs)) throw new Error('Invalid schedule-jobs file; migration did not change the original');
+      return { version: value.version ?? SCHEDULE_JOBS_VERSION,
+        jobs: value.jobs.map(job => normalizeJob(job as unknown as Record<string, unknown>, this.defaultNotify)) };
+    });
+    this.cache = null;
+    this.database = database;
+  }
 
   constructor(options: ScheduleJobStoreOptions) {
     this.dataDir = options.dataDir;
@@ -41,6 +59,7 @@ export class ScheduleJobStore {
   }
 
   async read(): Promise<ScheduleJobFile> {
+    if (this.database) return this.database.read();
     if (this.cache) return this.cache;
     try {
       const raw = await fs.promises.readFile(this.filePath, 'utf-8');
@@ -71,6 +90,7 @@ export class ScheduleJobStore {
   }
 
   async write(store: ScheduleJobFile): Promise<void> {
+    if (this.database) return this.database.update(file => { file.jobs = store.jobs; file.version = store.version; });
     await fs.promises.mkdir(path.dirname(this.filePath), { recursive: true });
     await fs.promises.writeFile(this.filePath, JSON.stringify(store, null, 2), 'utf-8');
     this.cache = store;
@@ -82,11 +102,16 @@ export class ScheduleJobStore {
   }
 
   async getJob(id: string): Promise<ScheduleJob | undefined> {
+    if (this.database) return this.database.get(id);
     const store = await this.read();
     return store.jobs.find((j) => j.id === id);
   }
 
   async upsertJob(job: ScheduleJob): Promise<void> {
+    if (this.database) return this.database.mutateJob(job.id, existing => ({ result: undefined,
+      job: existing && isSameScheduleJobBusiness(existing, job) ? existing : { ...job,
+        createdAt: existing?.createdAt ?? (job.createdAt || Date.now()), updatedAt: Date.now() },
+    }));
     const store = await this.read();
     const idx = store.jobs.findIndex((j) => j.id === job.id);
     const now = Date.now();
@@ -103,6 +128,7 @@ export class ScheduleJobStore {
   }
 
   async removeJob(id: string): Promise<boolean> {
+    if (this.database) return this.database.mutateJob(id, job => ({ job: undefined, result: job !== undefined }));
     const store = await this.read();
     const before = store.jobs.length;
     store.jobs = store.jobs.filter((j) => j.id !== id);
@@ -114,6 +140,9 @@ export class ScheduleJobStore {
   }
 
   async updateJobState(id: string, patch: Partial<ScheduleJob['state']>): Promise<void> {
+    if (this.database) return this.database.mutateJob(id, job => ({ result: undefined,
+      job: job ? { ...job, updatedAt: Date.now(), state: { ...job.state, ...patch } } : undefined,
+    }));
     const job = await this.getJob(id);
     if (!job) return;
     job.state = { ...job.state, ...patch };

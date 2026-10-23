@@ -42,7 +42,7 @@ import { createRuntimeProactiveOutbound, observeAgentTurnTrace } from './runtime
 const logger = getLogger('agent');
 
 /**
- * Persist schedule-jobs.json + schedule_* tools for Plugin Runtime Agent Host.
+ * Compose schedule_* tools; the persistence coordinator selects SQL or existing file storage before start.
  * When `assistant.enabled`, also sync profile routines and register Event Ingress.
  */
 export function createAssistantScheduleRuntime(
@@ -55,6 +55,8 @@ export function createAssistantScheduleRuntime(
   trace: AgentTraceRecorder,
 ): {
   tools: ReturnType<typeof createScheduleTools>;
+  store: ReturnType<typeof createScheduleJobStoreFromConfig>;
+  start: () => Promise<void>;
   dispose: () => Promise<void>;
   assistantEnabled: boolean;
   notificationRouter: ReturnType<typeof createNotificationRouter>;
@@ -137,6 +139,8 @@ export function createAssistantScheduleRuntime(
   };
 
   let assistantRuntime: AssistantRuntimeHandle | null = null;
+  let stopped = false;
+  let start = async () => { if (!stopped) await jobEngine.load(); };
   if (assistantCfg.enabled) {
     const ingress = new AssistantEventIngress({
       store,
@@ -156,38 +160,35 @@ export function createAssistantScheduleRuntime(
         resume: (id) => jobEngine.resumeJob(id),
       },
     };
-    void (async () => {
-      const profile = await loadAssistantProfileFile(projectRoot, assistantCfg.profile);
-      if (profile) {
-        for (const err of validateAssistantProfile(profile)) {
-          logger.warn(formatCompact({ assistant_profile: err }));
+    start = async () => {
+      if (stopped) return;
+      try {
+        const profile = await loadAssistantProfileFile(projectRoot, assistantCfg.profile);
+        if (profile) {
+          for (const err of validateAssistantProfile(profile)) {
+            logger.warn(formatCompact({ assistant_profile: err }));
+          }
         }
+        await syncProfileHeartbeatToStore(store, profile);
+        await syncProfileRoutinesToStore(store, profile);
+        await pruneStaleProfileCronJobs(store, profile);
+      } catch (error) {
+        logger.warn(formatCompact({ op: 'assistant_profile_load_fail', error: error instanceof Error ? error.message : String(error) }));
       }
-      await syncProfileHeartbeatToStore(store, profile);
-      await syncProfileRoutinesToStore(store, profile);
-      await pruneStaleProfileCronJobs(store, profile);
-      jobEngine.load();
-    })().catch((error) => {
-      logger.warn(formatCompact({
-        op: 'assistant_profile_load_fail',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      jobEngine.load();
-    });
+      if (!stopped) await jobEngine.load();
+    };
     logger.info(formatCompact({
       op: 'agent_host_assistant',
       enabled: true,
       events: ingress.isEnabled(),
       profile: assistantCfg.profile?.enabled === true,
     }));
-  } else {
-    jobEngine.load();
   }
 
   const tools = createScheduleTools(scheduleManager);
 
   return {
-    tools,
+    tools, store, start,
     assistantEnabled: assistantCfg.enabled,
     notificationRouter,
     defaultNotify,
@@ -195,6 +196,7 @@ export function createAssistantScheduleRuntime(
     assistantRuntime,
     // assistant / schedule-manager 注册随 generation lifecycle 反注册（provide 时挂接）
     dispose: async () => {
+      stopped = true;
       jobEngine.unload();
       await jobWorker.stop();
       await executor.dispose();

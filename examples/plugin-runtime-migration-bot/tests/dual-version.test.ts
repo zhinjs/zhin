@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from 'zhin.js';
 import { MiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
-import { createCapabilitySlot, rootPluginId } from 'zhin.js/plugin-runtime';
 import nextHello from '../commands/hello/[name]/index.js';
 import statusCard from '../components/status-card/index.js';
 import audit from '../middlewares/audit/index.js';
@@ -20,19 +20,23 @@ describe('Plugin Runtime migration result', () => {
   });
 
   it('keeps extracted middleware and component definitions executable', async () => {
-    const owner = rootPluginId();
-    const slot = createCapabilitySlot({ owner, feature: middlewareFeatureId, localName: 'audit',
-      source: '/middlewares/audit/index.ts', definition: audit });
-    const middleware = new MiddlewareIndex([slot], {
-      generation: 1, root: owner,
-      tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'migration-example',
-        packageRoot: '/migration-example', children: [] }]]),
-      config: new Map([[owner, {}]]), resources: new Map([[owner, new Map()]]),
-      capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({
+      owner: root, feature: middlewareFeatureId, localName: 'audit',
+      source: '/middlewares/audit/index.ts', definition: audit,
     });
+    const snapshot: RuntimeSnapshot = {
+      generation: 1, root,
+      tree: new Map([[root, {
+        id: root, instanceKey: 'root', packageName: '@test/migration',
+        packageRoot: '/project', children: [],
+      }]]),
+      config: new Map([[root, {}]]), resources: new Map([[root, new Map()]]),
+      capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+    };
     const terminal = vi.fn(async () => undefined);
-    // The executor owns next() and its opaque continuation, just as in the running plugin.
-    await middleware.run({ id: 'message-1' }, terminal);
+    // Execute with the real frame-scoped continuation returned by next().
+    await new MiddlewareIndex([slot], snapshot).run({ id: 'message-1' }, terminal);
 
     expect(terminal).toHaveBeenCalledOnce();
     expect(await statusCard.render({ label: 'ready' }, {} as never)).toBe('ready');

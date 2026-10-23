@@ -13,7 +13,16 @@ export const INBOX_TABLE_MESSAGE = 'unified_inbox_message';
 export const INBOX_TABLE_REQUEST = 'unified_inbox_request';
 export const INBOX_TABLE_NOTICE = 'unified_inbox_notice';
 
+export const INBOX_MESSAGE_QUERY_COLUMNS = {
+  direction: { type: 'text', nullable: true },
+  endpoint_capability_id: { type: 'text', nullable: true },
+  endpoint_adapter_id: { type: 'text', nullable: true },
+  thread_id: { type: 'text', nullable: true },
+  query_version: { type: 'integer', nullable: true },
+} as const;
+
 export const INBOX_MESSAGE_DEFINITION: Record<string, unknown> = {
+  ...INBOX_MESSAGE_QUERY_COLUMNS,
   id: { type: 'integer', primary: true, autoIncrement: true },
   adapter: { type: 'text', nullable: false },
   endpoint_id: { type: 'text', nullable: false },

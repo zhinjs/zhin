@@ -8,6 +8,7 @@ import type {
   OperationClientPort,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
+import type { DeliveryTarget } from '@zhin.js/plugin-runtime';
 import { isToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
@@ -68,6 +69,8 @@ export type ToolInvocationOrigin =
       sceneId: string;
       messageId?: string;
       threadId?: string;
+      /** Canonical endpoint/parent/thread address, when supplied by IM ingress. */
+      conversation?: DeliveryTarget;
     }>
   | Readonly<{ kind: 'http'; sessionId: string }>
   | Readonly<{ kind: 'a2a'; taskId: string }>

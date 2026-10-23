@@ -24,7 +24,7 @@ function known(call: TurnTraceModelCall, field: Field): number | undefined {
   if (value === undefined || !Number.isFinite(value) || value < 0) return undefined;
   // Old records lack availability. Positive usage is evidence; normalized zero isn't.
   const reported = call.reported?.[field] ?? (field === 'cacheRead' || field === 'cacheWrite' || field === 'reasoning'
-    ? value !== undefined : value > 0);
+    ? true : value > 0);
   return reported ? value : undefined;
 }
 

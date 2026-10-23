@@ -299,3 +299,15 @@ describe.skipIf(!sqliteAvailable)('audit fixes: migration', () => {
     expect(rows[0].label).toBe("o'clock");
   });
 });
+
+
+describe('transaction thenables', () => {
+  it.each(['select', 'update', 'delete'] as const)('propagates %s rejection through await', async operation => {
+    const { TransactionContextImpl } = await import('../src/base/transaction.js');
+    const failure = new Error('transaction statement failed');
+    const context = new TransactionContextImpl({ buildQuery: () => ({ query: 'statement', params: [] }), dialectName: 'sqlite' } as never,
+      { query: async () => { throw failure; }, commit: async () => {}, rollback: async () => {} });
+    const query = operation === 'select' ? context.select('rows') : operation === 'update' ? context.update('rows', {}) : context.delete('rows');
+    await expect(Promise.resolve(query)).rejects.toBe(failure);
+  });
+});

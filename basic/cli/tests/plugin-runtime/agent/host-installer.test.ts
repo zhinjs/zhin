@@ -21,6 +21,7 @@ vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
       knowledgeIndex: undefined,
       semanticMemory: null,
       scheduleTools: [],
+      schedule: { start: vi.fn() },
       homeTools: [],
       assistantEnabled: false,
       seedPresets: () => seedPresets(),
@@ -50,7 +51,7 @@ function context(resources: Scope) {
     resources,
     lifecycle: { add: vi.fn() },
     handoff: { add: vi.fn() },
-    config: { get: (key: string) => key === 'ai' ? { enabled: true } : undefined },
+    config: { get: (key: string) => key === 'ai' ? { enabled: true, sessions: { useDatabase: false } } : undefined },
     addFeature: vi.fn(),
   } as never;
 }
@@ -97,7 +98,7 @@ describe('installAgentHost optional Workroom', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('leaves the persistence latch to the Workroom coordinator when Workroom is installed', async () => {
+  it('owns the Agent persistence latch even when Workroom is installed', async () => {
     const markReady = vi.spyOn(agentRef.current!, 'markMemoryPersistenceReady');
     const workroom = {
       WorkroomHostAssembly: {
@@ -105,7 +106,7 @@ describe('installAgentHost optional Workroom', () => {
       },
     };
     await install(workroom)(context(new Scope(rootPluginId())));
-    expect(markReady).not.toHaveBeenCalled();
+    expect(markReady).toHaveBeenCalledOnce();
   });
 
   it('fails closed when an installed Workroom fails to compose (not downgraded to not-installed)', async () => {
