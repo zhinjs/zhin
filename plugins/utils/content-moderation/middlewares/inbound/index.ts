@@ -130,37 +130,34 @@ async function runGroupModeration(
     const moderator = context.use(moderationEngineToken).groupModerator;
     const { text } = extractFromTextAndSegments(message.content, message.segments);
     const scope = JSON.stringify(conversation);
-    try {
-      if (!bypass && message.sender?.id && message.origin !== 'self'
-        && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)) {
-        await moderator.review({
-          scope, group: conversation.id, sender: message.sender.id,
-          messageId: message.id ?? '', sentAt: Number(message.metadata?.platformSentAt), text,
-          signal: context.signal,
-          state: context.use(databaseHostToken).state.forConversation(createDeliveryTarget({ conversation })),
-          completion: context.use(aiCompletionToken), management: endpoint.management ?? {},
-          onBehalfOf: usageSubjectFromMessage(message),
-          onReview: () => { modelOwnsRecall = true; },
-          reply: async (content, mention) => {
-            context.signal.throwIfAborted();
-            const receipt = await message.$reply(mention ? [
-              { type: 'mention', data: { target: mention } },
-              { type: 'text', data: { text: ` ${content}` } },
-            ] : content);
-            if (receipt.status !== 'sent') throw new Error('Moderation notice was not delivered');
-          },
-          recall: async () => {
-            context.signal.throwIfAborted();
-            const host = context.use(outboundHostToken);
-            if (!host.recall || !message.id) throw new Error('Original message cannot be recalled');
-            await host.recall({ adapter: target.adapter, endpointKey: conversation.endpoint.id,
-              message: { conversation, id: message.id } });
-          },
-          audit: (event) => logger.info({ ...event, endpoint: conversation.endpoint.id, group: conversation.id }),
-        });
-      }
-    } finally {
-      moderator.remember(scope, message.sender?.id ?? '', text);
+    const precedingContext = moderator.remember(scope, message.sender?.id ?? '', text);
+    if (!bypass && message.sender?.id && message.origin !== 'self'
+      && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)) {
+      await moderator.review({
+        scope, group: conversation.id, sender: message.sender.id,
+        messageId: message.id ?? '', sentAt: Number(message.metadata?.platformSentAt), text, precedingContext,
+        signal: context.signal,
+        state: context.use(databaseHostToken).state.forConversation(createDeliveryTarget({ conversation })),
+        completion: context.use(aiCompletionToken), management: endpoint.management ?? {},
+        onBehalfOf: usageSubjectFromMessage(message),
+        onReview: () => { modelOwnsRecall = true; },
+        reply: async (content, mention) => {
+          context.signal.throwIfAborted();
+          const receipt = await message.$reply(mention ? [
+            { type: 'mention', data: { target: mention } },
+            { type: 'text', data: { text: ` ${content}` } },
+          ] : content);
+          if (receipt.status !== 'sent') throw new Error('Moderation notice was not delivered');
+        },
+        recall: async () => {
+          context.signal.throwIfAborted();
+          const host = context.use(outboundHostToken);
+          if (!host.recall || !message.id) throw new Error('Original message cannot be recalled');
+          await host.recall({ adapter: target.adapter, endpointKey: conversation.endpoint.id,
+            message: { conversation, id: message.id } });
+        },
+        audit: (event) => logger.info({ ...event, endpoint: conversation.endpoint.id, group: conversation.id }),
+      });
     }
   } catch (error) {
     logger.warn('Automatic group moderation unavailable', error instanceof Error ? error.message : String(error));

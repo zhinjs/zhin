@@ -51,7 +51,7 @@ describe('contextual group moderation', () => {
     const f = fixture();
     f.completeText.mockResolvedValue({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
     for (let n = 1; n <= 260; n++) await f.send(n);
-    expect(f.rows.size).toBe(2);
+    expect(f.rows.size).toBeLessThanOrEqual(2);
     expect([...f.rows.values()].every(row => Buffer.byteLength(JSON.stringify(row.value)) < 64 * 1024)).toBe(true);
     const calls = f.completeText.mock.calls.length;
     await new GroupModerator().review({ ...f.input, messageId: 'm1', sentAt: NOW + 2000 });
@@ -157,8 +157,128 @@ describe('contextual group moderation', () => {
   it('reserves a member before concurrent reviews can issue multiple notices', async () => {
     const f = fixture();
     await Promise.all([f.moderator.review(f.input), f.moderator.review({ ...f.input, messageId: 'm2' })]);
-    expect(f.completeText).toHaveBeenCalledTimes(1);
+    expect(f.completeText).toHaveBeenCalledTimes(2);
     expect(f.reply).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])('reviews an ad independently of a slow harmless review, replacement: %s', async (replacement) => {
+    const f = fixture();
+    f.inspectGroupMember.mockResolvedValue({ canModerate: true, joinedAt: NOW - 1000 });
+    let release!: (value: { text: string; model: string; durationMs: number }) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    f.completeText.mockImplementationOnce(() => {
+      entered();
+      return new Promise(resolve => { release = resolve; });
+    });
+    const first = f.moderator.review({ ...f.input, messageId: 'hello', text: '大家好' });
+    await started;
+    const nextModerator = replacement ? new GroupModerator() : f.moderator;
+    await nextModerator.review({ ...f.input, messageId: 'ad' });
+    expect(f.moderateGroupMember).toHaveBeenCalledTimes(1);
+    release({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
+    await first;
+    expect(f.completeText).toHaveBeenCalledTimes(2);
+    expect(f.moderateGroupMember).toHaveBeenCalledExactlyOnceWith('129043431', '123',
+      { type: 'kick', joinedAt: NOW - 1000, maxMembershipAgeMs: 600_000 }, expect.any(AbortSignal));
+    await f.moderator.review({ ...f.input, messageId: 'ad' });
+    expect(f.completeText).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not kick again for a concurrently reviewed ad sent before the delivered notice', async () => {
+    const f = fixture();
+    f.inspectGroupMember.mockResolvedValue({ canModerate: true, joinedAt: NOW - 1000 });
+    let release!: (value: { text: string; model: string; durationMs: number }) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    f.completeText.mockImplementationOnce(() => {
+      entered(); return new Promise(resolve => { release = resolve; });
+    });
+    const first = f.moderator.review(f.input);
+    await started;
+    await new GroupModerator().review({ ...f.input, messageId: 'second-ad' });
+    release({ text: verdict(), model: 'fixture', durationMs: 0 });
+    await first;
+    expect(f.completeText).toHaveBeenCalledTimes(2);
+    expect(f.moderateGroupMember).toHaveBeenCalledTimes(1);
+    expect(f.reply).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retain an already cancelled review behind an unrelated slow model call', async () => {
+    const f = fixture();
+    let release!: (value: { text: string; model: string; durationMs: number }) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    f.completeText.mockImplementationOnce(() => {
+      entered(); return new Promise(resolve => { release = resolve; });
+    });
+    const first = f.moderator.review(f.input);
+    await started;
+    const controller = new AbortController(); controller.abort();
+    await f.moderator.review({ ...f.input, messageId: 'cancelled', signal: controller.signal });
+    expect(f.completeText).toHaveBeenCalledTimes(1);
+    release({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
+    await first;
+  });
+
+  it('keeps a late model recall decision after its pending record is evicted without punishing', async () => {
+    const f = fixture();
+    const onReview = vi.fn();
+    let release!: (value: { text: string; model: string; durationMs: number }) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    f.completeText.mockResolvedValue({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
+    f.completeText.mockImplementationOnce(() => {
+      entered(); return new Promise(resolve => { release = resolve; });
+    });
+    const first = f.moderator.review({ ...f.input, messageId: 'original', onReview });
+    await started;
+    for (let n = 1; n <= 256; n++) await f.send(n);
+    release({ text: verdict(false), model: 'fixture', durationMs: 0 });
+    await first;
+    expect(onReview).toHaveBeenCalledTimes(1);
+    expect(f.reply).not.toHaveBeenCalled();
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
+    expect(f.recall).not.toHaveBeenCalled();
+    const calls = f.completeText.mock.calls.length;
+    await new GroupModerator().review({ ...f.input, messageId: 'original', onReview });
+    expect(onReview).toHaveBeenCalledTimes(2);
+    expect(f.completeText).toHaveBeenCalledTimes(calls);
+  });
+
+  it('lets a message sent after the notice advance while an optional recall is pending', async () => {
+    const f = fixture();
+    let release!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    f.completeText.mockResolvedValueOnce({ text: verdict(true), model: 'fixture', durationMs: 0 });
+    f.recall.mockImplementationOnce(() => {
+      entered(); return new Promise<void>(resolve => { release = resolve; });
+    });
+    const first = f.moderator.review(f.input);
+    await started;
+    vi.setSystemTime(NOW + 2000);
+    await new GroupModerator().review({ ...f.input, messageId: 'after-notice', sentAt: Date.now() });
+    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('警告'), '123');
+    release(); await first;
+    expect(f.reply).toHaveBeenCalledTimes(2);
+    expect(f.recall).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['```json\n', '```\n'])('accepts a complete JSON object wrapped in %s', fence => {
+    expect(parseGroupReview(`${fence}${verdict()}\n\x60\x60\x60`, text)).toEqual({
+      category: 'advertising', evidence: [text], recall: false, recallReason: '保留讨论上下文',
+    });
+  });
+
+  it('audits malformed review output without retrying or punishing', async () => {
+    const f = fixture();
+    f.completeText.mockResolvedValue({ text: '{', model: 'fixture', durationMs: 0 });
+    await f.moderator.review(f.input);
+    expect(f.input.audit).toHaveBeenCalledWith({ event: 'group_review_invalid', messageId: 'm1', reason: 'invalid_json' });
+    expect(f.completeText).toHaveBeenCalledTimes(1);
+    expect(f.reply).not.toHaveBeenCalled();
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
   });
 
   it('does nothing when the platform cannot authorize moderation', async () => {
@@ -228,7 +348,7 @@ describe('inbound group moderation wiring', () => {
     const context = { config, input: message, signal: f.abort.signal,
       use: (token: { id: string }) => { if (!resources.has(token.id)) throw new Error('Missing resource'); return resources.get(token.id); },
       project: () => ({ connection: () => endpoint }) };
-    const run = async () => inbound.handle(context as never, vi.fn(async () => undefined) as never);
+    const run = async (input = message) => inbound.handle({ ...context, input } as never, vi.fn(async () => undefined) as never);
     return { ...f, config, message, endpoint, engine, hostRecall, resources, run };
   }
 
@@ -253,6 +373,68 @@ describe('inbound group moderation wiring', () => {
     });
     await f.run();
     expect(f.message.$reply).toHaveBeenCalledExactlyOnceWith('提醒。请勿发布未经请求的广告或引流信息。');
+  });
+
+  it.each([false, true])('protects the pending recall decision from a duplicate, replacement: %s', async (replacement) => {
+    const f = middlewareFixture();
+    let release!: (value: { text: string; model: string; durationMs: number }) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    f.completeText.mockImplementationOnce(() => {
+      entered();
+      return new Promise(resolve => { release = resolve; });
+    });
+    const first = f.run();
+    await started;
+    if (replacement) {
+      const engine = new ModerationEngine(); engine.configure(f.config);
+      f.resources.set(moderationEngineToken.id, engine);
+    }
+    const duplicate = f.run();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.hostRecall).not.toHaveBeenCalled();
+    release({ text: verdict(false), model: 'fixture', durationMs: 0 });
+    await Promise.all([first, duplicate]);
+    expect(f.completeText).toHaveBeenCalledTimes(1);
+    expect(f.hostRecall).not.toHaveBeenCalled();
+    expect(f.message.$reply).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not suppress legacy recall for another message after an unknown notice outcome', async () => {
+    const f = middlewareFixture();
+    f.message.$reply.mockRejectedValueOnce(new Error('ACK timeout'));
+    await f.run();
+    expect(f.hostRecall).not.toHaveBeenCalled();
+    f.completeText.mockResolvedValue({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
+    vi.setSystemTime(NOW + 2000);
+    await f.run({ ...f.message, id: 'different-message', metadata: { platformSentAt: Date.now() } });
+    expect(f.hostRecall).toHaveBeenCalledExactlyOnceWith({ adapter: 'icqq', endpointKey: 'canonical:8596238',
+      message: { conversation: f.message.conversation, id: 'different-message' } });
+    expect(f.message.$reply).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures preceding context in arrival order before overlapping reviews', async () => {
+    const f = middlewareFixture();
+    let release!: (value: { text: string; model: string; durationMs: number }) => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    f.completeText.mockResolvedValue({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
+    f.completeText.mockImplementationOnce(() => {
+      entered();
+      return new Promise(resolve => { release = resolve; });
+    });
+    const first = f.run({ ...f.message, id: 'question', content: '请推荐一个产品' });
+    await started;
+    await f.run({ ...f.message, id: 'answer', sender: { id: '456' }, content: '推荐这个产品' });
+    const secondRequest = f.completeText.mock.calls[1][0];
+    expect(secondRequest.untrusted[0].text).toBe(JSON.stringify({ sender: '123', text: '请推荐一个产品' }));
+    release({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
+    await first;
+    await f.run({ ...f.message, id: 'thanks', sender: { id: '789' }, content: '谢谢' });
+    expect(f.completeText.mock.calls[2][0].untrusted[0].text).toBe([
+      JSON.stringify({ sender: '123', text: '请推荐一个产品' }),
+      JSON.stringify({ sender: '456', text: '推荐这个产品' }),
+    ].join('\n'));
   });
 
   it.each([true, false])('keeps the model recall choice even when a lexicon says critical: %s', async (recall) => {

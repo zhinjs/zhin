@@ -7,7 +7,7 @@ const NEWCOMER_MS = 10 * 60_000;
 type Category = 'advertising' | 'abuse';
 type Stage = { count: number; lastViolationAt: number; notifiedAt: number };
 type MemberState = { lease: string; leaseAt: number; advertising: Stage; abuse: Stage };
-type SeenMessage = { id: string; at: number; token: string; ownsRecall: boolean };
+type SeenMessage = { id: string; at: number; token: string; pending?: boolean; ownsRecall: boolean };
 type SeenWindow = { throughAt: number; messages: SeenMessage[] };
 export interface GroupReview {
   readonly category: Category;
@@ -24,18 +24,25 @@ abuse: clear targeted personal attacks in context. Criticism of an idea, quotati
 If context is missing, mixed, or uncertain, choose uncertain. Keyword matches alone are never evidence of a violation. Evidence must be nonempty exact excerpts of the current message establishing the rule.
 For a clear violation, independently decide whether to recall the original message alongside a reminder or warning. Consider whether leaving it visible continues promotion or harm and whether removal would erase useful context. Do not tie recall to a punishment stage. Explain that choice in recallReason. You cannot choose a target, message id, punishment, duration, or permission.`;
 
-export function parseGroupReview(text: string, original: string): GroupReview | undefined {
+export function parseGroupReview(text: string, original: string,
+  onInvalid?: (reason: 'invalid_json' | 'invalid_verdict') => void,
+): GroupReview | undefined {
+  const invalid = (reason: 'invalid_json' | 'invalid_verdict') => { onInvalid?.(reason); return undefined; };
   let value: Record<string, unknown>;
   try {
-    const parsed: unknown = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+    const trimmed = text.trim();
+    // Accept a complete Markdown wrapper, never repair or guess missing verdict fields.
+    const fenced = /^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(trimmed);
+    const parsed: unknown = JSON.parse(fenced ? fenced[1] : trimmed);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return invalid('invalid_verdict');
     value = parsed as Record<string, unknown>;
-  } catch { return; }
+  } catch { return invalid('invalid_json'); }
+  if (value.category === 'none' || value.category === 'uncertain') return;
   if ((value.category !== 'advertising' && value.category !== 'abuse')
     || typeof value.recall !== 'boolean'
     || typeof value.recallReason !== 'string' || !value.recallReason.trim()
     || !Array.isArray(value.evidence) || value.evidence.length === 0
-    || !value.evidence.every((quote) => typeof quote === 'string' && quote.trim() && original.includes(quote))) return;
+    || !value.evidence.every((quote) => typeof quote === 'string' && quote.trim() && original.includes(quote))) return invalid('invalid_verdict');
   return { category: value.category, evidence: value.evidence as string[],
     recall: value.recall, recallReason: value.recallReason };
 }
@@ -47,6 +54,7 @@ export interface GroupModerationInput {
   readonly messageId: string;
   readonly sentAt: number;
   readonly text: string;
+  readonly precedingContext?: string;
   readonly signal: AbortSignal;
   readonly state: PluginStateStore;
   readonly completion: AiCompletion;
@@ -63,12 +71,19 @@ export interface GroupModerationInput {
 export class GroupModerator {
   readonly #history = new Map<string, readonly { at: number; text: string }[]>();
 
-  remember(scope: string, sender: string, text: string): void {
+  remember(scope: string, sender: string, text: string): string {
     // Bounded context is an implementation budget, not a violation threshold.
+    const preceding = this.#context(scope);
     const entries = [...(this.#history.get(scope) ?? []).filter(entry => Date.now() - entry.at < QUIET_MS),
       { at: Date.now(), text: JSON.stringify({ sender, text: text.slice(0, 2000) }) }];
     while (entries.length > 50 || entries.reduce((size, entry) => size + entry.text.length, 0) > 12_000) entries.shift();
     this.#history.set(scope, entries);
+    return preceding;
+  }
+
+  #context(scope: string): string {
+    return (this.#history.get(scope) ?? []).filter(entry => Date.now() - entry.at < QUIET_MS)
+      .map(entry => entry.text).join('\n');
   }
 
   async review(input: GroupModerationInput): Promise<void> {
@@ -77,6 +92,7 @@ export class GroupModerator {
       || !input.messageId || !Number.isSafeInteger(input.sentAt) || input.sentAt <= 0
       || input.sentAt > Date.now() || Date.now() - input.sentAt >= QUIET_MS
       || !input.text.trim() || input.text.length > 12_000) return;
+    const precedingContext = input.precedingContext ?? this.#context(input.scope);
     // A stalled operation cannot outlive its reservation. Clear the deadline even on early return.
     const deadline = new AbortController();
     const timer = setTimeout(() => deadline.abort(new Error('Moderation reservation expired')), QUIET_MS);
@@ -87,6 +103,8 @@ export class GroupModerator {
     // One bounded row per member, not one database row per incoming message (TTL is logical expiry).
     const messageKey = `group-moderation:seen:${digest(input.sender)}`;
     const messageId = digest(input.messageId);
+    let messageClaimed = false;
+    let reviewOwnsRecall = false;
     let claimed = false;
     let effectStarted = false;
     let completed = false;
@@ -95,7 +113,7 @@ export class GroupModerator {
       const window = await state.update<SeenWindow>(messageKey, (current) => {
         const prior = current ?? { throughAt: 0, messages: [] };
         if (input.sentAt <= prior.throughAt || prior.messages.some(item => item.id === messageId)) return prior;
-        const messages = [...prior.messages, { id: messageId, at: input.sentAt, token, ownsRecall: false }]
+        const messages = [...prior.messages, { id: messageId, at: input.sentAt, token, pending: true, ownsRecall: false }]
           .sort((a, b) => a.at - b.at);
         let throughAt = prior.throughAt;
         while (messages.length > 256) throughAt = Math.max(throughAt, messages.shift()!.at);
@@ -104,44 +122,54 @@ export class GroupModerator {
       const seen = window?.messages.find(item => item.id === messageId);
       if (seen?.token !== token) {
         // Never turn an evicted old review into a fresh deletion through the lexicon fallback.
-        if (seen?.ownsRecall || input.sentAt <= (window?.throughAt ?? 0)) input.onReview?.();
+        if (seen?.pending || seen?.ownsRecall || input.sentAt <= (window?.throughAt ?? 0)) input.onReview?.();
         return;
       }
-      const now = Date.now();
-      const current = await state.update<MemberState>(memberKey, (prior) => {
-        if (prior?.lease && now - prior.leaseAt < QUIET_MS) return prior;
-        return { ...(prior ?? freshState()), lease: token, leaseAt: now };
-      }, { ttlMs: QUIET_MS });
-      if (current?.lease !== token) return;
-      claimed = true;
+      messageClaimed = true;
+      signal.throwIfAborted();
       const member = await management.inspectGroupMember(input.group, input.sender, signal);
       if (!member.canModerate) return;
+      signal.throwIfAborted();
       const result = await input.completion.completeText({
         purpose: 'group-moderation', system: GROUP_REVIEW_SYSTEM,
         prompt: 'Review the current message using the preceding group context. Missing context is not proof of unsolicited advertising or abuse.',
         untrusted: [
-          { source: 'preceding-group-context', text: (this.#history.get(input.scope) ?? [])
-            .filter(entry => Date.now() - entry.at < QUIET_MS).map(entry => entry.text).join('\n') },
+          { source: 'preceding-group-context', text: precedingContext },
           { source: 'current-group-message', text: JSON.stringify({ sender: input.sender, text: input.text }) },
         ],
         maxTokens: 800, signal, onBehalfOf: input.onBehalfOf,
       });
       signal.throwIfAborted();
-      if ((await state.get<MemberState>(memberKey))?.lease !== token) return;
-      const review = parseGroupReview(result.text, input.text);
+      const review = parseGroupReview(result.text, input.text, reason => input.audit({
+        event: 'group_review_invalid', messageId: input.messageId, reason,
+      }));
       if (!review) return;
+      reviewOwnsRecall = true;
+      input.onReview?.();
       const marked = await state.update<SeenWindow>(messageKey, (value) => value ? { ...value,
-        messages: value.messages.map(item => item.token === token ? { ...item, ownsRecall: true } : item) } : value,
+        messages: value.messages.map(item => item.token === token ? { ...item, pending: false, ownsRecall: true } : item) } : value,
         { ttlMs: QUIET_MS });
       if (!marked?.messages.some(item => item.token === token)) return;
-      input.onReview?.();
+      signal.throwIfAborted();
+      // Review distinct messages independently. Only side effects reserve the member,
+      // so a slow harmless review cannot discard a later violation, including after reload.
+      const now = Date.now();
+      const current = await state.update<MemberState>(memberKey, (prior) => {
+        if (prior?.lease && now - prior.leaseAt < QUIET_MS) return prior;
+        return { ...(prior ?? freshState()), lease: token, leaseAt: now };
+      }, { ttlMs: QUIET_MS });
+      if (current?.lease !== token) {
+        input.audit({ event: 'group_moderation_reserved', messageId: input.messageId });
+        return;
+      }
+      claimed = true;
       const previous = current[review.category];
       const stage = input.sentAt - previous.lastViolationAt >= QUIET_MS ? freshStage() : previous;
       const newcomer = review.category === 'advertising' && member.joinedAt !== undefined
         && input.sentAt >= member.joinedAt && input.sentAt - member.joinedAt <= NEWCOMER_MS
         && Date.now() - member.joinedAt <= NEWCOMER_MS;
       // Messages already sent before the last delivered notice cannot advance escalation.
-      if (!newcomer && input.sentAt <= stage.notifiedAt) return;
+      if (input.sentAt <= stage.notifiedAt) return;
       const count = Math.min(stage.count + 1, 3);
       input.audit({ event: 'group_review', category: review.category, messageId: input.messageId,
         evidence: review.evidence, recall: review.recall, recallReason: review.recallReason });
@@ -166,10 +194,12 @@ export class GroupModerator {
       const action = newcomer ? '入群 10 分钟内发布明确广告，已移出群聊' : count === 3 ? '已禁言 10 分钟' : count === 2 ? '警告' : '提醒';
       await input.reply(`${action}。${rule}。`, input.sender);
       const notifiedAt = Date.now();
+      // Commit the delivered stage and release together, before optional recall.
       await state.update<MemberState>(memberKey, (value) => value?.lease === token
-        ? { ...value, [review.category]: { count, lastViolationAt: input.sentAt, notifiedAt } } : value,
+        ? { ...value, lease: '', [review.category]: { count, lastViolationAt: input.sentAt, notifiedAt } } : value,
       { ttlMs: QUIET_MS });
       completed = true;
+      claimed = false;
       // Optional recall is independent of escalation and cannot undo a successfully delivered notice.
       if (!newcomer && count < 3 && review.recall && !signal.aborted) {
         try { await input.recall(); }
@@ -181,6 +211,14 @@ export class GroupModerator {
         error: error instanceof Error ? error.message : String(error) });
     } finally {
       clearTimeout(timer);
+      if (messageClaimed) {
+        try {
+          await state.update<SeenWindow>(messageKey, (value) => value ? { ...value,
+            messages: value.messages.map(item => item.token === token
+              ? { ...item, pending: false, ownsRecall: item.ownsRecall || reviewOwnsRecall } : item) } : value,
+          { ttlMs: QUIET_MS });
+        } catch { /* Leave this exact message reserved if its outcome cannot be persisted. */ }
+      }
       if (claimed && (!effectStarted || completed)) {
         try {
           await state.update<MemberState>(memberKey, (value) => value?.lease === token ? { ...value, lease: '' } : value,
