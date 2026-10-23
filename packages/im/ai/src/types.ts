@@ -671,14 +671,24 @@ export interface AIConfig {
 export interface AmbientEngagementConfig {
   /** Groups that may be joined unprompted, as `platform:groupId`; `*` for every group. Default: none. */
   conversations?: string[];
-  /** Judge model as `providerAlias/model`. Default: the main Agent's model. */
-  judge?: string;
+  /**
+   * Judge model as `providerAlias/model`, or a list tried in order when one fails or is rate
+   * limited (free tiers are limited per model). Default: the main Agent's model.
+   */
+  judge?: string | string[];
+  /** Outside a conversation, judge a group at most this often (default 30000), to spare the judge's quota. */
+  judgeIntervalMs?: number;
   /** Wait for the group to be quiet this long before judging a burst of messages (default 4000). */
   quietMs?: number;
-  /** Minimum gap after the bot last spoke in the group (default 120000). */
+  /** Minimum gap between two unprompted interjections in a group (default 120000). */
   cooldownMs?: number;
-  /** Unprompted replies per group per rolling hour (default 3). */
+  /** Unprompted interjections per group per rolling hour (default 3). */
   maxPerHour?: number;
+  /**
+   * After the bot spoke (addressed or not) the group is in a conversation with it for this long
+   * (default 180000): replies there skip the interjection cooldown and hourly cap; the judge still decides.
+   */
+  conversationWindowMs?: number;
   /** Judge confidence required to engage, 0..1 (default 0.7). */
   minConfidence?: number;
   /** `shadow` logs the judgment without replying (default `active`). */

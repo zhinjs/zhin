@@ -80,7 +80,7 @@ import {
 } from './request.js';
 import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
-import { AmbientEngagement, LlmEngagementJudge } from './ambient-engagement.js';
+import { AmbientEngagement, FallbackEngagementJudge, LlmEngagementJudge } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 
 const logger = getLogger('agent');
@@ -139,11 +139,28 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const config = service.getTriggerConfig()?.ambient;
     if (!config?.conversations?.length) return this.#ambient = null;
     const binding = service.getBindingRegistry().requireZhinBinding();
-    const [alias, ...model] = config.judge?.trim() ? config.judge.trim().split('/') : [binding.providerAlias, binding.model];
     const llm = service.getLlmRuntime();
+    const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
+      .map(entry => entry.trim()).filter(Boolean);
+    const judgeFor = (entry: string): LlmEngagementJudge | undefined => {
+      const [alias, ...model] = entry.split('/');
+      try {
+        return new LlmEngagementJudge(llm, llm.model(alias!, model.join('/')));
+      } catch (error) {
+        // An unknown provider or model must not break every group message; skip that judge.
+        logger.warn(formatCompact({ op: 'ambient_judge_unavailable', judge: entry, error: error instanceof Error ? error.message : String(error) }));
+        return undefined;
+      }
+    };
+    let judges = configured.map(judgeFor).filter(judge => judge !== undefined);
+    if (judges.length === 0) {
+      const fallback = judgeFor(`${binding.providerAlias}/${binding.model}`);
+      if (!fallback) return this.#ambient = null;
+      judges = [fallback];
+    }
     return this.#ambient = new AmbientEngagement({
       config,
-      judge: new LlmEngagementJudge(llm, llm.model(alias!, model.join('/'))),
+      judge: judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges),
     });
   }
 
