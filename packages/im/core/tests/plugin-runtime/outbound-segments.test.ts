@@ -495,4 +495,22 @@ describe('AI outbound segment types', () => {
       .toEqual({ types: ['text', 'markdown', 'keyboard', 'share'], extensions: { share } });
     expect(profile({ model: { share } })).toEqual({ types: expect.not.arrayContaining(['share']) });
   });
+
+  it('offers reactions only for a conversation kind the adapter declares', () => {
+    const reaction = { values: [{ value: '76', label: '赞' }], scopes: ['group'] };
+    const snapshot = mockSnapshot({ definition: { segments: { reaction } } });
+    expect(resolveAiOutboundSegments('adapter:test' as never, snapshot, 'group').reaction).toEqual({ values: reaction.values });
+    expect(resolveAiOutboundSegments('adapter:test' as never, snapshot, 'private').reaction).toBeUndefined();
+    expect(resolveAiOutboundSegments('adapter:test' as never, snapshot).reaction).toBeUndefined();
+    const everywhere = mockSnapshot({ definition: { segments: { reaction: { values: reaction.values } } } });
+    expect(resolveAiOutboundSegments('adapter:test' as never, everywhere, 'private').reaction).toEqual({ values: reaction.values });
+  });
+
+  it('makes reaction a required enum with "" for none in the reply schema', async () => {
+    const { buildAiOutboundJsonSchema } = await import('../../src/built/segment-contract/json-schema.js');
+    const schema = buildAiOutboundJsonSchema(['text'], {}, { values: [{ value: '76', label: '赞' }] });
+    expect(schema.required).toEqual(['messages', 'reaction']);
+    expect((schema.properties as Record<string, { enum?: string[] }>).reaction?.enum).toEqual(['', '76']);
+    expect(buildAiOutboundJsonSchema(['text']).required).toEqual(['messages']);
+  });
 });

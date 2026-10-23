@@ -82,6 +82,23 @@ segments: {
 工具的结果发成带播放链接与封面的分享卡片；`platform`（qq / netease / kugou / kuwo / migu）由 icqq
 映射成对应音乐应用的 appid，模型不需要也不应该填写 `config.appid`。
 
+### 表情回应
+
+真人在群里很多时候只是给消息点个表情，不说话。Adapter 用 `segments.reaction` 声明可用的表情和适用场景，Endpoint 需要实现 `control.addReaction`：
+
+```ts
+segments: {
+  reaction: {
+    scopes: ['group'],                       // 省略表示所有会话类型
+    values: [{ value: '76', label: '赞' }, { value: '182', label: '笑哭' } /* … */],
+  },
+}
+```
+
+- **对模型**：回复 Schema 多一个必填字段 `reaction`，取值为 `""`（不点表情）或声明的值之一，模型编不出不存在的表情。提示词里会列出这些表情和含义，并说明"感谢、附和、玩笑这类不需要说话的消息，只点个表情往往最自然"。例如 `{"messages":[],"reaction":"76"}` 只点赞、不说话。
+- **什么时候提供**：只有在回复收到的那条消息、并且会话类型在 `scopes` 内时才提供（icqq 只在群聊提供）。不提供时，模型写了 `reaction` 也会被忽略，不算格式错误；模型漏写 `reaction` 时按 `""` 处理。
+- **怎么发送**：表情在文字之前发出，发送端口调用 `addReaction` 给触发这一轮的消息点上表情，然后照常按节奏发送文字。点表情失败只记一条 debug 日志，不算发送失败。
+
 reply、forward、face 不提供给模型：它们需要平台消息 ID、转发 ID 或表情 ID，模型没有可靠来源。
 这样模型选出的段不会在出站投影因“Adapter 不支持该段”被拒发。
 可选展示字段、平台扩展和交互回调由工具/渲染器提供，不由最终回复模型制造。

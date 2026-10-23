@@ -27,6 +27,19 @@ export default defineAdapter<IcqqEndpointConfig>({
     supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps', 'share'],
     outboundMedia: ['base64', 'url', 'path'],
     interactive: 'text',
+    // QQ group reactions take system face ids; private chats have no reactions.
+    reaction: {
+      scopes: ['group'],
+      values: [
+        { value: '76', label: '赞' }, { value: '66', label: '爱心' }, { value: '124', label: 'OK' },
+        { value: '99', label: '鼓掌' }, { value: '144', label: '喝彩' }, { value: '320', label: '庆祝' },
+        { value: '319', label: '比心' }, { value: '299', label: '牛啊' }, { value: '297', label: '拜谢' },
+        { value: '182', label: '笑哭' }, { value: '179', label: 'doge' }, { value: '264', label: '捂脸' },
+        { value: '271', label: '吃瓜' }, { value: '269', label: '暗中观察' }, { value: '268', label: '问号脸' },
+        { value: '270', label: 'emm' }, { value: '106', label: '委屈' }, { value: '285', label: '摸鱼' },
+        { value: '104', label: '哈欠' }, { value: '267', label: '头秃' }, { value: '326', label: '生气' },
+      ],
+    },
     model: {
       share: {
         fields: ['description', 'image', 'audio', 'platform'],

@@ -14,6 +14,7 @@ export function renderAgentOutput(output: readonly AgentOutputElement[]): string
         if (segment.type === 'text') return String(segment.data.text);
         if (segment.type === 'markdown') return String(segment.data.content);
         if (segment.type === 'mention') return `@${segment.data.target}`;
+        if (segment.type === 'reaction') return `[reaction ${String((segment.data as { emoji?: unknown }).emoji ?? '')}]`;
         return `[${segment.type}]`;
       }).join('')
     : renderToPlainText([element])).join('\n');

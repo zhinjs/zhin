@@ -22,6 +22,7 @@ import {
   isMediaRef,
   type AiOutboundSegmentProfile,
   type AiOutboundSegmentType,
+  type AiReactionProfile,
   type AiSegmentExtension,
   type Segment,
 } from '../../built/segment-contract/index.js';
@@ -171,6 +172,8 @@ export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot
 export function resolveAiOutboundSegments(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
+  /** The conversation being answered; reactions are offered only where the adapter supports them. */
+  conversationKind?: 'private' | 'group' | 'channel',
 ): AiOutboundSegmentProfile {
   const supported = resolveOutboundSupportedSegments(adapter, snapshot);
   const degradesToText = (type: AiOutboundSegmentType) =>
@@ -180,11 +183,24 @@ export function resolveAiOutboundSegments(
     ? AI_OUTBOUND_SEGMENT_TYPES.filter(type => type === 'text' || degradesToText(type) || supported.includes(type))
     : DEFAULT_AI_OUTBOUND_SEGMENT_TYPES;
   const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  const declared = (slot?.definition as { segments?: { model?: Record<string, AiSegmentExtension> } } | undefined)?.segments?.model;
+  const segments = (slot?.definition as { segments?: {
+    model?: Record<string, AiSegmentExtension>;
+    reaction?: AiReactionProfile & { scopes?: readonly string[] };
+  } } | undefined)?.segments;
+  const declared = segments?.model;
   const extensions = declared
     ? Object.fromEntries(types.filter(type => declared[type]).map(type => [type, declared[type]!]))
     : {};
-  return Object.keys(extensions).length ? { types, extensions } : { types };
+  const reactionDeclared = segments?.reaction;
+  const reaction = reactionDeclared && conversationKind
+    && (!reactionDeclared.scopes || reactionDeclared.scopes.includes(conversationKind))
+    ? { values: reactionDeclared.values }
+    : undefined;
+  return {
+    types,
+    ...(Object.keys(extensions).length ? { extensions } : {}),
+    ...(reaction ? { reaction } : {}),
+  };
 }
 
 /** Preserve semantic Markdown only when the endpoint explicitly declares native consumption. */

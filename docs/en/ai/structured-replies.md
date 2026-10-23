@@ -67,6 +67,32 @@ icqq uses it so the model can turn music search results into a share card with a
 playable link and cover; icqq maps `platform` (qq / netease / kugou / kuwo /
 migu) to that music app's appid, so the model never fills `config.appid`.
 
+### Reactions
+
+A person in a group often just taps a reaction instead of typing. An adapter
+declares the reactions it offers with `segments.reaction`; its Endpoint implements
+`control.addReaction`:
+
+```ts
+segments: {
+  reaction: {
+    scopes: ['group'],                       // omitted: every conversation kind
+    values: [{ value: '76', label: '赞' }, { value: '182', label: '笑哭' } /* … */],
+  },
+}
+```
+
+The reply schema then has a required `reaction`: `""` or one of the declared values,
+so the model cannot invent one. The instruction lists them with their meaning and
+says a reaction alone is often the most natural answer to thanks, agreement or a
+joke, e.g. `{"messages":[],"reaction":"76"}`. Reactions are offered only when the
+reply answers the received message in a conversation kind listed in `scopes`
+(icqq: groups). Where they are not offered, a `reaction` the model wrote is
+ignored rather than a format error, and a missing `reaction` counts as `""`. The
+reaction is applied before the words: the reply port calls `addReaction` on the
+message being answered, then sends the messages as usual. A failed reaction is
+logged at debug level and does not fail the delivery.
+
 reply, forward and face are never offered: they need platform message, forward or
 emoji IDs the model has no reliable source for. A type the model picks is therefore
 never rejected later as unsupported by the adapter. The schema derives the required fields from the
