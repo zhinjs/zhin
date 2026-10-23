@@ -609,6 +609,9 @@ importers:
       '@zhin.js/cli':
         specifier: workspace:*
         version: link:../../basic/cli
+      '@zhin.js/middleware':
+        specifier: workspace:*
+        version: link:../../packages/im/middleware
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

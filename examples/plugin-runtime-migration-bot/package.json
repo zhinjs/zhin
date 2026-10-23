@@ -15,6 +15,7 @@
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
+    "@zhin.js/middleware": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {
