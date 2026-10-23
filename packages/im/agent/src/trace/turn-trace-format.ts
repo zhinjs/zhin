@@ -68,7 +68,9 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
   for (const call of trace.model_calls) {
     const cache = call.cache_read_tokens ? ` cache=${call.cache_read_tokens}` : '';
     const reasoning = call.reasoning_tokens ? ` reasoning=${call.reasoning_tokens}` : '';
-    lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}${reasoning}`);
+    const cacheWrite = call.cache_write_tokens !== undefined ? ` cache_write=${call.cache_write_tokens}` : '';
+    const model = call.model ? ` model=${call.provider ?? '?'}/${call.model}` : '';
+    lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}${reasoning}${cacheWrite}${model}`);
   }
 
   if (trace.context_budget) lines.push(...renderContextBudget(trace.context_budget, indent));

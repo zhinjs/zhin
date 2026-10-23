@@ -9,6 +9,28 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 
 还没启用 AI？先看 [AI 总览](./index.md)。想让 AI 调用你的函数？看 [Agent 工具与技能](../authoring/agent-tools.md)。
 
+
+### 每轮用量日志
+
+默认 INFO 级别在 Agent 回合结束时输出一条 `[ai.usage] turn`，失败和取消也有汇总；无需手动执行 `zhin trace`。字段顺序固定，聊天正文、思考正文、提示词、工具参数与返回内容不会进入这组日志。
+
+```text
+[INFO] [ai.usage] turn | trace: trace-1 | turn: turn-1 | scene: qq/group | status: completed | model: main/model | calls: 2 | input: 4200 | output: 180 | cache_read: 3000 | cache_write: 0 | reasoning: ? | ms: 1850
+```
+
+- `input`、`output`、`cache_read`、`cache_write`、`reasoning` 单位均为 token；缓存读写属于输入的分项，思考属于输出的分项，不能重复相加。数值沿用 Provider 经 SDK 归一化后的 usage，不用字符估算替代。
+- `?` 表示没有可证明的数据；`0` 表示明确的零值，或没有记录到模型响应；`>=60` 表示部分调用缺少该字段，已确认的部分合计为 60。旧记录无法证明的零值也会显示为 `?`。
+- `calls` 是本回合记录到的模型响应次数，包括统一完成链路中的摘要、进度总结、回复修复和同步子回合；`subagent_calls` 是其中的子回合次数，不能再加一次。SDK 内部 HTTP 重试没有独立响应事件，不按网络请求次数计数。
+- 汇总包含当前 trace 中已记录的子回合；`partial` 表示回合未正常完成、子回合结果不完整或记录达到上限；此时显示的只是已记录用量，不能当作全部消耗。它不是整个账号的账单：独立决策、嵌入、图像生成等没有进入该 trace 的调用不在此汇总，Provider 未回传的失败请求用量也无法推算。
+- `ms` 是 trace 记录的回合耗时；`trace` 用于串联日志，`turn` 可以交给 `zhin trace <turn>` 查看已有归档。日志无需归档开关；只开日志不会新增落盘存储。
+
+需要逐次排查时，将 Root 配置中的 `log_level` 设为 `debug`。`[ai.usage] call` 展示每次已记录响应的模型、结束原因、用量和已知耗时；`[ai.usage] context` 展示现有首个请求预算，并明确标为 `unit: estimated_tokens`。它不是每次调用的真实计费用量。恢复 `info` 后只保留每轮汇总；`warn`、`error` 或 `silent` 不输出这组 INFO/DEBUG 日志。其他模块原有的 DEBUG 日志仍遵循各自规则。
+
+```yaml
+log_level: debug
+```
+
+
 ## 按问题查找
 
 | 我想知道…… | 看这里 |

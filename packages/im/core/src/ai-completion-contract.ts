@@ -54,6 +54,8 @@ export interface AiCompletionTokenCost {
 
 /** Token usage; structurally identical to `@zhin.js/ai` `TokenUsage` (asserted by agent type tests). */
 export interface AiCompletionTokenUsage {
+  /** Availability metadata mirrors TokenUsage without importing the optional AI package. */
+  reported?: Partial<Record<'input' | 'output' | 'totalTokens' | 'cacheRead' | 'cacheWrite' | 'reasoning', boolean>>;
   input: number;
   output: number;
   cacheRead: number;

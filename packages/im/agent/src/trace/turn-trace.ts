@@ -31,6 +31,12 @@ export interface TurnTracePrincipal {
 }
 
 export interface TurnTraceModelCall {
+  readonly provider?: string;
+  readonly model?: string;
+  readonly duration_ms?: number;
+  readonly stop_reason?: string;
+  readonly cache_write_tokens?: number;
+  readonly reported?: import('@zhin.js/ai').TokenUsage['reported'];
   readonly index: number;
   readonly prompt_tokens: number;
   readonly completion_tokens: number;
@@ -229,11 +235,17 @@ export class TurnTraceCollector {
       case 'usage': {
         const call = Object.freeze({
           index: this.#modelCalls.length + 1,
+          ...(event.provider !== undefined ? { provider: event.provider } : {}),
+          ...(event.model !== undefined ? { model: event.model } : {}),
+          ...(event.durationMs !== undefined ? { duration_ms: event.durationMs } : {}),
+          ...(event.stopReason !== undefined ? { stop_reason: event.stopReason } : {}),
+          ...(event.usage.reported ? { reported: Object.freeze({ ...event.usage.reported }) } : {}),
+          ...(event.usage.cacheWriteTokens !== undefined ? { cache_write_tokens: event.usage.cacheWriteTokens } : {}),
           prompt_tokens: event.usage.promptTokens,
           completion_tokens: event.usage.completionTokens,
           total_tokens: event.usage.totalTokens,
-          ...(event.usage.cacheReadTokens ? { cache_read_tokens: event.usage.cacheReadTokens } : {}),
-          ...(event.usage.reasoningTokens ? { reasoning_tokens: event.usage.reasoningTokens } : {}),
+          ...(event.usage.cacheReadTokens !== undefined ? { cache_read_tokens: event.usage.cacheReadTokens } : {}),
+          ...(event.usage.reasoningTokens !== undefined ? { reasoning_tokens: event.usage.reasoningTokens } : {}),
         });
         this.#modelCalls.push(call);
         this.#addTimeline('model_call', `#${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}`);

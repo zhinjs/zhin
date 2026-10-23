@@ -114,6 +114,8 @@ export interface TokenCost {
 }
 
 export interface TokenUsage {
+  /** Availability of normalized SDK usage fields; absent on legacy/custom responses. */
+  reported?: Partial<Record<'input' | 'output' | 'totalTokens' | 'cacheRead' | 'cacheWrite' | 'reasoning', boolean>>;
   input: number;
   output: number;
   cacheRead: number;

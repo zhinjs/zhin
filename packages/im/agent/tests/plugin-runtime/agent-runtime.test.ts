@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getLogger } from '@zhin.js/logger';
 import {
   SnapshotStore,
   childPluginId,
@@ -1063,3 +1064,62 @@ function stateWithEngine(
   rootResources.set(agentTurnEngineToken.id, Object.freeze({ run }));
   return { ...state, resources: new Map(state.resources).set(state.root, rootResources) };
 }
+
+describe('automatic usage logs (#957)', () => {
+  it.each(['private', 'group', 'channel'] as const)('uses the canonical %s scene in logs', async scope => {
+    const fixture = await createFixture();
+    const info = vi.spyOn(getLogger('ai.usage'), 'info').mockImplementation(() => undefined);
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* () { yield terminalEvent(); }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      await runtime.execute(fixture.child, { ...externalRequest(scope),
+        origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope, sceneId: 'scene' } }, selection([]));
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(String(info.mock.calls[0]![0])).toContain(`scene: qq/${scope}`);
+    } finally { info.mockRestore(); await fixture.mcp.stop(); await store.close(); }
+  });
+
+  it.each(['completed', 'failed', 'cancelled'] as const)('logs one %s summary without requiring a trace archive', async status => {
+    const fixture = await createFixture();
+    const logger = getLogger('ai.usage');
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => undefined);
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* () {
+      yield { type: 'usage', provider: 'provider', model: 'model', durationMs: 20, stopReason: 'stop',
+        usage: { promptTokens: 100, completionTokens: 10, totalTokens: 110, cacheReadTokens: 60, cacheWriteTokens: 0 } };
+      if (status === 'failed') throw new Error('PRIVATE-ERROR-BODY');
+      if (status === 'cancelled') yield { type: 'turn_cancelled', code: 'cancelled', reason: 'PRIVATE-REASON' };
+      else yield terminalEvent();
+    }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
+    runtime.attach(store);
+    try {
+      await runtime.execute(fixture.child, { ...externalRequest('usage'), input: { text: 'PRIVATE-USER-BODY' } }, selection([]));
+      expect(info).toHaveBeenCalledTimes(1);
+      const line = String(info.mock.calls[0]![0]);
+      expect(line).toContain(`status: ${status}`);
+      expect(line).toContain('input: 100');
+      expect(line).toContain('cache_read: 60');
+      expect(line).toContain('cache_write: 0');
+      expect(line).toContain('calls: 1');
+      expect(line).toContain('model: provider/model');
+      expect(line).not.toMatch(/PRIVATE|\n/);
+    } finally { info.mockRestore(); debug.mockRestore(); await fixture.mcp.stop(); await store.close(); }
+  });
+
+  it('keeps execution successful and saves its trace when a log transport throws', async () => {
+    const fixture = await createFixture();
+    const info = vi.spyOn(getLogger('ai.usage'), 'info').mockImplementation(() => { throw new Error('transport down'); });
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* () { yield terminalEvent(); }));
+    const save = vi.fn(async () => undefined);
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator(), turnTraceStore: {
+      save, list: async () => [], latest: async () => undefined, find: async () => undefined,
+    } }); runtime.attach(store);
+    try {
+      expect((await runtime.execute(fixture.child, externalRequest('log-fail'), selection([]))).status).toBe('completed');
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save.mock.calls[0]).toEqual([expect.objectContaining({ termination: { status: 'completed' } })]);
+    }
+    finally { info.mockRestore(); await fixture.mcp.stop(); await store.close(); }
+  });
+});

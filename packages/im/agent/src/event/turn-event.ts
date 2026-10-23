@@ -4,10 +4,12 @@ import type { AgentOutputElement } from '../outbound/agent-output.js';
  *
  * Consumed by processMessageStream() callers; produced by the turn pipeline.
  */
-import type { ToolExecutionCause, Usage } from '@zhin.js/ai';
+import type { ToolExecutionCause, Usage, TokenUsage } from '@zhin.js/ai';
 import type { DecisionObservation } from '../decision/types.js';
 
 export interface TurnUsage {
+  reported?: TokenUsage['reported'];
+  cacheWriteTokens?: number;
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
@@ -145,6 +147,10 @@ export interface ThinkingEvent {
 /** Per-model-iteration usage, emitted before the next tool/model iteration. */
 export interface UsageEvent {
   type: 'usage';
+  provider?: string;
+  model?: string;
+  durationMs?: number;
+  stopReason?: string;
   usage: TurnUsage;
 }
 
