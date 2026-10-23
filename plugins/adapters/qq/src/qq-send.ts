@@ -58,8 +58,8 @@ export function markdownAsText(message: QqOutboundMessage): QqOutboundMessage | 
     if (part.type === 'text') return String(part.data.text ?? '');
     if (part.type === 'markdown') {
       return String(part.data.content ?? '')
-        .replace(/!\[[^\]]*\]\(([^)]+)\)/g, '$1')
-        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 $2')
+        .replace(/!\[[^\]\n]{0,500}\]\(([^)\s]{1,2000})\)/g, '$1')
+        .replace(/\[([^\]\n]{1,500})\]\(([^)\s]{1,2000})\)/g, '$1 $2')
         .replace(/^#{1,6}\s+/gm, '')
         .replace(/(\*\*|__|~~|`)/g, '');
     }
