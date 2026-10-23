@@ -1,0 +1,173 @@
+packages/im/adapter/src/endpoint-management.ts
+  s_9622fd28aba994::t_7cd6a7bed3ef88 47-50,65-73
+  s_9622fd28aba994::t_9a1dafb9277d78 74
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/SKILL.md
+  s_9622fd28aba994::t_1e538989077c11 26,28
+  s_9622fd28aba994::t_24374f406e5ca9 27
+  s_9622fd28aba994::t_737c28b73a6d35 29-31
+packages/im/agent/tests/media/perception.test.ts
+  s_9622fd28aba994::t_7e5821440c6c68 219-278,286-287,297
+  s_9622fd28aba994::t_1e70a724aea33f 217-218
+  s_9622fd28aba994::t_2a7e1fefcff2a9 279-281,283-285
+  s_9622fd28aba994::t_b9f3da0a1a6d54 288-290,294-296
+  s_9622fd28aba994::t_1b578bc62152df 298
+  s_9622fd28aba994::t_bb98e5f677625b 282,291-293
+packages/im/agent/src/media/perception.ts
+  s_9622fd28aba994::t_7e5821440c6c68 135-137
+  s_9622fd28aba994::t_c6e328a7346a3c 141-142,144,156-157,162,181-227,229-231
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9622fd28aba994::t_e402f298ae02db 97,119
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9622fd28aba994::t_35404508d1b274 448-449
+  s_9622fd28aba994::t_92137555204619 418,649-650,652-655,657
+  s_9622fd28aba994::t_1dd6166e6a7140 445-446
+  s_9622fd28aba994::t_4402c9ed212774 642
+  s_9622fd28aba994::t_e402f298ae02db 427,431,451,454,458,463-466
+packages/im/agent/evals/cases/voice-tts-outbound.case.ts
+  s_9622fd28aba994::t_37a460233cf9c2 11
+  s_9622fd28aba994::t_7e5821440c6c68 1-10,12-33
+packages/im/agent/src/security/policy-facade.ts
+  s_9622fd28aba994::t_e402f298ae02db 252
+plugins/utils/content-moderation/src/engine.ts
+  s_9622fd28aba994::t_bff692ff2194f4 6,35
+  s_9622fd28aba994::t_3fed3a1fbdc1dd 102-103,106-107
+plugins/utils/content-moderation/src/types.ts
+  s_9622fd28aba994::t_bff692ff2194f4 95-96,118-122
+  s_9622fd28aba994::t_3c3ce71851bd91 123-124
+packages/im/tool/README.md
+  s_9622fd28aba994::t_737c28b73a6d35 38
+packages/im/agent/evals/framework/fixture.ts
+  s_9622fd28aba994::t_7d483494e2a508 45
+.changeset/vision-voice-kick-approval.md
+  s_9622fd28aba994::t_737c28b73a6d35 7-11,14-16
+  s_9622fd28aba994::t_b5dde9e0c6194e 1-6,12-13
+packages/im/tool/src/definition.ts
+  s_9622fd28aba994::t_d686e2b2e00b25 15,227,289
+packages/im/agent/src/session/approval-port.ts
+  s_9622fd28aba994::t_e402f298ae02db 3-4
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_9622fd28aba994::t_d686e2b2e00b25 34
+docs/authoring/agent-tools.md
+  s_9622fd28aba994::t_737c28b73a6d35 71-72,292
+packages/im/ai/src/tool-policy.ts
+  s_9622fd28aba994::t_d686e2b2e00b25 5
+packages/im/agent/evals/cases/voice-tts-failure.case.ts
+  s_9622fd28aba994::t_7e5821440c6c68 1-8,10-22
+  s_9622fd28aba994::t_37a460233cf9c2 9
+packages/toolkit/speech/README.md
+  s_9622fd28aba994::t_37a460233cf9c2 42-43
+  s_9622fd28aba994::t_f140c84a2faf5e 16
+  s_9622fd28aba994::t_1e538989077c11 37-39,41,44-54
+  s_9622fd28aba994::t_24374f406e5ca9 40
+docs/configuration/generated.md
+  s_9622fd28aba994::t_1e538989077c11 355-357
+  s_9622fd28aba994::t_88cc1a6c3815b3 1781-1785
+packages/im/agent/tests/tool/tool-approval-gate.test.ts
+  s_9622fd28aba994::t_35404508d1b274 77-88
+plugins/adapters/icqq/src/icqq-inbound.ts
+  s_9622fd28aba994::t_0653758836f5c9 397-410
+basic/cli/src/plugin-runtime/speech-host-installer.ts
+  s_9622fd28aba994::t_26eccab9cd9f83 74-75
+  s_9622fd28aba994::t_37a460233cf9c2 25,170-171
+  s_9622fd28aba994::t_24374f406e5ca9 168
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_92137555204619 4,726
+plugins/utils/content-moderation/src/config.ts
+  s_9622fd28aba994::t_bff692ff2194f4 21,57-65
+packages/im/core/src/types.ts
+  s_9622fd28aba994::t_d686e2b2e00b25 297
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  s_9622fd28aba994::t_3fed3a1fbdc1dd 72
+  s_9622fd28aba994::t_85f76984a71b91 1,3-5,36,40-42,112-166
+  s_9622fd28aba994::t_6364e8e55206ec 167
+packages/toolkit/speech/src/pipeline.ts
+  s_9622fd28aba994::t_26eccab9cd9f83 61-62,66-68
+basic/cli/tests/plugin-runtime/speech-voice-reply.test.ts
+  s_9622fd28aba994::t_3f5b241952befe 22
+  s_9622fd28aba994::t_24374f406e5ca9 15,23-24
+  s_9622fd28aba994::t_1b15fa4cee6d0a 1-2,5-14,16-17,20,26-27
+  s_9622fd28aba994::t_7e5821440c6c68 3-4,18-19,21,25
+plugins/adapters/icqq/tests/group-moderation.test.ts
+  s_9622fd28aba994::t_1dd6166e6a7140 1-3,5-22,31-76
+  s_9622fd28aba994::t_2586fbb77ef526 4,23-30
+packages/im/agent/tests/session/approval-review-agent.test.ts
+  s_9622fd28aba994::t_1dd6166e6a7140 11,26-42,47
+  s_9622fd28aba994::t_7e3ed1560300ef 43-46
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_1e538989077c11 355-357
+  s_9622fd28aba994::t_98265dec9f3537 1781-1785
+basic/cli/tests/plugin-runtime/agent/tool-feature-publisher.test.ts
+  s_9622fd28aba994::t_70df002241cc1e 4,7-21
+packages/toolkit/speech/tests/pipeline.test.ts
+  s_9622fd28aba994::t_8f96cb7d3b3271 228-231,233-234,236-239,241-242,244-252
+  s_9622fd28aba994::t_24374f406e5ca9 232,235,240,243
+packages/im/agent/src/config/perception-config.ts
+  s_9622fd28aba994::t_c6e328a7346a3c 71-81
+  s_9622fd28aba994::t_c44f3af219606d 14-15,25,65-70,82-88,103
+packages/im/runtime/src/host-config-schema.json
+  s_9622fd28aba994::t_c1a7819ce77887 2543-2561
+plugins/adapters/icqq/src/group-moderation.ts
+  s_9622fd28aba994::t_7cd6a7bed3ef88 1-52
+packages/im/agent/src/tool/tool-approval-gate.ts
+  s_9622fd28aba994::t_e402f298ae02db 19,84
+  s_9622fd28aba994::t_35404508d1b274 78-79
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts
+  s_9622fd28aba994::t_4402c9ed212774 3,8,22-23
+  s_9622fd28aba994::t_d0c0bab0784081 16-21
+  s_9622fd28aba994::t_d686e2b2e00b25 13
+plugins/utils/content-moderation/README.md
+  s_9622fd28aba994::t_a9009adb86391c 65-89
+plugins/utils/content-moderation/tests/group-moderation.test.ts
+  s_9622fd28aba994::t_3fed3a1fbdc1dd 267
+  s_9622fd28aba994::t_9483961e3cd443 4-7,208-266,268-271
+  s_9622fd28aba994::t_bf059760d78438 43,50-68
+  s_9622fd28aba994::t_737c28b73a6d35 78,121
+  s_9622fd28aba994::t_2aebb3a3d80569 1-3,8-42,44-49,69-77,79-120,122-180,196-207,272-273
+  s_9622fd28aba994::t_81de89d9903889 181-195
+packages/im/agent/evals/cases/multimodal-perception-fallback.case.ts
+  s_9622fd28aba994::t_0f13ca4823ca2c 1-27
+packages/toolkit/speech/src/tts/edge.ts
+  s_9622fd28aba994::t_f140c84a2faf5e 29-30
+  s_9622fd28aba994::t_26eccab9cd9f83 28,31-33
+plugins/utils/content-moderation/src/group-moderation.ts
+  s_9622fd28aba994::t_81de89d9903889 80-84,183
+  s_9622fd28aba994::t_4267292ea1e9e0 10-11,64,68-70,87-89,95-104,106-107,123-124,133-134,136
+  s_9622fd28aba994::t_bff692ff2194f4 1-9,12-58,60-63,65-67,71-74,76-79,85-86,90-94,110-116,119-122,125-129,131-132,138-182,184-196
+  s_9622fd28aba994::t_3fed3a1fbdc1dd 59,105,108-109,135,137
+  s_9622fd28aba994::t_65280a3879731d 75,117-118,130
+plugins/adapters/icqq/src/endpoint.ts
+  s_9622fd28aba994::t_7cd6a7bed3ef88 64,116-119,157,852
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9622fd28aba994::t_1dd6166e6a7140 103-116
+  s_9622fd28aba994::t_7e3ed1560300ef 129-130
+packages/im/agent/tests/tool/turn-tool-runtime.test.ts
+  s_9622fd28aba994::t_1dd6166e6a7140 14-24
+packages/im/agent/evals/framework/driver.ts
+  s_9622fd28aba994::t_7d483494e2a508 147
+packages/im/agent/src/session/approval-review-agent.ts
+  s_9622fd28aba994::t_e402f298ae02db 128-132
+  s_9622fd28aba994::t_92137555204619 170-171,173-182
+docs/ai/index.md
+  s_9622fd28aba994::t_c1a7819ce77887 359-361,384-386
+  s_9622fd28aba994::t_7e5821440c6c68 371
+plugins/adapters/icqq/tests/icqq-inbound.test.ts
+  s_9622fd28aba994::t_f2f887c4e1641a 462-481
+plugins/utils/content-moderation/schema.json
+  s_9622fd28aba994::t_22b710c1d508bd 6-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3781f1cfb4edf469cc008a77ea512f1b7929440e",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
