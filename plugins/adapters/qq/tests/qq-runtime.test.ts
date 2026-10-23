@@ -390,6 +390,27 @@ describe('qq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
+  it('answers a received message as a passive reply, and sends actively without one', async () => {
+    const mock = createMockBot();
+    const gateway = { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
+    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      gateway,
+      config: baseConfig,
+      createBot: () => mock,
+    }), gateway, undefined);
+    await endpoint.start();
+    endpoint.open();
+    const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: 'group-1' };
+    await endpoint.send({ conversation: { ...conversation, id: 'group-2' }, payload: 'no source yet' });
+    endpoint.admit(textMessage({ id: 'msg-1' }));
+    await endpoint.send({ conversation, payload: 'pong' });
+    const calls = vi.mocked(mock.sendGroupMessage).mock.calls;
+    expect(calls[0]![2]).toBeUndefined();
+    expect(calls[1]!.slice(0, 3)).toEqual(['group-1', 'pong', { id: 'msg-1' }]);
+    await endpoint.stop();
+  });
+
   it('registers agent endpoint for tools', async () => {
     const mock = createMockBot();
     const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
