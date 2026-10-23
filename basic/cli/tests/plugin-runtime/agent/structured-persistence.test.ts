@@ -48,6 +48,8 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     const admission = { onActivate: (listener: () => void) => { publish = listener; return () => {}; } };
     installAgentPersistence({ resources, handoff, lifecycle: cleanup, admission: admission as never }, foundation as never, { usage: { retentionDays } } as never);
     expect(foundation.agent.markMemoryPersistenceReady).not.toHaveBeenCalled();
+    // Production seals the root DisposeStack before activateNext; cleanup must register in setup.
+    cleanup.seal();
     handoff.seal(); await handoff.activateNext(new AbortController().signal);
     expect(foundation.schedule.start).not.toHaveBeenCalled(); publish();
     expect(foundation.agent.markMemoryPersistenceReady).toHaveBeenCalledOnce();
@@ -55,6 +57,22 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     expect(new Scope(childPluginId(rootPluginId(), 'plugin'), resources).has(agentUsageStoreToken)).toBe(false);
     return { store: resources.use(agentUsageStoreToken), foundation };
   }
+
+  it('registers schedule/usage cleanup before DisposeStack seal so activateNext does not throw', async () => {
+    const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
+    resources.provide(databaseRootHostToken, host); handoff.add({ activateNext: () => host.start() });
+    const foundation = { agent: { configure: vi.fn(), upgradeProfilesToDatabase: vi.fn(), markMemoryPersistenceReady: vi.fn() },
+      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data-seal') }), start: vi.fn(async () => {}) } };
+    let publish!: () => void;
+    const admission = { onActivate: (listener: () => void) => { publish = listener; return () => {}; } };
+    installAgentPersistence({ resources, handoff, lifecycle: cleanup, admission: admission as never }, foundation as never, { usage: { retentionDays: 30 } } as never);
+    cleanup.seal();
+    handoff.seal();
+    await expect(handoff.activateNext(new AbortController().signal)).resolves.toBeUndefined();
+    publish();
+    expect(foundation.schedule.start).toHaveBeenCalledOnce();
+    await expect(cleanup.dispose()).resolves.toBeUndefined();
+  });
 
   it('stores root/child numeric usage with explicit zero and unknown, preserves exact address and prunes independently', async () => {
     const { store } = await activate();

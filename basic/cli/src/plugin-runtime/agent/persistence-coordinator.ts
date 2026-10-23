@@ -32,6 +32,19 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     getLogger('agent').warn('op=structured_storage status=unsupported; 结构化用量与任务存储需要 SQLite、MySQL 或 PostgreSQL');
   }
   if (!sessionsInDatabase) foundation.agent.markMemoryPersistenceReady();
+  // Register cleanup during setup — root lifecycle is sealed before activateNext runs.
+  let stopped = false;
+  let pendingPrune: Promise<void> | undefined;
+  let pendingStart: Promise<void> | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let off = () => {};
+  lifecycle.add(async () => {
+    stopped = true;
+    off();
+    if (timer) clearInterval(timer);
+    await pendingStart;
+    await pendingPrune;
+  });
   handoff.add({ activateNext: async signal => {
     signal.throwIfAborted();
     const raw = database?.getRawDatabase() as StructuredDatabase | undefined;
@@ -49,11 +62,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       await ensureDatabaseIndex(raw, 'agent_usage_calls', 'agent_usage_calls_ended', [{ name: 'root_ended_at' }]);
     }
     signal.throwIfAborted();
-    let stopped = false;
-    let pendingPrune: Promise<void> | undefined;
-    let pendingStart: Promise<void> | undefined;
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const off = admission.onActivate(() => {
+    off = admission.onActivate(() => {
       if (stopped) return;
       // Timers only become live after the fully migrated generation is published.
       pendingStart = foundation.schedule.start().catch(() => {
@@ -68,10 +77,6 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
         }, 3_600_000);
         timer.unref();
       }
-    });
-    lifecycle.add(async () => {
-      stopped = true; off(); if (timer) clearInterval(timer);
-      await pendingStart; await pendingPrune;
     });
   } });
 }
