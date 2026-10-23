@@ -3,6 +3,7 @@ import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchema, TOOL_CALL_MARKUP } from '../outbound/structured-reply.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 
+/** Sent when a reply could not be put into the message format; IM turns pass a chat-voice line. */
 export const STRUCTURED_REPLY_FAILURE = '模型未能生成符合消息格式的回复，本次未发送模型内容。请重试。';
 
 /** `<text>…</text>` wrappers some models put around each chat message instead of JSON. */
@@ -47,6 +48,8 @@ export async function recoverStructuredReply(input: {
   error: Error;
   signal?: AbortSignal;
   segments?: AiOutboundSegmentProfile;
+  /** What to send when correction fails (default {@link STRUCTURED_REPLY_FAILURE}). */
+  failureText?: string;
 }): Promise<{
   output: AgentOutputElement[];
   /**
@@ -86,5 +89,5 @@ export async function recoverStructuredReply(input: {
       // Invalid or missing output stays private, including provider reasoning.
     }
   }
-  return { output: [{ type: 'message', segments: [{ type: 'text', data: { text: STRUCTURED_REPLY_FAILURE } }] }] };
+  return { output: [{ type: 'message', segments: [{ type: 'text', data: { text: input.failureText ?? STRUCTURED_REPLY_FAILURE } }] }] };
 }

@@ -8,6 +8,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
     title: z.string().describe('头衔文字'),
   }),
   adapter: 'onebot11',
+  scopes: ["group"],
   tags: ['onebot11'],
   permissions: ['platform(onebot11,scene_owner)'],
   async execute({ group_id, user_id, title }: { group_id: number; user_id: number; title: string }, context) {

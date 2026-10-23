@@ -121,3 +121,28 @@ Convert platform-specific structures such as `share`, audio or cards at the `sen
 - [Endpoint lifecycle](./endpoint-lifecycle.md): long-lived connections, heartbeats, reconnection and multiple accounts.
 - [Message flow](../concepts/message-flow.md): the full path of a message through the framework.
 - [Complete plugin delivery](./plugin-delivery.md): test the adapter with the adapter harness and publish it.
+
+## AI capabilities and scene guidance
+
+The adapter owns platform capability declarations; the Agent should not maintain a second operation catalog:
+
+- A Tool's `description`, `inputSchema`, `platforms / scopes / permissions` describe one operation.
+- `agents/<platform>/skills/<name>/SKILL.md` groups operations by purpose and scene; instructions load on demand.
+- `prompt-sections/<name>/index.ts` contains necessary shared conventions, restricted by `platforms` and `scopes`, without repeating the Skill/Tool catalog.
+- `segments.supported` declares outbound types. `segments.model[type]` supplies extension fields, platform `hint` and optional `scopes`. A scene mismatch omits both its model schema and hint. This grants no send permission and does not change manually authored message delivery.
+
+This example offers model-authored share cards only in groups; other scenes retain plain text and existing fallbacks. Declarations must match actual platform delivery, not assumptions based on names.
+
+```ts
+segments: {
+  supported: ['text', 'share'],
+  model: {
+    share: {
+      scopes: ['group'],
+      hint: 'Use a real URL and title from the user or tool results.',
+    },
+  },
+}
+```
+
+`text` always remains a common fallback; scene declarations on it restrict only its extra fields and hints.

@@ -7,7 +7,7 @@ import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchem
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -18,7 +18,8 @@ import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
-import { decodeLenientStructuredReply, recoverStructuredReply, STRUCTURED_REPLY_FAILURE } from './structured-reply-recovery.js';
+import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
+import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
@@ -59,7 +60,6 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
-import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
 import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
@@ -75,10 +75,12 @@ function normalizeAssistantMessageText(assistant: AssistantMessage): void {
   }
 }
 
-function resolveAssistantReplyText(assistant: AssistantMessage): string {
+function resolveAssistantReplyText(assistant: AssistantMessage, chat?: ChatFailureOptions): string {
   normalizeAssistantMessageText(assistant);
   const text = assistantText(assistant);
   if (text.trim()) return text;
+  // In a chat the failure is said like a member would say it; operators read the logs.
+  if (assistant.errorMessage && chat) return chatFailureLine(chatFailureKindOf(assistant.errorMessage), chat);
   if (assistant.errorMessage && isProviderFailureMessage(assistant.errorMessage)) {
     return `${assistant.errorMessage}。`;
   }
@@ -520,6 +522,9 @@ export async function* runAgentLoopTextTurnRun(
   const messagePreset = configuredSchema === true || configuredSchema === 'segments';
   const imReply = messagePreset && input.turnContext.origin.kind === 'im'
     && input.conversationPersistence !== 'none';
+  const chatFailure: ChatFailureOptions | undefined = input.turnContext.origin.kind === 'im'
+    ? { master: input.turnContext.principal.roles.includes('master') }
+    : undefined;
   const outputSchema = imReply ? structuredReplySchema(input.replySegments)
     : messagePreset || !configuredSchema ? undefined : configuredSchema;
   const turnShellPolicy = input.turnContext.policy?.shell;
@@ -695,8 +700,16 @@ export async function* runAgentLoopTextTurnRun(
   const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
   // System prompt and tool schemas count against the window too, so the
   // compaction threshold is measured on what is left for messages (#730).
-  const fixedPromptTokens = () => estimatePromptTokens(systemPrompt)
-    + llmTools.reduce((sum, tool) => sum + estimatePromptTokens(`${tool.name} ${tool.description}`), 0);
+  let budgetTools: typeof llmTools | undefined;
+  let fixedBudget: Promise<number> | undefined;
+  const fixedPromptTokens = () => {
+    // 本回合系统提示不变；工具渐进披露替换数组后重新计算完整 Schema。
+    if (!fixedBudget || budgetTools !== llmTools) {
+      budgetTools = llmTools;
+      fixedBudget = estimateContextFixedTokens({ systemPrompt, tools: llmTools, model: llmModel, outputSchema });
+    }
+    return fixedBudget;
+  };
   const loopHooks = input.loopHooks;
   const completionPort = createTurnCompletionPort({
     host,
@@ -758,7 +771,7 @@ export async function* runAgentLoopTextTurnRun(
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
-        reservedTokens: fixedPromptTokens(),
+        reservedTokens: await fixedPromptTokens(),
         toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
         loopHooks,
@@ -771,7 +784,7 @@ export async function* runAgentLoopTextTurnRun(
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
-        reservedTokens: fixedPromptTokens(),
+        reservedTokens: await fixedPromptTokens(),
         toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
         force: true,
@@ -984,7 +997,7 @@ export async function* runAgentLoopTextTurnRun(
         lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
           || (!lastAssistantHadToolCalls && !answerText.trim());
         lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
-          : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant);
+          : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant, chatFailure);
         logAssistantIterationFailure(assistant, modelId, sessionId);
         const toolNames = assistant.content
           .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
@@ -1120,7 +1133,10 @@ export async function* runAgentLoopTextTurnRun(
   const continuationPrefix = continuations > 0 && input.turnContext.origin.kind !== 'im'
     ? `（任务步骤较多，已自动续跑 ${continuations} 次）\n\n` : '';
   const proseReply = structuredReply ? ''
-    : sanitizeAssistantReply(rawReply, { toolSummary: formatToolCallsForUser(toolCalls) });
+    : sanitizeAssistantReply(rawReply, {
+      toolSummary: formatToolCallsForUser(toolCalls),
+      ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
+    });
   const textReply = delegatedOnly ? '' : proseReply.trim() ? continuationPrefix + proseReply : proseReply;
   let output: AgentOutputElement[] = delegatedOnly || structuredReply ? [] : parseOutput(textReply);
   if (!delegatedOnly && structuredReply) {
@@ -1140,13 +1156,14 @@ export async function* runAgentLoopTextTurnRun(
           transport: completionUsage.transport, model: llmModel, raw: rawReply,
           error: error instanceof Error ? error : new Error('Invalid structured reply'), signal,
           segments: input.replySegments,
+          failureText: chatFailureLine('format', { ...chatFailure, random: 0 }),
         });
         output = recovery.output;
         // History must match what the user saw: the corrected reply, or the failure text. Never the
         // correction prompt (it embeds the rejected raw text) and never the rejected raw reply.
         if (messages && rejected?.role === 'assistant') {
           messages[messages.length - 1] = recovery.assistant
-            ?? { ...rejected, content: [{ type: 'text', text: STRUCTURED_REPLY_FAILURE }] };
+            ?? { ...rejected, content: [{ type: 'text', text: renderAgentOutput(recovery.output) }] };
         }
       }
     }

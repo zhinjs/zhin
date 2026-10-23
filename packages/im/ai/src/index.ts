@@ -114,6 +114,7 @@ export {
   computeBackoffDelay,
   createResilientCompletionPort,
   describeProviderFailure,
+  providerFailureKind,
   isProviderFailureMessage,
   parseRetryAfterMs,
   resolveProviderResilienceConfig,
@@ -234,6 +235,7 @@ export {
   shouldAutoCompact,
   autoCompactIfNeeded,
   // ── AgentMessage compaction (ADR 0010) ──
+  estimateContextFixedTokens,
   estimateAgentMessageTokens,
   estimateAgentMessagesTokens,
   findKeepRecentStartIndex,

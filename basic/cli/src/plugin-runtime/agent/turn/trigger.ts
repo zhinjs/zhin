@@ -1,6 +1,7 @@
 import type { AITriggerConfig } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core/runtime';
 import type { AgentCapabilities } from '@zhin.js/agent/runtime';
+import { chatFailureLine } from '@zhin.js/agent';
 import type { WorkroomTurnContinuation } from '../workroom-port.js';
 
 const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
@@ -20,6 +21,16 @@ export function renderTriggerError(trigger: AITriggerConfig | undefined, detail:
     ? trigger.errorTemplate
     : DEFAULT_TRIGGER_ERROR_TEMPLATE;
   return template.replace('{error}', detail);
+}
+
+/**
+ * Chat reply for a failed turn: the configured `errorTemplate` when there is one, otherwise a line a
+ * member would say, with the cause appended only for the owner.
+ */
+export function renderChatTurnError(trigger: AITriggerConfig | undefined, error: unknown, master: boolean): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (trigger?.errorTemplate?.trim()) return renderTriggerError(trigger, detail);
+  return chatFailureLine(error instanceof TriggerTimeoutError ? 'turn_timeout' : 'turn_error', { master, detail });
 }
 
 export class TriggerTimeoutError extends Error {

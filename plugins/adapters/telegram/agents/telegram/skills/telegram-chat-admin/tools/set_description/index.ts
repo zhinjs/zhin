@@ -8,6 +8,7 @@ export default defineAgentTool<{ chat_id: string; description: string }>({
     description: z.string().describe('群描述文字'),
   }),
   adapter: 'telegram',
+  scopes: ["group","channel"],
   tags: ['telegram'],
   async execute({ chat_id, description  }: { chat_id: string; description: string }, context) {
     const endpoint = context.$client;

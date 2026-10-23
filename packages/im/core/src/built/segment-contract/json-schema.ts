@@ -224,10 +224,17 @@ export interface AiSegmentExtension {
 }
 export type AiSegmentExtensions = Readonly<Partial<Record<AiOutboundSegmentType, AiSegmentExtension>>>;
 
+/** Reactions the model may put on the message it answers (platform value + meaning). */
+export interface AiReactionProfile {
+  readonly values: readonly { readonly value: string; readonly label: string }[];
+}
+
 /** What one reply endpoint lets the model author: offered types plus their declared extensions. */
 export interface AiOutboundSegmentProfile {
   readonly types: readonly AiOutboundSegmentType[];
   readonly extensions?: AiSegmentExtensions;
+  /** Present when the endpoint can react to the current message in this conversation. */
+  readonly reaction?: AiReactionProfile;
 }
 
 /** Offered when the adapter declares no `segments.supported` list. */
@@ -287,6 +294,7 @@ function withModelFields(branch: JsonSchemaObject, fields: readonly string[]): J
 export function buildAiOutboundJsonSchema(
   types: readonly AiOutboundSegmentType[] = DEFAULT_AI_OUTBOUND_SEGMENT_TYPES,
   extensions: AiSegmentExtensions = {},
+  reaction?: AiReactionProfile,
 ): JsonSchemaObject {
   const branches = (outboundSegmentJsonSchema.anyOf as JsonSchemaObject[]).flatMap(branch => {
     const type = (branch.properties as Record<string, { const?: string }>).type?.const as AiOutboundSegmentType | undefined;
@@ -317,8 +325,16 @@ export function buildAiOutboundJsonSchema(
         },
         description: 'Chat messages sent in order. Use an empty array only when no reply is needed.',
       },
+      // Required with "" for none, like extension fields: strict structured outputs reject optional keys.
+      ...(reaction ? {
+        reaction: {
+          type: 'string',
+          enum: ['', ...reaction.values.map(item => item.value)],
+          description: 'Reaction to put on the message being answered; "" for none.',
+        },
+      } : {}),
     },
-    required: ['messages'],
+    required: reaction ? ['messages', 'reaction'] : ['messages'],
     additionalProperties: false,
   };
 }

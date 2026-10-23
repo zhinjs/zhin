@@ -45,6 +45,7 @@ export {
   type AiSegmentExtension,
   type AiSegmentExtensions,
   type AiOutboundSegmentProfile,
+  type AiReactionProfile,
 } from './json-schema.js';
 export { segmentsForImDelivery } from './delivery.js';
 export {

@@ -34,6 +34,7 @@ describe('Prompt Section Feature', () => {
       maxChars: 800,
       profiles: ['interactive'],
       platforms: ['github'],
+      scopes: ['group'],
     });
     const host = new MemoryHost({
       '/project/prompt-sections': [
@@ -57,6 +58,13 @@ describe('Prompt Section Feature', () => {
     });
     expect(definition.platforms).toEqual(['github']);
     expect(Object.isFrozen(definition.platforms)).toBe(true);
+    expect(definition.scopes).toEqual(['group']);
+    expect(Object.isFrozen(definition.scopes)).toBe(true);
+  });
+
+  it.each([[], ['dm'], ['group', 'group'], 'group'])('rejects invalid scene declarations %j', scopes => {
+    expect(() => defineAgentPromptSection({ title: 'Rules', content: 'Group rules', scopes: scopes as never }))
+      .toThrow('scopes');
   });
 
   it('resolves nearest-owner sections and filters by prompt profile', () => {

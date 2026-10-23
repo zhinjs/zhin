@@ -15,30 +15,35 @@ const validators = new Map<string, ValidateFunction<StructuredReply>>();
 
 interface StructuredReply {
   messages: { segments: Segment[] }[];
+  reaction?: string;
 }
+
+/** Segment of the internal message that carries a reaction; the reply port applies it, never sends it. */
+export const REACTION_SEGMENT_TYPE = 'reaction';
 const DEFAULT_PROFILE: AiOutboundSegmentProfile = { types: DEFAULT_AI_OUTBOUND_SEGMENT_TYPES };
 const schemas = new Map<string, Record<string, unknown>>([[key(DEFAULT_PROFILE), aiOutboundJsonSchema]]);
 
 function key(profile: AiOutboundSegmentProfile): string {
-  return JSON.stringify([[...profile.types].sort(), profile.extensions ?? {}]);
+  return JSON.stringify([[...profile.types].sort(), profile.extensions ?? {}, profile.reaction?.values.map(item => item.value) ?? []]);
 }
 
 /** Provider-facing schema for exactly this endpoint profile (cached, stable identity). */
 export function structuredReplySchema(profile: AiOutboundSegmentProfile = DEFAULT_PROFILE): Record<string, unknown> {
   const id = key(profile);
   let schema = schemas.get(id);
-  if (!schema) schemas.set(id, schema = buildAiOutboundJsonSchema(profile.types, profile.extensions));
+  if (!schema) schemas.set(id, schema = buildAiOutboundJsonSchema(profile.types, profile.extensions, profile.reaction));
   return schema;
 }
 
 const SEGMENT_GUIDE: readonly (readonly [readonly AiOutboundSegmentType[], string])[] = [
-  [['text'], 'text: {"type":"text","data":{"text":"..."}} for plain text.'],
-  [['mention'], 'mention: {"type":"mention","data":{"target":"<user id>"}}. The target is a real user platform ID from the current conversation context or a member lookup tool result, never an endpoint ID, role or guessed nickname, and always a JSON string even for numeric IDs ("123", never 123). Use the Sender id to mention the current sender; to mention someone else by name, look the member up with the available platform tools; if the name is ambiguous or no ID is available, ask for clarification in a text segment.'],
-  [['markdown'], 'markdown: {"type":"markdown","data":{"content":"..."}} for formatted text (lists, bold, code, tables); platforms without Markdown receive plain text.'],
-  [['image', 'audio', 'video', 'file'], 'image / audio / video / file: {"type":"image","data":{"media":{"kind":"url","value":"https://..."}}}; kind is url, path (a workspace file) or base64. Only reference media you produced or were given; never Markdown image syntax.'],
-  [['keyboard'], 'keyboard: {"type":"keyboard","data":{"rows":[[{"label":"查看详情","payload":"/detail 1"}]]}} offers quick-reply buttons (at most 5 per row); tapping one sends its payload as the user\'s next message. Place it after the text it belongs to and use it only for concrete next steps.'],
-  [['share'], 'share: {"type":"share","data":{"url":"https://...","title":"..."}} for a link card.'],
-  [['dice', 'rps'], 'dice / rps: {"type":"dice","data":{}} or {"type":"rps","data":{}} sends the platform\'s random dice or rock-paper-scissors.'],
+  [['text'], 'plain text.'],
+  [['mention'], 'target must be a real platform user ID string ("123", not 123), from context or member lookup; never an endpoint ID, role or guessed nickname. Use Sender id for the sender; look up others by name, ask for clarification in text if missing/ambiguous. Plain @name does not notify. Reply is already in this conversation: mention only to call someone in.'],
+  [['markdown'], 'formatted text (lists, bold, code, tables); degrades to plain text where unsupported.'],
+  [['image', 'audio', 'video', 'file'], 'media.kind is url, path (workspace file) or base64. Use only media produced or given to you, as separate segments, never Markdown image syntax.'],
+  [['keyboard'], 'quick-reply buttons: at most 5 per row; tapping sends payload as the next user message. Use only for concrete next steps, after the related text.'],
+  [['share'], 'link card with url and title.'],
+  [['dice'], 'platform random dice.'],
+  [['rps'], 'platform random rock-paper-scissors.'],
 ];
 
 /** The final-reply contract for this endpoint; lists only the segment types it can deliver. */
@@ -49,15 +54,23 @@ export function structuredReplyInstruction(profile: AiOutboundSegmentProfile = D
     return hint ? [`- ${type} on this platform: ${hint}`] : [];
   });
   return [
-    'Your final reply must be a JSON object matching the supplied schema: {"messages":[{"segments":[...]}]} with no Markdown fence or surrounding prose.',
-    'Each item of messages is one chat message, sent in order. Usually send one; split into two or three only where a person would send separate messages, such as a quick reaction followed by the answer. Example: {"messages":[{"segments":[{"type":"text","data":{"text":"调好了"}}]},{"segments":[{"type":"text","data":{"text":"你再试试"}}]}]}.',
+    'Final reply: JSON matching the supplied schema, {"messages":[{"segments":[...]}]}, no fence/prose. Each item is one chat message; preserve message and segment order. Usually one message; split into 2–3 only where natural.',
     `Segment types available on this platform: ${types.join(', ')}.`,
-    ...SEGMENT_GUIDE.filter(([covers]) => covers.some(type => types.includes(type))).map(([, line]) => `- ${line}`),
+    ...SEGMENT_GUIDE.flatMap(([covers, line]) => {
+      const offered = covers.filter(type => types.includes(type));
+      return offered.length ? [`- ${offered.join(' / ')}: ${line}`] : [];
+    }),
     ...hints,
-    'Do not invent IDs or media references. Plain @name text does not notify anyone. Keep mentions, media and buttons as their own segments and preserve the intended order.',
-    'The reply already goes to this conversation: mention someone only to call that person in.',
-    'Business tool calls use their normal tool schemas; this message schema describes only the final user-facing answer, including the json response tool when supplied. Use {"messages":[]} only when no reply is needed.',
+    'Never invent IDs or references. Business calls use their own tool schemas; this schema is only for the final answer (including the json response tool). Use {"messages":[]} only when no reply is needed.',
+    ...(profile.reaction ? reactionInstruction(profile.reaction.values) : []),
   ].join('\n');
+}
+
+function reactionInstruction(values: readonly { readonly value: string; readonly label: string }[]): string[] {
+  return [
+    `"reaction" reacts to the message being answered: ${values.map(item => `${item.value} ${item.label}`).join(', ')}; "" for none.`,
+    'For thanks, agreement, jokes or news needing no words, {"messages":[],"reaction":"<value>"} may suffice. A short message may accompany it; avoid repeating its meaning.',
+  ];
 }
 
 export const STRUCTURED_REPLY_INSTRUCTION = structuredReplyInstruction();
@@ -78,6 +91,15 @@ export function decodeStructuredReply(
   // Replies persisted before multi-message replies are a single {segments} message; models may echo it.
   if (value && typeof value === 'object' && !Array.isArray(value) && 'segments' in value && !('messages' in value)) {
     value = { messages: [value] };
+  }
+  // "reaction" is required only to satisfy strict schemas; a reply without it simply has none.
+  if (profile.reaction && value && typeof value === 'object' && !Array.isArray(value) && !('reaction' in value)) {
+    value = { ...value, reaction: '' };
+  }
+  // Where reactions are not offered, a reaction the model wrote anyway is dropped, not a format error.
+  if (!profile.reaction && value && typeof value === 'object' && !Array.isArray(value) && 'reaction' in value) {
+    const { reaction: _ignored, ...rest } = value as Record<string, unknown>;
+    value = rest;
   }
   const id = key(profile);
   let validateReply = validators.get(id);
@@ -100,8 +122,12 @@ export function decodeStructuredReply(
       }
     }
   }
-  return value.messages.filter(message => message.segments.length > 0)
+  const messages: AgentOutputElement[] = value.messages.filter(message => message.segments.length > 0)
     .map(message => ({ type: 'message', segments: message.segments.map(segment => withoutEmptyModelFields(segment, profile)) }));
+  // React first, then talk, like a person tapping a reaction before typing.
+  return value.reaction
+    ? [{ type: 'message', segments: [{ type: REACTION_SEGMENT_TYPE, data: { emoji: value.reaction } } as Segment] }, ...messages]
+    : messages;
 }
 
 function stringifyNumbersWhereStringsExpected(value: unknown, errors: readonly ErrorObject[]): void {

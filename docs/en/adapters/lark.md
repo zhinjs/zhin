@@ -91,7 +91,7 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 
 ## Agent Tools
 
-The `tools/` directory provides get_user, group chat, administrator, file upload, and related Tools. A tool declaring `adapter: 'lark'` lazily receives the current operation's `LarkClient` through `context.$client`; the model no longer selects an Endpoint id.
+The `agents/lark/skills/` directories provide get_user, group chat, administrator, file upload, and related Tools. A tool declaring `adapter: 'lark'` lazily receives the current operation's `LarkClient` through `context.$client`; the model no longer selects an Endpoint id.
 
 ## Platform Permissions (platform permit)
 
@@ -112,3 +112,5 @@ pnpm --filter @zhin.js/adapter-lark test
 | Tenant Token fails | `appId`, `appSecret`, and whether the App version is published |
 | @bot does not trigger AI | Bot open_id cannot yet be identified reliably; use an explicit AI prefix |
 | Receives but cannot send | Message permission, visibility range, and chat membership |
+
+Existing-group administration is in `lark-group-admin`, disclosed only in group conversations. User lookup, creating a group and other common operations remain separate.

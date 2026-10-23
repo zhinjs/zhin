@@ -2,9 +2,13 @@ import { RED_CIRCLE_PNG } from '../../evals/fixtures/images.js';
 import { describe, expect, it, vi } from 'vitest';
 import { aiOutboundJsonSchema, buildAiOutboundJsonSchema, DEFAULT_AI_OUTBOUND_SEGMENT_TYPES, type AiOutboundSegmentProfile } from '@zhin.js/core';
 import type { AgentMessage, AgentTool, StreamOptions } from '@zhin.js/ai';
-import { STRUCTURED_REPLY_FAILURE } from '../../src/core/structured-reply-recovery.js';
+import { chatFailureLine } from '../../src/outbound/chat-failure.js';
+import { describeProviderFailure } from '@zhin.js/ai';
+
+/** IM turns say a format failure in the chat voice (the host notice is for non-chat callers). */
+const STRUCTURED_REPLY_FAILURE = chatFailureLine('format', { random: 0 });
 import { formatToolCallsForUser } from '../../src/core/tool-calls-user-format.js';
-import { decodeStructuredReply, structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
+import { decodeStructuredReply, REACTION_SEGMENT_TYPE, structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
 import { renderAgentOutput, splitOutputMessages } from '../../src/outbound/agent-output.js';
 import { OutboundLeakInspector, guardReplyPort } from '../../src/security/outbound-leak-guard.js';
@@ -28,6 +32,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   detached?: boolean;
   emptyReplyRetries?: number;
   replySegments?: AiOutboundSegmentProfile;
+  roles?: string[];
 } = {}) {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => responses.shift()! });
   const streamOptions: (StreamOptions | undefined)[] = [];
@@ -60,7 +65,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     promptProfile: { kind: 'interactive' },
     turnContext: {
       origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'g' },
-      principal: { subjectId: '123', roles: ['user'] }, session: { key: 's' },
+      principal: { subjectId: '123', roles: options.roles ?? ['user'] }, session: { key: 's' },
     },
     replySegments: options.replySegments,
     allTools: tools, resolvedTools: tools,
@@ -101,6 +106,19 @@ describe('structured Agent final replies', () => {
     expect(result.reply).toBe(path === 'rejected correction' ? STRUCTURED_REPLY_FAILURE : '已完成');
   });
 
+  it.each([
+    ['rate_limit', '模型限流'],
+    ['quota_exhausted', '模型额度用完了'],
+    ['auth', '模型 API 密钥有问题'],
+  ] as const)('says a %s failure like a member, with the cause only for the owner', async (kind, cause) => {
+    const failed = () => ({ ...assistantTextReply(''), content: [], stopReason: 'error' as const, errorMessage: describeProviderFailure(kind) });
+    const member = await run([failed()]);
+    expect(member.result.reply).not.toMatch(/模型|API|密钥|重试/);
+    expect(member.result.reply).not.toContain(cause);
+    const owner = await run([failed()], { roles: ['master'] });
+    expect(owner.result.reply).toContain(`（${cause}）`);
+  });
+
   it.each([false, true])('keeps the existing empty-reply notice without retrying (thinking: %s)', async thinking => {
     const assistant = assistantTextReply('');
     if (thinking) assistant.content = [{ type: 'thinking', thinking: 'private reasoning is not a JSON reply' }];
@@ -110,6 +128,37 @@ describe('structured Agent final replies', () => {
     expect(result.reply).toBe(formatToolCallsForUser([]));
     expect(calls).toHaveLength(1);
   });
+  describe('reactions', () => {
+    const profile = { types: ['text' as const], reaction: { values: [{ value: '76', label: '赞' }, { value: '182', label: '笑哭' }] } };
+
+    it('decodes a reaction as its own message before the words', () => {
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"哈哈"}}]}],"reaction":"182"}', profile)).toEqual([
+        { type: 'message', segments: [{ type: REACTION_SEGMENT_TYPE, data: { emoji: '182' } }] },
+        { type: 'message', segments: [text('哈哈')] },
+      ]);
+      expect(decodeStructuredReply('{"messages":[],"reaction":"76"}', profile)).toEqual([
+        { type: 'message', segments: [{ type: REACTION_SEGMENT_TYPE, data: { emoji: '76' } }] },
+      ]);
+    });
+
+    it('treats a missing or empty reaction as none and rejects values the platform lacks', () => {
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"好"}}]}]}', profile)).toEqual([{ type: 'message', segments: [text('好')] }]);
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"好"}}]}],"reaction":""}', profile)).toHaveLength(1);
+      expect(() => decodeStructuredReply('{"messages":[],"reaction":"999"}', profile)).toThrow();
+    });
+
+    it('drops a reaction where none is offered instead of failing the reply', () => {
+      expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"好"}}]}],"reaction":"76"}')).toEqual([{ type: 'message', segments: [text('好')] }]);
+    });
+
+    it('tells the model the reactions and when a reaction alone is enough', () => {
+      const instruction = structuredReplyInstruction(profile);
+      expect(instruction).toContain('76 赞, 182 笑哭');
+      expect(instruction).toContain('{"messages":[],"reaction":"<value>"}');
+      expect(structuredReplyInstruction({ types: ['text'] })).not.toContain('"reaction"');
+    });
+  });
+
   it('keeps media capability and size policies on structured messages', async () => {
     const output = decodeStructuredReply(JSON.stringify({ segments: [mention('123'),
       { type: 'image', data: { media: { kind: 'base64', value: RED_CIRCLE_PNG.base64 } } }] }));
@@ -305,8 +354,23 @@ describe('structured Agent final replies', () => {
   it('documents only the offered segment types', () => {
     const instruction = structuredReplyInstruction({ types: ['text', 'keyboard', 'dice'] });
     expect(instruction).toContain('keyboard:');
-    expect(instruction).toContain('dice / rps:');
-    expect(instruction).not.toContain('image / audio / video / file:');
+    expect(instruction).toContain('dice:');
+    expect(instruction).not.toContain('rps');
+    expect(instruction).not.toContain('media');
+    expect(instruction).not.toContain('mention');
+  });
+
+  it.each(['image', 'audio', 'video', 'file'] as const)('only describes the offered %s media type', type => {
+    const instruction = structuredReplyInstruction({ types: [type] });
+    expect(instruction).toContain(`- ${type}:`);
+    for (const other of ['image', 'audio', 'video', 'file'].filter(other => other !== type)) {
+      expect(instruction).not.toContain(`"type":"${other}"`);
+      expect(instruction).not.toContain(`${other} /`);
+    }
+    expect(instruction).toContain('url');
+    expect(instruction).toContain('path');
+    expect(instruction).toContain('base64');
+    expect(instruction).not.toContain('keyboard:');
   });
 
   it('completes model quick-reply buttons into a canonical keyboard with a text fallback', async () => {

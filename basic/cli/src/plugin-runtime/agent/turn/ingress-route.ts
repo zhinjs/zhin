@@ -7,6 +7,8 @@ import {
   routeTaskInterjection,
   type DetachedTaskRunner,
   publishOutboundElements,
+  REACTION_SEGMENT_TYPE,
+  type AgentOutputElement,
   type ApprovalPort,
 } from '@zhin.js/agent';
 import { DecisionApprovalJudgment } from '@zhin.js/agent/session';
@@ -52,7 +54,7 @@ import {
 } from './content.js';
 import {
   hasIgnoredTriggerPrefix,
-  renderTriggerError,
+  renderChatTurnError,
   resolveRuntimeAgentTrigger,
   resolveTriggerTimeoutMs,
   restrictWorkroomAgentCapabilities,
@@ -480,6 +482,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
               interaction: approvalInteraction,
               memory: options.agent.approvalReviewer,
             });
+            const replyConversation = workroomReplyConversation ?? message.conversation;
+            const replySegments = resolveAiOutboundSegments(
+              replyConversation.endpoint.id as CapabilityId,
+              snapshot,
+              replyConversation.kind,
+            );
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
               traceId,
               turnId,
@@ -550,10 +558,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 }),
                 question: createRuntimeQuestionPort(options.im, message),
                 reply: {
-                  segments: resolveAiOutboundSegments(
-                    (workroomReplyConversation ?? message.conversation).endpoint.id as CapabilityId,
-                    snapshot,
-                  ),
+                  // Message segments follow the target scene; reactions additionally need the original message.
+                  segments: workroomReplyConversation || !message.message
+                    ? { ...replySegments, reaction: undefined }
+                    : replySegments,
                   send: async (output) => {
                     logger.debug(formatCompact({
                       op: 'replychain_port_send',
@@ -563,6 +571,24 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     const outcome = await sendOutputMessages(output, {
                       render: messageOutput => flattenOutputElements([...messageOutput]),
                       send: async (messageOutput) => {
+                        const reaction = reactionOf(messageOutput);
+                        if (reaction !== undefined) {
+                          // A gesture, not a message: best effort, and it counts as having answered.
+                          const applied = message.message
+                            ? await options.im.endpoints.addReaction({
+                                adapter: effectiveAdapter,
+                                endpointKey: effectiveEndpoint,
+                                message: message.message,
+                                emoji: reaction,
+                              }).catch((error: unknown) => {
+                                logger.debug(formatCompact({ op: 'agent_reaction_failed', error: error instanceof Error ? error.message : String(error) }));
+                                return null;
+                              })
+                            : null;
+                          logger.debug(formatCompact({ op: 'agent_reaction', emoji: reaction, applied: applied !== null }));
+                          admission?.markDelivered();
+                          return { status: 'sent' as const };
+                        }
                         // Model output may name local files or URLs: hold them to this Turn's own authority.
                         const content = await publishOutboundElements([...messageOutput], effectiveAdapter || undefined, undefined, {
                           filesystem: turnPolicy.filesystem,
@@ -650,7 +676,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const detail = error instanceof Error ? error.message : String(error);
         logger.warn(formatCompact({ op: 'agent_host_turn_fail', error: detail }));
         try {
-          await reply(renderTriggerError(trigger, detail));
+          const line = renderChatTurnError(trigger, error, senderRoles.isMaster);
+          if (line) await reply(line);
         } catch {
           /* ignore reply failure */
         }
@@ -660,6 +687,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
         admission?.release();
       }
   }
+}
+
+/** The emoji of a reaction-only message from the structured reply, if this message is one. */
+export function reactionOf(output: readonly AgentOutputElement[]): string | undefined {
+  if (output.length !== 1) return undefined;
+  const element = output[0]!;
+  if (element.type !== 'message' || element.segments.length !== 1) return undefined;
+  const segment = element.segments[0]!;
+  if (segment.type !== REACTION_SEGMENT_TYPE) return undefined;
+  const emoji = (segment.data as { emoji?: unknown }).emoji;
+  return typeof emoji === 'string' && emoji ? emoji : undefined;
 }
 
 function admissionRejectionNotice(reason: 'queue_full' | 'expired' | 'stopped'): string | undefined {

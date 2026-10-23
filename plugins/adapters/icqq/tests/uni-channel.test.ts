@@ -369,6 +369,7 @@ describe('UNI-Channel defineAdapter segments policy', () => {
       outboundMedia: ['base64', 'url', 'path'],
       interactive: 'text',
       model: { share: { fields: ['description', 'image', 'audio', 'platform'], hint: expect.stringContaining('QQ link card') } },
+      reaction: { scopes: ['group'], values: expect.arrayContaining([{ value: '76', label: '赞' }, { value: '182', label: '笑哭' }]) },
     });
   });
 });

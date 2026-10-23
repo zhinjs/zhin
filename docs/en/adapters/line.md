@@ -102,7 +102,7 @@ After setup, click **Verify** in the LINE Developers Console to test connectivit
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools (2) | `tools/` (`line_get_profile`, `line_get_group_members`) |
-| Skill documentation | `agents/line/skills/line/SKILL.md` |
+| Skill documentation | `agents/line/skills/line/SKILL.md`、`agents/line/skills/line-group-directory/SKILL.md` |
 
 ## Known Limitations
 
@@ -120,3 +120,5 @@ After setup, click **Verify** in the LINE Developers Console to test connectivit
 | Send 401 | Confirm Channel Access Token has not expired |
 | Send 400 | Check if the message format conforms to the LINE API specification |
 | Events not arriving | Check if Webhook is enabled in the Console and Auto-reply is disabled |
+
+Group/channel-specific Skills and their private Tools are disclosed only in their declared scenes. Common lookup and messaging stay separate. See [Agent capabilities](../authoring/agent-tools.md) for classification.

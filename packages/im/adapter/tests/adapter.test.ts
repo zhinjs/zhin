@@ -1325,15 +1325,31 @@ describe('defineAdapter segments policy', () => {
     expect(defineWithSegments({ model: [] })).toThrow('segments.model');
     expect(defineWithSegments({ model: { share: { fields: [''] } } })).toThrow('segments.model');
     expect(defineWithSegments({ model: { share: { hint: ' ' } } })).toThrow('segments.model');
+    expect(defineWithSegments({ model: { share: { scopes: ['dm'] } } })).toThrow('segments.model');
+    expect(defineWithSegments({ model: { share: { scopes: [] } } })).toThrow('segments.model');
+    expect(defineWithSegments({ reaction: { values: [] } })).toThrow('segments.reaction');
+    expect(defineWithSegments({ reaction: { values: [{ value: '76', label: ' ' }] } })).toThrow('segments.reaction');
+    expect(defineWithSegments({ reaction: { values: [{ value: '76', label: '赞' }], scopes: ['dm'] } })).toThrow('segments.reaction');
+  });
+
+  it('accepts reactions with labels, deduped by value and frozen', () => {
+    const definition = defineAdapter({
+      capabilities: ['outbound'],
+      segments: { reaction: { values: [{ value: '76', label: ' 赞 ' }, { value: '76', label: '赞' }], scopes: ['group', 'group'] } },
+      create,
+    });
+    expect(definition.segments?.reaction).toEqual({ values: [{ value: '76', label: '赞' }], scopes: ['group'] });
+    expect(Object.isFrozen(definition.segments?.reaction?.values)).toBe(true);
   });
 
   it('accepts model extensions per segment type, deduped and frozen', () => {
     const definition = defineAdapter({
       capabilities: ['outbound'],
-      segments: { supported: ['text', 'share'], model: { share: { fields: ['audio', 'audio'], hint: ' music card ' } } },
+      segments: { supported: ['text', 'share'], model: { share: { fields: ['audio', 'audio'], hint: ' music card ', scopes: ['group', 'group'] } } },
       create,
     });
-    expect(definition.segments?.model).toEqual({ share: { fields: ['audio'], hint: 'music card' } });
+    expect(definition.segments?.model).toEqual({ share: { fields: ['audio'], hint: 'music card', scopes: ['group'] } });
+    expect(Object.isFrozen(definition.segments?.model?.share?.scopes)).toBe(true);
     expect(Object.isFrozen(definition.segments?.model?.share)).toBe(true);
   });
 

@@ -44,7 +44,7 @@ const expectedSurface = new Map([
     'EndpointImplementation', 'EndpointIncomingMessage', 'EndpointSendRequest',
     'PlatformEvent', 'AdapterCapability', 'AdapterInteractiveMode',
     'AdapterMarkdownMode', 'AdapterOperation', 'AdapterOperationDeclaration',
-    'AdapterOutboundMedia', 'HtmlOutboundMode', 'defineAdapter', 'defineEndpointClient',
+    'AdapterOutboundMedia', 'AdapterReactionDeclaration', 'HtmlOutboundMode', 'defineAdapter', 'defineEndpointClient',
   ]],
   ['zhin.js/agent', [
     'AgentResourceHub', 'AgentPreset', 'AgentTool', 'AgentToolExecutionContext',

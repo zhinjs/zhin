@@ -116,7 +116,7 @@ add/cancel/remove are restricted by `master`: when the instance configuration de
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools | `tools/` (channels, roles, etc.) |
-| Skill documentation | `agents/qq/skills/qq/SKILL.md` |
+| Skill documentation | `agents/qq/skills/qq/SKILL.md`、`agents/qq/skills/qq-directory/SKILL.md` |
 
 ## Platform Permissions (platform permit)
 
@@ -138,3 +138,5 @@ QQ Endpoints declare native Markdown and keyboard support. `UserInteraction.ask(
 ## License
 
 MIT License
+
+Group/channel-specific Skills and their private Tools are disclosed only in their declared scenes. Common lookup and messaging stay separate. See [Agent capabilities](../authoring/agent-tools.md) for classification.

@@ -2854,7 +2854,7 @@
             },
             "errorTemplate": {
               "type": "string",
-              "description": "错误提示模板（默认 '❌ AI 处理失败: {error}'）"
+              "description": "入口层错误提示模板，{error} 为错误信息（可选；不配置时用聊天口吻说\"刚卡了一下\"，主人额外看到原因）"
             },
             "ambient": {
               "type": "object",

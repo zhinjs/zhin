@@ -22,6 +22,7 @@ import {
   isMediaRef,
   type AiOutboundSegmentProfile,
   type AiOutboundSegmentType,
+  type AiReactionProfile,
   type AiSegmentExtension,
   type Segment,
 } from '../../built/segment-contract/index.js';
@@ -171,20 +172,48 @@ export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot
 export function resolveAiOutboundSegments(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
+  /** The reply target scene; callers must additionally omit reactions without an eligible source message. */
+  conversationKind?: 'private' | 'group' | 'channel',
 ): AiOutboundSegmentProfile {
   const supported = resolveOutboundSupportedSegments(adapter, snapshot);
   const degradesToText = (type: AiOutboundSegmentType) =>
     (type === 'markdown' && resolveOutboundMarkdownPolicy(adapter, snapshot) !== 'native')
     || (type === 'keyboard' && resolveOutboundInteractivePolicy(adapter, snapshot) !== 'native');
-  const types = supported
+  const deliverableTypes = supported
     ? AI_OUTBOUND_SEGMENT_TYPES.filter(type => type === 'text' || degradesToText(type) || supported.includes(type))
     : DEFAULT_AI_OUTBOUND_SEGMENT_TYPES;
   const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
-  const declared = (slot?.definition as { segments?: { model?: Record<string, AiSegmentExtension> } } | undefined)?.segments?.model;
+  const segments = (slot?.definition as { segments?: {
+    model?: Record<string, AiSegmentExtension & { scopes?: readonly string[] }>;
+    reaction?: AiReactionProfile & { scopes?: readonly string[] };
+  } } | undefined)?.segments;
+  const declared = segments?.model;
+  const inScene = (type: AiOutboundSegmentType) => {
+    const scopes = declared?.[type]?.scopes;
+    return !scopes || (conversationKind !== undefined && scopes.includes(conversationKind));
+  };
+  // Plain text remains the universal fallback even when its extra hints are scene-specific.
+  const types = deliverableTypes.filter(type => type === 'text' || inScene(type));
   const extensions = declared
-    ? Object.fromEntries(types.filter(type => declared[type]).map(type => [type, declared[type]!]))
+    ? Object.fromEntries(types.flatMap(type => {
+      const extension = declared[type];
+      if (!inScene(type) || !extension || (!extension.fields && !extension.hint)) return [];
+      return [[type, {
+        ...(extension.fields ? { fields: extension.fields } : {}),
+        ...(extension.hint ? { hint: extension.hint } : {}),
+      }]];
+    }))
     : {};
-  return Object.keys(extensions).length ? { types, extensions } : { types };
+  const reactionDeclared = segments?.reaction;
+  const reaction = reactionDeclared && conversationKind
+    && (!reactionDeclared.scopes || reactionDeclared.scopes.includes(conversationKind))
+    ? { values: reactionDeclared.values }
+    : undefined;
+  return {
+    types,
+    ...(Object.keys(extensions).length ? { extensions } : {}),
+    ...(reaction ? { reaction } : {}),
+  };
 }
 
 /** Preserve semantic Markdown only when the endpoint explicitly declares native consumption. */
