@@ -23,428 +23,143 @@ env:
   NPM_TOKEN: ''
 
 jobs:
-  platform-installed:
+  plan:
     permissions:
       contents: read
-      actions: write
+      actions: read
       packages: read
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: true
-      matrix:
-        platform: [onebot11, napcat, telegram, qq]
+    timeout-minutes: 10
+    outputs:
+      full: ${{ steps.plan.outputs.full }}
+      scope: ${{ steps.scope.outputs.scope }}
+      builds: ${{ steps.scope.outputs.builds }}
+      tests: ${{ steps.scope.outputs.tests }}
     steps:
-      - name: setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
-        with:
-          version: 9.0.2
-      - name: checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
         with:
           persist-credentials: false
-      - name: setup node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+      - uses: ./.github/actions/plan-validation
+        id: plan
         with:
-          node-version: 24
+          workflow: ci.yml
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
 
-      - name: restore pnpm store
-        uses: ./.github/actions/restore-pnpm-store
-      - name: install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
-        env:
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
-      - name: run dependency lifecycle scripts without registry credentials
-        run: pnpm rebuild
-      - name: verify candidate packages through installed platform
-        run: pnpm check:created-project:${{ matrix.platform }}
+      # The planner may have checked out a version baseline; scope uses the
+      # event's immutable candidate SHA, never that mutable worktree state.
+      - name: inspect affected scope
+        id: scope
+        if: steps.plan.outputs.full == 'true'
+        run: |
+          git -c advice.detachedHead=false checkout --detach "$GITHUB_SHA"
+          node scripts/ci/affected-scope.mjs
 
-      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
-      # cancels the whole run instead of letting the other jobs finish for nothing.
-      - name: cancel the rest of this run
-        if: failure()
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-  # Deliberately credential-free (see tests/docs/self-delivery-ci-credentials.test.ts).
-  # Not a required check and already run on the pull request; in the merge queue it
-  # cannot fetch the private @icqqjs packages without credentials, so it is skipped there.
-  database-live:
-    if: github.event_name != 'merge_group'
+  contracts:
+    needs: plan
+    if: needs.plan.outputs.full == 'true'
     permissions:
       contents: read
-    timeout-minutes: 20
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: zhin_test
-          MYSQL_USER: zhin
-          MYSQL_PASSWORD: zhin
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uzhin -pzhin"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=12
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_DB: zhin_test
-          POSTGRES_USER: zhin
-          POSTGRES_PASSWORD: zhin
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U zhin -d zhin_test"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=12
-      # mongo:8.x exits at startup on Linux 6.19+ runner kernels (TCMalloc rseq, SERVER-121912, no fix
-      # version yet); 7.x is unaffected. Move back to 8 once a fixed release exists.
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd="mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=12
-      redis:
-        image: redis:8
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=12
-    steps:
-      - name: setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
-        with:
-          version: 9.0.2
-
-      - name: checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
-        with:
-          persist-credentials: false
-
-      - name: setup node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-        with:
-          node-version: 24
-
-      - name: restore pnpm store
-        uses: ./.github/actions/restore-pnpm-store
-
-      - name: install dependencies
-        run: >-
-          pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss...
-          install --frozen-lockfile --ignore-scripts --ignore-pnpmfile --config.dedupe-peer-dependents=false
-
-      - name: run dependency lifecycle scripts without registry credentials
-        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... rebuild
-
-      - name: build database acceptance dependencies
-        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... --filter @zhin.js/plugin-reminder... --filter @zhin.js/plugin-rss... build
-
-      - name: verify live database dialects and conversation storage
-        run: >-
-          pnpm exec vitest run
-          basic/database/tests/live-dialects.test.ts
-          basic/cli/tests/plugin-runtime/database-conversation-live.test.ts
-          basic/cli/tests/plugin-runtime/mysql-startup.live.test.ts
-          basic/cli/tests/plugin-runtime/persistent-state.live.test.ts
-          packages/im/ai/tests/memory/context-repository-database.test.ts
-        env:
-          NODE_OPTIONS: --throw-deprecation
-          ZHIN_TEST_EXTERNAL_DATABASES: '1'
-          ZHIN_TEST_MYSQL_HOST: 127.0.0.1
-          ZHIN_TEST_MYSQL_PORT: '3306'
-          ZHIN_TEST_MYSQL_USER: zhin
-          ZHIN_TEST_MYSQL_PASSWORD: zhin
-          ZHIN_TEST_MYSQL_DATABASE: zhin_test
-          ZHIN_TEST_PG_HOST: 127.0.0.1
-          ZHIN_TEST_PG_PORT: '5432'
-          ZHIN_TEST_PG_USER: zhin
-          ZHIN_TEST_PG_PASSWORD: zhin
-          ZHIN_TEST_PG_DATABASE: zhin_test
-          ZHIN_TEST_MONGODB_URL: mongodb://127.0.0.1:27017
-          ZHIN_TEST_MONGODB_DATABASE: zhin_test
-          ZHIN_TEST_REDIS_URL: redis://127.0.0.1:6379
-
-      - name: verify structured storage across SQL dialects
-        run: pnpm exec vitest run basic/cli/tests/plugin-runtime/relational-state.test.ts
-        env:
-          ZHIN_TEST_STRUCTURED_SQL: '1'
-          ZHIN_TEST_MYSQL_PORT: '3306'
-          ZHIN_TEST_PG_PORT: '5432'
-
-  test:
-    permissions:
-      contents: read
-      actions: write
       packages: read
-    timeout-minutes: 25
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        node-version: [22, 24, 26]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: setup pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
-        with:
-          version: 9.0.2
-
-      - name: checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: install fonts for Chinese component rendering
-        uses: ./.github/actions/setup-rendering-fonts
-
-      - name: setup node.js
-        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+      - uses: ./.github/actions/prepare-workspace
         with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: restore pnpm store
-        uses: ./.github/actions/restore-pnpm-store
-
-      # changesets `baseBranch: main` compares against a **local** `main` ref; PR and merge
-      # queue checkouts only have `origin/main`, which makes `pnpm changeset status` and
-      # `check:release-plan` fail.
-      - name: sync local main ref for changesets
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        run: git fetch origin main:main
-
-      # Existing package credential for cross-organization @icqqjs dependencies.
-      # Only this script-free install receives the existing PERSONAL_TOKEN credential.
-      - name: install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+          build: 'false'
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
+      - name: validate source contracts and changed-file lint
+        run: node scripts/ci/run-pr-check.mjs contracts
         env:
-          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+          PR_SCOPE: ${{ needs.plan.outputs.scope }}
 
-      - name: run dependency lifecycle scripts without registry credentials
-        run: pnpm rebuild
-
-      # Avoid per-package pnpm/cmd orchestrators on Windows. The same package
-      # scripts run serially in dependency order under one pnpm process.
-      - name: verify Windows build failure handling
-        if: runner.os == 'Windows'
-        run: pnpm exec vitest run scripts/ci/build-windows.test.ts
-
-      - name: build packages (Windows)
-        if: runner.os == 'Windows'
-        run: ./scripts/ci/build-windows.ps1
-        env:
-          CI_NODE_VERSION: ${{ matrix.node-version }}
-
-      - name: upload Windows build resource samples
-        if: ${{ always() && runner.os == 'Windows' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+  build:
+    needs: plan
+    if: needs.plan.outputs.full == 'true' && needs.plan.outputs.builds == 'true'
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
         with:
-          name: windows-build-resources-node-${{ matrix.node-version }}-attempt-${{ github.run_attempt }}
-          path: .tmp/ci/windows-build-resources.json
-          include-hidden-files: true
-          if-no-files-found: warn
-          retention-days: 14
-
-      # Same turbo cache as `prepare-workspace` (Windows builds through build-windows.ps1).
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/prepare-workspace
+        with:
+          build: 'false'
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
       - name: restore turbo build cache
-        if: runner.os != 'Windows'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .turbo/cache
           key: turbo-${{ runner.os }}-${{ github.sha }}
-          restore-keys: |
-            turbo-${{ runner.os }}-
-
-      - name: build packages
-        if: runner.os != 'Windows'
-        run: pnpm build --cache-dir=.turbo/cache
-
-      - name: run tests with coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm vitest run --reporter=verbose --coverage
-
-      # The full suite exercises POSIX durability contracts such as directory
-      # fsync. Windows remains an install/build compatibility gate; runtime
-      # semantics are covered across every supported Node version on Linux.
-      - name: run tests (other supported runtimes)
-        if: ${{ runner.os != 'Windows' && !(matrix.os == 'ubuntu-latest' && matrix.node-version == 24) }}
-        run: pnpm vitest run
-
-      # Public tokenless uploads require Codecov tokenless access to be enabled.
-      # Reporting must not reintroduce long-lived secrets into candidate jobs.
-      - name: Upload coverage reports to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          fail_ci_if_error: false
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && matrix.node-version == 24 }}
-        uses: codecov/test-results-action@0fa95f0e1eeaafde2c782583b36b28ad0d8c77d3 # v1.2.1
-        with:
-          fail_ci_if_error: false
-
-      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
-      # cancels the whole run instead of letting the other jobs finish for nothing.
-      - name: cancel the rest of this run
-        if: failure()
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
+          restore-keys: turbo-${{ runner.os }}-
+      - name: build affected packages and dependencies once
+        run: node scripts/ci/run-pr-check.mjs build
         env:
-          GH_TOKEN: ${{ github.token }}
+          PR_SCOPE: ${{ needs.plan.outputs.scope }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr-build
+          path: pr-build.tgz
+          retention-days: 1
 
-  # The extra gates that only run once (Node 24, Linux) are split out of the
-  # `test` matrix so they run in parallel instead of serially after the tests.
+  test:
+    needs: [plan, build]
+    if: ${{ !cancelled() && needs.plan.outputs.full == 'true' && needs.plan.outputs.tests == 'true' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rendering-fonts
+      - uses: ./.github/actions/prepare-workspace
+        with:
+          build: 'false'
+          npm-token: ${{ secrets.PERSONAL_TOKEN }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: needs.build.result == 'success'
+        with:
+          name: pr-build
+      - name: test affected packages and consumers
+        run: node scripts/ci/run-pr-check.mjs test
+        env:
+          PR_SCOPE: ${{ needs.plan.outputs.scope }}
+          PR_SHARD: ${{ matrix.shard }}
+
   checks:
-    permissions:
-      contents: read
-      packages: read
-      actions: write
+    needs: [plan, contracts, build, test]
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 1
     steps:
-      - name: checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      # Some harness checks render components with real Chromium.
-      - name: install fonts for Chinese component rendering
-        uses: ./.github/actions/setup-rendering-fonts
-
-      - uses: ./.github/actions/prepare-workspace
-        with:
-          npm-token: ${{ secrets.PERSONAL_TOKEN }}
-
-      - name: audit dependencies
-        run: pnpm audit --prod || true
-
-      # Already enforced on the PR itself; in a merge group head_ref is empty, so the
-      # release PR could not be told apart and would fail the queue.
-      - name: check changeset
-        if: github.event_name != 'merge_group' && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
-        run: pnpm changeset status
-
-      # PR gate: scripted-model agent evals (packages/im/agent/evals), deterministic, < 1 min.
-      - name: agent evals (scripted model)
-        run: pnpm eval:agent
-
-      # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
-      - name: harness checks (incl. type-check, lint)
-        run: pnpm check:all
+      - name: require all selected checks and valid planning
         env:
-          HARNESS_SKIP_TEST: '1'
-          HARNESS_SEQUENTIAL: '1'
-
-      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
-      # cancels the whole run instead of letting the other jobs finish for nothing.
-      - name: cancel the rest of this run
-        if: failure()
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-  package-verify:
-    permissions:
-      contents: read
-      packages: read
-      actions: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: checkout official Console contract consumer
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
-        with:
-          repository: zhinjs/console
-          path: .tmp/console
-          persist-credentials: false
-
-      - uses: ./.github/actions/prepare-workspace
-        with:
-          npm-token: ${{ secrets.PERSONAL_TOKEN }}
-
-      # Every relative import in packed JS must resolve inside its tarball (#799).
-      - name: verify packed relative imports resolve
-        run: pnpm check:pack-imports
-
-      - name: verify packed Console publish contract
-        run: pnpm check:console-contract
-        env:
-          ZHIN_CONSOLE_DIR: .tmp/console
-
-      - name: verify clean generated project against candidate packages
-        run: pnpm check:created-project
-
-      # External plugin author path: built CLI -> zhin new -> install packed tarballs
-      # -> generated vitest + tsc; also fails if a packed manifest still has the
-      # source-only "development" condition.
-      - name: verify scaffolded plugin against candidate packages
-        run: node scripts/check-plugin-scaffold.mjs --no-build
-
-      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
-      # cancels the whole run instead of letting the other jobs finish for nothing.
-      - name: cancel the rest of this run
-        if: failure()
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-  docs:
-    permissions:
-      contents: read
-      packages: read
-      actions: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: ./.github/actions/prepare-workspace
-        with:
-          npm-token: ${{ secrets.PERSONAL_TOKEN }}
-
-      # Build after read-only harness checks: docs:build regenerates adapter/config docs.
-      # File-system link checks cannot catch links outside VitePress's site root.
-      - name: build documentation
-        run: pnpm docs:build
-        env:
-          VITE_DOCS_INSIGHTS_ENDPOINT: /__docs-insights
-          VITE_DOCS_INSIGHTS_SITE_ID: zhin-docs-test
-
-      # Exercise the same browser gate as Pages before a PR is merged.
-      - name: install docs browser
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: test docs journeys
-        run: pnpm test:docs:e2e:run
-
-      # Fail fast across jobs: `fail-fast` only stops one matrix, so a failing job
-      # cancels the whole run instead of letting the other jobs finish for nothing.
-      - name: cancel the rest of this run
-        if: failure()
-        run: gh run cancel ${{ github.run_id }} --repo ${{ github.repository }}
-        env:
-          GH_TOKEN: ${{ github.token }}
+          PLAN: ${{ needs.plan.result }}
+          FULL: ${{ needs.plan.outputs.full }}
+          CONTRACTS: ${{ needs.contracts.result }}
+          BUILD: ${{ needs.build.result }}
+          TEST: ${{ needs.test.result }}
+          EXPECT_BUILD: ${{ needs.plan.outputs.builds }}
+          EXPECT_TEST: ${{ needs.plan.outputs.tests }}
+        run: |
+          test "$PLAN" = success
+          if [ "$FULL" = true ]; then
+            test "$CONTRACTS" = success
+            if [ "$EXPECT_BUILD" = true ]; then test "$BUILD" = success; fi
+            if [ "$EXPECT_TEST" = true ]; then test "$TEST" = success; fi
+          fi

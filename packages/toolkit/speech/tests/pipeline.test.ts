@@ -225,3 +225,28 @@ describe('TTS fetch 超时', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('short voice replies', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('rejects blank speech before sending a provider request', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const pipeline = createSpeechPipeline({ tts: { provider: 'openai' } });
+    await expect(pipeline.synthesize({ text: '   ' })).rejects.toThrow('不能为空');
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('trims input and rejects empty audio', async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+    vi.stubGlobal('fetch', request);
+    const pipeline = createSpeechPipeline({ tts: { provider: 'openai' } });
+    await expect(pipeline.synthesize({ text: ' 😀 ' })).rejects.toThrow('空音频');
+    expect(JSON.parse(request.mock.calls[0][1].body).input).toBe('😀');
+  });
+
+  it('reports a missing edge executable with setup guidance', async () => {
+    const pipeline = createSpeechPipeline({ tts: { edgeTtsCommand: '/nonexistent/zhin-edge-tts' } });
+    await expect(pipeline.synthesize({ text: '你好' })).rejects.toThrow('speech.tts.edgeTtsCommand');
+  });
+});

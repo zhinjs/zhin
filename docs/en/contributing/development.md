@@ -41,7 +41,7 @@ pnpm --filter @zhin.js/scaffold-wizard build   # or pnpm prepare:cli
 
 ## Harness CI Gates (pnpm check:all)
 
-The most valuable command to run before committing is `pnpm check:all`: it runs every check registered in `scripts/check-all-harness.mjs` (including type-check, lint, and unit tests). All must pass to go green -- CI runs the exact same suite. If CI runs a separate coverage job, you can set `HARNESS_SKIP_TEST=1` to skip the `pnpm test` portion and avoid running tests twice.
+The most valuable command to run before committing is `pnpm check:all`: it runs every check registered in `scripts/check-all-harness.mjs` (including type-check, lint, and unit tests). Full validation uses this suite; ordinary PRs use the affected-scope checks described below. If CI runs a separate coverage job, you can set `HARNESS_SKIP_TEST=1` to skip the `pnpm test` portion and avoid running tests twice.
 
 Below are the checks grouped by responsibility (the command in parentheses can be run individually).
 
@@ -182,18 +182,20 @@ releases then increment patch only.
 
 ## Publishing (GitHub CI)
 
-Publishing is driven by `.github/workflows/publish.yml`: on **push to `main`** or via **Actions → workflow_dispatch**.
+PR and merge-queue checks target five minutes using affected packages and downstream tests on Linux Node 24. Builds run once and four test shards share their outputs. The required `checks` aggregate fails if planning or any selected task fails. Exact successful commits can be reused; generated version trees must be reproduced from a validated baseline.
+
+Full OS/Node matrices, coverage, live databases, installed consumers and browser docs journeys run in `full-validation.yml` nightly and for explicit releases. Start **Build and Publish** manually on main: full validation runs before Changesets consumes notes or creates the version PR. Failed/cancelled validation leaves main versions and changesets untouched. An advancing main requires a new batch. After merging versions, publication verifies the generated tree against the explicit successful batch, then builds and validates final packages. Partial npm uploads retain their versions for retry; changed source cannot reuse those versions.
+
+The release workflow starts a batch only through **Actions → Build and Publish → Run workflow**. Ordinary pushes to main do not create version PRs. Merging a validated version PR triggers publication automatically.
 
 ```mermaid
 flowchart LR
-  trigger["push main / workflow_dispatch"] --> install["pnpm install"] --> build["pnpm build"]
-  build --> harness["pnpm check:all"]
-  harness --> gate["check:unpublished<br/>detect first-time packages"]
-  gate -->|"new packages"| stop["Fail with package list<br/>manual first publish, then re-run"]
-  gate -->|"all on npm"| action["changesets/action"]
-  action -->|"Unconsumed changesets exist"| pr["Open version PR<br/>pnpm bump"]
-  action -->|"main merges version PR"| pub["pnpm pub<br/>Publish to npm"]
+  manual["Explicit release batch"] --> full["Full validation"]
+  full -->|Failed| keep["Keep changesets and versions unchanged"]
+  full -->|Passed| version["Create version PR"]
+  version --> merged["Merge and verify generated tree"] --> packed["Build and validate final packages"] --> npm["Publish npm"]
 ```
+
 
 npm authentication tries trusted publishing (OIDC) first and falls back to the npm token for packages that have no trusted publisher yet. Every publish carries provenance. The setup steps and the per-package npmjs.com checklist are in [npm publishing and trusted publishing](/contributing/publishing) (Chinese).
 
@@ -213,9 +215,9 @@ Then add the trusted publisher (npm >= 11.15.0):
 npm trust github <package> --repo zhinjs/zhin --file publish.yml --env npm-production --allow-publish --yes
 ```
 
-Then re-run **Build and Publish** (push `main` or workflow_dispatch).
+Then manually re-run **Build and Publish** on `main`.
 
-PR gates are in `.github/workflows/ci.yml` (Node 22/24 matrix), which also runs `pnpm check:all`.
+PR gates are in `.github/workflows/ci.yml`; full matrices and `pnpm check:all` run in `.github/workflows/full-validation.yml` for nightly and explicit releases.
 
 ## Debugging
 

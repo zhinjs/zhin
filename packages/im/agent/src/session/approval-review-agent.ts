@@ -125,6 +125,11 @@ export function createAutoApprovalPort(
     async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
       try {
         input.signal.throwIfAborted();
+        if (input.humanOnly) {
+          return isApprovalPortAvailable(ask)
+            ? await settleWithinTimeout(requestApprovalOutcome(ask, input), input)
+            : { status: 'unavailable', reason: 'this tool requires fresh human approval' };
+        }
         const recalled = reviewer.recall(input);
         if (recalled !== undefined) {
           return recalled
@@ -162,11 +167,19 @@ export function createAutoApprovalPort(
   return Object.freeze(port);
 }
 
-export function createBypassApprovalPort(): ApprovalPort {
-  return Object.freeze({
+export function createBypassApprovalPort(ask?: ApprovalPort): ApprovalOutcomePort {
+  const port: ApprovalOutcomePort = {
     available: true,
-    requestApproval: async () => true,
-  });
+    async requestApprovalOutcome(input) {
+      if (input.signal.aborted) return { status: 'unavailable', reason: 'approval request cancelled' };
+      if (input.humanOnly) return isApprovalPortAvailable(ask)
+        ? requestApprovalOutcome(ask, input)
+        : { status: 'unavailable', reason: 'this tool requires fresh human approval' };
+      return { status: 'approved', decision: 'approve-once' };
+    },
+    requestApproval: async input => (await port.requestApprovalOutcome(input)).status === 'approved',
+  };
+  return Object.freeze(port);
 }
 
 

@@ -39,21 +39,21 @@ function expectCancelOnlyAsLastStep(steps: Step[]) {
 }
 
 describe('untrusted candidate CI credential isolation', () => {
-  it.each([['ci', 'test'], ['ci', 'platform-installed'], ['plugin-runtime-size', 'production-install']])('%s exposes the dedicated package secret only during script-free install', (file, jobName) => {
+  it.each([['full-validation', 'test'], ['full-validation', 'platform-installed'], ['plugin-runtime-size', 'production-install']])('%s exposes the dedicated package secret only during script-free install', (file, jobName) => {
     const { config, source } = read(file);
     const job = config.jobs[jobName];
     expect(config.permissions).toEqual({ contents: 'read' });
-    expect(job.permissions).toEqual(file === 'ci' ? CI_CREDENTIAL_PERMISSIONS : { contents: 'read', packages: 'read' });
+    expect(job.permissions).toEqual(file === 'full-validation' ? CI_CREDENTIAL_PERMISSIONS : { contents: 'read', packages: 'read' });
     expect(source).not.toMatch(/secrets\.(?!PERSONAL_TOKEN\b)|secrets\[['"]|CODECOV_TOKEN/);
     // ci: the inline installs of `test` and `platform-installed`, plus one `prepare-workspace` input per prepared job.
-    expect(source.match(/secrets\.PERSONAL_TOKEN/g)).toHaveLength(file === 'ci' ? 2 + PREPARED_JOBS.length : 1);
+    expect(source.match(/secrets\.PERSONAL_TOKEN/g)).toHaveLength(file === 'full-validation' ? 2 + PREPARED_JOBS.length : 2);
     expect(config.env?.NPM_TOKEN ?? job.env?.NPM_TOKEN).toBe('');
     const install = job.steps.find((step: Step) => step.name === 'install dependencies');
     expect(install.run).toBe('pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile');
     expect(install.env).toEqual({ NPM_TOKEN: '${{ secrets.PERSONAL_TOKEN }}' });
     const installIndex = job.steps.indexOf(install);
     expect(job.steps[installIndex + 1].run).toBe('pnpm rebuild');
-    if (file === 'ci') {
+    if (file === 'full-validation') {
       expectCancelOnlyAsLastStep(job.steps);
       expectNoCredentialOutside(job.steps, [install, job.steps.at(-1)]);
     } else {
@@ -62,7 +62,7 @@ describe('untrusted candidate CI credential isolation', () => {
   });
 
   it.each(PREPARED_JOBS)('ci %s receives the package secret only as the prepare-workspace input', (jobName) => {
-    const { config } = read('ci');
+    const { config } = read('full-validation');
     const job = config.jobs[jobName];
     expect(job.permissions).toEqual(CI_CREDENTIAL_PERMISSIONS);
     expect(job.env).toBeUndefined();
@@ -91,7 +91,7 @@ describe('untrusted candidate CI credential isolation', () => {
   });
 
   it('preserves the protected matrix identities and isolated live-database gate', () => {
-    const { config } = read('ci');
+    const { config } = read('full-validation');
     expect(Object.keys(config.jobs)).toEqual(['platform-installed', 'database-live', 'test', ...PREPARED_JOBS]);
     expect(config.jobs['platform-installed'].strategy.matrix.platform).toEqual(['onebot11', 'napcat', 'telegram', 'qq']);
     expect(config.jobs['platform-installed'].strategy['fail-fast']).toBe(true);

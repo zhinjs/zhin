@@ -23,7 +23,9 @@
     "export{default}from './provider.js';"
   ],
   "agent/runtime": [
+    "export * from '../assistant/job-storage.js';",
     "export * from '../decision/index.js';",
+    "export * from '../usage/usage-store.js';",
     "export * from './agent-event-bus.js';",
     "export * from './agent-host-port.js';",
     "export * from './agent-runtime.js';",
@@ -231,6 +233,7 @@
     "export * from './plugin-tasks.js';",
     "export * from './plugin-verification.js';",
     "export * from './plugin.js';",
+    "export * from './relational-state.js';",
     "export * from './root-config-document.js';",
     "export * from './root-config-file.js';",
     "export * from './root-controller.js';",
@@ -238,6 +241,7 @@
     "export * from './shared-lifetime.js';",
     "export * from './snapshot.js';",
     "export * from './system-log.js';",
+    "export * from './task-storage.js';",
     "export * from './token.js';",
     "export{GenerationAdmissionGate,bindGenerationAdmission,createGenerationAdmissionGate,generationAdmissionBinder,generationAdmissionSource,type GenerationAdmissionBindable,type GenerationAdmissionSource,}from './admission.js';"
   ],

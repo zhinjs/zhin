@@ -1,4 +1,4 @@
-import { createMemoryContextRepository, createUserMessage, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage, type Model } from '@zhin.js/ai';
+import { autoCompactAgentMessagesIfNeeded, estimateAgentMessagesTokens, createPromptContextBlock, projectPromptContext, createMemoryContextRepository, createUserMessage, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage, type Model } from '@zhin.js/ai';
 import { AgentCompactionRuntime } from '../../src/memory/compaction-runtime.js';
 
 const model = { id: 'm', sdk: 'openai' } as Model;
@@ -115,4 +115,63 @@ describe('compaction persistence boundary', () => {
     expect(await running).toBe(messages);
     expect((await repository.loadContext(sessionId)).messages.map(m => m.content)).toEqual(messages.map(m => m.content));
   });
+});
+
+it('restores a full marked context after compaction and reload without changing raw records', async () => {
+  const { repository, sessionStore } = createMemoryContextRepository();
+  const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'marked' });
+  const marked = () => ({ ...createUserMessage(''), content: [
+    { type: 'text' as const, text: 'Recent work remains verbatim. '.repeat(20) }, createPromptContextBlock('workspace', 'Stable rules: verify sources.'),
+  ] });
+  const raw = [marked(), createUserMessage('older task details '.repeat(2000)), marked()];
+  await repository.appendMessages(sessionId, raw);
+  const loaded = (await repository.loadContext(sessionId)).messages;
+  const result = await new AgentCompactionRuntime().transformContext(loaded, undefined, {
+    host: { contextRepository: repository }, sessionId, model,
+    transport: { complete: vi.fn(), completeSimple: vi.fn().mockResolvedValue(answer('Older task was discussed.')) },
+    contextWindow: 8192, reservedTokens: 1000, compactionConfig: { keepRecentTokens: 100, minKeepCount: 1 },
+  });
+  const reloaded = (await repository.loadContext(sessionId)).messages;
+  expect(projectPromptContext(reloaded).map(message => message.content)).toEqual(projectPromptContext(result).map(message => message.content));
+  expect(JSON.stringify(projectPromptContext(reloaded))).toContain('Stable rules: verify sources.');
+  expect(await repository.loadMessageRows(sessionId)).toHaveLength(raw.length);
+  expect(reloaded.length).toBeLessThan(raw.length);
+});
+
+it('rejects a checkpoint when restoring a full context erases the projected savings', async () => {
+  const { repository, sessionStore } = createMemoryContextRepository();
+  const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'no-savings' });
+  const marked = () => ({ ...createUserMessage(''), content: [
+    { type: 'text' as const, text: 'turn' }, createPromptContextBlock('workspace', 'Stable rules: verify sources.'),
+  ] });
+  const raw = [marked(), createUserMessage('older task details '.repeat(2000)), marked()];
+  await repository.appendMessages(sessionId, raw);
+  const loaded = (await repository.loadContext(sessionId)).messages;
+  const save = vi.spyOn(repository, 'saveCompactionSummary');
+  const summarize = vi.fn().mockResolvedValue(answer('Older task was discussed.'));
+  const result = await new AgentCompactionRuntime().transformContext(loaded, undefined, {
+    host: { contextRepository: repository }, sessionId, model,
+    transport: { complete: vi.fn(), completeSimple: summarize },
+    contextWindow: 8192, reservedTokens: 1000, compactionConfig: { keepRecentTokens: 100, minKeepCount: 1 },
+  });
+  expect(summarize).toHaveBeenCalledOnce();
+  expect(save).not.toHaveBeenCalled();
+  expect(result).toBe(loaded);
+  expect((await repository.loadContext(sessionId)).messages.map(message => message.content)).toEqual(loaded.map(message => message.content));
+});
+
+it('reports summary savings after restoring the retained full context', async () => {
+  const marked = () => ({ ...createUserMessage(''), content: [
+    { type: 'text' as const, text: 'Recent work remains verbatim. '.repeat(20) },
+    createPromptContextBlock('workspace', 'Stable rules: verify sources. '.repeat(100)),
+  ] });
+  const raw = [marked(), createUserMessage('older task details '.repeat(2000)), marked()];
+  const result = await autoCompactAgentMessagesIfNeeded({
+    messages: raw, model, transport: { complete: vi.fn(), completeSimple: vi.fn().mockResolvedValue(answer('Older task was discussed.')) },
+    config: { contextWindow: 100_000, keepRecentTokens: 100, minKeepCount: 1 }, force: true,
+  });
+  expect(result.wasCompacted).toBe(true);
+  const savings = estimateAgentMessagesTokens(projectPromptContext(raw)) - estimateAgentMessagesTokens(projectPromptContext(result.messages));
+  expect(result.savedTokens).toBe(savings);
+  expect(result.autoSavedTokens).toBe(savings);
 });

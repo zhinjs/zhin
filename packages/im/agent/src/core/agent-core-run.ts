@@ -7,7 +7,7 @@ import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchem
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { createPromptContextBlock, projectPromptContext, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -233,6 +233,7 @@ export interface AgentLoopTurnInput {
   /** Turn-owned deferred selection authority. Required for deferred loading. */
   deferredController?: Readonly<{
     loadedToolNames(): string[];
+    modelOutputBlocks?(name: string, args: unknown, text: string): import('@zhin.js/ai').TextContentBlock[] | undefined;
     /** Optional: lets the loop auto-load a deferred tool the model called directly. */
     load?(name: string): Promise<boolean>;
   }>;
@@ -341,7 +342,7 @@ async function* runAgentLoopVisionTurnOnceRun(
       modelId,
       label: 'vision',
     }),
-    convertToLlm: (messages: AgentMessage[]) => messages,
+    convertToLlm: projectPromptContext,
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
   };
@@ -503,7 +504,7 @@ export async function* runAgentLoopTextTurnRun(
   const loaded = persistentConversation
     ? await repo.loadContext(sessionId)
     : { messages: [] as AgentMessage[] };
-  const promptMessages = input.initialMessages?.length
+  let promptMessages = input.initialMessages?.length
     ? input.initialMessages
     : [createUserMessage(input.rawContent)];
 
@@ -624,7 +625,15 @@ export async function* runAgentLoopTextTurnRun(
   if (hasTools && !directTools) {
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
       .map((item) => ({ name: item.name, description: item.brief })));
-    if (toolIndex) systemPrompt = `${systemPrompt}\n\n${toolIndex}`;
+    if (toolIndex) {
+      const block = createPromptContextBlock('deferred-tools', toolIndex);
+      const userIndex = promptMessages.map(message => message.role === 'user' && Array.isArray(message.content)).lastIndexOf(true);
+      promptMessages = userIndex < 0
+        ? [...promptMessages, { ...createUserMessage(''), content: [block] }]
+        : promptMessages.map((message, index) => index === userIndex && Array.isArray(message.content)
+          ? { ...message, content: [...message.content, block] }
+          : message);
+    }
   }
   if (networkWithheld) systemPrompt = `${systemPrompt}\n\n${NETWORK_DISABLED_PROMPT_NOTE}`;
 
@@ -643,6 +652,7 @@ export async function* runAgentLoopTextTurnRun(
       kind: 'context_budget',
       report: buildContextBudgetReport({
         systemPrompt,
+        outputSchema,
         sections: promptSections,
         bootstrapContext: input.promptRuntime?.bootstrapContext,
         activeSkillsContext: input.promptRuntime?.activeSkillsContext,
@@ -761,7 +771,7 @@ export async function* runAgentLoopTextTurnRun(
       }),
       ...(outputSchema ? { outputSchema } : {}),
     },
-    convertToLlm: (messages: AgentMessage[]) => messages,
+    convertToLlm: projectPromptContext,
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
@@ -868,7 +878,9 @@ export async function* runAgentLoopTextTurnRun(
         const budgetNote = explorationBudget?.record(resolvedName, isProgress(progressKind));
         const finalText = budgetNote ? `${resultText}\n\n${budgetNote}` : resultText;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
-        return toolResultToAgentMessage(toolCall, finalText, false);
+        const result = toolResultToAgentMessage(toolCall, finalText, false);
+        const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);
+        return blocks ? { ...result, content: blocks } : result;
       } catch (err) {
         if (err instanceof TurnJournalCommitError) throw err;
         if (signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {

@@ -16,7 +16,7 @@ export async function resolveToolApprovalRequired(
   onceStore?: ToolApprovalOnceStore,
 ): Promise<boolean> {
   if (!policy || policy === 'never') return false;
-  if (policy === 'always' || policy === 'on-risk') return true;
+  if (policy === 'always' || policy === 'on-risk' || policy === 'human') return true;
   if (policy === 'once') {
     if (!onceStore) return true;
     return !onceStore.has(input.sessionId, input.toolName);
@@ -75,11 +75,13 @@ export async function runToolApprovalGate(
     },
   }, publishCtx);
 
-  const question = `工具「${options.toolName}」需要确认后执行。是否继续？`;
+  const question = `工具「${options.toolName}」需要确认后执行。是否继续？`
+    + (options.policy === 'human' ? `\n本次参数：${stableApprovalValue(options.args)}` : '');
   let approved = false;
   let failure: string | undefined;
   try {
     approved = await options.port.requestApproval({
+      ...(options.policy === 'human' ? { humanOnly: true } : {}),
       requestId,
       sessionKey: options.sessionId,
       conversationScope: options.commMessage.conversation.kind,

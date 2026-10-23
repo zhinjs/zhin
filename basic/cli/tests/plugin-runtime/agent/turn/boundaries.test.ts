@@ -100,6 +100,20 @@ describe('Workroom Orchestrator turn routing', () => {
 });
 
 describe('Plugin Runtime Tool policy bridge', () => {
+  it('requires a fresh human answer even for master and previously remembered permission', async () => {
+    const ask = vi.fn(async () => 'approve-once' as never);
+    const memory = { recall: vi.fn(() => true), remember: vi.fn() };
+    const port = createRuntimeApprovalPort({ isMaster: true, memory,
+      interaction: { ask, async sequence() { return {} as never; } } });
+    const request = { requestId: 'kick', toolName: 'group_kick', humanOnly: true,
+      conversationScope: 'group' as const, question: '踢出群 129043431 的 123？', signal: new AbortController().signal };
+    await expect(port.requestApproval(request)).resolves.toBe(true);
+    await expect(port.requestApproval(request)).resolves.toBe(true);
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(memory.recall).not.toHaveBeenCalled(); expect(memory.remember).not.toHaveBeenCalled();
+    expect(ask.mock.calls[0][0].options.map(option => option.value)).toEqual(['reject', 'approve-once']);
+    expect(runtimeApprovalPolicy('human')).toBe('human');
+  });
   it('preserves never/on-risk/always for the Agent approval gate', () => {
     expect(runtimeApprovalPolicy('never')).toBe('never');
     expect(runtimeApprovalPolicy('on-risk')).toBe('on-risk');
@@ -112,6 +126,8 @@ describe('Plugin Runtime Tool policy bridge', () => {
     };
     await expect(createDeterministicApprovalPort().requestApproval(input)).resolves.toBe(false);
     await expect(createDeterministicApprovalPort('approve').requestApproval(input)).resolves.toBe(true);
+    await expect(createDeterministicApprovalPort('approve').requestApprovalOutcome({ ...input, humanOnly: true }))
+      .resolves.toMatchObject({ status: 'unavailable' });
   });
 });
 

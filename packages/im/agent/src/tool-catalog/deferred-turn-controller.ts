@@ -69,9 +69,7 @@ function formatDiscoverResults(items: ReturnType<typeof discoverInCatalog>, quer
 }
 
 function schemaSummary(item: ToolCatalogItem): string {
-  const params = item.fullTool.parameters;
-  if (!params) return `Loaded tool "${item.name}".`;
-  return `Loaded tool "${item.name}".\nParameters schema:\n${JSON.stringify(params, null, 2)}`;
+  return `Loaded tool "${item.name}". Use its tool definition for arguments.`;
 }
 
 export function createDeferredTurnController(

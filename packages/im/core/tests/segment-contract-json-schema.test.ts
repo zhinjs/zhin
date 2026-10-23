@@ -144,3 +144,26 @@ describe('buildAiOutboundJsonSchema', () => {
     expect(all(reply([{ type: 'dice', data: {} }, { type: 'rps', data: {} }]))).toBe(true);
   });
 });
+
+describe('compact provider schema', () => {
+  it('shares identical media shapes without narrowing kinds or accepting cross-shape fields', () => {
+    const all = ['image', 'audio', 'video', 'file'] as const;
+    const schema = buildAiOutboundJsonSchema(all);
+    const combined = ajv.compile(schema);
+    const singles = all.map(type => ajv.compile(buildAiOutboundJsonSchema([type])));
+    for (const type of [...all, 'text', 'share']) {
+      for (const kind of ['url', 'path', 'base64', 'file', 'invalid']) {
+        for (const data of [{ media: { kind, value: 'x' } }, { media: { kind } }, { media: { kind, value: 3 } }, { media: { kind, value: 'x' }, alt: 'a' }]) {
+          const value = reply([{ type, data }]);
+          expect(combined(value), JSON.stringify(value)).toBe(singles.some(validate => validate(value)));
+        }
+      }
+    }
+    expect(JSON.stringify(schema).length).toBeLessThan(1000);
+    const extended = ajv.compile(buildAiOutboundJsonSchema(all, { image: { fields: ['alt'] } }));
+    expect(extended(reply([{ type: 'image', data: { media: { kind: 'url', value: 'x' }, alt: '' } }]))).toBe(true);
+    expect(extended(reply([{ type: 'image', data: { media: { kind: 'url', value: 'x' } } }]))).toBe(false);
+    expect(extended(reply([{ type: 'audio', data: { media: { kind: 'url', value: 'x' } } }]))).toBe(true);
+    expect(extended(reply([{ type: 'audio', data: { media: { kind: 'url', value: 'x' }, alt: '' } }]))).toBe(false);
+  });
+});

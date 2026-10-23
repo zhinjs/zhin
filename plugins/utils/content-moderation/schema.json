@@ -3,6 +3,39 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "groupModeration": {
+      "type": "array",
+      "default": [],
+      "description": "自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "adapter",
+          "endpoint",
+          "account",
+          "group"
+        ],
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "minLength": 1
+          },
+          "endpoint": {
+            "type": "string",
+            "minLength": 1
+          },
+          "account": {
+            "type": "string",
+            "minLength": 1
+          },
+          "group": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
     "enabled": {
       "type": "boolean",
       "default": true,

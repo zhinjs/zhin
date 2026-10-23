@@ -1,3 +1,4 @@
+import { createPromptContextBlock, type TextContentBlock } from '@zhin.js/ai';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import type { TurnRequest } from '../turn/turn-ingress.js';
 
@@ -19,9 +20,11 @@ export interface TurnContextEnvelopeInput {
   toneHint?: string;
   deferredStats?: string;
   activeSkillsContext?: string;
+  activeSkillBlocks?: readonly TextContentBlock[];
   quoteSystemHint?: string;
   modelLine?: string;
   sdk?: string;
+  gitStatus?: string | null;
   agentsContext?: string;
   /** Rendered "already told the user" ledger (#730). */
   toldLedger?: string;
@@ -49,7 +52,15 @@ export function formatSenderContextLine(turn: TurnContextView): string {
 }
 
 export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): string | null {
-  const lines: string[] = [];
+  return buildTurnContextBlocks(input).map(block => block.text).join('\n');
+}
+
+export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextContentBlock[] {
+  const blocks: TextContentBlock[] = [];
+  const lines: string[] = [TURN_CONTEXT_BEGIN];
+  const flush = () => {
+    if (lines.length) blocks.push({ type: 'text', text: lines.splice(0).join('\n') });
+  };
   const now = new Date();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
@@ -57,6 +68,7 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
 
   if (input.modelLine?.trim()) lines.push(`Model: ${input.modelLine.trim()}`);
   if (input.sdk?.trim()) lines.push(`Sdk: ${input.sdk.trim()}`);
+  if (input.gitStatus?.trim()) lines.push(input.gitStatus.trim());
 
   if (input.turn) {
     lines.push(formatSessionContextLine(input.turn));
@@ -82,15 +94,21 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.deferredStats?.trim()) lines.push(`Deferred catalog: ${input.deferredStats.trim()}`);
   if (input.profileSummary?.trim()) lines.push(input.profileSummary.trim());
   if (input.toneHint?.trim()) lines.push(`[Tone hint] ${input.toneHint.trim()}`);
-  if (input.activeSkillsContext?.trim()) lines.push(input.activeSkillsContext.trim());
+  if (input.activeSkillBlocks?.length) {
+    flush();
+    blocks.push(...input.activeSkillBlocks);
+  } else if (input.activeSkillsContext?.trim()) lines.push(input.activeSkillsContext.trim());
   if (input.quoteSystemHint?.trim()) lines.push(input.quoteSystemHint.trim());
-  if (input.agentsContext?.trim()) lines.push(input.agentsContext.trim());
+  if (input.agentsContext?.trim()) {
+    flush();
+    blocks.push(createPromptContextBlock('workspace-rules', input.agentsContext.trim()));
+  }
   if (input.toldLedger?.trim()) lines.push(input.toldLedger.trim());
   if (input.relevantMemory?.trim()) lines.push(input.relevantMemory.trim());
 
-  return lines.length === 0
-    ? null
-    : `${TURN_CONTEXT_BEGIN}\n${lines.join('\n')}\n${TURN_CONTEXT_END}`;
+  lines.push(TURN_CONTEXT_END);
+  flush();
+  return blocks;
 }
 
 export function prependTurnContextEnvelope(content: string, envelope: string | null | undefined): string {

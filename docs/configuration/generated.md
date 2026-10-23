@@ -352,6 +352,9 @@ outline: [2, 3]
 | `ai.multimodal.perception.maxChars` | number \| string | 否 | — | Description length cap in characters. Default 800. |
 | `ai.multimodal.perception.timeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms. Default 30000. |
 | `ai.multimodal.perception.maxItemsPerTurn` | number \| string | 否 | — | Media described per turn; the rest keep the placeholder. Default 4. |
+| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | 否 | — | 主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。 |
+| `ai.multimodal.perception.fallbacks[].provider` | string | 是 | — | — |
+| `ai.multimodal.perception.fallbacks[].model` | string | 是 | — | — |
 | `ai.memory` | object \| null | 否 | — | 三层 Markdown 文件记忆（global / platform / session）。 默认启用；设 enabled: false 可关闭注入。 |
 | `ai.memory.enabled` | boolean \| string | 否 | — | — |
 | `ai.memory.semantic` | object \| null | 否 | — | L4 语义记忆：memory_entries 表 + memory_search/upsert 工具 |
@@ -1777,6 +1780,11 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
+| `content-moderation.groupModeration` | array&lt;object&gt; | 否 | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。 |
+| `content-moderation.groupModeration[].adapter` | string | 是 | — | — |
+| `content-moderation.groupModeration[].endpoint` | string | 是 | — | — |
+| `content-moderation.groupModeration[].account` | string | 是 | — | — |
+| `content-moderation.groupModeration[].group` | string | 是 | — | — |
 | `content-moderation.enabled` | boolean | 否 | `true` | 总开关 |
 | `content-moderation.onError` | string: `"open"`, `"closed"` | 否 | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
 | `content-moderation.maskChar` | string | 否 | `"*"` | 文本打码字符 |

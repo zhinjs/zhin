@@ -113,6 +113,12 @@ export function renderUserMessageForLlm(
   message: UserMessage,
   extra?: AgentMessageExtra | null,
 ): UserMessage {
+  if (message.content.some(block => block.contextRef)) {
+    const [first, ...rest] = message.content;
+    if (!first || first.contextRef) return message;
+    const head = renderUserMessageForLlm({ ...message, content: [first] }, extra);
+    return { ...head, content: [...head.content, ...rest] };
+  }
   const actorPrefix = message.actor ? buildActorPrefix(message.actor) : null;
   const quoteBlock = extra?.quote?.block.trim();
   if (!quoteBlock && !actorPrefix) return message;
@@ -134,6 +140,19 @@ export function normalizeUserMessageForStorage(
 ): { message: AgentMessage; extra?: AgentMessageExtra } {
   if (message.role !== 'user') return { message };
   const user = message as UserMessage;
+  if (user.content.some(block => block.contextRef)) {
+    const [first, ...rest] = user.content;
+    // Injections have an unmarked leading presentation block. Preserve marked
+    // blocks even for custom callers that put one first; do not guess at text.
+    const head = first && !first.contextRef
+      ? normalizeUserMessageForStorage({ ...user, content: [first] }, extra)
+      : { message: { ...user, content: [] }, extra };
+    const { media: _dropped, ...stored } = head.message as UserMessage;
+    return {
+      message: { ...stored, content: first?.contextRef ? user.content : [...stored.content, ...rest] },
+      ...(head.extra ? { extra: head.extra } : {}),
+    };
+  }
   const body = userMessageBody(user, extra);
   const stored = cloneUserMessageWithText(user, body);
   const { media: _dropped, ...withoutMedia } = stored;

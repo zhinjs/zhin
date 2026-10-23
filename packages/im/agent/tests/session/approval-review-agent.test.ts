@@ -8,6 +8,7 @@ import {
 import {
   ApprovalReviewAgent,
   createAutoApprovalPort,
+  createBypassApprovalPort,
 } from '../../src/session/approval-review-agent.js';
 import { LlmApprovalJudgment } from '../../src/decision/approval-judgment.js';
 import type { ApprovalDecisionPort, ApprovalOutcomePort } from '../../src/session/approval-port.js';
@@ -22,6 +23,28 @@ const model: Model = {
 };
 
 describe('ApprovalReviewAgent', () => {
+  it('routes human-only calls directly to a fresh human decision, ignoring reviewer grants', async () => {
+    const agent = reviewer('{"decision":"approve","reason":"allowed"}');
+    const review = vi.spyOn(agent, 'review');
+    const recall = vi.spyOn(agent, 'recall').mockReturnValue(true);
+    const requestApproval = vi.fn(async () => true);
+    const port = createAutoApprovalPort(agent, { requestApproval });
+    const input = { ...request('kick'), humanOnly: true };
+    await expect(port.requestApproval(input)).resolves.toBe(true);
+    await expect(port.requestApproval(input)).resolves.toBe(true);
+    expect(requestApproval).toHaveBeenCalledTimes(2);
+    expect(review).not.toHaveBeenCalled(); expect(recall).not.toHaveBeenCalled();
+  });
+
+  it('cannot auto-approve or bypass a human-only call without a human surface', async () => {
+    const input = { ...request('kick'), humanOnly: true };
+    await expect(createAutoApprovalPort(reviewer('{"decision":"approve"}')).requestApproval(input)).resolves.toBe(false);
+    await expect(createBypassApprovalPort().requestApproval(input)).resolves.toBe(false);
+    await expect(createBypassApprovalPort().requestApprovalOutcome(input)).resolves.toMatchObject({ status: 'unavailable' });
+    const ask = { requestApproval: vi.fn(async () => true) };
+    await expect(createBypassApprovalPort(ask).requestApproval(input)).resolves.toBe(true);
+    expect(ask.requestApproval).toHaveBeenCalledWith(input);
+  });
   it('approves and rejects from the isolated structured verdict', async () => {
     const approve = reviewer('{"decision":"approve","reason":"bounded"}');
     const reject = reviewer('{"decision":"reject","reason":"destructive"}');

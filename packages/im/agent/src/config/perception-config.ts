@@ -11,6 +11,8 @@ export const PERCEPTION_MEDIA_KINDS: readonly PerceptionMediaKind[] = Object.fre
 export interface PerceptionConfigInput {
   provider?: string;
   model?: string;
+  /** 按顺序尝试的备用识图模型，不改变主对话模型。 */
+  fallbacks?: readonly { provider: string; model: string }[];
   kinds?: readonly string[];
   maxChars?: number;
   timeoutMs?: number;
@@ -20,6 +22,7 @@ export interface PerceptionConfigInput {
 export interface ResolvedPerceptionConfig {
   readonly provider: string;
   readonly model: string;
+  readonly fallbacks?: readonly { readonly provider: string; readonly model: string }[];
   readonly kinds: readonly PerceptionMediaKind[];
   readonly maxChars: number;
   readonly timeoutMs: number;
@@ -59,6 +62,30 @@ export function resolvePerceptionConfig(
   if (providerAliases && !providerAliases.includes(provider)) {
     throw new Error(`${base}.provider "${provider}" is not defined in ai.providers`);
   }
+  const fallbacks: { provider: string; model: string }[] = [];
+  if (raw.fallbacks !== undefined) {
+    if (!Array.isArray(raw.fallbacks)) throw new Error(`${base}.fallbacks must be an array`);
+    const seen = new Set([JSON.stringify([provider, model])]);
+    for (const [index, item] of raw.fallbacks.entries()) {
+      const path = `${base}.fallbacks[${index}]`;
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error(`${path} must contain provider and model`);
+      }
+      const candidate = {
+        provider: typeof item.provider === 'string' ? item.provider.trim() : '',
+        model: typeof item.model === 'string' ? item.model.trim() : '',
+      };
+      if (!candidate.provider || !candidate.model) throw new Error(`${path} must contain provider and model`);
+      if (providerAliases && !providerAliases.includes(candidate.provider)) {
+        throw new Error(`${path}.provider "${candidate.provider}" is not defined in ai.providers`);
+      }
+      const key = JSON.stringify([candidate.provider, candidate.model]);
+      if (!seen.has(key)) {
+        seen.add(key);
+        fallbacks.push(Object.freeze({ provider: candidate.provider, model: candidate.model }));
+      }
+    }
+  }
   let kinds = DEFAULT_PERCEPTION_SETTINGS.kinds;
   if (raw.kinds !== undefined) {
     if (!Array.isArray(raw.kinds) || raw.kinds.length === 0) {
@@ -73,6 +100,7 @@ export function resolvePerceptionConfig(
   return Object.freeze({
     provider,
     model,
+    ...(fallbacks.length ? { fallbacks: Object.freeze(fallbacks) } : {}),
     kinds,
     maxChars: positiveInteger(raw.maxChars, `${base}.maxChars`, DEFAULT_PERCEPTION_SETTINGS.maxChars),
     timeoutMs: positiveInteger(raw.timeoutMs, `${base}.timeoutMs`, DEFAULT_PERCEPTION_SETTINGS.timeoutMs),
