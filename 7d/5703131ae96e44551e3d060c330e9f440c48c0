@@ -1,0 +1,27 @@
+examples/plugin-runtime-migration-bot/package.json
+  s_079f1dc5e6308d::t_58ebf25337ac0b 18
+examples/plugin-runtime-migration-bot/tests/dual-version.test.ts
+  s_079f1dc5e6308d::t_9afa1a2a079ab6 2-3,23-39,41
+examples/test-bot/tsconfig.json
+  s_079f1dc5e6308d::t_2b6a0f71307034 4,6
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_d7d5e91b46e98f 612-614
+tests/helpers/render-card.ts
+  s_079f1dc5e6308d::t_d796bfaafdac0e 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7d5703131ae96e44551e3d060c330e9f440c48c0",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
