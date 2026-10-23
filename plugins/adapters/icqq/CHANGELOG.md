@@ -1,5 +1,34 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.15
+
+### Patch Changes
+
+- 7d68df6: 精简 Agent 内置固定提示词与消息说明，保留工具、审批和结构化回复能力。适配器 Skill 按会话场景拆分，群／频道管理仅向对应场景披露；提示段与模型消息段支持场景声明，沿用当前回合权限和 generation 投影。
+- e91235e: Let the bot answer with a reaction, the way a person taps 👍 instead of typing. Adapters declare reactions with `segments.reaction` (values with meanings, optional scopes); the reply schema then has a `reaction` field limited to those values, the instruction says when a reaction alone is enough, and the reply port applies it to the message being answered before any words. icqq offers 21 QQ face reactions in groups.
+- 3781f1c: 支持多模态感知备用模型和 ICQQ 原创表情识图；增强语音回复的使用指引与错误提示，让已启用的 TTS 回复无需逐次审批。ICQQ 踢人工具使用 human 策略，每次都要求独立人工审批，不能由自动审核或历史授权替代。
+
+  内容审核支持按账号和群显式开启广告、辱骂审核：提醒、警告、10 分钟禁言，通知通过 @ 对应成员说明处理结果，30 分钟无新违规重置；提醒/警告是否撤回原消息由模型结合上下文决定。入群 10 分钟内的明确广告可直接踢出，执行前刷新权限和入群时间；审核、通知或平台操作结果不确定时不盲目重试。
+
+  并发消息独立审核并按到达顺序保存上下文，仅处罚和通知使用成员预留；重复投递不覆盖正在等待的撤回决定。接受完整 JSON 代码块，记录无效审核结果。人工确认显示具体参数，并在等待确认时隔离参数，确保批准对象与执行对象一致。
+
+- Updated dependencies [f98025b]
+- Updated dependencies [66ec1a5]
+- Updated dependencies [7d68df6]
+- Updated dependencies [bf0fa9f]
+- Updated dependencies [3326db3]
+- Updated dependencies [e91235e]
+- Updated dependencies [6da2bad]
+- Updated dependencies [3781f1c]
+  - @zhin.js/core@1.1.50
+  - @zhin.js/adapter@1.1.22
+  - @zhin.js/im-contract@1.1.6
+  - @zhin.js/tool@1.1.9
+  - @zhin.js/agent-feature@1.1.9
+  - @zhin.js/feature-kit@1.1.8
+  - @zhin.js/permission@1.1.8
+  - @zhin.js/skill@1.1.9
+
 ## 1.1.14
 
 ### Patch Changes

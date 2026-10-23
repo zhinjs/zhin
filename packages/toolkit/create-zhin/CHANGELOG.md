@@ -1,5 +1,11 @@
 # create-zhin-app
 
+## 1.1.10
+
+### Patch Changes
+
+- @zhin.js/scaffold-wizard@1.1.9
+
 ## 1.1.9
 
 ### Patch Changes

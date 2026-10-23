@@ -1,5 +1,51 @@
 # @zhin.js/agent
 
+## 1.1.40
+
+### Patch Changes
+
+- f98025b: 自动输出统一的每轮 Agent 用量汇总，DEBUG 展示模型调用与首请求上下文预算。沿用 TurnTrace 汇总主回合及子回合，传递缓存写入、模型身份和用量可用性；未知或部分数据明确标记，日志不包含消息、提示词或工具内容。
+- 66ec1a5: Batch queued group moderation by conversation and sender while allowing ordinary inbound handling to continue. Preserve original-message evidence, notice-based escalation, model-owned recall and generation cancellation. Bound each group's pending buffer, explicitly audit reviews skipped at capacity, and attribute shared completions proportionally without counting the group request more than once. Older completion hosts retain per-message attribution.
+- 7d68df6: 精简 Agent 内置固定提示词与消息说明，保留工具、审批和结构化回复能力。适配器 Skill 按会话场景拆分，群／频道管理仅向对应场景披露；提示段与模型消息段支持场景声明，沿用当前回合权限和 generation 投影。
+- 250b026: 补齐上下文压缩中的工具参数、思考和媒体估算，以及已披露工具输入与结构化输出 Schema 的固定预算。小窗口按可用预算收紧近期原文保留量，继续保留最少消息数与工具调用配对。拒绝截断、失败、取消、请求工具、空白或未节省 token 的摘要，避免错误摘要写入历史；无可压缩前缀时不再报告摘要成功。
+
+  摘要检查点改为绑定实际被压缩的已持久化前缀，修复当前回合未落库时的锚点错位；对来源不明、并发变更或等待写锁期间取消的结果跳过保存，原始记录不删除。
+
+- bf0fa9f: Say failures in a chat voice. In IM turns a failed reply no longer reads "模型服务当前限流，已自动重试仍未成功…", "模型调用失败：…请检查 API 密钥与网络后重试", "模型未能生成符合消息格式的回复…" or "❌ AI 处理失败: …"; the bot says something like "刚卡了一下，你再说一遍？" (tired / confused / refusing lines for quota, overlong context and safety blocks, nothing for a cancelled request). The owner (master) also gets a short cause in brackets. Full errors stay in the logs, non-chat origins keep the precise messages, and a configured `ai.trigger.errorTemplate` is still honoured.
+- 9bc3285: Never send tool-call markup as a chat message. DeepSeek sometimes writes a tool call as text (`<｜｜DSML｜｜ calls>…`), which the plain-prose fallback forwarded to the group verbatim. Replies containing DSML, `<invoke>`, `<tool_call>` or similar markup are rejected in JSON and in prose, are not reworded by the format correction (that would announce an action that never ran), and fall back to the host failure notice. `<text>…</text>` wrappers are split into one message each.
+- 3326db3: 减少已加载 Skill、工作区规则和工具参数 Schema 的重复上下文；保留原始记录、更新版本和压缩检查点。合并等价消息输出 Schema，稳定请求前缀与工具顺序，并沿现有开关扩展 Anthropic 历史缓存标记。上下文追踪包含输出 Schema 和去重后的消息估算。
+- e91235e: Let the bot answer with a reaction, the way a person taps 👍 instead of typing. Adapters declare reactions with `segments.reaction` (values with meanings, optional scopes); the reply schema then has a `reaction` field limited to those values, the instruction says when a reaction alone is enough, and the reply port applies it to the message being answered before any words. icqq offers 21 QQ face reactions in groups.
+- 6da2bad: 新增独立于日志的 Agent 用量分字段存储，默认保留 30 天；为消息与会话增加可查询身份及状态字段。提醒、管理员 RSS 和 Agent 计划任务使用事务化 SQL 表，迁移保留认领与回执，未知投递不自动重发。修复跨连接事务隔离、拒绝传播和 PostgreSQL 长度字段兼容。支持 SQLite、MySQL、PostgreSQL，升级需备份并完整重启，不能与旧版本进程混写。
+- 3781f1c: 支持多模态感知备用模型和 ICQQ 原创表情识图；增强语音回复的使用指引与错误提示，让已启用的 TTS 回复无需逐次审批。ICQQ 踢人工具使用 human 策略，每次都要求独立人工审批，不能由自动审核或历史授权替代。
+
+  内容审核支持按账号和群显式开启广告、辱骂审核：提醒、警告、10 分钟禁言，通知通过 @ 对应成员说明处理结果，30 分钟无新违规重置；提醒/警告是否撤回原消息由模型结合上下文决定。入群 10 分钟内的明确广告可直接踢出，执行前刷新权限和入群时间；审核、通知或平台操作结果不确定时不盲目重试。
+
+  并发消息独立审核并按到达顺序保存上下文，仅处罚和通知使用成员预留；重复投递不覆盖正在等待的撤回决定。接受完整 JSON 代码块，记录无效审核结果。人工确认显示具体参数，并在等待确认时隔离参数，确保批准对象与执行对象一致。
+
+- Updated dependencies [f98025b]
+- Updated dependencies [9e21404]
+- Updated dependencies [de39053]
+- Updated dependencies [66ec1a5]
+- Updated dependencies [7d68df6]
+- Updated dependencies [250b026]
+- Updated dependencies [bff8e31]
+- Updated dependencies [bf0fa9f]
+- Updated dependencies [3326db3]
+- Updated dependencies [e91235e]
+- Updated dependencies [6da2bad]
+- Updated dependencies [3781f1c]
+  - @zhin.js/ai@1.1.44
+  - @zhin.js/core@1.1.50
+  - @zhin.js/adapter@1.1.22
+  - @zhin.js/prompt-section@1.1.8
+  - @zhin.js/plugin-runtime@1.1.16
+  - @zhin.js/im-contract@1.1.6
+  - @zhin.js/tool@1.1.9
+  - @zhin.js/agent-feature@1.1.9
+  - @zhin.js/mcp-feature@1.1.9
+  - @zhin.js/permission@1.1.8
+  - @zhin.js/skill@1.1.9
+
 ## 1.1.39
 
 ### Patch Changes
