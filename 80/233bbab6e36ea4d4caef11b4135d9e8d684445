@@ -1,0 +1,92 @@
+.changeset/humane-failure-replies.md
+  h_b680f75345178a 1-9
+.changeset/qq-passive-reply-ledger.md
+  h_b680f75345178a 1-5
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 57,675-676
+basic/cli/src/plugin-runtime/agent/turn/trigger.ts
+  h_b680f75345178a 4,26-35
+basic/cli/tests/plugin-runtime/agent/turn/trigger.test.ts
+  h_b680f75345178a 6-7,143-154
+docs/adapters/qq.md
+  h_b680f75345178a 11,189-213,221-223
+docs/ai/index.md
+  h_b680f75345178a 283,290-291
+docs/configuration/generated.md
+  h_b680f75345178a 389
+docs/en/ai/index.md
+  h_b680f75345178a 283,290-291
+docs/en/configuration/generated.md
+  h_b680f75345178a 389
+packages/im/agent/evals/cases/provider-billing-no-same-provider-fallback.case.ts
+  h_b680f75345178a 10,13,20
+packages/im/agent/evals/cases/provider-failure-member-voice.case.ts
+  h_b680f75345178a 1-24
+packages/im/agent/evals/cases/provider-gemini-deadline-exceeded-polite.case.ts
+  h_b680f75345178a 9,12,19-20
+packages/im/agent/evals/cases/provider-gemini-prompt-blocked-polite.case.ts
+  h_b680f75345178a 5,8,15
+packages/im/agent/evals/cases/provider-gemini-safety-block-polite.case.ts
+  h_b680f75345178a 5,8,17
+packages/im/agent/evals/cases/provider-openai-insufficient-quota-not-retried.case.ts
+  h_b680f75345178a 15,18,24
+packages/im/agent/evals/cases/provider-retries-exhausted-polite.case.ts
+  h_b680f75345178a 5,8,15
+packages/im/agent/evals/cases/provider-timeout-exhausted-polite.case.ts
+  h_b680f75345178a 5,8,15
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 21-22,79,83-84,526-528,993,1129-1132,1152,1159
+packages/im/agent/src/core/structured-reply-recovery.ts
+  h_b680f75345178a 6,51-52,92
+packages/im/agent/src/index.ts
+  h_b680f75345178a 548-549
+packages/im/agent/src/outbound/chat-failure.ts
+  h_b680f75345178a 1-74
+packages/im/agent/tests/core/chat-failure.test.ts
+  h_b680f75345178a 1-33
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  h_b680f75345178a 1-4
+packages/im/agent/tests/core/structured-reply.test.ts
+  h_b680f75345178a 5-9,35,68,109-121
+packages/im/ai/src/index.ts
+  h_b680f75345178a 117
+packages/im/ai/src/llm/index.ts
+  h_b680f75345178a 111
+packages/im/ai/src/llm/provider-resilience.ts
+  h_b680f75345178a 46,156-162
+packages/im/ai/src/types.ts
+  h_b680f75345178a 660
+packages/im/core/src/built/ai-trigger.ts
+  h_b680f75345178a 61
+packages/im/runtime/src/host-config-schema.json
+  h_b680f75345178a 2857
+plugins/adapters/qq/README.md
+  h_b680f75345178a 177-201,209-211
+plugins/adapters/qq/src/endpoint.ts
+  h_b680f75345178a 23-24,72-74,177-182,221,264-265,330-332,435-440,478,521-522
+plugins/adapters/qq/src/passive-reply.ts
+  h_b680f75345178a 1-159
+plugins/adapters/qq/src/qq-send.ts
+  h_b680f75345178a 1-138
+plugins/adapters/qq/src/webhook.ts
+  h_b680f75345178a 103-107
+plugins/adapters/qq/src/ws.ts
+  h_b680f75345178a 15-23,57-61,338-342
+plugins/adapters/qq/tests/passive-reply.test.ts
+  h_b680f75345178a 1-136
+plugins/adapters/qq/tests/qq-runtime.test.ts
+  h_b680f75345178a 393-413
+tests/snapshots/api-surface.json
+  h_b680f75345178a 34,103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "80233bbab6e36ea4d4caef11b4135d9e8d684445",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
