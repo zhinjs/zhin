@@ -40,7 +40,7 @@ const OWNER_CAUSE: Readonly<Record<ChatFailureKind, string | undefined>> = {
   length: '输出超长', bad_request: '模型拒绝了请求', unknown: '模型调用失败', format: '回复格式没对上',
   turn_timeout: '处理超时', turn_error: undefined,
   quota_exhausted: '模型额度用完了', billing: '模型账户欠费', auth: '模型 API 密钥有问题',
-  context_overflow: '上下文超长', safety_block: undefined, aborted: undefined,
+  context_overflow: '上下文超长', safety_block: '内容被模型拦截', aborted: undefined,
 };
 
 export interface ChatFailureOptions {

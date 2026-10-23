@@ -16,8 +16,9 @@ describe('chatFailureLine', () => {
     expect(chatFailureLine('turn_error', { random: 0, detail: 'boom' })).not.toContain('boom');
   });
 
-  it('refuses a safety block without a cause and stays quiet on a cancelled request', () => {
-    expect(chatFailureLine('safety_block', { master: true })).toBe('这个我不接');
+  it('refuses a safety block and stays quiet on a cancelled request', () => {
+    expect(chatFailureLine('safety_block')).toBe('这个我不接');
+    expect(chatFailureLine('safety_block', { master: true })).toBe('这个我不接（内容被模型拦截）');
     expect(chatFailureLine('aborted')).toBe('');
   });
 });
