@@ -1,0 +1,57 @@
+.changeset/compaction-budget-validation.md
+  s_079f1dc5e6308d::t_4fc2e65277236c 1-8
+packages/im/agent/evals/cases/context-small-window-compaction.case.ts
+  s_079f1dc5e6308d::t_186b3fdb9fdc05 1-21
+packages/im/agent/evals/cases/context-tool-schema-budget.case.ts
+  s_079f1dc5e6308d::t_4e07e04d76cf66 1-25
+packages/im/agent/src/core/agent-core-run.ts
+  s_079f1dc5e6308d::t_093073598a98b2 10,703-712,774,787
+packages/im/agent/src/memory/compaction-runtime.ts
+  s_079f1dc5e6308d::t_059a297da520b6 33-35,43,46,54-56,60,63,138-143,146-147,150,166
+packages/im/agent/tests/memory/compaction-trigger.test.ts
+  s_079f1dc5e6308d::t_85128d80b2a39f 17-18,21-30
+packages/im/agent/tests/memory/compaction-validation.test.ts
+  s_079f1dc5e6308d::t_103b4dab48ad2d 1-118
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  s_079f1dc5e6308d::t_187059acaef4e0 68-69,131,137-141,217-219,224,287-294,310
+packages/im/ai/src/compaction/context-budget.ts
+  s_079f1dc5e6308d::t_b19b5aeca6f785 1-29
+packages/im/ai/src/memory/context-repository.ts
+  s_079f1dc5e6308d::t_c324481a23b8bf 57-66,183-214,220,243-244,254-256,259,262,266-269,274,278,329-353,424-425,428,456,477,479,496,499,503-506,511,515,563-588,590
+packages/im/ai/tests/compaction/agent-message-compaction.test.ts
+  s_079f1dc5e6308d::t_bd088c7d14bc65 38,214-271
+packages/im/ai/tests/compaction/agent-message-tokens.test.ts
+  s_079f1dc5e6308d::t_f5aeb379a3b913 1-43
+packages/im/ai/tests/compaction/context-budget.test.ts
+  s_079f1dc5e6308d::t_12537f0fcb292d 1-44
+packages/im/ai/src/compaction/agent-message-tokens.ts
+  s_079f1dc5e6308d::t_8bc49b01626b03 1-2,4,6-18,22-32,34
+packages/im/ai/src/compaction/index.ts
+  s_079f1dc5e6308d::t_e3f5fdc35acf6c 5
+packages/im/ai/src/index.ts
+  s_5b75e930661e41::t_83e5f19f9c14bd 238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "250b02677b733d6f107f63f81eb4b38217714d34",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_5b75e930661e41": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16723-fff5-7790-a194-f7c6782c636d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
