@@ -1,0 +1,35 @@
+docs/ai/agent.md
+  s_079f1dc5e6308d::t_295706ea3488d0 229
+docs/en/ai/agent.md
+  s_079f1dc5e6308d::t_87a953e3d4137b 233
+packages/im/ai/src/llm/bridge/ai-sdk-prompt-cache.ts
+  s_079f1dc5e6308d::t_ddbf70d9f41664 135-152,159-169
+packages/im/ai/tests/ai-sdk-prompt-cache.test.ts
+  s_079f1dc5e6308d::t_2d6665f17139ad 4,78,86-87,115-142
+packages/im/ai/tests/llm/provider-prompt-cache.test.ts
+  s_9622fd28aba994::t_5352221332059c 58-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e1baa8985cec089954ec04c7db119e0ff4b9e752",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
