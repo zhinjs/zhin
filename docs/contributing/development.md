@@ -158,6 +158,7 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 - **修复 agent 行为 bug 的 PR 必须附带评测用例。** 先在 `packages/im/agent/evals/cases/` 里写一条能复现问题的用例（脚本化模型，确定性），确认它在修复前失败、修复后通过，再提交修复。用例的 `source` 写明对应的 issue、PR 或 QQ 事故。写法见 [`packages/im/agent/evals/README.md`](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/evals/README.md)。
 - PR 门禁只跑脚本化用例：`pnpm eval:agent`，不调用真模型。
 - 真模型的能力矩阵只在 nightly 跑（`.github/workflows/nightly-evals.yml`，`pnpm eval:nightly`），作为趋势指标，不作为 PR 必过项；预算上限见评测 README。
+- 聊天质量（像不像真人、人设、分寸）用 `pnpm eval:chat --workspace <工作区>` 在本地跑：用工作区真实的模型和 SOUL 跑固定场景，确定性检查加判断模型打分，并和上一次报告对比。改聊天提示词、回复格式或换模型时，PR 里附上前后对比。写法见 [`evals/chat/README.md`](https://github.com/zhinjs/zhin/blob/main/evals/chat/README.md)。
 
 ## 包导出与发布清单
 

@@ -117,11 +117,15 @@ message schema. Console completion previews and logs project the validated outpu
 
 ## Failures and compatibility
 
-Invalid JSON, extra fields or any invalid segment reject the entire model answer.
-One format-only correction is allowed; if it also fails, the host sends a fixed
-failure notice.
-The harness does not strip Markdown fences, extract JSON from prose, send partial
-valid segments, or fall back to literal nickname mentions. It buffers final JSON
+When strict validation fails, Agent first repairs without a model call, and the
+result must still pass the same full schema: a JSON object wrapped in a sentence or
+a Markdown fence, or with a bracket too many or too few, is extracted; a reply in
+plain prose with no JSON is sent as one text message; an integer ID where the
+schema wants a string (a mention target) is stringified. Anything still invalid
+(wrong fields, truncated JSON) gets one format-only correction; if it also fails,
+the host sends a fixed failure notice.
+The harness does not send partial valid segments or fall back to literal nickname
+mentions. It buffers final JSON
 until validation before emitting a readable preview. Existing outbound leak checks
 inspect text, Markdown and nested segment strings. Invalid formatting does not rerun
 tools or repeat completed side effects. Host-generated error/fallback messages do
@@ -133,6 +137,11 @@ intentionally need plain text can set `ai.agent.outputSchema: false`; literal @ 
 then remains text. Detached subagents and non-IM entry points do not inherit the IM
 preset. Custom schemas retain their caller-owned contract without the IM prompt.
 
+A tool call the model wrote as text (DeepSeek DSML, `<invoke>`, `<tool_call>`) is
+never sent, inside JSON or as prose, and is not reworded by the correction call,
+which would announce an action that never ran; the host failure notice is sent
+instead. `<text>…</text>` wrappers are split into one message each.
+
 Tests use scripted providers to verify schema propagation, lookup followed by a
 mixed reply, ordering, strict rejection, recovery, media policies and leak masking.
 They do not prove real group notifications, client rendering or compatibility with
@@ -141,10 +150,17 @@ every production provider.
 ## Provider transport and bounded correction
 
 MiniMax may return the final object as JSON text instead of calling the SDK's
-synthetic `json` tool. The transport preserves complete JSON text blocks for
-MiniMax, and Agent validates the same full schema regardless of transport.
-Reasoning is never a final reply; fenced JSON, prose extraction and numeric ID
-coercion are not accepted.
+synthetic `json` tool. The transport preserves its answer text, and Agent validates
+the same full schema regardless of transport. Reasoning is never a final reply and
+is never searched for JSON.
+
+How a provider is asked for structured output is `compat.structuredOutput`:
+`native` uses the provider's structured output / JSON mode; `prompt` writes the
+schema into the system prompt and decodes the answer text leniently. DeepSeek
+defaults to `prompt`: its thinking models in JSON mode often think and then return
+only whitespace (4 of 8 replies measured), while without JSON mode 12 of 12 were
+usable. Other SDKs default to `native`; set `compat: { structuredOutput: prompt }`
+on a provider whose JSON mode returns empty answers.
 
 On a schema mismatch, Agent makes at most one format-only completion without
 conversation history or business tools (30-second timeout, turn cancellation

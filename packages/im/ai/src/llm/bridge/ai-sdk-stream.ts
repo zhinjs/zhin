@@ -11,6 +11,7 @@ import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import { streamPartError } from './stream-error.js';
 import { parseLenientJsonObject } from './lenient-json.js';
+import { normalizePromptStructuredText, structuredOutputMode, withStructuredOutputInstruction } from './prompt-structured-output.js';
 import { toolCallInput } from './tool-call-input.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
@@ -367,7 +368,10 @@ function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
 }
 
 export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
-  return (model, context, options) => {
+  return (model, requestedContext, requestedOptions) => {
+    const promptStructured = Boolean(requestedOptions?.outputSchema) && structuredOutputMode(model) === 'prompt';
+    const context = promptStructured ? withStructuredOutputInstruction(requestedContext, requestedOptions!.outputSchema!) : requestedContext;
+    const options = promptStructured ? { ...requestedOptions, outputSchema: undefined } : requestedOptions;
     return createAssistantMessageEventStream(async (push) => {
       const languageModel = runtime.resolveLanguageModel(model.provider, model.id);
       if (!languageModel) {
@@ -500,9 +504,10 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       const finalUsage = await final.usage;
 
       const calls = [...toolCalls.values()];
-      const resolvedText = structured !== undefined
+      const answerText = structured !== undefined
         ? formatStructuredAsAssistantText(structured)
         : (text || finalText);
+      const resolvedText = promptStructured && calls.length === 0 ? normalizePromptStructuredText(answerText) : answerText;
       let thinkingParts = resolveThinkingParts({
         streamedText: thinking,
         finalText: finalReasoning || '',
@@ -547,9 +552,12 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
 export async function generateTextViaAiSdk(
   languageModel: LanguageModel,
   model: Model,
-  context: Context,
-  options?: StreamOptions,
+  requestedContext: Context,
+  requestedOptions?: StreamOptions,
 ): Promise<AssistantMessage> {
+  const promptStructured = Boolean(requestedOptions?.outputSchema) && structuredOutputMode(model) === 'prompt';
+  const context = promptStructured ? withStructuredOutputInstruction(requestedContext, requestedOptions!.outputSchema!) : requestedContext;
+  const options = promptStructured ? { ...requestedOptions, outputSchema: undefined } : requestedOptions;
   const cacheCtx = resolvePromptCacheApplyInput(
     isStreamPromptCacheEnabled(options?.promptCache),
     model.sdk,
@@ -614,7 +622,8 @@ export async function generateTextViaAiSdk(
     };
   });
 
-  const text = structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text;
+  const answerText = structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text;
+  const text = promptStructured && toolCalls.length === 0 ? normalizePromptStructuredText(answerText) : answerText;
   const refused = model.sdk === 'openai'
     ? refusalFinish(openAiRefusalText(result.response.body), Boolean(text.trim()), toolCalls.length > 0)
     : undefined;

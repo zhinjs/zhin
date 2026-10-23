@@ -45,6 +45,13 @@ export interface OpenAiCompatFlags {
    */
   appendV1?: boolean;
   /**
+   * How a requested JSON Schema reply is obtained. `native`: the provider's structured output /
+   * JSON mode. `prompt`: the schema is written into the system prompt and the reply text decoded
+   * leniently, for models whose JSON mode returns empty answers. Default: `prompt` for
+   * `sdk: deepseek`, `native` otherwise.
+   */
+  structuredOutput?: 'native' | 'prompt';
+  /**
    * `sdk: openai-compatible`: send OpenAI's `prompt_cache_key` (and
    * `prompt_cache_retention`) for gateways that route prompt caches by key. Default
    * false, because strict servers reject unknown body fields.
