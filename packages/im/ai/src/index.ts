@@ -235,6 +235,7 @@ export {
   shouldAutoCompact,
   autoCompactIfNeeded,
   // ── AgentMessage compaction (ADR 0010) ──
+  estimateContextFixedTokens,
   estimateAgentMessageTokens,
   estimateAgentMessagesTokens,
   findKeepRecentStartIndex,

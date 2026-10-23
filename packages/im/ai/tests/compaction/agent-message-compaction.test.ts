@@ -35,7 +35,7 @@ function makeMessages(): AgentMessage[] {
 }
 
 function assistantOf(text: string) {
-  return { role: 'assistant', content: [{ type: 'text', text }] };
+  return { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text }] };
 }
 
 describe('agent-message-compaction 失败语义', () => {
@@ -209,5 +209,63 @@ describe('agent-message-compaction 取消信号（S13）', () => {
     });
     expect(state.consecutiveFailures).toBe(0);
     expect(result.messages).toEqual(messages);
+  });
+});
+
+describe('summary acceptance', () => {
+  beforeEach(() => completeSimpleMock.mockReset());
+
+  it.each(['length', 'toolCalls', 'error', 'aborted'])('rejects a nonempty %s completion', async (stopReason) => {
+    completeSimpleMock.mockResolvedValue({ ...assistantOf('半段摘要'), stopReason });
+    const messages = makeMessages();
+    const state = createAgentCompactionState();
+    const result = await autoCompactAgentMessagesIfNeeded({ transport, model, messages, state, force: true,
+      config: { keepRecentTokens: 5, minKeepCount: 1 } });
+    expect(result.messages).toEqual(messages);
+    expect(result.wasCompacted).toBe(false);
+    expect(result.summary).toBeUndefined();
+  });
+
+  it('rejects tool calls even with a stop finish and useful text', async () => {
+    const response = assistantOf('摘要');
+    completeSimpleMock.mockResolvedValue({ ...response, content: [...response.content,
+      { type: 'toolCall', name: 'lookup', id: 'c', arguments: {} }] });
+    await expect(compactAgentMessages({ transport, model, messages: makeMessages(), keepRecentTokens: 5, minKeepCount: 1 }))
+      .rejects.toThrow();
+  });
+
+  it('rejects a summary whose wrapped message is no smaller than the replaced history', async () => {
+    completeSimpleMock.mockResolvedValue(assistantOf('冗长摘要'.repeat(200)));
+    const messages = makeMessages();
+    const state = createAgentCompactionState();
+    const result = await autoCompactAgentMessagesIfNeeded({ transport, model, messages, state, force: true,
+      config: { keepRecentTokens: 5, minKeepCount: 1 } });
+    expect(result.messages).toEqual(messages);
+    expect(result.wasCompacted).toBe(false);
+    expect(result.summary).toBeUndefined();
+    expect(state.consecutiveFailures).toBe(1);
+  });
+
+  it('does not report success or reset failures when the retention boundary keeps everything', async () => {
+    const state = createAgentCompactionState();
+    state.consecutiveFailures = 2;
+    const messages = makeMessages();
+    const result = await autoCompactAgentMessagesIfNeeded({ transport, model, messages, state, force: true });
+    expect(completeSimpleMock).not.toHaveBeenCalled();
+    expect(result.wasCompacted).toBe(false);
+    expect(result.messages).toBe(messages);
+    expect(state.consecutiveFailures).toBe(2);
+  });
+
+  it('does not accept a completed summary after cancellation', async () => {
+    const controller = new AbortController();
+    completeSimpleMock.mockImplementation(async () => { controller.abort(); return assistantOf('有效摘要'); });
+    const messages = makeMessages();
+    const state = createAgentCompactionState();
+    const result = await autoCompactAgentMessagesIfNeeded({ transport, model, messages, state, force: true,
+      signal: controller.signal, config: { keepRecentTokens: 5, minKeepCount: 1 } });
+    expect(result.messages).toEqual(messages);
+    expect(result.summary).toBeUndefined();
+    expect(state.consecutiveFailures).toBe(0);
   });
 });
