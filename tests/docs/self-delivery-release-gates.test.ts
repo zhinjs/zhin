@@ -9,7 +9,9 @@ describe('formal release isolation from self delivery', () => {
     expect(config.permissions).toEqual({ contents: 'read' });
     expect(config.env).not.toHaveProperty('NPM_TOKEN');
     expect(config.jobs.publish.environment).toBe('npm-production');
-    expect(config.jobs.publish.if).toBe("github.repository == 'zhinjs/zhin' && github.ref == 'refs/heads/main'");
+    expect(config.jobs.plan.if).toBe("github.repository == 'zhinjs/zhin' && github.ref == 'refs/heads/main'");
+    expect(config.jobs.publish.needs).toContain('plan');
+    expect(config.jobs.publish.if).toBe("needs.plan.outputs.mode == 'publish' && needs.approve-publication.result == 'success'");
     expect(config.jobs.publish.permissions['id-token']).toBe('write');
   });
 

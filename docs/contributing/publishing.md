@@ -6,6 +6,14 @@ title: npm 发布与可信发布
 
 `.github/workflows/publish.yml` 用 changesets 发布全部非 private 包（`pnpm pub` → `changeset publish` → `pnpm publish` → npm CLI）。认证方式正在从长期 npm token 迁移到 [npm 可信发布](https://docs.npmjs.com/trusted-publishers)（OIDC）。
 
+## 发版触发与失败恢复
+
+日常 PR 使用 5 分钟目标的受影响范围检查。正式发版必须在 Actions → **Build and Publish** 手动启动：先调用 `full-validation.yml` 进行全量验收，成功后才消费 changeset、创建版本 PR。全量失败或取消时 main 不产生版本变更，修复后重跑即可。main 在验收中前进也会拒绝生成版本，需要重新验收。
+
+版本 PR 合并后，发布任务会重新生成并逐字节比较完整版本树，核对对应源码的正式全量验收记录，再对最终版本进行构建、打包导入与已安装消费者验收。不能用同名分支、提交标题或任意绿色 PR 代替发布证据。nightly 只验证，不发布。
+
+如果 npm 上传已开始且只有部分包成功，不自动回退版本或恢复已经消费的 changeset。保持该源码与版本，手动重跑续发未完成的包；源码有新变化时拒绝继续复用旧版本。详细流程见[开发流程](./development.md#显式发版批次)。
+
 ## 工作方式
 
 发布步骤对每个包按下面的顺序认证，由 npm CLI 自己完成，不需要脚本判断：
