@@ -1,0 +1,48 @@
+.changeset/ambient-conversation-flow.md
+  h_b680f75345178a 1-7
+.changeset/ambient-judge-quota.md
+  h_b680f75345178a 1-7
+.changeset/deepseek-prompt-structured-output.md
+  h_b680f75345178a 1-5
+basic/cli/src/plugin-runtime/agent/turn/ambient-engagement.ts
+  h_b680f75345178a 20,24-25,36,54-55,68,70,72-73,80-110,132-135,140-144,148,154-155,164-165,179,197-208,213,218,229,235-240
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 83,143-160,163
+basic/cli/tests/plugin-runtime/agent/turn/ambient-engagement.test.ts
+  h_b680f75345178a 4-5,60-61,64-85,95-96,111-140,147,159-191
+docs/ai/index.md
+  h_b680f75345178a 301-303,305-308,315-317
+docs/ai/structured-replies.md
+  h_b680f75345178a 114-119,125-135
+docs/configuration/generated.md
+  h_b680f75345178a 392,394-397
+docs/en/ai/index.md
+  h_b680f75345178a 301-303,305-308,315-317
+docs/en/ai/structured-replies.md
+  h_b680f75345178a 120-128,153-163
+docs/en/configuration/generated.md
+  h_b680f75345178a 392,394-397
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  h_b680f75345178a 14,371-374,507,510,555-556,558-560,625-626
+packages/im/ai/src/llm/bridge/prompt-structured-output.ts
+  h_b680f75345178a 1-32
+packages/im/ai/src/llm/types/model.ts
+  h_b680f75345178a 47-53
+packages/im/ai/src/types.ts
+  h_b680f75345178a 674-680,683,685,687-691
+packages/im/ai/tests/llm/provider-structured-output.test.ts
+  h_b680f75345178a 3,82-123
+packages/im/runtime/src/host-config-schema.json
+  h_b680f75345178a 2872-2879,2893,2900-2914
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0f2c332d92513f6563270ee07d446ed1f3950133",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
