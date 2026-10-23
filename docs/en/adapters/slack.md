@@ -135,7 +135,7 @@ Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Blo
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools | `tools/` (invite, topic, reactions, pin, edit, etc.) |
-| Skill documentation | `agents/slack/skills/slack-channels/SKILL.md` and `agents/slack/skills/slack-messages/SKILL.md` |
+| Skill documentation | `agents/slack/skills/slack-channels/SKILL.md` and `agents/slack/skills/slack-messages/SKILL.md`、`agents/slack/skills/slack-users/SKILL.md` |
 
 ## Limitations
 
@@ -156,3 +156,5 @@ Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Blo
 ## License
 
 MIT
+
+Group/channel-specific Skills and their private Tools are disclosed only in their declared scenes. Common lookup and messaging stay separate. See [Agent capabilities](../authoring/agent-tools.md) for classification.

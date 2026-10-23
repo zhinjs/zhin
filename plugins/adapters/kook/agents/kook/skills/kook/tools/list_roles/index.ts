@@ -7,6 +7,7 @@ export default defineAgentTool<{ guild_id: string }>({
     guild_id: z.string().describe('服务器 ID'),
   }),
   adapter: 'kook',
+  scopes: ["channel"],
   tags: ['kook'],
   async execute({ guild_id  }: { guild_id: string }, context) {
     const client = context.$client;

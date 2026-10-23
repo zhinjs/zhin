@@ -8,6 +8,7 @@ export default defineAgentTool<{ chat_id: string }>({
     chat_id: z.string().describe('聊天 ID'),
   }),
   adapter: 'telegram',
+  scopes: ["group","channel"],
   tags: ['telegram'],
   permissions: [platformPermission('telegram', 'chat_administrator')],
   async execute({ chat_id  }: { chat_id: string }, context) {

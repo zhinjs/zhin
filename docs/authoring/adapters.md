@@ -121,3 +121,28 @@ example:
 - [端点生命周期](./endpoint-lifecycle.md)：长连接、心跳、重连与多账号。
 - [消息流](../concepts/message-flow.md)：消息在框架里的完整路径。
 - [插件完整交付](./plugin-delivery.md)：用 adapter harness 测试并发布适配器。
+
+## AI 能力与场景说明
+
+适配器拥有平台能力声明，Agent 不应维护另一份平台操作清单：
+
+- Tool 的 `description`、`inputSchema`、`platforms / scopes / permissions` 描述一个操作。
+- `agents/<platform>/skills/<name>/SKILL.md` 按用途和场景组织操作，正文仅在加载后披露。
+- `prompt-sections/<name>/index.ts` 承载必要的共同约定，使用 `platforms` 和 `scopes` 限定，不重复罗列 Skill/Tool 清单。
+- `segments.supported` 声明出站段，`segments.model[type]` 提供模型扩展字段、平台 `hint` 和可选 `scopes`。场景不匹配时，模型既看不到该段 Schema，也看不到其提示；这不授予发送权限，也不改变手写消息的发送策略。
+
+以下声明表示模型只在群聊获得 share 卡片能力；其他场景仍保留通用文本和已有降级能力。不要根据名称推测平台支持，声明需与实际发送实现一致。
+
+```ts
+segments: {
+  supported: ['text', 'share'],
+  model: {
+    share: {
+      scopes: ['group'],
+      hint: 'Use a real URL and title from the user or tool results.',
+    },
+  },
+}
+```
+
+`text` 始终保留为通用回退；若为它声明场景，只限制扩展字段和提示。

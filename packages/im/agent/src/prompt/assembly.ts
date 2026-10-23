@@ -61,7 +61,6 @@ function mergeRequiredBasePrompt(
 export function buildDisciplinedPrompt(_host: AgentContextHost, basePrompt: string): string {
   const guidance = [
     '# Style',
-    '- Lead with the answer or result.',
     '- Be concise, direct, and useful.',
     '',
     '# Safety',

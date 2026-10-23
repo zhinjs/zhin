@@ -9,6 +9,7 @@ export default defineAgentTool<{ guild_id: string; user_id: string }>({
     user_id: z.string().describe('用户 ID'),
   }),
   adapter: 'qq',
+  scopes: ["channel"],
   tags: ['qq'],
   permissions: [platformPermission('qq', 'guild_admin')],
   async execute({ guild_id, user_id  }: { guild_id: string; user_id: string }, context) {
