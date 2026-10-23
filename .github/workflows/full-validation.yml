@@ -178,7 +178,9 @@ jobs:
           ZHIN_TEST_REDIS_URL: redis://127.0.0.1:6379
 
       - name: verify structured storage across SQL dialects
-        run: pnpm exec vitest run basic/cli/tests/plugin-runtime/relational-state.test.ts
+        run: >-
+          pnpm exec vitest run basic/cli/tests/plugin-runtime/relational-state.test.ts
+          basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts --no-file-parallelism
         env:
           ZHIN_TEST_STRUCTURED_SQL: '1'
           ZHIN_TEST_MYSQL_PORT: '3306'

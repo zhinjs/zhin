@@ -1,3 +1,4 @@
+import type { StructuredDatabase } from '@zhin.js/database';
 // Composition-root integration: real SQLite and public Agent storage ports, no model/platform calls.
 import { mkdtemp, rm, writeFile, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -17,12 +18,26 @@ const request = {
   } }, principal: { subjectId: 'alice', roles: [] }, input: { text: 'CHAT_BODY_MUST_NOT_ENTER_USAGE' },
 } as unknown as TurnRequest;
 
-describe('Agent structured persistence without Workroom', () => {
+const dialects = ['sqlite', ...(process.env.ZHIN_TEST_STRUCTURED_SQL === '1' ? ['mysql', 'pg'] : [])];
+describe.each(dialects)('Agent structured persistence without Workroom (%s)', dialect => {
   let dir: string;
   let host: ReturnType<typeof createDatabaseHost>;
   let cleanup: DisposeStack;
-  beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'zhin-agent-db-')); host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'db.sqlite') }); cleanup = new DisposeStack(); });
-  afterEach(async () => { await cleanup.dispose(); await host.stop(); await rm(dir, { recursive: true, force: true }); });
+  function createHost() {
+    return createDatabaseHost(dialect === 'sqlite' ? { dialect, filename: join(dir, 'db.sqlite') } : {
+      dialect, host: '127.0.0.1', port: Number(process.env[dialect === 'pg' ? 'ZHIN_TEST_PG_PORT' : 'ZHIN_TEST_MYSQL_PORT']),
+      user: 'zhin', password: process.env[dialect === 'pg' ? 'ZHIN_TEST_PG_PASSWORD' : 'ZHIN_TEST_MYSQL_PASSWORD'] ?? 'zhin', database: 'zhin_test', pool: { max: 3 },
+    });
+  }
+  beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'zhin-agent-db-')); host = createHost(); cleanup = new DisposeStack(); });
+  afterEach(async () => {
+    await cleanup.dispose();
+    if (dialect !== 'sqlite' && host.started) {
+      const raw = host.getRawDatabase() as StructuredDatabase;
+      for (const table of host.tables()) await raw.query(`DROP TABLE IF EXISTS ${dialect === 'mysql' ? '`' + table + '`' : '"' + table + '"'}`);
+    }
+    await host.stop(); await rm(dir, { recursive: true, force: true });
+  });
 
   async function activate(retentionDays = 30) {
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
@@ -77,7 +92,7 @@ describe('Agent structured persistence without Workroom', () => {
     await host.models.get('agent_messages')!.insert({ id: 1, session_id: 'epoch', role: 'user', payload: JSON.stringify(message), parent_id: null, timestamp: 10 });
     await host.models.get('agent_sessions')!.insert({ session_id: 'epoch', session_key: 'key', active_leaf_message_id: 1 });
     await host.models.get('agent_summaries')!.insert({ session_id: 'epoch', summary: 'prior', anchor_message_id: 1 });
-    await host.stop(); host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'db.sqlite') });
+    await host.stop(); host = createHost();
     await activate();
     const row = (await host.models.get('agent_messages')!.select())[0]!;
     expect(row).toMatchObject({ actor_id: 'k1:alice', actor_scope: 'channel', turn_id: 'k1:old', query_version: 1, parent_id: null });
@@ -98,7 +113,7 @@ describe('Agent structured persistence without Workroom', () => {
     expect((await store.listJobs()).map(job => job.id)).toEqual(['job', 'second']);
     expect((await store.getJob('job'))!.state.retryCount).toBe(3);
     await store.removeJob('job'); await cleanup.dispose(); cleanup = new DisposeStack(); await host.stop();
-    host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'db.sqlite') });
+    host = createHost();
     const restarted = await activate();
     expect(await restarted.foundation.schedule.store.getJob('job')).toBeUndefined();
     expect((await restarted.foundation.schedule.store.listJobs()).map(job => job.id)).toEqual(['second']);
