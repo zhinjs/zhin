@@ -1,0 +1,98 @@
+packages/im/core/src/ai-completion-contract.ts
+  s_9622fd28aba994::t_f9b48f8e56cf24 19-20,22-23,50-51,102-103
+  s_9622fd28aba994::t_b8668e05ba785c 18,21
+  s_9622fd28aba994::t_7c09915dd5ed4c 83-84
+packages/im/agent/tests/plugin-runtime/ai-completion.test.ts
+  s_9622fd28aba994::t_54f1acf8ed0f97 84-96
+  s_9622fd28aba994::t_9b10ec8dc57314 8,55-83,97-108
+  s_9622fd28aba994::t_f0338f7cb674c0 40-54
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  s_9622fd28aba994::t_00d0e3ae2cacb1 6,42,73,113,116,118,122,125-126,129-130,133,135-186
+plugins/utils/content-moderation/src/engine.ts
+  s_9622fd28aba994::t_93318b1301d307 7-8,38-39,107,110-113
+plugins/utils/content-moderation/plugin.ts
+  s_9622fd28aba994::t_93318b1301d307 17
+docs/en/authoring/host-tokens.md
+  s_9622fd28aba994::t_b5e0b9f6621dcb 131-132
+  s_6eb8d20a15fb15::t_80e0dd960b5a03 84
+.changeset/batched-group-review.md
+  s_9622fd28aba994::t_bbd939d3196278 7
+  s_9622fd28aba994::t_b5e0b9f6621dcb 1-6
+packages/im/agent/src/security/usage-quota.ts
+  s_9622fd28aba994::t_f9b48f8e56cf24 97-101,103-117,140
+plugins/utils/content-moderation/src/group-review-batch.ts
+  s_9622fd28aba994::t_ddf231af4b1c80 40,50,53,59,61-69,90,95,110-111
+  s_9622fd28aba994::t_6c2ff75b5005e3 2,84
+  s_9622fd28aba994::t_08110d5b44932a 1,3-6,14-30,37,45,49,51-52,54-58,70-78,82-83,85-89,91-94,96-109,112-133
+  s_9622fd28aba994::t_7c09915dd5ed4c 31-35
+  s_9622fd28aba994::t_24c43342001038 60
+  s_9622fd28aba994::t_041c24057324c8 7-13,38-39
+  s_9622fd28aba994::t_1507cc1302435f 79-81
+  s_9622fd28aba994::t_bde826712510ae 36,41-44,46-48
+plugins/utils/content-moderation/src/group-moderation.ts
+  s_9622fd28aba994::t_08110d5b44932a 2,12,61-62,77-78,87,90-91,93-94,96,101,104,148
+  s_9622fd28aba994::t_bbd939d3196278 80-85
+  s_9622fd28aba994::t_6c2ff75b5005e3 20,25-28
+  s_9622fd28aba994::t_9a2d91bb94ea40 29
+  s_9622fd28aba994::t_e3842aff3e822b 79
+packages/im/agent/src/plugin-runtime/ai-completion.ts
+  s_9622fd28aba994::t_f9b48f8e56cf24 36,47,49,53,60,71,78-83,85-86,114,116-117,119,121,123-124,146,172-173,178-184
+  s_9622fd28aba994::t_b8668e05ba785c 19,171,174-177
+  s_9622fd28aba994::t_f0338f7cb674c0 67
+  s_9622fd28aba994::t_24c43342001038 115,118,120,122,149,185-201
+  s_9622fd28aba994::t_c4702ba442075c 202
+plugins/utils/content-moderation/src/group-review-queue.ts
+  s_9622fd28aba994::t_7c09915dd5ed4c 38,52-54,68,108-112
+  s_9622fd28aba994::t_711ddaef9848ed 93,104-107,123
+  s_9622fd28aba994::t_1507cc1302435f 94-96
+  s_9622fd28aba994::t_041c24057324c8 3,9,62
+  s_9622fd28aba994::t_bbd939d3196278 55-59
+  s_9622fd28aba994::t_93318b1301d307 1-2,4-8,11-37,39-46,51,60-61,63-67,69-72,74-92,97-103,113-122,124-127,135
+  s_9622fd28aba994::t_953f216a81b939 10,47-50,73,128-134
+plugins/utils/content-moderation/tests/group-review-queue.test.ts
+  s_9622fd28aba994::t_05a187bea9c1b8 244-253,327-363
+  s_9622fd28aba994::t_bbd939d3196278 302-304,310
+  s_9622fd28aba994::t_1658bac183a335 22
+  s_9622fd28aba994::t_c16fc1be4c710a 1-21,23-27,29-31,33-51,53-55,57,61-65,67-72,74-102,217-231,242-243,254-299,301,305-307,315-322,373-390
+  s_9622fd28aba994::t_df7752635542b6 56,166-168,173-182,184-191
+  s_9622fd28aba994::t_953f216a81b939 52,300,308-309,311-314,323-326,364-372
+  s_9622fd28aba994::t_f65fd0192b9ffb 103-152,209-216
+  s_9622fd28aba994::t_f95bbb550643f0 28,32,58-60,73,183,194-208,232-241
+  s_9622fd28aba994::t_54f1acf8ed0f97 66,153-165,169-172,192-193
+docs/authoring/host-tokens.md
+  s_9622fd28aba994::t_b5e0b9f6621dcb 131-132
+  s_6eb8d20a15fb15::t_9291ecd934bdae 84
+packages/im/agent/tests/security/usage-quota.test.ts
+  s_9622fd28aba994::t_9b10ec8dc57314 8-23
+plugins/utils/content-moderation/README.md
+  s_9622fd28aba994::t_bbd939d3196278 92,94
+  s_9622fd28aba994::t_b5e0b9f6621dcb 90-91,93,95-96
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_b8668e05ba785c 542
+tests/snapshots/api-surface.json
+  s_6eb8d20a15fb15::t_8c367e6d94b625 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df65edc888047b5fe018991632f7cd0ca4fb2049",
+  "prompts": {},
+  "sessions": {
+    "s_6eb8d20a15fb15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c308-1cb8-7b22-996b-d675199d9934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
