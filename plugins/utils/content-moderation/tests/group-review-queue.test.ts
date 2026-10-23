@@ -100,6 +100,19 @@ describe('group review queue and inbound delivery', () => {
     expect(f.moderateGroupMember).not.toHaveBeenCalled();
   });
 
+  it('uses the same scene buffer for equivalent addresses with different property order', async () => {
+    const f = fixture(); await f.run({ ...f.message, content: 'first' });
+    await f.run({ ...f.message, id: 'second', content: 'second', conversation: {
+      id: f.message.conversation.id, kind: 'group', endpoint: {
+        id: f.message.conversation.endpoint.id, adapter: f.message.conversation.endpoint.adapter,
+      },
+    } });
+    await f.flush(); expect(f.completeText).toHaveBeenCalledOnce();
+    const request = payload(f.completeText.mock.calls[0]![0]);
+    expect(request.messages.map(item => item.text)).toEqual(['first', 'second']);
+    expect(request.messages[1]!.preceding).toEqual([request.messages[0]!.sequence]);
+  });
+
   it('uses a snapshot of message identity after ordinary dispatch returns', async () => {
     const f = fixture(); await f.run();
     f.message.sender.id = 'victim'; f.message.conversation.id = 'other-group'; f.message.id = 'other-message'; f.message.content = 'changed';

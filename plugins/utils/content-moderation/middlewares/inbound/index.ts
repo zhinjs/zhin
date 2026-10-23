@@ -129,7 +129,8 @@ async function enqueueGroupModeration(
       || endpoint.identity.adapter !== target.adapter || endpoint.selfUserId !== target.account) return;
     const engine = context.use(moderationEngineToken);
     const { text } = extractFromTextAndSegments(message.content, message.segments);
-    const scope = JSON.stringify(conversation);
+    const destination = createDeliveryTarget({ conversation });
+    const scope = JSON.stringify(destination);
     const remembered = engine.groupModerator.remember(scope, message.sender?.id ?? '', text);
     if (!bypass && message.sender?.id && message.origin !== 'self'
       && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)
@@ -141,7 +142,6 @@ async function enqueueGroupModeration(
       const detach = gates.map(gate => gate.onDeactivate(() => lifetime.abort(new Error('Moderation adapter generation retired'))));
       const signal = AbortSignal.any([context.signal, lifetime.signal]);
       const messageId = message.id ?? '';
-      const destination = createDeliveryTarget({ conversation });
       const assertTarget = () => {
         signal.throwIfAborted();
         if (endpoint.identity.id !== conversation.endpoint.id || endpoint.selfUserId !== target.account
