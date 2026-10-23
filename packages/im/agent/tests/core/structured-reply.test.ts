@@ -184,6 +184,25 @@ describe('structured Agent final replies', () => {
     expect(JSON.stringify(persisted.at(-1))).toContain(JSON.stringify(JSON.stringify({ segments: [text('选一个')] })).slice(1, -1));
   });
 
+  it.each([
+    ['DeepSeek DSML', '<｜｜DSML｜｜ calls>\n<｜｜DSML｜｜ invoke name="discover">\n</｜｜DSML｜｜ invoke>\n</｜｜DSML｜｜ calls>'],
+    ['XML function call', '好的<invoke name="remind"><parameter name="at">明天</parameter></invoke>'],
+    ['tool call inside JSON', JSON.stringify({ segments: [text('<tool_call>{"name":"remind"}</tool_call>')] })],
+  ])('never sends %s as chat, and does not reword it into a claim', async (_label, raw) => {
+    const { result, calls, persisted } = await run([assistantTextReply(raw), assistantTextReply(JSON.stringify({ segments: [text('好，明天提醒你')] }))]);
+    expect(result.reply).toBe(STRUCTURED_REPLY_FAILURE);
+    expect(calls).toHaveLength(1);
+    const dump = JSON.stringify(persisted);
+    expect(dump).not.toContain('DSML');
+    expect(dump).not.toContain('<invoke');
+  });
+
+  it('splits <text> wrappers into separate chat messages', async () => {
+    const { result, calls } = await run([assistantTextReply('<text>能，看版本</text>\n<text>22.6 起加 --experimental-strip-types</text>')]);
+    expect(calls).toHaveLength(1);
+    expect(await publishOutboundElements(result.output!)).toEqual([text('能，看版本'), text('22.6 起加 --experimental-strip-types')]);
+  });
+
   it('sends a plain prose reply as one text message without a correction call', async () => {
     const { result, calls, persisted } = await run([assistantTextReply('知道了，就这么办。')]);
     expect(calls).toHaveLength(1);
