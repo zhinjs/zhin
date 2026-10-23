@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import nextHello from '../commands/hello/[name]/index.js';
 import statusCard from '../components/status-card/index.js';
 import audit from '../middlewares/audit/index.js';
+import type { MiddlewareContinuation, MiddlewareNext } from 'zhin.js/middleware';
 
 describe('Plugin Runtime migration result', () => {
   it('executes the migrated command definition', async () => {
@@ -18,7 +19,7 @@ describe('Plugin Runtime migration result', () => {
   });
 
   it('keeps extracted middleware and component definitions executable', async () => {
-    const next = vi.fn(async () => undefined);
+    const next = vi.fn<MiddlewareNext>(async () => undefined as unknown as MiddlewareContinuation);
     await audit.handle({ input: { id: 'message-1' } } as never, next);
 
     expect(next).toHaveBeenCalledOnce();
