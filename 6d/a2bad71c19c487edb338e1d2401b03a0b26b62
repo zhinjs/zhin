@@ -1,0 +1,145 @@
+.changeset/structured-usage-message-task-storage.md
+  s_079f1dc5e6308d::t_c4a666864ccab1 1-14
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  s_079f1dc5e6308d::t_1559ea7d2a3dda 45,58-59,142-143,163-170,172-176,178-179,191,199
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_079f1dc5e6308d::t_18b627a70835db 1,120,209-210
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_079f1dc5e6308d::t_36a987fd6cb218 1-96
+basic/cli/src/plugin-runtime/console/inbox.ts
+  s_079f1dc5e6308d::t_64097732a94691 1,59-63
+basic/cli/src/plugin-runtime/conversation-migration.ts
+  s_079f1dc5e6308d::t_383a978a029b56 1-46
+basic/cli/src/plugin-runtime/start-command.ts
+  s_079f1dc5e6308d::t_339f6f219185f8 1-2,221-222
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_6562bcb6cc0539::t_c92adea7f2246f 134
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_079f1dc5e6308d::t_33c4227bb9151d 24,54,101,109
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  s_079f1dc5e6308d::t_8bd740dd10257d 1-102
+basic/cli/tests/plugin-runtime/console/inbox.test.ts
+  s_9622fd28aba994::t_ac8f27ea66e76b 135-136
+basic/cli/tests/plugin-runtime/relational-state.test.ts
+  s_9622fd28aba994::t_903a8bd90424cf 1-184
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts
+  s_079f1dc5e6308d::t_85551634acd599 59,150
+basic/database/src/base/transaction.ts
+  s_9622fd28aba994::t_304cda51424890 48,59,81,89-91,112,119-121,125-126
+basic/database/src/dialects/pg.ts
+  s_9622fd28aba994::t_a0403e58208b50 199
+basic/database/src/structured-schema.ts
+  s_079f1dc5e6308d::t_96e566b83753b5 1-32
+basic/database/tests/audit-fixes.test.ts
+  s_079f1dc5e6308d::t_d92f49f3d9e40b 302-313
+docs/en/operations/structured-storage.md
+  s_079f1dc5e6308d::t_083c266d654fba 1-55
+docs/operations/structured-storage.md
+  s_079f1dc5e6308d::t_76924199460bd9 1-82
+packages/im/agent/src/assistant/job-storage.ts
+  s_079f1dc5e6308d::t_66b3856c62df02 1-136
+packages/im/agent/src/assistant/job-store.ts
+  s_9622fd28aba994::t_184c5ac5f0da52 2,4,29-45,62,93,105,111-114,131,143-145
+packages/im/agent/src/plugin-runtime/index.ts
+  s_079f1dc5e6308d::t_987a551414ebdf 48-50
+packages/im/agent/src/session/turn-ingress-session.ts
+  s_079f1dc5e6308d::t_70db98540f431f 62-68
+packages/im/agent/src/usage/usage-store.ts
+  s_079f1dc5e6308d::t_cd5caa0c1e7e5d 1-111
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_079f1dc5e6308d::t_6dabb38b32addc 1,1127-1153
+packages/im/agent/tests/session/turn-ingress-session.test.ts
+  s_079f1dc5e6308d::t_8b247968b71165 94,107
+packages/im/ai/src/memory/agent-db-models.ts
+  s_9622fd28aba994::t_2abe72b377d291 13-53,59,70,82,90,102,123
+packages/im/ai/src/memory/agent-session-store.ts
+  s_6562bcb6cc0539::t_58c8dfffa31602 10,77,192
+packages/im/ai/tests/memory/agent-session-store.test.ts
+  s_079f1dc5e6308d::t_c53527c02b0587 1-2,130
+packages/im/im-contract/src/conversation-store.ts
+  s_6562bcb6cc0539::t_6eb17cf979fe24 75-93,95,134
+packages/im/plugin-runtime/src/database-host.ts
+  s_6562bcb6cc0539::t_adf8646e69140c 47-51,112-113,196-212,248-263
+packages/im/plugin-runtime/src/inbox.ts
+  s_079f1dc5e6308d::t_1212122b9af1e7 16-23,25
+packages/im/plugin-runtime/src/index.ts
+  s_6562bcb6cc0539::t_10fb97fb00579d 44,49-50
+packages/im/plugin-runtime/src/relational-state.ts
+  s_9622fd28aba994::t_f8051c7d0dba64 1-118
+packages/im/plugin-runtime/src/task-storage.ts
+  s_6562bcb6cc0539::t_c8bebdea235aa2 1-44
+packages/im/plugin-runtime/tests/inbox.test.ts
+  s_079f1dc5e6308d::t_0af78274064ead 33
+plugins/utils/reminder/README.md
+  s_079f1dc5e6308d::t_ce5dcebff3cece 113-116
+plugins/utils/reminder/plugin.ts
+  s_6562bcb6cc0539::t_0fa11ae4b57f23 5,16-18,21
+plugins/utils/reminder/src/storage.ts
+  s_079f1dc5e6308d::t_8b1ebe960f12e0 1-52
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_9622fd28aba994::t_58d61f667c413f 1,191-196,203,222,271,304,354-359,367,386,422,428-429
+plugins/utils/rss/README.md
+  s_079f1dc5e6308d::t_e30ca5df20b1e2 161-164
+plugins/utils/rss/plugin.ts
+  s_079f1dc5e6308d::t_b46e77477f5b27 8,89
+plugins/utils/rss/src/storage.ts
+  s_079f1dc5e6308d::t_3c9c9d0f5f263e 1-58
+plugins/utils/rss/tests/admin-fixture.ts
+  s_9622fd28aba994::t_3fd396ea14b07f 12,57-58,85
+plugins/utils/rss/tests/admin-tasks.test.ts
+  s_9622fd28aba994::t_53515b7218c467 156-157,159,182-183,194-195
+plugins/utils/rss/tests/quiet-runtime.test.ts
+  s_079f1dc5e6308d::t_c5c1d67b3cb0aa 128-132,148-152
+basic/cli/src/plugin-runtime/database-host-installer.ts
+  s_90ecc93987aa4c::t_0634ba8886f204 4,7,54,182-200
+basic/database/src/base/database.ts
+  s_90ecc93987aa4c::t_dd7b4fe18b57d0 1,41-53,153-155,158-160,166-167,265-266,268-291
+basic/database/src/index.ts
+  s_90ecc93987aa4c::t_2b59066b29b057 20
+packages/im/agent/src/context/im-turn-context-adapter.ts
+  s_90ecc93987aa4c::t_7f0dfc118a702d 26-27
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_90ecc93987aa4c::t_249cd8cf4ae4aa 1-2,308-312,354,395,398,408-414,499,505-506,521
+packages/im/ai/src/types.ts
+  s_90ecc93987aa4c::t_bcf5fa06d94a2e 412-413
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6da2bad71c19c487edb338e1d2401b03a0b26b62",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_90ecc93987aa4c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a167b7-a762-7fc1-bb46-357665f3a2c4",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
