@@ -42,6 +42,7 @@ export interface EvalImage {
 }
 
 export interface EvalPerception {
+  readonly fallbacks?: readonly string[];
   readonly kinds?: readonly ('image' | 'video' | 'file')[];
   readonly maxChars?: number;
   readonly maxItemsPerTurn?: number;

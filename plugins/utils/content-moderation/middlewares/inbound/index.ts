@@ -1,6 +1,8 @@
-import { defineMiddleware } from 'zhin.js/middleware';
+import { defineMiddleware, type MiddlewareContext } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
-import { outboundHostToken } from 'zhin.js';
+import { aiCompletionToken, createDeliveryTarget, databaseHostToken, getLogger, hasResource,
+  outboundHostToken, usageSubjectFromMessage } from 'zhin.js';
+import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
 import {
   buildScanContext,
   extractFromTextAndSegments,
@@ -31,11 +33,13 @@ export default defineMiddleware<Message, ModerationConfig>({
     const conversationId = message.conversation.id;
     const endpointMasters = resolveEndpointMasters(message, config);
 
-    if (shouldBypassInbound(config, {
+    const bypass = shouldBypassInbound(config, {
       sender,
       conversationId,
       endpointMasters,
-    })) {
+    });
+    const modelOwnsRecall = await runGroupModeration(context, config, bypass);
+    if (bypass) {
       await next();
       return;
     }
@@ -65,6 +69,7 @@ export default defineMiddleware<Message, ModerationConfig>({
 
     const result = await engine.apply({
       direction: 'inbound',
+      recallManaged: modelOwnsRecall,
       extracted,
       scanInput,
       hooks: {
@@ -103,6 +108,62 @@ export default defineMiddleware<Message, ModerationConfig>({
     }
   },
 });
+
+async function runGroupModeration(
+  context: MiddlewareContext<Message, ModerationConfig, string | undefined>,
+  config: ModerationConfig, bypass: boolean,
+): Promise<boolean> {
+  const message = context.input;
+  const conversation = message.conversation;
+  const target = config.groupModeration.find((item) => conversation.kind === 'group'
+    && item.adapter === conversation.endpoint.adapter
+    && item.endpoint === message.endpointId && item.group === conversation.id);
+  if (!target) return false;
+  let modelOwnsRecall = false;
+  const logger = getLogger('content-moderation');
+  try {
+    const endpoint = context.project<AdapterIndex>(adapterFeatureId)
+      .connection(conversation.endpoint.adapter, conversation.endpoint.id);
+    // Reject alias fallback and account switches, even when a local instance name is reused.
+    if (!endpoint || endpoint.identity.id !== conversation.endpoint.id
+      || endpoint.identity.adapter !== target.adapter || endpoint.selfUserId !== target.account) return false;
+    const moderator = context.use(moderationEngineToken).groupModerator;
+    const { text } = extractFromTextAndSegments(message.content, message.segments);
+    const scope = JSON.stringify(conversation);
+    const precedingContext = moderator.remember(scope, message.sender?.id ?? '', text);
+    if (!bypass && message.sender?.id && message.origin !== 'self'
+      && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)) {
+      await moderator.review({
+        scope, group: conversation.id, sender: message.sender.id,
+        messageId: message.id ?? '', sentAt: Number(message.metadata?.platformSentAt), text, precedingContext,
+        signal: context.signal,
+        state: context.use(databaseHostToken).state.forConversation(createDeliveryTarget({ conversation })),
+        completion: context.use(aiCompletionToken), management: endpoint.management ?? {},
+        onBehalfOf: usageSubjectFromMessage(message),
+        onReview: () => { modelOwnsRecall = true; },
+        reply: async (content, mention) => {
+          context.signal.throwIfAborted();
+          const receipt = await message.$reply(mention ? [
+            { type: 'mention', data: { target: mention } },
+            { type: 'text', data: { text: ` ${content}` } },
+          ] : content);
+          if (receipt.status !== 'sent') throw new Error('Moderation notice was not delivered');
+        },
+        recall: async () => {
+          context.signal.throwIfAborted();
+          const host = context.use(outboundHostToken);
+          if (!host.recall || !message.id) throw new Error('Original message cannot be recalled');
+          await host.recall({ adapter: target.adapter, endpointKey: conversation.endpoint.id,
+            message: { conversation, id: message.id } });
+        },
+        audit: (event) => logger.info({ ...event, endpoint: conversation.endpoint.id, group: conversation.id }),
+      });
+    }
+  } catch (error) {
+    logger.warn('Automatic group moderation unavailable', error instanceof Error ? error.message : String(error));
+  }
+  return modelOwnsRecall;
+}
 
 /**
  * Masters from plugin config + optional metadata.endpointMaster / metadata.master.

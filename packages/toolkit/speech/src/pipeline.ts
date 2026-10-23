@@ -58,10 +58,14 @@ export function createSpeechPipeline(
       if (merged.tts?.enabled === false) {
         throw new Error('TTS is disabled in speech config');
       }
+      const text = input.text.trim();
+      if (!text) throw new Error('语音内容不能为空');
       const provider = input.provider
         ? resolveTtsProvider(merged, input.provider)
         : defaultTts;
-      return provider.synthesize(input);
+      const result = await provider.synthesize({ ...input, text });
+      if (!result.data.length) throw new Error('语音合成返回了空音频，请改用文字回复');
+      return result;
     },
   };
 }

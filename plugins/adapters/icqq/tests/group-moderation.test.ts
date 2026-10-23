@@ -1,0 +1,76 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { inspectGroupMember, moderateGroupMember } from '../src/group-moderation.js';
+import type { Client, MemberInfo } from '@icqqjs/icqq';
+import kickTool from '../agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts';
+
+function fixture() {
+  const joinedAt = Date.now() - 1000;
+  const self = { user_id: 8596238, group_id: 129043431, role: 'admin' } as MemberInfo;
+  const member = { user_id: 123, group_id: 129043431, role: 'member', join_time: Math.floor(joinedAt / 1000) } as MemberInfo;
+  const native = {
+    uin: 8596238, isOnline: () => true,
+    getGroupMemberInfo: vi.fn(async (_group: number, id: number) => id === 8596238 ? self : member),
+    setGroupKick: vi.fn(async () => true), setGroupBan: vi.fn(async () => true),
+  };
+  const client = native as unknown as Client;
+  const abort = new AbortController();
+  return { self, member, native, client, abort, joinedAt: member.join_time * 1000 };
+}
+
+afterEach(() => vi.useRealTimers());
+
+describe('ICQQ checked moderation port', () => {
+  it('keeps the ordinary kick tool behind human approval and checks the SDK result', async () => {
+    const f = fixture(); f.native.setGroupKick.mockResolvedValue(false);
+    expect(kickTool.requiresApproval).toBe('human');
+    await expect(kickTool.execute({ group_id: 129043431, user_id: 123, reason: '经人工确认' },
+      { $client: f.client, signal: f.abort.signal } as never)).resolves.toMatchObject({ success: false });
+    expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 123, true);
+    expect(f.native.setGroupKick).toHaveBeenCalledTimes(1);
+  });
+  it('reads uncached roles and actual platform join time', async () => {
+    const f = fixture();
+    await expect(inspectGroupMember(f.client, '129043431', '123', f.abort.signal))
+      .resolves.toEqual({ canModerate: true, joinedAt: f.joinedAt });
+    expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 8596238, true);
+    expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 123, true);
+  });
+
+  it.each(['owner', 'admin'])('refuses to moderate a %s', async (role) => {
+    const f = fixture(); f.member.role = role as MemberInfo['role'];
+    await expect(moderateGroupMember(f.client, '129043431', '123', { type: 'mute', durationSeconds: 600 }, f.abort.signal, () => true)).rejects.toThrow('permission');
+    expect(f.native.setGroupBan).not.toHaveBeenCalled();
+  });
+
+  it('refuses a permission loss between review and action', async () => {
+    const f = fixture();
+    await inspectGroupMember(f.client, '129043431', '123', f.abort.signal);
+    f.self.role = 'member';
+    await expect(moderateGroupMember(f.client, '129043431', '123', { type: 'mute', durationSeconds: 600 }, f.abort.signal, () => true)).rejects.toThrow('permission');
+  });
+
+  it.each(['rejoined', 'expired', 'missing'])('refuses newcomer kicks with %s join facts', async (mode) => {
+    const f = fixture(); const approved = f.joinedAt;
+    if (mode === 'rejoined') f.member.join_time -= 1;
+    if (mode === 'expired') vi.spyOn(Date, 'now').mockReturnValue(approved + 600_001);
+    if (mode === 'missing') f.member.join_time = 0;
+    try {
+      await expect(moderateGroupMember(f.client, '129043431', '123',
+        { type: 'kick', joinedAt: approved, maxMembershipAgeMs: 600_000 }, f.abort.signal, () => true)).rejects.toThrow('membership');
+      expect(f.native.setGroupKick).not.toHaveBeenCalled();
+    } finally { vi.restoreAllMocks(); }
+  });
+
+  it('rejects stale generations after the awaited platform reads', async () => {
+    const f = fixture();
+    await expect(moderateGroupMember(f.client, '129043431', '123', { type: 'mute', durationSeconds: 600 }, f.abort.signal, () => false)).rejects.toThrow('permission');
+    expect(f.native.setGroupBan).not.toHaveBeenCalled();
+  });
+
+  it('does not report a false SDK result as successful or retry it', async () => {
+    const f = fixture(); f.native.setGroupKick.mockResolvedValue(false);
+    await expect(moderateGroupMember(f.client, '129043431', '123',
+      { type: 'kick', joinedAt: f.joinedAt, maxMembershipAgeMs: 600_000 }, f.abort.signal, () => true)).rejects.toThrow('confirm');
+    expect(f.native.setGroupKick).toHaveBeenCalledTimes(1);
+  });
+});

@@ -144,6 +144,7 @@ async function runInWorkspace(
     ? resolvePerceptionConfig({
       provider: PERCEPTION_PROVIDER_ALIAS,
       model: PERCEPTION_MODEL_ID,
+      ...(definition.perception.fallbacks ? { fallbacks: definition.perception.fallbacks.map((id) => ({ provider: model.providerAlias, model: id })) } : {}),
       ...(definition.perception.kinds ? { kinds: definition.perception.kinds } : {}),
       ...(definition.perception.maxChars ? { maxChars: definition.perception.maxChars } : {}),
       ...(definition.perception.maxItemsPerTurn ? { maxItemsPerTurn: definition.perception.maxItemsPerTurn } : {}),

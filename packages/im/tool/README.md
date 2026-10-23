@@ -35,7 +35,7 @@ export default defineAgentTool<{ city: string }>({
 });
 ```
 
-`defineAgentTool()` 只校验并冻结声明，不定位当前 Plugin、不注册能力。`requiresApproval` 表示 Tool 何时需要审批，支持 `never`、`on-risk`、`once`、`always`，默认 `on-risk`；批准状态和判定由 Turn Tool Runtime 持有，本包只保留声明。标准 Host 中 `once` 可在当前会话记住 Tool，`always` 每次请求确认；`on-risk` 仅在专用风险策略尚未覆盖该操作时请求确认。
+`defineAgentTool()` 只校验并冻结声明，不定位当前 Plugin、不注册能力。`requiresApproval` 表示 Tool 何时需要审批，支持 `never`、`on-risk`、`once`、`always`、`human`，默认 `on-risk`；批准状态和判定由 Turn Tool Runtime 持有，本包只保留声明。标准 Host 中 `once` 可在当前会话记住 Tool，`always` 每次进入配置的审批流程；`human` 每次要求人工确认，不能由自动审核、主人身份或历史授权代替，没有人工渠道时拒绝；`on-risk` 仅在专用风险策略尚未覆盖该操作时请求确认。
 
 `inputSchema` 只有两种契约：根节点为 `object` 的 JSON Schema，或同时实现
 `safeParse()` 与 `toJSONSchema()` 的可执行 Schema。Zod 4 object 原生满足后一契约；Zod 3

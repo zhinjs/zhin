@@ -352,6 +352,9 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.multimodal.perception.maxChars` | number \| string | no | — | Description length cap in characters. Default 800. |
 | `ai.multimodal.perception.timeoutMs` | number \| string | no | — | Per-attempt timeout in ms. Default 30000. |
 | `ai.multimodal.perception.maxItemsPerTurn` | number \| string | no | — | Media described per turn; the rest keep the placeholder. Default 4. |
+| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | no | — | 主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。 |
+| `ai.multimodal.perception.fallbacks[].provider` | string | yes | — | — |
+| `ai.multimodal.perception.fallbacks[].model` | string | yes | — | — |
 | `ai.memory` | object \| null | no | — | 三层 Markdown 文件记忆（global / platform / session）。 默认启用；设 enabled: false 可关闭注入。 |
 | `ai.memory.enabled` | boolean \| string | no | — | — |
 | `ai.memory.semantic` | object \| null | no | — | L4 语义记忆：memory_entries 表 + memory_search/upsert 工具 |
@@ -1775,6 +1778,11 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
+| `content-moderation.groupModeration` | array&lt;object&gt; | no | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。 |
+| `content-moderation.groupModeration[].adapter` | string | yes | — | — |
+| `content-moderation.groupModeration[].endpoint` | string | yes | — | — |
+| `content-moderation.groupModeration[].account` | string | yes | — | — |
+| `content-moderation.groupModeration[].group` | string | yes | — | — |
 | `content-moderation.enabled` | boolean | no | `true` | 总开关 |
 | `content-moderation.onError` | string: `"open"`, `"closed"` | no | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
 | `content-moderation.maskChar` | string | no | `"*"` | 文本打码字符 |

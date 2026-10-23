@@ -214,3 +214,85 @@ describe('AIService ai.multimodal.perception', () => {
       .toThrow('"nope" is not defined in ai.providers');
   });
 });
+
+describe('perception fallback chain', () => {
+  async function setup(
+    first: 'success' | 'error' | 'empty' | 'hang' | 'text-only' = 'error',
+    backupReply = geminiGenerate.reply({ text: '一只猫的表情包', usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10, totalTokenCount: 110 } }),
+  ) {
+    const { createLlmApiRuntime } = await import('../../../ai/src/llm/llm-runtime-factory.js');
+    const primary = createProviderHarness({ sdk: 'google', alias: 'primary' });
+    const backup = createProviderHarness({ sdk: 'google', alias: 'backup' });
+    const runtime = createLlmApiRuntime([
+      { alias: 'primary', config: primary.config, models: [primary.modelId], fetch: primary.server.fetch },
+      { alias: 'backup', config: backup.config, models: [backup.modelId], fetch: backup.server.fetch },
+    ], () => [primary.modelId]);
+    if (first === 'text-only') {
+      const original = runtime.model.bind(runtime);
+      runtime.model = (provider, model) => ({ ...original(provider, model), ...(provider === 'primary' ? { input: ['text'] as const } : {}) });
+    } else {
+      primary.reply(first === 'success' ? geminiGenerate.reply({ text: '一张截图' })
+        : first === 'hang' ? { hang: 'before-headers' } : first === 'empty'
+        ? geminiGenerate.reply({ text: '', usageMetadata: { promptTokenCount: 250, candidatesTokenCount: 0, totalTokenCount: 250 } })
+        : geminiGenerate.error(400, { message: 'location unsupported', status: 'FAILED_PRECONDITION' }));
+    }
+    backup.reply(backupReply);
+    const port = createLlmMediaPerceptionPort({ runtime, resilience: NO_RETRY, config: config({
+      provider: 'primary', timeoutMs: 30,
+      fallbacks: [{ provider: 'backup', model: backup.modelId }],
+    }) });
+    return { port, primary, backup };
+  }
+
+  it.each(['error', 'empty', 'hang', 'text-only'] as const)('falls back after %s and caches the actual provider', async (failure) => {
+    const { port, primary, backup } = await setup(failure);
+    const result = await port.describe(image());
+    expect(result).toMatchObject({ text: '一只猫的表情包', provider: 'backup', cached: false });
+    if (failure === 'error') expect(result!.usage!.total_tokens).toBeGreaterThan(1000);
+    if (failure === 'empty') expect(result?.usage).toEqual({ prompt_tokens: 350, completion_tokens: 10, total_tokens: 360 });
+    expect(primary.requests).toHaveLength(failure === 'text-only' ? 0 : 1);
+    expect(backup.requests).toHaveLength(1);
+    expect(await port.describe(image())).toEqual({ text: '一只猫的表情包', provider: 'backup', model: backup.modelId, cached: true });
+    expect(backup.requests).toHaveLength(1);
+  });
+
+  it('does not call a backup when the primary succeeds', async () => {
+    const { port, primary, backup } = await setup('success');
+    expect(await port.describe(image())).toMatchObject({ text: '一张截图', provider: 'primary', cached: false });
+    expect(primary.requests).toHaveLength(1);
+    expect(backup.requests).toHaveLength(0);
+  });
+
+  it('accounts for both failed candidates without caching the failure', async () => {
+    const { port, primary, backup } = await setup('error', geminiGenerate.error(400, { message: 'backup unavailable' }));
+    const error = await port.describe(image()).catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(MediaPerceptionFailedError);
+    expect((error as MediaPerceptionFailedError).usage.total_tokens).toBeGreaterThan(2_000);
+    expect(primary.requests).toHaveLength(1);
+    expect(backup.requests).toHaveLength(1);
+
+    primary.reply(geminiGenerate.reply({ text: '恢复后识别成功' }));
+    expect(await port.describe(image())).toMatchObject({ text: '恢复后识别成功', provider: 'primary', cached: false });
+    expect(primary.requests).toHaveLength(2);
+    expect(backup.requests).toHaveLength(1);
+  });
+
+  it('does not start a backup request after cancellation', async () => {
+    const { port, backup } = await setup('hang');
+    const controller = new AbortController();
+    const promise = port.describe(image(), controller.signal);
+    controller.abort(new Error('turn cancelled'));
+    await expect(promise).rejects.toThrow();
+    expect(backup.requests).toHaveLength(0);
+  });
+
+  it('validates aliases and deduplicates the configured chain', () => {
+    expect(resolvePerceptionConfig({ provider: 'a', model: 'm', fallbacks: [
+      { provider: 'a', model: 'm' }, { provider: 'b', model: 'v' }, { provider: 'b', model: 'v' },
+    ] }, ['a', 'b'])?.fallbacks).toEqual([{ provider: 'b', model: 'v' }]);
+    expect(() => resolvePerceptionConfig({ provider: 'a', model: 'm', fallbacks: [{ provider: 'b', model: 'v' }] }, ['a']))
+      .toThrow('fallbacks[0].provider');
+    expect(() => resolvePerceptionConfig({ provider: 'a', model: 'm', fallbacks: [{ provider: 'a', model: '' }] }))
+      .toThrow('fallbacks[0]');
+  });
+});

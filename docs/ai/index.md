@@ -358,6 +358,9 @@ ai:
     perception:
       provider: gemini              # 必填，ai.providers 里的名字
       model: gemini-2.5-flash-lite  # 必填，这个模型必须声明能接收对应类型
+      # 可选：预先在 ai.providers 中配置备用 provider，并声明模型的 image 输入能力
+      # fallbacks:
+      #   - { provider: backup, model: your-vision-model }
       kinds: [image]                # 可选：image | video | file，默认 [image]；file 只处理 PDF
       maxChars: 800                 # 可选：描述最长字符数，默认 800
       timeoutMs: 30000              # 可选：单次请求超时，默认 30000
@@ -367,6 +370,7 @@ ai:
 | 字段 | 说明 |
 | --- | --- |
 | `provider` / `model` | 用来描述媒体的模型，`provider` 必须是 `ai.providers` 里的名字；配置错误时启动失败，`zhin config check` 也会报错 |
+| `fallbacks` | 可选的 `{ provider, model }` 列表，主模型无法生成描述时按顺序尝试；不配置则保持单模型行为 |
 | `kinds` | 要描述的类型。音频不在这里，仍走 `ai.multimodal.audio` 的语音转写 |
 | `maxChars` | 描述超出时截断 |
 | `timeoutMs` | 单次请求超时；失败最多重试 1 次，走和主对话相同的重试、超时和错误分类 |
@@ -379,6 +383,9 @@ ai:
 - 描述会随用户消息写入会话历史，之后的回合可以继续问“刚才那张图”；图片本身不写入历史。
 - 相同内容的图片（按字节的 sha256）只描述一次，常见的表情包和贴纸不会重复调用。
 - 描述失败、超时或超出 `maxItemsPerTurn` 时，回到原来的占位，回合照常进行。每项媒体的结果记录在 `zhin trace` 时间线的 `media_resolution` 事件里，描述成功时 `code` 为 `media_perception` 并带上所用模型。
+- `fallbacks` 按顺序切换：请求失败、空回答或模型不支持媒体类型都会尝试下一项；每个候选适用 `timeoutMs` 和至多一次重试。取消回合立即停止，不切换。所有候选失败才保留占位，不猜测图片内容。
+- 缓存与 trace 记录实际成功的 provider/model；费用统计累计失败候选和最终候选。备用列表越长，最坏等待时间越长，应使用少量已验证的模型。
+- ICQQ 的普通动画表情按 image 处理；原创 bface 表情转换为图片链接并保留文字标签。失效链接仍可能无法识别。
 - 不配置 `perception` 时行为与之前完全一样。
 
 ### ai.agent

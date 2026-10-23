@@ -61,6 +61,7 @@ import {
 } from './protocol.js';
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
 import { ManagedIcqqClient, type IcqqBackgroundOperation } from './managed-client.js';
+import { inspectGroupMember, moderateGroupMember } from './group-moderation.js';
 
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
@@ -112,6 +113,10 @@ export class IcqqEndpoint extends Endpoint<Client> {
   readonly content: EndpointContentPort;
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
+    inspectGroupMember: (group, user, signal) => inspectGroupMember(this.client, group, user, signal),
+    moderateGroupMember: (group, user, action, signal) => moderateGroupMember(
+      this.client, group, user, action, signal, () => this.#open && !this.#retiring && !this.#stopped,
+    ),
     listFriends: async () =>
       Array.from(this.client.fl.values()).map((f) => ({
         user_id: f.user_id,
@@ -149,7 +154,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
   readonly control: EndpointControl = Object.freeze({
     recall: async (message: MessageRef) => {
       if (!message.id || message.id.startsWith('outbound:')) return;
-      await this.client.deleteMsg(message.id);
+      if (!await this.client.deleteMsg(message.id)) throw new Error('QQ did not confirm message recall');
     },
     addReaction: async (message: MessageRef, emoji: string) => {
       const target = resolveIcqqGroupReactionTarget(message);
@@ -844,6 +849,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
       metadata: {
         nickname: normalized.nickname,
         senderRole: normalized.senderRole,
+        platformSentAt: normalized.timestampMs,
       },
     }, admittedBeforeRetire);
   }

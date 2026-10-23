@@ -132,17 +132,16 @@ function isPdf(payload: MediaBinaryPayload): boolean {
 }
 
 /**
- * Perception port backed by a configured provider/model: one media-capable
- * completion per payload through the provider resilience layer (retry,
- * per-attempt timeout, error classification). Descriptions are cached by
- * content hash.
+ * Perception port backed by an ordered provider/model chain. Each candidate
+ * uses the provider resilience layer (retry, per-attempt timeout, error
+ * classification). Successful descriptions are cached by content hash.
  */
 export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions): MediaPerceptionPort {
   const { runtime, config } = options;
-  const cache = new Map<string, string>();
-  const remember = (key: string, text: string) => {
+  const cache = new Map<string, Pick<MediaPerception, 'text' | 'provider' | 'model'>>();
+  const remember = (key: string, value: Pick<MediaPerception, 'text' | 'provider' | 'model'>) => {
     cache.delete(key);
-    cache.set(key, text);
+    cache.set(key, value);
     while (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
   };
   return Object.freeze({
@@ -154,29 +153,14 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
       return payload.kind !== 'file' || isPdf(payload);
     },
     async describe(payload: MediaBinaryPayload, signal?: AbortSignal): Promise<MediaPerception | undefined> {
-      if (payload.kind === 'audio') return undefined;
+      signal?.throwIfAborted();
+      if (payload.kind === 'audio' || !config.kinds.includes(payload.kind) || (payload.kind === 'file' && !isPdf(payload))) return undefined;
       const key = perceptionCacheKey(payload);
       const hit = cache.get(key);
       if (hit !== undefined) {
         remember(key, hit);
-        return { text: hit, provider: config.provider, model: config.model, cached: true };
+        return { ...hit, cached: true };
       }
-      const model = runtime.model(config.provider, config.model);
-      const input = Array.isArray(model.input) ? model.input : ['text'];
-      if (!input.includes(payload.kind)) {
-        throw new Error(`perception model ${config.provider}/${config.model} does not declare ${payload.kind} input`);
-      }
-      const resilience = resolveProviderResilienceConfig(
-        options.resilience,
-        resolveProviderConfigResilience(runtime.providerConfig?.(config.provider)),
-        // One retry at most: perception runs before the turn and must stay quick.
-        { requestTimeoutMs: config.timeoutMs, maxRetries: Math.min(options.resilience?.maxRetries ?? 1, 1) },
-      );
-      const port = createResilientCompletionPort(runtime, {
-        config: resilience,
-        timers: options.timers,
-        onEvent: options.onEvent,
-      });
       const block: MediaContentBlock = {
         type: payload.kind,
         data: {
@@ -194,21 +178,57 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
         media: [block],
         timestamp: Date.now(),
       };
-      let reply: Awaited<ReturnType<typeof port.complete>>;
-      let text: string;
-      try {
-        reply = await port.complete(model, { systemPrompt: PERCEPTION_SYSTEM_PROMPT, messages: [user] }, { signal });
-        text = truncatePerceptionText(assistantAnswerText(reply), config.maxChars);
-      } catch (error) {
-        const prompt = estimatePromptTokens(`${PERCEPTION_SYSTEM_PROMPT}\n${PERCEPTION_INSTRUCTIONS[payload.kind]}`)
-          + (FAILED_PERCEPTION_MEDIA_TOKENS[payload.kind] ?? 1_000);
-        throw new MediaPerceptionFailedError(error, { prompt_tokens: prompt, completion_tokens: 0, total_tokens: prompt });
+      const total: Usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+      const addUsage = (usage?: Usage) => {
+        if (!usage) return;
+        total.prompt_tokens += usage.prompt_tokens;
+        total.completion_tokens += usage.completion_tokens;
+        total.total_tokens += usage.total_tokens;
+      };
+      let lastError: unknown;
+      let empty: MediaPerception | undefined;
+      for (const candidate of [config, ...(config.fallbacks ?? [])]) {
+        signal?.throwIfAborted();
+        let sent = false;
+        try {
+          const model = runtime.model(candidate.provider, candidate.model);
+          if (!(model.input ?? ['text']).includes(payload.kind)) {
+            throw new Error(`perception model ${candidate.provider}/${candidate.model} does not declare ${payload.kind} input`);
+          }
+          const resilience = resolveProviderResilienceConfig(
+            options.resilience,
+            resolveProviderConfigResilience(runtime.providerConfig?.(candidate.provider)),
+            { requestTimeoutMs: config.timeoutMs, maxRetries: Math.min(options.resilience?.maxRetries ?? 1, 1) },
+          );
+          const port = createResilientCompletionPort(runtime, {
+            config: resilience, timers: options.timers, onEvent: options.onEvent,
+          });
+          sent = true;
+          const reply = await port.complete(model, { systemPrompt: PERCEPTION_SYSTEM_PROMPT, messages: [user] }, { signal });
+          addUsage(perceptionUsageOf(reply.usage));
+          const text = truncatePerceptionText(assistantAnswerText(reply), config.maxChars);
+          const result = { text, provider: candidate.provider, model: candidate.model };
+          // 空回答同样计费，但不写缓存；继续尝试下一个候选。
+          if (!text) {
+            empty = { ...result, cached: false };
+            continue;
+          }
+          remember(key, result);
+          return { ...result, cached: false, ...(total.total_tokens ? { usage: total } : {}) };
+        } catch (error) {
+          // 取消属于当前回合，不能借备用模型启动新的请求。
+          if (signal?.aborted) throw error;
+          if (sent) {
+            const prompt = estimatePromptTokens(`${PERCEPTION_SYSTEM_PROMPT}\n${PERCEPTION_INSTRUCTIONS[payload.kind]}`)
+              + (FAILED_PERCEPTION_MEDIA_TOKENS[payload.kind] ?? 1_000);
+            addUsage({ prompt_tokens: prompt, completion_tokens: 0, total_tokens: prompt });
+          }
+          lastError = error;
+        }
       }
-      const usage = perceptionUsageOf(reply.usage);
-      // An empty description still spent tokens: report the usage with no text.
-      if (!text) return { text: '', provider: config.provider, model: config.model, cached: false, ...(usage ? { usage } : {}) };
-      remember(key, text);
-      return { text, provider: config.provider, model: config.model, cached: false, ...(usage ? { usage } : {}) };
+      if (empty) return { ...empty, ...(total.total_tokens ? { usage: total } : {}) };
+      if (total.total_tokens) throw new MediaPerceptionFailedError(lastError, total);
+      throw lastError;
     },
   });
 }

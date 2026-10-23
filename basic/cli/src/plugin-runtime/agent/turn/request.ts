@@ -13,7 +13,6 @@ import {
   type ApprovalDecisionPort,
   type ApprovalOutcome,
   type ApprovalOutcomePort,
-  type ApprovalPort,
   type ApprovalRequestInput,
   type DeliveryOutcome,
   type TurnAccessContext,
@@ -416,7 +415,7 @@ export function createRuntimeQuestionPort(
   });
 }
 
-/** IM ApprovalPort: master is already the authority; others wait via UserInteraction. */
+/** IM approvals use UserInteraction; human-only tools also require a fresh answer from masters. */
 export function createRuntimeApprovalPort(options: {
   readonly isMaster: boolean;
   readonly interaction?: UserInteraction;
@@ -425,11 +424,11 @@ export function createRuntimeApprovalPort(options: {
   const port: ApprovalDecisionPort & ApprovalOutcomePort = {
     available: options.isMaster || options.interaction != null,
     async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
-      if (options.isMaster) return { status: 'approved', decision: 'approve-always' };
+      if (options.isMaster && !input.humanOnly) return { status: 'approved', decision: 'approve-always' };
       if (!options.interaction) {
         return { status: 'unavailable', reason: 'this conversation cannot show an approval prompt' };
       }
-      const recalled = options.memory?.recall(input);
+      const recalled = input.humanOnly ? undefined : options.memory?.recall(input);
       if (recalled !== undefined) {
         return recalled
           ? { status: 'approved', decision: 'approve-always' }
@@ -443,24 +442,28 @@ export function createRuntimeApprovalPort(options: {
           type: 'select',
           title: '操作确认',
           description: input.question,
-          tip: '回复 y / 同意 允许一次，n / 拒绝 拒绝；长期决定仅在当前 Host、当前会话和当前发起者范围内复用。',
+          tip: input.humanOnly ? '此操作必须逐次人工确认。回复 y / 同意 允许一次，n / 拒绝 拒绝。'
+            : '回复 y / 同意 允许一次，n / 拒绝 拒绝；长期决定仅在当前 Host、当前会话和当前发起者范围内复用。',
           options: [
-            { label: '拒绝', value: 'reject', aliases: ['n', 'no', '否'], description: '阻止当前及后续同类操作。' },
+            { label: '拒绝', value: 'reject', aliases: ['n', 'no', '否'],
+              description: input.humanOnly ? '拒绝当前操作。' : '阻止当前及后续同类操作。' },
             { label: '允许一次', value: 'approve-once', aliases: ['y', 'yes', '同意'], description: '仅执行当前操作。' },
-            ...(sharedConversation ? [
+            ...(sharedConversation && !input.humanOnly ? [
               { label: '允许此会话', value: 'approve-session', description: '当前会话中，所有发送者的同类操作持续放行。' },
             ] : []),
-            {
+            ...(!input.humanOnly ? [{
               label: '始终允许',
               value: 'approve-always',
               description: '当前会话中，此发送者的同类操作持续放行。',
-            },
+            }] : []),
           ],
           ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
           signal: input.signal,
         });
-        const decision = normalizeApprovalDecision(selected, sharedConversation);
-        options.memory?.remember(input, decision);
+        const decision = input.humanOnly
+          ? selected === 'approve-once' ? 'approve-once' : 'reject'
+          : normalizeApprovalDecision(selected, sharedConversation);
+        if (!input.humanOnly) options.memory?.remember(input, decision);
         return decision === 'reject' ? { status: 'denied', by: 'user' } : { status: 'approved', decision };
       } catch (error) {
         return approvalOutcomeFromInteractionError(error);
@@ -636,16 +639,20 @@ export function adapterLiveEndpointId(message: Message): string {
 
 export function runtimeApprovalPolicy(
   requiresApproval: ToolCapability['requiresApproval'],
-): 'never' | 'always' | 'once' | 'on-risk' {
+): ToolCapability['requiresApproval'] {
   return requiresApproval;
 }
 
 /** A small non-interactive ApprovalPort suitable for CLI/service hosts and tests. */
 export function createDeterministicApprovalPort(
   decision: 'approve' | 'deny' = 'deny',
-): ApprovalPort {
-  return {
+): ApprovalOutcomePort {
+  const port: ApprovalOutcomePort = {
     available: true,
-    requestApproval: async () => decision === 'approve',
+    requestApprovalOutcome: async input => input.humanOnly
+      ? { status: 'unavailable', reason: 'this non-interactive host cannot obtain fresh human approval' }
+      : decision === 'approve' ? { status: 'approved', decision: 'approve-once' } : { status: 'denied', by: 'user' },
+    requestApproval: async input => (await port.requestApprovalOutcome(input)).status === 'approved',
   };
+  return port;
 }

@@ -2,7 +2,7 @@
  * Per-tool approval / model-output policy types (ADR 0039 P1).
  */
 
-export type ToolApprovalMode = 'always' | 'once' | 'never' | 'on-risk';
+export type ToolApprovalMode = 'always' | 'once' | 'never' | 'on-risk' | 'human';
 
 export type ToolApprovalPolicy =
   | ToolApprovalMode

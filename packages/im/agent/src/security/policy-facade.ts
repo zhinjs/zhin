@@ -249,7 +249,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
 
 function requiresDeclarativeApproval(tool: ToolDescriptor): boolean {
   if (tool.requiresApproval === 'never') return false;
-  if (tool.requiresApproval === 'always' || tool.requiresApproval === 'once') return true;
+  if (tool.requiresApproval === 'always' || tool.requiresApproval === 'once' || tool.requiresApproval === 'human') return true;
   return !hasCanonicalRiskPolicy(tool.name);
 }
 
