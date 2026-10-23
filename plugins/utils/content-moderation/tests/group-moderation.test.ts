@@ -84,7 +84,7 @@ describe('contextual group moderation', () => {
     f.recall.mockRejectedValue(new Error('no permission'));
     await f.send(1); await f.send(1); await f.send(2);
     expect(f.reply).toHaveBeenCalledTimes(2);
-    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('警告'));
+    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('警告'), '123');
     expect(f.recall).toHaveBeenCalledTimes(2);
     expect(f.moderateGroupMember).not.toHaveBeenCalled();
   });
@@ -95,13 +95,13 @@ describe('contextual group moderation', () => {
     await f.send(2, { sentAt: NOW + 1000 });
     await f.send(3);
     expect(f.reply).toHaveBeenCalledTimes(2);
-    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('警告'));
+    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('警告'), '123');
   });
 
   it('resets after 30 minutes without another violation', async () => {
     const f = fixture();
     await f.send(1); await f.send(2); await f.send(903);
-    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('提醒'));
+    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('提醒'), '123');
     expect(f.moderateGroupMember).not.toHaveBeenCalled();
   });
 
@@ -110,7 +110,7 @@ describe('contextual group moderation', () => {
     await f.send(1);
     f.completeText.mockResolvedValue({ text: verdict(false, 'abuse'), model: 'fixture', durationMs: 0 });
     await f.send(2);
-    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('提醒'));
+    expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('提醒'), '123');
   });
 
   it.each([0, 600_000])('automatically kicks a clear ad at newcomer age %d ms', async (age) => {
@@ -229,8 +229,31 @@ describe('inbound group moderation wiring', () => {
       use: (token: { id: string }) => { if (!resources.has(token.id)) throw new Error('Missing resource'); return resources.get(token.id); },
       project: () => ({ connection: () => endpoint }) };
     const run = async () => inbound.handle(context as never, vi.fn(async () => undefined) as never);
-    return { ...f, config, message, endpoint, hostRecall, resources, run };
+    return { ...f, config, message, endpoint, engine, hostRecall, resources, run };
   }
+
+  it('mentions the original sender through the outbound path at each escalation stage', async () => {
+    const f = middlewareFixture();
+    for (let n = 0; n < 3; n++) {
+      vi.setSystemTime(NOW + n * 2000);
+      f.message.id = `notice-${n}`;
+      f.message.metadata.platformSentAt = Date.now();
+      await f.run();
+    }
+    expect(f.message.$reply.mock.calls).toEqual(['提醒', '警告', '已禁言 10 分钟'].map(action => [[
+      { type: 'mention', data: { target: '123' } },
+      { type: 'text', data: { text: ` ${action}。请勿发布未经请求的广告或引流信息。` } },
+    ]]));
+  });
+
+  it('preserves text-only replies when mention is omitted', async () => {
+    const f = middlewareFixture();
+    vi.spyOn(f.engine.groupModerator, 'review').mockImplementation(async input => {
+      await input.reply('提醒。请勿发布未经请求的广告或引流信息。');
+    });
+    await f.run();
+    expect(f.message.$reply).toHaveBeenCalledExactlyOnceWith('提醒。请勿发布未经请求的广告或引流信息。');
+  });
 
   it.each([true, false])('keeps the model recall choice even when a lexicon says critical: %s', async (recall) => {
     const f = middlewareFixture();

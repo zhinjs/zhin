@@ -52,7 +52,7 @@ export interface GroupModerationInput {
   readonly completion: AiCompletion;
   readonly management: EndpointManagement;
   readonly onBehalfOf?: Parameters<AiCompletion['completeText']>[0]['onBehalfOf'];
-  readonly reply: (text: string) => Promise<void>;
+  readonly reply: (text: string, mention?: string) => Promise<void>;
   /** Bound by middleware to this original message only. No model-controlled address. */
   readonly recall: () => Promise<void>;
   readonly audit: (event: Readonly<Record<string, unknown>>) => void;
@@ -164,7 +164,7 @@ export class GroupModerator {
       signal.throwIfAborted();
       const rule = review.category === 'advertising' ? '请勿发布未经请求的广告或引流信息' : '请勿针对他人进行人身攻击';
       const action = newcomer ? '入群 10 分钟内发布明确广告，已移出群聊' : count === 3 ? '已禁言 10 分钟' : count === 2 ? '警告' : '提醒';
-      await input.reply(`${input.sender}：${action}。${rule}。`);
+      await input.reply(`${action}。${rule}。`, input.sender);
       const notifiedAt = Date.now();
       await state.update<MemberState>(memberKey, (value) => value?.lease === token
         ? { ...value, [review.category]: { count, lastViolationAt: input.sentAt, notifiedAt } } : value,

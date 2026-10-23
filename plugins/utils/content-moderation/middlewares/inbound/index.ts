@@ -141,9 +141,12 @@ async function runGroupModeration(
           completion: context.use(aiCompletionToken), management: endpoint.management ?? {},
           onBehalfOf: usageSubjectFromMessage(message),
           onReview: () => { modelOwnsRecall = true; },
-          reply: async (content) => {
+          reply: async (content, mention) => {
             context.signal.throwIfAborted();
-            const receipt = await message.$reply(content);
+            const receipt = await message.$reply(mention ? [
+              { type: 'mention', data: { target: mention } },
+              { type: 'text', data: { text: ` ${content}` } },
+            ] : content);
             if (receipt.status !== 'sent') throw new Error('Moderation notice was not delivered');
           },
           recall: async () => {
