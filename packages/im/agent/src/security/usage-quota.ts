@@ -94,8 +94,27 @@ export class UsageQuota {
 
   /** Checks a turn before it starts; an allowed group turn counts against the group's rate. */
   check(subject: UsageSubject): UsageQuotaDecision {
-    if (!this.enabled || (subject.owner && this.settings.exemptOwner)) return { allowed: true };
+    return this.#check(subject, true, this.#now());
+  }
+
+  /** Preflight the whole request before consuming one rate slot per non-exempt group. */
+  checkBatch(subjects: readonly UsageSubject[]): UsageQuotaDecision & { readonly deniedUserIds?: readonly string[] } {
     const now = this.#now();
+    const denied = subjects.map(subject => ({ subject, decision: this.#check(subject, false, now) }))
+      .filter((entry): entry is { subject: UsageSubject; decision: Extract<UsageQuotaDecision, { allowed: false }> } => !entry.decision.allowed);
+    const groupDenial = denied.find(entry => entry.decision.scope === 'group');
+    if (groupDenial) return groupDenial.decision;
+    if (denied.length) return { ...denied[0]!.decision, deniedUserIds: [...new Set(denied.map(entry => entry.subject.userId))] };
+    if (this.settings.perGroupRequestsPerMinute > 0) {
+      const groups = new Set(subjects.filter(subject => !(subject.owner && this.settings.exemptOwner))
+        .map(subject => subject.groupId).filter((id): id is string => !!id));
+      for (const group of groups) this.#add(`rate:group:${group}`, RATE_WINDOW_MS, now, 1);
+    }
+    return { allowed: true };
+  }
+
+  #check(subject: UsageSubject, countRequest: boolean, now: number): UsageQuotaDecision {
+    if (!this.enabled || (subject.owner && this.settings.exemptOwner)) return { allowed: true };
     const { perUserTokens, perGroupTokens, perGroupRequestsPerMinute, windowMs } = this.settings;
     if (perUserTokens > 0) {
       const bucket = this.#current(`tokens:user:${subject.userId}`, windowMs, now);
@@ -118,7 +137,7 @@ export class UsageQuota {
         return deny('group', 'rate', bucket, RATE_WINDOW_MS, now,
           `本群消息太多啦，请约 ${formatWait(bucket, RATE_WINDOW_MS, now)}后再试。`);
       }
-      this.#store.set(key, { windowStart: bucket.windowStart, used: bucket.used + 1 });
+      if (countRequest) this.#store.set(key, { windowStart: bucket.windowStart, used: bucket.used + 1 });
     }
     return { allowed: true };
   }

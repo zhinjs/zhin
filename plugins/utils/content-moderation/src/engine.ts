@@ -4,6 +4,8 @@ import { mergeMatches, type ExtractedContent } from './extract.js';
 import { redactOutboundPayload } from './redact.js';
 import { createProviders } from './providers/registry.js';
 import { GroupModerator } from './group-moderation.js';
+import { GroupReviewQueue } from './group-review-queue.js';
+import { generationAdmissionSource } from 'zhin.js/plugin-runtime';
 import type { ModerationProvider } from './providers/types.js';
 import {
   maxSeverity,
@@ -33,6 +35,8 @@ export interface ApplyResult {
 
 export class ModerationEngine {
   readonly groupModerator = new GroupModerator();
+  readonly groupReviewQueue = new GroupReviewQueue(this.groupModerator);
+  get [generationAdmissionSource]() { return this.groupReviewQueue[generationAdmissionSource]; }
   readonly #logger: Logger;
   readonly #cwd: string;
   readonly #fetch?: typeof fetch;
@@ -100,11 +104,13 @@ export class ModerationEngine {
     readonly scanInput: ScanInput;
     readonly hooks: ApplyHooks;
     /** A contextual review already owns recall for this message, including a choice to keep it. */
-    readonly recallManaged?: boolean;
+    readonly recallManaged?: boolean | Promise<boolean>;
   }): Promise<ApplyResult> {
     const merged = await this.scan(options.scanInput);
-    const actions = this.#config.actions[merged.severity]
-      .filter(action => !(options.recallManaged && action === 'recall'));
+    const configured = this.#config.actions[merged.severity];
+    // Ordinary pass/drop paths do not wait for the model. A legacy recall must respect its decision.
+    const recallManaged = configured.includes('recall') ? await options.recallManaged : false;
+    const actions = configured.filter(action => !(recallManaged && action === 'recall'));
     const actionSet = new Set<Action>(actions);
 
     if (merged.severity !== 'pass' || actionSet.has('log')) {

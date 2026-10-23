@@ -16,7 +16,7 @@
  */
 import { resolveModelCandidates } from '../context/model-resolver.js';
 import type { AIProvider, ProviderResilienceConfig, TextCompleteResult } from '@zhin.js/ai';
-import type { AiCompletion, AiCompletionInput, AiCompletionResult } from '@zhin.js/core';
+import type { AiCompletion, AiCompletionInput, AiCompletionResult, UsageSubject } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIService } from '../service.js';
 import { renderExternalContent } from '../security/trust-level.js';
@@ -33,6 +33,7 @@ export type {
   AiCompletionInput,
   AiCompletionResult,
   AiCompletionUntrustedInput,
+  AiCompletionUsageShare,
   UsageSubject,
 } from '@zhin.js/core';
 
@@ -43,37 +44,46 @@ export class AiCompletionQuotaError extends Error {
   override readonly name = 'AiCompletionQuotaError' as const;
   readonly scope: 'user' | 'group';
   readonly retryAfterSeconds: number;
+  readonly deniedUserIds?: readonly string[];
 
-  constructor(message: string, scope: 'user' | 'group', retryAfterSeconds: number) {
+  constructor(message: string, scope: 'user' | 'group', retryAfterSeconds: number, deniedUserIds?: readonly string[]) {
     super(message);
     this.scope = scope;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.deniedUserIds = deniedUserIds;
   }
 }
 
 export interface AiCompletionOptions {
   readonly service: Pick<AIService, 'getBindingRegistry' | 'getProvider' | 'getAgentConfig'>
     & Partial<Pick<AIService, 'getModelRegistry'>>;
-  readonly usageQuota?: Pick<UsageQuota, 'check' | 'record'>;
+  readonly usageQuota?: Pick<UsageQuota, 'check' | 'record'> & Partial<Pick<UsageQuota, 'checkBatch'>>;
   readonly now?: () => number;
 }
 
 export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
   const now = options.now ?? Date.now;
   return Object.freeze({
+    ...(options.usageQuota && !options.usageQuota.checkBatch ? {} : { supportsUsageShares: true as const }),
     async completeText(input: AiCompletionInput): Promise<AiCompletionResult> {
       const purpose = requiredText(input.purpose, 'purpose');
       const prompt = requiredText(input.prompt, 'prompt');
+      const shares = usageShares(input);
       const registry = options.service.getBindingRegistry();
       const binding = input.agent ? registry.getBinding(input.agent) : registry.requireZhinBinding();
       if (!binding) throw new Error(`AI completion: agent binding "${input.agent}" not found`);
       const provider: AIProvider = options.service.getProvider(binding.providerAlias);
       const model = input.model?.trim() || binding.model || provider.models[0] || '';
 
-      if (input.onBehalfOf && options.usageQuota) {
-        const decision = options.usageQuota.check(input.onBehalfOf);
+      input.signal?.throwIfAborted();
+      if (shares.length && options.usageQuota) {
+        if (input.usageShares && !options.usageQuota.checkBatch) throw new Error('AI completion: quota does not support shared attribution');
+        const decision = input.usageShares
+          ? options.usageQuota.checkBatch!(shares.map(share => share.subject))
+          : options.usageQuota.check(shares[0]!.subject);
         if (!decision.allowed) {
-          throw new AiCompletionQuotaError(decision.message, decision.scope, decision.retryAfterSeconds);
+          throw new AiCompletionQuotaError(decision.message, decision.scope, decision.retryAfterSeconds,
+            'deniedUserIds' in decision ? decision.deniedUserIds as readonly string[] : undefined);
         }
       }
 
@@ -101,9 +111,17 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       };
       // Reserve the prompt estimate before the call: concurrent calls then see each other's
       // spend at `check`, and a call that fails after reaching the provider is still billed.
-      const quotaSubject = input.onBehalfOf && options.usageQuota ? input.onBehalfOf : undefined;
-      const reserved = quotaSubject ? estimatePromptTokens(`${input.system ?? ''}\n${user}`) : 0;
-      if (quotaSubject && reserved > 0) options.usageQuota!.record(quotaSubject, reserved);
+      const reserved = shares.length && options.usageQuota ? estimatePromptTokens(`${input.system ?? ''}\n${user}`) : 0;
+      let billed = shares.map(() => 0);
+      const record = (tokens: number) => {
+        if (!options.usageQuota || tokens <= 0) return;
+        const allocated = allocateTokens(tokens, shares.map(share => share.weight));
+        shares.forEach((share, index) => {
+          options.usageQuota!.record(share.subject, allocated[index]! - billed[index]!);
+        });
+        billed = allocated;
+      };
+      record(reserved);
       const started = now();
       let result: TextCompleteResult;
       try {
@@ -125,10 +143,10 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       const durationMs = now() - started;
       const reportedTokens = result.usage?.totalTokens;
       const totalTokens = reportedTokens || undefined;
-      if (quotaSubject) {
+      if (shares.length && options.usageQuota) {
         // Reported usage settles the reservation; without it, estimate the answer on top of the prompt.
         const settled = totalTokens ?? reserved + estimatePromptTokens(result.text);
-        if (settled > reserved) options.usageQuota!.record(quotaSubject, settled - reserved);
+        if (settled > reserved) record(settled);
       }
       logger.info(formatCompact({
         op: 'ai_completion',
@@ -148,6 +166,38 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       });
     },
   });
+}
+
+function usageShares(input: AiCompletionInput): readonly { subject: UsageSubject; weight: number }[] {
+  if (!input.usageShares) return input.onBehalfOf ? [{ subject: { ...input.onBehalfOf }, weight: 1 }] : [];
+  if (input.onBehalfOf || !input.usageShares.length) throw new TypeError('AI completion: choose nonempty usageShares or onBehalfOf');
+  const shares = new Map<string, { subject: UsageSubject; weight: number }>();
+  for (const { subject, text } of input.usageShares) {
+    if (!subject.userId || typeof text !== 'string' || !text.trim()) throw new TypeError('AI completion: invalid usage share');
+    const weight = Math.max(1, estimatePromptTokens(text));
+    const key = JSON.stringify([subject.userId, subject.groupId]);
+    const previous = shares.get(key);
+    if (previous && previous.subject.owner !== subject.owner) throw new TypeError('AI completion: conflicting usage subjects');
+    shares.set(key, { subject: { ...subject }, weight: weight + (previous?.weight ?? 0) });
+  }
+  if (!Number.isFinite([...shares.values()].reduce((sum, share) => sum + share.weight, 0))) throw new TypeError('AI completion: invalid total weight');
+  return [...shares.values()];
+}
+
+/** Highest-averages rounding is monotone: settling a larger total never needs to refund a user. */
+function allocateTokens(tokens: number, weights: readonly number[]): number[] {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  const allocated = weights.map(weight => Math.floor(tokens * (weight / total)));
+  let remaining = tokens - allocated.reduce((sum, value) => sum + value, 0);
+  while (remaining > 0 && weights.length) {
+    let next = 0;
+    for (let index = 1; index < weights.length; index++) {
+      if (weights[index]! / (allocated[index]! + 1) > weights[next]! / (allocated[next]! + 1)) next = index;
+    }
+    const amount = Math.min(1, remaining);
+    allocated[next]! += amount; remaining -= amount;
+  }
+  return allocated;
 }
 
 function requiredText(value: unknown, name: string): string {
