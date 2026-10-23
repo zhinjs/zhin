@@ -1,0 +1,28 @@
+plugins/utils/content-moderation/README.md
+  s_9622fd28aba994::t_6471965ba016b8 85
+.changeset/vision-voice-kick-approval.md
+  s_9622fd28aba994::t_6471965ba016b8 16
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  s_9622fd28aba994::t_6471965ba016b8 144,146-149
+plugins/utils/content-moderation/tests/group-moderation.test.ts
+  s_9622fd28aba994::t_6471965ba016b8 87,98,104,113,232,235-256
+  s_9622fd28aba994::t_1ed205f09148dc 257
+plugins/utils/content-moderation/src/group-moderation.ts
+  s_9622fd28aba994::t_6471965ba016b8 55,167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e4b951cd70db4e7440900edf8d2ca01a41322558",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
