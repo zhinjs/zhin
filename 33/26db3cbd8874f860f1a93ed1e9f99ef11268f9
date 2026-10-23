@@ -1,0 +1,125 @@
+.changeset/prompt-context-dedup-cache.md
+  s_079f1dc5e6308d::t_8028fb7f80fdf0 1-7
+docs/ai/agent.md
+  s_079f1dc5e6308d::t_300d028dd33c98 225-231
+docs/en/ai/agent.md
+  s_079f1dc5e6308d::t_520aca8a53d49a 229-235
+packages/im/agent/evals/cases/context-deferred-tool-index.case.ts
+  s_079f1dc5e6308d::t_01f77dcc8dc731 24
+packages/im/agent/evals/cases/context-repeated-instructions.case.ts
+  s_079f1dc5e6308d::t_2ed6e76336d9e9 1-20
+packages/im/agent/evals/cases/context-tool-schema-budget.case.ts
+  s_079f1dc5e6308d::t_fc36085d6614d7 14,16
+packages/im/agent/src/context/skill-context.ts
+  s_079f1dc5e6308d::t_50441a57956ebb 1-8
+packages/im/agent/src/core/agent-core-run.ts
+  s_079f1dc5e6308d::t_01c9edabdf9fb0 10,237,346,508,629-637,656,775,882-884
+packages/im/agent/src/memory/compaction-runtime.ts
+  s_079f1dc5e6308d::t_a0f29c56a5cf7d 1,182
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_079f1dc5e6308d::t_af69250c6261aa 7,24-25,54-56,212-221,426,439,490-493,495-501
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_079f1dc5e6308d::t_54eaf4a3690f63 181
+packages/im/agent/src/tool-catalog/deferred-turn-controller.ts
+  s_079f1dc5e6308d::t_df25ad82ee6f46 72
+packages/im/agent/src/trace/context-budget.ts
+  s_079f1dc5e6308d::t_d2f9e0dc990165 10,18,31,35,53,64,131,137-157,166
+packages/im/agent/src/trace/turn-trace-format.ts
+  s_079f1dc5e6308d::t_f7eca8c45961a4 113
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_079f1dc5e6308d::t_3d6fbb69dfaac0 36-37,75-81,432-442
+packages/im/agent/tests/core/structured-schema-provider.test.ts
+  s_079f1dc5e6308d::t_afa6f28db930c8 1-27
+packages/im/agent/tests/memory/compaction-validation.test.ts
+  s_079f1dc5e6308d::t_9dded82d0a2612 1,119-177
+packages/im/agent/tests/trace/context-budget.test.ts
+  s_079f1dc5e6308d::t_6457851ffdb326 1,71-86
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  s_9477e63ef5cee5::t_1e2ee2e968a83a 12,124,175,206,225-226,302-307,314-315
+packages/im/ai/src/compaction/agent-micro-compact.ts
+  s_079f1dc5e6308d::t_cb21373df3182b 1,35,67
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  s_079f1dc5e6308d::t_187388a0ee4ab1 273
+packages/im/ai/src/llm/bridge/ai-sdk-prompt-cache.ts
+  s_079f1dc5e6308d::t_eb0e5f0e0b035f 1,134-162
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  s_079f1dc5e6308d::t_ab8e48a7bbbd27 30,424,586
+packages/im/ai/src/llm/types/content-block.ts
+  s_079f1dc5e6308d::t_41855d3467726a 18-22
+packages/im/ai/src/memory/prompt-context.ts
+  s_079f1dc5e6308d::t_36860e2a77f616 1-44
+packages/im/ai/src/memory/user-message-presentation.ts
+  s_079f1dc5e6308d::t_8c05d3d9c8ee31 116-121,143-155
+packages/im/ai/tests/ai-sdk-prompt-cache.test.ts
+  s_079f1dc5e6308d::t_ed857e8e5ad21c 71-113
+packages/im/ai/tests/llm/providers/anthropic.test.ts
+  s_079f1dc5e6308d::t_96873032feb34d 23
+packages/im/ai/tests/memory/prompt-context.test.ts
+  s_079f1dc5e6308d::t_63014e15068bd0 1-80
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_079f1dc5e6308d::t_0f91d71a5a584f 289-310,341
+packages/im/core/tests/segment-contract-json-schema.test.ts
+  s_079f1dc5e6308d::t_0649c4783de61d 147-169
+packages/im/agent/evals/cases/context-load-tool-no-schema-echo.case.ts
+  s_f2a025542d6fd8::t_68f1000faef6e9 1-18
+packages/im/agent/evals/framework/assertions.ts
+  s_f2a025542d6fd8::t_6f20f0ece7dff5 61-63,68-73
+packages/im/agent/evals/framework/fixture.ts
+  s_f2a025542d6fd8::t_0d5cf7e6c28e28 111-112,115-116
+packages/im/agent/src/context/context-system.ts
+  s_8d12591d455129::t_519ca60a30c9a4 7,11,14,114,120,124,130-135,167
+packages/im/agent/src/context/turn-envelope.ts
+  s_f2a025542d6fd8::t_612a83f4217f5c 1,23,27,55-63,71,97-100,102-105,109-111
+packages/im/agent/src/context/turn-user-message.ts
+  s_8d12591d455129::t_35157e49a5dff2 1,69-81
+packages/im/agent/src/prompt/git-context.ts
+  s_f2a025542d6fd8::t_512bb7a55d00f0 2
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_8d12591d455129::t_876b3662a1ab82 1-80
+packages/im/agent/tests/context/context-system.test.ts
+  s_f2a025542d6fd8::t_2f55760ba0c7d2 107
+packages/im/ai/src/index.ts
+  s_f2a025542d6fd8::t_5fb1e50bea9e49 87,523-524
+packages/im/ai/tests/llm/provider-prompt-cache.test.ts
+  s_f2a025542d6fd8::t_e0a51df48562bb 1-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3326db3cbd8874f860f1a93ed1e9f99ef11268f9",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_8d12591d455129": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16765-32e0-70d1-ad89-271863fa150c",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_f2a025542d6fd8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1674a-8706-7c50-9a23-bd75a19b16b8",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
