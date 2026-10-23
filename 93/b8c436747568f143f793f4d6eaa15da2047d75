@@ -1,0 +1,19 @@
+basic/cli/tests/plugin-runtime/database-conversation-live.test.ts
+  s_6562bcb6cc0539::t_d953eada77e8b1 5-6,18-19,34-46,52-54,58,66-70,132-133,138-141,145,162-163,172-188,270-271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "93b8c436747568f143f793f4d6eaa15da2047d75",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
