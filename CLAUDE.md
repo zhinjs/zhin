@@ -19,6 +19,7 @@ pnpm lint               # ESLint (.ts,.tsx)
 pnpm type-check         # tsc --noEmit -p tsconfig.typecheck.json
 pnpm dev                # Start minimal-bot (examples/minimal-bot); use pnpm dev:test for test-bot
 pnpm clean              # Clean all lib/ dist/ directories
+pnpm eval:chat --workspace <dir> --judge <alias/model>  # Real-model chat quality eval (local, not CI)
 
 # Bootstrap (first-time or after clean)
 pnpm prepare:logger     # Build @zhin.js/logger + install CLI deps
