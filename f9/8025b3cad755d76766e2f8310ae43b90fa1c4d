@@ -1,0 +1,53 @@
+.changeset/agent-usage-logs.md
+  s_079f1dc5e6308d::t_7c8082a743599a 1-7
+docs/ai/agent.md
+  s_079f1dc5e6308d::t_e061114e53aa87 12-33
+docs/en/ai/agent.md
+  s_079f1dc5e6308d::t_1bdbac121e78eb 12-33
+packages/im/agent/src/core/agent-core-run.ts
+  s_079f1dc5e6308d::t_8bed9f6b1f689c 950
+packages/im/agent/src/core/turn-completion-usage.ts
+  s_079f1dc5e6308d::t_c632871d41b44c 3-5,10,14,16,18-20,37-44,47
+packages/im/agent/src/core/turn-event-mapper.ts
+  s_079f1dc5e6308d::t_7d0da5e34c8ae8 7-10,13,18-21,55-56
+packages/im/agent/src/event/turn-event.ts
+  s_079f1dc5e6308d::t_a369860a09e8b0 7,11-12,150-153
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_079f1dc5e6308d::t_55b003b1733051 1-2,248,308-313,338,356,388-394,398,402,404-405,407
+packages/im/agent/src/trace/turn-trace-format.ts
+  s_079f1dc5e6308d::t_708addace67511 71-73
+packages/im/agent/src/trace/turn-trace.ts
+  s_079f1dc5e6308d::t_eaec8341a50ab8 34-39,238-243,247-248
+packages/im/agent/src/trace/turn-usage-log.ts
+  s_079f1dc5e6308d::t_5b13ff0834003c 1-91
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  s_079f1dc5e6308d::t_5c97de6f7874ea 8,28-38
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_079f1dc5e6308d::t_b1ace02ddf5eae 2,1067-1125
+packages/im/agent/tests/trace/turn-usage-log.test.ts
+  s_079f1dc5e6308d::t_f9386659c39c1f 1-85
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  s_079f1dc5e6308d::t_92247464746766 119,132-140
+packages/im/ai/src/llm/types/agent-message.ts
+  s_079f1dc5e6308d::t_62cf6af563f5ad 117-118
+packages/im/ai/tests/llm/provider-usage-reporting.test.ts
+  s_079f1dc5e6308d::t_ea0607dff22993 1-22
+packages/im/core/src/ai-completion-contract.ts
+  s_079f1dc5e6308d::t_70e364a3bcf259 57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f98025b3cad755d76766e2f8310ae43b90fa1c4d",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
