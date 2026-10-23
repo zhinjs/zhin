@@ -10,6 +10,7 @@ export default defineAgentTool<{ guild_id: string; name: string; color?: number 
     color: z.number().optional().describe('颜色（RGB 十进制数值）'),
   }),
   adapter: 'qq',
+  scopes: ["channel"],
   tags: ['qq'],
   permissions: [platformPermission('qq', 'guild_owner')],
   async execute({ guild_id, name, color  }: { guild_id: string; name: string; color?: number }, context) {

@@ -7,6 +7,7 @@ export default defineAgentTool<{ group_id: number; user_id: number }>({
     user_id: z.number().describe('要邀请的 QQ号'),
   }),
   adapter: 'icqq',
+  scopes: ["group"],
   requiresApproval: 'always',
   async execute({ group_id, user_id }, context) {
     const client = context.$client;

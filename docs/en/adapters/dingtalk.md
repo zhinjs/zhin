@@ -88,7 +88,7 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 
 ## Agent Tools
 
-The `tools/` directory provides get_user, department, group chat, work notification, and related Tools. A tool declaring `adapter: 'dingtalk'` lazily receives the current operation's `DingTalkClient` through `context.$client`; the model no longer selects an Endpoint id.
+The `agents/dingtalk/skills/` directories provide get_user, department, group chat, work notification, and related Tools. A tool declaring `adapter: 'dingtalk'` lazily receives the current operation's `DingTalkClient` through `context.$client`; the model no longer selects an Endpoint id.
 
 ## Platform Permissions (platform permit)
 
@@ -109,3 +109,5 @@ pnpm --filter @zhin.js/adapter-dingtalk test
 | Webhook returns 401/403 | `appSecret`, signature timestamp, and server clock |
 | Receives but cannot reply | `robotCode`, App permissions, and session Webhook validity |
 | Endpoint is missing | Schema or credential errors in Logs, then Endpoint presence in Runtime Capabilities |
+
+Existing-group administration is in `dingtalk-group-admin`, disclosed only in group conversations. User lookup, creating a group and other common operations remain separate.

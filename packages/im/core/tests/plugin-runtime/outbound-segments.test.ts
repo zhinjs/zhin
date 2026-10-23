@@ -496,6 +496,27 @@ describe('AI outbound segment types', () => {
     expect(profile({ model: { share } })).toEqual({ types: expect.not.arrayContaining(['share']) });
   });
 
+  it('filters scene-specific segment types and their hints together before building the model schema', () => {
+    const snapshot = mockSnapshot({ definition: { segments: {
+      supported: ['text', 'share'],
+      model: {
+        share: { scopes: ['group'], fields: ['audio'], hint: 'group music card' },
+        text: { scopes: ['group'], hint: 'group text hint' },
+      },
+    } } });
+    const group = resolveAiOutboundSegments('adapter:test' as never, snapshot, 'group');
+    expect(group.types).toContain('share');
+    expect(group.extensions).toEqual({
+      share: { fields: ['audio'], hint: 'group music card' }, text: { hint: 'group text hint' },
+    });
+    for (const scope of ['private', 'channel', undefined] as const) {
+      const other = resolveAiOutboundSegments('adapter:test' as never, snapshot, scope);
+      expect(other.types).not.toContain('share');
+      expect(other.extensions).toBeUndefined();
+      expect(other.types).toContain('text');
+    }
+  });
+
   it('offers reactions only for a conversation kind the adapter declares', () => {
     const reaction = { values: [{ value: '76', label: '赞' }], scopes: ['group'] };
     const snapshot = mockSnapshot({ definition: { segments: { reaction } } });

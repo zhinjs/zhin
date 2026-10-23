@@ -12,6 +12,7 @@ export default defineAgentTool<{
     topic: z.string().describe('新话题'),
   }),
   adapter: 'slack',
+  scopes: ["group"],
   tags: ['slack'],
   permissions: [platformPermission('slack', 'channel_manager')],
   async execute({ channel, topic }, context) {

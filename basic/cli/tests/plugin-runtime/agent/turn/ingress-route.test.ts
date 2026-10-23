@@ -1,10 +1,70 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DecisionProvider } from '@zhin.js/ai';
 import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/runtime';
-import { rootPluginId } from '@zhin.js/plugin-runtime';
+import type { TurnRequest } from '@zhin.js/agent';
+import type { Message } from '@zhin.js/core/runtime';
+import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { AgentTurnIngressRoute, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
 describe('AgentTurnIngressRoute', () => {
+  it.each([
+    { source: 'group', target: undefined, messageId: undefined, share: true, reaction: false },
+    { source: 'channel', target: undefined, messageId: undefined, share: true, reaction: false },
+    { source: 'group', target: undefined, messageId: 'm1', share: true, reaction: true },
+    { source: 'private', target: 'group', messageId: 'm1', share: true, reaction: false },
+    { source: 'group', target: 'channel', messageId: 'm1', share: true, reaction: false },
+    { source: 'group', target: 'private', messageId: 'm1', share: false, reaction: false },
+  ] as const)('discloses target-scoped segments independently of reaction eligibility: %j', async scenario => {
+    const endpoint = { id: 'root\u0000zhin.adapter\u0000test', adapter: 'root' };
+    const conversation = { endpoint, kind: scenario.source, id: 'source' };
+    const reply = vi.fn().mockResolvedValue({ status: 'sent' });
+    const message = {
+      conversation, content: '#hello', endpointId: 'bot', sender: { id: 'sender' },
+      ...(scenario.messageId ? { message: { conversation, id: scenario.messageId } } : {}),
+      $reply: reply,
+    } as Message;
+    const snapshot = {
+      root: rootPluginId(), resources: new Map(), tree: new Map(),
+      capabilities: new Map([[endpoint.id, { definition: { segments: {
+        supported: ['text', 'share'],
+        model: { share: { scopes: ['group', 'channel'], hint: 'Use the room share card.' } },
+        reaction: { scopes: ['group', 'channel'], values: [{ value: '76', label: '赞' }] },
+      } } }]]),
+    } as unknown as RuntimeSnapshot;
+    const executeLeased = vi.fn().mockResolvedValue({ status: 'completed', output: [] });
+    const binding = { name: 'zhin', providerAlias: 'test', model: 'test' };
+    const route = new AgentTurnIngressRoute({
+      projectRoot: process.cwd(),
+      runtime: { executeLeased } as never,
+      im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
+      ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
+      agent: {
+        service: {
+          getBindingRegistry: () => ({ requireZhinBinding: () => binding }),
+          getTriggerConfig: () => ({ enabled: true }),
+          getAgentConfig: () => ({}),
+        },
+        agent: {},
+      } as never,
+      ...(scenario.target ? { workroom: {
+        preRoute: async () => false,
+        hasAgentTurn: () => true,
+        takeAgentTurn: () => ({ projectId: 'p', proposalId: 'case', space: 'workroom', agentDefinitionId: 'zhin' }),
+        resolveOrchestratorConversation: async () => ({ endpoint, kind: scenario.target!, id: 'target' }),
+      } } : {}),
+    });
+
+    await route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined);
+
+    expect(reply).not.toHaveBeenCalled();
+    expect(executeLeased).toHaveBeenCalledOnce();
+    const request = executeLeased.mock.calls[0]![2] as TurnRequest;
+    const profile = request.ports.reply!.segments!;
+    expect(profile.types.includes('share')).toBe(scenario.share);
+    expect(profile.extensions?.share?.hint).toBe(scenario.share ? 'Use the room share card.' : undefined);
+    expect(profile.reaction).toEqual(scenario.reaction ? { values: [{ value: '76', label: '赞' }] } : undefined);
+  });
+
   it('adapts the durable Workroom pre-route through the IngressRoute interface', async () => {
     const preRoute = vi.fn().mockResolvedValue(true);
     const route = new AgentTurnIngressRoute({

@@ -1,31 +1,37 @@
-import type { AgentMessage, AssistantMessage, ToolResultMessage } from '../llm/types/agent-message.js';
-import { assistantText } from '../llm/convert/openai-bridge.js';
+import type { AgentMessage, ToolResultMessage, UserMessage } from '../llm/types/agent-message.js';
+import type { ContentBlock } from '../llm/types/content-block.js';
 import { estimateTextTokens } from './token-counter.js';
+import { IMAGE_MAX_TOKEN_SIZE } from './micro-compact.js';
 
-function blockText(block: { type: string; text?: string; thinking?: string }): string {
-  if (block.type === 'text' && block.text) return block.text;
-  if (block.type === 'thinking' && block.thinking) return block.thinking;
-  return '';
+function blockTokens(block: ContentBlock): number {
+  switch (block.type) {
+    case 'text': return estimateTextTokens(block.text);
+    case 'thinking': return estimateTextTokens(block.thinking);
+    case 'toolCall':
+      return estimateTextTokens(JSON.stringify({ id: block.id, name: block.name, arguments: block.arguments }));
+    // 媒体按已有媒体预算估算，不把 URL / base64 长度当作文本 token。
+    // 实际消耗由 provider、分辨率、页数和时长决定，这里不是计费值或上界。
+    case 'image':
+    case 'audio':
+    case 'video':
+    case 'file': return IMAGE_MAX_TOKEN_SIZE;
+  }
 }
 
 export function estimateAgentMessageTokens(message: AgentMessage): number {
-  let text = '';
-  if (message.role === 'user' || message.role === 'assistant' || message.role === 'toolResult') {
-    const blocks = (message as { content: Array<{ type: string; text?: string; thinking?: string }> }).content;
-    if (Array.isArray(blocks)) {
-      text = blocks.map(blockText).join('\n');
-    }
-    if (message.role === 'assistant') {
-      text = assistantText(message as AssistantMessage) || text;
-    }
-    if (message.role === 'toolResult') {
-      const tr = message as ToolResultMessage;
-      text = `${tr.toolName}:${text}`;
-    }
-  } else {
-    text = JSON.stringify(message);
+  if (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'toolResult') {
+    return estimateTextTokens(JSON.stringify(message)) + 4;
   }
-  return estimateTextTokens(text) + 4;
+  const content = (message as { content: ContentBlock[] }).content;
+  let tokens = Array.isArray(content) ? content.reduce((sum, block) => sum + blockTokens(block), 0) : 0;
+  if (message.role === 'user') {
+    tokens += ((message as UserMessage).media ?? []).reduce((sum, block) => sum + blockTokens(block), 0);
+  }
+  if (message.role === 'toolResult') {
+    const result = message as ToolResultMessage;
+    tokens += estimateTextTokens(`${result.toolName}:${result.toolCallId}`);
+  }
+  return tokens + 4;
 }
 
 export function estimateAgentMessagesTokens(messages: AgentMessage[]): number {

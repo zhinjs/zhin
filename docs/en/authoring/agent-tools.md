@@ -233,6 +233,12 @@ tools:
 
 Split a Skill that covers several independently triggered tasks, so a simple task doesn't pull in every tool. Skills shipped by adapters go in `agents/<platform>/skills/<name>/` and appear only in that platform's conversations.
 
+Classify before disclosure. Adapters own their Skill instructions, Tool descriptions and platform segment hints; the framework filters them using trusted inbound identity. Use `platforms` for the platform, `scopes` for conversation kinds, separate Skills by purpose, and keep authorization in `permissions`. Saying “group only” in prose is insufficient.
+
+For example, ICQQ likes remain in the common `icqq-interaction` Skill; group pokes and sign-in belong to `icqq-group-interaction`. Both that Skill's frontmatter and its private Tools declare `scopes: ['group']`. Private turns receive neither its catalog entry, instructions nor tools, even if previously loaded. Omitted `scopes` means all scenes, not all permissions.
+
+Group administration is disclosed in groups. For guild/channel administration, use the adapter's canonical scene: Slack channels are `group`, while Discord, KOOK and QQ channels are `channel`. Keep group creation, account queries and user lookup separate as common capabilities. Split mixed-scene Skills.
+
 ### Define a sub-agent
 
 A sub-agent is an `agents/<name>/` folder with its own responsibilities, boundaries and tools. It must contain four files:
@@ -310,6 +316,7 @@ my-plugin/
 | `maxChars` | Character limit for this section |
 | `profiles` | `interactive` (chat), `schedule` (scheduled runs), or both |
 | `platforms` | Optional: inject only on given platforms, e.g. `['github']` |
+| `scopes` | Optional: inject only in specified IM scenes: `private`, `group`, `channel`; combinations allowed, empty lists rejected |
 
 The total budget is `ai.agent.systemPromptMaxChars`.
 
@@ -344,7 +351,7 @@ flowchart LR
 
 ::: details Implementation details
 - Both registration styles write to one capability table published by a single `ToolIndex`; there is no second dynamic registry. `addTool()` writes during the new version's preparation; if preparation fails it never becomes visible, and on success it goes live with the whole version.
-- The admission predicate is Core's `canAccessTool(tool, message)` (`packages/im/core/src/built/tool.ts`), applied on the Plugin Runtime side through `CapabilityIngress` (`packages/im/agent/src/plugin-runtime/capability-ingress.ts`). `platforms` compares `String(message.$adapter)`; `scopes` compares `message.$channel.type` (default `private`).
+- Plugin Runtime's `CapabilityIngress` filters Tools and Skills using the current turn's trusted `origin.platform`, `origin.scope` and permission subject. Prompt sections also filter by platform and scene. Missing IM context on a non-IM request does not bypass these restrictions.
 - Model-visible names (`qualifiedName`): root plugin tools keep their local name; child plugin tools join the plugin path segments and folder name with `__`, e.g. `maps__get-weather`. Execution stays bound to the original plugin's pinned version context.
 - On-demand loading is managed by a per-turn deferred controller (`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`), with state in `DeferredToolSessionSnapshot`, never keyed by IM `Message`.
 - `ask_user` is a framework capability that requests input through the current turn's `QuestionPort`; unattended turns (e.g. schedules) get no port and never fall back to a global message, adapter or user queue.

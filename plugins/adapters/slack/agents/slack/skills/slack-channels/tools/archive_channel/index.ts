@@ -10,6 +10,7 @@ export default defineAgentTool<{
     channel: z.string().describe('频道 ID'),
   }),
   adapter: 'slack',
+  scopes: ["group"],
   tags: ['slack'],
   permissions: [platformPermission('slack', 'workspace_admin')],
   async execute({ channel }, context) {

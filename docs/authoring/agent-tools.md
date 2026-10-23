@@ -234,6 +234,12 @@ tools:
 
 一个 Skill 如果包含多个可以独立触发的任务，应拆成多个 Skill，避免加载一个简单任务时带出所有工具。适配器提供的 Skill 放在 `agents/<platform>/skills/<name>/`，只在对应平台的对话中出现。
 
+先分类，再披露：适配器负责自己的 Skill 说明、Tool 描述和平台消息段提示；框架根据当前可信入站身份筛选。用 `platforms` 指定平台，`scopes` 指定会话类型，按用途划分 Skill，`permissions` 继续控制权限。不要只在文字中写“仅群聊”。
+
+例如 ICQQ 的点赞放在通用 `icqq-interaction`，戳一戳和签到放在 `icqq-group-interaction`；后者的 SKILL.md frontmatter 和每个私有 Tool 都声明 `scopes: ['group']`。私聊不会获得这个 Skill 的目录、正文或工具，之前加载过也不会绕过本轮筛选。未声明 `scopes` 表示所有场景，不代表拥有所有权限。
+
+群管理只在群聊披露，服务器/频道管理使用适配器实际归一化后的场景：Slack 的频道是 `group`，Discord、KOOK、QQ 频道是 `channel`。创建新群、账号查询、用户资料等通用能力独立保留；混合场景的 Skill 应拆分。
+
 ### 定义子 Agent
 
 子 Agent 是 `agents/<name>/` 目录，有自己的职责、边界和工具。它必须包含四个文件：
@@ -311,6 +317,7 @@ my-plugin/
 | `maxChars` | 这一段的字符上限 |
 | `profiles` | `interactive`（对话）、`schedule`（定时任务）或两者 |
 | `platforms` | 可选，只在指定平台的对话中注入，例如 `['github']` |
+| `scopes` | 可选，只在指定 IM 场景注入：`private`、`group`、`channel`，可组合；声明时不能为空 |
 
 总预算由 `ai.agent.systemPromptMaxChars` 控制。
 
@@ -345,7 +352,7 @@ flowchart LR
 
 ::: details 实现细节
 - 两种注册方式写入同一张能力表，由唯一的 `ToolIndex` 发布，不存在第二个动态注册表。`addTool()` 在新版本准备阶段写入，准备失败时从不可见，切换成功后随整个版本一起生效。
-- 准入谓词是 Core 的 `canAccessTool(tool, message)`（`packages/im/core/src/built/tool.ts`），Plugin Runtime 侧通过 `CapabilityIngress` 套用（`packages/im/agent/src/plugin-runtime/capability-ingress.ts`）。`platforms` 比较 `String(message.$adapter)`；`scopes` 比较 `message.$channel.type`（缺省为 `private`）。
+- Plugin Runtime 通过 `CapabilityIngress` 按当前回合的可信 `origin.platform`、`origin.scope` 与权限主体筛选 Tool、Skill。提示段也按平台与场景筛选；带 IM 限定的能力不会因非 IM 请求缺少场景而放行。
 - 工具的模型可见名（`qualifiedName`）：根插件的工具保持本地名；子插件的工具由插件路径段与目录名以 `__` 连接，例如 `maps__get-weather`。执行时仍绑定原插件的固定版本上下文。
 - 按需加载由每轮独占的 deferred controller 管理（`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`），状态保存在 `DeferredToolSessionSnapshot`，不以 IM `Message` 作为状态键。
 - `ask_user` 是框架提供的能力，通过当前回合的 `QuestionPort` 请求输入；无人值守的回合（如定时任务）不注入该端口，也不会回退到全局消息、适配器或用户队列。

@@ -483,6 +483,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
               interaction: approvalInteraction,
               memory: options.agent.approvalReviewer,
             });
+            const replyConversation = workroomReplyConversation ?? message.conversation;
+            const replySegments = resolveAiOutboundSegments(
+              replyConversation.endpoint.id as CapabilityId,
+              snapshot,
+              replyConversation.kind,
+            );
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
               traceId,
               turnId,
@@ -552,12 +558,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 }),
                 question: createRuntimeQuestionPort(options.im, message),
                 reply: {
-                  segments: resolveAiOutboundSegments(
-                    (workroomReplyConversation ?? message.conversation).endpoint.id as CapabilityId,
-                    snapshot,
-                    // Reactions land on the message being answered, so only for direct replies.
-                    workroomReplyConversation || !message.message ? undefined : message.conversation.kind,
-                  ),
+                  // Message segments follow the target scene; reactions additionally need the original message.
+                  segments: workroomReplyConversation || !message.message
+                    ? { ...replySegments, reaction: undefined }
+                    : replySegments,
                   send: async (output) => {
                     logger.debug(formatCompact({
                       op: 'replychain_port_send',

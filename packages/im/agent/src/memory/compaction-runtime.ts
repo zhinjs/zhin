@@ -30,8 +30,9 @@ export const DEFAULT_COMPACTION_THRESHOLD_RATIO = 0.7;
 /**
  * Message-token count above which auto-compaction runs: `thresholdRatio` of
  * the window minus what the system prompt and tools already use. It never
- * exceeds the older "window minus buffer" rule (when that is positive) and
- * never drops below 1.25 × keepRecentTokens, so a compaction frees room.
+ * exceeds the older "window minus buffer" rule (when that is positive).
+ * Fixed request tokens are deducted from both limits; retention cannot raise
+ * the trigger beyond the available window.
  */
 export function resolveCompactionTriggerTokens(
   compaction: CompactionConfig | undefined,
@@ -39,12 +40,10 @@ export function resolveCompactionTriggerTokens(
   reservedTokens = 0,
 ): number {
   const ratio = compaction?.thresholdRatio ?? DEFAULT_COMPACTION_THRESHOLD_RATIO;
-  const keepRecent = compaction?.keepRecentTokens ?? 20_000;
-  const target = Math.floor(contextWindow * ratio) - Math.max(0, reservedTokens);
-  const floor = Math.ceil(keepRecent * 1.25);
+  const target = Math.floor(contextWindow * ratio);
   const ceiling = contextWindow - AUTOCOMPACT_BUFFER_TOKENS;
   const bounded = ceiling > 0 ? Math.min(target, ceiling) : target;
-  return Math.max(bounded, floor);
+  return Math.max(0, bounded - Math.max(0, reservedTokens));
 }
 
 function resolveAgentCompactionConfig(
@@ -52,13 +51,16 @@ function resolveAgentCompactionConfig(
   contextWindow: number,
   reservedTokens?: number,
 ): AgentCompactionConfig {
+  const triggerTokens = resolveCompactionTriggerTokens(compaction, contextWindow, reservedTokens);
+  // 沿用触发预算与保留预算的 1.25 倍余量；小窗口收紧保留量，不抬高触发线。
+  const keepRecentTokens = Math.min(compaction?.keepRecentTokens ?? 20_000, Math.floor(triggerTokens / 1.25));
   return {
     enabled: compaction?.enabled !== false,
     auto: compaction?.auto !== false,
-    keepRecentTokens: compaction?.keepRecentTokens ?? 20_000,
+    keepRecentTokens,
     minKeepCount: compaction?.minKeepCount ?? 2,
     contextWindow,
-    triggerTokens: resolveCompactionTriggerTokens(compaction, contextWindow, reservedTokens),
+    triggerTokens,
   };
 }
 
@@ -133,18 +135,19 @@ export class AgentCompactionRuntime {
       signal,
     });
 
-    if (result.summary?.trim()) {
-      const anchorId = await options.host.contextRepository.resolveCompactionAnchorId(
-        options.sessionId,
-        cfg.keepRecentTokens ?? 20_000,
-        cfg.minKeepCount ?? 2,
-      );
-      await options.host.contextRepository.saveSummary(
+    if (signal?.aborted) return messages;
+    if (result.summary?.trim() && result.compactedCount) {
+      // Use the actual summarized prefix before micro-compaction replaces objects.
+      // Current-turn messages are persisted later; never infer their row boundary
+      // by independently applying the retention budget to stored history.
+      await options.host.contextRepository.saveCompactionSummary?.(
         options.sessionId,
         result.summary,
-        anchorId,
+        messages.slice(0, result.compactedCount),
+        signal,
       );
     }
+    if (signal?.aborted) return messages;
 
     let out = result.messages;
     if (options.loopHooks) {
@@ -160,7 +163,7 @@ export class AgentCompactionRuntime {
     repo: ContextRepository,
     options: Omit<CompactionRuntimeOptions, 'host'> & { host: CompactionContextHost },
   ): Promise<{ ok: boolean; message: string }> {
-    const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow);
+    const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow, options.reservedTokens);
     if (cfg.enabled === false) {
       return { ok: false, message: 'compaction 已禁用（ai.agent.compaction.enabled=false）' };
     }
