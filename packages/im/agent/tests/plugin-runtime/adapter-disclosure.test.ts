@@ -68,6 +68,10 @@ describe('adapter-owned scene disclosure (#949)', () => {
     const ingress = new CapabilityIngress();
     const index = snapshot.projections.get(skillFeatureId) as SkillIndex;
     const tools = snapshot.projections.get(toolFeatureId) as ToolIndex;
+    if (platform === 'icqq') {
+      expect(index.list().find(skill => skill.name === 'icqq-directory')?.instructions)
+        .toContain('目录信息只向群主、管理员、master 或 trusted 披露');
+    }
     expect(index.list().some(skill => skill.scopes?.length)).toBe(true);
     for (const scope of ['private', 'group', 'channel'] as const) {
       const capabilities = await ingress.read(snapshot, snapshot.root, () => true, turn(platform, scope), platform);

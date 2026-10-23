@@ -1,5 +1,6 @@
 ---
 "@zhin.js/agent": patch
+"@zhin.js/cli": patch
 "@zhin.js/core": patch
 "@zhin.js/adapter": patch
 "@zhin.js/prompt-section": patch

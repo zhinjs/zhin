@@ -172,7 +172,7 @@ export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot
 export function resolveAiOutboundSegments(
   adapter: CapabilityId,
   snapshot: RuntimeSnapshot,
-  /** The conversation being answered; reactions are offered only where the adapter supports them. */
+  /** The reply target scene; callers must additionally omit reactions without an eligible source message. */
   conversationKind?: 'private' | 'group' | 'channel',
 ): AiOutboundSegmentProfile {
   const supported = resolveOutboundSupportedSegments(adapter, snapshot);
