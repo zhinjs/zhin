@@ -1,4 +1,7 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { parse } from 'yaml';
 
 /** A dependency install (`pnpm install`, or a filtered `pnpm --filter ... install`), not `pnpm exec playwright install`. */
@@ -28,9 +31,10 @@ function installingStepLists(): Array<[string, Step[]]> {
 describe('pnpm store cache', () => {
   it('restores the pnpm store with restore-keys, credential-free, through the pinned actions/cache', () => {
     const source = read('.github/actions/restore-pnpm-store/action.yml');
-    expect(source).not.toMatch(/secrets\.|github\.token|NPM_TOKEN/);
+    expect(source).not.toMatch(/secrets\.|github\.token/);
     const steps: Step[] = parse(source).runs.steps;
     expect(steps[0].run).toBe('echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"');
+    expect(steps[0].env).toEqual({ NPM_TOKEN: '' });
     const cache = steps[1];
     expect(cache.uses).toBe('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
     expect(cache.with).toEqual({
@@ -38,6 +42,30 @@ describe('pnpm store cache', () => {
       key: "pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}",
       'restore-keys': 'pnpm-store-${{ runner.os }}-\nnode-cache-${{ runner.os }}-x64-pnpm-\n',
     });
+  });
+
+  it.each([undefined, '', 'synthetic-inherited-credential'])('writes one valid cache output with inherited token %s', (inheritedToken) => {
+    const directory = mkdtempSync(join(tmpdir(), 'zhin-pnpm-cache-env-'));
+    try {
+      writeFileSync(join(directory, 'package.json'), JSON.stringify({ name: 'cache-env-fixture', private: true, packageManager: JSON.parse(read('package.json')).packageManager }));
+      writeFileSync(join(directory, '.npmrc'), '//registry.example.invalid/:_authToken=${NPM_TOKEN}\n');
+      writeFileSync(join(directory, 'empty-user-config'), '');
+      const step: Step = parse(read('.github/actions/restore-pnpm-store/action.yml')).runs.steps[0];
+      const outputFile = join(directory, 'github-output');
+      const env: NodeJS.ProcessEnv = { ...process.env, NPM_CONFIG_USERCONFIG: join(directory, 'empty-user-config'), GITHUB_OUTPUT: outputFile };
+      delete env.NPM_TOKEN;
+      if (inheritedToken !== undefined) env.NPM_TOKEN = inheritedToken;
+      Object.assign(env, step.env);
+      execFileSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', step.run!], {
+        cwd: directory, env, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const output = readFileSync(outputFile, 'utf8');
+      expect(output).toMatch(/^path=[^\r\n]+\n$/);
+      expect(output).not.toContain('WARN');
+      expect(output).not.toContain('synthetic-inherited-credential');
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it.each(installingStepLists())('%s restores the store before installing instead of setup-node exact-match caching', (_label, steps) => {

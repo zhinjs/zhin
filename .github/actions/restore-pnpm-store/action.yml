@@ -11,6 +11,10 @@ runs:
     - name: resolve pnpm store path
       id: store
       shell: bash
+      # Only resolve the local path; no registry credential is needed. pnpm 9
+      # otherwise writes missing .npmrc interpolation warnings into GITHUB_OUTPUT.
+      env:
+        NPM_TOKEN: ''
       run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
     # setup-node's `cache: pnpm` only restores an exact lockfile-hash match, so every lockfile
