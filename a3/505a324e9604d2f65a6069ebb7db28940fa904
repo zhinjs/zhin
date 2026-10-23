@@ -1,0 +1,19 @@
+packages/im/agent/src/outbound/structured-reply.ts
+  s_9477e63ef5cee5::t_d1d10cafe13674 77-82,116-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a3505a324e9604d2f65a6069ebb7db28940fa904",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
