@@ -1,0 +1,19 @@
+packages/im/agent/src/trace/turn-usage-log.ts
+  s_9622fd28aba994::t_2797a50fbd69b8 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bdad6a4892063610a9ffe07804977f2d4ad611e2",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
