@@ -9,6 +9,7 @@ import { childPluginId, rootPluginId, definePlugin, databaseHostToken, databaseR
 import { RootRuntime, type ModuleRuntime } from '../../../../packages/im/runtime/src/index.js';
 import { createDatabaseHost } from '../../../../basic/cli/src/plugin-runtime/database-host-installer.js';
 import plugin from '../plugin.js';
+import { createAdministratorRssState } from '../src/storage.js';
 import remove from '../commands/rss-remove/[url]/index.js';
 import list from '../commands/rss-list/index.js';
 import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
@@ -53,7 +54,8 @@ export async function rssFixture(options: { persistence?: boolean; outbound?: bo
     } });
   let runtime = makeRuntime();
   const provider = (name = 'alpha') => runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))?.get(pluginTaskProviderToken.id) as PluginTaskProvider | undefined;
-  const state = (name = 'alpha') => (runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))!.get(databaseHostToken.id) as PluginDatabaseHost).state;
+  const storage = (name = 'alpha') => runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))!.get(databaseHostToken.id) as PluginDatabaseHost;
+  const state = (name = 'alpha') => createAdministratorRssState(storage(name));
   const rss = (name = 'alpha') => runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))!.get(rssRuntimeToken.id) as RssRuntime;
   const tick = (name = 'alpha') => {
     const job = [...active].find(job => job.owner === childPluginId(rootPluginId(), name) && job.id.endsWith('rss/poll_feeds'));
@@ -80,7 +82,7 @@ export async function rssFixture(options: { persistence?: boolean; outbound?: bo
     input: { conversation: { kind: 'group', id: 'chat' }, clientAdapter: 'sandbox', endpointId: 'chat-account', sender: { id: 'alice', name: 'Alice' } },
     use: (token: unknown) => { if (token === rssRuntimeToken) return rss(); throw new Error('unexpected token'); },
   } as never);
-  return { project, get runtime() { return runtime; }, database, active, jobs, send, provider, state, rss, tick, hmr, chat,
+  return { project, get runtime() { return runtime; }, database, active, jobs, send, provider, state, storage, rss, tick, hmr, chat,
     async restart() { await runtime.stop(); await database.stop(); runtime = makeRuntime(); await runtime.start(); },
     async close() { await runtime.stop(); await database.stop(); await rm(project, { recursive: true, force: true }); },
   };

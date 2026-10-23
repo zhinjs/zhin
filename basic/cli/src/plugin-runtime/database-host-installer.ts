@@ -1,9 +1,10 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { Registry } from '@zhin.js/database';
+import { Registry, type TransactionContext } from '@zhin.js/database';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  guardTransactionModel,
   databaseHostToken,
   databaseRootHostToken,
   PluginDatabaseHost,
@@ -50,6 +51,7 @@ type RawConsoleModel = RawModel & {
 
 type RawDatabase = {
   define: (name: string, definition: unknown) => void;
+  transaction<T>(callback: (transaction: TransactionContext<Record<string, Record<string, unknown>>>) => Promise<T>, options?: { isolationLevel: 'REPEATABLE_READ' }): Promise<T>;
   start(): Promise<void>;
   stop(): Promise<void>;
   models: Map<string, RawConsoleModel>;
@@ -176,6 +178,25 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
         wrapped.set(name, model);
         return model;
       },
+    },
+    async transaction(callback) {
+      if (!started) throw new Error('Database is not connected');
+      if (!['sqlite', 'mysql', 'pg'].includes(config.dialect)) throw new Error(`Transactions are not supported by '${config.dialect}'`);
+      return db.transaction(async transaction => {
+        let active = true;
+        try {
+          return await callback({ model(name) {
+            if (!active) throw new Error('Database transaction is already closed');
+            if (!definedTables.has(name)) throw new Error(`Table '${name}' is not registered`);
+            return guardTransactionModel({
+              select: (...fields) => transaction.select(name, fields) as DatabaseHostSelection,
+              insert: row => transaction.insert(name, row),
+              update: patch => ({ where: async query => transaction.update(name, patch).where(query) }),
+              delete: () => ({ where: async query => transaction.delete(name).where(query) }),
+            }, () => { if (!active) throw new Error('Database transaction is already closed'); });
+          } });
+        } finally { active = false; }
+      }, { isolationLevel: 'REPEATABLE_READ' });
     },
     console: consolePort,
     getRawDatabase() {

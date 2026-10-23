@@ -72,7 +72,27 @@ export class MemoryConversationEventStore implements ConversationEventStore {
   }
 }
 
+export const CONVERSATION_EVENT_QUERY_MODEL = Object.freeze({
+  event_type: { type: 'text' as const, nullable: true },
+  endpoint_adapter: { type: 'text' as const, nullable: true }, endpoint_id: { type: 'text' as const, nullable: true },
+  conversation_kind: { type: 'text' as const, nullable: true }, conversation_id: { type: 'text' as const, nullable: true },
+  parent_kind: { type: 'text' as const, nullable: true }, parent_id: { type: 'text' as const, nullable: true },
+  thread_id: { type: 'text' as const, nullable: true }, actor_id: { type: 'text' as const, nullable: true },
+  platform_message_id: { type: 'text' as const, nullable: true }, query_version: { type: 'integer' as const, nullable: true },
+});
+
+export function conversationEventQueryFields(event: ConversationEvent): Record<string, string | number | null> {
+  const conversation = event.conversation;
+  const actor = event.type === 'message.created' ? event.message.actor : 'actor' in event ? event.actor : undefined;
+  return { event_type: event.type, endpoint_adapter: databaseTextKey(conversation.endpoint.adapter), endpoint_id: databaseTextKey(conversation.endpoint.id),
+    conversation_kind: conversation.kind, conversation_id: databaseTextKey(conversation.id), parent_kind: conversation.parent?.kind ?? null,
+    parent_id: conversation.parent ? databaseTextKey(conversation.parent.id) : null, thread_id: conversation.threadId === undefined ? null : databaseTextKey(conversation.threadId),
+    actor_id: actor ? databaseTextKey(actor.id) : null,
+    platform_message_id: event.type === 'message.created' ? databaseTextKey(event.message.ref.id) : null, query_version: 1 };
+}
+
 export const CONVERSATION_EVENT_MODEL = Object.freeze({
+  ...CONVERSATION_EVENT_QUERY_MODEL,
   id: { type: 'integer' as const, primary: true, autoIncrement: true },
   event_id: { type: 'text' as const, nullable: false, unique: true },
   conversation_key: { type: 'text' as const, nullable: false },
@@ -111,6 +131,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     if (existing) return Object.freeze({ appended: false, sequence: Number(existing.id) });
     try {
       await Promise.resolve(this.events.insert({
+        ...conversationEventQueryFields(event),
         event_id: databaseTextKey(event.eventId),
         conversation_key: databaseTextKey(conversationRefKey(event.conversation)),
         message_key: event.type === 'message.created' ? databaseTextKey(messageRefKey(event.message.ref)) : '',

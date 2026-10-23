@@ -1,3 +1,4 @@
+import { createReminderState } from '../src/storage.js';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -187,18 +188,19 @@ describe('persistent reminder through real Runtime discovery', () => {
       await expect(provider.create({ ...input, requestId: randomUUID(), expectedRevision: created.revision })).rejects.toThrow('管理员提醒池');
       await f.command('a remind after 1 chat'); clock.mockReturnValue(Date.now() + 1000);
       await f.jobs[0]!.execute(); expect(f.send).toHaveBeenCalledTimes(1); expect(f.send.mock.calls[0]![1]).toBe('⏰ 提醒：chat');
-      const port = f.db.state!; const compareExchange = port.compareExchange.bind(port);
-      const crash = vi.spyOn(port, 'compareExchange').mockImplementation(async (...args) => {
-        const committed = await compareExchange(...args);
-        if (committed && args[2] === ADMIN_REMINDER_STATE_KEY && JSON.stringify(args[4]).includes('"state":"unknown"')) f.service('alpha').stop();
-        return committed;
+      const transaction = f.db.transaction!.bind(f.db);
+      const crash = vi.spyOn(f.db, 'transaction').mockImplementation(async callback => {
+        const result = await transaction(callback);
+        const host = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
+        if ((await host.models.get('admin_reminder_tasks')!.select().where({ state: 'unknown' })).length) f.service('alpha').stop();
+        return result;
       });
       await f.jobs[0]!.execute(); expect(f.send).toHaveBeenCalledTimes(1); crash.mockRestore();
       await f.runtime.stop(); await f.db.stop(); await f.db.start(); await f.restart();
       await [...f.active][0]!.execute(); expect(f.send).toHaveBeenCalledTimes(1);
       expect((await f.tasks('alpha').read()).tasks[0]!.state).toBe('unknown');
       const state = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
-      const book = await state.state.get<AdminReminderBook>(ADMIN_REMINDER_STATE_KEY); expect(book!.tasks[0]!.claimId).toBeTruthy();
+      const book = await createReminderState(state).get<AdminReminderBook>(ADMIN_REMINDER_STATE_KEY); expect(book!.tasks[0]!.claimId).toBeTruthy();
     } finally { await f.runtime.stop(); await f.db.stop(); }
   });
 
@@ -217,7 +219,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       const failed = await provider.read(); expect(failed.tasks[0]!.state).toBe('failed'); expect(failed.tasks[0]!.actions).toEqual([]);
       expect(f.send).toHaveBeenCalledTimes(1);
       const state = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
-      await state.state.set(ADMIN_REMINDER_STATE_KEY, { version: 1, revision: 'broken', tasks: [{ state: 'scheduled' }], receipts: [] });
+      await state.models.get('admin_reminder_tasks_book')!.update({ version: 99 }).where({ storage_id: 1 });
       await expect(provider.read()).rejects.toMatchObject({ code: 'unavailable' });
       await expect(f.jobs[0]!.execute()).rejects.toThrow('持久状态格式无效');
       expect(f.send).toHaveBeenCalledTimes(1);
@@ -266,7 +268,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       expect(f.send).toHaveBeenCalledTimes(1);
       expect(f.send.mock.calls[0]![1]).toBe('⏰ 提醒：due-after-cycles');
       const host = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
-      const book = (await host.state.get<ReminderBook>(REMINDER_STATE_KEY))!;
+      const book = (await createReminderState(host).get<ReminderBook>(REMINDER_STATE_KEY))!;
       expect(book.tasks.filter(task => task.intervalMs !== null && task.nextRunAt > Date.now())).toHaveLength(30);
       expect(book.tasks.find(task => task.text === 'due-after-cycles')!.status).toBe('delivered');
     } finally { await f.runtime.stop(); await f.db.stop(); }
@@ -299,7 +301,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       await f.jobs[0]!.execute(); expect(await f.command('a remind list')).toContain('投递失败');
       // Simulate durable claim followed by process loss before platform send.
       const state = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
-      await state.state.update<ReminderBook>(REMINDER_STATE_KEY, book => ({ version: 1, tasks: book!.tasks.map(task => task.status === 'unknown' ? { ...task, claimId: 'crashed' } : task) }));
+      await createReminderState(state).update<ReminderBook>(REMINDER_STATE_KEY, book => ({ version: 1, tasks: book!.tasks.map(task => task.status === 'unknown' ? { ...task, claimId: 'crashed' } : task) }));
       await f.runtime.stop(); await f.restart(); await [...f.active][0]!.execute();
       expect(f.send).toHaveBeenCalledTimes(3);
     } finally { await f.runtime.stop(); await f.db.stop(); }
@@ -349,12 +351,12 @@ describe('persistent reminder through real Runtime discovery', () => {
     try {
       await f.runtime.start(); await f.command('a remind after 1 claim-before-send');
       clock.mockReturnValue(Date.now() + 1000);
-      const port = f.db.state!;
-      const compareExchange = port.compareExchange.bind(port);
-      const crash = vi.spyOn(port, 'compareExchange').mockImplementation(async (...args) => {
-        const committed = await compareExchange(...args);
-        if (committed && args[2] === REMINDER_STATE_KEY && JSON.stringify(args[4]).includes('"status":"unknown"')) f.service('alpha').stop();
-        return committed;
+      const transaction = f.db.transaction!.bind(f.db);
+      const crash = vi.spyOn(f.db, 'transaction').mockImplementation(async callback => {
+        const result = await transaction(callback);
+        const host = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
+        if ((await host.models.get('reminder_tasks')!.select().where({ state: 'unknown' })).length) f.service('alpha').stop();
+        return result;
       });
       await f.jobs[0]!.execute(); expect(f.send).not.toHaveBeenCalled();
       crash.mockRestore();
@@ -362,7 +364,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       await [...f.active][0]!.execute(); expect(f.send).not.toHaveBeenCalled();
       expect(await f.command('a remind list')).toContain('未确认');
       const state = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
-      await state.state.set(REMINDER_STATE_KEY, { version: 1, tasks: [{ status: 'pending', nextRunAt: Date.now() }] });
+      await state.models.get('reminder_tasks_book')!.update({ version: 99 }).where({ storage_id: 1 });
       await expect([...f.active][0]!.execute()).rejects.toThrow('持久状态格式无效'); expect(f.send).not.toHaveBeenCalled();
     } finally { await f.runtime.stop(); await f.db.stop(); }
   });
@@ -381,7 +383,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       await f.jobs[0]!.execute(); expect(f.send).toHaveBeenCalledTimes(2);
       expect(await f.command('a remind after 1 next')).toContain('已创建');
       const state = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
-      expect((await state.state.get<ReminderBook>(REMINDER_STATE_KEY))!.tasks).toHaveLength(2);
+      expect((await createReminderState(state).get<ReminderBook>(REMINDER_STATE_KEY))!.tasks).toHaveLength(2);
       expect(await f.command('a remind at 2020-01-01T00:00Z past')).toContain('未来一年');
     } finally { await f.runtime.stop(); await f.db.stop(); }
   });
@@ -417,13 +419,14 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
   await write('plugins/reminder/schema.json', configSchema);
   for (const [name, value] of Object.entries({ after, at, every, list, cancel, create })) await write(`plugins/reminder/commands/remind/${name}/index.ts`, { default: value }, true);
   await write('plugins/reminder/schedules/poll/index.ts', { default: poll }, true);
-  const db = createDatabaseHost({ dialect: 'sqlite', filename: join(project, 'state.sqlite') }); await db.start();
+  const db = createDatabaseHost({ dialect: 'sqlite', filename: join(project, 'state.sqlite') });
   const jobs: ScheduleJobRegistration[] = []; const active = new Set<ScheduleJobRegistration>();
   const schedule: ScheduleHost = { register(job) { jobs.push(job); active.add(job); return () => { active.delete(job); }; }, list: () => [...active] };
   const send = vi.fn<NonNullable<import('../../../../packages/im/plugin-runtime/src/index.js').OutboundRootHost['sendTarget']>>().mockResolvedValue('message-id');
   const outbound = { send: vi.fn().mockResolvedValue(null), sendTarget: send };
   const loader: ModuleRuntime = { async load<T>(source: string): Promise<T> { if (!modules.has(source)) throw new Error(`Missing fixture module ${source}`); return modules.get(source) as T; }, async close() {} };
-  const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader, config: { configVersion: 2, plugins: { alpha: '@test/reminder', beta: '@test/reminder' }, alpha: { commandNamespace: 'a', ...settings }, beta: { commandNamespace: 'b' } }, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission }) {
+  const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader, config: { configVersion: 2, plugins: { alpha: '@test/reminder', beta: '@test/reminder' }, alpha: { commandNamespace: 'a', ...settings }, beta: { commandNamespace: 'b' } }, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission, handoff }) {
+    handoff.add({ activateNext: () => db.start() });
     const database = persistence ? db : { ...db, state: undefined };
     resources.provide(databaseRootHostToken, database); resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), database, admission));
     resources.provide(scheduleRootHostToken, schedule); resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), schedule, admission));

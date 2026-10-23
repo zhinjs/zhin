@@ -41,7 +41,10 @@ export * from './outbound-host.js';
 export * from './outbound-sender.js';
 export * from './delivery-target.js';
 export * from './persistent-state.js';
+export * from './relational-state.js';
 export * from './inbox.js';
 export * from './system-log.js';
 export * from './plugin-verification.js';
 export * from './plugin-tasks.js';
+
+export * from './task-storage.js';

@@ -5,6 +5,7 @@ import {
   scheduleHostToken,
 } from 'zhin.js';
 import { pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
+import { createAdministratorRssState } from './src/storage.js';
 import { AdministratorRssTasks } from './src/admin-tasks.js';
 import { resolveRssConfig, type RssConfig } from './src/feed.js';
 import {
@@ -85,7 +86,7 @@ export default definePlugin<RssConfig>({
       let state;
       try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
       if (state) {
-        administrator = new AdministratorRssTasks(state, outbound, config);
+        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config);
         context.resources.provide(pluginTaskProviderToken, administrator);
         context.lifecycle.add(() => administrator?.stop());
       }

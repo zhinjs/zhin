@@ -2,6 +2,7 @@ import { databaseHostToken, definePlugin, outboundHostToken } from 'zhin.js';
 import { pluginVerificationToken, pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
 import { randomUUID } from 'node:crypto';
 import { assertReminderTimezone, type ReminderConfig } from './src/config.js';
+import { createReminderState } from './src/storage.js';
 import { ReminderService } from './src/service.js';
 import { reminderServiceToken } from './src/runtime.js';
 
@@ -12,10 +13,12 @@ export default definePlugin<ReminderConfig>({
   setup(context) {
     const config = context.config.get();
     assertReminderTimezone(config.timezone);
-    const state = context.resources.use(databaseHostToken).state;
+    const database = context.resources.use(databaseHostToken);
+    const state = database.state;
+    const taskState = createReminderState(database);
     const outbound = context.resources.use(outboundHostToken);
     if (!outbound.sendTarget) throw new Error('提醒需要支持精确 DeliveryTarget 的 Outbound Host');
-    const service = new ReminderService(state, outbound, config);
+    const service = new ReminderService(taskState, outbound, config);
     context.resources.provide(reminderServiceToken, service);
     context.resources.provide(pluginTaskProviderToken, service.administratorTasks);
     context.resources.provide(pluginVerificationToken, {

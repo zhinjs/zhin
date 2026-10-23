@@ -59,7 +59,13 @@ function renderTurnReferences(turn: TurnIngress): string | undefined {
 export function buildTurnSessionCreateInput(
   turn: TurnIngress,
 ): CreateAgentSessionInput {
-  return { session_key: turn.session.key };
+  const origin = turn.origin, im = origin.kind === 'im' ? origin : undefined;
+  return { session_key: turn.session.key, source: {
+    kind: origin.kind, adapter: im?.conversation?.endpoint.adapter ?? im?.platform,
+    endpoint: im?.conversation?.endpoint.id ?? im?.endpoint, scope: im?.conversation?.kind ?? im?.scope, id: im?.conversation?.id ?? im?.sceneId ?? (origin.kind === 'http' ? origin.sessionId : origin.kind === 'schedule' ? origin.jobId : origin.kind === 'a2a' ? origin.taskId : origin.kind === 'internal' ? origin.source : undefined),
+    parentKind: im?.conversation?.parent?.kind, parentId: im?.conversation?.parent?.id,
+    threadId: im?.conversation?.threadId ?? im?.threadId,
+  } };
 }
 
 export async function beginIngressTurnSession(

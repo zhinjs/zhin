@@ -409,6 +409,8 @@ export interface AIConfig {
   providers?: Record<string, ProviderInstanceConfig>;
   /** per-agent 绑定（协作角色如 researcher 亦用 agents.<role>）；IM 入站总是交给 zhin */
   agents?: Record<string, AgentBindingConfig>;
+  /** Structured numeric usage records; independent of log/trace retention. */
+  usage?: { /** Retention in days, default 30; positive integer. */ retentionDays?: number };
   sessions?: {
     /** 最大历史消息数（数据库模式默认200，内存模式默认100） */
     maxHistory?: number;

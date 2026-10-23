@@ -31,6 +31,8 @@ log_level: debug
 ```
 
 
+SQL 数据库会独立保存结构化用量，默认保留 30 天。字段、查询与升级方式见[结构化存储与用量查询](../operations/structured-storage.md)。
+
 ## 按问题查找
 
 | 我想知道…… | 看这里 |

@@ -2932,6 +2932,25 @@
             }
           },
           "description": "AI 触发配置"
+        },
+        "usage": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "description": "结构化用量存储（SQLite、MySQL、PostgreSQL）；独立于日志级别，不保存正文或工具参数。",
+          "properties": {
+            "retentionDays": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "minimum": 1,
+              "default": 30,
+              "description": "用量明细保留天数，正整数，默认 30 天；按回合结束时间清理，子调用与所属回合一起删除。"
+            }
+          }
         }
       }
     },

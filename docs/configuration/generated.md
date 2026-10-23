@@ -397,6 +397,8 @@ outline: [2, 3]
 | `ai.trigger.ambient.judgeIntervalMs` | number \| string | 否 | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度 |
 | `ai.trigger.ambient.minConfidence` | number \| string | 否 | — | 判断模型置信度门槛 0..1（默认 0.7） |
 | `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | 否 | — | shadow 只记录判断结果、不回复（默认 active） |
+| `ai.usage` | object \| null | 否 | — | 结构化用量存储（SQLite、MySQL、PostgreSQL）；独立于日志级别，不保存正文或工具参数。 |
+| `ai.usage.retentionDays` | integer \| string | 否 | `30` | 用量明细保留天数，正整数，默认 30 天；按回合结束时间清理，子调用与所属回合一起删除。 |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
 | `menuStyle.title` | string | 否 | — | 菜单标题。 |

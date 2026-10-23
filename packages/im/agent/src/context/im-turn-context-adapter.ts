@@ -23,6 +23,8 @@ export function turnContextViewFromMessage(message: Message): TurnContextView {
   return Object.freeze({
     origin: Object.freeze({
       kind: 'im',
+      conversation: message.conversation,
+      ...(message.conversation.threadId ? { threadId: message.conversation.threadId } : {}),
       platform,
       endpoint,
       scope,
