@@ -298,17 +298,23 @@ ai:
   trigger:
     ambient:
       conversations: ["icqq:1048877509"]  # platform:groupId；"*" 表示所有群
-      judge: gemini/gemini-2.5-flash      # 判断模型，默认用主 Agent 的模型；建议用便宜、快的模型
+      judge:                              # 判断模型，默认用主 Agent 的模型；建议用便宜、快的模型
+        - groq/openai/gpt-oss-120b        # 可写成列表：前一个失败或限流时按顺序换下一个
+        - groq/openai/gpt-oss-20b
       quietMs: 4000                       # 群安静这么久之后，对这一串消息判断一次
-      cooldownMs: 120000                  # Bot 在群里说过话后的冷却时间
-      maxPerHour: 3                       # 每个群每小时最多主动接话次数
+      cooldownMs: 120000                  # 两次主动插话之间的最短间隔
+      maxPerHour: 3                       # 每个群每小时最多主动插话次数
+      conversationWindowMs: 180000        # Bot 说话后这段时间内算作对话进行中
+      judgeIntervalMs: 30000              # 没在对话时，同一个群至少隔这么久才判断一次
       minConfidence: 0.7                  # 判断模型的置信度门槛
       mode: active                        # shadow：只记录判断结果，不回复
 ```
 
 流程：
 1. 群里有新消息后等群安静 `quietMs`，期间的新消息合并为一次判断。
-2. 冷却时间和每小时上限都满足时，判断模型读最近 20 条消息，给出要不要接话和置信度。
+2. 判断模型读最近 20 条消息（Bot 自己的话标为 `You (this bot)`），给出要不要接话和置信度。
+   - **对话进行中**（Bot 在 `conversationWindowMs` 内说过话，无论是被 @ 还是主动接话）：群友接它的话只看判断结果，不受冷却和每小时次数限制，只有每小时 30 次的安全上限。
+   - **没有对话时**：主动插话受 `cooldownMs` 和 `maxPerHour` 限制。
 3. 达到门槛后交给主 Agent 正常处理。这一轮的上下文会注明"没人叫你"，Agent 仍然可以选择不说话。
 
 每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由）。建议先用 `shadow` 跑一段时间，看判断是否靠谱，再改成 `active`。
