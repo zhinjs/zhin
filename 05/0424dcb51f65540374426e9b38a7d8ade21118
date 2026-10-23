@@ -1,0 +1,62 @@
+evals/chat/src/judge.ts
+  s_9477e63ef5cee5::t_c9ecb6fb7c1a11 9
+  s_9477e63ef5cee5::t_5d4f4f673c126e 89-97,104,106-121
+  s_9477e63ef5cee5::t_6246308783ea80 1-8,10-88,98-103,105,122
+evals/chat/README.md
+  s_9477e63ef5cee5::t_4129cecc040cae 34-36
+  s_9477e63ef5cee5::t_2774e4783cefe5 1-19,21-33,37-92
+  s_9477e63ef5cee5::t_5d4f4f673c126e 20
+evals/chat/tsconfig.json
+  s_9477e63ef5cee5::t_2d8f31fcfebbdf 1-9
+evals/chat/src/turn.ts
+  s_9477e63ef5cee5::t_813b204d0cb784 1-12,14-150
+  s_9477e63ef5cee5::t_c9ecb6fb7c1a11 13
+evals/chat/src/report.ts
+  s_9477e63ef5cee5::t_10d9a229a648ec 1-150
+docs/contributing/development.md
+  s_9477e63ef5cee5::t_4129cecc040cae 161
+package.json
+  s_9477e63ef5cee5::t_cff752738227ea 140
+evals/chat/run.ts
+  s_9477e63ef5cee5::t_5d4f4f673c126e 34
+  s_9477e63ef5cee5::t_d356429091189c 22,52,80,95-96
+  s_9477e63ef5cee5::t_10cbf762d8e6aa 1-21,23-33,35-51,53-79,81-94
+evals/chat/tests/eval.test.ts
+  s_9477e63ef5cee5::t_6cdb5b9e9c2fdb 4,102-108
+  s_9477e63ef5cee5::t_3baa25740659ca 20
+  s_9477e63ef5cee5::t_72ce9ed81d6f9c 1-3,5-19,21-101,109-146
+evals/chat/src/workspace.ts
+  s_9477e63ef5cee5::t_d0b24a1d3f3ed5 1-7,9-79
+  s_9477e63ef5cee5::t_c9ecb6fb7c1a11 8
+evals/chat/src/scenario.ts
+  s_9477e63ef5cee5::t_d97704b9c39f13 1-98
+.changeset/chat-eval.md
+  s_9477e63ef5cee5::t_4129cecc040cae 1-4
+evals/chat/src/checks.ts
+  s_9477e63ef5cee5::t_1c481ecad0a00f 1-69
+evals/chat/scenarios.yaml
+  s_9477e63ef5cee5::t_76c63dc5db8faa 1-64,68-140,144-145,149-151,153,156-172,174-195,197-206,210-221,223,225-260,263-273,275-287,290-292,294
+  s_9477e63ef5cee5::t_e6b7bf95f4d183 196,261
+  s_9477e63ef5cee5::t_0a28a026dbc1cf 65-67,173,207-209,222,224,262,274,288-289
+  s_9477e63ef5cee5::t_6cdb5b9e9c2fdb 141-143,146-148,152,154-155,293,295
+CLAUDE.md
+  s_9477e63ef5cee5::t_4129cecc040cae 22
+evals/chat/.gitignore
+  s_9477e63ef5cee5::t_cff752738227ea 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "050424dcb51f65540374426e9b38a7d8ade21118",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
