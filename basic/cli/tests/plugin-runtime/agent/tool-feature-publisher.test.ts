@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIService } from '@zhin.js/agent';
 import { publishAgentToolFeatures } from '../../../src/plugin-runtime/agent/tool-feature-publisher.js';
+import { prepareSpeechHost } from '../../../src/plugin-runtime/speech-host-installer.js';
 
 describe('Agent Tool feature publisher', () => {
+  it('publishes voice replies without approval while keeping transcription behind approval', async () => {
+    const host = await prepareSpeechHost({ tts: { provider: 'edge' } });
+    const definitions = new Map<string, unknown>();
+    publishAgentToolFeatures({
+      addFeature: (_feature, name, definition) => { definitions.set(name, definition); },
+      projectRoot: process.cwd(),
+      service: {} as AIService,
+      mcpServers: [],
+      hostTools: host!.tools,
+      runtimeTools: [],
+    });
+    expect(definitions.get('voice_tts')).toMatchObject({ requiresApproval: 'never' });
+    expect(definitions.get('voice_stt')).toMatchObject({ requiresApproval: 'on-risk' });
+  });
+
   it('projects Host, runtime, and native tools through one generation callback', () => {
     const names: string[] = [];
     const service = {

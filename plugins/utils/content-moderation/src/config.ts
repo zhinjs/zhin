@@ -18,6 +18,7 @@ export const DEFAULT_ACTIONS: Readonly<Record<Severity, readonly Action[]>> = Ob
 });
 
 export const DEFAULT_MODERATION_CONFIG: ModerationConfig = Object.freeze({
+  groupModeration: Object.freeze([]),
   enabled: true,
   onError: 'open',
   maskChar: '*',
@@ -53,6 +54,15 @@ export function resolveModerationConfig(raw: unknown): ModerationConfig {
     : DEFAULT_MODERATION_CONFIG.replyTemplate;
 
   return Object.freeze({
+    groupModeration: Object.freeze((Array.isArray(input.groupModeration) ? input.groupModeration : [])
+      .map(asRecord)
+      .filter((target) => ['adapter', 'endpoint', 'account', 'group'].every(
+        (key) => typeof target[key] === 'string' && (target[key] as string).trim().length > 0,
+      ))
+      .map((target) => Object.freeze({
+        adapter: (target.adapter as string).trim(), endpoint: (target.endpoint as string).trim(),
+        account: (target.account as string).trim(), group: (target.group as string).trim(),
+      }))),
     enabled: input.enabled !== false,
     onError,
     maskChar,

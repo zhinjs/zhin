@@ -22,6 +22,7 @@ export interface SpeechHostTool {
   };
   execute(args: Record<string, unknown>): Promise<unknown>;
   readonly source?: string;
+  readonly requiresApproval?: 'always' | 'once' | 'never' | 'on-risk';
 }
 
 export interface SpeechHostHandle extends AudioTranscriptionPort {
@@ -70,7 +71,8 @@ export async function prepareSpeechHost(
       ) => SpeechPipelineLike;
     };
     const pipeline = mod.createSpeechPipeline(config, logger);
-    const tools = buildSpeechTools(pipeline);
+    const tools = buildSpeechTools(pipeline).filter((tool) =>
+      tool.name === 'voice_tts' ? config.tts?.enabled !== false : config.stt?.enabled !== false);
     const sttProvider = typeof config.stt?.provider === 'string' ? config.stt.provider : 'ollama';
     const ttsProvider = typeof config.tts?.provider === 'string' ? config.tts.provider : 'edge';
     return Object.freeze({
@@ -163,8 +165,10 @@ function buildSpeechTools(pipeline: SpeechPipelineLike): SpeechHostTool[] {
     },
     {
       name: 'voice_tts',
-      description: '将文字转换为语音（返回 base64 音频）',
+      description: '将简短口语合成为语音并自动发到当前会话。对方明确要求语音时使用；对方先发语音、情绪化短句或私聊中可以偶尔使用，长内容使用文字。成功后无需再次发送相同语音；失败改用文字，不声称已发出。',
       source: 'speech',
+      // 只合成当前会话回复，不接受文件路径或其他会话目标；语音转写仍走原审批。
+      requiresApproval: 'never',
       parameters: {
         type: 'object',
         properties: {

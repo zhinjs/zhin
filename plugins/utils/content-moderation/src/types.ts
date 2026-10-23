@@ -92,6 +92,8 @@ export interface HttpSourceConfig {
 export type SourceConfig = LocalSourceConfig | HttpSourceConfig;
 
 export interface ModerationConfig {
+  /** Empty unless an operator explicitly enables automatic group moderation. */
+  readonly groupModeration: readonly GroupModerationTarget[];
   readonly enabled: boolean;
   readonly onError: OnErrorPolicy;
   readonly maskChar: string;
@@ -111,6 +113,13 @@ export interface ModerationConfig {
   };
   readonly actions: Readonly<Record<Severity, readonly Action[]>>;
   readonly sources: readonly SourceConfig[];
+}
+
+export interface GroupModerationTarget {
+  readonly adapter: string;
+  readonly endpoint: string;
+  readonly account: string;
+  readonly group: string;
 }
 
 export const SEVERITY_RANK: Readonly<Record<Severity, number>> = Object.freeze({

@@ -104,7 +104,7 @@ describe('ContextSystem', () => {
     });
 
     expect(result.userMessages).toHaveLength(1);
-    const text = result.userMessages[0]?.content.find(block => block.type === 'text');
+    const text = { type: 'text', text: result.userMessages[0]?.content.filter(block => block.type === 'text').map(block => block.text).join('\n') };
     expect(text?.type === 'text' ? text.text : '').toContain('publish report');
     expect(text?.type === 'text' ? text.text : '').not.toContain('old conversation');
     expect(text?.type === 'text' ? text.text : '').not.toContain('interactive profile');

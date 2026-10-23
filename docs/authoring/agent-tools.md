@@ -68,7 +68,8 @@ export default defineAgentTool({
 
 | 取值 | 何时需要用户确认 |
 | --- | --- |
-| `'always'` | 每次调用 |
+| `'always'` | 每次调用进入当前配置的审批流程（可能由模型审核） |
+| `'human'` | 每次调用由人工确认；不复用授权，不接受模型审核或主人身份跳过；无人工渠道时拒绝 |
 | `'once'` | 同一会话中第一次调用 |
 | `'on-risk'`（默认） | 有风险时。未知的插件操作会确认；`bash`、文件和网络工具在安全策略已经验证具体命令、路径或 URL 后不再重复确认 |
 | `'never'` | 不需要确认 |
@@ -294,7 +295,7 @@ my-plugin/
 | --- | --- | --- |
 | `description` | 是 | 给模型看的功能描述 |
 | `inputSchema` | 否 | Zod 4 对象，或根节点为 `object` 的 JSON Schema；执行前校验 |
-| `requiresApproval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always'`，默认 `'on-risk'` |
+| `requiresApproval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always' \| 'human'`，默认 `'on-risk'` |
 | `platforms` | 否 | 限定平台，如 `['icqq']`；为空表示全部 |
 | `scopes` | 否 | 限定场景 `'private' \| 'group' \| 'channel'`；为空表示全部 |
 | `permissions` | 否 | 权限规则列表，全部满足才提供 |

@@ -12,7 +12,7 @@ import { isToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
 
-export type ToolApproval = 'never' | 'on-risk' | 'once' | 'always';
+export type ToolApproval = 'never' | 'on-risk' | 'once' | 'always' | 'human';
 export type ToolScope = 'private' | 'group' | 'channel';
 
 export interface ToolInvocationPolicy {
@@ -224,7 +224,7 @@ export function defineAgentTool<
   }
   const requiresApproval = definition.requiresApproval ?? 'on-risk';
   if (requiresApproval !== 'never' && requiresApproval !== 'on-risk'
-    && requiresApproval !== 'once' && requiresApproval !== 'always') {
+    && requiresApproval !== 'once' && requiresApproval !== 'always' && requiresApproval !== 'human') {
     throw new TypeError(`Invalid Agent Tool requiresApproval: ${String(requiresApproval)}`);
   }
   validateStringList('platforms', definition.platforms);
@@ -286,7 +286,7 @@ export function parseAgentToolDefinition(
     || (definition.requiresApproval !== 'never'
       && definition.requiresApproval !== 'on-risk'
       && definition.requiresApproval !== 'once'
-      && definition.requiresApproval !== 'always')
+      && definition.requiresApproval !== 'always' && definition.requiresApproval !== 'human')
     || !validStringList(definition.platforms)
     || !validStringList(definition.permissions)
     || !validStringList(definition.tags)

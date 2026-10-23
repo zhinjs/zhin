@@ -9,6 +9,7 @@ import {
   type UserMessage,
 } from '../llm/types/agent-message.js';
 
+import { projectPromptContext } from '../memory/prompt-context.js';
 import type { Model } from '../llm/types/model.js';
 import { createContext } from '../llm/index.js';
 import type { LlmCompletionPort } from '../llm/llm-api-runtime.js';
@@ -120,7 +121,7 @@ async function summarizeAgentMessages(
     systemPrompt += `\n\nAdditional instructions: ${customInstructions}`;
   }
 
-  const conversation = messages.map(agentMessageToTranscriptLine).join('\n');
+  const conversation = projectPromptContext(messages).map(agentMessageToTranscriptLine).join('\n');
   let userContent = '';
   if (previousSummary) {
     userContent += `Previous summary:\n${previousSummary}\n\n`;
@@ -171,7 +172,7 @@ export function shouldAutoCompactAgentMessages(
     logger.warn(formatCompact({ circuit_breaker: state.consecutiveFailures }));
     return false;
   }
-  const totalTokens = estimateAgentMessagesTokens(messages);
+  const totalTokens = estimateAgentMessagesTokens(projectPromptContext(messages));
   return totalTokens > (triggerTokens ?? contextWindow - AUTOCOMPACT_BUFFER_TOKENS);
 }
 
@@ -202,7 +203,7 @@ export async function compactAgentMessages(params: {
 
   const toCompact = messages.slice(0, startIdx);
   const toKeep = messages.slice(startIdx);
-  const beforeTokens = estimateAgentMessagesTokens(toCompact);
+  const beforeTokens = estimateAgentMessagesTokens(projectPromptContext(toCompact));
 
   const summary = await summarizeAgentMessages(
     params.transport,
@@ -221,7 +222,8 @@ export async function compactAgentMessages(params: {
     summary,
     keptMessages: toKeep,
     compactedCount: toCompact.length,
-    savedTokens: beforeTokens - summaryTokens,
+    savedTokens: Math.max(0, estimateAgentMessagesTokens(projectPromptContext(messages))
+      - estimateAgentMessagesTokens(projectPromptContext([summaryAsAgentUserMessage(summary), ...toKeep]))),
   };
 }
 
@@ -297,13 +299,20 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
       compactedMessages.push(summaryAsAgentUserMessage(result.summary));
     }
     compactedMessages.push(...result.keptMessages);
+    // Removing the first full context block can expand retained references.
+    // Validate the entire resulting model view before committing a checkpoint.
+    if (estimateAgentMessagesTokens(projectPromptContext(compactedMessages))
+      >= estimateAgentMessagesTokens(projectPromptContext(messages))) {
+      throw new Error('Summarization did not reduce projected context tokens');
+    }
 
     if (state) state.consecutiveFailures = 0;
 
     return {
       wasCompacted: true,
       messages: compactedMessages,
-      savedTokens: microSavedTokens + result.savedTokens,
+      savedTokens: Math.max(0, estimateAgentMessagesTokens(projectPromptContext(params.messages))
+        - estimateAgentMessagesTokens(projectPromptContext(compactedMessages))),
       microSavedTokens,
       autoSavedTokens: result.savedTokens,
       summary: result.summary,

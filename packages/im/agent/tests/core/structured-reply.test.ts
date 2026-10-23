@@ -33,6 +33,8 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   emptyReplyRetries?: number;
   replySegments?: AiOutboundSegmentProfile;
   roles?: string[];
+  initialMessages?: AgentMessage[];
+  deferred?: boolean;
 } = {}) {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => responses.shift()! });
   const streamOptions: (StreamOptions | undefined)[] = [];
@@ -70,7 +72,13 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     replySegments: options.replySegments,
     allTools: tools, resolvedTools: tools,
     toolExecution: { execute: async () => ({ status: 'completed', output: { id: '456', name: 'Alice' }, durationMs: 1 }) } as never,
-    personaEnhanced: '', modelId: 'm', modelCandidates: ['m'], toolLoading: 'direct',
+    personaEnhanced: '', modelId: 'm', modelCandidates: ['m'], toolLoading: options.deferred ? 'deferred' : 'direct',
+    initialMessages: options.initialMessages,
+    ...(options.deferred ? {
+      deferredController: { loadedToolNames: () => [] },
+      toolCatalog: [...tools.map(fullTool => ({ name: fullTool.name, brief: fullTool.description, fullTool, source: 'plugin' as const, deferDefault: false })),
+        { name: 'deferred_lookup', brief: 'Find an item', fullTool: { name: 'deferred_lookup', description: 'Find an item', parameters: { type: 'object', properties: {} } } as AgentTool, source: 'plugin' as const, deferDefault: true }],
+    } : {}),
     conversationPersistence: options.detached ? 'none' : 'session',
     onChunk: chunk => { chunks.push(chunk); },
   }), event => { events.push(event); });
@@ -420,4 +428,15 @@ describe('structured Agent final replies', () => {
       .toEqual([{ type: 'message', segments: [text('旧格式')] }]);
     expect(decodeStructuredReply(JSON.stringify({ messages: [] }))).toEqual([]);
   });
+});
+
+it('keeps the deferred catalog available when a prebuilt continuation has no user message', async () => {
+  const initial = assistantTextReply('continue');
+  const { calls } = await run([assistantTextReply(JSON.stringify({ messages: [] }))], {
+    initialMessages: [initial], deferred: true,
+    tools: [{ name: 'resident', description: 'Resident', parameters: { type: 'object', properties: {} } } as AgentTool],
+  });
+  expect(calls[0]!.context.messages[0]).toEqual(initial);
+  expect(JSON.stringify(calls[0]!.context.messages)).toContain('deferred_lookup');
+  expect(calls[0]!.context.systemPrompt).not.toContain('deferred_lookup');
 });

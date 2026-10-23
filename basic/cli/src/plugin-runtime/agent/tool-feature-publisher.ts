@@ -31,7 +31,7 @@ export interface HostAgentTool {
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
-  readonly requiresApproval?: 'always' | 'once' | 'never' | 'on-risk';
+  readonly requiresApproval?: 'always' | 'once' | 'never' | 'on-risk' | 'human';
 }
 
 interface RuntimeToolFeature {

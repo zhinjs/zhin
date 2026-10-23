@@ -1,4 +1,4 @@
-import { AUTOCOMPACT_BUFFER_TOKENS, autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
+import { projectPromptContext, AUTOCOMPACT_BUFFER_TOKENS, autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
@@ -179,7 +179,7 @@ export class AgentCompactionRuntime {
       force: true,
     });
 
-    const saved = estimateAgentMessagesTokens(messages) - estimateAgentMessagesTokens(compacted);
+    const saved = estimateAgentMessagesTokens(projectPromptContext(messages)) - estimateAgentMessagesTokens(projectPromptContext(compacted));
     return {
       ok: true,
       message: `已压缩会话，约节省 ${Math.max(0, saved)} tokens（保留最近 ~${cfg.keepRecentTokens ?? 20_000} tokens）`,

@@ -9,8 +9,145 @@ import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import * as policyFacade from '../../src/security/policy-facade.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
+import { OutboundLeakInspector } from '../../src/security/outbound-leak-guard.js';
 
 describe('TurnToolRuntime', () => {
+  it.each([false, true])('binds human approval to an isolated nested argument snapshot (provenance: %s)', async (tainted) => {
+    const execute = vi.fn<ToolCapability['execute']>(async () => 'done');
+    const args = { group_id: 129043431, user_id: 123456789, reason: '明确广告', evidence: [{ message: { id: 'original' } }] };
+    const original = structuredClone(args);
+    const requestApproval = vi.fn<import('../../src/session/approval-port.js').ApprovalPort['requestApproval']>()
+      .mockImplementation(async () => {
+        args.group_id = 987654321;
+        args.user_id = 234567890;
+        args.evidence[0]!.message.id = 'different';
+        return true;
+      });
+    const { turn } = fixture({ approval: { requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [{ ...tool(execute, 'human', 'group_kick'), ...(tainted ? { tags: ['outbound'] } : {}) }]);
+    if (tainted) runtime.provenance.record({ kind: 'conversation_context' });
+
+    await expect(runtime.execute('group_kick', args, 'snapshot')).resolves.toMatchObject({ status: 'completed' });
+
+    const request = requestApproval.mock.calls[0]![0];
+    expect(request.question).toContain('"group_id":129043431');
+    expect(request.question).toContain('"user_id":123456789');
+    expect(request.question).toContain('"id":"original"');
+    if (!tainted) expect(request.scopeKey).toContain('"user_id":123456789');
+    expect(execute).toHaveBeenCalledExactlyOnceWith(original, expect.anything());
+    expect(execute.mock.calls[0]![0]).not.toBe(args);
+  });
+
+  it.each(['function', 'cycle'])('denies human confirmation when arguments cannot be safely snapshotted: %s', async (invalid) => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn(async () => true);
+    const { turn, events } = fixture({ approval: { requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'human')]);
+    const args: Record<string, unknown> = { user_id: 123456789 };
+    args.unsupported = invalid === 'function' ? () => 'not JSON' : args;
+
+    await expect(runtime.execute('danger', args, 'invalid-snapshot')).resolves.toMatchObject({
+      status: 'denied', policy: 'approval',
+    });
+
+    expect(requestApproval).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.map(event => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
+  it('shows the final masked arguments before human approval and executes that same snapshot', async () => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn<import('../../src/session/approval-port.js').ApprovalPort['requestApproval']>()
+      .mockResolvedValue(true);
+    const { turn } = fixture({ approval: { requestApproval } });
+    const inspector = new OutboundLeakInspector({ secretValues: ['fixture-secret-123456'] });
+    const runtime = new TurnToolRuntime(turn, [{ ...tool(execute, 'human'), tags: ['outbound'] }], { leakInspector: inspector });
+
+    await runtime.execute('danger', { target: 'reviewed-group', text: 'fixture-secret-123456' }, 'masked');
+
+    const request = requestApproval.mock.calls[0]![0];
+    expect(request.question).toContain('"text":"[已隐藏：密钥]"');
+    expect(request.question).not.toContain('fixture-secret-123456');
+    expect(request.scopeKey).toContain('"text":"[已隐藏：密钥]"');
+    expect(execute).toHaveBeenCalledExactlyOnceWith({ target: 'reviewed-group', text: '[已隐藏：密钥]' }, expect.anything());
+  });
+
+  it('shows each human-only kick target and reason before approving that invocation', async () => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn<import('../../src/session/approval-port.js').ApprovalPort['requestApproval']>()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const { turn } = fixture({ approval: { requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'human', 'group_kick')]);
+    const approved = { group_id: 129043431, user_id: 123456789, reason: '明确广告' };
+    const denied = { group_id: 987654321, user_id: 234567890, reason: '持续辱骂' };
+
+    await expect(runtime.execute('group_kick', approved, 'kick-1')).resolves.toMatchObject({ status: 'completed' });
+    await expect(runtime.execute('group_kick', denied, 'kick-2')).resolves.toMatchObject({ status: 'denied' });
+
+    expect(requestApproval).toHaveBeenCalledTimes(2);
+    for (const [index, args] of [approved, denied].entries()) {
+      expect(requestApproval.mock.calls[index]![0]).toMatchObject({
+        humanOnly: true,
+        requestId: `turn:kick-${index + 1}`,
+        question: expect.stringContaining(`本次参数：{"group_id":${args.group_id},"reason":"${args.reason}","user_id":${args.user_id}}`),
+      });
+    }
+    expect(execute).toHaveBeenCalledExactlyOnceWith(approved, expect.anything());
+  });
+
+  it('keeps existing non-human approval prompts unchanged', async () => {
+    const requestApproval = vi.fn<import('../../src/session/approval-port.js').ApprovalPort['requestApproval']>()
+      .mockResolvedValue(false);
+    const { turn } = fixture({ approval: { requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [tool(async () => 'done', 'always')]);
+
+    await runtime.execute('danger', { arbitrary: 'value' }, 'ordinary');
+
+    expect(requestApproval.mock.calls[0]![0].question).toBe(
+      '工具「danger」需要确认后执行。\n风险：tool approval policy is always\n是否继续？',
+    );
+  });
+
+  it('keeps concrete human-only confirmation when provenance also requires approval', async () => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn<import('../../src/session/approval-port.js').ApprovalPort['requestApproval']>()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const { turn } = fixture({ approval: { requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [{ ...tool(execute, 'human', 'group_kick'), tags: ['outbound'] }]);
+    runtime.provenance.record({ kind: 'conversation_context' });
+    const args = { group_id: 129043431, user_id: 123456789, reason: '明确广告' };
+
+    await expect(runtime.execute('group_kick', args, 'tainted-1')).resolves.toMatchObject({ status: 'completed' });
+    await expect(runtime.execute('group_kick', args, 'tainted-2')).resolves.toMatchObject({
+      status: 'denied', policy: 'external-content-confirmation',
+    });
+
+    expect(requestApproval).toHaveBeenCalledTimes(2);
+    for (const [index, [request]] of requestApproval.mock.calls.entries()) {
+      expect(request).toMatchObject({
+        humanOnly: true,
+        requestId: `turn:tainted-${index + 1}`,
+        scopeKey: `external-content-confirmation:turn:tainted-${index + 1}`,
+        question: expect.stringContaining('本次参数：{"group_id":129043431,"reason":"明确广告","user_id":123456789}'),
+      });
+      expect(request.remember).toBeUndefined();
+    }
+    expect(execute).toHaveBeenCalledExactlyOnceWith(args, expect.anything());
+  });
+
+  it('preserves fresh human authority on each invocation', async () => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn(async () => true);
+    const { turn } = fixture({ approval: { requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'human')]);
+    await runtime.execute('danger', {}, 'human-1');
+    await runtime.execute('danger', {}, 'human-2');
+    expect(requestApproval).toHaveBeenCalledTimes(2);
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ humanOnly: true }));
+    expect(requestApproval.mock.calls.every(([request]) => request.remember === undefined)).toBe(true);
+  });
   it('records a pre-aborted invocation as cancelled without running policies or the tool', async () => {
     const controller = new AbortController();
     controller.abort('deadline exceeded');

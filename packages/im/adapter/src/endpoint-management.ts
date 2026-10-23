@@ -44,6 +44,10 @@ export interface EndpointPendingRequest {
  * names or transport-specific fields.
  */
 export interface EndpointManagement {
+  /** Fresh platform facts for moderation; absent means automatic moderation is unsupported. */
+  inspectGroupMember?(groupId: string, userId: string, signal: AbortSignal): Promise<GroupModerationMember>;
+  /** Recheck platform permissions and membership immediately before the operation. */
+  moderateGroupMember?(groupId: string, userId: string, action: GroupModerationAction, signal: AbortSignal): Promise<void>;
   listFriends?(): Promise<readonly EndpointFriend[]>;
   listGroups?(): Promise<readonly EndpointGroup[]>;
   listChannels?(): Promise<readonly EndpointChannel[]>;
@@ -57,6 +61,16 @@ export interface EndpointManagement {
   setGroupAdmin?(groupId: string, userId: string, enabled: boolean): Promise<void>;
   deleteFriend?(userId: string): Promise<void>;
 }
+
+export interface GroupModerationMember {
+  readonly canModerate: boolean;
+  /** Actual platform join time in epoch milliseconds, never inferred from first observation. */
+  readonly joinedAt?: number;
+}
+
+export type GroupModerationAction =
+  | Readonly<{ type: 'mute'; durationSeconds: number }>
+  | Readonly<{ type: 'kick'; joinedAt: number; maxMembershipAgeMs: number }>;
 
 export interface EndpointWithManagement {
   readonly management?: EndpointManagement;

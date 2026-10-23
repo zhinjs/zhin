@@ -294,7 +294,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   permissions?: string[];
 
   /** Per-tool approval policy; `on-risk` remains fail-closed at Agent boundaries. */
-  requiresApproval?: 'always' | 'once' | 'never' | 'on-risk';
+  requiresApproval?: 'always' | 'once' | 'never' | 'on-risk' | 'human';
   
   /**
    * 支持的平台列表

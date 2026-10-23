@@ -83,6 +83,21 @@ export class TurnToolRuntime {
     }
     let effectiveInput = decision.input;
     const highRisk = classifyHighRiskAction(tool);
+    const humanOnly = tool.requiresApproval === 'human';
+    if (humanOnly) {
+      try {
+        // Caller-owned nested values must not change the operation while a person reviews it.
+        effectiveInput = structuredClone(effectiveInput);
+        // Reject cycles and other non-serializable input before constructing the approval card.
+        JSON.stringify(effectiveInput);
+        if (highRisk === 'outbound' && this.#leakInspector) {
+          // Show exactly what will execute; do not redact approved arguments afterward.
+          effectiveInput = this.#leakInspector.inspectArguments(effectiveInput).input;
+        }
+      } catch {
+        return this.#deny(name, toolUseId, 'approval', 'human approval requires an isolated JSON argument snapshot', causedBy);
+      }
+    }
     const provenanceGate = highRisk !== undefined
       && this.#guard.confirmHighRisk === 'external_content'
       && this.provenance.tainted;
@@ -94,6 +109,7 @@ export class TurnToolRuntime {
       }
       const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
       const approval = await requestApprovalOutcome(this.turn.ports.approval, {
+        ...(humanOnly ? { humanOnly: true } : {}),
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
         ...(this.turn.origin.kind === 'im'
@@ -103,7 +119,8 @@ export class TurnToolRuntime {
         toolName: name,
         // Never matches a remembered approval: each tainted call is confirmed on its own.
         scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
-        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput),
+        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput,
+          humanOnly),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -115,6 +132,7 @@ export class TurnToolRuntime {
         return this.#deny(name, toolUseId, decision.policy, 'approval required but ApprovalPort unavailable', causedBy);
       }
       const approval = await requestApprovalOutcome(this.turn.ports.approval, {
+        ...(humanOnly ? { humanOnly: true } : {}),
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
         ...(this.turn.origin.kind === 'im'
@@ -124,11 +142,11 @@ export class TurnToolRuntime {
         toolName: name,
         scopeKey: tool.requiresApproval === 'once'
           ? name
-          : approvalScopeKey(name, decision.input),
+          : approvalScopeKey(name, effectiveInput),
         ...(tool.requiresApproval === 'once' || decision.policy === 'exec-policy'
           ? { remember: 'session' as const }
           : {}),
-        question: formatApprovalQuestion(name, decision.reason, decision.input),
+        question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -137,7 +155,7 @@ export class TurnToolRuntime {
       }
     }
 
-    if (highRisk === 'outbound' && this.#leakInspector) {
+    if (!humanOnly && highRisk === 'outbound' && this.#leakInspector) {
       // #727 M3.4: messages to other conversations go through the same leak check as replies.
       effectiveInput = this.#leakInspector.inspectArguments(effectiveInput).input;
     }
@@ -208,6 +226,7 @@ function formatApprovalQuestion(
   toolName: string,
   reason: string,
   input: Readonly<Record<string, unknown>>,
+  humanOnly: boolean,
 ): string {
   const command = typeof input.command === 'string' ? input.command.trim() : '';
   const cwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
@@ -217,6 +236,7 @@ function formatApprovalQuestion(
     command ? `命令：${command}` : undefined,
     cwd ? `工作目录：${cwd}` : undefined,
     path ? `目标文件：${path}` : undefined,
+    humanOnly ? `本次参数：${stableApprovalValue(input)}` : undefined,
     `风险：${reason}`,
     '是否继续？',
   ].filter((line): line is string => Boolean(line)).join('\n');
