@@ -14,5 +14,6 @@ export default definePlugin({
     const engine = new ModerationEngine();
     engine.configure(context.config.get());
     context.resources.provide(moderationEngineToken, engine);
+    return () => engine.groupReviewQueue.stop();
   },
 });

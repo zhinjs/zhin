@@ -539,6 +539,7 @@ export type {
   AiCompletionInput,
   AiCompletionResult,
   AiCompletionUntrustedInput,
+  AiCompletionUsageShare,
   UsageSubject,
 } from './plugin-runtime/ai-completion.js';
 

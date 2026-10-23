@@ -15,6 +15,12 @@ export interface UsageSubject {
   readonly owner: boolean;
 }
 
+/** Original input used to estimate one participant's share of a completion. */
+export interface AiCompletionUsageShare {
+  readonly subject: UsageSubject;
+  readonly text: string;
+}
+
 export interface AiCompletionUntrustedInput {
   /** Where the text came from, e.g. `group-chat`; shown to the model as the block's source. */
   readonly source: string;
@@ -41,6 +47,8 @@ export interface AiCompletionInput {
   readonly signal?: AbortSignal;
   /** The IM user (and group) this call is made for; counts against their usage quota. */
   readonly onBehalfOf?: UsageSubject;
+  /** Shared attribution, mutually exclusive with onBehalfOf. Denied users must be removed from the prompt before retrying. */
+  readonly usageShares?: readonly AiCompletionUsageShare[];
 }
 
 /** Token cost breakdown; structurally identical to `@zhin.js/ai` `TokenCost`. */
@@ -74,6 +82,8 @@ export interface AiCompletionResult {
 }
 
 export interface AiCompletion {
+  /** Older/custom hosts may omit this; callers must not send shared attribution to such hosts. */
+  readonly supportsUsageShares?: true;
   completeText(input: AiCompletionInput): Promise<AiCompletionResult>;
 }
 
@@ -91,6 +101,8 @@ export interface AiCompletionQuotaErrorLike extends Error {
   readonly name: 'AiCompletionQuotaError';
   readonly scope: 'user' | 'group';
   readonly retryAfterSeconds: number;
+  /** Batch preflight rejected these users without starting a provider request or reserving quota. */
+  readonly deniedUserIds?: readonly string[];
 }
 
 /** True for the agent's quota error (`message` is user-facing); works without importing `@zhin.js/agent`. */

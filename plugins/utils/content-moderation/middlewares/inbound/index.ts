@@ -3,6 +3,7 @@ import type { Message } from '@zhin.js/core/runtime';
 import { aiCompletionToken, createDeliveryTarget, databaseHostToken, getLogger, hasResource,
   outboundHostToken, usageSubjectFromMessage } from 'zhin.js';
 import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
+import { generationAdmissionSource } from 'zhin.js/plugin-runtime';
 import {
   buildScanContext,
   extractFromTextAndSegments,
@@ -38,7 +39,7 @@ export default defineMiddleware<Message, ModerationConfig>({
       conversationId,
       endpointMasters,
     });
-    const modelOwnsRecall = await runGroupModeration(context, config, bypass);
+    const review = await enqueueGroupModeration(context, config, bypass);
     if (bypass) {
       await next();
       return;
@@ -69,7 +70,7 @@ export default defineMiddleware<Message, ModerationConfig>({
 
     const result = await engine.apply({
       direction: 'inbound',
-      recallManaged: modelOwnsRecall,
+      recallManaged: review?.done,
       extracted,
       scanInput,
       hooks: {
@@ -109,60 +110,84 @@ export default defineMiddleware<Message, ModerationConfig>({
   },
 });
 
-async function runGroupModeration(
+async function enqueueGroupModeration(
   context: MiddlewareContext<Message, ModerationConfig, string | undefined>,
   config: ModerationConfig, bypass: boolean,
-): Promise<boolean> {
+): Promise<{ done: Promise<boolean> } | undefined> {
   const message = context.input;
-  const conversation = message.conversation;
+  const conversation = structuredClone(message.conversation);
   const target = config.groupModeration.find((item) => conversation.kind === 'group'
     && item.adapter === conversation.endpoint.adapter
     && item.endpoint === message.endpointId && item.group === conversation.id);
-  if (!target) return false;
-  let modelOwnsRecall = false;
+  if (!target) return;
   const logger = getLogger('content-moderation');
   try {
-    const endpoint = context.project<AdapterIndex>(adapterFeatureId)
-      .connection(conversation.endpoint.adapter, conversation.endpoint.id);
+    const adapters = context.project<AdapterIndex>(adapterFeatureId);
+    const endpoint = adapters.connection(conversation.endpoint.adapter, conversation.endpoint.id);
     // Reject alias fallback and account switches, even when a local instance name is reused.
     if (!endpoint || endpoint.identity.id !== conversation.endpoint.id
-      || endpoint.identity.adapter !== target.adapter || endpoint.selfUserId !== target.account) return false;
-    const moderator = context.use(moderationEngineToken).groupModerator;
+      || endpoint.identity.adapter !== target.adapter || endpoint.selfUserId !== target.account) return;
+    const engine = context.use(moderationEngineToken);
     const { text } = extractFromTextAndSegments(message.content, message.segments);
-    const scope = JSON.stringify(conversation);
-    const precedingContext = moderator.remember(scope, message.sender?.id ?? '', text);
+    const destination = createDeliveryTarget({ conversation });
+    const scope = JSON.stringify(destination);
+    const remembered = engine.groupModerator.remember(scope, message.sender?.id ?? '', text);
     if (!bypass && message.sender?.id && message.origin !== 'self'
-      && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)) {
-      await moderator.review({
-        scope, group: conversation.id, sender: message.sender.id,
-        messageId: message.id ?? '', sentAt: Number(message.metadata?.platformSentAt), text, precedingContext,
-        signal: context.signal,
-        state: context.use(databaseHostToken).state.forConversation(createDeliveryTarget({ conversation })),
-        completion: context.use(aiCompletionToken), management: endpoint.management ?? {},
-        onBehalfOf: usageSubjectFromMessage(message),
-        onReview: () => { modelOwnsRecall = true; },
-        reply: async (content, mention) => {
-          context.signal.throwIfAborted();
-          const receipt = await message.$reply(mention ? [
-            { type: 'mention', data: { target: mention } },
-            { type: 'text', data: { text: ` ${content}` } },
-          ] : content);
-          if (receipt.status !== 'sent') throw new Error('Moderation notice was not delivered');
-        },
-        recall: async () => {
-          context.signal.throwIfAborted();
-          const host = context.use(outboundHostToken);
-          if (!host.recall || !message.id) throw new Error('Original message cannot be recalled');
-          await host.recall({ adapter: target.adapter, endpointKey: conversation.endpoint.id,
-            message: { conversation, id: message.id } });
-        },
-        audit: (event) => logger.info({ ...event, endpoint: conversation.endpoint.id, group: conversation.id }),
-      });
+      && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)
+      && hasResource(context, outboundHostToken)) {
+      const host = context.use(outboundHostToken);
+      if (!host.sendTarget) return;
+      const lifetime = new AbortController();
+      const gates = adapters[generationAdmissionSource] ?? [];
+      const detach = gates.map(gate => gate.onDeactivate(() => lifetime.abort(new Error('Moderation adapter generation retired'))));
+      const signal = AbortSignal.any([context.signal, lifetime.signal]);
+      const messageId = message.id ?? '';
+      const assertTarget = () => {
+        signal.throwIfAborted();
+        if (endpoint.identity.id !== conversation.endpoint.id || endpoint.selfUserId !== target.account
+          || endpoint.identity.adapter !== target.adapter || gates.some(gate => !gate.active)) {
+          throw new Error('Moderation target account is no longer active');
+        }
+      };
+      try {
+        const queued = await engine.groupReviewQueue.enqueue({
+          scope, group: conversation.id, sender: message.sender.id,
+          messageId, sentAt: Number(message.metadata?.platformSentAt), text, ...remembered,
+          signal,
+          state: context.use(databaseHostToken).state.forConversation(destination),
+          completion: context.use(aiCompletionToken), management: {
+            inspectGroupMember: endpoint.management?.inspectGroupMember ? async (group, member, operationSignal) => {
+              assertTarget(); return endpoint.management!.inspectGroupMember!(group, member, operationSignal);
+            } : undefined,
+            moderateGroupMember: endpoint.management?.moderateGroupMember ? async (group, member, action, operationSignal) => {
+              assertTarget(); return endpoint.management!.moderateGroupMember!(group, member, action, operationSignal);
+            } : undefined,
+          },
+          onBehalfOf: usageSubjectFromMessage(message),
+          reply: async (content, mention) => {
+            assertTarget();
+            const receipt = await host.sendTarget!(destination, mention ? [
+              { type: 'mention', data: { target: mention } },
+              { type: 'text', data: { text: ` ${content}` } },
+            ] : content);
+            if (!receipt) throw new Error('Moderation notice was not confirmed');
+          },
+          recall: async () => {
+            assertTarget();
+            if (!host.recall || !messageId) throw new Error('Original message cannot be recalled');
+            await host.recall({ adapter: target.adapter, endpointKey: conversation.endpoint.id,
+              message: { conversation, id: messageId } });
+          },
+          audit: (event) => logger.info({ ...event, endpoint: conversation.endpoint.id, group: conversation.id }),
+        });
+        return { done: queued.done.finally(() => detach.forEach(remove => remove())) };
+      } catch (error) {
+        detach.forEach(remove => remove()); throw error;
+      }
     }
   } catch (error) {
     logger.warn('Automatic group moderation unavailable', error instanceof Error ? error.message : String(error));
   }
-  return modelOwnsRecall;
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   createAiCompletion,
   type AiCompletionOptions,
 } from '../../src/plugin-runtime/ai-completion.js';
-import { UsageQuota } from '../../src/security/usage-quota.js';
+import { InMemoryUsageQuotaStore, UsageQuota } from '../../src/security/usage-quota.js';
 
 type Call = { system: string; user: string; opts: TextCompleteOptions };
 
@@ -37,6 +37,75 @@ function fixture(provider: Partial<AIProvider> = {}, agentConfig: Record<string,
 }
 
 describe('aiCompletion.completeText', () => {
+  it('advertises shared attribution only when the injected quota port supports it', async () => {
+    const { service, calls } = fixture();
+    const quota = new UsageQuota({ perUserTokens: 100 });
+    const completion = createAiCompletion({ service, usageQuota: {
+      check: quota.check.bind(quota), record: quota.record.bind(quota),
+    } });
+    expect(completion.supportsUsageShares).toBeUndefined();
+    expect(createAiCompletion({ service, usageQuota: quota }).supportsUsageShares).toBe(true);
+    const subject = { userId: 'u', owner: false };
+    await completion.completeText({ purpose: 'single', prompt: 'hi', onBehalfOf: subject });
+    await expect(completion.completeText({ purpose: 'shared', prompt: 'hi', usageShares: [{ subject, text: 'hi' }] }))
+      .rejects.toThrow('quota does not support shared attribution');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('attributes a shared completion proportionally without duplicating the group bill or request', async () => {
+    const { service, calls } = fixture();
+    const store = new InMemoryUsageQuotaStore();
+    const quota = new UsageQuota({ perUserTokens: 1000, perGroupTokens: 1000, perGroupRequestsPerMinute: 1 }, store);
+    const subjects = ['alice', 'bob'].map(userId => ({ userId, groupId: 'g', owner: false }));
+    await createAiCompletion({ service, usageQuota: quota }).completeText({ purpose: 'shared', prompt: 'hi',
+      usageShares: [{ subject: subjects[0]!, text: 'abcd' }, { subject: subjects[1]!, text: 'abcdefghijkl' }] });
+    const a = store.get('tokens:user:alice')!.used, b = store.get('tokens:user:bob')!.used;
+    expect(a + b).toBe(15);
+    expect(Math.abs(a - 15 / 4)).toBeLessThanOrEqual(1);
+    expect(store.get('tokens:group:g')!.used).toBe(15);
+    expect(store.get('rate:group:g')!.used).toBe(1);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('identifies all exhausted users before any provider call or rate reservation', async () => {
+    const { service, calls } = fixture();
+    const quota = new UsageQuota({ perUserTokens: 10, perGroupRequestsPerMinute: 1 });
+    const subject = (userId: string) => ({ userId, groupId: 'g', owner: false });
+    quota.record(subject('alice'), 10); quota.record(subject('bob'), 10);
+    const completion = createAiCompletion({ service, usageQuota: quota });
+    await expect(completion.completeText({ purpose: 'shared', prompt: 'hi',
+      usageShares: ['alice', 'bob', 'carol'].map(userId => ({ subject: subject(userId), text: 'hello' })) }))
+      .rejects.toMatchObject({ deniedUserIds: ['alice', 'bob'], scope: 'user' });
+    expect(calls).toHaveLength(0);
+    await expect(completion.completeText({ purpose: 'shared', prompt: 'hi',
+      usageShares: [{ subject: subject('carol'), text: 'hello' }] })).resolves.toMatchObject({ text: 'answer' });
+  });
+
+  it('settles the cumulative shared cost instead of rounding reservation and delta twice', async () => {
+    const { service } = fixture({ completeTextResult: async () => ({ text: 'x', model: 'main',
+      usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } }) });
+    const store = new InMemoryUsageQuotaStore();
+    await createAiCompletion({ service, usageQuota: new UsageQuota({ perUserTokens: 100, perGroupTokens: 100 }, store) })
+      .completeText({ purpose: 'shared', prompt: 'hi', usageShares: ['a', 'b'].map(userId => ({
+        subject: { userId, groupId: 'g', owner: false }, text: 'x',
+      })) });
+    expect(store.get('tokens:user:a')!.used).toBe(1);
+    expect(store.get('tokens:user:b')!.used).toBe(1);
+    expect(store.get('tokens:group:g')!.used).toBe(2);
+  });
+
+  it('snapshots attribution across provider awaits and rejects conflicting attribution', async () => {
+    const subject = { userId: 'alice', owner: false };
+    const { service } = fixture({ completeText: async () => { subject.userId = 'bob'; return 'x'.repeat(400); }, completeTextResult: undefined });
+    const store = new InMemoryUsageQuotaStore();
+    const completion = createAiCompletion({ service, usageQuota: new UsageQuota({ perUserTokens: 1000 }, store) });
+    await completion.completeText({ purpose: 'shared', prompt: 'hi', usageShares: [{ subject, text: 'hello' }] });
+    expect(store.get('tokens:user:alice')!.used).toBeGreaterThan(100);
+    expect(store.get('tokens:user:bob')).toBeUndefined();
+    await expect(completion.completeText({ purpose: 'x', prompt: 'hi', onBehalfOf: subject,
+      usageShares: [{ subject, text: 'hello' }] })).rejects.toThrow('choose');
+  });
+
   it('runs one tool-free completion on the zhin binding with the conversation path fallback candidates', async () => {
     const { calls, service } = fixture({}, { providerResilience: { maxRetries: 1 } });
     const result = await createAiCompletion({ service }).completeText({

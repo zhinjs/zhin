@@ -24,7 +24,7 @@
     "export type{AgentSurfaceInfoReport,AgentSurfacePluginInfo,AgentSurfaceWorkspaceAgentInfo,}from './discovery/agent-surface-info.js';",
     "export type{AgentTurnConfiguration,AgentTurnRequest}from './zhin-agent/index.js';",
     "export type{AgentsInstructionEntry}from './context/agents-instruction.js';",
-    "export type{AiCompletion,AiCompletionInput,AiCompletionResult,AiCompletionUntrustedInput,UsageSubject,}from './plugin-runtime/ai-completion.js';",
+    "export type{AiCompletion,AiCompletionInput,AiCompletionResult,AiCompletionUntrustedInput,AiCompletionUsageShare,UsageSubject,}from './plugin-runtime/ai-completion.js';",
     "export type{ApprovalDecision,ApprovalDecisionMemory,ApprovalDecisionPort,ApprovalOutcome,ApprovalOutcomePort,ApprovalPort,ApprovalRequestInput,}from './session/approval-port.js';",
     "export type{ApprovalReviewAgentOptions,ApprovalReviewDecision,}from './session/approval-review-agent.js';",
     "export type{AssistantConfig,AssistantDefaultsConfig,AssistantEventsConfig,AssistantProfileConfig,AssistantProfile,NotificationRouter,BootstrapAssistantHomeResult,HomeToolRegistration,ScheduleJob,ScheduleJobFile,ScheduleJobCreator,ScheduleJobExecutionPlan,ScheduleInvocationContext,AssistantEventRequest,AssistantEventResult,}from './assistant/index.js';",

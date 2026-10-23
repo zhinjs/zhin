@@ -81,7 +81,7 @@ export default definePlugin<ReminderConfig>({
 | `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列出 Agent 绑定、提交 `TurnRequest`、读取 Console / 诊断信息；不暴露 ZhinAgent / AIService 实例 |
 | `workroomHostToken`（`@zhin.js/workroom`） | Workroom Host 端口 | 由 CLI 组合根与 `agentHostToken` 一同发布；其 `console` 只含 Workroom 控制端口（run 控制、catalog、profiles / knowledge / sponsor / 数据生命周期）。供 Console / host-http 使用，不供插件注入；Console 视图是两个 console 的 key 不相交合并 |
 | `turnIntentResolverToken`（`@zhin.js/agent/runtime`） | 由账号所属插件提供的可信意图解析器 | 按平台 / 场景把消息解析为 `supersede`、`new`、`steer`、`follow_up` 或 `observe`；只有它能为跨参与者的控制签发 `authorizedBy: 'product_policy'` |
-| `aiCompletionToken`（`zhin.js`；`zhin.js/agent` / `@zhin.js/agent/runtime` 再导出同一个 token） | `AiCompletion`（可选，只在配置了 AI 时存在，见 [下文](#调用纯文本-ai-补全)） | `completeText({ purpose, system?, prompt, untrusted?, agent?, model?, maxTokens?, timeoutMs?, signal?, onBehalfOf? })` 只做一次纯文本补全，**不带任何工具**，自带重试、超时和同 provider 模型降级；`untrusted` 里的群聊等内容按数据渲染，内部指令无效；传 `onBehalfOf`（类型 `UsageSubject`：`{ userId, groupId?, owner }`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`）时计入该用户 / 群的用量配额（超额抛 `AiCompletionQuotaError`）。插件只需要文本时用它，不要借整轮 Agent |
+| `aiCompletionToken`（`zhin.js`；`zhin.js/agent` / `@zhin.js/agent/runtime` 再导出同一个 token） | `AiCompletion`（可选，只在配置了 AI 时存在，见 [下文](#调用纯文本-ai-补全)） | `completeText({ purpose, system?, prompt, untrusted?, agent?, model?, maxTokens?, timeoutMs?, signal?, onBehalfOf?, usageShares? })` 只做一次纯文本补全，**不带任何工具**，自带重试、超时和同 provider 模型降级；`untrusted` 里的群聊等内容按数据渲染，内部指令无效；传 `onBehalfOf`（类型 `UsageSubject`：`{ userId, groupId?, owner }`，群 / 频道里 `groupId` 为 `${platform}:${endpoint}:${sceneId}`）时计入该用户 / 群的用量配额（超额抛 `AiCompletionQuotaError`）。插件只需要文本时用它，不要借整轮 Agent |
 
 ### 渲染与 HTTP
 
@@ -128,6 +128,8 @@ export default defineCommand({
 
 ::: tip 和 Agent 包的关系
 `zhin.js/agent` 和 `@zhin.js/agent` 仍然导出 `aiCompletionToken`，它和 `zhin.js` 导出的是同一个对象，旧代码不用改。`AiCompletionQuotaError` 类仍然在 Agent 包里，插件里用 `isAiCompletionQuotaError` 判断即可。
+
+多人共享一次补全前，先确认服务声明 `supportsUsageShares === true`；旧服务可能忽略未知字段，应继续使用逐人 `onBehalfOf` 调用，不能默默合批而漏记配额。多人共享一次补全时，可用 `usageShares: [{ subject, text }]` 替代 `onBehalfOf`，二者不能同时传入。`text` 是该参与人的原文，服务用现有 token 估算器计算占比，按比例分摊输入预留和最终增量；每群请求计数一次。个人额度不足时，调用在请求 provider 和预留额度前抛出带 `deniedUserIds` 的 `AiCompletionQuotaError`。调用方应移除这些人的待审项，重新构造 prompt 和 usageShares 后再提交；不能只删计费主体却仍审核其消息。群额度不足则停止该群请求。既有单人调用保持兼容；用量不足或 provider 失败的行为与原有预留规则一致。
 :::
 
 ## 保存小对象和发送目标

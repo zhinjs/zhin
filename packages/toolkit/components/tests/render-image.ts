@@ -1,4 +1,4 @@
-import { afterAll } from 'vitest';
+import { afterAll, expect } from 'vitest';
 import { fork, type ChildProcess } from 'node:child_process';
 import { PNG } from 'pngjs';
 

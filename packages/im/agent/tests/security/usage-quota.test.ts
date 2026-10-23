@@ -5,6 +5,22 @@ const alice = { userId: 'alice', groupId: 'qq:bot:g1', owner: false };
 const bob = { userId: 'bob', groupId: 'qq:bot:g1', owner: false };
 
 describe('UsageQuota', () => {
+  it('counts one shared request per group and leaves no rate reservation after a rejected batch', () => {
+    const quota = new UsageQuota({ perUserTokens: 10, perGroupRequestsPerMinute: 1 });
+    quota.record(alice, 10);
+    expect(quota.checkBatch([alice, bob])).toMatchObject({ allowed: false, scope: 'user', deniedUserIds: ['alice'] });
+    expect(quota.checkBatch([bob, bob])).toEqual({ allowed: true });
+    expect(quota.check(bob)).toMatchObject({ allowed: false, scope: 'group', reason: 'rate' });
+  });
+
+  it('preflights all groups before reserving any rate slot', () => {
+    const quota = new UsageQuota({ perGroupRequestsPerMinute: 1 });
+    const other = { ...bob, groupId: 'qq:bot:other' };
+    quota.check(other);
+    expect(quota.checkBatch([alice, other])).toMatchObject({ allowed: false, scope: 'group' });
+    expect(quota.checkBatch([alice, bob])).toEqual({ allowed: true });
+  });
+
   it('is off by default', () => {
     const quota = new UsageQuota();
     quota.record(alice, 1_000_000);
