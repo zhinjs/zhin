@@ -132,31 +132,39 @@ export interface StreamPromptCacheOptions {
   promptCacheRetention?: PromptCacheRetention;
 }
 
-/** Extend the existing Anthropic cache to the immutable conversation prefix.
- * This adds one breakpoint (system + tools + history = at most three here),
- * retaining the existing opt-out and ephemeral lifetime. Never mark thinking.
+/** Find a message whose final block the SDK can mark without touching thinking. */
+function lastCacheableMessage(messages: ModelMessage[], end: number): number {
+  for (let index = end - 1; index >= 0; index -= 1) {
+    const content = messages[index]!.content;
+    const last = Array.isArray(content) ? content.at(-1) : undefined;
+    const cacheable = typeof content === 'string' ? content.trim().length > 0
+      : last && last.type !== 'reasoning' && (last.type !== 'text' || last.text.trim().length > 0);
+    if (cacheable) return index;
+  }
+  return -1;
+}
+
+/**
+ * Mark the current input and the input before the latest assistant response.
+ * The latter reconstructs the previous request boundary from serial history,
+ * so new content cannot push it outside Anthropic's 20-block lookback window.
+ * At most two message markers + system + tools = four runtime breakpoints.
+ * Derive them afresh after compaction/branching; do not mutate or persist markers.
  */
 export function applyPromptCacheToMessages(
   messages: ModelMessage[],
   input: PromptCacheApplyInput,
 ): ModelMessage[] {
   if (!input.enabled || input.sdk !== 'anthropic') return messages;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]!;
-    const content = message.content;
-    const last = Array.isArray(content) ? content.at(-1) : undefined;
-    const cacheable = typeof content === 'string' ? content.trim().length > 0
-      : last && last.type !== 'reasoning' && (last.type !== 'text' || last.text.trim().length > 0);
-    if (!cacheable) continue;
-    const out = [...messages];
-    out[index] = {
-      ...message,
-      providerOptions: {
-        ...message.providerOptions,
-        anthropic: { ...message.providerOptions?.anthropic, cacheControl: { type: 'ephemeral' } },
-      },
-    };
-    return out;
-  }
-  return messages;
+  const current = lastCacheableMessage(messages, messages.length);
+  if (current < 0) return messages;
+  const lastAssistant = messages.map(message => message.role === 'assistant').lastIndexOf(true);
+  const previous = lastCacheableMessage(messages, lastAssistant);
+  return messages.map((message, index) => index !== current && index !== previous ? message : {
+    ...message,
+    providerOptions: {
+      ...message.providerOptions,
+      anthropic: { ...message.providerOptions?.anthropic, cacheControl: { type: 'ephemeral' } },
+    },
+  });
 }

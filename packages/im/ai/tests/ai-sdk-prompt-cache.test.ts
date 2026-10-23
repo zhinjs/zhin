@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   applyPromptCacheToTools,
+  applyPromptCacheToMessages,
   buildPromptCacheKey,
   buildPromptCacheProviderOptions,
   isStreamPromptCacheEnabled,
@@ -69,13 +70,12 @@ describe('ai-sdk-prompt-cache', () => {
   });
 });
 
-import { applyPromptCacheToMessages } from '../src/llm/bridge/ai-sdk-prompt-cache.js';
 import { llmToolsToAiSdk } from '../src/llm/bridge/ai-sdk-messages.js';
 import type { ModelMessage } from 'ai';
 import { z } from 'zod';
 
 describe('conversation cache prefix', () => {
-  it('marks the last cacheable message only for enabled Anthropic requests without mutating history', () => {
+  it('marks the current and prior input only for enabled Anthropic requests without mutating history', () => {
     const messages: ModelMessage[] = [
       { role: 'user', content: 'question' },
       { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 't', toolName: 'read', input: {} }] },
@@ -83,7 +83,8 @@ describe('conversation cache prefix', () => {
     ];
     const before = structuredClone(messages);
     const result = applyPromptCacheToMessages(messages, { enabled: true, sdk: 'anthropic' });
-    expect(result.slice(0, -1)).toEqual(before.slice(0, -1));
+    expect(result[0]?.providerOptions).toEqual({ anthropic: { cacheControl: { type: 'ephemeral' } } });
+    expect(result[1]).toBe(messages[1]);
     expect(result[2]?.providerOptions).toEqual({ anthropic: { cacheControl: { type: 'ephemeral' } } });
     expect(messages).toEqual(before);
     for (const sdk of ['openai', 'openai-compatible', 'google', 'minimax']) {
@@ -109,5 +110,33 @@ describe('conversation cache prefix', () => {
     expect(Object.keys(llmToolsToAiSdk(tools)!)).toEqual(['a', 'z']);
     expect(JSON.stringify(llmToolsToAiSdk(tools))).toBe(JSON.stringify(llmToolsToAiSdk([...tools].reverse())));
     expect(tools.map(tool => tool.name)).toEqual(['z', 'a']);
+  });
+});
+
+
+describe('Anthropic previous-request anchor', () => {
+  it('keeps the input boundary before the last assistant response, not the penultimate message', () => {
+    const messages: import('ai').ModelMessage[] = [
+      { role: 'user', content: 'old input' },
+      { role: 'assistant', content: 'previous answer' },
+      ...Array.from({ length: 25 }, (_, i) => ({ role: 'user' as const, content: `new context ${i}` })),
+    ];
+    const before = structuredClone(messages);
+    const result = applyPromptCacheToMessages(messages, { sdk: 'anthropic', enabled: true });
+    const marked = result.flatMap((m, index) => m.providerOptions?.anthropic?.cacheControl ? [index] : []);
+    expect(marked).toEqual([0, messages.length - 1]);
+    expect(messages).toEqual(before);
+    expect(result[1]).toBe(messages[1]);
+  });
+
+  it('deduplicates anchors and does not mark empty content or reasoning-only history', () => {
+    const messages: import('ai').ModelMessage[] = [
+      { role: 'user', content: 'old input' },
+      { role: 'assistant', content: [{ type: 'reasoning', text: 'thinking' }] },
+      { role: 'user', content: '' },
+    ];
+    const result = applyPromptCacheToMessages(messages, { sdk: 'anthropic', enabled: true });
+    expect(result.filter(m => m.providerOptions?.anthropic?.cacheControl)).toHaveLength(1);
+    expect(result[1]).toBe(messages[1]);
   });
 });
