@@ -20,7 +20,7 @@ describe('anthropic provider (baseline)', () => {
     expect(req.headers['x-api-key']).toBe(TEST_API_KEY);
     expect(req.rawBody).not.toContain(TEST_API_KEY);
     expect(req.body.system).toEqual([{ type: 'text', text: 'You are zhin.', cache_control: { type: 'ephemeral' } }]);
-    expect(req.body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: '你好' }] }]);
+    expect(req.body.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: '你好', cache_control: { type: 'ephemeral' } }] }]);
 
     expect(message.stopReason).toBe('stop');
     expect(message.content).toEqual([{ type: 'text', text: '你好呀' }]);

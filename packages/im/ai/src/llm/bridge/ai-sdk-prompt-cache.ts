@@ -1,4 +1,4 @@
-import type { SystemModelMessage, ToolSet } from 'ai';
+import type { ModelMessage, SystemModelMessage, ToolSet } from 'ai';
 import type { SdkId } from '../sdk-registry.js';
 
 export type PromptCacheProviderOptions = {
@@ -130,4 +130,33 @@ export interface StreamPromptCacheOptions {
   promptCache?: boolean;
   promptCacheKey?: string;
   promptCacheRetention?: PromptCacheRetention;
+}
+
+/** Extend the existing Anthropic cache to the immutable conversation prefix.
+ * This adds one breakpoint (system + tools + history = at most three here),
+ * retaining the existing opt-out and ephemeral lifetime. Never mark thinking.
+ */
+export function applyPromptCacheToMessages(
+  messages: ModelMessage[],
+  input: PromptCacheApplyInput,
+): ModelMessage[] {
+  if (!input.enabled || input.sdk !== 'anthropic') return messages;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    const content = message.content;
+    const last = Array.isArray(content) ? content.at(-1) : undefined;
+    const cacheable = typeof content === 'string' ? content.trim().length > 0
+      : last && last.type !== 'reasoning' && (last.type !== 'text' || last.text.trim().length > 0);
+    if (!cacheable) continue;
+    const out = [...messages];
+    out[index] = {
+      ...message,
+      providerOptions: {
+        ...message.providerOptions,
+        anthropic: { ...message.providerOptions?.anthropic, cacheControl: { type: 'ephemeral' } },
+      },
+    };
+    return out;
+  }
+  return messages;
 }

@@ -226,7 +226,13 @@ Progress updates and final replies share this one record, and a repeated stateme
 
 ### Prompt caching
 
-The system prompt is ordered stable-first: the per-turn git status is the last section (`§12_git_status`), and time, session and other volatile details live in the user message's `[Turn context]`. Cache-read tokens reported by the provider are recorded in the turn trace, and `zhin trace last` shows the prompt cache hit count and its share of input tokens.
+Stable rules stay in the system prompt. Git status, time, session details and the current deferred-tool catalog belong to the current user context, so loading tools or changing files does not rewrite the system prefix. Tool definitions have a stable name order; current permissions and platform capabilities still determine the offered tools and schema.
+
+Runtime-injected workspace rules and loaded skills carry provenance. The model sees the first full version and short references for identical repetitions; changes emit the full new version. Raw history retains every original body. Tail loads, branch switches and compaction recompute the first full version from the available history, so references cannot point outside it. Unmarked legacy records, user text and ordinary tool results are never deduplicated by guessing from their text. `load_tool` confirms loading; the following request's tool definition supplies the arguments.
+
+Anthropic adds the same ephemeral cache breakpoint to the last cacheable message, alongside the existing system and tools breakpoints, to reuse conversation and tool history. `promptCache: false` still disables these markers. OpenAI keeps its existing routing key and automatic prefix caching; compatible gateways still require the declared capability for extra fields, and Gemini explicit caching keeps its existing configuration. TTLs and model-call counts are unchanged.
+
+`zhin trace last` reports cache-hit tokens returned by the provider. Context estimates include the output schema and projected messages after deduplication. Prefix tests prove reuse eligibility, not a server-side cache hit: actual hits, costs and latency depend on the model, cache lifetime and returned usage.
 
 ## Semantic memory
 

@@ -1,4 +1,4 @@
-import { type AgentMessageExtra, type AgentMessage, type UserMessage, createUserMessage, userMessagePlainText } from '@zhin.js/ai';
+import { type AgentMessageExtra, type AgentMessage, type UserMessage, type TextContentBlock, createUserMessage, userMessagePlainText, userMessageBody, renderUserMessageForLlm } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
 import { resolveTurnUserMessage } from '../session/session-io.js';
 import { prependTurnContextEnvelope } from './turn-envelope.js';
@@ -65,4 +65,17 @@ export function prependEnvelopeToFirstUserText(
   const nextContent = [...content];
   nextContent[textIdx] = { type: 'text', text: nextText };
   return [{ ...first, content: nextContent }, ...messages.slice(1)];
+}
+
+/** Keep provenance-bearing guidance separate from the actual participant text. */
+export function prependTurnContextBlocks(messages: AgentMessage[], blocks: readonly TextContentBlock[], extra?: AgentMessageExtra): AgentMessage[] {
+  const first = messages[0];
+  if (first?.role !== 'user' || !Array.isArray(first.content) || !blocks.length) return messages;
+  const user = first as UserMessage;
+  // Only the first text block carries the ingress presentation. Preserve the
+  // other blocks (including provenance) and current media without flattening.
+  const content = user.content.map((block, index) => index === 0 && !block.contextRef
+    ? { ...block, text: userMessageBody({ ...user, content: [block] }, extra) }
+    : block);
+  return [renderUserMessageForLlm({ ...user, content: [...blocks, ...content] }, extra), ...messages.slice(1)];
 }

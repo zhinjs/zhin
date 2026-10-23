@@ -84,6 +84,7 @@ export type {
   ToolResultMessage,
   CustomAgentMessage,
   ContentBlock,
+  TextContentBlock,
   MediaContentBlock,
   MediaBlockRef,
   LlmTool,
@@ -519,3 +520,5 @@ export type {
   DecisionQuestion, DecisionQuestions, ChoiceAnswer, ScoreAnswer, NoulAnswer,
   DecisionAnswer, DecisionRequest, DecisionResult, DecisionOptions, DecisionProvider,
 } from './decision/index.js';
+
+export { createPromptContextBlock, projectPromptContext } from './memory/prompt-context.js';

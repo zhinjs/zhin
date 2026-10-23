@@ -11,8 +11,9 @@ export default defineEvalCase({
   tools: [{ name: 'lookup', description: '查询', parameters: { type: 'object', properties: {
     query: { type: 'string', description: '字段说明'.repeat(3800) },
   } }, result: '查询结果' }],
+  // Keep history above the trigger even after the final-reply schema is compacted (#954).
   inbound: [
-    { text: '旧纪要：'.concat('请保留时间和负责人。'.repeat(120)) },
+    { text: '旧纪要：'.concat('请保留时间和负责人。'.repeat(220)) },
     { text: '继续确认负责人。' },
   ],
   script: [

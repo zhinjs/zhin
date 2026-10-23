@@ -7,7 +7,7 @@
  * provider's real `prompt_tokens` stays in the trace's model calls for
  * comparison. Only sizes are kept; prompt text never enters the report.
  */
-import { estimateAgentMessagesTokens, type AgentMessage, type AgentTool } from '@zhin.js/ai';
+import { projectPromptContext, estimateAgentMessagesTokens, type AgentMessage, type AgentTool } from '@zhin.js/ai';
 import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 import { AGENT_CATALOG_HEADING, DEFERRED_TOOL_INDEX_HEADING, SKILL_CATALOG_HEADING } from '../skill/capability-catalog.js';
 
@@ -15,6 +15,7 @@ import { AGENT_CATALOG_HEADING, DEFERRED_TOOL_INDEX_HEADING, SKILL_CATALOG_HEADI
 export const CONTEXT_BUDGET_SEGMENTS = [
   'system',
   'tool_schemas',
+  'output_schema',
   'tool_index',
   'skill_catalog',
   'agent_catalog',
@@ -27,10 +28,11 @@ export const CONTEXT_BUDGET_SEGMENTS = [
 
 export type ContextBudgetSegment = (typeof CONTEXT_BUDGET_SEGMENTS)[number];
 
-/** Segments that are paid on every request regardless of the conversation. */
+/** Fixed-cost categories; a catalog carried in turn data is deducted separately. */
 export const FIXED_CONTEXT_SEGMENTS: ReadonlySet<ContextBudgetSegment> = new Set([
   'system',
   'tool_schemas',
+  'output_schema',
   'tool_index',
   'skill_catalog',
   'agent_catalog',
@@ -48,7 +50,7 @@ export interface ContextBudgetSection {
 /** Snake_case: persisted inside the TurnTrace JSON. */
 export interface ContextBudgetReport {
   readonly total_tokens: number;
-  /** Sum of the segments in FIXED_CONTEXT_SEGMENTS. */
+  /** Fixed segments, excluding the current user-context tool catalog. */
   readonly fixed_tokens: number;
   readonly segments: Readonly<Record<ContextBudgetSegment, number>>;
   /** System prompt sections, largest first. */
@@ -59,6 +61,7 @@ export interface ContextBudgetReport {
 export interface ContextBudgetInput {
   /** The final system prompt sent to the model. */
   readonly systemPrompt: string;
+  readonly outputSchema?: Record<string, unknown>;
   /** Per-section text sizes from the prompt assembly (ids such as `§8_skills`). */
   readonly sections?: readonly Readonly<{ id: string; approxChars: number; approxTokens?: number }>[];
   /** Bootstrap text that went into the system prompt; capability catalogs are attributed out of it. */
@@ -125,17 +128,33 @@ export function buildContextBudgetReport(input: ContextBudgetInput): ContextBudg
     segments.bootstrap -= attributed;
   }
 
-  // The deferred tool index is appended to the system prompt after assembly.
+  // Legacy callers may still carry the tool index in system; current turns mark it in user context.
   segments.tool_index = estimatePromptTokens(headedBlock(input.systemPrompt, DEFERRED_TOOL_INDEX_HEADING));
 
   const attributedSystem = segments.tool_index + segments.skill_catalog + segments.agent_catalog + segments.memory + segments.bootstrap;
   segments.system = Math.max(0, systemTokens - attributedSystem);
   segments.tool_schemas = toolSchemaTokens(input.loadedTools);
-  segments.history = estimateAgentMessagesTokens([...input.historyMessages]);
-
-  const userTokens = estimateAgentMessagesTokens([...input.userMessages]);
-  segments.active_skills = Math.min(estimatePromptTokens(input.activeSkillsContext ?? ''), userTokens);
-  segments.user = userTokens - segments.active_skills;
+  segments.output_schema = input.outputSchema ? estimatePromptTokens(JSON.stringify(input.outputSchema)) : 0;
+  const projected = projectPromptContext([...input.historyMessages, ...input.userMessages]);
+  segments.history = estimateAgentMessagesTokens(projected.slice(0, input.historyMessages.length));
+  const current = projected.slice(input.historyMessages.length);
+  const contextTokens = (key: (key: string) => boolean) => input.userMessages.reduce((total, message, index) => {
+    const renderedContent = current[index]?.content;
+    if (!Array.isArray(message.content) || !Array.isArray(renderedContent)) return total;
+    return total + message.content.reduce((sum: number, block: { contextRef?: { key: string } }, blockIndex: number) => {
+      const rendered = renderedContent[blockIndex];
+      return sum + (typeof block.contextRef?.key === 'string' && key(block.contextRef.key) && rendered?.type === 'text'
+        ? estimatePromptTokens(rendered.text) : 0);
+    }, 0);
+  }, 0);
+  const dynamicIndexTokens = contextTokens(key => key === 'deferred-tools');
+  segments.tool_index += dynamicIndexTokens;
+  const userTokens = estimateAgentMessagesTokens(current);
+  const skillTokens = contextTokens(key => key.startsWith('skill:'));
+  const hasMarkedSkills = input.userMessages.some(message => Array.isArray(message.content)
+    && message.content.some(block => typeof block.contextRef?.key === 'string' && block.contextRef.key.startsWith('skill:')));
+  segments.active_skills = Math.min(hasMarkedSkills ? skillTokens : estimatePromptTokens(input.activeSkillsContext ?? ''), userTokens);
+  segments.user = Math.max(0, userTokens - segments.active_skills - dynamicIndexTokens);
 
   const total = CONTEXT_BUDGET_SEGMENTS.reduce((sum, segment) => sum + segments[segment], 0);
   const fixed = CONTEXT_BUDGET_SEGMENTS
@@ -144,7 +163,7 @@ export function buildContextBudgetReport(input: ContextBudgetInput): ContextBudg
 
   return Object.freeze({
     total_tokens: total,
-    fixed_tokens: fixed,
+    fixed_tokens: fixed - dynamicIndexTokens,
     segments: Object.freeze(segments),
     sections: Object.freeze(sections),
     tools: Object.freeze({ loaded: input.loadedTools.length, deferred: input.deferredToolCount }),

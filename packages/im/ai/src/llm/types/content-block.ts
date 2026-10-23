@@ -15,6 +15,11 @@ export interface MediaBlockRef {
 export interface TextContentBlock {
   type: 'text';
   text: string;
+  /** Runtime-injected guidance, persisted verbatim; never inferred from user text.
+   * The digest prevents a later text transform from reusing stale provenance.
+   * Provider bridges must not serialize this metadata.
+   */
+  contextRef?: { readonly key: string; readonly digest: string };
   /**
    * Gemini 3 may sign a text part (`google.thoughtSignature`); it is sent back with
    * the text on the next request. Only set on assistant text.

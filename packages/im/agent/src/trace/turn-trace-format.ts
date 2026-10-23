@@ -110,6 +110,7 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
 const SEGMENT_LABEL: Record<ContextBudgetSegment, string> = {
   system: '系统提示',
   tool_schemas: '工具 schema',
+  output_schema: '输出 schema',
   tool_index: '按需工具索引',
   skill_catalog: '技能目录',
   agent_catalog: '专家 agent 目录',

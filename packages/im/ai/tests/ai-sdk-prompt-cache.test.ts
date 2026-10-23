@@ -68,3 +68,46 @@ describe('ai-sdk-prompt-cache', () => {
     });
   });
 });
+
+import { applyPromptCacheToMessages } from '../src/llm/bridge/ai-sdk-prompt-cache.js';
+import { llmToolsToAiSdk } from '../src/llm/bridge/ai-sdk-messages.js';
+import type { ModelMessage } from 'ai';
+import { z } from 'zod';
+
+describe('conversation cache prefix', () => {
+  it('marks the last cacheable message only for enabled Anthropic requests without mutating history', () => {
+    const messages: ModelMessage[] = [
+      { role: 'user', content: 'question' },
+      { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 't', toolName: 'read', input: {} }] },
+      { role: 'tool', content: [{ type: 'tool-result', toolCallId: 't', toolName: 'read', output: { type: 'text', value: 'result' } }] },
+    ];
+    const before = structuredClone(messages);
+    const result = applyPromptCacheToMessages(messages, { enabled: true, sdk: 'anthropic' });
+    expect(result.slice(0, -1)).toEqual(before.slice(0, -1));
+    expect(result[2]?.providerOptions).toEqual({ anthropic: { cacheControl: { type: 'ephemeral' } } });
+    expect(messages).toEqual(before);
+    for (const sdk of ['openai', 'openai-compatible', 'google', 'minimax']) {
+      expect(applyPromptCacheToMessages(messages, { enabled: true, sdk })).toBe(messages);
+    }
+    expect(applyPromptCacheToMessages(messages, { enabled: false, sdk: 'anthropic' })).toBe(messages);
+  });
+
+  it('preserves existing provider options and skips empty/thinking-only trailing messages', () => {
+    const messages: ModelMessage[] = [
+      { role: 'user', content: 'start', providerOptions: { other: { keep: true } } },
+      { role: 'assistant', content: [{ type: 'reasoning', text: 'signed thought' }] },
+      { role: 'user', content: '' },
+    ];
+    const out = applyPromptCacheToMessages(messages, { enabled: true, sdk: 'anthropic' });
+    expect(out[0]?.providerOptions).toMatchObject({ other: { keep: true }, anthropic: { cacheControl: { type: 'ephemeral' } } });
+    expect(out[1]).toBe(messages[1]);
+    expect(out[2]).toBe(messages[2]);
+  });
+
+  it('keeps tool definitions stable when the same set arrives in a different recency order', () => {
+    const tools = ['z', 'a'].map(name => ({ name, description: name, parameters: z.object({ value: z.string() }) }));
+    expect(Object.keys(llmToolsToAiSdk(tools)!)).toEqual(['a', 'z']);
+    expect(JSON.stringify(llmToolsToAiSdk(tools))).toBe(JSON.stringify(llmToolsToAiSdk([...tools].reverse())));
+    expect(tools.map(tool => tool.name)).toEqual(['z', 'a']);
+  });
+});
