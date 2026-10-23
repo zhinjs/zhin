@@ -108,6 +108,7 @@ export {
   computeBackoffDelay,
   createResilientCompletionPort,
   describeProviderFailure,
+  providerFailureKind,
   isProviderFailureMessage,
   parseRetryAfterMs,
   resolveProviderResilienceConfig,

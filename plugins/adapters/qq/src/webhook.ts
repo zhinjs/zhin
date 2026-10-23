@@ -100,10 +100,10 @@ export function defaultCreateHttpBot(config: ResolvedQqHttpConfig): QqHttpBotTra
     removeAllListeners: () => {
       bot.removeAllListeners(undefined as never);
     },
-    sendPrivateMessage: (userId, message) => bot.sendPrivateMessage(userId, message as Sendable),
-    sendGroupMessage: (groupId, message) => bot.sendGroupMessage(groupId, message as Sendable),
-    sendGuildMessage: (channelId, message) => bot.sendGuildMessage(channelId, message as Sendable),
-    sendDirectMessage: (guildId, message) => bot.sendDirectMessage(guildId, message as Sendable),
+    sendPrivateMessage: (userId, message, source, options) => bot.sendPrivateMessage(userId, message as Sendable, source, options),
+    sendGroupMessage: (groupId, message, source, options) => bot.sendGroupMessage(groupId, message as Sendable, source, options),
+    sendGuildMessage: (channelId, message, source, options) => bot.sendGuildMessage(channelId, message as Sendable, source, options),
+    sendDirectMessage: (guildId, message, source, options) => bot.sendDirectMessage(guildId, message as Sendable, source, options),
     recallPrivateMessage: (userId, messageId) => bot.recallPrivateMessage(userId, messageId),
     recallGroupMessage: (groupId, messageId) => bot.recallGroupMessage(groupId, messageId),
     recallGuildMessage: (channelId, messageId) => bot.recallGuildMessage(channelId, messageId),

@@ -28,3 +28,27 @@ it.each(['reject', 'cut', 'missing-id'])('actual SDK outbound %s submits once an
     expect(requests).toBe(1);
   } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 });
+
+it('actual SDK sends the msg_seq the Endpoint assigns to a passive reply', async () => {
+  const bodies: Array<Record<string, unknown>> = [];
+  const server = createServer((request, response) => {
+    let raw = '';
+    request.on('data', chunk => { raw += chunk; });
+    request.on('end', () => {
+      bodies.push(JSON.parse(raw || '{}'));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ id: `out-${bodies.length}` }));
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const require = createRequire(import.meta.url);
+  const { Bot } = require(join(dirname(require.resolve('qq-official-bot/package.json')), 'lib/bot.js'));
+  const address = server.address() as { port: number };
+  const bot = new Bot({ mode: 'websocket', appid: 'fixture', secret: 'fixture', apiBaseUrl: `http://127.0.0.1:${address.port}`, timeout: 1000 });
+  try {
+    await bot.messageService.sendGroupMessage('g1', 'hi', { id: 'in-1' }, { msgSeq: 3 });
+    await bot.messageService.sendGroupMessage('g1', 'hi again', { id: 'in-1' });
+    expect(bodies[0]).toMatchObject({ msg_id: 'in-1', msg_seq: 3 });
+    expect(bodies[1]).toMatchObject({ msg_id: 'in-1', msg_seq: expect.any(Number) });
+  } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
+});

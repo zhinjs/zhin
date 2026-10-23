@@ -99,6 +99,18 @@ export interface AdapterSegmentPolicy {
    * `hint` 追加到回复提示词。仅对实际提供给模型的段生效，不声明则不增加任何提示。
    */
   readonly model?: Readonly<Record<string, AdapterSegmentModelExtension>>;
+  /**
+   * Reactions the Agent may put on the message it answers instead of (or before) replying, like a
+   * person who just taps 👍. Requires `control.addReaction` on the Endpoint.
+   */
+  readonly reaction?: AdapterReactionDeclaration;
+}
+
+export interface AdapterReactionDeclaration {
+  /** Platform reaction values (emoji or platform ids) with what each means, shown to the model. */
+  readonly values: readonly { readonly value: string; readonly label: string }[];
+  /** Conversation kinds where reactions work; omitted means every kind. */
+  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
 }
 
 export interface AdapterSegmentModelExtension {
@@ -284,6 +296,7 @@ function normalizeSegmentPolicy(
     throw new TypeError("Adapter segments.markdown must be 'native' or 'text'");
   }
   const model = normalizeSegmentModel(policy.model);
+  const reaction = normalizeReaction(policy.reaction);
   return Object.freeze({
     ...(policy.supported ? { supported: Object.freeze([...new Set(policy.supported)]) } : {}),
     ...(policy.html ? { html: policy.html } : {}),
@@ -293,6 +306,20 @@ function normalizeSegmentPolicy(
     ...(policy.interactive ? { interactive: policy.interactive } : {}),
     ...(policy.markdown ? { markdown: policy.markdown } : {}),
     ...(model ? { model } : {}),
+    ...(reaction ? { reaction } : {}),
+  });
+}
+
+function normalizeReaction(reaction: AdapterSegmentPolicy['reaction']): AdapterSegmentPolicy['reaction'] {
+  if (reaction === undefined) return undefined;
+  const invalid = () => new TypeError('Adapter segments.reaction must be { values: { value, label }[], scopes?: (private | group | channel)[] }');
+  if (!reaction || typeof reaction !== 'object' || !Array.isArray(reaction.values) || reaction.values.length === 0) throw invalid();
+  if (reaction.values.some(item => !item || typeof item.value !== 'string' || !item.value || typeof item.label !== 'string' || !item.label.trim())) throw invalid();
+  if (reaction.scopes !== undefined && (!Array.isArray(reaction.scopes) || reaction.scopes.some(scope => scope !== 'private' && scope !== 'group' && scope !== 'channel'))) throw invalid();
+  const values = [...new Map(reaction.values.map(item => [item.value, Object.freeze({ value: item.value, label: item.label.trim() })])).values()];
+  return Object.freeze({
+    values: Object.freeze(values),
+    ...(reaction.scopes ? { scopes: Object.freeze([...new Set(reaction.scopes)]) } : {}),
   });
 }
 

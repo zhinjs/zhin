@@ -15,19 +15,23 @@ const validators = new Map<string, ValidateFunction<StructuredReply>>();
 
 interface StructuredReply {
   messages: { segments: Segment[] }[];
+  reaction?: string;
 }
+
+/** Segment of the internal message that carries a reaction; the reply port applies it, never sends it. */
+export const REACTION_SEGMENT_TYPE = 'reaction';
 const DEFAULT_PROFILE: AiOutboundSegmentProfile = { types: DEFAULT_AI_OUTBOUND_SEGMENT_TYPES };
 const schemas = new Map<string, Record<string, unknown>>([[key(DEFAULT_PROFILE), aiOutboundJsonSchema]]);
 
 function key(profile: AiOutboundSegmentProfile): string {
-  return JSON.stringify([[...profile.types].sort(), profile.extensions ?? {}]);
+  return JSON.stringify([[...profile.types].sort(), profile.extensions ?? {}, profile.reaction?.values.map(item => item.value) ?? []]);
 }
 
 /** Provider-facing schema for exactly this endpoint profile (cached, stable identity). */
 export function structuredReplySchema(profile: AiOutboundSegmentProfile = DEFAULT_PROFILE): Record<string, unknown> {
   const id = key(profile);
   let schema = schemas.get(id);
-  if (!schema) schemas.set(id, schema = buildAiOutboundJsonSchema(profile.types, profile.extensions));
+  if (!schema) schemas.set(id, schema = buildAiOutboundJsonSchema(profile.types, profile.extensions, profile.reaction));
   return schema;
 }
 
@@ -57,7 +61,15 @@ export function structuredReplyInstruction(profile: AiOutboundSegmentProfile = D
     'Do not invent IDs or media references. Plain @name text does not notify anyone. Keep mentions, media and buttons as their own segments and preserve the intended order.',
     'The reply already goes to this conversation: mention someone only to call that person in.',
     'Business tool calls use their normal tool schemas; this message schema describes only the final user-facing answer, including the json response tool when supplied. Use {"messages":[]} only when no reply is needed.',
+    ...(profile.reaction ? reactionInstruction(profile.reaction.values) : []),
   ].join('\n');
+}
+
+function reactionInstruction(values: readonly { readonly value: string; readonly label: string }[]): string[] {
+  return [
+    `"reaction" puts a reaction on the message you are answering, the way a person taps one instead of typing. Values here: ${values.map(item => `${item.value} ${item.label}`).join(', ')}; "" for none.`,
+    'A reaction alone ({"messages":[],"reaction":"<value>"}) is often the most natural answer to thanks, agreement, a joke or news that needs no words. A reaction plus a short message is fine; do not say in words what the reaction already says.',
+  ];
 }
 
 export const STRUCTURED_REPLY_INSTRUCTION = structuredReplyInstruction();
@@ -78,6 +90,15 @@ export function decodeStructuredReply(
   // Replies persisted before multi-message replies are a single {segments} message; models may echo it.
   if (value && typeof value === 'object' && !Array.isArray(value) && 'segments' in value && !('messages' in value)) {
     value = { messages: [value] };
+  }
+  // "reaction" is required only to satisfy strict schemas; a reply without it simply has none.
+  if (profile.reaction && value && typeof value === 'object' && !Array.isArray(value) && !('reaction' in value)) {
+    value = { ...value, reaction: '' };
+  }
+  // Where reactions are not offered, a reaction the model wrote anyway is dropped, not a format error.
+  if (!profile.reaction && value && typeof value === 'object' && !Array.isArray(value) && 'reaction' in value) {
+    const { reaction: _ignored, ...rest } = value as Record<string, unknown>;
+    value = rest;
   }
   const id = key(profile);
   let validateReply = validators.get(id);
@@ -100,8 +121,12 @@ export function decodeStructuredReply(
       }
     }
   }
-  return value.messages.filter(message => message.segments.length > 0)
+  const messages: AgentOutputElement[] = value.messages.filter(message => message.segments.length > 0)
     .map(message => ({ type: 'message', segments: message.segments.map(segment => withoutEmptyModelFields(segment, profile)) }));
+  // React first, then talk, like a person tapping a reaction before typing.
+  return value.reaction
+    ? [{ type: 'message', segments: [{ type: REACTION_SEGMENT_TYPE, data: { emoji: value.reaction } } as Segment] }, ...messages]
+    : messages;
 }
 
 function stringifyNumbersWhereStringsExpected(value: unknown, errors: readonly ErrorObject[]): void {

@@ -12,6 +12,12 @@ import {
 import type { EndpointTransportState } from 'zhin.js/adapter';
 import type { MediaRef, Segment } from '@zhin.js/im-contract';
 import type { QqOutboundMessage } from './outbound.js';
+import type { QqReplySource } from './passive-reply.js';
+
+/** Per-send options. `msgSeq` numbers replies to one passive source (qq-official-bot ≥ 1.3.3). */
+export interface QqSendOptions {
+  readonly msgSeq?: number;
+}
 import type { QqChannelKind, QqInboundMessage, ResolvedQqWebsocketConfig } from './protocol.js';
 
 /** SDK business surface exposed to plugins without bypassing Endpoint lifecycle ownership. */
@@ -45,10 +51,11 @@ export interface QqBotTransport {
   stop(): Promise<void>;
   on(event: string, listener: (...args: unknown[]) => void): void;
   removeAllListeners(): void;
-  sendPrivateMessage(userId: string, message: QqOutboundMessage): Promise<unknown>;
-  sendGroupMessage(groupId: string, message: QqOutboundMessage): Promise<unknown>;
-  sendGuildMessage(channelId: string, message: QqOutboundMessage): Promise<unknown>;
-  sendDirectMessage?(guildId: string, message: QqOutboundMessage): Promise<unknown>;
+  /** `source` makes it a passive reply; without it the platform treats the message as active. */
+  sendPrivateMessage(userId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
+  sendGroupMessage(groupId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
+  sendGuildMessage(channelId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
+  sendDirectMessage?(guildId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
   recallPrivateMessage?(userId: string, messageId: string): Promise<unknown>;
   recallGroupMessage?(groupId: string, messageId: string): Promise<unknown>;
   recallGuildMessage?(channelId: string, messageId: string): Promise<unknown>;
@@ -325,10 +332,10 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
       for (const entry of receiverListeners.splice(0)) receiver.removeListener(entry.event, entry.listener);
       bot.removeAllListeners(undefined as never);
     },
-    sendPrivateMessage: (userId, message) => bot.sendPrivateMessage(userId, message as Sendable),
-    sendGroupMessage: (groupId, message) => bot.sendGroupMessage(groupId, message as Sendable),
-    sendGuildMessage: (channelId, message) => bot.sendGuildMessage(channelId, message as Sendable),
-    sendDirectMessage: (guildId, message) => bot.sendDirectMessage(guildId, message as Sendable),
+    sendPrivateMessage: (userId, message, source, options) => bot.sendPrivateMessage(userId, message as Sendable, source, options),
+    sendGroupMessage: (groupId, message, source, options) => bot.sendGroupMessage(groupId, message as Sendable, source, options),
+    sendGuildMessage: (channelId, message, source, options) => bot.sendGuildMessage(channelId, message as Sendable, source, options),
+    sendDirectMessage: (guildId, message, source, options) => bot.sendDirectMessage(guildId, message as Sendable, source, options),
     recallPrivateMessage: (userId, messageId) => bot.recallPrivateMessage(userId, messageId),
     recallGroupMessage: (groupId, messageId) => bot.recallGroupMessage(groupId, messageId),
     recallGuildMessage: (channelId, messageId) => bot.recallGuildMessage(channelId, messageId),

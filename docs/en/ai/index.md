@@ -280,12 +280,14 @@ ai:
     keywords: []               # trigger when a DM contains one of these
     timeout: 60000             # per-turn timeout (ms)
     thinkingMessage: Thinking… # optional placeholder reply before processing
-    errorTemplate: "❌ AI failed: {error}"
+    # errorTemplate: "Error: {error}"  # optional; unset, the bot says it lagged in a chat voice and the owner also sees the cause
     masters: ["10001"]         # users with approval rights
     trusted: []                # trusted users (below master)
 ```
 
 Mention triggering relies on the adapter flagging the message as mentioning the bot (CQ codes, Slack `app_mention`, etc.).
+
+When a turn fails, the bot says so in a chat voice ("刚卡了一下，你再说一遍？") without mentioning models, keys or retries; when the sender is the owner (master), a short cause is appended in brackets, such as "（模型额度用完了）". The full error goes to the logs only. HTTP, Console and other non-chat entry points keep the precise messages. A configured `errorTemplate` still formats entry-level errors.
 
 Mentions, quotes and DMs always reach the Agent. The Agent may still decide no reply is needed and return an empty reply (`{"messages":[]}`), in which case nothing is sent.
 

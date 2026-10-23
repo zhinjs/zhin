@@ -389,7 +389,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.trigger.ignorePrefixes` | array&lt;string&gt; | no | — | 忽略的前缀（命令前缀，避免与命令冲突，默认 ['/', '!', '！']） |
 | `ai.trigger.timeout` | number \| string | no | — | 超时时间（毫秒，默认 60000） |
 | `ai.trigger.thinkingMessage` | string | no | — | 思考中提示语（可选，设置后会在处理前发送） |
-| `ai.trigger.errorTemplate` | string | no | — | 错误提示模板（默认 '❌ AI 处理失败: {error}'） |
+| `ai.trigger.errorTemplate` | string | no | — | 入口层错误提示模板，{error} 为错误信息（可选；不配置时用聊天口吻说"刚卡了一下"，主人额外看到原因） |
 | `ai.trigger.ambient` | object | no | — | 群聊旁听：群里没人叫机器人时，由判断模型决定是否接话。被 @、引用和私聊不经过这里，总会交给 Agent（Agent 也可以选择不回复）。 |
 | `ai.trigger.ambient.conversations` | array&lt;string&gt; | no | — | 开启旁听的群，格式 platform:groupId；* 表示所有群。默认为空（关闭） |
 | `ai.trigger.ambient.judge` | string \| array | no | — | 判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型 |

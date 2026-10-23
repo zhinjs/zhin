@@ -12,16 +12,16 @@ const INSUFFICIENT_QUOTA = {
 
 export default defineEvalCase({
   id: 'provider-openai-insufficient-quota-not-retried',
-  description: 'An OpenAI 429 insufficient_quota is not retried like a rate limit; the user gets the billing message.',
+  description: 'An OpenAI 429 insufficient_quota is not retried like a rate limit; the owner is told the account is out of credit.',
   source: '#724 provider audit S19: OpenAI insufficient_quota retried uselessly',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候' },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', roles: ['master'] } },
   script: [
     { model: 'scripted-model', fault: { kind: 'error', message: INSUFFICIENT_QUOTA.error.message, status: 429, body: INSUFFICIENT_QUOTA } },
   ],
   expect: {
     modelIds: ['scripted-model'],
-    outboundContains: ['余额不足'],
+    outboundContains: ['（模型账户欠费）'],
     outboundNotContains: ['exceeded your current quota', '限流'],
     termination: 'turn_end',
     modelSteps: 1,
