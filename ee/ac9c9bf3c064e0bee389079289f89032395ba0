@@ -1,0 +1,35 @@
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_cfb9530c2a6402 110,258
+packages/im/plugin-runtime/src/relational-state.ts
+  s_079f1dc5e6308d::t_eca0da5d6fbc52 21-23
+plugins/utils/rss/plugin.ts
+  s_079f1dc5e6308d::t_1568ebfc9b0eda 3,86-88
+scripts/check-api-docs-surface.mjs
+  s_079f1dc5e6308d::t_de4194284954fd 27,116
+packages/im/plugin-runtime/src/plugin.ts
+  s_049610816b2cf4::t_33f0596252131e 105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eeac9c9bf3c064e0bee389079289f89032395ba0",
+  "prompts": {},
+  "sessions": {
+    "s_049610816b2cf4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a167dc-ebf1-79a3-90c8-04c2d3850bbc",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
