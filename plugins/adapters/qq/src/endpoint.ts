@@ -20,6 +20,8 @@ import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { collectOutboundImageSizes, formatOutboundMessages } from './outbound.js';
+import { QqActiveMessageGate, QqPassiveReplyLedger } from './passive-reply.js';
+import { sendQqMessages } from './qq-send.js';
 import {
   formatInboundContent,
   parseCompoundMessageId,
@@ -67,6 +69,9 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   #bot: QqBotTransport | null = null;
   #open = false;
   readonly #seenInteractions = new Map<string, number>();
+  /** Recent msg_id / event_id per conversation, so replies go out as passive messages. */
+  readonly #passiveReplies = new QqPassiveReplyLedger();
+  readonly #activeGate = new QqActiveMessageGate();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
   readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
@@ -169,23 +174,12 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     const bot = this.#requireBot();
     let result: unknown;
     try {
-      for (const message of messages) {
-        switch (kind) {
-          case 'private':
-            result = await bot.sendPrivateMessage(conversation.id, message);
-            break;
-          case 'group':
-            result = await bot.sendGroupMessage(conversation.id, message);
-            break;
-          case 'channel':
-            result = await bot.sendGuildMessage(conversation.id, message);
-            break;
-          case 'direct':
-            if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-            result = await bot.sendDirectMessage(conversation.id, message);
-            break;
-        }
-      }
+      result = await sendQqMessages({
+        bot,
+        ledger: this.#passiveReplies,
+        activeGate: this.#activeGate,
+        log: fields => this.#logger.warn(formatCompact(fields)),
+      }, conversation, messages);
     } catch (error) {
       const { failure, diagnostic } = qqDeliveryFailure(error);
       this.#logger.warn(formatCompact(diagnostic));
@@ -224,6 +218,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
       + ` | ${truncatePreview(content, 80)}`,
     );
     const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
+    if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
@@ -266,6 +261,8 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     // ACK owns only platform loading state, never implies business acceptance.
     void action.ack().then(ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); }, () => this.#logger.warn('qq_interaction_ack_failed'));
     const conversation = qqInboundConversation(String(this.#options.id), action.message);
+    // INTERACTION_CREATE's id is an event_id the reply may answer passively.
+    this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { event_id: action.message.id });
     void this.emit('message.receive', {
       conversation, message: { conversation, id: action.message.id }, content: '',
       segments: action.message.segments, sender: { id: action.message.authorId }, endpointId: this.#options.config.id,
@@ -330,6 +327,9 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   #bot: QqHttpBotTransport | null = null;
   #open = false;
   readonly #seenInteractions = new Map<string, number>();
+  /** Recent msg_id / event_id per conversation, so replies go out as passive messages. */
+  readonly #passiveReplies = new QqPassiveReplyLedger();
+  readonly #activeGate = new QqActiveMessageGate();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
   readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
@@ -432,23 +432,12 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     const bot = this.#requireBot();
     let result: unknown;
     try {
-      for (const message of messages) {
-        switch (kind) {
-          case 'private':
-            result = await bot.sendPrivateMessage(conversation.id, message);
-            break;
-          case 'group':
-            result = await bot.sendGroupMessage(conversation.id, message);
-            break;
-          case 'channel':
-            result = await bot.sendGuildMessage(conversation.id, message);
-            break;
-          case 'direct':
-            if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-            result = await bot.sendDirectMessage(conversation.id, message);
-            break;
-        }
-      }
+      result = await sendQqMessages({
+        bot,
+        ledger: this.#passiveReplies,
+        activeGate: this.#activeGate,
+        log: fields => this.#logger.warn(formatCompact(fields)),
+      }, conversation, messages);
     } catch (error) {
       const { failure, diagnostic } = qqDeliveryFailure(error);
       this.#logger.warn(formatCompact(diagnostic));
@@ -486,6 +475,7 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
       + ` | ${truncatePreview(content, 80)}`,
     );
     const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
+    if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
     void this.emit('message.receive', {
       conversation,
       message: { conversation, id: msg.id },
@@ -528,6 +518,8 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     // ACK owns only platform loading state, never implies business acceptance.
     void action.ack().then(ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); }, () => this.#logger.warn('qq_interaction_ack_failed'));
     const conversation = qqInboundConversation(String(this.#options.id), action.message);
+    // INTERACTION_CREATE's id is an event_id the reply may answer passively.
+    this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { event_id: action.message.id });
     void this.emit('message.receive', {
       conversation, message: { conversation, id: action.message.id }, content: '',
       segments: action.message.segments, sender: { id: action.message.authorId }, endpointId: this.#options.config.id,
