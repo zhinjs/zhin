@@ -1,0 +1,14 @@
+docs/adapters/qq.md
+  h_b680f75345178a 11,201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b2778f040c10621a0c8d2cf2632b7ade2755b52c",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
