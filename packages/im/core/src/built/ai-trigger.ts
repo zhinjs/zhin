@@ -58,7 +58,7 @@ export interface AITriggerConfig {
   /** 思考中提示（可选） */
   thinkingMessage?: string;
   
-  /** 错误消息模板 */
+  /** 入口层错误提示模板（可选；不配置时用聊天口吻，主人额外看到原因） */
   errorTemplate?: string;
   
   /** 全局 master（trigger 级，赋予 master 角色） */

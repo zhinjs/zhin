@@ -52,7 +52,7 @@ import {
 } from './content.js';
 import {
   hasIgnoredTriggerPrefix,
-  renderTriggerError,
+  renderChatTurnError,
   resolveRuntimeAgentTrigger,
   resolveTriggerTimeoutMs,
   restrictWorkroomAgentCapabilities,
@@ -650,7 +650,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const detail = error instanceof Error ? error.message : String(error);
         logger.warn(formatCompact({ op: 'agent_host_turn_fail', error: detail }));
         try {
-          await reply(renderTriggerError(trigger, detail));
+          const line = renderChatTurnError(trigger, error, senderRoles.isMaster);
+          if (line) await reply(line);
         } catch {
           /* ignore reply failure */
         }
