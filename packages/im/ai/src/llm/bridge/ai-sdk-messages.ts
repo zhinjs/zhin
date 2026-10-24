@@ -16,6 +16,7 @@ import {
 import { repairAgentMessagesForLlm } from '../repair-agent-messages.js';
 import type { LlmTool } from '../types/tool.js';
 import { geminiCompatibleSchema } from '../json-schema-zod.js';
+import { createToolNameCodec, type ToolNameCodec } from './tool-name-wire.js';
 
 /**
  * DeepSeek thinking + tools requires `reasoning_content` on every assistant
@@ -39,6 +40,11 @@ export type AiSdkMessageBridgeOptions = {
   readonly ensureToolCallReasoning?: boolean;
   /** Provider SDK id — gates Anthropic signed-thinking round-trip. */
   readonly sdk?: string;
+  /**
+   * Internal → wire tool-name mapping (see `createToolNameCodec`). Defaults to a
+   * codec for `sdk`, so Gemini never sees an invalid function name in history.
+   */
+  readonly toolNames?: ToolNameCodec;
 };
 
 /** SDKs that convert messages via Anthropic prompt + signed thinking blocks. */
@@ -137,7 +143,8 @@ function thinkingToReasoningParts(
 
 function assistantToAiMessage(
   message: AssistantMessage,
-  options?: AiSdkMessageBridgeOptions,
+  options: AiSdkMessageBridgeOptions | undefined,
+  toolNames: ToolNameCodec,
 ): ModelMessage {
   const textParts = message.content
     .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
@@ -151,7 +158,7 @@ function assistantToAiMessage(
     .map((b) => ({
       type: 'tool-call' as const,
       toolCallId: b.id,
-      toolName: b.name,
+      toolName: toolNames.toWire(b.name),
       input: b.arguments,
       ...(b.providerOptions ? { providerOptions: b.providerOptions } : {}),
     }));
@@ -175,7 +182,7 @@ function assistantToAiMessage(
   };
 }
 
-function toolResultToAiMessage(message: ToolResultMessage): ModelMessage {
+function toolResultToAiMessage(message: ToolResultMessage, toolNames: ToolNameCodec): ModelMessage {
   const text = message.content
     .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
     .map((b) => b.text)
@@ -186,7 +193,7 @@ function toolResultToAiMessage(message: ToolResultMessage): ModelMessage {
       {
         type: 'tool-result',
         toolCallId: message.toolCallId,
-        toolName: message.toolName,
+        toolName: toolNames.toWire(message.toolName),
         output: {
           type: message.isError ? 'error-text' : 'text',
           value: text || (message.isError ? 'Error' : ''),
@@ -203,14 +210,15 @@ export function agentMessagesToAiSdk(
 ): ModelMessage[] {
   const out: ModelMessage[] = [];
   const source = options?.preRepaired ? messages : repairAgentMessagesForLlm(messages);
+  const toolNames = options?.toolNames ?? createToolNameCodec([], options?.sdk);
   for (const message of source) {
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'user') {
       out.push({ role: 'user', content: userBlocksToAiContent(message, mediaCapabilities) });
     } else if (message.role === 'assistant') {
-      out.push(assistantToAiMessage(message, options));
+      out.push(assistantToAiMessage(message, options, toolNames));
     } else if (message.role === 'toolResult') {
-      out.push(toolResultToAiMessage(message));
+      out.push(toolResultToAiMessage(message, toolNames));
     }
   }
   return options?.sdk === 'google' ? orderGeminiFunctionCallTurns(out) : out;
@@ -272,6 +280,7 @@ export function contextToAiSdkPrompt(
     preRepaired: context.preRepaired === true,
     ensureToolCallReasoning: options?.ensureToolCallReasoning,
     sdk: options?.sdk,
+    toolNames: options?.toolNames,
   });
   const system = context.systemPrompt.trim() || undefined;
   return { system, messages };
@@ -308,11 +317,17 @@ function toolInputSchema(llmTool: LlmTool, sdk: string | undefined) {
   });
 }
 
+/**
+ * LlmTool[] → AI SDK ToolSet keyed by wire names. For Gemini, names that break its
+ * function-name rule (e.g. a leading digit) are rewritten via `toolNames`; pass the
+ * same codec to the message bridge and map returned tool calls back with `fromWire`.
+ */
 export function llmToolsToAiSdk(
   tools: LlmTool[] | undefined,
-  options?: { sdk?: string },
+  options?: { sdk?: string; toolNames?: ToolNameCodec },
 ): ToolSet | undefined {
   if (!tools?.length) return undefined;
+  const toolNames = options?.toolNames ?? createToolNameCodec(tools.map((t) => t.name), options?.sdk);
   const out: ToolSet = {};
   for (const llmTool of [...tools].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
     const base = tool({
@@ -320,14 +335,14 @@ export function llmToolsToAiSdk(
       inputSchema: toolInputSchema(llmTool, options?.sdk),
     });
     if (llmTool.deferLoading) {
-      out[llmTool.name] = {
+      out[toolNames.toWire(llmTool.name)] = {
         ...base,
         providerOptions: {
           anthropic: { deferLoading: true },
         },
       } as typeof base;
     } else {
-      out[llmTool.name] = base;
+      out[toolNames.toWire(llmTool.name)] = base;
     }
   }
   return out;
