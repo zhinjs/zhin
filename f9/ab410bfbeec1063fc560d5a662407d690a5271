@@ -1,0 +1,28 @@
+.changeset/gemini-tool-name-sanitize.md
+  h_b680f75345178a 1-5
+docs/ai/index.md
+  h_b680f75345178a 179-180
+docs/en/ai/index.md
+  h_b680f75345178a 179-180
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  h_b680f75345178a 19,43-47,146-147,161,185,196,213,219,221,283,320-324,327,330,338,345
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  h_b680f75345178a 16,397,404,408,485,488,495,580,587,591,633
+packages/im/ai/src/llm/bridge/tool-name-wire.ts
+  h_b680f75345178a 1-99
+packages/im/ai/tests/llm/google-gemini-provider.test.ts
+  h_b680f75345178a 150-184
+packages/im/ai/tests/llm/tool-name-wire.test.ts
+  h_b680f75345178a 1-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f9ab410bfbeec1063fc560d5a662407d690a5271",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
