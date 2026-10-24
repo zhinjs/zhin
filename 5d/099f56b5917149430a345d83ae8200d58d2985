@@ -1,0 +1,37 @@
+packages/im/ai/tests/llm/google-gemini-provider.test.ts
+  s_9622fd28aba994::t_aa1e87b81a268e 87-92,104-105,114
+  s_9622fd28aba994::t_0986d72a7c102f 10,93-103,106-113,115-116
+packages/im/ai/tests/llm/gemini-context-cache.test.ts
+  s_9622fd28aba994::t_0986d72a7c102f 6-7,14-15,41-43,100-134
+  s_9622fd28aba994::t_aa1e87b81a268e 58-99
+packages/im/ai/src/llm/gemini-context-cache.ts
+  s_9622fd28aba994::t_7f83c91a8d0253 26,98-104
+packages/im/ai/src/sdk-provider-adapter.ts
+  s_9622fd28aba994::t_7f83c91a8d0253 34,150,168,227
+.changeset/gemini-cache-diagnostics.md
+  s_9622fd28aba994::t_aa1e87b81a268e 1-5
+packages/im/ai/tests/llm/ai-sdk-messages.test.ts
+  s_9622fd28aba994::t_aa1e87b81a268e 44-57
+docs/en/ai/index.md
+  s_9622fd28aba994::t_f761457ad5f5d9 177-178
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  s_9622fd28aba994::t_7f83c91a8d0253 216-259
+docs/ai/index.md
+  s_9622fd28aba994::t_384ec3567e2a52 177-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5d099f56b5917149430a345d83ae8200d58d2985",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
