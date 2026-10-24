@@ -176,6 +176,8 @@ ai:
 
   使用代理时，显式缓存还要求代理实现 `cachedContents` 接口。创建失败会在 `ai-context-cache` 日志中记录 `gemini_cache_create`、HTTP 状态（如有）和回退原因；同一前缀沿用现有失败退避，不会每次请求重复创建。日志不包含提示词、密钥或上游响应正文。`cacheRead` 也可能来自隐式缓存，不能据此确认显式缓存已创建。
 
+  Gemini 要求工具名符合 `^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$`。插件实例键（如 `60s`）会成为工具名前缀，`60s__skill__60s-life__weather` 这类以数字开头的名字会被 Gemini 以 400 `Invalid function name` 拒绝。框架在发给 Gemini 前会自动把这类名字改成合法形式（如 `_60s__skill__60s-life__weather`，冲突或超长时加短哈希），并把模型返回的工具调用映射回原名，执行、权限和会话历史都仍用原名，无需改插件键。合法的名字原样发送，其他 Provider 不受影响。
+
 - **Gemini 走自己的代理**：如果代理只是原样转发（请求、`x-goog-api-key` 鉴权和响应都和官方一致，只是域名不同），把 `baseUrl` 指到代理即可。写到根路径或带 `/v1beta` 都行，结尾的 `/` 会被去掉，不会出现重复的 `/v1beta`。不写时默认 `https://generativelanguage.googleapis.com`。`generateContent`、流式的 `streamGenerateContent`、显式缓存的 `cachedContents`（创建和删除）以及模型列表都会走这个地址。代理需要额外请求头时可以加 `headers`，所有请求都会带上，可不填：
 
   ```yaml

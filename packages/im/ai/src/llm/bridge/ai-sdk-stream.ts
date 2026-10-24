@@ -13,6 +13,7 @@ import { streamPartError } from './stream-error.js';
 import { parseLenientJsonObject } from './lenient-json.js';
 import { normalizePromptStructuredText, structuredOutputMode, withStructuredOutputInstruction } from './prompt-structured-output.js';
 import { toolCallInput } from './tool-call-input.js';
+import { createToolNameCodec } from './tool-name-wire.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
 import type { ThinkingContentBlock, ThinkingProviderOptions, ToolCallInputError, ToolCallProviderOptions } from '../types/content-block.js';
@@ -393,16 +394,18 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         options,
         model.compat,
       );
+      const toolNames = createToolNameCodec((context.tools ?? []).map((t) => t.name), model.sdk);
       const { system: systemText, messages } = contextToAiSdkPrompt(
         context,
         model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
         {
         ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
         sdk: model.sdk,
+        toolNames,
         },
       );
       const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
-      const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk }), cacheCtx);
+      const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk, toolNames }), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
       const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
       const providerOptions = buildProviderOptions(model, cacheOpts, hasDeferredTools);
@@ -479,16 +482,17 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         } else if (part.type === 'tool-call') {
           const { arguments: args, inputError } = toolCallInput(part, toolInputBuffers.get(part.toolCallId));
           const signed = toolCallProviderOptions(part.providerMetadata);
+          const name = toolNames.fromWire(part.toolName);
           toolCalls.set(part.toolCallId, {
             id: part.toolCallId,
-            name: part.toolName,
+            name,
             arguments: args,
             ...(inputError ? { inputError } : {}),
             ...(signed ? { providerOptions: signed } : {}),
           });
           push({
             type: 'toolcall_delta',
-            toolCall: { id: part.toolCallId, name: part.toolName, arguments: args },
+            toolCall: { id: part.toolCallId, name, arguments: args },
           });
         } else if (part.type === 'raw') {
           if (captureStructuredText) {
@@ -573,16 +577,18 @@ export async function generateTextViaAiSdk(
     options,
     model.compat,
   );
+  const toolNames = createToolNameCodec((context.tools ?? []).map((t) => t.name), model.sdk);
   const { system: systemText, messages } = contextToAiSdkPrompt(
     context,
     model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
     {
     ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
     sdk: model.sdk,
+    toolNames,
     },
   );
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
-  const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk }), cacheCtx);
+  const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk, toolNames }), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
   const providerOptions = buildProviderOptions(model, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
 
@@ -624,7 +630,7 @@ export async function generateTextViaAiSdk(
     const { arguments: args, inputError } = toolCallInput(call);
     return {
       id: call.toolCallId,
-      name: call.toolName,
+      name: toolNames.fromWire(call.toolName),
       arguments: args,
       ...(inputError ? { inputError } : {}),
       ...(signed ? { providerOptions: signed } : {}),

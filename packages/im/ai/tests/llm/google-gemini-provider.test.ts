@@ -147,6 +147,41 @@ describe('Gemini provider (google sdk)', () => {
     expect(message.content).toEqual(expect.arrayContaining([expect.objectContaining({ type: 'toolCall', name: 'get_weather', arguments: { city: '上海' } })]));
   });
 
+  it('sends digit-leading tool names as valid function names and maps calls and history back', async () => {
+    const internal = '60s__skill__60s-life__weather';
+    const wire = '_60s__skill__60s-life__weather';
+    const digitTool = { ...weather, name: internal };
+    const { runtime, model, captured } = setup([
+      (body) => ({
+        candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: body.tools[0].functionDeclarations.find((d: any) => d.name === wire).name, args: { city: '上海' } } }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 30, candidatesTokenCount: 5, totalTokenCount: 35 },
+      }),
+      textReply('上海晴', { promptTokenCount: 40, candidatesTokenCount: 3, totalTokenCount: 43 }),
+    ]);
+    const call = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('上海天气？')], tools: [weather, digitTool] });
+    const names = captured[0]!.body.tools[0].functionDeclarations.map((d: { name: string }) => d.name);
+    expect(names).toEqual(expect.arrayContaining(['get_weather', wire]));
+    for (const name of names) expect(name).toMatch(/^[A-Za-z_][A-Za-z0-9_.:-]{0,127}$/);
+    const block = call.content.find((b) => b.type === 'toolCall') as { id: string; name: string };
+    expect(block.name).toBe(internal);
+
+    await runtime.complete(model, {
+      systemPrompt: SYSTEM,
+      messages: [
+        createUserMessage('上海天气？'),
+        call,
+        { role: 'toolResult', toolCallId: block.id, toolName: internal, content: [{ type: 'text', text: '晴' }], isError: false, timestamp: Date.now() },
+      ],
+      tools: [weather, digitTool],
+    });
+    const contents = captured[1]!.body.contents;
+    expect(JSON.stringify(contents)).not.toContain(`"${internal}"`);
+    const modelTurn = contents.find((c: { role: string }) => c.role === 'model');
+    expect(modelTurn.parts[0].functionCall.name).toBe(wire);
+    const responseTurn = contents.find((c: any) => c.parts.some((p: any) => p.functionResponse));
+    expect(responseTurn.parts[0].functionResponse.name).toBe(wire);
+  });
+
   it('keeps the cacheable prefix byte-identical across turns and surfaces cached tokens', async () => {
     const { runtime, model, captured } = setup([
       textReply('第一轮', { promptTokenCount: 5000, candidatesTokenCount: 4, totalTokenCount: 5004 }),
