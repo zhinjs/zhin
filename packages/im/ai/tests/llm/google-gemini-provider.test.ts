@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel, defaultModelInput } from '../../src/llm/llm-api-runtime.js';
-import { createUserMessage, type AssistantMessage } from '../../src/llm/types/agent-message.js';
+import { createUserMessage, EMPTY_TOKEN_USAGE, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
 import {
   ProviderRequestError,
@@ -84,6 +84,36 @@ const weather = { name: 'get_weather', description: 'Weather for one city.', par
 const SYSTEM = 'You are zhin, a group-chat assistant. '.repeat(50);
 
 describe('Gemini provider (google sdk)', () => {
+  it.each([
+    { leading: false, precedingTexts: 1 },
+    { leading: false, precedingTexts: 2 },
+    { leading: true, precedingTexts: 0 },
+    { leading: true, precedingTexts: 2 },
+  ])('repairs cross-provider function-call history ($leading, $precedingTexts text turns)', async ({ leading, precedingTexts }) => {
+    const { runtime, model, captured } = setup([textReply('ok', { promptTokenCount: 10, candidatesTokenCount: 1, totalTokenCount: 11 })]);
+    const call: AssistantMessage = {
+      role: 'assistant', api: 'ai-sdk', provider: 'gemini', model: PRIMARY, timestamp: 1,
+      usage: { ...EMPTY_TOKEN_USAGE }, stopReason: 'toolCalls', content: [
+        { type: 'toolCall', id: 'weather-1', name: 'get_weather', arguments: { city: '上海' }, providerOptions: { google: { thoughtSignature: 'c2ln' } } },
+      ],
+    };
+    const text: AssistantMessage = { ...call, stopReason: 'stop', content: [{ type: 'text', text: '先查天气' }] };
+    await runtime.complete(model, {
+      systemPrompt: SYSTEM, tools: [weather],
+      messages: [
+        ...(!leading ? [createUserMessage('天气？')] : []),
+        ...Array.from({ length: precedingTexts }, () => text), call,
+        { role: 'toolResult', toolCallId: 'weather-1', toolName: 'get_weather', content: [{ type: 'text', text: '晴' }], isError: false, timestamp: 2 },
+      ],
+    });
+    const contents = captured[0]!.body.contents;
+    const index = contents.findIndex((c: any) => c.parts.some((p: any) => p.functionCall));
+    expect(contents[index - 1]?.role).toBe('user');
+    expect(contents[index].parts).toContainEqual(expect.objectContaining({ thoughtSignature: 'c2ln' }));
+    expect(contents[index + 1].parts[0]).toMatchObject({ functionResponse: { name: 'get_weather' } });
+    expect(contents[index].parts.filter((part: any) => part.text === '先查天气')).toHaveLength(precedingTexts);
+  });
+
   it('defaults Gemini chat models to multimodal input, but not TTS/embedding models or other SDKs', () => {
     expect(defaultModelInput('google', 'gemini-3.8-flash')).toContain('image');
     expect(defaultModelInput('google', 'gemini-3.8-flash-tts')).toEqual(['text']);

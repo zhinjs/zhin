@@ -41,6 +41,20 @@ function toolCallAssistant(overrides?: {
 }
 
 describe('agentMessagesToAiSdk tool-call reasoning', () => {
+  it('only repairs Gemini turn order and leaves the stored history untouched', () => {
+    const call = toolCallAssistant();
+    const text: AssistantMessage = { ...call, content: [{ type: 'text', text: 'checking' }], stopReason: 'stop' };
+    const history = [createUserMessage('weather?'), text, call];
+    const original = structuredClone(history);
+    for (const sdk of ['anthropic', 'minimax', 'openai-compatible'] as const) {
+      const converted = agentMessagesToAiSdk(history, undefined, { sdk });
+      expect(converted.slice(0, 3).map((message) => message.role)).toEqual(['user', 'assistant', 'assistant']);
+    }
+    const converted = agentMessagesToAiSdk(history, undefined, { sdk: 'google' });
+    expect(converted.slice(0, 3).map((message) => message.role)).toEqual(['user', 'assistant', 'tool']);
+    expect(history).toEqual(original);
+  });
+
   it('injects placeholder reasoning when toolCall assistant has no thinking', () => {
     const messages = agentMessagesToAiSdk([toolCallAssistant()], undefined, {
       ensureToolCallReasoning: true,

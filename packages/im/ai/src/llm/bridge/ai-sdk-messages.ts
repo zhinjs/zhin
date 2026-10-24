@@ -213,6 +213,50 @@ export function agentMessagesToAiSdk(
       out.push(toolResultToAiMessage(message));
     }
   }
+  return options?.sdk === 'google' ? orderGeminiFunctionCallTurns(out) : out;
+}
+
+type AssistantModelMessage = Extract<ModelMessage, { role: 'assistant' }>;
+
+function hasToolCallPart(message: ModelMessage): message is AssistantModelMessage {
+  return message.role === 'assistant' && Array.isArray(message.content)
+    && message.content.some((part) => part.type === 'tool-call');
+}
+
+function assistantParts(message: AssistantModelMessage): Exclude<AssistantContent, string> {
+  return typeof message.content === 'string'
+    ? message.content ? [{ type: 'text', text: message.content }] : []
+    : message.content;
+}
+
+/** Gemini function calls must follow a user or function-response turn, including imported histories. */
+function orderGeminiFunctionCallTurns(messages: ModelMessage[]): ModelMessage[] {
+  const out: ModelMessage[] = [];
+  for (const message of messages) {
+    if (!hasToolCallPart(message)) {
+      out.push(message);
+      continue;
+    }
+    let call = message;
+    let previous = out.at(-1);
+    while (previous?.role === 'assistant' && !hasToolCallPart(previous)) {
+      const parts = assistantParts(call);
+      call = {
+        ...call,
+        content: [
+          ...parts.filter((part) => part.type === 'reasoning'),
+          ...assistantParts(previous),
+          ...parts.filter((part) => part.type !== 'reasoning'),
+        ],
+      };
+      out.pop();
+      previous = out.at(-1);
+    }
+    if (previous?.role !== 'user' && previous?.role !== 'tool') {
+      out.push({ role: 'user', content: [{ type: 'text', text: '(continue)' }] });
+    }
+    out.push(call);
+  }
   return out;
 }
 

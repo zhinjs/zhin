@@ -23,6 +23,7 @@
  * and later do not support it (ai.google.dev/gemini-api/docs/caching).
  */
 import { createHash } from 'node:crypto';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 
 export interface GeminiContextCacheConfig {
   /** `implicit` (default) leaves requests untouched. `explicit` creates cachedContents. */
@@ -94,6 +95,13 @@ export function createGeminiCachingFetch(
       // Remember the failure for one TTL so every request does not pay for a doomed create.
       stats.failed += 1;
       entries.set(key, { expiresAt: now() + ttlMs });
+      getLogger('ai-context-cache').warn(formatCompact({
+        op: 'gemini_cache_create',
+        model,
+        status: response?.status,
+        reason: !response ? 'network_error' : response.ok ? 'invalid_response' : 'http_error',
+        fallback: 'implicit',
+      }));
       return undefined;
     }
     stats.created += 1;

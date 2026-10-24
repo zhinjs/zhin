@@ -10,7 +10,6 @@ import type {
 } from './types.js';
 import type { ProviderInstanceConfig } from './llm/types/model.js';
 import {
-  createLanguageModel,
   formatAuthorizationHeader,
   normalizeGoogleBaseUrl,
   normalizeOpenAiBaseUrl,
@@ -32,7 +31,7 @@ import {
   resolveProviderResilienceConfig,
   type ProviderResilienceEvent,
 } from './llm/provider-resilience.js';
-import type { LlmCompletionPort } from './llm/llm-api-runtime.js';
+import { LlmApiRuntime, type LlmCompletionPort } from './llm/llm-api-runtime.js';
 import type { Model } from './llm/types/model.js';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { ImageGenerateRequest, ImageGenerateResult } from './image-generation.js';
@@ -148,6 +147,7 @@ export class SdkProviderAdapter implements AIProvider {
   contextWindow?: number;
   imageGenerationDefaults: ProviderInstanceConfig['imageGeneration'];
   readonly #transport: AiHttpTransport;
+  readonly #textRuntime = new LlmApiRuntime();
 
   constructor(
     alias: string,
@@ -165,6 +165,7 @@ export class SdkProviderAdapter implements AIProvider {
       : resolveSdkProviderModels(sdk, config);
     this.contextWindow = config.contextWindow;
     this.imageGenerationDefaults = config.imageGeneration;
+    this.#textRuntime.registerProvider(alias, config, this.models, transport.fetch);
   }
 
   /**
@@ -223,7 +224,7 @@ export class SdkProviderAdapter implements AIProvider {
   #textCompletionPort(): LlmCompletionPort {
     const complete = (model: Model, context: Parameters<LlmCompletionPort['complete']>[1], options?: Parameters<LlmCompletionPort['complete']>[2]) =>
       generateTextViaAiSdk(
-        createLanguageModel(this.sdk, this.config, model.id, this.#transport.fetch, this.name),
+        this.#textRuntime.resolveLanguageModel(this.name, model.id)!,
         model,
         context,
         options,
