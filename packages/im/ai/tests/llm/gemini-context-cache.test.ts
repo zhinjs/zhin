@@ -3,13 +3,16 @@
  * mocked HTTP endpoint (#769): create once, reuse on the second turn, TTL refresh,
  * invalidation on prefix change and on a server-side miss, implicit fallback.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { getLogger } from '@zhin.js/logger';
 import { z } from 'zod';
 import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import { createGeminiCachingFetch } from '../../src/llm/gemini-context-cache.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+import { createSdkProviderAdapter } from '../../src/sdk-provider-adapter.js';
+import { AiHttpTransport } from '../../src/llm/http-transport.js';
 
 type Call = { url: string; method: string; body: Record<string, any>; keyed: boolean };
 const SYSTEM = 'You are zhin, a group-chat assistant. '.repeat(400);
@@ -35,7 +38,9 @@ function server(options: { createStatus?: number; generateStatus?: (call: Call) 
       candidates: [{ content: { role: 'model', parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
       usageMetadata: { promptTokenCount: 4200, candidatesTokenCount: 1, totalTokenCount: 4201, ...(cached ? { cachedContentTokenCount: cached } : {}) },
     };
-    return new Response(`data: ${JSON.stringify(payload)}\r\n\r\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    return url.includes('streamGenerateContent')
+      ? new Response(`data: ${JSON.stringify(payload)}\r\n\r\n`, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+      : Response.json(payload);
   }) as typeof globalThis.fetch;
   return { fetch, calls };
 }
@@ -50,6 +55,83 @@ const generates = (calls: Call[]) => calls.filter((c) => /GenerateContent/.test(
 const creates = (calls: Call[]) => calls.filter((c) => c.url.endsWith('/cachedContents'));
 
 describe('Gemini explicit context caching', () => {
+  it('retains failure backoff across standalone completions and keeps provider instances isolated', async () => {
+    const srv = server({ createStatus: 404 });
+    const config: ProviderInstanceConfig = {
+      sdk: 'google', apiKey: 'test-key', models: ['gemini-3.8-flash'], contextCache: { mode: 'explicit' },
+    };
+    const first = createSdkProviderAdapter('gemini', config, new AiHttpTransport({ fetch: srv.fetch }))!;
+    const second = createSdkProviderAdapter('gemini', config, new AiHttpTransport({ fetch: srv.fetch }))!;
+    try {
+      expect(await first.completeText(SYSTEM, 'a')).toBe('ok');
+      expect(await first.completeText(SYSTEM, 'b')).toBe('ok');
+      expect(creates(srv.calls)).toHaveLength(1);
+      expect(await second.completeText(SYSTEM, 'c')).toBe('ok');
+      expect(creates(srv.calls)).toHaveLength(2);
+    } finally {
+      await first.dispose();
+      await second.dispose();
+    }
+  });
+
+  it.each(['html', 'network'])('reports %s creation failures without response or exception contents', async (failure) => {
+    const warn = vi.spyOn(getLogger('ai-context-cache'), 'warn').mockImplementation(() => {});
+    const srv = server();
+    const secret = 'sensitive upstream error contents';
+    const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/cachedContents')) {
+        if (failure === 'network') throw new Error(secret);
+        return new Response(`<html>${secret}</html>`, { headers: { 'content-type': 'text/html' } });
+      }
+      return srv.fetch(input, init);
+    }) as typeof globalThis.fetch;
+    const { runtime, model } = setup({ fetch, calls: srv.calls });
+    try {
+      const result = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('a')] });
+      expect(result.stopReason).toBe('stop');
+      expect(warn).toHaveBeenCalledOnce();
+      expect(JSON.stringify(warn.mock.calls)).toContain(failure === 'network' ? 'network_error' : 'invalid_response');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(secret);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reuses the configured cache across standalone text completions', async () => {
+    const srv = server();
+    const provider = createSdkProviderAdapter('gemini', {
+      sdk: 'google', apiKey: 'test-key', models: ['gemini-3.8-flash'], contextCache: { mode: 'explicit' },
+    }, new AiHttpTransport({ fetch: srv.fetch }))!;
+    try {
+      await provider.completeTextResult(SYSTEM, 'a');
+      const second = await provider.completeTextResult(SYSTEM, 'b');
+      expect(second.usage?.cacheRead).toBe(4000);
+      expect(creates(srv.calls)).toHaveLength(1);
+    } finally {
+      await provider.dispose();
+    }
+  });
+
+  it('reports an unavailable cache endpoint once per prefix backoff without leaking request data', async () => {
+    const warn = vi.spyOn(getLogger('ai-context-cache'), 'warn').mockImplementation(() => {});
+    const srv = server({ createStatus: 404 });
+    const { runtime, model } = setup(srv);
+    try {
+      await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('a')] });
+      await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('b')] });
+      expect(creates(srv.calls)).toHaveLength(1);
+      expect(warn).toHaveBeenCalledOnce();
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).toContain('gemini_cache_create');
+      expect(logged).toContain('404');
+      expect(logged).toContain('implicit');
+      expect(logged).not.toContain(SYSTEM);
+      expect(logged).not.toContain('test-key');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('creates one cache for the system + tools prefix and reuses it on the second turn', async () => {
     const srv = server();
     const { runtime, model } = setup(srv);
