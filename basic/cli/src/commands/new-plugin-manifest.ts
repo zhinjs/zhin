@@ -26,7 +26,7 @@ export const FALLBACK_STACK_RANGE = '^1.0.0';
 export const PLUGIN_TOOLING_RANGES = {
   '@types/node': '^26.1.2',
   typescript: '^6.0.3',
-  vitest: '^4.1.11',
+  vitest: '^4.1.12',
   rimraf: '^6.1.3',
 } as const;
 
