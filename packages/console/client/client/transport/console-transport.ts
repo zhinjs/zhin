@@ -22,6 +22,8 @@ import {
   type ConsoleEventHistoryPage,
   type ConsoleEventHistoryQuery,
   type ConsoleConfigSource,
+  type ConsoleConfigPatchRequest,
+  type ConsoleConfigPatchResult,
 } from "@zhin.js/console-protocol";
 
 interface ConsoleEventCursor {
@@ -487,6 +489,16 @@ export class ConsoleTransport {
       type: CONFIG_RPC.SET,
       pluginName,
       data: config,
+    });
+  }
+  /**
+   * Scoped path write. Resolves with `status: 'saved' | 'conflict' | 'invalid'`; a conflict
+   * carries the latest revision and values so the page can show them before retrying.
+   */
+  async patchConfig(request: ConsoleConfigPatchRequest) {
+    return this.sendRequest<ConsoleConfigPatchResult>({
+      type: CONFIG_RPC.PATCH,
+      ...request,
     });
   }
   async getSchema(pluginName: string) {

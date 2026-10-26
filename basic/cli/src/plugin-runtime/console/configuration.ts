@@ -1,8 +1,9 @@
-import type { ConfigFileDocument } from '@zhin.js/config-file';
+import { ConfigDocumentConflictError, type ConfigFileDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
-import type { ConsoleConfigSource } from '@zhin.js/console-protocol';
+import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
+  applyConfigPatches,
   readPluginConfigurationMap,
   rootPluginId,
   type RuntimeConfigDocument,
@@ -13,6 +14,13 @@ import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
+import {
+  assertPatchesInScope,
+  normalizeConfigPatchOperations,
+  readDeclaredPatchPaths,
+  readPath,
+  resolvePatchScope,
+} from './configuration-patch.js';
 
 /** Owns one project's Console configuration projection over the Root config authority. */
 export class ConsoleConfigurationStore {
@@ -108,6 +116,79 @@ export class ConsoleConfigurationStore {
       await prepared.commit();
       return Object.freeze({ restartRequired: HOST_CONFIG_KEYS.includes(pluginName) });
     });
+  }
+
+  /**
+   * Scoped, revision-checked path writes (`config:patch`). Paths outside the caller's
+   * allowlist are rejected before reading values; a stale revision returns the latest
+   * values instead of overwriting; every touched section is validated by its schema.
+   */
+  patch(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult> {
+    const instanceKey = request.instanceKey;
+    return this.#serialize(async () => {
+      const patches = normalizeConfigPatchOperations(request.patches);
+      const current = await this.#document.read();
+      const declared = instanceKey === undefined
+        ? []
+        : readDeclaredPatchPaths(await this.#ownSchema(current.document, instanceKey), instanceKey);
+      const allowed = resolvePatchScope(current.document, instanceKey, declared);
+      assertPatchesInScope(patches, allowed, instanceKey === undefined ? 'Host 白名单' : `插件 ${instanceKey}`);
+      const paths = Object.freeze(patches.map(patch => patch.path));
+      const conflict = (snapshot: typeof current): ConsoleConfigPatchResult => Object.freeze({
+        status: 'conflict',
+        revision: snapshot.revision,
+        current: Object.freeze(paths.map(path => Object.freeze({ path, value: readPath(snapshot.document, path) }))),
+        message: '配置已被其他地方修改，未保存。请查看最新值后重试。',
+      });
+      if (current.revision !== request.expectedRevision) return conflict(current);
+      const candidate = applyConfigPatches(current.document, patches);
+      const sections = [...new Set(patches.map(patch => patch.path[0]!))];
+      const errors: Array<{ path: string; message: string }> = [];
+      const missingEnv = new Set<string>();
+      for (const section of sections) {
+        if (candidate[section] === undefined) continue;
+        const validation = await this.validatePluginConfig(section, candidate[section], current.document);
+        for (const error of validation.errors) errors.push({ path: `$.${section}${error.path.slice(1)}`, message: error.message });
+        for (const name of validation.missingEnv) missingEnv.add(name);
+      }
+      if (errors.length > 0) {
+        return Object.freeze({
+          status: 'invalid',
+          revision: current.revision,
+          errors: Object.freeze(errors),
+          missingEnv: Object.freeze([...missingEnv].sort()),
+          message: '配置校验失败，未保存',
+        });
+      }
+      let committed;
+      try {
+        const prepared = await this.#document.prepare(current, patches);
+        readApplicationPluginDeclaration(prepared.document);
+        committed = await prepared.commit();
+      } catch (error) {
+        if (error instanceof ConfigDocumentConflictError) return conflict(await this.#document.read());
+        throw error;
+      }
+      const restartRequired = sections.some(section => HOST_CONFIG_KEYS.includes(section));
+      return Object.freeze({
+        status: 'saved',
+        revision: committed.revision,
+        restartRequired,
+        paths,
+        missingEnv: Object.freeze([...missingEnv].sort()),
+        message: restartRequired ? '配置已保存，需重启进程才能生效' : '配置已保存',
+      });
+    });
+  }
+
+  async #ownSchema(document: RuntimeConfigDocument, instanceKey: string): Promise<Readonly<Record<string, unknown>> | null> {
+    if (HOST_CONFIG_KEYS.includes(instanceKey)) return null;
+    try {
+      assertUnambiguousConfigKey(document, instanceKey);
+    } catch {
+      return null;
+    }
+    return this.#schemas.readJson(instanceKey, document);
   }
 
   readEnvironmentFile(filename: string): Promise<string> {
