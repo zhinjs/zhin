@@ -176,3 +176,25 @@ describe('plugin Console actions for non-admin tokens', () => {
     expect(await call('plugin.root/ambient.reset', {}, 'full')).toMatchObject({ status: 200 });
   });
 });
+
+it('serves host-owned queries as plugin.root.<name> ahead of a root plugin provider, read-only for scoped tokens', async () => {
+  const root = rootPluginId();
+  const rootRpc = definePluginConsoleRpc({ status: { handler: async () => ({ from: 'root-plugin' }) }, queries: { ambient: { handler: async () => ({ from: 'root-plugin' }) } } });
+  const state: SnapshotState = {
+    root,
+    tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: '/app', children: [] }]]),
+    config: new Map(), capabilities: new Map(), projections: new Map(),
+    resources: new Map([[root, new Map([[pluginConsoleRpcToken.id, rootRpc]])]]),
+  };
+  const store = new SnapshotStore(state); stores.push(store);
+  const hostRpc = definePluginConsoleRpc({
+    queries: { ambient: { requiredPermissions: ['ambient:read'], handler: async () => ({ from: 'host' }) } },
+    actions: { reset: { handler: async () => null } },
+  });
+  const call = (type: string, access: ConsoleAccess) => dispatchPluginConsoleRpcRequest({ type, requestId: 1 },
+    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc });
+  expect(await call('plugin.root.ambient', scoped(['ambient:read']))).toMatchObject({ status: 200, body: { data: { from: 'host' } } });
+  expect(await call('plugin.root.ambient', scoped())).toMatchObject({ status: 403 });
+  expect(await call('plugin.root.reset', scoped(['ambient:read']))).toMatchObject({ status: 403 });
+  expect(await call('plugin.root.status', unrestrictedConsoleAccess)).toMatchObject({ status: 200, body: { data: { from: 'root-plugin' } } });
+});

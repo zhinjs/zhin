@@ -94,6 +94,7 @@ import {
   type EngagementJudge,
 } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
+import type { AssistantStatus } from '../../console/assistant-status.js';
 
 const logger = getLogger('agent');
 /** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */
@@ -127,6 +128,8 @@ export interface AgentTurnIngressRouteOptions {
   readonly agent: AgentRuntimeFoundation;
   /** Absent when the optional Workroom package is not installed. */
   readonly workroom?: AgentWorkroomPort;
+  /** Process-owned Console status for 群聊插话 / 技能助手 (#970); metadata only. */
+  readonly assistantStatus?: AssistantStatus;
   /** Detached task runner (#732); a snapshot-provided `detachedTaskRunnerToken` wins. */
   readonly detachedTasks?: DetachedTaskRunner;
 }
@@ -144,6 +147,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
+    options.assistantStatus?.bindAmbientConfig(() => options.agent.service.getTriggerConfig()?.ambient);
   }
 
   /**
@@ -218,15 +222,21 @@ export class AgentTurnIngressRoute implements IngressRoute {
         base,
         provider: runtime.provider,
         policy,
-        observe: logAmbientDecisionObservation,
-        reportShadow: (decision, primary) => logger.info(formatCompact({
+        observe: (observation) => {
+          logAmbientDecisionObservation(observation);
+          this.options.assistantStatus?.recordDecision(observation);
+        },
+        reportShadow: (decision, primary) => {
+          this.options.assistantStatus?.recordAmbientShadow(decision?.engage, primary?.engage);
+          logger.info(formatCompact({
           op: 'ambient_decision_shadow',
           conv: key,
           decision: decision ? (decision.engage ? 'engage' : 'declined') : 'failed',
           confidence: decision?.confidence,
           judge: primary ? (primary.engage ? 'engage' : 'declined') : 'failed',
           judgeConfidence: primary?.confidence,
-        })),
+          }));
+        },
       });
     } catch (error) {
       logger.warn(formatCompact({ op: 'ambient_decision_unavailable', error: error instanceof Error ? error.message : String(error) }));
@@ -264,6 +274,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         AMBIENT_CONTEXT_MESSAGES,
       )).blocks.map(block => block.text),
     });
+    this.options.assistantStatus?.recordAmbient(key, decision);
     if (decision.kind !== 'skipped' || decision.reason !== 'superseded') {
       logger.info(formatCompact({
         op: 'ambient_engagement',
@@ -703,19 +714,22 @@ export class AgentTurnIngressRoute implements IngressRoute {
             );
           }, {
             disabled: workroomAgentTurn != null,
-            observe: observation => logger.debug(formatCompact({
-              op: 'agent_decision_evaluation',
-              task: observation.task,
-              mode: observation.mode,
-              outcome: observation.outcome,
-              candidates: observation.candidates,
-              selected: observation.selected,
-              durationMs: observation.durationMs,
-              model: observation.model,
-              reason: observation.reason,
-              inputTokens: observation.usage?.inputTokens,
-              outputTokens: observation.usage?.outputTokens,
-            })),
+            observe: observation => {
+              options.assistantStatus?.recordDecision(observation);
+              logger.debug(formatCompact({
+                op: 'agent_decision_evaluation',
+                task: observation.task,
+                mode: observation.mode,
+                outcome: observation.outcome,
+                candidates: observation.candidates,
+                selected: observation.selected,
+                durationMs: observation.durationMs,
+                model: observation.model,
+                reason: observation.reason,
+                inputTokens: observation.usage?.inputTokens,
+                outputTokens: observation.usage?.outputTokens,
+              }));
+            },
           }),
           resolveTriggerTimeoutMs(trigger),
         );

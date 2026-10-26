@@ -54,6 +54,11 @@ export interface PluginConsoleRpcDefinition {
   /** Read-only status for the plugin's Console page(s): `plugin.<pluginId>.status`. */
   readonly status?: PluginConsoleRpcStatus;
   /**
+   * Extra read-only views beside `status`: `plugin.<pluginId>.<name>`. Same access rules as
+   * `status`; use them when one plugin backs several pages with different permissions.
+   */
+  readonly queries?: Readonly<Record<string, PluginConsoleRpcStatus>>;
+  /**
    * Limited, named actions: `plugin.<pluginId>.<name>`. Non-admin tokens may run one only when the
    * action declares its own requirements and the token holds them (plus the page's); otherwise
    * admin-only.
@@ -66,6 +71,8 @@ export interface NormalizedPluginConsoleRpcMethod {
   readonly requiredPermissions: readonly string[];
   readonly requiredRoles: readonly string[];
   readonly demo: boolean;
+  /** `status` and `queries` are read-only; actions are not. */
+  readonly readOnly: boolean;
   readonly handler: PluginConsoleRpcMethod['handler'];
 }
 
@@ -98,12 +105,16 @@ export function definePluginConsoleRpc(definition: PluginConsoleRpcDefinition): 
   if (!definition || typeof definition !== 'object') throw new TypeError('Plugin Console RPC definition must be an object');
   const methods = new Map<string, NormalizedPluginConsoleRpcMethod>();
   if (definition.status !== undefined) {
-    methods.set(PLUGIN_CONSOLE_RPC_STATUS, normalizeMethod('status', definition.status, definition.status.demo === true));
+    methods.set(PLUGIN_CONSOLE_RPC_STATUS, normalizeMethod('status', definition.status, definition.status.demo === true, true));
   }
-  for (const [name, method] of Object.entries(definition.actions ?? {})) {
-    if (!methodNamePattern.test(name)) throw new TypeError(`Invalid plugin Console RPC action name: ${name}`);
-    if (name === PLUGIN_CONSOLE_RPC_STATUS) throw new TypeError('"status" is reserved; declare it as definition.status');
-    methods.set(name, normalizeMethod(name, method, false));
+  for (const [kind, entries] of [['query', definition.queries], ['action', definition.actions]] as const) {
+    for (const [name, method] of Object.entries(entries ?? {})) {
+      if (!methodNamePattern.test(name)) throw new TypeError(`Invalid plugin Console RPC ${kind} name: ${name}`);
+      if (name === PLUGIN_CONSOLE_RPC_STATUS) throw new TypeError('"status" is reserved; declare it as definition.status');
+      if (methods.has(name)) throw new TypeError(`Duplicate plugin Console RPC method: ${name}`);
+      const readOnly = kind === 'query';
+      methods.set(name, normalizeMethod(name, method, readOnly && (method as PluginConsoleRpcStatus).demo === true, readOnly));
+    }
   }
   if (methods.size === 0) throw new TypeError('Plugin Console RPC must declare status or at least one action');
   const gate: GenerationAdmissionGate = createGenerationAdmissionGate();
@@ -114,7 +125,12 @@ export function definePluginConsoleRpc(definition: PluginConsoleRpcDefinition): 
   });
 }
 
-function normalizeMethod(name: string, method: PluginConsoleRpcMethod, demo: boolean): NormalizedPluginConsoleRpcMethod {
+function normalizeMethod(
+  name: string,
+  method: PluginConsoleRpcMethod,
+  demo: boolean,
+  readOnly: boolean,
+): NormalizedPluginConsoleRpcMethod {
   if (!method || typeof method.handler !== 'function') {
     throw new TypeError(`Plugin Console RPC ${name} must have a handler`);
   }
@@ -126,6 +142,7 @@ function normalizeMethod(name: string, method: PluginConsoleRpcMethod, demo: boo
     requiredPermissions: stringList(method.requiredPermissions, `${name} requiredPermissions`),
     requiredRoles: stringList(method.requiredRoles, `${name} requiredRoles`),
     demo,
+    readOnly,
     handler: method.handler as PluginConsoleRpcMethod['handler'],
   });
 }
