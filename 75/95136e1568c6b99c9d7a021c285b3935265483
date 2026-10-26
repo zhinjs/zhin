@@ -1,0 +1,31 @@
+.changeset/nodemailer-js-yaml-security.md
+  s_079f1dc5e6308d::t_ac4dd39caf303f 1-7
+package.json
+  s_079f1dc5e6308d::t_df2a70dbf0953e 194-195
+packages/im/agent/package.json
+  s_079f1dc5e6308d::t_39d443b3e2d11b 130
+packages/im/skill/package.json
+  s_079f1dc5e6308d::t_89f5173f265352 27
+plugins/adapters/email/package.json
+  s_079f1dc5e6308d::t_555fef9e710fa7 24
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_060246e9518a6a 12-13,1318-1319,1795-1796,2272-2273,6711-6713,7877-7878,8242-8243,12206-12207,13421,13423,13610,13814
+pnpm-workspace.yaml
+  s_079f1dc5e6308d::t_bf5b29f1e29437 38-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7595136e1568c6b99c9d7a021c285b3935265483",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
