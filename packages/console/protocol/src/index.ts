@@ -200,7 +200,13 @@ export interface ConsoleEventPayloadMap {
   readonly 'endpoint.login.expired': ConsoleEndpointEventData;
   readonly sync: Readonly<{ key: string; value: unknown }>;
   readonly 'init-data': Readonly<{ timestamp: number }>;
-  readonly 'config:updated': Readonly<{ pluginName: string | null; keys?: readonly string[] }>;
+  readonly 'config:updated': Readonly<{
+    pluginName: string | null;
+    keys?: readonly string[];
+    /** Exact document paths written by `config:patch`; absent for whole-key or source writes. */
+    paths?: readonly (readonly string[])[];
+    revision?: string;
+  }>;
   readonly 'workrooms:updated': Readonly<{ revision: string }>;
   readonly 'hmr:reload': Readonly<Record<string, unknown>>;
   readonly 'system:restarting': Readonly<Record<string, unknown>>;
@@ -465,7 +471,68 @@ export const CONFIG_RPC = Object.freeze({
   EXPLAIN: 'config:explain',
   REPLACE_SOURCE: 'config:replace-source',
   SET: 'config:set',
+  PATCH: 'config:patch',
 } as const);
+
+/**
+ * Host config sub-paths that ordinary-user Console pages may write through `config:patch`
+ * without naming a plugin (`instanceKey` omitted). Everything else in Host config stays
+ * reachable only through `config:set` / `config:replace-source` (advanced editors).
+ */
+export const HOST_CONFIG_PATCH_PATHS: readonly (readonly string[])[] = Object.freeze([
+  Object.freeze(['ai', 'trigger', 'ambient']),
+]);
+
+/** Limits shared by Host validation and clients. */
+export const CONFIG_PATCH_LIMITS = Object.freeze({
+  maxOperations: 32,
+  maxPathDepth: 16,
+  maxSegmentLength: 128,
+} as const);
+
+export type ConsoleConfigPatchOperation =
+  | Readonly<{ op: 'set'; path: readonly string[]; value: unknown }>
+  | Readonly<{ op: 'remove'; path: readonly string[] }>;
+
+/**
+ * Scoped, revision-checked config write.
+ * - `instanceKey` set: paths must stay inside `[instanceKey, ...]` or a Host sub-path the
+ *   plugin declares in its schema root `x-zhin-config.patchPaths` (e.g. `"ai.decisions"`).
+ * - `instanceKey` omitted: paths must stay inside {@link HOST_CONFIG_PATCH_PATHS}.
+ * Paths are absolute document paths (`['ai', 'trigger', 'ambient', 'mode']`).
+ */
+export interface ConsoleConfigPatchRequest {
+  readonly instanceKey?: string;
+  readonly expectedRevision: string;
+  readonly patches: readonly ConsoleConfigPatchOperation[];
+}
+
+export type ConsoleConfigPatchResult =
+  | Readonly<{
+    status: 'saved';
+    revision: string;
+    /** True when a Host section changed: the file is saved but takes effect after restart. */
+    restartRequired: boolean;
+    paths: readonly (readonly string[])[];
+    /** Environment references in the written sections that are not defined yet (warning only). */
+    missingEnv: readonly string[];
+    message: string;
+  }>
+  | Readonly<{
+    status: 'conflict';
+    /** Latest revision; retry with it after showing `current` to the user. */
+    revision: string;
+    /** Latest stored value at each requested path (`undefined` when absent). */
+    current: readonly Readonly<{ path: readonly string[]; value: unknown }>[];
+    message: string;
+  }>
+  | Readonly<{
+    status: 'invalid';
+    revision: string;
+    errors: readonly Readonly<{ path: string; message: string }>[];
+    missingEnv: readonly string[];
+    message: string;
+  }>;
 
 /** Console plugin management RPC names. Mutations remain full-scope only. */
 export const PLUGIN_RPC = Object.freeze({
@@ -545,6 +612,7 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
 
 export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
   CONFIG_RPC.SET,
+  CONFIG_RPC.PATCH,
   CONFIG_RPC.REPLACE_SOURCE,
   PLUGIN_RPC.APPLY,
   PLUGIN_RPC.VERIFY,
