@@ -19,6 +19,7 @@ There is nothing to deploy: open <https://console.zhin.dev> and enter the API ad
 | Activity log | Browse runtime logs by time and source |
 | Config (Advanced) | Edit `zhin.config.yml` through a form or source editor; failed saves roll back automatically |
 | Bot status | See AI conversations, tool calls, approvals and cancellations |
+| Group chime-in (群聊插话) | Choose whether the bot joins a group conversation when nobody @-mentions it (Off / Watch only / Join in), in which groups, and how often per hour, and see the last 24 hours. Saved changes take effect after a restart. Viewing needs a token with `ambient:read`; changing settings needs the admin token |
 | Workroom (Advanced) | See persistent task spaces and task boards |
 
 ## Sidebar navigation
@@ -28,7 +29,7 @@ Console is aimed at everyday users: the sidebar is grouped by what you want to d
 | Group | Pages |
 | --- | --- |
 | Everyday (常用) | Home, Chat accounts, Chat history, Reminders, Activity log |
-| Bot (机器人) | Bot status, Try a chat, Assistant jobs (shown when the assistant is enabled) |
+| Bot (机器人) | Bot status, Try a chat, Assistant jobs (shown when the assistant is enabled), Group chime-in |
 | Features (功能) | Manage features, Feature store, Task center |
 | Advanced (高级, folded by default) | Config, Environment, Project files, Database, Runtime Capabilities, Message scenario lab, Workroom |
 
@@ -170,7 +171,7 @@ http:
 - **With no tokens configured** (local development), everyone counts as the admin, as before.
 - The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered by token and never cached.
 
-Pages choose their own permission and role names, such as `ambient:read`.
+Pages choose their own permission and role names, such as `ambient:read`. The built-in ambient engagement and skills assistant status use `ambient:read` and `skills:read` (see [Built-in status](../authoring/console-pages.md#built-in-status-ambient-engagement-and-skills-assistant)).
 
 ## Demo Scope (Read-Only Deployment)
 

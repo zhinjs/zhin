@@ -85,6 +85,10 @@ function setValue(
   for (const [index, segment] of path.slice(0, -1).entries()) {
     const existing = readChild(target, segment, path.slice(0, index + 1));
     if (existing === undefined) {
+      // Inline guard (in addition to assertPath) so the write is visibly safe.
+      if (segment === '__proto__' || segment === 'constructor' || segment === 'prototype') {
+        throw unsafeSegment(segment);
+      }
       const created: Record<string, unknown> = {};
       (target as Record<string, unknown>)[segment] = created;
       target = created;
@@ -107,7 +111,10 @@ function removeValue(document: Record<string, unknown>, path: readonly string[])
     target.splice(arrayIndex(segment, target, path), 1);
     return;
   }
-  delete target[segment];
+  if (segment === '__proto__' || segment === 'constructor' || segment === 'prototype') {
+    throw unsafeSegment(segment);
+  }
+  if (Object.hasOwn(target, segment)) delete target[segment];
 }
 
 function cloneDocument(value: unknown): Record<string, unknown> {
@@ -124,7 +131,9 @@ function readChild(
   path: readonly string[],
 ): unknown {
   if (Array.isArray(container)) return container[arrayIndex(segment, container, path)];
-  return container[segment];
+  // Only own properties count: inherited members (toString, hasOwnProperty, ...)
+  // must never be traversed into or treated as existing config values.
+  return Object.hasOwn(container, segment) ? container[segment] : undefined;
 }
 
 function writeChild(
@@ -136,6 +145,9 @@ function writeChild(
   if (Array.isArray(container)) {
     container[arrayIndex(segment, container, path)] = value;
     return;
+  }
+  if (segment === '__proto__' || segment === 'constructor' || segment === 'prototype') {
+    throw unsafeSegment(segment);
   }
   container[segment] = value;
 }
@@ -172,9 +184,13 @@ function requireContainer(
 function assertPath(path: readonly string[]): void {
   for (const segment of path) {
     if (!segment || segment === '__proto__' || segment === 'prototype' || segment === 'constructor') {
-      throw new ConfigPatchPathError(`Unsafe config path segment: ${segment || '<empty>'}`);
+      throw unsafeSegment(segment);
     }
   }
+}
+
+function unsafeSegment(segment: string): ConfigPatchPathError {
+  return new ConfigPatchPathError(`Unsafe config path segment: ${segment || '<empty>'}`);
 }
 
 function lastSegment(path: readonly string[]): string {

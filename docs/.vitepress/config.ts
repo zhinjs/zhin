@@ -75,6 +75,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Satori', link: '/adapters/satori' },
       { text: 'Email', link: '/adapters/email' },
       { text: 'GitHub', link: '/adapters/github' },
+      { text: 'Bilibili 评论', link: '/adapters/bilibili' },
     ]),
   ]),
   sidebarGroup('AI 能力（可选）', [
@@ -227,6 +228,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Satori', link: '/en/adapters/satori' },
       { text: 'Email', link: '/en/adapters/email' },
       { text: 'GitHub', link: '/en/adapters/github' },
+      { text: 'Bilibili Comments', link: '/en/adapters/bilibili' },
     ]),
   ]),
   sidebarGroup('AI (Optional)', [

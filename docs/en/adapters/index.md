@@ -68,6 +68,7 @@ _(Currently none)_
 | WeCom | `@zhin.js/adapter-wecom` | — | [WeCom](/adapters/wecom) |
 | WeChat iLink | `@zhin.js/adapter-weixin-ilink` | — | [WeChat iLink](/adapters/weixin-ilink) |
 | Email | `@zhin.js/adapter-email` | — | [Email](/adapters/email) |
+| Bilibili Comments | `@zhin.js/adapter-bilibili` | — | [Bilibili Comments](/en/adapters/bilibili) |
 | GitHub | `@zhin.js/adapter-github` | — | [GitHub](/adapters/github) |
 | LINE | `@zhin.js/adapter-line` | — | [LINE](/adapters/line) |
 | Milky | `@zhin.js/adapter-milky` | — | [Milky](/adapters/milky) |

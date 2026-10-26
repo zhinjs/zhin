@@ -34,6 +34,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       const pluginReply = await dispatchPluginConsoleRpcRequest(message, {
         snapshots: options.snapshots,
         access: access ?? unrestrictedConsoleAccess,
+        ...(options.hostConsoleRpc ? { hostRpc: options.hostConsoleRpc } : {}),
       });
       if (pluginReply) {
         response.setHeader('cache-control', 'no-store');

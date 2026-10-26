@@ -540,6 +540,31 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 
 These fields use the Runtime schema reader for trusted plugins’ `config: Schema.object(...)` declarations or `schema.json`; isolated plugins must use `schema.json`. Top-level `<name>` is the default instanceKey; `plugins.<name>` only stores the package reference.
 
+### bilibili
+
+[`plugins/adapters/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/bilibili/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `bilibili.apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
+| `bilibili.pollIntervalSec` | number | no | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
+| `bilibili.sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发 |
+| `bilibili.videos` | array&lt;string \| number&gt; | no | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.master` | string \| number | no | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
+| `bilibili.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `bilibili.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `bilibili.endpoints[].id` | string | yes | — | Endpoint 名称（本地标识，不是 B 站账号） |
+| `bilibili.endpoints[].sessdata` | string | no | — | Cookie SESSDATA（以你的账号身份操作；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库） |
+| `bilibili.endpoints[].biliJct` | string | no | — | Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入） |
+| `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | no | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.endpoints[].pollIntervalSec` | number | no | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
+| `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发 |
+| `bilibili.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
+| `bilibili.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（B 站 uid） |
+| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `bilibili.endpoints[].commandPrefix` | string | no | — | — |
+
 ### dingtalk
 
 [`plugins/adapters/dingtalk/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/dingtalk/schema.json)
