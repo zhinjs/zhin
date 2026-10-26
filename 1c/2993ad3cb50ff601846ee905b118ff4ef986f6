@@ -1,0 +1,21 @@
+docs/console/index.md
+  s_079f1dc5e6308d::t_1bd3d5af880a6a 23,33
+docs/en/console/index.md
+  s_079f1dc5e6308d::t_7d76e9b2f20026 23,33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1c2993ad3cb50ff601846ee905b118ff4ef986f6",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
