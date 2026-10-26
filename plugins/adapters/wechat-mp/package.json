@@ -20,7 +20,7 @@
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "xml2js": "^0.6.2",
     "@zhin.js/skill": "workspace:*"
   },
