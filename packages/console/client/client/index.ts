@@ -104,6 +104,8 @@ export {
   apiFetch,
   getApiBase,
   getToken,
+  pluginRpc,
+  PluginRpcError,
   resolveApiUrl,
 } from "./console-utils/remoteApi.js";
 

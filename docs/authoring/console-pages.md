@@ -102,6 +102,68 @@ export default definePlugin({
 });
 ```
 
+## 页面数据：插件 RPC
+
+页面需要显示插件的运行状态，或者提供几个按钮时，插件可以注册自己的 Console RPC，不用自己开 WebSocket 或 HTTP 路由。
+
+插件在 `setup` 里注册一个只读的 `status`，再按需加几个有限的动作：
+
+```ts
+// plugin.ts
+import { definePlugin } from 'zhin.js';
+import { definePluginConsoleRpc, PluginConsoleRpcError, pluginConsoleRpcToken } from 'zhin.js/plugin-runtime';
+
+export default definePlugin({
+  name: 'ambient',
+  setup(context) {
+    context.resources.provide(pluginConsoleRpcToken, definePluginConsoleRpc({
+      status: {
+        page: 'index', // 与 pages/index 的访问规则一致
+        handler: async () => ({
+          mode: 'shadow',
+          recent: recentJudgments(10).map(j => ({ at: j.at, spoke: j.engaged })),
+        }),
+      },
+      actions: {
+        'clear-cooldown': {
+          page: 'index',
+          handler: async ({ group }) => {
+            if (typeof group !== 'string') throw new PluginConsoleRpcError('invalid_input', '请选择一个群');
+            return { cleared: clearCooldown(group) };
+          },
+        },
+      },
+    }));
+  },
+});
+```
+
+页面里用 `@zhin.js/client` 的 `pluginRpc` 调用。`pluginId` 是插件的 PluginId（比如 `root/ambient`），和页面清单里的 `owner` 相同：
+
+```tsx
+import { pluginRpc } from '@zhin.js/client';
+
+const status = await pluginRpc<{ mode: string }>('root/ambient', 'status');
+await pluginRpc('root/ambient', 'clear-cooldown', { group: '123' });
+```
+
+请求走现有的 `POST /api/console/request`，类型名是 `plugin.<pluginId>.status` 或 `plugin.<pluginId>.<动作名>`。动作名只能用小写字母、数字和 `-`，`status` 是保留名。
+
+访问规则：
+
+- **跟随页面**：写了 `page` 时，调用者必须满足这个页面的 `requiredPermissions` 和 `requiredRoles`，方法自己声明的要求会叠加上去。页面在当前代没有加载时直接拒绝。
+- **动作**只允许 full scope 令牌调用。
+- **demo 令牌**默认不能调用。只有 `status` 写了 `demo: true`，并且页面和方法都没有权限要求时，demo 令牌才能读取。
+
+返回给页面的内容会被普通用户看到，所以：
+
+- 只返回页面需要的少量字段，不要直接返回日志记录、提示词、聊天原文或密钥。
+- 返回值必须是 JSON，超过 256 KB 会被拒绝；请求的 `data` 也必须是不超过 64 KB 的 JSON 对象。
+- 处理函数 10 秒没返回就算超时，`signal` 会被中止。
+- 想给用户看错误原因，就抛 `PluginConsoleRpcError`，它的消息会原样显示。其他异常只会显示「插件操作失败」。
+
+插件 RPC 不负责改配置。改配置请用 `config:patch`。
+
 ## 它是怎么工作的
 
 页面文件运行在**浏览器**里，所以不会被 Node 直接加载，而是交给客户端构建器（`TypeScriptClientBuilder`，`packages/console/pagemanager`）用 esbuild 打包：

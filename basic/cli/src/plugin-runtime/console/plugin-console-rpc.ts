@@ -1,0 +1,206 @@
+import type { AuthScope } from '@zhin.js/host-http';
+import { parsePluginConsoleRpcType } from '@zhin.js/console-protocol';
+import { ConsoleCatalog } from '@zhin.js/pagemanager/plugin-runtime';
+import {
+  GenerationAdmissionGate,
+  PLUGIN_CONSOLE_RPC_STATUS,
+  PluginConsoleRpcError,
+  generationAdmissionSource,
+  pluginConsoleRpcToken,
+  type NormalizedPluginConsoleRpcMethod,
+  type PluginConsoleRpc,
+  type PluginId,
+  type RuntimeSnapshot,
+  type SnapshotLease,
+  type SnapshotReader,
+} from '@zhin.js/plugin-runtime';
+
+/** Conservative bounds: Console pages need small status shapes, not dumps. */
+export const PLUGIN_CONSOLE_RPC_INPUT_LIMIT = 64 * 1024;
+export const PLUGIN_CONSOLE_RPC_OUTPUT_LIMIT = 256 * 1024;
+export const PLUGIN_CONSOLE_RPC_TIMEOUT_MS = 10_000;
+
+export type PluginConsoleRpcFailureCode =
+  | 'forbidden' | 'invalid_input' | 'conflict' | 'not_found' | 'unsupported' | 'unavailable' | 'timeout' | 'failed';
+
+export type PluginConsoleRpcResult =
+  | { readonly status: 200; readonly body: { readonly success: true; readonly data: unknown; readonly requestId?: unknown } }
+  | { readonly status: number; readonly body: { readonly success: false; readonly code: PluginConsoleRpcFailureCode; readonly error: string; readonly requestId?: unknown } };
+
+const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
+
+export interface PluginConsoleRpcRequestOptions {
+  readonly snapshots?: SnapshotReader;
+  readonly authScope: AuthScope;
+  readonly timeoutMs?: number;
+  /** @internal Test seam; defaults to the generation's Console Page catalog. */
+  readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
+}
+
+const catalogPagesOwnedBy = (snapshot: RuntimeSnapshot, owner: PluginId) =>
+  new ConsoleCatalog(snapshot, publicAccess).pagesOwnedBy(owner);
+
+const failureStatus: Readonly<Record<PluginConsoleRpcFailureCode, number>> = {
+  forbidden: 403, invalid_input: 400, conflict: 409, not_found: 404,
+  unsupported: 400, unavailable: 503, timeout: 504, failed: 500,
+};
+
+class Failure extends Error {
+  constructor(readonly code: PluginConsoleRpcFailureCode, message: string) { super(message); }
+}
+
+/**
+ * Handles `plugin.<pluginId>.<method>` Console RPC. Returns undefined for any other type so the
+ * caller falls through to the built-in dispatcher.
+ */
+export async function dispatchPluginConsoleRpcRequest(
+  message: Readonly<Record<string, unknown>>,
+  options: PluginConsoleRpcRequestOptions,
+): Promise<PluginConsoleRpcResult | undefined> {
+  const address = parsePluginConsoleRpcType(message.type);
+  if (!address) return undefined;
+  const requestId = message.requestId;
+  let lease: SnapshotLease | undefined;
+  const releases: Array<() => void> = [];
+  try {
+    const input = parseInput(message.data);
+    lease = acquire(options.snapshots);
+    const snapshot = lease.value;
+    const pluginId = address.pluginId as PluginId;
+    if (!snapshot.tree.has(pluginId)) throw new Failure('not_found', '插件未加载');
+    const provider = ownProvider(snapshot, pluginId);
+    const method = provider?.methods.get(address.method);
+    if (!provider || !method) throw new Failure('not_found', '插件未提供该操作');
+    authorize(snapshot, pluginId, address.method, method, options.authScope, options.pagesOwnedBy ?? catalogPagesOwnedBy);
+    releases.push(...admit(provider));
+    const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS);
+    return { status: 200, body: { success: true, data: output, ...(requestId === undefined ? {} : { requestId }) } };
+  } catch (error) {
+    const failure = toFailure(error);
+    return {
+      status: failureStatus[failure.code],
+      body: { success: false, code: failure.code, error: failure.message, ...(requestId === undefined ? {} : { requestId }) },
+    };
+  } finally {
+    releases.reverse().forEach((release) => release());
+    lease?.release();
+  }
+}
+
+/**
+ * The Console currently has two principals: the full-scope operator token, which already holds
+ * every Console permission, and the demo token, which holds none. A method's requirements are its
+ * Page's `requiredPermissions` / `requiredRoles` plus its own; demo callers pass only when that
+ * set is empty, the method is `status`, and the plugin opted in with `demo: true`.
+ */
+function authorize(
+  snapshot: RuntimeSnapshot,
+  pluginId: PluginId,
+  name: string,
+  method: NormalizedPluginConsoleRpcMethod,
+  scope: AuthScope,
+  pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
+): void {
+  const permissions = new Set(method.requiredPermissions);
+  const roles = new Set(method.requiredRoles);
+  if (method.page !== undefined) {
+    const page = pagesOwnedBy(snapshot, pluginId).find((candidate) => candidate.localName === method.page);
+    // Fail closed: a method bound to a missing page must not become unguarded.
+    if (!page) throw new Failure('unavailable', '该操作对应的页面未加载');
+    page.requiredPermissions.forEach((permission) => permissions.add(permission));
+    page.requiredRoles.forEach((role) => roles.add(role));
+  }
+  if (scope === 'full') return;
+  const readOnly = name === PLUGIN_CONSOLE_RPC_STATUS;
+  if (!readOnly || !method.demo || permissions.size > 0 || roles.size > 0) {
+    throw new Failure('forbidden', '需要管理员令牌');
+  }
+}
+
+function acquire(snapshots?: SnapshotReader): SnapshotLease {
+  if (!snapshots) throw new Failure('unavailable', '运行时未就绪');
+  try { return snapshots.acquire(); } catch { throw new Failure('unavailable', '运行时未就绪'); }
+}
+
+/** Scope snapshots flatten inherited bindings; only the declaring owner answers. */
+function ownProvider(snapshot: RuntimeSnapshot, owner: PluginId): PluginConsoleRpc | undefined {
+  const value = snapshot.resources.get(owner)?.get(pluginConsoleRpcToken.id);
+  if (value === undefined) return undefined;
+  let parent = snapshot.tree.get(owner)?.parent;
+  while (parent) {
+    if (snapshot.resources.get(parent)?.get(pluginConsoleRpcToken.id) === value) return undefined;
+    parent = snapshot.tree.get(parent)?.parent;
+  }
+  if (!value || typeof value !== 'object' || !((value as PluginConsoleRpc).methods instanceof Map)) {
+    throw new Failure('unavailable', '插件接口无效');
+  }
+  return value as PluginConsoleRpc;
+}
+
+function admit(provider: PluginConsoleRpc): Array<() => void> {
+  const gates = provider[generationAdmissionSource];
+  if (!Array.isArray(gates) || !gates.length || !gates.every((gate) => gate instanceof GenerationAdmissionGate)) {
+    throw new Failure('unavailable', '插件接口无效');
+  }
+  const releases: Array<() => void> = [];
+  try {
+    for (const gate of new Set(gates)) {
+      const release = gate.acquire();
+      if (!release) throw new Failure('conflict', '插件正在重载，请稍后重试');
+      releases.push(release);
+    }
+    return releases;
+  } catch (error) {
+    releases.reverse().forEach((release) => release());
+    throw error;
+  }
+}
+
+function parseInput(value: unknown): Readonly<Record<string, unknown>> {
+  if (value === undefined || value === null) return Object.freeze({});
+  if (typeof value !== 'object' || Array.isArray(value)) throw new Failure('invalid_input', 'data 必须是对象');
+  let encoded: string;
+  try { encoded = JSON.stringify(value); } catch { throw new Failure('invalid_input', 'data 必须是 JSON'); }
+  if (encoded.length > PLUGIN_CONSOLE_RPC_INPUT_LIMIT) throw new Failure('invalid_input', 'data 过大');
+  return Object.freeze(JSON.parse(encoded) as Record<string, unknown>);
+}
+
+async function callWithTimeout(
+  method: NormalizedPluginConsoleRpcMethod,
+  input: Readonly<Record<string, unknown>>,
+  timeoutMs: number,
+): Promise<unknown> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Failure('timeout', '插件响应超时'));
+    }, timeoutMs);
+  });
+  try {
+    const result = await Promise.race([
+      Promise.resolve().then(() => method.handler(input as never, { signal: controller.signal })),
+      timeout,
+    ]);
+    return encodeOutput(result);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Round-trips through JSON so only plain data leaves the plugin, and bounds its size. */
+function encodeOutput(value: unknown): unknown {
+  let encoded: string | undefined;
+  try { encoded = JSON.stringify(value === undefined ? null : value); } catch { throw new Failure('failed', '插件返回了无效数据'); }
+  if (encoded === undefined) throw new Failure('failed', '插件返回了无效数据');
+  if (encoded.length > PLUGIN_CONSOLE_RPC_OUTPUT_LIMIT) throw new Failure('failed', '插件返回的数据过大');
+  return JSON.parse(encoded) as unknown;
+}
+
+/** Only PluginConsoleRpcError messages are plugin-authored safe text; everything else is generic. */
+function toFailure(error: unknown): Failure {
+  if (error instanceof Failure) return error;
+  if (error instanceof PluginConsoleRpcError) return new Failure(error.code, error.message);
+  return new Failure('failed', '插件操作失败');
+}

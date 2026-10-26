@@ -11,6 +11,7 @@ import {
 } from './rpc-context.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
 import { assertDemoConsoleRpcAllowed } from '@zhin.js/console-protocol';
+import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
@@ -25,6 +26,16 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
   ) => {
     try {
       const message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+      // `plugin.<pluginId>.<method>` is plugin-registered and authorizes itself against its Page.
+      const pluginReply = await dispatchPluginConsoleRpcRequest(message, {
+        snapshots: options.snapshots,
+        authScope,
+      });
+      if (pluginReply) {
+        response.setHeader('cache-control', 'no-store');
+        writeJson(response, pluginReply.status, pluginReply.body);
+        return;
+      }
       if (authScope === 'demo') {
         const denied = assertDemoConsoleRpcAllowed(String(message.type ?? ''));
         if (denied) {

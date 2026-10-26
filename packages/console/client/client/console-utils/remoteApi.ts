@@ -70,6 +70,39 @@ export async function consoleRpc<T>(
   return body.data as T;
 }
 
+/** Error from a plugin Console RPC; `message` is safe to show, `code` is stable. */
+export class PluginRpcError extends Error {
+  constructor(message: string, readonly code: string, readonly status: number) {
+    super(message);
+    this.name = "PluginRpcError";
+  }
+}
+
+/**
+ * Calls a plugin-registered Console RPC (`plugin.<pluginId>.<method>`, #970).
+ * Use `method: "status"` for the plugin's read-only status.
+ */
+export async function pluginRpc<T>(
+  pluginId: string,
+  method: string,
+  data?: Readonly<Record<string, unknown>>,
+): Promise<T> {
+  const res = await apiFetch('/api/console/request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: `plugin.${pluginId}.${method}`,
+      requestId: Date.now(),
+      ...(data === undefined ? {} : { data }),
+    }),
+  });
+  const body = await res.json() as { success?: boolean; data?: T; error?: string; code?: string };
+  if (!res.ok || !body.success) {
+    throw new PluginRpcError(body.error ?? `HTTP ${res.status}`, body.code ?? 'failed', res.status);
+  }
+  return body.data as T;
+}
+
 function trimTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
