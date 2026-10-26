@@ -3,7 +3,6 @@ import { parsePluginConsoleRpcType } from '@zhin.js/console-protocol';
 import { ConsoleCatalog } from '@zhin.js/pagemanager/plugin-runtime';
 import {
   GenerationAdmissionGate,
-  PLUGIN_CONSOLE_RPC_STATUS,
   PluginConsoleRpcError,
   generationAdmissionSource,
   pluginConsoleRpcToken,
@@ -34,6 +33,12 @@ export interface PluginConsoleRpcRequestOptions {
   /** Caller access from its bearer token (`TokenRegistry.resolveAccess`). */
   readonly access: ConsoleAccess;
   readonly timeoutMs?: number;
+  /**
+   * Host-owned methods answered as `plugin.root.<name>` (for example the Agent's 群聊插话 and
+   * 技能助手 views). They live for the whole process, so no generation admission applies, and they
+   * take precedence over the same name on the root plugin's own provider.
+   */
+  readonly hostRpc?: PluginConsoleRpc;
   /** @internal Test seam; defaults to the generation's Console Page catalog. */
   readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
 }
@@ -69,11 +74,12 @@ export async function dispatchPluginConsoleRpcRequest(
     const snapshot = lease.value;
     const pluginId = address.pluginId as PluginId;
     if (!snapshot.tree.has(pluginId)) throw new Failure('not_found', '插件未加载');
-    const provider = ownProvider(snapshot, pluginId);
-    const method = provider?.methods.get(address.method);
-    if (!provider || !method) throw new Failure('not_found', '插件未提供该操作');
-    authorize(snapshot, pluginId, address.method, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
-    releases.push(...admit(provider));
+    const hostMethod = pluginId === snapshot.root ? options.hostRpc?.methods.get(address.method) : undefined;
+    const provider = hostMethod ? undefined : ownProvider(snapshot, pluginId);
+    const method = hostMethod ?? provider?.methods.get(address.method);
+    if (!method) throw new Failure('not_found', '插件未提供该操作');
+    authorize(snapshot, pluginId, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
+    if (provider) releases.push(...admit(provider));
     const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS);
     return { status: 200, body: { success: true, data: output, ...(requestId === undefined ? {} : { requestId }) } };
   } catch (error) {
@@ -91,14 +97,13 @@ export async function dispatchPluginConsoleRpcRequest(
 /**
  * A method's requirements are its Page's `requiredPermissions` / `requiredRoles` plus its own.
  * - The operator (full scope, or a Host without tokens) passes everything.
- * - Any other token may read `status` when it holds every required permission and role. A
- *   `status` with no requirements at all is open to such tokens only with `demo: true`.
+ * - Any other token may call read-only methods (`status`, queries) when it holds every required
+ *   permission and role. One with no requirements at all is open to such tokens only with `demo: true`.
  * - Actions stay operator-only.
  */
 function authorize(
   snapshot: RuntimeSnapshot,
   pluginId: PluginId,
-  name: string,
   method: NormalizedPluginConsoleRpcMethod,
   access: ConsoleAccess,
   pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
@@ -113,7 +118,7 @@ function authorize(
     page.requiredRoles.forEach((role) => roles.add(role));
   }
   if (access.unrestricted) return;
-  if (name !== PLUGIN_CONSOLE_RPC_STATUS) throw new Failure('forbidden', '需要管理员令牌');
+  if (!method.readOnly) throw new Failure('forbidden', '需要管理员令牌');
   const held = new Set(access.permissions);
   const heldRoles = new Set(access.roles);
   const satisfied = [...permissions].every((permission) => held.has(permission))

@@ -1,3 +1,4 @@
+import type { PluginConsoleRpc } from '@zhin.js/plugin-runtime';
 import {
   consoleEventHubToken,
   createConsoleEventHub,
@@ -38,6 +39,8 @@ export interface ConsoleControlPlaneOptions {
   readonly pluginLifecycleStore: PluginLifecycleStore;
   readonly eventHub?: ConsoleEventHub;
   readonly configuration: ConsoleConfigurationStore;
+  /** Host-owned read-only Console RPC answered as `plugin.root.<name>`. */
+  readonly hostConsoleRpc?: PluginConsoleRpc;
 }
 
 export interface StartConsoleControlPlaneOptions extends ConsoleControlPlaneOptions {
@@ -84,6 +87,7 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
         ?? resolvePluginLifecycleFile(options.projectRoot),
       pluginLifecycleStore: options.pluginLifecycleStore,
       configuration,
+      ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
     });
   } catch (error) {
     for (const dispose of disposers.reverse()) dispose();
