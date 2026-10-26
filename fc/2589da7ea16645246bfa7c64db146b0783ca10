@@ -1,0 +1,65 @@
+.changeset/console-user-scope-actions.md
+  s_079f1dc5e6308d::t_45e04bdf4b5868 1-8
+.changeset/runtime-deps-security.md
+  s_079f1dc5e6308d::t_fd47af34197274 1-10
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  s_079f1dc5e6308d::t_50e1a358c524a3 102-103,127-135
+basic/cli/src/plugin-runtime/http-host-installer.ts
+  s_079f1dc5e6308d::t_a02fb784572953 209-210
+basic/cli/tests/plugin-runtime/console/console-access.test.ts
+  s_079f1dc5e6308d::t_4924998cdef293 30
+basic/cli/tests/plugin-runtime/console/plugin-console-rpc.test.ts
+  s_079f1dc5e6308d::t_14c142594077d6 1,128,138-179
+basic/cli/tests/plugin-runtime/http-host-installer.test.ts
+  s_079f1dc5e6308d::t_f71d0f5f1455ff 30-47
+docs/authoring/console-pages.md
+  s_079f1dc5e6308d::t_f089de73fecb45 168-179
+docs/console/index.md
+  s_079f1dc5e6308d::t_adab4a9b7a6396 158,165,167,172-173
+docs/en/authoring/console-pages.md
+  s_079f1dc5e6308d::t_ec8bd99c76723f 168-179
+docs/en/console/index.md
+  s_079f1dc5e6308d::t_223976c8c4b153 155,162,164,169-170
+package.json
+  s_079f1dc5e6308d::t_4aecdcd98e4f18 190-191,193,198,209-210,215-221
+packages/host/http/src/token-registry.ts
+  s_079f1dc5e6308d::t_9bd0a0b83c3bce 8-12,83,157
+packages/host/http/tests/token-registry.test.ts
+  s_079f1dc5e6308d::t_16e042ac833508 78-91
+packages/host/mcp/package.json
+  s_079f1dc5e6308d::t_8d3572e61c323b 47
+packages/im/agent/package.json
+  s_079f1dc5e6308d::t_9a0b182e61b42c 142
+packages/im/ai/package.json
+  s_079f1dc5e6308d::t_650344b290e971 60
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  s_079f1dc5e6308d::t_e09083f3c78f0b 19-23,61-65
+packages/im/runtime/src/host-config-schema.json
+  s_079f1dc5e6308d::t_d7a2013f2b5d45 115,122-125
+plugins/adapters/discord/package.json
+  s_079f1dc5e6308d::t_a86ba7a9947bde 56
+plugins/adapters/lark/package.json
+  s_079f1dc5e6308d::t_514b707dc21304 45
+plugins/adapters/wechat-mp/package.json
+  s_079f1dc5e6308d::t_4048f8b26a3e81 23
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_5fe8642a13ef5f 8-9,11,16,27-28,33-39,377-378,936-937,1226-1227,1328-1329,1371-1372,2232-2233,2507-2508,3118-3119,4786,5025-5026,6590,6762-6763,6902-6905,7514-7515,7649-7650,7774-7775,8535-8536,9078-9079,9082-9083,9086-9087,9480,9489,9498,9837,10101,10103,10135,10384,10386-10388,10396,11471,12156,12158,12225,12253,12256,12368-12369,12681,12942,12949,12967,13059,13196,13336,13795,14078,14729,14731,14733
+pnpm-workspace.yaml
+  s_079f1dc5e6308d::t_a00f0874d00654 31,41,43,54,58-60,65-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fc2589da7ea16645246bfa7c64db146b0783ca10",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
