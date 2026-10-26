@@ -151,21 +151,22 @@ Page directory changes are pushed in real-time to connected UIs via SSE `sync` e
 
 ## Users and permissions
 
-Each extra token is one Console user. Give it `permissions` and `roles`, and the Console shows it only the pages whose requirements those meet. Plugin page status endpoints follow the same rules:
+Console users are the `http.tokens` entries in `zhin.config.yml`: each extra token is one user. There's no separate account store, sign-up or login. To add a user, add a token; to remove one, delete its token. Give it `permissions` and `roles`, and the Console shows it only the pages whose requirements those meet. Plugin page status endpoints follow the same rules:
 
 ```yaml
 http:
   token: ${HTTP_TOKEN}            # Admin: full, can see and change everything
   tokens:
     - token: ${ALICE_TOKEN}
-      scope: demo                 # Ordinary user: read-only, can't change config
+      scope: user                 # Ordinary user (same as demo): can't change config
       principalId: alice
-      permissions: [ambient:read] # matched against a page's requiredPermissions
+      permissions: [ambient:read, ambient:write] # matched against page and plugin action requiredPermissions
       roles: [member]             # matched against a page's requiredRoles
 ```
 
 - **Full tokens**, including the primary `token`, see every page. `permissions` and `roles` don't affect them.
-- **Other tokens** see only pages whose `requiredPermissions` and `requiredRoles` their `permissions` and `roles` meet. The demo read-only limits still apply: they can't change config or run plugin actions.
+- **`scope: user` tokens** are ordinary users. `user` and `demo` mean exactly the same; prefer `user` in new configs. A missing or unknown `scope` is also treated as an ordinary user, never as the admin.
+- Ordinary users see only pages whose `requiredPermissions` and `requiredRoles` their `permissions` and `roles` meet. They can run a plugin action only when the action declares its own `requiredPermissions` or `requiredRoles` and the token meets all of them (see [plugin RPC](../authoring/console-pages.md#page-data-plugin-rpc)). Built-in admin operations, such as changing config or managing plugins, still need a full token.
 - **Without a token**, only pages with no requirements show.
 - **With no tokens configured** (local development), everyone counts as the admin, as before.
 - The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered by token and never cached.

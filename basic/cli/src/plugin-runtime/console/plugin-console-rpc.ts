@@ -113,12 +113,20 @@ function authorize(
     page.requiredRoles.forEach((role) => roles.add(role));
   }
   if (access.unrestricted) return;
-  if (name !== PLUGIN_CONSOLE_RPC_STATUS) throw new Failure('forbidden', '需要管理员令牌');
   const held = new Set(access.permissions);
   const heldRoles = new Set(access.roles);
   const satisfied = [...permissions].every((permission) => held.has(permission))
     && [...roles].every((role) => heldRoles.has(role));
   const guarded = permissions.size > 0 || roles.size > 0;
+  if (name !== PLUGIN_CONSOLE_RPC_STATUS) {
+    // An action opens to non-admin tokens only through its own permission or role, so viewing a
+    // page never grants its actions; the page's requirements still apply on top.
+    if (method.requiredPermissions.length === 0 && method.requiredRoles.length === 0) {
+      throw new Failure('forbidden', '需要管理员令牌');
+    }
+    if (!satisfied) throw new Failure('forbidden', '没有操作权限');
+    return;
+  }
   if (!satisfied || (!guarded && !method.demo)) throw new Failure('forbidden', '没有查看权限');
 }
 

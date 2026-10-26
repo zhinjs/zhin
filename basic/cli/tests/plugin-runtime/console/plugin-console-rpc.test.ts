@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PluginConsoleRpcError, SnapshotStore, childPluginId, definePluginConsoleRpc, pluginConsoleRpcToken, rootPluginId,
   type PluginConsoleRpcDefinition, type SnapshotState,
@@ -125,7 +125,7 @@ it('lets a scoped token read status when it holds the page permissions and roles
   expect((await guarded.call('plugin.root/ambient.status', undefined, scoped(['ambient:read'], ['member'])))?.status).toBe(200);
   expect((await guarded.call('plugin.root/ambient.status', undefined, scoped(['ambient:read'])))?.status).toBe(403);
   expect((await guarded.call('plugin.root/ambient.status', undefined, scoped([], ['member'])))?.status).toBe(403);
-  // Actions stay operator-only even when the token holds the page requirements.
+  // Page requirements alone never open an action: it needs its own permission or role.
   expect((await guarded.call('plugin.root/ambient.reset', {}, scoped(['ambient:read'], ['member'])))?.status).toBe(403);
   expect((await guarded.call('plugin.root/ambient.reset', {}, 'full'))?.status).toBe(200);
 });
@@ -133,4 +133,46 @@ it('lets a scoped token read status when it holds the page permissions and roles
 it('keeps an unguarded status closed to scoped tokens unless the plugin opts in', async () => {
   expect((await setup({ status: status() }).call('plugin.root/ambient.status', undefined, scoped(['x'])))?.status).toBe(403);
   expect((await setup({ status: status({ demo: true }) }).call('plugin.root/ambient.status', undefined, scoped(['x'])))?.status).toBe(200);
+});
+
+describe('plugin Console actions for non-admin tokens', () => {
+  const save = () => vi.fn(async (input: Record<string, unknown>) => ({ saved: input.group ?? null }));
+  const anonymous = publicConsoleAccess;
+
+  it('lets a user token holding the action permission run it', async () => {
+    const handler = save();
+    const { call } = setup({ status: status(), actions: { 'clear-cooldown': { requiredPermissions: ['ambient:write'], handler } } });
+    expect(await call('plugin.root/ambient.clear-cooldown', { group: 'g1' }, scoped(['ambient:write'])))
+      .toMatchObject({ status: 200, body: { success: true, data: { saved: 'g1' } } });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('forbids a user token missing the permission or role, and anonymous callers', async () => {
+    const handler = save();
+    const { call } = setup({ status: status(), actions: { 'clear-cooldown': { requiredPermissions: ['ambient:write'], requiredRoles: ['member'], handler } } });
+    const missingRole = await call('plugin.root/ambient.clear-cooldown', {}, scoped(['ambient:write']));
+    expect(missingRole).toMatchObject({ status: 403, body: { code: 'forbidden', error: '没有操作权限' } });
+    expect(await call('plugin.root/ambient.clear-cooldown', {}, scoped(['ambient:read'], ['member']))).toMatchObject({ status: 403 });
+    expect(await call('plugin.root/ambient.clear-cooldown', {}, anonymous)).toMatchObject({ status: 403 });
+    expect(await call('plugin.root/ambient.clear-cooldown', {}, scoped(['ambient:write'], ['member']))).toMatchObject({ status: 200 });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds the bound page requirements to the action and still lets the admin run it', async () => {
+    const handler = save();
+    const { call } = setup(
+      { status: status(), actions: { reset: { page: 'ambient', requiredPermissions: ['ambient:write'], handler } } },
+      [{ localName: 'ambient', requiredPermissions: ['ambient:read'], requiredRoles: [] }],
+    );
+    expect(await call('plugin.root/ambient.reset', {}, scoped(['ambient:write']))).toMatchObject({ status: 403 });
+    expect(await call('plugin.root/ambient.reset', {}, scoped(['ambient:read', 'ambient:write']))).toMatchObject({ status: 200 });
+    expect(await call('plugin.root/ambient.reset', {}, 'full')).toMatchObject({ status: 200 });
+  });
+
+  it('keeps an action with no requirements of its own admin-only', async () => {
+    const { call } = setup({ status: status(), actions: { reset: { handler: save() } } });
+    expect(await call('plugin.root/ambient.reset', {}, scoped(['anything'], ['member'])))
+      .toMatchObject({ status: 403, body: { code: 'forbidden', error: '需要管理员令牌' } });
+    expect(await call('plugin.root/ambient.reset', {}, 'full')).toMatchObject({ status: 200 });
+  });
 });

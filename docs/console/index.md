@@ -154,21 +154,22 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 ## 用户与权限
 
-每个附加令牌就是一个 Console 用户。给它配上 `permissions` 和 `roles`，Console 就只给它看满足要求的页面，插件页面的状态接口也按同样的规则放行：
+Console 用户就是 `zhin.config.yml` 里 `http.tokens` 的条目：每个附加令牌就是一个用户，没有单独的账号库，也没有登录和注册。加用户就加一条令牌，停用就删掉这条令牌。给它配上 `permissions` 和 `roles`，Console 就只给它看满足要求的页面，插件页面的状态接口也按同样的规则放行：
 
 ```yaml
 http:
   token: ${HTTP_TOKEN}            # 管理员：full，能看和改全部内容
   tokens:
     - token: ${ALICE_TOKEN}
-      scope: demo                 # 普通用户：只读，不能改配置
+      scope: user                 # 普通用户（与 demo 等价）：不能改配置
       principalId: alice
-      permissions: [ambient:read] # 对应页面的 requiredPermissions
+      permissions: [ambient:read, ambient:write] # 对应页面和插件操作的 requiredPermissions
       roles: [member]             # 对应页面的 requiredRoles
 ```
 
 - **full 令牌**（包括主 `token`）能看到全部页面，`permissions` 和 `roles` 对它不起作用。
-- **其他令牌**只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。它仍然受 demo 的只读限制：不能改配置、不能执行插件动作。
+- **`scope: user` 令牌**是普通用户。`user` 和 `demo` 完全等价，新配置建议写 `user`；没写 `scope` 或写了其他值时也按普通用户处理，不会变成管理员。
+- 普通用户只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。插件动作只有在动作自己声明了 `requiredPermissions` 或 `requiredRoles`、并且令牌全部满足时才能执行（见 [插件 RPC](../authoring/console-pages.md#页面数据插件-rpc)）。改配置、管理插件等内置管理操作仍然只给 full 令牌。
 - **不带令牌**只能看到没有任何要求的页面。
 - **没有配置任何令牌**时（本地开发），所有人都等同于管理员，和以前一样。
 - 页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）都按令牌过滤，且不会被缓存。

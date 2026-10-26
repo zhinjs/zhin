@@ -206,7 +206,8 @@ function parseScopedTokens(value: unknown): readonly ScopedTokenConfig[] | undef
     if (!entry || typeof entry !== 'object') continue;
     const record = entry as Record<string, unknown>;
     if (typeof record.token !== 'string' || !record.token) continue;
-    const scope = record.scope === 'demo' || record.scope === 'full' ? record.scope : 'demo';
+    // `user` is an alias of `demo` (an ordinary Console user); anything but `full` is never the operator.
+    const scope = record.scope === 'full' ? 'full' : 'demo';
     const principalId = typeof record.principalId === 'string' && record.principalId.trim() === record.principalId
       && record.principalId.length > 0
       ? record.principalId

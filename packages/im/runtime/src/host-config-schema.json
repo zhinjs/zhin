@@ -112,12 +112,16 @@
                   "string",
                   "null"
                 ],
-                "description": "令牌作用范围。",
+                "description": "令牌作用范围：full 为管理员；user（与 demo 等价）为普通用户，按 permissions / roles 开放页面和插件操作。",
                 "x-zhin-config": {
                   "options": [
                     {
                       "label": "完整管理",
                       "value": "full"
+                    },
+                    {
+                      "label": "普通用户",
+                      "value": "user"
                     },
                     {
                       "label": "只读演示",

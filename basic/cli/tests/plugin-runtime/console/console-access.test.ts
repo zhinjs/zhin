@@ -27,7 +27,7 @@ async function start(tokens = true) {
     host: '127.0.0.1', port: 0,
     ...(tokens ? {
       token: 'admin-secret',
-      tokens: [{ token: 'alice-secret', scope: 'demo' as const, permissions: ['ambient:read'] }],
+      tokens: [{ token: 'alice-secret', scope: 'user' as const, permissions: ['ambient:read'] }],
     } : {}),
   });
   hosts.push(http);

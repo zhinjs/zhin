@@ -16,9 +16,11 @@ import { createToken } from './token.js';
  * `root/typesafe`). No WebSocket, no new HTTP route, and no generic config writes.
  *
  * Authorization follows the Console Page the method is bound to (`page`): the caller must
- * satisfy that page's `requiredPermissions` / `requiredRoles`. Actions always require the
- * full-scope Console token; `status` is readable with the demo token only when it opts in
- * with `demo: true` and its page has no requirements.
+ * satisfy that page's `requiredPermissions` / `requiredRoles`, plus the method's own. The full
+ * (admin) token may call everything. Other tokens (`user` / `demo`) may call a method when they
+ * hold every required permission and role. An action is open to them only when it declares its
+ * own `requiredPermissions` / `requiredRoles` (the page's requirements apply on top, but never
+ * grant an action by themselves); an unguarded `status` needs `demo: true`.
  */
 
 export type PluginConsoleRpcJson = JsonValue;
@@ -51,7 +53,11 @@ export interface PluginConsoleRpcStatus extends PluginConsoleRpcMethod<PluginCon
 export interface PluginConsoleRpcDefinition {
   /** Read-only status for the plugin's Console page(s): `plugin.<pluginId>.status`. */
   readonly status?: PluginConsoleRpcStatus;
-  /** Limited, named actions: `plugin.<pluginId>.<name>`. Always full scope. */
+  /**
+   * Limited, named actions: `plugin.<pluginId>.<name>`. Non-admin tokens may run one only when the
+   * action declares its own requirements and the token holds them (plus the page's); otherwise
+   * admin-only.
+   */
   readonly actions?: Readonly<Record<string, PluginConsoleRpcMethod>>;
 }
 
