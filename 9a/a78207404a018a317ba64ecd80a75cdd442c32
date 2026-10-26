@@ -1,0 +1,43 @@
+basic/cli/src/plugin-runtime/console/entry-projection.ts
+  s_557ef14607705d::t_0eece12fb2023a 1-8,11-19,21-26
+basic/cli/src/plugin-runtime/console/entry-routes.ts
+  s_557ef14607705d::t_81ea607e0c9424 4,13,15-16
+basic/cli/src/plugin-runtime/console/events.ts
+  s_557ef14607705d::t_a8934a931f93c4 5,67
+basic/cli/src/plugin-runtime/console/host.ts
+  s_557ef14607705d::t_59361b7a44dff0 20-21,68-70,72,74-75,91-92,96,105,132,134
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  s_557ef14607705d::t_503e6b43bf68c1 1,34-35,75,92-96,103,115-122
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_557ef14607705d::t_187af1248c7c0e 5,53-54
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_557ef14607705d::t_ad2ccfd3f791cc 64
+basic/cli/src/plugin-runtime/console/rpc-route.ts
+  s_557ef14607705d::t_60b038a8ada9bb 6,16,27,31-32,36,53
+packages/console/pagemanager/src/plugin-runtime/access.ts
+  s_557ef14607705d::t_23d127ae7d433e 6,13,18
+packages/console/plugin-contract/src/navigation.ts
+  s_557ef14607705d::t_0a53707325a90c 14-15
+packages/host/http/src/index.ts
+  s_557ef14607705d::t_d16d37816f9701 24-25,27
+packages/host/http/src/public-api.ts
+  s_557ef14607705d::t_a4ad1bdc64fa67 14
+packages/host/http/src/token-registry.ts
+  s_557ef14607705d::t_2c92376ddf2a3c 11-17,20-41,60-61,71,73,78,81-82,86-88,118-133,155-156,191-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9aa78207404a018a317ba64ecd80a75cdd442c32",
+  "prompts": {},
+  "sessions": {
+    "s_557ef14607705d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a176ee-a8fa-73f0-aa53-7d542945b616",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
