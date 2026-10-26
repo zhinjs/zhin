@@ -27,7 +27,7 @@ The startup output prints the API Base. New projects currently use `http://127.0
 1. Open [console.zhin.dev](https://console.zhin.dev).
 2. Enter the API Base printed by the Host.
 3. Use `HTTP_TOKEN` from the project `.env` file. When the project is created, the terminal shows only a masked token and where it is stored — never the full value — so it stays out of CI logs.
-4. Open Sandbox under **Conversations & Channels** and send `/hello`.
+4. Open **Bot → Try a chat** (Sandbox) in the sidebar and send `/hello`.
 
 A reply means the whole path works: Console reached the bot over HTTP → the Sandbox adapter received the message → it matched `commands/hello` → the reply went back through the same adapter. Connecting a real platform later just swaps Sandbox for that platform's adapter.
 

@@ -85,7 +85,7 @@ example:
   token: ${EXAMPLE_TOKEN}
 ```
 
-启动后在 Console 的"渠道与会话"里确认账号在线、消息能收到。完整的挂载方式见 [第一个插件 · 挂载到你的 Bot](../getting-started/first-plugin.md)。
+启动后在 Console 的"聊天账号"里确认账号在线、消息能收到。完整的挂载方式见 [第一个插件 · 挂载到你的 Bot](../getting-started/first-plugin.md)。
 
 ### 一个适配器挂多个账号
 

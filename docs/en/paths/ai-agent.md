@@ -115,9 +115,9 @@ Only the three directories above are valid. Root-level legacy files such as `dat
 
 ## 6. Accept the result in Console
 
-1. Check provider, binding, and runtime state in **Agent Overview**.
+1. Check provider, binding, and runtime state in **Bot status**.
 2. In **Runtime Capabilities**, confirm the `weather` tool and the `product-language` Prompt Section are loaded from your project.
-3. Start a request in **Conversations & Channels** and inspect each step and the tool result in the Agent workbench.
+3. Start a request in **Chat accounts** and inspect each step and the tool result in **Bot status**.
 4. Edit the Prompt Section, save, and confirm a new conversation reads the new text.
 
 ## Security rules

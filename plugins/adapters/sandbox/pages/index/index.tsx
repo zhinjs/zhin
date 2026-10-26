@@ -2,7 +2,7 @@ import { definePage } from '@zhin.js/console-contract';
 import SandboxChat from './SandboxChat';
 
 export const meta = definePage({
-  title: 'Agent 试验台',
+  title: '试聊一下',
   icon: 'Box',
   order: 10,
 });

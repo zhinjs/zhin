@@ -405,7 +405,7 @@ export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context
     lines.push('');
   });
 
-  lines.push('---', `由 Zhin Agent 试验台于 ${new Date().toISOString()} 导出。`);
+  lines.push('---', `由 Zhin「试聊一下」于 ${new Date().toISOString()} 导出。`);
   return `${lines.join('\n').trim()}\n`;
 }
 

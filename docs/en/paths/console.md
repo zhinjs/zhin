@@ -29,19 +29,21 @@ Projects created by the scaffold default to port `8068`, but go by the terminal 
 
 | Task | Page | Source of truth |
 | --- | --- | --- |
-| Judge system health | Dashboard | Endpoint, log, Agent, and action summaries |
-| Send messages or handle requests | Conversations & Channels | Endpoints, sessions, messages, notices, requests |
-| See how the AI handled a message | Agent Overview | each run's steps, tool results, cancel and retry actions |
-| Manage multi-Agent projects | Workroom | tasks, assignments, reviews, and approval gates in a project |
-| Confirm a command or tool is actually loaded | Runtime Capabilities | commands, middleware, components, Tools, Prompt Sections, MCP |
-| Diagnose a failure | Logs | level, source, timeline, details |
-| Change the system | Config, Environment, Files, Database | full-scope administration only |
+| Judge system health | Home | Endpoint, log, Agent, and action summaries |
+| Send messages or handle requests | Chat accounts | Endpoints, sessions, messages, notices, requests |
+| Look back at what the bot and people said | Chat history | AI conversations per session; continue from any point |
+| Try the bot without a platform account | Try a chat | built-in simulated chat (Sandbox): send a message, see the reply |
+| See how the AI handled a message | Bot status | each run's steps, tool results, cancel and retry actions |
+| Manage multi-Agent projects | Workroom (Advanced) | tasks, assignments, reviews, and approval gates in a project |
+| Confirm a command or tool is actually loaded | Runtime Capabilities (Advanced) | commands, middleware, components, Tools, Prompt Sections, MCP |
+| Diagnose a failure | Activity log | level, source, timeline, details |
+| Change the system | Advanced → Config, Environment, Project files, Database | full-scope administration only |
 
 **Configured doesn't mean active.** To know whether something is available, go by what **Runtime Capabilities** shows as currently loaded.
 
 ## 3. Send and receive messages
 
-In **Conversations & Channels**, pick an Endpoint (one account the bot is signed in to on a platform) and a conversation to read and send messages. New messages arrive live; saved history is still there after a refresh.
+In **Chat accounts**, pick an Endpoint (one account the bot is signed in to on a platform) and a conversation to read and send messages. New messages arrive live; saved history is still there after a refresh.
 
 ::: details Why can't I see older history on some platforms?
 The page receives live events over SSE and pulls history over HTTP; after a reconnect with a gap, it reloads the current conversation. If a platform's adapter has no history API, Console can only show what the bot saved itself while running.
@@ -49,7 +51,7 @@ The page receives live events over SSE and pulls history over HTTP; after a reco
 
 ## 4. See what the AI did
 
-**Agent Overview** lists every AI execution (a Run). Open one to see each model step, which tools were called with what results, and whether it was cancelled. You can also cancel a running task here or export a report of the run.
+**Bot status** lists every AI execution (a Run). Open one to see each model step, which tools were called with what results, and whether it was cancelled. You can also cancel a running task here or export a report of the run.
 
 The workbench can also open lab sessions: choose a working directory and security policy when you start; the Host saves the session so it survives a refresh.
 
@@ -119,11 +121,11 @@ If the inbound message is visible in a conversation, open its **Diagnostics** ac
 
 The Host endpoint is `GET /api/messages/diagnostics`: use `id` for one record, or `conversation` (complete `ConversationRef` JSON) and `messageId` for an exact lookup; `limit` accepts 1–100. Follow the observed result in [message troubleshooting](../troubleshooting/messages.md); newer Console versions also link to the relevant topic from each diagnostic. When no record is available, continue below. Older Hosts do not expose this endpoint; update the Host and standalone Console separately.
 
-1. **Dashboard**: is the bot connected? Are the Endpoints online?
-2. **Conversations & Channels**: did the user's message reach the bot?
+1. **Home**: is the bot connected? Are the Endpoints online?
+2. **Chat accounts**: did the user's message reach the bot?
 3. **Runtime Capabilities**: is the command, tool, or Prompt Section loaded?
-4. **Agent Overview**: which step did the AI reach, and how did it end?
-5. **Logs**: filter to the same time window and source to find the error.
+4. **Bot status**: which step did the AI reach, and how did it end?
+5. **Activity log**: filter to the same time window and source to find the error.
 
 ## Administrator task center
 

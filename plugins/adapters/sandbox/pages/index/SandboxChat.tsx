@@ -698,7 +698,7 @@ export default function Sandbox() {
         <section className="agent-playground-shell">
             <div className="agent-playground-mobilebar">
                 <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />测试会话</button>
-                <strong>Agent 试验台</strong>
+                <strong>试聊一下</strong>
                 <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />检查器</button>
             </div>
 
@@ -707,7 +707,7 @@ export default function Sandbox() {
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <span className="agent-playground-mark"><Sparkles size={16} /></span>
-                            <div><h2>Agent 试验台</h2><small>Sandbox playground</small></div>
+                            <div><h2>试聊一下</h2><small>Try a chat</small></div>
                         </div>
                         <span className={cn("agent-playground-connection", connected && "is-online")} title={connected ? 'Sandbox WebSocket 已连接' : '正在重连 Sandbox WebSocket'}>
                             {connected ? <Wifi size={12} /> : <WifiOff size={12} />}

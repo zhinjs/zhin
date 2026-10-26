@@ -85,7 +85,7 @@ example:
   token: ${EXAMPLE_TOKEN}
 ```
 
-After startup, check in Console's Conversations & Channels that the account is online and receiving. Mounting is covered in [First plugin · Mount it on your bot](../getting-started/first-plugin.md).
+After startup, check in Console's **Chat accounts** that the account is online and receiving. Mounting is covered in [First plugin · Mount it on your bot](../getting-started/first-plugin.md).
 
 ### Several accounts on one adapter
 

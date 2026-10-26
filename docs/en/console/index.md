@@ -13,12 +13,28 @@ There is nothing to deploy: open <https://console.zhin.dev> and enter the API ad
 
 | Page | What it's for |
 | --- | --- |
-| Conversations & Channels / Sandbox | Send test messages; see traffic per platform account |
-| Runtime Capabilities | Confirm commands, middleware, components and tools are loaded, and which plugin they come from |
-| Logs | Browse runtime logs by time and source |
-| Config | Edit `zhin.config.yml` through a form or source editor; failed saves roll back automatically |
-| Agent workbench | See AI conversations, tool calls, approvals and cancellations |
-| Workrooms | See persistent task spaces and task boards |
+| Chat accounts / Try a chat | Send test messages; see traffic per platform account |
+| Chat history | Look back at what the bot and people said, and continue from any point |
+| Runtime Capabilities (Advanced) | Confirm commands, middleware, components and tools are loaded, and which plugin they come from |
+| Activity log | Browse runtime logs by time and source |
+| Config (Advanced) | Edit `zhin.config.yml` through a form or source editor; failed saves roll back automatically |
+| Bot status | See AI conversations, tool calls, approvals and cancellations |
+| Workroom (Advanced) | See persistent task spaces and task boards |
+
+## Sidebar navigation
+
+Console is aimed at everyday users: the sidebar is grouped by what you want to do, and pages use plain names. Existing page links (routes) are unchanged.
+
+| Group | Pages |
+| --- | --- |
+| Everyday (常用) | Home, Chat accounts, Chat history, Reminders, Activity log |
+| Bot (机器人) | Bot status, Try a chat, Assistant jobs (shown when the assistant is enabled) |
+| Features (功能) | Manage features, Feature store, Task center |
+| Advanced (高级, folded by default) | Config, Environment, Project files, Database, Runtime Capabilities, Message scenario lab, Workroom |
+
+Old → new names: Dashboard → Home, Conversations & Channels → Chat accounts, Conversation branches → Chat history, Agent playground → Try a chat, Agent Overview / Agent workbench → Bot status, Scheduled tasks → Reminders, Logs → Activity log, Plugins → Manage features, Marketplace → Feature store.
+
+YAML editing of `zhin.config.yml` is still available under **Advanced → Config** for experienced users and CI.
 
 ::: details Why can Console connect while the bot is still logging in?
 The HTTP service, Console RPC and SSE are process control-plane services that start listening before all plugins have started (before the first generation is published). So while an adapter such as ICQQ is still waiting for a QR scan, slider or device confirmation, the browser can complete login through `login.list`, `login.submit` and `endpoint.login.pending`. Pages that depend on started plugins may be empty or show not-ready until every adapter finishes starting.
