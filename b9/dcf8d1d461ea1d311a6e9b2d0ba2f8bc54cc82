@@ -1,0 +1,21 @@
+docs/console/index.md
+  s_557ef14607705d::t_555d7c2e5b7ecd 22,32
+docs/en/console/index.md
+  s_557ef14607705d::t_f227f9da5d7e58 22,32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9dcf8d1d461ea1d311a6e9b2d0ba2f8bc54cc82",
+  "prompts": {},
+  "sessions": {
+    "s_557ef14607705d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a176ee-a8fa-73f0-aa53-7d542945b616",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
