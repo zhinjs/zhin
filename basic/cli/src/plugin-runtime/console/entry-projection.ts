@@ -1,10 +1,29 @@
-import type { RuntimeConsolePage } from '@zhin.js/host-http';
+import {
+  extractBearerToken,
+  publicConsoleAccess,
+  type ConsoleAccess,
+  type HttpHost,
+  type RuntimeConsolePage,
+} from '@zhin.js/host-http';
+import type { IncomingMessage } from 'node:http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 
-const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
+/**
+ * Console access of one HTTP request, from its bearer token (header, or `?token=` for page
+ * navigations). Routes outside the API base are public, so a missing token means public access.
+ */
+export function requestConsoleAccess(http: HttpHost, request: IncomingMessage, url?: URL): ConsoleAccess {
+  const header = request.headers.authorization;
+  const token = extractBearerToken(Array.isArray(header) ? header[0] : header, url?.searchParams.get('token') ?? null);
+  return http.tokenRegistry.resolveAccess(token);
+}
 
-export async function listPages(consoleRuntime: ConsoleRuntime): Promise<readonly RuntimeConsolePage[]> {
-  const pages = await consoleRuntime.runView(publicAccess, (catalog) => catalog.pages());
+/** Pages the caller may open. Defaults to public access, never to the operator's view. */
+export async function listPages(
+  consoleRuntime: ConsoleRuntime,
+  access: ConsoleAccess = publicConsoleAccess,
+): Promise<readonly RuntimeConsolePage[]> {
+  const pages = await consoleRuntime.runView(access, (catalog) => catalog.pages());
   return Object.freeze(pages.map((page) => Object.freeze({
     id: page.id,
     localName: page.localName,

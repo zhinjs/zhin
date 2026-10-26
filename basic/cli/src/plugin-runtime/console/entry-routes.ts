@@ -1,7 +1,7 @@
 import type { HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { writeJson } from './http-response.js';
-import { buildConsoleEntriesBody, listPages } from './entry-projection.js';
+import { buildConsoleEntriesBody, listPages, requestConsoleAccess } from './entry-projection.js';
 
 export interface RegisterConsoleEntryRoutesOptions {
   readonly http: HttpHost;
@@ -10,9 +10,10 @@ export interface RegisterConsoleEntryRoutesOptions {
 
 export function registerConsoleEntryRoutes(options: RegisterConsoleEntryRoutesOptions): void {
   const { http, consoleRuntime } = options;
-  http.route('GET', '/entries', async (_request, response) => {
+  http.route('GET', '/entries', async (request, response, url) => {
     try {
-      const pages = await listPages(consoleRuntime);
+      response.setHeader('cache-control', 'no-store');
+      const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, url));
       writeJson(response, 200, buildConsoleEntriesBody(pages));
     } catch (error) {
       writeJson(response, 503, {

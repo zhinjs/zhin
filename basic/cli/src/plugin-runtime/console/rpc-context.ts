@@ -61,7 +61,7 @@ function createRpcContext(
     : undefined;
   const context: RuntimeConsoleRpcContext = {
     authScope: identity.authScope,
-    listPages: () => listPages(consoleRuntime),
+    listPages: () => listPages(consoleRuntime, identity.access),
     readConfigSource: () => configuration.readSource(),
     readConfigDocument: () => configuration.readDocument(),
     replaceConfigSource: (source: string, expectedRevision: string) =>

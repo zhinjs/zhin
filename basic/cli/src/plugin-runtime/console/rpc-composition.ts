@@ -2,6 +2,7 @@ import type { ImRuntime } from '@zhin.js/core/runtime';
 import type {
   AuthenticatedTokenPrincipal,
   AuthScope,
+  ConsoleAccess,
   ConsoleEventHub,
   PluginManagementPort,
 } from '@zhin.js/host-http';
@@ -49,5 +50,7 @@ export interface ConsoleRpcConfigurationPort {
 
 export interface ConsoleRpcRequestIdentity {
   readonly authScope: AuthScope;
+  /** Page/RPC access of the bearer token; omitted means public access. */
+  readonly access?: ConsoleAccess;
   readonly authenticatedPrincipal?: AuthenticatedTokenPrincipal;
 }

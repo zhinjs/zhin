@@ -3,6 +3,7 @@ import {
   HttpBodyError,
   pickRpcReply,
   readJsonBody,
+  unrestrictedConsoleAccess,
   type HttpHost,
 } from '@zhin.js/host-http';
 import { writeJson } from './http-response.js';
@@ -12,6 +13,7 @@ import {
 import type { ConsoleRpcComposition } from './rpc-composition.js';
 import { assertDemoConsoleRpcAllowed } from '@zhin.js/console-protocol';
 import { dispatchPluginConsoleRpcRequest } from './plugin-console-rpc.js';
+import { requestConsoleAccess } from './entry-projection.js';
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
@@ -22,14 +24,16 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
   const { http, base } = options;
 
   http.route('POST', `${base}/console/request`, async (
-    request, response, _url, authScope, authenticatedPrincipal,
+    request, response, url, authScope, authenticatedPrincipal,
   ) => {
     try {
       const message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+      // A full-scope caller is the operator even when the Host has no tokens configured.
+      const access = authScope === 'full' ? undefined : requestConsoleAccess(http, request, url);
       // `plugin.<pluginId>.<method>` is plugin-registered and authorizes itself against its Page.
       const pluginReply = await dispatchPluginConsoleRpcRequest(message, {
         snapshots: options.snapshots,
-        authScope,
+        access: access ?? unrestrictedConsoleAccess,
       });
       if (pluginReply) {
         response.setHeader('cache-control', 'no-store');
@@ -46,6 +50,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
       const requestScope = new ConsoleRpcRequestScope(options, {
         authScope,
         authenticatedPrincipal,
+        access: access ?? unrestrictedConsoleAccess,
       });
       let payloads: Awaited<ReturnType<typeof dispatchRuntimeConsoleRpc>>;
       try {
