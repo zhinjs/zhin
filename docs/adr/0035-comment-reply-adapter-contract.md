@@ -35,7 +35,11 @@ sidebar: false
 
 ### 3. 默认「先审再发」
 
-`sendMode` 默认 `review`：AI 生成的回复只进入草稿队列，`send` 返回 `EndpointDeliveryError('approval_pending', …, 'not_sent')`，不调用平台写接口。自动直发（`auto`）不在 v1 范围；后续接入现有 `ApprovalPort` 与 Console「群聊插话」同类的普通人页面后再开放。
+`sendMode` 默认 `review`：AI 生成的回复只进入草稿队列，`send` 返回 `EndpointDeliveryError('approval_pending', …, 'not_sent')`，**`send` 永远不调用平台写接口**。
+
+真正发出必须由人审批：adapter 插件提供仅 master 可用的 `bili-draft list|show|edit|send|drop` 命令（可在任意已接入的聊天平台里执行），`send` 调用 `endpoint.approveDraft(id)` 后才走平台写接口。审批发送同样受保护：已熔断、缺凭据、`sendMode: off`、距上次发送不足最小间隔（默认 30s）时直接拒绝，草稿保留，不排队、不自动重试；发送遇风控码熔断整个 endpoint。
+
+自动直发（`auto`）不在 v1 范围。新草稿主动推送给 master、Console 审批页（与「群聊插话」同类的普通人页面）、接入 `ApprovalPort` 留作后续。
 
 `sendMode: off` 完全禁止出站。
 
@@ -64,9 +68,10 @@ sidebar: false
 | 解析 BV → aid（`x/web-interface/view`） | 实现 |
 | 读取白名单视频最新评论（`x/v2/reply`，`sort=0`） | 实现（只读轮询） |
 | 登录态识别自身 uid（`x/web-interface/nav`） | 实现（有 Cookie 时） |
-| 「回复我的 / @我的」通知（`x/msgfeed/reply`、`x/msgfeed/at`） | 未实现（后续） |
+| 「回复我的 / @我的」通知（`x/msgfeed/reply`、`x/msgfeed/at`） | 实现（可选 `notifications`，需 Cookie；只收视频评论；默认只收白名单视频；以 `mentioned: true` 入站） |
 | 草稿队列（`review` 模式） | 实现（进程内存，不持久化） |
-| 审批后真正发出（`x/v2/reply/add`） | 客户端方法已备，**endpoint 未接线**；需审批入口落地后开启 |
+| 审批后真正发出（`x/v2/reply/add`） | 实现：master 执行 `bili-draft send <id>`；带最小发送间隔与风控熔断 |
+| 新草稿推送 / Console 审批页 / 草稿持久化 | 未实现（后续） |
 | 扫码登录 / Cookie 持久化 | 未实现 |
 
 ## 结果

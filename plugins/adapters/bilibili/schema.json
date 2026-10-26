@@ -25,10 +25,53 @@
         "off"
       ],
       "default": "review",
-      "description": "出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发",
+      "description": "出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send <id> 审批后才发出（默认）；off=禁止出站。不提供自动直发",
       "x-i18n": {
         "en": {
-          "description": "Outbound mode: review (default) queues AI replies as drafts for human confirmation; off disables outbound messages. Version 1 does not support automatic direct replies."
+          "description": "Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported."
+        }
+      }
+    },
+    "minSendIntervalSec": {
+      "type": "number",
+      "minimum": 10,
+      "default": 30,
+      "description": "审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队",
+      "x-i18n": {
+        "en": {
+          "description": "Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued."
+        }
+      }
+    },
+    "notifications": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "reply",
+          "at"
+        ]
+      },
+      "uniqueItems": true,
+      "default": [],
+      "description": "额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开",
+      "x-i18n": {
+        "en": {
+          "description": "Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default."
+        }
+      }
+    },
+    "notificationScope": {
+      "type": "string",
+      "enum": [
+        "whitelist",
+        "all"
+      ],
+      "default": "whitelist",
+      "description": "通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知",
+      "x-i18n": {
+        "en": {
+          "description": "Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video."
         }
       }
     },
@@ -153,10 +196,53 @@
               "off"
             ],
             "default": "review",
-            "description": "出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发",
+            "description": "出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send <id> 审批后才发出（默认）；off=禁止出站。不提供自动直发",
             "x-i18n": {
               "en": {
-                "description": "Outbound mode: review (default) queues AI replies as drafts for human confirmation; off disables outbound messages. Version 1 does not support automatic direct replies."
+                "description": "Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported."
+              }
+            }
+          },
+          "minSendIntervalSec": {
+            "type": "number",
+            "minimum": 10,
+            "default": 30,
+            "description": "审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队",
+            "x-i18n": {
+              "en": {
+                "description": "Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued."
+              }
+            }
+          },
+          "notifications": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "reply",
+                "at"
+              ]
+            },
+            "uniqueItems": true,
+            "default": [],
+            "description": "额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开",
+            "x-i18n": {
+              "en": {
+                "description": "Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default."
+              }
+            }
+          },
+          "notificationScope": {
+            "type": "string",
+            "enum": [
+              "whitelist",
+              "all"
+            ],
+            "default": "whitelist",
+            "description": "通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知",
+            "x-i18n": {
+              "en": {
+                "description": "Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video."
               }
             }
           },

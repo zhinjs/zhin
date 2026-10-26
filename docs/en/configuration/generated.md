@@ -549,7 +549,10 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `bilibili.apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
 | `bilibili.pollIntervalSec` | number | no | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
-| `bilibili.sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发 |
+| `bilibili.sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
+| `bilibili.minSendIntervalSec` | number | no | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
+| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
+| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
 | `bilibili.videos` | array&lt;string \| number&gt; | no | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
 | `bilibili.master` | string \| number | no | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
 | `bilibili.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（B 站 uid） |
@@ -560,7 +563,10 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].biliJct` | string | no | — | Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入） |
 | `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | no | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
 | `bilibili.endpoints[].pollIntervalSec` | number | no | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
-| `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发 |
+| `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
+| `bilibili.endpoints[].minSendIntervalSec` | number | no | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
+| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
+| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
 | `bilibili.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
 | `bilibili.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（B 站 uid） |
 | `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |

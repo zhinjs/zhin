@@ -1,6 +1,6 @@
 /**
  * Bilibili Web API client（非官方接口，Experimental）。
- * 只做白名单视频评论读取；写接口 `addReply` 已备但未被 endpoint 调用（先审再发）。
+ * 读：白名单视频评论、「回复我的 / @我的」通知；写：`addReply`，只在人工审批草稿后由 endpoint 调用。
  * 永远不要记录 Cookie。
  */
 import { defineEndpointClient } from 'zhin.js/adapter';
@@ -8,6 +8,8 @@ import {
   BILIBILI_RISK_CODES,
   BILIBILI_VIDEO_COMMENT_TYPE,
   type BilibiliApiEnvelope,
+  type BilibiliNotificationKind,
+  type BilibiliNotificationPage,
   type BilibiliReply,
   type BilibiliReplyPage,
   type ResolvedBilibiliConfig,
@@ -107,9 +109,18 @@ export class BilibiliClient {
     return this.request<BilibiliReplyPage>(`/x/v2/reply?${query.toString()}`);
   }
 
+  /** 「回复我的」（`x/msgfeed/reply`）/「@我的」（`x/msgfeed/at`）最新一页通知。需要 Cookie。 */
+  listNotifications(kind: BilibiliNotificationKind): Promise<BilibiliNotificationPage> {
+    if (!this.hasCookie) {
+      return Promise.reject(new BilibiliApiError(-101, 'Bilibili cookie (SESSDATA) is required to read notifications'));
+    }
+    const query = new URLSearchParams({ platform: 'web', build: '0', mobi_app: 'web' });
+    return this.request<BilibiliNotificationPage>(`/x/msgfeed/${kind}?${query.toString()}`);
+  }
+
   /**
    * 回复评论（`POST x/v2/reply/add`）。
-   * **v1 未接线**：endpoint 只会把草稿放进审批队列，审批入口落地前不会调用本方法。
+   * 只由 `BilibiliEndpoint.approveDraft()` 在人工审批后调用；`send()` 永远不直接调用。
    */
   async addReply(input: { readonly oid: string; readonly root: string; readonly parent: string; readonly message: string }): Promise<string> {
     if (!this.config.sessdata || !this.config.biliJct) {
