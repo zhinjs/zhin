@@ -151,6 +151,16 @@ await pluginRpc('root/ambient', 'clear-cooldown', { group: '123' });
 
 请求走现有的 `POST /api/console/request`，类型名是 `plugin.<pluginId>.status` 或 `plugin.<pluginId>.<动作名>`。动作名只能用小写字母、数字和 `-`，`status` 是保留名。
 
+除了 `status`，还可以用 `queries` 注册几个**只读查询**，规则和 `status` 一样（可以写 `page`、`demo`、`requiredPermissions`）。查询和动作不能重名：
+
+```ts
+definePluginConsoleRpc({
+  queries: {
+    history: { page: 'index', handler: async () => ({ days: last7Days() }) },
+  },
+});
+```
+
 访问规则：
 
 - **跟随页面**：写了 `page` 时，调用者必须满足这个页面的 `requiredPermissions` 和 `requiredRoles`，方法自己声明的要求会叠加上去。页面在当前代没有加载时直接拒绝。
@@ -166,6 +176,68 @@ await pluginRpc('root/ambient', 'clear-cooldown', { group: '123' });
 - 想给用户看错误原因，就抛 `PluginConsoleRpcError`，它的消息会原样显示。其他异常只会显示「插件操作失败」。
 
 插件 RPC 不负责改配置。改配置请用 `config:patch`。
+
+### 内置状态：群聊插话和技能助手
+
+群聊插话和技能助手由 Host 自己提供，不是插件，所以挂在根插件下：
+
+| 方法 | 调用 | 需要的权限 |
+| --- | --- | --- |
+| `plugin.root.ambient` | `pluginRpc('root', 'ambient')` | `ambient:read` |
+| `plugin.root.skills` | `pluginRpc('root', 'skills')` | `skills:read` |
+
+full 令牌不需要这些权限。页面在 `requiredPermissions` 里写同样的权限，令牌在 `http.tokens[].permissions` 里给出（见 [用户与权限](../console/index.md#用户与权限)）。两个查询都只读，不接收参数。
+
+数据只保存在内存里：最近 24 小时，最多 2000 条，重启后清空。不包含聊天内容、提示词、判断理由或密钥。时间都是毫秒时间戳。
+
+`plugin.root.ambient` 返回：
+
+```ts
+interface AmbientStatus {
+  enabled: boolean;                       // 配置了至少一个群
+  mode: 'off' | 'shadow' | 'active';      // shadow：只判断不发言
+  groups: number | 'all';                 // 配置的群数，'*' 时为 'all'
+  judges: string[];                       // 判断用的模型，按顺序（provider/model）
+  last24h: { spoke: number; watched: number; stayed_quiet: number; skipped: number };
+  decisionShadow: { agreed: number; disagreed: number }; // ai.decisions.ambient 影子模式和聊天模型判断是否一致
+  recent: Array<{                         // 最新在前，最多 20 条
+    at: number;
+    group: string;                        // platform:groupId
+    outcome: 'spoke' | 'watched' | 'stayed_quiet' | 'skipped';
+    skipReason?: 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed';
+    confidence?: number;                  // 0..1，两位小数
+    judge?: 'decision' | 'chat-model';
+  }>;
+  updatedAt: number | null;
+}
+```
+
+`watched` 是影子模式下判断要发言但没有发。
+
+`plugin.root.skills` 返回结构化决策（技能、工具、记忆、子代理、审批、群聊插话的选择）的调用统计：
+
+```ts
+interface SkillsStatus {
+  tasks: Array<{                          // 每个任务一行，按名字排序
+    task: 'skills' | 'tools' | 'memory' | 'agents' | 'approval' | 'ambient';
+    mode: 'off' | 'shadow' | 'active';    // 最近一次调用的模式
+    calls: number; selected: number; abstained: number; shadow: number; failed: number;
+    averageMs: number;
+    inputTokens: number; outputTokens: number;
+    lastModel?: string;
+    lastAt: number;
+  }>;
+  totals: { calls: number; inputTokens: number; outputTokens: number };
+  recent: Array<{                         // 最新在前，最多 20 条
+    at: number; task: string; mode: string;
+    outcome: 'selected' | 'abstained' | 'failed' | 'shadow';
+    durationMs: number;
+    model?: string;
+    reason?: string;                      // 机器可读的失败/放弃原因，不是文字说明
+  }>;
+  updatedAt: number | null;
+}
+```
 
 ## 在页面里保存设置 (config:patch)
 

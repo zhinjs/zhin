@@ -42,6 +42,7 @@ export interface RegisterConsoleRoutesOptions {
   readonly pluginLifecycleFile?: string;
   readonly pluginLifecycleStore?: PluginLifecycleStore;
   readonly configuration: ConsoleConfigurationStore;
+  readonly hostConsoleRpc?: import('@zhin.js/plugin-runtime').PluginConsoleRpc;
 }
 
 /** Registers the Console HTTP surface without installing process-level subscriptions. */
@@ -116,6 +117,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     databaseHost,
     scheduleHost,
     snapshots,
+    ...(options.hostConsoleRpc ? { hostConsoleRpc: options.hostConsoleRpc } : {}),
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });
   registerAgentConsoleRoutes({ http, base, snapshots, projectRoot });

@@ -46,6 +46,7 @@ import {
   startConsoleControlPlane,
   SystemLogStore,
   resolveSystemLogConfig,
+  AssistantStatus,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
@@ -171,6 +172,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
   const consoleEventHub = createConsoleEventHub();
+  // 群聊插话 / 技能助手 Console status (#970): process-owned, survives HMR generations.
+  const assistantStatus = new AssistantStatus();
   const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
     projectRoot: options.root,
     configFile,
@@ -237,6 +240,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       if (agentHost) {
         await agentHost.install({
           im,
+          assistantStatus,
           projectRoot: options.root,
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
@@ -317,6 +321,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     databaseHost,
     scheduleHost,
     eventHub: consoleEventHub,
+    hostConsoleRpc: assistantStatus.consoleRpc,
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
@@ -477,6 +482,7 @@ interface ConfiguredAgentHost {
     readonly extraTools?: readonly unknown[];
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
+    readonly assistantStatus?: AssistantStatus;
   }): RootResourceInstaller;
 }
 

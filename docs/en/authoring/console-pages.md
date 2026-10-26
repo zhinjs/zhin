@@ -151,6 +151,16 @@ await pluginRpc('root/ambient', 'clear-cooldown', { group: '123' });
 
 Requests go through the existing `POST /api/console/request`, with the type `plugin.<pluginId>.status` or `plugin.<pluginId>.<action>`. Action names may use only lowercase letters, digits and `-`, and `status` is reserved.
 
+Besides `status`, you can register a few **read-only queries** under `queries`. They follow the same rules as `status` (`page`, `demo` and `requiredPermissions` all work). A query and an action can't share a name:
+
+```ts
+definePluginConsoleRpc({
+  queries: {
+    history: { page: 'index', handler: async () => ({ days: last7Days() }) },
+  },
+});
+```
+
 Access rules:
 
 - **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
@@ -166,6 +176,68 @@ Ordinary users see what you return, so:
 - To show users why something failed, throw `PluginConsoleRpcError`. Its message is shown as is. Any other error shows only a generic failure message.
 
 Plugin RPC doesn't change configuration. Use `config:patch` for that.
+
+### Built-in status: ambient engagement and skills assistant
+
+Ambient engagement (群聊插话) and the skills assistant (技能助手) are provided by the Host itself, not by a plugin, so they sit under the root plugin:
+
+| Method | Call | Permission needed |
+| --- | --- | --- |
+| `plugin.root.ambient` | `pluginRpc('root', 'ambient')` | `ambient:read` |
+| `plugin.root.skills` | `pluginRpc('root', 'skills')` | `skills:read` |
+
+The full token doesn't need these permissions. Pages list the same permission in `requiredPermissions`, and tokens get it in `http.tokens[].permissions` (see [Users and permissions](../console/index.md#users-and-permissions)). Both queries are read-only and take no input.
+
+The data lives only in memory: the last 24 hours, at most 2000 entries, cleared on restart. It never includes chat text, prompts, judge reasons or secrets. All times are millisecond timestamps.
+
+`plugin.root.ambient` returns:
+
+```ts
+interface AmbientStatus {
+  enabled: boolean;                       // at least one group is configured
+  mode: 'off' | 'shadow' | 'active';      // shadow: judge without speaking
+  groups: number | 'all';                 // configured groups, or 'all' for '*'
+  judges: string[];                       // judge models in order (provider/model)
+  last24h: { spoke: number; watched: number; stayed_quiet: number; skipped: number };
+  decisionShadow: { agreed: number; disagreed: number }; // ai.decisions.ambient shadow vs the chat-model judge
+  recent: Array<{                         // newest first, at most 20
+    at: number;
+    group: string;                        // platform:groupId
+    outcome: 'spoke' | 'watched' | 'stayed_quiet' | 'skipped';
+    skipReason?: 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed';
+    confidence?: number;                  // 0..1, two decimals
+    judge?: 'decision' | 'chat-model';
+  }>;
+  updatedAt: number | null;
+}
+```
+
+`watched` means the judge would have spoken but shadow mode kept it quiet.
+
+`plugin.root.skills` returns call statistics for structured decisions (choosing skills, tools, memory, sub-agents, approvals and ambient engagement):
+
+```ts
+interface SkillsStatus {
+  tasks: Array<{                          // one row per task, sorted by name
+    task: 'skills' | 'tools' | 'memory' | 'agents' | 'approval' | 'ambient';
+    mode: 'off' | 'shadow' | 'active';    // mode of the latest call
+    calls: number; selected: number; abstained: number; shadow: number; failed: number;
+    averageMs: number;
+    inputTokens: number; outputTokens: number;
+    lastModel?: string;
+    lastAt: number;
+  }>;
+  totals: { calls: number; inputTokens: number; outputTokens: number };
+  recent: Array<{                         // newest first, at most 20
+    at: number; task: string; mode: string;
+    outcome: 'selected' | 'abstained' | 'failed' | 'shadow';
+    durationMs: number;
+    model?: string;
+    reason?: string;                      // machine-readable failure/abstain reason, never free text
+  }>;
+  updatedAt: number | null;
+}
+```
 
 ## Saving settings from a page (config:patch)
 

@@ -170,7 +170,7 @@ http:
 - **With no tokens configured** (local development), everyone counts as the admin, as before.
 - The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered by token and never cached.
 
-Pages choose their own permission and role names, such as `ambient:read`.
+Pages choose their own permission and role names, such as `ambient:read`. The built-in ambient engagement and skills assistant status use `ambient:read` and `skills:read` (see [Built-in status](../authoring/console-pages.md#built-in-status-ambient-engagement-and-skills-assistant)).
 
 ## Demo Scope (Read-Only Deployment)
 
