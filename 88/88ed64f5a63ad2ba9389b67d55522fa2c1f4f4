@@ -1,0 +1,71 @@
+.changeset/console-assistant-status.md
+  s_557ef14607705d::t_a50cc8383cd830 1-6
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_557ef14607705d::t_55b5f455f52f15 57-58,227
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_557ef14607705d::t_472492e1af556e 97,131-132,150,225-231,238-239,277,717-732
+basic/cli/src/plugin-runtime/console/api-installer.ts
+  s_557ef14607705d::t_e6272222dbe775 1,42-43,90
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_557ef14607705d::t_72c6345f582444 45,120
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  s_557ef14607705d::t_a2608e7d6d57b5 1-234
+basic/cli/src/plugin-runtime/console/module.ts
+  s_557ef14607705d::t_3c1b2c0d9883ac 12-19
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  s_557ef14607705d::t_97fced179fe51a 36-41,77-82,100-103,127
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_557ef14607705d::t_c568ec20fee27a 26-27
+basic/cli/src/plugin-runtime/console/rpc-route.ts
+  s_557ef14607705d::t_b4257fe23bcba6 37
+basic/cli/src/plugin-runtime/start-command.ts
+  s_557ef14607705d::t_3042549e1e7341 49,175-176,243,324,485
+basic/cli/tests/plugin-runtime/console/assistant-status.test.ts
+  s_557ef14607705d::t_3c420d9fc4d12f 1-109
+docs/authoring/console-pages.md
+  s_557ef14607705d::t_402e7ce8fea744 154-163,190-251
+docs/console/index.md
+  s_557ef14607705d::t_cbf9fb01a94b6a 177
+docs/en/authoring/console-pages.md
+  s_557ef14607705d::t_a97b89a561956c 154-163,190-251
+docs/en/console/index.md
+  s_557ef14607705d::t_0277d949cde6ad 174
+packages/im/plugin-runtime/tests/plugin-console-rpc.test.ts
+  s_557ef14607705d::t_e46af8c3990d0f 26-36
+basic/cli/tests/plugin-runtime/console/plugin-console-rpc.test.ts
+  s_d86152dbd794b9::t_4d58b54cb64eb5 179-200
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  s_079f1dc5e6308d::t_a378983345f68b 56-60,74-75,108,110-117,128-133,145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8888ed64f5a63ad2ba9389b67d55522fa2c1f4f4",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_557ef14607705d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a176ee-a8fa-73f0-aa53-7d542945b616",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_d86152dbd794b9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17770-2656-7460-8e2e-0f4b4f92da0c",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
