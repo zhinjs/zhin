@@ -1,0 +1,18 @@
+.changeset/config-patch-prototype-guard.md
+  h_b680f75345178a 1-5
+packages/im/plugin-runtime/src/root-config-document.ts
+  h_b680f75345178a 88-91,114-117,134-136,149-151,187,192-195
+packages/im/plugin-runtime/tests/root-config-document.test.ts
+  h_b680f75345178a 38-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0fc02192e2c8fa9700123957434be7620dbfb77b",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
