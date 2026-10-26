@@ -1,11 +1,11 @@
 /**
  * Convention entry: discover `adapters/bilibili/index.ts` → defineAdapter.
- * Experimental：只读轮询白名单视频评论；出站默认进入草稿队列（先审再发）。
+ * Experimental：轮询白名单视频评论；出站只进草稿队列，master 用 `bili-draft send <id>` 审批后才发出。
  */
 import { defineAdapter } from 'zhin.js/adapter';
 import { BilibiliEndpoint } from '../../src/endpoint.js';
 import { resolveBilibiliConfig, type BilibiliEndpointConfig } from '../../src/protocol.js';
-import { bilibiliRuntimeStateToken } from '../../src/bilibili-runtime-state.js';
+import { bilibiliEndpointRegistryToken, bilibiliRuntimeStateToken } from '../../src/bilibili-runtime-state.js';
 
 export { BilibiliEndpoint } from '../../src/endpoint.js';
 export type { BilibiliEndpointOptions } from '../../src/endpoint.js';
@@ -25,6 +25,9 @@ export default defineAdapter<BilibiliEndpointConfig>({
       id: config.id,
       mode: 'polling',
     });
-    return new BilibiliEndpoint({ id: context.id, config });
+    const registry = context.use(bilibiliEndpointRegistryToken);
+    const endpoint = new BilibiliEndpoint({ id: context.id, config, registry });
+    registry.set(config.id, endpoint);
+    return endpoint;
   },
 });
