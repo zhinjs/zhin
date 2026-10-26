@@ -1,0 +1,71 @@
+docs/adapters/bilibili.md
+  s_90fe6eae2106d0::t_0d7abe673215ed 11,22,26,36-40,62-63,72-74,81-86,88-93,97-113,119-121,131-134
+docs/configuration/generated.md
+  s_90fe6eae2106d0::t_43b7407c2f9a9f 551-554,565-568
+docs/en/adapters/bilibili.md
+  s_90fe6eae2106d0::t_055d9f89a14134 22,26,36-40,62-63,72-74,81-86,88-93,97-113,119-121,131-134
+docs/en/configuration/generated.md
+  s_90fe6eae2106d0::t_776af7dfb5d580 551-554,565-568
+plugins/adapters/bilibili/README.md
+  s_90fe6eae2106d0::t_c0e774b7731218 10,14,24-28,50-51,60-62,69-74,76-81,85-101,107-109,119-122
+plugins/adapters/bilibili/adapters/bilibili/index.ts
+  s_079f1dc5e6308d::t_dd0e36b7e4503a 3,8,28-31
+plugins/adapters/bilibili/commands/bili-draft/drop/[id]/index.ts
+  s_079f1dc5e6308d::t_de5acf67f8421e 1-12
+plugins/adapters/bilibili/commands/bili-draft/edit/[id]/index.ts
+  s_079f1dc5e6308d::t_886bc9093698e4 1-14
+plugins/adapters/bilibili/commands/bili-draft/list/index.ts
+  s_079f1dc5e6308d::t_5ebdb79a2c017e 1-11
+plugins/adapters/bilibili/commands/bili-draft/send/[id]/index.ts
+  s_079f1dc5e6308d::t_abd85383553db4 1-12
+plugins/adapters/bilibili/commands/bili-draft/show/[id]/index.ts
+  s_079f1dc5e6308d::t_fead37ada143ff 1-12
+plugins/adapters/bilibili/package.json
+  s_55ca365c7efe01::t_56e026135ce5a5 5,69
+plugins/adapters/bilibili/plugin.ts
+  s_079f1dc5e6308d::t_9b590fbd73dff8 3,5-9,17
+plugins/adapters/bilibili/schema.json
+  s_55ca365c7efe01::t_1e2f0046e07967 23-51,129-157
+plugins/adapters/bilibili/src/bilibili-runtime-state.ts
+  s_079f1dc5e6308d::t_e50e5873a97d00 2-4,6,8,11-17
+plugins/adapters/bilibili/src/endpoint.ts
+  s_079f1dc5e6308d::t_77a16369c9e489 2,5-8,21-22,25,31-58,68-71,82-86,128-130,152-157,193,199-232,243-257,261-265,273-274,277-279,282,294-297,316-317,326-327,331-332,334-335,338,340-341,344-421,423
+plugins/adapters/bilibili/src/index.ts
+  s_079f1dc5e6308d::t_baf2f4af0758a2 9-29
+plugins/adapters/bilibili/src/review.ts
+  s_90fe6eae2106d0::t_4be40f03c058c2 1-95
+plugins/adapters/bilibili/tsconfig.json
+  s_55ca365c7efe01::t_0c563b66df421f 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0d9296392cca7a86b3650e80d882ff1891b8906a",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_55ca365c7efe01": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a177b8-87f4-7953-a680-2af16d1c55f2",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_90fe6eae2106d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a177b8-f506-78d3-b307-a0828dac836f",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
