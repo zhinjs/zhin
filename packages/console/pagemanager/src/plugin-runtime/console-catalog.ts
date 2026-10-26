@@ -45,6 +45,15 @@ export class ConsoleCatalog {
     return Object.freeze((this.#pages?.list() ?? []).filter((page) => allowsPage(page, this.#access)));
   }
 
+  /**
+   * Every Page owned by `owner`, unfiltered. For authorization decisions only (for example
+   * plugin Console RPC bound to a Page); never return this list to a client.
+   */
+  pagesOwnedBy(owner: PluginId): readonly Readonly<PageManifest>[] {
+    this.#assertActive();
+    return this.#pages?.ownedBy(owner) ?? Object.freeze([]);
+  }
+
   match(path: string): RouteMatch {
     this.#assertActive();
     const page = this.#pages?.route(path);

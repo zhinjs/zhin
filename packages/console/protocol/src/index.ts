@@ -484,6 +484,32 @@ export const PLUGIN_RPC = Object.freeze({
   SET_ENABLED: 'plugin:set-enabled',
 } as const);
 
+/**
+ * Plugin-registered Console RPC (#970): `plugin.<pluginId>.status` / `plugin.<pluginId>.<action>`.
+ * `<pluginId>` is the owner PluginId (`root`, `root/typesafe`, ...). Sent through the same
+ * `/api/console/request` envelope as every other Console RPC, with the payload in `data`.
+ */
+export const PLUGIN_CONSOLE_RPC_PREFIX = 'plugin.' as const;
+const pluginConsoleRpcTypePattern = /^plugin\.(root(?:\/[a-z0-9][a-z0-9-]*)*)\.([a-z][a-z0-9-]{0,63})$/u;
+
+export interface PluginConsoleRpcAddress {
+  readonly pluginId: string;
+  readonly method: string;
+}
+
+export function pluginConsoleRpcType(pluginId: string, method: string): string {
+  const type = `${PLUGIN_CONSOLE_RPC_PREFIX}${pluginId}.${method}`;
+  if (!parsePluginConsoleRpcType(type)) throw new TypeError(`Invalid plugin Console RPC: ${pluginId} ${method}`);
+  return type;
+}
+
+/** Returns null for anything that is not a well-formed plugin Console RPC type. */
+export function parsePluginConsoleRpcType(type: unknown): PluginConsoleRpcAddress | null {
+  if (typeof type !== 'string' || type.length > 640 || !type.startsWith(PLUGIN_CONSOLE_RPC_PREFIX)) return null;
+  const match = pluginConsoleRpcTypePattern.exec(type);
+  return match ? Object.freeze({ pluginId: match[1]!, method: match[2]! }) : null;
+}
+
 export type ConsoleConfigFormat = 'yaml' | 'json';
 
 export interface ConsoleConfigSource {
