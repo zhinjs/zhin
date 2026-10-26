@@ -1,0 +1,14 @@
+packages/host/http/src/public-api.ts
+  h_b680f75345178a 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "62d8cdb3ac51901938561fdf2c06d1ea6d95bc1e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
