@@ -24,7 +24,7 @@
   "dependencies": {
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
-    "js-yaml": "^5.2.2"
+    "js-yaml": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

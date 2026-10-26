@@ -127,7 +127,7 @@
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "he": "^1.2.0",
-    "js-yaml": "^5.2.2"
+    "js-yaml": "^5.4.1"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
