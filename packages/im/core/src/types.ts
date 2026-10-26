@@ -89,6 +89,7 @@ export type MessageMiddleware = (message: Message, next: () => Promise<void>) =>
 export type DefineConfig<T> = T | ((env:Record<string,string>)=>MaybePromise<T>);
 
 export interface SendOptions extends MessageChannel{
+  locale?: import('@zhin.js/plugin-runtime').Locale
   context:string
   endpoint:string
   content:SendContent

@@ -10,6 +10,7 @@ export type RssOutboundPush = (input: {
   readonly channelType: ChannelInfo['channelType'];
   readonly channelId: string;
   readonly content: string;
+  readonly locale?: Locale;
 }) => Promise<void>;
 
 export interface RssRuntime {

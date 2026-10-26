@@ -22,7 +22,7 @@ Without an explicit language, `-y` keeps the Chinese default. Running setup on a
 
 ## Personal language
 
-With the command feature installed, send `language en` or `language zh-CN` using the bot's actual command prefix. With `/`, send `/language en`; with an empty prefix, send `language en`.
+With the Command Feature mounted on the application Root, send `language en` or `language zh-CN` using the bot's actual command prefix. With `/`, send `/language en`; with an empty prefix, send `language en`. Mounting the feature only in a child plugin does not register this Root command.
 
 Personal preferences require SQLite, MySQL, or PostgreSQL. Project language still works without SQL. Personal switching reports unavailable storage rather than silently saving a temporary preference.
 

@@ -3,7 +3,7 @@ import { resolveBilibiliConfig, type BilibiliConfig } from '../src/config.js';
 import type { BiliClient, DynamicItem, LiveInfo, RoomInfo, UserCard } from '../src/api.js';
 import { BilibiliWatcher } from '../src/poll.js';
 import { createInMemoryBiliDb, type BiliDb } from '../src/store.js';
-import type { BilibiliRuntime } from '../src/runtime.js';
+import type { BilibiliRuntime, BiliOutboundPush } from '../src/runtime.js';
 
 /** Default sender is a group admin so subscription flows pass the manager check. */
 export function biliMessage(kind: 'private' | 'group' | 'channel' = 'group', id = '10001', roles: readonly string[] = ['admin'], senderId = 'u1') {
@@ -71,7 +71,7 @@ export class FakeClient {
 export interface Harness {
   db: BiliDb;
   client: FakeClient;
-  pushes: { channelId: string; content: string }[];
+  pushes: Parameters<BiliOutboundPush>[0][];
   clock: { now: number };
   watcher: BilibiliWatcher;
   runtime: BilibiliRuntime;
@@ -86,7 +86,7 @@ export function harness(config: BilibiliConfig = {}, withOutbound = true): Harne
   const clock = { now: 1_800_000_000_000 };
   const resolved = resolveBilibiliConfig({ jitterMs: 0, requestGapMs: 0, ...config });
   const outbound = withOutbound
-    ? async (input: { channelId: string; content: string }) => { pushes.push({ channelId: input.channelId, content: input.content }); }
+    ? async (input: Parameters<BiliOutboundPush>[0]) => { pushes.push(input); }
     : null;
   const watcher = new BilibiliWatcher({
     db,

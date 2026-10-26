@@ -61,12 +61,27 @@ export function readScope(root, base, head) {
   return { ...scope, base, head, changed };
 }
 
+/** Cross-job transport is bounded: file lists are recomputed from these immutable commits. */
+export function scopeOutputs(scope) {
+  return { base: scope.base, head: scope.head, builds: scope.builds.length > 0, tests: scope.tests.length > 0 };
+}
+
+export function readPlannedScope(root, env = process.env) {
+  const base = env.PR_SCOPE_BASE, head = env.PR_SCOPE_HEAD;
+  const validSha = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value) && !/^0+$/.test(value);
+  if (!validSha(base) || !validSha(head)) throw new Error('Missing or invalid immutable PR scope commits');
+  if (head !== env.GITHUB_SHA) throw new Error('PR scope head does not match the workflow candidate');
+  const checkedOut = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  if (checkedOut !== head) throw new Error('PR scope head does not match the checked-out candidate');
+  return readScope(root, base, head);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
   const refs = comparison(process.env.GITHUB_EVENT_NAME, event, process.env.GITHUB_SHA);
   const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
   const base = /^[a-f0-9]{40}$/.test(refs.base ?? '') && !/^0+$/.test(refs.base) ? refs.base : git('rev-parse', `${process.env.GITHUB_SHA}^`);
   const scope = readScope(process.cwd(), base, process.env.GITHUB_SHA);
-  writeOutputs({ scope: JSON.stringify(scope), builds: scope.builds.length > 0, tests: scope.tests.length > 0 });
+  writeOutputs(scopeOutputs(scope));
   console.log(`${scope.changed.length} changed files; ${scope.builds.length} affected packages; ${scope.tests.length} selected test files`);
 }

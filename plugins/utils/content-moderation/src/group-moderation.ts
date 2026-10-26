@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { AiCompletion, AiCompletionResult, PluginStateStore } from 'zhin.js';
 import type { EndpointManagement } from 'zhin.js/adapter';
+import type { Locale } from 'zhin.js/i18n';
+import { moderationMessages } from './messages.js';
 
 const QUIET_MS = 30 * 60_000;
 const NEWCOMER_MS = 10 * 60_000;
@@ -51,6 +53,8 @@ export function parseGroupReview(text: string, original: string,
 }
 
 export interface GroupModerationInput {
+  /** Captured when the original inbound message is admitted, before asynchronous review. */
+  readonly locale?: Locale;
   readonly scope: string;
   readonly group: string;
   readonly sender: string;
@@ -205,9 +209,9 @@ export class GroupModerator {
         await management.moderateGroupMember(input.group, input.sender, { type: 'mute', durationSeconds: 600 }, signal);
       }
       signal.throwIfAborted();
-      const rule = review.category === 'advertising' ? '请勿发布未经请求的广告或引流信息' : '请勿针对他人进行人身攻击';
-      const action = newcomer ? '入群 10 分钟内发布明确广告，已移出群聊' : count === 3 ? '已禁言 10 分钟' : count === 2 ? '警告' : '提醒';
-      await input.reply(`${action}。${rule}。`, input.sender);
+      const rule = moderationMessages(input.locale, review.category);
+      const action = moderationMessages(input.locale, newcomer ? 'kicked' : count === 3 ? 'muted' : count === 2 ? 'warning' : 'reminder');
+      await input.reply(moderationMessages(input.locale, 'notice', { action, rule }), input.sender);
       const notifiedAt = Date.now();
       // Commit the delivered stage and release together, before optional recall.
       await state.update<MemberState>(memberKey, (value) => value?.lease === token

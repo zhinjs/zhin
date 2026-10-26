@@ -58,6 +58,26 @@ describe('ScheduleJobEngine', () => {
     engine.unload();
   });
 
+  it.each(['en', undefined] as const)('uses the persisted job locale for failure delivery (%s)', async (locale) => {
+    const sendIm = vi.fn(async () => {});
+    const localizedRouter = createNotificationRouter({ resolveAdapter: () => undefined, sendIm });
+    const execute = vi.fn(async () => ({ success: false, responseText: '', error: 'synthetic failure', durationMs: 1 }));
+    const store = new ScheduleJobStore({ dataDir });
+    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
+    const engine = new ScheduleJobEngine({ store, worker, router: localizedRouter, notifyOnFailure: true });
+    const notify = { channel: 'im', target: { channel: 'im', scene: {
+      platform: 'qq', endpointKey: 'bot1', sceneId: 'group1', kind: 'group',
+    } } } as const;
+    try {
+      await engine.addJob({ id: 'locale-job', locale, enabled: true,
+        schedule: { kind: 'every', everyMs: 60_000 }, action: { kind: 'agent', prompt: 'check weather' }, notify });
+      await engine.runJobNow('locale-job');
+      expect(sendIm).toHaveBeenCalledWith(notify,
+        expect.stringContaining(locale === 'en' ? '[Task failed]' : '[任务失败]'),
+        undefined, { locale: locale ?? 'zh-CN' });
+    } finally { engine.unload(); }
+  });
+
   it('runJob passes createdBy to task executor', async () => {
     const execute = vi.fn(async () => ({
       success: true,

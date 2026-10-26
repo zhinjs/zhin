@@ -11,7 +11,7 @@ import {
   type EndpointManagement,
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
-import { normalizeDeliveryTarget, type DeliveryTarget, type CapabilityId, type PluginId, type RuntimeSnapshot, type SnapshotLease } from '@zhin.js/plugin-runtime';
+import { normalizeDeliveryTarget, type DeliveryTarget, type CapabilityId, type PluginId, type RuntimeSnapshot, type SnapshotLease, type Locale } from '@zhin.js/plugin-runtime';
 import {
   EndpointDeliveryError,
   type ConversationRef,
@@ -44,6 +44,7 @@ export interface EndpointRuntimeSummary {
 export type EndpointRuntimeDetail = Omit<EndpointRuntimeSummary, 'id' | 'owner'>;
 
 export interface RuntimeEndpointSendInput {
+  readonly locale?: Locale;
   readonly adapter: string;
   readonly endpointKey: string;
   readonly conversation: ConversationAddress;
@@ -161,6 +162,7 @@ export class EndpointRuntime {
       const result = await this.context.send({
         conversation,
         requester,
+        locale: input.locale,
         content: normalizeConsoleContent(input.content),
       }, lease.value);
       return requireSentReceipt(result);
@@ -170,7 +172,7 @@ export class EndpointRuntime {
   }
 
   /** Resolves a persisted identity exactly in the current operation generation. */
-  async sendTarget(target: DeliveryTarget, content: unknown, requester?: PluginId): Promise<{ messageId: string }> {
+  async sendTarget(target: DeliveryTarget, content: unknown, requester?: PluginId, options?: Readonly<{ locale?: Locale }>): Promise<{ messageId: string }> {
     const conversation = normalizeDeliveryTarget(target);
     const lease = this.context.acquire();
     try {
@@ -190,6 +192,7 @@ export class EndpointRuntime {
       const result = await this.context.send({
         conversation,
         requester: requester ?? owner,
+        locale: options?.locale,
         // The unified renderer validates JSX, components and native Segments.
         content: content as SendContent,
       }, lease.value);

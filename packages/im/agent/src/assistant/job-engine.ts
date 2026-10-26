@@ -1,7 +1,7 @@
 /**
  * ScheduleJobEngine — schedule-jobs.json 持久化调度
  */
-import { createMessages } from '@zhin.js/plugin-runtime';
+import { createMessages, resolveLocale } from '@zhin.js/plugin-runtime';
 import { getLogger, formatCompact } from '@zhin.js/logger';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -94,7 +94,7 @@ export class ScheduleJobEngine {
       const notify = resolveEffectiveNotify(job.notify, this.defaultNotify);
       if (notify.channel !== 'silent' && notify.channel !== 'log') {
         const msg = messages(job.locale, 'failed', { label: job.label || jobId, error: result.error || 'unknown error' });
-        await this.router.deliver({ notify, content: msg, jobId, label: job.label }).catch(() => {});
+        await this.router.deliver({ notify, content: msg, jobId, label: job.label, locale: resolveLocale(job.locale) }).catch(() => {});
       }
     }
 

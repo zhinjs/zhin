@@ -32,7 +32,8 @@ jobs:
     timeout-minutes: 10
     outputs:
       full: ${{ steps.plan.outputs.full }}
-      scope: ${{ steps.scope.outputs.scope }}
+      base: ${{ steps.scope.outputs.base }}
+      head: ${{ steps.scope.outputs.head }}
       builds: ${{ steps.scope.outputs.builds }}
       tests: ${{ steps.scope.outputs.tests }}
     steps:
@@ -74,7 +75,8 @@ jobs:
       - name: validate source contracts and changed-file lint
         run: node scripts/ci/run-pr-check.mjs contracts
         env:
-          PR_SCOPE: ${{ needs.plan.outputs.scope }}
+          PR_SCOPE_BASE: ${{ needs.plan.outputs.base }}
+          PR_SCOPE_HEAD: ${{ needs.plan.outputs.head }}
 
   build:
     needs: plan
@@ -102,7 +104,8 @@ jobs:
       - name: build affected packages and dependencies once
         run: node scripts/ci/run-pr-check.mjs build
         env:
-          PR_SCOPE: ${{ needs.plan.outputs.scope }}
+          PR_SCOPE_BASE: ${{ needs.plan.outputs.base }}
+          PR_SCOPE_HEAD: ${{ needs.plan.outputs.head }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: pr-build
@@ -138,7 +141,8 @@ jobs:
       - name: test affected packages and consumers
         run: node scripts/ci/run-pr-check.mjs test
         env:
-          PR_SCOPE: ${{ needs.plan.outputs.scope }}
+          PR_SCOPE_BASE: ${{ needs.plan.outputs.base }}
+          PR_SCOPE_HEAD: ${{ needs.plan.outputs.head }}
           PR_SHARD: ${{ matrix.shard }}
 
   checks:

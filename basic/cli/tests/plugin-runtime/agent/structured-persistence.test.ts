@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Scope, rootPluginId, childPluginId, databaseRootHostToken, GenerationHandoffStack, DisposeStack } from '@zhin.js/plugin-runtime';
-import { SCHEDULE_JOB_MODEL, AgentUsageCollector, agentUsageStoreToken } from '@zhin.js/agent/runtime';
+import { SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL, DatabaseScheduleJobStorage, AgentUsageCollector, agentUsageStoreToken } from '@zhin.js/agent/runtime';
 import { ScheduleJobStore, type TurnRequest } from '@zhin.js/agent';
 import { createScopedTraceJournal } from '@zhin.js/agent/trace';
 import { AGENT_MESSAGE_MODEL, AGENT_SESSION_MODEL, AGENT_SUMMARY_MODEL, parseAgentMessageRow } from '@zhin.js/ai';
@@ -120,7 +120,7 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     expect((await host.models.get('agent_summaries')!.select())[0]).toMatchObject({ summary: 'prior', anchor_message_id: 1 });
   });
 
-  it('adds locale to an old schedule table and retains legacy Chinese through restart', async () => {
+  it('adds locale to an old schedule table and retains Chinese and English across connections and restart', async () => {
     host.define('agent_schedule_jobs', Object.fromEntries(Object.entries(SCHEDULE_JOB_MODEL).filter(([name]) => name !== 'locale')));
     await host.start();
     await host.models.get('agent_schedule_jobs')!.insert({ id: createHash('sha256').update('legacy').digest('hex'), job_id: 'k1:legacy', position: 0, enabled: true,
@@ -129,9 +129,26 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     const { foundation } = await activate();
     expect(await foundation.schedule.store.getJob('legacy')).toMatchObject({ locale: 'zh-CN', action: { prompt: 'work' } });
     expect((await host.models.get('agent_schedule_jobs')!.select())[0]).toMatchObject({ locale: null });
+    const english = { id: 'english', locale: 'en', enabled: true, createdAt: 2, updatedAt: 2,
+      schedule: { kind: 'every', everyMs: 60_000 }, action: { kind: 'agent', prompt: '原始任务内容' },
+      notify: { channel: 'im', target: { channel: 'im', scene: { platform: 'slack', endpointKey: 'bot', kind: 'channel', sceneId: 'room',
+        parent: { kind: 'channel', sceneId: 'guild' } }, threadId: 'thread' } }, state: {} } as const;
+    await foundation.schedule.store.upsertJob(english);
+    const saved = await foundation.schedule.store.getJob('english');
+    expect(saved).toEqual({ ...english, updatedAt: expect.any(Number) });
+    const second = createHost();
+    second.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL);
+    second.define('agent_schedule_migration', SCHEDULE_JOB_MIGRATION_MODEL);
+    try {
+      await second.start();
+      const storage = new DatabaseScheduleJobStorage(second);
+      expect(await storage.get('english')).toEqual(saved);
+      expect(await storage.get('legacy')).toMatchObject({ locale: 'zh-CN', action: { prompt: 'work' } });
+    } finally { await second.stop(); }
     await cleanup.dispose(); cleanup = new DisposeStack(); await host.stop(); host = createHost();
     const restarted = await activate();
     expect(await restarted.foundation.schedule.store.getJob('legacy')).toMatchObject({ locale: 'zh-CN' });
+    expect(await restarted.foundation.schedule.store.getJob('english')).toEqual(saved);
   });
 
   it('imports schedule-jobs once and preserves concurrent per-job mutations across restart', async () => {

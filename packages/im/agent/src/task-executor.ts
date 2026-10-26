@@ -116,6 +116,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
               content: result.output,
               router,
               source: 'scheduled',
+              locale: resolveLocale(job.locale),
             });
           } catch (error) {
             await event('error');

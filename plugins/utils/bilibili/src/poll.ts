@@ -136,7 +136,7 @@ export class BilibiliWatcher {
         || typeof channelId !== 'string' || !channelId
         || (channelType !== 'private' && channelType !== 'group' && channelType !== 'channel')) continue;
       try {
-        await push({ adapterName, endpointKey, channelType, channelId, content: content(resolveLocale(row.locale)) });
+        await push({ adapterName, endpointKey, channelType, channelId, locale: resolveLocale(row.locale), content: content(resolveLocale(row.locale)) });
         pushed += 1;
       } catch {
         // OutboundHost already logs; keep delivering to other subscribers.

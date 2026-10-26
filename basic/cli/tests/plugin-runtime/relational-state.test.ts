@@ -1,5 +1,6 @@
 import { createReminderState } from '../../../../plugins/utils/reminder/src/storage.js';
 import { ADMIN_REMINDER_STATE_KEY } from '../../../../plugins/utils/reminder/src/admin-tasks.js';
+import { REMINDER_STATE_KEY } from '../../../../plugins/utils/reminder/src/service.js';
 import { createAdministratorRssState } from '../../../../plugins/utils/rss/src/storage.js';
 import { ADMIN_RSS_STATE_KEY } from '../../../../plugins/utils/rss/src/admin-tasks.js';
 import { CONVERSATION_EVENT_MODEL, CONVERSATION_EVENT_QUERY_MODEL, CONVERSATION_CURSOR_MODEL, DatabaseConversationEventStore, type ConversationEvent } from '@zhin.js/im-contract';
@@ -8,7 +9,7 @@ import { migrateConversationColumns, migrateInboxColumns } from '../../src/plugi
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { childPluginId, rootPluginId, PluginDatabaseHost, createRelationalStateStore, type RelationalStateCodec, type DatabaseHostModel } from '@zhin.js/plugin-runtime';
+import { childPluginId, rootPluginId, PluginDatabaseHost, createRelationalStateStore, encodeTaskTarget, encodeStorageIdentity, type RelationalStateCodec, type DatabaseHostModel } from '@zhin.js/plugin-runtime';
 import { AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL, DatabaseAgentUsageStore, AgentUsageCollector, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL } from '@zhin.js/agent/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import { ensureDatabaseColumns, ensureDatabaseIndex, type StructuredDatabase } from '@zhin.js/database';
@@ -158,6 +159,68 @@ describe.each(dialects)('transactional relational state (%s)', mode => {
     expect(await db.models.get('admin_rss_seen')!.select()).toHaveLength(1);
     expect(await db.models.get('admin_rss_pending_items')!.select()).toHaveLength(1);
     expect(await db.models.get('admin_rss_receipts')!.select()).toEqual([expect.objectContaining({ id: 'operation', task_id: 'task' })]);
+  });
+
+  it('adds reminder/RSS locale columns to old tables and retains captured languages across connections and restart', async () => {
+    const target = { endpoint: { adapter: 'root/slack', id: 'root/slack\0bot' }, kind: 'channel' as const,
+      id: 'room', parent: { kind: 'channel' as const, id: 'parent' }, threadId: 'thread' };
+    const task = { id: 'legacy', target, text: '用户原文\0%', locale: 'zh-CN', createdAt: 1, nextRunAt: 2,
+      intervalMs: null, claimId: 'claim', lastRunAt: null, detail: '历史状态\0%' };
+    const reminderRow = { id: task.id, position: 0, ...encodeTaskTarget(target), content: encodeStorageIdentity(task.text),
+      state: 'unknown', created_at: 1, next_run_at: 2, interval_ms: null, claim_id: 'claim', last_run_at: null,
+      detail: encodeStorageIdentity(task.detail) };
+    const specs = [
+      { store: 'reminders' as const, key: REMINDER_STATE_KEY, table: 'reminder_tasks', header: 'reminder_tasks_book',
+        row: { ...reminderRow, sender_id: encodeStorageIdentity('alice'), creation: null },
+        book: { version: 1, tasks: [{ ...task, senderId: 'alice', status: 'unknown' }] } },
+      { store: 'reminders' as const, key: ADMIN_REMINDER_STATE_KEY, table: 'admin_reminder_tasks', header: 'admin_reminder_tasks_book',
+        row: { ...reminderRow, sender_id: null, creation: 'creation' },
+        book: { version: 1, revision: 'version', receipts: [], tasks: [{ ...task, creation: 'creation', state: 'unknown' }] } },
+      { store: 'rss' as const, key: ADMIN_RSS_STATE_KEY, table: 'admin_rss_tasks', header: 'admin_rss_book',
+        row: { id: task.id, position: 0, ...encodeTaskTarget(target), creation: 'creation', version: 'version',
+          url: encodeStorageIdentity('https://test.invalid/rss'), state: 'unknown', created_at: 1, claim_id: 'claim',
+          last_check_at: 2, last_run_at: null, detail: encodeStorageIdentity(task.detail), seen_known: false, pending_kind: 'absent' },
+        book: { version: 2, revision: 'version', receipts: [], tasks: [{ id: task.id, target, creation: 'creation', version: 'version',
+          locale: 'zh-CN', url: 'https://test.invalid/rss', state: 'unknown', createdAt: 1, claimId: 'claim',
+          lastCheckAt: 2, lastRunAt: null, detail: task.detail, seen: null }] } },
+    ];
+    const register = (database: PluginDatabaseHost) => ({ reminders: createReminderState(database), rss: createAdministratorRssState(database) });
+    let db = new PluginDatabaseHost(owner, host);
+    // Build the historical schema from the actual declarations, without their new columns.
+    // All subsequent startup/migration/query operations use the real SQL implementation.
+    const define = host.define.bind(host);
+    const oldSchema = vi.spyOn(host, 'define').mockImplementation((name, definition, options) => {
+      define(name, Object.fromEntries(Object.entries(definition).filter(([column]) => !options?.addColumns?.includes(column))));
+    });
+    try { register(db); } finally { oldSchema.mockRestore(); }
+    await host.start();
+    await db.transaction(async transaction => {
+      for (const spec of specs) {
+        await transaction.model(spec.header).insert({ version: spec.book.version, revision: 'version',
+          storage_id: 1, storage_revision: 'legacy-revision', storage_present: true, storage_expires_at: null });
+        await transaction.model(spec.table).insert(spec.row);
+      }
+    });
+    await host.stop(); host = createHost(); db = new PluginDatabaseHost(owner, host);
+    const stores = register(db);
+    await host.start();
+    for (const spec of specs) {
+      expect(await db.models.get(spec.table)!.select('id', 'locale', 'detail_key')).toEqual([{ id: 'legacy', locale: null, detail_key: null }]);
+      expect(await stores[spec.store].get(spec.key)).toEqual(spec.book);
+    }
+    const books = specs.map(spec => ({ ...spec, english: { ...spec.book,
+      tasks: [...spec.book.tasks, { ...spec.book.tasks[0]!, id: 'english', locale: 'en' }] } }));
+    for (const spec of books) await stores[spec.store].set(spec.key, spec.english);
+    const second = createHost();
+    const secondStores = register(new PluginDatabaseHost(owner, second));
+    try {
+      await second.start();
+      for (const spec of books) expect(await secondStores[spec.store].get(spec.key)).toEqual(spec.english);
+    } finally { await second.stop(); }
+    await host.stop(); host = createHost();
+    const restarted = register(new PluginDatabaseHost(owner, host));
+    await host.start();
+    for (const spec of books) expect(await restarted[spec.store].get(spec.key)).toEqual(spec.english);
   });
 
   it('backfills canonical message identities and inbox direction without changing replay data', async () => {

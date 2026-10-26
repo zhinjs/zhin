@@ -535,7 +535,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `assistant.events.rateLimitPerMinute` | number \| string \| null | no | — | 每来源每分钟最大请求数（默认 60） |
 | `log_level` | string \| number | no | — | Runtime log level. |
 | `plugin` | object | no | — | Root Plugin configuration; replaced by its project schema during composition. |
-| `locale` | string: `"zh-CN"`, `"en"` | no | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
+| `locale` | string: `"zh-CN"`, `"en"` | no | — | Language used when no personal preference is set; Simplified Chinese when omitted. Language and time zone are independent. |
 
 ## Plugin instance fields
 
@@ -548,28 +548,28 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `bilibili.apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
-| `bilibili.pollIntervalSec` | number | no | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
-| `bilibili.sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
-| `bilibili.minSendIntervalSec` | number | no | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
-| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
-| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
-| `bilibili.videos` | array&lt;string \| number&gt; | no | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
-| `bilibili.master` | string \| number | no | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
-| `bilibili.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（B 站 uid） |
-| `bilibili.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
-| `bilibili.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `bilibili.endpoints[].id` | string | yes | — | Endpoint 名称（本地标识，不是 B 站账号） |
-| `bilibili.endpoints[].sessdata` | string | no | — | Cookie SESSDATA（以你的账号身份操作；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库） |
-| `bilibili.endpoints[].biliJct` | string | no | — | Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入） |
-| `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | no | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
-| `bilibili.endpoints[].pollIntervalSec` | number | no | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
-| `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
-| `bilibili.endpoints[].minSendIntervalSec` | number | no | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
-| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
-| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
+| `bilibili.pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
+| `bilibili.sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported. |
+| `bilibili.minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
+| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default. |
+| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video. |
+| `bilibili.videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
+| `bilibili.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
+| `bilibili.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `bilibili.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `bilibili.endpoints[].id` | string | yes | — | Local endpoint name, not a Bilibili account ID. |
+| `bilibili.endpoints[].sessdata` | string | no | — | SESSDATA cookie, acting as your account. Reference ${BILIBILI_SESSDATA}; never commit it to the repository. |
+| `bilibili.endpoints[].biliJct` | string | no | — | bili_jct cookie (CSRF token). Reference ${BILIBILI_BILI_JCT}. |
+| `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
+| `bilibili.endpoints[].pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
+| `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported. |
+| `bilibili.endpoints[].minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
+| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default. |
+| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video. |
 | `bilibili.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
-| `bilibili.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（B 站 uid） |
-| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `bilibili.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Bilibili uid). |
+| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `bilibili.endpoints[].commandPrefix` | string | no | — | — |
 
 ### dingtalk
@@ -579,11 +579,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
 | `dingtalk.apiBaseUrl` | string | no | `"https://oapi.dingtalk.com"` | — |
-| `dingtalk.master` | string \| number | no | — | 框架 master（DingTalk userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `dingtalk.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `dingtalk.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `dingtalk.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（DingTalk userid）；覆盖顶层 master |
-| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `dingtalk.master` | string \| number | no | — | Framework masters (DingTalk userid; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `dingtalk.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `dingtalk.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `dingtalk.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (DingTalk userid), overriding the top-level master list. |
+| `dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `dingtalk.endpoints[].appKey` | string | yes | — | Dingtalk app key |
 | `dingtalk.endpoints[].appSecret` | string | yes | — | Dingtalk app secret |
 | `dingtalk.endpoints[].webhookPath` | string | no | — | Dingtalk webhook path |
@@ -594,10 +594,10 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `dingtalk.endpoints[].mode` | string: `"webhook"`, `"stream"` | no | `"webhook"` | — |
 | `dingtalk.endpoints[].cardTemplateId` | string | no | — | Stream interactive card template ID |
 | `dingtalk.endpoints[].cardButtonCount` | integer | no | `2` | Fixed button count in the card template |
-| `dingtalk.endpoints[].streamProxy` | object | no | — | 故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份 |
+| `dingtalk.endpoints[].streamProxy` | object | no | — | Fault-injection tests only: pin TCP to 127.0.0.1 while preserving the actual WSS TLS identity. |
 | `dingtalk.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `dingtalk.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `dingtalk.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `dingtalk.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `dingtalk.mode` | string: `"webhook"`, `"stream"` | no | `"webhook"` | — |
 | `dingtalk.cardTemplateId` | string | no | — | Stream interactive card template ID |
 | `dingtalk.cardButtonCount` | integer | no | `2` | Fixed button count in the card template |
@@ -620,11 +620,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `discord.applicationId` | string | no | — | Required when connection is interactions. |
 | `discord.publicKey` | string | no | — | Required when connection is interactions (hex Ed25519 public key). |
 | `discord.interactionsPath` | string | no | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
-| `discord.master` | string \| number | no | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `discord.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `discord.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `discord.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
-| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `discord.master` | string \| number | no | — | Framework masters (Discord user snowflake; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `discord.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `discord.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and token are required; other fields override instance defaults. |
+| `discord.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Discord user snowflake), overriding the top-level master list. |
+| `discord.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `discord.endpoints[].token` | string | yes | — | Discord bot token |
 | `discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | no | — | — |
 | `discord.endpoints[].intents` | array&lt;number&gt; | no | — | — |
@@ -641,9 +641,9 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `discord.endpoints[].commandPrefix` | string | no | — | — |
 | `discord.endpoints[].id` | string | yes | — | Discord bot name |
 | `discord.endpoints[].gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
-| `discord.endpoints[].restApiProxy` | object | no | — | Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理 |
+| `discord.endpoints[].restApiProxy` | object | no | — | REST-only fault proxy for Gateway tests: pin discord.com:443 TCP to loopback while preserving SNI and certificate validation, independently of the Gateway proxy. |
 | `discord.endpoints[].restApiProxy.port` | integer | yes | — | — |
-| `discord.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `discord.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `discord.gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
 
 ### email
@@ -652,11 +652,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `email.master` | string \| number | no | — | 框架 master（email address；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `email.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `email.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `email.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（email address）；覆盖顶层 master |
-| `email.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `email.master` | string \| number | no | — | Framework masters (email address; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `email.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `email.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `email.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (email address), overriding the top-level master list. |
+| `email.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `email.endpoints[].smtp` | object | yes | — | — |
 | `email.endpoints[].smtp.host` | string | yes | — | — |
 | `email.endpoints[].smtp.port` | number | yes | — | — |
@@ -664,7 +664,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `email.endpoints[].smtp.auth` | object | yes | — | — |
 | `email.endpoints[].smtp.auth.user` | string | yes | — | — |
 | `email.endpoints[].smtp.auth.pass` | string | yes | — | — |
-| `email.endpoints[].smtp.serverName` | string | no | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
+| `email.endpoints[].smtp.serverName` | string | no | — | TLS SNI and certificate hostname verification. Preserve the original service hostname when using a proxy; does not change certificate validation policy. |
 | `email.endpoints[].imap` | object | yes | — | — |
 | `email.endpoints[].imap.host` | string | yes | — | — |
 | `email.endpoints[].imap.port` | number | yes | — | — |
@@ -675,7 +675,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `email.endpoints[].imap.reconnectInterval` | number | no | `5000` | — |
 | `email.endpoints[].imap.mailbox` | string | no | `"INBOX"` | — |
 | `email.endpoints[].imap.markSeen` | boolean | no | `true` | — |
-| `email.endpoints[].imap.serverName` | string | no | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
+| `email.endpoints[].imap.serverName` | string | no | — | TLS SNI and certificate hostname verification. Preserve the original service hostname when using a proxy; does not change certificate validation policy. |
 | `email.endpoints[].attachments` | object | no | — | — |
 | `email.endpoints[].attachments.enabled` | boolean | no | `false` | — |
 | `email.endpoints[].attachments.downloadPath` | string | no | — | — |
@@ -683,7 +683,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | no | — | — |
 | `email.endpoints[].commandPrefix` | string | no | — | — |
 | `email.endpoints[].id` | string | yes | — | Email bot name |
-| `email.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `email.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### github
 
@@ -696,11 +696,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `github.auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose Issue/PR comments auto-trigger AI without @bot |
 | `github.bot_login` | string | no | — | Override App bot login (default {slug}[bot]) |
 | `github.workspace_root` | string | no | — | Managed git workspace root |
-| `github.master` | string \| number | no | — | 框架 master（GitHub user login or id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `github.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `github.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint |
-| `github.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（GitHub user login or id）；覆盖顶层 master |
-| `github.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `github.master` | string \| number | no | — | Framework masters (GitHub user login or id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `github.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `github.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. |
+| `github.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (GitHub user login or id), overriding the top-level master list. |
+| `github.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `github.endpoints[].app_id` | string \| number | yes | — | GitHub App ID |
 | `github.endpoints[].private_key` | string | yes | — | GitHub App private key (PEM content or file path) |
 | `github.endpoints[].webhook_secret` | string | no | — | Webhook HMAC secret; enables httpHostToken POST route |
@@ -710,8 +710,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `github.endpoints[].auto_reply_repos` | array&lt;string&gt; | no | — | Repos whose comments auto-trigger AI |
 | `github.endpoints[].bot_login` | string | no | — | Override App bot login |
 | `github.endpoints[].workspace_root` | string | no | — | Managed git workspace root |
-| `github.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
-| `github.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `github.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `github.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### icqq
 
@@ -719,40 +719,40 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `icqq.master` | string \| number | yes | — | 框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖 |
-| `icqq.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted QQ uin 列表（弱于 master） |
-| `icqq.password` | string | no | — | QQ 密码（可选，不填则扫码登录） |
-| `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | `1` | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
-| `icqq.ver` | string | no | — | 协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本 |
-| `icqq.signApiAddr` | string | no | — | 签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名 |
-| `icqq.dataDir` | string | no | — | 数据存储文件夹路径，默认为主模块下的 data 文件夹 |
-| `icqq.autoReconnect` | boolean | no | `true` | 断线后是否自动重连（默认 true） |
-| `icqq.outboundMedia` | string: `"file"`, `"base64"` | no | `"file"` | 出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联 |
-| `icqq.ignoreSelf` | boolean | no | `true` | 群聊和频道中是否过滤自己的消息（默认 true） |
-| `icqq.resend` | boolean | no | `false` | 被风控时是否尝试用分片发送（默认 false） |
-| `icqq.cacheGroupMember` | boolean | no | `true` | 是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存 |
-| `icqq.autoServer` | boolean | no | `true` | 是否自动选择最优服务器（默认 true） |
-| `icqq.qqnt` | boolean | no | `true` | 是否使用 QQNT 协议（默认 true） |
-| `icqq.ntLogin` | boolean | no | — | 是否使用 NT 登录方式 |
-| `icqq.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `icqq.master` | string \| number | yes | — | Framework master QQ uin list for approval and AI/tool permissions. endpoints[i].master can override this value. |
+| `icqq.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted QQ uin list, below master authority. |
+| `icqq.password` | string | no | — | QQ password (optional); scan a QR code to log in when omitted. |
+| `icqq.platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | `1` | Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom. |
+| `icqq.ver` | string | no | — | Protocol version, only applicable when the selected platform has multiple versions. Uses the latest when omitted. |
+| `icqq.signApiAddr` | string | no | — | Signing server URL. When omitted, uses local signing automatically if @icqqjs/qqsign is installed. |
+| `icqq.dataDir` | string | no | — | Data directory path; defaults to the data directory under the main module. |
+| `icqq.autoReconnect` | boolean | no | `true` | Reconnect automatically after disconnecting (default true). |
+| `icqq.outboundMedia` | string: `"file"`, `"base64"` | no | `"file"` | Outbound media mode: file uses local file paths (default); base64 uses inline CQ base64:// data. |
+| `icqq.ignoreSelf` | boolean | no | `true` | Filter the bot's own messages in groups and channels (default true). |
+| `icqq.resend` | boolean | no | `false` | Attempt fragmented sending when rate-limited by the platform (default false). |
+| `icqq.cacheGroupMember` | boolean | no | `true` | Cache group member lists (default true). Large numbers of groups (500+) may use approximately 100 MB or more of extra memory. |
+| `icqq.autoServer` | boolean | no | `true` | Automatically select the optimal server (default true). |
+| `icqq.qqnt` | boolean | no | `true` | Use the QQNT protocol (default true). |
+| `icqq.ntLogin` | boolean | no | — | Use the NT login method. |
+| `icqq.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `icqq.endpoints[].id` | string | yes | — | QQ uin |
-| `icqq.endpoints[].master` | string \| number | no | — | 本 endpoint 的 master QQ uin；覆盖顶层 master |
-| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `icqq.endpoints[].password` | string | no | — | 本 endpoint 的 QQ 密码 |
-| `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | — | 登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom |
-| `icqq.endpoints[].ver` | string | no | — | 协议版本号 |
-| `icqq.endpoints[].signApiAddr` | string | no | — | 签名服务器地址 |
-| `icqq.endpoints[].dataDir` | string | no | — | 数据存储文件夹路径 |
-| `icqq.endpoints[].autoReconnect` | boolean | no | — | 断线后是否自动重连 |
-| `icqq.endpoints[].outboundMedia` | string: `"file"`, `"base64"` | no | — | 出站媒体模式 |
-| `icqq.endpoints[].ignoreSelf` | boolean | no | — | 是否过滤自己的消息 |
-| `icqq.endpoints[].resend` | boolean | no | — | 被风控时是否分片发送 |
-| `icqq.endpoints[].cacheGroupMember` | boolean | no | — | 是否缓存群员列表 |
-| `icqq.endpoints[].autoServer` | boolean | no | — | 是否自动选择最优服务器 |
-| `icqq.endpoints[].qqnt` | boolean | no | — | 是否使用 QQNT 协议 |
-| `icqq.endpoints[].ntLogin` | boolean | no | — | 是否使用 NT 登录方式 |
-| `icqq.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
-| `icqq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
+| `icqq.endpoints[].master` | string \| number | no | — | Master QQ uin list for this endpoint, overriding the top-level master list. |
+| `icqq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `icqq.endpoints[].password` | string | no | — | QQ password for this endpoint. |
+| `icqq.endpoints[].platform` | number: `1`, `2`, `3`, `4`, `5`, `6`, `7` | no | — | Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom. |
+| `icqq.endpoints[].ver` | string | no | — | Protocol version. |
+| `icqq.endpoints[].signApiAddr` | string | no | — | Signing server URL. |
+| `icqq.endpoints[].dataDir` | string | no | — | Data directory path. |
+| `icqq.endpoints[].autoReconnect` | boolean | no | — | Reconnect automatically after disconnecting. |
+| `icqq.endpoints[].outboundMedia` | string: `"file"`, `"base64"` | no | — | Outbound media mode. |
+| `icqq.endpoints[].ignoreSelf` | boolean | no | — | Filter the bot's own messages. |
+| `icqq.endpoints[].resend` | boolean | no | — | Use fragmented sending when rate-limited by the platform. |
+| `icqq.endpoints[].cacheGroupMember` | boolean | no | — | Cache group member lists. |
+| `icqq.endpoints[].autoServer` | boolean | no | — | Automatically select the optimal server. |
+| `icqq.endpoints[].qqnt` | boolean | no | — | Use the QQNT protocol. |
+| `icqq.endpoints[].ntLogin` | boolean | no | — | Use the NT login method. |
+| `icqq.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `icqq.commandPrefix` | string | no | `""` | Command prefix, empty by default. Each endpoints[i] can override it. |
 
 ### kook
 
@@ -767,11 +767,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `kook.max_retry` | number | no | `3` | — |
 | `kook.ignore` | string: `"bot"`, `"self"` | no | `"bot"` | — |
 | `kook.logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | `"info"` | — |
-| `kook.master` | string \| number | no | — | 框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `kook.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `kook.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
-| `kook.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master |
-| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `kook.master` | string \| number | no | — | Framework masters (KOOK user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `kook.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `kook.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and token are required; other fields override instance defaults. |
+| `kook.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (KOOK user id), overriding the top-level master list. |
+| `kook.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `kook.endpoints[].token` | string | yes | — | KOOK bot token |
 | `kook.endpoints[].connection` | string: `"websocket"`, `"webhook"` | no | — | — |
 | `kook.endpoints[].webhookPath` | string | no | — | — |
@@ -784,12 +784,12 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `kook.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | no | — | — |
 | `kook.endpoints[].commandPrefix` | string | no | — | — |
 | `kook.endpoints[].id` | string | yes | — | KOOK bot name |
-| `kook.endpoints[].streamProxy` | object | no | — | WSS故障验收固定loopback，保持真实TLS身份 |
+| `kook.endpoints[].streamProxy` | object | no | — | Pin WSS fault-injection tests to loopback while preserving the actual TLS identity. |
 | `kook.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `kook.endpoints[].streamProxy.serverName` | string | yes | — | — |
 | `kook.endpoints[].apiProxy` | object | no | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
 | `kook.endpoints[].apiProxy.port` | integer | yes | — | — |
-| `kook.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `kook.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### lark
 
@@ -800,11 +800,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `lark.webhookPath` | string | no | `"/lark/webhook"` | — |
 | `lark.apiBaseUrl` | string | no | — | — |
 | `lark.isFeishu` | boolean | no | `true` | — |
-| `lark.master` | string \| number | no | — | 框架 master（Lark/Feishu open_id or user_id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `lark.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `lark.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `lark.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Lark/Feishu open_id or user_id）；覆盖顶层 master |
-| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `lark.master` | string \| number | no | — | Framework masters (Lark/Feishu open_id or user_id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `lark.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `lark.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `lark.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Lark/Feishu open_id or user_id), overriding the top-level master list. |
+| `lark.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `lark.endpoints[].appId` | string | yes | — | Lark app ID |
 | `lark.endpoints[].appSecret` | string | yes | — | Lark app secret |
 | `lark.endpoints[].encryptKey` | string | no | — | Lark encrypt key |
@@ -815,14 +815,14 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `lark.endpoints[].commandPrefix` | string | no | — | — |
 | `lark.endpoints[].id` | string | yes | — | Lark bot name |
 | `lark.endpoints[].mode` | string: `"webhook"`, `"websocket"` | no | `"webhook"` | — |
-| `lark.endpoints[].streamProxy` | object | no | — | WSS故障验收：仅TCP固定loopback，保留TLS身份 |
+| `lark.endpoints[].streamProxy` | object | no | — | WSS fault-injection tests: pin only TCP to loopback while preserving TLS identity. |
 | `lark.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `lark.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `lark.endpoints[].webApiProxy` | object | no | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `lark.endpoints[].webApiProxy` | object | no | — | Disabled by default. Loopback TLS fault proxy for Feishu outbound APIs only; preserves the official Host, SNI and certificate validation. Independent of streamProxy. |
 | `lark.endpoints[].webApiProxy.port` | integer | yes | — | — |
-| `lark.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `lark.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `lark.mode` | string: `"webhook"`, `"websocket"` | no | `"webhook"` | — |
-| `lark.webApiProxy` | object | no | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `lark.webApiProxy` | object | no | — | Disabled by default. Loopback TLS fault proxy for Feishu outbound APIs only; preserves the official Host, SNI and certificate validation. Independent of streamProxy. |
 | `lark.webApiProxy.port` | integer | yes | — | — |
 
 ### line
@@ -833,18 +833,18 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `line.webhookPath` | string | no | `"/line/webhook"` | — |
 | `line.apiBaseUrl` | string | no | `"https://api.line.me"` | — |
-| `line.master` | string \| number | no | — | 框架 master（LINE user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `line.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `line.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `line.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（LINE user id）；覆盖顶层 master |
-| `line.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `line.master` | string \| number | no | — | Framework masters (LINE user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `line.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `line.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `line.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (LINE user id), overriding the top-level master list. |
+| `line.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `line.endpoints[].channelSecret` | string | yes | — | LINE channel secret |
 | `line.endpoints[].channelAccessToken` | string | yes | — | LINE channel access token |
 | `line.endpoints[].webhookPath` | string | no | — | — |
 | `line.endpoints[].apiBaseUrl` | string | no | — | — |
 | `line.endpoints[].commandPrefix` | string | no | — | — |
 | `line.endpoints[].id` | string | yes | — | LINE bot name |
-| `line.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `line.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### milky
 
@@ -855,11 +855,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `milky.connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), sse (EventSource client), webhook or wss (webhook/wss via httpHostToken) |
 | `milky.reconnect_interval` | number | no | `5000` | — |
 | `milky.heartbeat_interval` | number | no | `30000` | — |
-| `milky.master` | string \| number | no | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `milky.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `milky.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `milky.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `milky.master` | string \| number | no | — | Framework masters (QQ uin; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `milky.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `milky.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `milky.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (QQ uin), overriding the top-level master list. |
+| `milky.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | — | — |
 | `milky.endpoints[].baseUrl` | string | yes | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
 | `milky.endpoints[].path` | string | no | — | Path for webhook / reverse-wss |
@@ -868,7 +868,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `milky.endpoints[].heartbeat_interval` | number | no | — | — |
 | `milky.endpoints[].commandPrefix` | string | no | — | — |
 | `milky.endpoints[].id` | string | yes | — | Milky bot name |
-| `milky.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `milky.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### napcat
 
@@ -880,11 +880,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `napcat.reconnect_interval` | number | no | `5000` | — |
 | `napcat.heartbeat_interval` | number | no | `30000` | — |
 | `napcat.poll_interval` | number | no | `30000` | — |
-| `napcat.master` | string \| number | no | — | 框架 master（QQ uin；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `napcat.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `napcat.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `napcat.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
-| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `napcat.master` | string \| number | no | — | Framework masters (QQ uin; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `napcat.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `napcat.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `napcat.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (QQ uin), overriding the top-level master list. |
+| `napcat.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | no | — | — |
 | `napcat.endpoints[].url` | string | no | — | NapCat WebSocket URL (required for connection: ws) |
 | `napcat.endpoints[].path` | string | no | — | WS path for reverse-wss |
@@ -896,7 +896,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `napcat.endpoints[].poll_interval` | number | no | — | — |
 | `napcat.endpoints[].commandPrefix` | string | no | — | — |
 | `napcat.endpoints[].id` | string | yes | — | NapCat bot name |
-| `napcat.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `napcat.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### onebot11
 
@@ -907,11 +907,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot11.connection` | string: `"ws"`, `"wss"` | no | `"ws"` | connection: ws (forward WS client, default) or wss (reverse WS via httpHostToken) |
 | `onebot11.reconnect_interval` | number | no | `5000` | — |
 | `onebot11.heartbeat_interval` | number | no | `30000` | — |
-| `onebot11.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `onebot11.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `onebot11.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `onebot11.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `onebot11.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `onebot11.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `onebot11.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `onebot11.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
+| `onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | no | — | — |
 | `onebot11.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot11.endpoints[].path` | string | no | — | WS path for reverse-wss (connection: wss) |
@@ -920,7 +920,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot11.endpoints[].heartbeat_interval` | number | no | — | — |
 | `onebot11.endpoints[].commandPrefix` | string | no | — | — |
 | `onebot11.endpoints[].id` | string | yes | — | OneBot11 bot name |
-| `onebot11.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot11.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### onebot12
 
@@ -931,11 +931,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | `"ws"` | ws (default), webhook (httpHostToken POST), or wss (reverse WS via httpHostToken) |
 | `onebot12.reconnect_interval` | number | no | `5000` | — |
 | `onebot12.heartbeat_interval` | number | no | `30000` | — |
-| `onebot12.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `onebot12.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `onebot12.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `onebot12.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `onebot12.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `onebot12.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `onebot12.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `onebot12.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
+| `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | — | — |
 | `onebot12.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `onebot12.endpoints[].path` | string | no | — | HTTP/WS path for webhook or reverse-wss |
@@ -945,7 +945,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.endpoints[].heartbeat_interval` | number | no | — | — |
 | `onebot12.endpoints[].commandPrefix` | string | no | — | — |
 | `onebot12.endpoints[].id` | string | yes | — | OneBot12 bot name |
-| `onebot12.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot12.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### qq
 
@@ -955,22 +955,22 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `qq.mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | `"websocket"` | WebSocket gateway (default). webhook/middleware use httpHostToken POST. |
 | `qq.sandbox` | boolean | no | `false` | — |
-| `qq.botKind` | string: `"public"`, `"private"` | no | `"public"` | 公域/私域：均含 GROUP_AND_C2C_EVENT；频道消息分别为 PUBLIC_GUILD_MESSAGES / GUILD_MESSAGES。未显式配置 intents 时按此展开 |
-| `qq.master` | string \| number | no | — | 框架 master（endpoint 管理命令、AI/工具权限）；openid。endpoints[i].master 可逐项覆盖 |
-| `qq.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `qq.intents` | array&lt;string&gt; | no | — | WebSocket Identify intents；省略时按 botKind 自动生成（public→含 PUBLIC_GUILD_MESSAGES） |
+| `qq.botKind` | string: `"public"`, `"private"` | no | `"public"` | Public/private bot type. Both include GROUP_AND_C2C_EVENT; channel messages use PUBLIC_GUILD_MESSAGES or GUILD_MESSAGES respectively. Used to derive intents when they are not explicitly configured. |
+| `qq.master` | string \| number | no | — | Framework masters (openid) for endpoint management and AI/tool permissions. endpoints[i].master can override this value. |
+| `qq.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `qq.intents` | array&lt;string&gt; | no | — | WebSocket Identify intents. When omitted, derived from botKind; public includes PUBLIC_GUILD_MESSAGES. |
 | `qq.accessTokenUrl` | string | no | — | — |
 | `qq.gatewayUrl` | string | no | — | — |
 | `qq.webhookPath` | string | no | `"/qq/webhook"` | POST path on httpHostToken for webhook/middleware modes. |
-| `qq.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/appid/secret 必填，其余字段覆盖实例默认值 |
+| `qq.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id, appid and secret are required; other fields override instance defaults. |
 | `qq.endpoints[].appid` | string | yes | — | QQ official bot app ID |
 | `qq.endpoints[].secret` | string | yes | — | QQ official bot secret |
 | `qq.endpoints[].mode` | string: `"websocket"`, `"webhook"`, `"middleware"` | no | — | — |
 | `qq.endpoints[].sandbox` | boolean | no | — | — |
-| `qq.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（openid）；覆盖顶层 master |
-| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `qq.endpoints[].botKind` | string: `"public"`, `"private"` | no | — | 覆盖顶层 botKind（公域/私域），用于按 endpoint 生成 intents |
-| `qq.endpoints[].intents` | array&lt;string&gt; | no | — | 覆盖顶层 intents |
+| `qq.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (openid), overriding the top-level master list. |
+| `qq.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `qq.endpoints[].botKind` | string: `"public"`, `"private"` | no | — | Override top-level botKind (public/private) when deriving this endpoint's intents. |
+| `qq.endpoints[].intents` | array&lt;string&gt; | no | — | Override top-level intents. |
 | `qq.endpoints[].accessTokenUrl` | string | no | — | — |
 | `qq.endpoints[].gatewayUrl` | string | no | — | — |
 | `qq.endpoints[].webhookPath` | string | no | — | — |
@@ -979,7 +979,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.endpoints[].streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `qq.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `qq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `qq.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `qq.streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.streamProxy.port` | integer | yes | — | — |
 | `qq.streamProxy.serverName` | string | yes | — | — |
@@ -990,15 +990,15 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `sandbox.master` | string \| number | no | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `sandbox.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `sandbox.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `sandbox.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
-| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `sandbox.master` | string \| number | no | — | Framework masters (sandbox client id, distinct from endpoints[].owner; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `sandbox.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `sandbox.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `sandbox.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (sandbox client id, distinct from endpoints[].owner), overriding the top-level master list. |
+| `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
 | `sandbox.endpoints[].commandPrefix` | string | no | — | — |
 | `sandbox.endpoints[].id` | string | yes | — | Sandbox bot name |
-| `sandbox.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `sandbox.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### satori
 
@@ -1008,11 +1008,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `satori.connection` | string: `"ws"`, `"webhook"` | no | `"ws"` | ws (default) or webhook (httpHostToken POST route) |
 | `satori.heartbeat_interval` | number | no | `10000` | WS PING interval in milliseconds |
-| `satori.master` | string \| number | no | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `satori.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `satori.endpoints` | array&lt;object&gt; | yes | — | 多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值 |
-| `satori.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
-| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `satori.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `satori.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `satori.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and baseUrl are required; other fields override instance defaults. |
+| `satori.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
+| `satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `satori.endpoints[].baseUrl` | string | yes | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
 | `satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | no | — | — |
 | `satori.endpoints[].token` | string | no | — | Bearer token for API and WS IDENTIFY |
@@ -1020,7 +1020,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `satori.endpoints[].heartbeat_interval` | number | no | — | — |
 | `satori.endpoints[].commandPrefix` | string | no | — | — |
 | `satori.endpoints[].id` | string | yes | — | Satori bot name |
-| `satori.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `satori.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### slack
 
@@ -1031,11 +1031,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `slack.socketMode` | boolean | no | `true` | Prefer Socket Mode (default). Set false for HTTP Events via httpHostToken. |
 | `slack.webhookPath` | string | no | `"/slack/events"` | — |
 | `slack.clientPingTimeout` | number | no | `15000` | Socket Mode client ping timeout (ms) |
-| `slack.master` | string \| number | no | — | 框架 master（Slack user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `slack.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `slack.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `slack.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Slack user id）；覆盖顶层 master |
-| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `slack.master` | string \| number | no | — | Framework masters (Slack user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `slack.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `slack.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `slack.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Slack user id), overriding the top-level master list. |
+| `slack.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `slack.endpoints[].token` | string | yes | — | Bot User OAuth Token (xoxb-...) |
 | `slack.endpoints[].signingSecret` | string | no | — | Required for HTTP Events API (socketMode: false) |
 | `slack.endpoints[].appToken` | string | no | — | App-Level Token (xapp-...) for Socket Mode |
@@ -1044,12 +1044,12 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `slack.endpoints[].clientPingTimeout` | number | no | — | — |
 | `slack.endpoints[].commandPrefix` | string | no | — | — |
 | `slack.endpoints[].id` | string | yes | — | Slack bot name |
-| `slack.endpoints[].streamProxy` | object | no | — | Socket故障验收：WSS固定loopback TCP，API仍标准TLS直连 |
+| `slack.endpoints[].streamProxy` | object | no | — | Socket fault-injection tests: pin WSS TCP to loopback while API requests retain direct standard TLS. |
 | `slack.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `slack.endpoints[].streamProxy.serverName` | string | yes | — | — |
-| `slack.endpoints[].webApiProxy` | object | no | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
+| `slack.endpoints[].webApiProxy` | object | no | — | Fault proxy for outbound JSON Web APIs only: pin slack.com:443 TCP to loopback while preserving SNI and certificate validation. Independent of the Socket proxy; does not apply to upload hosts. |
 | `slack.endpoints[].webApiProxy.port` | integer | yes | — | — |
-| `slack.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `slack.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### telegram
 
@@ -1064,11 +1064,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `telegram.webhook.secretToken` | string | no | — | Verified via X-Telegram-Bot-Api-Secret-Token. |
 | `telegram.allowedUpdates` | array&lt;string&gt; | no | `["message","callback_query"]` | — |
 | `telegram.apiBaseUrl` | string | no | `"https://api.telegram.org"` | — |
-| `telegram.master` | string \| number | no | — | 框架 master（Telegram user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `telegram.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `telegram.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `telegram.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
-| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `telegram.master` | string \| number | no | — | Framework masters (Telegram user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `telegram.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `telegram.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `telegram.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Telegram user id), overriding the top-level master list. |
+| `telegram.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `telegram.endpoints[].token` | string | yes | — | Telegram bot token |
 | `telegram.endpoints[].polling` | boolean | no | — | — |
 | `telegram.endpoints[].webhook` | object | no | — | — |
@@ -1079,7 +1079,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `telegram.endpoints[].apiBaseUrl` | string | no | — | — |
 | `telegram.endpoints[].commandPrefix` | string | no | — | — |
 | `telegram.endpoints[].id` | string | yes | — | Telegram bot name |
-| `telegram.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `telegram.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### wechat-mp
 
@@ -1092,11 +1092,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wechat-mp.encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | Default follows encrypt: 'plain' when encrypt=false, 'compatible' when encrypt=true |
 | `wechat-mp.replyMode` | string: `"passive"`, `"customer_service"` | no | `"passive"` | — |
 | `wechat-mp.passiveReplyTimeoutMs` | number | no | `4500` | — |
-| `wechat-mp.master` | string \| number | no | — | 框架 master（WeChat OpenID；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `wechat-mp.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `wechat-mp.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `wechat-mp.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（WeChat OpenID）；覆盖顶层 master |
-| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `wechat-mp.master` | string \| number | no | — | Framework masters (WeChat OpenID; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `wechat-mp.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `wechat-mp.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `wechat-mp.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (WeChat OpenID), overriding the top-level master list. |
+| `wechat-mp.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `wechat-mp.endpoints[].appId` | string | yes | — | WeChat MP app ID |
 | `wechat-mp.endpoints[].appSecret` | string | yes | — | WeChat MP app secret |
 | `wechat-mp.endpoints[].token` | string | yes | — | WeChat MP callback token |
@@ -1108,7 +1108,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | no | — | — |
 | `wechat-mp.endpoints[].commandPrefix` | string | no | — | — |
 | `wechat-mp.endpoints[].id` | string | yes | — | WeChat MP bot name |
-| `wechat-mp.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wechat-mp.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### wecom
 
@@ -1118,11 +1118,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | --- | --- | --- | --- | --- |
 | `wecom.webhookPath` | string | no | `"/wecom/callback"` | — |
 | `wecom.apiBaseUrl` | string | no | `"https://qyapi.weixin.qq.com"` | — |
-| `wecom.master` | string \| number | no | — | 框架 master（WeCom userid；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `wecom.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `wecom.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `wecom.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（WeCom userid）；覆盖顶层 master |
-| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `wecom.master` | string \| number | no | — | Framework masters (WeCom userid; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `wecom.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `wecom.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `wecom.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (WeCom userid), overriding the top-level master list. |
+| `wecom.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `wecom.endpoints[].corpId` | string | yes | — | WeCom corp ID |
 | `wecom.endpoints[].agentSecret` | string | yes | — | WeCom agent secret |
 | `wecom.endpoints[].token` | string | yes | — | WeCom callback token |
@@ -1131,7 +1131,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wecom.endpoints[].apiBaseUrl` | string | no | — | — |
 | `wecom.endpoints[].commandPrefix` | string | no | — | — |
 | `wecom.endpoints[].id` | string | yes | — | WeCom bot name |
-| `wecom.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wecom.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### weixin-ilink
 
@@ -1144,11 +1144,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `weixin-ilink.cdnBaseUrl` | string | no | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
 | `weixin-ilink.longPollTimeoutMs` | number | no | `35000` | — |
 | `weixin-ilink.dataDir` | string | no | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
-| `weixin-ilink.master` | string \| number | no | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
-| `weixin-ilink.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `weixin-ilink.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
-| `weixin-ilink.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
-| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `weixin-ilink.master` | string \| number | no | — | Framework masters (Weixin user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
+| `weixin-ilink.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
+| `weixin-ilink.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `weixin-ilink.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Weixin user id), overriding the top-level master list. |
+| `weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `weixin-ilink.endpoints[].botToken` | string | no | — | iLink bot token; omit to load endpoint state or start QR login |
 | `weixin-ilink.endpoints[].id` | string | yes | — | Weixin iLink bot name |
 | `weixin-ilink.endpoints[].botAgent` | string | no | — | — |
@@ -1156,8 +1156,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `weixin-ilink.endpoints[].cdnBaseUrl` | string | no | — | — |
 | `weixin-ilink.endpoints[].longPollTimeoutMs` | number | no | — | — |
 | `weixin-ilink.endpoints[].dataDir` | string | no | — | Endpoint state root |
-| `weixin-ilink.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
-| `weixin-ilink.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `weixin-ilink.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `weixin-ilink.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### process-monitor
 
@@ -1165,11 +1165,11 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `process-monitor.enabled` | boolean | no | `true` | 是否启用进程监控 |
-| `process-monitor.notifyOnStart` | boolean | no | `true` | 首次启动时通知 |
-| `process-monitor.notifyOnRestart` | boolean | no | `true` | 正常重启时通知 |
-| `process-monitor.notifyOnCrash` | boolean | no | `true` | 异常崩溃重启时通知 |
-| `process-monitor.notifyChannels` | array&lt;object&gt; | no | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
+| `process-monitor.enabled` | boolean | no | `true` | Enable process monitoring. |
+| `process-monitor.notifyOnStart` | boolean | no | `true` | Notify on first startup. |
+| `process-monitor.notifyOnRestart` | boolean | no | `true` | Notify on normal restart. |
+| `process-monitor.notifyOnCrash` | boolean | no | `true` | Notify after a crash restart. |
+| `process-monitor.notifyChannels` | array&lt;object&gt; | no | `[]` | Notification channel (slice 1 supports webhook only). |
 | `process-monitor.notifyChannels[].type` | string: `"webhook"` | yes | — | — |
 | `process-monitor.notifyChannels[].target` | string | yes | — | — |
 
@@ -1753,10 +1753,10 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `answers.dailyStable` | boolean | no | `false` | 同一用户同一天问同一个问题时，答案之书给出相同答案 |
-| `answers.timezone` | string | no | `"Asia/Shanghai"` | dailyStable 判断「同一天」所用的 IANA 时区 |
-| `answers.quizTimeoutSeconds` | number | no | `120` | 出题后等待作答的秒数，超时题目作废 |
-| `answers.enableDrivingQuiz` | boolean | no | `true` | 启用「科目一」交规小测（原创题面，仅供娱乐参考） |
+| `answers.dailyStable` | boolean | no | `false` | Return the same Book of Answers response when the same user asks the same question on the same day. |
+| `answers.timezone` | string | no | `"Asia/Shanghai"` | IANA timezone used by dailyStable to determine the day. |
+| `answers.quizTimeoutSeconds` | number | no | `120` | Seconds to wait for a quiz answer; the question expires afterward. |
+| `answers.enableDrivingQuiz` | boolean | no | `true` | Enable the original driving-theory quiz, for entertainment and reference only. |
 
 ### bilibili
 
@@ -1764,15 +1764,15 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `bilibili.pollCron` | string | no | `"0 * * * * *"` | 轮询频率（6 段 Cron，默认每 60 秒） / Poll schedule (6-field cron, default every 60s) |
-| `bilibili.jitterMs` | number | no | `15000` | 每轮轮询前的随机延迟上限（毫秒） / Max random delay before each poll (ms) |
-| `bilibili.requestGapMs` | number | no | `1500` | 同一轮内相邻动态请求的间隔（毫秒） / Gap between dynamic requests within one poll (ms) |
-| `bilibili.maxBackoffMinutes` | number | no | `30` | 接口失败或风控时指数退避的上限（分钟） / Upper bound of exponential backoff (minutes) |
-| `bilibili.maxPerChannel` | number | no | `20` | 每个会话最多订阅的 UP 主数量 / Max UP subscriptions per conversation |
-| `bilibili.timeout` | number | no | `10000` | 单次 HTTP 请求超时（毫秒） / HTTP timeout (ms) |
-| `bilibili.live` | boolean | no | `true` | 是否轮询开播状态 / Poll live status |
-| `bilibili.dynamic` | boolean | no | `true` | 是否轮询 UP 主动态 / Poll UP dynamics |
-| `bilibili.cookie` | string | no | `""` | 可选的 B 站 Cookie（如 SESSDATA=...），风控严格时使用，请写成 ${BILIBILI_COOKIE} / Optional cookie, reference it as ${BILIBILI_COOKIE} |
+| `bilibili.pollCron` | string | no | `"0 * * * * *"` | Poll schedule (6-field cron, every 60 seconds by default). |
+| `bilibili.jitterMs` | number | no | `15000` | Maximum random delay before each poll, in milliseconds. |
+| `bilibili.requestGapMs` | number | no | `1500` | Gap between dynamic requests within one poll, in milliseconds. |
+| `bilibili.maxBackoffMinutes` | number | no | `30` | Upper bound of exponential backoff after API failures or rate limiting, in minutes. |
+| `bilibili.maxPerChannel` | number | no | `20` | Maximum UP subscriptions per conversation. |
+| `bilibili.timeout` | number | no | `10000` | HTTP request timeout in milliseconds. |
+| `bilibili.live` | boolean | no | `true` | Poll live-stream status. |
+| `bilibili.dynamic` | boolean | no | `true` | Poll UP activity. |
+| `bilibili.cookie` | string | no | `""` | Optional Bilibili cookie for stricter rate limits. Reference ${BILIBILI_COOKIE}; do not put credentials directly in configuration. |
 
 ### calendar
 
@@ -1780,31 +1780,31 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | no | `"none"` | 日历后端；none 时工具返回未启用提示 |
-| `calendar.timezone` | string | no | `"Asia/Manila"` | 解释无偏移时间与展示用的 IANA 时区 |
+| `calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | no | `"none"` | Calendar backend. Tools report that the calendar is disabled when set to none. |
+| `calendar.timezone` | string | no | `"Asia/Manila"` | IANA timezone for interpreting times without offsets and for display. |
 | `calendar.work_day_start` | string | no | `"09:00"` | — |
 | `calendar.work_day_end` | string | no | `"18:00"` | — |
 | `calendar.oauth_redirect_base_url` | string | no | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
 | `calendar.oauth_callback_path` | string | no | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
 | `calendar.caldav` | object | no | — | — |
 | `calendar.caldav.enabled` | boolean | no | `false` | — |
-| `calendar.caldav.calendar_url` | string | no | `""` | 日历 collection URL |
+| `calendar.caldav.calendar_url` | string | no | `""` | Calendar collection URL. |
 | `calendar.caldav.username` | string | no | `""` | — |
 | `calendar.caldav.password` | string | no | `""` | — |
 | `calendar.google` | object | no | — | — |
 | `calendar.google.enabled` | boolean | no | `false` | — |
 | `calendar.google.client_id` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
 | `calendar.google.client_secret` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_SECRET} |
-| `calendar.google.refresh_token` | string | no | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取 |
-| `calendar.google.calendar_id` | string | no | `"primary"` | 日历 ID，默认 primary；可换成其它日历的 id |
+| `calendar.google.refresh_token` | string | no | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}; obtain using the calendar authorization flow. |
+| `calendar.google.calendar_id` | string | no | `"primary"` | Calendar ID, primary by default; can be set to another calendar ID. |
 | `calendar.google.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json） |
 | `calendar.microsoft` | object | no | — | — |
 | `calendar.microsoft.enabled` | boolean | no | `false` | — |
 | `calendar.microsoft.client_id` | string | no | `""` | ${MS_GRAPH_CLIENT_ID} |
-| `calendar.microsoft.client_secret` | string | no | `""` | 可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET} |
-| `calendar.microsoft.refresh_token` | string | no | `""` | ${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取 |
-| `calendar.microsoft.tenant` | string | no | `"common"` | Azure tenant，默认 common |
-| `calendar.microsoft.calendar_id` | string | no | `""` | 留空或 primary/me = 默认日历；否则为 Graph calendar id |
+| `calendar.microsoft.client_secret` | string | no | `""` | Optional for public clients. ${MS_GRAPH_CLIENT_SECRET} |
+| `calendar.microsoft.refresh_token` | string | no | `""` | ${MS_GRAPH_REFRESH_TOKEN}; obtain using the calendar authorization flow. |
+| `calendar.microsoft.tenant` | string | no | `"common"` | Azure tenant, common by default. |
+| `calendar.microsoft.calendar_id` | string | no | `""` | Empty, primary or me selects the default calendar; otherwise a Graph calendar ID. |
 | `calendar.microsoft.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json） |
 
 ### code-runner
@@ -1819,26 +1819,26 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `content-moderation.groupModeration` | array&lt;object&gt; | no | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。 |
+| `content-moderation.groupModeration` | array&lt;object&gt; | no | `[]` | Exact scope for automatic advertising/abuse moderation. Disabled when unconfigured. Requires AI, atomic persistent state and adapter group-management support. |
 | `content-moderation.groupModeration[].adapter` | string | yes | — | — |
 | `content-moderation.groupModeration[].endpoint` | string | yes | — | — |
 | `content-moderation.groupModeration[].account` | string | yes | — | — |
 | `content-moderation.groupModeration[].group` | string | yes | — | — |
-| `content-moderation.enabled` | boolean | no | `true` | 总开关 |
-| `content-moderation.onError` | string: `"open"`, `"closed"` | no | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
-| `content-moderation.maskChar` | string | no | `"*"` | 文本打码字符 |
-| `content-moderation.replyTemplate` | string | no | `"消息含不当内容，已拦截。"` | reply 动作时的提示文案 |
-| `content-moderation.masters` | array&lt;string&gt; | no | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
+| `content-moderation.enabled` | boolean | no | `true` | Enable moderation. |
+| `content-moderation.onError` | string: `"open"`, `"closed"` | no | `"open"` | Default policy when a review source fails: open treats it as passed; closed treats it as critical. |
+| `content-moderation.maskChar` | string | no | `"*"` | Text masking character. |
+| `content-moderation.replyTemplate` | string | no | — | Reply text for the reply action. When omitted, use the message language; explicit text is preserved. |
+| `content-moderation.masters` | array&lt;string&gt; | no | `[]` | Additional user IDs treated as masters, merged with endpoint masters as a fallback. |
 | `content-moderation.inbound` | object | no | — | — |
 | `content-moderation.inbound.enabled` | boolean | no | `true` | — |
-| `content-moderation.inbound.bypassMasters` | boolean | no | `true` | master 跳过入站审查 |
+| `content-moderation.inbound.bypassMasters` | boolean | no | `true` | Skip inbound review for masters. |
 | `content-moderation.inbound.whitelist` | object | no | — | — |
 | `content-moderation.inbound.whitelist.userIds` | array&lt;string&gt; | no | `[]` | — |
 | `content-moderation.inbound.whitelist.conversationIds` | array&lt;string&gt; | no | `[]` | — |
 | `content-moderation.outbound` | object | no | — | — |
 | `content-moderation.outbound.enabled` | boolean | no | `true` | — |
-| `content-moderation.outbound.bypass` | boolean | no | `false` | 为 true 时跳过出站审查 |
-| `content-moderation.actions` | object | no | — | severity → 动作（字符串或数组）；缺省用偏严默认表 |
+| `content-moderation.outbound.bypass` | boolean | no | `false` | Skip outbound review when true. |
+| `content-moderation.actions` | object | no | — | Severity-to-action mapping (string or array); uses the stricter default mapping when omitted. |
 | `content-moderation.actions.pass` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
 | `content-moderation.actions.low` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
 | `content-moderation.actions.medium` | string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"` \| array&lt;string: `"allow"`, `"log"`, `"reply"`, `"redact"`, `"drop"`, `"recall"`&gt; | no | — | — |
@@ -1849,15 +1849,15 @@ _This Schema declares no fields._
 | `content-moderation.sources[].type` | string: `"local"`, `"http"` | yes | — | — |
 | `content-moderation.sources[].enabled` | boolean | no | `true` | — |
 | `content-moderation.sources[].onError` | string: `"open"`, `"closed"` | no | — | — |
-| `content-moderation.sources[].includeBuiltin` | boolean | no | `true` | 是否合并内置分级违禁词词库 |
-| `content-moderation.sources[].words` | array&lt;string \| object&gt; | no | `[]` | 自定义词：字符串（用 defaultSeverity）或 { word, severity } |
-| `content-moderation.sources[].wordFiles` | array&lt;string&gt; | no | `[]` | 词库文件；行格式 word / severity:word / word\|severity |
-| `content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | 未标注分级的自定义词默认 severity |
-| `content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | 兼容旧字段，等同 defaultSeverity |
+| `content-moderation.sources[].includeBuiltin` | boolean | no | `true` | Include the built-in graded blocked-word dictionary. |
+| `content-moderation.sources[].words` | array&lt;string \| object&gt; | no | `[]` | Custom words: strings using defaultSeverity, or { word, severity } objects. |
+| `content-moderation.sources[].wordFiles` | array&lt;string&gt; | no | `[]` | Dictionary file; line formats: word, severity:word, or word\|severity. |
+| `content-moderation.sources[].defaultSeverity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | Default severity for custom words without an explicit severity. |
+| `content-moderation.sources[].severity` | string: `"low"`, `"medium"`, `"high"`, `"critical"` | no | `"high"` | Legacy alias for defaultSeverity. |
 | `content-moderation.sources[].url` | string | no | — | — |
 | `content-moderation.sources[].headers` | object | no | — | — |
 | `content-moderation.sources[].timeoutMs` | number | no | `5000` | — |
-| `content-moderation.sources[].forceUpload` | boolean | no | `false` | 强制下载图片后上传，不传 URL |
+| `content-moderation.sources[].forceUpload` | boolean | no | `false` | Download images before uploading them instead of passing the URL. |
 
 ### earthquake
 
@@ -1865,23 +1865,23 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `earthquake.sources` | array&lt;string: `"cenc"`, `"usgs"`&gt; | no | `["cenc","usgs"]` | 启用的数据源及优先顺序；合并同一地震时排在前面的数据源提供地点文字，某个数据源失败时由其余数据源兜底 |
-| `earthquake.cencUrls` | array&lt;string&gt; | no | `["https://api.wolfx.jp/cenc_eqlist.json","https://ceic.ac.cn/data/data.json"]` | CENC 地震目录地址，按顺序尝试（首个为主源，其余为备用镜像）；仅支持 HTTPS，最多 5 个 |
-| `earthquake.usgsFeed` | string: `"significant_hour"`, `"significant_day"`, `"4.5_hour"`, `"4.5_day"`, `"2.5_hour"`, `"2.5_day"`, `"1.0_hour"`, `"1.0_day"` | no | `"2.5_day"` | USGS GeoJSON 汇总源名称（震级下限_时间范围） |
-| `earthquake.pollCron` | string | no | `"0 */2 * * * *"` | 订阅轮询频率（6 段 Cron：秒 分 时 日 月 周） |
-| `earthquake.timezone` | string | no | `"Asia/Shanghai"` | 显示发震时刻使用的 IANA 时区 |
-| `earthquake.requestTimeoutMs` | number | no | `10000` | 单次 HTTP 请求超时（毫秒） |
-| `earthquake.maxRetries` | number | no | `2` | 网络错误、超时、429 与 5xx 的重试次数（不含首次请求） |
-| `earthquake.retryBaseDelayMs` | number | no | `1000` | 指数退避的首次等待（毫秒），每次重试翻倍并加入随机抖动 |
-| `earthquake.retryMaxDelayMs` | number | no | `30000` | 单次退避或 Retry-After 等待上限（毫秒）；服务端要求更久时本轮放弃并冷却该数据源 |
-| `earthquake.defaultMinMagnitude` | number | no | `5` | 订阅未指定震级时使用的最小震级 |
-| `earthquake.queryMinMagnitude` | number | no | `3` | 「地震」查询未指定震级时使用的最小震级 |
-| `earthquake.queryLimit` | number | no | `5` | 「地震」查询默认列出的条数 |
-| `earthquake.maxEventAgeMinutes` | number | no | `60` | 只推送发震时间在此分钟数以内的地震，避免推送迟到或重放的旧事件 |
-| `earthquake.pushLimit` | number | no | `3` | 每个会话在一个限流窗口内最多推送的消息数 |
-| `earthquake.pushWindowMinutes` | number | no | `10` | 推送限流窗口长度（分钟） |
-| `earthquake.maxEventsPerMessage` | number | no | `5` | 单条推送消息最多列出的地震数，其余以数量概括 |
-| `earthquake.maxSubscriptions` | number | no | `100` | 本实例所有会话的订阅总数上限（每个会话最多一个订阅） |
+| `earthquake.sources` | array&lt;string: `"cenc"`, `"usgs"`&gt; | no | `["cenc","usgs"]` | Enabled data sources in priority order. The first source supplies location text when merging the same earthquake; other sources cover a failed source. |
+| `earthquake.cencUrls` | array&lt;string&gt; | no | `["https://api.wolfx.jp/cenc_eqlist.json","https://ceic.ac.cn/data/data.json"]` | CENC catalog URLs, tried in order (primary followed by mirrors). HTTPS only, up to 5 URLs. |
+| `earthquake.usgsFeed` | string: `"significant_hour"`, `"significant_day"`, `"4.5_hour"`, `"4.5_day"`, `"2.5_hour"`, `"2.5_day"`, `"1.0_hour"`, `"1.0_day"` | no | `"2.5_day"` | USGS GeoJSON summary feed name (minimum-magnitude_time-range). |
+| `earthquake.pollCron` | string | no | `"0 */2 * * * *"` | Subscription polling schedule (6-field cron: second, minute, hour, day, month, weekday). |
+| `earthquake.timezone` | string | no | `"Asia/Shanghai"` | IANA timezone used to display earthquake times. |
+| `earthquake.requestTimeoutMs` | number | no | `10000` | HTTP request timeout in milliseconds. |
+| `earthquake.maxRetries` | number | no | `2` | Retries for network errors, timeouts, HTTP 429 and 5xx, excluding the initial request. |
+| `earthquake.retryBaseDelayMs` | number | no | `1000` | Initial exponential-backoff delay in milliseconds; doubles for each retry with random jitter. |
+| `earthquake.retryMaxDelayMs` | number | no | `30000` | Maximum backoff or Retry-After wait in milliseconds. Longer server waits abandon this round and cool down the source. |
+| `earthquake.defaultMinMagnitude` | number | no | `5` | Minimum magnitude for subscriptions that do not specify one. |
+| `earthquake.queryMinMagnitude` | number | no | `3` | Minimum magnitude for earthquake queries that do not specify one. |
+| `earthquake.queryLimit` | number | no | `5` | Default number of earthquake query results. |
+| `earthquake.maxEventAgeMinutes` | number | no | `60` | Only notify about earthquakes from the last specified number of minutes, avoiding delayed or replayed old events. |
+| `earthquake.pushLimit` | number | no | `3` | Maximum notification messages per conversation in one rate-limit window. |
+| `earthquake.pushWindowMinutes` | number | no | `10` | Notification rate-limit window in minutes. |
+| `earthquake.maxEventsPerMessage` | number | no | `5` | Maximum earthquakes listed in one notification; the remainder is summarized as a count. |
+| `earthquake.maxSubscriptions` | number | no | `100` | Maximum subscriptions across this instance, at most one per conversation. |
 
 ### group-suite
 
@@ -1918,9 +1918,9 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `ledger.timezone` | string | no | `"Asia/Shanghai"` | 计算今日、本周（周一开始）、本月与日报日期所用的 IANA 时区 |
-| `ledger.reportTime` | string | no | `"22:00"` | 记账日报的发送时间（HH:MM，按 timezone）；只发给用「记账日报 开启」订阅的用户 |
-| `ledger.reportWhenEmpty` | boolean | no | `false` | 当天没有记账时是否仍发送日报 |
+| `ledger.timezone` | string | no | `"Asia/Shanghai"` | IANA timezone used to calculate today, this week (starting Monday), this month and daily-report dates. |
+| `ledger.reportTime` | string | no | `"22:00"` | Daily ledger report time (HH:MM in timezone); sent only to users who explicitly subscribed to daily reports. |
+| `ledger.reportWhenEmpty` | boolean | no | `false` | Send a daily report even when no transactions were recorded that day. |
 
 ### link-poster
 
@@ -1989,12 +1989,12 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `reminder.timezone` | string | no | `"UTC"` | 解释 create 自然时间并显示提醒的 IANA 时区；ISO 绝对时间仍须显式 offset |
-| `reminder.maxTasks` | number | no | `20` | 每实例聊天个人提醒池的活跃任务上限；与管理员池独立，降低上限不删除既有任务 |
-| `reminder.adminMaxTasks` | number | no | `20` | 每实例管理员提醒池的活跃任务上限（待执行、暂停或未确认）；与聊天池独立，两池总量可达上限之和 |
-| `reminder.maxTasksPerSender` | number | no | `10` | 同一发送者在同一会话的任务上限 |
-| `reminder.batchSize` | number | no | `5` | 每次扫描最多投递的任务数 |
-| `reminder.missedGraceSeconds` | number | no | `15` | 周期轮次超过此延迟后跳过；停机期间不补历史轮次 |
+| `reminder.timezone` | string | no | `"UTC"` | IANA timezone for natural reminder times and display. Absolute ISO times still require an explicit offset. |
+| `reminder.maxTasks` | number | no | `20` | Maximum active personal chat reminders per instance, separate from administrator tasks. Lowering the limit does not delete existing tasks. |
+| `reminder.adminMaxTasks` | number | no | `20` | Maximum active administrator reminders (scheduled, paused or unconfirmed) per instance. Separate from chat tasks; the two quotas are additive. |
+| `reminder.maxTasksPerSender` | number | no | `10` | Maximum tasks per sender in the same conversation. |
+| `reminder.batchSize` | number | no | `5` | Maximum tasks delivered in each scan. |
+| `reminder.missedGraceSeconds` | number | no | `15` | Skip recurring runs delayed beyond this many seconds. Missed runs during downtime are not backfilled. |
 
 ### repeater
 
@@ -2002,9 +2002,9 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `repeater.threshold` | number | no | `3` | 触发复读的最少人数 |
-| `repeater.cooldown` | number | no | `30000` | 同一群冷却时间 (ms) |
-| `repeater.maxLength` | number | no | `200` | 消息长度上限 |
+| `repeater.threshold` | number | no | `3` | Minimum distinct users needed to trigger repetition. |
+| `repeater.cooldown` | number | no | `30000` | Cooldown for the same group, in milliseconds. |
+| `repeater.maxLength` | number | no | `200` | Maximum message length. |
 
 ### rss
 
@@ -2012,7 +2012,7 @@ _This Schema declares no fields._
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `rss.pollCron` | string | no | `"0 */5 * * * *"` | 轮询频率 (6 段 Cron 表达式) |
+| `rss.pollCron` | string | no | `"0 */5 * * * *"` | Polling schedule (6-field cron expression). |
 | `rss.maxPerGroup` | number | no | `30` | — |
 | `rss.maxItems` | number | no | `5` | — |
 | `rss.timeout` | number | no | `15000` | — |

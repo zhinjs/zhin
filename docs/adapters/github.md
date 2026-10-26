@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4d046b06b470d9ed -->
+<!-- sync-adapter-docs:sha256=032c014d6bb69e4c -->
 
 # @zhin.js/adapter-github
 
@@ -124,4 +124,4 @@ MIT
 
 ## Language / 语言
 
-命令和工具反馈使用当前操作语言，账号绑定等异步流程固定开始时语言。用户名称、第三方内容和结构化协议字段保持原样；语言不改变权限、认证、通知或重试策略。参见[官方插件语言说明](../../README.md#语言与内容)。
+命令和工具反馈使用当前操作语言，账号绑定等异步流程固定开始时语言。用户名称、第三方内容和结构化协议字段保持原样；语言不改变权限、认证、通知或重试策略。参见[官方插件语言说明](https://github.com/zhinjs/zhin/blob/main/plugins/README.md#语言与内容)。

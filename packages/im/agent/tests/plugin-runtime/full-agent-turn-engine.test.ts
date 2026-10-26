@@ -36,7 +36,7 @@ describe('FullAgentTurnEngine', () => {
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
       origin: { kind: 'im', platform: 'sandbox', endpoint: 'main', scope: 'private', sceneId: 'user', messageId: 'm-1' },
       principal: { subjectId: 'user', roles: ['user'] },
-      input: { text: 'hello' },
+      input: { text: 'hello', locale: 'en' },
       session: { key: 'im:sandbox:main:private:user' },
       policy: { permissions: ['user'], unattended: false },
       capabilities: { tools: [], skills: [] },
@@ -177,6 +177,7 @@ describe('FullAgentTurnEngine', () => {
     expect(order).toEqual(['context-read', 'terminal', 'reply', 'touch', 'context-commit:9', 'finalize', 'finish']);
     expect(started).toHaveLength(1);
     expect(started[0]).toMatchObject({
+      locale: 'en',
       platform: 'sandbox',
       endpointKey: 'main',
       sceneId: 'user',
@@ -185,8 +186,8 @@ describe('FullAgentTurnEngine', () => {
       hookContext: { activityFeedbackEligible: true },
     });
     expect(finished).toHaveLength(1);
-    expect(toolCalls).toEqual([expect.objectContaining({ toolName: 'web_search' })]);
-    expect(toolResults).toEqual([expect.objectContaining({ toolName: 'web_search' })]);
+    expect(toolCalls).toEqual([expect.objectContaining({ toolName: 'web_search', locale: 'en' })]);
+    expect(toolResults).toEqual([expect.objectContaining({ toolName: 'web_search', locale: 'en' })]);
     expect(coreInput).toMatchObject({
       toolLoading: 'deferred',
       generation: 7,

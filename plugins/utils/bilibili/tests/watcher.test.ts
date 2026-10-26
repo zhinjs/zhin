@@ -24,6 +24,8 @@ describe('BilibiliWatcher', () => {
     h.client.liveStatus.set('1', live('1', 1, 2000));
     await h.watcher.tick();
     expect(h.pushes).toHaveLength(2);
+    expect(h.pushes.find(row => row.channelId === 'old')?.locale).toBe('zh-CN');
+    expect(h.pushes.find(row => row.channelId === 'new')?.locale).toBe('en');
     expect(h.pushes.find(row => row.channelId === 'old')?.content).toContain('【开播】');
     expect(h.pushes.find(row => row.channelId === 'new')?.content).toContain('[Live]');
     expect(h.client.calls.live).toBe(2);

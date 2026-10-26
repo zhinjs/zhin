@@ -155,7 +155,7 @@ export class AdministratorReminderTasks implements PluginTaskProvider {
     if (this.#stopped) return;
     let state: AdminTask['state'] = 'unknown'; let detail = taskDetail('unknown');
     try {
-      const id = await this.outbound.sendTarget!(task.target, t(resolveLocale(task.locale), 'notification', { text: task.text }));
+      const id = await this.outbound.sendTarget!(task.target, t(resolveLocale(task.locale), 'notification', { text: task.text }), { locale: resolveLocale(task.locale) });
       if (id) { state = task.intervalMs === null ? 'succeeded' : 'scheduled'; detail = taskDetail('delivered'); }
     } catch (error) {
       if (error instanceof EndpointDeliveryError && error.disposition !== 'unknown') { state = 'failed'; detail = taskDetail('rejected'); }

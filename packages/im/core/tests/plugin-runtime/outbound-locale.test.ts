@@ -1,9 +1,11 @@
-import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, projectLocaleToken,
+import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, projectLocaleToken, PluginOutboundHost,
   userLocalePreferencesToken, type Locale, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointSendRequest } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { MiddlewareIndex, middlewareFeatureId, defineMiddleware } from '@zhin.js/middleware';
 import { ImRuntime, type Message, type SendContent, type OutboundEnvelope } from '../../src/plugin-runtime/im/index.js';
+import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
+import { createRuntimeProactiveOutbound } from '../../../../../basic/cli/src/plugin-runtime/agent/runtime-factory.js';
 
 async function fixture(projectLocale: Locale, replace = false) {
   const root = rootPluginId();
@@ -72,5 +74,23 @@ it.each<Locale>(['en', 'zh-CN'])('uses snapshot project language %s for an expli
     expect(f.sent).toHaveLength(1);
     expect(f.sent[0]!.locale).toBe(locale);
     expect(JSON.stringify(f.sent[0]!.payload)).toContain('原始内容');
+  } finally { await f.stop(); }
+});
+
+it('carries captured language through owner-bound Host sends, exact targets and scheduled proactive sends', async () => {
+  const f = await fixture('zh-CN');
+  try {
+    const host = new PluginOutboundHost(rootPluginId(), createOutboundHost(f.im));
+    const conversation = { kind: 'channel' as const, id: 'room', parent: { kind: 'channel' as const, id: 'guild' }, threadId: 'thread' };
+    await host.send({ adapter: f.row.endpoint.adapter, endpointKey: f.row.endpoint.id, conversation, content: '后台原文', locale: 'en' });
+    await host.sendTarget!({ ...conversation, endpoint: f.row.endpoint }, '队列原文', { locale: 'en' });
+    const proactive = createRuntimeProactiveOutbound(f.im);
+    await proactive.send({ scene: { platform: f.row.endpoint.adapter, endpointKey: f.row.endpoint.id, kind: 'private', sceneId: 'recipient' }, source: 'scheduled', locale: 'en' }, '计划原文');
+    expect(f.sent.map(request => request.locale)).toEqual(['en', 'en', 'en']);
+    expect(f.sent[0]!.conversation).toMatchObject(conversation);
+    expect(f.sent[1]!.conversation).toMatchObject(conversation);
+    expect(JSON.stringify(f.sent.map(request => request.payload))).toContain('后台原文');
+    expect(JSON.stringify(f.sent.map(request => request.payload))).toContain('队列原文');
+    expect(JSON.stringify(f.sent.map(request => request.payload))).toContain('计划原文');
   } finally { await f.stop(); }
 });

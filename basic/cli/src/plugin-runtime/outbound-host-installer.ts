@@ -29,9 +29,11 @@ export interface OutboundRuntimePort {
 
 export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
   return {
-    async sendTarget(target, content, requester) {
+    async sendTarget(target, content, requester, options) {
       try {
-        const result = await im.endpoints.sendTarget(target, content, requester);
+        const result = options
+          ? await im.endpoints.sendTarget(target, content, requester, options)
+          : await im.endpoints.sendTarget(target, content, requester);
         return result.messageId || null;
       } catch (error) {
         logger.debug(formatCompact({
@@ -62,6 +64,7 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
           endpointKey: input.endpointKey,
           conversation: input.conversation,
           content: input.content,
+          ...(input.locale ? { locale: input.locale } : {}),
         });
         return result.messageId || null;
       } catch (error) {

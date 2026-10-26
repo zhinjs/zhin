@@ -79,11 +79,10 @@
     },
     "replyTemplate": {
       "type": "string",
-      "default": "消息含不当内容，已拦截。",
-      "description": "reply 动作时的提示文案",
+      "description": "reply 动作时的提示文案；省略时按本次消息语言选择默认文案，显式文本保持原样",
       "x-i18n": {
         "en": {
-          "description": "Reply text for the reply action."
+          "description": "Reply text for the reply action. When omitted, use the message language; explicit text is preserved."
         }
       }
     },

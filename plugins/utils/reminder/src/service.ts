@@ -127,7 +127,7 @@ export class ReminderService {
         let status: TaskStatus = 'unknown';
         let detail = taskDetail(task.locale, 'unconfirmed');
         try {
-          const id = await this.#outbound.sendTarget!(task.target, t(resolveLocale(task.locale), 'notification', { text: task.text }));
+          const id = await this.#outbound.sendTarget!(task.target, t(resolveLocale(task.locale), 'notification', { text: task.text }), { locale: resolveLocale(task.locale) });
           if (id) { status = task.intervalMs === null ? 'delivered' : 'pending'; detail = taskDetail(task.locale, 'delivered'); }
         } catch (error) {
           if (error instanceof EndpointDeliveryError && error.disposition !== 'unknown') {

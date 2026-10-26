@@ -2,6 +2,7 @@
  * Schedule → adapter delivery helper — ADR 0039 P1.
  * Routes scheduled task output through NotificationRouter (unified outbound chain).
  */
+import type { Locale } from '@zhin.js/plugin-runtime';
 import type { JobNotify } from './types.js';
 import {
   type DeliverResult,
@@ -15,6 +16,7 @@ export interface DeliverScheduleToAdapterInput {
   label?: string;
   router: NotificationRouter;
   source?: string;
+  locale?: Locale;
 }
 
 /**
@@ -23,6 +25,6 @@ export interface DeliverScheduleToAdapterInput {
 export async function deliverScheduleToAdapter(
   input: DeliverScheduleToAdapterInput,
 ): Promise<DeliverResult> {
-  const { notify, content, jobId, label, source, router } = input;
-  return router.deliver({ notify, content, jobId, label, source });
+  const { notify, content, jobId, label, source, locale, router } = input;
+  return router.deliver({ notify, content, jobId, label, source, locale });
 }

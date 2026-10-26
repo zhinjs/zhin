@@ -68,6 +68,7 @@ async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, feedTitle
         endpointKey,
         channelType,
         channelId,
+        locale: resolveLocale(sub.locale),
         content: formatNewItems(feedTitle, items, runtime.config.maxItems, resolveLocale(sub.locale)),
       });
       pushed += 1;

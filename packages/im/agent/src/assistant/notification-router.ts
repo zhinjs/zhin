@@ -1,6 +1,7 @@
 /**
  * NotificationRouter — 按 JobNotify.channel 分发任务结果（M3）
  */
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { type SendOptions, sceneRefToSendOptions } from '@zhin.js/core';
 import { getLogger, formatCompact } from '@zhin.js/logger';
 import type { JobNotify } from './types.js';
@@ -11,7 +12,7 @@ export type ImJobNotify = Extract<JobNotify, { channel: 'im' }>;
 export interface NotificationRouterDeps {
   resolveAdapter: (platform: string) => { sendMessage: (opts: SendOptions) => Promise<string> } | undefined;
   /** 优先经 sendProactive 出站；未注入时回退 resolveAdapter.sendMessage */
-  sendIm?: (notify: ImJobNotify, content: string, source?: string) => Promise<void>;
+  sendIm?: (notify: ImJobNotify, content: string, source?: string, options?: Readonly<{ locale?: Locale }>) => Promise<void>;
   /** M4 注入 HA REST；M3 未配置时仅记日志 */
   callHaService?: (service: string, target?: string, data?: unknown) => Promise<void>;
 }
@@ -22,6 +23,7 @@ export interface DeliverParams {
   jobId?: string;
   label?: string;
   source?: string;
+  locale?: Locale;
 }
 
 export interface DeliverResult {
@@ -115,12 +117,12 @@ export function resolveEffectiveNotify(
   return { channel: 'silent' };
 }
 
-export function imNotifyToSendOptions(notify: ImJobNotify, content: string): SendOptions {
-  return sceneRefToSendOptions(notify.target, content);
+export function imNotifyToSendOptions(notify: ImJobNotify, content: string, locale?: Locale): SendOptions {
+  return { ...sceneRefToSendOptions(notify.target, content), ...(locale ? { locale } : {}) };
 }
 
 export function createNotificationRouter(deps: NotificationRouterDeps) {
-  async function deliverIm(notify: ImJobNotify, content: string, source?: string): Promise<DeliverResult> {
+  async function deliverIm(notify: ImJobNotify, content: string, source?: string, locale?: Locale): Promise<DeliverResult> {
     const scene = notify.target.scene;
     if (!scene.platform || !scene.endpointKey || !scene.sceneId) {
       logger.warn(formatCompact({
@@ -138,9 +140,9 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       return { delivered: false, channel: 'im' };
     }
     if (deps.sendIm) {
-      await deps.sendIm(notify, content, source);
+      await deps.sendIm(notify, content, source, { locale });
     } else {
-      await adapter!.sendMessage(imNotifyToSendOptions(notify, content));
+      await adapter!.sendMessage(imNotifyToSendOptions(notify, content, locale));
     }
     return { delivered: true, channel: 'im' };
   }
@@ -173,7 +175,7 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
         return { delivered: true, channel: 'ha' };
       }
       case 'im':
-        return deliverIm(notify, content, params.source);
+        return deliverIm(notify, content, params.source, params.locale);
     }
   }
 

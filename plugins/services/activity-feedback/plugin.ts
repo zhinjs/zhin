@@ -7,6 +7,7 @@ import {
 } from 'zhin.js';
 import { agentEventBusToken } from '@zhin.js/agent/runtime';
 import { getLogger } from '@zhin.js/logger';
+import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 import {
   loadActivityFeedbackServiceConfig,
   type ActivityFeedbackServiceConfig,
@@ -56,11 +57,14 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       return;
     }
     const access = createOutboundEndpointAccess(outbound, logger);
+    const locale = resolveLocale(context.resources.has(projectLocaleToken)
+      ? context.resources.use(projectLocaleToken) : undefined);
 
     const orchestrator = createActivityFeedbackOrchestratorForRuntime(
       serviceConfig,
       logger,
       access,
+      locale,
     );
     const admission = createGenerationAdmissionGate();
     context.resources.provide(activityFeedbackAdmissionToken, admission);
@@ -69,6 +73,7 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       orchestrator,
       admission,
       outbound.runWithView.bind(outbound),
+      locale,
     );
     context.lifecycle.add(async () => {
       logger.debug('[ActivityFeedback] Disposing Runtime AI event binder');

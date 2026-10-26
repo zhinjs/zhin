@@ -56,6 +56,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       expect((await f.service('alpha').list({ senderId: 'alice', target, locale: 'en' }))[0]!.locale).toBe('zh-CN');
       clock.mockReturnValue(start + 60_000); await [...f.active][0]!.execute();
       expect(f.send.mock.calls.map(call => call[1])).toEqual(expect.arrayContaining(['⏰ 提醒：legacy-chat', '⏰ 提醒：legacy-admin']));
+      expect(f.send.mock.calls.every(call => call[3]?.locale === 'zh-CN')).toBe(true);
     } finally { await f.runtime.stop(); await f.db.stop(); }
   });
 
@@ -78,6 +79,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       expect((await f.tasks('alpha').read({ locale: 'en' })).tasks[0]!.detail).toContain('Waiting to run');
       clock.mockReturnValue(start + 60_000); await [...f.active][0]!.execute();
       expect(f.send.mock.calls[0]![1]).toBe('⏰ Reminder: pinned language');
+      expect(f.send.mock.calls[0]![3]).toEqual({ locale: 'en' });
       expect((await f.tasks('alpha').read({ locale: 'en' })).tasks[0]!.detail).toContain('Delivery confirmed');
     } finally { await f.runtime.stop(); await f.db.stop(); }
   });
@@ -299,7 +301,7 @@ describe('persistent reminder through real Runtime discovery', () => {
       clock.mockReturnValue(task.nextRunAt + 600_000);
       await Promise.all([...f.active].map(job => job.execute()));
       expect(f.send).toHaveBeenCalledTimes(1);
-      expect(f.send).toHaveBeenCalledWith(target, '⏰ 提醒：hello world', childPluginId(rootPluginId(), 'alpha'));
+      expect(f.send).toHaveBeenCalledWith(target, '⏰ 提醒：hello world', childPluginId(rootPluginId(), 'alpha'), { locale: 'zh-CN' });
       await Promise.all([...f.active].map(job => job.execute()));
       expect(f.send).toHaveBeenCalledTimes(1);
       expect(await f.command('a remind list')).toContain('已完成');

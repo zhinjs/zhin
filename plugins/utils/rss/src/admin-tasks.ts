@@ -212,7 +212,7 @@ export class AdministratorRssTasks implements PluginTaskProvider {
     if (this.#stopped) return;
     let state: Task['state'] = 'unknown', detail = taskDetail('unknown');
     try {
-      const id = await this.#outbound.sendTarget!(claimed.target, content);
+      const id = await this.#outbound.sendTarget!(claimed.target, content, { locale: resolveLocale(claimed.locale) });
       if (id) { state = 'scheduled'; detail = taskDetail('delivered'); }
     } catch (error) {
       if (error instanceof EndpointDeliveryError && error.disposition !== 'unknown') { state = 'failed'; detail = taskDetail('rejected'); }

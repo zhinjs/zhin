@@ -92,7 +92,7 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       const tasks = await f.service.list({ senderId: 'alice', target: f.conversation });
       expect(tasks[0]).toMatchObject({ locale: 'en', text: 'Ship the report', nextRunAt: now + 600_000 });
       clock.mockReturnValue(now + 600_000); await f.service.tick();
-      expect(f.outbound.sendTarget).toHaveBeenCalledWith(f.conversation, '⏰ Reminder: Ship the report');
+      expect(f.outbound.sendTarget).toHaveBeenCalledWith(f.conversation, '⏰ Reminder: Ship the report', { locale: 'en' });
       const incomplete = f.receive('!remind create');
       await vi.waitFor(() => expect(rendered(f.sent)).toContain('When should I remind you?'));
       await f.receive('cancel'); await incomplete;

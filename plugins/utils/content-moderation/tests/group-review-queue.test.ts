@@ -2,6 +2,7 @@ import { PluginStateStore, rootPluginId, type StateRecord, aiCompletionToken, da
   type AiCompletionInput } from 'zhin.js';
 import { SnapshotStore, createGenerationAdmissionGate, generationAdmissionSource } from 'zhin.js/plugin-runtime';
 import { adapterFeatureId } from 'zhin.js/adapter';
+import type { Locale } from 'zhin.js/i18n';
 import inbound from '../middlewares/inbound/index.ts';
 import { ModerationEngine } from '../src/engine.js';
 import { moderationEngineToken } from '../src/runtime.js';
@@ -58,7 +59,7 @@ function fixture(legacyRecall = false) {
   const disposed = vi.fn();
   const snapshots = new SnapshotStore({ ...snapshot(), resources: new Map(), projections: new Map() });
   snapshots.commit(0, { snapshot: snapshot(), dispose: disposed });
-  const message = { endpointId: '8596238', id: 'original', sender: { id: '123' },
+  const message = { endpointId: '8596238', id: 'original', sender: { id: '123' }, locale: 'zh-CN' as Locale,
     conversation: { endpoint: { adapter: 'icqq', id: 'canonical:8596238' }, kind: 'group', id: '129043431' },
     content: advertising, segments: [], metadata: { platformSentAt: NOW },
     $reply: vi.fn(async () => { throw new Error('Original Message reply expired'); }) };
@@ -84,7 +85,31 @@ describe('group review queue and inbound delivery', () => {
     expect(f.sendTarget).toHaveBeenCalledWith(expect.objectContaining({ id: '129043431' }), [
       { type: 'mention', data: { target: '123' } },
       { type: 'text', data: { text: ' 提醒。请勿发布未经请求的广告或引流信息。' } },
-    ]);
+    ], { locale: 'zh-CN' });
+  });
+
+  it('pins each message language across queued review and owned host delivery', async () => {
+    const f = fixture(); const result = Promise.withResolvers<ReturnType<typeof answer>>();
+    f.completeText.mockImplementationOnce(() => result.promise);
+    const english = { ...f.message, locale: 'en' as Locale, metadata: { ...f.message.metadata, locale: 'zh-CN' } };
+    await f.run(english);
+    await f.run({ ...f.message, id: 'chinese', sender: { id: '456' } });
+    await f.flush();
+    english.locale = 'zh-CN';
+    f.message.locale = 'en';
+    result.resolve(answer(f.completeText.mock.calls[0]![0]));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.sendTarget).toHaveBeenCalledTimes(2);
+    expect(f.sendTarget).toHaveBeenNthCalledWith(1, expect.objectContaining({ id: '129043431' }), [
+      { type: 'mention', data: { target: '123' } },
+      { type: 'text', data: { text: ' Reminder. Do not post unsolicited advertising or promotional invitations.' } },
+    ], { locale: 'en' });
+    expect(f.sendTarget).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: '129043431' }), [
+      { type: 'mention', data: { target: '456' } },
+      { type: 'text', data: { text: ' 提醒。请勿发布未经请求的广告或引流信息。' } },
+    ], { locale: 'zh-CN' });
+    expect(payload(f.completeText.mock.calls[0]![0]).messages.map(item => item.text)).toEqual([advertising, advertising]);
+    expect(f.message.$reply).not.toHaveBeenCalled();
   });
 
   it('groups by user without reordering the shared conversation or escalating old messages', async () => {
@@ -120,7 +145,7 @@ describe('group review queue and inbound delivery', () => {
     expect(payload(f.completeText.mock.calls[0]![0]).messages[0]).toMatchObject({ sender: '123', text: advertising });
     expect(f.sendTarget).toHaveBeenCalledWith(expect.objectContaining({ id: '129043431' }), expect.arrayContaining([
       { type: 'mention', data: { target: '123' } },
-    ]));
+    ]), { locale: 'zh-CN' });
   });
 
   it('matches reordered verdicts to original IDs and rejects cross-message evidence', async () => {

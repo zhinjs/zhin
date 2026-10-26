@@ -9,6 +9,7 @@ import {
   mergeActivityFeedbackLayers,
   loadActivityFeedbackServiceConfig,
 } from './config.js';
+import type { Locale } from 'zhin.js/i18n';
 
 export type { ActivityFeedbackServiceConfig } from './config.js';
 export { loadActivityFeedbackServiceConfig } from './config.js';
@@ -26,6 +27,7 @@ export class ActivityFeedbackPolicy {
     endpointKey: string,
     phase: ActivityFeedbackPhase,
     sceneType: ActivitySceneType,
+    locale?: Locale,
   ): PhaseResolution {
     if (this.service.enabled === false) {
       return { kind: 'disabled' };
@@ -42,7 +44,7 @@ export class ActivityFeedbackPolicy {
       return { kind: 'disabled' };
     }
 
-    const config = resolveActivityFeedbackPhaseConfig(platform, policy, phase, sceneType);
+    const config = resolveActivityFeedbackPhaseConfig(platform, policy, phase, sceneType, locale);
     if (config.type === 'none') {
       return { kind: 'none' };
     }

@@ -22,7 +22,7 @@ zhin setup --locale en
 
 ## 设置个人语言
 
-在安装了指令能力的 Bot 中发送 `language en` 或 `language zh-CN`，前面加当前 Bot 的实际指令前缀。例如前缀为 `/` 时发送 `/language en`；空前缀时直接发送 `language en`。
+在应用 Root 挂载了指令能力的 Bot 中发送 `language en` 或 `language zh-CN`，前面加当前 Bot 的实际指令前缀。例如前缀为 `/` 时发送 `/language en`；空前缀时直接发送 `language en`。仅在子插件挂载指令能力不会注册这个 Root 指令。
 
 个人设置需要 SQLite、MySQL 或 PostgreSQL 持久存储。没有这些存储时项目语言仍有效，个人切换会明确说明不可用，不会临时保存并假装持久化成功。
 

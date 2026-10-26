@@ -190,7 +190,7 @@ describe('RSS canonical conversation addresses', () => {
     for (const [endpoint, kind, id] of [
       ['bot-a', 'private', 'user'], ['bot-b', 'group', 'group'], ['bot-b', 'channel', 'channel'],
     ]) {
-      await Subs.insert({ url, adapter_name: 'icqq', endpoint_id: endpoint, channel_type: kind, channel_id: id });
+      await Subs.insert({ url, adapter_name: 'icqq', endpoint_id: endpoint, channel_type: kind, channel_id: id, ...(kind === 'group' ? { locale: 'en' } : {}) });
     }
     // Old/incomplete rows must never be routed by guessing the bot from the adapter.
     await Subs.insert({ url, adapter_name: 'icqq', channel_type: 'private', channel_id: 'old-target' });
@@ -199,9 +199,9 @@ describe('RSS canonical conversation addresses', () => {
     const result = await checkSubscriptions(runtime!, { urls: [url] });
     expect(result.pushed).toBe(2);
     expect(send.mock.calls.map(([input]) => input)).toEqual([
-      { adapter: 'icqq', endpointKey: 'bot-a', conversation: { kind: 'private', id: 'user' }, content: expect.stringContaining('Update') },
-      { adapter: 'icqq', endpointKey: 'bot-b', conversation: { kind: 'group', id: 'group' }, content: expect.stringContaining('Update') },
-      { adapter: 'icqq', endpointKey: 'bot-b', conversation: { kind: 'channel', id: 'channel' }, content: expect.stringContaining('Update') },
+      { adapter: 'icqq', locale: 'zh-CN', endpointKey: 'bot-a', conversation: { kind: 'private', id: 'user' }, content: expect.stringContaining('Update') },
+      { adapter: 'icqq', locale: 'en', endpointKey: 'bot-b', conversation: { kind: 'group', id: 'group' }, content: expect.stringContaining('Update') },
+      { adapter: 'icqq', locale: 'zh-CN', endpointKey: 'bot-b', conversation: { kind: 'channel', id: 'channel' }, content: expect.stringContaining('Update') },
     ]);
   });
 });

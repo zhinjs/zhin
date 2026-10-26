@@ -14,10 +14,14 @@ import {
 } from './executor.js';
 import { ActivityFeedbackOrchestrator } from './orchestrator.js';
 import { ActivityFeedbackPolicy } from './policy.js';
+import { isLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './messages.js';
 
 export function createActivityFeedbackAIEventHandlers(
   orchestrator: ActivityFeedbackOrchestrator,
+  defaultLocale: Locale = 'zh-CN',
 ): AIEventHandlers {
+  const locale = (payload: AIEventPayload) => isLocale(payload.locale) ? payload.locale : defaultLocale;
   return {
     onQueuedStart: (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'queued')) return;
@@ -35,8 +39,12 @@ export function createActivityFeedbackAIEventHandlers(
         await orchestrator.stopPhase(payload, 'thinking', 'processing.iteration');
       }
       await orchestrator.startPhase(payload, 'active', 'processing.start');
-      if (typeof payload.iterations === 'number' && payload.iterations > 1 && payload.content?.trim()) {
-        await orchestrator.updatePhaseText(payload, 'active', payload.content.trim());
+      if (typeof payload.iterations === 'number' && payload.iterations > 1) {
+        const progress = payload.iterationProgress;
+        const text = payload.content?.trim() || (progress
+          ? t(locale(payload), 'iteration', { iteration: progress.current, maxIterations: progress.total })
+          : undefined);
+        if (text) await orchestrator.updatePhaseText(payload, 'active', text);
       }
     },
 
@@ -71,15 +79,14 @@ export function createActivityFeedbackAIEventHandlers(
 
     onToolCall: async (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'active') || !payload.toolName?.trim()) return;
-      const text = `调用工具：${payload.toolName.trim()}…`;
+      const text = t(locale(payload), 'toolCall', { tool: payload.toolName.trim() });
       await orchestrator.updatePhaseText(payload, 'thinking', text);
       await orchestrator.updatePhaseText(payload, 'active', text);
     },
 
     onToolResult: async (payload) => {
       if (!isActivityFeedbackEnabled(payload, 'active') || !payload.toolName?.trim()) return;
-      const outcome = payload.status === 'error' || payload.error ? '未完成' : '已完成';
-      const text = `工具 ${payload.toolName.trim()} ${outcome}，继续处理…`;
+      const text = t(locale(payload), payload.status === 'error' || payload.error ? 'toolIncomplete' : 'toolDone', { tool: payload.toolName.trim() });
       await orchestrator.updatePhaseText(payload, 'thinking', text);
       await orchestrator.updatePhaseText(payload, 'active', text);
     },
@@ -92,8 +99,8 @@ export function createActivityFeedbackAIEventHandlers(
       await orchestrator.startPhase(payload, 'thinking', 'subagent.start');
       const tag = payload.agentId?.trim() || 'subagent';
       const label = payload.label?.trim()
-        ? `子任务执行中: ${payload.label.trim()}...`
-        : '思考中...';
+        ? t(locale(payload), 'subtask', { label: payload.label.trim() })
+        : t(locale(payload), 'thinking');
       await orchestrator.updateThinkingText(payload, `[${tag}] ${label}`);
     },
 
@@ -126,6 +133,7 @@ export function bindActivityFeedbackToAIEventBus(
   orchestrator: ActivityFeedbackOrchestrator,
   admission: GenerationAdmissionGate,
   runWithView: <T>(operation: () => Promise<T>) => Promise<T>,
+  defaultLocale: Locale = 'zh-CN',
 ): () => Promise<void> {
   let stopWatchingRetirement: (() => void) | undefined;
   let cleanupNeedsGenerationView = false;
@@ -144,7 +152,7 @@ export function bindActivityFeedbackToAIEventBus(
   );
   const unsubscribe = subscribeAIEventsOnTarget(
     serialized.target,
-    createActivityFeedbackAIEventHandlers(orchestrator),
+    createActivityFeedbackAIEventHandlers(orchestrator, defaultLocale),
   );
   let shutdown: Promise<void> | undefined;
   function close(): Promise<void> {
@@ -237,6 +245,7 @@ export type ActivityFeedbackLogger = {
 };
 
 export interface CreateActivityFeedbackOrchestratorOptions {
+  defaultLocale?: Locale;
   serviceConfig: ActivityFeedbackServiceConfig;
   access: ActivityFeedbackEndpointAccess;
   logger: ActivityFeedbackLogger;
@@ -247,7 +256,7 @@ export function createActivityFeedbackOrchestrator(
 ): ActivityFeedbackOrchestrator {
   const policy = new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig(options.serviceConfig));
   const executor = new ActivityFeedbackExecutor(options.access);
-  return new ActivityFeedbackOrchestrator(policy, executor, options.logger);
+  return new ActivityFeedbackOrchestrator(policy, executor, options.logger, options.defaultLocale);
 }
 
 /** Runtime: prefer OutboundHost-backed access; else noop until Host wires outbound. */
@@ -255,10 +264,12 @@ export function createActivityFeedbackOrchestratorForRuntime(
   serviceConfig: ActivityFeedbackServiceConfig,
   logger: ActivityFeedbackLogger,
   access: ActivityFeedbackEndpointAccess = createNoopEndpointAccess(),
+  defaultLocale: Locale = 'zh-CN',
 ): ActivityFeedbackOrchestrator {
   return createActivityFeedbackOrchestrator({
     serviceConfig,
     access,
     logger,
+    defaultLocale,
   });
 }

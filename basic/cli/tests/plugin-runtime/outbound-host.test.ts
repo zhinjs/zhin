@@ -57,6 +57,15 @@ describe('OutboundHost', () => {
     });
   });
 
+  it('preserves captured locale without changing the owner argument of exact-target sends', async () => {
+    const sendTarget = vi.fn().mockResolvedValue({ messageId: 'localized' });
+    const owner = childPluginId(rootPluginId(), 'reminder');
+    const host = new PluginOutboundHost(owner, createOutboundHost(createRuntime({ sendTarget })));
+    const target = { endpoint: { adapter: 'root/icqq', id: 'exact-endpoint' }, kind: 'private' as const, id: 'user' };
+    await host.sendTarget!(target, '原文', { locale: 'en' });
+    expect(sendTarget).toHaveBeenCalledExactlyOnceWith(target, '原文', owner, { locale: 'en' });
+  });
+
   it('swallows reaction failures so activity-feedback cannot block outbound send', async () => {
     const host = createOutboundHost(createRuntime({
       addReaction: vi.fn().mockRejectedValue(new Error('packet timeout')),

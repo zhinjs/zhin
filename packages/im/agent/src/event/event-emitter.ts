@@ -29,6 +29,7 @@ export class ZhinAgentEventEmitter {
       scope: commMessage.conversation.kind ?? 'private',
       ...(Object.keys(hookContext).length > 0 ? { hookContext } : {}),
       ...rest,
+      locale: commMessage.locale,
     };
   }
 

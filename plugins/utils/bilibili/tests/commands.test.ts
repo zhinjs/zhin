@@ -179,10 +179,11 @@ describe('@zhin.js/plugin-bilibili setup', () => {
     const jobs: { id: string; cron: string }[] = [];
     const disposers: unknown[] = [];
     let provided: BilibiliRuntime | undefined;
+    const send = vi.fn(async () => null);
     const fakeDb = { define: (name: string) => defined.push(name), models: { get: () => undefined } };
     const hosts = new Map<unknown, unknown>([
       [databaseHostToken, fakeDb],
-      [outboundHostToken, { send: async () => undefined }],
+      [outboundHostToken, { send }],
       [scheduleHostToken, { register: (job: { id: string; cron: string }) => { jobs.push(job); return () => undefined; } }],
     ]);
     await (plugin as unknown as { setup: (ctx: unknown) => Promise<void> }).setup({
@@ -199,6 +200,10 @@ describe('@zhin.js/plugin-bilibili setup', () => {
     expect(defined).toEqual([BILI_SUBS_TABLE, BILI_STATE_TABLE]);
     expect(provided?.persistent).toBe(true);
     expect(provided?.outbound).toBeTypeOf('function');
+    await provided!.outbound!({ adapterName: 'sandbox', endpointKey: 'bot1', channelType: 'group',
+      channelId: 'room', content: 'Already formatted notification', locale: 'en' });
+    expect(send).toHaveBeenCalledWith({ adapter: 'sandbox', endpointKey: 'bot1',
+      conversation: { kind: 'group', id: 'room' }, content: 'Already formatted notification', locale: 'en' });
     expect(jobs).toMatchObject([{ id: 'bilibili/watch', cron: '*/90 * * * * *' }]);
     expect(disposers).toHaveLength(1);
   });

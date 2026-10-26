@@ -38,6 +38,7 @@ describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQ
     expect((await f.state().get<AdministratorRssBook>(ADMIN_RSS_STATE_KEY))!.tasks[0]!.locale).toBe('zh-CN');
     load.mockResolvedValue(items('new', 'base')); await f.tick();
     expect(f.send.mock.calls[0]![1]).toContain('新内容');
+    expect(f.send.mock.calls[0]![3]).toEqual({ locale: 'zh-CN' });
     expect(f.send.mock.calls[0]![1]).not.toContain('new items');
   });
 
@@ -56,6 +57,7 @@ describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQ
     expect((await f.provider()!.read({ locale: 'en' })).tasks[0]!.detail).toContain('Baseline established');
     load.mockResolvedValue(items('new-item', 'baseline')); await f.tick();
     expect(f.send.mock.calls[0]![1]).toContain('new items');
+    expect(f.send.mock.calls[0]![3]).toEqual({ locale: 'en' });
     expect(f.send.mock.calls[0]![1]).not.toContain('新文章');
     expect((await f.state().get<AdministratorRssBook>(ADMIN_RSS_STATE_KEY))!.tasks[0]!.locale).toBe('en');
   });

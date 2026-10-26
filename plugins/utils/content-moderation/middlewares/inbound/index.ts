@@ -4,6 +4,7 @@ import { aiCompletionToken, createDeliveryTarget, databaseHostToken, getLogger, 
   outboundHostToken, usageSubjectFromMessage } from 'zhin.js';
 import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
 import { generationAdmissionSource } from 'zhin.js/plugin-runtime';
+import { resolveLocale } from 'zhin.js/i18n';
 import {
   buildScanContext,
   extractFromTextAndSegments,
@@ -30,6 +31,7 @@ export default defineMiddleware<Message, ModerationConfig>({
     }
 
     const message = context.input;
+    const locale = resolveLocale(message.locale);
     const sender = message.sender?.id;
     const conversationId = message.conversation.id;
     const endpointMasters = resolveEndpointMasters(message, config);
@@ -70,6 +72,7 @@ export default defineMiddleware<Message, ModerationConfig>({
 
     const result = await engine.apply({
       direction: 'inbound',
+      locale,
       recallManaged: review?.done,
       extracted,
       scanInput,
@@ -115,6 +118,7 @@ async function enqueueGroupModeration(
   config: ModerationConfig, bypass: boolean,
 ): Promise<{ done: Promise<boolean> } | undefined> {
   const message = context.input;
+  const locale = resolveLocale(message.locale);
   const conversation = structuredClone(message.conversation);
   const target = config.groupModeration.find((item) => conversation.kind === 'group'
     && item.adapter === conversation.endpoint.adapter
@@ -151,7 +155,7 @@ async function enqueueGroupModeration(
       };
       try {
         const queued = await engine.groupReviewQueue.enqueue({
-          scope, group: conversation.id, sender: message.sender.id,
+          scope, group: conversation.id, sender: message.sender.id, locale,
           messageId, sentAt: Number(message.metadata?.platformSentAt), text, ...remembered,
           signal,
           state: context.use(databaseHostToken).state.forConversation(destination),
@@ -169,7 +173,7 @@ async function enqueueGroupModeration(
             const receipt = await host.sendTarget!(destination, mention ? [
               { type: 'mention', data: { target: mention } },
               { type: 'text', data: { text: ` ${content}` } },
-            ] : content);
+            ] : content, { locale });
             if (!receipt) throw new Error('Moderation notice was not confirmed');
           },
           recall: async () => {

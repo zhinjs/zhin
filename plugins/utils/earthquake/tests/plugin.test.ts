@@ -95,7 +95,8 @@ describe('@zhin.js/plugin-earthquake definition', () => {
 
 describe('@zhin.js/plugin-earthquake runtime', () => {
   it('uses current language for commands and retains the subscription language on later edits', async () => {
-    stubFeeds({ cenc: () => [], usgs: () => [] });
+    let quakes: QuakeSpec[] = [];
+    stubFeeds({ cenc: () => [], usgs: () => quakes });
     const fake = await runPluginSetup(plugin, { config: {} });
     try {
       const input = createFakeMessage({ locale: 'en', sender: { id: 'u', roles: ['admin'] } });
@@ -108,6 +109,11 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
       const result = await runCommand(fake, queryCommand, { input });
       expect(result).toContain('Earthquakes M3.0+');
       expect(result).toContain('no records');
+      await fake.clock.advance(2 * 60_000);
+      quakes = [liveQuake('locale-test', 1, { magnitude: 6.1 })];
+      await fake.clock.advance(2 * 60_000);
+      expect(fake.sent).toHaveLength(1);
+      expect(fake.sent[0]).toMatchObject({ kind: 'send', input: { locale: 'en', content: expect.stringContaining('Earthquake') } });
     } finally { await fake.dispose(); }
   });
 

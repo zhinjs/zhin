@@ -43,6 +43,38 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(NOW); });
 afterEach(() => vi.useRealTimers());
 
 describe('contextual group moderation', () => {
+  it('localizes official escalation notices without changing model evidence or recall decisions', async () => {
+    const f = fixture();
+    f.completeText.mockResolvedValue({ text: verdict(true), model: 'fixture', durationMs: 0 });
+    await f.send(1, { locale: 'en' }); await f.send(2, { locale: 'en' }); await f.send(3, { locale: 'en' });
+    expect(f.reply.mock.calls.map(([message]) => message)).toEqual([
+      'Reminder. Do not post unsolicited advertising or promotional invitations.',
+      'Warning. Do not post unsolicited advertising or promotional invitations.',
+      'Muted for 10 minutes. Do not post unsolicited advertising or promotional invitations.',
+    ]);
+    expect(f.input.audit).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'group_review', evidence: [text], recallReason: '避免继续引流', recall: true,
+    }));
+    expect(f.recall).toHaveBeenCalledTimes(2);
+    expect(f.moderateGroupMember).toHaveBeenCalledExactlyOnceWith('129043431', '123',
+      { type: 'mute', durationSeconds: 600 }, expect.any(AbortSignal));
+  });
+
+  it('localizes newcomer and abuse notices while preserving their different actions', async () => {
+    const newcomer = fixture();
+    newcomer.inspectGroupMember.mockResolvedValue({ canModerate: true, joinedAt: NOW - 1000 });
+    await newcomer.send(1, { locale: 'en' });
+    expect(newcomer.reply).toHaveBeenCalledWith(
+      'Removed from the group for posting clear advertising within 10 minutes of joining. Do not post unsolicited advertising or promotional invitations.', '123');
+    expect(newcomer.moderateGroupMember).toHaveBeenCalledWith('129043431', '123',
+      { type: 'kick', joinedAt: NOW - 1000, maxMembershipAgeMs: 600_000 }, expect.any(AbortSignal));
+    const abuse = fixture();
+    abuse.completeText.mockResolvedValue({ text: verdict(false, 'abuse'), model: 'fixture', durationMs: 0 });
+    await abuse.send(2, { locale: 'en' });
+    expect(abuse.reply).toHaveBeenCalledExactlyOnceWith('Reminder. Do not direct personal attacks at others.', '123');
+    expect(abuse.moderateGroupMember).not.toHaveBeenCalled();
+  });
+
   it('keeps persistent deduplication bounded and does not re-review an evicted old message', async () => {
     const f = fixture();
     f.completeText.mockResolvedValue({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });

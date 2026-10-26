@@ -105,8 +105,8 @@ function flattenProperties(schema, prefix, inheritedRequired = new Set(), rootSc
       type: displayType(resolvedValue, fieldPath, rootSchema),
       required: required.has(key),
       defaultValue: formatValue(resolvedValue.default),
-      description: resolvedValue.description ?? resolvedValue['x-descriptionZh'] ?? '—',
-      descriptionZh: resolvedValue['x-descriptionZh'] ?? resolvedValue.description ?? '—',
+      description: resolvedValue['x-i18n']?.en?.description ?? resolvedValue.description ?? resolvedValue['x-descriptionZh'] ?? '—',
+      descriptionZh: resolvedValue['x-i18n']?.['zh-CN']?.description ?? resolvedValue['x-descriptionZh'] ?? resolvedValue.description ?? '—',
     });
     if (resolvedValue.type === 'object' || resolvedValue.properties) {
       rows.push(...flattenProperties(resolvedValue, fieldPath, new Set(), rootSchema));

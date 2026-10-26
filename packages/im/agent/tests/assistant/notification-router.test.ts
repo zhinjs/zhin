@@ -33,6 +33,15 @@ const privateTarget = {
 };
 
 describe('NotificationRouter', () => {
+  it('passes captured language to an explicitly supplied legacy sendMessage port', async () => {
+    const sendMessage = vi.fn(async () => 'sent');
+    const router = createNotificationRouter({ resolveAdapter: () => ({ sendMessage }) });
+    await router.deliver({ notify: privateTarget, content: '原始任务输出', locale: 'en' });
+    expect(sendMessage).toHaveBeenCalledExactlyOnceWith({
+      context: 'icqq', endpoint: '1', id: 's2', type: 'private', content: '原始任务输出', locale: 'en',
+    });
+  });
+
   it('imNotifyToSendOptions 构建 IM 发送选项', () => {
     expect(imNotifyToSendOptions(groupTarget, 'hello')).toEqual({
       context: 'qq',

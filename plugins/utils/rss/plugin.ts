@@ -72,6 +72,7 @@ export default definePlugin<RssConfig>({
             id: input.channelId,
           },
           content: input.content,
+          locale: input.locale,
         });
       };
     }
