@@ -1,0 +1,40 @@
+docs/authoring/adapters.md
+  h_b680f75345178a 88
+docs/console/index.md
+  h_b680f75345178a 16-37
+docs/en/authoring/adapters.md
+  h_b680f75345178a 88
+docs/en/console/index.md
+  h_b680f75345178a 16-37
+docs/en/getting-started/index.md
+  h_b680f75345178a 30
+docs/en/paths/ai-agent.md
+  h_b680f75345178a 118,120
+docs/en/paths/console.md
+  h_b680f75345178a 32-40,46,54,124-125,127-128
+docs/en/paths/im-bot.md
+  h_b680f75345178a 24,88,110
+docs/en/solutions/multi-endpoint-operations.md
+  h_b680f75345178a 22
+docs/getting-started/index.md
+  h_b680f75345178a 30
+docs/paths/ai-agent.md
+  h_b680f75345178a 118,120
+docs/paths/console.md
+  h_b680f75345178a 32-40,46,54,124-125,127-128
+docs/paths/im-bot.md
+  h_b680f75345178a 24,88,110
+docs/solutions/multi-endpoint-operations.md
+  h_b680f75345178a 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fbbff4bfca96073140112910c33268f7598d0e26",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
