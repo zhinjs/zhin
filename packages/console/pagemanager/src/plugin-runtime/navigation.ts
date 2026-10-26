@@ -44,6 +44,7 @@ function pageNode(page: PageManifest): Readonly<NavNode> {
     id: page.id,
     type: 'page' as const,
     label: page.title,
+    ...(page.titleI18n === undefined ? {} : { titleI18n: page.titleI18n }),
     icon: page.icon,
     path: page.route,
     order: page.order,

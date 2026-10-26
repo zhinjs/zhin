@@ -109,7 +109,12 @@
           "string",
           "number"
         ],
-        "description": "Trusted Bilibili uid"
+        "description": "信任的 Bilibili 用户 ID",
+        "x-i18n": {
+          "en": {
+            "description": "Trusted Bilibili user ID"
+          }
+        }
       },
       "description": "框架 trusted 用户列表（B 站 uid）",
       "x-i18n": {
@@ -269,7 +274,12 @@
                 "string",
                 "number"
               ],
-              "description": "Trusted Bilibili uid"
+              "description": "信任的 Bilibili 用户 ID",
+              "x-i18n": {
+                "en": {
+                  "description": "Trusted Bilibili user ID"
+                }
+              }
             },
             "description": "本 endpoint 的 trusted 列表",
             "x-i18n": {

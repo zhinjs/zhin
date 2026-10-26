@@ -341,7 +341,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     }, this.#now);
     this.#logger.info(formatCompact({ op: 'bilibili_draft_queued', draft: draft.id, target: conversation.id }));
     throw new EndpointDeliveryError('approval_pending',
-      `Reply queued as draft ${draft.id}; a master must run "bili-draft send ${draft.id}" to post it`, 'not_sent');
+      `Reply queued as draft ${draft.id}; master approval is required before posting`, 'not_sent');
   }
 
   /** 审批前修改草稿正文。 */

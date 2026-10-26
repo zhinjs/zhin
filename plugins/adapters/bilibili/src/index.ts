@@ -21,6 +21,8 @@ export {
 } from './bilibili-runtime-state.js';
 export {
   approveDraftText,
+  draftEditUsage,
+  type DraftPresentation,
   discardDraftText,
   editDraftText,
   formatDraft,

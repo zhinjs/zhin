@@ -51,10 +51,14 @@
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
     "@zhin.js/core": "workspace:^",
-    "zhin.js": "workspace:^"
+    "zhin.js": "workspace:^",
+    "@zhin.js/command": "workspace:^"
   },
   "peerDependenciesMeta": {
     "zhin.js": {
+      "optional": true
+    },
+    "@zhin.js/command": {
       "optional": true
     }
   },
@@ -67,7 +71,7 @@
   "files": [
     "adapters",
     "commands",
-    "plugin.js",
+    "plugin.ts",
     "schema.json",
     "src",
     "lib",
@@ -89,12 +93,16 @@
   "zhin": {
     "protocol": 1,
     "type": "plugin",
-    "entry": "./plugin.js",
+    "entry": "./plugin.ts",
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
       {
         "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
         "api": "^1.0.0"
       }
     ],

@@ -55,6 +55,10 @@ Three tiers:
 | `outboundMessageToken` | `stable` | `@zhin.js/core` (`zhin.js/core/runtime`) | Inbound message delivery gateway (used by adapters) |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host capability (used by Console, Webhooks) |
 
+### Language and command references
+
+The stable authoring surface at `zhin.js/i18n` includes `createMessages`, `Locale`, `MessageCatalog`, `MessageValues`, `DEFAULT_LOCALE`, `SUPPORTED_LOCALES`, `isLocale`, `resolveLocale`, and `projectLocaleToken`. `Message.locale`, `CommandContext.locale`, and their `formatCommand()` methods use the current operation environment; an unknown command environment returns `undefined`. Personal preference storage is an internal Host responsibility. See [localization](../configuration/localization.md) for configuration and examples.
+
 ### Agent Capability Resources
 
 | API | Stability | Source Package | One-liner |

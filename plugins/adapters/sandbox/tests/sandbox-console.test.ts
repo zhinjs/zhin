@@ -31,6 +31,7 @@ describe('sandbox console page', () => {
     const source = await readFile(sandboxPageSource, 'utf8');
     expect(extractPageMetadata(source, sandboxPageSource)).toMatchObject({
       title: '试聊一下',
+      titleI18n: { en: 'Try a conversation' },
       order: 10,
     });
   });
@@ -89,9 +90,12 @@ describe('sandbox console page', () => {
       expect.objectContaining({
         localName: 'index',
         title: '试聊一下',
+        titleI18n: { en: 'Try a conversation' },
         route: '/',
       }),
     ]));
+    const navigation = await consoleRuntime.runView({permissions: [], roles: []}, catalog => catalog.navigation());
+    expect(navigation).toEqual(expect.arrayContaining([expect.objectContaining({label: '试聊一下', titleI18n: {en: 'Try a conversation'}})]));
     expect(pageIndex(runtime.snapshot).route('/')?.module)
       .toMatch(/^\/assets\/client\//u);
 

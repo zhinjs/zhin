@@ -17,6 +17,7 @@ export type ConsoleRouteRecord = {
   requiredRoles?: string[];
   meta?: {
     hideInMenu?: boolean;
+    titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
     order?: number;
     group?: string;
     fullWidth?: boolean;

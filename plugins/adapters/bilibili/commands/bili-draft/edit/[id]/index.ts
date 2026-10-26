@@ -1,14 +1,13 @@
 import { defineCommand } from 'zhin.js/command';
-import { bilibiliEndpointRegistryToken } from '../../../../src/bilibili-runtime-state.js';
-import { editDraftText } from '../../../../src/review.js';
+import { bilibiliEndpointRegistryToken, editDraftText, draftEditUsage } from '@zhin.js/adapter-bilibili';
 
 export default defineCommand({
-  description: '改写一条 B 站评论草稿（bili-draft edit <id> <新内容>），改完仍需 send',
+  description: '改写一条 B 站评论草稿，改完仍需审批发送', descriptionI18n: { en: 'Edit a Bilibili comment draft; approval is still required to send' },
   permit: ['role(master)'],
-  params: { id: { type: 'string', description: '草稿 id' } },
-  execute({ params, args, use }) {
+  params: { id: { type: 'string', description: '草稿 ID', descriptionI18n: { en: 'Draft ID' } } },
+  execute({ params, args, use, locale, formatCommand }) {
     const message = args.join(' ').trim();
-    if (!message) return '用法：bili-draft edit <id> <新内容>';
-    return editDraftText(use(bilibiliEndpointRegistryToken), String(params.id ?? '').trim(), message);
+    if (!message) return draftEditUsage({ locale, formatCommand });
+    return editDraftText(use(bilibiliEndpointRegistryToken), String(params.id ?? '').trim(), message, { locale, formatCommand });
   },
 });

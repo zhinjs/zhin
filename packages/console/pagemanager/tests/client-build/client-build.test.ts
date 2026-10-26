@@ -23,7 +23,7 @@ describe('Client build adapter', () => {
     const source = join(root, 'pages/status.tsx');
     await writeSource(source, [
       "import { definePage } from '@zhin.js/console-contract';",
-      "export const meta = definePage({ title: 'Status', order: 10, requiredRoles: ['admin'] });",
+      "export const meta = definePage({ title: 'Status', titleI18n: { en: 'Status page', 'zh-CN': '状态页' }, order: 10, requiredRoles: ['admin'] });",
       'export default function Status() { return <main>Status</main>; }',
     ].join('\n'));
     const builder = new TypeScriptClientBuilder({
@@ -40,7 +40,7 @@ describe('Client build adapter', () => {
       localName: 'status',
       source: 'pages/status.tsx',
       module: expect.stringMatching(/^\/assets\/zhin\/root-status-[a-f0-9]{16}\.js$/u),
-      metadata: { title: 'Status', order: 10, requiredRoles: ['admin'] },
+      metadata: { title: 'Status', titleI18n: { en: 'Status page', 'zh-CN': '状态页' }, order: 10, requiredRoles: ['admin'] },
     });
     const chunk = await readFile(join(root, 'dist/client', artifact!.module.split('/').at(-1)!), 'utf8');
     // Bare `react/jsx-runtime` is rewritten to Host `/esm/…` so browsers can resolve it.
@@ -52,6 +52,12 @@ describe('Client build adapter', () => {
     // Remote Console loadConsoleEntries requires `register(api)`.
     expect(chunk).toMatch(/export\s+(?:async\s+)?function\s+register\b|export\s*\{\s*[^}]*\bregister\b/);
     expect(chunk).toContain('addRoute');
+    const jsxStub = 'data:text/javascript,export const jsx=()=>null;';
+    const runnable = chunk.replace(/(["'])\/esm\/react(?:%7E|~)jsx-runtime\.mjs(?:\?[^"']*)?\1/gu, JSON.stringify(jsxStub));
+    const browserModule = await import(`data:text/javascript;base64,${Buffer.from(runnable).toString('base64')}`);
+    const routes: unknown[] = [];
+    browserModule.register({ React: { createElement: () => null }, addRoute: (route: unknown) => routes.push(route) });
+    expect(routes).toEqual([expect.objectContaining({name: 'Status', meta: expect.objectContaining({titleI18n: {en: 'Status page', 'zh-CN': '状态页'}})})]);
 
     const persisted = JSON.parse(
       await readFile(join(root, 'dist/client/pages.manifest.json'), 'utf8'),

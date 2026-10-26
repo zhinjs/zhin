@@ -29,8 +29,11 @@ let child;
 let output = '';
 let passed = false;
 const selectedPlatforms = ['onebot11', 'napcat', 'telegram', 'qq'].filter(name => process.argv.includes(`--${name}`));
-if (selectedPlatforms.length > 1 || process.argv.slice(2).some(arg => !['--onebot11', '--napcat', '--telegram', '--qq'].includes(arg))) throw new Error('Choose one platform flag: --onebot11, --napcat, --telegram or --qq (default Sandbox)');
+const localeFlags = process.argv.slice(2).filter(arg => arg.startsWith('--locale='));
+if (selectedPlatforms.length > 1 || localeFlags.length > 1 || process.argv.slice(2).some(arg => !['--onebot11', '--napcat', '--telegram', '--qq', '--locale=en', '--locale=zh-CN'].includes(arg))) throw new Error('Choose one platform flag: --onebot11, --napcat, --telegram or --qq (default Sandbox), optionally --locale=en or --locale=zh-CN');
 const platform = selectedPlatforms[0] ?? 'sandbox';
+const locale = localeFlags[0]?.slice('--locale='.length) ?? 'zh-CN';
+const greeting = locale === 'en' ? 'Hello! Welcome to Zhin.js!' : '你好！欢迎使用 Zhin.js！';
 let gateway;
 let gatewaySocket;
 let replyWaiter;
@@ -292,7 +295,7 @@ try {
   }), null, 2));
   await run('pnpm', ['install', '--no-frozen-lockfile'], creator);
   console.log('Creating an empty project with the packed creator CLI…');
-  await run(process.execPath, [path.join(creator, 'node_modules/create-zhin-app/lib/index.js'), 'acceptance-bot', '-y', '--skip-install'], creator);
+  await run(process.execPath, [path.join(creator, 'node_modules/create-zhin-app/lib/index.js'), 'acceptance-bot', '-y', '--skip-install', ...localeFlags], creator);
   const manifestFile = path.join(project, 'package.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
   if (platform !== 'sandbox') {
@@ -319,6 +322,33 @@ try {
   await writeFile(workspaceFile, stringify(workspaceConfig));
   console.log('Installing the generated project exclusively against candidate workspace tarballs…');
   await run('pnpm', ['install', '--no-frozen-lockfile'], project);
+  console.log('Checking published localization exports with a NodeNext consumer…');
+  await writeFile(path.join(project, 'i18n-consumer.mts'), `
+import { createMessages, type Locale } from 'zhin.js/i18n';
+import type { Message } from 'zhin.js';
+import { defineCommand } from 'zhin.js/command';
+const t = createMessages({ greeting: { 'zh-CN': '你好 {name}', en: 'Hello {name}' } });
+const check = (message: Message): Locale => message.locale;
+defineCommand({ execute(context) {
+  const command: string | undefined = context.formatCommand('hello');
+  return t(context.locale, 'greeting', { name: command ?? 'Ada' });
+} });
+// @ts-expect-error Missing translations must fail at the public type boundary.
+createMessages({ incomplete: { en: 'Hello' } });
+// @ts-expect-error Unknown catalog keys must not typecheck.
+t('en', 'missing');
+void check;
+`);
+  await writeFile(path.join(project, 'i18n-consumer.tsconfig.json'), JSON.stringify({
+    compilerOptions: { module: 'NodeNext', moduleResolution: 'NodeNext', target: 'ES2022', strict: true, skipLibCheck: true, noEmit: true },
+    files: ['./i18n-consumer.mts'],
+  }));
+  await run('pnpm', ['exec', 'tsc', '-p', 'i18n-consumer.tsconfig.json'], project);
+  await run(process.execPath, ['--input-type=module', '-e', `
+import { createMessages } from 'zhin.js/i18n';
+const text = createMessages({ done: { 'zh-CN': '完成', en: 'Done' } });
+if (text('en', 'done') !== 'Done' || text('zh-CN', 'done') !== '完成') throw new Error('Published locale exports failed');
+`], project);
   if (platform === 'sandbox') {
     console.log('Checking migration preview, workspace links, preserved files and dependency reinstall…');
     await checkMigrationUpgrade();
@@ -327,6 +357,9 @@ try {
   }
   const configFile = path.join(project, 'zhin.config.yml');
   const config = parse(await readFile(configFile, 'utf8'));
+  if (config.locale !== locale) throw new Error('The generated project did not preserve the selected locale');
+  // The fixture explicitly opts into SQL so personal preference persistence is exercised.
+  config.database = { dialect: 'sqlite', filename: path.join(temp, 'locale.sqlite') };
   const token = 'local-acceptance-token';
   if (platform !== 'sandbox') {
     delete config.plugins.sandbox;
@@ -342,6 +375,14 @@ try {
   config.http = { ...config.http, host: '127.0.0.1', port: 0, token,
     readiness: { endpoints: [{ owner: `root/${platform}`, name: platform === 'sandbox' ? 'sandbox~sandbox-bot' : `${platform}~fixture-bot` }] } };
   await writeFile(configFile, stringify(config));
+  const localeProbe = path.join(project, 'commands/locale-probe');
+  await mkdir(localeProbe, { recursive: true });
+  await writeFile(path.join(localeProbe, 'index.ts'), `
+import { defineCommand } from 'zhin.js/command';
+export default defineCommand({ execute(context) {
+  return context.locale + '|' + context.formatCommand('locale-probe');
+} });
+`);
   if (platform !== 'sandbox') {
     const probeDirectory = path.join(project, 'commands/acceptance');
     await mkdir(probeDirectory, { recursive: true });
@@ -351,7 +392,11 @@ try {
   }
   console.log('Checking development startup, /hello and command HMR…');
   const origin = await startBot('development');
-  await requestHello(origin, token, '你好！欢迎使用 Zhin.js！');
+  await requestHello(origin, token, greeting);
+  await requestHello(origin, token, locale + '|/locale-probe', '/locale-probe');
+  const personalLocale = locale === 'en' ? 'zh-CN' : 'en';
+  await requestHello(origin, token, personalLocale === 'en' ? 'Your language is now English' : '个人语言已设置为简体中文', '/language ' + personalLocale);
+  await requestHello(origin, token, personalLocale + '|/locale-probe', '/locale-probe');
   const details = async () => {
     const response = await fetch(`${origin}/api/system/readiness`, {
       headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2_000),
@@ -381,12 +426,13 @@ try {
   }
   const beforeCommand = await details();
   const command = path.join(project, 'commands', 'hello', 'index.ts');
-  await writeFile(command, (await readFile(command, 'utf8')).replace('你好！欢迎使用 Zhin.js！', 'candidate HMR accepted'));
+  await writeFile(command, (await readFile(command, 'utf8')).replace(greeting, 'candidate HMR accepted'));
   await waitFor(async () => (await details()).generation > beforeCommand.generation, 'command generation replacement');
   await requestHello(origin, token, 'candidate HMR accepted');
   await stopBot();
   console.log('Checking production restart and persisted command…');
   const production = await startBot('production');
+  await requestHello(production, token, personalLocale + '|/locale-probe', '/locale-probe');
   await requestHello(production, token, 'candidate HMR accepted');
   if (platform === 'sandbox') await requestHello(production, token, 'candidate JSX HMR accepted', '/card', 'html');
   await run(process.execPath, [path.join(project, 'node_modules/@zhin.js/cli/bin/zhin.js'),
@@ -398,7 +444,7 @@ try {
     }, 'installed acceptance probe confirmed delivery');
   }
   passed = true;
-  console.log(`PASS [${platform}]: packed creator -> clean install${platform === 'sandbox' ? ' -> migration + reinstall' : ''} -> readiness -> /hello${platform === 'sandbox' ? ' -> Console JSX preview -> JSX /card + TSX HMR' : ''} -> command HMR -> production restart${platform !== 'sandbox' ? ' -> acceptance probe receipt' : ''}.`);
+  console.log(`PASS [${platform}, ${locale}]: packed creator -> clean install${platform === 'sandbox' ? ' -> migration + reinstall' : ''} -> readiness -> /hello${platform === 'sandbox' ? ' -> Console JSX preview -> JSX /card + TSX HMR' : ''} -> command HMR -> production restart${platform !== 'sandbox' ? ' -> acceptance probe receipt' : ''}.`);
 } finally {
   await stopBot();
   if (gateway) { for (const socket of gateway.clients) socket.terminate(); await new Promise(resolve => gateway.close(resolve)); }

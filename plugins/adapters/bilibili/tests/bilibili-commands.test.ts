@@ -33,7 +33,7 @@ function setup() {
     if (token !== bilibiliEndpointRegistryToken) throw new Error('unexpected token');
     return registry;
   }) as never;
-  const ctx = (params: Record<string, unknown> = {}, args: string[] = []) => ({ params, args, use }) as never;
+  const ctx = (params: Record<string, unknown> = {}, args: string[] = []) => ({ params, args, use, locale: 'zh-CN', formatCommand: (path: string) => path }) as never;
   return { endpoint, posts, ctx };
 }
 

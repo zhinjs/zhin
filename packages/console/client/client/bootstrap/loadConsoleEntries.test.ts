@@ -22,7 +22,7 @@ describe("console entries bootstrap", () => {
   it("synthesizes register from default component + entry.route", () => {
     const Page = () => null;
     const register = resolveEntryRegister(
-      { default: Page, meta: { title: "Sandbox", icon: "Box" } },
+      { default: Page, meta: { title: "Sandbox", titleI18n: { en: "Try a conversation" }, icon: "Box" } },
       { id: "sandbox", resolvedModule: "/assets/client/sandbox.js", route: "/p-sandbox" } as any,
     );
     expect(typeof register).toBe("function");
@@ -37,6 +37,7 @@ describe("console entries bootstrap", () => {
       path: "/p-sandbox",
       name: "Sandbox",
       icon: "Box",
+      meta: { hideInMenu: false, titleI18n: { en: "Try a conversation" } },
     }));
     expect(createElement).toHaveBeenCalledWith(Page);
   });
