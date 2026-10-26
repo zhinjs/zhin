@@ -22,6 +22,15 @@ export const BILIBILI_RISK_CODES: ReadonlySet<number> = new Set([-352, -412, -50
 
 export type BilibiliSendMode = 'review' | 'off';
 
+/** 审批后两次真实发送之间的默认最小间隔（秒）与下限。 */
+export const BILIBILI_DEFAULT_SEND_INTERVAL_SEC = 30;
+export const BILIBILI_MIN_SEND_INTERVAL_SEC = 10;
+
+/** 「回复我的 / @我的」通知源。 */
+export type BilibiliNotificationKind = 'reply' | 'at';
+/** 通知入站范围：`whitelist` 只收白名单视频下的通知（默认）；`all` 收所有视频评论通知。 */
+export type BilibiliNotificationScope = 'whitelist' | 'all';
+
 /** One endpoint config after AdapterIndex expands `<instanceKey>.endpoints`. */
 export interface BilibiliEndpointConfig {
   readonly id: string;
@@ -35,6 +44,12 @@ export interface BilibiliEndpointConfig {
   readonly pollIntervalSec?: number;
   /** 出站模式：`review`（默认，进草稿队列）/ `off`（禁止出站）。 */
   readonly sendMode?: BilibiliSendMode;
+  /** 审批后两次真实发送的最小间隔秒数（默认 30，最小 10）。 */
+  readonly minSendIntervalSec?: number;
+  /** 额外轮询的通知源：`reply`（回复我的）/ `at`（@我的）。默认不开；需要 Cookie。 */
+  readonly notifications?: readonly BilibiliNotificationKind[];
+  /** 通知入站范围，默认 `whitelist`。 */
+  readonly notificationScope?: BilibiliNotificationScope;
   readonly apiBaseUrl?: string;
 }
 
@@ -46,6 +61,9 @@ export interface ResolvedBilibiliConfig {
   readonly videos: readonly BilibiliVideoRef[];
   readonly pollIntervalMs: number;
   readonly sendMode: BilibiliSendMode;
+  readonly minSendIntervalMs: number;
+  readonly notifications: readonly BilibiliNotificationKind[];
+  readonly notificationScope: BilibiliNotificationScope;
   readonly apiBaseUrl: string;
 }
 
@@ -79,6 +97,20 @@ export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedB
     BILIBILI_MIN_POLL_INTERVAL_SEC,
     Number.isFinite(config.pollIntervalSec) ? Number(config.pollIntervalSec) : BILIBILI_MIN_POLL_INTERVAL_SEC,
   );
+  const sendInterval = Math.max(
+    BILIBILI_MIN_SEND_INTERVAL_SEC,
+    Number.isFinite(config.minSendIntervalSec) ? Number(config.minSendIntervalSec) : BILIBILI_DEFAULT_SEND_INTERVAL_SEC,
+  );
+  const notifications = [...new Set(config.notifications ?? [])];
+  for (const kind of notifications) {
+    if (kind !== 'reply' && kind !== 'at') {
+      throw new TypeError(`Bilibili notifications must be "reply" or "at", got "${String(kind)}"`);
+    }
+  }
+  const notificationScope = config.notificationScope ?? 'whitelist';
+  if (notificationScope !== 'whitelist' && notificationScope !== 'all') {
+    throw new TypeError(`Bilibili notificationScope must be "whitelist" or "all", got "${String(notificationScope)}"`);
+  }
   const sessdata = config.sessdata?.trim() || undefined;
   const biliJct = config.biliJct?.trim() || undefined;
   return {
@@ -89,6 +121,9 @@ export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedB
     videos: (config.videos ?? []).map(parseVideoRef),
     pollIntervalMs: interval * 1000,
     sendMode,
+    minSendIntervalMs: sendInterval * 1000,
+    notifications: Object.freeze(notifications),
+    notificationScope,
     apiBaseUrl: trimTrailingSlashes(config.apiBaseUrl?.trim() || 'https://api.bilibili.com'),
   };
 }
@@ -168,6 +203,71 @@ export function flattenReplies(replies: readonly BilibiliReply[] | null | undefi
     for (const child of reply.replies ?? []) out.push(child);
   }
   return out;
+}
+
+/** One item of `x/msgfeed/reply` / `x/msgfeed/at` (fields we consume). */
+export interface BilibiliNotificationItem {
+  readonly id: number;
+  readonly user?: { readonly mid?: number; readonly nickname?: string };
+  readonly item?: {
+    readonly type?: string;
+    /** 1 = 视频评论；其余（动态 11/17 等）v1 忽略。 */
+    readonly business_id?: number;
+    /** 评论区 oid（视频即 aid）。 */
+    readonly subject_id?: number;
+    /** 根评论 rpid；0 表示通知里的评论本身是一级评论。 */
+    readonly root_id?: number;
+    /** 触发通知的这条评论 rpid。 */
+    readonly source_id?: number;
+    /** 被回复的评论 rpid（@ 通知里通常为 0）。 */
+    readonly target_id?: number;
+    readonly source_content?: string;
+  };
+  readonly reply_time?: number;
+  readonly at_time?: number;
+}
+
+export interface BilibiliNotificationPage {
+  readonly items?: readonly BilibiliNotificationItem[] | null;
+  readonly cursor?: { readonly is_end?: boolean; readonly id?: number; readonly time?: number };
+}
+
+/**
+ * 把一条视频评论通知还原成评论结构；非视频评论 / 缺字段时返回 undefined。
+ */
+export function notificationToReply(entry: BilibiliNotificationItem): BilibiliReply | undefined {
+  const item = entry.item;
+  if (!item || item.business_id !== BILIBILI_VIDEO_COMMENT_TYPE) return undefined;
+  if (item.type !== undefined && item.type !== 'reply') return undefined;
+  const rpid = Number(item.source_id);
+  const oid = Number(item.subject_id);
+  const mid = Number(entry.user?.mid);
+  if (!rpid || !oid || !mid) return undefined;
+  const root = Number(item.root_id) || 0;
+  return {
+    rpid,
+    oid,
+    type: BILIBILI_VIDEO_COMMENT_TYPE,
+    mid,
+    root,
+    parent: Number(item.target_id) || root,
+    ctime: Number(entry.reply_time ?? entry.at_time ?? 0),
+    member: { mid: String(mid), ...(entry.user?.nickname ? { uname: entry.user.nickname } : {}) },
+    content: { message: item.source_content ?? '' },
+  };
+}
+
+/** 出站 payload 里 `reply` 段指向的评论 rpid（纯数字才认）。 */
+export function outboundReplyTarget(payload: unknown): string | undefined {
+  const items = Array.isArray(payload) ? payload : [payload];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const seg = item as WireSegment;
+    if (seg.type !== 'reply') continue;
+    const id = String(seg.data?.id ?? seg.data?.message_id ?? '').trim();
+    if (/^\d+$/.test(id)) return id;
+  }
+  return undefined;
 }
 
 interface WireSegment {
