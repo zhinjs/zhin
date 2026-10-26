@@ -1,0 +1,1923 @@
+packages/toolkit/scaffold-wizard/tests/locale.test.ts
+  s_079f1dc5e6308d::t_4edfe8749faca5 1-29
+packages/game-kit/tests/command-message.test.ts
+  s_079f1dc5e6308d::t_2a654353db0ac9 25-30
+plugins/utils/60s/skills/60s-life/tools/history_today/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/60s/commands/zhihu/[[limit]]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+plugins/utils/60s/skills/60s-life/tools/moyu/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/adapters/qq/agents/qq/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-24
+plugins/adapters/github/agents/github/skills/github-account/handlers.ts
+  s_079f1dc5e6308d::t_77dce52994c319 1,28,31-32,35,38,42,53,56,58,82,90,94,96-97,100,103,106,109,111-112,115,118,123,125,128,130,133,135
+  s_079f1dc5e6308d::t_2e85fd12b8926d 2
+plugins/adapters/telegram/agents/telegram/skills/telegram-messages/tools/send_sticker/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_83333f6234cc9d 16
+packages/im/core/src/built/message-enrich.ts
+  s_079f1dc5e6308d::t_2848752bda3ab6 55
+  s_079f1dc5e6308d::t_94f2dc1cb4e811 5,26,54
+plugins/utils/60s/skills/60s-news/tools/toutiao_hot/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_title/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_f7ed8760046a4a 18,20,22
+plugins/utils/60s/src/handlers/weibo-hot.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-8
+plugins/utils/music/src/login/index.ts
+  s_079f1dc5e6308d::t_b0d960cf932be0 2-3,25,28
+  s_079f1dc5e6308d::t_e0f7fa1a541723 92,115
+  s_079f1dc5e6308d::t_28044c0dc0a105 1,4,13,76,82,90,107,118,138,143
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/remove_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_cf9f3a7a68db61 26
+plugins/adapters/bilibili/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 14-19,28-33,43-48,55-60,71-76,81-86,98-103,107-112,116-121,131-136,142-147,156-161,172-177,188-193,202-206
+plugins/utils/earthquake/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 21-26,41-46,61-66,71-76,81-86,93-98,106-111,118-123,130-135,142-147,154-159,167-172,179-184,192-197,204-209,217-222,230-235
+basic/cli/src/plugin-management/use-cases.ts
+  s_079f1dc5e6308d::t_80f43cee4333e6 1-2,43,69-122
+  s_079f1dc5e6308d::t_c38b83672971d2 123
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  s_079f1dc5e6308d::t_9ec42ab9dbe6d5 16-27
+docs/reference/api.md
+  s_079f1dc5e6308d::t_a9e72c091bfe11 17
+plugins/utils/group-suite/commands/teach-regex/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+  s_079f1dc5e6308d::t_167040c9769c04 10-11
+plugins/games/roulette/src/models.ts
+  s_079f1dc5e6308d::t_ba3d3039a7e1cd 46
+  s_079f1dc5e6308d::t_d38d9615e011ef 68
+  s_079f1dc5e6308d::t_563d7f759e0868 9,50
+plugins/games/roulette/src/engine.ts
+  s_079f1dc5e6308d::t_9e3d88df7b0024 1,57-58,61-62,83,85,88,98,100,103,118,120,122,140,144,156,158,163,168,214-215,230-245
+packages/toolkit/scaffold-wizard/README.md
+  s_079f1dc5e6308d::t_386a30a59acbb9 78-83
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/remove_reaction/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_974a4116a14111 31
+plugins/utils/60s/src/handlers/duanzi.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,5-7
+plugins/utils/reminder/src/service.ts
+  s_079f1dc5e6308d::t_3e0dfae32c9993 14-19,26,84,109,115,128,131,134-135,139,149,151,170-171,178,180,182,187
+  s_079f1dc5e6308d::t_295fc492053e4c 1-2,21,24,40,44,50,53-56,58,60,64-65,130,146-148,150,169
+  s_079f1dc5e6308d::t_8db5f594a9d4e9 68,74,76,80,83,154,160
+plugins/games/rps/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 22-25
+plugins/utils/60s/skills/60s-life/tools/weather/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/games/text-adventure/src/story-catalog.ts
+  s_079f1dc5e6308d::t_16936aa44564a9 1,58,60,64,68,72,76,105-106,109-110,112-163
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/announce/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_69686bfab9103d 16
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/add_reaction/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_0af6216a88e5c2 28
+plugins/utils/music/commands/cookie/delete/[source]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9,11
+  s_079f1dc5e6308d::t_28044c0dc0a105 1,13,18,21-22,26
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_079f1dc5e6308d::t_d4f3a37cd4d980 65-66
+  s_079f1dc5e6308d::t_b8e57bc358ba20 2,115,148,150,179
+  s_079f1dc5e6308d::t_35737af505214b 10-11,167
+plugins/adapters/qq/src/i18n.ts
+  s_079f1dc5e6308d::t_385eb6fb47ef1e 4
+  s_079f1dc5e6308d::t_e2db328031187b 5-71
+  s_079f1dc5e6308d::t_491cbcea7ccdd2 1-3,72-73
+plugins/games/text-adventure/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 40
+plugins/games/word-riddle/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 39
+plugins/utils/calendar/src/credential-store.ts
+  s_079f1dc5e6308d::t_a90233cbe92f81 1,17-18
+plugins/adapters/icqq/tests/group-moderation.test.ts
+  s_079f1dc5e6308d::t_a872c7a68c55ce 27
+plugins/utils/short-url/commands/shorten/[url]/index.ts
+  s_079f1dc5e6308d::t_90a81e7fad0753 2,8,10,12-13,15
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+basic/cli/tests/setup-save.test.ts
+  s_079f1dc5e6308d::t_386a30a59acbb9 106-107,109-112,115-127
+  s_079f1dc5e6308d::t_43bc231f50b7bb 108,113-114
+plugins/utils/60s/src/handlers/zhihu-hot.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-8
+plugins/utils/group-suite/commands/keyword-remove/[keyword]/index.ts
+  s_079f1dc5e6308d::t_58fbc1d878ee77 1,13,16,18
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+plugins/utils/music/tests/music-runtime.test.ts
+  s_079f1dc5e6308d::t_f217bded39ba16 37-42,52,61,64,197,200,232,259-262,265-266,269,272-274,280-281,310,328
+  s_079f1dc5e6308d::t_e0f7fa1a541723 10-11,49-51,53-60,62-63,65-78
+packages/toolkit/create-zhin/src/workspace.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,53,84,374,389-392
+  s_079f1dc5e6308d::t_43bc231f50b7bb 26
+  s_079f1dc5e6308d::t_335a3c43a87261 56,59,61,193-194,211,265,370,394,396,398,400,491,495,499,505,513,522,526,531
+plugins/utils/60s/commands/kfc/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+plugins/adapters/telegram/agents/telegram/skills/telegram-messages/tools/send_poll/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_13d964bc2fab56 22,25,31
+plugins/adapters/napcat/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 33-38,49-54,69-74,85-90,140-144,150-155
+basic/cli/tests/plugin-runtime/console/plugin-task-routes.test.ts
+  s_079f1dc5e6308d::t_3413ce18985240 69-86
+  s_079f1dc5e6308d::t_11fd5760f8ee66 195-204
+plugins/utils/nettools/src/target-guard.ts
+  s_079f1dc5e6308d::t_7c75a2b037f51b 77
+  s_079f1dc5e6308d::t_dc1597bd28b606 1,43,62,69,81-82
+plugins/utils/60s/commands/weibo/[[limit]]/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+packages/toolkit/scaffold-wizard/tests/localized-prompts.test.ts
+  s_079f1dc5e6308d::t_386a30a59acbb9 29,36
+  s_079f1dc5e6308d::t_73cf1a46c2334c 55
+  s_079f1dc5e6308d::t_a449d752d7c3f6 1-28,30-35,37-54,56-57
+plugins/utils/reminder/src/tool-actor.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1-2,13,23,36-44,61-62
+packages/toolkit/scaffold-wizard/src/zhin-stack-deps.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,191,201,213,243,252
+plugins/utils/group-suite/commands/mystats/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 9-10
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+basic/schema/src/schema.ts
+  s_079f1dc5e6308d::t_72012c598d648d 3,83-87,248
+packages/im/command/src/permission-explanation.ts
+  s_079f1dc5e6308d::t_c1d267d8961522 45
+  s_079f1dc5e6308d::t_2f5a18f832fe1d 5-6,25,27,42-44,48,51-54,56-57,59
+plugins/utils/calendar/commands/calendar/auth/index.ts
+  s_079f1dc5e6308d::t_a90233cbe92f81 1,13,16,19,27-28
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8,10
+packages/im/runtime/src/topology-generation-preparer.ts
+  s_079f1dc5e6308d::t_b8e57bc358ba20 127
+  s_079f1dc5e6308d::t_ba5916fe468e0f 99,102,104-110,305,309,317-321,324,441-450
+  s_079f1dc5e6308d::t_130d0e84b610e2 451-452
+plugins/utils/60s/skills/60s-utility/tools/ip_query/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/calendar/skills/calendar-scheduling/tools/list_events/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1,24,32,41
+basic/cli/tests/plugin-runtime/console/permission-explanation-routes.test.ts
+  s_079f1dc5e6308d::t_11fd5760f8ee66 32,179-193
+  s_079f1dc5e6308d::t_20c8ea488ac3e7 194
+plugins/games/text-adventure/src/adv-command.ts
+  s_079f1dc5e6308d::t_0e6232357499e9 1,12-34,41,49,51,54,69,74,79,81,84
+  s_079f1dc5e6308d::t_811f2da2468bb4 2
+  s_079f1dc5e6308d::t_a8f163a7c7cbf9 11
+plugins/utils/60s/commands/history/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+packages/im/runtime/tests/root-runtime.test.ts
+  s_079f1dc5e6308d::t_dbca464d00818e 5,11,21-51
+packages/im/agent/src/plugin-runtime/capability-tools.ts
+  s_079f1dc5e6308d::t_4a617afe313088 11,56
+plugins/adapters/github/README.md
+  s_079f1dc5e6308d::t_711c4915824fc5 112-115
+plugins/utils/earthquake/commands/地震/退订/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 10
+  s_079f1dc5e6308d::t_859904ed80d1b2 8-9
+  s_079f1dc5e6308d::t_bfa1246c9cd65f 15
+  s_079f1dc5e6308d::t_05b7407179ebe8 11
+  s_079f1dc5e6308d::t_267e178e974a9a 14
+  s_079f1dc5e6308d::t_1a5580a319cfb1 1,17
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk/tools/send_work_notice/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_1227b6900d56d5 16
+plugins/games/dice-duel/src/game-flow.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 27,46,58
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_33ffc9e4879f98 30,32,47,59-60,63,75,104-113
+plugins/utils/lottery/src/lottery-tool-handlers.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1-2,30,32,36,38,48,50,55,71,73,78
+plugins/utils/group-suite/src/keywords.ts
+  s_079f1dc5e6308d::t_58fbc1d878ee77 1,15,31,39,48,64-65,67,71
+plugins/adapters/slack/agents/slack/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-52
+plugins/games/dice-duel/src/models.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 33,53
+  s_079f1dc5e6308d::t_563d7f759e0868 9,37
+plugins/adapters/icqq/src/icqq-login-assist.ts
+  s_079f1dc5e6308d::t_cdb8aef8832308 1-2,32,37,88,93,98,103,109,114
+packages/im/agent/src/schedule-domain/execution-domain.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 3,40,121
+plugins/utils/60s/commands/ip/[ip]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+packages/im/core/src/built/interaction-messages.ts
+  s_079f1dc5e6308d::t_1a1a4a3b585f32 29
+  s_079f1dc5e6308d::t_3f48da3897aa71 1-28,30
+packages/im/core/tests/public-events.test-d.ts
+  s_079f1dc5e6308d::t_dc28e107ed7a7c 2,45-59
+packages/toolkit/scaffold-wizard/src/database.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,21,23,26,32,37,39,49,52,55,58,61,67,69,71,77,82,85,92,94-96,110,115,121,124,131,137,142,145,162,167,173,176,183,189,194,197,214,219,222,224,232,235,249,254,260,263,270,275,278-279
+packages/toolkit/scaffold-wizard/src/upgrade-l4.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 38,46-47,94,96
+  s_079f1dc5e6308d::t_0d6deafe37b4a1 1,90
+plugins/utils/music/tests/session-boundaries.test.ts
+  s_079f1dc5e6308d::t_f74c4751c72cd7 95,105,124
+  s_079f1dc5e6308d::t_ddebc5ca6bbe91 1-94,96-104,106-123,125-126
+README.md
+  s_079f1dc5e6308d::t_dcffec27bbf74d 213
+plugins/adapters/telegram/agents/telegram/skills/telegram-group-permissions/tools/set_permissions/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_b15ed4dc00e59f 31
+plugins/utils/code-runner/commands/run/[language]/index.ts
+  s_079f1dc5e6308d::t_925e8dfc34f31d 8,14-15
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 5,11,13
+packages/im/tool/tests/tool.test.ts
+  s_079f1dc5e6308d::t_12bdedf719e144 7,37-53
+packages/toolkit/scaffold-wizard/src/apply.ts
+  s_079f1dc5e6308d::t_73cf1a46c2334c 221
+  s_079f1dc5e6308d::t_72012c598d648d 299-302
+  s_079f1dc5e6308d::t_861c07a0119a8e 5,222-225
+  s_079f1dc5e6308d::t_737ce7432341f2 1,32,36,77,101,105,119,122-124,227,297,320
+packages/im/agent/src/context/turn-envelope.ts
+  s_079f1dc5e6308d::t_f1d92d2d97d6c1 66,68
+  s_079f1dc5e6308d::t_ebf78538e85ed2 4,76-81
+plugins/games/guess-number/tests/session.test.ts
+  s_079f1dc5e6308d::t_c52eb96007ec73 5,52-68
+  s_079f1dc5e6308d::t_a267cb55f4f06a 69-70
+plugins/adapters/napcat/agents/napcat/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-16
+packages/im/command/src/messages.ts
+  s_079f1dc5e6308d::t_a2624841d211f6 1-9
+  s_079f1dc5e6308d::t_87ee6476f5fd74 10-62
+plugins/utils/reminder/commands/remind/list/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 7
+  s_079f1dc5e6308d::t_d2df04434917b3 1,8,11-12
+packages/im/zhin/README.md
+  s_079f1dc5e6308d::t_dcffec27bbf74d 193-196
+.changeset/localization-official-plugins.md
+  s_079f1dc5e6308d::t_42f4cea3f55090 1-34
+packages/im/runtime/src/host-config-schema.json
+  s_079f1dc5e6308d::t_966bde41f0262d 4185-4192,4194-4196,4198-4203
+  s_079f1dc5e6308d::t_dbca464d00818e 4193,4197
+plugins/games/blackjack/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 41
+plugins/utils/lottery/tests/lottery-runtime.test.ts
+  s_079f1dc5e6308d::t_3b7384a824a131 22-23
+plugins/utils/group-suite/src/i18n.ts
+  s_079f1dc5e6308d::t_58fbc1d878ee77 267-439,443,447,451,455,459,463,467,471,475
+  s_079f1dc5e6308d::t_167040c9769c04 1-266,479-480
+  s_079f1dc5e6308d::t_496b75a54e7ec0 440-442,444-446,448-450,452-454,456-458,460-462,464-466,468-470,472-474,476-478
+plugins/utils/group-suite/src/analysis-card.ts
+  s_079f1dc5e6308d::t_58fbc1d878ee77 1,32-33,36,46,58,71,87,92,97,102,107,116
+plugins/utils/calendar/tests/oauth-token.test.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 193
+plugins/utils/music/commands/cookie/get/[source]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9,11
+  s_079f1dc5e6308d::t_28044c0dc0a105 1,13,18,21-22,25,27,32
+packages/im/command/README.md
+  s_079f1dc5e6308d::t_49ba944887315a 45,83-85
+  s_079f1dc5e6308d::t_83846c4edb7ef3 46
+  s_079f1dc5e6308d::t_811f2da2468bb4 177-192
+plugins/utils/reminder/commands/remind/every/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8-9
+  s_079f1dc5e6308d::t_d2df04434917b3 1,10,13-14
+plugins/utils/calendar/src/chat-auth.ts
+  s_079f1dc5e6308d::t_a90233cbe92f81 1-2,41,119,129,141-142,144,146,150,154,164,177,180-181,193,197,199,206,208,216,241,243,249,252,254,258-259,261,267-268,270,274,280,287,290-291,293,298,301,304,306,333,335,337
+plugins/utils/repeater/src/i18n.ts
+  s_079f1dc5e6308d::t_925e8dfc34f31d 1-8
+plugins/adapters/dingtalk/agents/dingtalk/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-32
+plugins/games/roulette/src/roulette-actions.ts
+  s_079f1dc5e6308d::t_fb4e49708b3b21 1-2,54-76
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 1,57,119,232
+packages/im/command/src/index.ts
+  s_079f1dc5e6308d::t_2f5a18f832fe1d 31
+plugins/utils/group-suite/src/conversation-scope.ts
+  s_079f1dc5e6308d::t_167040c9769c04 6
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_079f1dc5e6308d::t_a449d752d7c3f6 257-258,260-276
+  s_079f1dc5e6308d::t_73cf1a46c2334c 259
+basic/cli/src/plugin-runtime/database-host-installer.ts
+  s_079f1dc5e6308d::t_db695bf3d1d54e 4,135,153,155-161,168-176,184,230-232
+  s_079f1dc5e6308d::t_13404704bb5779 154,162-163
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-interaction/tools/poke/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_f7100e2ab4f445 15
+plugins/utils/60s/commands/fuel/[province]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+plugins/utils/group-suite/commands/stats-rank/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 1,10-12,14
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+plugins/utils/reminder/src/natural-time.ts
+  s_079f1dc5e6308d::t_d2df04434917b3 1-2,35,37-38,73,75-76
+  s_079f1dc5e6308d::t_546355b822cd45 6,25-26,30,39,41,47,49,52-53,56,60-61,68,70,74,90,93,97,103,118,123,136-137,143,147,149,152,155,163,166,184
+plugins/utils/lottery/src/games/kl8-groups.ts
+  s_079f1dc5e6308d::t_e46e714d95a5f5 1-2,75,92
+tsconfig.typedoc.json
+  s_079f1dc5e6308d::t_7c16cb13a5c946 173
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_ebf78538e85ed2 171-173,203-204,238-239,290-292,308-310
+  s_079f1dc5e6308d::t_2848752bda3ab6 2,174-175,336-340,342
+  s_079f1dc5e6308d::t_859904ed80d1b2 341
+  s_079f1dc5e6308d::t_d4f3a37cd4d980 4,113-114,169-170,202,237,248
+  s_079f1dc5e6308d::t_b9bde074fc2bb6 343-344
+plugins/adapters/telegram/agents/telegram/skills/telegram-messages/tools/react/index.ts
+  s_079f1dc5e6308d::t_e2db328031187b 17
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+plugins/adapters/icqq/tests/icqq-login-assist.test.ts
+  s_079f1dc5e6308d::t_a872c7a68c55ce 19,29,58,60,77
+plugins/adapters/dingtalk/src/i18n.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 4-6
+  s_079f1dc5e6308d::t_350dea3d6990f5 1-3,7
+plugins/utils/rss/commands/rss-preview/[url]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_a650859b2f9be6 1,8,10-11,15,17
+plugins/adapters/dingtalk/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 15-20,31-36,51-56,67-72,139-144,152-156,162-167
+plugins/games/dungeon-expedition/src/dungeon-command.ts
+  s_079f1dc5e6308d::t_811f2da2468bb4 2
+  s_079f1dc5e6308d::t_86ff771f15b5b2 1,11-28,72,77
+plugins/utils/group-suite/commands/forget/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 10-11
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+packages/im/agent/tests/assistant/job-store.test.ts
+  s_079f1dc5e6308d::t_0ced2319dccd41 43-55
+plugins/games/text-adventure/commands/adv/[[action]]/index.ts
+  s_079f1dc5e6308d::t_0e6232357499e9 3,11
+  s_079f1dc5e6308d::t_811f2da2468bb4 9
+  s_079f1dc5e6308d::t_158ab71632c88e 13
+plugins/utils/earthquake/commands/地震/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8,10,13-15
+  s_079f1dc5e6308d::t_859904ed80d1b2 6-7
+  s_079f1dc5e6308d::t_8e71d5dee972c4 18,25
+plugins/games/text-adventure/src/story.ts
+  s_079f1dc5e6308d::t_16936aa44564a9 1,9,56,58-59,67-68,101,104
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_8c6d4b943367a5 22,24-25
+plugins/utils/reminder/src/admin-tasks.ts
+  s_079f1dc5e6308d::t_08de28cdec67d6 1,17,61-62,66,71,77,83,86,91,95,99-100,109,113-114,116-117,119,122,125,127-128,132,143,147,156,159,161,169,176-183,185,189,197,202,204,208,223,226,230-231,233,249,254
+  s_079f1dc5e6308d::t_385eb6fb47ef1e 36,49-58
+  s_079f1dc5e6308d::t_295fc492053e4c 2-3,15,75,158
+  s_079f1dc5e6308d::t_44aa9dd54f6b5d 28-35,37,42-44
+plugins/games/idiom-chain/src/idiom-provider.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_a59f308c5bfe1f 78-79,133,137,140,143,151,157,161,164,167-180
+plugins/utils/bilibili/commands/bili/unsub/index.ts
+  s_079f1dc5e6308d::t_30cb52141e1ec7 1,12,15,17,19-20,24,33
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 10-11
+plugins/utils/lottery/skills/lottery/tools/save-prediction/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 10
+plugins/adapters/sandbox/pages/index/RichTextEditor.tsx
+  s_079f1dc5e6308d::t_98d878f4b377dd 1,10,32,137,149
+packages/im/plugin-runtime/src/database-host.ts
+  s_079f1dc5e6308d::t_db695bf3d1d54e 59-64,112,191-194
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/create_invite/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_97ddbb3a543359 18
+plugins/games/roulette/src/game-flow.ts
+  s_079f1dc5e6308d::t_576c3eb2e1c91f 309
+  s_079f1dc5e6308d::t_ba3d3039a7e1cd 46,305
+  s_079f1dc5e6308d::t_811f2da2468bb4 1-2
+  s_079f1dc5e6308d::t_4edfe8749faca5 7,54-56,104,106-107,109,112,122-124,134,136,140,142,154-156,158-159,161,164,166,184,199,209,217,221,223,233-234,240,242,245,248,251,254-257,303-304,306-308,310-323
+basic/cli/src/plugin-runtime/console/string-literal-options.ts
+  s_079f1dc5e6308d::t_12bdedf719e144 3,6,11,22-25
+plugins/adapters/onebot11/agents/onebot11/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-12
+plugins/utils/bilibili/skills/bilibili/tools/bili_list_subscriptions/index.ts
+  s_079f1dc5e6308d::t_d4939d82abf97e 1,15,17,22,30
+plugins/utils/short-url/src/short-url-lib.ts
+  s_079f1dc5e6308d::t_90a81e7fad0753 1-3,13,16,18,22,28
+basic/cli/src/plugin-runtime/console/permission-explanation-routes.ts
+  s_079f1dc5e6308d::t_f1d92d2d97d6c1 5
+  s_079f1dc5e6308d::t_b83c139f000752 29-30
+  s_079f1dc5e6308d::t_8d445a27051431 9-23,37-38,41-42,49,54,58-60,63-64,68-70,79,84,89,93,97-98,102,111,119,121,169,171,174-182
+plugins/utils/rss/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 9-14
+plugins/utils/60s/src/client.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,24,36,41,45,56
+plugins/utils/60s/commands/bing/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+plugins/utils/60s/commands/toutiao/[[limit]]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+plugins/games/idiom-chain/src/chain-command.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_28cfec8dffb986 2,8-27,39,47,58,63
+  s_079f1dc5e6308d::t_d38d9615e011ef 43,45,60
+plugins/utils/60s/commands/60s/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7
+plugins/utils/60s/skills/60s-news/tools/weibo_hot/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/games/text-adventure/src/achievements.ts
+  s_079f1dc5e6308d::t_16936aa44564a9 1,10-11,29-43,87-89
+plugins/adapters/milky/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 30-35,46-51,66-71,82-87,128-132,138-143
+basic/cli/src/commands/setup.ts
+  s_079f1dc5e6308d::t_386a30a59acbb9 71,73-78
+  s_079f1dc5e6308d::t_9d9ee86a888516 30,72,129
+  s_079f1dc5e6308d::t_73cf1a46c2334c 149
+  s_079f1dc5e6308d::t_737ce7432341f2 1,34,36,54,60,66,88,90,104,109,111,133,137,141,145,153,159,163-164,172-173,175,180,183,195-196,201,203-204,209,215-216,218
+  s_079f1dc5e6308d::t_dab51c36205802 8,40-42,80,121-126
+packages/toolkit/scaffold-wizard/src/types.ts
+  s_079f1dc5e6308d::t_861c07a0119a8e 1,10
+packages/im/agent/src/assistant/job-engine.ts
+  s_079f1dc5e6308d::t_4a35d6aa3b8e0c 4,17,96
+packages/im/runtime/tests/host-config-schema-coverage.test.ts
+  s_079f1dc5e6308d::t_dbca464d00818e 24-33
+basic/cli/tests/plugin-runtime/locale-child-feature.test.ts
+  s_079f1dc5e6308d::t_b8e57bc358ba20 1-30
+plugins/utils/lottery/commands/lottery-train/[[game]]/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 15-16,18,32
+plugins/utils/calendar/commands/calendar/status/index.ts
+  s_079f1dc5e6308d::t_a90233cbe92f81 1,8-9
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_d4f3a37cd4d980 31
+  s_079f1dc5e6308d::t_ebf78538e85ed2 384-386
+  s_079f1dc5e6308d::t_1da8e7a10e3577 336,345
+packages/toolkit/scaffold-wizard/src/project-config-plan.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,111,119,133,151,299,314,354-355,365,370,414,422
+plugins/games/dice-duel/commands/dice/[[action]]/index.ts
+  s_079f1dc5e6308d::t_158ab71632c88e 13
+  s_079f1dc5e6308d::t_41f1ca56abfe58 3,11
+  s_079f1dc5e6308d::t_811f2da2468bb4 9
+packages/im/runtime/src/config-composer.ts
+  s_079f1dc5e6308d::t_35737af505214b 22
+  s_079f1dc5e6308d::t_1926687b581950 370
+plugins/utils/lottery/commands/lottery-stats/[game]/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,15-16,18,20,24-27,30,37
+plugins/utils/lottery/src/i18n.ts
+  s_079f1dc5e6308d::t_3b7384a824a131 4-12
+  s_079f1dc5e6308d::t_e46e714d95a5f5 1-3,22-222
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 13-21
+packages/game-kit/src/command-message.ts
+  s_079f1dc5e6308d::t_c52eb96007ec73 94-97
+  s_079f1dc5e6308d::t_28334f210a44bc 15,90-93,115,125
+  s_079f1dc5e6308d::t_21cf2cf5cd6370 58,116-117
+  s_079f1dc5e6308d::t_6d36880abf850d 8,14,57,79
+plugins/utils/lottery/commands/lottery-history/[game]/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,9-10,12,14,19
+plugins/games/tic-tac-toe/src/player-label.ts
+  s_079f1dc5e6308d::t_9bef6a4e8cb74a 1,13-14,23,25,29,40,45,51-52
+plugins/adapters/qq/tests/qq-endpoint-commands.test.ts
+  s_079f1dc5e6308d::t_cdb8aef8832308 94
+  s_079f1dc5e6308d::t_af6b477702d371 1-3,313,315,319,337-365
+plugins/utils/rss/src/admin-tasks.ts
+  s_079f1dc5e6308d::t_08de28cdec67d6 1,27,80-81,85-86,92,96,103,105-106,111-112,117-118,127,131-132,134-135,137,139-140,142-143,147-148,173,189-190,207,213,216,218,225,228,234,237-244,246,251-253,261,264,271,275,283-286,290,297,307,328,352
+  s_079f1dc5e6308d::t_a650859b2f9be6 3,12,24,95,165,195-196,386
+  s_079f1dc5e6308d::t_2f38917a78b710 2
+  s_079f1dc5e6308d::t_355c7de27c2da5 79
+  s_079f1dc5e6308d::t_026c15e2a0128b 387
+  s_5e8cee79946dc9::t_35cfe8348878ad 39-52,56-59,73,389-390
+plugins/utils/bilibili/src/i18n.ts
+  s_079f1dc5e6308d::t_30cb52141e1ec7 1-53
+docs/adapters/icqq.md
+  s_079f1dc5e6308d::t_5af012c12367d5 11,207-212
+plugins/adapters/qq/agents/qq/skills/qq/tools/add_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_7a9b7801e46a5d 21
+plugins/utils/group-suite/commands/stats-card/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 1,20,22
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 13
+packages/im/plugin-runtime/src/index.ts
+  s_079f1dc5e6308d::t_35737af505214b 23
+plugins/utils/reminder/src/caller.ts
+  s_079f1dc5e6308d::t_295fc492053e4c 1-2,7-9
+plugins/utils/rss/src/poll.ts
+  s_079f1dc5e6308d::t_a650859b2f9be6 1-2,14-15,23,50,71,87,89,93,107,112,114,116,120,122-123,125-126,156,158,161-162
+plugins/utils/qrcode/src/i18n.ts
+  s_079f1dc5e6308d::t_90a81e7fad0753 1-20
+packages/game-kit/src/game-index.ts
+  s_079f1dc5e6308d::t_435ccc673001e0 1,5-7,15,34,70-75,78,80-81,84,86-90,92,108,111,113,115
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_anonymous/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_47c5cf0644c67b 18,20
+plugins/adapters/kook/agents/kook/skills/kook/tools/create_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_a6e3616bca6b36 21
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/essence/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_934d0c76302a58 21
+plugins/games/tic-tac-toe/commands/ttt/[[action]]/index.ts
+  s_079f1dc5e6308d::t_3e0dfae32c9993 3,11
+  s_079f1dc5e6308d::t_158ab71632c88e 9,13
+packages/game-kit/tests/grid-keyboard.test.ts
+  s_079f1dc5e6308d::t_2a654353db0ac9 85-95
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  s_079f1dc5e6308d::t_d4939d82abf97e 144
+  s_079f1dc5e6308d::t_bcf16c254ec411 1,8,123-126
+  s_079f1dc5e6308d::t_6b16b5beb8430c 127-136
+plugins/utils/earthquake/tests/plugin.test.ts
+  s_079f1dc5e6308d::t_859904ed80d1b2 97-113
+  s_079f1dc5e6308d::t_30c99a0fd1814b 57
+packages/toolkit/scaffold-wizard/src/optional-peers.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,88,110-111,122-123,140-141
+plugins/games/word-riddle/src/models.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 9,40
+  s_079f1dc5e6308d::t_d38d9615e011ef 36,59
+plugins/utils/nettools/tests/localization.test.ts
+  s_079f1dc5e6308d::t_979c05e85b205b 1-6,8-59,61-64,66-67
+  s_079f1dc5e6308d::t_811f2da2468bb4 7,60,65
+plugins/adapters/qq/agents/qq/skills/qq/tools/create_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_725de18caae805 20
+plugins/utils/reminder/src/storage.ts
+  s_079f1dc5e6308d::t_295fc492053e4c 10
+  s_079f1dc5e6308d::t_f893650a11096b 25
+  s_079f1dc5e6308d::t_af4d394c0a4e13 14,33,35,41,43
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/forum_post/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_59fbd38789b87b 23,33
+plugins/games/guess-number/tests/guess-number-runtime.test.ts
+  s_079f1dc5e6308d::t_c52eb96007ec73 74-84
+plugins/games/rps/src/engine.ts
+  s_079f1dc5e6308d::t_657ae79c7502e5 1,48-50
+packages/im/agent/src/turn/turn-ingress.ts
+  s_079f1dc5e6308d::t_ebf78538e85ed2 86-89
+plugins/utils/short-url/src/i18n.ts
+  s_079f1dc5e6308d::t_90a81e7fad0753 1-36
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 138
+plugins/utils/music/src/login/netease.ts
+  s_079f1dc5e6308d::t_28044c0dc0a105 1-2,9,21,33,48,50,52,57,62,67
+plugins/utils/lottery/commands/lottery/[[game]]/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 13-14,16,20,24
+plugins/utils/lottery/tests/localization.test.ts
+  s_079f1dc5e6308d::t_eecb41497f0698 1-99
+plugins/adapters/discord/agents/discord/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-48
+plugins/games/blackjack/src/bj-command.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_41f1ca56abfe58 5,7-10,18,26,29
+  s_079f1dc5e6308d::t_968c701ce04b27 6
+packages/im/adapter/tests/endpoint-commands.test.ts
+  s_079f1dc5e6308d::t_1323fe10bed062 20,49,240-251
+  s_079f1dc5e6308d::t_83846c4edb7ef3 184
+  s_079f1dc5e6308d::t_43409d8c126550 252,260-261,348-378
+plugins/utils/group-suite/src/analysis.ts
+  s_079f1dc5e6308d::t_58fbc1d878ee77 1,159-160,164-165,167,169-172,174,188,191,198,205
+plugins/utils/repeater/src/engine.ts
+  s_079f1dc5e6308d::t_925e8dfc34f31d 1-2,110-112
+plugins/adapters/qq/tests/qq-bot-kind-prompt.test.ts
+  s_079f1dc5e6308d::t_cdb8aef8832308 28,30
+  s_079f1dc5e6308d::t_e7d053e9d4434e 38-54
+plugins/adapters/qq/src/qq-runtime-state.ts
+  s_079f1dc5e6308d::t_e2db328031187b 17-18,32-33
+  s_079f1dc5e6308d::t_a872c7a68c55ce 19,34
+plugins/utils/lottery/commands/lottery-today/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,8-10,13-16
+plugins/utils/rss/plugin.ts
+  s_079f1dc5e6308d::t_1c35acd6f77552 80
+  s_079f1dc5e6308d::t_f893650a11096b 21,33
+  s_079f1dc5e6308d::t_a650859b2f9be6 1,32,95
+plugins/games/dungeon-expedition/src/view.ts
+  s_079f1dc5e6308d::t_811f2da2468bb4 1
+  s_079f1dc5e6308d::t_753f1caa25e78b 24,28,35-38,43-46,50-52,61,64-65,68-69,71,77-78,81,86,88-89,93,108-114,116-148
+plugins/adapters/icqq/agents/icqq/skills/icqq-directory/tools/user_info/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_a7ac75036df4d8 13
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/unpin_message/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_7d82e78a3aff71 19
+plugins/games/text-adventure/src/game-flow.ts
+  s_079f1dc5e6308d::t_0e6232357499e9 1,3-4,28,41-43,45,66,69,72,77,80,86,102,106,149,161,166,169-177,179,182-202
+  s_079f1dc5e6308d::t_811f2da2468bb4 2
+plugins/utils/reminder/src/timing.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1-2,5-6,11,13
+plugins/utils/60s/src/handlers/kfc.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,5-7
+plugins/utils/lottery/skills/lottery/tools/compute-recommend/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 10
+plugins/adapters/slack/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 25-30,41-46,61-66,77-82,131-136,151-156,163-167,173-178
+plugins/games/text-adventure/src/story-items.ts
+  s_079f1dc5e6308d::t_16936aa44564a9 1,23-42
+plugins/utils/group-suite/commands/stats-week/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 1,10-12,14
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+plugins/adapters/wecom/agents/wecom/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-12
+packages/game-kit/README.md
+  s_079f1dc5e6308d::t_d38d9615e011ef 45
+  s_079f1dc5e6308d::t_c52eb96007ec73 28,46-47
+plugins/adapters/discord/agents/discord/skills/discord/tools/react/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_82d0c28685aad6 19,23
+plugins/utils/earthquake/commands/地震/订阅/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 11,13
+  s_079f1dc5e6308d::t_859904ed80d1b2 9-10
+  s_079f1dc5e6308d::t_bfa1246c9cd65f 19
+  s_079f1dc5e6308d::t_e22e216a217618 18
+  s_079f1dc5e6308d::t_a9f73cccb099ad 20
+  s_079f1dc5e6308d::t_5d84162262a28d 1,15,26,36,38,41,43-44,47
+plugins/adapters/lark/agents/lark/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-57
+plugins/games/rps/src/game-flow.ts
+  s_079f1dc5e6308d::t_33ffc9e4879f98 36,38,52,54,56,68,101,106-115
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_d38d9615e011ef 33,51,100
+plugins/adapters/onebot12/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 29-34,45-50,65-70,81-86,129-133,139-144
+packages/im/agent/src/assistant/job-storage.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 3,11,35,73
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/add_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_2eac1d84798aa9 26
+plugins/utils/qrcode/commands/gen/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6-8
+plugins/utils/qrcode/commands/scan/[url]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 7
+  s_079f1dc5e6308d::t_90a81e7fad0753 2,9,15,22,24,27
+plugins/games/idiom-chain/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 45
+plugins/adapters/qq/src/qq-bot-kind-prompt.ts
+  s_079f1dc5e6308d::t_e2db328031187b 1-4,7,9-15,18-19,22-25,29-32
+plugins/utils/60s/skills/60s-market/tools/fuel_price/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/bilibili/commands/bili/sub/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 11,13-14
+  s_079f1dc5e6308d::t_30cb52141e1ec7 1,16,19,22,24,27-28,33,35,39,46,56,62-64
+packages/toolkit/scaffold-wizard/src/index.ts
+  s_079f1dc5e6308d::t_9d9ee86a888516 3
+  s_079f1dc5e6308d::t_764b2d02bcd8dd 1
+plugins/games/rps/src/view.ts
+  s_079f1dc5e6308d::t_657ae79c7502e5 1,5,14,16,21,24,26-27,33-35,37,39,43,47,50,60,65-81
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/archive_channel/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_d73222469a47cf 21
+basic/cli/src/plugin-runtime/console/console-schema.ts
+  s_079f1dc5e6308d::t_861c07a0119a8e 102-107
+  s_079f1dc5e6308d::t_35737af505214b 94,97
+plugins/utils/ledger/commands/ledger-today/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+  s_079f1dc5e6308d::t_a2aa4610715870 1-2,10,12
+plugins/utils/music/commands/cookie/set/[source]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9,11
+  s_079f1dc5e6308d::t_28044c0dc0a105 1,13,18,21-22,26
+plugins/utils/group-suite/commands/mypoints/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 10-11
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+plugins/utils/nettools/commands/whois/[domain]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6-7
+  s_079f1dc5e6308d::t_9ae9ecd9fa8d08 8,12
+packages/game-kit/src/messages.ts
+  s_079f1dc5e6308d::t_6d36880abf850d 1-12
+plugins/utils/60s/src/handlers/translate.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6,9,21,23-24,26
+plugins/utils/bilibili/src/format.ts
+  s_079f1dc5e6308d::t_d4939d82abf97e 1,3,5-7,10,13,16-19,24-25,28-29,31-32,34,36
+  s_079f1dc5e6308d::t_0e6232357499e9 30
+packages/im/command/src/provider.ts
+  s_079f1dc5e6308d::t_4fe22d16e6bdba 314
+plugins/utils/lottery/src/recommend/game-pick.ts
+  s_079f1dc5e6308d::t_e46e714d95a5f5 1-2,35,48,50,63,67,75,93,98,107,121,125,133,147,151,159,170,174,182,192,196,204,216,223,230,232,242,244-245,256
+  s_079f1dc5e6308d::t_3b7384a824a131 66,88,97,124,150,173,195,227,236
+plugins/adapters/kook/agents/kook/skills/kook/tools/delete_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_cf289da0433d56 19
+plugins/utils/reminder/src/duration.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1-2,6,11,17
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  s_079f1dc5e6308d::t_69213b1bbf7132 18,23-24,80-114
+  s_079f1dc5e6308d::t_f89e67b309d22f 115,170
+plugins/adapters/wecom/agents/wecom/skills/wecom/tools/send_text/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_437e49dc30724d 15
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/member_count/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_6eeca5ff251086 16
+plugins/utils/rss/tests/rss-runtime.test.ts
+  s_079f1dc5e6308d::t_1c35acd6f77552 1,29-30,126
+plugins/utils/lottery/commands/lottery-backtest/[[game]]/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,16-17,19,32-35
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-state/tools/group_files/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_5e4398c34201cf 15
+plugins/utils/60s/commands/duanzi/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7
+plugins/utils/calendar/src/tool-errors.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1-2,10-11,17
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  s_079f1dc5e6308d::t_1880405dad4c7d 157
+packages/im/command/tests/command.test.ts
+  s_079f1dc5e6308d::t_4c4116730cd1bd 1793,1795,1809
+plugins/utils/ledger/commands/ledger-add/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8,11
+  s_079f1dc5e6308d::t_2a69b938eff87e 1-2,13,15
+.changeset/localization-adapters.md
+  s_079f1dc5e6308d::t_42f4cea3f55090 1-24
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_mute/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_c3357a3ecbf779 17,19,21
+plugins/utils/rss/src/storage.ts
+  s_079f1dc5e6308d::t_f893650a11096b 13
+  s_079f1dc5e6308d::t_08de28cdec67d6 16,30,45
+  s_079f1dc5e6308d::t_d0fa66fc3d5b19 29,44
+plugins/adapters/qq/tests/qq-endpoint-command-defs.test.ts
+  s_079f1dc5e6308d::t_fecc8daacc3027 25
+  s_079f1dc5e6308d::t_27fb2aba834b14 22-24
+  s_079f1dc5e6308d::t_5efe0212860bd9 26-28
+  s_83064017245d8e::t_5289ac2eb332d7 5-6,21,29-35,37-38,68,72-84,92
+plugins/games/roulette/tests/roulette-runtime.test.ts
+  s_079f1dc5e6308d::t_ba3d3039a7e1cd 211
+  s_079f1dc5e6308d::t_aa7d25cd593ee7 1,449-464
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/remove_managers/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_cab58a4de67699 19
+plugins/utils/earthquake/commands/地震/订阅状态/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 11
+  s_079f1dc5e6308d::t_859904ed80d1b2 9-10
+  s_079f1dc5e6308d::t_34f8e90720486e 1,12,15,20-21,23-25,27,29,31,33,35
+plugins/utils/rss/src/feed.ts
+  s_079f1dc5e6308d::t_a650859b2f9be6 1-2,97-99,103,106
+plugins/utils/reminder/src/create-reminder.ts
+  s_079f1dc5e6308d::t_d2df04434917b3 1-2,21-27,31,35-36,42,51-52,62-65,75-76,81,92-94,97,101,103-105,110-111
+  s_079f1dc5e6308d::t_49bbcd91922fc6 79
+plugins/games/tic-tac-toe/src/models.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 9,69
+  s_079f1dc5e6308d::t_d38d9615e011ef 65,88
+packages/im/agent/src/assistant/schedule-job-service.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 20,36,47,174
+plugins/features/process-monitor/commands/process-status/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 5
+  s_079f1dc5e6308d::t_77dce52994c319 7
+packages/toolkit/scaffold-wizard/src/ai.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,216,218-220,226,239,241,259,262-263,270,272,288,296-297,300,307-308,312-313,330-331,337,343,349,360-361,367,369-371,378,384,424,427
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  s_079f1dc5e6308d::t_ea25447b36f532 85,88,113,115,338,421,674,677,889,987,1051-1053,1082,1084,1106,1137,1173-1174
+  s_079f1dc5e6308d::t_0d794d6af90654 687
+  s_079f1dc5e6308d::t_98d878f4b377dd 1,54-55,86-87,144,148,150-151,154,159,175-176,194,196-197,219,238,342,344,352,430,432,436,449,467,483,488,503,506,534,546,575,610,616-617,620,644,661,666,668,670,675-676,678,691,695,698,707-709,712,717,719,725,734,745-746,749,754-755,759,763,782,785,787,790-792,798-800,806-807,812,814,818,823,828-830,834,840-842,846,856,859,865,870,872-874,887,906,910,914,918,922,926-928,932,940,952,961-963,968,978,988,997,1011,1021,1026,1032,1034,1036-1037,1041-1043,1049,1054,1059,1074,1080,1083,1089,1093,1101,1112,1119,1136,1144,1148,1155-1159,1179-1184
+packages/im/command/tests/localization.test.ts
+  s_079f1dc5e6308d::t_979c05e85b205b 150-153
+  s_079f1dc5e6308d::t_2a654353db0ac9 66-70,105,110
+  s_079f1dc5e6308d::t_4c4116730cd1bd 1-65,71-104,106-109,111-144,165,173
+  s_079f1dc5e6308d::t_b80d83370b60b0 145-149,154-164,166-172
+plugins/utils/ledger/commands/ledger-delete/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8,11
+  s_079f1dc5e6308d::t_9b794d721df707 1-2,13,15
+plugins/utils/ledger/commands/ledger-stats/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9,12
+  s_079f1dc5e6308d::t_5b7e6150a4681d 1-2,14,16-18
+plugins/adapters/qq/src/qq-bind-flow.ts
+  s_079f1dc5e6308d::t_385eb6fb47ef1e 1-2,30,105
+docs/configuration/generated.md
+  s_079f1dc5e6308d::t_5af012c12367d5 538
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_079f1dc5e6308d::t_cdb8aef8832308 1,61
+plugins/adapters/wecom/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 19-24,35-40,55-60,71-76,115-119,125-130
+plugins/games/guess-number/commands/guess/[[action]]/index.ts
+  s_079f1dc5e6308d::t_158ab71632c88e 13
+  s_079f1dc5e6308d::t_811f2da2468bb4 9
+  s_079f1dc5e6308d::t_41f1ca56abfe58 3,11
+plugins/utils/answers/commands/答案之书/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 7,9
+  s_079f1dc5e6308d::t_fd1d33f8cbd1da 2,6,10,12,20
+plugins/games/word-riddle/src/engine.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_a59f308c5bfe1f 27-28,32-36
+basic/cli/src/plugin-runtime/agent/runtime-foundation.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 1
+  s_079f1dc5e6308d::t_0ced2319dccd41 156
+plugins/adapters/icqq/src/i18n.ts
+  s_079f1dc5e6308d::t_cdb8aef8832308 4-46
+  s_079f1dc5e6308d::t_cc5de053cc77ce 1-3,47-48
+plugins/utils/group-suite/src/teach-lib.ts
+  s_079f1dc5e6308d::t_167040c9769c04 1,12,46,49,51-52,113-114,119-120,128,130,142,161,178-179,189,195,201,205-206,215,217,224,233,278,283
+README.zh-CN.md
+  s_079f1dc5e6308d::t_dcffec27bbf74d 217
+plugins/utils/bilibili/tests/commands.test.ts
+  s_079f1dc5e6308d::t_0e6232357499e9 19-33
+plugins/adapters/sandbox/pages/index/agentTrace.ts
+  s_079f1dc5e6308d::t_98d878f4b377dd 1,225,255,275,289,294,302-303,317,326,335,340-343,358-359,367,372-374,376,378-381,383-384,389,391-392,397-398,401-402,409,413,417-425,427-429,431-434,439,449-450,455,468,481,496,529-533,547,549
+  s_079f1dc5e6308d::t_ea25447b36f532 382,385,394,403,430,483,498
+plugins/utils/rss/commands/rss-check/[[url]]/index.ts
+  s_079f1dc5e6308d::t_a650859b2f9be6 1,12,15,18,27,33,37
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 10
+plugins/utils/ledger/commands/ledger-list/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9,12
+  s_079f1dc5e6308d::t_1185c803ef41e9 1-2,14,16-18
+plugins/utils/reminder/src/admin-i18n.ts
+  s_079f1dc5e6308d::t_08de28cdec67d6 1-154
+plugins/utils/bilibili/skills/bilibili/tools/bili_live_status/index.ts
+  s_079f1dc5e6308d::t_d4939d82abf97e 1,24,27,29-30,34
+packages/game-kit/tests/game-index.test.ts
+  s_079f1dc5e6308d::t_2a654353db0ac9 63-64,66-67,71-80
+  s_079f1dc5e6308d::t_a204382044c14a 81-82
+plugins/utils/60s/src/handlers/gold-price.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-8,15,17,21
+packages/toolkit/scaffold-wizard/src/database-definitions.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,164,166,176,218,244,249,254,260,268,274,278,284,288,291,294,305,309,312,320,323,327,334,338
+  s_079f1dc5e6308d::t_8235bf8f17b2db 168
+plugins/games/guess-number/src/models.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 33,53
+  s_079f1dc5e6308d::t_563d7f759e0868 9,37
+plugins/games/guess-number/src/game-flow.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_33ffc9e4879f98 17,37,47,68,81,84,86,94,97,100-110
+  s_079f1dc5e6308d::t_d38d9615e011ef 13,32,80
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_790ab5891cd212 102,220-221,277,286,292,321,365,375,387,551,585,601-606
+  s_079f1dc5e6308d::t_03a0d20ad5ef57 8,13,22-23,83,142-143,275-276,278-285,287-291,311,320,327,337,339,341-342,344-345,350,369,379,385
+  s_079f1dc5e6308d::t_4fe22d16e6bdba 499,502,511,513,515-516,521,528,537,543-544,549-550,557,567,571-573,583,596,607-612
+  s_079f1dc5e6308d::t_71fd97776e450a 295-298,386
+  s_079f1dc5e6308d::t_0097f0ea45edfa 293-294,613
+plugins/utils/lottery/src/recommend/report.ts
+  s_079f1dc5e6308d::t_e46e714d95a5f5 1-3,13,37,53,55,61,66,72,76,88
+  s_079f1dc5e6308d::t_924c03cb8626ea 137,149,166,170,174,176
+plugins/adapters/qq/tests/qq-bind-flow.test.ts
+  s_079f1dc5e6308d::t_385eb6fb47ef1e 100,110,113
+plugins/utils/music/middlewares/music-selection/index.ts
+  s_079f1dc5e6308d::t_b0d960cf932be0 24
+  s_079f1dc5e6308d::t_28044c0dc0a105 1-2,32-33,35,47,53,57
+plugins/utils/60s/commands/moyu/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7
+plugins/games/dice-duel/src/dice-command.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 25
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_41f1ca56abfe58 6,8-11,23,27,37,41
+  s_079f1dc5e6308d::t_968c701ce04b27 2,7,43-46
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_079f1dc5e6308d::t_1a1a4a3b585f32 1-3,29-30,34,37,45,106,110,132,180-181,199,206,213,230,292,294,300,318,321-322
+plugins/games/guess-number/src/engine.ts
+  s_079f1dc5e6308d::t_a59f308c5bfe1f 21-23,25-29
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+examples/minimal-bot/tests/stable-path.test.ts
+  s_079f1dc5e6308d::t_b83c139f000752 276-277
+plugins/utils/60s/commands/gold/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+docs/en/reference/api.md
+  s_079f1dc5e6308d::t_a9e72c091bfe11 17
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-directory/tools/group_member_info/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_b4822dbe89f43f 21,23
+plugins/utils/lottery/src/types.ts
+  s_079f1dc5e6308d::t_e46e714d95a5f5 57,85
+plugins/utils/group-suite/src/stats-card.ts
+  s_079f1dc5e6308d::t_58fbc1d878ee77 1,24-25,29,35,42,47,53,63,68,80-81,86,91,96,107,112
+plugins/adapters/github/agents/github/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-72
+plugins/adapters/wechat-mp/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 40-45,56-61,76-81,92-97,153-157,163-168
+plugins/utils/ledger/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 11-15,25-29,38-42
+plugins/utils/60s/src/handlers/exchange-rate.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6,13,15,17-18
+packages/im/agent/tests/schedule-domain/execution-domain.test.ts
+  s_079f1dc5e6308d::t_0ced2319dccd41 44,54
+plugins/utils/calendar/src/token-manager.ts
+  s_079f1dc5e6308d::t_a90233cbe92f81 33-34,233,270
+packages/im/agent/src/assistant/types.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 48-49
+packages/game-kit/src/index.ts
+  s_079f1dc5e6308d::t_28334f210a44bc 30
+packages/im/runtime/src/primary-config.ts
+  s_079f1dc5e6308d::t_35737af505214b 1,48
+plugins/utils/music/src/music-lib.ts
+  s_079f1dc5e6308d::t_28044c0dc0a105 1-3,31,34,47-49,56
+plugins/games/hub/commands/排行/[[query]]/index.ts
+  s_079f1dc5e6308d::t_158ab71632c88e 28,49
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 26
+  s_079f1dc5e6308d::t_641173b1d4ba40 1,11,13,15,18,20,32,34,39,44-45,51,54-61
+  s_079f1dc5e6308d::t_bba4c14e289f86 24-25,62
+plugins/utils/calendar/skills/calendar-scheduling/tools/create_event/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1,29,42-43
+packages/im/runtime/src/subtree-generation-preparer.ts
+  s_079f1dc5e6308d::t_b8e57bc358ba20 81
+packages/im/permission/tests/explain.test.ts
+  s_079f1dc5e6308d::t_43409d8c126550 33-43
+basic/cli/src/plugin-runtime/start-command.ts
+  s_079f1dc5e6308d::t_d4f3a37cd4d980 53,217
+plugins/games/dungeon-expedition/src/session-service.ts
+  s_079f1dc5e6308d::t_4c3de64cd5a75b 50,117
+  s_079f1dc5e6308d::t_563d7f759e0868 54
+plugins/games/word-riddle/src/game-flow.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_d38d9615e011ef 54,74,86,138
+  s_079f1dc5e6308d::t_b8efc7fa9f442a 57,59,75,96,111-112,121-122,128,139-140,151,155,158,162-163,171,177,180,184-205
+plugins/utils/60s/src/handlers/fuel-price.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6,10-11,15
+plugins/games/blackjack/src/view.ts
+  s_079f1dc5e6308d::t_833306a809efe4 1,17,19-20,25-29,31,35,37-39,48,74-91
+plugins/games/text-adventure/src/profile-format.ts
+  s_079f1dc5e6308d::t_16936aa44564a9 1,22,27,34,36,43,46,52,55-56,60-61,70,72,74
+plugins/adapters/qq/middlewares/bot-kind-reply/index.ts
+  s_079f1dc5e6308d::t_a872c7a68c55ce 39
+  s_079f1dc5e6308d::t_e2db328031187b 1,11,44,47,62
+plugins/adapters/icqq/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 7-16,20-31,35-40,44-52,54-59,63-68,72-77,81-86,91-96,100-103,105-110,115-120,125-130,135-140,145-150,155-160,164-169,185-194,198-209,213-218,222-236,240-245,249-254,258-263,267-272,276-285,289-294,298-303,307-312,316-321,325-330,334-339,343-348,351-358,364-369,372-375
+plugins/adapters/qq/commands/qq/endpoint/definition.ts
+  s_079f1dc5e6308d::t_385eb6fb47ef1e 213
+  s_079f1dc5e6308d::t_e2db328031187b 1-2,24,55,58,67,72,87,105,132-133,138,161,166,185,190,202,205,210,220-221,225,230,232,251-252,255-256,259,265
+  s_079f1dc5e6308d::t_a872c7a68c55ce 56,134,199,215,266
+plugins/adapters/onebot11/agents/onebot11/skills/onebot11/tools/set_title/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_bbcb3cd245d6a2 24
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_079f1dc5e6308d::t_f87674c592bb5c 197-199
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/dissolve_chat/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_cb5dc3641ce821 15
+basic/cli/tests/plugin-runtime/endpoint-configuration-store.test.ts
+  s_079f1dc5e6308d::t_4a3624a0890941 150
+plugins/utils/60s/src/handlers/hitokoto.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,5,9,11
+packages/im/runtime/src/root-runtime.ts
+  s_079f1dc5e6308d::t_b8e57bc358ba20 931
+packages/im/plugin-runtime/tests/i18n.test.ts
+  s_079f1dc5e6308d::t_94f2dc1cb4e811 1-14
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/create_thread/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_f11bcbe7b0496d 22,28
+plugins/games/roulette/src/view.ts
+  s_079f1dc5e6308d::t_773550304ea1e0 1-2,4-5,7-31,33-41,44-48,51,54-57,60-61,64,66-70,74-76,79-84,87-88
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/set_description/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_71e9f0d8709d75 17
+plugins/games/hub/tests/game-hub-runtime.test.ts
+  s_079f1dc5e6308d::t_2a654353db0ac9 42-43,61,78
+plugins/utils/reminder/tests/natural-time.test.ts
+  s_079f1dc5e6308d::t_69213b1bbf7132 112-139
+plugins/utils/60s/skills/60s-life/tools/duanzi/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/60s/skills/60s-market/tools/gold_price/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/adapters/kook/agents/kook/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-48
+plugins/games/blackjack/commands/bj/[[action]]/index.ts
+  s_079f1dc5e6308d::t_811f2da2468bb4 17
+  s_079f1dc5e6308d::t_41f1ca56abfe58 3,19
+  s_079f1dc5e6308d::t_158ab71632c88e 21
+plugins/utils/rss/tests/admin-tasks.test.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 58
+  s_079f1dc5e6308d::t_da728ddc1fef97 1-2,25-57,59-62
+packages/game-kit/src/session-coordinator.ts
+  s_079f1dc5e6308d::t_6d36880abf850d 27,30-34,69-70
+plugins/utils/lottery/skills/lottery/tools/history/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,14
+plugins/adapters/satori/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 25-30,41-46,61-66,77-82,118-122,128-133
+plugins/utils/60s/commands/hitokoto/[type]/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+plugins/games/tic-tac-toe/src/board-view.ts
+  s_079f1dc5e6308d::t_811f2da2468bb4 1
+  s_079f1dc5e6308d::t_9bef6a4e8cb74a 49,62,73,75,102-106
+plugins/utils/60s/skills/60s-life/tools/hitokoto/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/rss/tests/rss-channel.test.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 181
+  s_079f1dc5e6308d::t_1c35acd6f77552 1
+  s_079f1dc5e6308d::t_69213b1bbf7132 27-28
+plugins/utils/code-runner/src/run-code.ts
+  s_079f1dc5e6308d::t_925e8dfc34f31d 1-3,29,36,44,65,77,82,87
+plugins/games/dungeon-expedition/commands/dungeon/[[action]]/index.ts
+  s_079f1dc5e6308d::t_158ab71632c88e 19
+  s_079f1dc5e6308d::t_811f2da2468bb4 13
+  s_079f1dc5e6308d::t_42758b2fced7e9 4,15
+plugins/utils/nettools/commands/ping/[host]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6-7
+  s_079f1dc5e6308d::t_ed3c60170f5f58 8,12
+plugins/games/hub/commands/战绩/index.ts
+  s_079f1dc5e6308d::t_641173b1d4ba40 1,11-12,15-16,18,29,32-38
+  s_079f1dc5e6308d::t_158ab71632c88e 25,27
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 24
+  s_079f1dc5e6308d::t_10bed439e28b9f 22-23,39
+plugins/games/dice-duel/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 22-25
+plugins/utils/60s/commands/exchange/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 7,10
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+packages/im/plugin-runtime/src/plugin-tasks.ts
+  s_079f1dc5e6308d::t_f87674c592bb5c 5,41-42,50-52,59
+plugins/adapters/email/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 11-16,27-32,47-52,63-68,103-108,157-162,208-212,218-223
+plugins/utils/reminder/skills/reminder/tools/reminder_create/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1,49,62,65,67,72,75
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/add_members/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_ab6cd5b4f28962 19
+plugins/utils/60s/skills/60s-news/tools/zhihu_hot/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/adapters/icqq/tests/icqq-outbound-images.test.ts
+  s_079f1dc5e6308d::t_a872c7a68c55ce 1,152
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/unpin_message/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_afe7520273bcf3 22
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-interaction/tools/group_sign/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_287cbcd5684065 15,17
+basic/cli/tests/plugin-runtime/database-host.test.ts
+  s_079f1dc5e6308d::t_be5547d722074b 15-44
+plugins/utils/short-url/commands/expand/[url]/index.ts
+  s_079f1dc5e6308d::t_90a81e7fad0753 2,8,10,12-13,15
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+plugins/games/roulette/commands/roulette/[[action]]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 7
+  s_079f1dc5e6308d::t_fb4e49708b3b21 1,3,12
+plugins/games/idiom-chain/src/models.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 10,44
+  s_079f1dc5e6308d::t_d38d9615e011ef 40,66
+plugins/games/rps/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 40
+plugins/utils/music/package.json
+  s_079f1dc5e6308d::t_b0d960cf932be0 55
+plugins/games/tic-tac-toe/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 33-36
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/unarchive/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_bb320b0f916b2a 21
+plugins/utils/group-suite/src/stats-lib.ts
+  s_079f1dc5e6308d::t_167040c9769c04 1,168,174,176,181,197-198,205
+plugins/utils/60s/src/handlers/toutiao-hot.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-8
+plugins/utils/bilibili/src/channel.ts
+  s_079f1dc5e6308d::t_30cb52141e1ec7 1-2,29-30
+plugins/utils/answers/tests/answers-runtime.test.ts
+  s_079f1dc5e6308d::t_7c75a2b037f51b 48,50,154-167,169
+  s_079f1dc5e6308d::t_0967b2ddd88515 168,170
+tests/snapshots/plugin-runtime-api.json
+  s_079f1dc5e6308d::t_223b298dfdffe2 82,158-159,228
+packages/im/agent/src/prompt/rules/critical-rules.ts
+  s_079f1dc5e6308d::t_f87674c592bb5c 8
+plugins/utils/bilibili/tests/watcher.test.ts
+  s_079f1dc5e6308d::t_0e6232357499e9 17-31
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk/tools/create_chat/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_0419b804c310e7 19
+plugins/adapters/kook/agents/kook/skills/kook/tools/blacklist/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_af54e051fca6dc 23,27,30
+plugins/utils/repeater/commands/repeater-status/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+  s_079f1dc5e6308d::t_925e8dfc34f31d 9-10
+plugins/adapters/telegram/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 48-53,64-69,84-89,100-105,150-154,160-165
+packages/im/core/src/plugin-runtime/im/command-feedback.ts
+  s_079f1dc5e6308d::t_4a4df8c3dc201b 4,22,50-59,63,68-71,92,106
+packages/im/adapter/src/endpoint-configuration.ts
+  s_079f1dc5e6308d::t_b83c139f000752 5,7,10
+  s_079f1dc5e6308d::t_838f374cc161dc 3-4,6,8-9,11-14
+plugins/utils/bilibili/commands/bili/list/index.ts
+  s_079f1dc5e6308d::t_30cb52141e1ec7 1,11,14,16,19,21-24
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 10
+plugins/adapters/line/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 19-24,35-40,55-60,71-76,105-109,115-120
+plugins/utils/rss/src/admin-i18n.ts
+  s_079f1dc5e6308d::t_08de28cdec67d6 1-218
+plugins/utils/ledger/commands/ledger-report/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+  s_079f1dc5e6308d::t_befe6d7335c807 1-2,12,14,16-20
+plugins/utils/answers/commands/科目一/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 11
+  s_079f1dc5e6308d::t_ebd2fc8c816aa6 1,9-10,12,14,16-18
+plugins/adapters/discord/agents/discord/skills/discord/tools/send_embed/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_fba4ea9082dd20 29,34,37
+packages/game-kit/src/game-command-help.ts
+  s_079f1dc5e6308d::t_c4afcb1c9480af 9-12,28
+  s_079f1dc5e6308d::t_28334f210a44bc 1-8,13-27,29-46
+plugins/adapters/github/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 34-39,50-55,70-75,86-91,138-143,151-155,161-166
+packages/im/plugin-runtime/src/i18n.ts
+  s_079f1dc5e6308d::t_35737af505214b 1-37,39-53
+  s_079f1dc5e6308d::t_21d9cfbceb4db1 38
+plugins/utils/group-suite/commands/stats/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 10
+  s_079f1dc5e6308d::t_167040c9769c04 1,11-13,15
+plugins/games/dice-duel/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 40
+plugins/utils/lottery/src/stats/pro-analysis.ts
+  s_079f1dc5e6308d::t_e46e714d95a5f5 2,64,82,96-97,101-102,110,122,131
+  s_079f1dc5e6308d::t_3b7384a824a131 1
+plugins/adapters/github/agents/github/skills/github-account/tools/install/index.ts
+  s_079f1dc5e6308d::t_77dce52994c319 11
+plugins/games/hub/commands/games/[[action]]/index.ts
+  s_079f1dc5e6308d::t_32adebd3263891 3-7,12,18-22,25
+docs/adapters/github.md
+  s_079f1dc5e6308d::t_5af012c12367d5 11,124-127
+docs/configuration/localization.md
+  s_079f1dc5e6308d::t_4a35d6aa3b8e0c 1-83,85-92
+  s_079f1dc5e6308d::t_3ec9246ff44823 84
+plugins/utils/rss/commands/rss-list/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+  s_079f1dc5e6308d::t_a650859b2f9be6 1,10,12,15,22-23,27,31
+plugins/utils/ledger/commands/ledger-month/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+  s_079f1dc5e6308d::t_4dd2072e9db44b 1-2,10,12
+plugins/utils/reminder/skills/reminder/tools/reminder_cancel/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1,22-23
+packages/game-kit/src/define-game-plugin.ts
+  s_079f1dc5e6308d::t_435ccc673001e0 5,32,154-155
+  s_079f1dc5e6308d::t_d38d9615e011ef 143
+packages/im/zhin/package.json
+  s_079f1dc5e6308d::t_966bde41f0262d 87-91,208-211
+plugins/utils/music/commands/点歌/[keyword]/index.ts
+  s_079f1dc5e6308d::t_859904ed80d1b2 16-17
+  s_079f1dc5e6308d::t_28044c0dc0a105 1,5,27,30-31,56,62,69,77
+  s_079f1dc5e6308d::t_b0d960cf932be0 67
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 18
+plugins/utils/calendar/commands/calendar/logout/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 7,9
+  s_079f1dc5e6308d::t_a90233cbe92f81 1,12,15,17
+plugins/games/guess-number/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 22-25
+plugins/games/tic-tac-toe/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 165
+plugins/utils/ledger/tests/ledger.test.ts
+  s_079f1dc5e6308d::t_f893650a11096b 21,426,429,431,435-442,456
+  s_079f1dc5e6308d::t_577aa4d851417d 469-488
+plugins/utils/answers/tests/answers-logic.test.ts
+  s_079f1dc5e6308d::t_7c75a2b037f51b 20
+plugins/utils/lottery/src/evaluate/backtest.ts
+  s_079f1dc5e6308d::t_3b7384a824a131 1
+  s_079f1dc5e6308d::t_e46e714d95a5f5 2,107,110-114,118,121-124
+plugins/utils/reminder/commands/remind/at/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 9,13
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+  s_079f1dc5e6308d::t_d2df04434917b3 1,10,14
+plugins/utils/lottery/src/runtime-state.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,8
+plugins/utils/group-suite/commands/checkin/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 10-11
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  s_079f1dc5e6308d::t_15f1a9a1be1fcd 1,28
+docs/en/configuration/generated.md
+  s_079f1dc5e6308d::t_5af012c12367d5 538
+plugins/adapters/telegram/agents/telegram/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-52
+plugins/utils/60s/skills/60s-utility/tools/translate_60s/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+packages/im/core/src/plugin-runtime/im/command-menu-navigation.ts
+  s_079f1dc5e6308d::t_4a4df8c3dc201b 1,10-15,40,45,47-48
+plugins/utils/music/skills/music/tools/music-share/index.ts
+  s_079f1dc5e6308d::t_28044c0dc0a105 25
+packages/im/core/src/built/user-interaction.ts
+  s_079f1dc5e6308d::t_1a1a4a3b585f32 1-2,67,92,104,106,113,133-134,139,141,145,151-154,158-160,163-165,169,175-176,178,185-186,189,192,195,202,205-206,215,217-220,248-253,281-282
+plugins/games/dungeon-expedition/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 19-22
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_invite/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_acd866268a213e 16,18,20
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/set_managers/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_04ee09b1e35074 19
+packages/im/command/tests/types/config.ts
+  s_079f1dc5e6308d::t_49ba944887315a 12-14
+plugins/adapters/sandbox/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 11-16,27-32,46-51,62-67,84-88,94-99
+plugins/utils/60s/src/handlers/history-today.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-9
+plugins/utils/ledger/src/store.ts
+  s_079f1dc5e6308d::t_f893650a11096b 46
+  s_079f1dc5e6308d::t_265711bed0d856 1,24,43,78,104,161,165,192
+plugins/utils/calendar/plugin.ts
+  s_079f1dc5e6308d::t_a90233cbe92f81 1,78
+packages/toolkit/testing/tests/run-kit.mjs
+  s_079f1dc5e6308d::t_d4939d82abf97e 120
+plugins/adapters/github/agents/github/skills/github-account/tools/bind/index.ts
+  s_079f1dc5e6308d::t_77dce52994c319 11
+packages/im/tool/src/tool-index.ts
+  s_079f1dc5e6308d::t_4a617afe313088 6,91-92
+packages/toolkit/create-zhin/src/install.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,6,9,11,13,15,18,20,23,29,31,36,40,42,44,56-57,66
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/invite_to_channel/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_37affd377c084c 23
+plugins/adapters/qq/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 27-32,39-44,55-60,67-72,117-122,133-138,146-151,158-163,207-211,217-222
+packages/toolkit/create-zhin/src/index.ts
+  s_079f1dc5e6308d::t_9d9ee86a888516 26-27,36-37,43
+  s_079f1dc5e6308d::t_737ce7432341f2 2,51,55,65,68,70,78,85,90,92-93,109,111,125,127,139,141,147,150,162,164,173,176,186-187,193,208-210,216,228,236,240,244,248-249,251,253,257,259,262-264,269-270,273,275,278,280-282,289,295,297,300,311-312,315-318,320-321,323,325,327,331,333,340-346,350,352,354-358,360,367-368,370-372,374-375,377-381,383-384,387,389-391,393-394,396-400,402-403,405-406,410,418
+  s_079f1dc5e6308d::t_a75af722918b82 44
+plugins/adapters/qq/agents/qq/skills/qq/tools/remove_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_ec4934662cb376 21
+packages/im/adapter/src/endpoint-command-messages.ts
+  s_079f1dc5e6308d::t_ab4ba30e13a5f3 1-5,7-16,18-19,22,25-27,29
+  s_079f1dc5e6308d::t_838f374cc161dc 20-21
+  s_079f1dc5e6308d::t_83846c4edb7ef3 6,17,23-24,28
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk-group-admin/tools/add_chat_members/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_260f1515f9d2de 19
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_079f1dc5e6308d::t_9ec42ab9dbe6d5 8-9,122,155,157,174,211-237
+  s_079f1dc5e6308d::t_859904ed80d1b2 172-173,175
+  s_079f1dc5e6308d::t_a203fd185e855f 238,562-564,650,804
+plugins/adapters/icqq/src/endpoint.ts
+  s_079f1dc5e6308d::t_cdb8aef8832308 70,703
+plugins/adapters/napcat/agents/napcat/skills/napcat-messaging/tools/send_poke/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_7276b5c427b4c4 17
+plugins/utils/group-suite/src/checkin-lib.ts
+  s_079f1dc5e6308d::t_167040c9769c04 1,74,77,82,86,110-112,120,123,131,135-140,150,155,161,163-164,167
+packages/im/plugin-runtime/src/relational-state.ts
+  s_079f1dc5e6308d::t_db695bf3d1d54e 11-12,37-43
+basic/cli/src/plugin-runtime/endpoint-configuration-store.ts
+  s_079f1dc5e6308d::t_67ea1af5854058 5,66
+plugins/utils/music/commands/cookie/status/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 7
+  s_079f1dc5e6308d::t_28044c0dc0a105 3,10,12,14,17,20
+plugins/games/blackjack/src/models.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 31,49
+  s_079f1dc5e6308d::t_563d7f759e0868 9,35
+plugins/games/dungeon-expedition/src/models.ts
+  s_079f1dc5e6308d::t_ba3d3039a7e1cd 36
+  s_079f1dc5e6308d::t_d38d9615e011ef 60
+  s_079f1dc5e6308d::t_563d7f759e0868 9,41
+plugins/games/word-riddle/commands/riddle/[[action]]/index.ts
+  s_079f1dc5e6308d::t_158ab71632c88e 13
+  s_079f1dc5e6308d::t_28cfec8dffb986 3,11
+  s_079f1dc5e6308d::t_811f2da2468bb4 9
+plugins/utils/60s/src/handlers/bing-image.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-8
+plugins/utils/lottery/src/evaluate/train-weights.ts
+  s_079f1dc5e6308d::t_e46e714d95a5f5 2,115,118,120-123,127-128,130-131,133
+  s_079f1dc5e6308d::t_3b7384a824a131 1
+plugins/utils/answers/commands/好无聊/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 10
+  s_079f1dc5e6308d::t_3d9e69fb6c0e59 1,9,12,14,16-17
+plugins/adapters/icqq/tests/endpoint-commands.test.ts
+  s_079f1dc5e6308d::t_a872c7a68c55ce 33,51
+plugins/utils/lottery/skills/lottery/tools/stats-snapshot/index.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 10
+plugins/games/tic-tac-toe/src/ttt-command.ts
+  s_079f1dc5e6308d::t_811f2da2468bb4 2
+  s_079f1dc5e6308d::t_d38d9615e011ef 65
+  s_079f1dc5e6308d::t_3e0dfae32c9993 1,7-11,24-27,33,36,42,49,54,63,70,72,75,77-90
+plugins/utils/lottery/plugin.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,32,64,81
+plugins/utils/60s/commands/fanyi/[text]/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+plugins/adapters/sandbox/src/endpoint.ts
+  s_079f1dc5e6308d::t_15f1a9a1be1fcd 1,115-121,123-124,139,152,298,369,379-381
+packages/im/adapter/src/endpoint-commands.ts
+  s_079f1dc5e6308d::t_06fca2692d0d61 42,378,422-428,496-498
+  s_079f1dc5e6308d::t_ab4ba30e13a5f3 32,37,39,76-77,219,226-227,247,249,254,267-268,291,306,329,333,335,337,343,345,348,356-357,361,363-366,368-369,380,386,391,393,398,419-420,429,438,440,442-443,447,449,451,462-465,470,476-478,480-482,491,494-495,502-503,505-507,512
+basic/cli/src/plugin-runtime/locale-host-installer.ts
+  s_079f1dc5e6308d::t_72012c598d648d 10,12,43,45
+  s_079f1dc5e6308d::t_d4f3a37cd4d980 1-9,11,13-42,44,46-55
+packages/im/agent/src/assistant/job-store.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 4,17,28,52,115-119,123,206,234,257,259
+plugins/adapters/napcat/agents/napcat/skills/napcat-account/tools/send_like/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_40bf5b84a5978c 17
+packages/im/command/src/arguments.ts
+  s_079f1dc5e6308d::t_4c4116730cd1bd 244,249
+  s_079f1dc5e6308d::t_a2624841d211f6 5-11,16-28,86-90,189-190,193,195-197,200,204-205,214,233,236,250-251,263,276,283,286-287,289,299-302,305-307
+plugins/utils/rss/tests/admin-fixture.ts
+  s_079f1dc5e6308d::t_90a81e7fad0753 21,82
+  s_079f1dc5e6308d::t_cbca4a370f5449 22,44,87
+plugins/utils/bilibili/src/poll.ts
+  s_079f1dc5e6308d::t_30cb52141e1ec7 1-2,122,126,129,217,255
+  s_079f1dc5e6308d::t_d4939d82abf97e 139
+plugins/games/guess-number/src/view.ts
+  s_079f1dc5e6308d::t_657ae79c7502e5 1,16,19-20,26-28,31,33,44,48,54-66
+plugins/utils/60s/commands/weather/[city]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+plugins/games/idiom-chain/src/game-flow.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 75,108,120,183
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_b8efc7fa9f442a 39,48,62-63,78,80,95-96,109,128,130,143,167,184-185,190,195,207-208,213,225,232-233,245,252,255,259-280
+plugins/features/process-monitor/tests/process-monitor-runtime.test.ts
+  s_079f1dc5e6308d::t_711c4915824fc5 44-61,116-117
+basic/cli/tests/plugin-runtime/relational-state.test.ts
+  s_079f1dc5e6308d::t_bfa1246c9cd65f 142,154-155
+plugins/games/word-riddle/src/view.ts
+  s_079f1dc5e6308d::t_833306a809efe4 1,21,23,27,31,33,38,42-43,46-48,58,65-80
+plugins/utils/60s/src/handlers/ip-query.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,5,9-10,12,14-15
+plugins/utils/60s/skills/60s-market/tools/exchange_rate/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/lottery/src/command-helpers.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1,14,18
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/pin_message/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_f62a7db3a3a767 22
+plugins/adapters/lark/src/i18n.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 4-6
+  s_079f1dc5e6308d::t_26be895ffbb2ed 1-3,7
+plugins/utils/music/src/login/types.ts
+  s_079f1dc5e6308d::t_28044c0dc0a105 1,16-17
+plugins/utils/60s/skills/60s-news/tools/douyin_hot/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/games/text-adventure/src/scene-view.ts
+  s_079f1dc5e6308d::t_16936aa44564a9 1,20-21,28,47
+plugins/adapters/qq/commands/qq/endpoint/cancel/index.ts
+  s_079f1dc5e6308d::t_e2db328031187b 1,10-13
+plugins/adapters/weixin-ilink/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 32-37,48-53,68-73,84-89,119-124,130-134,140-145
+plugins/games/blackjack/src/game-flow.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_d38d9615e011ef 59,82,94
+  s_079f1dc5e6308d::t_33ffc9e4879f98 62,64,83,95-96,103,116,129,143-153
+plugins/adapters/slack/agents/slack/skills/slack-users/tools/user_info/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_089ca3fc79082e 18
+scripts/check-api-surface.mjs
+  s_079f1dc5e6308d::t_9389a1c1033c3d 17
+plugins/adapters/sandbox/tests/localization.test.ts
+  s_079f1dc5e6308d::t_0d794d6af90654 1-38,41-61
+  s_079f1dc5e6308d::t_f2fcd224778cde 39-40
+plugins/utils/earthquake/src/subscriptions.ts
+  s_079f1dc5e6308d::t_b83c139f000752 146,150
+  s_079f1dc5e6308d::t_7b6a7ca07ea8a0 1,15,55,116
+plugins/adapters/kook/agents/kook/skills/kook/tools/grant_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_d4e437779d8bfb 20
+plugins/utils/group-suite/commands/teach-list/[[page]]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+  s_079f1dc5e6308d::t_167040c9769c04 10,12
+plugins/utils/lottery/README.md
+  s_079f1dc5e6308d::t_385eb6fb47ef1e 118-125
+plugins/games/guess-number/src/guess-command.ts
+  s_079f1dc5e6308d::t_968c701ce04b27 2,8,45-48
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_41f1ca56abfe58 7,9-12,24,26,28,37,43
+  s_079f1dc5e6308d::t_d38d9615e011ef 40
+plugins/utils/music/src/i18n.ts
+  s_079f1dc5e6308d::t_28044c0dc0a105 1-4,6-50
+  s_079f1dc5e6308d::t_e0f7fa1a541723 5
+plugins/games/idiom-chain/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 22-25
+plugins/utils/reminder/src/i18n.ts
+  s_079f1dc5e6308d::t_295fc492053e4c 1-105,107-133,135-202,335-336
+  s_079f1dc5e6308d::t_546355b822cd45 203-277
+  s_079f1dc5e6308d::t_49bbcd91922fc6 134,278-327,331
+  s_079f1dc5e6308d::t_68704f1c59dcc1 106,328-330,332-334
+plugins/adapters/kook/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 58-63,74-79,94-99,110-115,194-199,221-225,231-236
+packages/toolkit/scaffold-wizard/src/adapter.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,346,348-350,356,358,361,364,381,383,385,435,437,552,556,587,593,596,602,604,607,609,623
+  s_079f1dc5e6308d::t_ec6d4ce2ab9bc2 430,432,443,460,465,470
+plugins/adapters/lark/agents/lark/skills/lark/tools/upload_file/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_15f1a9a1be1fcd 22
+  s_079f1dc5e6308d::t_faee94ef9d6492 23
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/set_topic/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_9d1a619f2cbdd6 23
+plugins/utils/rss/commands/rss-remove/[url]/index.ts
+  s_079f1dc5e6308d::t_a650859b2f9be6 1,11,13,16,19,25,33
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_4a35d6aa3b8e0c 51,205,395,479
+packages/im/zhin/src/i18n.ts
+  s_079f1dc5e6308d::t_35737af505214b 2-3
+  s_079f1dc5e6308d::t_9389a1c1033c3d 1
+packages/toolkit/scaffold-wizard/src/decisions.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,29-32,34-37,86,92,94,98-99,101,103,105,114,117,120-122
+plugins/games/word-riddle/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 22-25
+packages/im/command/src/command-menu.ts
+  s_079f1dc5e6308d::t_49ba944887315a 1-3
+  s_079f1dc5e6308d::t_d06087a13f988c 79,81,98,111-113
+  s_079f1dc5e6308d::t_7aaed3837115c2 109
+plugins/utils/60s/src/handlers/moyu.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-9,14,20,33
+plugins/adapters/lark/agents/lark/skills/lark-group-admin/tools/update_chat/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_2df435356633c9 20
+plugins/utils/nettools/commands/dns/[name]/[[type]]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6,8-9
+  s_079f1dc5e6308d::t_4964254d1028df 11,16
+basic/cli/tests/plugin-runtime/locale-host.test.ts
+  s_079f1dc5e6308d::t_4ff735225a424b 1-128
+plugins/utils/60s/skills/60s-news/tools/60s_news/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+packages/toolkit/scaffold-wizard/src/adapter-configurers.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,19,25-26,32,34,42-43,52,55,59,75-77,83,85-86,93,109-110,117,119,127,130,134,149,156,161,163,171,178,181,185,195-197,203-204,209,222,226,238,249,259-260,266,268-269,279,281,295,297,302,307,309,319,332-333,339,341,346-347,353,364,366-367,374,380,383,387,422-423,429,431-432,442,444,450,462,468,474,479,492-493,499,501-502,512,514,520,526,545-546,552,559-560,566,568-570,580,582,596,598,603,608,610,619,621,626,628,639,652-653,659,661-663,673,675,689,691,700,702,707,709,715,720,722,732,745-746,752,754,756-757,767,769,776,791,793,803,816-817,823,825-826,836,838,845,860,862,872,889-891,897-898,903-904,912,914-915,927-928,939,941-943,956,965,976,982,988,994,1027-1029,1035,1037,1045,1047-1048,1061,1069,1080,1098,1104,1107,1109,1113,1118
+plugins/utils/calendar/src/i18n.ts
+  s_079f1dc5e6308d::t_a90233cbe92f81 1-132
+packages/game-kit/tests/localization.test.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 14,46
+  s_079f1dc5e6308d::t_811f2da2468bb4 1
+  s_079f1dc5e6308d::t_22ff97a16e2ccc 2-13,15-45,47-49
+plugins/utils/rss/src/runtime.ts
+  s_079f1dc5e6308d::t_a650859b2f9be6 1,16
+plugins/adapters/onebot11/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 28-33,44-49,64-69,80-85,123-127,133-138
+plugins/games/text-adventure/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 22-25
+packages/game-kit/src/grid-keyboard.ts
+  s_079f1dc5e6308d::t_6d36880abf850d 7-8,25,154
+plugins/adapters/lark/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 22-27,38-43,58-63,74-79,140-145,160-165,173-177,183-188,211-216
+plugins/utils/rss/src/i18n.ts
+  s_079f1dc5e6308d::t_a650859b2f9be6 1-164
+packages/im/permission/src/explain.ts
+  s_079f1dc5e6308d::t_c1d267d8961522 3-4,23,25,31-32,39,42
+plugins/games/rps/src/rps-command.ts
+  s_079f1dc5e6308d::t_41f1ca56abfe58 6,8-11,23,27,37,41
+  s_079f1dc5e6308d::t_d38d9615e011ef 25
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_968c701ce04b27 2,7,43-46
+plugins/utils/reminder/commands/remind/create/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6-7,11
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 25
+packages/toolkit/scaffold-wizard/src/env.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,67,73,83,93,100,122,127,137,147,154
+packages/im/tool/src/definition.ts
+  s_079f1dc5e6308d::t_4a617afe313088 11,82-83,104
+packages/toolkit/scaffold-wizard/src/locale.ts
+  s_079f1dc5e6308d::t_4a0c13a077e437 1-41
+plugins/utils/music/src/login/qq.ts
+  s_079f1dc5e6308d::t_28044c0dc0a105 1-2,80,112,115,118,121,125,128,132,137,146,152
+plugins/games/text-adventure/src/story-scenes.ts
+  s_079f1dc5e6308d::t_5b13e822d19f44 1,7-8,13,15,17-19,23-27,34-35,38-40,47,50-52,55-58,64,66-67,76-77,79,83-88,95,97-98,101-103,110,112-113,116-117,124,126-127,130-134,141,143-144,147-150,157,159,162-165,172,174-175,178-183,190,192,195-196,203,205-206,209-213,220,222-223,226-228,235,237,240-241,248,250,253-257,264,266,269-273,280,282,285-287,294,296,299-301,308,310-311,314-318,325,327-328,331-333,340,342,345-348,355,357,360-362,369,371,374-377,384,386-387,390-392,399,401,404-405,412,414,417-418,425,427,430-431,438,440-441,444-447,454,456,459-461,470,472,478,482-484,489-1399
+plugins/adapters/discord/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 79-84,95-100,115-120,131-136,227-232,239-243,249-254
+plugins/utils/calendar/tests/chat-auth.test.ts
+  s_079f1dc5e6308d::t_83386e0864ca82 108-130
+  s_079f1dc5e6308d::t_a90233cbe92f81 198,201
+plugins/adapters/github/agents/github/skills/github-account/tools/whoami/index.ts
+  s_079f1dc5e6308d::t_77dce52994c319 11
+plugins/utils/group-suite/commands/teach/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+  s_079f1dc5e6308d::t_167040c9769c04 10-11
+plugins/utils/lottery/src/pipeline.ts
+  s_079f1dc5e6308d::t_5378e6fdc97fd4 1-2,24,63,134,138,147,156,190,192
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_bfa1246c9cd65f 3344
+plugins/utils/bilibili/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 9-14,21-26,33-38,45-50,57-62,69-74,79-84,89-94,99-104
+plugins/utils/group-suite/src/stats-data.ts
+  s_079f1dc5e6308d::t_167040c9769c04 1-2,80-81,85,87,89,94,96-101
+plugins/utils/group-suite/commands/rank/index.ts
+  s_079f1dc5e6308d::t_167040c9769c04 10-11
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+packages/im/core/src/plugin-runtime/im/jsx-button-registry.ts
+  s_079f1dc5e6308d::t_55af572e85661c 1,79
+packages/game-kit/src/game-definition.ts
+  s_079f1dc5e6308d::t_435ccc673001e0 3,15,18,20-21,23
+plugins/utils/60s/src/handlers/douyin-hot.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-8
+plugins/adapters/sandbox/pages/index/messages.ts
+  s_079f1dc5e6308d::t_98d878f4b377dd 1-229
+docs/contributing/development.md
+  s_079f1dc5e6308d::t_9389a1c1033c3d 15-16
+tests/snapshots/api-surface.json
+  s_079f1dc5e6308d::t_223b298dfdffe2 185-187
+plugins/utils/reminder/skills/reminder/tools/reminder_list/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1,19-20
+basic/schema/tests/config-declaration.test.ts
+  s_079f1dc5e6308d::t_72012c598d648d 7,12-27
+plugins/games/dungeon-expedition/src/game-flow.ts
+  s_079f1dc5e6308d::t_753f1caa25e78b 33,42,44,54,56,59,61,63-64,68,84-85,88,95-96,129-139
+  s_079f1dc5e6308d::t_811f2da2468bb4 1
+plugins/utils/music/src/session.ts
+  s_079f1dc5e6308d::t_28044c0dc0a105 1,6
+  s_079f1dc5e6308d::t_b0d960cf932be0 2,16,19,24,26-32
+docs/configuration/index.md
+  s_079f1dc5e6308d::t_4a35d6aa3b8e0c 8-9
+docs/en/configuration/index.md
+  s_079f1dc5e6308d::t_4a35d6aa3b8e0c 8-9
+plugins/adapters/dingtalk/agents/dingtalk/skills/dingtalk-group-admin/tools/update_chat/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_67b324d99f9581 24
+plugins/adapters/telegram/agents/telegram/skills/telegram-chat-admin/tools/pin_message/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_ec6f8e4e9569c3 19
+plugins/utils/reminder/tests/reminder-tools.test.ts
+  s_079f1dc5e6308d::t_83386e0864ca82 21-33
+plugins/games/rps/commands/rps/[[action]]/index.ts
+  s_079f1dc5e6308d::t_158ab71632c88e 13
+  s_079f1dc5e6308d::t_41f1ca56abfe58 3,11
+  s_079f1dc5e6308d::t_811f2da2468bb4 9
+packages/im/agent/src/task-executor.ts
+  s_079f1dc5e6308d::t_0ec9e21ba7190f 2,140
+plugins/adapters/slack/agents/slack/skills/slack-channels/tools/set_purpose/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_c1b7ab307d7028 23
+docs/contributing/internationalization-plan.md
+  s_079f1dc5e6308d::t_9389a1c1033c3d 1-5
+  s_079f1dc5e6308d::t_dd1c4c3213beba 6-170
+plugins/utils/60s/src/i18n.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-180
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/tools/set_title/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_37163449a3e697 20
+plugins/utils/music/commands/login/[platform]/index.ts
+  s_079f1dc5e6308d::t_e60d8fded99315 41
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 17,19
+  s_079f1dc5e6308d::t_b0d960cf932be0 25-27
+  s_83064017245d8e::t_4099a3f6f8c1ba 8,22,30-36,45,48,51,53,57,60,62,69
+plugins/utils/60s/src/handlers/weather.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,6-7,13,15-18,22
+plugins/utils/reminder/commands/remind/after/index.ts
+  s_079f1dc5e6308d::t_d2df04434917b3 1,10,13-14
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8-9
+plugins/features/process-monitor/src/monitor.ts
+  s_079f1dc5e6308d::t_77dce52994c319 1-2,48,53-56,131,134,136-143
+basic/cli/src/plugin-runtime/console/plugin-task-routes.ts
+  s_079f1dc5e6308d::t_4a617afe313088 82-83
+  s_079f1dc5e6308d::t_55af572e85661c 58,90,157,163-164,172-173,189,209-213
+  s_079f1dc5e6308d::t_4991e457329f21 13-24,35,38,47,97-102
+  s_079f1dc5e6308d::t_52f8ade2e7af05 5,36-37,39,42-43,60,64-66,71,91,103-105,110,264,266,272
+plugins/utils/group-suite/commands/keyword-list/index.ts
+  s_079f1dc5e6308d::t_58fbc1d878ee77 1,14,16
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+plugins/utils/lottery/src/evaluate/tracker.ts
+  s_079f1dc5e6308d::t_3b7384a824a131 1-2,272,275,277,290,292,294,298,306
+plugins/games/roulette/src/roulette-command.ts
+  s_079f1dc5e6308d::t_fb4e49708b3b21 3,17,20
+plugins/utils/bilibili/tests/fixtures.ts
+  s_079f1dc5e6308d::t_0e6232357499e9 113-114
+plugins/utils/reminder/plugin.ts
+  s_079f1dc5e6308d::t_1c35acd6f77552 22
+  s_079f1dc5e6308d::t_d2df04434917b3 1
+plugins/features/process-monitor/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 9-14,19-24,29-34,39-44,53-56,58-71
+plugins/adapters/github/agents/github/skills/github-account/tools/unbind/index.ts
+  s_079f1dc5e6308d::t_77dce52994c319 11
+typedoc.json
+  s_079f1dc5e6308d::t_9389a1c1033c3d 5
+plugins/utils/content-moderation/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 37-41,47-52,56-59,61-66,73-78,83-88,92-94,96-101,107-110,114-119,127-129,134-136,147-150,154-159,172-179,186-193,202-209,216-223,232-239,246-253,262-269,276-283,292-299,306-313,318-322,330-333,336-357,361-366,374-377,381-383,385-392,395-400,405-409,414-416,418-423,427-432,434-439,443-448,450-458,462-464,475-480
+plugins/utils/lottery/skills/lottery/tools/sync/index.ts
+  s_079f1dc5e6308d::t_3b7384a824a131 18
+plugins/games/dungeon-expedition/src/engine.ts
+  s_079f1dc5e6308d::t_4a74949463da70 93,118-123,200,220,228,272,296-298,315-316,339-340,460
+  s_079f1dc5e6308d::t_4c3de64cd5a75b 66,79,88,91,95,98,105,109,115,162,165,168,171,176,183,186,189,194,197,202,206,213,216,223,231,245,258,270,283,286,289,294,305,308,311,314,323,326-328,337,349,365,372,391,400,404,412,415-416,467,479-527
+  s_079f1dc5e6308d::t_811f2da2468bb4 1
+tsconfig.typecheck.json
+  s_079f1dc5e6308d::t_dc28e107ed7a7c 280-282
+docs/adapters/qq.md
+  s_079f1dc5e6308d::t_5af012c12367d5 11,252-257
+plugins/adapters/icqq/agents/icqq/messages.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1-100
+plugins/utils/rss/commands/rss-add/[url]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 10
+  s_079f1dc5e6308d::t_a650859b2f9be6 1,12,15,18-19,22,29,35,44,57,60
+packages/toolkit/create-zhin/src/utils.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,12,14,23-24,28,45-47
+  s_079f1dc5e6308d::t_3324ef60aa7571 29
+packages/toolkit/scaffold-wizard/src/weixin-ilink-login.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,74,94,134,145,151
+packages/game-kit/src/base-session-service.ts
+  s_079f1dc5e6308d::t_435ccc673001e0 7,10
+  s_079f1dc5e6308d::t_32adebd3263891 11
+packages/im/core/src/plugin-runtime/im/locale.ts
+  s_079f1dc5e6308d::t_d4f3a37cd4d980 1-17
+plugins/utils/bilibili/commands/bili/live/index.ts
+  s_079f1dc5e6308d::t_30cb52141e1ec7 1,11,13,24,26-27
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9-10
+plugins/games/word-riddle/src/riddle-command.ts
+  s_079f1dc5e6308d::t_70fb6dc394b216 1
+  s_079f1dc5e6308d::t_28cfec8dffb986 2,11-30,49,53,67,72
+  s_079f1dc5e6308d::t_d38d9615e011ef 51,69
+plugins/features/process-monitor/README.md
+  s_079f1dc5e6308d::t_711c4915824fc5 56-59
+scripts/check-api-docs-surface.mjs
+  s_079f1dc5e6308d::t_9389a1c1033c3d 10-11,118,132,136,140
+plugins/games/blackjack/plugin.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 22-25
+plugins/features/process-monitor/src/i18n.ts
+  s_079f1dc5e6308d::t_77dce52994c319 1-56
+plugins/utils/answers/schema.json
+  s_079f1dc5e6308d::t_a67155f5bb4abe 8-12,21-25,34-38,50-53
+  s_079f1dc5e6308d::t_86180fe55f8e6f 54
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/edit_message/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_5bb1a24bc64043 24
+plugins/utils/60s/commands/douyin/[[limit]]/index.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 8
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6
+plugins/games/idiom-chain/src/view.ts
+  s_079f1dc5e6308d::t_833306a809efe4 1,21,23,28-29,33,42-43,45,49,51-53,63,70-84
+packages/im/agent/tests/assistant/schedule-job-service.test.ts
+  s_079f1dc5e6308d::t_0ced2319dccd41 34-37
+packages/toolkit/testing/src/fake-runners.ts
+  s_079f1dc5e6308d::t_859904ed80d1b2 25,51,155,202
+  s_079f1dc5e6308d::t_d0621fd00749ec 1,40,52,79-80
+plugins/games/guess-number/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 44
+plugins/games/rps/src/models.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 9,35
+  s_079f1dc5e6308d::t_d38d9615e011ef 31,49
+plugins/games/roulette/src/runtime.ts
+  s_079f1dc5e6308d::t_fb4e49708b3b21 1,13-14
+plugins/games/tic-tac-toe/src/game-flow.ts
+  s_079f1dc5e6308d::t_811f2da2468bb4 1
+  s_079f1dc5e6308d::t_9bef6a4e8cb74a 66-67,72,105,108,116,121,126,150,187,198,200,213,224,227-241
+  s_079f1dc5e6308d::t_d38d9615e011ef 45,65,103,186,212
+plugins/features/process-monitor/skills/process-monitor/tools/process-status/index.ts
+  s_079f1dc5e6308d::t_77dce52994c319 11
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_079f1dc5e6308d::t_ebf78538e85ed2 70-75,95
+packages/im/command/src/definition.ts
+  s_079f1dc5e6308d::t_3e6615c0f16c46 5,95-96,150,272-274,277-280,312,419,430-436,593-594
+  s_079f1dc5e6308d::t_83846c4edb7ef3 275-276
+  s_079f1dc5e6308d::t_790ab5891cd212 326-327,421,437,467-479,551-552
+  s_079f1dc5e6308d::t_71fd97776e450a 281,584
+  s_079f1dc5e6308d::t_49ba944887315a 198-199
+  s_079f1dc5e6308d::t_3f490d24c0ebfd 438
+plugins/utils/60s/src/handlers/60s-news.ts
+  s_079f1dc5e6308d::t_ec02ffd9d6e3dc 1-2,5-7
+packages/im/permission/src/messages.ts
+  s_079f1dc5e6308d::t_c1d267d8961522 1-17
+plugins/utils/60s/skills/60s-life/tools/kfc/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/calendar/skills/calendar-scheduling/tools/find_free_time/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 1,27,46,49
+packages/im/agent/src/context/im-turn-context-adapter.ts
+  s_079f1dc5e6308d::t_ebf78538e85ed2 24-25
+plugins/adapters/icqq/commands/icqq/endpoint/definition.ts
+  s_079f1dc5e6308d::t_cdb8aef8832308 1,10,12-13,15-16,19,27,29
+plugins/adapters/sandbox/pages/index/HtmlMessage.tsx
+  s_079f1dc5e6308d::t_98d878f4b377dd 1,5,28
+.changeset/localization-runtime.md
+  s_079f1dc5e6308d::t_42f4cea3f55090 1-18
+plugins/adapters/lark/agents/lark/skills/lark/tools/create_chat/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_4b46d320e5f9cc 16
+basic/schema/src/json-schema.ts
+  s_079f1dc5e6308d::t_72012c598d648d 3-9,83
+plugins/games/text-adventure/src/models.ts
+  s_079f1dc5e6308d::t_d38d9615e011ef 50,71
+  s_079f1dc5e6308d::t_563d7f759e0868 9,54
+plugins/games/roulette/src/session-service.ts
+  s_079f1dc5e6308d::t_563d7f759e0868 85
+plugins/games/roulette/plugin.ts
+  s_079f1dc5e6308d::t_fb4e49708b3b21 28
+  s_079f1dc5e6308d::t_563d7f759e0868 25-27
+docs/en/configuration/localization.md
+  s_079f1dc5e6308d::t_4a35d6aa3b8e0c 1-83,85-92
+  s_079f1dc5e6308d::t_0473303299e6bf 84
+plugins/utils/group-suite/commands/keyword-add/[keyword]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 9
+  s_079f1dc5e6308d::t_58fbc1d878ee77 1,14,18
+plugins/utils/60s/skills/60s-media/tools/bing_image/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 12
+plugins/utils/ledger/commands/ledger-week/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 8
+  s_079f1dc5e6308d::t_2bf06db07deb48 1-2,10,12
+plugins/utils/bilibili/src/store.ts
+  s_079f1dc5e6308d::t_30cb52141e1ec7 45,60-61
+packages/toolkit/scaffold-wizard/src/project-deps.ts
+  s_079f1dc5e6308d::t_737ce7432341f2 1,191,200,209,359,367
+plugins/games/dice-duel/src/view.ts
+  s_079f1dc5e6308d::t_657ae79c7502e5 1,14,16,21,24,26-27,33-35,37,41,43-44,53,58-75
+plugins/adapters/icqq/agents/icqq/skills/icqq-interaction/tools/send_user_like/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_8afa6168845a87 20-21
+plugins/utils/code-runner/src/i18n.ts
+  s_079f1dc5e6308d::t_925e8dfc34f31d 1-28
+plugins/utils/nettools/commands/domain-price/[suffix]/[[order]]/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 6,9-10
+  s_079f1dc5e6308d::t_14455bf3973008 12,17
+plugins/adapters/github/tests/account-localization.test.ts
+  s_079f1dc5e6308d::t_711c4915824fc5 1-42
+plugins/utils/rss/src/channel.ts
+  s_079f1dc5e6308d::t_a650859b2f9be6 1-2,31-32
+plugins/games/idiom-chain/commands/chain/[[action]]/index.ts
+  s_079f1dc5e6308d::t_811f2da2468bb4 9
+  s_079f1dc5e6308d::t_28cfec8dffb986 3,11
+  s_079f1dc5e6308d::t_158ab71632c88e 13
+plugins/utils/lottery/src/sync/run-sync.ts
+  s_079f1dc5e6308d::t_3b7384a824a131 1-2,11,14,32
+plugins/utils/code-runner/skills/code-runner/tools/run_code/index.ts
+  s_079f1dc5e6308d::t_49bbcd91922fc6 13-15
+plugins/adapters/kook/agents/kook/skills/kook/tools/revoke_role/index.ts
+  s_079f1dc5e6308d::t_2e85fd12b8926d 1
+  s_079f1dc5e6308d::t_83dce1ce71f750 20
+plugins/utils/reminder/commands/remind/cancel/index.ts
+  s_079f1dc5e6308d::t_d1a82d482cd9e5 7-8
+  s_079f1dc5e6308d::t_d2df04434917b3 1,9-10
+packages/im/adapter/src/endpoint-contract.ts
+  s_079f1dc5e6308d::t_9528188721dfd4 41-42
+packages/im/agent/tests/plugin-runtime/subagent-turn-capability.test.ts
+  s_079f1dc5e6308d::t_5fda02e3573523 58,185
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_079f1dc5e6308d::t_5f1d66890b0c6d 1-2,160
+packages/im/core/tests/plugin-runtime/outbound-locale.test.ts
+  s_079f1dc5e6308d::t_3f9b33ed844ee5 1-76
+packages/im/runtime/tests/topology-setup-runtime.test.ts
+  s_079f1dc5e6308d::t_00f5197c19762d 1-146
+packages/toolkit/scaffold-wizard/src/message-templates.ts
+  s_079f1dc5e6308d::t_2626c4aeb1b94c 1-95
+packages/toolkit/scaffold-wizard/src/messages.ts
+  s_079f1dc5e6308d::t_0df8e3e1e377c1 1-1965
+plugins/README.md
+  s_079f1dc5e6308d::t_21e95634fcc85b 3,5-13,17,20,22,24-32,34,36
+plugins/adapters/dingtalk/commands/dingtalk/endpoint/definition.ts
+  s_079f1dc5e6308d::t_f3f9a9401e7d50 13-15
+plugins/adapters/dingtalk/src/cards.ts
+  s_079f1dc5e6308d::t_1396c3be080513 1-2,19,40
+plugins/adapters/dingtalk/src/endpoint.ts
+  s_079f1dc5e6308d::t_9c7a675b0af755 172,174,205
+plugins/adapters/dingtalk/src/protocol.ts
+  s_079f1dc5e6308d::t_c2450af04bf22b 1-2,255,308,319,330,338
+plugins/adapters/dingtalk/tests/cards.test.ts
+  s_079f1dc5e6308d::t_5fba9d1846a433 55-56
+plugins/adapters/dingtalk/tests/share-keyboard.test.ts
+  s_079f1dc5e6308d::t_08b0f1942e0232 22-30
+plugins/adapters/github/commands/github/endpoint/definition.ts
+  s_079f1dc5e6308d::t_d5781249954163 18-19
+plugins/adapters/icqq/README.md
+  s_079f1dc5e6308d::t_26905941c390d2 195-200
+plugins/adapters/icqq/tests/localized-tool-feedback.test.ts
+  s_079f1dc5e6308d::t_c3090b3b0df4c0 1-40
+plugins/adapters/kook/commands/kook/endpoint/definition.ts
+  s_079f1dc5e6308d::t_7b1848f79d6ef3 14-15
+plugins/adapters/lark/commands/lark/endpoint/definition.ts
+  s_079f1dc5e6308d::t_66687474cece51 13-16
+plugins/adapters/lark/src/cards.ts
+  s_079f1dc5e6308d::t_232aee6736e1d0 1-2,7,27
+plugins/adapters/lark/src/endpoint.ts
+  s_079f1dc5e6308d::t_453a0d5fc82cbf 261,264
+plugins/adapters/lark/src/protocol.ts
+  s_079f1dc5e6308d::t_1526b3b22c56bb 1,276,289
+plugins/adapters/lark/tests/localized-presentation.test.ts
+  s_079f1dc5e6308d::t_762633594d9f37 1-35
+plugins/adapters/milky/commands/milky/endpoint/definition.ts
+  s_079f1dc5e6308d::t_762b3c74356c86 14
+plugins/adapters/napcat/commands/napcat/endpoint/definition.ts
+  s_079f1dc5e6308d::t_a0bdbeea89af6e 13-16
+plugins/adapters/onebot11/commands/onebot11/endpoint/definition.ts
+  s_079f1dc5e6308d::t_eecf0e43fac837 13-14
+plugins/adapters/onebot12/commands/onebot12/endpoint/definition.ts
+  s_079f1dc5e6308d::t_376bbf99bf67fb 13-15
+plugins/adapters/qq/README.md
+  s_079f1dc5e6308d::t_6399a1691b4a84 240-245
+plugins/adapters/satori/commands/satori/endpoint/definition.ts
+  s_079f1dc5e6308d::t_23329673fd3918 13-14
+plugins/adapters/slack/commands/slack/endpoint/definition.ts
+  s_079f1dc5e6308d::t_84764ebc875bd8 14
+plugins/adapters/wechat-mp/commands/wechat-mp/endpoint/definition.ts
+  s_079f1dc5e6308d::t_f2fdb4cd93b984 13-16
+plugins/adapters/wecom/commands/wecom/endpoint/definition.ts
+  s_079f1dc5e6308d::t_993755f3698905 13-16
+plugins/games/dungeon-expedition/tests/engine.test.ts
+  s_079f1dc5e6308d::t_0767562c2d5d01 57,63-64,74,79-90
+plugins/games/text-adventure/tests/localization.test.ts
+  s_079f1dc5e6308d::t_52b424ff445389 1-53
+plugins/utils/60s/README.md
+  s_079f1dc5e6308d::t_288836b2db7ff0 64-69
+plugins/utils/answers/src/book.ts
+  s_079f1dc5e6308d::t_b47333c274e4a6 1-2,6-9,46-47
+plugins/utils/answers/src/messages.ts
+  s_079f1dc5e6308d::t_c0182925ff0df8 1-16
+plugins/utils/answers/src/quiz.ts
+  s_079f1dc5e6308d::t_825c7bd5ab829c 1-2,20,63-64,68,73,75-76,86,91
+plugins/utils/calendar/schema.json
+  s_079f1dc5e6308d::t_fd9f30a2d62919 25-29,38-42,89-93,142-146,155-159,194-198,207-211,220-224,233-237
+plugins/utils/code-runner/README.md
+  s_079f1dc5e6308d::t_a0b08c93ce85c6 37-42
+plugins/utils/earthquake/skills/earthquake/tools/recent_earthquakes/index.ts
+  s_079f1dc5e6308d::t_fb532056c2958d 24
+plugins/utils/earthquake/src/conversation.ts
+  s_079f1dc5e6308d::t_fa106b477da2f5 1-2,31-33
+plugins/utils/earthquake/src/format.ts
+  s_079f1dc5e6308d::t_bea9430734c9df 1-2,36,41,45,53,57,60,65,71,74
+plugins/utils/earthquake/src/i18n.ts
+  s_079f1dc5e6308d::t_dbac19ccf0f624 1-39
+plugins/utils/earthquake/src/query-text.ts
+  s_079f1dc5e6308d::t_ee2a7f4311883a 1-2,18,28-30,32,35-36,44
+plugins/utils/earthquake/src/service.ts
+  s_079f1dc5e6308d::t_b401edc17a7cc0 1-2,278,291,294,296,300
+plugins/utils/earthquake/src/subscribe-args.ts
+  s_079f1dc5e6308d::t_f806595058f90d 1-2,24,35,38,43
+plugins/utils/group-suite/README.md
+  s_079f1dc5e6308d::t_cb2656efe43122 131-136
+plugins/utils/group-suite/skills/checkin/tools/checkin_query/index.ts
+  s_079f1dc5e6308d::t_83001ba113a40a 1,22,30,32,36
+plugins/utils/group-suite/skills/checkin/tools/checkin_rank/index.ts
+  s_079f1dc5e6308d::t_d809e7d93fedda 1,20,27,29
+plugins/utils/group-suite/skills/group-daily-analysis/tools/group_announce/index.ts
+  s_079f1dc5e6308d::t_47ec74e21211e0 1,12-13
+plugins/utils/group-suite/skills/group-daily-analysis/tools/stats_query/index.ts
+  s_079f1dc5e6308d::t_c48e604df77a80 1,29,33-34
+plugins/utils/group-suite/skills/group-daily-analysis/tools/stats_user/index.ts
+  s_079f1dc5e6308d::t_76657b85001c0a 1,25,31,44
+plugins/utils/group-suite/src/shared-runtime.ts
+  s_079f1dc5e6308d::t_839b89c1be1c89 1,29,35
+plugins/utils/group-suite/tests/review-regressions.test.ts
+  s_079f1dc5e6308d::t_4df1867ae02f6b 1-4,58,97-119
+plugins/utils/ledger/README.md
+  s_079f1dc5e6308d::t_2fad10c20e7612 85-90
+plugins/utils/ledger/src/entry-input.ts
+  s_079f1dc5e6308d::t_6ca3b9907c65f6 1-2,8,25-26,28,32,35-36,38-40
+plugins/utils/ledger/src/i18n.ts
+  s_079f1dc5e6308d::t_e7ff1cea33c12d 1-200
+plugins/utils/ledger/src/identity.ts
+  s_079f1dc5e6308d::t_1b1be5a92762c3 1-2,10,27,29,39
+plugins/utils/ledger/src/money.ts
+  s_079f1dc5e6308d::t_728ece263588d1 1-2,33,36,38,42-43
+plugins/utils/ledger/src/period.ts
+  s_079f1dc5e6308d::t_96eb90864046c0 1-2,12,15,18,86,94
+plugins/utils/ledger/src/report-format.ts
+  s_079f1dc5e6308d::t_5df13cfbb2362e 1-2,44,49,63-64,66,69-71,74-75,80-81,83,86,92-93,95-96,103-105,107,112,122
+plugins/utils/ledger/src/service.ts
+  s_079f1dc5e6308d::t_7e3631152b33a8 1-2,86,103,110,113,125-126,131-132,137-138,149-150,165,167,171-172,176,178-179,182,188-189,210,212
+plugins/utils/ledger/tests/locale-storage.test.ts
+  s_079f1dc5e6308d::t_a4597e344be0d4 1-35
+plugins/utils/lottery/tests/recommend/resolve-today.test.ts
+  s_079f1dc5e6308d::t_56afaf7707b72b 49-51
+plugins/utils/nettools/skills/nettools/tools/dns_lookup/index.ts
+  s_079f1dc5e6308d::t_8ca20810229e58 18
+plugins/utils/nettools/skills/nettools/tools/domain_price/index.ts
+  s_079f1dc5e6308d::t_1d0b3c830efacf 17
+plugins/utils/nettools/skills/nettools/tools/net_ping/index.ts
+  s_079f1dc5e6308d::t_77cf38a856ca70 14
+plugins/utils/nettools/skills/nettools/tools/whois_lookup/index.ts
+  s_079f1dc5e6308d::t_6720c099f167dd 14
+plugins/utils/nettools/src/address-policy.ts
+  s_079f1dc5e6308d::t_a39a8757399482 1,37,48-49,59,62,77-91,96-100,147,150,153,160,187,194,198,205,210,214-215,237,246,251,283,287,295,298,301,304,307,310,313,316,319,329,335,365,385,391,415,421,425,442
+plugins/utils/nettools/src/cooldown.ts
+  s_079f1dc5e6308d::t_7cbb805e2762b4 1,48
+plugins/utils/nettools/src/dns.ts
+  s_079f1dc5e6308d::t_455892c5954a42 1-3,106,127,139,141,147,179,184,217-218,220,225,236,239
+plugins/utils/nettools/src/domain-price.ts
+  s_079f1dc5e6308d::t_bc2fcbac42f810 1-3,37,61,77,81,108,111-112,177-178,180,182,185,189,191-192
+plugins/utils/nettools/src/errors.ts
+  s_079f1dc5e6308d::t_55603fcd8b73a7 1-2,24,32,35,38,53,56,58
+plugins/utils/nettools/src/http.ts
+  s_079f1dc5e6308d::t_e7f22fa95b50a2 1,122,159,172,176,184,190,251,268,291,297,306
+plugins/utils/nettools/src/messages.ts
+  s_079f1dc5e6308d::t_8a2d7492408f9a 1-342
+plugins/utils/nettools/src/ping.ts
+  s_079f1dc5e6308d::t_387bc1f201e45f 1-3,115,212-213,216,219,224,226,229,234,239,243
+plugins/utils/nettools/src/presentation.ts
+  s_079f1dc5e6308d::t_fe1cbfd7283756 1-36
+plugins/utils/nettools/src/service.ts
+  s_079f1dc5e6308d::t_e93bafe0c45bc3 1-2,55,59,63,67,77,80,83,87,91,94,99,102,107,110,115
+plugins/utils/nettools/src/whois.ts
+  s_079f1dc5e6308d::t_7d932f80354c3d 1-3,110,182,205,208,253,256,351,353,355,357,360,363,366,369,372,375
+plugins/utils/qrcode/README.md
+  s_079f1dc5e6308d::t_9692fb2ccf1312 36-41
+plugins/utils/reminder/schema.json
+  s_079f1dc5e6308d::t_e4b6047a68a592 8-12,21-25,37-41,53-57,69-73,85-89
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_079f1dc5e6308d::t_d9e45f64389915 1,36-84,454,478,486
+plugins/utils/repeater/README.md
+  s_079f1dc5e6308d::t_b62a3c656d7a51 44-49
+plugins/utils/repeater/schema.json
+  s_079f1dc5e6308d::t_cef46bfaca487b 8-12,24-28,39-43
+plugins/utils/short-url/README.md
+  s_079f1dc5e6308d::t_038432ca5bad37 25-30
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_a0c061ad2ec9dd 3895-3897
+plugins/utils/60s/tests/sixty-s-runtime.test.ts
+  s_5e8cee79946dc9::t_38d50a79845317 49-59
+plugins/utils/answers/src/config.ts
+  s_5e8cee79946dc9::t_32d3fa81e45ff3 12-15
+plugins/utils/calendar/README.md
+  s_5e8cee79946dc9::t_80413309c973c1 195-200
+plugins/utils/calendar/src/config.ts
+  s_5e8cee79946dc9::t_4be7ac3f4303f6 11,15,35,52,56,73,77,81,85
+plugins/utils/ledger/src/config.ts
+  s_5e8cee79946dc9::t_67d423775588f5 7-9
+plugins/utils/qrcode/tests/qrcode-runtime.test.ts
+  s_5e8cee79946dc9::t_46444052182b65 42
+plugins/utils/reminder/README.md
+  s_5e8cee79946dc9::t_494c492b63c792 57,59,117-122
+plugins/utils/reminder/src/config.ts
+  s_5e8cee79946dc9::t_bbd12e5d81d893 4-9
+plugins/utils/repeater/src/config.ts
+  s_5e8cee79946dc9::t_9dbca98713536e 11-13
+plugins/utils/repeater/tests/repeater-runtime.test.ts
+  s_5e8cee79946dc9::t_e6b6fb3a3c2fa4 24
+plugins/utils/rss/README.md
+  s_5e8cee79946dc9::t_6b78d4340bea66 165-172
+plugins/utils/rss/src/quiet-hours.ts
+  s_5e8cee79946dc9::t_8f6bd087b47750 1-7,18,20,22,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "53bc6a07204a077f39ed6985aa8c911b52685f41",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_5e8cee79946dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a177cd-2935-7d83-b223-468c532f9743",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_83064017245d8e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a177b9-bc18-7911-b873-92bd689b303f",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
