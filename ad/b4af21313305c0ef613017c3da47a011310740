@@ -1,0 +1,100 @@
+packages/im/core/src/plugin-runtime/im/outbound-projection.ts
+  s_079f1dc5e6308d::t_74d1a4b121944a 11,29,38,43,48
+packages/im/core/src/plugin-runtime/im/command-feedback.ts
+  s_079f1dc5e6308d::t_23c2a817ee1cd8 74-81,83-84
+  s_079f1dc5e6308d::t_254a868c68f2b9 1-73,82,85-97
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_079f1dc5e6308d::t_74d1a4b121944a 17,69,84,132
+packages/im/core/src/plugin-runtime/im/command-menu-presentation.ts
+  s_079f1dc5e6308d::t_ab7f335abeed63 1-48
+docs/snippets/behavior-customization.ts
+  s_079f1dc5e6308d::t_9c03dfed3908ab 1-42
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_079f1dc5e6308d::t_254a868c68f2b9 11-12,23-33,76-85,93,99,104,112-113,127-129
+packages/im/core/tests/plugin-runtime/behavior-customization.test.ts
+  s_079f1dc5e6308d::t_ee177c679b57c1 68-74
+  s_079f1dc5e6308d::t_99d72b62652a1e 92-95
+  s_079f1dc5e6308d::t_9c03dfed3908ab 1-37,39-65,67,75-91,96-124
+  s_079f1dc5e6308d::t_40319360436c01 38
+  s_079f1dc5e6308d::t_8befda2df5eae5 66
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_1a5f1ac877ab34 2,3226-3329,3358-3383,3385-3395,3410-3414,3416-3451
+  s_079f1dc5e6308d::t_25bfe0ab1ddef6 3330-3357
+  s_079f1dc5e6308d::t_efbb12fd0d1771 3,147-183
+  s_079f1dc5e6308d::t_c51351bcac3891 3384,3396-3409,3415
+  s_079f1dc5e6308d::t_73e99dcea0b3d7 3452
+packages/im/core/src/plugin-runtime/im/outbound-presentation.ts
+  s_079f1dc5e6308d::t_74d1a4b121944a 1-67
+packages/im/command/src/command-menu.ts
+  s_079f1dc5e6308d::t_ab7f335abeed63 1,6,30,72-73,76,82,85
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_ab7f335abeed63 21-22,67,78-89,92,547-552,555-562
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_079f1dc5e6308d::t_4ed6d5b9482f98 5,102,123-124,179,245
+  s_079f1dc5e6308d::t_d53689f3d33525 23,30-31,44-47,93,101,108,113,122,125-131,136-137,139,142,159-162,164-178,180-238,240,246-249,266-297
+  s_079f1dc5e6308d::t_f481f4e745b558 163,239,241-244,250-265
+packages/im/core/tests/plugin-runtime/command-menu-image.test.ts
+  s_079f1dc5e6308d::t_45d5541e81300e 7-8,10-11,208-282
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_254a868c68f2b9 477,479,496-497,500
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_079f1dc5e6308d::t_74d1a4b121944a 21,47-48,51
+packages/im/core/src/plugin-runtime/im/command-menu-navigation.ts
+  s_079f1dc5e6308d::t_ab7f335abeed63 7,10,16,19-21
+.changeset/root-behavior-presentation.md
+  s_079f1dc5e6308d::t_16f8000eb735c3 1-7
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_79cd3e4ab56f19 95,244
+docs/authoring/behavior-customization.md
+  s_079f1dc5e6308d::t_d2dfe1e3d5df16 1-78
+docs/authoring/commands.md
+  s_079f1dc5e6308d::t_2ed3e5f5c02a28 8-9
+docs/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_87cbc8bf0e6afb 8-9
+docs/contributing/behavior-customization-plan.md
+  s_079f1dc5e6308d::t_ab2fe822efa5b5 1-127
+docs/contributing/development.md
+  s_079f1dc5e6308d::t_85649707effb99 13
+docs/en/authoring/behavior-customization.md
+  s_079f1dc5e6308d::t_f228e10d8e7432 1-67
+docs/en/authoring/commands.md
+  s_079f1dc5e6308d::t_dc19b12157ce62 8-9
+docs/en/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_1e5697338ebb2b 8-9
+packages/im/core/README.md
+  s_079f1dc5e6308d::t_3a25b390338766 149-152
+packages/im/core/src/feature/command-public-api.ts
+  s_079f1dc5e6308d::t_1381af09fc0583 1-40
+packages/im/core/src/feature/command.ts
+  s_079f1dc5e6308d::t_5af8c9a100c24f 3-6
+packages/im/core/src/feature/middleware-public-api.ts
+  s_079f1dc5e6308d::t_c5b88ab80b1b9a 16-22
+packages/im/core/src/feature/middleware.ts
+  s_079f1dc5e6308d::t_07359179c626ff 49-54
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_e737d37e265824 2,161
+packages/im/zhin/README.md
+  s_079f1dc5e6308d::t_56affa848c7db9 189-192
+scripts/check-api-docs-surface.mjs
+  s_079f1dc5e6308d::t_48bf592d8432af 64-65,79-80
+tests/docs/api-docs.test.ts
+  s_079f1dc5e6308d::t_cfba85e7b94a94 13
+typedoc.json
+  s_079f1dc5e6308d::t_1aa2d969d2a442 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "adb4af21313305c0ef613017c3da47a011310740",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
