@@ -1,0 +1,42 @@
+.changeset/ambient-decision-engagement.md
+  h_b680f75345178a 1-9
+basic/cli/src/plugin-runtime/agent/turn/ambient-engagement.ts
+  h_b680f75345178a 7-10,14,21-22,118-269,347-348,376
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 30,32,34,89-95,103-116,139-142,191-237,242,255,259,275,408
+basic/cli/tests/plugin-runtime/agent/turn/ambient-engagement.test.ts
+  h_b680f75345178a 2,5-6,9,205-328
+docs/ai/index.md
+  h_b680f75345178a 328-352
+docs/ai/structured-decisions.md
+  h_b680f75345178a 13-14,80-81,111
+docs/configuration/generated.md
+  h_b680f75345178a 123-129,402
+docs/en/ai/index.md
+  h_b680f75345178a 328-352
+docs/en/configuration/generated.md
+  h_b680f75345178a 123-129,402
+packages/im/agent/src/decision/config.ts
+  h_b680f75345178a 3
+packages/im/agent/src/decision/types.ts
+  h_b680f75345178a 3
+packages/im/agent/tests/decision/runtime-binding.test.ts
+  h_b680f75345178a 45-52
+packages/im/ai/src/types.ts
+  h_b680f75345178a 395-396,681-682
+packages/im/runtime/src/host-config-schema.json
+  h_b680f75345178a 735-739,2903
+packages/toolkit/scaffold-wizard/src/decisions.ts
+  h_b680f75345178a 90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0dd657d14bed799636b9e420c1796ef0256fa536",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
