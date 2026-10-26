@@ -4,19 +4,21 @@ import type { ConversationRef } from '@zhin.js/im-contract';
 import type { CapabilityId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, SendContent } from './contracts.js';
 import { resolveOutboundInteractivePolicy, resolveOutboundMarkdownPolicy, resolveOutboundSupportedSegments } from './outbound-segments.js';
+import { presentCommandMenu } from './command-menu-presentation.js';
 
 /** IM-only presentation: Command remains independent of JSX, adapters and callback registries. */
-export function commandMenuReply(
+export async function commandMenuReply(
   result: CommandDispatchResult,
   commands: CommandIndex,
   snapshot: RuntimeSnapshot,
   conversation: ConversationRef,
   prefix: string,
-): SendContent {
+): Promise<SendContent> {
   // Only validated menus carry this metadata; other command return values stay opaque.
-  const content = result.value as SendContent;
   const menu = result.menu;
-  if (!menu || menu.pages <= 1) return content;
+  if (!menu) return result.value as SendContent;
+  const content = await presentCommandMenu(menu, result.value as SendContent, snapshot, conversation);
+  if (menu.pages <= 1) return content;
   const endpoint = conversation.endpoint.id as CapabilityId;
   const supported = resolveOutboundSupportedSegments(endpoint, snapshot);
   if (resolveOutboundMarkdownPolicy(endpoint, snapshot) !== 'native'

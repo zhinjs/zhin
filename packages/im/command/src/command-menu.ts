@@ -1,9 +1,9 @@
-interface MenuEntry {
+export interface CommandMenuEntry {
   readonly name: string;
   readonly description?: string;
 }
 
-interface MenuAppearance {
+export interface CommandMenuAppearance {
   readonly title?: string;
   readonly subtitle?: string;
   readonly accentColor?: string;
@@ -27,7 +27,7 @@ const escape = (value: string) => value.replace(/[&<>"']/gu, char => ({
 })[char] ?? char);
 
 /** Configuration is text/data, never an interpolated CSS or HTML fragment. */
-export function readMenuAppearance(value: unknown): MenuAppearance {
+export function readMenuAppearance(value: unknown): CommandMenuAppearance {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const input = value as Record<string, unknown>;
   const result: { title?: string; subtitle?: string; accentColor?: string; backgroundImage?: string } = {};
@@ -69,20 +69,20 @@ function icon(name: string, plugin = false): string {
 /** Presentation only: the unified outbound pipeline owns image rendering and fallback. */
 export function renderCommandMenu(
   title: string,
-  commands: readonly MenuEntry[],
-  children: readonly MenuEntry[],
+  commands: readonly CommandMenuEntry[],
+  children: readonly CommandMenuEntry[],
   hint: string | undefined,
   text: string,
-  options: { readonly page?: number; readonly pages?: number; readonly commandTotal?: number; readonly pluginTotal?: number; readonly appearance?: MenuAppearance } = {},
+  options: { readonly page?: number; readonly pages?: number; readonly commandTotal?: number; readonly pluginTotal?: number; readonly appearance?: CommandMenuAppearance } = {},
 ): CommandMenuSegment {
   const appearance = options.appearance ?? {};
   const background = appearance.backgroundImage ?? `data:image/svg+xml,${encodeURIComponent(landscape)}`;
   // CSS string escaping additionally prevents an artwork URL from closing <style>.
   const cssUrl = JSON.stringify(background).replace(/</gu, '\\3c ').replace(/>/gu, '\\3e ');
-  const entries = (items: readonly MenuEntry[], plugin: boolean) => items.map(item =>
+  const entries = (items: readonly CommandMenuEntry[], plugin: boolean) => items.map(item =>
     `<div class="entry"><div class="icon">${icon(item.name, plugin)}</div><div class="copy"><div class="name">${escape(item.name)}</div>${item.description
       ? `<div class="description">${escape(item.description)}</div>` : ''}</div></div>`).join('');
-  const section = (label: string, items: readonly MenuEntry[], total: number, plugin = false) => items.length === 0 ? ''
+  const section = (label: string, items: readonly CommandMenuEntry[], total: number, plugin = false) => items.length === 0 ? ''
     : `<section><div class="section-head"><h2>${label}</h2><span>${items.length} / ${total}</span></div><div class="grid">${entries(items, plugin)}</div></section>`;
   const page = options.page ?? 1;
   const pages = options.pages ?? 1;

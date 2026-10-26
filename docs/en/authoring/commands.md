@@ -5,6 +5,8 @@ description: "Write /xxx commands — params, options, aliases, permissions, ima
 
 # Commands
 
+For feedback and menu layout policies, see [Customize built-in presentation](./behavior-customization.md).
+
 A command is a function that runs when a user sends something like `/hello` or `/remind 10 drink water`. This page starts with the simplest command and adds params, options, permissions and rich replies step by step.
 
 The `remind` command here is a development example. For a ready-to-use persistent reminder with follow-up questions, see [Create reminders without AI](../solutions/reminders.md).

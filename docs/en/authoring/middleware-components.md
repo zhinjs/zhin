@@ -5,6 +5,8 @@ description: "Use middleware for keyword replies and filtering, write mixed mess
 
 # Middleware & components
 
+For per-conversation preferences before rendering, see [Customize built-in presentation](./behavior-customization.md).
+
 - **Middleware** is an interceptor every message passes through — keyword replies, filters, moderation.
 - **Components** are reusable message cards written in JSX.
 

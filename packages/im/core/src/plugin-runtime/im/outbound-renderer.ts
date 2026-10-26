@@ -18,6 +18,7 @@ import {
 import { JsxButtonRegistry } from './jsx-button-registry.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import { projectOutboundPayload, type OutboundProjection } from './outbound-projection.js';
+import { resolveOutboundPresentation } from './outbound-presentation.js';
 
 const maxComponentDepth = 32;
 const TEMPLATE_MARKER = '${';
@@ -43,9 +44,11 @@ export class OutboundRenderer {
     if (!adapters.list().find(item => item.id === endpointId)?.capabilities.includes('outbound')) {
       throw new Error('Preview endpoint does not support outbound messages');
     }
+    options.signal?.throwIfAborted();
+    const presentation = resolveOutboundPresentation(snapshot, conversation, requester);
     const buttons = new JsxButtonRegistry().prepare({ content, requester, conversation }, snapshot);
     const rendered = await this.render(content, requester, snapshot, conversation, undefined, { ...options, bindButton: buttons.bind });
-    const result = await projectOutboundPayload(rendered, conversation, snapshot, options);
+    const result = await projectOutboundPayload(rendered, conversation, snapshot, { ...options, presentation });
     options.signal?.throwIfAborted();
     return result;
   }

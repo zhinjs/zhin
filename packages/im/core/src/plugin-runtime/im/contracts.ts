@@ -1,5 +1,5 @@
 import type { JSXElement } from '@zhin.js/jsx';
-import type { CommandMenuNavigation } from '@zhin.js/command';
+import type { CommandMenuPage } from '@zhin.js/command';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { operationInputBinding, operationInputSignal } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
@@ -158,7 +158,7 @@ export interface MessageDispatchResult {
   readonly command?: string;
   readonly owner?: PluginId;
   readonly value?: unknown;
-  readonly menu?: CommandMenuNavigation;
+  readonly menu?: CommandMenuPage;
 }
 
 /** Canonical message value delivered to inbound middleware and handlers. */

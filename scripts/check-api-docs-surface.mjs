@@ -61,6 +61,8 @@ const expectedSurface = new Map([
     'CommandParameterValue', 'defineCommand',
     'CommandExecutionPolicy', 'CommandExecutionLimit',
     'CommandParams', 'CommandOptions', 'CommandOptionSchema', 'InferCommandParams', 'InferCommandOptions',
+    'CommandFeedback', 'CommandFeedbackContext', 'CommandFeedbackRenderer', 'CommandMenuPresentationInput', 'CommandMenuPresenter', 'CommandMenuPage', 'CommandMenuNavigation', 'CommandMenuEntry', 'CommandMenuAppearance', 'CommandValidationIssue',
+    'commandFeedbackToken', 'commandMenuPresentationToken',
   ]],
   ['zhin.js/component', ['ComponentContext', 'ComponentDefinition', 'defineComponent']],
   ['zhin.js/core/runtime', [
@@ -74,6 +76,8 @@ const expectedSurface = new Map([
     'MiddlewareContext', 'MiddlewareContinuation', 'MiddlewareDefinition',
     'MiddlewareDefinitionBase', 'MiddlewareNext', 'MiddlewarePhase',
     'MiddlewareTarget', 'OutboundMiddlewareNext', 'defineMiddleware',
+    'outboundPresentationToken', 'OutboundPresentation', 'OutboundPresentationContext',
+    'OutboundPresentationMode', 'OutboundPresentationPreferences',
   ]],
 ]);
 

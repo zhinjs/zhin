@@ -10,7 +10,7 @@ title: 开发流程
 
 在 [Issue](https://github.com/zhinjs/zhin/issues) 记录问题和验收标准，通过关联的 PR 提交实现。[交付看板](https://github.com/orgs/zhinjs/projects/3) 跟踪当前开放 Issue 和 PR，按 Todo → In Progress → Done 推进；新建或更新且仍开放的条目会自动进入看板。历史已合并 PR 不需要补录。文档入口见 [GitHub Wiki](https://github.com/zhinjs/zhin/wiki)，技术内容仍在本仓库 `docs/` 中维护。
 
-插件易用性相关工作按[插件开发与安装体验改进计划](./plugin-experience-plan.md)分阶段验收。
+插件易用性相关工作按[插件开发与安装体验改进计划](./plugin-experience-plan.md)分阶段验收。行为修改能力按[行为定制实施计划](./behavior-customization-plan.md)推进，默认行为保持与新策略的显式选择分别验收。
 
 ## 环境准备
 

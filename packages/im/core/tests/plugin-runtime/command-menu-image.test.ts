@@ -4,7 +4,11 @@ import {
   type HtmlRendererHost, type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
+import { getLogger } from '@zhin.js/logger';
+import { jsx } from '@zhin.js/jsx';
 import { projectOutboundPayload } from '../../src/plugin-runtime/im/outbound-projection.js';
+import { commandMenuReply } from '../../src/plugin-runtime/im/command-menu-navigation.js';
+import { commandMenuPresentationToken, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-menu-presentation.js';
 
 function fixture(renderer?: HtmlRendererHost, html: 'image' | 'text' = 'image', media = ['base64']) {
   const root = rootPluginId();
@@ -200,4 +204,79 @@ it('applies safe appearance settings from root configuration without changing te
   const invalid = await index.dispatch('帮助', undefined, undefined, '', bad);
   expect((invalid.value as { data: { html: string } }).data.html).not.toContain('javascript:');
   expect((invalid.value as { data: { html: string } }).data.html).not.toContain('display:none');
+});
+
+it('uses copied page data for an asynchronous Root presenter without executing catalog commands', async () => {
+  const { index, snapshot, conversation, resources } = largeFixture(35, 2);
+  const presenter = vi.fn<CommandMenuPresenter>(async ({ page }) => jsx('text', {
+    children: `${page.title}: ${page.commands.map(command => command.name).join(',')}`,
+  }));
+  resources.set(commandMenuPresentationToken.id, presenter);
+  const result = await index.dispatch('帮助 --page 2', undefined, undefined, '/', snapshot);
+  const reply = await commandMenuReply(result, index, snapshot, conversation, '/');
+  expect(reply).toEqual(jsx('text', { children: 'root: /cmd-030,/cmd-031,/cmd-032,/cmd-033,/cmd-034' }));
+  const { page } = presenter.mock.calls[0]![0];
+  expect(page).toMatchObject({ page: 2, pages: 2, commandTotal: 35, pluginTotal: 2,
+    plugins: [{ name: 'plugin-000' }, { name: 'plugin-001' }] });
+  expect(page.commands).toHaveLength(5);
+  expect(page.commands[0]).not.toHaveProperty('execute');
+  expect(result.owner).toBe(snapshot.root);
+});
+
+it('resolves only the current Root selection and never promotes a sibling presenter', async () => {
+  const { index, snapshot, conversation, resources } = fixture();
+  const sibling = vi.fn<CommandMenuPresenter>(() => 'sibling');
+  const old = vi.fn<CommandMenuPresenter>(() => 'old generation');
+  resources.set(commandMenuPresentationToken.id, old);
+  const child = childPluginId(snapshot.root, 'music');
+  const selected = vi.fn<CommandMenuPresenter>(({ generation }) => `current generation ${generation}`);
+  const current = { ...snapshot, generation: 2, resources: new Map([
+    [snapshot.root, new Map([[commandMenuPresentationToken.id, selected]])],
+    [child, new Map([[commandMenuPresentationToken.id, sibling]])],
+  ]) };
+  const result = await index.dispatch('帮助', undefined, undefined, '/', current);
+  expect(await commandMenuReply(result, index, current, conversation, '/')).toBe('current generation 2');
+  const removed = { ...current, resources: new Map([[child, current.resources.get(child)!]]) };
+  expect(await commandMenuReply(result, index, removed, conversation, '/')).toBe(result.value);
+  expect(old).not.toHaveBeenCalled();
+  expect(sibling).not.toHaveBeenCalled();
+});
+
+it.each(['undefined', 'throw', 'mutate'] as const)('retains the built-in menu after presenter %s without logging content', async mode => {
+  const { index, snapshot, conversation, resources } = fixture(rendererFixture());
+  const warn = vi.spyOn(getLogger('command'), 'warn').mockImplementation(() => undefined);
+  resources.set(commandMenuPresentationToken.id, ({ page, conversation: view }: Parameters<CommandMenuPresenter>[0]) => {
+    if (mode === 'throw') throw new Error('secret from menu or conversation');
+    if (mode === 'mutate') {
+      expect(Reflect.set(view.endpoint, 'id', 'other-account')).toBe(false);
+      expect(Reflect.set(page.commands[0]!, 'name', 'corrupt')).toBe(false);
+      Object.assign(page, { page: 999 });
+    }
+    return undefined;
+  });
+  try {
+    const result = await index.dispatch('帮助', undefined, undefined, '/', snapshot);
+    expect(await commandMenuReply(result, index, snapshot, conversation, '/')).toBe(result.value);
+    expect(result.menu?.page).toBe(1);
+    expect(result.menu?.commands[0]?.name).toBe('/ping');
+    expect(conversation.endpoint.id).not.toBe('other-account');
+    expect(warn).toHaveBeenCalledTimes(mode === 'undefined' ? 0 : 1);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('secret');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('测试连通性');
+  } finally { warn.mockRestore(); }
+});
+
+it('preserves menuStyle and pagination when no presenter is selected', async () => {
+  const { index, snapshot, conversation } = largeFixture(40, 0, rendererFixture());
+  const current = { ...snapshot, config: new Map([[snapshot.root, {
+    menuStyle: { title: '项目帮助', subtitle: '所有功能', accentColor: '#123456' },
+  }]]) };
+  for (const page of [1, 2]) {
+    const result = await index.dispatch(`帮助 --page ${page}`, undefined, undefined, '/', current);
+    expect(await commandMenuReply(result, index, current, conversation, '/')).toBe(result.value);
+    expect(result.value).toMatchObject({ type: 'html', data: {
+      html: expect.stringContaining('项目帮助'), text: expect.stringContaining(`第 ${page}/2 页`),
+    } });
+    expect(result.menu?.appearance).toEqual({ title: '项目帮助', subtitle: '所有功能', accentColor: '#123456' });
+  }
 });

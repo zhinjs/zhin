@@ -474,8 +474,9 @@ export class InboundRuntime {
               this.context.diagnostics?.step('handlers', 'completed');
               const interactive = await this.#dispatchInteractive(message, requester, admission, lease.value);
               if (interactive) this.context.diagnostics?.route('interaction');
-              result = interactive ?? await this.#dispatcher.dispatch(message, lease.value, interactionFactory,
+              const dispatched = interactive ? undefined : await this.#dispatcher.dispatchWithReply(message, lease.value, interactionFactory,
                 (stage, status) => this.context.diagnostics?.step(stage, status));
+              result = interactive ?? dispatched!.dispatch;
               if (!result.matched && ingressRoute) {
                 logger.debug(formatCompact({
                   op: 'unmatched',
@@ -492,11 +493,11 @@ export class InboundRuntime {
                   result = Object.freeze({ matched: true, command: 'ai', owner: requester });
                 }
               }
+              const response = dispatched?.reply ?? (interactive?.value !== undefined && interactive.owner
+                ? { owner: interactive.owner, content: interactive.value as SendContent } : undefined);
               return {
                 dispatch: result,
-                ...(result.value !== undefined && result.owner
-                  ? { reply: { owner: result.owner, content: result.value as SendContent } }
-                  : {}),
+                ...(response ? { reply: response } : {}),
               };
           };
           const middleware = lease.value.projections.get(middlewareFeatureId);
