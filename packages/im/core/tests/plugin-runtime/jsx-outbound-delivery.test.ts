@@ -2,6 +2,7 @@ import {
   createCapabilitySlot,
   createSnapshotView,
   htmlRendererToken,
+  childPluginId,
   rootPluginId,
   type CapabilityId,
   type CapabilitySlot,
@@ -19,13 +20,15 @@ import {
   type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '@zhin.js/middleware';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 import { getLogger } from '@zhin.js/logger';
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
 import { OutboundDeliveryRuntime } from '../../src/plugin-runtime/im/outbound-delivery-runtime.js';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
 import { raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
+import { outboundPresentationToken, type OutboundPresentation } from '../../src/plugin-runtime/im/outbound-presentation.js';
+import { JsxButtonRegistry } from '../../src/plugin-runtime/im/jsx-button-registry.js';
 
 const activeAdapters: AdapterIndex[] = [];
 afterEach(async () => {
@@ -38,6 +41,10 @@ interface FixtureOptions {
   readonly replace?: unknown;
   readonly mutate?: (payload: unknown) => void;
   readonly onSend?: (request: EndpointSendRequest) => string | Promise<string>;
+  readonly presentation?: OutboundPresentation;
+  readonly childPresentation?: OutboundPresentation;
+  readonly target?: Pick<ConversationRef, 'kind' | 'id' | 'parent' | 'threadId'>;
+  readonly generation?: number;
 }
 
 /** Exercise real AdapterIndex admission and the production delivery/normalization chain. */
@@ -83,6 +90,7 @@ async function fixture(options: FixtureOptions = {}) {
   const resources = new Map([
     [endpointEventGatewayToken.id, { receive: async () => undefined } as unknown],
     ...(options.renderer ? [[htmlRendererToken.id, options.renderer] as const] : []),
+    ...(options.presentation ? [[outboundPresentationToken.id, options.presentation] as const] : []),
   ]);
   const state: SnapshotState = {
     root,
@@ -90,18 +98,19 @@ async function fixture(options: FixtureOptions = {}) {
       id: root, instanceKey: 'root', packageName: '@test/neutral-endpoint', packageRoot: '/project', children: [],
     }]]),
     config: new Map([[root, {}]]),
-    resources: new Map([[root, resources]]),
+    resources: new Map([[root, resources], ...(options.childPresentation
+      ? [[childPluginId(root, 'child'), new Map([[outboundPresentationToken.id, options.childPresentation]])] as const] : [])]),
     capabilities: new Map<CapabilityId, Readonly<CapabilitySlot>>([
       [adapter.id, adapter], [middleware.id, middleware],
     ]),
     projections: new Map(),
   };
-  const view = createSnapshotView(0, state);
+  const view = createSnapshotView(options.generation ?? 0, state);
   const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
   activeAdapters.push(adapters);
   await adapters.start();
   adapters.open();
-  const snapshot = createSnapshotView(0, {
+  const snapshot = createSnapshotView(options.generation ?? 0, {
     ...state,
     projections: new Map([
       [adapterFeatureId, adapters as unknown],
@@ -110,16 +119,27 @@ async function fixture(options: FixtureOptions = {}) {
   });
   const record = vi.fn(async () => undefined);
   const publish = vi.fn();
-  const runtime = new OutboundDeliveryRuntime({ record, publish, rememberFallback: () => undefined });
+  const buttons = new JsxButtonRegistry();
+  const activate = vi.fn<(payloads: ReadonlySet<string>) => void>();
+  const rememberFallback = vi.fn<(conversation: ConversationRef, generation: number, map: Record<string, string>) => void>();
+  const runtime = new OutboundDeliveryRuntime({ record, publish, rememberFallback,
+    prepareButtons(request, current) {
+      const batch = buttons.prepare(request, current);
+      return { bind: batch.bind, activate(payloads) { activate(payloads); return batch.activate(payloads); } };
+    },
+  });
+  const target = options.target ?? { kind: 'private' as const, id: 'room' };
   return {
     sent,
     record,
     publish,
+    activate,
+    rememberFallback,
     preview: (content: SendContent, signal?: AbortSignal) => new OutboundRenderer().preview(content, root, snapshot,
-      { endpoint: { id: String(adapter.id), adapter: 'test' }, kind: 'private', id: 'room' }, { signal }),
+      { endpoint: { id: String(adapter.id), adapter: 'test' }, ...target }, { signal }),
     send: (content: SendContent) => runtime.deliver({
       requester: root,
-      conversation: { endpoint: { id: String(adapter.id), adapter: String(root) }, kind: 'private', id: 'room' },
+      conversation: { endpoint: { id: String(adapter.id), adapter: String(root) }, ...target },
       content,
     }, snapshot),
   };
@@ -136,6 +156,145 @@ function rasterRenderer() {
 }
 
 describe('JSX outbound delivery through a real Endpoint', () => {
+  it('applies Root text preferences before rasterizing and reuses the same decision after JSX replacement', async () => {
+    const renderer = rasterRenderer();
+    const preferences = { html: 'text' as const, markdown: 'text' as const, interactive: 'text' as const };
+    const presentation = vi.fn(() => preferences);
+    const original = vi.fn(() => [jsx(Html, { children: 'Original' }), jsx('button', { label: 'Discarded', onClick: vi.fn() })]);
+    const replacement = vi.fn(() => [jsx(Html, { children: 'Replacement' }),
+      segment.markdown('**ready**'), jsx('button', { label: 'Retry', onClick: vi.fn() })]);
+    const f = await fixture({ renderer, presentation,
+      segments: { html: 'image', markdown: 'native', interactive: 'native', supported: ['text', 'image', 'markdown', 'keyboard'] },
+      replace: jsx(replacement, {}),
+      mutate() { Object.assign(preferences, { html: 'default', markdown: 'default', interactive: 'default' }); },
+    });
+    expect((await f.send(jsx(original, {}))).status).toBe('sent');
+    expect(presentation).toHaveBeenCalledTimes(1);
+    expect(original).toHaveBeenCalledTimes(1);
+    expect(replacement).toHaveBeenCalledTimes(1);
+    expect(renderer.render).not.toHaveBeenCalled();
+    expect(f.sent).toHaveLength(1);
+    expect(f.sent[0]?.payload).toEqual([segment.text('Replacement'), segment.text('ready'), expect.objectContaining({ type: 'text' })]);
+    expect(f.activate).toHaveBeenCalledTimes(1);
+    expect([...f.activate.mock.calls[0]![0]]).toEqual(Object.values(f.rememberFallback.mock.calls[0]![2]));
+    expect(f.record).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares a read-only, precise conversation decision with previews without middleware or transport', async () => {
+    const renderer = rasterRenderer();
+    const target = { kind: 'channel' as const, id: 'room', parent: { kind: 'group' as const, id: 'guild' }, threadId: 'topic' };
+    const presentation = vi.fn<OutboundPresentation>(context => {
+      expect(context).toMatchObject({ requester: rootPluginId(), generation: 7, conversation: target });
+      expect(Object.isFrozen(context)).toBe(true);
+      expect(Object.isFrozen(context.conversation)).toBe(true);
+      expect(Object.isFrozen(context.conversation.endpoint)).toBe(true);
+      expect(Object.isFrozen(context.conversation.parent)).toBe(true);
+      expect(context.conversation.parent).not.toBe(target.parent);
+      return context.conversation.threadId === 'topic' ? { html: 'text', markdown: 'text', interactive: 'text' } : undefined;
+    });
+    const mutate = vi.fn();
+    const f = await fixture({ renderer, presentation, target, generation: 7, mutate,
+      segments: { html: 'image', markdown: 'native', interactive: 'native' } });
+    const content = [jsx(Html, { children: 'Report' }), segment.markdown('**ready**')];
+    const preview = await f.preview(content);
+    expect(presentation).toHaveBeenCalledTimes(1);
+    expect(mutate).not.toHaveBeenCalled();
+    expect(f.sent).toEqual([]);
+    expect(f.activate).not.toHaveBeenCalled();
+    expect((await f.send(content)).status).toBe('sent');
+    expect(presentation).toHaveBeenCalledTimes(2);
+    expect(renderer.render).not.toHaveBeenCalled();
+    expect(f.sent[0]?.payload).toEqual(preview.payload);
+    expect(f.publish).toHaveBeenCalledWith(expect.objectContaining({ rendering: preview.rendering }));
+    expect(Object.isFrozen(target.parent)).toBe(false);
+  });
+
+  it.each(['undefined', 'default', 'throw', 'invalid', 'async'] as const)('falls back to built-in presentation for %s without repeating business or delivery', async mode => {
+    const renderer = rasterRenderer();
+    const presentation = vi.fn(() => {
+      if (mode === 'throw') throw new Error('private policy detail');
+      if (mode === 'invalid') return { html: 'direct' };
+      if (mode === 'async') return Promise.reject(new Error('private async policy detail'));
+      return mode === 'default' ? { html: 'default' } : undefined;
+    }) as unknown as OutboundPresentation;
+    const render = vi.fn(() => jsx(Html, { children: 'Report' }));
+    const warn = vi.spyOn(getLogger('im.outbound'), 'warn').mockImplementation(() => undefined);
+    try {
+      const f = await fixture({ renderer, presentation, segments: { html: 'image' } });
+      expect((await f.send(jsx(render, {}))).status).toBe('sent');
+      expect(presentation).toHaveBeenCalledTimes(1);
+      expect(render).toHaveBeenCalledTimes(1);
+      expect(renderer.render).toHaveBeenCalledTimes(1);
+      expect(f.sent).toHaveLength(1);
+      expect(f.sent[0]?.payload).toEqual([expect.objectContaining({ type: 'image' })]);
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('private');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('Report');
+      if (mode === 'throw' || mode === 'invalid' || mode === 'async') {
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn).toHaveBeenCalledWith(expect.stringMatching(/outbound_presentation.*fallback.*policy_failed/s));
+      } else expect(warn).not.toHaveBeenCalled();
+    } finally { warn.mockRestore(); }
+  });
+
+  it.each(['html', 'markdown', 'interactive'] as const)('does not let %s text preferences bypass supported segment admission', async kind => {
+    const renderer = rasterRenderer();
+    const f = await fixture({ renderer, presentation: () => ({ [kind]: 'text' }),
+      segments: { html: 'direct', markdown: 'native', interactive: 'native', supported: ['html', 'markdown', 'keyboard'] } });
+    const content = kind === 'html' ? jsx(Html, { children: 'Report' })
+      : kind === 'markdown' ? segment.markdown('**Report**') : jsx('button', { label: 'Report', onClick: vi.fn() });
+    expect(await f.send(content)).toMatchObject({ status: 'unsupported', failure: { code: 'unsupported_operation' } });
+    await expect(f.preview(content)).rejects.toMatchObject({ code: 'unsupported_operation' });
+    expect(renderer.render).not.toHaveBeenCalled();
+    expect(f.sent).toEqual([]);
+    expect(f.activate).not.toHaveBeenCalled();
+  });
+
+  it.each(['direct', 'image'] as const)('keeps mixed %s HTML, Markdown and buttons readable on a strict text target', async html => {
+    const renderer = rasterRenderer();
+    const f = await fixture({ renderer, presentation: () => ({ html: 'text', markdown: 'text', interactive: 'text' }),
+      segments: { html, markdown: 'native', interactive: 'native', supported: ['text'] } });
+    const content = [jsx(Html, { children: 'Report' }), segment.markdown('**ready**'),
+      jsx('button', { label: 'Continue', onClick: vi.fn() }), jsx('button', { label: 'Previous', disabled: true, onClick: vi.fn() })];
+    const preview = await f.preview(content);
+    expect((await f.send(content)).status).toBe('sent');
+    expect(f.sent[0]?.payload).toEqual(preview.payload);
+    expect(f.sent[0]?.payload).toEqual([segment.text('Report'), segment.text('ready'),
+      expect.objectContaining({ type: 'text', data: { text: expect.stringContaining('Continue') } }),
+      expect.objectContaining({ type: 'text', data: { text: expect.stringContaining('Previous (不可用)') } })]);
+    expect(renderer.render).not.toHaveBeenCalled();
+    expect([...f.activate.mock.calls[0]![0]]).toHaveLength(1);
+  });
+
+  it('resolves only the current snapshot Root policy, never a child override or another generation', async () => {
+    const renderer = rasterRenderer();
+    const childPresentation = vi.fn<OutboundPresentation>(() => ({ html: 'text' }));
+    const first = await fixture({ renderer, childPresentation, generation: 3, segments: { html: 'image' } });
+    const presentation = vi.fn<OutboundPresentation>(() => ({ html: 'text' }));
+    const second = await fixture({ renderer, presentation, generation: 4, segments: { html: 'image' } });
+    const content = jsx(Html, { children: 'Report' });
+    await first.send(content);
+    await second.send(content);
+    await first.send(content);
+    expect(childPresentation).not.toHaveBeenCalled();
+    expect(presentation).toHaveBeenCalledTimes(1);
+    expect(presentation.mock.calls[0]?.[0].generation).toBe(4);
+    expect(renderer.render).toHaveBeenCalledTimes(2);
+    expect(second.sent[0]?.payload).toEqual([segment.text('Report')]);
+  });
+
+  it('keeps one transport attempt when the selected text presentation has an unknown delivery outcome', async () => {
+    const renderer = rasterRenderer();
+    const presentation = vi.fn<OutboundPresentation>(() => ({ html: 'text' }));
+    const f = await fixture({ renderer, presentation, segments: { html: 'image' }, onSend() {
+      throw new EndpointDeliveryError('endpoint_timeout', 'timeout', 'unknown');
+    } });
+    expect(await f.send(jsx(Html, { children: 'Report' }))).toMatchObject({ status: 'failed', failure: { deliveryUnknown: true, retryable: false } });
+    expect(presentation).toHaveBeenCalledTimes(1);
+    expect(renderer.render).not.toHaveBeenCalled();
+    expect(f.sent).toHaveLength(1);
+    expect(f.record).not.toHaveBeenCalled();
+  });
+
   it('cancels a target preview while the HTML host is pending without text fallback or sending', async () => {
     const controller = new AbortController();
     let started!: () => void, rejectHost!: (error: Error) => void;

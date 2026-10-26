@@ -14,6 +14,7 @@ import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent,
 import { runRuntimeMiddleware } from './runtime-middleware.js';
 import { collectButtonPayloads, type JsxButtonBatch } from './jsx-button-registry.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
+import { resolveOutboundPresentation } from './outbound-presentation.js';
 
 const logger = getLogger('im.outbound');
 
@@ -65,6 +66,7 @@ export class OutboundDeliveryRuntime {
     observeRendering: (rendering: RuntimeMessageRendering) => void,
   ): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
+    const presentation = resolveOutboundPresentation(snapshot, request.conversation, request.requester);
     const jsxCache = new WeakMap<JSXElement, Promise<unknown>>();
     const buttons = this.context.prepareButtons?.(request, snapshot);
     const renderOptions = { jsxCache, bindButton: buttons?.bind };
@@ -79,7 +81,7 @@ export class OutboundDeliveryRuntime {
         request.incoming,
         renderOptions,
       );
-      initialProjection = await projectOutboundPayload(rendered, request.conversation, snapshot, { deferInteractive: true });
+      initialProjection = await projectOutboundPayload(rendered, request.conversation, snapshot, { deferInteractive: true, presentation });
       initialPayload = initialProjection.payload;
     } catch (error) {
       if (error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent') return receiptFromEndpointError(error, false);
@@ -127,6 +129,7 @@ export class OutboundDeliveryRuntime {
               ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, renderOptions)
               : replacement;
             projection = await projectOutboundPayload(replaced, request.conversation, snapshot, {
+              presentation,
               inheritedFallbacks: retainsInitialProjection(replacement) ? initialProjection.rendering.fallbacks : [],
               rememberFallback: (map) => {
                 for (const value of Object.values(map)) buttonPayloads.add(value);

@@ -8,7 +8,8 @@ import {
 import type { UserInteractionFactory } from '@zhin.js/interaction';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import type { Message, MessageDispatchResult } from './contracts.js';
+import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
+import { renderCommandFeedback } from './command-feedback.js';
 import { commandMenuReply } from './command-menu-navigation.js';
 
 const logger = getLogger('command');
@@ -18,6 +19,17 @@ const logger = getLogger('command');
  * `''` 表示无前缀（任意文本都尝试按命令匹配）。
  */
 export type CommandPrefixResolver = (message: Message, snapshot: RuntimeSnapshot) => string;
+
+/** @internal Keep command facts separate from the author of the rendered reply. */
+export interface MessageDispatchOutcome {
+  readonly dispatch: MessageDispatchResult;
+  readonly reply?: { readonly owner: PluginId; readonly content: SendContent };
+}
+
+function dispatchOutcome(result: MessageDispatchResult, replyOwner = result.owner): MessageDispatchOutcome {
+  return { dispatch: result, ...(result.value !== undefined && replyOwner
+    ? { reply: { owner: replyOwner, content: result.value as SendContent } } : {}) };
+}
 
 function ownerOfMessage(message: Message, snapshot: RuntimeSnapshot): PluginId | undefined {
   // adapter is a platform literal (e.g. terminal), not the Plugin owner.
@@ -61,6 +73,16 @@ export class MessageDispatcher {
     interactionFactory?: UserInteractionFactory,
     observe?: (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => void,
   ): Promise<MessageDispatchResult> {
+    return (await this.dispatchWithReply(message, snapshot, interactionFactory, observe)).dispatch;
+  }
+
+  /** @internal The inbound runtime retains reply authorship without changing command facts. */
+  async dispatchWithReply(
+    message: Message,
+    snapshot: RuntimeSnapshot,
+    interactionFactory?: UserInteractionFactory,
+    observe?: (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => void,
+  ): Promise<MessageDispatchOutcome> {
     const note = (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => {
       try { observe?.(stage, status); } catch { /* Observation never controls dispatch. */ }
     };
@@ -68,18 +90,18 @@ export class MessageDispatcher {
     let input = message.content.trim();
     if (prefix && !input.startsWith(prefix)) {
       note('prefix', 'mismatch');
-      return Object.freeze({ matched: false });
+      return dispatchOutcome(Object.freeze({ matched: false }));
     }
     note('prefix', 'matched');
     if (prefix) input = input.slice(prefix.length).trim();
     if (!input) {
       note('dispatch', 'empty_input');
-      return Object.freeze({ matched: false });
+      return dispatchOutcome(Object.freeze({ matched: false }));
     }
     const commands = snapshot.projections.get(commandFeatureId);
     if (!isCommandIndex(commands)) {
       note('dispatch', 'commands_unavailable');
-      return Object.freeze({ matched: false });
+      return dispatchOutcome(Object.freeze({ matched: false }));
     }
     const structuredInput = message.segments
       ? stripCommandPrefix(message.segments, prefix)
@@ -87,27 +109,8 @@ export class MessageDispatcher {
     const matchInput = structuredInput ?? input;
     note('dispatch', 'started');
     const result = await commands.dispatch(matchInput, message, interactionFactory, prefix, snapshot);
-    if (result.status === 'invalid') {
-      return Object.freeze({
-        ...result,
-        value: [...(result.issues ?? []).map((issue) => issue.message), result.help]
-          .filter(Boolean).join('\n'),
-      });
-    }
-    if (result.status === 'denied') {
-      return Object.freeze({ ...result, value: '没有权限执行此指令。' });
-    }
-    if (result.status === 'limited') {
-      const reason = result.limit?.reason;
-      const waitMs = result.limit?.retryAfterMs;
-      const value = reason === 'cooldown'
-        ? typeof waitMs === 'number' && waitMs > 0
-          ? `此指令仍在冷却，约 ${Math.ceil(waitMs / 1000)} 秒后再试。` : '此指令仍在冷却，请稍后再试。'
-        : reason === 'busy' ? '你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。'
-        : reason === 'capacity' ? '当前繁忙，本次指令未被接纳，请稍后再试。'
-        : '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。';
-      return Object.freeze({ ...result, value });
-    }
+    const feedback = await renderCommandFeedback(result, message, snapshot);
+    if (feedback) return dispatchOutcome(Object.freeze({ ...result, value: feedback.content }), feedback.owner);
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({
@@ -121,9 +124,9 @@ export class MessageDispatcher {
         preview: truncatePreview(input),
       }));
     }
-    return result.menu ? Object.freeze({ ...result,
-      value: commandMenuReply(result, commands, snapshot, message.conversation, prefix),
-    }) : result;
+    return dispatchOutcome(result.menu ? Object.freeze({ ...result,
+      value: await commandMenuReply(result, commands, snapshot, message.conversation, prefix),
+    }) : result);
   }
 }
 

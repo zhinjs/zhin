@@ -18,7 +18,8 @@ import {
 } from '@zhin.js/permission';
 import { commandAdapterMatches, toCommandPermissionSubject } from './permission-explanation.js';
 import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
-import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment } from './command-menu.js';
+import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment, type CommandMenuEntry, type CommandMenuAppearance } from './command-menu.js';
+export type { CommandMenuEntry, CommandMenuAppearance } from './command-menu.js';
 import { admitCommandExecution, admitDirectCommandExecution } from './execution-runtime.js';
 import { CommandExecutionLimitedError, normalizeExecutionPolicy, type CommandExecutionLimit } from './execution-policy.js';
 export { CommandExecutionLimitedError } from './execution-policy.js';
@@ -63,7 +64,7 @@ export interface CommandDispatchResult {
   readonly command?: string;
   readonly owner?: PluginId;
   readonly value?: unknown;
-  readonly menu?: CommandMenuNavigation;
+  readonly menu?: CommandMenuPage;
 }
 
 /** Semantic menu navigation; the IM composition layer supplies platform controls. */
@@ -74,9 +75,21 @@ export interface CommandMenuNavigation {
   readonly pages: number;
 }
 
+/** Immutable page data; presentation cannot change the catalog or execute commands. */
+export interface CommandMenuPage extends CommandMenuNavigation {
+  readonly title: string;
+  readonly commands: readonly CommandMenuEntry[];
+  readonly plugins: readonly CommandMenuEntry[];
+  readonly commandTotal: number;
+  readonly pluginTotal: number;
+  readonly hint?: string;
+  readonly text: string;
+  readonly appearance: CommandMenuAppearance;
+}
+
 interface CommandMenuResult {
   readonly value: string | CommandMenuSegment;
-  readonly menu?: CommandMenuNavigation;
+  readonly menu?: CommandMenuPage;
 }
 
 interface CommandRecord extends CommandDescriptor {
@@ -530,16 +543,23 @@ export class CommandIndex {
     }
 
     const text = lines.join('\n');
-    const menu = Object.freeze({ keyword, ...(pluginKey ? { pluginKey } : {}), page, pages });
-    if (!snapshot.resources.get(root)?.has(htmlRendererToken.id)) return { value: text, menu };
     const config = snapshot.config.get(root) as Record<string, unknown> | undefined;
-    return { menu, value: renderCommandMenu(displayKey,
-      pageCommands.map(cmd => ({ name: `${commandPrefix}${cmd.name}`, description: cmd.description })),
-      pageChildren.map(child => ({
+    const menu: CommandMenuPage = Object.freeze({
+      keyword, ...(pluginKey ? { pluginKey } : {}), page, pages, title: displayKey,
+      commands: Object.freeze(pageCommands.map(cmd => Object.freeze({
+        name: `${commandPrefix}${cmd.name}`, description: cmd.description,
+      }))),
+      plugins: Object.freeze(pageChildren.map(child => Object.freeze({
         name: pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey,
         description: child.metadata?.displayName ?? child.instanceKey,
-      })), hint, text, { page, pages, commandTotal: directCommands.length, pluginTotal: children.length,
-        appearance: readMenuAppearance(config?.menuStyle) }) };
+      }))),
+      commandTotal: directCommands.length, pluginTotal: children.length, hint, text,
+      appearance: Object.freeze(readMenuAppearance(config?.menuStyle)),
+    });
+    if (!snapshot.resources.get(root)?.has(htmlRendererToken.id)) return { value: text, menu };
+    return { menu, value: renderCommandMenu(displayKey, menu.commands, menu.plugins, hint, text, {
+      page, pages, commandTotal: menu.commandTotal, pluginTotal: menu.pluginTotal, appearance: menu.appearance,
+    }) };
   }
 }
 

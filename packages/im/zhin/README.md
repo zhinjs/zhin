@@ -186,3 +186,7 @@ npx zhin doctor   # 诊断（含 AI 依赖）
 ## 许可证
 
 MIT License
+
+## 定制内置展示
+
+应用 Root 可从 `zhin.js/command` 选择 `commandFeedbackToken`、`commandMenuPresentationToken`，从 `zhin.js/middleware` 选择 `outboundPresentationToken`。保留默认反馈、分页、权限与平台能力；不绑定或返回 `undefined` 继续使用内置展示。具体上下文、JSX 作者和失败边界见[定制内置展示](../../../docs/authoring/behavior-customization.md)。

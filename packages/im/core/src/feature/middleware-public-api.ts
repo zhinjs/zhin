@@ -13,3 +13,10 @@ export {
   type MiddlewareTarget,
   type OutboundMiddlewareNext,
 } from './middleware.js';
+export {
+  outboundPresentationToken,
+  type OutboundPresentation,
+  type OutboundPresentationContext,
+  type OutboundPresentationMode,
+  type OutboundPresentationPreferences,
+} from './middleware.js';

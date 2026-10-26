@@ -10,7 +10,7 @@ const readJson = (relativePath: string) => JSON.parse(
 
 const publicModules = [
   { source: 'packages/im/plugin-runtime/src/plugin.ts', module: 'zhin.js' },
-  { source: 'packages/im/command/src/definition.ts', module: 'zhin.js/command' },
+  { source: 'packages/im/core/src/feature/command-public-api.ts', module: 'zhin.js/command' },
   { source: 'packages/im/adapter/src/definition.ts', module: 'zhin.js/adapter' },
   { source: 'packages/im/component/src/definition.ts', module: 'zhin.js/component' },
   { source: 'packages/im/core/src/feature/middleware-public-api.ts', module: 'zhin.js/middleware' },

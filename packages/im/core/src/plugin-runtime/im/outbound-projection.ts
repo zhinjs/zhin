@@ -8,6 +8,7 @@ import {
   resolveOutboundMediaPolicy, resolveOutboundSupportedSegments,
 } from './outbound-segments.js';
 import type { OutboundFallbackReason, RuntimeMessageRendering } from './message-events.js';
+import type { OutboundPresentationPreferences } from './outbound-presentation.js';
 
 export interface OutboundProjection {
   readonly payload: unknown;
@@ -25,6 +26,7 @@ export async function projectOutboundPayload(
     /** Keep keyboard payloads until outbound middleware has had a chance to replace them. */
     readonly deferInteractive?: boolean;
     readonly signal?: AbortSignal;
+    readonly presentation?: OutboundPresentationPreferences;
   } = {},
 ): Promise<OutboundProjection> {
   options.signal?.throwIfAborted();
@@ -33,17 +35,17 @@ export async function projectOutboundPayload(
   const values = Array.isArray(rendered) ? flattenOutboundArray(rendered) : rendered;
   const contains = (type: string) => (Array.isArray(values) ? values : [values])
     .some(value => value && typeof value === 'object' && value.type === type);
-  const markdown = resolveOutboundMarkdownPolicy(adapter, snapshot);
+  const markdown = options.presentation?.markdown === 'text' ? 'text' : resolveOutboundMarkdownPolicy(adapter, snapshot);
   if (markdown === 'text' && contains('markdown')) reasons.add('markdown_text_policy');
   const host = snapshot.resources.get(snapshot.root)?.get(htmlRendererToken.id) as HtmlRendererHost | undefined;
   let payload = await normalizeOutboundPayload(applyOutboundMarkdownPolicy(values, markdown), host, {
     mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
-    htmlPolicy: resolveOutboundHtmlPolicy(adapter, snapshot),
+    htmlPolicy: options.presentation?.html === 'text' ? 'text' : resolveOutboundHtmlPolicy(adapter, snapshot),
     onFallback: reason => reasons.add(reason),
     signal: options.signal,
   });
   options.signal?.throwIfAborted();
-  const interactive = resolveOutboundInteractivePolicy(adapter, snapshot);
+  const interactive = options.presentation?.interactive === 'text' ? 'text' : resolveOutboundInteractivePolicy(adapter, snapshot);
   if (interactive === 'text' && Array.isArray(payload) && payload.some(item => item?.type === 'keyboard')) {
     reasons.add('interactive_text_policy');
   }

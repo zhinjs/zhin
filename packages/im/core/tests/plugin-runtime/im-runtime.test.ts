@@ -1,4 +1,6 @@
 import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/message-dispatcher.js';
+import { commandFeedbackToken, type CommandFeedbackRenderer } from '../../src/plugin-runtime/im/command-feedback.js';
+import { commandMenuPresentationToken, type CommandMenuPresenter } from '../../src/plugin-runtime/im/command-menu-presentation.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
@@ -142,6 +144,43 @@ function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<un
 }
 
 describe('IM Runtime', () => {
+  it('keeps the Root menu presenter and content author across native page callbacks', async () => {
+    const events: string[] = [];
+    const sent: unknown[] = [];
+    const outbound = vi.fn(async (_input: OutboundEnvelope, next: () => Promise<void>) => next());
+    const fixture = await createFixture(events, sent, undefined, undefined, undefined, {
+      menuCommands: 31, commandOwner: childPluginId(rootPluginId(), 'music'),
+      adapterSegments: { interactive: 'native', markdown: 'native' },
+      componentResult: () => jsx('text', { children: 'Root 品牌组件' }),
+      outboundMiddleware: outbound,
+    });
+    const presenter = vi.fn<CommandMenuPresenter>(async ({ page }) => [
+      component('result', {}), jsx('text', { children: `定制菜单 ${page.page}/${page.pages} · ${page.commands.length} 项` }),
+    ]);
+    const current = fixture.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([...resources.get(current.root)!, [commandMenuPresentationToken.id, presenter]]));
+    fixture.store.commit(0, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+    const input = fixtureInput(fixture, '/菜单 music');
+    try {
+      await receive(fixture.im, input);
+      expect(JSON.stringify(sent[0])).toContain('Root 品牌组件');
+      expect(JSON.stringify(sent[0])).toContain('定制菜单 1/2 · 30 项');
+      const payload = (sent[0] as { payload: Array<{ type: string; data: { rows?: Array<Array<{ payload: string; disabled: boolean }>> } }> }).payload;
+      const buttons = payload.find(segment => segment.type === 'keyboard')!.data.rows![0];
+      expect(buttons.map(button => button.disabled)).toEqual([true, false]);
+      await receive(fixture.im, { ...input, content: '', segments: [{ type: 'action', data: { id: 'next', payload: buttons[1].payload } }] });
+      expect(JSON.stringify(sent[1])).toContain('Root 品牌组件');
+      expect(JSON.stringify(sent[1])).toContain('定制菜单 2/2 · 2 项');
+      expect(presenter.mock.calls.map(([value]) => value.page.page)).toEqual([1, 2]);
+      expect(presenter.mock.calls.every(([value]) => value.generation === 1 && value.page.pluginKey === 'music')).toBe(true);
+      expect(sent).toHaveLength(2);
+      expect(outbound).toHaveBeenCalledTimes(2);
+      expect(outbound.mock.calls.every(([envelope]) => envelope.requester === current.root)).toBe(true);
+      expect(events.some(event => event.startsWith('command:'))).toBe(false);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('navigates menu pages through scoped native callbacks and disables boundary buttons', async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent, undefined, undefined, undefined, {
@@ -3183,6 +3222,233 @@ async function createFixture(
   adapters.open();
   return { im, store, adapters, adapter, command, conversationEvents };
 }
+
+describe('Root command feedback presentation', () => {
+  function bindFeedback(
+    fixture: Awaited<ReturnType<typeof createFixture>>,
+    renderer: CommandFeedbackRenderer,
+    owner = fixture.store.current.root,
+    dispose = () => {},
+  ) {
+    const current = fixture.store.current;
+    const scope = new Scope(owner);
+    scope.provide(commandFeedbackToken, renderer);
+    scope.seal();
+    const resources = new Map(current.resources);
+    resources.set(owner, new Map([...resources.get(owner) ?? [], ...scope.snapshot()]));
+    fixture.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose });
+  }
+
+  it.each(['invalid', 'denied'] as const)('presents %s once without executing the command and keeps its real owner', async status => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'command-author');
+    const executed = vi.fn(() => 'must not execute');
+    const sent: unknown[] = [];
+    const authors: PluginId[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      commandOwner: child, commandResult: executed,
+      validateCommand: status === 'invalid', restrictCommand: status === 'denied',
+      inboundMiddleware: (_input, next) => next(),
+      outboundMiddleware: async (input, next) => { authors.push(input.requester); await next(); },
+    });
+    const renderer = vi.fn<CommandFeedbackRenderer>((feedback, context) => {
+      expect(Object.isFrozen(feedback)).toBe(true);
+      expect(Object.isFrozen(context.conversation.endpoint)).toBe(true);
+      expect(context).not.toHaveProperty('content');
+      expect(context).not.toHaveProperty('$reply');
+      expect(feedback).toMatchObject({ status, command: 'gh issue list', owner: child });
+      if (feedback.status === 'invalid') {
+        expect(Object.isFrozen(feedback.issues[0])).toBe(true);
+        expect(feedback.issues[0].field).toBe('count');
+      }
+      return component('result', { state: feedback.status, sender: context.sender?.id, generation: context.generation });
+    });
+    bindFeedback(fixture, renderer);
+    try {
+      const result = await receive(fixture.im, fixtureInput(fixture, '/gh issue list nope'));
+      expect(result).toMatchObject({ matched: true, status, owner: child });
+      expect(executed).not.toHaveBeenCalled();
+      expect(renderer).toHaveBeenCalledTimes(1);
+      expect(authors).toEqual([root]);
+      expect(sent).toHaveLength(1);
+      expect(JSON.stringify(sent)).toContain(`${status}:alice:g1`);
+      expect(fixture.im.messageDiagnostics.list()[0]).toMatchObject({ dispatchStatus: status, command: 'gh issue list' });
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('allows scene-specific JSX without exposing mutable message data', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, { middleware: false, restrictCommand: true });
+    const renderer = vi.fn<CommandFeedbackRenderer>((feedback, context) => context.conversation.kind === 'channel'
+      ? jsx(Fragment, { children: ['请联系 ', jsx('mention', { target: context.sender!.id }), `：${feedback.status}`] })
+      : undefined);
+    bindFeedback(fixture, renderer);
+    try {
+      const input = fixtureInput(fixture, '/gh issue list open');
+      const conversation = { ...input.conversation, kind: 'channel', parent: { kind: 'channel', id: 'workspace' }, threadId: 'thread' } as const;
+      await receive(fixture.im, { ...input, conversation, sender: { id: 'alice', roles: ['user'] }, metadata: { secret: 'not disclosed' } });
+      expect(renderer.mock.calls[0][1]).toMatchObject({ conversation, clientAdapter: 'memory', generation: 1, sender: { id: 'alice' } });
+      expect(Object.isFrozen(renderer.mock.calls[0][1].conversation.parent)).toBe(true);
+      expect(Object.isFrozen(renderer.mock.calls[0][1].sender?.roles)).toBe(true);
+      expect(JSON.stringify(renderer.mock.calls)).not.toContain('not disclosed');
+      expect((sent[0] as { payload: unknown }).payload).toEqual([
+        { type: 'text', data: { text: '请联系 ' } }, { type: 'mention', data: { target: 'alice' } }, { type: 'text', data: { text: '：denied' } },
+      ]);
+      await receive(fixture.im, input);
+      expect((sent[1] as { payload: unknown }).payload).toBe('没有权限执行此指令。');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each(['cooldown', 'busy'] as const)('preserves %s admission while formatting its structured limit', async reason => {
+    const sent: unknown[] = [];
+    const gate = admissionDeferred();
+    const started = admissionDeferred();
+    const executed = vi.fn(() => 'accepted');
+    const fixture = await createFixture([], sent, undefined, reason === 'busy' ? gate.promise : undefined, started.resolve, {
+      middleware: false, commandResult: executed,
+      execution: reason === 'busy' ? { maxConcurrent: 1 } : { cooldownMs: 60_000 },
+    });
+    const renderer = vi.fn<CommandFeedbackRenderer>(feedback => {
+      expect(feedback).toMatchObject({ status: 'limited', limit: { reason } });
+      if (feedback.status === 'limited') expect(Object.isFrozen(feedback.limit)).toBe(true);
+      return `custom:${reason}`;
+    });
+    bindFeedback(fixture, renderer);
+    const first = receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+    try {
+      await started.promise;
+      if (reason === 'cooldown') await first;
+      const rejected = await receive(fixture.im, fixtureInput(fixture, '/limited-alias open'));
+      expect(rejected).toMatchObject({ matched: true, status: 'limited', limit: { reason }, value: `custom:${reason}` });
+      expect(renderer).toHaveBeenCalledTimes(1);
+      gate.resolve(); await first;
+      expect(executed).toHaveBeenCalledTimes(1);
+      expect(sent).toHaveLength(2);
+    } finally { gate.resolve(); await first; await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('omits structural extensions and never shares their objects with a feedback renderer', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, { middleware: false, restrictCommand: true });
+    const renderer = vi.fn<CommandFeedbackRenderer>(() => 'custom');
+    bindFeedback(fixture, renderer);
+    const extra = { nested: 'original' };
+    const sender = { id: 'alice', name: 'Alice', roles: ['user'], content: 'PRIVATE_BODY', extra };
+    const input = fixtureInput(fixture, '/gh issue list open');
+    const conversation = { ...input.conversation, kind: 'channel', content: 'PRIVATE_ROOM_BODY', extra,
+      parent: { kind: 'group', id: 'workspace', content: 'PRIVATE_PARENT_BODY', extra }, threadId: 'thread' } as const;
+    try {
+      await receive(fixture.im, { ...input, conversation, sender });
+      expect(renderer).toHaveBeenCalledTimes(1);
+      const context = renderer.mock.calls[0][1];
+      expect(context).toEqual({ generation: 1, clientAdapter: 'memory',
+        sender: { id: 'alice', name: 'Alice', roles: ['user'] },
+        conversation: { endpoint: input.conversation.endpoint, kind: 'channel', id: input.conversation.id,
+          parent: { kind: 'group', id: 'workspace' }, threadId: 'thread' } });
+      expect(context.sender?.roles).not.toBe(sender.roles);
+      expect(context.conversation.parent).not.toBe(conversation.parent);
+      expect(JSON.stringify(renderer.mock.calls)).not.toMatch(/PRIVATE_|nested/);
+      expect(Object.isFrozen(sender.roles)).toBe(false);
+      expect(Object.isFrozen(conversation.parent)).toBe(false);
+      expect(Object.isFrozen(extra)).toBe(false);
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each(['undefined', 'throw', 'reject'] as const)('falls back once on %s without logging the error body or retrying delivery', async mode => {
+    const sent: unknown[] = [];
+    const executed = vi.fn(() => 'must not execute');
+    const warn = vi.spyOn(getLogger('command'), 'warn').mockImplementation(() => {});
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, restrictCommand: true, commandResult: executed,
+      endpointSend: () => { throw new EndpointDeliveryError('endpoint_timeout', 'PRIVATE_DELIVERY', 'unknown'); },
+    });
+    const renderer = vi.fn<CommandFeedbackRenderer>(() => {
+      if (mode === 'throw') throw new Error('PRIVATE_RENDERER');
+      if (mode === 'reject') return Promise.reject(new Error('PRIVATE_RENDERER'));
+      return undefined;
+    });
+    bindFeedback(fixture, renderer);
+    try {
+      const result = await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(result).toMatchObject({ status: 'denied', value: '没有权限执行此指令。' });
+      expect(executed).not.toHaveBeenCalled();
+      expect(renderer).toHaveBeenCalledTimes(1);
+      expect(sent).toHaveLength(1);
+      expect(warn).toHaveBeenCalledTimes(mode === 'undefined' ? 0 : 1);
+      expect(JSON.stringify(warn.mock.calls)).not.toMatch(/PRIVATE_RENDERER|PRIVATE_DELIVERY/);
+      if (mode !== 'undefined') expect(String(warn.mock.calls[0][0])).toContain('command_feedback_error');
+    } finally { warn.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('ignores a descendant binding', async () => {
+    const child = childPluginId(rootPluginId(), 'command-author');
+    const sent: unknown[] = [];
+    const executed = vi.fn(() => 'ok');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, commandOwner: child, commandResult: executed, restrictCommand: true,
+    });
+    const renderer = vi.fn<CommandFeedbackRenderer>(() => 'override');
+    bindFeedback(fixture, renderer, child);
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect((sent[0] as { payload: unknown }).payload).toBe('没有权限执行此指令。');
+      expect(renderer).not.toHaveBeenCalled();
+      expect(executed).not.toHaveBeenCalled();
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('never applies feedback to help, success or unmatched chat', async () => {
+    const sent: unknown[] = [];
+    const executed = vi.fn(() => 'ok');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, { middleware: false, commandResult: executed });
+    const renderer = vi.fn<CommandFeedbackRenderer>(() => 'override');
+    bindFeedback(fixture, renderer);
+    try {
+      const input = fixtureInput(fixture, '/gh issue list open');
+      await receive(fixture.im, input);
+      await receive(fixture.im, { ...input, content: '/gh issue list --help' });
+      await receive(fixture.im, { ...input, content: '/not-a-command' });
+      expect(renderer).not.toHaveBeenCalled();
+      expect(executed).toHaveBeenCalledTimes(1);
+      expect(sent).toHaveLength(2);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps an in-flight renderer and its reply on the leased generation during replacement', async () => {
+    const sent: unknown[] = [];
+    const authors: Array<[PluginId, number]> = [];
+    const gate = admissionDeferred(); const started = admissionDeferred();
+    const executed = vi.fn(() => 'must not execute');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      commandOwner: childPluginId(rootPluginId(), 'command-author'), restrictCommand: true, commandResult: executed,
+      inboundMiddleware: (_input, next) => next(),
+      outboundMiddleware: async (input, next) => { authors.push([input.requester, input.generation]); await next(); },
+    });
+    let disposed = false;
+    const old = vi.fn<CommandFeedbackRenderer>(async (_feedback, context) => {
+      started.resolve(); await gate.promise;
+      return component('result', { state: 'old', generation: context.generation });
+    });
+    const next = vi.fn<CommandFeedbackRenderer>((_feedback, context) => `new:g${context.generation}`);
+    bindFeedback(fixture, old, rootPluginId(), () => { disposed = true; });
+    const running = receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+    try {
+      await started.promise;
+      bindFeedback(fixture, next);
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(disposed).toBe(false);
+      gate.resolve(); await running;
+      await vi.waitFor(() => expect(disposed).toBe(true));
+      expect(authors).toEqual([[rootPluginId(), 2], [rootPluginId(), 1]]);
+      expect(JSON.stringify(sent)).toContain('old:unknown:g1');
+      expect(JSON.stringify(sent)).toContain('new:g2');
+      expect(old).toHaveBeenCalledTimes(1); expect(next).toHaveBeenCalledTimes(1);
+      expect(executed).not.toHaveBeenCalled(); expect(sent).toHaveLength(2);
+    } finally { gate.resolve(); await running; await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+});
 
 describe('per-message operational diagnostics', () => {
   it('records bound ingress even when AdapterIndex owner resolution fails', async () => {
