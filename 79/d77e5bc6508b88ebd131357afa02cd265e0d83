@@ -1,0 +1,54 @@
+docs/.vitepress/config.ts
+  h_b680f75345178a 78
+docs/adapters/bilibili.md
+  h_b680f75345178a 1-96
+docs/adapters/index.md
+  h_b680f75345178a 70
+docs/adapters/sandbox.md
+  h_b680f75345178a 11
+docs/adr/0035-comment-reply-adapter-contract.md
+  h_b680f75345178a 1-76
+docs/snippets/platform-tiers.md
+  h_b680f75345178a 20
+plugins/adapters/bilibili/README.md
+  h_b680f75345178a 1-84
+plugins/adapters/bilibili/adapters/bilibili/index.ts
+  h_b680f75345178a 1-30
+plugins/adapters/bilibili/package.json
+  h_b680f75345178a 1-102
+plugins/adapters/bilibili/plugin.ts
+  h_b680f75345178a 1-13
+plugins/adapters/bilibili/schema.json
+  h_b680f75345178a 1-138
+plugins/adapters/bilibili/src/bilibili-runtime-state.ts
+  h_b680f75345178a 1-6
+plugins/adapters/bilibili/src/client.ts
+  h_b680f75345178a 1-147
+plugins/adapters/bilibili/src/drafts.ts
+  h_b680f75345178a 1-45
+plugins/adapters/bilibili/src/endpoint.ts
+  h_b680f75345178a 1-233
+plugins/adapters/bilibili/src/index.ts
+  h_b680f75345178a 1-11
+plugins/adapters/bilibili/src/protocol.ts
+  h_b680f75345178a 1-190
+plugins/adapters/bilibili/tests/bilibili-endpoint.test.ts
+  h_b680f75345178a 1-146
+plugins/adapters/bilibili/tsconfig.json
+  h_b680f75345178a 1-12
+pnpm-lock.yaml
+  h_b680f75345178a 2091-2121
+scripts/adapter-meta.mjs
+  h_b680f75345178a 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "79d77e5bc6508b88ebd131357afa02cd265e0d83",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
