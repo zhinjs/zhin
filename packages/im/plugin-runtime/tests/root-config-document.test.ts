@@ -35,6 +35,39 @@ describe('Root config document patches', () => {
     }])).toThrow(/out of bounds/);
   });
 
+  it.each([
+    ['set', ['__proto__', 'polluted']],
+    ['set', ['plugins', '__proto__', 'polluted']],
+    ['set', ['plugins', 'constructor', 'prototype', 'polluted']],
+    ['set', ['plugins', 'demo', 'prototype']],
+    ['set', ['fresh', 'constructor']],
+    ['remove', ['plugins', '__proto__']],
+    ['remove', ['constructor', 'prototype', 'toString']],
+  ] as const)('never pollutes Object.prototype via %s %j', (op, path) => {
+    const source = { plugins: { demo: { enabled: true } } };
+    const patch = op === 'set'
+      ? { op, path: [...path], value: { polluted: true } }
+      : { op, path: [...path] };
+    expect(() => applyConfigPatches(source, [patch])).toThrow(/Unsafe config path segment/);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(Object.prototype, 'polluted')).toBe(false);
+    expect(typeof Object.prototype.toString).toBe('function');
+  });
+
+  it('ignores inherited members when walking or removing paths', () => {
+    const source = { plugins: {} };
+    expect(applyConfigPatches(source, [
+      { op: 'set', path: ['plugins', 'toString', 'enabled'], value: true },
+    ])).toEqual({ plugins: { toString: { enabled: true } } });
+    expect(applyConfigPatches(source, [
+      { op: 'remove', path: ['plugins', 'hasOwnProperty'] },
+    ])).toEqual({ plugins: {} });
+    expect(applyConfigPatches(source, [
+      { op: 'remove', path: ['plugins', 'valueOf', 'x'] },
+    ])).toEqual({ plugins: {} });
+    expect(typeof Object.prototype.hasOwnProperty).toBe('function');
+  });
+
   it('validates root replacements', () => {
     expect(applyConfigPatches({}, [{ op: 'set', path: [], value: { log_level: 'debug' } }]))
       .toEqual({ log_level: 'debug' });
