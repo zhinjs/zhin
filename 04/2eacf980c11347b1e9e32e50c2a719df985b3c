@@ -1,0 +1,19 @@
+.changeset/security-frontend-toolchain.md
+  s_269290d150ed08::t_86222c411e34c6 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "042eacf980c11347b1e9e32e50c2a719df985b3c",
+  "prompts": {},
+  "sessions": {
+    "s_269290d150ed08": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1776f-e5ad-7a72-97e9-a4a7ffb14dc6",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
