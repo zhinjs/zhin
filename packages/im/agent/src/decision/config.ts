@@ -1,6 +1,6 @@
 import type { AgentDecisionConfig, DecisionTask, DecisionTaskPolicy } from './types.js';
 
-export const DECISION_TASKS = ['skills', 'tools', 'memory', 'agents', 'approval'] as const satisfies readonly DecisionTask[];
+export const DECISION_TASKS = ['skills', 'tools', 'memory', 'agents', 'approval', 'ambient'] as const satisfies readonly DecisionTask[];
 
 /** Validate before installing any optional remote decision service. */
 export function normalizeAgentDecisionConfig(input: unknown): AgentDecisionConfig | undefined {

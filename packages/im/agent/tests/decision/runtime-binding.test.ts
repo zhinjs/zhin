@@ -42,6 +42,14 @@ describe('decision configuration and generation binding', () => {
     expect(Object.isFrozen(config?.skills)).toBe(true);
   });
 
+  it('accepts an ambient engagement policy, which alone enables the decision runtime', () => {
+    expect(normalizeAgentDecisionConfig({ provider: 'root/typesafe', ambient: { mode: 'active', timeoutMs: 2000, minConfidence: 0.8 } }))
+      .toEqual({ provider: 'root/typesafe', ambient: { mode: 'active', timeoutMs: 2000, minConfidence: 0.8 } });
+    const ambientOnly = state();
+    ambientOnly.resources.get(ambientOnly.root)!.set(agentDecisionConfigToken.id, normalizeAgentDecisionConfig({ provider: 'root/typesafe', ambient: { mode: 'shadow' } }));
+    expect(resolveAgentDecisionRuntime(createSnapshotView(1, ambientOnly))?.config.ambient).toEqual({ mode: 'shadow' });
+  });
+
   it('resolves only an explicitly configured owner-local provider', () => {
     const baseline = state();
     expect(resolveAgentDecisionRuntime(createSnapshotView(1, baseline))?.provider).toBe(provider);

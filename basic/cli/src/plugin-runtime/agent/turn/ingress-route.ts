@@ -27,8 +27,11 @@ import {
   type TurnIntentResolver,
   type AgentDecisionRuntime,
   rankDecisionCandidates,
+  resolveAgentDecisionRuntime,
   runWithAgentDecisionTurn,
+  type DecisionObservation,
 } from '@zhin.js/agent/runtime';
+import type { DecisionProvider, DecisionTaskConfig } from '@zhin.js/ai';
 import {
   resolveAiOutboundSegments,
   type ImRuntime,
@@ -83,13 +86,33 @@ import {
 } from './request.js';
 import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
-import { AmbientEngagement, FallbackEngagementJudge, LlmEngagementJudge } from './ambient-engagement.js';
+import {
+  AmbientEngagement,
+  createAmbientDecisionJudge,
+  FallbackEngagementJudge,
+  LlmEngagementJudge,
+  type EngagementJudge,
+} from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 
 const logger = getLogger('agent');
 /** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */
 const AMBIENT_CONTEXT_CONSUMER = 'zhin.ambient-engagement';
 const AMBIENT_CONTEXT_MESSAGES = 20;
+
+function logAmbientDecisionObservation(observation: DecisionObservation): void {
+  logger.debug(formatCompact({
+    op: 'agent_decision_evaluation',
+    task: observation.task,
+    mode: observation.mode,
+    outcome: observation.outcome,
+    durationMs: observation.durationMs,
+    model: observation.model,
+    reason: observation.reason,
+    inputTokens: observation.usage?.inputTokens,
+    outputTokens: observation.usage?.outputTokens,
+  }));
+}
 
 export interface AgentTurnIngressRouteOptions {
   readonly projectRoot: string;
@@ -113,6 +136,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   #admissionGate: TurnAdmissionGate | undefined;
   #ambient: AmbientEngagement | null | undefined;
+  /** Chat-model judge(s) from `ai.trigger.ambient.judge`; the fallback of the decision route. */
+  #ambientLlmJudge: EngagementJudge | undefined;
+  /** Decision route for `ai.decisions.ambient` per group, kept while provider and policy are unchanged. */
+  readonly #ambientDecisionJudges = new Map<string, { provider: DecisionProvider; policy: DecisionTaskConfig; judge: EngagementJudge }>();
   private readonly workroomPort: AgentWorkroomPort;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
@@ -161,14 +188,58 @@ export class AgentTurnIngressRoute implements IngressRoute {
       if (!fallback) return this.#ambient = null;
       judges = [fallback];
     }
-    return this.#ambient = new AmbientEngagement({
-      config,
-      judge: judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges),
-    });
+    this.#ambientLlmJudge = judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges);
+    return this.#ambient = new AmbientEngagement({ config, judge: this.#ambientLlmJudge });
+  }
+
+  /**
+   * `ai.decisions.ambient` of the held generation. active: the DecisionProvider judges first and the
+   * chat-model judges take over when it fails; shadow: the chat-model judges decide and the provider
+   * is only logged. Undefined (configured chat-model judges only) when off, unset or unavailable.
+   */
+  #ambientDecisionRoute(snapshot: RuntimeSnapshot, key: string): EngagementJudge | undefined {
+    const base = this.#ambientLlmJudge;
+    if (!base) return undefined;
+    let runtime: AgentDecisionRuntime | undefined;
+    try {
+      runtime = resolveAgentDecisionRuntime(snapshot);
+    } catch (error) {
+      // A missing provider must not silence ambient engagement; the chat-model judges still work.
+      logger.debug(formatCompact({ op: 'ambient_decision_unavailable', error: error instanceof Error ? error.message : String(error) }));
+      return undefined;
+    }
+    const policy = runtime?.config.ambient;
+    if (!runtime || !policy || policy.mode === 'off') return undefined;
+    const cached = this.#ambientDecisionJudges.get(key);
+    if (cached?.provider === runtime.provider && cached.policy === policy) return cached.judge;
+    let judge: EngagementJudge | undefined;
+    try {
+      judge = createAmbientDecisionJudge({
+        base,
+        provider: runtime.provider,
+        policy,
+        observe: logAmbientDecisionObservation,
+        reportShadow: (decision, primary) => logger.info(formatCompact({
+          op: 'ambient_decision_shadow',
+          conv: key,
+          decision: decision ? (decision.engage ? 'engage' : 'declined') : 'failed',
+          confidence: decision?.confidence,
+          judge: primary ? (primary.engage ? 'engage' : 'declined') : 'failed',
+          judgeConfidence: primary?.confidence,
+        })),
+      });
+    } catch (error) {
+      logger.warn(formatCompact({ op: 'ambient_decision_unavailable', error: error instanceof Error ? error.message : String(error) }));
+      return undefined;
+    }
+    if (!judge) return undefined;
+    this.#ambientDecisionJudges.set(key, { provider: runtime.provider, policy, judge });
+    return judge;
   }
 
   /** For a group message nobody addressed: wait for the burst, throttle, then let the judge decide. */
   async #considerAmbient(
+    snapshot: RuntimeSnapshot,
     message: Message,
     conversationSequence: number | undefined,
     platform: string,
@@ -181,9 +252,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const engagement = this.#ambientEngagement();
     if (!engagement?.enabledFor(platform, message.conversation.id)) return null;
     const key = `${platform}:${message.conversation.id}`;
+    const judge = this.#ambientDecisionRoute(snapshot, key);
     const decision = await engagement.consider({
       key,
       botName,
+      ...(judge ? { judge } : {}),
       readRecent: async () => (await this.options.im.readConversationContext(
         message.conversation,
         AMBIENT_CONTEXT_CONSUMER,
@@ -199,6 +272,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         ...(decision.kind === 'skipped' ? { reason: decision.reason } : {
           confidence: decision.judgment.confidence,
           reason: decision.judgment.reason,
+          ...(decision.judgment.source ? { judge: decision.judgment.source } : {}),
         }),
       }));
     }
@@ -331,6 +405,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       let ambient = false;
       if (!matched) {
         matched = workroomAgentTurn ? null : await this.#considerAmbient(
+          snapshot,
           message,
           conversationSequence,
           platform,

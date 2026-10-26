@@ -325,6 +325,31 @@ ai:
 
 每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由）。建议先用 `shadow` 跑一段时间，看判断是否靠谱，再改成 `active`。
 
+##### 用结构化决策模型判断是否接话
+
+已经接入 [结构化决策](./structured-decisions.md)（如 TypeSafe Jev）时，可以让决策模型代替聊天模型来判断"要不要接话"，通常更快、更稳定：
+
+```yaml
+ai:
+  decisions:
+    provider: root/typesafe
+    ambient:
+      mode: shadow        # 先 shadow：仍由 judge 列表决定，Jev 的判断只记 ambient_decision_shadow 日志
+      timeoutMs: 3000     # 单次判断预算（默认 3000），超时视为失败
+      # minConfidence: 0.8  # 可选：Jev 选"接话"的概率低于此值时按不接话处理
+  trigger:
+    ambient:
+      conversations: ["icqq:1048877509"]
+      judge:              # active 时作为兜底：Jev 失败、超时或返回无效结果时按顺序使用
+        - groq/openai/gpt-oss-120b
+```
+
+- `off` 或不配置：和以前一样，只用 `judge` 列表。
+- `shadow`：`judge` 列表决定是否接话；Jev 同时判断一次，结果写入 `ambient_decision_shadow` 日志，方便对比。
+- `active`：Jev 决定；失败时自动换到 `judge` 列表（失败的判断器会被跳过 60 秒）。`ambient_engagement` 日志的 `judge` 字段标出 `decision:<model>`。
+
+`quietMs`、`cooldownMs`、`maxPerHour`、`conversationWindowMs`、`judgeIntervalMs`、`ambient.minConfidence` 和 `ambient.mode: shadow` 仍然照常生效；被 @、引用、命中前缀和私聊的消息依然不经过旁听判断。两个 `minConfidence` 同时生效（取更严格的）。
+
 ### ai.access
 
 控制哪些会话可以使用 AI（例如为满足平台对 AIGC 的合规要求）：

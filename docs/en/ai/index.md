@@ -325,6 +325,31 @@ How it works:
 
 Each judgment logs an `ambient_engagement` line (decision, confidence, reason). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.
 
+##### Let the structured-decision model judge
+
+With [structured decisions](../../ai/structured-decisions.md) (Chinese) set up (for example TypeSafe Jev), the decision model can replace the chat-model judge for "should the bot speak up?", which is usually faster and more consistent:
+
+```yaml
+ai:
+  decisions:
+    provider: root/typesafe
+    ambient:
+      mode: shadow        # start in shadow: the judge list still decides; Jev's call is logged as ambient_decision_shadow
+      timeoutMs: 3000     # budget per judgment (default 3000); a timeout counts as a failure
+      # minConfidence: 0.8  # optional: treat "engage" below this probability as "stay quiet"
+  trigger:
+    ambient:
+      conversations: ["icqq:1048877509"]
+      judge:              # fallback in active mode when Jev fails, times out or answers invalidly
+        - groq/openai/gpt-oss-120b
+```
+
+- `off` or unset: unchanged, only the `judge` list.
+- `shadow`: the `judge` list decides; Jev judges the same messages and its answer is logged as `ambient_decision_shadow` for comparison.
+- `active`: Jev decides; on failure the `judge` list takes over (a failed judge is passed over for 60 seconds). The `ambient_engagement` log line names `decision:<model>` in its `judge` field.
+
+`quietMs`, `cooldownMs`, `maxPerHour`, `conversationWindowMs`, `judgeIntervalMs`, `ambient.minConfidence` and `ambient.mode: shadow` still apply; addressed, quoted, prefix-matched and private messages still skip the ambient judge. Both `minConfidence` values apply (the stricter wins).
+
 ### ai.access
 
 Control which conversations may use the AI (e.g. for platform AIGC compliance):
