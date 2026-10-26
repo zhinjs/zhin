@@ -1,0 +1,90 @@
+.changeset/console-970-sandbox-try-a-chat.md
+  h_b680f75345178a 1-5
+.changeset/plugin-console-rpc.md
+  h_b680f75345178a 1-9
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  h_b680f75345178a 1-206
+basic/cli/src/plugin-runtime/console/rpc-route.ts
+  h_b680f75345178a 14,29-38
+basic/cli/tests/plugin-runtime/console/plugin-console-rpc.test.ts
+  h_b680f75345178a 1-115
+docs/adapters/sandbox.md
+  h_b680f75345178a 126
+docs/authoring/adapters.md
+  h_b680f75345178a 88
+docs/authoring/console-pages.md
+  h_b680f75345178a 105-166
+docs/console/index.md
+  h_b680f75345178a 16-37
+docs/en/adapters/sandbox.md
+  h_b680f75345178a 121
+docs/en/authoring/adapters.md
+  h_b680f75345178a 88
+docs/en/authoring/console-pages.md
+  h_b680f75345178a 105-166
+docs/en/console/index.md
+  h_b680f75345178a 16-37
+docs/en/getting-started/index.md
+  h_b680f75345178a 30
+docs/en/paths/ai-agent.md
+  h_b680f75345178a 118,120
+docs/en/paths/console.md
+  h_b680f75345178a 32-40,46,54,124-125,127-128
+docs/en/paths/im-bot.md
+  h_b680f75345178a 24,88,110
+docs/en/solutions/multi-endpoint-operations.md
+  h_b680f75345178a 22
+docs/getting-started/index.md
+  h_b680f75345178a 30
+docs/paths/ai-agent.md
+  h_b680f75345178a 118,120
+docs/paths/console.md
+  h_b680f75345178a 32-40,46,54,124-125,127-128
+docs/paths/im-bot.md
+  h_b680f75345178a 24,88,110
+docs/solutions/multi-endpoint-operations.md
+  h_b680f75345178a 22
+packages/console/client/client/console-utils/remoteApi.ts
+  h_b680f75345178a 73-105
+packages/console/client/client/index.ts
+  h_b680f75345178a 107-108
+packages/console/pagemanager/src/plugin-runtime/console-catalog.ts
+  h_b680f75345178a 48-56
+packages/console/pagemanager/tests/plugin-runtime/console.test.ts
+  h_b680f75345178a 59-69
+packages/console/protocol/src/index.ts
+  h_b680f75345178a 554-579
+packages/console/protocol/tests/plugin-console-rpc.test.ts
+  h_b680f75345178a 1-22
+packages/im/plugin-runtime/src/index.ts
+  h_b680f75345178a 51
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  h_b680f75345178a 1-133
+packages/im/plugin-runtime/tests/plugin-console-rpc.test.ts
+  h_b680f75345178a 1-25
+plugins/adapters/sandbox/README.md
+  h_b680f75345178a 114
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  h_b680f75345178a 701,710
+plugins/adapters/sandbox/pages/index/agentTrace.ts
+  h_b680f75345178a 408
+plugins/adapters/sandbox/pages/index/index.tsx
+  h_b680f75345178a 5
+plugins/adapters/sandbox/src/endpoint.ts
+  h_b680f75345178a 368
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  h_b680f75345178a 33,54,91
+tests/snapshots/plugin-runtime-api.json
+  h_b680f75345178a 233
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "150515541c2678b2877f1da04b138822b3b0a06c",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
