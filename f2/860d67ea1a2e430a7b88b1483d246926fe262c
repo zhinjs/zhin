@@ -1,0 +1,31 @@
+.changeset/runtime-deps-security.md
+  s_079f1dc5e6308d::t_d8b4d1cb14f1d9 1-10
+packages/host/mcp/package.json
+  s_079f1dc5e6308d::t_82f7513c703873 47
+packages/im/agent/package.json
+  s_079f1dc5e6308d::t_10821ca3efebe4 142
+packages/im/ai/package.json
+  s_079f1dc5e6308d::t_f2ee9d2a948ac4 60
+plugins/adapters/discord/package.json
+  s_079f1dc5e6308d::t_cf7b7aca6f05b2 56
+plugins/adapters/lark/package.json
+  s_079f1dc5e6308d::t_a9dcf895e35c47 45
+plugins/adapters/wechat-mp/package.json
+  s_079f1dc5e6308d::t_5ffaa720c6da96 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f2860d67ea1a2e430a7b88b1483d246926fe262c",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
