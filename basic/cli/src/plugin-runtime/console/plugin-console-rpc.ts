@@ -27,13 +27,18 @@ export type PluginConsoleRpcResult =
   | { readonly status: 200; readonly body: { readonly success: true; readonly data: unknown; readonly requestId?: unknown } }
   | { readonly status: number; readonly body: { readonly success: false; readonly code: PluginConsoleRpcFailureCode; readonly error: string; readonly requestId?: unknown } };
 
+const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
+
 export interface PluginConsoleRpcRequestOptions {
   readonly snapshots?: SnapshotReader;
   readonly authScope: AuthScope;
   readonly timeoutMs?: number;
+  /** @internal Test seam; defaults to the generation's Console Page catalog. */
+  readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
 }
 
-const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
+const catalogPagesOwnedBy = (snapshot: RuntimeSnapshot, owner: PluginId) =>
+  new ConsoleCatalog(snapshot, publicAccess).pagesOwnedBy(owner);
 
 const failureStatus: Readonly<Record<PluginConsoleRpcFailureCode, number>> = {
   forbidden: 403, invalid_input: 400, conflict: 409, not_found: 404,
@@ -66,7 +71,7 @@ export async function dispatchPluginConsoleRpcRequest(
     const provider = ownProvider(snapshot, pluginId);
     const method = provider?.methods.get(address.method);
     if (!provider || !method) throw new Failure('not_found', '插件未提供该操作');
-    authorize(snapshot, pluginId, address.method, method, options.authScope);
+    authorize(snapshot, pluginId, address.method, method, options.authScope, options.pagesOwnedBy ?? catalogPagesOwnedBy);
     releases.push(...admit(provider));
     const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS);
     return { status: 200, body: { success: true, data: output, ...(requestId === undefined ? {} : { requestId }) } };
@@ -94,13 +99,12 @@ function authorize(
   name: string,
   method: NormalizedPluginConsoleRpcMethod,
   scope: AuthScope,
+  pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
 ): void {
   const permissions = new Set(method.requiredPermissions);
   const roles = new Set(method.requiredRoles);
   if (method.page !== undefined) {
-    const page = new ConsoleCatalog(snapshot, publicAccess)
-      .pagesOwnedBy(pluginId)
-      .find((candidate) => candidate.localName === method.page);
+    const page = pagesOwnedBy(snapshot, pluginId).find((candidate) => candidate.localName === method.page);
     // Fail closed: a method bound to a missing page must not become unguarded.
     if (!page) throw new Failure('unavailable', '该操作对应的页面未加载');
     page.requiredPermissions.forEach((permission) => permissions.add(permission));
