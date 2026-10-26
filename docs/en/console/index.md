@@ -20,6 +20,7 @@ There is nothing to deploy: open <https://console.zhin.dev> and enter the API ad
 | Config (Advanced) | Edit `zhin.config.yml` through a form or source editor; failed saves roll back automatically |
 | Bot status | See AI conversations, tool calls, approvals and cancellations |
 | Group chime-in (群聊插话) | Choose whether the bot joins a group conversation when nobody @-mentions it (Off / Watch only / Join in), in which groups, and how often per hour, and see the last 24 hours. Saved changes take effect after a restart. Viewing needs a token with `ambient:read`; changing settings needs the admin token |
+| Skills assistant (技能助手) | Let a dedicated helper pick skills, tools and memories, choose which agent handles a request, auto-approve approvals, and judge whether to chime in to a group. Each item is Off / Watch only / On, and you can see how often it was used and how often it worked in the last 24 hours. Requires `@zhin.js/service-typesafe` (`zhin setup --decisions`). Saved changes take effect after a restart. Viewing needs a token with `skills:read`; changing settings needs the admin token |
 | Workroom (Advanced) | See persistent task spaces and task boards |
 
 ## Sidebar navigation
@@ -29,7 +30,7 @@ Console is aimed at everyday users: the sidebar is grouped by what you want to d
 | Group | Pages |
 | --- | --- |
 | Everyday (常用) | Home, Chat accounts, Chat history, Reminders, Activity log |
-| Bot (机器人) | Bot status, Try a chat, Assistant jobs (shown when the assistant is enabled), Group chime-in |
+| Bot (机器人) | Bot status, Try a chat, Assistant jobs (shown when the assistant is enabled), Group chime-in, Skills assistant |
 | Features (功能) | Manage features, Feature store, Task center |
 | Advanced (高级, folded by default) | Config, Environment, Project files, Database, Runtime Capabilities, Message scenario lab, Workroom |
 
