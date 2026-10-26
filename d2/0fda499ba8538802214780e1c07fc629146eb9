@@ -1,0 +1,24 @@
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  h_b680f75345178a 1-202
+basic/cli/src/plugin-runtime/console/rpc-route.ts
+  h_b680f75345178a 14,29-38
+packages/console/pagemanager/src/plugin-runtime/console-catalog.ts
+  h_b680f75345178a 48-56
+packages/console/protocol/src/index.ts
+  h_b680f75345178a 487-512
+packages/im/plugin-runtime/src/index.ts
+  h_b680f75345178a 51
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  h_b680f75345178a 1-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d20fda499ba8538802214780e1c07fc629146eb9",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
