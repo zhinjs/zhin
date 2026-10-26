@@ -1,0 +1,19 @@
+packages/console/client/client/bootstrap/loadConsoleEntries.ts
+  s_557ef14607705d::t_aac022b43b37fc 3,55-67,76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ed5a64b69d8b1260a79edb7d849fa7e87404cb20",
+  "prompts": {},
+  "sessions": {
+    "s_557ef14607705d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a176ee-a8fa-73f0-aa53-7d542945b616",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
