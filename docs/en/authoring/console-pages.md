@@ -164,6 +164,53 @@ Ordinary users see what you return, so:
 
 Plugin RPC doesn't change configuration. Use `config:patch` for that.
 
+## Saving settings from a page (config:patch)
+
+When a page changes a few settings, use `config:patch` to write exact paths instead of overwriting a whole section with `config:set`. Everything else in `zhin.config.yml`, including comments, is kept; the YAML/Config page stays available for advanced users.
+
+```ts
+const { revision } = await wsManager.getConfigSource();
+const result = await wsManager.patchConfig({
+  instanceKey: 'typesafe',          // omit to use the Host allowlist
+  expectedRevision: revision,
+  patches: [
+    { op: 'set', path: ['ai', 'decisions', 'skills', 'mode'], value: 'shadow' },
+    { op: 'remove', path: ['typesafe', 'timeoutMs'] },
+  ],
+});
+if (result.status === 'saved' && result.restartRequired) showRestartHint(result.message);
+if (result.status === 'conflict') showLatest(result.current, result.revision); // never overwrites someone else's change
+if (result.status === 'invalid') showErrors(result.errors);
+```
+
+**Which paths can be written**
+
+| Call | Writable scope |
+| --- | --- |
+| With `instanceKey` | The instance's own block `[instanceKey, ...]`, plus Host sub-paths declared in the plugin `schema.json` root under `x-zhin-config.patchPaths` |
+| Without `instanceKey` | `HOST_CONFIG_PATCH_PATHS` (exported by `@zhin.js/console-protocol`; currently `ai.trigger.ambient`) |
+
+Declaring cross-scope ownership in a plugin (the TypeSafe decision provider, for example):
+
+```json
+{
+  "type": "object",
+  "x-zhin-config": { "patchPaths": ["ai.decisions"] },
+  "properties": { "...": {} }
+}
+```
+
+`patchPaths` may only name Host config paths at least two levels deep (such as `ai.decisions`). It cannot claim `plugin`, `http`, `plugins`, a whole Host key or another plugin's block. A path outside the scope is rejected and nothing is written.
+
+**Rules**
+
+- `expectedRevision` is required; read it from `config:get-source`. If the file changed in the meantime the result is `status: 'conflict'` with the latest `revision` and the current value at each path; nothing is overwritten silently.
+- Every touched top-level section is validated against its schema before writing. Failures return `status: 'invalid'` with full paths (e.g. `$.ai.trigger.ambient.mode`) and nothing is written.
+- On success `restartRequired` says whether Host config changed: when `true` the file is saved but the process must restart for it to take effect, and `message` says so.
+- A successful write publishes `config:updated` with `paths` (the paths written) and the new `revision`.
+- Full-scope tokens only; not available on Demo deployments. At most 32 patches per call and 16 segments per path.
+- Plugin status and actions use plugin RPC (`plugin.<PluginId>.status` / `plugin.<PluginId>.<action>`); don't use it to write config.
+
 ## How it works
 
 Page files run in the **browser**, so Node doesn't load them; the client builder (`TypeScriptClientBuilder`, `packages/console/pagemanager`) bundles them with esbuild:

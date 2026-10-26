@@ -3,6 +3,8 @@ import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
   CONFIG_RPC,
   ENDPOINT_RPC,
+  type ConsoleConfigPatchRequest,
+  type ConsoleConfigPatchResult,
   type ConsoleConfigSource,
   type ConsoleConfigExplanation,
   type ConsoleEndpointSummary,
@@ -194,6 +196,11 @@ export type RuntimeConsoleRpcContext = {
    * Returns whether a process restart is required.
    */
   setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  /**
+   * Full-scope, path-allowlisted and revision-checked write (`config:patch`).
+   * Scope and schema checks belong to the implementation; scope violations throw.
+   */
+  patchConfig?(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
   setPluginEnabled?(
     instanceKey: string,
@@ -450,6 +457,48 @@ export async function dispatchRuntimeConsoleRpc(
         emit({
           requestId,
           error: `Failed to save config: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+      return payloads;
+    }
+    case CONFIG_RPC.PATCH: {
+      if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
+      const { instanceKey, expectedRevision, patches } = message;
+      if (instanceKey !== undefined && (typeof instanceKey !== 'string' || !instanceKey || instanceKey.length > 128)) {
+        emit({ requestId, error: 'instanceKey 必须是插件实例名，或省略以使用 Host 白名单' });
+        return payloads;
+      }
+      if (typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(expectedRevision)) {
+        emit({ requestId, error: 'expectedRevision is required' });
+        return payloads;
+      }
+      if (!Array.isArray(patches)) {
+        emit({ requestId, error: 'patches 必须是数组' });
+        return payloads;
+      }
+      if (!ctx.patchConfig) {
+        emit({ requestId, error: 'Config patch is not configured' });
+        return payloads;
+      }
+      try {
+        const result = await ctx.patchConfig({
+          ...(instanceKey === undefined ? {} : { instanceKey }),
+          expectedRevision,
+          patches,
+        });
+        if (result.status === 'saved') {
+          ctx.publishEvent?.('config:updated', {
+            pluginName: instanceKey ?? null,
+            keys: [...new Set(result.paths.map(path => path[0]))],
+            paths: result.paths,
+            revision: result.revision,
+          });
+        }
+        emit({ requestId, data: result });
+      } catch (error) {
+        emit({
+          requestId,
+          error: `Failed to patch config: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
       return payloads;
