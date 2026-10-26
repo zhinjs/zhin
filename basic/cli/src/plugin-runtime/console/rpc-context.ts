@@ -67,6 +67,7 @@ function createRpcContext(
     replaceConfigSource: (source: string, expectedRevision: string) =>
       configuration.replaceSource(source, expectedRevision),
     setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data),
+    patchConfig: (request) => configuration.patch(request),
     pluginManagement,
     setPluginEnabled: (instanceKey: string, enabled: boolean) => setProjectPluginEnabled(projectRoot, instanceKey, enabled),
     ...createWorkroomCatalogRpcContext(agent, im, principal),

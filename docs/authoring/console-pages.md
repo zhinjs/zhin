@@ -167,6 +167,53 @@ await pluginRpc('root/ambient', 'clear-cooldown', { group: '123' });
 
 插件 RPC 不负责改配置。改配置请用 `config:patch`。
 
+## 在页面里保存设置 (config:patch)
+
+页面要改几项设置时，用 `config:patch` 只写具体路径，不要用 `config:set` 覆盖整块配置。`zhin.config.yml` 里其他内容和注释都会保留；YAML/配置页仍然保留给高级用户。
+
+```ts
+const { revision } = await wsManager.getConfigSource();
+const result = await wsManager.patchConfig({
+  instanceKey: 'typesafe',          // 省略则使用 Host 白名单
+  expectedRevision: revision,
+  patches: [
+    { op: 'set', path: ['ai', 'decisions', 'skills', 'mode'], value: 'shadow' },
+    { op: 'remove', path: ['typesafe', 'timeoutMs'] },
+  ],
+});
+if (result.status === 'saved' && result.restartRequired) showRestartHint(result.message);
+if (result.status === 'conflict') showLatest(result.current, result.revision); // 不会覆盖别人的修改
+if (result.status === 'invalid') showErrors(result.errors);
+```
+
+**能写哪些路径**
+
+| 调用方式 | 可写范围 |
+| --- | --- |
+| 带 `instanceKey` | 该插件实例自己的配置块 `[instanceKey, ...]`，加上插件 `schema.json` 根部 `x-zhin-config.patchPaths` 声明的 Host 子路径 |
+| 省略 `instanceKey` | `HOST_CONFIG_PATCH_PATHS`（`@zhin.js/console-protocol` 导出，目前是 `ai.trigger.ambient`） |
+
+插件声明跨作用域归属的写法（以 TypeSafe 决策服务为例）：
+
+```json
+{
+  "type": "object",
+  "x-zhin-config": { "patchPaths": ["ai.decisions"] },
+  "properties": { "...": {} }
+}
+```
+
+`patchPaths` 只能写 Host 配置下至少两级的路径（如 `ai.decisions`），不能声明 `plugin`、`http`、`plugins`、整块 Host 键或其他插件的配置块。超出范围的路径会直接报错，不写入任何内容。
+
+**规则**
+
+- `expectedRevision` 必填，取自 `config:get-source`。文件已被别处修改时返回 `status: 'conflict'`，附带最新 `revision` 和每个路径的当前值，不会静默覆盖。
+- 写入前按 schema 校验每个被改动的顶层配置块，失败时返回 `status: 'invalid'` 和带完整路径的错误（如 `$.ai.trigger.ambient.mode`），不写入。
+- 成功时 `restartRequired` 表示是否改到了 Host 配置：为 `true` 时文件已保存，需要重启进程才能生效，`message` 为「配置已保存，需重启进程才能生效」。
+- 成功后发布 `config:updated` 事件，带 `paths`（实际写入的路径）和新 `revision`。
+- 只接受 full scope Token；Demo 部署不可用。一次最多 32 个 patch，每个路径最多 16 段。
+- 插件状态与动作走 plugin RPC（`plugin.<PluginId>.status` / `plugin.<PluginId>.<action>`），不要用它写配置。
+
 ## 它是怎么工作的
 
 页面文件运行在**浏览器**里，所以不会被 Node 直接加载，而是交给客户端构建器（`TypeScriptClientBuilder`，`packages/console/pagemanager`）用 esbuild 打包：
