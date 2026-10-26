@@ -102,6 +102,68 @@ export default definePlugin({
 });
 ```
 
+## Page data: plugin RPC
+
+When a page needs to show a plugin's runtime status or offer a few buttons, the plugin can register its own Console RPC instead of opening a WebSocket or an HTTP route.
+
+In `setup`, the plugin registers a read-only `status` and, if needed, a few limited actions:
+
+```ts
+// plugin.ts
+import { definePlugin } from 'zhin.js';
+import { definePluginConsoleRpc, PluginConsoleRpcError, pluginConsoleRpcToken } from 'zhin.js/plugin-runtime';
+
+export default definePlugin({
+  name: 'ambient',
+  setup(context) {
+    context.resources.provide(pluginConsoleRpcToken, definePluginConsoleRpc({
+      status: {
+        page: 'index', // same access rules as pages/index
+        handler: async () => ({
+          mode: 'shadow',
+          recent: recentJudgments(10).map(j => ({ at: j.at, spoke: j.engaged })),
+        }),
+      },
+      actions: {
+        'clear-cooldown': {
+          page: 'index',
+          handler: async ({ group }) => {
+            if (typeof group !== 'string') throw new PluginConsoleRpcError('invalid_input', 'Pick a group');
+            return { cleared: clearCooldown(group) };
+          },
+        },
+      },
+    }));
+  },
+});
+```
+
+Pages call it with `pluginRpc` from `@zhin.js/client`. `pluginId` is the plugin's PluginId (for example `root/ambient`), the same value as `owner` in the page list:
+
+```tsx
+import { pluginRpc } from '@zhin.js/client';
+
+const status = await pluginRpc<{ mode: string }>('root/ambient', 'status');
+await pluginRpc('root/ambient', 'clear-cooldown', { group: '123' });
+```
+
+Requests go through the existing `POST /api/console/request`, with the type `plugin.<pluginId>.status` or `plugin.<pluginId>.<action>`. Action names may use only lowercase letters, digits and `-`, and `status` is reserved.
+
+Access rules:
+
+- **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
+- **Actions** need the full-scope token.
+- **The demo token** is refused by default. It can read `status` only when `status` sets `demo: true` and neither the page nor the method has any requirements.
+
+Ordinary users see what you return, so:
+
+- Return only the few fields the page needs. Don't return log records, prompts, chat text or secrets.
+- The result must be JSON and at most 256 KB. The request's `data` must be a JSON object of at most 64 KB.
+- A handler that doesn't return within 10 seconds times out, and its `signal` is aborted.
+- To show users why something failed, throw `PluginConsoleRpcError`. Its message is shown as is. Any other error shows only a generic failure message.
+
+Plugin RPC doesn't change configuration. Use `config:patch` for that.
+
 ## Saving settings from a page (config:patch)
 
 When a page changes a few settings, use `config:patch` to write exact paths instead of overwriting a whole section with `config:set`. Everything else in `zhin.config.yml`, including comments, is kept; the YAML/Config page stays available for advanced users.

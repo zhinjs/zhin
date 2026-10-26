@@ -19,7 +19,7 @@ Commands, components, and middleware belong to your plugin and are shared by eve
 1. Check commands and replies in Sandbox.
 2. Run `npx zhin setup --adapters` and install an adapter for each platform.
 3. Add one entry per account under the adapter's `endpoints`; keep account secrets in environment variables.
-4. After startup, send a test message from each Endpoint in Console's **Conversations & Channels**.
+4. After startup, send a test message from each Endpoint in Console's **Chat accounts**.
 5. Check which operations (`operations`) each Endpoint supports in **Runtime Capabilities**. Connection modes of the same adapter can differ, so don't assume they match.
 6. When something fails, filter **Logs** by level and Endpoint, and check Host and push health on the **Dashboard**.
 

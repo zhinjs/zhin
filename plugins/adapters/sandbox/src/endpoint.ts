@@ -365,7 +365,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
             text: [
               `已连接 Sandbox「${target}」`,
               `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
-              'Agent 试验台会话已启用持久化运行配置。',
+              '「试聊一下」会话已启用持久化运行配置。',
             ].join('\n'),
           },
         }],

@@ -115,9 +115,9 @@ AI 会读取三层 Markdown 记忆文件：
 
 ## 6. 在 Console 验收
 
-1. “Agent 概览”确认 provider、binding 和当前运行态。
+1. “机器人状态”确认 provider、binding 和当前运行态。
 2. “运行时能力”确认 `weather` 工具和 `product-language` Prompt Section 已加载，来源是你的项目。
-3. 在“渠道与会话”发起请求，在 Agent 工作台查看每一步和工具返回的结果。
+3. 在“聊天账号”发起请求，在“机器人状态”查看每一步和工具返回的结果。
 4. 修改 Prompt Section 并保存，确认新对话读到新内容。
 
 ## 安全原则

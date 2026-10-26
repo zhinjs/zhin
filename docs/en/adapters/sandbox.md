@@ -118,7 +118,7 @@ The Console Sandbox page and any test client you write use this protocol. Every 
 | `text` | string | Optional. Plain text when `content` is missing; also used as the message text when `content` has no text segment |
 | `messageId` | string | Optional client-generated id matching `^[A-Za-z0-9._:-]{1,160}$` (ignored otherwise). It becomes the id of this inbound message, so a quoted reply can find it |
 | `timestamp` | number | Optional. Milliseconds; defaults to the time the server received it |
-| `agentRun` | object | Optional Agent playground run config, see below |
+| `agentRun` | object | Optional **Try a chat** (formerly Agent playground) run config, see below |
 
 - A frame that is not JSON is handled as one plain-text message.
 - The sender is always the endpoint `owner`.

@@ -56,6 +56,17 @@ describe('Console Runtime', () => {
     );
   });
 
+  it('lists every page of one owner for authorization, including pages the viewer cannot open', async () => {
+    const store = new SnapshotStore(state());
+    const runtime = new ConsoleRuntime();
+    runtime.attach(store);
+    await runtime.runView({ permissions: [], roles: [] }, (catalog) => {
+      const owned = catalog.pagesOwnedBy(`${rootPluginId()}/a` as PluginId).map((page) => page.localName);
+      expect(owned).toContain('secret');
+      expect(catalog.pages().some((page) => page.localName === 'secret')).toBe(false);
+    });
+  });
+
   it('does not mix page and layout catalogs across an HMR generation commit', async () => {
     const store = new SnapshotStore(state('v1'));
     const runtime = new ConsoleRuntime();

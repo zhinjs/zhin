@@ -21,7 +21,7 @@ cd my-bot
 pnpm dev
 ```
 
-Sandbox 是内置的模拟聊天窗口，不需要任何平台账号。用终端打印的 API Base 和 `.env` 中的 `HTTP_TOKEN` 连接 [Console](https://console.zhin.dev)，进入“渠道与会话”中的 Sandbox，发送 `/hello`，确认有回复。
+Sandbox 是内置的模拟聊天窗口，不需要任何平台账号。用终端打印的 API Base 和 `.env` 中的 `HTTP_TOKEN` 连接 [Console](https://console.zhin.dev)，打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`，确认有回复。
 
 ## 2. 添加一个命令
 
@@ -85,7 +85,7 @@ export default definePlugin<Config>({
 
 在配置里填好 `morningTarget` 后任务才会注册：
 
-- `endpointKey` 填 Console“渠道与会话”中显示的完整 Endpoint 标识（Endpoint 就是 Bot 在某个平台上登录的一个账号）；
+- `endpointKey` 填 Console“聊天账号”中显示的完整 Endpoint 标识（Endpoint 就是 Bot 在某个平台上登录的一个账号）；
 - `cron` 是六段格式：秒、分、时、日、月、周；
 - `context.lifecycle.add()` 让插件在热重载或停用时自动注销旧任务，不会重复发送。
 
@@ -107,7 +107,7 @@ pnpm dev
 
 ## 5. 在 Console 验收
 
-1. “渠道与会话”确认 Endpoint 在线并发送测试消息。
+1. “聊天账号”确认 Endpoint 在线并发送测试消息。
 2. “运行时能力”确认 `/roll` 已加载，并且是最新保存的版本。
 3. “日志”检查命令和主动通知没有错误。
 4. 重启 Host，再重复一次真实平台测试。

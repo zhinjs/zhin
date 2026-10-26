@@ -48,3 +48,4 @@ export * from './plugin-verification.js';
 export * from './plugin-tasks.js';
 
 export * from './task-storage.js';
+export * from './plugin-console-rpc.js';
