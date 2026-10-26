@@ -75,6 +75,20 @@ describe('TokenRegistry Console access', () => {
     expect(registry.resolve('alice-secret')).toBe('demo');
   });
 
+  it('treats scope: user as an ordinary Console user (alias of demo)', () => {
+    const registry = new TokenRegistry({
+      primaryToken: 'admin-secret',
+      scopedTokens: [{ token: 'alice-secret', scope: 'user', principalId: 'alice', permissions: ['ambient:write'] }],
+    });
+    expect(registry.resolve('alice-secret')).toBe('demo');
+    expect(registry.resolvePrincipal('alice-secret')).toEqual({ principalId: 'alice', scope: 'demo' });
+    expect(registry.resolveAccess('alice-secret')).toEqual({ unrestricted: false, permissions: ['ambient:write'], roles: [] });
+    expect(() => new TokenRegistry({ scopedTokens: [
+      { token: 't', scope: 'user' },
+      { token: 't', scope: 'demo' },
+    ] })).not.toThrow();
+  });
+
   it('gives missing, unknown and expired tokens public access only', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-26T08:00:00Z'));

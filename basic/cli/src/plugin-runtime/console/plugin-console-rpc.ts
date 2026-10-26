@@ -99,7 +99,8 @@ export async function dispatchPluginConsoleRpcRequest(
  * - The operator (full scope, or a Host without tokens) passes everything.
  * - Any other token may call read-only methods (`status`, queries) when it holds every required
  *   permission and role. One with no requirements at all is open to such tokens only with `demo: true`.
- * - Actions stay operator-only.
+ * - Actions are open to such tokens only when the action declares its own requirements and the
+ *   token holds them all (page ones included); an action without its own requirements is admin-only.
  */
 function authorize(
   snapshot: RuntimeSnapshot,
@@ -118,12 +119,20 @@ function authorize(
     page.requiredRoles.forEach((role) => roles.add(role));
   }
   if (access.unrestricted) return;
-  if (!method.readOnly) throw new Failure('forbidden', '需要管理员令牌');
   const held = new Set(access.permissions);
   const heldRoles = new Set(access.roles);
   const satisfied = [...permissions].every((permission) => held.has(permission))
     && [...roles].every((role) => heldRoles.has(role));
   const guarded = permissions.size > 0 || roles.size > 0;
+  if (!method.readOnly) {
+    // An action opens to non-admin tokens only through its own permission or role, so viewing a
+    // page never grants its actions; the page's requirements still apply on top.
+    if (method.requiredPermissions.length === 0 && method.requiredRoles.length === 0) {
+      throw new Failure('forbidden', '需要管理员令牌');
+    }
+    if (!satisfied) throw new Failure('forbidden', '没有操作权限');
+    return;
+  }
   if (!satisfied || (!guarded && !method.demo)) throw new Failure('forbidden', '没有查看权限');
 }
 

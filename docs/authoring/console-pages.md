@@ -165,8 +165,18 @@ definePluginConsoleRpc({
 
 - **跟随页面**：写了 `page` 时，调用者必须满足这个页面的 `requiredPermissions` 和 `requiredRoles`，方法自己声明的要求会叠加上去。页面在当前代没有加载时直接拒绝。
 - **full 令牌**可以调用全部方法。
-- **其他令牌**可以读取 `status`，前提是它持有全部要求的权限和角色。`status` 完全没有要求时，只有写了 `demo: true` 才对这些令牌开放。
-- **动作**只允许 full 令牌调用。
+- **其他令牌**（`scope: user` / `demo`）可以读取 `status`，前提是它持有全部要求的权限和角色。`status` 完全没有要求时，只有写了 `demo: true` 才对这些令牌开放。
+- **动作**：其他令牌只有在动作**自己**声明了 `requiredPermissions` 或 `requiredRoles`，并且令牌满足全部要求（包括页面的要求）时才能执行，否则返回「没有操作权限」。动作自己没有声明任何要求时只允许 full 令牌调用，页面的要求不会单独放行动作。
+
+```ts
+actions: {
+  'clear-cooldown': {
+    page: 'index',                       // 先满足页面的要求
+    requiredPermissions: ['ambient:write'], // 再要求这个权限，普通用户才能执行
+    handler: async ({ group }) => ({ cleared: clearCooldown(String(group)) }),
+  },
+},
+```
 
 返回给页面的内容会被普通用户看到，所以：
 

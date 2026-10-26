@@ -27,6 +27,24 @@ describe('Plugin Runtime HTTP Host config', () => {
     });
   });
 
+  it('accepts scope: user as an alias of demo and never upgrades unknown scopes', async () => {
+    await expect(resolveHttpConfig({
+      http: {
+        tokens: [
+          { token: 'alice-secret', scope: 'user', permissions: ['ambient:read'] },
+          { token: 'bob-secret', scope: 'root' },
+          { token: 'ops-secret', scope: 'full' },
+        ],
+      },
+    })).resolves.toMatchObject({
+      tokens: [
+        { token: 'alice-secret', scope: 'demo', permissions: ['ambient:read'] },
+        { token: 'bob-secret', scope: 'demo' },
+        { token: 'ops-secret', scope: 'full' },
+      ],
+    });
+  });
+
   it('loads HTTPS key, certificate and CA files relative to the project root', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-http-tls-'));
     await Promise.all([

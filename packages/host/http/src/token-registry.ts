@@ -5,7 +5,11 @@ export type AuthScope = 'full' | 'demo';
 
 export type ScopedTokenConfig = {
   readonly token: string;
-  readonly scope: AuthScope;
+  /**
+   * `full` is the operator. `user` is an alias of `demo`: an ordinary Console user who sees and
+   * calls only what its `permissions` / `roles` allow. Stored and reported as `demo`.
+   */
+  readonly scope: AuthScope | 'user';
   /** Root-configured subject binding; never accepted from an HTTP payload. */
   readonly principalId?: string;
   /**
@@ -76,7 +80,7 @@ export class TokenRegistry {
         throw new Error('HTTP token principalId is invalid');
       }
       const candidate: TokenBinding = Object.freeze({
-        scope,
+        scope: scope === 'full' ? 'full' : 'demo',
         ...(principalId === undefined ? {} : { principalId }),
         permissions: accessList(permissions, 'permissions'),
         roles: accessList(roles, 'roles'),
@@ -150,7 +154,7 @@ export class TokenRegistry {
       throw new Error('Dynamic HTTP token expiresAt must be a future epoch millisecond');
     }
     const candidate: TokenBinding = Object.freeze({
-      scope: config.scope,
+      scope: config.scope === 'full' ? 'full' : 'demo',
       ...(config.principalId === undefined ? {} : { principalId: config.principalId }),
       permissions: accessList(config.permissions, 'permissions'),
       roles: accessList(config.roles, 'roles'),

@@ -165,8 +165,18 @@ Access rules:
 
 - **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
 - **The full token** can call every method.
-- **Any other token** can read `status` if it holds every required permission and role. A `status` with no requirements at all is open to these tokens only when it sets `demo: true`.
-- **Actions** need the full token.
+- **Any other token** (`scope: user` / `demo`) can read `status` if it holds every required permission and role. A `status` with no requirements at all is open to these tokens only when it sets `demo: true`.
+- **Actions**: other tokens can run an action only when the action **itself** declares `requiredPermissions` or `requiredRoles` and the token meets all of them, including the page's. Otherwise the call is refused. An action with no requirements of its own needs the full token; a page's requirements never open an action on their own.
+
+```ts
+actions: {
+  'clear-cooldown': {
+    page: 'index',                          // the page's requirements apply first
+    requiredPermissions: ['ambient:write'], // then this one lets ordinary users run it
+    handler: async ({ group }) => ({ cleared: clearCooldown(String(group)) }),
+  },
+},
+```
 
 Ordinary users see what you return, so:
 
