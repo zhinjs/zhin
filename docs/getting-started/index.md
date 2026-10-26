@@ -27,7 +27,7 @@ pnpm dev
 1. 打开 [console.zhin.dev](https://console.zhin.dev)。
 2. 填入终端显示的 API Base。
 3. Token 使用项目 `.env` 中的 `HTTP_TOKEN`。创建项目时终端只显示打码后的 Token 和它的存放位置，不会打印完整值，避免进入 CI 日志。
-4. 打开“渠道与会话”中的 Sandbox，会话里发送 `/hello`。
+4. 打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`。
 
 收到回复才算首跑成功。这一条消息走完了完整的链路：Console 通过 HTTP 连上 Bot → Sandbox 适配器收到消息 → 匹配到 `commands/hello` → 回复经同一个适配器发回。之后接入真实平台，只是把 Sandbox 换成对应的适配器。
 
