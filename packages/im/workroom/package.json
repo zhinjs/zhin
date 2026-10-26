@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/workroom",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Workroom, Portfolio and Data Governance domain for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",

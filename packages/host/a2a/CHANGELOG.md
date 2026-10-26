@@ -1,5 +1,12 @@
 # @zhin.js/a2a
 
+## 1.1.17
+
+### Patch Changes
+
+- @zhin.js/workroom@0.0.10
+- @zhin.js/core@1.1.50
+
 ## 1.1.16
 
 ### Patch Changes

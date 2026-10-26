@@ -1,5 +1,13 @@
 # @zhin.js/ai
 
+## 1.1.45
+
+### Patch Changes
+
+- 0dd657d: Let the structured-decision provider decide group ambient engagement. New `ai.decisions.ambient` policy (`off` / `shadow` / `active`, plus `timeoutMs` and `minConfidence`): in `active` mode the DecisionProvider (for example TypeSafe Jev) answers one binary `engage` / `stay_quiet` choice over the same recent messages the chat-model judge sees, and the `ai.trigger.ambient.judge` list takes over when it fails, times out or answers invalidly; in `shadow` mode the judge list still decides and the decision is logged as `ambient_decision_shadow`. Quiet time, cooldown, hourly caps, conversation window, judge interval, `ambient.minConfidence` and ambient shadow mode are unchanged, and addressed turns still skip the ambient judge. Without `ai.decisions.ambient` nothing changes.
+- 5d099f5: Reuse explicit Gemini caches and failure backoff across standalone text completions. Report cache creation failures without exposing prompts, credentials, or upstream error bodies. Repair imported Gemini tool-call histories while preserving signed parts and leaving other providers unchanged.
+- f9ab410: Send Gemini only valid function names. Tool names that break Gemini's naming rule (for example `60s__skill__60s-life__weather`, which starts with a digit because the plugin key is `60s`) are rewritten for the request and mapped back when the model calls them, so execution and history keep the real names. Valid names and other providers are unchanged.
+
 ## 1.1.44
 
 ### Patch Changes

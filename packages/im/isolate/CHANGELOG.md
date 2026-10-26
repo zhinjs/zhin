@@ -1,5 +1,12 @@
 # @zhin.js/isolate
 
+## 1.1.13
+
+### Patch Changes
+
+- Updated dependencies [0dd657d]
+  - @zhin.js/runtime@1.1.13
+
 ## 1.1.12
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @zhin.js/pagemanager
 
+## 1.1.14
+
+### Patch Changes
+
+- @zhin.js/contract@1.1.13
+
 ## 1.1.13
 
 ### Patch Changes

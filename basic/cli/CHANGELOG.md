@@ -1,5 +1,22 @@
 # @zhin.js/cli
 
+## 1.1.19
+
+### Patch Changes
+
+- 0dd657d: Let the structured-decision provider decide group ambient engagement. New `ai.decisions.ambient` policy (`off` / `shadow` / `active`, plus `timeoutMs` and `minConfidence`): in `active` mode the DecisionProvider (for example TypeSafe Jev) answers one binary `engage` / `stay_quiet` choice over the same recent messages the chat-model judge sees, and the `ai.trigger.ambient.judge` list takes over when it fails, times out or answers invalidly; in `shadow` mode the judge list still decides and the decision is logged as `ambient_decision_shadow`. Quiet time, cooldown, hourly caps, conversation window, judge interval, `ambient.minConfidence` and ambient shadow mode are unchanged, and addressed turns still skip the ambient judge. Without `ai.decisions.ambient` nothing changes.
+- c991823: 修复 Agent 持久化在 `activateNext` 里调用已 seal 的 `DisposeStack.add` 导致启动立即退出（`DisposeStack is sealed`）。清理回调改在 setup 阶段注册，激活阶段只做数据库与 admission 接线。
+- Updated dependencies [0dd657d]
+- Updated dependencies [5d099f5]
+- Updated dependencies [f9ab410]
+  - @zhin.js/ai@1.1.45
+  - @zhin.js/runtime@1.1.13
+  - @zhin.js/scaffold-wizard@1.1.10
+  - @zhin.js/workroom@0.0.10
+  - @zhin.js/core@1.1.50
+  - @zhin.js/pagemanager@1.1.14
+  - @zhin.js/config-file@1.1.8
+
 ## 1.1.18
 
 ### Patch Changes
