@@ -11,5 +11,5 @@ export {
   type WsConnection,
   type WsHandle,
 } from './http-host.js';
-export type { AuthenticatedTokenPrincipal, AuthScope, ConsoleAccess } from './token-registry.js';
+export type { AuthenticatedTokenPrincipal, AuthScope } from './token-registry.js';
 export type { ListedRoute, OpenApiParameter, RouteMeta } from './openapi.js';
