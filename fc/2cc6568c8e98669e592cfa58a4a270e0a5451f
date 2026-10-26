@@ -1,0 +1,31 @@
+package.json
+  s_079f1dc5e6308d::t_4dece34b87c169 201,207
+pnpm-lock.yaml
+  s_557ef14607705d::t_10fde973c836f9 19,25,6777-6778,6781-6782,6913-6916,7471-7472,8556-8557,12204,12211,12302,12305,12316,12415-12416,12996,13014,13048,13755,14133
+pnpm-workspace.yaml
+  s_079f1dc5e6308d::t_731683857024be 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fc2cc6568c8e98669e592cfa58a4a270e0a5451f",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_557ef14607705d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a176ee-a8fa-73f0-aa53-7d542945b616",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
