@@ -1,0 +1,207 @@
+plugins/services/activity-feedback/plugin.ts
+  s_079f1dc5e6308d::t_8f830086cd0220 10,60-61,67,76
+plugins/services/activity-feedback/tests/localization.test.ts
+  s_079f1dc5e6308d::t_4257d4025ae464 1-96,105,110,118-119,122-124,130-131
+  s_079f1dc5e6308d::t_aab3030ee20ce2 97-104,106-109,111-117,120-121,125-129
+packages/im/agent/src/activity-feedback/adapter-integration.ts
+  s_079f1dc5e6308d::t_464210657c0bad 48,98
+  s_079f1dc5e6308d::t_80c1dcab451fb3 118
+  s_079f1dc5e6308d::t_307091dd52a174 39,93
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  s_079f1dc5e6308d::t_3e2d9fc080add0 7,34,75,121,158,176
+plugins/utils/reminder/src/admin-tasks.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 158
+.github/workflows/ci.yml
+  s_079f1dc5e6308d::t_861847ea04f877 35-36,78-79,107-108,144-145
+plugins/services/activity-feedback/src/ai-event-binder.ts
+  s_079f1dc5e6308d::t_8f830086cd0220 17-18,22,24,42-47,82,89,102-103,136,155,248,259,267,273
+docs/contributing/internationalization-plan.md
+  s_079f1dc5e6308d::t_c46170cbc47393 10,30,153,155-156
+  s_079f1dc5e6308d::t_2c8cc852c6fc8a 154,159
+packages/im/agent/src/activity-feedback/config-resolver.ts
+  s_079f1dc5e6308d::t_3e1a30e9d06946 10-11,20,33,40,43,48,52,59,65,67,73,75,82,85,97,105-106,123,139
+packages/im/agent/src/activity-feedback/event-context.ts
+  s_079f1dc5e6308d::t_80c1dcab451fb3 9
+  s_079f1dc5e6308d::t_307091dd52a174 5,67,76,79,88
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 95
+scripts/ci/scope-transport.test.ts
+  s_079f1dc5e6308d::t_32833230892845 5,33-56,60,87-88
+  s_079f1dc5e6308d::t_09da9f82fd1225 1-4,6-32,57-59,61-86,89-131
+packages/im/agent/src/assistant/job-engine.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 4,97
+plugins/services/activity-feedback/src/messages.ts
+  s_079f1dc5e6308d::t_8f830086cd0220 1-10
+plugins/utils/earthquake/plugin.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 1,58
+docs/configuration/localization.md
+  s_079f1dc5e6308d::t_c46170cbc47393 25
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_079f1dc5e6308d::t_a2fdb5dc6e9bab 14,47,165,175,195
+plugins/utils/rss/plugin.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 75
+plugins/services/activity-feedback/src/executor.ts
+  s_079f1dc5e6308d::t_8f830086cd0220 157,169
+  s_079f1dc5e6308d::t_80c1dcab451fb3 208
+packages/im/agent/src/outbound/send-proactive.ts
+  s_079f1dc5e6308d::t_f77479f636f80e 4,14
+plugins/utils/bilibili/plugin.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 44
+plugins/utils/content-moderation/schema.json
+  s_079f1dc5e6308d::t_3e2d9fc080add0 82,85
+plugins/utils/rss/tests/rss-channel.test.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 193,202-204
+basic/cli/tests/plugin-runtime/persistent-state.live.test.ts
+  s_079f1dc5e6308d::t_47456486d319aa 2-5,7,10-16,39-44,53-58,72-75,84
+plugins/utils/bilibili/src/runtime.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 1
+  s_079f1dc5e6308d::t_d22f98b6e16d17 15
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_079f1dc5e6308d::t_307091dd52a174 37,564
+packages/im/agent/tests/task-executor.test.ts
+  s_079f1dc5e6308d::t_22f102433d8440 60-84,91
+  s_079f1dc5e6308d::t_3678db465c7f06 85-90,92-93,95-97
+plugins/utils/earthquake/tests/plugin.test.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 98,112-116
+  s_079f1dc5e6308d::t_d93f86ea9c1034 99
+basic/cli/tests/plugin-runtime/relational-state.test.ts
+  s_079f1dc5e6308d::t_c8c274e6e58d7c 3,12,164-223
+  s_079f1dc5e6308d::t_56130132111d32 224-225
+scripts/ci/affected-scope.mjs
+  s_079f1dc5e6308d::t_861847ea04f877 64-78,85
+plugins/utils/bilibili/tests/fixtures.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 6,74,89
+packages/im/agent/src/ai-event-contract.ts
+  s_079f1dc5e6308d::t_307091dd52a174 1-2,38-39
+  s_079f1dc5e6308d::t_11127d4dfd12d1 59-60
+packages/im/agent/src/activity-feedback/messages.ts
+  s_079f1dc5e6308d::t_307091dd52a174 1-10
+packages/im/agent/src/task-executor.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 119
+plugins/utils/bilibili/src/poll.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 139
+plugins/utils/reminder/src/service.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 130
+plugins/utils/rss/src/poll.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 71
+plugins/utils/rss/tests/admin-tasks.test.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 41,60
+packages/im/core/tests/plugin-runtime/outbound-locale.test.ts
+  s_079f1dc5e6308d::t_d3fe34c3b1eed9 1,7-8,79-94
+  s_079f1dc5e6308d::t_51c194faf11112 95-96
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  s_079f1dc5e6308d::t_f77479f636f80e 90,94
+  s_079f1dc5e6308d::t_464210657c0bad 1
+  s_079f1dc5e6308d::t_8d3304ec2e3142 301
+.changeset/quiet-notification-locales.md
+  s_079f1dc5e6308d::t_8d3304ec2e3142 1-16
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  s_079f1dc5e6308d::t_a2fdb5dc6e9bab 32,34-36,67
+plugins/utils/rss/src/admin-tasks.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 215
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_079f1dc5e6308d::t_f77479f636f80e 206
+packages/im/agent/tests/assistant/deliver-schedule-to-adapter.test.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 61,66
+packages/im/core/src/types.ts
+  s_079f1dc5e6308d::t_464210657c0bad 92
+plugins/utils/content-moderation/README.md
+  s_079f1dc5e6308d::t_3e2d9fc080add0 23-24
+  s_079f1dc5e6308d::t_a61f7d0e6aa8a0 97
+packages/im/agent/src/assistant/notification-router.ts
+  s_079f1dc5e6308d::t_464210657c0bad 120-121,145
+  s_079f1dc5e6308d::t_8f9da550d88f1d 4,15,26,125,143,178
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 59,82,304
+scripts/ci/run-pr-check.mjs
+  s_079f1dc5e6308d::t_861847ea04f877 3,6-8,22,25
+plugins/utils/content-moderation/tests/group-moderation.test.ts
+  s_079f1dc5e6308d::t_a61f7d0e6aa8a0 46-77
+packages/im/agent/tests/typing-indicator/index.test.ts
+  s_079f1dc5e6308d::t_d1b013d50fc4b3 686-700
+plugins/utils/bilibili/tests/watcher.test.ts
+  s_079f1dc5e6308d::t_f4cb22d61b5fa8 27-28
+basic/cli/tests/plugin-runtime/outbound-host.test.ts
+  s_079f1dc5e6308d::t_d3fe34c3b1eed9 60-68
+packages/im/agent/src/event/event-emitter.ts
+  s_079f1dc5e6308d::t_307091dd52a174 32
+plugins/utils/content-moderation/tests/group-review-queue.test.ts
+  s_079f1dc5e6308d::t_a61f7d0e6aa8a0 5,62,88-112,148
+plugins/adapters/github/README.md
+  s_079f1dc5e6308d::t_b2d0a15f2e1368 115
+packages/im/agent/src/assistant/deliver-schedule-to-adapter.ts
+  s_079f1dc5e6308d::t_8f9da550d88f1d 5,19,28-29
+plugins/services/activity-feedback/src/orchestrator.ts
+  s_079f1dc5e6308d::t_8f830086cd0220 11,31
+  s_079f1dc5e6308d::t_156aed8c43a696 43,53,72,95,111,113
+plugins/services/activity-feedback/README.md
+  s_079f1dc5e6308d::t_8d3304ec2e3142 76-82
+plugins/utils/content-moderation/tests/localization.test.ts
+  s_079f1dc5e6308d::t_a61f7d0e6aa8a0 1-50
+packages/im/agent/src/typing-indicator/index.ts
+  s_079f1dc5e6308d::t_307091dd52a174 12-13,41-42,195
+plugins/services/activity-feedback/src/policy.ts
+  s_079f1dc5e6308d::t_8f830086cd0220 12,30,47
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  s_079f1dc5e6308d::t_e8df1b5cb45f2e 137-138,145,151
+  s_079f1dc5e6308d::t_b547294f2b6fa2 8,123,132-133,136,139-144,146-147
+  s_079f1dc5e6308d::t_fab8924cb077bb 134-135
+docs/en/configuration/localization.md
+  s_079f1dc5e6308d::t_c46170cbc47393 25
+scripts/generate-config-reference.mjs
+  s_079f1dc5e6308d::t_a41474255ee2ba 108-109
+packages/im/agent/tests/assistant/notification-router.test.ts
+  s_079f1dc5e6308d::t_d1b013d50fc4b3 36-44
+packages/im/plugin-runtime/src/outbound-host.ts
+  s_079f1dc5e6308d::t_a2fdb5dc6e9bab 4,29-30,91,114,146-148
+docs/adapters/github.md
+  s_079f1dc5e6308d::t_1d62cdafb0d242 11,127
+packages/im/agent/src/activity-feedback/turn-event-projector.ts
+  s_079f1dc5e6308d::t_e1ecbd76a08465 49-51,53,55
+packages/im/agent/tests/assistant/job-engine.test.ts
+  s_079f1dc5e6308d::t_62eb9faa578531 61-80
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_079f1dc5e6308d::t_66814f716d9997 39,180,189-190
+plugins/utils/bilibili/tests/commands.test.ts
+  s_079f1dc5e6308d::t_9023ecbcc1d47b 182,186,203-206
+plugins/utils/content-moderation/src/group-moderation.ts
+  s_079f1dc5e6308d::t_806a0714050db6 4-5,56-57,212-214
+plugins/utils/rss/src/runtime.ts
+  s_079f1dc5e6308d::t_fdebe6b813ac87 13
+docs/configuration/generated.md
+  s_079f1dc5e6308d::t_fa1e3c8dfa9b8e 1830
+docs/en/configuration/generated.md
+  s_079f1dc5e6308d::t_212bca67d3f92a 538,551-569,571-572,582-586,597,600,623-627,644,646,655-659,667,678,686,699-703,713-714,722-737,739-755,770-774,787,792,803-807,818,821,823,825,836-840,847,858-862,871,883-887,899,910-914,923,934-938,948,958-961,965,970-973,982,993-997,1001,1011-1015,1023,1034-1038,1047,1050,1052,1067-1071,1082,1095-1099,1111,1121-1125,1134,1147-1151,1159-1160,1168-1172,1756-1759,1767-1775,1783-1784,1791,1798-1799,1804-1807,1822,1827-1831,1834,1840-1841,1852-1856,1860,1868-1884,1921-1923,1992-1997,2005-2007,2015
+plugins/utils/content-moderation/src/config.ts
+  s_55ca365c7efe01::t_24b8cfd353e4fb 53,68
+plugins/utils/content-moderation/src/engine.ts
+  s_55ca365c7efe01::t_137e8bf2174f59 9-10,105,153
+plugins/utils/content-moderation/src/messages.ts
+  s_55ca365c7efe01::t_8ae5caa696ee3a 1-12
+plugins/utils/content-moderation/src/types.ts
+  s_55ca365c7efe01::t_689890a38beb31 100-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "66b64048021b956e9c46b0997b572b41b0ea7496",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_55ca365c7efe01": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a177b8-87f4-7953-a680-2af16d1c55f2",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
