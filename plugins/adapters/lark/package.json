@@ -42,7 +42,7 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
-    "undici": "6.28.0",
+    "undici": "6.29.1",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/core": "workspace:*",
