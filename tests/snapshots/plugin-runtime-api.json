@@ -230,6 +230,7 @@
     "export * from './outbound-sender.js';",
     "export * from './persistent-state.js';",
     "export * from './plugin-configuration.js';",
+    "export * from './plugin-console-rpc.js';",
     "export * from './plugin-tasks.js';",
     "export * from './plugin-verification.js';",
     "export * from './plugin.js';",
