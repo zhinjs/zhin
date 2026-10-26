@@ -55,7 +55,7 @@ const MAX_BOOTSTRAP_CHARS = 12_000;
 
 export interface InstallAgentHostOptions {
   /** Process-owned 群聊插话 / 技能助手 Console status (#970). */
-  readonly assistantStatus?: import('./assistant-status.js').AssistantStatus;
+  readonly assistantStatus?: import('../console/assistant-status.js').AssistantStatus;
   /** Root-private self-delivery authentication/integration configuration. Never accepts model-supplied policy. */
   readonly selfDelivery?: SelfDeliveryHostConfiguration;
   /**

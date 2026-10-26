@@ -94,7 +94,7 @@ import {
   type EngagementJudge,
 } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
-import type { AssistantStatus } from '../assistant-status.js';
+import type { AssistantStatus } from '../../console/assistant-status.js';
 
 const logger = getLogger('agent');
 /** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */

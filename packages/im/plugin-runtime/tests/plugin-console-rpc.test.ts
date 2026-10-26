@@ -23,3 +23,14 @@ it('rejects empty, reserved and malformed declarations at setup time', () => {
   expect(() => definePluginConsoleRpc({ status: {} as never })).toThrow(/handler/u);
   expect(() => definePluginConsoleRpc({ status: { handler, requiredRoles: [''] } })).toThrow(/non-empty/u);
 });
+
+it('treats named queries as read-only methods with the status access rules', () => {
+  const rpc = definePluginConsoleRpc({
+    queries: { ambient: { handler, demo: true, requiredPermissions: ['ambient:read'] } },
+    actions: { reset: { handler } },
+  });
+  expect(rpc.methods.get('ambient')).toMatchObject({ readOnly: true, demo: true, requiredPermissions: ['ambient:read'] });
+  expect(rpc.methods.get('reset')).toMatchObject({ readOnly: false, demo: false });
+  expect(() => definePluginConsoleRpc({ queries: { x: { handler } }, actions: { x: { handler } } })).toThrow(/Duplicate/u);
+  expect(() => definePluginConsoleRpc({ queries: { status: { handler } } })).toThrow(/reserved/u);
+});

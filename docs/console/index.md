@@ -173,7 +173,7 @@ http:
 - **没有配置任何令牌**时（本地开发），所有人都等同于管理员，和以前一样。
 - 页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）都按令牌过滤，且不会被缓存。
 
-权限名和角色名由页面自己约定，比如 `ambient:read`。
+权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#内置状态群聊插话和技能助手)）。
 
 ## Demo scope（只读部署）
 

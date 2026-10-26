@@ -1,7 +1,7 @@
 import type { AmbientEngagementConfig } from '@zhin.js/ai';
 import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
-import type { AmbientDecision } from './turn/ambient-engagement.js';
+import type { AmbientDecision } from '../agent/turn/ambient-engagement.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手

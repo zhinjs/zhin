@@ -46,6 +46,7 @@ import {
   startConsoleControlPlane,
   SystemLogStore,
   resolveSystemLogConfig,
+  AssistantStatus,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
@@ -83,7 +84,6 @@ export {
   type RespawnPlan,
   type StartOptions,
 } from './start/module.js';
-import { AssistantStatus } from './agent/assistant-status.js';
 
 const REMOTE_CONSOLE_URL = 'https://console.zhin.dev';
 
@@ -482,7 +482,7 @@ interface ConfiguredAgentHost {
     readonly extraTools?: readonly unknown[];
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
-    readonly assistantStatus?: import('./agent/assistant-status.js').AssistantStatus;
+    readonly assistantStatus?: AssistantStatus;
   }): RootResourceInstaller;
 }
 
