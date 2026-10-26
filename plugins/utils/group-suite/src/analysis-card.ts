@@ -1,3 +1,4 @@
+import { messages as t } from './i18n.js';
 import { jsx, renderToHtml } from "@zhin.js/jsx";
 import {
   BarChart,
@@ -28,10 +29,11 @@ const T = {
 } as const;
 
 export async function buildAnalysisReportHtml(
-  data: AnalysisReportData
+  data: AnalysisReportData,
+  locale?: import('zhin.js/i18n').Locale
 ): Promise<string> {
   const { stats, channelName, days, startDate, endDate, llm } = data;
-  const title = channelName ? `${channelName} · 群日常分析` : "群日常分析";
+  const title = channelName ? t(locale, 'analysisNamed', { name: channelName }) : t(locale, 'analysis');
   const peakLabel = `${String(stats.mostActiveHour).padStart(2, "0")}:00`;
   const hourlyValues = Array.from(
     { length: 24 },
@@ -41,7 +43,7 @@ export async function buildAnalysisReportHtml(
   const llmBlocks = [
     llm?.topics?.length
       ? jsx(Section, {
-          title: "热门话题",
+          title: t(locale, 'topics'),
           children: llm.topics.map((topic, i) =>
             jsx(TopicItem, {
               index: i + 1,
@@ -53,7 +55,7 @@ export async function buildAnalysisReportHtml(
       : "",
     llm?.quotes?.length
       ? jsx(Section, {
-          title: "金句精选",
+          title: t(locale, 'quotes'),
           children: llm.quotes.map((quote, i) =>
             jsx(QuoteCard, {
               index: i + 1,
@@ -66,7 +68,7 @@ export async function buildAnalysisReportHtml(
       : "",
     llm?.userTitles?.length
       ? jsx(Section, {
-          title: "用户画像",
+          title: t(locale, 'profiles'),
           children: llm.userTitles.map((user, i) =>
             jsx(ProfileRow, {
               index: i + 1,
@@ -82,27 +84,27 @@ export async function buildAnalysisReportHtml(
   const body = elevatedCard([
     jsx(CardHeader, {
       title,
-      subtitle: `${startDate} 至 ${endDate} · 最近 ${days} 天`,
+      subtitle: t(locale, 'analysisRange', { start: startDate, end: endDate, days }),
     }),
     jsx(Row, {
       children: [
         jsx(StatChip, {
-          label: "消息",
+          label: t(locale, 'messages'),
           value: formatCount(stats.messageCount),
           accent: T.accentMsg,
         }),
         jsx(StatChip, {
-          label: "参与",
+          label: t(locale, 'participants'),
           value: formatCount(stats.participantCount),
           accent: T.accentPeople,
         }),
         jsx(StatChip, {
-          label: "字数",
+          label: t(locale, 'characters'),
           value: formatCount(stats.totalChars),
           accent: T.accentChars,
         }),
         jsx(StatChip, {
-          label: "活跃",
+          label: t(locale, 'active'),
           value: peakLabel,
           accent: T.accentHour,
         }),
@@ -111,7 +113,7 @@ export async function buildAnalysisReportHtml(
       style: "margin-bottom:4px",
     }),
     jsx(Section, {
-      title: "每小时消息分布",
+      title: t(locale, 'hourDistribution'),
       children: jsx(BarChart, {
         values: hourlyValues,
         peakIndex: stats.mostActiveHour,

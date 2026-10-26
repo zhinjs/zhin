@@ -218,7 +218,7 @@ export function register(api) {
     name,
     element,
     ...(icon != null ? { icon } : {}),
-    meta: { hideInMenu: m.hideInNav === true || ${hideInNav} },
+    meta: { hideInMenu: m.hideInNav === true || ${hideInNav}, ...(m.titleI18n === undefined ? {} : { titleI18n: m.titleI18n }) },
   });
   if (typeof api.addTool === 'function') {
     api.addTool({

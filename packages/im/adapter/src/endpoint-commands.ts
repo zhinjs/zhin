@@ -29,13 +29,17 @@
  */
 import {
   createToken,
+  resolveLocale,
   outboundHostToken,
   type OutboundHost,
   type OutboundSendInput,
   type Token,
+  type Locale,
 } from '@zhin.js/plugin-runtime';
+import { endpointCommandMessages } from './endpoint-command-messages.js';
 import {
   endpointConfigurationStoreToken,
+  EndpointConfigurationError,
   type ConfiguredEndpointEntry,
   type EndpointConfigurationStore,
 } from './endpoint-configuration.js';
@@ -69,8 +73,8 @@ export function isEndpointOperator(config: unknown, input: unknown): boolean {
 }
 
 /** add/remove 的拒绝文案（list 只读，不校验）。 */
-export function endpointCommandForbidden(adapterDisplayName: string): string {
-  return `仅 master 可执行 ${adapterDisplayName} endpoint 管理命令`;
+export function endpointCommandForbidden(adapterDisplayName: string, locale: Locale = 'zh-CN'): string {
+  return endpointCommandMessages(locale, 'forbidden', { adapter: adapterDisplayName });
 }
 
 // ---------------------------------------------------------------------------
@@ -212,12 +216,15 @@ export interface EndpointFieldSpec {
   readonly env?: boolean;
   /** 字段说明（用于用法提示） */
   readonly description?: string;
+  readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
 }
 
 export type EndpointCommandUse = <T>(token: Token<T>) => T;
 
 /** bindFlow 钩子上下文：接管 add 命令的自定义绑定流程（如 QQ 扫码）。 */
 export interface EndpointBindFlowContext {
+  readonly locale: Locale;
+  readonly formatCommand?: (localPath: string) => string | undefined;
   /** 命令参数 id（未指定时为 undefined，流程可自行决定终名） */
   readonly id?: string;
   /** 向当前会话推送后续状态（二维码刷新 / 成功 / 失败；走 durable OutboundHost，可在命令 reply scope 结束后调用） */
@@ -237,13 +244,14 @@ export interface EndpointCommandsSpec {
   /** 运行中 endpoints 数据源（可选）：通常读 adapter create 注册的 runtime state */
   readonly running?: (use: EndpointCommandUse) => Iterable<EndpointRunningInfo>;
   /** list 中配置项的附加描述（如 entry => `appid: ${entry.appid}`） */
-  readonly describeEntry?: (entry: ConfiguredEndpointEntry) => string;
+  readonly describeEntry?: (entry: ConfiguredEndpointEntry, locale?: Locale) => string;
   /** list 末尾的附加行（如 QQ 的进行中扫码提示）；返回 undefined 不加行 */
-  readonly listFooter?: (use: EndpointCommandUse) => string | undefined;
+  readonly listFooter?: (use: EndpointCommandUse, locale?: Locale) => string | undefined;
   /** 自定义 add 流程（扫码绑定等）；提供时 add 命令忽略 kv 参数，交给钩子 */
   readonly bindFlow?: (context: EndpointBindFlowContext) => Promise<string> | string;
   /** add 命令描述覆盖 */
   readonly addDescription?: string;
+  readonly addDescriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
 }
 
 /**
@@ -256,6 +264,8 @@ export interface EndpointCommandsSpec {
  * TS 逆变检查失败（TS2345）。
  */
 export interface EndpointCommandContext {
+  readonly locale?: Locale;
+  readonly formatCommand?: (localPath: string) => string | undefined;
   readonly config: unknown;
   /**
    * 与 `@zhin.js/command` 的 `CommandContext.input` 对齐：IM 命中时有值，
@@ -278,6 +288,7 @@ export interface EndpointCommandContext {
 
 export interface EndpointCommandDefinition {
   readonly description?: string;
+  readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
   // 与 @zhin.js/command 的 CommandParamSchema 结构对齐（provider 层不能 import
   // command，字面量联合在此镜像声明；新增参数类型须两侧同步）。
   readonly params?: Readonly<Record<string, {
@@ -292,6 +303,7 @@ export interface EndpointCommandDefinition {
       | Readonly<Record<string, unknown>>
       | null;
     readonly description?: string;
+    readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
   }>>;
   execute(context: EndpointCommandContext): unknown;
 }
@@ -314,24 +326,26 @@ export function formatEndpointList(
     readonly running: Iterable<EndpointRunningInfo>;
     readonly configured: readonly ConfiguredEndpointEntry[];
     readonly footer?: string;
+    readonly locale?: Locale;
   },
 ): string {
   const running = [...source.running];
+  const locale = resolveLocale(source.locale);
   const lines: string[] = [];
-  lines.push(`【运行中的 ${spec.adapterDisplayName} endpoints】`);
+  lines.push(endpointCommandMessages(locale, 'running', { adapter: spec.adapterDisplayName }));
   if (running.length === 0) {
-    lines.push('  （无）');
+    lines.push(endpointCommandMessages(locale, 'none'));
   } else {
     for (const endpoint of running) {
       lines.push(endpoint.mode ? `  - ${endpoint.id}（${endpoint.mode}）` : `  - ${endpoint.id}`);
     }
   }
-  lines.push(`【配置中的 ${spec.adapterDisplayName} endpoints】（Root 配置 → plugins.${spec.adapterKey}.endpoints）`);
+  lines.push(endpointCommandMessages(locale, 'configured', { adapter: spec.adapterDisplayName, key: spec.adapterKey }));
   if (source.configured.length === 0) {
-    lines.push('  （无）');
+    lines.push(endpointCommandMessages(locale, 'none'));
   } else {
     for (const entry of source.configured) {
-      const detail = spec.describeEntry?.(entry);
+      const detail = spec.describeEntry?.(entry, locale);
       lines.push(detail ? `  - ${entry.id}（${detail}）` : `  - ${entry.id}`);
     }
   }
@@ -339,19 +353,20 @@ export function formatEndpointList(
   return lines.join('\n');
 }
 
-function addUsage(spec: EndpointCommandsSpec): string {
+function addUsage(spec: EndpointCommandsSpec, locale: Locale, command?: string): string {
+  if (command === undefined) return endpointCommandMessages(locale, 'noCommand');
   const fields = spec.fields ?? [];
   const fieldText = fields.length === 0
     ? ''
-    : `\n字段：${fields.map((field) => {
+    : endpointCommandMessages(locale, 'fieldList', { fields: fields.map((field) => {
       const marks = [
-        field.required ? '必填' : '',
-        field.env ? '写入 .env' : '',
-        field.description ?? '',
-      ].filter(Boolean).join('，');
+        field.required ? endpointCommandMessages(locale, 'required') : '',
+        field.env ? endpointCommandMessages(locale, 'environment') : '',
+        field.descriptionI18n?.[locale] ?? field.description ?? '',
+      ].filter(Boolean).join(locale === 'en' ? ', ' : '，');
       return marks ? `${field.key}（${marks}）` : field.key;
-    }).join('、')}`;
-  return `用法：${spec.adapterKey} endpoint add <id> <key=value...>${fieldText}`;
+    }).join(locale === 'en' ? ', ' : '、') });
+  return endpointCommandMessages(locale, 'addUsage', { command, fields: fieldText });
 }
 
 /** add（kv 模式）的完整业务逻辑：解析 kv → 凭据写 .env → 更新 Root 配置。 */
@@ -360,25 +375,27 @@ export async function addEndpointFromKeyValues(
   id: string,
   args: readonly string[],
   store: EndpointConfigurationStore,
+  presentation: Readonly<{ locale?: Locale; command?: string; removeCommand?: string }> = {},
 ): Promise<string> {
+  const locale = resolveLocale(presentation.locale);
   const fields = spec.fields ?? [];
   const known = new Map(fields.map((field) => [field.key, field]));
   const values = new Map<string, string>();
   for (const arg of args) {
     const eq = arg.indexOf('=');
-    if (eq <= 0) return `参数「${arg}」不是 key=value 形式。${addUsage(spec)}`;
+    if (eq <= 0) return endpointCommandMessages(locale, 'invalidPair', { argument: arg, usage: addUsage(spec, locale, presentation.command) });
     const key = arg.slice(0, eq);
     const value = arg.slice(eq + 1).trim();
     const field = known.get(key);
     if (!field) {
-      return `未知字段「${key}」，可用字段：${fields.map((item) => item.key).join('、')}`;
+      return endpointCommandMessages(locale, 'unknownField', { field: key, fields: fields.map((item) => item.key).join(locale === 'en' ? ', ' : '、') });
     }
-    if (!value) return `字段「${key}」的值不能为空`;
+    if (!value) return endpointCommandMessages(locale, 'emptyField', { field: key });
     values.set(key, value);
   }
   const missing = fields.filter((field) => field.required && !values.has(field.key));
   if (missing.length > 0) {
-    return `缺少必填字段：${missing.map((field) => field.key).join('、')}。${addUsage(spec)}`;
+    return endpointCommandMessages(locale, 'missingFields', { fields: missing.map((field) => field.key).join(locale === 'en' ? ', ' : '、'), usage: addUsage(spec, locale, presentation.command) });
   }
   const entry: Record<string, unknown> = { id };
   const envValues: Record<string, string> = {};
@@ -399,13 +416,17 @@ export async function addEndpointFromKeyValues(
       entry: entry as ConfiguredEndpointEntry,
       environment: envValues,
     });
-    return (
-      `✅ endpoint「${id}」已追加到 ${filePath} 的 plugins.${spec.adapterKey}.endpoints` +
-      `${Object.keys(envValues).length > 0 ? '（凭据已写入 .env）' : ''}。\n` +
-      '⚠️ 需重启 zhin 后新 endpoint 才会生效。'
-    );
+    return endpointCommandMessages(locale, 'added', { id, file: filePath, key: spec.adapterKey,
+      credentials: Object.keys(envValues).length > 0 ? endpointCommandMessages(locale, 'credentialsSaved') : '' });
   } catch (error) {
-    return `添加失败：${error instanceof Error ? error.message : String(error)}`;
+    if (error instanceof EndpointConfigurationError && error.code === 'duplicate_entry') {
+      const detail = endpointCommandMessages(locale, 'duplicate', { adapter: error.details.adapterKey, id: error.details.endpointId });
+      const hint = presentation.removeCommand === undefined ? '' : '\n' + endpointCommandMessages(locale, 'removeExisting', {
+        command: `${presentation.removeCommand} ${JSON.stringify(error.details.endpointId)}`,
+      });
+      return endpointCommandMessages(locale, 'addFailed', { error: detail + hint });
+    }
+    return endpointCommandMessages(locale, 'addFailed', { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -414,20 +435,20 @@ export async function removeEndpointById(
   spec: Pick<EndpointCommandsSpec, 'adapterKey'>,
   id: string,
   store: EndpointConfigurationStore,
+  presentation: Readonly<{ locale?: Locale; command?: string }> = {},
 ): Promise<string> {
+  const locale = resolveLocale(presentation.locale);
   const trimmed = id.trim();
-  if (!trimmed) return `用法：${spec.adapterKey} endpoint remove <id>`;
+  if (!trimmed) return presentation.command === undefined ? endpointCommandMessages(locale, 'noCommand')
+    : endpointCommandMessages(locale, 'removeUsage', { command: presentation.command });
   try {
     const { removed, filePath } = await store.remove(spec.adapterKey, trimmed);
     if (!removed) {
-      return `配置中不存在 ${spec.adapterKey} endpoint「${trimmed}」（${filePath} → plugins.${spec.adapterKey}.endpoints）`;
+      return endpointCommandMessages(locale, 'notFound', { key: spec.adapterKey, id: trimmed, file: filePath });
     }
-    return (
-      `已从 ${filePath} 的 plugins.${spec.adapterKey}.endpoints 移除「${trimmed}」。\n` +
-      '⚠️ 需重启 zhin 后生效（运行中的连接届时才会断开）；.env 中的凭据键未删除，可手动清理。'
-    );
+    return endpointCommandMessages(locale, 'removed', { file: filePath, key: spec.adapterKey, id: trimmed });
   } catch (error) {
-    return `移除失败：${error instanceof Error ? error.message : String(error)}`;
+    return endpointCommandMessages(locale, 'removeFailed', { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -436,25 +457,29 @@ export function createEndpointCommands<TCommand>(
   spec: EndpointCommandsSpec,
   defineCommand: (definition: EndpointCommandDefinition) => TCommand,
 ): EndpointCommands<TCommand> {
-  const forbidden = endpointCommandForbidden(spec.adapterDisplayName);
   return Object.freeze({
     list: defineCommand({
-      description: `列出 ${spec.adapterDisplayName} endpoints（运行中 + Root 配置）`,
-      async execute({ use }) {
+      description: endpointCommandMessages('zh-CN', 'listDescription', { adapter: spec.adapterDisplayName }),
+      descriptionI18n: { en: endpointCommandMessages('en', 'listDescription', { adapter: spec.adapterDisplayName }) },
+      async execute({ use, locale: preference }) {
+        const locale = resolveLocale(preference);
         const store = use(endpointConfigurationStoreToken);
         return formatEndpointList(spec, {
           running: spec.running?.(use) ?? [],
           configured: await store.list(spec.adapterKey),
-          footer: spec.listFooter?.(use),
+          footer: spec.listFooter?.(use, locale), locale,
         });
       },
     }),
     add: defineCommand({
       description: spec.addDescription
-        ?? `手动添加 ${spec.adapterDisplayName} endpoint（凭据写入 .env 并更新 Root 配置，重启生效）`,
+        ?? endpointCommandMessages('zh-CN', 'addDescription', { adapter: spec.adapterDisplayName }),
+      descriptionI18n: spec.addDescriptionI18n ?? (spec.addDescription === undefined
+        ? { en: endpointCommandMessages('en', 'addDescription', { adapter: spec.adapterDisplayName }) } : undefined),
       params: { id: { type: 'string', description: 'endpoint ID' } },
-      async execute({ config, input, params, args, use }) {
-        if (!isEndpointOperator(config, input)) return forbidden;
+      async execute({ config, input, params, args, use, locale: preference, formatCommand }) {
+        const locale = resolveLocale(preference);
+        if (!isEndpointOperator(config, input)) return endpointCommandForbidden(spec.adapterDisplayName, locale);
         const id = endpointIdParam(params);
         if (spec.bindFlow) {
           return await spec.bindFlow({
@@ -463,21 +488,28 @@ export function createEndpointCommands<TCommand>(
             config,
             input,
             use,
+            locale, formatCommand,
           });
         }
-        if (!id) return addUsage(spec);
-        return await addEndpointFromKeyValues(spec, id, args, use(endpointConfigurationStoreToken));
+        const command = formatCommand?.(`${spec.adapterKey} endpoint add`);
+        if (!id) return addUsage(spec, locale, command);
+        return await addEndpointFromKeyValues(spec, id, args, use(endpointConfigurationStoreToken), {
+          locale, command, removeCommand: formatCommand?.(`${spec.adapterKey} endpoint remove`),
+        });
       },
     }),
     remove: defineCommand({
-      description: `从 Root 配置的 plugins.${spec.adapterKey}.endpoints 移除指定 endpoint（重启生效）`,
+      description: endpointCommandMessages('zh-CN', 'removeDescription', { key: spec.adapterKey }),
+      descriptionI18n: { en: endpointCommandMessages('en', 'removeDescription', { key: spec.adapterKey }) },
       params: { id: { type: 'string', description: 'endpoint ID' } },
-      async execute({ config, input, params, use }) {
-        if (!isEndpointOperator(config, input)) return forbidden;
+      async execute({ config, input, params, use, locale: preference, formatCommand }) {
+        const locale = resolveLocale(preference);
+        if (!isEndpointOperator(config, input)) return endpointCommandForbidden(spec.adapterDisplayName, locale);
         return await removeEndpointById(
           spec,
           String(params.id ?? ''),
           use(endpointConfigurationStoreToken),
+          { locale, command: formatCommand?.(`${spec.adapterKey} endpoint remove`) },
         );
       },
     }),

@@ -237,3 +237,9 @@ QQ 当前未实现 canonical `share` 的标题/描述/URL 消息卡片。适配�
 可选 `streamProxy: { port: 18443, serverName: "实际网关 hostname" }` 将 WSS 的 TCP 连接导向 `127.0.0.1:port`。需代理固定转发到相同官方网关的 443 端口；SDK 每次仍动态调用 `getWsUrl()`，hostname/443 不匹配会拒绝连接并只记录 hostname，不能自动绕过代理。原始 URL、HTTP Host、TLS SNI 保留，证书验证始终开启。不要填带 query 的 URL。
 
 仅 WSS 入站、心跳和会话认证经过此代理；AppSecret 换 token、网关发现 HTTP、消息 API 和媒体上传仍直连。故障恢复由 `createEndpointLifecycle` 负责，SDK 内置重连关闭，避免双重重连。此入口用于受控网络验收，不提供全局代理或 TLS 验证绕过。
+
+## 语言与绑定会话
+
+Endpoint 管理命令和工具反馈使用当前操作语言。扫码绑定在开始时固定语言，后续二维码刷新、公域/私域选择和结果回复保持一致；`public` / `private` 是稳定的配置值，两种语言都可使用，中文别名只在中文流程中接受。
+
+取消指引使用发起命令时的真实前缀及插件命名空间，不猜测调用方式。确认回复仅接受发起者所在的完整会话（Endpoint、会话、父容器、线程和发送者）；其他成员或线程不会完成该绑定。

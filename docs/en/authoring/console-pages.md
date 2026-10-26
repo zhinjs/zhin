@@ -17,6 +17,7 @@ import { definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
   title: 'My Plugin',
+  titleI18n: { 'zh-CN': '我的插件' },
   icon: 'Box',
   order: 10,
 });
@@ -39,6 +40,7 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | Field | Default | Description |
 | --- | --- | --- |
 | `title` | Generated from the folder name (`foo-bar` → `Foo Bar`) | Navigation and header title |
+| `titleI18n` | none | Explicit titles for `zh-CN` / `en`, e.g. `{ en: 'My Plugin' }`; missing entries retain `title` |
 | `icon` | none | A lucide-style icon name, e.g. `'Box'`, `'Workflow'` |
 | `order` | `100` | Navigation order; lower comes first |
 | `hideInNav` | `false` | Hide from navigation |
@@ -46,6 +48,8 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | `requiredRoles` | `[]` | Roles required to access, matched against the token's `roles` |
 
 Navigation and the page list are filtered by the caller's token. The full token sees every page. Any other token sees only pages whose requirements its `permissions` and `roles` meet. Without a token, only pages with no requirements show. For token setup, see [Console users and permissions](../console/index.md#users-and-permissions).
+
+Console selects `titleI18n` using its independent interface language. This only changes navigation and breadcrumb display, never routes, permissions or page content. Plugins localize their own components; third-party titles without translations remain unchanged.
 
 ## Page addresses
 

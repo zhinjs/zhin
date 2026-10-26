@@ -8,6 +8,7 @@ import {
 } from '@zhin.js/agent';
 import { ActivityFeedbackExecutor } from './executor.js';
 import { ActivityFeedbackPolicy } from './policy.js';
+import type { Locale } from 'zhin.js/i18n';
 
 type Logger = { debug: (msg: string, ...args: unknown[]) => void; error: (msg: string, ...args: unknown[]) => void };
 
@@ -27,6 +28,7 @@ export class ActivityFeedbackOrchestrator {
     private readonly policy: ActivityFeedbackPolicy,
     private readonly executor: ActivityFeedbackExecutor,
     private readonly log: Logger,
+    private readonly defaultLocale: Locale = 'zh-CN',
   ) {}
 
   async startPhase(payload: AIEventPayload, phase: ActivityFeedbackPhase, reason: string): Promise<void> {
@@ -38,7 +40,7 @@ export class ActivityFeedbackOrchestrator {
       );
       return;
     }
-    const ctx = toActivityFeedbackEventContext(payload);
+    const ctx = toActivityFeedbackEventContext(payload, this.defaultLocale);
     if (!ctx) {
       this.log.debug(
         `[ActivityFeedback] skip ${phase} (${reason}): unresolvable context`
@@ -48,7 +50,7 @@ export class ActivityFeedbackOrchestrator {
     }
 
     try {
-      const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType);
+      const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType, ctx.locale);
       if (resolution.kind !== 'active') {
         this.log.debug(
           `[ActivityFeedback] skip ${phase} (${reason}): policy=${resolution.kind}`
@@ -67,7 +69,7 @@ export class ActivityFeedbackOrchestrator {
   }
 
   async stopPhase(payload: AIEventPayload, phase: ActivityFeedbackPhase, reason: string): Promise<void> {
-    const ctx = toActivityFeedbackEventContext(payload);
+    const ctx = toActivityFeedbackEventContext(payload, this.defaultLocale);
     if (!ctx) return;
     const key = this.phaseKey(ctx, phase);
     this.clearTransient(key);
@@ -90,7 +92,7 @@ export class ActivityFeedbackOrchestrator {
     phase: ActivityFeedbackPhase,
     text: string,
   ): Promise<void> {
-    const ctx = toActivityFeedbackEventContext(payload);
+    const ctx = toActivityFeedbackEventContext(payload, this.defaultLocale);
     if (!ctx || !text) return;
 
     try {
@@ -106,9 +108,9 @@ export class ActivityFeedbackOrchestrator {
     reason: string,
   ): Promise<void> {
     await this.startPhase(payload, phase, reason);
-    const ctx = toActivityFeedbackEventContext(payload);
+    const ctx = toActivityFeedbackEventContext(payload, this.defaultLocale);
     if (!ctx) return;
-    const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType);
+    const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType, ctx.locale);
     if (resolution.kind !== 'active') return;
     const delay = resolution.config.removeDelay ?? 3_000;
     const key = this.phaseKey(ctx, phase);

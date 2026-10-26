@@ -115,3 +115,11 @@ lottery:
 ## 免责声明
 
 本插件推荐仅供参考，不构成投注建议，不保证中奖。请理性购彩。
+
+## Language / 语言
+
+命令说明、即时统计、回测与训练结果支持简体中文和英文，提示中的命令会根据当前前缀与插件命名空间生成。手动新建的报告使用当前发送者语言；定时流水线使用注册时的项目语言。语言不改变玩法 ID、号码、评分、权重、开奖数据、执行时间或推送目标。
+
+报告保存生成时的语言及已格式化内容，再次查看不会重新推算或自动翻译；历史报告缺少语言字段时保留原中文。Agent 写入的正文、复盘说明和记忆、第三方数据均保持原样。
+
+Command feedback and fresh statistics follow the current operation language. New scheduled reports use the project language captured at registration. Saved reports retain their original language and authored content. Localization does not alter the statistical model or imply better odds; the same disclaimer is included in both languages.

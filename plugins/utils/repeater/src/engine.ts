@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import { DEFAULT_REPEATER_CONFIG } from './config.js';
 import type { RepeaterConfig } from './config.js';
 export { DEFAULT_REPEATER_CONFIG } from './config.js';
@@ -105,15 +107,9 @@ export class RepeaterEngine {
     return { action: 'next' };
   }
 
-  statusLines(config: RepeaterConfig): string {
-    return [
-      '复读机状态',
-      `监控群数: ${this.activeGroups}`,
-      `触发阈值: ${config.threshold} 人`,
-      `冷却时间: ${config.cooldown / 1000}s`,
-      `消息长度上限: ${config.maxLength}`,
-      `累计复读: ${this.#totalRepeats} 次`,
-    ].join('\n');
+  statusLines(config: RepeaterConfig, locale?: Locale): string {
+    return t(locale, 'status', { groups: this.activeGroups, threshold: config.threshold,
+      cooldown: config.cooldown / 1000, length: config.maxLength, repeats: this.#totalRepeats });
   }
 
   pruneStale(now = Date.now(), expiry = 5 * 60_000, cooldown = this.#lastCooldown): void {

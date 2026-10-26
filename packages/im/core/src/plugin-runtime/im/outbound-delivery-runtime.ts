@@ -1,3 +1,5 @@
+import { resolveLocale } from '@zhin.js/plugin-runtime';
+import { projectLocale } from './locale.js';
 import {
   type CapabilityId,
   type RuntimeSnapshot,
@@ -155,6 +157,7 @@ export class OutboundDeliveryRuntime {
           try {
             const result = await requireAdapters(snapshot).send(adapter, {
               conversation: request.conversation,
+              locale: resolveLocale(request.locale ?? projectLocale(snapshot)),
               payload,
             });
             receipt = receiptFromEndpointResult(result, request.conversation);

@@ -17,6 +17,7 @@ import {
 } from '../src/endpoint-commands.js';
 import {
   endpointConfigurationStoreToken,
+  EndpointConfigurationError,
   type AddConfiguredEndpointRequest,
   type ConfiguredEndpointEntry,
   type EndpointConfigurationStore,
@@ -45,7 +46,7 @@ class MemoryEndpointConfigurationStore implements EndpointConfigurationStore {
   async add(request: AddConfiguredEndpointRequest) {
     const entries = this.entries.get(request.adapterKey) ?? [];
     if (entries.some((entry) => entry.id === request.entry.id)) {
-      throw new Error(`配置中已存在 ${request.adapterKey} endpoint「${request.entry.id}」`);
+      throw new EndpointConfigurationError('duplicate_entry', { adapterKey: request.adapterKey, endpointId: request.entry.id });
     }
     entries.push(request.entry);
     this.entries.set(request.adapterKey, entries);
@@ -180,7 +181,7 @@ describe('formatEndpointList', () => {
     expect(text).toContain('【运行中的 Demo endpoints】');
     expect(text).toContain('  - run-bot（ws）');
     expect(text).toContain('  - no-mode\n');
-    expect(text).toContain('plugins.demo.endpoints');
+    expect(text).toContain('demo 实例 → endpoints');
     expect(text).toContain('  - conf-bot（token: ${DEMO_CONF_BOT_TOKEN}）');
     expect(text.endsWith('⚠️ 提示行')).toBe(true);
   });
@@ -236,6 +237,19 @@ describe('addEndpointFromKeyValues', () => {
     await addEndpointFromKeyValues(demoSpec, 'eq-bot', ['token=a=b=c'], store);
     expect(store.environment.get('DEMO_EQ_BOT_TOKEN')).toBe('a=b=c');
   });
+
+  it('localizes structured duplicate failures and offers only a verified remove invocation', async () => {
+    const store = new MemoryEndpointConfigurationStore();
+    store.entries.set('demo', [{ id: 'two words' }]);
+    const text = await addEndpointFromKeyValues(demoSpec, 'two words', ['token=synthetic'], store,
+      { locale: 'en', command: '!mounted demo endpoint add', removeCommand: '!mounted demo endpoint remove' });
+    expect(text).toContain('Endpoint “two words” is already configured for demo.');
+    expect(text).toContain('!mounted demo endpoint remove "two words"');
+    expect(text).not.toContain('synthetic');
+    const unknown = await addEndpointFromKeyValues(demoSpec, 'two words', ['token=synthetic'], store, { locale: 'en' });
+    expect(unknown).not.toContain('endpoint remove');
+    expect(store.environment.size).toBe(0);
+  });
 });
 
 describe('removeEndpointById', () => {
@@ -243,7 +257,8 @@ describe('removeEndpointById', () => {
     const store = new MemoryEndpointConfigurationStore();
     store.entries.set('demo', [{ id: 'a', token: '1' }]);
 
-    await expect(removeEndpointById(demoSpec, '  ', store)).resolves.toContain('用法：demo endpoint remove <id>');
+    await expect(removeEndpointById(demoSpec, '  ', store, { command: '!demo endpoint remove' })).resolves.toContain('用法：!demo endpoint remove <id>');
+    await expect(removeEndpointById(demoSpec, '  ', store)).resolves.toContain('当前没有可确认的聊天命令入口');
     await expect(removeEndpointById(demoSpec, 'ghost', store)).resolves.toContain('不存在');
     await expect(removeEndpointById(demoSpec, 'a', store)).resolves.toContain('重启');
     await expect(store.list('demo')).resolves.toEqual([]);
@@ -330,7 +345,37 @@ describe('createEndpointCommands', () => {
 
   it('add 无 id 时返回用法', async () => {
     const commands = createEndpointCommands(demoSpec, defineCommand);
-    await expect(commands.add.execute(fakeContext())).resolves.toContain('用法：demo endpoint add <id>');
+    const paths: string[] = [];
+    await expect(commands.add.execute(fakeContext({ formatCommand: (path: string) => {
+      paths.push(path);
+      return `!!mounted ${path}`;
+    } }))).resolves.toContain('用法：!!mounted demo endpoint add <id>');
+    expect(paths).toEqual(['demo endpoint add']);
+    await expect(commands.add.execute(fakeContext())).resolves.toContain('当前没有可确认的聊天命令入口');
+  });
+
+  it('uses each operation locale for permissions, field hints and bind flows', async () => {
+    const store = new MemoryEndpointConfigurationStore();
+    const commands = createEndpointCommands({ ...demoSpec,
+      fields: [{ key: 'token', required: true, description: '令牌', descriptionI18n: { en: 'Bot token' } }],
+    }, defineCommand);
+    const denied = fakeContext({ locale: 'en', config: { master: 'alice' }, input: { sender: { id: 'bob' } } }, store);
+    await expect(commands.add.execute(denied)).resolves.toBe('Only master may manage Demo endpoints');
+    await expect(commands.remove.execute(denied)).resolves.toBe('Only master may manage Demo endpoints');
+    const hint = await commands.add.execute(fakeContext({ locale: 'en', formatCommand: () => '!mounted demo endpoint add' }, store));
+    expect(hint).toContain('Usage: !mounted demo endpoint add');
+    expect(hint).toContain('Bot token');
+    expect(hint).not.toContain('令牌');
+    expect(store.entries.size).toBe(0);
+    const observed: unknown[] = [];
+    const bound = createEndpointCommands({ ...demoSpec, bindFlow(context) {
+      observed.push(context.locale, context.formatCommand?.('demo endpoint list'));
+      return 'bound';
+    } }, defineCommand);
+    await bound.add.execute(fakeContext({ locale: 'en', params: { id: 'bot' }, formatCommand: () => '/mounted demo endpoint list' }));
+    expect(observed).toEqual(['en', '/mounted demo endpoint list']);
+    await expect(commands.list.execute(fakeContext({ locale: 'en' }, store))).resolves.toContain('[Running Demo endpoints]');
+    await expect(commands.list.execute(fakeContext({}, store))).resolves.toContain('【运行中的 Demo endpoints】');
   });
 
   it('bindFlow 钩子接管 add（忽略 kv）', async () => {

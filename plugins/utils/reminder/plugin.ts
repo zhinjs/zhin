@@ -1,3 +1,4 @@
+import { projectLocaleToken } from 'zhin.js/i18n';
 import { databaseHostToken, definePlugin, outboundHostToken } from 'zhin.js';
 import { pluginVerificationToken, pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
 import { randomUUID } from 'node:crypto';
@@ -18,7 +19,7 @@ export default definePlugin<ReminderConfig>({
     const taskState = createReminderState(database);
     const outbound = context.resources.use(outboundHostToken);
     if (!outbound.sendTarget) throw new Error('提醒需要支持精确 DeliveryTarget 的 Outbound Host');
-    const service = new ReminderService(taskState, outbound, config);
+    const service = new ReminderService(taskState, outbound, config, context.resources.use(projectLocaleToken));
     context.resources.provide(reminderServiceToken, service);
     context.resources.provide(pluginTaskProviderToken, service.administratorTasks);
     context.resources.provide(pluginVerificationToken, {

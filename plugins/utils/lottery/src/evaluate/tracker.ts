@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import { DEFAULT_WEIGHTS, type DrawNumbers, type GameId, type GamePick, type HitSummary, type NormalizedDraw, type ScoreWeights, type AccuracySnapshot } from '../types.js';
 
 import { loadDraws, parseStoredJson, type LotteryDb } from '../db.js';
@@ -267,12 +269,12 @@ export async function loadAgentMemory(db: LotteryDb, gameId?: string, limit = 20
     .slice(0, limit);
 }
 
-export async function formatReviewReport(db: LotteryDb, gameId?: GameId): Promise<string> {
+export async function formatReviewReport(db: LotteryDb, gameId?: GameId, locale?: Locale): Promise<string> {
   const predModel = db.models.get(PREDICTIONS_TABLE);
   const memModel = db.models.get(MEMORY_TABLE);
-  if (!predModel) return '数据库未就绪';
+  if (!predModel) return t(locale, 'dbNotReady');
   const games: GameId[] = gameId ? [gameId] : ['kl8', 'ssq', 'dlt', 'fc3d', 'pl3', 'pl5'];
-  const lines = ['【彩票推荐复盘】', ''];
+  const lines = [t(locale, 'reviewTitle'), ''];
   for (const gid of games) {
     const weights = await loadGameWeights(db, gid);
     const snap = await loadAccuracySnapshot(db, gid);
@@ -285,15 +287,15 @@ export async function formatReviewReport(db: LotteryDb, gameId?: GameId): Promis
     const recent = [...preds]
       .sort((a, b) => (b.evaluated_at ?? '').localeCompare(a.evaluated_at ?? ''))
       .slice(0, 5);
-    lines.push(`■ ${gid} 模型 ${formatWeights(weights)}`);
+    lines.push(t(locale, 'reviewModel', { game: gid, weights: formatWeights(weights) }));
     if (snap) {
-      lines.push(`  累计 ${snap.evalCount} 期 平均命中 ${(snap.avgHitRate * 100).toFixed(1)}%`);
+      lines.push(t(locale, 'reviewRate', { count: snap.evalCount, rate: (snap.avgHitRate * 100).toFixed(1) }));
     } else {
-      lines.push('  尚无复盘数据');
+      lines.push(t(locale, 'reviewEmpty'));
     }
     for (const p of recent) {
       const h = parseStoredJson<HitSummary>(p.hit_summary, { total: 0, hits: 0, rate: 0, detail: '-' });
-      lines.push(`  第${p.actual_issue}期 ${h.detail} (${(h.rate * 100).toFixed(0)}%)`);
+      lines.push(t(locale, 'reviewDraw', { issue: p.actual_issue, detail: h.detail, rate: (h.rate * 100).toFixed(0) }));
       if (p.analysis?.trim()) lines.push(`    ${p.analysis.trim()}`);
     }
     lines.push('');
@@ -301,7 +303,7 @@ export async function formatReviewReport(db: LotteryDb, gameId?: GameId): Promis
   if (memModel) {
     const mem = await loadAgentMemory(db, gameId, 5);
     if (mem.length) {
-      lines.push('【Agent 记忆】');
+      lines.push(t(locale, 'agentMemory'));
       for (const m of mem as Array<{ game_id?: string; content?: string; memory_type?: string }>) {
         lines.push(`- [${m.game_id || 'global'}/${m.memory_type}] ${m.content}`);
       }

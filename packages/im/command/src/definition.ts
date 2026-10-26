@@ -2,7 +2,7 @@
  * Command authoring API consumed from `zhin.js/command`.
  * @module zhin.js/command
  */
-import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   createCapabilityContext,
   readOperationClient,
@@ -92,6 +92,8 @@ export interface CommandParamSchema {
   readonly type: CommandParameterType;
   readonly default?: CommandDynamicValue;
   readonly description?: string;
+  /** Optional translated display text; machine keys and values remain unchanged. */
+  readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly optional?: boolean;
   readonly rest?: boolean;
   readonly min?: number;
@@ -145,6 +147,7 @@ export interface CommandParameterDefinition {
   /** `[...name]` / `[[...name]]` 捕获所有段，运行时值为 `string[]`。 */
   readonly rest?: boolean;
   readonly description?: string;
+  readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
 }
 
 /** 场景：群 / 私聊 / 频道等。 */
@@ -192,6 +195,8 @@ export interface CommandConversation {
 export interface CommandMessage {
   readonly conversation: CommandConversation;
   readonly content: string;
+  /** Display preference resolved by the IM runtime, when this is an IM operation. */
+  readonly locale?: Locale;
   /** 发送者（结构化视图见 CommandContext.sender）。 */
   readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
   readonly id?: string;
@@ -264,6 +269,16 @@ export interface CommandContext<
   TInput extends CommandMessage = CommandMessage,
   TAdapter extends string | undefined = undefined,
 > extends CapabilityContext<TConfig>, CommandSession {
+  /** Language resolved once for the current operation. */
+  readonly locale: Locale;
+  /**
+   * Resolve a static local command path to its current chat invocation. Defaults to this
+   * plugin; an explicit owner may reference another indexed plugin.
+   * Includes the actual Endpoint prefix and configured commandNamespace. Arguments
+   * are appended explicitly by the caller. Returns undefined for unknown/disabled
+   * paths or calls without a known chat command environment.
+   */
+  formatCommand(localPath: string, owner?: PluginId): string | undefined;
   readonly args: readonly string[];
   readonly params: Readonly<Record<string, CommandParameterValue>>;
   readonly options: Readonly<Record<string, CommandParameterValue>>;
@@ -294,6 +309,7 @@ export interface CommandDefinition<
   /** @internal Convention-derived parameter metadata. */
   readonly $parameter?: CommandParameterDefinition;
   readonly description?: string;
+  readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
   /** Restrict this command to one adapter and infer `context.$client`. */
   readonly adapter?: TAdapter;
   /**
@@ -307,6 +323,8 @@ export interface CommandDefinition<
    * 用户路由；alias 只替换文件路径提供的静态段。
    */
   readonly alias?: readonly string[];
+  /** Display an explicitly declared alias for this locale; every value must also occur in alias. */
+  readonly preferredAliasI18n?: Readonly<Partial<Record<Locale, string>>>;
   /**
    * 内置 permit DSL（AND）。单项内逗号为 OR。
    * 例：`adapter(icqq)`、`role(master)`、`group(123,456)`。
@@ -398,13 +416,24 @@ export function defineCommand<
     }
   }
   validateArgumentSchemas(definition.params, definition.options);
+  validateDescriptionI18n(definition.descriptionI18n);
   validateCommandAlias(definition.alias);
+  validatePreferredAliases(definition);
   validateCommandPermit(definition.permit);
   validateCommandShortcutShape(definition.shortcut);
   const execution = normalizeExecutionPolicy(definition.execution);
   return Object.freeze({ $feature: commandBrand, ...definition, ...(execution ? { execution } : {}) }) as Readonly<
     CommandDefinition<TConfig, TResult, TInput, string | undefined>
   >;
+}
+
+/** @internal Validate display-only translations without changing their fallback text. */
+export function validateDescriptionI18n(value: CommandDefinition['descriptionI18n']): void {
+  if (value === undefined) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)
+    || Object.entries(value).some(([locale, text]) => !['zh-CN', 'en'].includes(locale) || typeof text !== 'string')) {
+    throw new TypeError('Command descriptionI18n must map zh-CN/en to strings');
+  }
 }
 
 /**
@@ -432,6 +461,19 @@ defineCommand.withConfig = function withConfig<
 function validateAdapterName(adapter: string | undefined): void {
   if (adapter !== undefined && (typeof adapter !== 'string' || adapter.trim() === '')) {
     throw new TypeError('Command adapter must be a non-empty string');
+  }
+}
+
+function validatePreferredAliases(definition: Pick<CommandDefinition, 'alias' | 'preferredAliasI18n'>): void {
+  const preferred = definition.preferredAliasI18n;
+  if (preferred === undefined) return;
+  validateDescriptionI18n(preferred);
+  const normalize = (value: string) => value.trim().split(/\s+/u).filter(Boolean).join(' ');
+  const aliases = new Set(definition.alias?.map(normalize));
+  for (const [locale, alias] of Object.entries(preferred)) {
+    if (!aliases.has(normalize(alias))) {
+      throw new TypeError(`Command preferredAliasI18n.${locale} must reference a declared alias`);
+    }
   }
 }
 
@@ -506,6 +548,8 @@ export function parseCommandDefinition(value: unknown): CommandDefinition {
   }
   validateAdapterName(definition.adapter);
   normalizeExecutionPolicy(definition.execution);
+  validateCommandAlias(definition.alias);
+  validatePreferredAliases(definition);
   return definition as CommandDefinition;
 }
 
@@ -537,6 +581,7 @@ export function createCommandContext(
   interaction?: UserInteraction,
   adapter?: string,
   options: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
+  presentation?: Readonly<{ locale: Locale; formatCommand?: (localPath: string, owner?: PluginId) => string | undefined }>,
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId, undefined, readOperationInputSignal(input));
   const session = resolveCommandSession(input);
@@ -545,6 +590,8 @@ export function createCommandContext(
   const result = {
     ...context,
     ...session,
+    locale: presentation?.locale ?? resolveLocale((snapshot.config.get(snapshot.root) as { locale?: unknown } | undefined)?.locale),
+    formatCommand: presentation?.formatCommand ?? (() => undefined),
     args: Object.freeze([...args]),
     params: Object.freeze(parameterValues),
     options: Object.freeze(optionValues),

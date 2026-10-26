@@ -84,6 +84,11 @@
       "types": "./lib/core-runtime.d.ts",
       "development": "./src/core-runtime.ts",
       "import": "./lib/core-runtime.js"
+    },
+    "./i18n": {
+      "types": "./lib/i18n.d.ts",
+      "development": "./src/i18n.ts",
+      "import": "./lib/i18n.js"
     }
   },
   "files": [
@@ -200,6 +205,10 @@
       "./core/runtime": {
         "types": "./lib/core-runtime.d.ts",
         "import": "./lib/core-runtime.js"
+      },
+      "./i18n": {
+        "types": "./lib/i18n.d.ts",
+        "import": "./lib/i18n.js"
       }
     }
   },

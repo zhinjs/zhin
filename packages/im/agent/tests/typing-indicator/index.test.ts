@@ -683,6 +683,21 @@ describe('NoneTypingIndicator', () => {
 });
 
 describe('Endpoint activity feedback capability boundary', () => {
+  it('keeps language on legacy sendMessage fallback without changing its target', async () => {
+    const sendMessage = vi.fn().mockResolvedValue('status-1');
+    const feedback = new AdapterActivityFeedbackManager().enableForEndpoint({
+      $id: 'bot', control: { recall: vi.fn().mockResolvedValue(undefined) },
+    }, 'test', { sendMessage });
+    const options = { locale: 'en' as const, platform: 'test', endpointKey: 'bot',
+      sessionId: 'private:user', userId: 'user', sceneType: 'private' as const };
+    await feedback.start('active', options, { type: 'message' });
+    expect(sendMessage).toHaveBeenCalledExactlyOnceWith({
+      type: 'private', id: 'user', context: 'test', endpoint: 'bot', locale: 'en',
+      content: [{ type: 'text', data: { text: 'Working...' } }],
+    });
+    await feedback.stop('active', options);
+  });
+
   it('does not use legacy $updateMessage without explicit endpoint edit control', async () => {
     const legacyUpdate = vi.fn().mockResolvedValue(undefined);
     const manager = new AdapterActivityFeedbackManager();

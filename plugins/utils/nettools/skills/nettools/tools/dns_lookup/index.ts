@@ -15,6 +15,6 @@ export default defineAgentTool<{ name: string; type?: string }>({
   async execute({ name, type }, context) {
     const service = context.use(nettoolsServiceToken);
     const callerKey = toolCallerKey(context);
-    return service.run(() => service.dns(name, type, callerKey, context.signal));
+    return service.run(() => service.dns(name, type, callerKey, context.signal, context.locale), context.locale);
   },
 });

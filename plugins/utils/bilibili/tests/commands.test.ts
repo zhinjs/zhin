@@ -16,6 +16,21 @@ import { BILI_STATE_TABLE, BILI_SUBS_TABLE, getBiliState, getBiliSubs } from '..
 import { biliMessage, commandContext, dyn, harness, live } from './fixtures.js';
 
 describe('@zhin.js/plugin-bilibili commands', () => {
+  it('captures subscription language while display commands use the current language and prefix', async () => {
+    const h = harness();
+    h.client.liveStatus.set('1', live('1', 0));
+    const en = { ...commandContext(h.runtime), locale: 'en' as const, formatCommand: (path: string) => `/tools ${path}` };
+    expect(await subCommand.execute({ ...en, params: {} })).toContain('/tools bili sub');
+    expect(await subCommand.execute({ ...en, params: { uid: '1', kind: 'live' } })).toContain('Subscribed to');
+    expect((await getBiliSubs(h.db)!.select())[0]).toMatchObject({ locale: 'en' });
+    expect(await listCommand.execute(commandContext(h.runtime))).toContain('当前订阅');
+    await subCommand.execute({ ...commandContext(h.runtime), params: { uid: '1', kind: 'all' } });
+    expect((await getBiliSubs(h.db)!.select())[0]).toMatchObject({ locale: 'en' });
+    h.client.liveStatus.set('1', live('1', 1, 2000));
+    await h.watcher.tick();
+    expect(h.pushes[0]?.content).toContain('[Live] UP1 is streaming!');
+  });
+
   it('brands every command', () => {
     for (const command of [subCommand, unsubCommand, listCommand, liveCommand]) {
       expect(parseCommandDefinition(command)).toBe(command);
@@ -164,10 +179,11 @@ describe('@zhin.js/plugin-bilibili setup', () => {
     const jobs: { id: string; cron: string }[] = [];
     const disposers: unknown[] = [];
     let provided: BilibiliRuntime | undefined;
+    const send = vi.fn(async () => null);
     const fakeDb = { define: (name: string) => defined.push(name), models: { get: () => undefined } };
     const hosts = new Map<unknown, unknown>([
       [databaseHostToken, fakeDb],
-      [outboundHostToken, { send: async () => undefined }],
+      [outboundHostToken, { send }],
       [scheduleHostToken, { register: (job: { id: string; cron: string }) => { jobs.push(job); return () => undefined; } }],
     ]);
     await (plugin as unknown as { setup: (ctx: unknown) => Promise<void> }).setup({
@@ -184,6 +200,10 @@ describe('@zhin.js/plugin-bilibili setup', () => {
     expect(defined).toEqual([BILI_SUBS_TABLE, BILI_STATE_TABLE]);
     expect(provided?.persistent).toBe(true);
     expect(provided?.outbound).toBeTypeOf('function');
+    await provided!.outbound!({ adapterName: 'sandbox', endpointKey: 'bot1', channelType: 'group',
+      channelId: 'room', content: 'Already formatted notification', locale: 'en' });
+    expect(send).toHaveBeenCalledWith({ adapter: 'sandbox', endpointKey: 'bot1',
+      conversation: { kind: 'group', id: 'room' }, content: 'Already formatted notification', locale: 'en' });
     expect(jobs).toMatchObject([{ id: 'bilibili/watch', cron: '*/90 * * * * *' }]);
     expect(disposers).toHaveLength(1);
   });

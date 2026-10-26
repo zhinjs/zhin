@@ -50,6 +50,7 @@ import {
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
+import { installLocaleHost } from './locale-host-installer.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installComponentHost } from './component-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
@@ -213,6 +214,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
+      installLocaleHost(databaseHost)(context);
       context.handoff.add({
         activateNext: async (signal) => {
           signal.throwIfAborted();

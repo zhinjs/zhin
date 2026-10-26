@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -17,6 +18,6 @@ export default defineAgentTool<{
     const client = context.$client;
     await client.conversations.unarchive({ channel: channel_id });
     const success = true;
-    return { success, message: success ? '频道已恢复' : '操作失败' };
+    return { success, message: success ? t(context.locale, 'channelRestored') : t(context.locale, 'operationFailed') };
   },
 });

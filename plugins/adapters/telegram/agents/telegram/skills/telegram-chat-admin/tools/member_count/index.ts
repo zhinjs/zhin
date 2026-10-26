@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -12,6 +13,6 @@ export default defineAgentTool<{ chat_id: string }>({
   async execute({ chat_id  }: { chat_id: string }, context) {
     const endpoint = context.$client;
     const count = await endpoint.getChatMemberCount(Number(chat_id));
-    return { count, message: `群组共有 ${count} 名成员` };
+    return { count, message: t(context.locale, 'memberCount', { p0: count }) };
   },
 });

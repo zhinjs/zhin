@@ -1,3 +1,4 @@
+import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 import {
   definePlugin,
   databaseHostToken,
@@ -28,6 +29,7 @@ export default definePlugin<LotteryConfig>({
   },
   async setup(context) {
     const config = resolveLotteryConfig(context.config.get());
+    const locale = resolveLocale(context.resources.use(projectLocaleToken));
     // host 与 memory 模型表面结构兼容（where 均返回 PromiseLike），可直接互换。
     const db: LotteryDb = (() => {
       if (context.resources.has(databaseHostToken)) {
@@ -59,6 +61,7 @@ export default definePlugin<LotteryConfig>({
       };
     }
     context.resources.provide(lotteryRuntimeToken, Object.freeze({
+      locale,
       db,
       config: Object.freeze({ ...config }),
       enabledGames: Object.freeze([...lotteryEnabledGames(config)]),
@@ -75,6 +78,7 @@ export default definePlugin<LotteryConfig>({
       description: 'Daily lottery pipeline',
       async execute() {
         await runLotteryPipeline({
+          locale,
           db,
           enabledGames: () => lotteryEnabledGames(config),
           historyLimit: config.historyLimit,

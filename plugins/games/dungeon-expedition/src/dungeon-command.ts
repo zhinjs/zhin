@@ -1,8 +1,5 @@
-import {
-  channelKey,
-  type GameMessageLike,
-  type GameReply,
-} from '@zhin.js/game-kit';
+import { createMessages } from 'zhin.js/i18n';
+import { gameCommandHint, channelKey, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
 import {
   continueDungeon,
   handleDungeonChoice,
@@ -11,17 +8,24 @@ import {
 import type { SessionService } from './session-service.js';
 import { dungeonSessionToken } from './view.js';
 
-export const DUNGEON_HELP = [
-  '地牢远征 · 1-4 人确定性回合冒险',
-  '地牢 开始 — 创建远征队',
-  '地牢 加入 — 加入当前频道的队伍',
-  '地牢 准备 — 切换准备状态',
-  '地牢 出发 — 队长开始远征',
-  '地牢 探索 — 探索下一房间',
-  '地牢 攻击 / 防御 / 药水 — 战斗操作',
-  '地牢 状态 — 刷新当前界面',
-  '地牢 结束 — 队长结束远征',
-].join('\n');
+const messages = createMessages({
+  title: { 'zh-CN': '地牢远征 · 1-4 人确定性回合冒险', en: 'Dungeon Expedition · Turn-based adventure for 1–4 players' },
+  start: { 'zh-CN': '创建远征队', en: 'Create a party' },
+  join: { 'zh-CN': '加入当前频道的队伍', en: 'Join this channel’s party' },
+  ready: { 'zh-CN': '切换准备状态', en: 'Toggle readiness' },
+  go: { 'zh-CN': '队长开始远征', en: 'Leader starts the expedition' },
+  explore: { 'zh-CN': '探索下一房间', en: 'Explore the next room' },
+  attack: { 'zh-CN': '攻击', en: 'Attack' }, defend: { 'zh-CN': '防御', en: 'Defend' }, potion: { 'zh-CN': '使用药水', en: 'Use a potion' },
+  status: { 'zh-CN': '刷新当前界面', en: 'View current status' },
+  abort: { 'zh-CN': '队长结束远征', en: 'Leader ends the expedition' },
+  empty: { 'zh-CN': '当前频道没有远征队。', en: 'This channel has no expedition party.' },
+});
+export function getDungeonHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'> = {}): string {
+  const command = message.formatCommand?.('dungeon');
+  const actions = ['start', 'join', 'ready', 'go', 'explore', 'attack', 'defend', 'potion', 'status', 'abort'] as const;
+  return [messages(message.locale, 'title'), ...(command === undefined ? [] : actions.map(action => `${command} ${action} — ${messages(message.locale, action)}`))].join('\n');
+}
+export const DUNGEON_HELP = getDungeonHelp();
 
 const ACTION_ALIASES: Readonly<Record<string, string>> = {
   '': 'status',
@@ -65,12 +69,12 @@ export async function runDungeonCommand(
   rawAction: string,
 ): Promise<GameReply> {
   const action = normalizeDungeonAction(rawAction);
-  if (!action || action === 'help') return DUNGEON_HELP;
+  if (!action || action === 'help') return getDungeonHelp(message);
   if (action === 'create') return startDungeon(service, message);
   if (action === 'status') return continueDungeon(service, message);
 
   const session = await service.getActiveByChannel(channelKey(message));
-  if (!session) return '当前频道没有远征队。发送「地牢 开始」创建。';
+  if (!session) return messages(message.locale, 'empty') + gameCommandHint(message, 'dungeon');
   return handleDungeonChoice(
     service,
     message,

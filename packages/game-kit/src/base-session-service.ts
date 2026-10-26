@@ -4,8 +4,11 @@ import {
   type GameOutcome,
 } from './game-events.js';
 import type { GameSessionAvailability, GameSessionProvider } from './session-coordinator.js';
+import type { Locale } from '@zhin.js/plugin-runtime';
 
 export interface BaseGameSessionRow extends GameEventSession {
+  /** Captured when the game starts; legacy rows may not carry a locale. */
+  locale?: Locale | null;
   id: string;
   channel_key: string;
   status: string;

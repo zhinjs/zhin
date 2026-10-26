@@ -154,7 +154,7 @@ export function createOutboundEndpointAccess(
         },
       } as EndpointWithActivityFeedback;
       const sendPort: ActivityFeedbackSendPort = {
-        send: async ({ conversation, content }) => {
+        send: async ({ conversation, content, locale }) => {
           const text = stringifySendContent(content);
           if (!text || !conversation.id) return null;
           try {
@@ -166,6 +166,7 @@ export function createOutboundEndpointAccess(
                 id: conversation.id,
               },
               content: text,
+              locale,
             });
             return messageId || null;
           } catch (error) {
@@ -204,6 +205,7 @@ class PlatformPhaseDriver implements PhaseDriver {
   ): Promise<void> {
     const sceneType = ctx.sceneType === 'channel' ? 'group' : ctx.sceneType;
     await this.manager.start({
+      locale: ctx.locale,
       messageId: ctx.messageId,
       sessionId: ctx.sessionId,
       userId: ctx.userId,

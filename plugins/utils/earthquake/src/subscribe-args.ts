@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /**
  * Parses `地震 订阅 [最小震级] [地区...]` arguments.
  * The first token may be a magnitude such as `5`, `5.5`, `M5` or `5级`; the rest are regions.
@@ -19,7 +21,7 @@ export function parseMagnitudeToken(token: string): number | undefined {
   return value;
 }
 
-export function parseSubscribeArgs(tokens: readonly string[]): SubscribeArgs | { readonly error: string } {
+export function parseSubscribeArgs(tokens: readonly string[], locale: Locale = 'zh-CN'): SubscribeArgs | { readonly error: string } {
   const cleaned = tokens.map((token) => token.trim()).filter((token) => token.length > 0);
   let minMagnitude: number | undefined;
   const regions: string[] = [];
@@ -30,15 +32,15 @@ export function parseSubscribeArgs(tokens: readonly string[]): SubscribeArgs | {
       continue;
     }
     if (magnitude !== undefined) {
-      return { error: '最小震级请写在地区之前，例如：地震 订阅 5 四川 云南' };
+      return { error: t(locale, 'order') };
     }
     if (token.length > 20) {
-      return { error: `地区关键词过长：${token.slice(0, 20)}…` };
+      return { error: t(locale, 'longRegion', { region: token.slice(0, 20) }) };
     }
     if (!regions.includes(token)) regions.push(token);
   }
   if (regions.length > MAX_REGIONS_PER_SUBSCRIPTION) {
-    return { error: `最多设置 ${MAX_REGIONS_PER_SUBSCRIPTION} 个地区关键词` };
+    return { error: t(locale, 'maxRegions', { count: MAX_REGIONS_PER_SUBSCRIPTION }) };
   }
   return { minMagnitude, regions };
 }

@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { groupSuiteRuntimeToken } from '../../../../src/runtime-state.js';
@@ -25,11 +26,11 @@ export default defineAgentTool<{ group_id?: string; period?: Period }>({
       ? weekStartStr()
       : period === 'month' ? monthStartStr() : todayStr();
     const stats = await queryStats(groupId, fromDate, runtime);
-    if (stats.size === 0) return `${period} 暂无消息统计数据`;
+    if (stats.size === 0) return t(context.locale, 'periodStatsEmpty', { period });
     const ranked = [...stats.values()].sort((left, right) => right.count - left.count);
     const total = ranked.reduce((sum, item) => sum + item.count, 0);
     const lines = ranked.slice(0, 10)
-      .map((item, index) => `${index + 1}. ${item.name} — ${item.count}条`);
-    return `消息统计 (${period})\n总消息: ${total}条, 活跃用户: ${stats.size}人\n${lines.join('\n')}`;
+      .map((item, index) => t(context.locale, 'statsRow', { prefix: `${index + 1}.`, name: item.name, count: item.count }));
+    return t(context.locale, 'statsOverview', { period, total, users: stats.size, lines: lines.join('\n') });
   },
 });

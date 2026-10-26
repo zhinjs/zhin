@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -15,6 +16,6 @@ export default defineAgentTool<{ guild_id: string; role_id: string }>({
   async execute({ guild_id, role_id  }: { guild_id: string; role_id: string }, context) {
     const client = context.$client;
     const success = await client.pickGuild(guild_id).deleteRole(role_id);
-    return { success, message: success ? `已删除角色 ${role_id}` : '删除角色失败' };
+    return { success, message: success ? t(context.locale, 'roleDeleted', { p0: role_id }) : t(context.locale, 'roleDeleteFailed') };
   },
 });

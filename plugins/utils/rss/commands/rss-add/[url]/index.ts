@@ -1,3 +1,4 @@
+import { rssMessages as t } from '../../../src/i18n.js';
 import { defineCommand } from 'zhin.js/command';
 import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
 import { getRssSubs } from '../../../src/db-store.js';
@@ -6,32 +7,32 @@ import { markItemsSeen } from '../../../src/poll.js';
 import { rssRuntimeToken } from '../../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
-  description: '订阅一个 RSS/Atom 源',
+  description: '订阅一个 RSS/Atom 源', descriptionI18n: { en: "Subscribe to an RSS/Atom feed" },
   params: { url: { type: 'string' } },
-  async execute({ params, config, input, use }) {
+  async execute({ params, config, input, use, locale }) {
     const runtime = use(rssRuntimeToken);
     const Subs = getRssSubs(runtime.db);
-    if (!Subs) return 'RSS 数据库尚未就绪，请稍后重试';
+    if (!Subs) return t(locale, 'databaseRetry');
 
     const url = String(params.url ?? '').trim();
-    if (!url) return '请提供 RSS 源地址，格式：rss-add <URL>';
-    if (!/^https?:\/\//i.test(url)) return '请提供有效的 HTTP/HTTPS 地址';
+    if (!url) return t(locale, 'urlRequired');
+    if (!/^https?:\/\//i.test(url)) return t(locale, 'httpRequired');
 
     const channel = extractChannelInfo(input);
-    if (!channel) return channelSourceError(input);
+    if (!channel) return channelSourceError(input, locale);
     const cfg = resolveRssConfig(config);
 
     const existing = await Subs.select().where({
       url,
       ...subscriptionScope(channel),
     });
-    if (existing.length > 0) return '当前会话已订阅该源，无需重复添加';
+    if (existing.length > 0) return t(locale, 'existing');
 
     const currentSubs = await Subs.select().where({
       ...subscriptionScope(channel),
     });
     if (currentSubs.length >= cfg.maxPerGroup) {
-      return `当前会话订阅数已达上限 (${cfg.maxPerGroup})，请先取消一些`;
+      return t(locale, 'limit', { max: cfg.maxPerGroup });
     }
 
     let feedTitle = '';
@@ -40,7 +41,7 @@ export default defineCommand<RssConfig>({
       feedTitle = title;
       await markItemsSeen(runtime, url, items);
     } catch (e) {
-      return `无法解析该地址: ${(e as Error).message}\n请确认是有效的 RSS/Atom 源`;
+      return t(locale, 'loadFailed', { error: (e as Error).message });
     }
 
     await Subs.insert({
@@ -53,8 +54,9 @@ export default defineCommand<RssConfig>({
       creator_id: channel.senderId,
       creator_name: channel.senderName,
       created_at: new Date().toISOString(),
+      locale,
     });
 
-    return `订阅成功！\n源: ${feedTitle || url}\n新内容将在轮询时推送到本会话（需 OutboundHost）`;
+    return t(locale, 'added', { feed: feedTitle || url });
   },
 });

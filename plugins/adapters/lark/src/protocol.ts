@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 import { validateLarkWebApiProxy } from './web-api-proxy.js';
 /**
  * Lark/Feishu protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
@@ -272,7 +273,7 @@ export function verifyToken(token: string, expected: string): boolean {
  * Wire-encode an already-rendered outbound payload into Lark im/v1 message body.
  * Segment canonicalization is intentionally not done here.
  */
-export function formatOutboundBody(payload: unknown): LarkSendBody {
+export function formatOutboundBody(payload: unknown, locale?: Locale): LarkSendBody {
   if (typeof payload === 'string') {
     return {
       msg_type: 'text',
@@ -285,7 +286,7 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
     : payload && typeof payload === 'object' && 'type' in (payload as object)
       ? [payload as LarkWireSegment]
       : [];
-  if (items.some(item => typeof item !== 'string' && ['markdown', 'share', 'keyboard'].includes(item.type))) return formatLarkCard(items);
+  if (items.some(item => typeof item !== 'string' && ['markdown', 'share', 'keyboard'].includes(item.type))) return formatLarkCard(items, locale);
   const hasMarkdown = items.some((item) => typeof item !== 'string' && item.type === 'markdown');
 
   if (items.length === 0) {

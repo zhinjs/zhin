@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { rssMessages as t } from './i18n.js';
 /**
  * Feed poll helpers: detect new items; optional OutboundHost push to subscribers.
  */
@@ -9,8 +11,8 @@ function ts(): string {
   return new Date().toISOString();
 }
 
-export function formatNewItems(feedTitle: string, items: FeedItem[], maxItems: number): string {
-  const lines = [`${feedTitle} 有 ${items.length} 条新内容：`];
+export function formatNewItems(feedTitle: string, items: FeedItem[], maxItems: number, locale: Locale = 'zh-CN'): string {
+  const lines = [t(locale, 'newItems', { title: feedTitle, count: items.length })];
   for (const item of items.slice(0, maxItems)) {
     lines.push('');
     lines.push(`${item.title}`);
@@ -18,7 +20,7 @@ export function formatNewItems(feedTitle: string, items: FeedItem[], maxItems: n
     if (item.link) lines.push(item.link);
   }
   if (items.length > maxItems) {
-    lines.push(`\n...还有 ${items.length - maxItems} 条，请查看源站`);
+    lines.push(t(locale, 'moreSource', { count: items.length - maxItems }));
   }
   return lines.join('\n');
 }
@@ -45,7 +47,7 @@ export interface CheckResult {
   readonly pushed: number;
 }
 
-async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, content: string): Promise<number> {
+async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, feedTitle: string, items: FeedItem[]): Promise<number> {
   const push = runtime.outbound;
   const Subs = getRssSubs(runtime.db);
   if (!push || !Subs) return 0;
@@ -66,7 +68,8 @@ async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, content: 
         endpointKey,
         channelType,
         channelId,
-        content,
+        locale: resolveLocale(sub.locale),
+        content: formatNewItems(feedTitle, items, runtime.config.maxItems, resolveLocale(sub.locale)),
       });
       pushed += 1;
     } catch {
@@ -82,11 +85,13 @@ async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, content: 
  */
 export async function checkSubscriptions(runtime: RssRuntime, options: {
   urls: readonly string[];
+  locale?: Locale;
 }): Promise<CheckResult> {
+  const locale = resolveLocale(options.locale);
   const Seen = getRssSeen(runtime.db);
   const Subs = getRssSubs(runtime.db);
   if (!Seen || !Subs) {
-    return { text: 'RSS 数据库尚未就绪', totalNew: 0, pushed: 0 };
+    return { text: t(locale, 'databaseUnavailable'), totalNew: 0, pushed: 0 };
   }
 
   const parts: string[] = [];
@@ -100,26 +105,26 @@ export async function checkSubscriptions(runtime: RssRuntime, options: {
       const seenGuids = new Set(seenRows.map((r) => String(r.item_guid ?? '')));
       const newItems = items.filter((item) => item.guid && !seenGuids.has(item.guid));
       if (newItems.length === 0) {
-        parts.push(`${title || url}: 无新内容`);
+        parts.push(t(locale, 'noNew', { title: title || url }));
         continue;
       }
       await markItemsSeen(runtime, url, newItems);
       totalNew += newItems.length;
-      const body = formatNewItems(title || url, newItems, runtime.config.maxItems);
+      const body = formatNewItems(title || url, newItems, runtime.config.maxItems, locale);
       parts.push(body);
-      pushed += await pushToSubscribers(runtime, url, body);
+      pushed += await pushToSubscribers(runtime, url, title || url, newItems);
     } catch (e) {
-      parts.push(`${url}: 检查失败 — ${(e as Error).message}`);
+      parts.push(t(locale, 'checkFailed', { url, error: (e as Error).message }));
     }
   }
 
-  if (parts.length === 0) return { text: '没有可检查的订阅', totalNew: 0, pushed: 0 };
+  if (parts.length === 0) return { text: t(locale, 'nothingToCheck'), totalNew: 0, pushed: 0 };
   const pushNote = runtime.outbound
-    ? (pushed > 0 ? `，已推送 ${pushed} 个会话` : '，无出站推送')
-    : '（未装配 OutboundHost，仅本地标记）';
+    ? (pushed > 0 ? t(locale, 'pushed', { count: pushed }) : t(locale, 'notPushed'))
+    : t(locale, 'localOnly');
   const header = totalNew > 0
-    ? `检查完成，共 ${totalNew} 条新内容${pushNote}`
-    : '检查完成，暂无新内容';
+    ? t(locale, 'checked', { count: totalNew, pushNote })
+    : t(locale, 'checkedEmpty');
   return { text: `${header}\n\n${parts.join('\n\n')}`, totalNew, pushed };
 }
 
@@ -149,10 +154,11 @@ export async function cleanOldSeen(runtime: RssRuntime): Promise<void> {
  * Poll all unique feed URLs across subscriptions.
  */
 export async function pollAllFeeds(runtime: RssRuntime): Promise<CheckResult> {
+  const locale = resolveLocale(runtime.locale);
   const Subs = getRssSubs(runtime.db);
-  if (!Subs) return { text: 'RSS 数据库尚未就绪', totalNew: 0, pushed: 0 };
+  if (!Subs) return { text: t(locale, 'databaseUnavailable'), totalNew: 0, pushed: 0 };
   const all = await Subs.select();
   const urls = [...new Set(all.map((s) => String(s.url ?? '')).filter(Boolean))];
-  if (urls.length === 0) return { text: '暂无任何 RSS 订阅', totalNew: 0, pushed: 0 };
-  return checkSubscriptions(runtime, { urls });
+  if (urls.length === 0) return { text: t(locale, 'noFeeds'), totalNew: 0, pushed: 0 };
+  return checkSubscriptions(runtime, { urls, locale });
 }

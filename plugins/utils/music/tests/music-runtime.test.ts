@@ -7,6 +7,8 @@ import shareMusic from '../components/share-music/index.ts';
 import searchTool from '../skills/music/tools/music-search/index.ts';
 import shareTool from '../skills/music/tools/music-share/index.ts';
 import loginCommand from '../commands/login/[platform]/index.ts';
+import searchCommand from '../commands/点歌/[keyword]/index.ts';
+import selectionMiddleware from '../middlewares/music-selection/index.ts';
 import statusCommand from '../commands/cookie/status/index.ts';
 import setCommand from '../commands/cookie/set/[source]/index.ts';
 import getCommand from '../commands/cookie/get/[source]/index.ts';
@@ -32,12 +34,48 @@ import {
   type QrLoginProvider,
 } from '../src/login/index.js';
 import type { MusicInfo, MusicSource } from '../src/types.js';
+import type { ConversationRef } from '@zhin.js/im-contract';
+
+function conversation(endpointId: string, id: string): ConversationRef {
+  return { endpoint: { adapter: 'test', id: endpointId }, kind: 'group', id };
+}
+
 
 function createCredentials(): CredentialStore {
   return new CredentialStore(createInMemoryCredentialDb());
 }
 
 describe('@zhin.js/plugin-music', () => {
+  it('pins selection language, preserves song text, and uses the actual namespaced command', async () => {
+    const sessions = new MusicSearchSessions();
+    const runtime = { sessions, services: { qq: { search: async () => [{ id: '1', source: 'qq', title: '中文原名', url: '' }] } } };
+    const input = { content: '', metadata: { endpointId: 'ep' }, conversation: conversation('ep', 'chat'), sender: { id: 'user' }, $reply: vi.fn() };
+    const context = { input, use: () => runtime, config: {}, params: {}, locale: 'en', formatCommand: (path: string) => `/music ${path}` };
+    expect(await searchCommand.execute(context as never)).toContain('/music 点歌 <song>');
+    const reply = await searchCommand.execute({ ...context, params: { keyword: '中文原名' } } as never);
+    expect(reply).toContain('中文原名');
+    expect(reply).toContain('"cancel"');
+    const next = vi.fn();
+    await selectionMiddleware.handle({ ...context, input: { ...input, content: '取消', locale: 'zh-CN' } } as never, next);
+    expect(next).toHaveBeenCalledOnce();
+    expect(sessions.get(sessionKey(conversation('ep', 'chat'), 'user'))).toBeDefined();
+    await selectionMiddleware.handle({ ...context, input: { ...input, content: 'cancel', locale: 'zh-CN' } } as never, next);
+    expect(input.$reply).toHaveBeenCalledWith('Music selection cancelled.');
+    expect(sessions.get(sessionKey(conversation('ep', 'chat'), 'user'))).toBeUndefined();
+  });
+
+  it('pins QR status updates to the locale captured at login start', async () => {
+    const provider: QrLoginProvider = {
+      createQr: async () => ({ imageSegment: { type: 'image', data: {} }, pollData: {} }),
+      pollQr: vi.fn(async (_data, locale) => ({ status: 'expired', message: locale === 'en' ? 'Expired' : '过期' })),
+    };
+    const logins = new QrLoginRuntime(createCredentials(), { qq: provider, netease: provider });
+    await logins.start('qq', 'session', 'en');
+    expect(logins.get('session')?.locale).toBe('en');
+    expect(await logins.poll('session', async () => {})).toMatchObject({ status: 'expired', message: 'Expired' });
+    expect(provider.pollQr).toHaveBeenCalledWith({}, 'en');
+  });
+
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('music');
   });
@@ -156,10 +194,10 @@ describe('@zhin.js/plugin-music', () => {
   });
 
   describe('session management', () => {
-    const key = sessionKey('ep1', 'group:123', 'user:456');
+    const key = sessionKey(conversation('ep1', 'group:123'), 'user:456');
 
     it('generates consistent session keys', () => {
-      expect(key).toBe('ep1:group:123:user:456');
+      expect(JSON.parse(key)).toEqual([['test', 'ep1', 'group', 'group:123', '', '', ''].join('\0'), 'user:456']);
     });
 
     it('stores and retrieves pending search', () => {
@@ -191,7 +229,7 @@ describe('@zhin.js/plugin-music', () => {
 
     it('cleanExpired removes stale entries', () => {
       const sessions = new MusicSearchSessions();
-      const staleKey = sessionKey('ep', 'g', 'stale');
+      const staleKey = sessionKey(conversation('ep', 'g'), 'stale');
       sessions.set(staleKey, {
         results: [],
         source: 'netease',
@@ -218,41 +256,29 @@ describe('@zhin.js/plugin-music', () => {
   });
 
   describe('resolveMessageIds', () => {
-    it('extracts ids from message-like object', () => {
-      const ids = resolveMessageIds({
-        metadata: { endpointId: 'ep1' },
-        conversation: { id: 'conv1' },
-        sender: { id: 'user1' },
-      });
-      expect(ids).toEqual({
-        endpointId: 'ep1',
-        conversationId: 'conv1',
-        senderId: 'user1',
-      });
+    it('uses canonical conversation identity and ignores endpoint metadata', () => {
+      const chat = conversation('actual', 'conv1');
+      expect(resolveMessageIds({ metadata: { endpointId: 'spoofed' }, conversation: chat, sender: { id: 'user1' } }))
+        .toEqual({ conversation: chat, senderId: 'user1' });
     });
 
-    it('returns null when ids are missing', () => {
+    it('returns null when canonical identity is missing', () => {
+      expect(resolveMessageIds(undefined)).toBeNull();
       expect(resolveMessageIds({})).toBeNull();
       expect(resolveMessageIds({ sender: { id: 'u1' } })).toBeNull();
+      expect(resolveMessageIds({ metadata: { endpointId: 'fake' }, conversation: { id: 'c1' }, sender: { id: 'u1' } } as never)).toBeNull();
     });
 
-    it('falls back to conversation.endpoint.id', () => {
-      const ids = resolveMessageIds({
-        conversation: { id: 'c1', endpoint: { id: 'ep2' } },
-        sender: { id: 'u1' },
-      });
-      expect(ids).toEqual({
-        endpointId: 'ep2',
-        conversationId: 'c1',
-        senderId: 'u1',
-      });
+    it('accepts a full canonical conversation without endpoint metadata', () => {
+      const chat = conversation('ep2', 'c1');
+      expect(resolveMessageIds({ conversation: chat, sender: { id: 'u1' } })).toEqual({ conversation: chat, senderId: 'u1' });
     });
   });
 
   describe('qr login session management', () => {
     it('generates login session keys', () => {
-      const key = loginSessionKey('ep1', 'group:1', 'user:1');
-      expect(key).toBe('login:ep1:group:1:user:1');
+      const key = loginSessionKey(conversation('ep1', 'group:1'), 'user:1');
+      expect(key).toBe(`login:${sessionKey(conversation('ep1', 'group:1'), 'user:1')}`);
     });
 
     it('returns undefined for non-existent login', () => {
@@ -281,7 +307,7 @@ describe('@zhin.js/plugin-music', () => {
       const providers = { qq: provider, netease: provider };
       const first = new QrLoginRuntime(createCredentials(), providers);
       const second = new QrLoginRuntime(createCredentials(), providers);
-      const key = loginSessionKey('ep', 'group', 'owner');
+      const key = loginSessionKey(conversation('ep', 'group'), 'owner');
 
       await first.start('qq', key);
 
@@ -299,7 +325,7 @@ describe('@zhin.js/plugin-music', () => {
         qq: provider,
         netease: provider,
       });
-      const key = loginSessionKey('ep', 'group', 'owner');
+      const key = loginSessionKey(conversation('ep', 'group'), 'owner');
       const starting = logins.start('qq', key);
 
       logins.dispose();

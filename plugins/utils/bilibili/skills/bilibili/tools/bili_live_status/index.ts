@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { parseRoomId, parseUid } from '../../../../src/api.js';
@@ -20,17 +21,17 @@ export default defineAgentTool({
       if (roomId) {
         const info = await client.getRoomInfo(roomId);
         const live = info.uid ? (await client.getLiveStatus([info.uid])).get(info.uid) : undefined;
-        return formatRoom(info, live?.uname ?? '', live?.liveTime ?? 0);
+        return formatRoom(info, live?.uname ?? '', live?.liveTime ?? 0, Date.now(), context.locale);
       }
       const upUid = uid ? parseUid(uid) : undefined;
-      if (!upUid) return '请提供直播间号（room）或 UP 主 UID（uid）';
+      if (!upUid) return t(context.locale, 'toolInput');
       const live = (await client.getLiveStatus([upUid])).get(upUid);
-      if (!live) return `UID ${upUid} 没有开通直播间`;
-      return [`${live.uname || upUid}：${liveStatusText(live.liveStatus)}`, live.title && `标题：${live.title}`, live.url]
+      if (!live) return t(context.locale, 'noRoom', { uid: upUid });
+      return [`${live.uname || upUid}：${liveStatusText(live.liveStatus, context.locale)}`, live.title && t(context.locale, 'title', { title: live.title }), live.url]
         .filter(Boolean)
         .join('\n');
     } catch (error) {
-      return `查询失败：${(error as Error).message}`;
+      return t(context.locale, 'failed', { error: (error as Error).message });
     }
   },
 });

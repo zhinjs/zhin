@@ -1,3 +1,5 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { interactionMessages as t } from './interaction-messages.js';
 import type {
   UserInteractionContent,
   UserInteractionOption,
@@ -62,6 +64,7 @@ export function assertUserInteractionRequest(request: UserInteractionRequest): v
 export function renderUserInteraction(
   view: UserInteractionView,
   actionPayload: (value: string, index: number) => string = (value) => value,
+  locale: Locale = 'zh-CN',
 ): SendContent {
   const markdown = [
     `### ${view.title}`,
@@ -86,7 +89,7 @@ export function renderUserInteraction(
       data: {
         rows: chunk(buttons, 5),
         fallback: {
-          hint: '也可以直接回复对应内容。',
+          hint: t(locale, 'fallback'),
           map: Object.fromEntries(buttons.map((button, index) => [String(index + 1), button.payload])),
         },
       },
@@ -98,15 +101,16 @@ export function renderUserInteraction(
 export function projectUserInteraction(
   request: UserInteractionRequest,
   progress?: UserInteractionProgress,
+  locale: Locale = 'zh-CN',
 ): UserInteractionView {
-  const instruction = instructionFor(request);
+  const instruction = instructionFor(request, locale);
   const optionList = request.type === 'select' || request.type === 'multiselect'
     ? renderOptions(request.options)
     : undefined;
   const optionsHaveDescriptions = request.type === 'select' || request.type === 'multiselect'
     ? request.options.some((option) => !!option.description)
     : false;
-  const actions = actionsFor(request);
+  const actions = actionsFor(request, locale);
   const stepDescription = [
     progress ? `**${progress.index}/${progress.total} · ${request.title}**` : undefined,
     request.description,
@@ -126,76 +130,80 @@ export function projectUserInteraction(
 export function parseUserInteractionAnswer(
   request: UserInteractionRequest,
   rawInput: string,
+  locale: Locale = 'zh-CN',
+  action = false,
 ): UserInteractionParseResult {
   const raw = rawInput.trim();
   switch (request.type) {
     case 'text': {
-      if (raw.length < (request.minLength ?? 0)) return invalid(`请至少输入 ${request.minLength} 个字符`);
+      if (raw.length < (request.minLength ?? 0)) return invalid(t(locale, 'minLength', { count: request.minLength! }));
       if (request.maxLength !== undefined && raw.length > request.maxLength) {
-        return invalid(`请不要超过 ${request.maxLength} 个字符`);
+        return invalid(t(locale, 'maxLength', { count: request.maxLength }));
       }
       if (request.pattern) {
         request.pattern.lastIndex = 0;
-        if (!request.pattern.test(raw)) return invalid('输入格式不正确');
+        if (!request.pattern.test(raw)) return invalid(t(locale, 'pattern'));
       }
       return valid(raw);
     }
     case 'number': {
       const value = Number(raw);
-      if (!raw || !Number.isFinite(value)) return invalid('请输入有效数字');
-      if (request.integer && !Number.isInteger(value)) return invalid('请输入整数');
-      if (request.min !== undefined && value < request.min) return invalid(`请输入不小于 ${request.min} 的数字`);
-      if (request.max !== undefined && value > request.max) return invalid(`请输入不大于 ${request.max} 的数字`);
+      if (!raw || !Number.isFinite(value)) return invalid(t(locale, 'number'));
+      if (request.integer && !Number.isInteger(value)) return invalid(t(locale, 'integer'));
+      if (request.min !== undefined && value < request.min) return invalid(t(locale, 'min', { count: request.min }));
+      if (request.max !== undefined && value > request.max) return invalid(t(locale, 'max', { count: request.max }));
       return valid(value);
     }
     case 'confirm': {
-      const normalized = raw.toLocaleLowerCase();
+      const normalized = raw.toLowerCase();
+      if (action && normalized === 'yes') return valid(true);
+      if (action && normalized === 'no') return valid(false);
       const confirmLabel = request.confirmLabel?.trim().toLocaleLowerCase();
       const cancelLabel = request.cancelLabel?.trim().toLocaleLowerCase();
-      if (CONFIRM_VALUES.has(normalized) || (confirmLabel && normalized === confirmLabel)) return valid(true);
-      if (CANCEL_VALUES.has(normalized) || (cancelLabel && normalized === cancelLabel)) return valid(false);
-      return invalid('请选择确认或取消');
+      if (CONFIRM_VALUES[locale].has(normalized) || (confirmLabel && normalized === confirmLabel)) return valid(true);
+      if (CANCEL_VALUES[locale].has(normalized) || (cancelLabel && normalized === cancelLabel)) return valid(false);
+      return invalid(t(locale, 'confirmOrCancel'));
     }
     case 'select': {
       const option = resolveOption(request.options, raw);
-      return option ? valid(option.value) : invalid('请选择一个有效选项');
+      return option ? valid(option.value) : invalid(t(locale, 'select'));
     }
     case 'multiselect': {
       const separator = request.separator ?? ',';
       const tokens = raw.split(separator).map((token) => token.trim()).filter(Boolean);
       const selected = uniqueOptions(tokens.map((token) => resolveOption(request.options, token)));
-      if (selected.length !== tokens.length) return invalid('多选中包含无效选项');
-      if (selected.length < (request.minSelections ?? 0)) return invalid(`请至少选择 ${request.minSelections} 项`);
+      if (selected.length !== tokens.length) return invalid(t(locale, 'invalidSelection'));
+      if (selected.length < (request.minSelections ?? 0)) return invalid(t(locale, 'minSelections', { count: request.minSelections! }));
       if (request.maxSelections !== undefined && selected.length > request.maxSelections) {
-        return invalid(`请最多选择 ${request.maxSelections} 项`);
+        return invalid(t(locale, 'maxSelections', { count: request.maxSelections }));
       }
       return valid(Object.freeze(selected.map((option) => option.value)));
     }
     case 'list': {
       const separator = request.separator ?? ',';
       const tokens = raw.split(separator).map((token) => token.trim()).filter(Boolean);
-      if (tokens.length < (request.minItems ?? 0)) return invalid(`请至少输入 ${request.minItems} 项`);
-      if (request.maxItems !== undefined && tokens.length > request.maxItems) return invalid(`请最多输入 ${request.maxItems} 项`);
+      if (tokens.length < (request.minItems ?? 0)) return invalid(t(locale, 'minItems', { count: request.minItems! }));
+      if (request.maxItems !== undefined && tokens.length > request.maxItems) return invalid(t(locale, 'maxItems', { count: request.maxItems }));
       if (request.valueType === 'number') {
         const values = tokens.map(Number);
-        return values.every(Number.isFinite) ? valid(Object.freeze(values)) : invalid('列表中包含无效数字');
+        return values.every(Number.isFinite) ? valid(Object.freeze(values)) : invalid(t(locale, 'invalidNumbers'));
       }
       if (request.valueType === 'boolean') {
-        const values = tokens.map(parseBoolean);
+        const values = tokens.map(value => parseBoolean(value, locale));
         return values.every((value) => value !== undefined)
           ? valid(Object.freeze(values as boolean[]))
-          : invalid('布尔列表只接受 true/false、yes/no 或 是/否');
+          : invalid(t(locale, 'invalidBooleans'));
       }
       return valid(Object.freeze(tokens));
     }
   }
 }
 
-function actionsFor(request: UserInteractionRequest): UserInteractionAction[] | undefined {
+function actionsFor(request: UserInteractionRequest, locale: Locale): UserInteractionAction[] | undefined {
   if (request.type === 'confirm') {
     return [
-      { label: request.confirmLabel ?? '确认', value: 'yes', style: 'primary' },
-      { label: request.cancelLabel ?? '取消', value: 'no', style: 'danger' },
+      { label: request.confirmLabel ?? t(locale, 'confirm'), value: 'yes', style: 'primary' },
+      { label: request.cancelLabel ?? t(locale, 'cancel'), value: 'no', style: 'danger' },
     ];
   }
   if (request.type === 'select' && request.options.length <= 10) {
@@ -204,12 +212,12 @@ function actionsFor(request: UserInteractionRequest): UserInteractionAction[] | 
   return undefined;
 }
 
-function instructionFor(request: UserInteractionRequest): string | undefined {
+function instructionFor(request: UserInteractionRequest, locale: Locale): string | undefined {
   switch (request.type) {
-    case 'confirm': return '请选择确认或取消。';
-    case 'select': return '可以点击按钮，或回复序号/选项名称。';
-    case 'multiselect': return `回复序号或选项名称，多项用“${request.separator ?? ','}”分隔。`;
-    case 'list': return `多项用“${request.separator ?? ','}”分隔。`;
+    case 'confirm': return t(locale, 'confirmation');
+    case 'select': return t(locale, 'selection');
+    case 'multiselect': return t(locale, 'multiple', { separator: request.separator ?? ',' });
+    case 'list': return t(locale, 'list', { separator: request.separator ?? ',' });
     default: return undefined;
   }
 }
@@ -237,10 +245,12 @@ function uniqueOptions<V>(options: readonly (UserInteractionOption<V> | undefine
   return result;
 }
 
-function parseBoolean(raw: string): boolean | undefined {
-  const normalized = raw.toLocaleLowerCase();
-  if (CONFIRM_VALUES.has(normalized)) return true;
-  if (CANCEL_VALUES.has(normalized)) return false;
+function parseBoolean(raw: string, locale: Locale): boolean | undefined {
+  const normalized = raw.toLowerCase();
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  if (CONFIRM_VALUES[locale].has(normalized)) return true;
+  if (CANCEL_VALUES[locale].has(normalized)) return false;
   return undefined;
 }
 
@@ -268,8 +278,8 @@ function validBounds(minimum?: number, maximum?: number): boolean {
     && (minimum === undefined || maximum === undefined || minimum <= maximum);
 }
 
-const CONFIRM_VALUES = new Set(['1', 'y', 'yes', 'true', '是', '确认', '同意']);
-const CANCEL_VALUES = new Set(['2', 'n', 'no', 'false', '否', '取消', '拒绝']);
+const CONFIRM_VALUES = { 'zh-CN': new Set(['1', '是', '确认', '同意']), en: new Set(['1', 'y', 'yes', 'true', 'confirm', 'agree']) };
+const CANCEL_VALUES = { 'zh-CN': new Set(['2', '否', '取消', '拒绝']), en: new Set(['2', 'n', 'no', 'false', 'cancel', 'reject']) };
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const rows: T[][] = [];

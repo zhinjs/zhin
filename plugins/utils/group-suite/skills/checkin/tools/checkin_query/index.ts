@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { getCheckinModel } from '../../../../src/db-store.js';
@@ -18,7 +19,7 @@ export default defineAgentTool<{ user_id?: string; group_id?: string }>({
   async execute({ user_id: userId, group_id: requestedGroupId }, context) {
     const runtime = context.use(groupSuiteRuntimeToken);
     const model = getCheckinModel(runtime.db);
-    if (!model) return '签到数据库尚未就绪';
+    if (!model) return t(context.locale, 'checkinDb');
     const groupId = conversationKey(toolGroupConversation(context, requestedGroupId));
     const query = {
       ...(userId ? { user_id: userId } : {}),
@@ -26,12 +27,12 @@ export default defineAgentTool<{ user_id?: string; group_id?: string }>({
     };
     const rows = await model.select().where(query);
     if (userId) {
-      if (rows.length === 0) return `用户 ${userId} 没有签到记录`;
+      if (rows.length === 0) return t(context.locale, 'userCheckinEmpty', { user: userId });
       const user = rows[0]!;
-      return `${String(user.user_name ?? userId)}: 积分=${Number(user.points ?? 0)}, 累计=${Number(user.total_checkins ?? 0)}天, 连续=${Number(user.streak ?? 0)}天, 最长=${Number(user.max_streak ?? 0)}天, 上次=${String(user.last_checkin ?? '')}`;
+      return t(context.locale, 'userCheckinInfo', { name: String(user.user_name ?? userId), points: Number(user.points ?? 0), total: Number(user.total_checkins ?? 0), streak: Number(user.streak ?? 0), max: Number(user.max_streak ?? 0), last: String(user.last_checkin ?? '') });
     }
     const totalPoints = rows.reduce((sum, user) => sum + Number(user.points ?? 0), 0);
     const todayCount = rows.filter((user) => user.last_checkin === todayStr()).length;
-    return `签到系统统计\n总用户: ${rows.length}\n总积分: ${totalPoints}\n今日签到: ${todayCount}人`;
+    return t(context.locale, 'checkinOverview', { users: rows.length, points: totalPoints, today: todayCount });
   },
 });

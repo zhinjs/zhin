@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ name: string; members: string; owner?: string }>({
@@ -12,7 +13,7 @@ export default defineAgentTool<{ name: string; members: string; owner?: string }
   async execute({ name, members, owner   }: { name: string; members: string; owner?: string }, context) {
     const endpoint = context.$client;
     const chatId = await endpoint.createChat(name, members.split(','), owner);
-    return { success: !!chatId, chat_id: chatId, message: chatId ? `群聊创建成功: ${chatId}` : '创建失败' };
+    return { success: !!chatId, chat_id: chatId, message: chatId ? t(context.locale, 'chatCreated', { p0: chatId }) : t(context.locale, 'createFailed') };
   },
 });
 

@@ -82,6 +82,17 @@ describe('grid-keyboard', () => {
   });
 
   describe('buildGridKeyboard', () => {
+    it('translates only the default fallback hint and preserves payloads and author text', () => {
+      const options = { gamePrefix: 'test', sessionId: 'session', rows: 1, cols: 1,
+        cells: [{ state: 0, label: 'A', disabled: false }], statusLine: 'Author status' };
+      const en = JSON.stringify(buildGridKeyboard({ ...options, locale: 'en' }));
+      const zh = JSON.stringify(buildGridKeyboard({ ...options, locale: 'zh-CN' }));
+      expect(en).toContain('Reply with a number to choose');
+      expect(zh).toContain('回复数字选择');
+      expect(en).toContain('test:session:0');
+      expect(en).toContain('Author status');
+      expect(JSON.stringify(buildGridKeyboard({ ...options, locale: 'en', fallbackHint: 'My hint' }))).toContain('My hint');
+    });
     it('creates 3x3 keyboard', () => {
       const cells: GridCell[] = Array(9).fill(null).map(() => ({
         state: 0,

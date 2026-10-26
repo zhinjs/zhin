@@ -9,6 +9,6 @@ export default defineAgentTool<{ city: string }>({
   tags: ["天气", "生活", "查询"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/weather.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

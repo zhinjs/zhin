@@ -1,5 +1,7 @@
 export interface PageMetadata {
   readonly title?: string;
+  /** Explicit display titles; missing locales retain title. */
+  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
   readonly icon?: string;
   readonly order?: number;
   readonly hideInNav?: boolean;
@@ -9,6 +11,7 @@ export interface PageMetadata {
 
 export interface NormalizedPageMetadata {
   readonly title: string;
+  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
   readonly icon?: string;
   readonly order: number;
   readonly hideInNav: boolean;
@@ -55,11 +58,13 @@ export function normalizePageMetadata(
   const input = metadata === undefined ? {} : requireRecord(metadata, 'Page metadata');
   assertKnownMetadataKeys(input);
   const title = optionalString(input.title, 'Page title') ?? titleFromName(localName);
+  const titleI18n = pageTitleTranslations(input.titleI18n);
   const icon = optionalString(input.icon, 'Page icon');
   const order = optionalNumber(input.order, 'Page order') ?? 100;
   const hideInNav = optionalBoolean(input.hideInNav, 'Page hideInNav') ?? false;
   return Object.freeze({
     title,
+    ...(titleI18n === undefined ? {} : { titleI18n }),
     icon,
     order,
     hideInNav,
@@ -71,6 +76,7 @@ export function normalizePageMetadata(
 function assertKnownMetadataKeys(input: Record<string, unknown>): void {
   const known = new Set([
     'title',
+    'titleI18n',
     'icon',
     'order',
     'hideInNav',
@@ -105,6 +111,7 @@ function normalizePageInput(metadata: PageMetadata): Readonly<PageMetadata> {
   const normalized = normalizePageMetadata('page', metadata);
   return Object.freeze({
     title: metadata.title === undefined ? undefined : normalized.title,
+    ...(normalized.titleI18n === undefined ? {} : { titleI18n: normalized.titleI18n }),
     icon: normalized.icon,
     order: metadata.order === undefined ? undefined : normalized.order,
     hideInNav: metadata.hideInNav === undefined ? undefined : normalized.hideInNav,
@@ -150,4 +157,17 @@ function stringList(value: unknown, label: string): readonly string[] {
     return item;
   });
   return Object.freeze([...new Set(result)].sort());
+}
+
+function pageTitleTranslations(value: unknown): NormalizedPageMetadata['titleI18n'] {
+  if (value === undefined) return undefined;
+  const input = requireRecord(value, 'Page titleI18n');
+  const output: Partial<Record<'zh-CN' | 'en', string>> = {};
+  for (const [locale, title] of Object.entries(input)) {
+    if (locale !== 'zh-CN' && locale !== 'en') throw new TypeError(`Unsupported Page titleI18n locale: ${locale}`);
+    const text = optionalString(title, `Page titleI18n.${locale}`);
+    if (text === undefined) throw new TypeError(`Page titleI18n.${locale} must be a non-empty string`);
+    output[locale] = text;
+  }
+  return Object.freeze(output);
 }

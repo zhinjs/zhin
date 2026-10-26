@@ -7,6 +7,8 @@ import {
 } from 'typedoc';
 
 const expectedSurface = new Map([
+  ['zhin.js/i18n', ['createMessages', 'DEFAULT_LOCALE', 'SUPPORTED_LOCALES', 'isLocale', 'resolveLocale',
+    'projectLocaleToken', 'Locale', 'MessageCatalog', 'MessageValues']],
   ['@zhin.js/host-http', [
     'AuthenticatedTokenPrincipal', 'HttpHost', 'HttpHostAddress', 'WsConnection',
     'WsHandle', 'AuthScope', 'HttpHandler', 'ListedRoute', 'OpenApiParameter',
@@ -113,6 +115,7 @@ const expectedMembers = new Map([
     '$client', '$reply', '$replyFrom', '$replyToChannel', '$replyToGroup', '$replyToPrivate',
     '$sendTo', 'clientAdapter', 'content', 'conversation', 'endpointId', 'generation', 'id',
     'mentioned', 'message', 'metadata', 'origin', 'replyTo', 'segments', 'sender',
+    'locale', 'formatCommand', 'commandPrefix', 'commandMenu',
   ]],
   ['zhin.js.PluginDefinition', ['config', 'metadata', 'name', 'requires', 'setup']],
   ['zhin.js.PluginConfigSchema', ['output', 'toJsonSchema']],
@@ -126,12 +129,15 @@ const expectedMembers = new Map([
   ['zhin.js/command.CommandContext', [
     '$client', 'adapter', 'args', 'config', 'endpoint', 'generation', 'has', 'input', 'interaction',
     'options', 'owner', 'params', 'project', 'scene', 'segments', 'sender', 'signal', 'use',
+    'locale', 'formatCommand',
   ]],
   ['zhin.js/command.CommandOptionSchema', [
     'alias', 'choices', 'default', 'description', 'max', 'min', 'optional', 'pattern', 'type', 'validate',
+    'descriptionI18n',
   ]],
   ['zhin.js/command.CommandDefinition', [
     'adapter', 'alias', 'description', 'execute', 'execution', 'options', 'params', 'permit', 'shortcut',
+    'descriptionI18n', 'preferredAliasI18n',
   ]],
   ['zhin.js/command.CommandExecutionPolicy', ['cooldownMs', 'maxConcurrent', 'progressAfterMs']],
   ['zhin.js/command.CommandExecutionLimit', ['reason', 'retryAfterMs']],

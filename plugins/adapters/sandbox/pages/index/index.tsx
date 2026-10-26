@@ -3,6 +3,7 @@ import SandboxChat from './SandboxChat';
 
 export const meta = definePage({
   title: '试聊一下',
+  titleI18n: { en: 'Try a conversation' },
   icon: 'Box',
   order: 10,
 });

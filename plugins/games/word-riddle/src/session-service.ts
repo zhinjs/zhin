@@ -36,6 +36,7 @@ export class SessionService extends BaseSessionService<RiddleSessionRow> {
     const queue = pickRoundQueue(mode).map((r) => r.id);
     const row: RiddleSessionRow = {
       id: generateSessionId(),
+      locale: message.locale ?? 'zh-CN',
       adapter: String(message.$adapter),
       endpoint: message.$endpoint,
       channel_type: message.$channel.type,

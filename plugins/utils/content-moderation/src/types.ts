@@ -97,7 +97,8 @@ export interface ModerationConfig {
   readonly enabled: boolean;
   readonly onError: OnErrorPolicy;
   readonly maskChar: string;
-  readonly replyTemplate: string;
+  /** Omitted templates use the inbound operation's language. Explicit text is never translated. */
+  readonly replyTemplate?: string;
   readonly masters: readonly string[];
   readonly inbound: {
     readonly enabled: boolean;

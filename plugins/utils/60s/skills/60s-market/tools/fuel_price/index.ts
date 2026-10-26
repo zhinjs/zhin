@@ -9,6 +9,6 @@ export default defineAgentTool<{ province?: string }>({
   tags: ["生活", "油价", "价格"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/fuel-price.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

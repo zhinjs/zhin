@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /**
  * Chat-driven OAuth authorization: `calendar auth <provider>` creates a PKCE
  * link, the HTTP callback exchanges the code, stores the refresh token in the
@@ -36,6 +38,7 @@ export type CalendarNotifier<Target> = (
 
 export interface CalendarAuthServiceOptions<Target> {
   readonly config: CalendarConfig;
+  readonly locale?: Locale;
   readonly managers: Partial<Record<OAuthProviderKind, OAuthTokenManager>>;
   readonly credentials: CalendarCredentialStore | undefined;
   readonly notify: CalendarNotifier<Target> | undefined;
@@ -56,10 +59,6 @@ interface ClientCredentials {
   readonly tenant: string;
 }
 
-const PROVIDER_DISPLAY_NAME: Record<OAuthProviderKind, string> = {
-  google: "Google 日历",
-  microsoft: "Outlook 日历",
-};
 
 export function parseOAuthProvider(
   value: unknown
@@ -117,6 +116,7 @@ export function localOriginFromAddress(address: {
 
 export class CalendarAuthService<Target> {
   readonly #config: CalendarConfig;
+  readonly #locale: Locale;
   readonly #managers: Partial<Record<OAuthProviderKind, OAuthTokenManager>>;
   readonly #credentials: CalendarCredentialStore | undefined;
   readonly #notify: CalendarNotifier<Target> | undefined;
@@ -126,6 +126,7 @@ export class CalendarAuthService<Target> {
 
   constructor(options: CalendarAuthServiceOptions<Target>) {
     this.#config = options.config;
+    this.#locale = resolveLocale(options.locale);
     this.#managers = options.managers;
     this.#credentials = options.credentials;
     this.#notify = options.notify;
@@ -137,19 +138,20 @@ export class CalendarAuthService<Target> {
   /** Handles `calendar auth <provider>` and returns the chat reply. */
   async startAuthorization(
     provider: OAuthProviderKind,
-    requester: CredentialOwner<Target>
+    requester: CredentialOwner<Target>,
+    locale: Locale = resolveLocale(requester.locale)
   ): Promise<string> {
-    const displayName = PROVIDER_DISPLAY_NAME[provider];
+    const displayName = t(locale, provider);
     if (!this.#credentials) {
-      return "日历授权需要数据库（databaseHostToken）来保存 refresh_token，当前不可用。";
+      return t(locale, 'needsDatabase');
     }
     const client = this.#clientCredentials(provider);
     if (!client) {
-      return this.#missingClientMessage(provider);
+      return this.#missingClientMessage(provider, locale);
     }
     const redirectUri = this.#resolveRedirectUri();
     if (!redirectUri) {
-      return "未找到 HTTP 服务地址：请启用 zhin 的 HTTP Host，或在 plugins.calendar.oauth_redirect_base_url 配置外部可访问地址。";
+      return t(locale, 'needsHttp');
     }
 
     const pkce = createPkcePair();
@@ -159,7 +161,7 @@ export class CalendarAuthService<Target> {
       state,
       codeVerifier: pkce.verifier,
       redirectUri,
-      requester,
+      requester: { ...requester, locale },
     });
     const authorizeUrl = buildAuthorizeUrl({
       provider,
@@ -172,11 +174,11 @@ export class CalendarAuthService<Target> {
 
     const validMinutes = Math.round(OAUTH_SESSION_TTL_MS / 60_000);
     return [
-      `请在浏览器打开下面的链接完成${displayName}授权（${validMinutes} 分钟内有效，只能使用一次）：`,
+      t(locale, 'openLink', { provider: displayName, minutes: validMinutes }),
       authorizeUrl,
       "",
-      `回调地址：${redirectUri}`,
-      "该地址必须能从打开链接的浏览器访问，并已登记在 OAuth 客户端的重定向 URI 中。",
+      t(locale, 'callback', { url: redirectUri }),
+      t(locale, 'callbackHelp'),
     ].join("\n");
   }
 
@@ -188,21 +190,22 @@ export class CalendarAuthService<Target> {
       return {
         statusCode: 400,
         message:
-          "授权链接无效、已使用或已过期，请在聊天中重新发送 calendar auth 命令。",
+          t(this.#locale, 'invalidLink'),
       };
     }
 
+    const locale = resolveLocale(session.requester.locale);
     const provider = session.provider;
-    const displayName = PROVIDER_DISPLAY_NAME[provider];
+    const displayName = t(locale, provider);
     const oauthError = searchParams.get("error");
     if (oauthError) {
       const description = searchParams.get("error_description") ?? "";
       const detail = `${oauthError} ${description}`.trim();
       await this.#notifySafely(
         session.requester.target,
-        `${displayName}授权失败：${detail}`
+        t(locale, 'failed', { provider: displayName, detail })
       );
-      return { statusCode: 400, message: `授权失败：${detail}` };
+      return { statusCode: 400, message: t(locale, 'callbackFailed', { detail }) };
     }
 
     const code = searchParams.get("code") ?? "";
@@ -210,7 +213,7 @@ export class CalendarAuthService<Target> {
     if (!code || !client || !this.#credentials) {
       return {
         statusCode: 400,
-        message: "缺少授权码或客户端配置，请重新授权。",
+        message: t(locale, 'codeMissing'),
       };
     }
 
@@ -235,76 +238,72 @@ export class CalendarAuthService<Target> {
       const reason = error instanceof Error ? error.message : String(error);
       await this.#notifySafely(
         session.requester.target,
-        `${displayName}授权失败：${reason}`
+        t(locale, 'failed', { provider: displayName, detail: reason })
       );
-      return { statusCode: 502, message: `授权失败：${reason}` };
+      return { statusCode: 502, message: t(locale, 'callbackFailed', { detail: reason }) };
     }
 
     const providerHint =
       this.#config.provider === provider
         ? ""
-        : `\n注意：当前 plugins.calendar.provider 是 ${
-            this.#config.provider
-          }，日历工具不会使用 ${provider}。`;
+        : t(locale, 'otherProvider', { current: this.#config.provider, provider });
     await this.#notifySafely(
       session.requester.target,
-      `${displayName}授权成功，refresh_token 已保存到插件数据库。${providerHint}`
+      t(locale, 'authorized', { provider: displayName, hint: providerHint })
     );
-    return { statusCode: 200, message: "授权成功，可以关闭此页回到聊天。" };
+    return { statusCode: 200, message: t(locale, 'callbackSuccess') };
   }
 
   /** Handles `calendar status`. */
-  async describeStatus(): Promise<string> {
-    const lines = [`当前 provider：${this.#config.provider}`];
+  async describeStatus(locale?: Locale, authCommand?: string): Promise<string> {
+    const lines = [t(locale, 'currentProvider', { provider: this.#config.provider })];
     for (const provider of OAUTH_PROVIDERS) {
-      lines.push(await this.#describeProvider(provider));
+      lines.push(await this.#describeProvider(provider, locale, authCommand));
     }
     return lines.join("\n");
   }
 
   /** Handles `calendar logout <provider>`: removes the stored token. */
-  async logout(provider: OAuthProviderKind): Promise<string> {
-    const displayName = PROVIDER_DISPLAY_NAME[provider];
+  async logout(provider: OAuthProviderKind, locale?: Locale): Promise<string> {
+    const displayName = t(locale, provider);
     if (!this.#credentials) {
-      return "数据库不可用，没有可删除的授权。";
+      return t(locale, 'noDatabase');
     }
     await this.#credentials.delete(provider);
     this.#managers[provider]?.clearTokens();
-    return `已删除${displayName}在插件数据库中的授权。若 .env 里仍有 refresh_token，重载配置后会继续作为后备使用。`;
+    return t(locale, 'loggedOut', { provider: displayName });
   }
 
   /** Called by the token manager once when the refresh token is rejected. */
   async notifyAuthorizationLost(
     provider: OAuthProviderKind,
-    message: string
+    _message: string
   ): Promise<void> {
     const credential = await this.#credentials?.get(provider);
     const owner = credential?.authorized_by as CredentialOwner<Target> | null;
     if (!owner) {
       return;
     }
-    await this.#notifySafely(owner.target, message);
+    await this.#notifySafely(owner.target, t(resolveLocale(owner.locale), 'lost', { provider: t(resolveLocale(owner.locale), provider) }));
   }
 
-  async #describeProvider(provider: OAuthProviderKind): Promise<string> {
-    const displayName = PROVIDER_DISPLAY_NAME[provider];
+  async #describeProvider(provider: OAuthProviderKind, locale?: Locale, authCommand?: string): Promise<string> {
+    const displayName = t(locale, provider);
     if (!this.#clientCredentials(provider)) {
-      return `${displayName}：未配置 client_id`;
+      return t(locale, 'clientMissing', { provider: displayName });
     }
     const credential = await this.#credentials?.get(provider);
     const manager = this.#managers[provider];
     if (manager?.authorizationLost) {
-      return `${displayName}：授权已失效，请发送「${authCommandFor(
-        provider
-      )}」`;
+      return [t(locale, 'lost', { provider: displayName }), authCommand ? t(locale, 'commandHint', { command: authCommandFor(provider, authCommand)! }) : ''].filter(Boolean).join(' ');
     }
     if (credential) {
-      return `${displayName}：已授权（数据库，${credential.authorized_at}）`;
+      return t(locale, 'databaseStatus', { provider: displayName, at: credential.authorized_at });
     }
     if (manager?.hasRefreshToken) {
-      return `${displayName}：使用配置/环境变量中的 refresh_token`;
+      return t(locale, 'envStatus', { provider: displayName });
     }
-    return `${displayName}：未授权，请发送「${authCommandFor(provider)}」`;
+    return [t(locale, 'notAuthorized', { provider: displayName }), authCommand ? t(locale, 'commandHint', { command: authCommandFor(provider, authCommand)! }) : ''].filter(Boolean).join(' ');
   }
 
   #clientCredentials(
@@ -331,11 +330,11 @@ export class CalendarAuthService<Target> {
     };
   }
 
-  #missingClientMessage(provider: OAuthProviderKind): string {
+  #missingClientMessage(provider: OAuthProviderKind, locale?: Locale): string {
     if (provider === "google") {
-      return "请先在 plugins.calendar.google 配置 client_id 和 client_secret（例如 ${GOOGLE_CALENDAR_CLIENT_ID} / ${GOOGLE_CALENDAR_CLIENT_SECRET}）。";
+      return t(locale, 'googleClient');
     }
-    return "请先在 plugins.calendar.microsoft 配置 client_id（例如 ${MS_GRAPH_CLIENT_ID}）。";
+    return t(locale, 'microsoftClient');
   }
 
   async #notifySafely(target: Target, text: string): Promise<void> {

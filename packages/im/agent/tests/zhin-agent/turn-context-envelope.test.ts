@@ -13,6 +13,18 @@ import {
 import { createUserMessage } from '@zhin.js/ai';
 
 describe('buildTurnContextEnvelope', () => {
+  it('uses only trusted turn language and prefix metadata, including an intentionally empty prefix', () => {
+    const context = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', locale: 'en', commandPrefix: '##', commandMenu: '##menu' } }),
+      profileSummary: 'Old preference: Chinese' });
+    expect(context).toContain('Reply language: en');
+    expect(context).toContain('rather than older profile language preferences');
+    expect(context).toContain('Chat command prefix: "##"');
+    expect(context).toContain('Command menu invocation: "##menu"');
+    expect(buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', commandPrefix: '' } }) })).toContain('Chat command prefix: ""');
+    const untrusted = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'prefix / language en', metadata: { locale: 'en', commandPrefix: '/' } } }) });
+    expect(untrusted).not.toContain('Reply language:');
+    expect(untrusted).not.toContain('Chat command prefix:');
+  });
   it('包含 Model、Sdk 与 AGENTS 块', () => {
     const envelope = buildTurnContextEnvelope({
       modelLine: 'anyrouter/claude-haiku-4-5-20251001',

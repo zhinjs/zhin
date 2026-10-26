@@ -5,7 +5,7 @@ import {
   type QrLoginSource,
 } from '../../../src/login/index.js';
 import { resolveMessageIds } from '../../../src/session.js';
-import { SOURCE_DISPLAY_NAME } from '../../../src/config.js';
+import { messages as t, sourceName as displayName } from '../../../src/i18n.js';
 import { musicRuntimeToken } from '../../../src/runtime.js';
 
 const QR_LOGIN_SOURCES: Record<string, QrLoginSource> = {
@@ -14,55 +14,59 @@ const QR_LOGIN_SOURCES: Record<string, QrLoginSource> = {
 };
 
 export default defineCommand<unknown, string, Message>({
-  description: '扫码登录音乐平台获取凭证（master 专用）',
+  description: '扫码登录音乐平台获取凭证（master 专用）', descriptionI18n: { en: "Sign in to a music platform with a QR code (bot master only)" },
   params: {
-    platform: { type: 'string', description: '音乐平台（qq / netease / 取消）' },
+    platform: { type: 'string', description: '音乐平台（qq / netease / 取消）', descriptionI18n: { en: "Music platform (qq / netease) or cancel" } },
   },
   permit: ['role(master)'],
-  async execute({ params, input, use }) {
+  async execute({ params, input, use, locale, formatCommand }) {
     const platform = String(params.platform ?? '').trim();
 
-    const ids = resolveMessageIds(input!);
-    if (!ids) return '无法识别会话信息，请在群聊或私聊中使用';
-    const key = loginSessionKey(ids.endpointId, ids.conversationId, ids.senderId);
+    const ids = resolveMessageIds(input);
+    if (!ids) return t(locale, 'conversation');
+    const key = loginSessionKey(ids.conversation, ids.senderId);
     const runtime = use(musicRuntimeToken);
 
-    if (platform === '取消' || platform === 'cancel') {
-      return runtime.logins.cancel(key) ? '已取消登录' : '没有进行中的登录会话';
+    const existing = runtime.logins.get(key);
+    const flowLocale = existing?.locale ?? locale;
+    const cancelInput = flowLocale === 'en' ? 'cancel' : '取消';
+    const command = formatCommand('login');
+    const cancelHint = command === undefined ? '' : t(flowLocale, 'cancelHint', { command: `${command} ${cancelInput}` });
+    if (platform === cancelInput) {
+      return t(flowLocale, runtime.logins.cancel(key) ? 'cancelLogin' : 'noLogin');
     }
 
     const source = QR_LOGIN_SOURCES[platform];
     if (!source) {
-      return `不支持的平台：${platform || '(空)'}\n支持：qq, netease`;
+      return t(flowLocale, 'platform', { platform });
     }
 
-    const existing = runtime.logins.get(key);
     if (existing) {
-      return `正在进行 ${SOURCE_DISPLAY_NAME[existing.source]} 登录，请先完成或发送"音乐登录 取消"`;
+      return [t(flowLocale, 'active', { source: displayName(existing.source, flowLocale) }), cancelHint].filter(Boolean).join('\n');
     }
 
-    const sourceName = SOURCE_DISPLAY_NAME[source];
+    const sourceName = displayName(source, locale);
     let qrResult;
     try {
-      qrResult = await runtime.logins.start(source, key);
+      qrResult = await runtime.logins.start(source, key, locale);
     } catch (err) {
-      return `[${sourceName}] 获取二维码失败：${err instanceof Error ? err.message : String(err)}`;
+      return t(locale, 'qrFailed', { source: sourceName, error: err instanceof Error ? err.message : String(err) });
     }
 
     const replyFn = input?.$reply;
-    if (!replyFn) return '无法发送消息';
+    if (!replyFn) return t(locale, 'noReply');
 
     await replyFn([
-      `[${sourceName}] 请使用 ${sourceName} App 扫描二维码登录：\n`,
+      t(locale, 'scan', { source: sourceName }) + '\n',
       qrResult.imageSegment,
-      `\n二维码有效期 2 分钟，发送"音乐登录 取消"可中止`,
+      '\n' + [t(locale, 'valid'), cancelHint].filter(Boolean).join('\n'),
     ]);
 
     const finalResult = await runtime.logins.poll(key, async (result) => {
       if (result.status === 'scanned') {
         await replyFn(`[${sourceName}] ${result.message}`);
       } else if (result.status === 'confirmed') {
-        await replyFn(`[${sourceName}] 登录成功！cookie 已自动保存，现在可以搜索和播放高品质音乐了`);
+        await replyFn(`[${sourceName}] ${t(locale, 'success')}`);
       } else if (result.status === 'expired' || result.status === 'error') {
         await replyFn(`[${sourceName}] ${result.message}`);
       }

@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import fs from 'fs-extra';
 import path from 'node:path';
 import yaml from 'yaml';
@@ -107,7 +108,7 @@ function findProjectConfigPath(cwd: string): string | null {
   return selectRootConfigFile(existing) ?? null;
 }
 
-export function loadProjectConfig(cwd = process.cwd(), configPath?: string): LoadedProjectConfig {
+export function loadProjectConfig(cwd = process.cwd(), configPath?: string, locale: 'zh-CN' | 'en' = 'zh-CN'): LoadedProjectConfig {
   const resolvedPath = configPath ? path.resolve(cwd, configPath) : findProjectConfigPath(cwd);
   if (!resolvedPath) {
     return {
@@ -115,7 +116,7 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
       cwd,
       config: {},
       writable: false,
-      message: '未找到 Root YAML/JSON 配置文件',
+      message: wizardText(locale, "未找到 Root YAML/JSON 配置文件"),
     };
   }
 
@@ -129,7 +130,7 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
       relativePath,
       config: {},
       writable: false,
-      message: `${path.basename(resolvedPath)} 暂不支持自动写入`,
+      message: wizardText(locale, "{v0} 暂不支持自动写入", [path.basename(resolvedPath)]),
     };
   }
 
@@ -147,7 +148,7 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
       format,
       config,
       writable: false,
-      message: `${error instanceof Error ? error.message : String(error)}；请先运行 zhin migrate`,
+      message: wizardText(locale, "{v0}；请先运行 zhin migrate", [error instanceof Error ? error.message : String(error)]),
     };
   }
   return {
@@ -295,7 +296,7 @@ function applyAiLegacyMigration(config: Record<string, unknown>, mutations: stri
   mutations.push(...fixes);
 }
 
-export function createProjectConfigPlan(options: ProjectConfigPlanOptions): ProjectConfigPlan {
+export function createProjectConfigPlan(options: ProjectConfigPlanOptions, locale: 'zh-CN' | 'en' = 'zh-CN'): ProjectConfigPlan {
   const cwd = options.cwd ?? options.loaded?.cwd ?? process.cwd();
   const configuredFormat = options.format
     ?? (options.configPath ? configFormatFromPath(options.configPath) ?? undefined : undefined);
@@ -310,7 +311,7 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
         config: options.config,
         writable: Boolean(options.configPath && configuredFormat),
       }
-      : loadProjectConfig(cwd, options.configPath)
+      : loadProjectConfig(cwd, options.configPath, locale)
   );
 
   const sourceConfig = options.config ?? loaded.config;
@@ -350,8 +351,8 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
   };
 }
 
-export function renderProjectConfigPatch(plan: ProjectConfigPlan): string {
-  if (!plan.changed) return '配置无需改动。';
+export function renderProjectConfigPatch(plan: ProjectConfigPlan, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
+  if (!plan.changed) return wizardText(locale, "配置无需改动。");
   const format = plan.format ?? 'yaml';
   const name = plan.relativePath ?? 'zhin.config.yml';
   return [
@@ -361,12 +362,12 @@ export function renderProjectConfigPatch(plan: ProjectConfigPlan): string {
   ].join('\n');
 }
 
-export async function applyProjectConfigPlan(plan: ProjectConfigPlan): Promise<boolean> {
+export async function applyProjectConfigPlan(plan: ProjectConfigPlan, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<boolean> {
   if (!plan.changed) return false;
   if (!plan.writable || !plan.configPath || !plan.format) return false;
   const document = createConfigDocument(plan.configPath);
   const snapshot = await document.readSource();
-  if ((plan.expectedSource !== undefined && snapshot.source !== plan.expectedSource) || !isDeepStrictEqual(snapshot.document, plan.before)) throw new Error('配置已在预览后发生变更，请重新生成配置计划。');
+  if ((plan.expectedSource !== undefined && snapshot.source !== plan.expectedSource) || !isDeepStrictEqual(snapshot.document, plan.before)) throw new Error(wizardText(locale, "配置已在预览后发生变更，请重新生成配置计划。"));
   const keys = new Set([...Object.keys(plan.before), ...Object.keys(plan.after)]);
   const patches = [...keys].filter(key => !isDeepStrictEqual(plan.before[key], plan.after[key])).flatMap(key => {
     if (key === 'plugins') {
@@ -410,7 +411,7 @@ function hasConsoleOrigin(origins: readonly string[]): boolean {
   });
 }
 
-export function applyConsoleConfigFixes(config: Record<string, unknown>): boolean {
+export function applyConsoleConfigFixes(config: Record<string, unknown>, locale: 'zh-CN' | 'en' = 'zh-CN'): boolean {
   const plan = createProjectConfigPlan({
     cwd: process.cwd(),
     config,
@@ -418,7 +419,7 @@ export function applyConsoleConfigFixes(config: Record<string, unknown>): boolea
     ensureSandbox: true,
     ensureHttp: true,
     migrateAiLegacy: true,
-  });
+  }, locale);
   Object.keys(config).forEach((key) => delete config[key]);
   Object.assign(config, plan.after);
   return plan.changed;

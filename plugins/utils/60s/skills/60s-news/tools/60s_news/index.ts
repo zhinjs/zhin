@@ -9,6 +9,6 @@ export default defineAgentTool({
   tags: ["新闻", "资讯", "60s"],
   async execute(_input, context) {
     const handler = (await import('../../../../src/handlers/60s-news.js')).default;
-    return handler(context.use(sixtySClientToken));
+    return handler(context.use(sixtySClientToken), context.locale);
   },
 });

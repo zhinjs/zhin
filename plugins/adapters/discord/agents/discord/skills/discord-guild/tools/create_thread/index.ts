@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
@@ -18,12 +19,12 @@ export default defineAgentTool<{ channel_id: string; name: string; message_id?: 
   async execute({ channel_id, name, message_id, auto_archive_duration  }: { channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }, context) {
     const client = requireDiscordGatewayClient(context.$client);
     const channel = await client.channels.fetch(channel_id);
-    if (!channel?.threads) throw new Error(`Channel ${channel_id} 不支持创建帖子`);
+    if (!channel?.threads) throw new Error(t(context.locale, 'threadsUnsupported', { p0: channel_id }));
     const thread = await channel.threads.create({
       name,
       autoArchiveDuration: auto_archive_duration || 1440,
       ...(message_id ? { startMessage: message_id } : {}),
     });
-    return { success: true, thread_id: thread.id, message: `帖子 "${name}" 已创建` };
+    return { success: true, thread_id: thread.id, message: t(context.locale, 'threadCreated', { p0: name }) };
   },
 });

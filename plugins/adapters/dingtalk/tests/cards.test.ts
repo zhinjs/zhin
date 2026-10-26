@@ -52,7 +52,8 @@ it('sends the real card API request and dispatches a matching callback through t
   endpoint.open();
   await endpoint.admit({ msgtype: 'text', msgId: 'incoming', text: { content: 'hello' }, conversationId: conversation.id, conversationType: '1', senderStaffId: 'staff', senderId: 'sender', senderCorpId: 'corp' });
   const canonical = receive.mock.calls[0][0] as any;
-  const id = await endpoint.send({ conversation: canonical.conversation, payload });
+  const id = await endpoint.send({ conversation: canonical.conversation, payload, locale: 'en' });
+  expect(body.cardData.cardParamMap).toMatchObject({ title: 'Message', text: 'question', button0_label: 'Yes', button0_payload: 'answer' });
   expect(fetch).toHaveBeenLastCalledWith('https://api.dingtalk.com/v1.0/card/instances/createAndDeliver', expect.objectContaining({ headers: expect.objectContaining({ 'x-acs-dingtalk-access-token': 'fixture' }) }));
   receive.mockClear();
   await endpoint.admitCard({ outTrackId: id, spaceType: 'IM_ROBOT', spaceId: 'staff', userId: 'staff', userIdType: 1, corpId: 'corp', content: JSON.stringify({ cardPrivateData: { params: { action: 'answer' } } }) }, 'click');

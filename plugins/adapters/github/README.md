@@ -109,3 +109,7 @@ github:
 ## License
 
 MIT
+
+## Language / 语言
+
+命令和工具反馈使用当前操作语言，账号绑定等异步流程固定开始时语言。用户名称、第三方内容和结构化协议字段保持原样；语言不改变权限、认证、通知或重试策略。参见[官方插件语言说明](https://github.com/zhinjs/zhin/blob/main/plugins/README.md#语言与内容)。

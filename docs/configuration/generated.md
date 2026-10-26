@@ -535,6 +535,7 @@ outline: [2, 3]
 | `assistant.events.rateLimitPerMinute` | number \| string \| null | 否 | — | 每来源每分钟最大请求数（默认 60） |
 | `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
+| `locale` | string: `"zh-CN"`, `"en"` | 否 | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
 
 ## 插件实例字段
 
@@ -1826,7 +1827,7 @@ _该 Schema 没有声明字段。_
 | `content-moderation.enabled` | boolean | 否 | `true` | 总开关 |
 | `content-moderation.onError` | string: `"open"`, `"closed"` | 否 | `"open"` | 审查源失败时的全局默认策略：open=视为通过，closed=视为 critical |
 | `content-moderation.maskChar` | string | 否 | `"*"` | 文本打码字符 |
-| `content-moderation.replyTemplate` | string | 否 | `"消息含不当内容，已拦截。"` | reply 动作时的提示文案 |
+| `content-moderation.replyTemplate` | string | 否 | — | reply 动作时的提示文案；省略时按本次消息语言选择默认文案，显式文本保持原样 |
 | `content-moderation.masters` | array&lt;string&gt; | 否 | `[]` | 额外视为 master 的 userId（兜底，与 endpoint master 合并） |
 | `content-moderation.inbound` | object | 否 | — | — |
 | `content-moderation.inbound.enabled` | boolean | 否 | `true` | — |

@@ -82,6 +82,7 @@ export class RouletteSessionService extends VersionedSessionService<RouletteSess
     const state = createLobby(host, tableRules(config));
     return this.createRow({
       id: generateCompactId('rlt_'),
+      locale: message.locale ?? 'zh-CN',
       adapter: String(message.$adapter),
       endpoint: message.$endpoint,
       channel_type: message.$channel.type,

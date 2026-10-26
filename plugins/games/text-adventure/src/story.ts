@@ -1,3 +1,4 @@
+import { type Locale } from 'zhin.js/i18n';
 export { ADV_PREFIX } from './story-types.js';
 export type { SceneChoice, Scene, GameState, ChoiceResult } from './story-types.js';
 export { ITEM_LABELS, ITEM_IDS, itemLabel } from './story-items.js';
@@ -5,7 +6,7 @@ export { SCENES, countScenes } from './story-scenes.js';
 
 import type { GameState, ChoiceResult, Scene } from './story-types.js';
 import { itemLabel } from './story-items.js';
-import { SCENES } from './story-scenes.js';
+import { sceneCatalog } from './story-scenes.js';
 import { resolveTransition } from './story-transitions.js';
 
 export function parseInventory(value: string | string[] | unknown): string[] {
@@ -52,10 +53,10 @@ export function stateFromSession(row: {
   };
 }
 
-export function formatStatusBar(state: GameState): string {
+export function formatStatusBar(state: GameState, locale: Locale = 'zh-CN'): string {
   const items = state.inventory.length
-    ? state.inventory.map(itemLabel).join('、')
-    : '无';
+    ? state.inventory.map((id) => itemLabel(id, locale)).join(locale === 'en' ? ', ' : '、')
+    : locale === 'en' ? 'None' : '无';
   return `❤️ ${Math.max(0, state.hp)}  ·  🎒 ${items}`;
 }
 
@@ -63,8 +64,8 @@ export function resolveChoice(state: GameState, choiceId: string): ChoiceResult 
   return resolveTransition(state, choiceId);
 }
 
-export function getScene(sceneId: string): Scene | undefined {
-  return SCENES[sceneId];
+export function getScene(sceneId: string, locale: Locale = 'zh-CN'): Scene | undefined {
+  return sceneCatalog(locale)[sceneId];
 }
 
 export function visibleChoices(scene: Scene, state: GameState) {
@@ -97,8 +98,8 @@ export function applyChoiceResult(state: GameState, result: ChoiceResult): GameS
   };
 }
 
-export function sceneNarrative(scene: Scene, state: GameState): string {
+export function sceneNarrative(scene: Scene, state: GameState, locale: Locale = 'zh-CN'): string {
   const body = typeof scene.text === 'function' ? scene.text(state) : scene.text;
   if (scene.terminal) return body;
-  return `${body}\n\n${formatStatusBar(state)}`;
+  return `${body}\n\n${formatStatusBar(state, locale)}`;
 }

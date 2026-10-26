@@ -1,3 +1,4 @@
+import { createMessages } from 'zhin.js/i18n';
 import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { SendContent } from '@zhin.js/core/runtime';
 import { getRiddleById, RIDDLE_PREFIX, typeLabel } from './engine.js';
@@ -17,34 +18,34 @@ export function buildRiddleView(
   const entry = riddleId ? getRiddleById(riddleId) : undefined;
 
   const lines = [
-    `🧩 **${typeLabel(session.mode as 'char' | 'idiom')}**`,
+    `🧩 **${typeLabel(session.mode as 'char' | 'idiom', session.locale ?? undefined)}**`,
     '',
-    `进度 ${Math.min(session.index + 1, queue.length)}/${queue.length} · 得分 **${session.score}** · 连击 **${session.streak}**（最佳 ${session.best_streak}）`,
+    messages(session.locale ?? undefined, 'text1', { p0: Math.min(session.index + 1, queue.length), p1: queue.length, p2: session.score, p3: session.streak, p4: session.best_streak }),
   ];
 
   if (terminal) {
-    lines.push('', '🎊 **本轮题目已全部完成！**', `最终得分：**${session.score}**`);
+    lines.push('', messages(session.locale ?? undefined, 'text2'), messages(session.locale ?? undefined, 'text3', { p0: session.score }));
   } else if (entry) {
     lines.push('', `❓ ${entry.question}`);
     if (session.wrong_count > 0) {
-      lines.push(`⚠️ 本题失误 ${session.wrong_count}/${MAX_WRONG}`);
+      lines.push(messages(session.locale ?? undefined, 'text4', { p0: session.wrong_count, p1: MAX_WRONG }));
     }
-    lines.push('', session.mode === 'char' ? '请回复一个汉字。' : '请回复四字成语。');
+    lines.push('', session.mode === 'char' ? messages(session.locale ?? undefined, 'text5') : messages(session.locale ?? undefined, 'text6'));
   }
 
   if (eventLines.length) lines.push('', ...eventLines);
 
-  if (!entry && !terminal) return '题目加载失败，请重新开始。';
+  if (!entry && !terminal) return messages(session.locale ?? undefined, 'text7');
 
   const choices = terminal
     ? [
-        { id: 'restart_char', label: '🔤 再来字谜', style: 'primary' as const, keepEnabledWhenTerminal: true },
-        { id: 'restart_idiom', label: '📜 再来成语', style: 'primary' as const, keepEnabledWhenTerminal: true },
+        { id: 'restart_char', label: messages(session.locale ?? undefined, 'text8'), style: 'primary' as const, keepEnabledWhenTerminal: true },
+        { id: 'restart_idiom', label: messages(session.locale ?? undefined, 'text9'), style: 'primary' as const, keepEnabledWhenTerminal: true },
       ]
     : [
-        { id: 'hint', label: '💡 提示', style: 'secondary' as const },
-        { id: 'skip', label: '⏭️ 跳过', style: 'secondary' as const },
-        { id: 'quit', label: '🏳️ 结束', style: 'danger' as const },
+        { id: 'hint', label: messages(session.locale ?? undefined, 'text10'), style: 'secondary' as const },
+        { id: 'skip', label: messages(session.locale ?? undefined, 'text11'), style: 'secondary' as const },
+        { id: 'quit', label: messages(session.locale ?? undefined, 'text12'), style: 'danger' as const },
       ];
 
   return buildChoiceKeyboard({
@@ -54,10 +55,26 @@ export function buildRiddleView(
     choices,
     terminal,
     buttonsPerRow: terminal ? 2 : 3,
-    fallbackHint: '回复答案，或 1提示 2跳过 3结束',
+    fallbackHint: messages(session.locale ?? undefined, 'text13'),
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });
 }
 
 export { MAX_WRONG };
+
+const messages = createMessages({
+  text1: { 'zh-CN': "进度 {p0}/{p1} · 得分 **{p2}** · 连击 **{p3}**（最佳 {p4}）", en: "Progress {p0}/{p1} · Score **{p2}** · Streak **{p3}** (best {p4})" },
+  text2: { 'zh-CN': "🎊 **本轮题目已全部完成！**", en: "🎊 **All riddles completed!**" },
+  text3: { 'zh-CN': "最终得分：**{p0}**", en: "Final score: **{p0}**" },
+  text4: { 'zh-CN': "⚠️ 本题失误 {p0}/{p1}", en: "⚠️ Mistakes on this riddle: {p0}/{p1}" },
+  text5: { 'zh-CN': "请回复一个汉字。", en: "Reply with one Chinese character." },
+  text6: { 'zh-CN': "请回复四字成语。", en: "Reply with a four-character Chinese idiom." },
+  text7: { 'zh-CN': "题目加载失败，请重新开始。", en: "The riddle could not be loaded. Please start again." },
+  text8: { 'zh-CN': "🔤 再来字谜", en: "🔤 More character riddles" },
+  text9: { 'zh-CN': "📜 再来成语", en: "📜 More idiom riddles" },
+  text10: { 'zh-CN': "💡 提示", en: "💡 Hint" },
+  text11: { 'zh-CN': "⏭️ 跳过", en: "⏭️ Skip" },
+  text12: { 'zh-CN': "🏳️ 结束", en: "🏳️ End" },
+  text13: { 'zh-CN': "回复答案，或 1提示 2跳过 3结束", en: "Reply with your answer, or 1 Hint · 2 Skip · 3 End" },
+});

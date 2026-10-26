@@ -1,3 +1,4 @@
+import { message, formatMessage } from './messages.js';
 /**
  * Resolve-and-check guard for hosts that will be actively probed (ping).
  *
@@ -39,7 +40,7 @@ export async function assertPublicTarget(
   const display = displayHost(host);
   const verdict = classifyParsedHost(host);
   if (verdict.blocked) {
-    throw new NettoolsError('blocked_target', `拒绝探测 ${display}：${verdict.reason}`);
+    throw new NettoolsError('blocked_target', message('probeBlocked', { host: display, reason: verdict.detail }));
   }
   if (host.kind !== 'domain') {
     return Object.freeze({ host, display, resolvedAddresses: Object.freeze([]) });
@@ -58,14 +59,14 @@ export async function assertPublicTarget(
     }
   }
   if (addresses.length === 0) {
-    throw new NettoolsError('not_found', `无法解析 ${display}（没有 A/AAAA 记录）`);
+    throw new NettoolsError('not_found', message('noAddresses', { host: display }));
   }
   for (const address of addresses) {
     const addressVerdict = safeClassify(address);
     if (addressVerdict.blocked) {
       throw new NettoolsError(
         'blocked_target',
-        `拒绝探测 ${display}：解析到 ${address}（${addressVerdict.reason}）`,
+        message('resolvedBlocked', { host: display, address, reason: addressVerdict.detail }),
       );
     }
   }
@@ -73,10 +74,11 @@ export async function assertPublicTarget(
 }
 
 /** A record value that is not a parsable IP is treated as blocked (fail closed). */
-function safeClassify(address: string): { blocked: boolean; reason?: string } {
+function safeClassify(address: string): import('./address-policy.js').AddressVerdict {
   try {
     return classifyAddress(address);
   } catch {
-    return { blocked: true, reason: '无法识别的地址记录' };
+    const detail = message('unknownAddress');
+    return { blocked: true, reason: formatMessage(detail), detail };
   }
 }

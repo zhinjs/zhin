@@ -17,6 +17,7 @@ describe('configuration', () => {
   it('validates and defaults the schema exposed to Console', () => {
     const ajv = new Ajv2020({ useDefaults: true, strict: true });
     ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
+    ajv.addKeyword({ keyword: 'x-i18n', schemaType: 'object' });
     const validate = ajv.compile(schema);
     const empty = {};
     expect(validate(empty)).toBe(true);

@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /**
  * Extracts a push destination from the public Message fields of a command input.
  * Platform-agnostic: only adapter name, endpoint, conversation kind/id and sender id.
@@ -26,9 +28,9 @@ function isThreaded(input: Record<string, unknown>): boolean {
   return conversation.parent !== undefined || conversation.threadId !== undefined;
 }
 
-export function conversationError(input: unknown): string {
-  if (isRecord(input) && isThreaded(input)) return THREAD_UNSUPPORTED_MESSAGE;
-  return CONVERSATION_REQUIRED_MESSAGE;
+export function conversationError(input: unknown, locale: Locale = 'zh-CN'): string {
+  if (isRecord(input) && isThreaded(input)) return t(locale, 'noThread');
+  return t(locale, 'conversation');
 }
 
 /** Returns null when the input has no complete, un-threaded conversation address. */

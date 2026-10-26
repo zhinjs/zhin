@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 import {
   getRiddleById,
   type RiddleEntry,
@@ -23,8 +24,13 @@ export function checkAnswer(entry: RiddleEntry, raw: string): boolean {
   return answersFor(entry).some((x) => x === a);
 }
 
-export function typeLabel(type: RiddleType): string {
-  return type === 'char' ? '字谜' : '猜成语';
+export function typeLabel(type: RiddleType, locale?: Locale): string {
+  return type === 'char' ? messages(locale, 'text1') : messages(locale, 'text2');
 }
 
 export { getRiddleById };
+
+const messages = createMessages({
+  text1: { 'zh-CN': "字谜", en: "Chinese Character Riddles" },
+  text2: { 'zh-CN': "猜成语", en: "Chinese Idiom Riddles" },
+});

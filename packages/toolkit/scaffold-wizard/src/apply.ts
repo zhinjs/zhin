@@ -1,7 +1,8 @@
+import { wizardText } from './messages.js';
 import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
-import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import { isLocale, readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import type { AdapterSetupResult, AISetupConfig, DatabaseConfig, InitOptions } from './types.js';
 import {
@@ -28,11 +29,11 @@ export function clonePluginConfigurationMap(
   return { ...readPluginConfigurationMap(config) };
 }
 
-export function applyAdaptersToConfig(config: Record<string, unknown>, result: AdapterSetupResult): void {
+export function applyAdaptersToConfig(config: Record<string, unknown>, result: AdapterSetupResult, locale: 'zh-CN' | 'en' = 'zh-CN'): void {
   for (const instance of result.instances) {
     const plugins = clonePluginConfigurationMap(config);
     setPluginInstanceConfig(config, instance, mergeAdapterInstanceConfig(
-      instance.instanceKey, plugins[instance.instanceKey], instance.config,
+      instance.instanceKey, plugins[instance.instanceKey], instance.config, locale
     ));
   }
   if (result.instances.length === 0) clonePluginConfigurationMap(config);
@@ -73,6 +74,7 @@ function mergeAdapterInstanceConfig(
   instanceKey: string,
   existing: unknown,
   next: Record<string, unknown>,
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): Record<string, unknown> {
   if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return next;
   const current = existing as Record<string, unknown>;
@@ -96,11 +98,11 @@ function mergeAdapterInstanceConfig(
   }
 
   for (const key of Object.keys(next)) {
-    if (key !== 'endpoints' && key in current) dropped.push(`键 "${key}"`);
+    if (key !== 'endpoints' && key in current) dropped.push(wizardText(locale, "键 \"{v0}\"", [key]));
   }
 
   if (dropped.length > 0) {
-    console.warn(`[zhin setup] plugins.${instanceKey} 的 ${dropped.join('、')} 已被向导结果覆盖`);
+    console.warn(wizardText(locale, "[zhin setup] plugins.{v0} 的 {v1} 已被向导结果覆盖", [instanceKey, dropped.join('、')]));
   }
   return merged;
 }
@@ -114,11 +116,12 @@ export async function appendWizardEnvVars(
   adapters?: AdapterSetupResult,
   ai?: AISetupConfig,
   database?: DatabaseConfig,
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): Promise<void> {
   const extra =
-    (database ? generateDatabaseEnvVars(database) : '') +
-    (adapters ? generateAdapterEnvVars(adapters) : '') +
-    (ai ? generateAIEnvVars(ai) : '');
+    (database ? generateDatabaseEnvVars(database, locale) : '') +
+    (adapters ? generateAdapterEnvVars(adapters, locale) : '') +
+    (ai ? generateAIEnvVars(ai, locale) : '');
   if (extra.trim()) {
     const envPath = path.join(projectDir, '.env');
     const existing = (await fs.pathExists(envPath)) ? await fs.readFile(envPath, 'utf-8') : '';
@@ -215,9 +218,13 @@ export function finalizeWizardOptions(options: InitOptions): void {
 }
 
 /** 将 InitOptions 中的 wizard 结果合并进已有 zhin 配置对象 */
-export function applyWizardOptionsToConfig(config: Record<string, unknown>, options: InitOptions): void {
+export function applyWizardOptionsToConfig(config: Record<string, unknown>, options: InitOptions, locale: 'zh-CN' | 'en' = options.locale ?? 'zh-CN'): void {
+  if (options.locale !== undefined) {
+    if (!isLocale(options.locale)) throw new TypeError('Unsupported project locale');
+    config.locale = options.locale;
+  }
   if (options.database) applyDatabaseToConfig(config, options.database);
-  if (options.adapters) applyAdaptersToConfig(config, options.adapters);
+  if (options.adapters) applyAdaptersToConfig(config, options.adapters, locale);
   if (options.ai?.enabled) applyAIToConfig(config, options.ai);
 }
 
@@ -287,7 +294,12 @@ function applyLifeAssistantAiExtras(ai: Record<string, unknown>): Record<string,
  * 顶层键与 packages/im/runtime/src/config-composer.ts 的 effectiveSchema 对齐。
  */
 export function buildRuntimeConfigDocument(options: InitOptions): Record<string, unknown> {
+  const locale = options.locale;
   const doc: Record<string, unknown> = { configVersion: 2, plugins: {} };
+  if (options.locale !== undefined) {
+    if (!isLocale(options.locale)) throw new TypeError('Unsupported project locale');
+    doc.locale = options.locale;
+  }
 
   if (options.database) {
     doc.database = materializeDatabaseConfig(options.database);
@@ -305,7 +317,7 @@ export function buildRuntimeConfigDocument(options: InitOptions): Record<string,
     doc.ai = options.template === 'life-assistant' ? applyLifeAssistantAiExtras(ai) : ai;
   }
 
-  if (options.adapters) applyAdaptersToConfig(doc, options.adapters);
+  if (options.adapters) applyAdaptersToConfig(doc, options.adapters, locale);
 
   return doc;
 }

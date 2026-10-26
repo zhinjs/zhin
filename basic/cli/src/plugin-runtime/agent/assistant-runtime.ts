@@ -1,8 +1,8 @@
+import { resolveLocale, rootPluginId, type Locale } from '@zhin.js/plugin-runtime';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
-import { rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   AssistantEventIngress,
@@ -53,6 +53,7 @@ export function createAssistantScheduleRuntime(
   projectRoot: string,
   assistantRaw: AssistantConfig | undefined,
   trace: AgentTraceRecorder,
+  locale: Locale = 'zh-CN',
 ): {
   tools: ReturnType<typeof createScheduleTools>;
   store: ReturnType<typeof createScheduleJobStoreFromConfig>;
@@ -86,10 +87,11 @@ export function createAssistantScheduleRuntime(
   const proactiveOutbound = createRuntimeProactiveOutbound(im);
   const notificationRouter = createNotificationRouter({
     resolveAdapter: () => undefined,
-    sendIm: async (notify, content, source) => {
+    sendIm: async (notify, content, source, options) => {
       await proactiveOutbound.send({
         scene: notify.target.scene,
         source: (source ?? 'scheduled') as ProactiveSendSource,
+        locale: options?.locale,
       }, content);
     },
     callHaService: async (service, target, data) => {
@@ -114,6 +116,7 @@ export function createAssistantScheduleRuntime(
   });
 
   const store = createScheduleJobStoreFromConfig(dataDir, {
+    defaultLocale: locale,
     defaultNotify,
   });
   const jobWorker = new JobWorker({
@@ -226,7 +229,7 @@ function createRuntimeScheduleTurnPort(
           ...(creator?.name ? { displayName: creator.name } : {}),
           roles: [...(creator?.roles ?? [])],
         },
-        input: { text: input.prompt },
+        input: { text: input.prompt, locale: input.locale },
         session: { key: `schedule:${input.jobId}` },
         policy: {
           permissions: [],
@@ -295,6 +298,7 @@ function scheduleActivityPayload(event: ScheduleActivityEvent) {
     source: 'zhin-agent' as const,
     mode: 'text' as const,
     userId: event.job.createdBy?.userId ?? 'schedule',
+    locale: resolveLocale(event.previewSource?.locale ?? event.job.locale),
     ...address,
     hookContext: {
       scheduleJobId: event.job.id,

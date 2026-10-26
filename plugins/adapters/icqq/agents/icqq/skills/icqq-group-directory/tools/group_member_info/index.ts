@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 interface GroupMemberInfoInput {
@@ -17,9 +18,9 @@ export default defineAgentTool<GroupMemberInfoInput>({
   requiresApproval: 'never',
   async execute({ group_id, user_id }, context) {
     const group = context.$client.pickGroup(group_id);
-    if (!group) return { success: false, message: '目标群不存在' };
+    if (!group) return { success: false, message: t(context.locale, 'groupMissing') };
     const memberInfo = group.pickMember(user_id);
-    if (!memberInfo) return { success: false, message: '目标成员不存在' };
+    if (!memberInfo) return { success: false, message: t(context.locale, 'memberMissing') };
     return {
       success: true,
       member: memberInfo,

@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 export interface StatsRankEntry {
   rank: number;
   userId: string;
@@ -75,27 +77,27 @@ export function buildStatsRankReportData(
   };
 }
 
-export function formatRankText(data: StatsRankReportData): string {
-  if (data.empty) return `${data.title}\n暂无数据`;
+export function formatRankText(data: StatsRankReportData, locale?: Locale): string {
+  if (data.empty) return t(locale, 'statsEmpty', { title: data.title });
   const medals = ["🥇", "🥈", "🥉"];
   const lines = data.entries.map((entry) => {
     const prefix = entry.rank <= 3 ? medals[entry.rank - 1] : `${entry.rank}.`;
-    return `${prefix} ${entry.name} — ${entry.count}条`;
+    return t(locale, 'statsRow', { prefix, name: entry.name, count: entry.count });
   });
-  let footer = `\n共 ${data.participantCount} 人, ${data.totalMessages} 条消息`;
+  let footer = t(locale, 'statsFooter', { people: data.participantCount, messages: data.totalMessages });
   if (data.myRank != null && data.myCount != null) {
-    footer += ` | 你第${data.myRank}名 (${data.myCount}条)`;
+    footer += t(locale, 'statsMyFooter', { rank: data.myRank, count: data.myCount });
   }
   return `${data.title}\n${lines.join("\n")}${footer}`;
 }
 
-export function formatMyStatsText(data: MyStatsReportData): string {
+export function formatMyStatsText(data: MyStatsReportData, locale?: Locale): string {
   return [
-    `${data.userName} 的${data.scope}消息统计`,
-    `今日: ${data.todayCount} 条`,
-    `本周: ${data.weekCount} 条`,
-    `本月: ${data.monthCount} 条`,
-    `总计: ${data.totalCount} 条`,
-    `活跃天数: ${data.activeDays} 天`,
+    t(locale, 'myStatsTitle', { name: data.userName, scope: data.scope }),
+    t(locale, 'todayMessages', { count: data.todayCount }),
+    t(locale, 'weekMessages', { count: data.weekCount }),
+    t(locale, 'monthMessages', { count: data.monthCount }),
+    t(locale, 'totalMessages', { count: data.totalCount }),
+    t(locale, 'activeDays', { count: data.activeDays }),
   ].join("\n");
 }

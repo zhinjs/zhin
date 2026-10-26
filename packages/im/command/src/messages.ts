@@ -1,0 +1,62 @@
+import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
+
+/** Translates only display metadata explicitly supplied by its author. */
+export function commandDescription(
+  value: Readonly<{ description?: string; descriptionI18n?: Readonly<Partial<Record<Locale, string>>> }>,
+  locale: Locale,
+): string | undefined {
+  return value.descriptionI18n?.[locale] ?? value.description;
+}
+
+/** Static dictionaries; the caller supplies the operation's language. */
+export const commandMessages = createMessages({
+  menuKeyword: { 'zh-CN': '菜单', en: 'menu' },
+  invalidPage: { 'zh-CN': '页码必须是正整数。用法：{command} [插件名] --page <页码>', en: 'The page must be a positive integer. Usage: {command} [plugin] --page <page>' },
+  missingPlugin: { 'zh-CN': '未找到插件: {plugin}', en: 'Plugin not found: {plugin}' },
+  pageOutOfRange: { 'zh-CN': '页码超出范围：共 {pages} 页。请使用「{command} --page <页码>」。', en: 'Page out of range: {pages} pages available. Use {command} --page <page>.' },
+  menuTitle: { 'zh-CN': '=== {plugin} 指令菜单 ===', en: '=== {plugin} command menu ===' },
+  menuSummary: { 'zh-CN': '第 {page}/{pages} 页 · {commands} 条指令 · {plugins} 个子插件', en: 'Page {page}/{pages} · Commands: {commands} · Plugins: {plugins}' },
+  childPlugins: { 'zh-CN': '子插件：', en: 'Plugins:' },
+  emptyMenu: { 'zh-CN': '（暂无指令和子插件）', en: '(No commands or plugins)' },
+  pluginHint: { 'zh-CN': '提示：使用「{command} <插件名>」查看子插件的指令', en: 'Use {command} <plugin> to view a plugin’s commands.' },
+  previousPage: { 'zh-CN': '上一页：{command}', en: 'Previous page: {command}' },
+  nextPage: { 'zh-CN': '下一页：{command}', en: 'Next page: {command}' },
+  guideTitle: { 'zh-CN': '{title} · 指令指南', en: '{title} · Command guide' },
+  guideSubtitle: { 'zh-CN': '每一个灵感，都有回应。', en: 'An answer to every idea.' },
+  commandCount: { 'zh-CN': '{count} 条指令', en: 'Commands: {count}' },
+  pluginCount: { 'zh-CN': '{count} 个子插件', en: 'Plugins: {count}' },
+  commandIndex: { 'zh-CN': '指令索引', en: 'Commands' },
+  pluginIndex: { 'zh-CN': '插件导航', en: 'Plugins' },
+  guideEmpty: { 'zh-CN': '暂无指令和子插件', en: 'No commands or plugins' },
+  helpHint: { 'zh-CN': '查看参数与用法：{command} --help', en: 'View arguments and usage: {command} --help' },
+  genericHelpHint: { 'zh-CN': '在当前环境的指令后追加 --help 查看用法', en: 'Append --help to a command in this environment to view its usage' },
+  expectedType: { 'zh-CN': '{field}：应为 {type}', en: '{field}: expected {type}' },
+  expectedArray: { 'zh-CN': '{field}：应为 {type} 数组', en: '{field}: expected an array of {type}' },
+  minimum: { 'zh-CN': '{field}：最小值为 {minimum}', en: '{field}: minimum {minimum}' },
+  maximum: { 'zh-CN': '{field}：最大值为 {maximum}', en: '{field}: maximum {maximum}' },
+  choices: { 'zh-CN': '{field}：可选值为 {choices}', en: '{field}: expected one of {choices}' },
+  invalidFormat: { 'zh-CN': '{field}：格式不正确', en: '{field}: invalid format' },
+  invalidValue: { 'zh-CN': '{field}：值不正确', en: '{field}: invalid value' },
+  unknownOption: { 'zh-CN': '未知选项 {field}', en: 'Unknown option {field}' },
+  duplicateOption: { 'zh-CN': '重复选项 --{field}', en: 'Duplicate option --{field}' },
+  defaultUndefined: { 'zh-CN': '{field}：默认值返回了 undefined', en: '{field}: default returned undefined' },
+  parameterUndefined: { 'zh-CN': '{field}：默认值或快捷指令返回了 undefined', en: '{field}: default or shortcut returned undefined' },
+  missingOption: { 'zh-CN': '缺少选项 --{field}', en: 'Missing option --{field}' },
+  unexpectedArguments: { 'zh-CN': '存在多余参数', en: 'Unexpected arguments' },
+  invalidParameter: { 'zh-CN': '缺少指令参数或参数不正确', en: 'Missing or invalid command parameter' },
+  defaultValue: { 'zh-CN': '默认值：{value}', en: 'default: {value}' },
+  dynamicValue: { 'zh-CN': '动态计算', en: 'dynamic' },
+  noAdapter: { 'zh-CN': '命令未声明 adapter 约束', en: 'The command does not declare an adapter restriction' },
+  missingEndpoint: { 'zh-CN': '未选择当前 Endpoint，无法判断命令的精确 adapter 约束', en: 'Select an Endpoint to evaluate the command’s exact adapter restriction' },
+  adapterComparison: { 'zh-CN': '命令 adapter 与当前 Endpoint 声明的原生适配器精确比较；未探测在线状态', en: 'Exact comparison with the Endpoint’s declared native adapter; online status was not checked' },
+  conditionMismatch: { 'zh-CN': '至少一个声明条件与假设输入不符；这不是实际准入检查', en: 'At least one declared condition does not match the hypothetical input; this is not a live admission check' },
+  missingPermissionHost: { 'zh-CN': 'PermissionHost 缺失或无法确认；不能推断命令可执行', en: 'PermissionHost is missing or unverified; command execution cannot be inferred' },
+  missingEvidence: { 'zh-CN': '存在缺少依据的条件，不能推断命令可执行', en: 'Some conditions lack evidence; command execution cannot be inferred' },
+  noPermit: { 'zh-CN': '命令未声明 permit 限制；这不表示已获得执行权限', en: 'The command does not declare permit restrictions; this does not establish authorization' },
+  uncheckedConditions: { 'zh-CN': '存在未执行的平台或自定义条件，不能推断命令可执行', en: 'Platform or custom conditions have not been evaluated; command execution cannot be inferred' },
+  conditionsMatch: { 'zh-CN': '已解释的 builtin 条件与假设输入匹配；不代表真实授权或命令可执行', en: 'The explained builtin conditions match the hypothetical input; this does not establish authorization or executability' },
+  unconstrained: { 'zh-CN': '已解释的 builtin 规则不检查具体 Endpoint、parent 或 thread；保留完整目标不等于这些维度受规则限制', en: 'The explained builtin rules do not constrain a specific Endpoint, parent or thread; retaining the full target does not add such restrictions' },
+  simulatedIdentity: { 'zh-CN': '身份与角色仅用于模拟，未向平台核实', en: 'Identity and roles are hypothetical and have not been verified with the platform' },
+  unevaluatedCode: { 'zh-CN': '未执行命令、动态默认值、平台或自定义 checker', en: 'Commands, dynamic defaults, platform checks and custom checkers have not been executed' },
+  defaultedRole: { 'zh-CN': 'canonical 输入未附角色时按命令运行时默认 user 解释；这不是已核验的平台角色', en: 'Canonical input without roles uses the command runtime’s default user role; this is not a verified platform role' },
+});

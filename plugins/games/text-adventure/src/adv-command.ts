@@ -1,8 +1,5 @@
-import {
-  channelKey,
-  type GameMessageLike,
-  type GameReply,
-} from '@zhin.js/game-kit';
+import { createMessages, resolveLocale } from 'zhin.js/i18n';
+import { formatGameHelp, gameCommandHint, gameCommandFeedback, channelKey, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
 import {
   continueAdventure,
   sessionSummary,
@@ -11,23 +8,37 @@ import {
 import { formatAchievements, formatMapProgress, formatProgressCompact } from './profile-format.js';
 import type { GameServices } from './session-service.js';
 
-export const ADV_HELP = [
-  '秘境探险 · 文字冒险',
-  '冒险 / adv — 帮助与状态',
-  '冒险 开始 — 开始新冒险',
-  '冒险 继续 — 刷新当前场景',
-  '冒险 地图 — 全图探索进度',
-  '冒险 成就 — 成就列表',
-  '冒险 放弃 — 放弃当前冒险',
-  '',
-  '推进方式：点击选项按钮，或回复数字（1、2…）',
-].join('\n');
+
+const messages = createMessages({
+  map: { 'zh-CN': '全图探索进度', en: 'Exploration map' },
+  achievements: { 'zh-CN': '成就列表', en: 'Achievements' },
+  choices: { 'zh-CN': '推进方式：点击选项按钮，或回复数字（1、2…）', en: 'Choose an option button, or reply with its number (1, 2, …).' },
+  channel: { 'zh-CN': '— 当前频道 —', en: '— Current channel —' },
+  noGame: { 'zh-CN': '你没有进行中的冒险。', en: 'You have no active adventure.' },
+  quit: { 'zh-CN': '你已放弃冒险。', en: 'You have abandoned the adventure.' },
+});
+
+export function getAdvHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'>): string {
+  const locale = resolveLocale(message.locale);
+  const lines = [formatGameHelp(message,
+    { 'zh-CN': '秘境探险 · 文字冒险', en: 'Hidden Ruins · Text Adventure' },
+    'adv', ['start', 'continue', 'quit'])];
+  const command = message.formatCommand?.('adv');
+  if (command !== undefined) {
+    lines.push(`${command} map — ${messages(locale, 'map')}`);
+    lines.push(`${command} achievements — ${messages(locale, 'achievements')}`);
+  }
+  lines.push('', messages(locale, 'choices'));
+  return lines.join('\n');
+}
+export const ADV_HELP = getAdvHelp({});
 
 export async function runAdvCommand(
   services: GameServices,
   message: GameMessageLike,
   action: string,
 ): Promise<GameReply> {
+  const locale = resolveLocale(message.locale);
   const ch = channelKey(message);
   const userId = message.$sender.id;
   const userName = message.$sender.name?.trim() || userId;
@@ -35,12 +46,12 @@ export async function runAdvCommand(
   if (!action || action === 'help') {
     const active = await services.sessions.getActiveByChannel(ch);
     const profile = await services.profiles.getOrCreate(userId, userName);
-    const lines = [ADV_HELP, '', formatProgressCompact(profile), ''];
+    const lines = [getAdvHelp(message), '', formatProgressCompact(profile), ''];
     if (active) {
-      lines.push('— 当前频道 —');
+      lines.push(messages(locale, 'channel'));
       lines.push(sessionSummary(active));
     } else {
-      lines.push('暂无冒险，发送「冒险 开始」或从游戏大厅进入。');
+      lines.push(messages(locale, 'noGame') + gameCommandHint(message, 'adv'));
     }
     return lines.join('\n');
   }
@@ -55,20 +66,20 @@ export async function runAdvCommand(
 
   if (action === 'map') {
     const profile = await services.profiles.getOrCreate(userId, userName);
-    return formatMapProgress(profile);
+    return formatMapProgress(profile, locale);
   }
 
   if (action === 'achievements' || action === 'achievement') {
     const profile = await services.profiles.getOrCreate(userId, userName);
-    return formatAchievements(profile);
+    return formatAchievements(profile, false, locale);
   }
 
   if (action === 'quit') {
     const row = await services.sessions.getActiveForUser(ch, userId);
-    if (!row) return '你没有进行中的冒险。';
+    if (!row) return messages(locale, 'noGame');
     await services.sessions.updateSession(row.id, { status: 'aborted' });
-    return '你已放弃冒险。';
+    return messages(resolveLocale(row.locale), 'quit');
   }
 
-  return `未知子命令：${action}\n\n${ADV_HELP}`;
+  return `${gameCommandFeedback(message, 'unknown', action)}\n\n${getAdvHelp(message)}`;
 }

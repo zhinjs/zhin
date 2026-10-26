@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -12,6 +13,6 @@ export default defineAgentTool<{ chat_id: string; sticker: string }>({
   async execute({ chat_id, sticker  }: { chat_id: string; sticker: string }, context) {
     const endpoint = context.$client;
     const result = await endpoint.sendStickerMessage(Number(chat_id), sticker);
-    return { success: true, message_id: result.message_id, message: '贴纸已发送' };
+    return { success: true, message_id: result.message_id, message: t(context.locale, 'stickerSent') };
   },
 });

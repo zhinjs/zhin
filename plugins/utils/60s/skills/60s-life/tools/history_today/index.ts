@@ -9,6 +9,6 @@ export default defineAgentTool({
   tags: ["历史", "知识", "日历"],
   async execute(_input, context) {
     const handler = (await import('../../../../src/handlers/history-today.js')).default;
-    return handler(context.use(sixtySClientToken));
+    return handler(context.use(sixtySClientToken), context.locale);
   },
 });

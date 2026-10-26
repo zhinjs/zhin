@@ -1,3 +1,6 @@
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
+import { interactionMessages as t } from '../../built/interaction-messages.js';
+import { projectLocale } from './locale.js';
 import { conversationRefKey, type ConversationRef, type DeliveryReceipt, type MessageRef } from '@zhin.js/im-contract';
 import type {
   UserInteraction,
@@ -23,13 +26,15 @@ import { actionPayloadFromSegments, RuntimeInteractiveRouter } from './interacti
 import type { Segment } from '../../built/segment-contract/types.js';
 import { isJsxButtonPayload, JsxButtonRegistry, type JsxButtonBatch } from './jsx-button-registry.js';
 
+interface InteractionAnswer { readonly value: string; readonly action: boolean; }
+
 interface UserInteractionClaim {
   readonly generation?: number;
   readonly actions: ReadonlyMap<string, string>;
-  readonly accept: (raw: string) => boolean;
+  readonly accept: (raw: string, action?: boolean) => boolean;
   readonly reject: (error: Error) => void;
   readonly delivered: () => void;
-  readonly answer: Promise<string>;
+  readonly answer: Promise<InteractionAnswer>;
   readonly check: () => void;
   readonly dispose: () => void;
 }
@@ -37,6 +42,7 @@ interface UserInteractionClaim {
 const ASK_ACTION_PREFIX = 'zhin:ask:';
 
 export interface UserInteractionSource {
+  readonly locale?: Locale;
   readonly generation?: number;
   readonly conversation: ConversationRef;
   readonly sender?: MessageSenderRef;
@@ -97,11 +103,11 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const payload = this.#router.resolvePayload(message);
     if (payload && snapshot && await this.#buttons.dispatch(message, payload, snapshot)) return true;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
-      await message.$reply('交互已过期或不可用，请重新发起。');
+      await message.$reply(t(message.locale, 'expired'));
       return true;
     }
     if (this.#router.isExpiredFallback(message)) {
-      await message.$reply('交互已过期或不可用，请重新发起。');
+      await message.$reply(t(message.locale, 'expired'));
       return true;
     }
     return this.#router.dispatch(message, admission);
@@ -123,7 +129,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     if (!claim || claim.generation !== message.generation) return false;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
       const answer = claim.actions.get(payload);
-      if (answer !== undefined) return claim.accept(answer);
+      if (answer !== undefined) return claim.accept(answer, true);
       // Native stale callbacks never answer a new question. Plain text remains
       // the current question's input even if an old fallback once used its label.
       return explicit ? false : claim.accept(message.content);
@@ -171,7 +177,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
 
   create(source: UserInteractionSource, subjectId?: string, operation?: InteractionOperationScope): UserInteraction {
     const defaultTimeout = 3 * 60 * 1000;
-    const defaultTimeoutText = '输入超时';
+    const locale = resolveLocale(source.locale ?? (operation ? projectLocale(operation.snapshot) : undefined));
+    const defaultTimeoutText = t(locale, 'timeout');
     const ask = async <Request extends UserInteractionRequest>(
       request: Request,
       progress?: UserInteractionProgress,
@@ -189,21 +196,21 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       const timeout = request.timeout ?? defaultTimeout;
       const timeoutText = request.timeoutText ?? defaultTimeoutText;
       const deadline = Date.now() + timeout;
-      const view = projectUserInteraction(request, progress);
+      const view = projectUserInteraction(request, progress, locale);
       let prompt = view;
       while (true) {
         const claim = this.#reserveClaim(source, deadline, timeoutText, request.signal, subjectId, operation, view.actions);
         try {
           claim.check();
           const actions = [...claim.actions.keys()];
-          const receipt = await source.$reply(renderUserInteraction(prompt, (_value, index) => actions[index]!));
+          const receipt = await source.$reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
           assertLifetime();
           if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
           claim.delivered();
           if (receipt.message) this.#markPrompt?.(receipt.message);
           const raw = await claim.answer;
           claim.check();
-          const result = parseUserInteractionAnswer(request, raw);
+          const result = parseUserInteractionAnswer(request, raw.value, locale, raw.action);
           if (result.ok) return result.value as UserInteractionValue<Request>;
           prompt = {
             ...view,
@@ -220,7 +227,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
             return request.default as UserInteractionValue<Request>;
           }
           if (error instanceof UserInteractionTimeoutError) {
-            await source.$reply(renderUserInteraction({ title: '交互已结束', description: error.message }));
+            await source.$reply(renderUserInteraction({ title: t(locale, 'ended'), description: error.message }, undefined, locale));
           }
           throw error;
         } finally {
@@ -282,15 +289,15 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     this.#claims.get(key)?.reject(new UserInteractionSupersededError());
     const id = randomUUID();
     const answers = new Map(actions?.map((action, index) => [`${ASK_ACTION_PREFIX}${id}:${index}`, action.value]));
-    let resolve!: (value: string) => void;
+    let resolve!: (value: InteractionAnswer) => void;
     let reject!: (error: Error) => void;
-    const answer = new Promise<string>((yes, no) => { resolve = yes; reject = no; });
+    const answer = new Promise<InteractionAnswer>((yes, no) => { resolve = yes; reject = no; });
     // Prompt delivery may still be pending when cancellation rejects the claim.
     // Observe that rejection immediately without detaching the actual outbound I/O.
     void answer.catch(() => undefined);
     let failure: Error | undefined;
     let delivered = false;
-    let buffered: string | undefined;
+    let buffered: InteractionAnswer | undefined;
     const unsubscribers: (() => void)[] = [];
     const dispose = () => {
       if (this.#claims.get(key) === claim) this.#claims.delete(key);
@@ -308,11 +315,11 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       generation: operation?.snapshot.generation ?? source.generation,
       actions: answers,
       answer,
-      accept: (raw) => {
+      accept: (raw, action = false) => {
         if (failure || buffered !== undefined) return false;
         if (Date.now() >= deadline) { fail(new UserInteractionTimeoutError(timeoutText)); return false; }
-        buffered = raw;
-        if (delivered) resolve(raw);
+        buffered = { value: raw, action };
+        if (delivered) resolve(buffered);
         return true;
       },
       delivered: () => { if (!failure) { delivered = true; if (buffered !== undefined) resolve(buffered); } },

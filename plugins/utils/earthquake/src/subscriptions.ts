@@ -1,3 +1,4 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
 /**
  * Conversation subscriptions, one per conversation.
  *
@@ -11,6 +12,7 @@ import { isRecord, toFiniteNumber, toTrimmedString } from './sources/parse-helpe
 export type ConversationKind = 'private' | 'group' | 'channel';
 
 export interface EarthquakeSubscription {
+  readonly locale?: Locale;
   readonly adapter: string;
   readonly endpointKey: string;
   readonly conversationKind: ConversationKind;
@@ -50,6 +52,7 @@ function parseStoredSubscription(value: unknown): EarthquakeSubscription | undef
     : [];
   return {
     adapter,
+    locale: resolveLocale(value.locale),
     endpointKey,
     conversationKind: value.conversationKind,
     conversationId,
@@ -110,7 +113,7 @@ export class SubscriptionStore {
       if (index === -1) {
         all.push(subscription);
       } else {
-        all[index] = subscription;
+        all[index] = { ...subscription, locale: resolveLocale(all[index]?.locale) };
       }
       await this.#write(all);
       return { created: index === -1 };
@@ -140,8 +143,10 @@ export class SubscriptionStore {
 }
 
 export class SubscriptionLimitError extends Error {
+  readonly limit: number;
   constructor(limit: number) {
     super(`订阅总数已达上限（${limit}），请联系管理员调整 maxSubscriptions`);
     this.name = 'SubscriptionLimitError';
+    this.limit = limit;
   }
 }

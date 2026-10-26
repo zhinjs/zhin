@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from "@zhin.js/tool";
 import { z } from "zod";
 import { calendarRuntimeToken } from "../../../../src/runtime.js";
@@ -20,7 +21,7 @@ export default defineAgentTool({
     return runCalendarTool(async () => {
       const runtime = context.use(calendarRuntimeToken);
       if (!runtime.provider)
-        return "日历未启用：请在 plugins.calendar 配置 provider（caldav / google / microsoft）与凭据";
+        return t(context.locale, 'disabled');
       const timezone = runtime.config.timezone;
       const events = await runtime.provider.listEvents(
         parseDateTimeInZone(from, timezone),
@@ -28,7 +29,7 @@ export default defineAgentTool({
         context.signal
       );
       if (events.length === 0)
-        return `（${runtime.provider.name}）${from} ~ ${to} 没有事件`;
+        return t(context.locale, 'noEvents', { provider: runtime.provider.name, from, to });
       return events
         .map(
           (event) =>
@@ -37,6 +38,6 @@ export default defineAgentTool({
             }  [${event.id}]`
         )
         .join("\n");
-    });
+    }, context.locale);
   },
 });

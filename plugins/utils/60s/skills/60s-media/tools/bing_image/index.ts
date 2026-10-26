@@ -9,6 +9,6 @@ export default defineAgentTool({
   tags: ["图片", "壁纸", "Bing"],
   async execute(_input, context) {
     const handler = (await import('../../../../src/handlers/bing-image.js')).default;
-    return handler(context.use(sixtySClientToken));
+    return handler(context.use(sixtySClientToken), context.locale);
   },
 });

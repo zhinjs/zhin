@@ -14,6 +14,7 @@ API Reference 直接读取 Zhin 的公开创作入口、Host 契约和 JSDoc。�
 | --- | --- |
 | 定义插件 | `zhin.js` |
 | 编写命令 | `zhin.js/command` |
+| 本地化文案与显示语言 | `zhin.js/i18n`；[语言指南](/configuration/localization) |
 | 编写 Adapter | `zhin.js/adapter` |
 | 编写组件 | `zhin.js/component` |
 | 编写中间件 | `zhin.js/middleware` |

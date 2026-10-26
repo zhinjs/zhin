@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -27,6 +28,6 @@ export default defineAgentTool<{ chat_id: string; can_send_messages?: boolean; c
       if (typeof v === 'boolean') permissions[k] = v;
     }
     const success = await endpoint.setChatPermissionsAll(Number(chat_id), permissions);
-    return { success, message: success ? '群权限已更新' : '操作失败' };
+    return { success, message: success ? t(context.locale, 'permissionsUpdated') : t(context.locale, 'operationFailed') };
   },
 });

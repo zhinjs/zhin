@@ -96,12 +96,18 @@ export class TopologyGenerationPreparer {
       ...planned.replacedPluginRoots,
       ...configReplacements,
     ]);
-    const plan = withReplacements(planned, replacedPluginRoots);
+    const initialPlan = withReplacements(planned, replacedPluginRoots);
     const subtreeRoots = collapseRoots(delta.subtrees);
     const selected = delta.capabilities ?? capabilityDeltaFromSlots(current, delta.slots);
-    if (!plan.changed && subtreeRoots.length === 0 && selected.size === 0) return undefined;
+    if (!initialPlan.changed && subtreeRoots.length === 0 && selected.size === 0) return undefined;
 
-    const featureTopology = await this.#loadFeatureTopology(plan);
+    const featureTopology = await this.#loadFeatureTopology(initialPlan);
+    // Root installers can branch on their mounted Features. Changing that
+    // contract must rebuild the Root's setup resources and capabilities as one
+    // normal replacement, instead of keeping the previous installation alive.
+    const plan = this.installResources && !sameMountedFeatures(
+      current.root, this.model.rootsByFeature, featureTopology.rootsByFeature,
+    ) ? withReplacements(initialPlan, [current.root]) : initialPlan;
     const plugins = new PluginScopeAssembler(
       this.modules,
       this.configResolver,
@@ -118,7 +124,7 @@ export class TopologyGenerationPreparer {
       },
       this.isolation,
     );
-    plugins.installSetupFeatureAliases(featureSetupAliases(featureTopology.providers.values()));
+    plugins.installSetupFeatureAliases(featureSetupAliases(featureTopology.providers.values()), featureTopology.rootsByFeature);
     const setupRoots = collapseRoots([
       ...plan.addedPluginRoots,
       ...plan.replacedPluginRoots,
@@ -296,9 +302,11 @@ export class TopologyGenerationPreparer {
     }
 
     const capabilities = new Map(current.capabilities);
+    const retainedSetup: CapabilitySlot[] = [];
     const selectedIds = new Set(capabilityDeltaIds(selected));
     for (const [id, slot] of capabilities) {
       const key = ownerFeatureKey(slot.owner, slot.feature);
+      const replacedOwner = setupRoots.some(root => isWithin(slot.owner, root));
       if (
         !nextOwners.has(slot.owner)
         || !mounted.has(key)
@@ -306,8 +314,14 @@ export class TopologyGenerationPreparer {
         || selectedIds.has(id)
       ) {
         capabilities.delete(id);
+        // Setup definitions belong to their retained Scope, not a convention
+        // file. A provider refresh still validates them against its new contract;
+        // replaced/removed owners and mounts are never resurrected this way.
+        if (slot.origin === 'setup' && nextOwners.has(slot.owner) && mounted.has(key)
+          && !replacedOwner && !selectedIds.has(id)) retainedSetup.push(slot);
       }
     }
+    mergeSetupCapabilities(capabilities, retainedSetup, topology.providers, topology.rootsByFeature);
 
     const discovery = new FeatureDiscovery(new NodeDiscoveryHost(this.modules));
     for (const [feature, roots] of topology.rootsByFeature) {
@@ -422,6 +436,18 @@ function selectedSlotsByFeature(
 
 function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameMountedFeatures(
+  owner: PluginId,
+  previous: ReadonlyMap<FeatureId, readonly CapabilityRoot[]>,
+  next: ReadonlyMap<FeatureId, readonly CapabilityRoot[]>,
+): boolean {
+  const mounted = (roots: ReadonlyMap<FeatureId, readonly CapabilityRoot[]>) =>
+    new Set([...roots].filter(([, values]) => values.some(value => value.owner === owner)).map(([id]) => id));
+  const before = mounted(previous);
+  const after = mounted(next);
+  return before.size === after.size && [...before].every(id => after.has(id));
 }
 
 function sameFeatureSlots(

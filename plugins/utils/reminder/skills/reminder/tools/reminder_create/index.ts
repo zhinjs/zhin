@@ -1,3 +1,4 @@
+import { reminderMessages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from "@zhin.js/tool";
 import { z } from "zod";
 import { replyReminder } from "../../../../src/caller.js";
@@ -45,7 +46,7 @@ export default defineAgentTool({
       ].filter(Boolean);
       if (modes.length !== 1) {
         throw new ReminderInputError(
-          "请在 after / at / every_seconds 中只选一种时间表达"
+          t(context.locale, 'toolMode')
         );
       }
       const service = context.use(reminderServiceToken);
@@ -58,20 +59,20 @@ export default defineAgentTool({
           Date.now() + intervalMs,
           intervalMs
         );
-        return `已创建周期提醒\n${service.describe(task)}`;
+        return `${t(context.locale, 'createdPeriodic')}\n${service.describe(task, context.locale)}`;
       }
       if (after) {
-        const delayMs = parseRelativeDelayMs(after);
+        const delayMs = parseRelativeDelayMs(after, context.locale);
         const task = await service.add(actor, text, Date.now() + delayMs, null);
-        return `已创建提醒\n${service.describe(task)}`;
+        return `${t(context.locale, 'created')}\n${service.describe(task, context.locale)}`;
       }
       const task = await service.add(
         actor,
         text,
-        parseReminderInstant(at!),
+        parseReminderInstant(at!, context.locale),
         null
       );
-      return `已创建提醒\n${service.describe(task)}`;
+      return `${t(context.locale, 'created')}\n${service.describe(task, context.locale)}`;
     });
   },
 });

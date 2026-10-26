@@ -1,4 +1,6 @@
-import { DEFAULT_WEIGHTS, DISCLAIMER, type DailyReport, type DrawNumbers, type GameId, type GamePick, type ScoreWeights } from '../types.js';
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
+import { DEFAULT_WEIGHTS, type DailyReport, type DrawNumbers, type GameId, type GamePick, type ScoreWeights } from '../types.js';
 
 import { recommendGame, formatPickLine, formatPickStats } from './game-pick.js';
 import { resolveKl8Config, type Kl8Config } from '../games/kl8-groups.js';
@@ -8,6 +10,7 @@ import { loadDraws, REPORTS_TABLE, parseStoredJson, type LotteryDb } from '../db
 import { listPendingPredictions, loadAccuracySnapshot, loadGameWeights, savePrediction } from '../evaluate/tracker.js';
 
 export interface LotteryConfigSlice {
+  locale?: Locale;
   pickCount: number;
   historyLimit: number;
   kl8?: Kl8Config;
@@ -31,6 +34,7 @@ export async function buildDailyReport(
     const accuracy = await loadAccuracySnapshot(db, gameId);
     const kl8 = config.kl8 ?? resolveKl8Config(config.pickCount);
     const pick = recommendGame(gameId, draws, {
+      locale: config.locale,
       pickCount: gameId === 'kl8' ? kl8.pickCount : config.pickCount,
       tieSeed,
       weights,
@@ -46,28 +50,30 @@ export async function buildDailyReport(
     .join(' | ');
   return {
     date: dateStr,
+    locale: resolveLocale(config.locale),
     picks,
-    disclaimer: DISCLAIMER,
+    disclaimer: t(config.locale, 'disclaimer'),
     accuracyOverview: accuracyOverview || undefined,
   };
 }
 
 export function formatDailyReportText(report: DailyReport, aiExplanation?: string): string {
+  const locale = resolveLocale(report.locale);
   if (report.body?.trim()) {
     const extra = aiExplanation?.trim();
     return extra ? `${report.body.trim()}\n\n${extra}` : report.body.trim();
   }
-  const lines = [`【彩票每日推荐】${report.date}`, ''];
+  const lines = [t(locale, 'dailyTitle', { date: report.date }), ''];
   if (report.backtestOverview?.trim()) {
     lines.push(report.backtestOverview.trim());
     lines.push('');
   }
   if (report.weightFallbackGames?.length) {
-    lines.push(`【权重保护】近端 holdout 调优未跑赢随机，已回退默认 F40/O35/T25：${report.weightFallbackGames.join(', ')}`);
+    lines.push(t(locale, 'weightFallback', { games: report.weightFallbackGames.join(', ') }));
     lines.push('');
   }
   if (report.accuracyOverview) {
-    lines.push(`【模型复盘】累计平均命中 ${report.accuracyOverview}`);
+    lines.push(t(locale, 'accuracyOverview', { overview: report.accuracyOverview }));
     lines.push('');
   }
   for (const pick of report.picks) {
@@ -79,7 +85,7 @@ export function formatDailyReportText(report: DailyReport, aiExplanation?: strin
     lines.push(aiExplanation.trim());
     lines.push('');
   } else {
-    lines.push('【统计说明】号码由频率+遗漏+近期趋势综合打分，并根据历史命中自动调权。');
+    lines.push(t(locale, 'statsExplanation'));
     lines.push('');
   }
   lines.push(report.disclaimer);
@@ -128,6 +134,7 @@ export async function loadTodayPendingPicks(
   db: LotteryDb,
   gameIds: GameId[],
   date = new Date(),
+  locale?: Locale,
 ): Promise<GamePick[]> {
   const today = date.toISOString().slice(0, 10);
   const picks: GamePick[] = [];
@@ -139,6 +146,7 @@ export async function loadTodayPendingPicks(
     }>;
     for (const row of pending.filter((p) => p.predict_date === today)) {
       picks.push({
+        locale: resolveLocale(locale),
         gameId,
         label: gameId,
         numbers: parseStoredJson<DrawNumbers>(row.numbers, {}),
@@ -155,15 +163,17 @@ export async function resolveTodayReport(
   db: LotteryDb,
   gameIds: GameId[],
   date = new Date(),
+  locale?: Locale,
 ): Promise<DailyReport | null> {
   const saved = await loadTodayReport(db, date);
   if (saved) return saved;
-  const picks = await loadTodayPendingPicks(db, gameIds, date);
+  const picks = await loadTodayPendingPicks(db, gameIds, date, locale);
   if (!picks.length) return null;
   return {
     date: date.toISOString().slice(0, 10),
+    locale: resolveLocale(locale),
     picks,
-    disclaimer: DISCLAIMER,
+    disclaimer: t(locale, 'disclaimer'),
   };
 }
 

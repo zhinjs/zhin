@@ -48,6 +48,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('使用与配置', [
     { text: 'Console 管理后台', link: '/console/' },
     { text: '配置参考', link: '/configuration/' },
+    { text: '语言与本地化', link: '/configuration/localization' },
     { text: 'CLI 命令', link: '/cli/' },
   ], false),
   sidebarGroup('平台适配器', [
@@ -201,6 +202,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('Use & Configure', [
     { text: 'Console', link: '/en/console/' },
     { text: 'Configuration', link: '/en/configuration/' },
+    { text: 'Language and Localization', link: '/en/configuration/localization' },
     { text: 'CLI Commands', link: '/en/cli/' },
   ], false),
   sidebarGroup('Platform Adapters', [
@@ -390,6 +392,7 @@ export default withMermaid(defineConfig({
             items: [
               { text: 'API Reference', link: '/reference/api' },
               { text: '配置参考', link: '/configuration/' },
+    { text: '语言与本地化', link: '/configuration/localization' },
               { text: '配置字段（自动生成）', link: '/configuration/generated' },
               { text: 'CLI 命令', link: '/cli/' },
               { text: 'zhin runtime start', link: '/cli/runtime' },
@@ -473,6 +476,7 @@ export default withMermaid(defineConfig({
             items: [
               { text: 'API Reference', link: '/en/reference/api' },
               { text: 'Configuration', link: '/en/configuration/' },
+    { text: 'Language and Localization', link: '/en/configuration/localization' },
               { text: 'Configuration Fields (Generated)', link: '/en/configuration/generated' },
               { text: 'CLI Commands', link: '/en/cli/' },
               { text: 'zhin runtime start', link: '/en/cli/runtime' },

@@ -19,6 +19,8 @@ const runtime = Object.freeze({
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
+  locale: 'zh-CN' as const,
+  formatCommand: () => undefined,
   config: {},
   use: (token: typeof lotteryRuntimeToken) => token === lotteryRuntimeToken ? runtime : neverToken(),
   args: [],

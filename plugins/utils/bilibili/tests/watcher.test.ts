@@ -14,6 +14,23 @@ async function subscribe(h: Harness, uid: string, kinds = 'all', channelId = '10
 }
 
 describe('BilibiliWatcher', () => {
+  it('formats the same live event per saved subscriber language, with Chinese for legacy rows', async () => {
+    const h = harness();
+    await subscribe(h, '1', 'live', 'old');
+    await subscribe(h, '1', 'live', 'new');
+    await getBiliSubs(h.db)!.update({ locale: 'en' }).where({ channel_id: 'new' });
+    h.client.liveStatus.set('1', live('1', 0));
+    await h.watcher.tick();
+    h.client.liveStatus.set('1', live('1', 1, 2000));
+    await h.watcher.tick();
+    expect(h.pushes).toHaveLength(2);
+    expect(h.pushes.find(row => row.channelId === 'old')?.locale).toBe('zh-CN');
+    expect(h.pushes.find(row => row.channelId === 'new')?.locale).toBe('en');
+    expect(h.pushes.find(row => row.channelId === 'old')?.content).toContain('【开播】');
+    expect(h.pushes.find(row => row.channelId === 'new')?.content).toContain('[Live]');
+    expect(h.client.calls.live).toBe(2);
+  });
+
   it('records a silent baseline, then pushes a live start once', async () => {
     const h = harness();
     await subscribe(h, '1');

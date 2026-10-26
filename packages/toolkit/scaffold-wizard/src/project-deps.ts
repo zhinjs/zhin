@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
@@ -187,6 +188,7 @@ export function findOutdatedAiStackInPackageJson(
 export function findInstalledAiStackIncompatibilities(
   cwd: string,
   pkg: PackageJsonLike,
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): AiStackIncompatibility[] {
   const aiMajor = resolvePackageMajor(cwd, pkg, 'ai');
   if (aiMajor == null || aiMajor >= 7) return [];
@@ -195,7 +197,7 @@ export function findInstalledAiStackIncompatibilities(
   if (aiMajor < 7) {
     issues.push({
       package: 'ai',
-      reason: 'ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.0',
+      reason: wizardText(locale, "ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.0"),
     });
   }
 
@@ -204,7 +206,7 @@ export function findInstalledAiStackIncompatibilities(
     if (major == null || major < threshold) continue;
     issues.push({
       package: name,
-      reason: `${name}@${major} 需要 ai@7（当前 ai@${aiMajor}）`,
+      reason: wizardText(locale, "{v0}@{v1} 需要 ai@7（当前 ai@{v2}）", [name, major, aiMajor]),
     });
   }
 
@@ -354,6 +356,7 @@ export function diagnoseAIDependencies(
   cwd: string,
   config: { ai?: unknown },
   pkg?: PackageJsonLike,
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): AIDependencyDiagnosis | null {
   if (!isAiEnabledInConfig(config)) return null;
   const required = getRequiredAIDependenciesForConfig(config);
@@ -361,7 +364,7 @@ export function diagnoseAIDependencies(
   const packageJson = pkg ?? (fs.existsSync(packageJsonPath) ? fs.readJsonSync(packageJsonPath) as PackageJsonLike : {});
   const missingFromPackageJson = findMissingPackageDependencies(packageJson, required);
   const outdatedInPackageJson = findOutdatedAiStackInPackageJson(packageJson, required);
-  const incompatibleInstalled = findInstalledAiStackIncompatibilities(cwd, packageJson);
+  const incompatibleInstalled = findInstalledAiStackIncompatibilities(cwd, packageJson, locale);
   const declared = Object.keys(required).filter((name) => !missingFromPackageJson.includes(name));
   const notInstalled = findUnresolvedPackageInstalls(cwd, declared);
   return {

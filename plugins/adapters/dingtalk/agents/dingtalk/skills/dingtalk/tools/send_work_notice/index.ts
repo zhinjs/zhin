@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ user_ids: string; content: string }>({
@@ -12,7 +13,7 @@ export default defineAgentTool<{ user_ids: string; content: string }>({
     const endpoint = context.$client;
     const msgContent = { msgtype: 'text', text: { content } };
     const success = await endpoint.sendWorkNotice(user_ids.split(','), msgContent);
-    return { success, message: success ? '工作通知已发送' : '发送失败' };
+    return { success, message: success ? t(context.locale, 'workNoticeSent') : t(context.locale, 'sendFailed') };
   },
 });
 

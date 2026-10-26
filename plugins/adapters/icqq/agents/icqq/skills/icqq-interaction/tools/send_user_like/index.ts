@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ user_id: number }>({
@@ -16,7 +17,7 @@ export default defineAgentTool<{ user_id: number }>({
       } catch { /* ignore */ }
     }));
     const successTimes = successArray.reduce((a, b) => a + b, 0);
-    if (!successTimes) return { success: false, message: '点赞失败' };
-    return { success: true, message: `已给 ${user_id} 点赞 ${successTimes} 次` };
+    if (!successTimes) return { success: false, message: t(context.locale, 'likeFailed') };
+    return { success: true, message: t(context.locale, 'likesSent', { p0: user_id, p1: successTimes }) };
   },
 });

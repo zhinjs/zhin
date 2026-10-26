@@ -12,6 +12,8 @@ title: 开发流程
 
 插件易用性相关工作按[插件开发与安装体验改进计划](./plugin-experience-plan.md)分阶段验收。行为修改能力按[行为定制实施计划](./behavior-customization-plan.md)推进，默认行为保持与新策略的显式选择分别验收。
 
+中英文能力与验收边界见[国际化与本地化实施计划](./internationalization-plan.md)；用户和插件作者的配置入口见[语言与本地化](../configuration/localization.md)。
+
 ## 环境准备
 
 - Node.js `>=22.19.0`

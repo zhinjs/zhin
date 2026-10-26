@@ -1,3 +1,5 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
+
 /** Agent-owned lifecycle event contract shared by Runtime publishers and subscribers. */
 export type AIEventName =
   | 'ai.processing.start'
@@ -33,6 +35,8 @@ export type AIEventMode = 'text' | 'multimodal';
 export type AIEventPath = 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
 
 export interface AIEventPayload {
+  /** Display language captured by the originating turn or scheduled task. */
+  readonly locale?: Locale;
   sessionId: string;
   source: AIEventSource;
   mode?: AIEventMode;
@@ -52,6 +56,8 @@ export interface AIEventPayload {
   error?: string;
   model?: string;
   iterations?: number;
+  /** Framework progress is formatted by the display consumer, after its locale fallback resolves. */
+  iterationProgress?: Readonly<{ current: number; total: number }>;
   reason?: string;
   taskId?: string;
   label?: string;

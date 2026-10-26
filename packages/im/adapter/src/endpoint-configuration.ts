@@ -1,5 +1,17 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 
+/** Stable persistence failure; user-facing text belongs to the calling operation. */
+export class EndpointConfigurationError extends Error {
+  readonly code: 'duplicate_entry';
+  readonly details: Readonly<{ adapterKey: string; endpointId: string }>;
+  constructor(code: 'duplicate_entry', details: Readonly<{ adapterKey: string; endpointId: string }>) {
+    super(`Endpoint already configured: ${details.adapterKey}/${details.endpointId}`);
+    this.name = 'EndpointConfigurationError';
+    this.code = code;
+    this.details = Object.freeze({ ...details });
+  }
+}
+
 /** One canonical entry under `plugins.<adapterKey>.endpoints`. */
 export interface ConfiguredEndpointEntry {
   readonly id: string;

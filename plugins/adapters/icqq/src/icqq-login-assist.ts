@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import type { LoginAssist, LoginAssistType, PendingLoginTaskPayload } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 
@@ -27,11 +29,12 @@ export async function runIcqqLoginAssistStep(input: {
   logger: Logger;
   step: LoginAssistType;
   event: unknown;
+  locale?: Locale;
 }): Promise<void> {
   const { assist, client, adapter, endpointKey, owner, logger, step, event } = input;
   assist.cancelOwned(owner, `replaced_by_${step}`);
 
-  const payload = buildPayload(step, event);
+  const payload = buildPayload(step, event, input.locale);
   logger.info(formatCompact({
     op: 'login_assist_pending',
     endpoint: endpointKey,
@@ -82,33 +85,33 @@ export async function runIcqqLoginAssistStep(input: {
   }
 }
 
-function buildPayload(step: LoginAssistType, event: unknown): PendingLoginTaskPayload {
+function buildPayload(step: LoginAssistType, event: unknown, locale?: Locale): PendingLoginTaskPayload {
   const raw = event && typeof event === 'object' ? event as Record<string, unknown> : {};
   switch (step) {
     case 'qrcode':
       return {
-        message: '扫码登录：请在手机 QQ 扫描二维码，完成后在 Console / 终端确认继续',
+        message: t(locale, 'loginQr'),
         image: bufferToDataUrl(raw.image),
       };
     case 'slider':
       return {
-        message: '滑动验证：打开链接完成滑块，将返回的 ticket（可含 randstr）提交继续',
+        message: t(locale, 'loginSlider'),
         url: typeof raw.url === 'string' ? raw.url : undefined,
       };
     case 'device':
       return {
-        message: '设备锁：已请求短信验证码，请提交短信验证码继续',
+        message: t(locale, 'loginSms'),
         url: typeof raw.url === 'string' ? raw.url : undefined,
         phone: raw.phone,
       };
     case 'auth':
       return {
-        message: '身份验证：完成后在 Console / 终端确认继续',
+        message: t(locale, 'loginAuth'),
         url: typeof raw.url === 'string' ? raw.url : undefined,
         device: raw.device,
       };
     default:
-      return { message: `登录辅助（${step}）` };
+      return { message: t(locale, 'loginOther', { step }) };
   }
 }
 

@@ -1,3 +1,6 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
+
 export const MAX_CODE_LENGTH = 10000;
 
 const SUPPORTED_LANGUAGES: Record<string, string> = {
@@ -23,14 +26,14 @@ interface RunResult {
   error: string;
 }
 
-export async function runCode(language: string, code: string, timeoutSeconds = 30): Promise<RunResult> {
+export async function runCode(language: string, code: string, timeoutSeconds = 30, locale?: Locale): Promise<RunResult> {
   const lang = language.toLowerCase().trim();
 
   if (!SUPPORTED_LANGUAGES[lang]) {
     return {
       stdout: '',
       stderr: '',
-      error: `不支持的语言: ${lang}。支持: ${Object.keys(SUPPORTED_LANGUAGES).join(', ')}`,
+      error: t(locale, 'language', { language: lang, supported: Object.keys(SUPPORTED_LANGUAGES).join(', ') }),
     };
   }
 
@@ -38,7 +41,7 @@ export async function runCode(language: string, code: string, timeoutSeconds = 3
     return {
       stdout: '',
       stderr: '',
-      error: `代码长度超过上限 ${MAX_CODE_LENGTH} 字符（当前 ${code.length}）`,
+      error: t(locale, 'length', { max: MAX_CODE_LENGTH, length: code.length }),
     };
   }
 
@@ -59,7 +62,7 @@ export async function runCode(language: string, code: string, timeoutSeconds = 3
       return {
         stdout: '',
         stderr: '',
-        error: `API 请求失败: ${response.status} ${response.statusText}`,
+        error: t(locale, 'request', { status: response.status, text: response.statusText }),
       };
     }
 
@@ -71,15 +74,15 @@ export async function runCode(language: string, code: string, timeoutSeconds = 3
     };
   } catch (e: unknown) {
     const err = e as Error;
-    const msg = err.name === 'TimeoutError' ? `请求超时（${timeoutSeconds}s）` : err.message || '未知错误';
+    const msg = err.name === 'TimeoutError' ? t(locale, 'timeout', { seconds: timeoutSeconds }) : err.message || t(locale, 'unknown');
     return { stdout: '', stderr: '', error: msg };
   }
 }
 
-export function formatResult(result: RunResult): string {
+export function formatResult(result: RunResult, locale?: Locale): string {
   const parts: string[] = [];
   if (result.stdout) parts.push(`[stdout]\n${result.stdout}`);
   if (result.stderr) parts.push(`[stderr]\n${result.stderr}`);
   if (result.error) parts.push(`[error]\n${result.error}`);
-  return parts.length ? parts.join('\n') : '（无输出）';
+  return parts.length ? parts.join('\n') : t(locale, 'empty');
 }

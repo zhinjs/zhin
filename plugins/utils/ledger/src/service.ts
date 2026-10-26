@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import { getLogger, type DeliveryTarget, type OutboundHost, type PluginDatabaseHost } from 'zhin.js';
 import type { ResolvedLedgerConfig } from './config.js';
 import { parseEntryInput } from './entry-input.js';
@@ -81,7 +83,7 @@ export class LedgerService {
 
   async addEntry(caller: LedgerCaller, text: string): Promise<string> {
     await this.#rememberPrivate(caller);
-    const parsed = parseEntryInput(text);
+    const parsed = parseEntryInput(text, caller.locale);
     if (!parsed.ok) return parsed.reason;
     const { category, amountCents, note } = parsed.entry;
     const seq = await this.#withUserLock(caller.ownerKey, async () => {
@@ -98,17 +100,17 @@ export class LedgerService {
     });
     const amount = caller.isPrivate ? formatCents(amountCents) : MASKED_AMOUNT;
     const noteText = note ? ` · ${note}` : '';
-    return `✅ 已记账 #${seq} · ${category} ${amount}${noteText}`;
+    return t(caller.locale, 'added', { seq, category, amount, note: noteText });
   }
 
   async deleteEntry(caller: LedgerCaller, seq: number): Promise<string> {
     await this.#rememberPrivate(caller);
     return this.#withUserLock(caller.ownerKey, async () => {
       const entry = await this.#store.findEntry(caller.ownerKey, seq);
-      if (!entry) return `没有找到你的账目 #${seq}（只能删除自己的记账，可用「账单」查看编号）`;
+      if (!entry) return t(caller.locale, 'notFound', { seq });
       await this.#store.deleteEntry(caller.ownerKey, seq);
       const amount = caller.isPrivate ? formatCents(entry.amountCents) : MASKED_AMOUNT;
-      return `🗑️ 已删除 #${seq} · ${entry.category} ${amount}`;
+      return t(caller.locale, 'deleted', { seq, category: entry.category, amount });
     });
   }
 
@@ -120,20 +122,20 @@ export class LedgerService {
 
   async periodSummary(caller: LedgerCaller, period: LedgerPeriod): Promise<string> {
     const entries = await this.#entriesIn(caller.ownerKey, period);
-    const reply = formatPeriodSummary(summarize(entries, period, this.#now(), this.#config.timezone));
-    return this.#deliver(caller, reply, `${periodLabel(period)}消费`);
+    const reply = formatPeriodSummary(summarize(entries, period, this.#now(), this.#config.timezone, caller.locale), caller.locale);
+    return this.#deliver(caller, reply, t(caller.locale, 'spending', { period: periodLabel(period, caller.locale) }));
   }
 
   async categoryStatistics(caller: LedgerCaller, period: LedgerPeriod): Promise<string> {
     const entries = await this.#entriesIn(caller.ownerKey, period);
-    const reply = formatCategoryStatistics(summarize(entries, period, this.#now(), this.#config.timezone));
-    return this.#deliver(caller, reply, '分类统计');
+    const reply = formatCategoryStatistics(summarize(entries, period, this.#now(), this.#config.timezone, caller.locale), caller.locale);
+    return this.#deliver(caller, reply, t(caller.locale, 'statistics'));
   }
 
   async listEntries(caller: LedgerCaller, period: LedgerPeriod): Promise<string> {
     const entries = await this.#entriesIn(caller.ownerKey, period);
-    const reply = formatEntryList(entries, period, this.#now(), this.#config.timezone);
-    return this.#deliver(caller, reply, `${periodLabel(period)}账单`);
+    const reply = formatEntryList(entries, period, this.#now(), this.#config.timezone, caller.locale);
+    return this.#deliver(caller, reply, t(caller.locale, 'entryList', { period: periodLabel(period, caller.locale) }));
   }
 
   /** Private chat: full reply. Group/channel: try a private message, else the masked reply. */
@@ -144,8 +146,8 @@ export class LedgerService {
     }
     if (reply.full === reply.masked) return reply.full;
     const delivered = await this.#sendPrivately(caller, reply.full);
-    if (delivered) return `🔒 ${title}已私信发送给你`;
-    return `${reply.masked}\n（群聊中金额已隐藏，私聊我可查看完整金额）`;
+    if (delivered) return t(caller.locale, 'privateSent', { title });
+    return t(caller.locale, 'privateFallback', { text: reply.masked });
   }
 
   async #sendPrivately(caller: LedgerCaller, content: string): Promise<boolean> {
@@ -160,30 +162,31 @@ export class LedgerService {
     }
   }
 
-  async dailyReport(caller: LedgerCaller, action: DailyReportAction): Promise<string> {
+  async dailyReport(caller: LedgerCaller, action: DailyReportAction, commandHead?: string): Promise<string> {
     await this.#rememberPrivate(caller);
+    const hint = (action: 'on' | 'off') => commandHead ? t(caller.locale, 'commandHint', { command: `${commandHead} ${resolveLocale(caller.locale) === 'en' ? action : action === 'on' ? '开启' : '关闭'}` }) : '';
     const reportTime = this.#config.reportTime;
     const user = await this.#store.getUser(caller.ownerKey);
     if (action === 'status') {
-      if (user?.reportEnabled) return `记账日报已开启：每天 ${reportTime}（${this.#config.timezone}）私信发送当天消费`;
-      return '记账日报未开启。发送「记账日报 开启」订阅';
+      if (user?.reportEnabled) return t(caller.locale, 'reportEnabled', { time: reportTime, timezone: this.#config.timezone });
+      return [t(caller.locale, 'reportDisabled'), hint('on')].filter(Boolean).join(' ');
     }
     if (action === 'off') {
       await this.#store.setReport(caller.ownerKey, false, undefined, user?.lastReportDate ?? '');
-      return '已关闭记账日报';
+      return t(caller.locale, 'reportOff');
     }
-    if (!this.#outbound?.sendTarget) return '当前环境不支持主动私信，无法开启记账日报';
-    const confirmation = `已开启记账日报：每天 ${reportTime}（${this.#config.timezone}）私信发送当天消费。发送「记账日报 关闭」取消`;
+    if (!this.#outbound?.sendTarget) return t(caller.locale, 'noPrivate');
+    const confirmation = [t(caller.locale, 'reportOn', { time: reportTime, timezone: this.#config.timezone }), hint('off')].filter(Boolean).join(' ');
     if (!caller.isPrivate) {
       const reachable = await this.#sendPrivately(caller, confirmation);
-      if (!reachable) return '无法私信你，请先私聊我后再发送「记账日报 开启」';
+      if (!reachable) return [t(caller.locale, 'cannotPrivate'), hint('on')].filter(Boolean).join(' ');
     }
     const nowMs = this.#now();
     const today = localDateKey(nowMs, this.#config.timezone);
     const alreadyPastReportTime = localTimeKey(nowMs, this.#config.timezone) >= reportTime;
     const lastReportDate = alreadyPastReportTime ? today : '';
-    await this.#store.setReport(caller.ownerKey, true, await this.#privateTargetOf(caller), lastReportDate);
-    return caller.isPrivate ? confirmation : '🔒 已开启记账日报，确认消息已私信发送给你';
+    await this.#store.setReport(caller.ownerKey, true, await this.#privateTargetOf(caller), lastReportDate, resolveLocale(caller.locale));
+    return caller.isPrivate ? confirmation : t(caller.locale, 'reportOnPrivate');
   }
 
   /**
@@ -204,9 +207,9 @@ export class LedgerService {
       if (!subscriber.reportTarget || !this.#outbound?.sendTarget) continue;
       const entries = await this.#entriesIn(subscriber.ownerKey, 'today');
       if (entries.length === 0 && !this.#config.reportWhenEmpty) continue;
-      const summary = formatPeriodSummary(summarize(entries, 'today', nowMs, timezone));
+      const summary = formatPeriodSummary(summarize(entries, 'today', nowMs, timezone, subscriber.reportLocale), subscriber.reportLocale);
       try {
-        await this.#outbound.sendTarget(subscriber.reportTarget, `🌙 记账日报\n${summary.full}`);
+        await this.#outbound.sendTarget(subscriber.reportTarget, t(subscriber.reportLocale, 'report', { text: summary.full }));
         sent += 1;
       } catch (error) {
         logger.warn(`daily report delivery failed: ${error instanceof Error ? error.message : String(error)}`);

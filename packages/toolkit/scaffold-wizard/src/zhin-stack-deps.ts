@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
@@ -187,6 +188,7 @@ export function findInstalledZhinStackIncompatibilities(
   cwd: string,
   pkg: PackageJsonLike,
   config: Record<string, unknown>,
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): ZhinStackIncompatibility[] {
   const issues: ZhinStackIncompatibility[] = [];
   const zhinVersion = readInstalledVersion(cwd, 'zhin.js') ?? getDeclaredPackageVersion(pkg, 'zhin.js');
@@ -196,7 +198,7 @@ export function findInstalledZhinStackIncompatibilities(
   if (supportsSplitAiInstallation(zhinVersion) === false && (aiEnabled || agentDeclared)) {
     issues.push({
       package: 'zhin.js',
-      reason: 'zhin.js 1.1.x 稳定线才支持当前 @zhin.js/agent 与 AI 安装分层，请升级 zhin.js',
+      reason: wizardText(locale, "zhin.js 1.1.x 稳定线才支持当前 @zhin.js/agent 与 AI 安装分层，请升级 zhin.js"),
     });
   }
 
@@ -208,7 +210,7 @@ export function findInstalledZhinStackIncompatibilities(
   if (agentMajor != null && agentMajor < 1 && aiEnabled) {
     issues.push({
       package: '@zhin.js/agent',
-      reason: '@zhin.js/agent 1.x 与 zhin.js 1.1.x 稳定线 / AI SDK 7 配套，请升级 @zhin.js/agent',
+      reason: wizardText(locale, "@zhin.js/agent 1.x 与 zhin.js 1.1.x 稳定线 / AI SDK 7 配套，请升级 @zhin.js/agent"),
     });
   }
 
@@ -238,6 +240,7 @@ export function diagnoseZhinStackDependencies(
   cwd: string,
   config: Record<string, unknown>,
   pkg?: PackageJsonLike,
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): ZhinStackDiagnosis {
   const required = getRequiredZhinDependenciesForConfig(config);
   const packageJsonPath = path.join(cwd, 'package.json');
@@ -246,7 +249,7 @@ export function diagnoseZhinStackDependencies(
     : {});
   const missingFromPackageJson = findMissingPackageDependencies(packageJson, required);
   const outdatedInPackageJson = findOutdatedZhinStackInPackageJson(packageJson, required);
-  const incompatibleInstalled = findInstalledZhinStackIncompatibilities(cwd, packageJson, config);
+  const incompatibleInstalled = findInstalledZhinStackIncompatibilities(cwd, packageJson, config, locale);
   const declared = Object.keys(required).filter((name) => !missingFromPackageJson.includes(name));
   const notInstalled = findUnresolvedPackageInstalls(cwd, declared);
   return {

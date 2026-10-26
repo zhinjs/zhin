@@ -1,3 +1,6 @@
+import { type Locale } from 'zhin.js/i18n';
+import { messages } from './presentation.js';
+import { message } from './messages.js';
 /**
  * Domain registration lookup over RDAP (RFC 9082/9083), the JSON successor
  * of WHOIS.
@@ -104,7 +107,7 @@ export class RdapClient {
     if (lastError instanceof NettoolsError) {
       throw lastError;
     }
-    throw new NettoolsError('network', 'RDAP / WHOIS 查询失败', { cause: lastError });
+    throw new NettoolsError('network', message('rdapFailed'), { cause: lastError });
   }
 
   async #queryWhoisFallback(domain: string, signal?: AbortSignal): Promise<WhoisRecord> {
@@ -176,7 +179,7 @@ export class RdapClient {
 export function parseBootstrap(body: unknown): ReadonlyMap<string, readonly string[]> {
   const servers = new Map<string, readonly string[]>();
   if (!isRecord(body) || !Array.isArray(body.services)) {
-    throw new NettoolsError('malformed', 'IANA RDAP 引导数据格式异常');
+    throw new NettoolsError('malformed', message('ianaMalformed'));
   }
   for (const service of body.services) {
     if (!Array.isArray(service) || !Array.isArray(service[0]) || !Array.isArray(service[1])) {
@@ -199,10 +202,10 @@ export function parseBootstrap(body: unknown): ReadonlyMap<string, readonly stri
 
 export function parseRdapDomain(body: unknown, domain: string, source: string): WhoisRecord {
   if (!isRecord(body)) {
-    throw new NettoolsError('malformed', 'RDAP 返回了无法识别的数据');
+    throw new NettoolsError('malformed', message('rdapMalformed'));
   }
   if (body.objectClassName !== undefined && body.objectClassName !== 'domain') {
-    throw new NettoolsError('malformed', 'RDAP 返回的不是域名对象');
+    throw new NettoolsError('malformed', message('rdapNotDomain'));
   }
   const name = typeof body.ldhName === 'string' ? body.ldhName.toLowerCase() : domain;
   const events = Array.isArray(body.events) ? body.events : [];
@@ -247,10 +250,10 @@ export function parseRdapDomain(body: unknown, domain: string, source: string): 
  */
 export function parseWhoisFallback(body: unknown, domain: string, source: string): WhoisRecord {
   if (!isRecord(body) || !isRecord(body.data)) {
-    throw new NettoolsError('malformed', 'WHOIS 服务返回了无法识别的数据');
+    throw new NettoolsError('malformed', message('whoisMalformed'));
   }
   if (typeof body.code === 'number' && body.code !== 200 && body.code !== 0) {
-    throw new NettoolsError('http', `WHOIS 服务返回错误 ${body.code}`);
+    throw new NettoolsError('http', message('whoisError', { code: String(body.code) }));
   }
   const data = body.data;
   const text = (value: unknown): string | undefined =>
@@ -345,31 +348,31 @@ function unregistered(domain: string, source: string): WhoisRecord {
   });
 }
 
-export function formatWhoisRecord(record: WhoisRecord): string {
+export function formatWhoisRecord(record: WhoisRecord, locale: Locale = 'zh-CN'): string {
   if (!record.registered) {
-    return `📇 ${record.domain}\n未查询到注册信息（可能未注册，或该后缀未提供 RDAP）`;
+    return messages(locale, 'noWhois', { domain: record.domain });
   }
-  const lines = [`📇 ${record.domain} 注册信息（来源：${record.source}）`];
+  const lines = [messages(locale, 'whoisHeader', { domain: record.domain, source: record.source })];
   if (record.registrar) {
-    lines.push(`注册商：${record.registrar}`);
+    lines.push(messages(locale, 'registrar', { value: record.registrar }));
   }
   if (record.createdAt) {
-    lines.push(`注册时间：${formatDate(record.createdAt)}`);
+    lines.push(messages(locale, 'createdAt', { value: formatDate(record.createdAt) }));
   }
   if (record.expiresAt) {
-    lines.push(`到期时间：${formatDate(record.expiresAt)}`);
+    lines.push(messages(locale, 'expiresAt', { value: formatDate(record.expiresAt) }));
   }
   if (record.updatedAt) {
-    lines.push(`最近更新：${formatDate(record.updatedAt)}`);
+    lines.push(messages(locale, 'updatedAt', { value: formatDate(record.updatedAt) }));
   }
   if (record.statuses.length > 0) {
-    lines.push(`状态：${record.statuses.join(', ')}`);
+    lines.push(messages(locale, 'status', { value: record.statuses.join(', ') }));
   }
   if (record.nameservers.length > 0) {
-    lines.push(`DNS 服务器：${record.nameservers.join(', ')}`);
+    lines.push(messages(locale, 'nameservers', { value: record.nameservers.join(', ') }));
   }
   if (record.dnssec !== undefined) {
-    lines.push(`DNSSEC：${record.dnssec ? '已启用' : '未启用'}`);
+    lines.push(messages(locale, 'dnssec', { value: messages(locale, record.dnssec ? 'enabled' : 'disabled') }));
   }
   return lines.join('\n');
 }

@@ -4,6 +4,8 @@
  */
 import { segment } from '@zhin.js/core';
 import type { SendContent } from '@zhin.js/core/runtime';
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { gameMessages } from './messages.js';
 import { buildChoiceFallbackMap, type ChoiceOption } from './choice-keyboard.js';
 
 import { applyInteractionProfile } from './interaction-profiles.js';
@@ -20,6 +22,7 @@ export interface GridCell<T = unknown> {
 }
 
 export interface GridKeyboardOptions<T = unknown> {
+  readonly locale?: Locale;
   /** 游戏前缀（如 'ttt', 'gomoku', 'c4'） */
   gamePrefix: string;
   /** 会话 ID */
@@ -148,7 +151,7 @@ export function buildGridKeyboard<T>(options: GridKeyboardOptions<T>): SendConte
     segment.keyboard(buttonRows, {
       fallback: fallbackHint || Object.keys(fallback).length > 0
         ? {
-            hint: fallbackHint ?? '回复数字选择',
+            hint: fallbackHint ?? gameMessages(options.locale, 'chooseNumber'),
             map: fallback,
           }
         : undefined,

@@ -9,6 +9,6 @@ export default defineAgentTool({
   tags: ["金融", "黄金", "价格"],
   async execute(_input, context) {
     const handler = (await import('../../../../src/handlers/gold-price.js')).default;
-    return handler(context.use(sixtySClientToken));
+    return handler(context.use(sixtySClientToken), context.locale);
   },
 });

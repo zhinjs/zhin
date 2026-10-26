@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ user_id: number }>({
@@ -9,6 +10,6 @@ export default defineAgentTool<{ user_id: number }>({
   requiresApproval: 'never',
   async execute({ user_id }, context) {
     const profile = await context.$client.getProfile(user_id);
-    return { success: true, message: `已获取 ${user_id} 的用户信息:${JSON.stringify(profile,null,2)}` };
+    return { success: true, message: t(context.locale, 'userInfo', { p0: user_id, p1: JSON.stringify(profile,null,2) }) };
   },
 });

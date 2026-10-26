@@ -12,9 +12,10 @@ import { lotteryEnabledGames } from '../../../src/config.js';
 import { lotteryRuntimeToken } from '../../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
-  description: 'Full-history weight training',
+  description: '使用全部历史数据训练权重',
+  descriptionI18n: { en: 'Full-history weight training' },
   params: { game: { type: 'string', default: '' } },
-  async execute({ params, config, use }) {
+  async execute({ params, config, use, locale }) {
     const { db } = use(lotteryRuntimeToken);
     const cfg = resolveLotteryConfig(config);
     const gid = parseGameId(String(params.game ?? ''));
@@ -28,6 +29,6 @@ export default defineCommand<LotteryConfig>({
       holdoutFallback: cfg.weightHoldoutFallback,
       persist: true,
     });
-    return formatTrainReport(results);
+    return formatTrainReport(results, locale);
   },
 });

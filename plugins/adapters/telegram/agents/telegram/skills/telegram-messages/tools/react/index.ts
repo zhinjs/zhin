@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -13,6 +14,6 @@ export default defineAgentTool<{ chat_id: string; message_id: string; reaction: 
   async execute({ chat_id, message_id, reaction  }: { chat_id: string; message_id: string; reaction: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.setMessageReaction(Number(chat_id), Number(message_id), reaction);
-    return { success, message: success ? `已添加反应 ${reaction}` : '操作失败' };
+    return { success, message: success ? t(context.locale, 'reactionAdded', { p0: reaction }) : t(context.locale, 'operationFailed') };
   },
 });

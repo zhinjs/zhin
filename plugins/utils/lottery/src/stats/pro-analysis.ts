@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import { DEFAULT_WEIGHTS, type DrawNumbers, type GameId, type NormalizedDraw, type ScoreWeights } from '../types.js';
 
 import { formatWeights, normalizeWeights } from './weights.js';
@@ -59,6 +61,7 @@ export function computeProMetrics(
   poolMin?: number,
   poolMax?: number,
   mid?: number,
+  locale?: Locale,
 ): import('../types.js').ProMetrics {
   const odd = pick.filter((n) => n % 2 === 1).length;
   const even = pick.length - odd;
@@ -76,7 +79,7 @@ export function computeProMetrics(
       const idx = Math.min(2, Math.floor((n - poolMin) / size));
       z[idx] = (z[idx] ?? 0) + 1;
     }
-    zones = `三区 ${z.join(':')}`;
+    zones = t(locale, 'zones', { zones: z.join(':') });
   }
 
   const rows = draws.map((d) => extractFlat(d.numbers, gameId)).filter((a) => a.length);
@@ -90,13 +93,13 @@ export function computeProMetrics(
     .join(',');
 
   return {
-    oddEven: `奇偶 ${odd}:${even}`,
-    bigSmall: `大小 ${big}:${small}`,
+    oddEven: t(locale, 'oddEven', { odd, even }),
+    bigSmall: t(locale, 'bigSmall', { big, small }),
     sum,
     span,
     zones,
-    recentHot: recentHot ? `近10期热号 ${recentHot}` : '',
-    modelWeights: `权重 ${formatWeights(weights)}`,
+    recentHot: recentHot ? t(locale, 'recentHot', { numbers: recentHot }) : '',
+    modelWeights: t(locale, 'weights', { weights: formatWeights(weights) }),
   };
 }
 
@@ -104,6 +107,7 @@ export function computeDigitProMetrics(
   digits: number[],
   draws: NormalizedDraw[],
   weights: ScoreWeights,
+  locale?: Locale,
 ): import('../types.js').ProMetrics {
   const sum = digits.reduce((a, b) => a + b, 0);
   const span = digits.length ? Math.max(...digits) - Math.min(...digits) : 0;
@@ -115,7 +119,7 @@ export function computeDigitProMetrics(
     for (let d = 0; d <= 9; d++) freq.set(d, 0);
     col.slice(0, RECENT_WINDOW).forEach((n) => freq.set(n, (freq.get(n) ?? 0) + 1));
     const top = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([d]) => d);
-    posHints.push(`第${pos + 1}位[${top.join(',')}]`);
+    posHints.push(t(locale, 'digitPos', { position: pos + 1, numbers: top.join(',') }));
   }
   return {
     oddEven: '',
@@ -124,7 +128,7 @@ export function computeDigitProMetrics(
     span,
     digitPos: posHints.join(' '),
     recentHot: '',
-    modelWeights: `权重 ${formatWeights(weights)}`,
+    modelWeights: t(locale, 'weights', { weights: formatWeights(weights) }),
   };
 }
 

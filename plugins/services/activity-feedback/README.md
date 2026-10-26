@@ -73,3 +73,10 @@ activity-feedback:
 [Activity Feedback](../../../docs/advanced/activity-feedback.md) 和
 [自动生成配置参考](../../../docs/configuration/generated.md#activity-feedback)；设计边界见
 [ADR 0034](../../../docs/adr/0034-activity-feedback-service-plugin.md)。
+
+## 提示语言
+
+内置处理状态、工具进度和子任务提示跟随发起操作时的语言，同一次处理过程中不随个人偏好变化。
+定时任务使用任务创建时保存的语言；没有语言信息的旧事件使用当前运行代的项目语言。
+显式配置的 `message`、模型输出、任务标题和工具名称保留原文，插件只翻译自己的默认文案与说明。
+语言沿统一发送链传递，不改变提示的触发、平台能力选择、编辑或自动移除行为。

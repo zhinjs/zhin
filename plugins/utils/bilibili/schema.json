@@ -6,57 +6,102 @@
     "pollCron": {
       "type": "string",
       "default": "0 * * * * *",
-      "description": "轮询频率（6 段 Cron，默认每 60 秒） / Poll schedule (6-field cron, default every 60s)"
+      "description": "轮询频率（6 段 Cron，默认每 60 秒） / Poll schedule (6-field cron, default every 60s)",
+      "x-i18n": {
+        "en": {
+          "description": "Poll schedule (6-field cron, every 60 seconds by default)."
+        }
+      }
     },
     "jitterMs": {
       "type": "number",
       "default": 15000,
       "minimum": 0,
       "maximum": 120000,
-      "description": "每轮轮询前的随机延迟上限（毫秒） / Max random delay before each poll (ms)"
+      "description": "每轮轮询前的随机延迟上限（毫秒） / Max random delay before each poll (ms)",
+      "x-i18n": {
+        "en": {
+          "description": "Maximum random delay before each poll, in milliseconds."
+        }
+      }
     },
     "requestGapMs": {
       "type": "number",
       "default": 1500,
       "minimum": 0,
       "maximum": 30000,
-      "description": "同一轮内相邻动态请求的间隔（毫秒） / Gap between dynamic requests within one poll (ms)"
+      "description": "同一轮内相邻动态请求的间隔（毫秒） / Gap between dynamic requests within one poll (ms)",
+      "x-i18n": {
+        "en": {
+          "description": "Gap between dynamic requests within one poll, in milliseconds."
+        }
+      }
     },
     "maxBackoffMinutes": {
       "type": "number",
       "default": 30,
       "minimum": 1,
       "maximum": 720,
-      "description": "接口失败或风控时指数退避的上限（分钟） / Upper bound of exponential backoff (minutes)"
+      "description": "接口失败或风控时指数退避的上限（分钟） / Upper bound of exponential backoff (minutes)",
+      "x-i18n": {
+        "en": {
+          "description": "Upper bound of exponential backoff after API failures or rate limiting, in minutes."
+        }
+      }
     },
     "maxPerChannel": {
       "type": "number",
       "default": 20,
       "minimum": 1,
       "maximum": 200,
-      "description": "每个会话最多订阅的 UP 主数量 / Max UP subscriptions per conversation"
+      "description": "每个会话最多订阅的 UP 主数量 / Max UP subscriptions per conversation",
+      "x-i18n": {
+        "en": {
+          "description": "Maximum UP subscriptions per conversation."
+        }
+      }
     },
     "timeout": {
       "type": "number",
       "default": 10000,
       "minimum": 1000,
       "maximum": 60000,
-      "description": "单次 HTTP 请求超时（毫秒） / HTTP timeout (ms)"
+      "description": "单次 HTTP 请求超时（毫秒） / HTTP timeout (ms)",
+      "x-i18n": {
+        "en": {
+          "description": "HTTP request timeout in milliseconds."
+        }
+      }
     },
     "live": {
       "type": "boolean",
       "default": true,
-      "description": "是否轮询开播状态 / Poll live status"
+      "description": "是否轮询开播状态 / Poll live status",
+      "x-i18n": {
+        "en": {
+          "description": "Poll live-stream status."
+        }
+      }
     },
     "dynamic": {
       "type": "boolean",
       "default": true,
-      "description": "是否轮询 UP 主动态 / Poll UP dynamics"
+      "description": "是否轮询 UP 主动态 / Poll UP dynamics",
+      "x-i18n": {
+        "en": {
+          "description": "Poll UP activity."
+        }
+      }
     },
     "cookie": {
       "type": "string",
       "default": "",
-      "description": "可选的 B 站 Cookie（如 SESSDATA=...），风控严格时使用，请写成 ${BILIBILI_COOKIE} / Optional cookie, reference it as ${BILIBILI_COOKIE}"
+      "description": "可选的 B 站 Cookie（如 SESSDATA=...），风控严格时使用，请写成 ${BILIBILI_COOKIE} / Optional cookie, reference it as ${BILIBILI_COOKIE}",
+      "x-i18n": {
+        "en": {
+          "description": "Optional Bilibili cookie for stricter rate limits. Reference ${BILIBILI_COOKIE}; do not put credentials directly in configuration."
+        }
+      }
     }
   }
 }

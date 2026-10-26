@@ -6,8 +6,8 @@ import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
   permit: ['group()', 'role(owner,admin,master,trusted)'],
-  description: '教我问答（teach 问题 回答 或 问题|答案）',
-  execute({ config, input, args, owner, use }) {
-    return teachAdd(input ?? {}, resolveGroupSuiteConfig(config), args.join(' '), false, resolveGroupSuiteRuntime({ owner, use }));
+  description: '教我问答（teach 问题 回答 或 问题|答案）', descriptionI18n: { en: "Teach a question and answer pair" },
+  execute({ config, input, args, owner, use, locale }) {
+    return teachAdd({ ...input, locale }, resolveGroupSuiteConfig(config), args.join(' '), false, resolveGroupSuiteRuntime({ owner, use }));
   },
 });

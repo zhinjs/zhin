@@ -55,7 +55,7 @@ async function runQqTurn(options: {
     principal: options.groupMember
       ? { subjectId: 'member', roles: ['user'] }
       : { subjectId: 'master', roles: ['master'] },
-    input: { text: 'please delegate' },
+    input: { text: 'please delegate', locale: 'en', commandPrefix: '!!', commandMenu: '!!menu' },
     session: { key: 'im:icqq:bot:private:master' },
     policy: options.policy,
     capabilities: { tools: options.tools.map(tool => tool.name), skills: [] },
@@ -182,6 +182,7 @@ describe('spawn_task on the plugin-runtime (QQ) turn path', () => {
     expect(child).toBeDefined();
     expect(child!.turnContext.identity.turnId).toBe('turn-1:subagent:1');
     expect(child!.turnContext.origin).toEqual(turn.origin);
+    expect(child!.turnContext.input).toMatchObject({ locale: 'en', commandPrefix: '!!', commandMenu: '!!menu' });
     expect(child!.turnContext.principal).toEqual(turn.principal);
     expect(child!.conversationPersistence).toBe('none');
     expect(child!.maxIterations).toBe(7);

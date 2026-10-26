@@ -30,3 +30,14 @@ it('returns frozen rule rows and preserves parsed wildcard semantics', () => {
   expect(rows[0]?.values).toEqual(['']); expect(rows[1]?.outcome).toBe('mismatch');
   expect(Object.isFrozen(rows)).toBe(true); expect(Object.isFrozen(rows[0])).toBe(true); expect(Object.isFrozen(rows[0]?.values)).toBe(true);
 });
+
+it('localizes explanations without changing rule outcomes or evaluating custom rules', () => {
+  const rules = ['group(g1)', 'role(master)', 'user(u2)', 'private()', 'platform(qq,admin)', 'custom'];
+  const chinese = explainPermitRules(rules, subject, { rolesKnown: true });
+  const english = explainPermitRules(rules, subject, { rolesKnown: true, locale: 'en' });
+  expect(english.map(({ reason: _reason, ...row }) => row))
+    .toEqual(chinese.map(({ reason: _reason, ...row }) => row));
+  expect(english.every(row => !/\p{Script=Han}/u.test(row.reason))).toBe(true);
+  expect(chinese[0]?.reason).toContain('单项内多个值为 OR');
+  expect(english[0]?.reason).toContain('OR');
+});

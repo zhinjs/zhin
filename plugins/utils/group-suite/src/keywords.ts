@@ -1,3 +1,4 @@
+import { messages as t } from './i18n.js';
 import { createDeliveryTarget, databaseHostToken, type Token } from 'zhin.js';
 import type { GroupSuiteConfig } from './config.js';
 import type { ConversationInput } from './conversation-scope.js';
@@ -11,6 +12,7 @@ const MAX_KEYWORD_BYTES = 64 * 1024;
 
 type KeywordRows = readonly (readonly [string, string])[];
 interface KeywordContext {
+  readonly locale?: import('zhin.js/i18n').Locale;
   readonly config: Readonly<Partial<GroupSuiteConfig>>;
   use<T>(token: Token<T>): T;
 }
@@ -26,7 +28,7 @@ export function keywords(input: ConversationInput | undefined, context: KeywordC
       update: async (updater: (current: Map<string, string>) => void) => {
         const next = new Map(store);
         updater(next);
-        assertLimit(next);
+        assertLimit(next, context.locale ?? input?.locale);
         store.clear();
         for (const [key, value] of next) store.set(key, value);
       },
@@ -34,7 +36,7 @@ export function keywords(input: ConversationInput | undefined, context: KeywordC
   }
   const hostState = (() => {
     try { return context.use(databaseHostToken).state; }
-    catch (cause) { throw new KeywordStorageRequirementError(KEYWORD_STORAGE_REQUIREMENT, { cause }); }
+    catch (cause) { throw new KeywordStorageRequirementError(t(context.locale ?? input?.locale, 'keywordStorage'), { cause }); }
   })();
   const state = hostState.forConversation(createDeliveryTarget({ conversation: target }));
   return {
@@ -43,7 +45,7 @@ export function keywords(input: ConversationInput | undefined, context: KeywordC
       await state.update<KeywordRows>('keywords', current => {
         const next = new Map(current ?? []);
         updater(next);
-        assertLimit(next);
+        assertLimit(next, context.locale ?? input?.locale);
         return [...next.entries()];
       });
     },
@@ -59,14 +61,14 @@ export function keywordsForCommand(input: ConversationInput | undefined, context
   }
 }
 
-function assertLimit(store: Map<string, string>): void {
-  if (store.size > 200) throw new Error('Group keywords are limited to 200 entries');
+function assertLimit(store: Map<string, string>, locale?: import('zhin.js/i18n').Locale): void {
+  if (store.size > 200) throw new Error(t(locale, 'keywordLimit'));
   if (new TextEncoder().encode(JSON.stringify([...store.entries()])).byteLength >= MAX_KEYWORD_BYTES) {
-    throw new Error('Keyword dictionary JSON must be below 64 KiB (UTF-8); shorten replies or remove entries');
+    throw new Error(t(locale, 'keywordSize'));
   }
   for (const [keyword, reply] of store) {
     if (!keyword || keyword.length > 200 || !reply || reply.length > 2000) {
-      throw new Error('Keyword must contain 1–200 characters and reply 1–2000 characters');
+      throw new Error(t(locale, 'keywordLength'));
     }
   }
 }

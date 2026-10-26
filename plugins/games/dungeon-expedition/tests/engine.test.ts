@@ -54,14 +54,14 @@ describe('dungeon engine', () => {
   });
 });
 
-function simulateCampaign(seed: string): {
+function simulateCampaign(seed: string, locale: 'zh-CN' | 'en' = 'zh-CN'): {
   readonly state: DungeonState;
   readonly randomState: number;
   readonly steps: number;
 } {
   const random = DeterministicRandom.fromSeed(seed);
-  let state = createDungeonState('alice', 'Alice');
-  state = applyDungeonAction(state, 'alice', { type: 'start' }, random);
+  let state = createDungeonState('alice', 'Alice', locale);
+  state = applyDungeonAction(state, 'alice', { type: 'start' }, random, locale);
   let steps = 0;
   while (state.phase !== 'completed' && steps < 500) {
     const player = activePlayer(state);
@@ -71,8 +71,20 @@ function simulateCampaign(seed: string): {
       : state.phase === 'combat'
         ? { type: 'attack' }
         : { type: 'explore' };
-    state = applyDungeonAction(state, player.id, action, random);
+    state = applyDungeonAction(state, player.id, action, random, locale);
     steps += 1;
   }
   return { state, randomState: random.state, steps };
 }
+
+
+it('changes presentation without changing deterministic dungeon outcomes', () => {
+  const zh = simulateCampaign('locale-parity');
+  const en = simulateCampaign('locale-parity', 'en');
+  const gameplay = ({ state, ...rest }: ReturnType<typeof simulateCampaign>) => ({
+    ...rest, state: { ...state, log: undefined, enemy: state.enemy ? { ...state.enemy, name: undefined } : null },
+  });
+  expect(gameplay(en)).toEqual(gameplay(zh));
+  expect(en.state.log.join('\n')).not.toMatch(/[\u4e00-\u9fff]/);
+  expect(zh.state.log.join('\n')).toMatch(/[\u4e00-\u9fff]/);
+});

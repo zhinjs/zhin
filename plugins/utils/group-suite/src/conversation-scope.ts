@@ -3,6 +3,7 @@ import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
 import type { ToolInvocationOrigin } from '@zhin.js/tool';
 
 export interface ConversationInput {
+  readonly locale?: import('zhin.js/i18n').Locale;
   readonly conversation?: DeliveryTarget;
   readonly sender?: Readonly<{ id: string; name?: string }>;
   readonly content?: unknown;

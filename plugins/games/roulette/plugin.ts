@@ -22,6 +22,10 @@ export default defineGamePlugin<RouletteServices, RouletteSessionRow, Partial<Ro
     displayName: 'Russian Roulette',
   },
   game: {
+    commandPath: 'roulette',
+    titleI18n: { en: 'Roulette' },
+    descriptionI18n: { en: 'Take turns in a multiplayer roulette game' },
+    quickStartI18n: { en: 'open' },
     id: 'roulette',
     title: '俄罗斯轮盘',
     icon: '🔫',

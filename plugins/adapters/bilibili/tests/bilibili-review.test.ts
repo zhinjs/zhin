@@ -212,6 +212,33 @@ describe('BilibiliEndpoint review-then-send', () => {
 });
 
 describe('bili-draft review texts', () => {
+  it('localizes English limits and risk stops while keeping drafts and avoiding automatic retries', async () => {
+    const normal = fakeFetch();
+    const { endpoint, registry, clock } = makeEndpoint(normal.fetch);
+    const first = await queueDraft(endpoint, '第一条原文');
+    const second = await queueDraft(endpoint, '第二条原文');
+    expect(await approveDraftText(registry, first, { locale: 'en' })).toContain('Posted to Bilibili');
+    expect(await approveDraftText(registry, second, { locale: 'en' })).toContain('30 seconds');
+    expect(normal.posts).toHaveLength(1);
+    expect(endpoint.drafts.get(second)?.message).toBe('第二条原文');
+    expect(editDraftText(registry, second, 'x'.repeat(1001), { locale: 'en' })).toContain('at most 1000 characters');
+    expect(endpoint.drafts.get(second)?.message).toBe('第二条原文');
+    clock.now += 30_000;
+    await approveDraftText(registry, second, { locale: 'en' });
+    expect(normal.posts).toHaveLength(2);
+
+    const risk = fakeFetch({ addCode: -412 });
+    const stopped = makeEndpoint(risk.fetch);
+    const id = await queueDraft(stopped.endpoint, '风险时保留的原文');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(await approveDraftText(stopped.registry, id, { locale: 'en' })).toContain('risk controls stopped');
+    }
+    expect(risk.posts).toHaveLength(1);
+    expect(stopped.endpoint.drafts.get(id)?.message).toBe('风险时保留的原文');
+    endpoint.stop();
+    stopped.endpoint.stop();
+  });
+
   it('lists, edits, sends and drops drafts across endpoints', async () => {
     const { fetch, posts } = fakeFetch();
     const { endpoint, registry } = makeEndpoint(fetch);
@@ -220,7 +247,8 @@ describe('bili-draft review texts', () => {
     const listed = listDraftsText(registry);
     expect(listed).toContain(`[${id}]`);
     expect(listed).toContain('谢谢喜欢');
-    expect(listed).toContain('bili-draft send <id>');
+    expect(listed).not.toContain('bili-draft send');
+    expect(listDraftsText(registry, { formatCommand: path => `!review ${path}` })).toContain('!review bili-draft send <id>');
     expect(editDraftText(registry, id, '谢谢你的喜欢')).toContain('还没发出');
     expect(posts).toHaveLength(0);
     const sent = await approveDraftText(registry, id);

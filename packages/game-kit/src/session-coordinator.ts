@@ -24,11 +24,13 @@ export class GameSessionConflictError extends Error {
     readonly sessionId: string,
     readonly userId: string,
   ) {
-    super(
-      `你在当前频道已有进行中的「${activeGameId}」对局，`
-      + `请先结束它，再开始「${requestedGameId}」。`,
-    );
+    super(gameMessages('zh-CN', 'conflict', { active: activeGameId, requested: requestedGameId }));
     this.name = 'GameSessionConflictError';
+  }
+
+  /** Format at the reply boundary; session admission has no current-user locale. */
+  format(locale?: Locale): string {
+    return gameMessages(locale, 'conflict', { active: this.activeGameId, requested: this.requestedGameId });
   }
 }
 
@@ -64,3 +66,5 @@ export class GameSessionCoordinator implements GameSessionAvailability {
   }
 
 }
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { gameMessages } from './messages.js';

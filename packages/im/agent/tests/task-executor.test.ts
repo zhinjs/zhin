@@ -57,8 +57,44 @@ describe('task executor outbound seam', () => {
 
     expect(result.responseText).toBe('hello');
     expect(sendMessage).toHaveBeenCalledWith({
-      context: 'qq', endpoint: 'bot1', id: 'group1', type: 'group', content: 'hello',
+      context: 'qq', endpoint: 'bot1', id: 'group1', type: 'group', parent: undefined,
+      content: 'hello', locale: 'zh-CN',
     });
+  });
+
+  it('keeps a saved English task language and exact legacy target through execution and delivery', async () => {
+    const sendMessage = vi.fn(async () => 'msg-en');
+    const executor = createTaskExecutor({
+      domain: { execute: vi.fn(async () => domainResult('模型输出原文')) },
+      router: createNotificationRouter({ resolveAdapter: () => ({ sendMessage }) }),
+    });
+    try {
+      await executor.execute({ ...job({
+        channel: 'im', target: { channel: 'im', scene: {
+          platform: 'discord', endpointKey: 'bot-en', sceneId: 'channel-1', kind: 'channel',
+          parent: { kind: 'guild', sceneId: 'guild-1' },
+        }, threadId: 'thread-1', quoteId: 'quote-1' },
+      }), locale: 'en' });
+      expect(sendMessage).toHaveBeenCalledExactlyOnceWith({
+        context: 'discord', endpoint: 'bot-en', id: 'channel-1', type: 'channel',
+        parent: { type: 'guild', id: 'guild-1' }, threadId: 'thread-1', quoteId: 'quote-1',
+        content: '模型输出原文', locale: 'en',
+      });
+    } finally { await executor.dispose(); }
+  });
+
+  it.each(['en', undefined] as const)('forwards the captured schedule locale to proactive delivery (%s)', async (locale) => {
+    const sendIm = vi.fn(async () => {});
+    const notify = { channel: 'im', target: { channel: 'im', scene: {
+      platform: 'qq', endpointKey: 'bot1', sceneId: 'group1', kind: 'group',
+    } } } as const;
+    const executor = createTaskExecutor({
+      domain: { execute: vi.fn(async () => domainResult()) },
+      router: createNotificationRouter({ resolveAdapter: () => undefined, sendIm }),
+    });
+    await executor.execute({ ...job(notify), locale });
+    expect(sendIm).toHaveBeenCalledWith(notify, 'hello', 'scheduled', { locale: locale ?? 'zh-CN' });
+    await executor.dispose();
   });
 
   it('publishes Schedule feedback identity explicitly instead of relying on turn ALS', async () => {

@@ -9,6 +9,6 @@ export default defineAgentTool<{ text: string; to?: string }>({
   tags: ["工具", "翻译", "语言"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/translate.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

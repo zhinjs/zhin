@@ -11,8 +11,8 @@ export const kookEndpointCommands = createEndpointCommands({
   adapterDisplayName: 'KOOK',
   fields: [
     { key: 'token', required: true, env: true, description: 'KOOK bot token' },
-    { key: 'encrypt_key', env: true, description: 'webhook 加密密钥（connection: webhook）' },
-    { key: 'verify_token', env: true, description: 'webhook 验证 token（connection: webhook）' },
+    { key: 'encrypt_key', env: true, description: 'webhook 加密密钥（connection: webhook）', descriptionI18n: { en: "Webhook encryption secret (connection: webhook)" } },
+    { key: 'verify_token', env: true, description: 'webhook 验证 token（connection: webhook）', descriptionI18n: { en: "Webhook verification token (connection: webhook)" } },
   ],
   running: (use) => use(kookRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `token: ${String(entry.token)}`,

@@ -1,18 +1,14 @@
-import {
-  channelKey,
-  type GameMessageLike,
-  type GameReply,
-} from '@zhin.js/game-kit';
+import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
+import { createMessages } from 'zhin.js/i18n';
 import { continueGame, handleChoice, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 
-export const DICE_HELP = [
-  '🎲 骰子对决（三局两胜）',
-  '骰子 / dice — 帮助',
-  '骰子 开始 — 新对局',
-  '骰子 继续 — 刷新界面',
-  '骰子 放弃 — 结束对局',
-].join('\n');
+export function getDiceHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'> = {}): string {
+  return formatGameHelp(message, { 'zh-CN': "🎲 骰子对决（三局两胜）", en: "🎲 Dice Duel (best of three)" }, 'dice', ['start', 'continue', 'quit'],
+    { 'zh-CN': "点击按钮或回复选项数字掷骰。", en: "Choose a button or reply with its option number." });
+}
+
+export const DICE_HELP = getDiceHelp();
 
 export async function runDiceCommand(
   services: SessionService,
@@ -24,11 +20,11 @@ export async function runDiceCommand(
 
   if (!action || action === 'help') {
     const active = await services.getActiveByChannel(ch);
-    const lines = [DICE_HELP, ''];
+    const lines = [getDiceHelp(message), ''];
     if (active) {
-      lines.push(`进行中：${active.player_name} · ${active.player_wins}:${active.bot_wins}`);
+      lines.push(messages(active.locale ?? undefined, 'text1', { p0: active.player_name, p1: active.player_wins, p2: active.bot_wins }));
     } else {
-      lines.push('暂无对局，发送「骰子 开始」或从游戏大厅进入。');
+      lines.push(gameCommandFeedback(message, 'noGame'), gameCommandHint(message, 'dice'));
     }
     return lines.join('\n');
   }
@@ -38,9 +34,13 @@ export async function runDiceCommand(
 
   if (action === 'quit') {
     const row = await services.getActiveForUser(ch, userId);
-    if (!row) return '你没有进行中的骰子对决。';
+    if (!row) return gameCommandFeedback(message, 'noGame');
     return (await handleChoice(services, message, row.id, 'quit')) ?? '';
   }
 
-  return `未知子命令：${action}\n\n${DICE_HELP}`;
+  return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getDiceHelp(message);
 }
+
+const messages = createMessages({
+  text1: { 'zh-CN': "进行中：{p0} · {p1}:{p2}", en: "Playing: {p0} · {p1}:{p2}" },
+});

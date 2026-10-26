@@ -1,7 +1,9 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { reminderMessages as t } from './i18n.js';
 import { MAX_DELAY_SECONDS, parseReminderInstant } from './timing.js';
 
 export class ReminderTimeInputError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly code?: Parameters<typeof t>[1]) {
     super(message);
     this.name = 'ReminderTimeInputError';
   }
@@ -20,50 +22,58 @@ const DAY = 86_400_000;
 const MAX_DELAY = MAX_DELAY_SECONDS * 1000;
 const NUMBER = '[0-9零〇一二两三四五六七八九十百千万]+';
 const RELATIVE = new RegExp(`^(${NUMBER})\\s*(秒钟?|分钟?|小时|天)\\s*后$`, 'u');
+const EN_RELATIVE = /^in\s+(\d+)\s+(seconds?|minutes?|hours?|days?)$/iu;
+const EN_LOCAL = /^(today|tomorrow|(?:the )?day after tomorrow)\s+at\s+(\d{1,2}:\d{2}(?::\d{2})?)$/iu;
 const LOCAL = /^(今天|明天|后天)\s*(凌晨|上午|中午|下午|晚上)?\s*(.+)$/u;
 const POINT = new RegExp(`^(${NUMBER})\\s*点(?:\\s*(半)|\\s*(${NUMBER})\\s*分(?:\\s*(${NUMBER})\\s*秒)?)?$`, 'u');
 const DIGITS = '零一二三四五六七八九';
-const HELP = '暂不支持这种时间表达，请使用“十分钟后”“明天九点半”或带时区 offset 的 ISO 时间；不支持每天、每周等日历周期';
+const HELP = 'timeGrammar';
 
 /** Parse a bounded, explicit grammar; this never reads the machine's default timezone. */
 export function parseNaturalReminderTime(
   expression: string,
-  options: { now: number; timezone: string },
+  options: { now: number; timezone: string; locale?: Locale },
 ): { at: number; timezone: string; expression: string } {
-  if (typeof expression !== 'string' || expression.length > 200) fail('提醒时间须为不超过 200 个字符的文字');
+  const locale = resolveLocale(options.locale);
+  try {
+  if (typeof expression !== 'string' || expression.length > 200) fail('timeLength');
   const text = expression.trim();
-  if (!text || /\p{Cc}/u.test(expression)) fail('请在一行内输入提醒时间');
+  if (!text || /\p{Cc}/u.test(expression)) fail('timeOneLine');
   assertInstant(options.now);
   const formatter = createFormatter(options.timezone);
   let at: number;
   if (/^\d{4}-/u.test(text)) {
     try { at = parseReminderInstant(text); }
-    catch { fail('绝对时间无效，请使用带 Z 或 ±hh:mm 的 ISO 时间，例如 2026-10-20T09:00:00+08:00'); }
+    catch { fail('timeAbsolute'); }
   } else {
-    const relative = RELATIVE.exec(text);
+    const relative = (locale === 'en' ? EN_RELATIVE : RELATIVE).exec(text);
     if (relative) {
       const amount = parseInteger(relative[1]!);
-      const unit = relative[2]!;
-      const multiplier = unit.startsWith('秒') ? 1000 : unit.startsWith('分') ? 60_000 : unit === '小时' ? 3_600_000 : DAY;
+      const unit = relative[2]!.toLowerCase();
+      const multiplier = unit.startsWith('秒') || unit.startsWith('second') ? 1000 : unit.startsWith('分') || unit.startsWith('minute') ? 60_000 : unit === '小时' || unit.startsWith('hour') ? 3_600_000 : DAY;
       at = options.now + amount * multiplier;
     } else {
-      const local = LOCAL.exec(text);
+      const local = (locale === 'en' ? EN_LOCAL : LOCAL).exec(text);
       if (!local) fail(HELP);
       const current = partsAt(options.now, formatter);
       const date = new Date(utc({ ...current, hour: 0, minute: 0, second: 0 }));
-      date.setUTCDate(date.getUTCDate() + (local[1] === '今天' ? 0 : local[1] === '明天' ? 1 : 2));
-      const clock = parseClock(local[3]!, local[2]);
+      date.setUTCDate(date.getUTCDate() + (['今天', 'today'].includes(local[1]!.toLowerCase()) ? 0 : ['明天', 'tomorrow'].includes(local[1]!.toLowerCase()) ? 1 : 2));
+      const clock = locale === 'en' ? parseClock(local[2]!, undefined) : parseClock(local[3]!, local[2]);
       const desired: CalendarTime = { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1,
         day: date.getUTCDate(), ...clock };
       at = localInstant(desired, formatter);
     }
   }
   const delay = at - options.now;
-  if (delay > MAX_DELAY) fail('提醒时间不能超过当前时间的 365 天后');
+  if (delay > MAX_DELAY) fail('timeRange');
   if (!Number.isSafeInteger(at) || !Number.isFinite(new Date(at).getTime()) || delay < 1000) {
-    fail('提醒时间须在当前时间至少 1 秒后；今天已过的时间不会自动改到明天，请重新指定日期');
+    fail('timeFuture');
   }
   return { at, timezone: options.timezone, expression: text };
+  } catch (error) {
+    if (locale === 'en' && error instanceof ReminderTimeInputError && error.code) throw new ReminderTimeInputError(t(locale, error.code), error.code);
+    throw error;
+  }
 }
 
 /** Always show the resolved date, configured zone and its actual offset. */
@@ -77,20 +87,20 @@ export function formatReminderTime(at: number, timezone: string): string {
   return `${String(local.year).padStart(4, '0')}-${pad(local.month)}-${pad(local.day)} ${pad(local.hour)}:${pad(local.minute)}:${pad(local.second)} UTC${offsetText} (${timezone})`;
 }
 
-function fail(message: string): never { throw new ReminderTimeInputError(message); }
+function fail(code: Parameters<typeof t>[1]): never { throw new ReminderTimeInputError(t('zh-CN', code), code); }
 function pad(value: number): string { return String(value).padStart(2, '0'); }
 function assertInstant(value: number): void {
-  if (!Number.isSafeInteger(value) || !Number.isFinite(new Date(value).getTime())) fail('当前时间或提醒时间无效');
+  if (!Number.isSafeInteger(value) || !Number.isFinite(new Date(value).getTime())) fail('timeInstant');
 }
 function createFormatter(timezone: string): Intl.DateTimeFormat {
   if (typeof timezone !== 'string' || !timezone || timezone.length > 100 || timezone !== timezone.trim() || /^[+-]/u.test(timezone)) {
-    fail('提醒时区无效，请配置有效的 IANA 时区，例如 Asia/Shanghai');
+    fail('timeZone');
   }
   try {
     return new Intl.DateTimeFormat('en-GB', { timeZone: timezone, calendar: 'iso8601', numberingSystem: 'latn',
       year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
       hourCycle: 'h23', era: 'short' });
-  } catch { fail('提醒时区无效，请配置有效的 IANA 时区，例如 Asia/Shanghai'); }
+  } catch { fail('timeZone'); }
 }
 function partsAt(at: number, formatter: Intl.DateTimeFormat): CalendarTime {
   const parts = Object.fromEntries(formatter.formatToParts(at).map(part => [part.type, part.value]));
@@ -105,12 +115,12 @@ function utc(value: CalendarTime): number {
 }
 function offsetAt(at: number, formatter: Intl.DateTimeFormat): number {
   const local = utc(partsAt(at, formatter));
-  if (!Number.isFinite(local)) fail('提醒日期超出支持范围');
+  if (!Number.isFinite(local)) fail('timeDateRange');
   return local - Math.floor(at / 1000) * 1000;
 }
 function localInstant(desired: CalendarTime, formatter: Intl.DateTimeFormat): number {
   const naive = utc(desired);
-  if (!Number.isFinite(naive)) fail('提醒日期超出支持范围');
+  if (!Number.isFinite(naive)) fail('timeDateRange');
   const offsets = new Set<number>();
   // A fixed 97 probes cover both sides of a DST or date-line transition.
   // Candidate instants must round-trip exactly; never pick one side of a fold.
@@ -123,26 +133,26 @@ function localInstant(desired: CalendarTime, formatter: Intl.DateTimeFormat): nu
     const actual = partsAt(at, formatter);
     return (Object.keys(desired) as (keyof CalendarTime)[]).every(key => actual[key] === desired[key]);
   });
-  if (candidates.length === 0) fail('这个本地时间因时区或夏令时切换而不存在，请改用明确日期并带 offset 的 ISO 时间');
-  if (candidates.length !== 1) fail('这个本地时间因夏令时切换出现两次，请使用带明确 offset 的 ISO 时间选择其中一次');
+  if (candidates.length === 0) fail('timeGap');
+  if (candidates.length !== 1) fail('timeFold');
   return candidates[0]!;
 }
 function parseClock(text: string, period: string | undefined): Pick<CalendarTime, 'hour' | 'minute' | 'second'> {
   const colon = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/u.exec(text);
   const point = POINT.exec(text);
-  if (!colon && !point) fail('时间须写为 09:30、九点、九点半或九点三十分；请同时指定今天、明天或后天');
+  if (!colon && !point) fail('timeClock');
   let hour = colon ? Number(colon[1]) : parseInteger(point![1]!);
   const minute = colon ? Number(colon[2]) : point![2] ? 30 : point![3] ? parseInteger(point![3]!) : 0;
   const second = colon ? Number(colon[3] ?? 0) : point![4] ? parseInteger(point![4]!) : 0;
-  if (minute > 59 || second > 59 || hour > 23) fail('小时须为 0–23，分钟和秒须为 0–59');
+  if (minute > 59 || second > 59 || hour > 23) fail('timeClockRange');
   if (period === '下午' || period === '晚上') {
-    if (hour < 1 || hour > 12 || period === '晚上' && hour === 12) fail('时段与钟点不明确，请使用 24 小时制，例如 00:00 或 18:00');
+    if (hour < 1 || hour > 12 || period === '晚上' && hour === 12) fail('timePeriod');
     hour = hour === 12 ? 12 : hour + 12;
   } else if (period === '上午' || period === '凌晨') {
-    if (hour > 11) fail('时段与钟点不明确，请使用 24 小时制，例如 00:00 或 12:00');
+    if (hour > 11) fail('timeMorning');
   } else if (period === '中午') {
     if (hour === 1 || hour === 2) hour += 12;
-    else if (hour !== 11 && hour !== 12) fail('中午的钟点不明确，请使用 24 小时制');
+    else if (hour !== 11 && hour !== 12) fail('timeNoon');
   }
   return { hour, minute, second };
 }
@@ -150,10 +160,10 @@ function parseClock(text: string, period: string | undefined): Pick<CalendarTime
 function parseInteger(text: string): number {
   if (/^\d+$/u.test(text)) {
     const number = Number(text);
-    if (!Number.isSafeInteger(number)) fail('时间数值过大，请使用一年以内的时间');
+    if (!Number.isSafeInteger(number)) fail('timeNumberRange');
     return number;
   }
-  if (/两(?![百千万]|$)/u.test(text)) fail('中文数字不明确，请改用阿拉伯数字');
+  if (/两(?![百千万]|$)/u.test(text)) fail('timeChineseNumber');
   const normalized = text.replace(/〇/gu, '零').replace(/两/gu, '二');
   let total = 0;
   let section = 0;
@@ -171,7 +181,7 @@ function parseInteger(text: string): number {
   const number = total + section + digit;
   if (!Number.isSafeInteger(number) || number < 0 || number > 99_999_999
     || chineseInteger(number) !== normalized && !(normalized.startsWith('一十') && chineseInteger(number) === normalized.slice(1))) {
-    fail('中文数字不明确，请写完整中文整数或改用阿拉伯数字');
+    fail('timeChineseInteger');
   }
   return number;
 }

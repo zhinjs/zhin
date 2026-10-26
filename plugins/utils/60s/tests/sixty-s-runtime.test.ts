@@ -46,6 +46,17 @@ describe('@zhin.js/plugin-60s', () => {
     expect(client.fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('uses the same requested language for commands and tools without translating provider content', async () => {
+    const client = { fetch: vi.fn().mockResolvedValue({ weather: { temperature: 20, condition: '晴', humidity: 30 },
+      air_quality: {}, location: { city: '北京' } }) } as unknown as SixtySClient;
+    const use = () => client;
+    const command = await weatherCommand.execute({ params: { city: '北京' }, use, locale: 'en' } as never);
+    const tool = await weatherTool.execute({ city: '北京' }, { use, locale: 'en' } as never);
+    expect(command).toBe(tool); expect(command).toContain('Weather in 北京');
+    expect(command).toContain('Conditions: 晴'); expect(command).toContain('Temperature: 20');
+    expect(client.fetch).toHaveBeenCalledWith('/weather', { query: '北京' }, 'en');
+  });
+
   it('formats hot lists', () => {
     const result = formatList([
       { title: '热搜1', hot: '100万' },

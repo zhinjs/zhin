@@ -4,6 +4,7 @@ import {
   createCapabilitySlot,
   createToken,
   rootPluginId,
+  projectLocaleToken,
   type PluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
@@ -33,6 +34,23 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
+  it('uses the trusted turn language or project language, never a model argument', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'locale',
+      source: '/project/tools/locale/index.ts', definition: defineAgentTool({ description: 'Read language',
+        execute: (_input, context) => context.locale }) });
+    const base = createSnapshot([slot], createToken('unused').id);
+    const snapshot: RuntimeSnapshot = { ...base, resources: new Map([
+      [root, new Map([[projectLocaleToken.id, 'en']])],
+    ]) };
+    const index = new ToolIndex([slot], snapshot);
+    expect(await index.execute(root, 'locale', { locale: 'zh-CN' }, invocation())).toBe('en');
+    const results = await Promise.all([
+      index.execute(root, 'locale', { locale: 'en' }, { ...invocation(), locale: 'zh-CN' }),
+      index.execute(root, 'locale', {}, { ...invocation(), locale: 'en' }),
+    ]);
+    expect(results).toEqual(['zh-CN', 'en']);
+  });
   it('brands definitions and discovers flat tools/<name>/index.ts', async () => {
     const definition = defineAgentTool({
       description: 'Get weather',

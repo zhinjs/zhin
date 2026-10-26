@@ -5,11 +5,14 @@
  * Classic Message: { $adapter, $endpoint, $channel, $sender }
  */
 import type { SendContent } from '@zhin.js/core/runtime';
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 /** A game returns semantic content; Runtime owns native rendering and text fallback. */
 export type GameReply = SendContent;
 
 export interface GameMessageLike {
+  readonly locale?: Locale;
+  readonly formatCommand?: (localPath: string) => string | undefined;
   $adapter: string;
   $endpoint: string;
   $channel: { type: string; id: string };
@@ -51,6 +54,8 @@ function readSenderName(sender: string | RuntimeSenderRef | undefined): string |
 }
 
 function isRuntimeMessage(input: unknown): input is {
+  readonly locale?: Locale;
+  readonly formatCommand?: (localPath: string) => string | undefined;
   conversation?: {
     endpoint?: { id?: string; adapter?: string };
     kind?: string;
@@ -71,6 +76,7 @@ function isRuntimeMessage(input: unknown): input is {
 /** Smoke message when CommandContext has no usable input (unit tests / CLI). */
 export function smokeGameMessage(): GameMessageLike {
   return {
+    locale: 'zh-CN',
     $adapter: 'runtime',
     $endpoint: 'default',
     $channel: { type: 'private', id: 'smoke' },
@@ -81,8 +87,14 @@ export function smokeGameMessage(): GameMessageLike {
 /**
  * Convert CommandContext.input to a Message-like object for game-flow / *-command.
  */
-export function messageFromCommandInput(input: unknown): GameMessageLike {
-  if (isClassicMessage(input)) return input;
+export function messageFromCommandInput(input: unknown, presentation?: Readonly<{
+  locale?: Locale;
+  formatCommand?: (localPath: string) => string | undefined;
+}>): GameMessageLike {
+  if (isClassicMessage(input)) return presentation ? { ...input,
+    locale: presentation.locale ?? input.locale,
+    formatCommand: presentation.formatCommand ?? input.formatCommand,
+  } : input;
 
   if (isRuntimeMessage(input)) {
     const meta = input.metadata ?? {};
@@ -100,6 +112,9 @@ export function messageFromCommandInput(input: unknown): GameMessageLike {
     const senderId = String(readSenderId(input.sender) ?? meta.senderId ?? 'smoke');
     const senderName = String(readSenderName(input.sender) ?? meta.senderName ?? meta.name ?? senderId);
     return {
+      locale: resolveLocale(presentation?.locale ?? input.locale),
+      formatCommand: presentation?.formatCommand ?? (typeof input.formatCommand === 'function'
+        ? input.formatCommand.bind(input) : undefined),
       $adapter: adapter,
       $endpoint: endpoint,
       $channel: { type: channelType, id: channelId },
@@ -107,5 +122,5 @@ export function messageFromCommandInput(input: unknown): GameMessageLike {
     };
   }
 
-  return smokeGameMessage();
+  return { ...smokeGameMessage(), ...presentation };
 }

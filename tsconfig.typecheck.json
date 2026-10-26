@@ -277,6 +277,9 @@
       ],
       "@zhin.js/components": [
         "./packages/toolkit/components/src/index.ts"
+      ],
+      "zhin.js/i18n": [
+        "./packages/im/zhin/src/i18n.ts"
       ]
     },
     "types": [],

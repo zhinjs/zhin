@@ -2,51 +2,72 @@ import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { commandFeatureId, explainCommandPermissions, isCommandIndex, type CommandDescriptor } from '@zhin.js/command';
 import { extractBearerToken, HttpBodyError, readJsonBody, type HttpHost } from '@zhin.js/host-http';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { normalizeDeliveryTarget, type CapabilityId, type DeliveryTarget, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { createMessages, isLocale, resolveLocale, type Locale, normalizeDeliveryTarget, type CapabilityId, type DeliveryTarget, type RuntimeSnapshot, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { writeJson } from './http-response.js';
+
+const messages = createMessages({
+  generation: { 'zh-CN': "运行代已变化，请刷新命令列表后重新模拟", en: "The generation changed. Refresh the command list before simulating again." },
+  commandMissing: { 'zh-CN': "当前运行代中不存在此命令", en: "This command does not exist in the current generation." },
+  auth: { 'zh-CN': "请使用有效的 full scope Bearer Token 读取权限解释", en: "Use a valid full-scope Bearer Token to read permission explanations." },
+  runtime: { 'zh-CN': "命令运行时尚未就绪", en: "The command runtime is not ready." },
+  index: { 'zh-CN': "命令索引尚未就绪", en: "The command index is not ready." },
+  declaration: { 'zh-CN': "命令声明过大或无效，暂时无法解释", en: "The command declaration is too large or invalid to explain." },
+  endpointIndex: { 'zh-CN': "Endpoint 索引尚未就绪", en: "The Endpoint index is not ready." },
+  endpointMissing: { 'zh-CN': "当前运行代中不存在此 Endpoint", en: "This Endpoint does not exist in the current generation." },
+  invalid: { 'zh-CN': "解释参数无效，请提供完整的命令与会话标识", en: "Invalid explanation input. Provide complete command and conversation identifiers." },
+  large: { 'zh-CN': "解释结果过大，请缩小查询范围", en: "The explanation is too large. Narrow the query." },
+  body: { 'zh-CN': "请求体无效或过大", en: "The request body is invalid or too large." },
+  unavailable: { 'zh-CN': "权限解释暂时不可用", en: "Permission explanations are temporarily unavailable." },
+});
 
 const BODY_LIMIT = 32 * 1024;
 const OUTPUT_LIMIT = 1024 * 1024;
 
 class ExplanationError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
+  readonly key: Parameters<typeof messages>[1];
+  constructor(status: number, key: Parameters<typeof messages>[1]) { super(key); this.status = status; this.key = key; }
 }
 
 /** Describes command conditions without executing a command, checker, default factory or Endpoint operation. */
 export function registerPermissionExplanationRoutes(options: Readonly<{ http: HttpHost; base: string; snapshots?: SnapshotReader }>): void {
   const { http, base, snapshots } = options;
   http.route('GET', `${base}/commands/permissions`, (request, response, url, scope) => {
-    if (!authorize(request, response, http, scope)) return;
+    const locale = resolveLocale(url.searchParams.get('locale'));
+    if (!authorize(request, response, http, scope, locale)) return;
     let lease: SnapshotLease | undefined;
     try {
-      for (const key of url.searchParams.keys()) if (!['page', 'pageSize', 'q'].includes(key) || url.searchParams.getAll(key).length !== 1) invalid();
+      for (const key of url.searchParams.keys()) if (!['page', 'pageSize', 'q', 'locale'].includes(key) || url.searchParams.getAll(key).length !== 1) invalid();
+      validateLocale(url);
       const page = integerQuery(url.searchParams.get('page'), 1, Number.MAX_SAFE_INTEGER);
       const pageSize = integerQuery(url.searchParams.get('pageSize'), 50, 100);
       const q = url.searchParams.get('q') ?? '';
       if (q.length > 200) invalid();
       lease = acquire(snapshots);
       const snapshot = lease.value;
-      const commands = commandIndex(snapshot).list().filter(command => !q || `${command.name}\n${command.description ?? ''}\n${command.owner}`.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
+      const commands = commandIndex(snapshot).list(locale).filter(command => !q || `${command.name}\n${command.description ?? ''}\n${command.owner}`.toLocaleLowerCase().includes(q.toLocaleLowerCase()));
       const offset = (page - 1) * pageSize;
       if (!Number.isSafeInteger(offset)) invalid();
       send(response, { generation: snapshot.generation, page, pageSize, total: commands.length,
         commands: commands.slice(offset, offset + pageSize).map(projectCommand) });
-    } catch (error) { failure(response, error); }
+    } catch (error) { failure(response, error, locale); }
     finally { lease?.release(); }
   }, { summary: 'Explain declared command conditions', tags: ['commands'], description: 'Authenticated full-scope, read-only metadata. No command execution or permission checker calls.' });
 
-  http.route('POST', `${base}/commands/permissions/explain`, async (request, response, _url, scope) => {
-    if (!authorize(request, response, http, scope)) return;
+  http.route('POST', `${base}/commands/permissions/explain`, async (request, response, url, scope) => {
+    const locale = resolveLocale(url.searchParams.get('locale'));
+    if (!authorize(request, response, http, scope, locale)) return;
     let lease: SnapshotLease | undefined;
     try {
+      validateLocale(url);
+      for (const key of url.searchParams.keys()) if (key !== 'locale') invalid();
       const input = parseInput(await readJsonBody(request, { limit: BODY_LIMIT }));
       lease = acquire(snapshots);
       const snapshot = lease.value;
-      if (input.generation !== snapshot.generation) throw new ExplanationError(409, '运行代已变化，请刷新命令列表后重新模拟');
-      const command = commandIndex(snapshot).list().find(item => item.id === input.commandId);
-      if (!command) throw new ExplanationError(404, '当前运行代中不存在此命令');
+      if (input.generation !== snapshot.generation) throw new ExplanationError(409, 'generation');
+      const command = commandIndex(snapshot).list(locale).find(item => item.id === input.commandId);
+      if (!command) throw new ExplanationError(404, 'commandMissing');
       const commandData = projectCommand(command);
       const clientAdapter = input.target ? validateEndpoint(snapshot, input.target) : undefined;
       // Canonical IM-shaped data deliberately carries no metadata, content or lazy Client.
@@ -55,30 +76,30 @@ export function registerPermissionExplanationRoutes(options: Readonly<{ http: Ht
         ...(input.sender ? { sender: input.sender } : {}) }
         : input.sender ? { sender: input.sender } : undefined;
       const host = snapshot.resources.get(snapshot.root)?.get(permissionHostToken.id);
-      const explanation = explainCommandPermissions(command, { source,
+      const explanation = explainCommandPermissions(command, { source, locale,
         rolesKnown: input.sender?.roles !== undefined,
         permissionHost: host instanceof PermissionHost ? 'present' : host === undefined || host === null ? 'missing' : 'unverified' });
       send(response, { generation: snapshot.generation, simulation: true, command: commandData,
         ...(input.target ? { target: input.target } : {}), ...(input.sender ? { sender: input.sender } : {}), ...explanation });
-    } catch (error) { failure(response, error); }
+    } catch (error) { failure(response, error, locale); }
     finally { lease?.release(); }
   }, { summary: 'Simulate command builtin conditions', tags: ['commands'], description: 'Hypothetical conditions only, never authorization. Full canonical targets are checked against the current Endpoint catalog without probing connectivity.' });
 }
 
-function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string): boolean {
+function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string, locale: Locale): boolean {
   response.setHeader('cache-control', 'no-store');
   const explicit = http.tokenRegistry.resolve(extractBearerToken(request.headers.authorization, null));
   if (scope === 'full' && explicit === 'full') return true;
-  writeJson(response, explicit === 'demo' ? 403 : 401, { success: false, error: '请使用有效的 full scope Bearer Token 读取权限解释' });
+  writeJson(response, explicit === 'demo' ? 403 : 401, { success: false, error: messages(locale, 'auth') });
   return false;
 }
 function acquire(snapshots?: SnapshotReader): SnapshotLease {
-  if (!snapshots) throw new ExplanationError(503, '命令运行时尚未就绪');
-  try { return snapshots.acquire(); } catch { throw new ExplanationError(503, '命令运行时尚未就绪'); }
+  if (!snapshots) throw new ExplanationError(503, 'runtime');
+  try { return snapshots.acquire(); } catch { throw new ExplanationError(503, 'runtime'); }
 }
 function commandIndex(snapshot: RuntimeSnapshot) {
   const index = snapshot.projections.get(commandFeatureId);
-  if (!isCommandIndex(index)) throw new ExplanationError(503, '命令索引尚未就绪');
+  if (!isCommandIndex(index)) throw new ExplanationError(503, 'index');
   return index;
 }
 function projectCommand(command: CommandDescriptor) {
@@ -87,7 +108,7 @@ function projectCommand(command: CommandDescriptor) {
     || command.description !== undefined && !validString(command.description, 8192, true)
     || command.adapter !== undefined && !validString(command.adapter, 2048)
     || (command.permit?.length ?? 0) > 100 || command.permit?.some(rule => !validString(rule, 4096))) {
-    throw new ExplanationError(503, '命令声明过大或无效，暂时无法解释');
+    throw new ExplanationError(503, 'declaration');
   }
   return { id: command.id, owner: command.owner, name: command.name,
     ...(command.description === undefined ? {} : { description: command.description }),
@@ -95,9 +116,9 @@ function projectCommand(command: CommandDescriptor) {
 }
 function validateEndpoint(snapshot: RuntimeSnapshot, target: DeliveryTarget): string {
   const adapters = snapshot.projections.get(adapterFeatureId);
-  if (!isAdapterIndex(adapters)) throw new ExplanationError(503, 'Endpoint 索引尚未就绪');
+  if (!isAdapterIndex(adapters)) throw new ExplanationError(503, 'endpointIndex');
   const id = target.endpoint.id as CapabilityId;
-  if (!adapters.list().some(item => item.id === id)) throw new ExplanationError(404, '当前运行代中不存在此 Endpoint');
+  if (!adapters.list().some(item => item.id === id)) throw new ExplanationError(404, 'endpointMissing');
   // Public Message/EndpointRuntime identities use the literal adapter, not the
   // plugin owner path. Resolve it from the exact current Endpoint, never a body alias.
   const actual = adapters.clientAdapter(id);
@@ -145,13 +166,18 @@ function integerQuery(value: string | null, fallback: number, max: number): numb
   if (!/^[1-9]\d*$/u.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) > max) return invalid();
   return Number(value);
 }
-function invalid(): never { throw new ExplanationError(400, '解释参数无效，请提供完整的命令与会话标识'); }
+function invalid(): never { throw new ExplanationError(400, 'invalid'); }
 function send(response: ServerResponse, data: unknown): void {
-  if (Buffer.byteLength(JSON.stringify(data)) > OUTPUT_LIMIT) throw new ExplanationError(503, '解释结果过大，请缩小查询范围');
+  if (Buffer.byteLength(JSON.stringify(data)) > OUTPUT_LIMIT) throw new ExplanationError(503, 'large');
   writeJson(response, 200, { success: true, data });
 }
-function failure(response: ServerResponse, error: unknown): void {
-  if (error instanceof ExplanationError) writeJson(response, error.status, { success: false, error: error.message });
-  else if (error instanceof HttpBodyError) writeJson(response, error.statusCode, { success: false, error: '请求体无效或过大' });
-  else writeJson(response, 500, { success: false, error: '权限解释暂时不可用' });
+function failure(response: ServerResponse, error: unknown, locale: Locale): void {
+  if (error instanceof ExplanationError) writeJson(response, error.status, { success: false, error: messages(locale, error.key) });
+  else if (error instanceof HttpBodyError) writeJson(response, error.statusCode, { success: false, error: messages(locale, 'body') });
+  else writeJson(response, 500, { success: false, error: messages(locale, 'unavailable') });
+}
+
+function validateLocale(url: URL): void {
+  if (url.searchParams.getAll('locale').length > 1
+    || url.searchParams.has('locale') && !isLocale(url.searchParams.get('locale'))) invalid();
 }

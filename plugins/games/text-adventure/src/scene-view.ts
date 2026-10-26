@@ -1,3 +1,4 @@
+import { resolveLocale } from 'zhin.js/i18n';
 import type { SendContent } from '@zhin.js/core/runtime';
 import { buildChoiceKeyboard } from '@zhin.js/game-kit';
 import type { AdvProfileRow, AdvSessionRow } from './models.js';
@@ -16,14 +17,15 @@ export function buildSceneInteractive(
   profile?: AdvProfileRow,
   channelType?: string,
 ): SendContent | null {
-  const scene = getScene(session.scene_id);
+  const locale = resolveLocale(session.locale);
+  const scene = getScene(session.scene_id, locale);
   if (!scene) return null;
 
   const state = stateFromSession(session);
   const choices = visibleChoices(scene, state);
   const terminal = scene.terminal || session.status !== 'active';
 
-  let narrative = sceneNarrative(scene, state);
+  let narrative = sceneNarrative(scene, state, locale);
   if (profile && !terminal) {
     narrative = `${formatProgressCompact(profile)}\n\n${narrative}`;
   }
@@ -42,7 +44,7 @@ export function buildSceneInteractive(
     })),
     terminal,
     buttonsPerRow: 2,
-    fallbackHint: '回复数字选择（仅编号）',
+    fallbackHint: locale === 'en' ? 'Reply with the choice number only' : '回复数字选择（仅编号）',
     interactionProfile: terminal ? 'terminal' : 'gameplay',
     channelType,
   });

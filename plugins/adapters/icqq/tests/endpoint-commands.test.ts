@@ -30,6 +30,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
       if (token === endpointConfigurationStoreToken) return store;
       throw new Error(`unexpected token: ${String(token)}`);
     },
+    formatCommand: (path: string) => `!bots ${path}`,
     params: Object.freeze({}),
     args: Object.freeze([]),
     input: undefined,
@@ -47,7 +48,7 @@ describe('icqq endpoint command definitions', () => {
 
   it('add 无 id 时回复用法', async () => {
     const text = await addCommand.execute(fakeContext()) as string;
-    expect(text).toContain('用法：icqq endpoint add <uin>');
+    expect(text).toContain('用法：!bots icqq endpoint add <uin>');
   });
 
   it('add 非数字 id 拒绝', async () => {

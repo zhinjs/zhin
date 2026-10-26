@@ -1,3 +1,4 @@
+import { createMessages, resolveLocale } from 'zhin.js/i18n';
 import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import type { DiceSessionRow } from './models.js';
 import { compareRolls, DICE_PREFIX, rollD6, WIN_TARGET } from './engine.js';
@@ -23,11 +24,12 @@ export async function startGame(
 ): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.getActiveByChannel(ch);
+  const locale = resolveLocale(active ? active.locale : message.locale);
   if (active) {
     if (active.player_id === message.$sender.id) {
-      return '你已有进行中的骰子对决，发送「骰子 继续」刷新。';
+      return messages(locale, 'text1');
     }
-    return `本频道 ${active.player_name} 正在掷骰对决中。`;
+    return messages(locale, 'text2', { p0: active.player_name });
   }
   const session = await services.createSession(message);
   return renderView(session, message);
@@ -41,7 +43,8 @@ export async function continueGame(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
   );
-  if (!session) return '你没有进行中的骰子对决，发送「骰子 开始」。';
+  const locale = resolveLocale(session ? session.locale : message.locale);
+  if (!session) return messages(locale, 'text3');
   return renderView(session, message);
 }
 
@@ -52,11 +55,12 @@ export async function handleChoice(
   choiceId: string,
 ): Promise<GameReply | null> {
   const session = await services.getById(sessionId);
-  if (!session) return '对局不存在。';
-  if (session.player_id !== message.$sender.id) return '这是别人的对局。';
+  const locale = resolveLocale(session ? session.locale : message.locale);
+  if (!session) return messages(locale, 'text4');
+  if (session.player_id !== message.$sender.id) return messages(locale, 'text5');
 
   if (session.status !== 'active' && choiceId !== 'restart') {
-    return '对局已结束，请点击再来一局。';
+    return messages(locale, 'text6');
   }
 
   if (choiceId === 'restart') {
@@ -68,7 +72,7 @@ export async function handleChoice(
     return renderView((await services.getById(session.id))!, message);
   }
 
-  if (choiceId !== 'roll') return '无效操作。';
+  if (choiceId !== 'roll') return messages(locale, 'text7');
 
   const player = rollD6();
   const bot = rollD6();
@@ -97,3 +101,13 @@ export async function handleChoice(
 }
 
 export { DICE_PREFIX };
+
+const messages = createMessages({
+  text1: { 'zh-CN': "你已有进行中的骰子对决，请使用当前对局的操作入口。", en: "You already have an active dice duel. Continue using its controls." },
+  text2: { 'zh-CN': "本频道 {p0} 正在掷骰对决中。", en: "{p0} is playing a dice duel in this channel." },
+  text3: { 'zh-CN': "你没有进行中的骰子对决，请使用当前对局的操作入口。", en: "You have no active dice duel." },
+  text4: { 'zh-CN': "对局不存在。", en: "This game no longer exists." },
+  text5: { 'zh-CN': "这是别人的对局。", en: "This game belongs to another player." },
+  text6: { 'zh-CN': "对局已结束，请点击再来一局。", en: "This game has ended. Choose Play again." },
+  text7: { 'zh-CN': "无效操作。", en: "Invalid action." },
+});

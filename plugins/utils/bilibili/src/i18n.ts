@@ -1,0 +1,53 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
+export const messages = createMessages({
+  db: { 'zh-CN': 'B 站订阅数据库尚未就绪，请稍后重试', en: 'The Bilibili subscription database is not ready. Try again later.' },
+  uid: { 'zh-CN': '请提供 UP 主 UID 或空间链接', en: 'Provide a creator UID or profile URL.' },
+  room: { 'zh-CN': '请提供直播间号或链接', en: 'Provide a live room ID or URL.' },
+  usage: { 'zh-CN': '用法：{command}', en: 'Usage: {command}' },
+  kind: { 'zh-CN': '订阅类型只能是 all、live 或 dynamic', en: 'Subscription type must be all, live, or dynamic.' },
+  exists: { 'zh-CN': '当前会话已订阅该 UP 主，无需重复添加', en: 'This conversation already subscribes to this creator.' },
+  changed: { 'zh-CN': '已将 {name} 的订阅改为：{kind}', en: 'Updated {name} subscription to: {kind}' },
+  limit: { 'zh-CN': '当前会话订阅数已达上限 ({limit})，请先取消一些', en: 'This conversation has reached its subscription limit ({limit}). Remove a subscription first.' },
+  missingUser: { 'zh-CN': '找不到 UID 为 {uid} 的用户', en: 'No user found for UID {uid}.' },
+  noOutbound: { 'zh-CN': '⚠ 未接入 OutboundHost，暂时无法主动推送', en: '⚠ No OutboundHost is configured; proactive delivery is unavailable.' },
+  volatile: { 'zh-CN': '⚠ 未配置数据库，订阅在重启后会丢失', en: '⚠ No database is configured; subscriptions will be lost on restart.' },
+  subscribed: { 'zh-CN': '订阅成功：{name}（UID {uid}），类型：{kind}', en: 'Subscribed to {name} (UID {uid}): {kind}' },
+  empty: { 'zh-CN': '当前会话没有订阅任何 UP 主', en: 'This conversation has no creator subscriptions.' },
+  unknown: { 'zh-CN': '(未知)', en: '(unknown)' },
+  paused: { 'zh-CN': '暂停中的请求：', en: 'Requests in backoff:' },
+  list: { 'zh-CN': '当前订阅 ({count}/{limit})：\n{items}', en: 'Subscriptions ({count}/{limit}):\n{items}' },
+  missingRoom: { 'zh-CN': '直播间 {room} 不存在', en: 'Live room {room} does not exist.' },
+  failed: { 'zh-CN': '查询失败：{error}', en: 'Lookup failed: {error}' },
+  notSubscribed: { 'zh-CN': '当前会话没有订阅该 UP 主', en: 'This conversation does not subscribe to this creator.' },
+  removed: { 'zh-CN': '已取消订阅：{name}', en: 'Unsubscribed from {name}.' },
+  denied: { 'zh-CN': '只有群主、群管理员或机器人主人可以在群聊中修改 B 站订阅；私聊中可以直接订阅本会话。', en: 'Only a group owner, administrator, or bot master may change group subscriptions. In private chat you can subscribe the current conversation.' },
+  source: { 'zh-CN': '请在机器人私聊、群聊或频道内执行此命令；当前调用没有有效的订阅会话', en: 'Run this command in a private chat, group, or channel with the bot. This invocation has no valid subscription destination.' },
+  address: { 'zh-CN': '暂不支持线程／父频道寻址的订阅，请在无需线程或父频道信息的会话内执行', en: 'Subscriptions with a thread or parent-channel address are not supported. Use a conversation that requires neither.' },
+  all: { 'zh-CN': '开播 + 动态', en: 'Live streams + posts' },
+  live: { 'zh-CN': '开播', en: 'Live streams' },
+  dynamic: { 'zh-CN': '动态', en: 'Posts' },
+  offline: { 'zh-CN': '未开播', en: 'Offline' },
+  broadcasting: { 'zh-CN': '直播中', en: 'Live' },
+  replay: { 'zh-CN': '轮播中', en: 'Replaying' },
+  statusUnknown: { 'zh-CN': '未知状态 ({status})', en: 'Unknown status ({status})' },
+  minutes: { 'zh-CN': '已开播 {minutes} 分钟', en: 'Live for {minutes} min' },
+  hours: { 'zh-CN': '已开播 {hours} 小时 {minutes} 分钟', en: 'Live for {hours} h {minutes} min' },
+  started: { 'zh-CN': '【开播】{name} 开播啦！', en: '[Live] {name} is streaming!' },
+  title: { 'zh-CN': '标题：{title}', en: 'Title: {title}' },
+  area: { 'zh-CN': '分区：{area}', en: 'Category: {area}' },
+  post: { 'zh-CN': '【动态】{name} {summary}\n{url}', en: '[Post] {name} {summary}\n{url}' },
+  liveRoom: { 'zh-CN': '直播间', en: 'Live room' },
+  namedRoom: { 'zh-CN': '{name} 的直播间', en: '{name} live room' },
+  popularity: { 'zh-CN': '人气：{count}', en: 'Popularity: {count}' },
+  backoff: { 'zh-CN': '{key}：{minutes} 分钟后重试（{reason}）', en: '{key}: retry in {minutes} min ({reason})' },
+  toolInput: { 'zh-CN': '请提供直播间号（room）或 UP 主 UID（uid）', en: 'Provide a live room ID (room) or creator UID (uid).' },
+  noRoom: { 'zh-CN': 'UID {uid} 没有开通直播间', en: 'UID {uid} has no live room.' },
+  allEmpty: { 'zh-CN': '暂无任何 B 站订阅', en: 'There are no Bilibili subscriptions.' },
+  overview: { 'zh-CN': 'B 站订阅总览 ({count} 条)：\n{items}', en: 'Bilibili subscriptions ({count}):\n{items}' },
+});
+export function kindText(kind: unknown, locale: Locale = 'zh-CN'): string {
+  return messages(locale, kind === 'live' || kind === 'dynamic' ? kind : 'all');
+}
+export function commandHint(locale: Locale, invocation: string | undefined, args: string): string {
+  return invocation === undefined ? '' : '\n' + messages(locale, 'usage', { command: `${invocation} ${args}` });
+}

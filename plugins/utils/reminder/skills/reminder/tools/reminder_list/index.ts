@@ -1,3 +1,4 @@
+import { reminderMessages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from "@zhin.js/tool";
 import { z } from "zod";
 import { replyReminder } from "../../../../src/caller.js";
@@ -15,8 +16,8 @@ export default defineAgentTool({
     return replyReminder(async () => {
       const service = context.use(reminderServiceToken);
       const tasks = await service.list(reminderActorFromTool(context));
-      if (tasks.length === 0) return "当前会话没有提醒";
-      return tasks.map((task) => service.describe(task)).join("\n---\n");
+      if (tasks.length === 0) return t(context.locale, 'toolEmpty');
+      return tasks.map((task) => service.describe(task, context.locale)).join("\n---\n");
     });
   },
 });

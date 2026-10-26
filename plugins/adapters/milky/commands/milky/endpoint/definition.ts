@@ -11,7 +11,7 @@ export const milkyEndpointCommands = createEndpointCommands({
   adapterDisplayName: 'Milky',
   fields: [
     { key: 'baseUrl', required: true, description: 'Milky HTTP API base URL' },
-    { key: 'path', description: 'webhook / reverse-wss 路径' },
+    { key: 'path', description: 'webhook / reverse-wss 路径', descriptionI18n: { en: "Webhook / reverse-wss path" } },
     { key: 'access_token', env: true, description: 'Milky access token' },
   ],
   running: (use) => use(milkyRuntimeStateToken).endpoints.values(),

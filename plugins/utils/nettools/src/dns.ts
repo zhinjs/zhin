@@ -1,3 +1,6 @@
+import { type Locale } from 'zhin.js/i18n';
+import { messages } from './presentation.js';
+import { message } from './messages.js';
 /**
  * DNS lookups over HTTPS (DoH JSON API) with provider fallback.
  *
@@ -100,7 +103,7 @@ export function parseDnsType(input: string | undefined): DnsRecordType {
   }
   throw new NettoolsError(
     'invalid_input',
-    `不支持的记录类型 ${input}，可选：${SUPPORTED_DNS_TYPES.join(' / ')}`,
+    message('dnsType', { type: input, types: SUPPORTED_DNS_TYPES.join(' / ') }),
   );
 }
 
@@ -121,7 +124,7 @@ export class DohResolver {
 
   /** Resolve `name` (already validated) for one record type, falling back across providers. */
   async resolve(name: string, type: DnsRecordType, signal?: AbortSignal): Promise<DnsAnswer> {
-    const failures: string[] = [];
+    const failures: (string | import('./messages.js').NettoolsMessage)[] = [];
     let lastError: NettoolsError | undefined;
     for (const [index, provider] of this.#providers.entries()) {
       const hasFallback = index < this.#providers.length - 1;
@@ -133,15 +136,15 @@ export class DohResolver {
         }
         const wrapped = error instanceof NettoolsError
           ? error
-          : new NettoolsError('network', `${provider.label} 查询失败`, { cause: error });
+          : new NettoolsError('network', message('queryFailed', { provider: provider.label }), { cause: error });
         lastError = wrapped;
-        failures.push(wrapped.message);
+        failures.push(wrapped.detail ?? wrapped.message);
       }
     }
     if (failures.length <= 1 && lastError) {
       throw lastError;
     }
-    throw new NettoolsError('network', `所有 DNS 服务均不可用：${failures.join('；')}`, { cause: lastError });
+    throw new NettoolsError('network', message('dnsUnavailable', { failures }), { cause: lastError });
   }
 
   /**
@@ -173,12 +176,12 @@ export class DohResolver {
 /** Validate and normalise one DoH JSON body. Throws `malformed` or `http` (SERVFAIL etc.). */
 export function parseDohResponse(body: unknown, name: string, type: DnsRecordType, provider: string): DnsAnswer {
   if (!isRecord(body) || typeof body.Status !== 'number') {
-    throw new NettoolsError('malformed', `${provider} 返回了无法识别的 DNS 响应`);
+    throw new NettoolsError('malformed', message('dnsMalformed', { provider }));
   }
   const status = body.Status;
   if (status !== 0 && status !== 3) {
     const rcode = RCODE_NAMES[status] ?? `RCODE ${status}`;
-    throw new NettoolsError('http', `${provider} 解析失败（${rcode}）`);
+    throw new NettoolsError('http', message('dnsFailed', { provider, rcode }));
   }
   const rawAnswers = Array.isArray(body.Answer) ? body.Answer : [];
   const records: DnsRecord[] = [];
@@ -211,15 +214,15 @@ function parseDnsRecord(raw: unknown): DnsRecord | undefined {
   return Object.freeze({ name, type: typeName, ttl, data: raw.data });
 }
 
-export function formatDnsAnswer(answer: DnsAnswer, maxRecords = 20): string {
-  const header = `🔎 ${answer.name} ${answer.type} 记录（${answer.provider}${answer.authenticated ? '，DNSSEC 已验证' : ''}）`;
+export function formatDnsAnswer(answer: DnsAnswer, maxRecords = 20, locale: Locale = 'zh-CN'): string {
+  const header = messages(locale, 'dnsHeader', { name: answer.name, type: answer.type, provider: answer.provider, verified: answer.authenticated ? messages(locale, 'verified') : '' });
   if (answer.status === 'NXDOMAIN') {
-    return `${header}\n域名不存在 (NXDOMAIN)`;
+    return `${header}\n${messages(locale, 'nxdomain')}`;
   }
   const matching = answer.records.filter((record) => record.type === answer.type);
   const chain = answer.records.filter((record) => record.type !== answer.type);
   if (matching.length === 0 && chain.length === 0) {
-    return `${header}\n没有 ${answer.type} 记录`;
+    return `${header}\n${messages(locale, 'noRecord', { type: answer.type })}`;
   }
   const lines = [header];
   for (const record of chain.slice(0, maxRecords)) {
@@ -230,10 +233,10 @@ export function formatDnsAnswer(answer: DnsAnswer, maxRecords = 20): string {
     lines.push(`• ${truncate(record.data)}  (TTL ${record.ttl})`);
   }
   if (matching.length > shown.length) {
-    lines.push(`…另有 ${matching.length - shown.length} 条`);
+    lines.push(messages(locale, 'moreRecords', { count: matching.length - shown.length }));
   }
   if (matching.length === 0) {
-    lines.push(`没有直接的 ${answer.type} 记录`);
+    lines.push(messages(locale, 'noDirectRecord', { type: answer.type }));
   }
   return lines.join('\n');
 }

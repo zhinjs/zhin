@@ -1,5 +1,12 @@
 import type { Schema } from './schema.js';
 
+/** Optional display metadata; translated labels never change stored values. */
+export type ConfigFieldI18n = Readonly<Partial<Record<'zh-CN' | 'en', Readonly<{
+  title?: string;
+  description?: string;
+  enumLabels?: Readonly<Record<string, string>>;
+}>>>>;
+
 /** Form annotations on the same JSON Schema used for configuration validation. */
 export interface ConfigFieldMetadata {
   readonly secret?: boolean;
@@ -73,6 +80,7 @@ export function toJsonSchema(schema: Schema): ConfigJsonSchema {
     default: throw new TypeError(`Schema type ${meta.type} cannot describe JSON configuration`);
   }
   if (meta.description !== undefined) result.description = meta.description;
+  if (meta.i18n !== undefined) result['x-i18n'] = structuredClone(meta.i18n);
   if (meta.default !== undefined) {
     assertJsonValue(meta.default);
     assertPublicDefault(schema, meta.default);

@@ -1,3 +1,4 @@
+import { resolveLocale } from 'zhin.js/i18n';
 import {
   databaseHostToken,
   definePlugin,
@@ -54,6 +55,7 @@ export default definePlugin<EarthquakeConfig>({
             id: subscription.conversationId,
           },
           content,
+          locale: resolveLocale(subscription.locale),
         });
       };
     }

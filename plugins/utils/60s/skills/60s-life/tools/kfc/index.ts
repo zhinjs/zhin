@@ -9,6 +9,6 @@ export default defineAgentTool({
   tags: ["娱乐", "KFC", "文案"],
   async execute(_input, context) {
     const handler = (await import('../../../../src/handlers/kfc.js')).default;
-    return handler(context.use(sixtySClientToken));
+    return handler(context.use(sixtySClientToken), context.locale);
   },
 });

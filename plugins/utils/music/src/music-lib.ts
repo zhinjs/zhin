@@ -1,4 +1,6 @@
-import { sourceConfigMap, SOURCE_DISPLAY_NAME, formatDuration } from './config.js';
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t, sourceName as displayName } from './i18n.js';
+import { sourceConfigMap, formatDuration } from './config.js';
 import type { MusicInfo, MusicDetail, MusicSource } from './types.js';
 import type { MusicRuntime } from './runtime.js';
 
@@ -26,10 +28,10 @@ export async function searchMusic(
   };
 }
 
-export async function shareMusicDetail(runtime: MusicRuntime, id: string, source: MusicSource) {
+export async function shareMusicDetail(runtime: MusicRuntime, id: string, source: MusicSource, locale: Locale = 'zh-CN') {
   const service = runtime.services[source];
   if (!service) {
-    return { success: false as const, error: `不支持的音乐源: ${source}` };
+    return { success: false as const, error: t(locale, 'unsupported', { source }) };
   }
   try {
     const detail = await service.getDetail(id);
@@ -42,16 +44,16 @@ export async function shareMusicDetail(runtime: MusicRuntime, id: string, source
   }
 }
 
-export function formatSearchResults(results: readonly MusicInfo[], source: MusicSource): string {
-  const sourceName = SOURCE_DISPLAY_NAME[source] ?? source;
-  if (results.length === 0) return `[${sourceName}] 未找到相关歌曲`;
+export function formatSearchResults(results: readonly MusicInfo[], source: MusicSource, locale: Locale = 'zh-CN'): string {
+  const sourceName = displayName(source, locale) ?? source;
+  if (results.length === 0) return t(locale, 'noResults', { source: sourceName });
   const lines = results.map((m, i) => {
     const parts = [m.title];
     if (m.artist) parts.push(m.artist);
     const duration = m.duration ? ` [${formatDuration(m.duration)}]` : '';
     return `${i + 1}. ${parts.join(' - ')}${duration}`;
   });
-  return `[${sourceName}] 搜索结果：\n${lines.join('\n')}\n\n回复序号播放，回复"取消"取消选择`;
+  return t(locale, 'results', { source: sourceName, lines: lines.join('\n') });
 }
 
 export function buildMusicShareSegment(detail: MusicDetail) {

@@ -1,3 +1,6 @@
+import { type Locale } from 'zhin.js/i18n';
+import { messages } from './presentation.js';
+import { message } from './messages.js';
 /**
  * Domain registration / renewal / transfer price comparison through the
  * public nazhumi.com API (`GET /api/v1?domain=<suffix>&order=register`).
@@ -31,11 +34,7 @@ const PRICE_KIND_ALIASES: Readonly<Record<string, PriceKind>> = {
   转入: 'transfer',
 };
 
-const PRICE_KIND_LABELS: Readonly<Record<PriceKind, string>> = {
-  register: '注册',
-  renew: '续费',
-  transfer: '转入',
-};
+
 
 export interface PriceEntry {
   readonly registrar: string;
@@ -59,7 +58,7 @@ export function parsePriceKind(input: string | undefined): PriceKind {
   }
   const kind = PRICE_KIND_ALIASES[input.trim().toLowerCase()];
   if (!kind) {
-    throw new NettoolsError('invalid_input', '价格类型可选：注册(register) / 续费(renew) / 转入(transfer)');
+    throw new NettoolsError('invalid_input', message('priceKind'));
   }
   return kind;
 }
@@ -75,11 +74,11 @@ export function parseDomainSuffix(input: string): string {
   const explicitSuffix = trimmed.startsWith('.');
   const withoutDot = explicitSuffix ? trimmed.slice(1) : trimmed;
   if (withoutDot.length === 0) {
-    throw new NettoolsError('invalid_input', '请提供域名后缀，例如 com 或 .cn');
+    throw new NettoolsError('invalid_input', message('suffixRequired'));
   }
   const parsed = parseHostInput(withoutDot, { minLabels: 1 });
   if (parsed.kind !== 'domain') {
-    throw new NettoolsError('invalid_input', '请提供域名或后缀，而不是 IP 地址');
+    throw new NettoolsError('invalid_input', message('suffixNotIp'));
   }
   const labels = parsed.name.split('.');
   if (explicitSuffix || labels.length === 1) {
@@ -106,11 +105,11 @@ export async function comparePrices(
 
 export function parsePriceResponse(body: unknown, suffix: string, kind: PriceKind): PriceComparison {
   if (!isRecord(body)) {
-    throw new NettoolsError('malformed', 'nazhumi.com 返回了无法识别的数据');
+    throw new NettoolsError('malformed', message('priceMalformed'));
   }
   if (typeof body.code === 'number' && body.code !== 100 && body.code !== 200 && body.code !== 0) {
-    const message = typeof body.msg === 'string' ? body.msg : typeof body.message === 'string' ? body.message : '';
-    throw new NettoolsError('http', `nazhumi.com 返回错误 ${body.code}${message ? `：${message}` : ''}`);
+    const providerMessage = typeof body.msg === 'string' ? body.msg : typeof body.message === 'string' ? body.message : '';
+    throw new NettoolsError('http', message('priceError', { code: body.code, detail: providerMessage ? `: ${providerMessage}` : '' }));
   }
   const data = isRecord(body.data) ? body.data : {};
   const rawPrices = Array.isArray(data.price) ? data.price : [];
@@ -175,22 +174,22 @@ function compareByCnyPrice(left: PriceEntry, right: PriceEntry): number {
   return left.priceCny - right.priceCny;
 }
 
-export function formatPriceComparison(comparison: PriceComparison, limit: number): string {
-  const label = PRICE_KIND_LABELS[comparison.kind];
+export function formatPriceComparison(comparison: PriceComparison, limit: number, locale: Locale = 'zh-CN'): string {
+  const label = messages(locale, comparison.kind);
   if (comparison.entries.length === 0) {
-    return `💰 .${comparison.suffix} 暂无${label}价格数据`;
+    return messages(locale, 'noPrice', { suffix: comparison.suffix, kind: label });
   }
-  const lines = [`💰 .${comparison.suffix} ${label}价格（低→高，nazhumi.com）`];
+  const lines = [messages(locale, 'priceHeader', { suffix: comparison.suffix, kind: label })];
   comparison.entries.slice(0, limit).forEach((entry, index) => {
     const cny = entry.priceCny === undefined ? '' : `（≈¥${entry.priceCny.toFixed(2)}）`;
-    const promo = entry.hasPromoCode ? ' 🎟️有优惠码' : '';
+    const promo = entry.hasPromoCode ? messages(locale, 'promo') : '';
     lines.push(`${index + 1}. ${entry.registrar}：${entry.price} ${entry.currency}${cny}${promo}`);
   });
   if (comparison.entries.length > limit) {
-    lines.push(`…共 ${comparison.entries.length} 家`);
+    lines.push(messages(locale, 'registrars', { count: comparison.entries.length }));
   }
-  const updated = comparison.updatedAt ? `，数据更新于 ${comparison.updatedAt}` : '';
-  lines.push(`价格仅供参考${updated}，以注册商官网为准`);
+  const updated = comparison.updatedAt ? messages(locale, 'priceUpdated', { date: comparison.updatedAt }) : '';
+  lines.push(messages(locale, 'priceNote', { updated }));
   return lines.join('\n');
 }
 

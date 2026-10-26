@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import { randomUUID } from 'node:crypto';
 import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 import type { DingTalkMessage, ResolvedDingTalkConfig } from './protocol.js';
@@ -14,7 +16,7 @@ export class DingTalkCards {
     while (this.#contexts.size > 1024) this.#contexts.delete(this.#contexts.keys().next().value!);
   }
   clear(): void { this.#epoch++; this.#records.clear(); this.#contexts.clear(); }
-  prepare(config: ResolvedDingTalkConfig, conversation: ConversationRef, payload: unknown) {
+  prepare(config: ResolvedDingTalkConfig, conversation: ConversationRef, payload: unknown, locale?: Locale) {
     const segments = Array.isArray(payload) ? payload : [payload];
     const keyboard = segments.filter(item => item && typeof item === 'object' && item.type === 'keyboard');
     if (!keyboard.length) return undefined;
@@ -35,7 +37,7 @@ export class DingTalkCards {
       if (item?.type === 'text' || item?.type === 'markdown') return String(item.data?.text ?? item.data?.content ?? '');
       throw new EndpointDeliveryError('invalid_payload', 'DingTalk interactive cards accept text/markdown and keyboard only', 'not_sent');
     }).join('');
-    const cardParamMap: Record<string, string> = { title: '消息', text };
+    const cardParamMap: Record<string, string> = { title: t(locale, 'message'), text };
     for (let i = 0; i < count; i++) { cardParamMap[`button${i}_label`] = buttons[i]?.label ?? ''; cardParamMap[`button${i}_payload`] = buttons[i]?.payload ?? ''; cardParamMap[`button${i}_visible`] = buttons[i] ? 'true' : 'false'; }
     const id = randomUUID();
     const record: CardRecord = { conversation, spaceType, spaceId, staffId: context.senderStaffId, senderId: context.senderId, corpId: context.senderCorpId, payloads: new Set(buttons.map((button: any) => button.payload)), expiresAt: Date.now() + 3_600_000 };

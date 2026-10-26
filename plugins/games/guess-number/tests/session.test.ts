@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   createMemoryGameServices,
   plainTextFromSendContent,
+  type GameMessageLike,
 } from '@zhin.js/game-kit';
 import {
   handleGuessChoice,
@@ -46,6 +47,25 @@ describe('guess-number sessions', () => {
     const wrongGuess = session!.secret === 1 ? 100 : 1;
     const reply = await processGuess(services, mockMessage('alice'), wrongGuess);
     expect(plainTextFromSendContent(reply!)).toMatch(/大|小|机会/);
+  });
+
+  it('pins the game language, isolates players, and uses the new preference on restart', async () => {
+    const alice: GameMessageLike = { $adapter: 'sandbox', $endpoint: 'default',
+      $channel: { type: 'group', id: 'g1' }, $sender: { id: 'alice' }, locale: 'en' };
+    const bob: GameMessageLike = { ...alice, $sender: { id: 'bob' }, locale: 'zh-CN' };
+    expect(plainTextFromSendContent(await startGame(services, alice))).toContain('Guess the Number');
+    expect(plainTextFromSendContent(await startGame(services, bob))).toContain('猜数字');
+    const session = (await services.getActiveForUser('sandbox-default-group:g1', 'alice'))!;
+    expect(session.locale).toBe('en');
+    const changedPreference: GameMessageLike = { ...alice, locale: 'zh-CN' };
+    const wrong = session.secret === 1 ? 100 : 1;
+    const reply = plainTextFromSendContent((await processGuess(services, changedPreference, wrong))!);
+    expect(reply).toContain('Guess the Number');
+    expect(reply).toMatch(/Too (low|high)/);
+    expect(reply).not.toMatch(/\p{Script=Han}/u);
+    expect(plainTextFromSendContent(await handleGuessChoice(services, changedPreference, session.id, 'quit'))).toContain('quit');
+    expect(plainTextFromSendContent(await handleGuessChoice(services, changedPreference, session.id, 'restart'))).toContain('猜数字');
+    expect((await services.getActiveForUser('sandbox-default-group:g1', 'alice'))?.locale).toBe('zh-CN');
   });
 
   it('supports terminal restart through the structured action path', async () => {

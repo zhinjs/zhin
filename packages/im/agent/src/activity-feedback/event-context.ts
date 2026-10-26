@@ -2,9 +2,11 @@ import type { TypingIndicatorOptions } from '../typing-indicator/index.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import type { ActivitySceneType } from './types.js';
 import { resolveActivityFeedbackSessionId } from './subagent-prefix.js';
+import { isLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 /** 单次 activity phase 操作的归一化上下文（由 AI 事件 payload 解析） */
 export interface ActivityFeedbackEventContext {
+  locale?: Locale;
   platform: string;
   endpointKey: string;
   sessionId: string;
@@ -62,6 +64,7 @@ export function resolveActivityEventTargets(
 /** 将 AI 生命周期事件转为 activity 执行上下文 */
 export function toActivityFeedbackEventContext(
   payload: AIEventPayload,
+  defaultLocale: Locale = 'zh-CN',
 ): ActivityFeedbackEventContext | null {
   const { platform, endpointKey, sessionId } = payload;
   if (!platform || !endpointKey) return null;
@@ -70,8 +73,10 @@ export function toActivityFeedbackEventContext(
   const targets = resolveActivityEventTargets(payload, sceneType);
   // Subagent shares the IM session but uses an isolated indicator key.
   const activitySessionId = resolveActivityFeedbackSessionId(payload);
+  const locale = isLocale(payload.locale) ? payload.locale : defaultLocale;
 
   return {
+    locale,
     platform,
     endpointKey,
     sessionId: activitySessionId,
@@ -80,6 +85,7 @@ export function toActivityFeedbackEventContext(
     userId: targets.userId,
     groupId: targets.groupId,
     options: {
+      locale,
       platform,
       endpointKey,
       sessionId: activitySessionId,

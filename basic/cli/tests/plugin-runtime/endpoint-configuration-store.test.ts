@@ -147,7 +147,7 @@ describe('ProjectEndpointConfigurationStore', () => {
       adapterKey: 'demo',
       entry: { id: 'dup' },
       environment: { DEMO_DUP_TOKEN: 'secret' },
-    })).rejects.toThrow(/已存在/);
+    })).rejects.toMatchObject({ code: 'duplicate_entry', details: { adapterKey: 'demo', endpointId: 'dup' } });
     expect(fs.readFileSync(filePath, 'utf8')).toBe(before);
     expect(fs.existsSync(path.join(root, '.env'))).toBe(false);
   });

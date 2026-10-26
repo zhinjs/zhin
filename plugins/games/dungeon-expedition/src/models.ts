@@ -6,6 +6,7 @@ declare module '@zhin.js/core' {
   interface Models {
     dungeon_sessions: {
       id: string;
+      locale?: 'zh-CN' | 'en' | null;
       adapter: string;
       endpoint: string;
       channel_type: string;
@@ -32,11 +33,12 @@ export type DungeonSessionRow = Models['dungeon_sessions'];
 
 export function defineHostTables(
   database: {
-    define(name: string, definition: Record<string, unknown>): void;
+    define(name: string, definition: Record<string, unknown>, options?: { readonly addColumns?: readonly string[] }): void;
   },
 ): void {
   database.define('dungeon_sessions', {
     id: { type: 'text', primary: true },
+    locale: { type: 'text', nullable: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },
     channel_type: { type: 'text', nullable: false },
@@ -55,5 +57,5 @@ export function defineHostTables(
     status: { type: 'text', default: 'active' },
     updated_at: { type: 'bigint', default: 0 },
     created_at: { type: 'bigint', default: 0 },
-  });
+  }, { addColumns: ['locale'] });
 }

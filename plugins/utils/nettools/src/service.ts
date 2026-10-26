@@ -1,3 +1,5 @@
+import { type Locale } from 'zhin.js/i18n';
+import { message } from './messages.js';
 /**
  * NettoolsService: the single entry point used by chat commands and Agent
  * tools. Each method validates input, spends the caller's cooldown, performs
@@ -50,19 +52,19 @@ export class NettoolsService {
   }
 
   /** Run one operation and always resolve to a user-facing string. */
-  async run(operation: () => Promise<string>): Promise<string> {
+  async run(operation: () => Promise<string>, locale: Locale = 'zh-CN'): Promise<string> {
     try {
       return await operation();
     } catch (error) {
-      return describeFailure(error);
+      return describeFailure(error, locale);
     }
   }
 
-  async ping(hostInput: string, callerKey: string, signal?: AbortSignal): Promise<string> {
+  async ping(hostInput: string, callerKey: string, signal?: AbortSignal, locale: Locale = 'zh-CN'): Promise<string> {
     const host = parseHostInput(hostInput);
     const verdict = classifyParsedHost(host);
     if (verdict.blocked) {
-      throw new NettoolsError('blocked_target', `拒绝探测 ${displayHost(host)}：${verdict.reason}`);
+      throw new NettoolsError('blocked_target', message('probeBlocked', { host: displayHost(host), reason: verdict.detail }));
     }
     this.#cooldown.take(callerKey);
     const target = await assertPublicTarget(hostInput, this.#resolver, signal);
@@ -72,44 +74,44 @@ export class NettoolsService {
       maxPolls: this.config.pingMaxPolls,
       ...(signal ? { signal } : {}),
     });
-    return formatPingReport(report);
+    return formatPingReport(report, locale);
   }
 
-  async whois(domainInput: string, callerKey: string, signal?: AbortSignal): Promise<string> {
+  async whois(domainInput: string, callerKey: string, signal?: AbortSignal, locale: Locale = 'zh-CN'): Promise<string> {
     const host = parseHostInput(domainInput);
     if (host.kind !== 'domain') {
-      throw new NettoolsError('invalid_input', 'whois 目前只支持域名查询');
+      throw new NettoolsError('invalid_input', message('whoisDomainOnly'));
     }
     const verdict = classifyParsedHost(host);
     if (verdict.blocked) {
-      throw new NettoolsError('blocked_target', `拒绝查询 ${host.name}：${verdict.reason}`);
+      throw new NettoolsError('blocked_target', message('queryBlocked', { host: host.name, reason: verdict.detail }));
     }
     this.#cooldown.take(callerKey);
     const record = await this.#rdap.lookup(host.name, signal);
-    return formatWhoisRecord(record);
+    return formatWhoisRecord(record, locale);
   }
 
-  async dns(nameInput: string, typeInput: string | undefined, callerKey: string, signal?: AbortSignal): Promise<string> {
+  async dns(nameInput: string, typeInput: string | undefined, callerKey: string, signal?: AbortSignal, locale: Locale = 'zh-CN'): Promise<string> {
     const type = parseDnsType(typeInput);
     const host = parseHostInput(nameInput, { allowUnderscore: true });
     const verdict = classifyParsedHost(host);
     if (verdict.blocked) {
-      throw new NettoolsError('blocked_target', `拒绝查询 ${displayHost(host)}：${verdict.reason}`);
+      throw new NettoolsError('blocked_target', message('queryBlocked', { host: displayHost(host), reason: verdict.detail }));
     }
     if (host.kind !== 'domain' && type !== 'PTR') {
-      throw new NettoolsError('invalid_input', 'IP 地址只能做反向解析，请使用：dns <IP> PTR');
+      throw new NettoolsError('invalid_input', message('reverseOnly'));
     }
     const queryName = host.kind === 'domain' ? host.name : reverseLookupName(host);
     this.#cooldown.take(callerKey);
     const answer = await this.#resolver.resolve(queryName, type, signal);
-    return formatDnsAnswer(answer);
+    return formatDnsAnswer(answer, undefined, locale);
   }
 
-  async domainPrice(suffixInput: string, kindInput: string | undefined, callerKey: string, signal?: AbortSignal): Promise<string> {
+  async domainPrice(suffixInput: string, kindInput: string | undefined, callerKey: string, signal?: AbortSignal, locale: Locale = 'zh-CN'): Promise<string> {
     const kind = parsePriceKind(kindInput);
     const suffix = parseDomainSuffix(suffixInput);
     this.#cooldown.take(callerKey);
     const comparison = await comparePrices(this.#http, suffix, kind, signal);
-    return formatPriceComparison(comparison, this.config.priceListLimit);
+    return formatPriceComparison(comparison, this.config.priceListLimit, locale);
   }
 }

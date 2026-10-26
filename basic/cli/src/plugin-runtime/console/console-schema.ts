@@ -91,13 +91,20 @@ function convert(input: unknown, key: string | undefined, context: Context): Sch
   const inferred = type ?? (Array.isArray(schema.enum) && schema.enum.length ? (schema.enum[0] === null ? 'null' : typeof schema.enum[0]) : 'any');
   return finish({ type: inferred === 'integer' ? 'number' : jsonTypes.has(inferred) ? inferred : 'any', ...(inferred === 'integer' ? { integer: true } : {}) });
 }
-const annotationKeys = new Set(['title', 'description', 'x-descriptionZh', 'default', 'readOnly', 'writeOnly', 'examples', 'deprecated', 'x-zhin-config', 'key', 'hidden', 'component', 'options', 'effect', 'secret']);
+const annotationKeys = new Set(['title', 'description', 'x-descriptionZh', 'x-i18n', 'default', 'readOnly', 'writeOnly', 'examples', 'deprecated', 'x-zhin-config', 'key', 'hidden', 'component', 'options', 'effect', 'secret']);
 function annotate(result: Schema, schema: Schema, key?: string): Schema {
   const output: Schema = { ...result };
+  if (record(schema['x-i18n'])) output['x-i18n'] = schema['x-i18n'];
   for (const name of ['key', 'title', 'default', 'min', 'max', 'step', 'integer', 'pattern', 'minLength', 'maxLength', 'minItems', 'maxItems', 'minimum', 'maximum', 'multipleOf', 'uniqueItems', 'minProperties', 'maxProperties', 'exclusiveMinimum', 'exclusiveMaximum', 'readOnly', 'deprecated', 'format', 'unevaluatedProperties']) if (own(schema, name)) output[name] = schema[name];
   if (key !== undefined && output.key === undefined) output.key = key;
   const description = typeof schema['x-descriptionZh'] === 'string' ? schema['x-descriptionZh'] : schema.description;
   if (typeof description === 'string') output.description = description;
+  // Existing bilingual Host schemas already keep the English original beside x-descriptionZh.
+  if (typeof schema['x-descriptionZh'] === 'string' && typeof schema.description === 'string') {
+    const catalog = record(output['x-i18n']) ? output['x-i18n'] : {};
+    const english = record(catalog.en) ? catalog.en : {};
+    output['x-i18n'] = { ...catalog, en: { description: schema.description, ...english } };
+  }
   if (typeof schema.required === 'boolean') output.required = schema.required;
   if (Array.isArray(schema.enum)) output.options = schema.enum.map(value => ({ label: String(value), value }));
   for (const name of ['hidden', 'component', 'options', 'effect']) if (schema[name] !== undefined) output[name] = schema[name];

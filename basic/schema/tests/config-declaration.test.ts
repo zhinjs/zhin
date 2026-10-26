@@ -4,10 +4,27 @@ import { Schema } from '../src/index.js';
 function configValidator(schema: Schema) {
   const ajv = new Ajv2020({ useDefaults: true, allErrors: true, strict: true });
   ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
+  ajv.addKeyword({ keyword: 'x-i18n', schemaType: 'object' });
   return ajv.compile(schema.toJsonSchema());
 }
 
 describe('configuration declaration export', () => {
+  it('retains localized form annotations through serialization without changing validation', () => {
+    const labels = { en: { title: 'Region', description: 'Delivery region', enumLabels: { cn: 'China' } } };
+    const declaration = Schema.object({ region: Schema.string().option(['cn', 'global'])
+      .default('cn').description('投递地区').i18n(labels) });
+    labels.en.title = 'Changed externally';
+    const restored = Schema.fromJSON(declaration.toJSON() as Schema.JSON);
+    expect(restored.toJsonSchema()).toMatchObject({ properties: { region: {
+      description: '投递地区', enum: ['cn', 'global'], default: 'cn',
+      'x-i18n': { en: { title: 'Region', description: 'Delivery region', enumLabels: { cn: 'China' } } },
+    } } });
+    const validate = configValidator(restored);
+    const input = {};
+    expect(validate(input)).toBe(true);
+    expect(input).toEqual({ region: 'cn' });
+    expect(validate({ region: 'China' })).toBe(false);
+  });
   it('uses one subscription declaration for typed defaults and strict validation', () => {
     const schema = Schema.object({
       interval: Schema.number().min(1).max(86400).step(1).default(300).description('Polling interval in seconds').effect('reload'),

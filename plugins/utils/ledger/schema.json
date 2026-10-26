@@ -8,6 +8,11 @@
       "default": "Asia/Shanghai",
       "x-zhin-config": {
         "effect": "reload"
+      },
+      "x-i18n": {
+        "en": {
+          "description": "IANA timezone used to calculate today, this week (starting Monday), this month and daily-report dates."
+        }
       }
     },
     "reportTime": {
@@ -17,6 +22,11 @@
       "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
       "x-zhin-config": {
         "effect": "reload"
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Daily ledger report time (HH:MM in timezone); sent only to users who explicitly subscribed to daily reports."
+        }
       }
     },
     "reportWhenEmpty": {
@@ -25,6 +35,11 @@
       "default": false,
       "x-zhin-config": {
         "effect": "reload"
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Send a daily report even when no transactions were recorded that day."
+        }
       }
     }
   }

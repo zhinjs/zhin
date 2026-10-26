@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import { DEFAULT_WEIGHTS, type DrawNumbers, type Kl8GroupStrategy, type Kl8PickGroup, type NormalizedDraw, type ScoreWeights } from '../types.js';
 
 import { pickTopUnique, scorePool, type PoolScore } from '../stats/engine.js';
@@ -70,6 +72,7 @@ export function recommendKl8Groups(
     strategies: Kl8GroupStrategy[];
     tieSeed: string;
     baseWeights: ScoreWeights;
+    locale?: Locale;
   },
 ): RecommendKl8GroupsResult {
   const rows = poolDraws(draws, (n) => n.main ?? []);
@@ -86,7 +89,7 @@ export function recommendKl8Groups(
     groups.push({
       index: i + 1,
       strategy,
-      label: KL8_STRATEGY_LABELS[strategy],
+      label: t(options.locale, `strategy.${strategy}`),
       numbers: main,
       weights,
     });

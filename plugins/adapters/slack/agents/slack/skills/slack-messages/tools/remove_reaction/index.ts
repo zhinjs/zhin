@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { normalizeSlackReactionName } from '@zhin.js/adapter-slack';
@@ -27,6 +28,6 @@ export default defineAgentTool<{
       if ((error as { data?: { error?: string } })?.data?.error !== 'no_reaction') throw error;
     }
     const success = true;
-    return { success, message: success ? `已移除反应 :${name}:` : '操作失败' };
+    return { success, message: success ? t(context.locale, 'slackReactionRemoved', { p0: name }) : t(context.locale, 'operationFailed') };
   },
 });

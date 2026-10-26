@@ -1,6 +1,7 @@
 import { createRootPrivateToken, createToken } from './token.js';
 import type { DeliveryTarget } from './delivery-target.js';
 import type { PluginId } from './identity.js';
+import type { Locale } from './i18n.js';
 import { generationAdmissionBinder, generationAdmissionSource, type GenerationAdmissionGate } from './admission.js';
 import { OwnerOperation } from './owner-operation.js';
 
@@ -25,6 +26,8 @@ export interface OutboundConversation {
  * `sendEndpointMessage` (resolve adapter/endpoint → AdapterIndex.send).
  */
 export interface OutboundSendInput {
+  /** Language captured by the originating operation or persisted task. */
+  readonly locale?: Locale;
   readonly adapter: string;
   readonly endpointKey: string;
   readonly conversation: OutboundConversation;
@@ -85,7 +88,7 @@ export interface OutboundMessage {
 
 export interface OutboundHost {
   /** Sends to persisted exact identities, rejecting stale addresses instead of aliasing another bot. */
-  sendTarget?(target: DeliveryTarget, content: unknown): Promise<string | null>;
+  sendTarget?(target: DeliveryTarget, content: unknown, options?: Readonly<{ locale?: Locale }>): Promise<string | null>;
   /** Runs related operations against one IM Runtime snapshot captured at ingress. */
   runWithView?<T>(operation: () => Promise<T>): Promise<T>;
   /** Exact operations declared by one live Endpoint. */
@@ -108,7 +111,7 @@ export interface OutboundHost {
 
 /** Root-only process port: requester is supplied by the owner-bound facade. */
 export interface OutboundRootHost extends Omit<OutboundHost, 'sendTarget'> {
-  sendTarget?(target: DeliveryTarget, content: unknown, requester: PluginId): Promise<string | null>;
+  sendTarget?(target: DeliveryTarget, content: unknown, requester: PluginId, options?: Readonly<{ locale?: Locale }>): Promise<string | null>;
 }
 
 /** Preserve the sending plugin as requester, independent of the destination endpoint owner. */
@@ -140,7 +143,9 @@ export class PluginOutboundHost implements OutboundHost {
     const recall = host.recall?.bind(host);
     const edit = host.edit?.bind(host);
     const typing = host.typing?.bind(host);
-    this.sendTarget = sendTarget ? async (target, content) => this.#run(() => sendTarget(target, content, this.#owner)) : undefined;
+    this.sendTarget = sendTarget ? async (target, content, options) => this.#run(() => options
+      ? sendTarget(target, content, this.#owner, options)
+      : sendTarget(target, content, this.#owner)) : undefined;
     this.runWithView = runWithView ? (operation) => this.#run(() => runWithView(operation)) : undefined;
     this.capabilities = capabilities ? (input) => this.#run(() => capabilities(input)) : undefined;
     this.addReaction = addReaction ? (input) => this.#run(() => addReaction(input)) : undefined;

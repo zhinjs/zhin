@@ -1,7 +1,7 @@
 import type { CommandDispatchResult, CommandExecutionLimit, CommandValidationIssue } from '@zhin.js/command';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { createToken, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { createToken, createMessages, resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageSenderRef, SendContent } from './contracts.js';
 
 interface CommandFeedbackIdentity {
@@ -19,6 +19,7 @@ export type CommandFeedback = CommandFeedbackIdentity & (
 
 /** A presentation context deliberately without message bodies, sending methods or executors. */
 export interface CommandFeedbackContext {
+  readonly locale: Locale;
   readonly conversation: ConversationRef;
   readonly sender?: MessageSenderRef;
   readonly clientAdapter?: string;
@@ -46,19 +47,28 @@ function feedbackFrom(result: CommandDispatchResult): CommandFeedback | undefine
   return undefined;
 }
 
-function defaultFeedback(feedback: CommandFeedback): string {
+const feedbackMessages = createMessages({
+  denied: { 'zh-CN': '没有权限执行此指令。', en: 'You do not have permission to run this command.' },
+  cooldown: { 'zh-CN': '此指令仍在冷却，请稍后再试。', en: 'This command is on cooldown. Try again later.' },
+  wait: { 'zh-CN': '此指令仍在冷却，约 {seconds} 秒后再试。', en: 'This command is on cooldown. Try again in about {seconds} seconds.' },
+  busy: { 'zh-CN': '你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。', en: 'Your previous command is still running. Wait for it to finish before trying again.' },
+  capacity: { 'zh-CN': '当前繁忙，本次指令未被接纳，请稍后再试。', en: 'The service is busy. This command was not accepted; try again later.' },
+  identity: { 'zh-CN': '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。', en: 'This command was not accepted because a trusted identity or valid execution context is missing. Ask an administrator to check the adapter and runtime.' },
+});
+
+function defaultFeedback(feedback: CommandFeedback, locale: Locale): string {
   if (feedback.status === 'invalid') {
     return [...feedback.issues.map(issue => issue.message), feedback.help].filter(Boolean).join('\n');
   }
-  if (feedback.status === 'denied') return '没有权限执行此指令。';
+  if (feedback.status === 'denied') return feedbackMessages(locale, 'denied');
   const reason = feedback.limit?.reason;
   const waitMs = feedback.limit?.retryAfterMs;
   return reason === 'cooldown'
     ? typeof waitMs === 'number' && waitMs > 0
-      ? `此指令仍在冷却，约 ${Math.ceil(waitMs / 1000)} 秒后再试。` : '此指令仍在冷却，请稍后再试。'
-    : reason === 'busy' ? '你的上一条同类指令仍在处理中，请等待执行完成，避免重复触发。'
-    : reason === 'capacity' ? '当前繁忙，本次指令未被接纳，请稍后再试。'
-    : '当前缺少可信身份或有效执行上下文，本次指令未被接纳。请管理员检查适配器及当前运行状态。';
+      ? feedbackMessages(locale, 'wait', { seconds: Math.ceil(waitMs / 1000) }) : feedbackMessages(locale, 'cooldown')
+    : reason === 'busy' ? feedbackMessages(locale, 'busy')
+    : reason === 'capacity' ? feedbackMessages(locale, 'capacity')
+    : feedbackMessages(locale, 'identity');
 }
 
 /** @internal Resolve once from the operation snapshot; never redispatch or send from here. */
@@ -79,7 +89,7 @@ export async function renderCommandFeedback(
       }) } : {}),
       ...(message.conversation.threadId !== undefined ? { threadId: message.conversation.threadId } : {}),
     });
-    const context: CommandFeedbackContext = Object.freeze({ conversation,
+    const context: CommandFeedbackContext = Object.freeze({ conversation, locale: resolveLocale(message.locale),
       ...(message.sender ? { sender: Object.freeze({ id: message.sender.id,
         ...(message.sender.name !== undefined ? { name: message.sender.name } : {}),
         ...(message.sender.roles ? { roles: Object.freeze([...message.sender.roles]) } : {}) }) } : {}),
@@ -93,5 +103,5 @@ export async function renderCommandFeedback(
       logger.warn(formatCompact({ op: 'command_feedback_error', generation: snapshot.generation, status: feedback.status }));
     }
   }
-  return { content: defaultFeedback(feedback), owner: result.owner };
+  return { content: defaultFeedback(feedback, resolveLocale(message.locale)), owner: result.owner };
 }

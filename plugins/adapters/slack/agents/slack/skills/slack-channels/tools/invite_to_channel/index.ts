@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -19,6 +20,6 @@ export default defineAgentTool<{
     const client = context.$client;
     await client.conversations.invite({ channel, users });
     const success = true;
-    return { success, message: success ? '已邀请用户加入频道' : '操作失败' };
+    return { success, message: success ? t(context.locale, 'channelInvited') : t(context.locale, 'operationFailed') };
   },
 });

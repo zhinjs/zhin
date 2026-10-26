@@ -6,6 +6,8 @@ import { createProviders } from './providers/registry.js';
 import { GroupModerator } from './group-moderation.js';
 import { GroupReviewQueue } from './group-review-queue.js';
 import { generationAdmissionSource } from 'zhin.js/plugin-runtime';
+import type { Locale } from 'zhin.js/i18n';
+import { moderationMessages } from './messages.js';
 import type { ModerationProvider } from './providers/types.js';
 import {
   maxSeverity,
@@ -100,6 +102,7 @@ export class ModerationEngine {
 
   async apply(options: {
     readonly direction: Direction;
+    readonly locale?: Locale;
     readonly extracted: ExtractedContent;
     readonly scanInput: ScanInput;
     readonly hooks: ApplyHooks;
@@ -147,7 +150,7 @@ export class ModerationEngine {
 
     if (actionSet.has('reply') && options.direction === 'inbound') {
       try {
-        await options.hooks.reply?.(this.#config.replyTemplate);
+        await options.hooks.reply?.(this.#config.replyTemplate ?? moderationMessages(options.locale, 'blocked'));
       } catch (error) {
         this.#logger.warn(formatCompact({
           op: 'moderation_reply_failed',

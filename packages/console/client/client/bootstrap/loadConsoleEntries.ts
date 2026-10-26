@@ -109,7 +109,7 @@ export function resolveEntryRegister(
     ? entry.route
     : `/${entry.id}`;
   const meta = mod["meta"] && typeof mod["meta"] === "object"
-    ? mod["meta"] as { title?: string; icon?: string; hideInNav?: boolean }
+    ? mod["meta"] as { title?: string; titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>; icon?: string; hideInNav?: boolean }
     : undefined;
   const name = (typeof meta?.title === "string" && meta.title)
     || (typeof entry.title === "string" && entry.title)
@@ -121,7 +121,7 @@ export function resolveEntryRegister(
       name,
       element: api.React.createElement(Component as React.ComponentType),
       ...(meta?.icon != null ? { icon: meta.icon } : {}),
-      meta: { hideInMenu: meta?.hideInNav === true },
+      meta: { hideInMenu: meta?.hideInNav === true, ...(meta?.titleI18n === undefined ? {} : { titleI18n: meta.titleI18n }) },
     });
   };
 }

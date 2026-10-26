@@ -58,11 +58,12 @@ describe('deliverScheduleToAdapter', () => {
     const result = await deliverScheduleToAdapter({
       notify,
       content: 'hello',
+      locale: 'en',
       router,
       source: 'scheduled',
     });
     expect(result).toEqual({ delivered: true, channel: 'im' });
-    expect(sendIm).toHaveBeenCalledWith(notify, 'hello', 'scheduled');
+    expect(sendIm).toHaveBeenCalledWith(notify, 'hello', 'scheduled', { locale: 'en' });
   });
 
 });

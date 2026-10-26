@@ -46,10 +46,13 @@ export function createTurnActivityProjector(options: TurnActivityProjectorOption
       return;
     }
     if (event.type === 'iteration_start' && event.iteration > 1) {
+      // Base content is the user's input, not authored progress text. Keep it out of
+      // this projected event while leaving explicit content on other events intact.
+      const { content: _inputContent, ...context } = payload;
       options.publish('ai.processing.start', {
-        ...payload,
+        ...context,
         iterations: event.iteration,
-        content: `处理中 [${event.iteration}/${event.maxIterations}]...`,
+        iterationProgress: { current: event.iteration, total: event.maxIterations },
       });
       return;
     }

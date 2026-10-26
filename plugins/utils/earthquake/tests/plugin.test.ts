@@ -54,7 +54,7 @@ describe('@zhin.js/plugin-earthquake definition', () => {
   });
 
   it('publishes a strict schema whose defaults match the runtime defaults', () => {
-    const validate = new Ajv2020({ useDefaults: true, strict: true }).compile(schema);
+    const validate = new Ajv2020({ useDefaults: true, strict: true }).addKeyword({ keyword: 'x-i18n', schemaType: 'object', valid: true }).compile(schema);
     const filled: Record<string, unknown> = {};
     expect(validate(filled)).toBe(true);
     expect(filled).toEqual({ ...DEFAULT_EARTHQUAKE_CONFIG });
@@ -94,6 +94,29 @@ describe('@zhin.js/plugin-earthquake definition', () => {
 });
 
 describe('@zhin.js/plugin-earthquake runtime', () => {
+  it('uses current language for commands and retains the subscription language on later edits', async () => {
+    let quakes: QuakeSpec[] = [];
+    stubFeeds({ cenc: () => [], usgs: () => quakes });
+    const fake = await runPluginSetup(plugin, { config: {} });
+    try {
+      const input = createFakeMessage({ locale: 'en', sender: { id: 'u', roles: ['admin'] } });
+      const options = { input, params: { filters: ['5'] }, formatCommand: (path: string) => `/alerts ${path}` };
+      const reply = await runCommand(fake, subscribeCommand, options);
+      expect(reply).toContain('Subscribed: M5.0+');
+      expect(reply).toContain('/alerts 地震 退订');
+      await runCommand(fake, subscribeCommand, { ...options, locale: 'zh-CN', params: { filters: ['6'] } });
+      expect((await fake.resources.use(earthquakeServiceToken).store.list())[0]).toMatchObject({ locale: 'en', minMagnitude: 6 });
+      const result = await runCommand(fake, queryCommand, { input });
+      expect(result).toContain('Earthquakes M3.0+');
+      expect(result).toContain('no records');
+      await fake.clock.advance(2 * 60_000);
+      quakes = [liveQuake('locale-test', 1, { magnitude: 6.1 })];
+      await fake.clock.advance(2 * 60_000);
+      expect(fake.sent).toHaveLength(1);
+      expect(fake.sent[0]).toMatchObject({ kind: 'send', input: { locale: 'en', content: expect.stringContaining('Earthquake') } });
+    } finally { await fake.dispose(); }
+  });
+
   it('subscribes, shows status, queries, pushes on the cron tick and unsubscribes', async () => {
     let cenc: QuakeSpec[] = [liveQuake('CD.old', 30, { magnitude: 3.1, location: '新疆阿克苏地区库车市', latitude: 41.2, longitude: 83.7 })];
     let usgs: QuakeSpec[] = [];

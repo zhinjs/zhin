@@ -22,7 +22,6 @@ export const DEFAULT_MODERATION_CONFIG: ModerationConfig = Object.freeze({
   enabled: true,
   onError: 'open',
   maskChar: '*',
-  replyTemplate: '消息含不当内容，已拦截。',
   masters: Object.freeze([] as string[]),
   inbound: Object.freeze({
     enabled: true,
@@ -51,7 +50,7 @@ export function resolveModerationConfig(raw: unknown): ModerationConfig {
     : DEFAULT_MODERATION_CONFIG.maskChar;
   const replyTemplate = typeof input.replyTemplate === 'string' && input.replyTemplate.length > 0
     ? input.replyTemplate
-    : DEFAULT_MODERATION_CONFIG.replyTemplate;
+    : undefined;
 
   return Object.freeze({
     groupModeration: Object.freeze((Array.isArray(input.groupModeration) ? input.groupModeration : [])
@@ -66,7 +65,7 @@ export function resolveModerationConfig(raw: unknown): ModerationConfig {
     enabled: input.enabled !== false,
     onError,
     maskChar,
-    replyTemplate,
+    ...(replyTemplate === undefined ? {} : { replyTemplate }),
     masters: freezeStrings(input.masters),
     inbound: Object.freeze({
       enabled: inboundRaw.enabled !== false,

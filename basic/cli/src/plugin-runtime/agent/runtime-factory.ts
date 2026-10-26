@@ -203,6 +203,7 @@ export function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutbound
           id: ctx.scene.sceneId,
         },
         content,
+        locale: ctx.locale,
       });
       return result.messageId || 'ok';
     },

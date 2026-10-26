@@ -1,3 +1,5 @@
+import { type Locale } from 'zhin.js/i18n';
+import { message as errorMessage, formatMessage, type NettoolsMessage } from './messages.js';
 /**
  * Error categories surfaced by @zhin.js/plugin-nettools.
  *
@@ -19,6 +21,7 @@ export type NettoolsErrorKind =
 
 export class NettoolsError extends Error {
   readonly kind: NettoolsErrorKind;
+  readonly detail?: NettoolsMessage;
   /** HTTP status when the failure came from a provider response. */
   readonly status?: number;
   /** Milliseconds the caller should wait before retrying (cooldown / 429). */
@@ -26,12 +29,13 @@ export class NettoolsError extends Error {
 
   constructor(
     kind: NettoolsErrorKind,
-    message: string,
+    message: string | NettoolsMessage,
     options: { status?: number; retryAfterMs?: number; cause?: unknown } = {},
   ) {
-    super(message, options.cause === undefined ? undefined : { cause: options.cause });
+    super(typeof message === 'string' ? message : formatMessage(message), options.cause === undefined ? undefined : { cause: options.cause });
     this.name = 'NettoolsError';
     this.kind = kind;
+    if (typeof message !== 'string') this.detail = message;
     if (options.status !== undefined) {
       this.status = options.status;
     }
@@ -46,10 +50,10 @@ export function isNettoolsError(error: unknown): error is NettoolsError {
 }
 
 /** Render any thrown value as a short user-facing sentence. */
-export function describeFailure(error: unknown): string {
+export function describeFailure(error: unknown, locale: Locale = 'zh-CN'): string {
   if (!isNettoolsError(error)) {
     const detail = error instanceof Error ? error.message : String(error);
-    return `出错了：${detail}`;
+    return formatMessage(errorMessage('unexpected', { detail }), locale);
   }
-  return error.message;
+  return error.detail ? formatMessage(error.detail, locale) : error.message;
 }

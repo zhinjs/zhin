@@ -6,7 +6,12 @@
     "pollCron": {
       "type": "string",
       "default": "0 */5 * * * *",
-      "description": "轮询频率 (6 段 Cron 表达式)"
+      "description": "轮询频率 (6 段 Cron 表达式)",
+      "x-i18n": {
+        "en": {
+          "description": "Polling schedule (6-field cron expression)."
+        }
+      }
     },
     "maxPerGroup": {
       "type": "number",

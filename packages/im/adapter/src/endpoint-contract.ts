@@ -38,6 +38,8 @@ export interface PlatformEvent<
 
 /** Structured outbound request delivered to one platform Endpoint. */
 export interface EndpointSendRequest {
+  /** Trusted operation language, resolved by the unified send chain. */
+  readonly locale?: import('@zhin.js/plugin-runtime').Locale;
   /** The Endpoint derives its native target from this canonical conversation address. */
   readonly conversation: ConversationRef;
   readonly payload: unknown;

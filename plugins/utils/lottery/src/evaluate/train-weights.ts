@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import { DEFAULT_WEIGHTS, type GameId, type ScoreWeights } from '../types.js';
 
 import { loadDraws, type LotteryDb } from '../db.js';
@@ -110,25 +112,25 @@ function signedPct(delta: number): string {
   return v >= 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
 }
 
-export function formatTrainLine(r: TrainWeightsResult): string {
+export function formatTrainLine(r: TrainWeightsResult, locale?: Locale): string {
   const init = formatWeights(r.initialWeights);
   const fin = formatWeights(r.finalWeights);
-  const fallback = r.holdoutFallbackApplied ? ' [holdout→默认]' : '';
+  const fallback = r.holdoutFallbackApplied ? t(locale, 'trainFallback') : '';
   return [
-    `${r.gameId}: 训练${r.trainSteps}期 (${r.firstScoredIssue}→${r.lastScoredIssue})${fallback}`,
-    `命中 调优${pct(r.adaptiveAvgHitRate)}% / 固定${pct(r.fixedAvgHitRate)}% / 随机${pct(r.randomAvgHitRate)}%`,
-    `Δ调优-随机 ${signedPct(r.adaptiveVsRandom)}%`,
-    `权重 ${init} → ${fin}`,
+    t(locale, 'trainGame', { game: r.gameId, steps: r.trainSteps, first: r.firstScoredIssue, last: r.lastScoredIssue, fallback }),
+    t(locale, 'trainHit', { adaptive: pct(r.adaptiveAvgHitRate), fixed: pct(r.fixedAvgHitRate), random: pct(r.randomAvgHitRate) }),
+    t(locale, 'trainDelta', { delta: signedPct(r.adaptiveVsRandom) }),
+    t(locale, 'trainWeights', { initial: init, final: fin }),
   ].join('\n  ');
 }
 
-export function formatTrainReport(results: TrainWeightsResult[]): string {
-  if (!results.length) return '训练失败：历史数据不足，请先同步开奖。';
+export function formatTrainReport(results: TrainWeightsResult[], locale?: Locale): string {
+  if (!results.length) return t(locale, 'trainEmpty');
   const lines = [
-    '【权重训练】全历史 walk-forward：预测→比对→调权，已写入 lottery_model_weights',
-    ...results.map(formatTrainLine),
+    t(locale, 'trainTitle'),
+    ...results.map(result => formatTrainLine(result, locale)),
     '',
-    '说明：训练≠保证未来更准；终权重供后续 lottery 推荐使用。',
+    t(locale, 'trainNote'),
   ];
   return lines.join('\n');
 }

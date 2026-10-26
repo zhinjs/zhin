@@ -1,6 +1,7 @@
 /**
  * ScheduleJobEngine — schedule-jobs.json 持久化调度
  */
+import { createMessages, resolveLocale } from '@zhin.js/plugin-runtime';
 import { getLogger, formatCompact } from '@zhin.js/logger';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -13,6 +14,7 @@ import { jobPrompt } from './job-utils.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from './profile-types.js';
 import { type NotificationRouter, resolveEffectiveNotify } from './notification-router.js';
 const logger = getLogger('schedule-job-engine');
+const messages = createMessages({ failed: { 'zh-CN': '[任务失败] {label}: {error}', en: '[Task failed] {label}: {error}' } });
 
 export interface ScheduleJobEngineOptions {
   store: ScheduleJobStore;
@@ -91,8 +93,8 @@ export class ScheduleJobEngine {
     if (!result.success && (job.notifyOnFailure ?? this.notifyOnFailure)) {
       const notify = resolveEffectiveNotify(job.notify, this.defaultNotify);
       if (notify.channel !== 'silent' && notify.channel !== 'log') {
-        const msg = `[任务失败] ${job.label || jobId}: ${result.error || 'unknown error'}`;
-        await this.router.deliver({ notify, content: msg, jobId, label: job.label }).catch(() => {});
+        const msg = messages(job.locale, 'failed', { label: job.label || jobId, error: result.error || 'unknown error' });
+        await this.router.deliver({ notify, content: msg, jobId, label: job.label, locale: resolveLocale(job.locale) }).catch(() => {});
       }
     }
 

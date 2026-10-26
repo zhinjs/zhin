@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import type { SlackUserInfo } from '@zhin.js/adapter-slack';
@@ -14,7 +15,7 @@ export default defineAgentTool<{
   async execute({ user_id }, context) {
     const client = context.$client;
     const user = (await client.users.info({ user: user_id })).user as SlackUserInfo | undefined;
-    if (!user) throw new Error(`Slack 用户不存在: ${user_id}`);
+    if (!user) throw new Error(t(context.locale, 'slackUserMissing', { p0: user_id }));
     return {
       id: user.id,
       name: user.name,

@@ -41,6 +41,7 @@ export default definePlugin<BilibiliConfig>({
           endpointKey: input.endpointKey,
           conversation: { kind: input.channelType, id: input.channelId },
           content: input.content,
+          locale: input.locale,
         });
       }
       : null;

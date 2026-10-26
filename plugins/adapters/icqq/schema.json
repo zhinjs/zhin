@@ -4,75 +4,169 @@
   "additionalProperties": false,
   "properties": {
     "master": {
-      "type": ["string", "number"],
-      "description": "框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖"
+      "type": [
+        "string",
+        "number"
+      ],
+      "description": "框架 master QQ uin（/approve、AI/工具权限）；endpoints[i].master 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Framework master QQ uin list for approval and AI/tool permissions. endpoints[i].master can override this value."
+        }
+      }
     },
     "trusted": {
       "type": "array",
-      "items": { "type": ["string", "number"] },
-      "description": "框架 trusted QQ uin 列表（弱于 master）"
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ]
+      },
+      "description": "框架 trusted QQ uin 列表（弱于 master）",
+      "x-i18n": {
+        "en": {
+          "description": "Framework trusted QQ uin list, below master authority."
+        }
+      }
     },
     "password": {
       "type": "string",
-      "description": "QQ 密码（可选，不填则扫码登录）"
+      "description": "QQ 密码（可选，不填则扫码登录）",
+      "x-i18n": {
+        "en": {
+          "description": "QQ password (optional); scan a QR code to log in when omitted."
+        }
+      }
     },
     "platform": {
       "type": "number",
-      "enum": [1, 2, 3, 4, 5, 6, 7],
+      "enum": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
       "default": 1,
-      "description": "登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom"
+      "description": "登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom",
+      "x-i18n": {
+        "en": {
+          "description": "Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom."
+        }
+      }
     },
     "ver": {
       "type": "string",
-      "description": "协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本"
+      "description": "协议版本号，仅在对应 platform 有多个版本时有效，不填则使用最新版本",
+      "x-i18n": {
+        "en": {
+          "description": "Protocol version, only applicable when the selected platform has multiple versions. Uses the latest when omitted."
+        }
+      }
     },
     "signApiAddr": {
       "type": "string",
-      "description": "签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名"
+      "description": "签名服务器地址；未配置时若安装了 @icqqjs/qqsign 则自动使用本地签名",
+      "x-i18n": {
+        "en": {
+          "description": "Signing server URL. When omitted, uses local signing automatically if @icqqjs/qqsign is installed."
+        }
+      }
     },
     "dataDir": {
       "type": "string",
-      "description": "数据存储文件夹路径，默认为主模块下的 data 文件夹"
+      "description": "数据存储文件夹路径，默认为主模块下的 data 文件夹",
+      "x-i18n": {
+        "en": {
+          "description": "Data directory path; defaults to the data directory under the main module."
+        }
+      }
     },
     "autoReconnect": {
       "type": "boolean",
       "default": true,
-      "description": "断线后是否自动重连（默认 true）"
+      "description": "断线后是否自动重连（默认 true）",
+      "x-i18n": {
+        "en": {
+          "description": "Reconnect automatically after disconnecting (default true)."
+        }
+      }
     },
     "outboundMedia": {
       "type": "string",
-      "enum": ["file", "base64"],
+      "enum": [
+        "file",
+        "base64"
+      ],
       "default": "file",
-      "description": "出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联"
+      "description": "出站媒体模式：file=落盘本地路径（默认）; base64=CQ base64:// 内联",
+      "x-i18n": {
+        "en": {
+          "description": "Outbound media mode: file uses local file paths (default); base64 uses inline CQ base64:// data."
+        }
+      }
     },
     "ignoreSelf": {
       "type": "boolean",
       "default": true,
-      "description": "群聊和频道中是否过滤自己的消息（默认 true）"
+      "description": "群聊和频道中是否过滤自己的消息（默认 true）",
+      "x-i18n": {
+        "en": {
+          "description": "Filter the bot's own messages in groups and channels (default true)."
+        }
+      }
     },
     "resend": {
       "type": "boolean",
       "default": false,
-      "description": "被风控时是否尝试用分片发送（默认 false）"
+      "description": "被风控时是否尝试用分片发送（默认 false）",
+      "x-i18n": {
+        "en": {
+          "description": "Attempt fragmented sending when rate-limited by the platform (default false)."
+        }
+      }
     },
     "cacheGroupMember": {
       "type": "boolean",
       "default": true,
-      "description": "是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存"
+      "description": "是否缓存群员列表（默认 true）；群多时（500+）会多占约 100MB+ 内存",
+      "x-i18n": {
+        "en": {
+          "description": "Cache group member lists (default true). Large numbers of groups (500+) may use approximately 100 MB or more of extra memory."
+        }
+      }
     },
     "autoServer": {
       "type": "boolean",
       "default": true,
-      "description": "是否自动选择最优服务器（默认 true）"
+      "description": "是否自动选择最优服务器（默认 true）",
+      "x-i18n": {
+        "en": {
+          "description": "Automatically select the optimal server (default true)."
+        }
+      }
     },
     "qqnt": {
       "type": "boolean",
       "default": true,
-      "description": "是否使用 QQNT 协议（默认 true）"
+      "description": "是否使用 QQNT 协议（默认 true）",
+      "x-i18n": {
+        "en": {
+          "description": "Use the QQNT protocol (default true)."
+        }
+      }
     },
     "ntLogin": {
       "type": "boolean",
-      "description": "是否使用 NT 登录方式"
+      "description": "是否使用 NT 登录方式",
+      "x-i18n": {
+        "en": {
+          "description": "Use the NT login method."
+        }
+      }
     },
     "endpoints": {
       "type": "array",
@@ -88,81 +182,195 @@
             "description": "QQ uin"
           },
           "master": {
-            "type": ["string", "number"],
-            "description": "本 endpoint 的 master QQ uin；覆盖顶层 master"
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "本 endpoint 的 master QQ uin；覆盖顶层 master",
+            "x-i18n": {
+              "en": {
+                "description": "Master QQ uin list for this endpoint, overriding the top-level master list."
+              }
+            }
           },
           "trusted": {
             "type": "array",
-            "items": { "type": ["string", "number"] },
-            "description": "本 endpoint 的 trusted 列表"
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "description": "本 endpoint 的 trusted 列表",
+            "x-i18n": {
+              "en": {
+                "description": "Trusted users for this endpoint."
+              }
+            }
           },
           "password": {
             "type": "string",
-            "description": "本 endpoint 的 QQ 密码"
+            "description": "本 endpoint 的 QQ 密码",
+            "x-i18n": {
+              "en": {
+                "description": "QQ password for this endpoint."
+              }
+            }
           },
           "platform": {
             "type": "number",
-            "enum": [1, 2, 3, 4, 5, 6, 7],
-            "description": "登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom"
+            "enum": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "description": "登录设备平台：1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom",
+            "x-i18n": {
+              "en": {
+                "description": "Login device platform: 1=Android, 2=aPad, 3=Watch, 4=iMac, 5=iPad, 6=Tim, 7=Custom."
+              }
+            }
           },
           "ver": {
             "type": "string",
-            "description": "协议版本号"
+            "description": "协议版本号",
+            "x-i18n": {
+              "en": {
+                "description": "Protocol version."
+              }
+            }
           },
           "signApiAddr": {
             "type": "string",
-            "description": "签名服务器地址"
+            "description": "签名服务器地址",
+            "x-i18n": {
+              "en": {
+                "description": "Signing server URL."
+              }
+            }
           },
           "dataDir": {
             "type": "string",
-            "description": "数据存储文件夹路径"
+            "description": "数据存储文件夹路径",
+            "x-i18n": {
+              "en": {
+                "description": "Data directory path."
+              }
+            }
           },
           "autoReconnect": {
             "type": "boolean",
-            "description": "断线后是否自动重连"
+            "description": "断线后是否自动重连",
+            "x-i18n": {
+              "en": {
+                "description": "Reconnect automatically after disconnecting."
+              }
+            }
           },
           "outboundMedia": {
             "type": "string",
-            "enum": ["file", "base64"],
-            "description": "出站媒体模式"
+            "enum": [
+              "file",
+              "base64"
+            ],
+            "description": "出站媒体模式",
+            "x-i18n": {
+              "en": {
+                "description": "Outbound media mode."
+              }
+            }
           },
           "ignoreSelf": {
             "type": "boolean",
-            "description": "是否过滤自己的消息"
+            "description": "是否过滤自己的消息",
+            "x-i18n": {
+              "en": {
+                "description": "Filter the bot's own messages."
+              }
+            }
           },
           "resend": {
             "type": "boolean",
-            "description": "被风控时是否分片发送"
+            "description": "被风控时是否分片发送",
+            "x-i18n": {
+              "en": {
+                "description": "Use fragmented sending when rate-limited by the platform."
+              }
+            }
           },
           "cacheGroupMember": {
             "type": "boolean",
-            "description": "是否缓存群员列表"
+            "description": "是否缓存群员列表",
+            "x-i18n": {
+              "en": {
+                "description": "Cache group member lists."
+              }
+            }
           },
           "autoServer": {
             "type": "boolean",
-            "description": "是否自动选择最优服务器"
+            "description": "是否自动选择最优服务器",
+            "x-i18n": {
+              "en": {
+                "description": "Automatically select the optimal server."
+              }
+            }
           },
           "qqnt": {
             "type": "boolean",
-            "description": "是否使用 QQNT 协议"
+            "description": "是否使用 QQNT 协议",
+            "x-i18n": {
+              "en": {
+                "description": "Use the QQNT protocol."
+              }
+            }
           },
           "ntLogin": {
             "type": "boolean",
-            "description": "是否使用 NT 登录方式"
+            "description": "是否使用 NT 登录方式",
+            "x-i18n": {
+              "en": {
+                "description": "Use the NT login method."
+              }
+            }
           },
           "commandPrefix": {
             "type": "string",
-            "description": "本 endpoint 的命令前缀"
+            "description": "本 endpoint 的命令前缀",
+            "x-i18n": {
+              "en": {
+                "description": "Command prefix for this endpoint."
+              }
+            }
           }
         },
-        "required": ["id"]
+        "required": [
+          "id"
+        ]
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults."
+        }
       }
     },
     "commandPrefix": {
       "type": "string",
       "default": "",
-      "description": "命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖"
+      "description": "命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Command prefix, empty by default. Each endpoints[i] can override it."
+        }
+      }
     }
   },
-  "required": ["master", "endpoints"]
+  "required": [
+    "master",
+    "endpoints"
+  ]
 }

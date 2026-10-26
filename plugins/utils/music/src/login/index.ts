@@ -1,3 +1,7 @@
+import type { Locale } from 'zhin.js/i18n';
+import type { ConversationRef } from '@zhin.js/im-contract';
+import { sessionKey } from '../session.js';
+import { messages as t } from '../i18n.js';
 import type { QrLoginProvider, QrLoginSource, QrPollResult } from './types.js';
 import { QQLoginProvider } from './qq.js';
 import { NeteaseLoginProvider } from './netease.js';
@@ -6,6 +10,7 @@ import type { CredentialStore } from '../credential-store.js';
 export type { QrLoginSource, QrPollResult, QrLoginProvider } from './types.js';
 
 export interface QrLoginSession {
+  locale: Locale;
   source: QrLoginSource;
   pollData: Record<string, string>;
   timestamp: number;
@@ -17,11 +22,10 @@ const POLL_INTERVAL_MS = 3_000;
 const MAX_POLLS = Math.ceil(LOGIN_TIMEOUT_MS / POLL_INTERVAL_MS);
 
 export function loginSessionKey(
-  endpointId: string,
-  conversationId: string,
+  conversation: ConversationRef,
   senderId: string,
 ): string {
-  return `login:${endpointId}:${conversationId}:${senderId}`;
+  return `login:${sessionKey(conversation, senderId)}`;
 }
 
 /** Generation-owned QR login coordinator. */
@@ -69,11 +73,13 @@ export class QrLoginRuntime {
   async start(
     source: QrLoginSource,
     key: string,
+    locale: Locale = 'zh-CN',
   ): Promise<{ imageSegment: { type: 'image'; data: Record<string, unknown> } }> {
     const existing = this.#active.get(key);
     if (existing && !existing.aborted) existing.aborted = true;
     const session: QrLoginSession = {
       source,
+      locale,
       pollData: {},
       timestamp: this.#now(),
       aborted: false,
@@ -81,9 +87,9 @@ export class QrLoginRuntime {
     this.#active.set(key, session);
 
     try {
-      const result = await this.#providers[source].createQr();
+      const result = await this.#providers[source].createQr(locale);
       if (session.aborted || this.#active.get(key) !== session) {
-        throw new Error('登录已取消');
+        throw new Error(t(locale, 'loginAborted'));
       }
       session.pollData = result.pollData;
       return { imageSegment: result.imageSegment };
@@ -98,7 +104,7 @@ export class QrLoginRuntime {
     onStatus: (result: QrPollResult) => Promise<void>,
   ): Promise<QrPollResult> {
     const session = this.#active.get(key);
-    if (!session) return { status: 'error', message: '没有进行中的登录会话' };
+    if (!session) return { status: 'error', message: t('zh-CN', 'noLogin') };
 
     const provider = this.#providers[session.source];
     let lastStatus = '';
@@ -106,10 +112,10 @@ export class QrLoginRuntime {
       for (let i = 0; i < MAX_POLLS; i++) {
         if (session.aborted) {
           this.#active.delete(key);
-          return { status: 'error', message: '登录已取消' };
+          return { status: 'error', message: t(session.locale, 'loginAborted') };
         }
 
-        const result = await provider.pollQr(session.pollData);
+        const result = await provider.pollQr(session.pollData, session.locale);
         if (result.status !== lastStatus) {
           lastStatus = result.status;
           await onStatus(result);
@@ -129,12 +135,12 @@ export class QrLoginRuntime {
       this.#active.delete(key);
       return {
         status: 'error',
-        message: `轮询异常：${error instanceof Error ? error.message : String(error)}`,
+        message: t(session.locale, 'pollError', { error: error instanceof Error ? error.message : String(error) }),
       };
     }
 
     this.#active.delete(key);
-    return { status: 'expired', message: '登录超时，请重试' };
+    return { status: 'expired', message: t(session.locale, 'timeout') };
   }
 
   pruneExpired(): void {

@@ -6,6 +6,7 @@ declare module '@zhin.js/core' {
   interface Models {
     roulette_sessions: {
       id: string;
+      locale?: 'zh-CN' | 'en' | null;
       adapter: string;
       endpoint: string;
       channel_type: string;
@@ -42,10 +43,11 @@ export type RouletteGroupSettingsRow = Models['roulette_group_settings'];
 export const ROULETTE_TABLES = ['roulette_sessions', 'roulette_group_settings'] as const;
 
 export function defineHostTables(
-  database: { define(name: string, definition: Record<string, unknown>): void },
+  database: { define(name: string, definition: Record<string, unknown>, options?: { readonly addColumns?: readonly string[] }): void },
 ): void {
   database.define('roulette_sessions', {
     id: { type: 'text', primary: true },
+    locale: { type: 'text', nullable: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },
     channel_type: { type: 'text', nullable: false },
@@ -63,7 +65,7 @@ export function defineHostTables(
     status: { type: 'text', default: 'active' },
     updated_at: { type: 'bigint', default: 0 },
     created_at: { type: 'bigint', default: 0 },
-  });
+  }, { addColumns: ['locale'] });
   database.define('roulette_group_settings', {
     id: { type: 'text', primary: true },
     mute_penalty: { type: 'integer', default: 0 },

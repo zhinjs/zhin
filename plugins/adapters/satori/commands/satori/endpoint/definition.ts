@@ -10,8 +10,8 @@ export const satoriEndpointCommands = createEndpointCommands({
   adapterKey: 'satori',
   adapterDisplayName: 'Satori',
   fields: [
-    { key: 'baseUrl', required: true, description: 'Satori 服务 base URL' },
-    { key: 'path', description: 'webhook 路径（connection: webhook）' },
+    { key: 'baseUrl', required: true, description: 'Satori 服务 base URL', descriptionI18n: { en: "Satori service base URL" } },
+    { key: 'path', description: 'webhook 路径（connection: webhook）', descriptionI18n: { en: "Webhook path (connection: webhook)" } },
     { key: 'token', env: true, description: 'Satori access token' },
   ],
   running: (use) => use(satoriRuntimeStateToken).endpoints.values(),

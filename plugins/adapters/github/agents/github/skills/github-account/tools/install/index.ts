@@ -8,6 +8,6 @@ export default defineAgentTool<{}>({
   inputSchema: z.object({}),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubInstall(context.$client);
+    return executeGithubInstall(context.$client, context.locale);
   },
 });

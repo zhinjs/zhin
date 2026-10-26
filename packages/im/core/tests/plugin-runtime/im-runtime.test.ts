@@ -3341,7 +3341,7 @@ describe('Root command feedback presentation', () => {
       await receive(fixture.im, { ...input, conversation, sender });
       expect(renderer).toHaveBeenCalledTimes(1);
       const context = renderer.mock.calls[0][1];
-      expect(context).toEqual({ generation: 1, clientAdapter: 'memory',
+      expect(context).toEqual({ generation: 1, clientAdapter: 'memory', locale: 'zh-CN',
         sender: { id: 'alice', name: 'Alice', roles: ['user'] },
         conversation: { endpoint: input.conversation.endpoint, kind: 'channel', id: input.conversation.id,
           parent: { kind: 'group', id: 'workspace' }, threadId: 'thread' } });

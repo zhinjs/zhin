@@ -23,6 +23,20 @@ describe('Console contract', () => {
     });
   });
 
+  it('preserves explicit titles without translating keys, routes or fallback titles', () => {
+    const translations = { en: 'Try a conversation', 'zh-CN': '试聊一下' };
+    const result = definePage({ title: 'Sandbox', titleI18n: translations });
+    expect(result.title).toBe('Sandbox');
+    expect(result.titleI18n).toEqual(translations);
+    expect(Object.isFrozen(result.titleI18n)).toBe(true);
+    translations.en = 'Changed outside';
+    expect(result.titleI18n?.en).toBe('Try a conversation');
+    expect(normalizePageMetadata('sandbox', { title: 'Original' })).not.toHaveProperty('titleI18n');
+    for (const value of [null, [], 'English', { en: '' }, { en: 2 }, { en: undefined }, { fr: 'Français' }]) {
+      expect(() => definePage({ titleI18n: value } as never)).toThrow();
+    }
+  });
+
   it('derives routes only from Root-relative ownership', () => {
     expect(pageRoute('root', 'root', 'home')).toBe('/p-home');
     expect(pageRoute('root/a/b', 'root', 'status')).toBe('/a/b/p-status');

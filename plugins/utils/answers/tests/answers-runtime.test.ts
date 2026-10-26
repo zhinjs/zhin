@@ -45,9 +45,9 @@ async function fixture(settings: Record<string, unknown> = {}) {
   const runtime = new RootRuntime({ projectRoot: project, modules: loader,
     config: { configVersion: 2, plugins: { answers: '@test/answers' }, answers: { ...settings } },
     environment: { name: 'test', mode: 'test', platform: 'node' } });
-  const command = async (text: string, source = alice): Promise<unknown> => {
+  const command = async (text: string, source = alice, prefix = ''): Promise<unknown> => {
     const index = runtime.snapshot.projections.get(commandFeatureId); if (!(index instanceof CommandIndex)) throw new Error('Missing CommandIndex');
-    const result = await index.dispatch(text, { ...source, content: text }); return result.status === 'executed' ? result.value : result;
+    const result = await index.dispatch(text, { ...source, content: text }, undefined, prefix); return result.status === 'executed' ? result.value : result;
   };
   const service = (): QuizService => runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'answers'))!.get(quizServiceToken.id) as QuizService;
   /** Drive the inbound middleware with the owner-scoped service, mirroring Runtime's `context.use`. */
@@ -150,4 +150,21 @@ describe('@zhin.js/plugin-answers through real Runtime discovery', () => {
     await f.runtime.stop();
     expect(service.size).toBe(0);
   });
+});
+
+
+it('pins quiz feedback to the asking language and renders actual command prefixes', async () => {
+  const f = await fixture();
+  await f.runtime.start();
+  try {
+    const english: CommandMessage = { ...alice, locale: 'en' };
+    const prompt = String(await f.command('boring', english));
+    expect(prompt).toContain('Chinese question bank');
+    const question = FUN_QUESTIONS.find(item => prompt.includes(item.question))!;
+    expect(question).toBeDefined();
+    const answered = await f.reply(question.answer, { ...alice, locale: 'zh-CN' });
+    expect(String(answered.replies[0])).toContain('Correct!');
+    expect(String(answered.replies[0])).toContain(question.explanation);
+    expect(String(await f.command('答案之书', english, '!!'))).toContain('!!answerbook <question>');
+  } finally { await f.runtime.stop(); }
 });

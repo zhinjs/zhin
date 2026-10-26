@@ -103,4 +103,26 @@ describe('setup 配置落盘', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe(source);
     expect(fs.readFileSync(path.join(tmp, 'package.json'), 'utf8')).toBe(packageBefore);
   });
+  it('uses the existing project language for prompts and bootstrap files without changing language or timezone', async () => {
+    const file = path.join(tmp, 'zhin.config.yml');
+    fs.writeFileSync(file, 'configVersion: 2\nlocale: en\nplugins: {}\n');
+    const database = vi.spyOn(wizard, 'configureDatabaseOptions');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await setupCommand.parseAsync(['node', 'zhin', '--database', '--bootstrap']);
+    expect(database).toHaveBeenCalledWith('en');
+    expect(yaml.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ locale: 'en' });
+    expect(yaml.parse(fs.readFileSync(file, 'utf8'))).not.toHaveProperty('timezone');
+    expect(fs.readFileSync(path.join(tmp, 'SOUL.md'), 'utf8')).not.toMatch(/[\u3400-\u9fff]/u);
+    expect(log.mock.calls.flat().join(' ')).toContain('Zhin configuration wizard');
+  });
+
+  it('persists an explicitly selected language without guessing a timezone', async () => {
+    const file = path.join(tmp, 'zhin.config.yml');
+    fs.writeFileSync(file, 'configVersion: 2\nlocale: zh-CN\nplugins: {}\n');
+    await setupCommand.parseAsync(['node', 'zhin', '--database', '--locale', 'en']);
+    const config = yaml.parse(fs.readFileSync(file, 'utf8'));
+    expect(config.locale).toBe('en');
+    expect(config).not.toHaveProperty('timezone');
+  });
+
 });

@@ -19,6 +19,10 @@ export default defineGamePlugin<SessionService>({
     displayName: 'RPS',
   },
   game: {
+    commandPath: 'rps',
+    titleI18n: { en: 'Rock Paper Scissors' },
+    descriptionI18n: { en: 'Play rock, paper, scissors against the bot' },
+    quickStartI18n: { en: 'start' },
     id: 'rps',
     title: '猜拳对决',
     icon: '✊',

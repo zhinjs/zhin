@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /**
  * Amounts are stored as integer cents (分) and parsed from text without floating point,
  * so 0.1 + 0.2 style rounding errors cannot enter the ledger.
@@ -28,17 +30,17 @@ function invalid(reason: string): AmountParseResult {
 }
 
 /** Parses `18`, `18.5`, `18.50`, `¥18.5` or `18.5元` into cents; rejects negatives, zero, exponents and more than two decimals. */
-export function parseAmountToCents(raw: string): AmountParseResult {
+export function parseAmountToCents(raw: string, locale?: Locale): AmountParseResult {
   const normalized = toHalfWidth(raw.trim());
   const withoutCurrency = normalized.replace(CURRENCY_PREFIX, '').replace(CURRENCY_SUFFIX, '').trim();
-  if (withoutCurrency.startsWith('-')) return invalid('金额不能为负数');
+  if (withoutCurrency.startsWith('-')) return invalid(t(locale, 'negative'));
   const match = AMOUNT_PATTERN.exec(withoutCurrency);
-  if (!match) return invalid('金额格式不正确，请写成 18 或 18.50（最多两位小数）');
+  if (!match) return invalid(t(locale, 'amountFormat'));
   const wholeYuan = Number(match[1]);
   const fractionDigits = (match[2] ?? '').padEnd(2, '0');
   const cents = wholeYuan * 100 + Number(fractionDigits);
-  if (cents === 0) return invalid('金额必须大于 0');
-  if (cents > MAX_ENTRY_CENTS) return invalid('单笔金额不能超过 ¥1000000.00');
+  if (cents === 0) return invalid(t(locale, 'zero'));
+  if (cents > MAX_ENTRY_CENTS) return invalid(t(locale, 'amountMax'));
   return { ok: true, cents };
 }
 

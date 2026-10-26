@@ -37,6 +37,7 @@ export class SessionService extends BaseSessionService<RpsSessionRow> {
     const now = Date.now();
     const row: RpsSessionRow = {
       id: generateSessionId(),
+      locale: message.locale ?? 'zh-CN',
       adapter: String(message.$adapter),
       endpoint: message.$endpoint,
       channel_type: message.$channel.type,

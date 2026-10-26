@@ -39,6 +39,8 @@ function index(games: RuntimeRegisteredGame[] = [], records?: Partial<GameRecord
 
 function commandContext(games: GameIndex) {
   return {
+    locale: 'zh-CN' as const,
+    formatCommand: (path: string) => `!!mounted ${path}`,
     owner: {} as never,
     generation: 1,
     config: {},
@@ -56,7 +58,7 @@ function commandContext(games: GameIndex) {
 
 const guess: RuntimeRegisteredGame = {
   id: 'guess', title: '猜数字', icon: '🔢', description: '1~100 七步猜中神秘数',
-  commandPrefix: '/猜数', quickStart: '开始', aliases: ['guess'],
+  commandPrefix: '/猜数', commandPath: 'guess', quickStart: '开始', aliases: ['guess'],
 };
 
 describe('@zhin.js/plugin-game-hub runtime', () => {
@@ -73,7 +75,7 @@ describe('@zhin.js/plugin-game-hub runtime', () => {
     const context = commandContext(index([guess]));
     expect(String(await gamesCommand.execute({ ...context, params: {} }))).toContain('猜数字');
     expect(String(await gamesCommand.execute({ ...context, params: { action: 'guess' } })))
-      .toContain('/猜数 开始');
+      .toContain('!!mounted guess 开始');
   });
 
   it('aggregates stats through the selected game record port', async () => {

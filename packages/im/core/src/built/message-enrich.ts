@@ -2,6 +2,7 @@
  * Message enrich — inbound authorization snapshots and synthetic communication context.
  */
 import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import type {
   Message,
   MessageSenderRef,
@@ -22,6 +23,7 @@ export function senderRolesFromMessage(message: Message): readonly SenderRole[] 
 }
 
 export interface SyntheticMessageInput {
+  locale?: Locale;
   conversation: ConversationRef;
   sender?: MessageSenderRef;
   content?: string;
@@ -49,6 +51,8 @@ export function createSyntheticMessage(input: SyntheticMessageInput): AgentTurnM
   const segments = input.segments ? Object.freeze([...input.segments]) : undefined;
   const content = segments ? segmentsToPlainText(segments) : (input.content ?? '');
   return Object.freeze({
+    locale: resolveLocale(input.locale),
+    formatCommand: () => undefined,
     conversation: input.conversation,
     content,
     generation: input.generation ?? 0,

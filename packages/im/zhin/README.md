@@ -190,3 +190,7 @@ MIT License
 ## 定制内置展示
 
 应用 Root 可从 `zhin.js/command` 选择 `commandFeedbackToken`、`commandMenuPresentationToken`，从 `zhin.js/middleware` 选择 `outboundPresentationToken`。保留默认反馈、分页、权限与平台能力；不绑定或返回 `undefined` 继续使用内置展示。具体上下文、JSX 作者和失败边界见[定制内置展示](../../../docs/authoring/behavior-customization.md)。
+
+## 中英文与命令指引
+
+从 `zhin.js/i18n` 导入 `createMessages` 和 `Locale`，使用命令上下文或 Message 的 `locale` 生成文案。命令指引使用 `context.formatCommand()` 或 `message.formatCommand()`，让当前命令索引处理前缀、挂载路径和实际别名；环境未知时返回 `undefined`。项目语言、个人语言、后台通知与 Schema 标签见[语言与本地化](../../../docs/configuration/localization.md)。

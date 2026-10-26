@@ -14,6 +14,6 @@ export default defineAgentTool<{ suffix: string; order?: 'register' | 'renew' | 
   async execute({ suffix, order }, context) {
     const service = context.use(nettoolsServiceToken);
     const callerKey = toolCallerKey(context);
-    return service.run(() => service.domainPrice(suffix, order, callerKey, context.signal));
+    return service.run(() => service.domainPrice(suffix, order, callerKey, context.signal, context.locale), context.locale);
   },
 });

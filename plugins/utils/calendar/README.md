@@ -192,3 +192,9 @@ npx zhin-calendar-auth microsoft
 | `create_event`   | 创建事件（`role(master)` + 始终批准） |
 
 创建前应向用户确认标题、时间与时区。
+
+## Language / 语言
+
+授权命令按当前操作语言回复，OAuth 回调页面、完成通知和后续授权失效通知固定使用发起授权时的语言。refresh_token 轮换保留该语言和原完整通知目标。状态页中的授权指令由当前命令上下文解析真实前缀与插件命名空间；没有可用命令上下文时只描述授权入口，不猜测指令。
+
+Calendar authorization captures the initiating language. Browser callbacks and subsequent authorization-loss notifications use that language; token rotation preserves it. Event titles, descriptions and external provider messages are not automatically translated. Timezone remains independent of language.

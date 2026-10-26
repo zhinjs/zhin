@@ -1,3 +1,4 @@
+import { sandboxText, type SandboxLocale } from './messages.js';
 import { getSandboxApiBase, getSandboxAuthHeaders } from './sandboxTransport.js';
 
 export type SandboxScope = 'private' | 'group' | 'channel';
@@ -221,7 +222,7 @@ export function deriveTaskRuns(snapshot: AgentTraceSnapshot | null): AgentTaskRu
   }).sort((left, right) => right.startedAt - left.startedAt);
 }
 
-export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null): WorkbenchArtifact[] {
+export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null, locale: SandboxLocale = 'zh-CN'): WorkbenchArtifact[] {
   if (!snapshot) return [];
   const outcomes = new Map<string, AgentTraceEvent>();
   for (const event of snapshot.events) {
@@ -251,7 +252,7 @@ export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null): W
       return [{
         ...common,
         kind: 'file-change',
-        title: toolName === 'write_file' ? '写入文件' : '编辑文件',
+        title: toolName === 'write_file' ? sandboxText(locale, "写入文件") : sandboxText(locale, "编辑文件"),
         path: filePath,
         detail: artifactOutputDetail(outcome),
         diff: fileDiff(toolName, args, filePath),
@@ -271,7 +272,7 @@ export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null): W
   }).sort((left, right) => right.recordedAt - left.recordedAt);
 }
 
-export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: AgentRunIdentity | undefined): AgentRunStep[] {
+export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: AgentRunIdentity | undefined, locale: SandboxLocale = 'zh-CN'): AgentRunStep[] {
   if (!snapshot || !run) return [];
   const { turnId } = run;
   const events = snapshot.events.filter((event) => matchesRun(event, run));
@@ -285,12 +286,12 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
   const steps = events.flatMap((event): AgentRunStep[] => {
     const common = { id: `${event.runtimeId ?? 'legacy'}:${turnId}:${event.sequence}`, recordedAt: event.recordedAt } as const;
     if (event.type === 'turn_start') {
-      return [{ ...common, title: '接收任务', detail: shortTurn(turnId), status: 'completed' }];
+      return [{ ...common, title: sandboxText(locale, "接收任务"), detail: shortTurn(turnId), status: 'completed' }];
     }
     if (event.type === 'capability_resolution') {
       return [{
         ...common,
-        title: '准备运行能力',
+        title: sandboxText(locale, "准备运行能力"),
         detail: `${arrayLength(event.data.tools)} tools · ${arrayLength(event.data.skills)} skills`,
         status: 'completed',
       }];
@@ -298,8 +299,8 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
     if (event.type === 'iteration_start') {
       return [{
         ...common,
-        title: `推理迭代 ${String(event.data.iteration ?? '')}`.trim(),
-        detail: event.data.maxIterations == null ? undefined : `上限 ${String(event.data.maxIterations)}`,
+        title: sandboxText(locale, "推理迭代 {0}", [String(event.data.iteration ?? '')]).trim(),
+        detail: event.data.maxIterations == null ? undefined : sandboxText(locale, "上限 {0}", [String(event.data.maxIterations)]),
         status: 'completed',
       }];
     }
@@ -313,7 +314,7 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
       return [{
         ...common,
         id: toolCorrelationKey(event, toolUseId),
-        title: `运行 ${toolName}`,
+        title: sandboxText(locale, "运行 {0}", [toolName]),
         ...(detail ? { detail } : {}),
         status: artifactStatus(outcome),
         ...(durationMs !== undefined ? { durationMs } : {}),
@@ -322,7 +323,7 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
     if (event.type === 'subagent_start') {
       return [{
         ...common,
-        title: `委派 ${stringValue(event.data.agentName) || '子 Agent'}`,
+        title: sandboxText(locale, "委派 {0}", [stringValue(event.data.agentName) || sandboxText(locale, "子 Agent")]),
         detail: preview(event.data.description) || undefined,
         status: 'running',
       }];
@@ -331,15 +332,15 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
       const failed = event.data.status === 'error';
       return [{
         ...common,
-        title: failed ? '子 Agent 失败' : '子 Agent 返回',
+        title: failed ? sandboxText(locale, "子 Agent 失败") : sandboxText(locale, "子 Agent 返回"),
         detail: preview(event.data.summary ?? event.data.error) || undefined,
         status: failed ? 'failed' : 'completed',
       }];
     }
-    if (event.type === 'turn_end') return [{ ...common, title: '任务完成', detail: 'Agent 已返回结果', status: 'completed' }];
-    if (event.type === 'turn_cancelled') return [{ ...common, title: '任务已停止', detail: preview(event.data.reason) || undefined, status: 'cancelled' }];
-    if (event.type === 'budget_exceeded') return [{ ...common, title: '达到预算上限', detail: preview(event.data.budget) || undefined, status: 'failed' }];
-    if (event.type === 'error') return [{ ...common, title: '任务失败', detail: preview(event.data.error) || undefined, status: 'failed' }];
+    if (event.type === 'turn_end') return [{ ...common, title: sandboxText(locale, "任务完成"), detail: sandboxText(locale, "Agent 已返回结果"), status: 'completed' }];
+    if (event.type === 'turn_cancelled') return [{ ...common, title: sandboxText(locale, "任务已停止"), detail: preview(event.data.reason) || undefined, status: 'cancelled' }];
+    if (event.type === 'budget_exceeded') return [{ ...common, title: sandboxText(locale, "达到预算上限"), detail: preview(event.data.budget) || undefined, status: 'failed' }];
+    if (event.type === 'error') return [{ ...common, title: sandboxText(locale, "任务失败"), detail: preview(event.data.error) || undefined, status: 'failed' }];
     return [];
   });
 
@@ -354,8 +355,8 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
   if (task?.status === 'running' && steps.length > 0 && steps.at(-1)?.status !== 'running') {
     steps.push({
       id: `${task.id}:waiting`,
-      title: '等待 Agent 返回',
-      detail: '任务仍在运行',
+      title: sandboxText(locale, "等待 Agent 返回"),
+      detail: sandboxText(locale, "任务仍在运行"),
       status: 'running',
       recordedAt: events.at(-1)?.recordedAt ?? task.startedAt,
     });
@@ -363,79 +364,79 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
   return steps;
 }
 
-export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context: AgentRunReportContext = {}): string {
+export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context: AgentRunReportContext = {}, locale: SandboxLocale = 'zh-CN'): string {
   const runs = deriveTaskRuns(snapshot);
   const run = context.run ? runs.find((candidate) => candidate.id === runIdentityKey(context.run)) : runs[0];
   const identity = run ?? context.run;
   const turnId = identity?.turnId;
-  const steps = deriveAgentRunSteps(snapshot, identity);
-  const artifacts = deriveWorkbenchArtifacts(snapshot).filter((artifact) => identity && matchesRun(artifact, identity));
-  const status = run ? taskStatusText(run.status) : '无运行记录';
+  const steps = deriveAgentRunSteps(snapshot, identity, locale);
+  const artifacts = deriveWorkbenchArtifacts(snapshot, locale).filter((artifact) => identity && matchesRun(artifact, identity));
+  const status = run ? taskStatusText(run.status, locale) : sandboxText(locale, "无运行记录");
   const lines = [
-    '# Agent 运行报告',
+    sandboxText(locale, "# Agent 运行报告"),
     '',
-    `- **会话：** ${markdownInline(context.sessionName || snapshot?.sessionKey || '未命名会话')}`,
-    `- **任务 ID：** ${markdownInline(turnId || '—')}`,
-    `- **状态：** ${status}`,
-    `- **开始时间：** ${run ? new Date(run.startedAt).toISOString() : '—'}`,
-    `- **耗时：** ${run?.durationMs === undefined ? (run?.status === 'running' ? '进行中' : '—') : `${run.durationMs.toLocaleString()} ms`}`,
-    `- **工作目录：** ${markdownInline(context.workingDirectory || 'Host project root')}`,
-    `- **安全策略：** ${markdownInline(context.safetyMode || '—')} / ${markdownInline(context.approvalMode || '—')} / network ${context.networkAccess ? 'enabled' : 'disabled'}`,
-    `- **用量：** ${run?.toolCount ?? 0} tools / ${(run?.tokenCount ?? 0).toLocaleString()} tokens / ${run?.problemCount ?? 0} problems`,
+    sandboxText(locale, "- **会话：** {0}", [markdownInline(context.sessionName || snapshot?.sessionKey || sandboxText(locale, "未命名会话"))]),
+    sandboxText(locale, "- **任务 ID：** {0}", [markdownInline(turnId || '—')]),
+    sandboxText(locale, "- **状态：** {0}", [status]),
+    sandboxText(locale, "- **开始时间：** {0}", [run ? new Date(run.startedAt).toISOString() : '—']),
+    sandboxText(locale, "- **耗时：** {0}", [run?.durationMs === undefined ? (run?.status === 'running' ? sandboxText(locale, "进行中") : '—') : `${run.durationMs.toLocaleString(locale)} ms`]),
+    sandboxText(locale, "- **工作目录：** {0}", [markdownInline(context.workingDirectory || 'Host project root')]),
+    sandboxText(locale, "- **安全策略：** {0} / {1} / network {2}", [markdownInline(context.safetyMode || '—'), markdownInline(context.approvalMode || '—'), context.networkAccess ? 'enabled' : 'disabled']),
+    sandboxText(locale, "- **用量：** {0} tools / {1} tokens / {2} problems", [run?.toolCount ?? 0, (run?.tokenCount ?? 0).toLocaleString(locale), run?.problemCount ?? 0]),
   ];
 
   if (context.taskPrompt?.trim()) {
-    lines.push('', '## 任务', '', ...markdownBlock('text', context.taskPrompt.trim()));
+    lines.push('', sandboxText(locale, "## 任务"), '', ...markdownBlock('text', context.taskPrompt.trim()));
   }
-  lines.push('', '## 执行轨迹', '');
-  if (steps.length === 0) lines.push('- 暂无可用轨迹');
+  lines.push('', sandboxText(locale, "## 执行轨迹"), '');
+  if (steps.length === 0) lines.push(sandboxText(locale, "- 暂无可用轨迹"));
   else for (const step of steps) {
-    lines.push(`- ${stepStatusMark(step.status)} **${reportStepTitle(step.title)}**${step.detail ? ` — ${markdownInline(step.detail)}` : ''}${step.durationMs === undefined ? '' : ` (${step.durationMs.toLocaleString()} ms)`}`);
+    lines.push(`- ${stepStatusMark(step.status)} **${reportStepTitle(step.title, locale)}**${step.detail ? ` — ${markdownInline(step.detail)}` : ''}${step.durationMs === undefined ? '' : ` (${step.durationMs.toLocaleString(locale)} ms)`}`);
   }
 
-  lines.push('', '## 变更与产物', '');
-  if (artifacts.length === 0) lines.push('- 本次运行没有文件、命令或测试产物。');
+  lines.push('', sandboxText(locale, "## 变更与产物"), '');
+  if (artifacts.length === 0) lines.push(sandboxText(locale, "- 本次运行没有文件、命令或测试产物。"));
   else artifacts.forEach((artifact, index) => {
     lines.push(`### ${index + 1}. ${markdownInline(artifact.title)}`, '');
-    lines.push(`- 类型：${artifact.kind}`, `- 状态：${artifact.status}`);
-    if (artifact.path) lines.push(`- 路径：${markdownInlineCode(artifact.path)}`);
-    if (artifact.durationMs !== undefined) lines.push(`- 耗时：${artifact.durationMs.toLocaleString()} ms`);
+    lines.push(sandboxText(locale, "- 类型：{0}", [artifact.kind]), sandboxText(locale, "- 状态：{0}", [artifact.status]));
+    if (artifact.path) lines.push(sandboxText(locale, "- 路径：{0}", [markdownInlineCode(artifact.path)]));
+    if (artifact.durationMs !== undefined) lines.push(sandboxText(locale, "- 耗时：{0} ms", [artifact.durationMs.toLocaleString(locale)]));
     if (artifact.diff) lines.push('', ...markdownBlock('diff', artifact.diff));
     else if (artifact.detail) lines.push('', ...markdownBlock('text', artifact.detail));
     lines.push('');
   });
 
-  lines.push('---', `由 Zhin「试聊一下」于 ${new Date().toISOString()} 导出。`);
+  lines.push('---', sandboxText(locale, "由 Zhin「试聊一下」于 {0} 导出。", [new Date().toISOString()]));
   return `${lines.join('\n').trim()}\n`;
 }
 
-export function presentTraceEvent(event: AgentTraceEvent): { readonly title: string; readonly detail: string; readonly tone: string } {
+export function presentTraceEvent(event: AgentTraceEvent, locale: SandboxLocale = 'zh-CN'): { readonly title: string; readonly detail: string; readonly tone: string } {
   const data = event.data;
   const tool = String(data.toolName ?? 'tool');
   switch (event.type) {
-    case 'turn_start': return { title: '开始处理', detail: shortTurn(event.turnId), tone: 'running' };
-    case 'capability_resolution': return { title: '能力已解析', detail: `${arrayLength(data.tools)} tools · ${arrayLength(data.skills)} skills`, tone: 'capability' };
-    case 'iteration_start': return { title: `推理迭代 ${String(data.iteration ?? '')}`, detail: `上限 ${String(data.maxIterations ?? '—')}`, tone: 'thinking' };
-    case 'thinking': return { title: '模型思考', detail: preview(data.text), tone: 'thinking' };
-    case 'tool_call': return { title: `调用 ${tool}`, detail: preview(data.toolUseId), tone: 'tool' };
-    case 'tool_result': return { title: `${tool} 完成`, detail: duration(data.durationMs), tone: 'success' };
-    case 'tool_denied': return { title: `${tool} 被拒绝`, detail: preview(data.reason ?? data.policy), tone: 'problem' };
-    case 'tool_failed': return { title: `${tool} 失败`, detail: preview(data.error), tone: 'problem' };
-    case 'mcp_connect': return { title: `${String(data.serverName ?? 'MCP')} 连接`, detail: String(data.status ?? ''), tone: 'capability' };
+    case 'turn_start': return { title: sandboxText(locale, "开始处理"), detail: shortTurn(event.turnId), tone: 'running' };
+    case 'capability_resolution': return { title: sandboxText(locale, "能力已解析"), detail: `${arrayLength(data.tools)} tools · ${arrayLength(data.skills)} skills`, tone: 'capability' };
+    case 'iteration_start': return { title: sandboxText(locale, "推理迭代 {0}", [String(data.iteration ?? '')]), detail: sandboxText(locale, "上限 {0}", [String(data.maxIterations ?? '—')]), tone: 'thinking' };
+    case 'thinking': return { title: sandboxText(locale, "模型思考"), detail: preview(data.text), tone: 'thinking' };
+    case 'tool_call': return { title: sandboxText(locale, "调用 {0}", [tool]), detail: preview(data.toolUseId), tone: 'tool' };
+    case 'tool_result': return { title: sandboxText(locale, "{0} 完成", [tool]), detail: duration(data.durationMs, locale), tone: 'success' };
+    case 'tool_denied': return { title: sandboxText(locale, "{0} 被拒绝", [tool]), detail: preview(data.reason ?? data.policy), tone: 'problem' };
+    case 'tool_failed': return { title: sandboxText(locale, "{0} 失败", [tool]), detail: preview(data.error), tone: 'problem' };
+    case 'mcp_connect': return { title: sandboxText(locale, "{0} 连接", [String(data.serverName ?? 'MCP')]), detail: String(data.status ?? ''), tone: 'capability' };
     case 'mcp_tool_call': return { title: String(data.toolName ?? 'MCP tool'), detail: `via ${String(data.serverName ?? 'MCP')}`, tone: 'tool' };
-    case 'subagent_start': return { title: `委派 ${String(data.agentName ?? 'subagent')}`, detail: preview(data.description), tone: 'capability' };
-    case 'subagent_progress': return { title: '子 Agent 更新', detail: preview(data.summary), tone: 'running' };
-    case 'subagent_end': return { title: '子 Agent 返回', detail: String(data.status ?? 'done'), tone: data.status === 'error' ? 'problem' : 'success' };
-    case 'usage': return { title: `${usageTotal(data).toLocaleString()} tokens`, detail: usageDetail(data), tone: 'usage' };
-    case 'turn_end': return { title: '本轮完成', detail: 'Agent 已返回结果', tone: 'success' };
-    case 'turn_cancelled': return { title: '本轮取消', detail: preview(data.reason), tone: 'muted' };
-    case 'budget_exceeded': return { title: '达到预算上限', detail: preview(data.budget), tone: 'problem' };
-    case 'error': return { title: '执行失败', detail: preview(data.error), tone: 'problem' };
+    case 'subagent_start': return { title: sandboxText(locale, "委派 {0}", [String(data.agentName ?? 'subagent')]), detail: preview(data.description), tone: 'capability' };
+    case 'subagent_progress': return { title: sandboxText(locale, "子 Agent 更新"), detail: preview(data.summary), tone: 'running' };
+    case 'subagent_end': return { title: sandboxText(locale, "子 Agent 返回"), detail: String(data.status ?? 'done'), tone: data.status === 'error' ? 'problem' : 'success' };
+    case 'usage': return { title: `${usageTotal(data).toLocaleString(locale)} tokens`, detail: usageDetail(data, locale), tone: 'usage' };
+    case 'turn_end': return { title: sandboxText(locale, "本轮完成"), detail: sandboxText(locale, "Agent 已返回结果"), tone: 'success' };
+    case 'turn_cancelled': return { title: sandboxText(locale, "本轮取消"), detail: preview(data.reason), tone: 'muted' };
+    case 'budget_exceeded': return { title: sandboxText(locale, "达到预算上限"), detail: preview(data.budget), tone: 'problem' };
+    case 'error': return { title: sandboxText(locale, "执行失败"), detail: preview(data.error), tone: 'problem' };
     default: return { title: event.type.replaceAll('_', ' '), detail: '', tone: 'muted' };
   }
 }
 
-export async function fetchAgentTrace(sessionKey: string, afterSequence = 0): Promise<AgentTraceSnapshot> {
+export async function fetchAgentTrace(sessionKey: string, afterSequence = 0, locale: SandboxLocale = 'zh-CN'): Promise<AgentTraceSnapshot> {
   const base = getSandboxApiBase() || window.location.origin;
   const url = new URL('/api/agent/traces', `${base}/`);
   url.searchParams.set('sessionKey', sessionKey);
@@ -445,13 +446,13 @@ export async function fetchAgentTrace(sessionKey: string, afterSequence = 0): Pr
   const body = await response.json().catch(() => ({})) as { success?: boolean; data?: AgentTraceSnapshot; error?: string };
   if (!response.ok || body.success === false || !body.data) {
     throw new Error(response.status === 503
-      ? 'Agent Trace 尚未启用'
-      : body.error || '无法读取 Agent Trace');
+      ? sandboxText(locale, "Agent Trace 尚未启用")
+      : body.error || sandboxText(locale, "无法读取 Agent Trace"));
   }
   return body.data;
 }
 
-export async function cancelAgentTask(sessionKey: string): Promise<boolean> {
+export async function cancelAgentTask(sessionKey: string, locale: SandboxLocale = 'zh-CN'): Promise<boolean> {
   const base = getSandboxApiBase() || window.location.origin;
   const response = await fetch(new URL('/api/agent/tasks/cancel', `${base}/`), {
     method: 'POST',
@@ -464,7 +465,7 @@ export async function cancelAgentTask(sessionKey: string): Promise<boolean> {
     error?: string;
   };
   if (!response.ok || body.success === false) {
-    throw new Error(body.error || '无法停止 Agent 任务');
+    throw new Error(body.error || sandboxText(locale, "无法停止 Agent 任务"));
   }
   return body.data?.cancelled === true;
 }
@@ -477,9 +478,9 @@ function usageTotal(data: Record<string, unknown>): number {
   return Number(usageRecord(data).totalTokens ?? 0);
 }
 
-function usageDetail(data: Record<string, unknown>): string {
+function usageDetail(data: Record<string, unknown>, locale: SandboxLocale = 'zh-CN'): string {
   const usage = usageRecord(data);
-  return `输入 ${Number(usage.promptTokens ?? 0).toLocaleString()} · 输出 ${Number(usage.completionTokens ?? 0).toLocaleString()}`;
+  return sandboxText(locale, "输入 {0} · 输出 {1}", [Number(usage.promptTokens ?? 0).toLocaleString(locale), Number(usage.completionTokens ?? 0).toLocaleString(locale)]);
 }
 
 function arrayLength(value: unknown): number {
@@ -492,9 +493,9 @@ function preview(value: unknown): string {
   try { return JSON.stringify(value).slice(0, 96); } catch { return String(value).slice(0, 96); }
 }
 
-function duration(value: unknown): string {
+function duration(value: unknown, locale: SandboxLocale = 'zh-CN'): string {
   const ms = Number(value);
-  return Number.isFinite(ms) ? `${ms.toLocaleString()} ms` : '执行完成';
+  return Number.isFinite(ms) ? `${ms.toLocaleString(locale)} ms` : sandboxText(locale, "执行完成");
 }
 
 function shortTurn(value: string): string {
@@ -525,11 +526,11 @@ function toolStepDetail(toolName: string, args: Record<string, unknown>, fallbac
   return fallback;
 }
 
-function taskStatusText(status: AgentTaskStatus): string {
-  if (status === 'running') return '运行中';
-  if (status === 'completed') return '已完成';
-  if (status === 'cancelled') return '已取消';
-  return '失败';
+function taskStatusText(status: AgentTaskStatus, locale: SandboxLocale = 'zh-CN'): string {
+  if (status === 'running') return sandboxText(locale, "运行中");
+  if (status === 'completed') return sandboxText(locale, "已完成");
+  if (status === 'cancelled') return sandboxText(locale, "已取消");
+  return sandboxText(locale, "失败");
 }
 
 function stepStatusMark(status: AgentRunStepStatus): string {
@@ -543,9 +544,9 @@ function markdownInline(value: string): string {
   return value.replace(/[\\`*_[\]<>]/gu, '\\$&').replace(/\r?\n/gu, ' ');
 }
 
-function reportStepTitle(value: string): string {
+function reportStepTitle(value: string, locale: SandboxLocale = 'zh-CN'): string {
   const tool = /^运行 (.+)$/u.exec(value)?.[1];
-  return tool ? `运行 ${markdownInlineCode(tool)}` : markdownInline(value);
+  return tool ? sandboxText(locale, "运行 {0}", [markdownInlineCode(tool)]) : markdownInline(value);
 }
 
 function markdownInlineCode(value: string): string {

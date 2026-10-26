@@ -1,3 +1,4 @@
+import { projectLocaleToken } from 'zhin.js/i18n';
 import { readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -148,6 +149,7 @@ async function imageFixture(mode: 'file' | 'base64', handle: (input: OutboundEnv
   const middleware = createCapabilitySlot({ owner: root, feature: middlewareFeatureId, localName: 'before-send',
     source: '/project/middlewares/before-send/index.ts', definition: defineMiddleware<OutboundEnvelope>({ target: 'outbound', handle: ({ input }, next) => handle(input, next) }) });
   const resources = new Map<TokenId, unknown>([
+    [projectLocaleToken.id, 'zh-CN'],
     [endpointEventGatewayToken.id, im.endpointEvents], [loginAssistToken.id, im.loginAssist],
     [icqqRuntimeStateToken.id, createEndpointRuntimeState()], [htmlRendererToken.id, { render: renderHtml }],
   ]);

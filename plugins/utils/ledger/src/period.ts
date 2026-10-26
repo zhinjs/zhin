@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /**
  * Calendar periods evaluated in the configured IANA timezone. Entries are compared by their
  * local calendar date (YYYY-MM-DD), so daylight-saving shifts never move an entry into another day.
@@ -7,21 +9,13 @@ export type LedgerPeriod = 'today' | 'week' | 'month' | 'all';
 
 const DAY_MS = 86_400_000;
 
-const PERIOD_LABELS: Readonly<Record<LedgerPeriod, string>> = {
-  today: '今日',
-  week: '本周',
-  month: '本月',
-  all: '全部',
-};
-
-export function periodLabel(period: LedgerPeriod): string {
-  return PERIOD_LABELS[period];
-}
+export function periodLabel(period: LedgerPeriod, locale?: Locale): string { return t(locale, `period.${period}`); }
 
 /** Maps a user-typed period word to a period; undefined when the word is not recognised. */
-export function parsePeriodWord(word: string | undefined, fallback: LedgerPeriod): LedgerPeriod | undefined {
+export function parsePeriodWord(word: string | undefined, fallback: LedgerPeriod, locale?: Locale): LedgerPeriod | undefined {
   if (word === undefined || word.trim() === '') return fallback;
   const normalized = word.trim();
+  if (resolveLocale(locale) === 'en') return ['today', 'week', 'month', 'all'].includes(normalized.toLowerCase()) ? normalized.toLowerCase() as LedgerPeriod : undefined;
   if (normalized === '今日' || normalized === '今天') return 'today';
   if (normalized === '本周' || normalized === '这周') return 'week';
   if (normalized === '本月' || normalized === '这个月') return 'month';
@@ -89,7 +83,7 @@ export function isInPeriod(entryMs: number, nowMs: number, period: LedgerPeriod,
 }
 
 /** Human-readable range for a period header, e.g. `2026-10-19 ~ 2026-10-25`. */
-export function describePeriodRange(nowMs: number, period: LedgerPeriod, timeZone: string): string {
+export function describePeriodRange(nowMs: number, period: LedgerPeriod, timeZone: string, locale?: Locale): string {
   const today = localDateKey(nowMs, timeZone);
   if (period === 'today') return today;
   if (period === 'month') return today.slice(0, 7);
@@ -97,5 +91,5 @@ export function describePeriodRange(nowMs: number, period: LedgerPeriod, timeZon
     const start = weekStartKey(today);
     return `${start} ~ ${weekEndKey(start)}`;
   }
-  return '全部记录';
+  return t(locale, 'allRecords');
 }

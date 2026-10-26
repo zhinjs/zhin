@@ -2,6 +2,7 @@ import { createToken } from './token.js';
 import type { DeliveryTarget } from './delivery-target.js';
 import type { JsonValue } from './persistent-state.js';
 import type { GenerationAdmissionSource } from './admission.js';
+import type { Locale } from './i18n.js';
 
 export type PluginTaskState = 'scheduled' | 'paused' | 'running' | 'unknown' | 'succeeded' | 'failed' | 'cancelled';
 export type PluginTaskAction = 'pause' | 'resume' | 'cancel' | 'update';
@@ -37,6 +38,8 @@ export interface PluginTaskMutationReceipt {
 }
 
 export interface PluginTaskMutation {
+  /** Display language only; excluded from mutation identity and notification settings. */
+  readonly locale?: Locale;
   /** Client-created operation UUID, retained for reconciliation after a lost response. */
   readonly requestId: string;
   readonly expectedRevision: string;
@@ -44,13 +47,16 @@ export interface PluginTaskMutation {
 
 /** Optional plugin-owned task service, resolved from the current generation's owner scope. */
 export interface PluginTaskProvider extends GenerationAdmissionSource {
+  readonly i18n?: Readonly<Partial<Record<Locale, Readonly<{
+    title?: string; description?: string; effects?: readonly string[];
+  }>>>>;
   readonly title: string;
   readonly description: string;
   /** JSON Schema for this provider's creation/update parameters, never a Console-specific form. */
   readonly schema: Readonly<Record<string, JsonValue>>;
   /** Discloses future external effects before the operator creates a task. */
   readonly effects: readonly string[];
-  read(): Promise<PluginTaskSnapshot>;
+  read(options?: Readonly<{ locale?: Locale }>): Promise<PluginTaskSnapshot>;
   create(input: PluginTaskMutation & Readonly<{
     target: DeliveryTarget;
     parameters: Readonly<Record<string, JsonValue>>;

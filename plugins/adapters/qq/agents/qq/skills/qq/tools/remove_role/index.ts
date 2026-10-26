@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -17,6 +18,6 @@ export default defineAgentTool<{ guild_id: string; channel_id: string; user_id: 
   async execute({ guild_id, channel_id, user_id, role_id  }: { guild_id: string; channel_id: string; user_id: string; role_id: string }, context) {
     const client = context.$client;
     const success = await client.removeMemberRole(guild_id, channel_id, user_id, role_id);
-    return { success, message: success ? '已移除成员的角色' : '操作失败' };
+    return { success, message: success ? t(context.locale, 'roleRemoved') : t(context.locale, 'operationFailed') };
   },
 });

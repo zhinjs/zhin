@@ -1,8 +1,10 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import type { LarkSendBody, LarkWireSegment } from './protocol.js';
 
 /** Feishu JSON card v1: ordered native rich text, link and button components. */
-export function formatLarkCard(items: Array<string | LarkWireSegment>): LarkSendBody {
+export function formatLarkCard(items: Array<string | LarkWireSegment>, locale?: Locale): LarkSendBody {
   const elements: unknown[] = [];
   let replyTo: string | undefined;
   for (const item of items) {
@@ -22,7 +24,7 @@ export function formatLarkCard(items: Array<string | LarkWireSegment>): LarkSend
         if (!/^https?:\/\//.test(url)) throw unsupported();
         elements.push({ tag: 'div', text: { tag: 'plain_text', content: String(data.title ?? url) } });
         if (data.description) elements.push({ tag: 'div', text: { tag: 'plain_text', content: String(data.description) } });
-        elements.push({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: '打开链接' }, url }] }); break;
+        elements.push({ tag: 'action', actions: [{ tag: 'button', text: { tag: 'plain_text', content: t(locale, 'openLink') }, url }] }); break;
       }
       case 'keyboard': {
         const rows = data.rows as Array<Array<{ id?: string; label?: string; payload?: string; url?: string }>> | undefined;

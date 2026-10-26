@@ -1,3 +1,10 @@
+import { adminText, type AdminTextKey } from './admin-i18n.js';
+
+export class LocalizedQuietHoursError extends TypeError {
+  readonly messageKey: AdminTextKey;
+  constructor(messageKey: AdminTextKey) { super(adminText('zh-CN', messageKey)); this.messageKey = messageKey; }
+}
+
 export type RssQuietHours = {
   readonly timezone: string;
   readonly start: string;
@@ -8,13 +15,13 @@ export type RssQuietHours = {
 export function parseQuietHours(parameters: Readonly<Record<string, unknown>>): RssQuietHours | undefined {
   const values = [parameters.quietTimezone, parameters.quietStart, parameters.quietEnd];
   if (values.every(value => value === undefined || (typeof value === 'string' && !value.trim()))) return undefined;
-  if (!values.every(value => typeof value === 'string' && value.trim())) throw new TypeError('静默时区、开始和结束时间须全部填写；三项全部留空关闭静默');
+  if (!values.every(value => typeof value === 'string' && value.trim())) throw new LocalizedQuietHoursError('quietFields');
   const [timezone, start, end] = values.map(value => (value as string).trim());
-  if (timezone.length > 128 || !/^[A-Za-z][A-Za-z0-9_+/-]*$/u.test(timezone)) throw new TypeError('请填写有效 IANA 时区，如 Asia/Shanghai；不能使用 +08:00 等偏移');
+  if (timezone.length > 128 || !/^[A-Za-z][A-Za-z0-9_+/-]*$/u.test(timezone)) throw new LocalizedQuietHoursError('quietZoneOffset');
   try { new Intl.DateTimeFormat('en-GB', { timeZone: timezone }).format(0); }
-  catch { throw new TypeError('请填写有效 IANA 时区，如 Asia/Shanghai'); }
+  catch { throw new LocalizedQuietHoursError('quietZone'); }
   if (!/^([01]\d|2[0-3]):[0-5]\d$/u.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/u.test(end) || start === end) {
-    throw new TypeError('静默时间须为 HH:mm（24 小时制），开始和结束不能相同');
+    throw new LocalizedQuietHoursError('quietClock');
   }
   return Object.freeze({ timezone, start, end });
 }

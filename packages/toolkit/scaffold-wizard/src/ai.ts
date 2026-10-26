@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { formatEnvValue } from './env.js';
@@ -212,17 +213,17 @@ export const RECOMMENDED_AI_DEFAULTS = {
 /**
  * AI 配置引导向导
  */
-export async function configureAI(): Promise<AISetupConfig> {
+export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AISetupConfig> {
   console.log('');
-  console.log(chalk.blue('🤖 配置 AI 智能体'));
-  console.log(chalk.gray('  启用后将自动写入 package.json：@zhin.js/agent、zod、ai、所选 @ai-sdk/*（启用 memory MCP 时另加 @modelcontextprotocol/sdk）。'));
-  console.log(chalk.gray('  会话持久化默认开启，将自动配置 SQLite 数据库（若尚未选择）。'));
+  console.log(chalk.blue(wizardText(locale, "🤖 配置 AI 智能体")));
+  console.log(chalk.gray(wizardText(locale, "  启用后将自动写入 package.json：@zhin.js/agent、zod、ai、所选 @ai-sdk/*（启用 memory MCP 时另加 @modelcontextprotocol/sdk）。")));
+  console.log(chalk.gray(wizardText(locale, "  会话持久化默认开启，将自动配置 SQLite 数据库（若尚未选择）。")));
 
   const { enableAI } = await inquirer.prompt([
     {
       type: 'confirm',
       name: 'enableAI',
-      message: '是否启用 AI 智能体？（大模型对话 + 工具调用）',
+      message: wizardText(locale, "是否启用 AI 智能体？（大模型对话 + 工具调用）"),
       default: true,
     }
   ]);
@@ -235,9 +236,9 @@ export async function configureAI(): Promise<AISetupConfig> {
     {
       type: 'select',
       name: 'provider',
-      message: '选择 AI 提供商:',
+      message: wizardText(locale, "选择 AI 提供商:"),
       choices: PROVIDERS.map(p => ({
-        name: `${p.name} — ${p.hint}`,
+        name: `${wizardText(locale, p.name)} — ${wizardText(locale, p.hint)}`,
         value: p.value,
       })),
       pageSize: 10,
@@ -255,20 +256,20 @@ export async function configureAI(): Promise<AISetupConfig> {
       {
         type: 'input',
         name: 'host',
-        message: 'Ollama 地址:',
+        message: wizardText(locale, "Ollama 地址:"),
         default: 'http://127.0.0.1:11434',
         validate: (input: string) => {
-          if (!input.trim()) return '地址不能为空';
-          if (!/^https?:\/\//.test(input.trim())) return '请输入 http:// 或 https:// 开头的地址';
+          if (!input.trim()) return wizardText(locale, "地址不能为空");
+          if (!/^https?:\/\//.test(input.trim())) return wizardText(locale, "请输入 http:// 或 https:// 开头的地址");
           return true;
         },
       },
       {
         type: 'input',
         name: 'model',
-        message: '模型名称（需已 ollama pull）:',
+        message: wizardText(locale, "模型名称（需已 ollama pull）:"),
         default: providerInfo.defaultModel,
-        validate: (input: string) => (input.trim() ? true : '模型名不能为空'),
+        validate: (input: string) => (input.trim() ? true : wizardText(locale, "模型名不能为空")),
       }
     ]);
     providerConfig = {
@@ -284,7 +285,7 @@ export async function configureAI(): Promise<AISetupConfig> {
         name: 'apiKey',
         message: `${providerInfo.name.split(' (')[0]} API Key:`,
         validate: (input: string) => {
-          if (!input.trim()) return 'API Key 不能为空（可稍后在 .env 中填写 AI_API_KEY）';
+          if (!input.trim()) return wizardText(locale, "API Key 不能为空（可稍后在 .env 中填写 AI_API_KEY）");
           return true;
         }
       },
@@ -292,24 +293,24 @@ export async function configureAI(): Promise<AISetupConfig> {
         type: 'input',
         name: 'model',
         message: provider === 'openai-compatible'
-          ? '模型名称（服务端实际部署的模型 ID）:'
-          : '模型名称:',
+          ? wizardText(locale, "模型名称（服务端实际部署的模型 ID）:")
+          : wizardText(locale, "模型名称:"),
         default: providerInfo.defaultModel || undefined,
         validate: provider === 'openai-compatible'
-          ? (input: string) => (input.trim() ? true : '模型名称不能为空')
+          ? (input: string) => (input.trim() ? true : wizardText(locale, "模型名称不能为空"))
           : undefined,
       },
       {
         type: 'input',
         name: 'baseUrl',
         message: requireBaseUrl
-          ? 'API 地址（openai-compatible 必填，如 https://api.example.com/v1）:'
-          : '自定义 API 地址（留空使用官方默认）:',
+          ? wizardText(locale, "API 地址（openai-compatible 必填，如 https://api.example.com/v1）:")
+          : wizardText(locale, "自定义 API 地址（留空使用官方默认）:"),
         default: defaultBaseUrl ?? '',
         validate: requireBaseUrl
           ? (input: string) => {
-              if (!input.trim()) return 'baseUrl 不能为空（openai-compatible SDK 必须指定 API 地址）';
-              if (!/^https?:\/\//.test(input.trim())) return '请输入 http:// 或 https:// 开头的地址';
+              if (!input.trim()) return wizardText(locale, "baseUrl 不能为空（openai-compatible SDK 必须指定 API 地址）");
+              if (!/^https?:\/\//.test(input.trim())) return wizardText(locale, "请输入 http:// 或 https:// 开头的地址");
               return true;
             }
           : undefined,
@@ -326,26 +327,26 @@ export async function configureAI(): Promise<AISetupConfig> {
   }
 
   console.log('');
-  console.log(chalk.blue('⚡ 配置 AI 触发方式'));
-  console.log(chalk.gray('  决定 Endpoint 何时自动调用大模型；命令（/ 开头）不会被 AI 拦截。'));
+  console.log(chalk.blue(wizardText(locale, "⚡ 配置 AI 触发方式")));
+  console.log(chalk.gray(wizardText(locale, "  决定 Endpoint 何时自动调用大模型；命令（/ 开头）不会被 AI 拦截。")));
 
   const triggerConfig = await inquirer.prompt([
     {
       type: 'confirm',
       name: 'respondToAt',
-      message: '响应 @机器人 的消息？',
+      message: wizardText(locale, "响应 @机器人 的消息？"),
       default: true,
     },
     {
       type: 'confirm',
       name: 'respondToPrivate',
-      message: '响应私聊消息？',
+      message: wizardText(locale, "响应私聊消息？"),
       default: true,
     },
     {
       type: 'input',
       name: 'prefixes',
-      message: '触发前缀（逗号分隔，如 #,ai:）:',
+      message: wizardText(locale, "触发前缀（逗号分隔，如 #,ai:）:"),
       default: '#',
     }
   ]);
@@ -356,31 +357,31 @@ export async function configureAI(): Promise<AISetupConfig> {
     .filter(Boolean);
 
   console.log('');
-  console.log(chalk.blue('🛡️  配置 Agent 安全与能力'));
-  console.log(chalk.gray('  生产环境建议 execSecurity: deny；开发调试可选 allowlist。'));
+  console.log(chalk.blue(wizardText(locale, "🛡️  配置 Agent 安全与能力")));
+  console.log(chalk.gray(wizardText(locale, "  生产环境建议 execSecurity: deny；开发调试可选 allowlist。")));
 
   const agentConfig = await inquirer.prompt([
     {
       type: 'select',
       name: 'execSecurity',
-      message: '命令执行安全策略:',
+      message: wizardText(locale, "命令执行安全策略:"),
       choices: [
-        { name: 'deny — 禁止执行 shell（推荐）', value: 'deny' },
-        { name: 'allowlist — 仅允许白名单命令', value: 'allowlist' },
-        { name: 'full — 允许任意命令（仅本地调试）', value: 'full' },
+        { name: wizardText(locale, "deny — 禁止执行 shell（推荐）"), value: 'deny' },
+        { name: wizardText(locale, "allowlist — 仅允许白名单命令"), value: 'allowlist' },
+        { name: wizardText(locale, "full — 允许任意命令（仅本地调试）"), value: 'full' },
       ],
       default: 'deny',
     },
     {
       type: 'confirm',
       name: 'memoryMcp',
-      message: '启用本地知识图谱 memory MCP？（data/knowledge-graph.jsonl）',
+      message: wizardText(locale, "启用本地知识图谱 memory MCP？（data/knowledge-graph.jsonl）"),
       default: false,
     },
     {
       type: 'confirm',
       name: 'phaseTrace',
-      message: '输出 Agent 阶段日志（便于排障）？',
+      message: wizardText(locale, "输出 Agent 阶段日志（便于排障）？"),
       default: false,
     },
   ]);
@@ -420,10 +421,10 @@ export async function configureAI(): Promise<AISetupConfig> {
 /**
  * 获取 AI 配置需要写入 .env 的环境变量
  */
-export function generateAIEnvVars(config: AISetupConfig): string {
+export function generateAIEnvVars(config: AISetupConfig, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
   if (!config.enabled || !config.providers) return '';
 
-  const envVars: string[] = ['', '# AI 配置'];
+  const envVars: string[] = ['', wizardText(locale, "# AI 配置")];
 
   for (const [, providerConfig] of Object.entries(config.providers)) {
     const realKey = (providerConfig as any).__envApiKey;

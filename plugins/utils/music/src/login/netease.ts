@@ -1,10 +1,12 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import type { QrLoginProvider, QrCreateResult, QrPollResult } from './types.js';
 import { extractSetCookies } from './types.js';
 
 const QR_IMAGE_API = 'https://api.qrserver.com/v1/create-qr-code/';
 
 export class NeteaseLoginProvider implements QrLoginProvider {
-  async createQr(): Promise<QrCreateResult> {
+  async createQr(locale: Locale = 'zh-CN'): Promise<QrCreateResult> {
     const timestampMs = Date.now();
     const keyResp = await fetch(
       `https://music.163.com/api/login/qrcode/unikey?type=1&timestamp=${timestampMs}`,
@@ -16,7 +18,7 @@ export class NeteaseLoginProvider implements QrLoginProvider {
     );
     const keyData = (await keyResp.json()) as { code: number; unikey?: string };
     if (keyData.code !== 200 || !keyData.unikey) {
-      throw new Error('获取网易云登录二维码失败');
+      throw new Error(t(locale, 'neteaseQr'));
     }
 
     const loginUrl = `https://music.163.com/login?codekey=${keyData.unikey}`;
@@ -28,7 +30,7 @@ export class NeteaseLoginProvider implements QrLoginProvider {
     };
   }
 
-  async pollQr(pollData: Record<string, string>): Promise<QrPollResult> {
+  async pollQr(pollData: Record<string, string>, locale: Locale = 'zh-CN'): Promise<QrPollResult> {
     const { unikey } = pollData;
     try {
       const response = await fetch(
@@ -43,26 +45,26 @@ export class NeteaseLoginProvider implements QrLoginProvider {
 
       switch (data.code) {
         case 801:
-          return { status: 'waiting', message: '等待扫码...' };
+          return { status: 'waiting', message: t(locale, 'waiting') };
         case 802:
-          return { status: 'scanned', message: '已扫码，请在手机上确认登录' };
+          return { status: 'scanned', message: t(locale, 'scanned') };
         case 800:
-          return { status: 'expired', message: '二维码已过期，请重新发起登录' };
+          return { status: 'expired', message: t(locale, 'expired') };
         case 803: {
           const cookie = extractSetCookies(response.headers);
           return {
             status: 'confirmed',
-            message: '登录成功',
+            message: t(locale, 'confirmed'),
             cookie: cookie || undefined,
           };
         }
         default:
-          return { status: 'error', message: data.message ?? '未知状态' };
+          return { status: 'error', message: data.message ?? t(locale, 'unknown') };
       }
     } catch (err) {
       return {
         status: 'error',
-        message: `轮询失败：${err instanceof Error ? err.message : String(err)}`,
+        message: t(locale, 'pollFailed', { error: err instanceof Error ? err.message : String(err) }),
       };
     }
   }

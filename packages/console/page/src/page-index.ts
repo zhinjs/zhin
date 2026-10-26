@@ -28,6 +28,7 @@ export class PageIndex {
         hash: definition.hash,
         route,
         title: definition.title,
+        ...(definition.titleI18n === undefined ? {} : { titleI18n: definition.titleI18n }),
         icon: definition.icon,
         order: definition.order,
         hideInNav: definition.hideInNav,

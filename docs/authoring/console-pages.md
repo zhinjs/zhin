@@ -17,6 +17,7 @@ import { definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
   title: '我的插件',
+  titleI18n: { en: 'My Plugin' },
   icon: 'Box',
   order: 10,
 });
@@ -39,6 +40,7 @@ export default function MyPluginPage() {
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `title` | 由目录名生成（`foo-bar` → `Foo Bar`） | 导航与页头标题 |
+| `titleI18n` | 无 | 显式标题翻译，如 `{ en: 'My Plugin' }`；支持 `zh-CN` / `en`，缺失时保留 `title` |
 | `icon` | 无 | lucide 风格的图标名，如 `'Box'`、`'Workflow'` |
 | `order` | `100` | 导航排序，越小越靠前 |
 | `hideInNav` | `false` | 不在导航中显示 |
@@ -46,6 +48,8 @@ export default function MyPluginPage() {
 | `requiredRoles` | `[]` | 访问所需角色，对应令牌的 `roles` |
 
 导航和页面清单按调用者的令牌过滤：full 令牌能看到全部页面；其他令牌只能看到它的 `permissions` 和 `roles` 满足要求的页面；不带令牌只能看到没有要求的页面。令牌怎么配置见 [Console 的用户与权限](../console/index.md#用户与权限)。
+
+Console 根据独立的界面语言选择 `titleI18n`，只改变导航和面包屑显示，不改路由、权限或页面正文。Page 正文本地化由插件自己的组件负责；未声明翻译的第三方标题保留原文。
 
 ## 页面的地址
 

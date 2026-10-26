@@ -5,6 +5,8 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 
 # 配置参考
 
+语言与个人偏好见[语言与本地化](./localization.md)。
+
 本页是 `zhin.config.yml` 的完整参考。第一次配置时，先运行 `npx zhin setup` 生成一份能启动的配置，再回来查需要改的字段。
 
 ## 最常见的修改

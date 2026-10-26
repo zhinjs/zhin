@@ -1,4 +1,5 @@
 /** Delivery boundary for the independent schedule execution domain. */
+import { resolveLocale } from '@zhin.js/plugin-runtime';
 import { getLogger } from '@zhin.js/logger';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { NotificationRouter } from './assistant/notification-router.js';
@@ -115,6 +116,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
               content: result.output,
               router,
               source: 'scheduled',
+              locale: resolveLocale(job.locale),
             });
           } catch (error) {
             await event('error');
@@ -136,6 +138,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     const now = Date.now();
     const job: ScheduleJob = {
       id: `preview-${now}`,
+      locale: resolveLocale(source.locale),
       enabled: true,
       schedule: { kind: 'at', atMs: now },
       action: { kind: 'agent', prompt },

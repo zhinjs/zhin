@@ -1,3 +1,4 @@
+import { createMessages, resolveLocale } from 'zhin.js/i18n';
 import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import {
   BJ_PREFIX,
@@ -55,11 +56,12 @@ export async function startGame(
 ): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.getActiveByChannel(ch);
+  const locale = resolveLocale(active ? active.locale : message.locale);
   if (active) {
     if (active.player_id === message.$sender.id) {
-      return '你已有进行中的 21 点，发送「21点 继续」刷新。';
+      return messages(locale, 'text1');
     }
-    return `本频道 ${active.player_name} 正在玩 21 点。`;
+    return messages(locale, 'text2', { p0: active.player_name });
   }
   const session = await services.createSession(message);
   const natural = naturalOutcome(session);
@@ -77,7 +79,8 @@ export async function continueGame(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
   );
-  if (!session) return '你没有进行中的 21 点，发送「21点 开始」。';
+  const locale = resolveLocale(session ? session.locale : message.locale);
+  if (!session) return messages(locale, 'text3');
   return renderView(session, message);
 }
 
@@ -88,15 +91,16 @@ export async function handleChoice(
   choiceId: string,
 ): Promise<GameReply | null> {
   const session = await services.getById(sessionId);
-  if (!session) return '对局不存在。';
-  if (session.player_id !== message.$sender.id) return '这是别人的对局。';
+  const locale = resolveLocale(session ? session.locale : message.locale);
+  if (!session) return messages(locale, 'text4');
+  if (session.player_id !== message.$sender.id) return messages(locale, 'text5');
 
   if (session.status !== 'active' && choiceId === 'restart') {
     await services.updateSession(session.id, { status: 'aborted' });
     return (await startGame(services, message)) ?? null;
   }
 
-  if (session.status !== 'active') return '对局已结束，请点击再来一局。';
+  if (session.status !== 'active') return messages(locale, 'text6');
 
   if (choiceId === 'quit') {
     await services.updateSession(session.id, { status: 'aborted' });
@@ -109,7 +113,7 @@ export async function handleChoice(
 
   if (choiceId === 'hit') {
     const card = deck.pop();
-    if (!card) return '牌堆已空。';
+    if (!card) return messages(locale, 'text7');
     player = [...player, card];
     await services.updateSession(session.id, {
       deck_json: JSON.stringify(deck),
@@ -122,7 +126,7 @@ export async function handleChoice(
     return renderView(updated, message);
   }
 
-  if (choiceId !== 'stand') return '无效操作。';
+  if (choiceId !== 'stand') return messages(locale, 'text8');
 
   dealer = await dealerPlay(deck, dealer);
   await services.updateSession(session.id, {
@@ -136,3 +140,14 @@ export async function handleChoice(
 }
 
 export { BJ_PREFIX, handValue, TARGET };
+
+const messages = createMessages({
+  text1: { 'zh-CN': "你已有进行中的 21 点，请使用当前对局的操作入口。", en: "You already have an active blackjack game. Continue using its controls." },
+  text2: { 'zh-CN': "本频道 {p0} 正在玩 21 点。", en: "{p0} is playing blackjack in this channel." },
+  text3: { 'zh-CN': "你没有进行中的 21 点，请使用当前对局的操作入口。", en: "You have no active blackjack game." },
+  text4: { 'zh-CN': "对局不存在。", en: "This game no longer exists." },
+  text5: { 'zh-CN': "这是别人的对局。", en: "This game belongs to another player." },
+  text6: { 'zh-CN': "对局已结束，请点击再来一局。", en: "This game has ended. Choose Play again." },
+  text7: { 'zh-CN': "牌堆已空。", en: "The deck is empty." },
+  text8: { 'zh-CN': "无效操作。", en: "Invalid action." },
+});

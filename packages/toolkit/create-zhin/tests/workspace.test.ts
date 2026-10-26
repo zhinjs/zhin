@@ -254,3 +254,23 @@ describe('createWorkspace', () => {
     expect(config).toContain('provider: ollama')
   })
 })
+
+it('generates English project guidance and examples while retaining config values and dynamic command prefixes', async () => {
+  const projectPath = await makeProject({ locale: 'en', ai: {enabled:true,providers:{openai:{apiKey:'synthetic-only',models:['gpt-4o']}},agentProvider:'openai'} });
+  const config=parse(await fs.readFile(path.join(projectPath,'zhin.config.yml'),'utf8'));
+  expect(config.locale).toBe('en');
+  expect(config.database).toEqual({dialect:'sqlite',filename:'./data/bot.db',mode:'wal'});
+  expect(config).not.toHaveProperty('timezone');
+  const readme=await fs.readFile(path.join(projectPath,'README.md'),'utf8');
+  expect(readme).toContain('## 🚀 Quick start'); expect(readme).not.toMatch(/[\u3400-\u9fff]/u);
+  const instructions=await fs.readFile(path.join(projectPath,'AGENTS.md'),'utf8');
+  expect(instructions).toContain('Language: English');
+  const hello=await fs.readFile(path.join(projectPath,'commands/hello/index.ts'),'utf8');
+  expect(hello).toContain("context.formatCommand('card')"); expect(hello).not.toContain('Try /card');
+  const ts=await import('typescript'); const module={exports:{} as any};
+  const code=ts.transpileModule(hello,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  Function('require','module','exports',code)(()=>({defineCommand:(definition:unknown)=>definition}),module,module.exports);
+  const execute=module.exports.default.execute;
+  expect(execute({formatCommand:()=> '!card'})).toContain('Try !card');
+  expect(execute({formatCommand:()=>undefined})).not.toContain('card');
+});

@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ chat_id: string }>({
@@ -11,7 +12,7 @@ export default defineAgentTool<{ chat_id: string }>({
   async execute({ chat_id   }: { chat_id: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.dissolveChat(chat_id);
-    return { success, message: success ? '群聊已解散' : '解散失败' };
+    return { success, message: success ? t(context.locale, 'chatDissolved') : t(context.locale, 'dissolveFailed') };
   },
 });
 

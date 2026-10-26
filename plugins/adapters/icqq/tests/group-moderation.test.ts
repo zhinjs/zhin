@@ -24,7 +24,7 @@ describe('ICQQ checked moderation port', () => {
     const f = fixture(); f.native.setGroupKick.mockResolvedValue(false);
     expect(kickTool.requiresApproval).toBe('human');
     await expect(kickTool.execute({ group_id: 129043431, user_id: 123, reason: '经人工确认' },
-      { $client: f.client, signal: f.abort.signal } as never)).resolves.toMatchObject({ success: false });
+      { $client: f.client, signal: f.abort.signal, locale: 'en' } as never)).resolves.toMatchObject({ success: false, message: 'The platform did not confirm removal; do not retry automatically' });
     expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 123, true);
     expect(f.native.setGroupKick).toHaveBeenCalledTimes(1);
   });

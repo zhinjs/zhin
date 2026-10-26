@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import type { QrLoginProvider, QrCreateResult, QrPollResult } from './types.js';
 import { extractSetCookies } from './types.js';
 
@@ -75,7 +77,7 @@ export class QQLoginProvider implements QrLoginProvider {
     };
   }
 
-  async pollQr(pollData: Record<string, string>): Promise<QrPollResult> {
+  async pollQr(pollData: Record<string, string>, locale: Locale = 'zh-CN'): Promise<QrPollResult> {
     const { ptqrtoken, qrsig, loginSig } = pollData;
     const url = new URL('https://ssl.ptlogin2.qq.com/ptqrlogin');
     url.searchParams.set('u1', 'https://y.qq.com/');
@@ -107,32 +109,32 @@ export class QQLoginProvider implements QrLoginProvider {
       const text = await response.text();
 
       if (text.includes('二维码未失效')) {
-        return { status: 'waiting', message: '等待扫码...' };
+        return { status: 'waiting', message: t(locale, 'waiting') };
       }
       if (text.includes('二维码认证中') || text.includes('已扫码')) {
-        return { status: 'scanned', message: '已扫码，请在手机上确认登录' };
+        return { status: 'scanned', message: t(locale, 'scanned') };
       }
       if (text.includes('二维码已失效')) {
-        return { status: 'expired', message: '二维码已过期，请重新发起登录' };
+        return { status: 'expired', message: t(locale, 'expired') };
       }
       if (text.includes('登录成功') || text.includes('ptsigx')) {
-        return this.handleLoginSuccess(text, response.headers);
+        return this.handleLoginSuccess(text, response.headers, locale);
       }
 
       if (!text) {
-        return { status: 'error', message: `服务端返回空响应 (HTTP ${response.status})` };
+        return { status: 'error', message: t(locale, 'emptyResponse', { status: response.status }) };
       }
 
-      return { status: 'waiting', message: '等待扫码...' };
+      return { status: 'waiting', message: t(locale, 'waiting') };
     } catch (err) {
       return {
         status: 'error',
-        message: `轮询失败：${err instanceof Error ? err.message : String(err)}`,
+        message: t(locale, 'pollFailed', { error: err instanceof Error ? err.message : String(err) }),
       };
     }
   }
 
-  private async handleLoginSuccess(text: string, headers: Headers): Promise<QrPollResult> {
+  private async handleLoginSuccess(text: string, headers: Headers, locale: Locale): Promise<QrPollResult> {
     const redirectMatch = text.match(/'(https?:\/\/[^']+)'/);
     if (redirectMatch) {
       const redirectResp = await fetch(redirectMatch[1]!, {
@@ -141,13 +143,13 @@ export class QQLoginProvider implements QrLoginProvider {
       });
       const cookie = extractSetCookies(redirectResp.headers);
       if (cookie) {
-        return { status: 'confirmed', message: '登录成功', cookie };
+        return { status: 'confirmed', message: t(locale, 'confirmed'), cookie };
       }
     }
     const cookie = extractSetCookies(headers);
     return {
       status: cookie ? 'confirmed' : 'error',
-      message: cookie ? '登录成功' : '登录成功但获取 cookie 失败',
+      message: t(locale, cookie ? 'confirmed' : 'cookieFailed'),
       cookie: cookie || undefined,
     };
   }

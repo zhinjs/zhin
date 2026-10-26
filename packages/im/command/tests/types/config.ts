@@ -9,7 +9,9 @@ interface Config { readonly prefix: string; readonly limit: number }
 const curried = defineCommand.withConfig<Config>()({
   params: { count: { type: 'integer', min: 1 }, name: { type: 'string', optional: true } },
   options: { loud: { type: 'boolean' } },
-  execute({ params, options, config }) {
+  execute({ params, options, config, locale, formatCommand }) {
+    expectTypeOf(locale).toEqualTypeOf<'zh-CN' | 'en'>();
+    expectTypeOf(formatCommand('hello')).toEqualTypeOf<string | undefined>();
     expectTypeOf(config).toEqualTypeOf<Readonly<Config>>();
     expectTypeOf(params.count).toEqualTypeOf<number>();
     expectTypeOf(params.name).toEqualTypeOf<string | undefined>();

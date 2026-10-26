@@ -60,11 +60,24 @@ describe('GameIndex', () => {
     expect(index().formatHelp()).toContain('暂无已加载的游戏插件');
     const text = index({
       id: 'guess', title: '猜数字', icon: '🔢', description: '七步猜中',
-      commandPrefix: '/猜数', quickStart: '开始',
-    }).formatHelp();
+      commandPrefix: '/猜数', commandPath: 'guess', quickStart: '开始',
+    }).formatHelp('zh-CN', (path, owner) => owner === childPluginId(rootPluginId(), 'guess') ? `!!games ${path}` : undefined);
     expect(text).toContain('猜数字');
-    expect(text).toContain('/猜数');
+    expect(text).toContain('!!games guess');
+    expect(text).not.toContain('/猜数');
     expect(text).toContain('七步猜中');
+  });
+
+  it('uses translated metadata and does not invent a command without an indexed formatter', () => {
+    const games = index({ id: 'guess', title: '猜数字', titleI18n: { en: 'Guess the Number' }, icon: '🔢',
+      description: '猜中秘密', descriptionI18n: { en: 'Find the secret number' }, commandPrefix: '/猜数', commandPath: 'guess' });
+    const help = games.formatHelp('en');
+    expect(help).toContain('Game lobby');
+    expect(help).toContain('Guess the Number');
+    expect(help).toContain('Find the secret number');
+    expect(help).not.toContain('/猜数');
+    expect(games.formatCommand('missing', () => 'should not be called')).toBeUndefined();
+    expect(games.formatCommand('guess')).toBeUndefined();
   });
 
   it('rejects duplicate ids and aliases in one generation', () => {

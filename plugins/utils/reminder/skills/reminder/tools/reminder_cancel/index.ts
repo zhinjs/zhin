@@ -1,3 +1,4 @@
+import { reminderMessages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from "@zhin.js/tool";
 import { z } from "zod";
 import { replyReminder } from "../../../../src/caller.js";
@@ -18,8 +19,8 @@ export default defineAgentTool({
       const service = context.use(reminderServiceToken);
       const ok = await service.cancel(reminderActorFromTool(context), id);
       return ok
-        ? `已取消提醒 ${id}`
-        : `找不到提醒 ${id}（或不属于你在当前会话的任务）`;
+        ? t(context.locale, 'toolCancelled', { id })
+        : t(context.locale, 'toolNotFound', { id });
     });
   },
 });

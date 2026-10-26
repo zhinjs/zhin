@@ -19,6 +19,10 @@ export default defineGamePlugin<SessionService>({
     displayName: 'Blackjack',
   },
   game: {
+    commandPath: 'bj',
+    titleI18n: { en: 'Blackjack' },
+    descriptionI18n: { en: 'Beat the dealer without going over 21' },
+    quickStartI18n: { en: 'start' },
     id: 'blackjack',
     title: '21 点',
     icon: '🃏',

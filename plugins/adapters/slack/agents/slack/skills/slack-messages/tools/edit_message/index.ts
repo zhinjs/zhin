@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { editSlackContent } from '@zhin.js/adapter-slack';
@@ -20,6 +21,6 @@ export default defineAgentTool<{
     await editSlackContent(client, channel, message_ts, [
       { type: 'text', data: { text } },
     ]);
-    return { success: true, message: '消息已编辑' };
+    return { success: true, message: t(context.locale, 'messageEdited') };
   },
 });

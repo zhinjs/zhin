@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -16,6 +17,6 @@ export default defineAgentTool<{ guild_id: string; name: string; color?: number 
   async execute({ guild_id, name, color  }: { guild_id: string; name: string; color?: number }, context) {
     const client = context.$client;
     const role = await client.createGuildRole(guild_id, name, color);
-    return { success: !!role, role, message: role ? `角色 "${name}" 创建成功` : '创建失败' };
+    return { success: !!role, role, message: role ? t(context.locale, 'namedRoleCreated', { p0: name }) : t(context.locale, 'createFailed') };
   },
 });

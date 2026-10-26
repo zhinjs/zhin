@@ -1,3 +1,5 @@
+import { DatabaseSync } from 'node:sqlite';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { childPluginId, rootPluginId } from '../../../../packages/im/plugin-runtime/src/index.js';
@@ -20,6 +22,46 @@ function items(...ids: string[]): Awaited<ReturnType<typeof feed.fetchFeed>> {
 function mockFeed(...ids: string[]) { return vi.spyOn(feed, 'fetchFeed').mockResolvedValue(items(...ids)); }
 
 describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQLite', () => {
+  it('adds locale columns to pre-localization tables and keeps legacy notifications in Chinese', async () => {
+    const load = mockFeed('base'); const f = await setup({ locale: 'en' });
+    await createTask(f.provider()!); await f.tick();
+    await f.runtime.stop(); await f.database.stop();
+    const legacy = new DatabaseSync(join(f.project, 'state.sqlite'));
+    try {
+      for (const row of legacy.prepare("SELECT name FROM sqlite_master WHERE type='table'").all()) {
+        const table = String(row.name);
+        const columns = table.endsWith('admin_rss_tasks') ? ['locale', 'detail_key'] : table.endsWith('rss_subscriptions') ? ['locale'] : [];
+        for (const column of columns) legacy.exec(`ALTER TABLE "${table.replaceAll('"', '""')}" DROP COLUMN "${column}"`);
+      }
+    } finally { legacy.close(); }
+    await f.restart('en');
+    expect((await f.state().get<AdministratorRssBook>(ADMIN_RSS_STATE_KEY))!.tasks[0]!.locale).toBe('zh-CN');
+    load.mockResolvedValue(items('new', 'base')); await f.tick();
+    expect(f.send.mock.calls[0]![1]).toContain('新内容');
+    expect(f.send.mock.calls[0]![3]).toEqual({ locale: 'zh-CN' });
+    expect(f.send.mock.calls[0]![1]).not.toContain('new items');
+  });
+
+  it('pins notification language across SQLite reopen and keeps request locale outside mutation identity', async () => {
+    const load = mockFeed('baseline'); const f = await setup({ locale: 'en' }); const provider = f.provider()!;
+    const input = { requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
+      parameters: { url: 'https://example.test/feed.xml' } };
+    const chinese = await provider.create({ ...input, locale: 'zh-CN' });
+    const english = await provider.create({ ...input, locale: 'en' });
+    expect(chinese.tasks[0]!.detail).toContain('等待首次抓取');
+    expect(english.tasks[0]!.detail).toContain('Waiting for the first fetch');
+    expect(english.revision).toBe(chinese.revision); expect(english.receipts).toEqual(chinese.receipts);
+    await expect(provider.change({ requestId: randomUUID(), expectedRevision: english.revision,
+      id: input.requestId, action: 'resume', locale: 'en' })).rejects.toThrow('Only paused subscriptions');
+    await f.tick(); await f.restart('zh-CN');
+    expect((await f.provider()!.read({ locale: 'en' })).tasks[0]!.detail).toContain('Baseline established');
+    load.mockResolvedValue(items('new-item', 'baseline')); await f.tick();
+    expect(f.send.mock.calls[0]![1]).toContain('new items');
+    expect(f.send.mock.calls[0]![3]).toEqual({ locale: 'en' });
+    expect(f.send.mock.calls[0]![1]).not.toContain('新文章');
+    expect((await f.state().get<AdministratorRssBook>(ADMIN_RSS_STATE_KEY))!.tasks[0]!.locale).toBe('en');
+  });
+
   it('establishes initial/resumed baselines, then delivers only later articles through the exact owner-bound target', async () => {
     const load = mockFeed('before-create'); const f = await setup(); const provider = f.provider()!;
     let snapshot = await createTask(provider);

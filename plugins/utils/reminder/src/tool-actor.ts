@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { reminderMessages as t } from './i18n.js';
 /**
  * Resolve a ReminderActor from an Agent Tool invocation (IM origin only).
  */
@@ -8,6 +10,7 @@ import { ReminderInputError, type ReminderActor } from "./service.js";
 
 export interface ToolActorContext {
   readonly origin: ToolInvocationOrigin;
+  readonly locale?: Locale;
   readonly principal: Readonly<{ subjectId: string; roles: readonly string[] }>;
   project<T>(feature: typeof adapterFeatureId): T;
 }
@@ -17,7 +20,7 @@ export function toolDeliveryTarget(context: ToolActorContext): DeliveryTarget {
   const origin = context.origin;
   if (origin.kind !== "im") {
     throw new ReminderInputError(
-      "提醒工具只能在聊天会话中使用（不能用于 http/schedule 等来源）"
+      t(context.locale, 'toolOrigin')
     );
   }
   const index = context.project<AdapterIndex>(adapterFeatureId);
@@ -30,7 +33,15 @@ export function toolDeliveryTarget(context: ToolActorContext): DeliveryTarget {
         index.clientAdapter(endpoint.id) === origin.platform
     );
   if (matches.length !== 1) {
-    throw new ReminderInputError("无法确定当前会话所属的机器人账号");
+    throw new ReminderInputError(t(context.locale, 'toolEndpoint'));
+  }
+  if (origin.conversation) {
+    const canonical = createDeliveryTarget({ conversation: origin.conversation });
+    if (canonical.endpoint.id !== String(matches[0]!.id) || canonical.endpoint.adapter !== origin.platform
+      || canonical.kind !== origin.scope || canonical.id !== origin.sceneId || canonical.threadId !== origin.threadId) {
+      throw new ReminderInputError(t(context.locale, 'toolEndpoint'));
+    }
+    return canonical;
   }
   return createDeliveryTarget({
     conversation: {
@@ -47,6 +58,6 @@ export function reminderActorFromTool(
   context: ToolActorContext
 ): ReminderActor {
   const senderId = context.principal.subjectId?.trim();
-  if (!senderId) throw new ReminderInputError("提醒工具需要真实发送者");
-  return { senderId, target: toolDeliveryTarget(context) };
+  if (!senderId) throw new ReminderInputError(t(context.locale, 'toolSender'));
+  return { senderId, target: toolDeliveryTarget(context), locale: resolveLocale(context.locale) };
 }

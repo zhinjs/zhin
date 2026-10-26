@@ -2103,6 +2103,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/command':
+        specifier: workspace:^
+        version: link:../../../packages/im/command
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
@@ -3892,6 +3895,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware

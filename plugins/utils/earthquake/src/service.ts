@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /**
  * Earthquake service: fetches every enabled source, merges reports, answers
  * queries and drives the subscription poller.
@@ -273,7 +275,7 @@ export class EarthquakeService {
         this.#rateLimitedCounts.set(key, (this.#rateLimitedCounts.get(key) ?? 0) + matching.length);
         continue;
       }
-      const content = this.#formatPush(matching, this.#rateLimitedCounts.get(key) ?? 0);
+      const content = this.#formatPush(matching, this.#rateLimitedCounts.get(key) ?? 0, resolveLocale(subscription.locale));
       this.#rateLimitedCounts.delete(key);
       try {
         await this.#push(subscription, content);
@@ -286,15 +288,16 @@ export class EarthquakeService {
     return { status: 'ok', outcomes, newEvents: fresh.length, pushed, rateLimited, failedPushes };
   }
 
-  #formatPush(events: readonly EarthquakeEvent[], previouslyRateLimited: number): string {
+  #formatPush(events: readonly EarthquakeEvent[], previouslyRateLimited: number, locale: Locale): string {
     const limit = this.config.maxEventsPerMessage;
     const shown = events.slice(0, limit);
-    const title = events.length === 1 ? '🌏 地震速报' : `🌏 地震速报（${events.length} 条）`;
+    const title = events.length === 1 ? t(locale, 'alert') : t(locale, 'alerts', { count: events.length });
     const footer = previouslyRateLimited > 0
-      ? `（推送限流期间另有 ${previouslyRateLimited} 条地震未推送，可发送「地震」查看）`
+      ? t(locale, 'rateLimited', { count: previouslyRateLimited })
       : undefined;
     return formatEventList({
       title,
+      locale,
       events: shown,
       timezone: this.config.timezone,
       hiddenCount: events.length - shown.length,

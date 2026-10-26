@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { diagnoseAIDependencies, formatAIDependencyFixCommand, getRequiredAIDependenciesForConfig, isAiEnabledInConfig, findMissingPackageDependencies, findUnresolvedPackageInstalls, packagesNeedingAiStackFix, type PackageJsonLike } from './project-deps.js';
@@ -34,6 +35,7 @@ export function diagnoseUpgradeToL4(
   cwd: string,
   config: Record<string, unknown>,
   pkg?: PackageJsonLike,
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): UpgradeToL4Diagnosis {
   const packageJsonPath = path.join(cwd, 'package.json');
   const packageJson = pkg ?? (fs.existsSync(packageJsonPath)
@@ -41,8 +43,8 @@ export function diagnoseUpgradeToL4(
     : {});
 
   const aiEnabled = isAiEnabledInConfig(config);
-  const ai = aiEnabled ? diagnoseAIDependencies(cwd, config, packageJson) : null;
-  const optionalPeers = diagnoseOptionalPeers(cwd, config, packageJson);
+  const ai = aiEnabled ? diagnoseAIDependencies(cwd, config, packageJson, locale) : null;
+  const optionalPeers = diagnoseOptionalPeers(cwd, config, packageJson, locale);
 
   const missingAiDeps = ai
     ? [...new Set([...packagesNeedingAiStackFix(ai), ...ai.notInstalled])]
@@ -85,11 +87,11 @@ export function diagnoseUpgradeToL4(
     missingAiDeps: [...new Set(missingAiDeps)],
     missingOptionalPeers: [...new Set(missingOptionalPeers)],
     fixCommand: fixParts.join(' && '),
-    configSnippets: L4_CONFIG_SNIPPETS,
+    configSnippets: L4_CONFIG_SNIPPETS.map(line => wizardText(locale, line)),
   };
 }
 
-export function getUpgradeToL4Dependencies(config: Record<string, unknown>): Record<string, string> {
+export function getUpgradeToL4Dependencies(config: Record<string, unknown>, locale: 'zh-CN' | 'en' = 'zh-CN'): Record<string, string> {
   const deps = getRequiredAIDependenciesForConfig({ ai: { enabled: true } });
-  return { ...deps, ...getOptionalPeerDependencies(config) };
+  return { ...deps, ...getOptionalPeerDependencies(config, locale) };
 }

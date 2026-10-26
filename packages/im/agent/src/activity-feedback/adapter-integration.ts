@@ -36,6 +36,7 @@ export { PLATFORM_FEATURES, buildTypingSendContent, type PlatformFeatures };
  */
 export interface ActivityFeedbackSendPort {
   send(input: Readonly<{
+    locale?: import('@zhin.js/plugin-runtime').Locale;
     conversation: ConversationRef;
     content: unknown;
   }>): Promise<string | null | undefined>;
@@ -44,6 +45,7 @@ export interface ActivityFeedbackSendPort {
 /** Structural compatibility for callers that still expose legacy sendMessage. */
 export interface LegacyActivityFeedbackSendPort {
   sendMessage(options: Readonly<{
+    locale?: import('@zhin.js/plugin-runtime').Locale;
     type: 'private' | 'group';
     id: string;
     context: string;
@@ -88,10 +90,12 @@ function createOutboundSendMessage(
       if (outbound) {
         const messageId = 'send' in outbound
           ? await outbound.send({
+            locale: options.locale,
             conversation: toConversationRef(endpoint, platform, options),
             content: segments,
           })
           : await outbound.sendMessage({
+            ...(options.locale ? { locale: options.locale } : {}),
             type,
             id,
             context: platform,
@@ -111,6 +115,7 @@ function createOutboundSendMessage(
 }
 
 export interface PlatformActivityFeedbackStartOptions {
+  locale?: import('@zhin.js/plugin-runtime').Locale;
   messageId?: string;
   sessionId: string;
   userId?: string;

@@ -1,4 +1,4 @@
-import { createToken, type PluginId, type RuntimeConfigDocument, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
+import { createToken, projectLocaleToken, resolveLocale, type PluginId, type RuntimeConfigDocument, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import type { EnvStore } from './environment-store.js';
 
 /**
@@ -45,7 +45,7 @@ export function projectPrimaryConfigResources(
 ): Map<PluginId, ReadonlyMap<TokenId, unknown>> {
   return new Map([...resources].map(([owner, bindings]) => [
     owner,
-    new Map([...bindings, [primaryConfigToken.id, config]]),
+    new Map([...bindings, [primaryConfigToken.id, config], [projectLocaleToken.id, resolveLocale(config.get('locale'))]]),
   ]));
 }
 

@@ -30,6 +30,10 @@ export default defineGamePlugin<SessionServices>({
     displayName: 'Tic Tac Toe',
   },
   game: {
+    commandPath: 'ttt',
+    titleI18n: { en: 'Tic-Tac-Toe' },
+    descriptionI18n: { en: 'Play tic-tac-toe against the bot or another player' },
+    quickStartI18n: { en: 'bot' },
     id: 'ttt',
     title: '井字棋',
     icon: '♟️',

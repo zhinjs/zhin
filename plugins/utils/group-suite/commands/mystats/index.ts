@@ -5,8 +5,8 @@ import { myStatsText } from '../../src/stats-lib.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
-  description: '查看个人消息统计',
-  execute({ input, owner, use }) {
-    return myStatsText(input ?? {}, resolveGroupSuiteRuntime({ owner, use }));
+  description: '查看个人消息统计', descriptionI18n: { en: "View your message statistics" },
+  execute({ input, owner, use, locale, formatCommand }) {
+    return myStatsText({ ...input, locale }, resolveGroupSuiteRuntime({ owner, use }));
   },
 });

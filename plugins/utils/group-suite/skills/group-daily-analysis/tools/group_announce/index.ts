@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool<{ message: string }>({
@@ -8,7 +9,7 @@ export default defineAgentTool<{ message: string }>({
     required: ['message'],
   },
   requiresApproval: 'never',
-  execute({ message }) {
-    return `📢 群公告：\n${message}`;
+  execute({ message }, context) {
+    return t(context.locale, 'announcement', { message });
   },
 });

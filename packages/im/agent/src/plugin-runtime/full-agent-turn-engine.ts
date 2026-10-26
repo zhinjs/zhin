@@ -34,6 +34,7 @@ import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import type { UsageSubject } from '../security/usage-quota.js';
 import { usageGroupId } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
+import { isLocale } from '@zhin.js/plugin-runtime';
 import {
   createSubagentTurnCapability,
   type SubagentModelSelection,
@@ -560,6 +561,7 @@ function activityPayloadFromImTurn(
       ...(extraHook && typeof extraHook === 'object' ? extraHook : {}),
     },
     ...rest,
+    locale: isLocale(turn.input.locale) ? turn.input.locale : undefined,
   };
 }
 

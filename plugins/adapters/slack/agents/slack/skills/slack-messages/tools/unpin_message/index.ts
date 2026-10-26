@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -18,6 +19,6 @@ export default defineAgentTool<{
     const client = context.$client;
     await client.pins.remove({ channel: channel_id, timestamp });
     const success = true;
-    return { success, message: success ? '已取消置顶' : '操作失败' };
+    return { success, message: success ? t(context.locale, 'messageUnpinned') : t(context.locale, 'operationFailed') };
   },
 });

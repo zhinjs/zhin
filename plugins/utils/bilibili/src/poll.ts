@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages } from './i18n.js';
 /**
  * Conservative live / dynamic watcher.
  *
@@ -117,14 +119,14 @@ export class BilibiliWatcher {
   }
 
   /** Human readable list of sources currently backing off. */
-  backoffStatus(): string[] {
+  backoffStatus(locale: Locale = 'zh-CN'): string[] {
     const now = this.#now;
     return [...this.#backoff.entries()]
       .filter(([, entry]) => entry.until > now)
-      .map(([key, entry]) => `${key}：${Math.ceil((entry.until - now) / 60_000)} 分钟后重试（${entry.reason}）`);
+      .map(([key, entry]) => messages(locale, 'backoff', {key, minutes: Math.ceil((entry.until - now) / 60_000), reason: entry.reason}));
   }
 
-  async #push(rows: readonly BiliRow[], content: string): Promise<number> {
+  async #push(rows: readonly BiliRow[], content: (locale: Locale) => string): Promise<number> {
     const push = this.#options.outbound;
     if (!push) return 0;
     let pushed = 0;
@@ -134,7 +136,7 @@ export class BilibiliWatcher {
         || typeof channelId !== 'string' || !channelId
         || (channelType !== 'private' && channelType !== 'group' && channelType !== 'channel')) continue;
       try {
-        await push({ adapterName, endpointKey, channelType, channelId, content });
+        await push({ adapterName, endpointKey, channelType, channelId, locale: resolveLocale(row.locale), content: content(resolveLocale(row.locale)) });
         pushed += 1;
       } catch {
         // OutboundHost already logs; keep delivering to other subscribers.
@@ -212,7 +214,7 @@ export class BilibiliWatcher {
             liveChecked += 1;
             const state = (await loadState(State, uid)) ?? emptyState(uid);
             if (shouldPushLive(state, info)) {
-              pushed += await this.#push(byUid.get(uid)!.filter((s) => wantsLive(s.kinds)), formatLiveStart(info));
+              pushed += await this.#push(byUid.get(uid)!.filter((s) => wantsLive(s.kinds)), locale => formatLiveStart(info, locale));
             }
             if (state.liveStatus !== info.liveStatus || state.liveTime !== info.liveTime) {
               state.liveStatus = info.liveStatus;
@@ -250,7 +252,7 @@ export class BilibiliWatcher {
             const uname = typeof subs[0]?.uname === 'string' ? subs[0].uname : uid;
             const recent = fresh.filter((item) => item.pubTs >= Math.floor(this.#now / 1000) - MAX_DYNAMIC_AGE_SECONDS);
             for (const item of recent.slice(-MAX_DYNAMICS_PER_TICK)) {
-              pushed += await this.#push(targets, formatDynamic(uname, item));
+              pushed += await this.#push(targets, locale => formatDynamic(uname, item, locale));
             }
             for (const item of fresh) {
               state.seenDynamics.push(item.id);

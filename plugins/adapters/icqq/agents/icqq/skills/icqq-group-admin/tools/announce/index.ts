@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; content: string }>({
@@ -12,6 +13,6 @@ export default defineAgentTool<{ group_id: number; content: string }>({
   permissions: ['role(master,admin,trusted,owner)'],
   async execute({ group_id, content }, context) {
     await context.$client.sendGroupNotice(group_id, content);
-    return { success: true, message: '群公告已发送' };
+    return { success: true, message: t(context.locale, 'announcementSent') };
   },
 });

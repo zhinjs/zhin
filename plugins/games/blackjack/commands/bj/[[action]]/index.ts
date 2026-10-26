@@ -1,6 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
 import { messageFromCommandInput } from '@zhin.js/game-kit';
-import { BJ_HELP, runBjCommand } from '../../../src/bj-command.js';
+import { getBjHelp, runBjCommand } from '../../../src/bj-command.js';
 import { resolveGameServices } from '../../../src/runtime-store.js';
 
 function normalizeBjAction(raw: string): string {
@@ -14,11 +14,11 @@ function normalizeBjAction(raw: string): string {
 export default defineCommand({
   description: 'Blackjack',
   params: { action: { type: 'string', default: '' } },
-  async execute({ params, input, use, owner }) {
+  async execute({ params, input, use, locale, formatCommand }) {
     const action = normalizeBjAction(String(params.action ?? ''));
-    if (!action || action === 'help') return BJ_HELP;
+    if (!action || action === 'help') return getBjHelp({ locale, formatCommand });
     const services = resolveGameServices({ use });
-    const message = messageFromCommandInput(input);
+    const message = messageFromCommandInput(input, { locale, formatCommand });
     return runBjCommand(services, message, action);
   },
 });

@@ -1,3 +1,4 @@
+import { messages as t } from './i18n.js';
 /**
  * 群日常分析：从收件箱查询、基础统计、文本报告。
  * 数据源为 zhin 内置 unified_inbox_message 表（需 inbox.enabled）。
@@ -155,21 +156,22 @@ export function computeBasicStats(rows: InboxMessageRow[]): BasicStats {
  */
 export function formatTextReport(
   stats: BasicStats,
-  options: { channelName?: string; days: number; startDate: string; endDate: string }
+  options: { channelName?: string; days: number; startDate: string; endDate: string },
+  locale?: import('zhin.js/i18n').Locale
 ): string {
   const lines: string[] = [];
   const title = options.channelName
-    ? `【${options.channelName}】群日常分析`
-    : "群日常分析";
+    ? t(locale, 'analysisTextNamed', { name: options.channelName })
+    : t(locale, 'analysis');
   lines.push(`📊 ${title}`);
-  lines.push(`📅 统计区间：${options.startDate} 至 ${options.endDate}（最近 ${options.days} 天）`);
+  lines.push(t(locale, 'analysisTextRange', { start: options.startDate, end: options.endDate, days: options.days }));
   lines.push("");
-  lines.push(`💬 消息总数：${stats.messageCount} 条`);
-  lines.push(`👥 参与人数：${stats.participantCount} 人`);
-  lines.push(`📝 总字数：${stats.totalChars} 字`);
-  lines.push(`⏰ 最活跃时段：${stats.mostActiveHour}:00 - ${stats.mostActiveHour + 1}:00`);
+  lines.push(t(locale, 'analysisMessages', { count: stats.messageCount }));
+  lines.push(t(locale, 'analysisPeople', { count: stats.participantCount }));
+  lines.push(t(locale, 'analysisChars', { count: stats.totalChars }));
+  lines.push(t(locale, 'analysisPeak', { start: stats.mostActiveHour, end: stats.mostActiveHour + 1 }));
   lines.push("");
-  lines.push("📈 每小时消息分布：");
+  lines.push(t(locale, 'hourDistributionText'));
   const maxH = Math.max(...Object.values(stats.hourlyDistribution), 1);
   for (let h = 0; h < 24; h++) {
     const c = stats.hourlyDistribution[h] || 0;
@@ -183,24 +185,24 @@ export function formatTextReport(
  * 将 LLM 分析结果追加到文本报告。
  * 话题/金句/用户画像 设计灵感来自 astrbot_plugin_qq_group_daily_analysis
  */
-export function appendLLMReport(textReport: string, llm: LLMAnalysis): string {
+export function appendLLMReport(textReport: string, llm: LLMAnalysis, locale?: import('zhin.js/i18n').Locale): string {
   const lines: string[] = [textReport, ""];
   if (llm.topics?.length) {
-    lines.push("🔥 热门话题（LLM 提取）：");
+    lines.push(t(locale, 'llmTopics'));
     llm.topics.forEach((t, i) => {
       lines.push(`  ${i + 1}. ${t.topic}${t.summary ? ` — ${t.summary}` : ""}`);
     });
     lines.push("");
   }
   if (llm.quotes?.length) {
-    lines.push("💬 金句（LLM 筛选）：");
+    lines.push(t(locale, 'llmQuotes'));
     llm.quotes.forEach((q, i) => {
       lines.push(`  ${i + 1}. 「${q.content}」 — ${q.sender}（${q.reason}）`);
     });
     lines.push("");
   }
   if (llm.userTitles?.length) {
-    lines.push("👤 用户画像/称号（LLM）：");
+    lines.push(t(locale, 'llmProfiles'));
     llm.userTitles.forEach((u, i) => {
       lines.push(`  ${i + 1}. ${u.name} — ${u.title}${u.reason ? `（${u.reason}）` : ""}`);
     });

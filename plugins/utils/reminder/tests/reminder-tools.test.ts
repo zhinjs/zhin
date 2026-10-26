@@ -18,6 +18,19 @@ describe("parseRelativeDelayMs", () => {
 });
 
 describe("reminderActorFromTool", () => {
+  it("preserves the trusted canonical parent and thread and rejects mismatched identity", () => {
+    const conversation = { endpoint: { adapter: 'sandbox', id: 'cap-1' }, kind: 'channel' as const,
+      id: 'room', parent: { kind: 'channel' as const, id: 'guild' }, threadId: 'topic' };
+    const context = { locale: 'en' as const, origin: { kind: 'im' as const, platform: 'sandbox', endpoint: 'main',
+      scope: 'channel' as const, sceneId: 'room', threadId: 'topic', conversation },
+      principal: { subjectId: 'alice', roles: [] },
+      project: () => ({ describe: () => [{ id: 'cap-1', name: 'main' }], clientAdapter: () => 'sandbox' }) as never };
+    expect(reminderActorFromTool(context)).toEqual({ senderId: 'alice', target: conversation, locale: 'en' });
+    expect(() => reminderActorFromTool({ ...context, origin: { ...context.origin, conversation: { ...conversation,
+      endpoint: { adapter: 'sandbox', id: 'other-account' } } } })).toThrow('Could not identify');
+    expect(() => reminderActorFromTool({ ...context, origin: { ...context.origin, threadId: 'other-thread' } })).toThrow('Could not identify');
+  });
+
   it("resolves IM origin through AdapterIndex", () => {
     const actor = reminderActorFromTool({
       origin: {

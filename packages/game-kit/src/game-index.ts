@@ -1,7 +1,10 @@
-import type { CapabilitySlot } from '@zhin.js/plugin-runtime';
+import type { CapabilitySlot, Locale, PluginId } from '@zhin.js/plugin-runtime';
 import type { GameDefinition, RuntimeRegisteredGame } from './game-definition.js';
 import type { LeaderboardEntry, UserGameStats } from './game-records.js';
 import { GameSessionCoordinator } from './session-coordinator.js';
+import { gameMessages } from './messages.js';
+
+export type GameCommandFormatter = (localPath: string, owner?: PluginId) => string | undefined;
 
 export class GameIndex {
   readonly $projection = 'zhin.game-index/1' as const;
@@ -9,6 +12,7 @@ export class GameIndex {
   readonly #games: readonly RuntimeRegisteredGame[];
   readonly #definitionsByName: ReadonlyMap<string, GameDefinition>;
   readonly #gamesByName: ReadonlyMap<string, RuntimeRegisteredGame>;
+  readonly #owners: ReadonlyMap<string, PluginId>;
 
   constructor(slots: readonly Readonly<CapabilitySlot<GameDefinition>>[]) {
     const definitions = slots
@@ -27,6 +31,7 @@ export class GameIndex {
       return game;
     });
     this.#definitions = Object.freeze(definitions);
+    this.#owners = new Map(slots.map(slot => [slot.definition.id, slot.owner]));
     this.#games = Object.freeze(games);
     this.#definitionsByName = definitionsByName;
     this.#gamesByName = gamesByName;
@@ -62,22 +67,29 @@ export class GameIndex {
     return game ? game.records.getLeaderboard(game.id, channelKey, limit) : [];
   }
 
-  formatHelp(): string {
+  formatCommand(idOrAlias: string, formatter?: GameCommandFormatter): string | undefined {
+    const game = this.get(idOrAlias);
+    return game?.commandPath ? formatter?.(game.commandPath, this.#owners.get(game.id)) : undefined;
+  }
+
+  formatHelp(locale: Locale = 'zh-CN', formatter?: GameCommandFormatter): string {
     if (this.#games.length === 0) {
       return [
-        '🎮 游戏大厅',
+        gameMessages(locale, 'lobby'),
         '',
-        '暂无已加载的游戏插件。',
-        '安装并启用 `@zhin.js/plugin-guess-number` 等游戏包后重试。',
+        gameMessages(locale, 'noGames'),
+        gameMessages(locale, 'installGame'),
       ].join('\n');
     }
-    const lines = ['🎮 游戏大厅', '', '已加载：'];
+    const lines = [gameMessages(locale, 'lobby'), '', gameMessages(locale, 'loaded')];
     for (const game of this.#games) {
-      const start = game.quickStart ? ` ${game.quickStart}` : '';
-      lines.push(`${game.icon} **${game.title}** — \`${game.commandPrefix}${start}\``);
-      lines.push(`   ${game.description}`);
+      const quickStart = game.quickStartI18n?.[locale] ?? game.quickStart;
+      const start = quickStart ? ` ${quickStart}` : '';
+      const command = this.formatCommand(game.id, formatter);
+      lines.push(`${game.icon} **${game.titleI18n?.[locale] ?? game.title}**${command ? ` — \`${command}${start}\`` : ''}`);
+      lines.push(`   ${game.descriptionI18n?.[locale] ?? game.description}`);
     }
-    lines.push('', '发送对应命令开始；进行中可按各游戏说明直接回复。');
+    if (formatter) lines.push('', gameMessages(locale, 'startHint'));
     return lines.join('\n');
   }
 
@@ -93,10 +105,14 @@ function toRuntimeGame(definition: GameDefinition): RuntimeRegisteredGame {
   return Object.freeze({
     id: definition.id,
     title: definition.title,
+    titleI18n: definition.titleI18n,
     icon: definition.icon,
     description: definition.description,
+    descriptionI18n: definition.descriptionI18n,
     commandPrefix: definition.commandPrefix,
+    commandPath: definition.commandPath,
     quickStart: definition.quickStart,
+    quickStartI18n: definition.quickStartI18n,
     aliases: definition.aliases,
     menus: definition.menus,
   });

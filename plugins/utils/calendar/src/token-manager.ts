@@ -30,8 +30,8 @@ export type AuthorizationLostListener = (
 ) => void | Promise<void>;
 
 /** Chat command that (re-)authorizes a provider; shown in user-facing errors. */
-export function authCommandFor(provider: OAuthProviderKind): string {
-  return `calendar auth ${provider}`;
+export function authCommandFor(provider: OAuthProviderKind, commandHead?: string): string | undefined {
+  return commandHead ? `${commandHead} ${provider}` : undefined;
 }
 
 export interface TokenManagerOptions {
@@ -230,9 +230,7 @@ export class OAuthTokenManager {
         "not_authorized",
         `${
           this.#provider
-        }: 日历尚未授权。请 master 在聊天中发送「${authCommandFor(
-          this.#provider
-        )}」完成授权。`
+        }: 日历尚未授权。请 master 通过日历授权入口完成授权。`
       );
     }
     const body = new URLSearchParams({
@@ -269,9 +267,7 @@ export class OAuthTokenManager {
       if (errCode === "invalid_grant" || /invalid_grant/i.test(errDesc)) {
         const message = `${
           this.#provider
-        }: 日历授权已失效或被撤销（invalid_grant）。请 master 在聊天中发送「${authCommandFor(
-          this.#provider
-        )}」重新授权。详情：${errDesc}`;
+        }: 日历授权已失效或被撤销（invalid_grant）。请 master 通过日历授权入口重新授权。详情：${errDesc}`;
         this.#authorizationLostMessage = message;
         await this.#notifyAuthorizationLost(message);
         throw new OAuthTokenError("invalid_grant", message);

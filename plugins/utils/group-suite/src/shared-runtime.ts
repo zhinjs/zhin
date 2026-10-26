@@ -1,3 +1,4 @@
+import { messages as t } from './i18n.js';
 import { conversationKey, requireConversation, type ConversationInput } from './conversation-scope.js';
 export function todayStr(): string {
   const d = new Date();
@@ -25,11 +26,12 @@ export function resolveContextKey(input: ConversationInput): { type: string; id:
 }
 
 export function resolveSender(input: {
+  readonly locale?: import('zhin.js/i18n').Locale;
   sender?: { readonly id: string; readonly name?: string };
   metadata?: Readonly<Record<string, unknown>>;
 }): { id: string; name: string } {
   const meta = input.metadata ?? {};
   const id = input.sender?.id ?? String(meta.senderId ?? '');
-  const name = input.sender?.name ?? String(meta.senderName ?? meta.name ?? '用户');
+  const name = input.sender?.name ?? String(meta.senderName ?? meta.name ?? t(input.locale, 'user'));
   return { id, name };
 }

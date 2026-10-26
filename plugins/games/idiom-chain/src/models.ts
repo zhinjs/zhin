@@ -7,6 +7,7 @@ declare module '@zhin.js/core' {
   interface Models {
     idiom_chain_sessions: {
       id: string;
+      locale?: 'zh-CN' | 'en' | null;
       adapter: string;
       endpoint: string;
       channel_type: string;
@@ -36,10 +37,11 @@ export type ChainSessionRow = Models['idiom_chain_sessions'];
 
 
 export function defineHostTables(
-  db: { define: (name: string, definition: Record<string, unknown>) => void },
+  db: { define: (name: string, definition: Record<string, unknown>, options?: { readonly addColumns?: readonly string[] }) => void },
 ): void {
   db.define('idiom_chain_sessions', {
     id: { type: 'text', primary: true },
+    locale: { type: 'text', nullable: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },
     channel_type: { type: 'text', nullable: false },
@@ -61,5 +63,5 @@ export function defineHostTables(
     status: { type: 'text', default: 'active' },
     updated_at: { type: 'bigint', default: 0 },
     created_at: { type: 'bigint', default: 0 },
-  });
+  }, { addColumns: ['locale'] });
 }

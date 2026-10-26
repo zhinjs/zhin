@@ -1,3 +1,4 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import type { DatabaseHostModel, DeliveryTarget, PluginDatabaseHost } from 'zhin.js';
 
 export const ENTRY_TABLE = 'ledger_entries';
@@ -20,6 +21,7 @@ export interface LedgerUserRecord {
   readonly ownerKey: string;
   readonly nextSeq: number;
   readonly reportEnabled: boolean;
+  readonly reportLocale?: Locale;
   readonly reportTarget: DeliveryTarget | undefined;
   readonly lastReportDate: string;
 }
@@ -38,9 +40,10 @@ export function defineLedgerTables(database: Pick<PluginDatabaseHost, 'define'>)
     owner_key: { type: 'text', nullable: false },
     next_seq: { type: 'integer', default: 1 },
     report_enabled: { type: 'integer', default: 0 },
+    report_locale: { type: 'text', length: 16, nullable: true },
     report_target: { type: 'text', default: '' },
     last_report_date: { type: 'text', default: '' },
-  });
+  }, { addColumns: ['report_locale'] });
   database.define(PRIVATE_TARGET_TABLE, {
     owner_key: { type: 'text', nullable: false },
     target: { type: 'text', nullable: false },
@@ -72,6 +75,7 @@ function toUser(row: Record<string, unknown>): LedgerUserRecord {
     ownerKey: String(row.owner_key),
     nextSeq: Number(row.next_seq ?? 1),
     reportEnabled: Number(row.report_enabled ?? 0) === 1,
+    reportLocale: resolveLocale(row.report_locale),
     reportTarget: parseTarget(row.report_target),
     lastReportDate: String(row.last_report_date ?? ''),
   };
@@ -97,7 +101,7 @@ export class LedgerStore {
 
   async getUser(ownerKey: string): Promise<LedgerUserRecord | undefined> {
     const rows = await this.#model(USER_TABLE)
-      .select('owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date')
+      .select('owner_key', 'next_seq', 'report_enabled', 'report_locale', 'report_target', 'last_report_date')
       .where({ owner_key: ownerKey });
     const first = rows[0];
     return first ? toUser(first) : undefined;
@@ -154,10 +158,11 @@ export class LedgerStore {
     await this.#model(ENTRY_TABLE).delete().where({ owner_key: ownerKey, seq });
   }
 
-  async setReport(ownerKey: string, enabled: boolean, target: DeliveryTarget | undefined, lastReportDate: string): Promise<void> {
+  async setReport(ownerKey: string, enabled: boolean, target: DeliveryTarget | undefined, lastReportDate: string, locale?: Locale): Promise<void> {
     await this.#ensureUser(ownerKey);
     await this.#model(USER_TABLE).update({
       report_enabled: enabled ? 1 : 0,
+      ...(enabled ? { report_locale: resolveLocale(locale) } : {}),
       report_target: target ? JSON.stringify(target) : '',
       last_report_date: lastReportDate,
     }).where({ owner_key: ownerKey });
@@ -184,7 +189,7 @@ export class LedgerStore {
 
   async listReportSubscribers(): Promise<LedgerUserRecord[]> {
     const rows = await this.#model(USER_TABLE)
-      .select('owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date')
+      .select('owner_key', 'next_seq', 'report_enabled', 'report_locale', 'report_target', 'last_report_date')
       .where({ report_enabled: 1 });
     return rows.map(toUser);
   }

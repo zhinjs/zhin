@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
@@ -22,6 +23,6 @@ export default defineAgentTool<{ guild_id: string; user_id: string; role_id: str
     };
     await member.roles.add(role_id);
     const success = true;
-    return { success, message: success ? `已给用户 ${user_id} 添加角色` : '操作失败' };
+    return { success, message: success ? t(context.locale, 'memberRoleAdded', { p0: user_id }) : t(context.locale, 'operationFailed') };
   },
 });

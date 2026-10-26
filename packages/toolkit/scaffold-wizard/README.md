@@ -75,3 +75,9 @@ pnpm vitest run basic/cli/tests
 ## 文档链接
 
 适配器向导内嵌文档 URL 指向 [zhin.js.org/adapters/](https://zhin.js.org/adapters/) 各平台页；索引见 [Essentials · Adapters](https://zhin.js.org/essentials/adapters)。
+
+## 语言
+
+新建项目可在向导选择简体中文或英文，也可使用 `pnpm create zhin-app my-bot --locale=en`。`--yes` 未指定语言时保持中文；选择英文后，适配器、数据库、AI 问答、安装说明和生成项目文档使用英文。
+
+已有项目使用 `zhin setup --locale en` 修改项目语言；未传入时保留已有配置，并使用其语言显示向导。语言不会推断或修改时区、平台标识、环境变量名及用户填写内容。共享 API 接受显式 `locale` 参数（缺省 `zh-CN`），没有进程级语言状态。CLI 静态 help 同时提供中英文说明。

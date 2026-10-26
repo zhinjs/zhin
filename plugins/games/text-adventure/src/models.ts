@@ -6,6 +6,7 @@ declare module '@zhin.js/core' {
   interface Models {
     adv_sessions: {
       id: string;
+      locale?: 'zh-CN' | 'en' | null;
       adapter: string;
       endpoint: string;
       channel_type: string;
@@ -46,10 +47,11 @@ export type AdvModelName = 'adv_sessions' | 'adv_profiles';
 
 
 export function defineHostTables(
-  db: { define: (name: string, definition: Record<string, unknown>) => void },
+  db: { define: (name: string, definition: Record<string, unknown>, options?: { readonly addColumns?: readonly string[] }) => void },
 ): void {
   db.define('adv_sessions', {
     id: { type: 'text', primary: true },
+    locale: { type: 'text', nullable: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },
     channel_type: { type: 'text', nullable: false },
@@ -66,7 +68,7 @@ export function defineHostTables(
     step_count: { type: 'integer', default: 0 },
     updated_at: { type: 'bigint', default: 0 },
     created_at: { type: 'bigint', default: 0 },
-  });
+  }, { addColumns: ['locale'] });
   db.define('adv_profiles', {
     player_id: { type: 'text', primary: true },
     player_name: { type: 'text', default: '' },

@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 import { createToken, type Token } from 'zhin.js';
 import { resolveRouletteConfig } from './config.js';
 import type { RouletteFlow } from './game-flow.js';
@@ -9,6 +10,8 @@ export const rouletteServicesToken = createToken<RouletteServices>('zhin.game.ro
 
 /** A command, middleware or schedule capability context. */
 export interface RouletteCapabilityContext extends AdapterProjectionContext {
+  readonly locale?: Locale;
+  readonly formatCommand?: (path: string) => string | undefined;
   use<T>(token: Token<T>): T;
   readonly config?: unknown;
 }

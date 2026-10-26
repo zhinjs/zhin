@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /**
  * QQ Bot 扫码绑定流程（内联，等价 qqbot-connector startQrConnect）
  */
@@ -25,6 +27,7 @@ export interface QqBindCallbacks {
 }
 
 export interface QqBindFlowOptions {
+  locale?: Locale;
   signal?: AbortSignal;
   source?: string;
 }
@@ -99,7 +102,7 @@ export function startQqBindFlow(
         task = await createBindTask();
       } catch (err) {
         throw new Error(
-          `获取绑定任务失败: ${err instanceof Error ? err.message : String(err)}`,
+          t(options.locale, 'bindTaskFailed', { error: err instanceof Error ? err.message : String(err) }),
           { cause: err },
         );
       }

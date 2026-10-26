@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import type { GameId, NormalizedDraw } from '../types.js';
 import { syncGame, type LotteryDb } from '../db.js';
 
@@ -6,9 +8,10 @@ export async function runDataSync(
   enabledGames: () => GameId[],
   historyLimit: number,
   gameId?: GameId,
+  locale?: Locale,
 ): Promise<{ text: string; newSummary: string; inserted: NormalizedDraw[] }> {
   const db = getDb();
-  if (!db) return { text: 'db not ready', newSummary: '', inserted: [] };
+  if (!db) return { text: t(locale, 'dbNotReady'), newSummary: '', inserted: [] };
   const ids = gameId ? [gameId] : enabledGames();
   const parts: string[] = [];
   const newParts: string[] = [];
@@ -26,7 +29,7 @@ export async function runDataSync(
     }
   }
   return {
-    text: `sync ${parts.join(', ')}`,
+    text: t(locale, 'syncResult', { result: parts.join(', ') }),
     newSummary: newParts.join('; '),
     inserted,
   };

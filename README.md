@@ -210,6 +210,7 @@ Detailed table and sizes: [Install tiers](./docs/en/getting-started/index.md#ins
 | Run a bot for the first time | [Quick start](./docs/en/getting-started/index.md) · [Examples](./docs/en/examples/index.md) |
 | Write plugins | [First plugin](./docs/en/getting-started/first-plugin.md) · [definePlugin](./docs/en/authoring/define-plugin.md) · [Plugin delivery (test & publish)](./docs/en/authoring/plugin-delivery.md) |
 | Connect platforms | [Adapters](./docs/en/adapters/index.md) · [Configuration](./docs/en/configuration/index.md) |
+| Use Chinese or English | [Project, personal and Console languages](./docs/en/configuration/localization.md) |
 | Add AI | [AI overview](./docs/en/ai/index.md) · [Agent deep dive](./docs/en/ai/agent.md) |
 | Deploy and operate | [Production](./docs/en/operations/production.md) · [Console](./docs/en/console/index.md) · [Troubleshooting](./docs/en/troubleshooting/index.md) |
 | Understand the internals | [Architecture](./docs/en/concepts/architecture.md) · [Plugin model](./docs/en/concepts/plugin-model.md) · [Message flow](./docs/en/concepts/message-flow.md) · [Hot reload (Generations)](./docs/en/concepts/generation-lifecycle.md) |

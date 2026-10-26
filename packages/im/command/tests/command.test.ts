@@ -1790,9 +1790,9 @@ describe('central command argument declarations', () => {
     const execute = vi.fn();
     const withDefault = indexFor(defineCommand({ params: { minutes: { type: 'integer', default: 1 } }, execute }));
     const optional = indexFor(defineCommand({ params: { minutes: { type: 'integer', optional: true } }, execute }));
-    await expect(withDefault.dispatch('remind nope')).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'minutes', message: 'minutes: expected integer' }] });
+    await expect(withDefault.dispatch('remind nope')).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'minutes', code: 'expectedType', message: 'minutes：应为 integer' }] });
     await expect(optional.dispatch('remind nope')).resolves.toMatchObject({ status: 'invalid' });
-    await expect(withDefault.execute('remind', ['nope'])).rejects.toThrow('minutes: expected integer');
+    await expect(withDefault.execute('remind', ['nope'])).rejects.toThrow('minutes：应为 integer');
     expect(execute).not.toHaveBeenCalled();
     await expect(withDefault.dispatch('remind')).resolves.toMatchObject({ status: 'executed' });
   });
@@ -1806,7 +1806,7 @@ describe('central command argument declarations', () => {
     const index = new CommandIndex([slot], { ...snapshot, config: new Map([[owner, { commandNamespace: 'daily' }]]) });
     const result = await index.dispatch('daily remind --help', undefined, undefined, '#');
     expect(String(result.value)).toContain('#daily remind <minutes> [--count <integer>]');
-    expect(String(result.value)).toContain('default: 1');
+    expect(String(result.value)).toContain('默认值：1');
     expect(execute).not.toHaveBeenCalled();
     expect(index.list()[0]?.usage).toBe('daily remind <minutes> [--count <integer>]');
   });

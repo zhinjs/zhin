@@ -258,10 +258,10 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async send({ conversation, payload, locale }: EndpointSendRequest): Promise<string> {
     try {
       const materialized = await this.#materializeOutboundMedia(payload);
-      const content = formatOutboundBody(materialized);
+      const content = formatOutboundBody(materialized, locale);
       const data = await this.#request(content.replyTo
         ? `/im/v1/messages/${encodeURIComponent(content.replyTo)}/reply`
         : '/im/v1/messages', {

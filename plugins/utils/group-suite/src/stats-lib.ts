@@ -1,3 +1,4 @@
+import { messages as t } from './i18n.js';
 import { conversationKey, requireConversation, type ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getStatsModel } from './db-store.js';
@@ -164,20 +165,20 @@ export async function statsRankText(
   const stats = await queryStats(groupId, fromDate, runtime);
   const { id: userId } = resolveSender(input);
   const data = buildStatsRankReportData(stats, title, cfg.rankSize, userId);
-  return formatRankText(data);
+  return formatRankText(data, input.locale);
 }
 
 export async function myStatsText(input: MessageInput, runtime: GroupSuiteRuntime): Promise<string> {
   await flushStatsBuffer(runtime);
   const M = getStatsModel(runtime.db);
-  if (!M) return '统计数据库尚未就绪';
+  if (!M) return t(input.locale, 'statsDb');
   const { id: userId, name: userName } = resolveSender(input);
-  if (!userId) return '无法获取用户信息';
+  if (!userId) return t(input.locale, 'senderMissing');
   const groupId = resolveGroupId(input);
   const rows = (groupId
     ? await M.select().where({ user_id: userId, group_id: groupId })
     : await M.select().where({ user_id: userId })) as Record<string, unknown>[];
-  if (rows.length === 0) return '暂无你的消息记录';
+  if (rows.length === 0) return t(input.locale, 'myStatsEmpty');
   const today = todayStr();
   const weekStart = weekStartStr();
   const monthStart = monthStartStr();
@@ -193,13 +194,13 @@ export async function myStatsText(input: MessageInput, runtime: GroupSuiteRuntim
     if (row.date === today) todayCount += c;
   }
   const data: MyStatsReportData = {
-    userName: userName || '你',
-    scope: groupId ? '本群' : '全局',
+    userName: userName || t(input.locale, 'you'),
+    scope: groupId ? t(input.locale, 'thisGroup') : t(input.locale, 'global'),
     todayCount,
     weekCount,
     monthCount,
     totalCount,
     activeDays: rows.length,
   };
-  return formatMyStatsText(data);
+  return formatMyStatsText(data, input.locale);
 }

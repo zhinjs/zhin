@@ -59,6 +59,10 @@
 | `outboundMessageToken` | `stable` | `@zhin.js/core`（`zhin.js/core/runtime`） | 入站消息投递网关（适配器用） |
 | `httpHostToken` | `stable` | `@zhin.js/host-http` | HTTP/WS Host 能力（Console、Webhook 用） |
 
+### 语言与命令指引
+
+`zhin.js/i18n` 的 `createMessages`、`Locale`、`MessageCatalog`、`MessageValues`、`DEFAULT_LOCALE`、`SUPPORTED_LOCALES`、`isLocale`、`resolveLocale` 和 `projectLocaleToken` 为 stable 创作面。`Message.locale`、`CommandContext.locale` 与两者的 `formatCommand()` 来自当前操作环境；未知调用环境返回 `undefined`。个人偏好存储端口属于内部 Host 装配，不由插件各自实现。具体配置和用法见[语言与本地化](../configuration/localization.md)。
+
 ### Agent 能力资源
 
 | API | 稳定性 | 来源包 | 一句话 |

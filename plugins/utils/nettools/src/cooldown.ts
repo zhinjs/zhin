@@ -1,3 +1,4 @@
+import { message } from './messages.js';
 /**
  * Per-user cooldown shared by every nettools command and Agent tool of one
  * plugin instance. Each call to an external API spends the caller's budget
@@ -44,7 +45,7 @@ export class UserCooldown {
     const remaining = this.remainingMs(callerKey);
     if (remaining > 0) {
       const seconds = Math.ceil(remaining / 1000);
-      throw new NettoolsError('cooldown', `操作太频繁，请 ${seconds} 秒后再试`, { retryAfterMs: remaining });
+      throw new NettoolsError('cooldown', message('cooldown', { seconds }), { retryAfterMs: remaining });
     }
     this.#readyAt.delete(callerKey);
     this.#readyAt.set(callerKey, this.#now() + this.#cooldownMs);

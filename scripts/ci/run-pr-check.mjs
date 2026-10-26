@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, existsSync, unlinkSync } from 'node:fs';
-import { readScope } from './affected-scope.mjs';
+import { readPlannedScope } from './affected-scope.mjs';
 
-const scope = JSON.parse(process.env.PR_SCOPE);
 const root = process.cwd();
+// Never put expanded scope JSON in an environment variable: Linux limits each
+// env entry to 128 KiB, which can prevent even the job's shell from starting.
+const scope = readPlannedScope(root);
 const run = (command, args) => execFileSync(command, args, { stdio: 'inherit', env: { ...process.env, NPM_TOKEN: '' } });
 const pnpm = args => run('pnpm', args);
 const mode = process.argv[2];
@@ -17,12 +19,10 @@ if (mode === 'build') {
   finally { unlinkSync('.tmp-pr-outputs'); }
 } else if (mode === 'test') {
   if (existsSync('pr-build.tgz')) run('tar', ['-xzf', 'pr-build.tgz']);
-  // Recompute the same immutable scope locally; do not trust runner file paths from an artifact.
-  const selected = readScope(root, scope.base, scope.head).tests;
+  const selected = scope.tests;
   if (selected.length) pnpm(['exec', 'vitest', 'run', ...selected, `--shard=${process.env.PR_SHARD}/4`, '--maxWorkers=2', '--passWithNoTests']);
 } else if (mode === 'contracts') {
-  const changed = readScope(root, scope.base, scope.head);
-  const lint = changed.lint.filter(file => existsSync(file));
+  const lint = scope.lint.filter(file => existsSync(file));
   if (lint.length) pnpm(['exec', 'eslint', '--no-warn-ignored', ...lint]);
   // Source contracts stay on every PR; browser, packed consumers and the full
   // matrix run in Full validation and the explicit release batch.

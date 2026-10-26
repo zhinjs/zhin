@@ -1,3 +1,4 @@
+import { messages as t } from './i18n.js';
 import type { ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getTeachModel } from './db-store.js';
@@ -8,8 +9,7 @@ import {
 } from './shared-runtime.js';
 import type { GroupSuiteRuntime } from './runtime-state.js';
 
-export const TEACH_USAGE_HINT =
-  '格式：teach 关键词 回答（回答可含空格），或 teach 问题|答案';
+export const TEACH_USAGE_HINT = '格式：关键词 回答，或 问题|答案';
 
 function isSafeRegex(pattern: string): boolean {
   if (pattern.length > 200) return false;
@@ -43,12 +43,13 @@ function processAnswer(
   answer: string,
   sender: { id: string; name: string },
   match?: RegExpMatchArray,
+  locale?: import('zhin.js/i18n').Locale,
 ): string {
   let result = answer;
-  result = result.replace(/\{sender\}/g, sender.name || '你');
+  result = result.replace(/\{sender\}/g, sender.name || t(locale, 'you'));
   result = result.replace(/\{sender\.id\}/g, sender.id || '');
-  result = result.replace(/\{time\}/g, new Date().toLocaleTimeString('zh-CN'));
-  result = result.replace(/\{date\}/g, new Date().toLocaleDateString('zh-CN'));
+  result = result.replace(/\{time\}/g, new Date().toLocaleTimeString(locale ?? 'zh-CN'));
+  result = result.replace(/\{date\}/g, new Date().toLocaleDateString(locale ?? 'zh-CN'));
   if (match) {
     for (let i = 1; i < match.length; i++) {
       result = result.replace(new RegExp(`\\$${i}`, 'g'), match[i] || '');
@@ -109,14 +110,14 @@ export async function teachAdd(
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
   const QA = getTeachModel(runtime.db);
-  if (!QA) return '问答数据库尚未就绪，请稍后重试';
-  if (regex && !cfg.teachAllowRegex) return '管理员已禁用正则问答';
+  if (!QA) return t(input.locale, 'teachRetry');
+  if (regex && !cfg.teachAllowRegex) return t(input.locale, 'regexDisabled');
 
   const parsed = parseTeachPair(payload.trim());
   if (!parsed) {
     return regex
-      ? '格式：teach-regex 正则 回答，或 teach-regex 正则|回答'
-      : TEACH_USAGE_HINT;
+      ? t(input.locale, 'regexUsage')
+      : t(input.locale, 'teachUsage');
   }
   const { question, answer } = parsed;
 
@@ -124,9 +125,9 @@ export async function teachAdd(
     try {
       new RegExp(question, 'i');
     } catch (e) {
-      return `正则表达式不合法: ${(e as Error).message}`;
+      return t(input.locale, 'invalidRegex', { error: (e as Error).message });
     }
-    if (!isSafeRegex(question)) return '该正则可能导致性能问题，请简化';
+    if (!isSafeRegex(question)) return t(input.locale, 'unsafeRegex');
   }
 
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -138,7 +139,7 @@ export async function teachAdd(
       context_id: ctxId,
     })) as Record<string, unknown>[];
     if (existing.length >= cfg.teachMaxPerGroup) {
-      return `该群问答数已达上限 (${cfg.teachMaxPerGroup})`;
+      return t(input.locale, 'teachLimit', { limit: cfg.teachMaxPerGroup });
     }
   }
 
@@ -157,7 +158,7 @@ export async function teachAdd(
         is_regex?: number | boolean;
       }),
     );
-    return `已更新问答：「${question}」→「${answer}」`;
+    return t(input.locale, 'teachUpdated', { question, answer });
   }
 
   await QA.insert({
@@ -174,8 +175,8 @@ export async function teachAdd(
   });
 
   return regex
-    ? `学会了！匹配 /${question}/ 的消息我会回复「${answer}」`
-    : `学会了！发送「${question}」我会回复「${answer}」`;
+    ? t(input.locale, 'regexLearned', { question, answer })
+    : t(input.locale, 'teachLearned', { question, answer });
 }
 
 export async function teachList(
@@ -185,24 +186,24 @@ export async function teachList(
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
   const QA = getTeachModel(runtime.db);
-  if (!QA) return '问答数据库尚未就绪';
+  if (!QA) return t(input.locale, 'teachDb');
   const safePage = Math.max(1, page);
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const allItems = (await QA.select().where(
     { context_type: ctxType, context_id: ctxId },
   )) as Record<string, unknown>[];
-  if (allItems.length === 0) return '还没有教过任何问答哦～';
+  if (allItems.length === 0) return t(input.locale, 'teachEmpty');
   const totalPages = Math.ceil(allItems.length / cfg.teachPageSize);
   const pageNum = Math.min(safePage, totalPages);
   const start = (pageNum - 1) * cfg.teachPageSize;
   const pageItems = allItems.slice(start, start + cfg.teachPageSize);
   const lines = pageItems.map((item, i) => {
-    const prefix = item.is_regex ? '[正则]' : '[精确]';
+    const prefix = item.is_regex ? t(input.locale, 'regex') : t(input.locale, 'exact');
     const q = item.is_regex ? `/${item.question}/` : item.question;
     return `${start + i + 1}. ${prefix} ${q} → ${item.answer}`;
   });
-  const header = '本会话问答列表';
-  return `${header}\n${lines.join('\n')}\n第 ${pageNum}/${totalPages} 页 · 共 ${allItems.length} 条`;
+  const header = t(input.locale, 'teachTitle');
+  return t(input.locale, 'teachPage', { header, lines: lines.join('\n'), page: pageNum, pages: totalPages, count: allItems.length });
 }
 
 export async function teachForget(
@@ -211,16 +212,16 @@ export async function teachForget(
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
   const QA = getTeachModel(runtime.db);
-  if (!QA) return '问答数据库尚未就绪';
+  if (!QA) return t(input.locale, 'teachDb');
   const question = questionRaw.trim();
-  if (!question) return '请提供要删除的问题';
+  if (!question) return t(input.locale, 'questionRequired');
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const items = (await QA.select().where({
     question,
     context_type: ctxType,
     context_id: ctxId,
   })) as Record<string, unknown>[];
-  if (items.length === 0) return `没有找到问题「${question}」`;
+  if (items.length === 0) return t(input.locale, 'questionMissing', { question });
   await QA.delete().where(
     qaWhereKey(items[0] as {
       question: string;
@@ -229,7 +230,7 @@ export async function teachForget(
       is_regex?: number | boolean;
     }),
   );
-  return `已忘记「${question}」的回答`;
+  return t(input.locale, 'questionRemoved', { question });
 }
 
 /** Try teach auto-reply; returns reply text or null. */
@@ -274,12 +275,12 @@ export async function tryTeachReply(
   if (matched.is_regex) {
     try {
       const m = content.match(new RegExp(String(matched.question), 'i'));
-      answer = processAnswer(answer, sender, m || undefined);
+      answer = processAnswer(answer, sender, m || undefined, input.locale);
     } catch {
       /* ignore */
     }
   } else {
-    answer = processAnswer(answer, sender);
+    answer = processAnswer(answer, sender, undefined, input.locale);
   }
   return answer;
 }

@@ -47,10 +47,11 @@ export class SessionService extends VersionedSessionService<DungeonSessionRow> {
     const now = Date.now();
     const id = generateCompactId('dng_');
     const ownerName = message.$sender.name?.trim() || message.$sender.id;
-    const state = createDungeonState(message.$sender.id, ownerName);
+    const state = createDungeonState(message.$sender.id, ownerName, message.locale);
     const random = DeterministicRandom.fromSeed(seed ?? id);
     return this.createRow({
       id,
+      locale: message.locale ?? 'zh-CN',
       adapter: String(message.$adapter),
       endpoint: message.$endpoint,
       channel_type: message.$channel.type,
@@ -113,6 +114,7 @@ export class SessionService extends VersionedSessionService<DungeonSessionRow> {
           options.actorId,
           options.action,
           random,
+          session.locale ?? undefined,
         );
         return {
           state_json: JSON.stringify(next),

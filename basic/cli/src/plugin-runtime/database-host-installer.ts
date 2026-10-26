@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
-import { Registry, type TransactionContext } from '@zhin.js/database';
+import { Registry, ensureDatabaseColumns, type Column, type StructuredDatabase, type TransactionContext } from '@zhin.js/database';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   guardTransactionModel,
@@ -132,6 +132,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   const wrapped = new Map<string, DatabaseHostModel>();
   const definedTables = new Set<string>();
   const definitions = new Map<string, Record<string, unknown>>();
+  const additions = new Map<string, Record<string, Column>>();
   const consolePort = createDatabaseConsole(
     db,
     config.dialect,
@@ -149,12 +150,30 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     get started() {
       return started;
     },
-    define(name, definition) {
+    define(name, definition, options) {
+      const migration = Object.fromEntries((options?.addColumns ?? []).map(field => {
+        const column = Object.hasOwn(definition, field) ? definition[field] : undefined;
+        if (!column || typeof column !== 'object' || Array.isArray(column)
+          || !('type' in column) || ('primary' in column && column.primary)
+          || ('autoIncrement' in column && column.autoIncrement)
+          || (!('nullable' in column && column.nullable === true) && !('default' in column))) {
+          throw new TypeError(`Additive column '${field}' in '${name}' must be declared, nullable or defaulted, and not a primary key`);
+        }
+        return [field, structuredClone(column) as Column];
+      }));
       const existing = definitions.get(name);
       // Host 跨世代共享：reload 后新世代会重复 define 同名表，
       // 定义一致则幂等跳过（即使已 started），不一致才报错。
       if (existing !== undefined) {
-        if (isDeepStrictEqual(existing, definition)) return;
+        if (isDeepStrictEqual(existing, definition)) {
+          const previous = additions.get(name) ?? {};
+          const merged = { ...previous, ...migration };
+          if (started && !isDeepStrictEqual(previous, merged)) {
+            throw new Error(`DatabaseHost already started; restart to migrate table ${name}`);
+          }
+          if (Object.keys(merged).length) additions.set(name, merged);
+          return;
+        }
         throw new Error(`Table '${name}' already defined with a different definition`);
       }
       if (started) {
@@ -162,6 +181,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
       }
       definedTables.add(name);
       definitions.set(name, definition);
+      if (Object.keys(migration).length) additions.set(name, migration);
       db.define(name, definition);
     },
     tables() {
@@ -207,6 +227,9 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
       if (started) return;
       try {
         await db.start();
+        for (const [table, columns] of additions) {
+          await ensureDatabaseColumns(db as unknown as StructuredDatabase, table, columns);
+        }
         started = true;
         wrapped.clear();
         logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));

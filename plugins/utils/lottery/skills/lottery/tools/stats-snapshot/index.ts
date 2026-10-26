@@ -7,6 +7,6 @@ export default defineAgentTool<{ game: string }>({
   description: 'Get stats snapshot for a lottery game',
   inputSchema: z.object({ game: z.string().min(1) }),
   async execute({ game }, context) {
-    return handleStatsSnapshot(context.use(lotteryRuntimeToken), game);
+    return handleStatsSnapshot(context.use(lotteryRuntimeToken), game, context.locale);
   },
 });

@@ -9,6 +9,8 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { activityMessages } from '../activity-feedback/messages.js';
 
 const logger = getLogger('TypingIndicator');
 
@@ -36,6 +38,8 @@ export interface TypingIndicatorConfig {
 }
 
 export interface TypingIndicatorOptions {
+  /** Language fixed for this indicator's originating operation. */
+  locale?: Locale;
   /** 消息 ID */
   messageId?: string;
   /** 会话 ID */
@@ -82,7 +86,6 @@ export interface TypingIndicatorAdapter {
 const DEFAULT_CONFIG: TypingIndicatorConfig = {
   type: 'reaction',
   emoji: '⏳',
-  message: '正在处理中...',
   autoRemove: true,
   removeDelay: 5000,
 };
@@ -189,7 +192,7 @@ export class MessageTypingIndicator implements TypingIndicator {
     try {
       this.messageId = await this.sendMessage(
         this.options,
-        this.config.message || '正在处理中...',
+        this.config.message || activityMessages(this.options.locale, 'active'),
       );
       if (!this.messageId) {
         this.active = false;

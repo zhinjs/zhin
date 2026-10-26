@@ -7,10 +7,11 @@ import { ADMIN_REMINDER_STATE_KEY, type AdminReminderBook } from './admin-tasks.
 const taskColumns = {
   id: { type: 'text', length: 36, primary: true }, position: { type: 'integer', nullable: false },
   ...TASK_TARGET_COLUMNS, sender_id: { type: 'text', nullable: true }, creation: { type: 'text', nullable: true },
+  locale: { type: 'text', length: 16, nullable: true },
   content: { type: 'text', nullable: false }, state: { type: 'text', length: 24, nullable: false },
   created_at: { type: 'bigint', nullable: false }, next_run_at: { type: 'bigint', nullable: false },
   interval_ms: { type: 'bigint', nullable: true }, claim_id: { type: 'text', nullable: true },
-  last_run_at: { type: 'bigint', nullable: true }, detail: { type: 'text', nullable: false },
+  last_run_at: { type: 'bigint', nullable: true }, detail: { type: 'text', nullable: false }, detail_key: { type: 'text', length: 40, nullable: true }, failure_code: { type: 'text', length: 64, nullable: true },
 };
 
 function codec(admin: boolean): RelationalStateCodec {
@@ -21,6 +22,7 @@ function codec(admin: boolean): RelationalStateCodec {
     header: { table: `${table}_book`, definition: {
       version: { type: 'integer', nullable: true }, revision: { type: 'text', nullable: true },
     } },
+    addColumns: { [table]: ['locale', 'detail_key', 'failure_code'] },
     tables: { [table]: taskColumns, ...(admin ? { [receipts]: TASK_RECEIPT_COLUMNS } : {}) },
     encode(value) {
       const book = value as ReminderBook | AdminReminderBook;
@@ -28,17 +30,17 @@ function codec(admin: boolean): RelationalStateCodec {
       return { header: { version: book.version, revision: 'revision' in book ? book.revision : null }, rows: {
         [table]: book.tasks.map((task, position) => ({ id: task.id, position, ...encodeTaskTarget(task.target),
           sender_id: 'senderId' in task ? encodeStorageIdentity(task.senderId) : null,
-          creation: 'creation' in task ? task.creation : null, content: encodeStorageIdentity(task.text),
+          locale: task.locale ?? 'zh-CN', creation: 'creation' in task ? task.creation : null, content: encodeStorageIdentity(task.text),
           state: 'status' in task ? task.status : task.state, created_at: task.createdAt, next_run_at: task.nextRunAt,
-          interval_ms: task.intervalMs, claim_id: task.claimId, last_run_at: task.lastRunAt, detail: encodeStorageIdentity(task.detail) })),
+          interval_ms: task.intervalMs, claim_id: task.claimId, last_run_at: task.lastRunAt, detail: encodeStorageIdentity(task.detail), detail_key: task.detailKey ?? null, failure_code: 'failureCode' in task ? task.failureCode ?? null : null })),
         ...(admin ? { [receipts]: encodeTaskReceipts((book as AdminReminderBook).receipts) } : {}),
       } };
     },
     decode(header, rows) {
       return { version: Number(header.version), ...(admin ? { revision: String(header.revision) } : {}),
-        tasks: rows[table]!.map(row => ({ id: String(row.id), target: decodeTaskTarget(row), text: decodeStorageIdentity(row.content),
+        tasks: rows[table]!.map(row => ({ id: String(row.id), target: decodeTaskTarget(row), text: decodeStorageIdentity(row.content), locale: row.locale == null ? 'zh-CN' : String(row.locale),
           createdAt: Number(row.created_at), nextRunAt: Number(row.next_run_at), intervalMs: row.interval_ms == null ? null : Number(row.interval_ms),
-          claimId: row.claim_id == null ? null : String(row.claim_id), lastRunAt: row.last_run_at == null ? null : Number(row.last_run_at), detail: decodeStorageIdentity(row.detail),
+          claimId: row.claim_id == null ? null : String(row.claim_id), lastRunAt: row.last_run_at == null ? null : Number(row.last_run_at), detail: decodeStorageIdentity(row.detail), ...(row.detail_key == null ? {} : { detailKey: String(row.detail_key) }), ...(row.failure_code == null ? {} : { failureCode: String(row.failure_code) }),
           ...(admin ? { creation: String(row.creation), state: String(row.state) } : { senderId: decodeStorageIdentity(row.sender_id), status: String(row.state) }),
         })), ...(admin ? { receipts: decodeTaskReceipts(rows[receipts]!) } : {}),
       };

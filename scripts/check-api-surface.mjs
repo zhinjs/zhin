@@ -14,6 +14,7 @@ const targets = {
   '@zhin.js/core': 'packages/im/core/src/index.ts',
   'zhin.js/jsx': 'packages/im/zhin/src/jsx.ts',
   'zhin.js/component': 'packages/im/zhin/src/component.ts',
+  'zhin.js/i18n': 'packages/im/zhin/src/i18n.ts',
   '@zhin.js/jsx': 'packages/im/jsx/src/index.ts',
   '@zhin.js/components': 'packages/toolkit/components/src/index.ts',
 };
