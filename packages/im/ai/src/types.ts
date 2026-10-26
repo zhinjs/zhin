@@ -392,6 +392,8 @@ export interface AIConfig {
     memory?: DecisionTaskConfig;
     agents?: DecisionTaskConfig;
     approval?: DecisionTaskConfig;
+    /** Unprompted group engagement (`ai.trigger.ambient`): decide whether the bot speaks up. */
+    ambient?: DecisionTaskConfig;
   };
   /** Workroom control-plane policy. Project definitions remain in the persistent Catalog. */
   workroom?: {
@@ -676,6 +678,8 @@ export interface AmbientEngagementConfig {
   /**
    * Judge model as `providerAlias/model`, or a list tried in order when one fails or is rate
    * limited (free tiers are limited per model). Default: the main Agent's model.
+   * With `ai.decisions.ambient` in `active` mode the decision provider judges first and this list
+   * becomes its fallback; in `shadow` mode this list still decides.
    */
   judge?: string | string[];
   /** Outside a conversation, judge a group at most this often (default 30000), to spare the judge's quota. */

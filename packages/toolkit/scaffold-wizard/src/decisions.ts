@@ -87,7 +87,7 @@ export function diagnoseDecisionConfig(config: Readonly<Record<string, unknown>>
   if (!Object.hasOwn(ai, 'decisions')) return [];
   const decisions = record(ai.decisions);
   const issues: string[] = [];
-  const taskNames = ['skills', 'tools', 'memory', 'agents', 'approval'];
+  const taskNames = ['skills', 'tools', 'memory', 'agents', 'approval', 'ambient'];
   if (Object.keys(decisions).some(key => !['provider', ...taskNames].includes(key))) issues.push('ai.decisions 含有未知配置字段。');
   const provider = decisions.provider;
   if (typeof provider !== 'string' || !/^root(?:\/[a-z0-9][a-z0-9-]*)+$/.test(provider)) return [...issues, 'ai.decisions.provider 必须是精确插件 owner，例如 root/typesafe。'];

@@ -120,6 +120,13 @@ outline: [2, 3]
 | `ai.decisions.approval.topK` | integer | 否 | — | — |
 | `ai.decisions.approval.maxCandidates` | integer | 否 | — | — |
 | `ai.decisions.approval.maxSelections` | integer | 否 | — | — |
+| `ai.decisions.ambient` | object | 否 | — | 群聊旁听（ai.trigger.ambient）是否接话。active：由决策服务判断，ambient.judge 模型列表作为兜底；shadow：只记录。 |
+| `ai.decisions.ambient.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
+| `ai.decisions.ambient.timeoutMs` | integer | 否 | — | — |
+| `ai.decisions.ambient.minConfidence` | number | 否 | — | — |
+| `ai.decisions.ambient.topK` | integer | 否 | — | — |
+| `ai.decisions.ambient.maxCandidates` | integer | 否 | — | — |
+| `ai.decisions.ambient.maxSelections` | integer | 否 | — | — |
 | `ai.workroom` | object | 否 | — | 进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。 |
 | `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | 否 | — | 允许发布共享 Capability Pack 的 Console 认证 principalId。 |
 | `ai.workroom.disclosure` | object | 否 | — | Workroom 披露初始化使用的显式 P12 模型处理方契约。 |
@@ -392,7 +399,7 @@ outline: [2, 3]
 | `ai.trigger.errorTemplate` | string | 否 | — | 入口层错误提示模板，{error} 为错误信息（可选；不配置时用聊天口吻说"刚卡了一下"，主人额外看到原因） |
 | `ai.trigger.ambient` | object | 否 | — | 群聊旁听：群里没人叫机器人时，由判断模型决定是否接话。被 @、引用和私聊不经过这里，总会交给 Agent（Agent 也可以选择不回复）。 |
 | `ai.trigger.ambient.conversations` | array&lt;string&gt; | 否 | — | 开启旁听的群，格式 platform:groupId；* 表示所有群。默认为空（关闭） |
-| `ai.trigger.ambient.judge` | string \| array | 否 | — | 判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型 |
+| `ai.trigger.ambient.judge` | string \| array | 否 | — | 判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型。ai.decisions.ambient 为 active 时由决策服务先判断，这里的模型作为兜底 |
 | `ai.trigger.ambient.quietMs` | number \| string | 否 | — | 群安静多久后才判断一次（毫秒，默认 4000） |
 | `ai.trigger.ambient.cooldownMs` | number \| string | 否 | — | 两次主动插话之间的最短间隔（毫秒，默认 120000）；对话进行中不受限制 |
 | `ai.trigger.ambient.maxPerHour` | number \| string | 否 | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |

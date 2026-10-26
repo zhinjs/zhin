@@ -732,6 +732,11 @@
             },
             "approval": {
               "$ref": "#/$defs/decisionTask"
+            },
+            "ambient": {
+              "$ref": "#/$defs/decisionTask",
+              "description": "Unprompted group engagement (ai.trigger.ambient). active: the provider decides whether to speak up and the ambient judge models are the fallback; shadow: logged only.",
+              "x-descriptionZh": "群聊旁听（ai.trigger.ambient）是否接话。active：由决策服务判断，ambient.judge 模型列表作为兜底；shadow：只记录。"
             }
           }
         },
@@ -2895,7 +2900,7 @@
                   "items": {
                     "type": "string"
                   },
-                  "description": "判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型"
+                  "description": "判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型。ai.decisions.ambient 为 active 时由决策服务先判断，这里的模型作为兜底"
                 },
                 "quietMs": {
                   "type": [

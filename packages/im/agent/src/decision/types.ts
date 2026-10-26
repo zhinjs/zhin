@@ -1,6 +1,6 @@
 import type { AIConfig, DecisionProvider, DecisionTaskConfig } from '@zhin.js/ai';
 
-export type DecisionTask = 'skills' | 'tools' | 'memory' | 'agents' | 'approval';
+export type DecisionTask = 'skills' | 'tools' | 'memory' | 'agents' | 'approval' | 'ambient';
 export type DecisionMode = 'off' | 'shadow' | 'active';
 
 export type DecisionTaskPolicy = DecisionTaskConfig;

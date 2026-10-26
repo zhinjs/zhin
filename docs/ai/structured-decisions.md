@@ -10,7 +10,8 @@ description: "用专门的判断模型为 AI 选择 Agent、推荐 Skill、排�
 - 选择由哪个 Agent 处理；
 - 推荐要激活的 Skill；
 - 给工具检索和记忆检索结果排序；
-- 在 `execApprovalMode: auto` 时辅助自动审核。
+- 在 `execApprovalMode: auto` 时辅助自动审核；
+- 判断群聊旁听时要不要主动接话（`ai.trigger.ambient`）。
 
 **它只给建议，不扩大权限。** 聊天模型继续生成回复和工具参数；身份、权限、能力激活、审批和执行仍由 Zhin 负责。
 
@@ -76,6 +77,8 @@ ai:
       mode: off
     approval:
       mode: off
+    ambient:
+      mode: off
 typesafe:
   apiKey: ${TYPESAFE_API_KEY}
   model: jev-latest
@@ -105,6 +108,7 @@ typesafe:
 | Tool 发现 | 改进现有 `discover` 排序；有效弃选返回无匹配，服务失败使用已有检索。候选来自当前授权目录。 |
 | 记忆排序 | 只重排当前用户、会话或 Agent 范围内已经检索出的候选，不能跨范围检索。有效弃选返回无匹配；故障、`shadow` 和 `off` 使用已有检索结果。 |
 | 自动审核 | 仅在 `execApprovalMode: auto` 时作为审核判断器；证据不足询问 master，错误、超时或无效响应拒绝当前操作。 |
+| 群聊旁听 | 仅在 `ai.trigger.ambient` 开启的群、且没人叫 Bot 时，用一个二选一问题（`engage` / `stay_quiet`）判断是否接话；`active` 时错误、超时或无效响应交给 `ambient.judge` 聊天模型兜底，`shadow` 时只记录。等待、冷却、每小时上限等限流不变。会发送最近 20 条群消息（每条截断到 200 字）。详见 [群聊旁听](./index.md#群聊旁听-ambient)。 |
 
 这些策略不承担自由值抽取。用户 ID、时间、金额等参数继续由现有解析或聊天模型生成，并经工具 schema 校验。
 

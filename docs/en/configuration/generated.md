@@ -120,6 +120,13 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.decisions.approval.topK` | integer | no | — | — |
 | `ai.decisions.approval.maxCandidates` | integer | no | — | — |
 | `ai.decisions.approval.maxSelections` | integer | no | — | — |
+| `ai.decisions.ambient` | object | no | — | Unprompted group engagement (ai.trigger.ambient). active: the provider decides whether to speak up and the ambient judge models are the fallback; shadow: logged only. |
+| `ai.decisions.ambient.mode` | string: `"off"`, `"shadow"`, `"active"` | yes | — | — |
+| `ai.decisions.ambient.timeoutMs` | integer | no | — | — |
+| `ai.decisions.ambient.minConfidence` | number | no | — | — |
+| `ai.decisions.ambient.topK` | integer | no | — | — |
+| `ai.decisions.ambient.maxCandidates` | integer | no | — | — |
+| `ai.decisions.ambient.maxSelections` | integer | no | — | — |
 | `ai.workroom` | object | no | — | Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog. |
 | `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | no | — | Authenticated Console principal ids allowed to publish shared Capability Packs. |
 | `ai.workroom.disclosure` | object | no | — | Explicit P12 model processor contracts for Workroom disclosure bootstrap. |
@@ -392,7 +399,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.trigger.errorTemplate` | string | no | — | 入口层错误提示模板，{error} 为错误信息（可选；不配置时用聊天口吻说"刚卡了一下"，主人额外看到原因） |
 | `ai.trigger.ambient` | object | no | — | 群聊旁听：群里没人叫机器人时，由判断模型决定是否接话。被 @、引用和私聊不经过这里，总会交给 Agent（Agent 也可以选择不回复）。 |
 | `ai.trigger.ambient.conversations` | array&lt;string&gt; | no | — | 开启旁听的群，格式 platform:groupId；* 表示所有群。默认为空（关闭） |
-| `ai.trigger.ambient.judge` | string \| array | no | — | 判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型 |
+| `ai.trigger.ambient.judge` | string \| array | no | — | 判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型。ai.decisions.ambient 为 active 时由决策服务先判断，这里的模型作为兜底 |
 | `ai.trigger.ambient.quietMs` | number \| string | no | — | 群安静多久后才判断一次（毫秒，默认 4000） |
 | `ai.trigger.ambient.cooldownMs` | number \| string | no | — | 两次主动插话之间的最短间隔（毫秒，默认 120000）；对话进行中不受限制 |
 | `ai.trigger.ambient.maxPerHour` | number \| string | no | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |

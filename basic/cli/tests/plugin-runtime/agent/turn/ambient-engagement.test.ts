@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DecisionProvider } from '@zhin.js/ai';
 import {
   AmbientEngagement,
+  createAmbientDecisionJudge,
+  DecisionEngagementJudge,
   FallbackEngagementJudge,
   LlmEngagementJudge,
+  ShadowEngagementJudge,
   parseJudgment,
   type EngagementJudge,
   type EngagementJudgment,
@@ -196,5 +200,129 @@ describe('parseJudgment', () => {
 
   it.each(['', 'yes', '{"engage":"true","confidence":0.9}', '{"engage":true}'])('rejects %j', text => {
     expect(() => parseJudgment(text)).toThrow('Invalid engagement judgment');
+  });
+});
+
+describe('DecisionEngagementJudge', () => {
+  const input = () => ({ botName: '小知', recent: ['小林 (1): 有人知道怎么配代理吗'], inConversation: true, minutesSinceBotSpoke: 2, signal: new AbortController().signal });
+  const answer = (choice: 'engage' | 'stay_quiet', engage: number) => ({
+    model: 'jev-1.14',
+    answers: { engagement: { type: 'choice', choice, confidence: Math.max(engage, 1 - engage), probabilities: { engage, stay_quiet: 1 - engage } } },
+    usage: { inputTokens: 40, outputTokens: 2 },
+  });
+  const provider = (result: unknown) => ({ evaluate: vi.fn(async () => { if (result instanceof Error) throw result; return result; }) }) as unknown as DecisionProvider & { evaluate: ReturnType<typeof vi.fn> };
+
+  it('asks one binary choice over the judge evidence and reports metadata only', async () => {
+    const service = provider(answer('engage', 0.86));
+    const observe = vi.fn();
+    const judge = new DecisionEngagementJudge({ provider: service, policy: { mode: 'active', timeoutMs: 1500 }, observe });
+    await expect(judge.judge(input())).resolves.toEqual({ engage: true, confidence: 0.86, reason: 'decision: engage', source: 'decision:jev-1.14' });
+    const [request, options] = service.evaluate.mock.calls[0]!;
+    expect(request.state).toEqual({ bot: '小知', botIsInConversation: true, minutesSinceBotSpoke: 2, recentMessages: ['小林 (1): 有人知道怎么配代理吗'] });
+    expect(Object.keys(request.questions)).toEqual(['engagement']);
+    expect(request.questions.engagement).toMatchObject({ type: 'choice', criteria: { engage: expect.any(String), stay_quiet: expect.any(String) } });
+    expect(options).toMatchObject({ timeoutMs: 1500 });
+    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ task: 'ambient', mode: 'active', outcome: 'selected', candidates: 2, selected: 1, model: 'jev-1.14', usage: { inputTokens: 40, outputTokens: 2, totalTokens: 42 } }));
+    expect(JSON.stringify(observe.mock.calls)).not.toContain('代理');
+  });
+
+  it('declines when the provider chooses to stay quiet', async () => {
+    const judge = new DecisionEngagementJudge({ provider: provider(answer('stay_quiet', 0.1)), policy: { mode: 'active' } });
+    await expect(judge.judge(input())).resolves.toMatchObject({ engage: false, confidence: 0.9 });
+  });
+
+  it('gates engagement with ai.decisions.ambient.minConfidence', async () => {
+    const observe = vi.fn();
+    const judge = new DecisionEngagementJudge({ provider: provider(answer('engage', 0.6)), policy: { mode: 'active', minConfidence: 0.8 }, observe });
+    await expect(judge.judge(input())).resolves.toMatchObject({ engage: false });
+    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'abstained', reason: 'low_confidence' }));
+  });
+
+  it('throws on invalid answers, provider errors and timeouts so the chat-model judges can take over', async () => {
+    for (const [result, reason] of [
+      [{ model: 'jev-1.14', answers: { engagement: { type: 'choice', choice: 'maybe', probabilities: {} } }, usage: { inputTokens: 1, outputTokens: 1 } }, 'invalid_response'],
+      [new Error('503 channel_unavailable'), 'provider_error'],
+    ] as const) {
+      const observe = vi.fn();
+      const judge = new DecisionEngagementJudge({ provider: provider(result), policy: { mode: 'active' }, observe });
+      await expect(judge.judge(input())).rejects.toThrow(reason);
+      expect(observe).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed', reason }));
+    }
+    const slow = { evaluate: (_request: unknown, options: { signal: AbortSignal }) => new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason))) } as unknown as DecisionProvider;
+    const observe = vi.fn();
+    await expect(new DecisionEngagementJudge({ provider: slow, policy: { mode: 'active', timeoutMs: 20 }, observe }).judge(input())).rejects.toThrow('timeout');
+    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ reason: 'timeout' }));
+
+    const llm = { judge: vi.fn(async () => yes) } satisfies EngagementJudge;
+    const failing = new DecisionEngagementJudge({ provider: provider(new Error('down')), policy: { mode: 'active' } });
+    await expect(new FallbackEngagementJudge([failing, llm]).judge(input())).resolves.toEqual(yes);
+    expect(llm.judge).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an invalid policy', () => {
+    expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), policy: { mode: 'active', timeoutMs: 0 } })).toThrow('Invalid ambient decision policy');
+    expect(() => new DecisionEngagementJudge({ provider: provider(answer('engage', 1)), policy: { mode: 'active', minConfidence: 2 } })).toThrow('Invalid ambient decision policy');
+  });
+});
+
+describe('ShadowEngagementJudge', () => {
+  it('returns the primary judgment and reports the shadow one', async () => {
+    const shadowJudgment: EngagementJudgment = { engage: false, confidence: 0.8, reason: 'decision: stay_quiet', source: 'decision:jev-1.14' };
+    const report = vi.fn();
+    const judge = new ShadowEngagementJudge({ judge: async () => yes }, { judge: async () => shadowJudgment }, report);
+    await expect(judge.judge({ botName: '小知', recent: ['a'], signal: new AbortController().signal })).resolves.toEqual(yes);
+    expect(report).toHaveBeenCalledWith(shadowJudgment, yes);
+  });
+
+  it('ignores a failing shadow and still fails with the primary', async () => {
+    const report = vi.fn();
+    const input = { botName: '小知', recent: ['a'], signal: new AbortController().signal };
+    await expect(new ShadowEngagementJudge({ judge: async () => yes }, { judge: async () => { throw new Error('down'); } }, report).judge(input)).resolves.toEqual(yes);
+    expect(report).toHaveBeenLastCalledWith(undefined, yes);
+    await expect(new ShadowEngagementJudge({ judge: async () => { throw new Error('primary'); } }, { judge: async () => yes }, report).judge(input)).rejects.toThrow('primary');
+  });
+});
+
+describe('AmbientEngagement judge override', () => {
+  it('uses the per-call judge while keeping the throttles', async () => {
+    const h = harness(yes, { cooldownMs: 60_000, conversationWindowMs: 0 });
+    const override = { judge: vi.fn(async (): Promise<EngagementJudgment> => ({ ...yes, source: 'decision:jev-1.14' })) } satisfies EngagementJudge;
+    const consider = () => h.engagement.consider({ key: 'icqq:1048877509', botName: '小知', readRecent: async () => ['x'], judge: override });
+    const first = consider();
+    await h.release();
+    await expect(first).resolves.toMatchObject({ kind: 'engage', judgment: { source: 'decision:jev-1.14' } });
+    const second = consider();
+    await h.release();
+    await expect(second).resolves.toEqual({ kind: 'skipped', reason: 'cooldown' });
+    expect(override.judge).toHaveBeenCalledTimes(1);
+    expect(h.judge.judge).not.toHaveBeenCalled();
+  });
+});
+
+describe('createAmbientDecisionJudge', () => {
+  const input = () => ({ botName: '小知', recent: ['a'], signal: new AbortController().signal });
+  const quiet = { model: 'jev-1.14', answers: { engagement: { type: 'choice', choice: 'stay_quiet', confidence: 0.95, probabilities: { engage: 0.05, stay_quiet: 0.95 } } }, usage: { inputTokens: 1, outputTokens: 1 } };
+  const service = (result: unknown) => ({ evaluate: vi.fn(async () => { if (result instanceof Error) throw result; return result; }) }) as unknown as DecisionProvider & { evaluate: ReturnType<typeof vi.fn> };
+
+  it('keeps the configured judges when the policy is off', () => {
+    expect(createAmbientDecisionJudge({ base: { judge: async () => yes }, provider: service(quiet), policy: { mode: 'off' } })).toBeUndefined();
+  });
+
+  it('active: the decision provider decides and the chat-model judges are the fallback', async () => {
+    const base = { judge: vi.fn(async () => yes) } satisfies EngagementJudge;
+    const active = createAmbientDecisionJudge({ base, provider: service(quiet), policy: { mode: 'active' } })!;
+    await expect(active.judge(input())).resolves.toMatchObject({ engage: false, source: 'decision:jev-1.14' });
+    expect(base.judge).not.toHaveBeenCalled();
+    const failing = createAmbientDecisionJudge({ base, provider: service(new Error('down')), policy: { mode: 'active' } })!;
+    await expect(failing.judge(input())).resolves.toEqual(yes);
+  });
+
+  it('shadow: the chat-model judges decide and the decision is only reported', async () => {
+    const reportShadow = vi.fn();
+    const observe = vi.fn();
+    const shadow = createAmbientDecisionJudge({ base: { judge: async () => yes }, provider: service(quiet), policy: { mode: 'shadow' }, observe, reportShadow })!;
+    await expect(shadow.judge(input())).resolves.toEqual(yes);
+    expect(reportShadow).toHaveBeenCalledWith(expect.objectContaining({ engage: false }), yes);
+    expect(observe).toHaveBeenCalledWith(expect.objectContaining({ task: 'ambient', mode: 'shadow', outcome: 'shadow' }));
   });
 });
