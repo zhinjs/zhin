@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=487f5c4cd2a38b80 -->
+<!-- sync-adapter-docs:sha256=0eb86a616f4d3fdc -->
 
 # @zhin.js/adapter-sandbox
 

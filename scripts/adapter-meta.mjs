@@ -48,6 +48,7 @@ export const ADAPTER_META = {
   github: { tier: 'Experimental', label: 'GitHub', packageName: '@zhin.js/adapter-github' },
   satori: { tier: 'Experimental', label: 'Satori', packageName: '@zhin.js/adapter-satori' },
   line: { tier: 'Experimental', label: 'LINE', packageName: '@zhin.js/adapter-line' },
+  bilibili: { tier: 'Experimental', label: 'Bilibili 评论', packageName: '@zhin.js/adapter-bilibili' },
   wecom: { tier: 'Experimental', label: '企业微信', packageName: '@zhin.js/adapter-wecom' },
   'weixin-ilink': { tier: 'Experimental', label: '微信 iLink', packageName: '@zhin.js/adapter-weixin-ilink' },
 };
