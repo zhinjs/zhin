@@ -30,7 +30,7 @@ describe('sandbox console page', () => {
   it('exposes static definePage metadata for convention discovery', async () => {
     const source = await readFile(sandboxPageSource, 'utf8');
     expect(extractPageMetadata(source, sandboxPageSource)).toMatchObject({
-      title: 'Agent 试验台',
+      title: '试聊一下',
       order: 10,
     });
   });
@@ -51,7 +51,7 @@ describe('sandbox console page', () => {
     });
     expect(artifact).toMatchObject({
       module: expect.stringMatching(/^\/assets\/client\//u),
-      metadata: expect.objectContaining({ title: 'Agent 试验台' }),
+      metadata: expect.objectContaining({ title: '试聊一下' }),
     });
   });
 
@@ -88,7 +88,7 @@ describe('sandbox console page', () => {
     expect(pages).toEqual(expect.arrayContaining([
       expect.objectContaining({
         localName: 'index',
-        title: 'Agent 试验台',
+        title: '试聊一下',
         route: '/',
       }),
     ]));

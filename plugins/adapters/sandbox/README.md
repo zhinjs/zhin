@@ -111,7 +111,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 | `text` | string | 可选。没有 `content` 时作为纯文本；`content` 里没有文本段时也用它作为消息文本 |
 | `messageId` | string | 可选。客户端生成的消息 id，须匹配 `^[A-Za-z0-9._:-]{1,160}$`，不匹配时忽略；填写后作为这条入站消息的 id，引用回复时可据此定位 |
 | `timestamp` | number | 可选。毫秒时间戳，默认取服务端收到的时间 |
-| `agentRun` | object | 可选。Agent 试验台运行配置，见下表 |
+| `agentRun` | object | 可选。「试聊一下」（原 Agent 试验台）运行配置，见下表 |
 
 - 帧内容不是 JSON 时，整段文本按一条纯文本消息处理。
 - 消息的发送者固定为 endpoint 的 `owner`。
