@@ -21,6 +21,8 @@ export function turnContextViewFromMessage(message: Message): TurnContextView {
     throw new TypeError('IM Turn context requires platform, endpoint, scene, and sender identity');
   }
   return Object.freeze({
+    input: Object.freeze({ text: message.content, locale: message.locale,
+      commandPrefix: message.commandPrefix, commandMenu: message.commandMenu }),
     origin: Object.freeze({
       kind: 'im',
       conversation: message.conversation,

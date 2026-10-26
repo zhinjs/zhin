@@ -97,7 +97,7 @@ describe('startQqBindFlow', () => {
     });
   });
 
-  it('create_bind_task 失败时回调 onFailure', async () => {
+  it.each(['zh-CN', 'en'] as const)('create_bind_task failures follow the captured %s language', async (locale) => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => jsonResponse({ retcode: 1, msg: 'boom' })),
@@ -107,10 +107,10 @@ describe('startQqBindFlow', () => {
       startQqBindFlow({
         onSuccess: vi.fn(),
         onFailure: resolve,
-      });
+      }, { locale });
     });
 
-    expect(error.message).toContain('获取绑定任务失败');
+    expect(error.message).toContain(locale === 'en' ? 'Could not create the binding task' : '获取绑定任务失败');
     expect(error.message).toContain('boom');
   });
 });

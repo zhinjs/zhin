@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -16,6 +17,6 @@ export default defineAgentTool<{ chat_id: string; name?: string; description?: s
   async execute({ chat_id, name, description   }: { chat_id: string; name?: string; description?: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.updateChatInfo(chat_id, { name, description });
-    return { success, message: success ? '群信息更新成功' : '更新失败' };
+    return { success, message: success ? t(context.locale, 'chatInfoUpdated') : t(context.locale, 'updateFailed') };
   },
 });

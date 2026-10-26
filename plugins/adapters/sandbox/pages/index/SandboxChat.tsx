@@ -1,3 +1,4 @@
+import { sandboxText, type SandboxLocale } from './messages.js';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   cn,
@@ -50,6 +51,8 @@ type Channel = PlaygroundSession
 interface Face { id: number; emojiId: number; stickerId: number; emojiType: string; name: string; describe: string; png: boolean; apng: boolean; lottie: boolean; }
 
 export default function Sandbox() {
+    const [locale, setLocale] = useState<SandboxLocale>('zh-CN')
+    const localeRef = useRef<SandboxLocale>('zh-CN')
     const [initialState] = useState(() => loadPlaygroundState())
     const [messages, setMessages] = useState<Message[]>(() => [...initialState.messages])
     const [channels, setChannels] = useState<Channel[]>(() => [...initialState.sessions])
@@ -79,10 +82,10 @@ export default function Sandbox() {
     const [atPopoverPosition, setAtPopoverPosition] = useState<{ top: number; left: number } | null>(null)
     const [atSearchQuery, setAtSearchQuery] = useState('')
     const [faceSearchQuery, setFaceSearchQuery] = useState('')
-    const [atSuggestions] = useState([
-        { id: 'actor-owner', name: '当前用户' }, { id: 'actor-reviewer', name: '审阅者' },
-        { id: 'actor-operator', name: '协作者' }, { id: 'actor-bot', name: 'Sandbox Agent' }
-    ])
+    const atSuggestions = [
+        { id: 'actor-owner', name: sandboxText(locale, "当前用户") }, { id: 'actor-reviewer', name: sandboxText(locale, "审阅者") },
+        { id: 'actor-operator', name: sandboxText(locale, "协作者") }, { id: 'actor-bot', name: 'Sandbox Agent' }
+    ]
     const [previewSegments, setPreviewSegments] = useState<MessageSegment[]>([])
     const [composerMode, setComposerMode] = useState<'write' | 'preview'>('write')
     const [showChannelList, setShowChannelList] = useState(false)
@@ -107,9 +110,9 @@ export default function Sandbox() {
     )
     const traceSummary = useMemo(() => summarizeTrace(trace), [trace])
     const taskRuns = useMemo(() => deriveTaskRuns(trace), [trace])
-    const workbenchArtifacts = useMemo(() => deriveWorkbenchArtifacts(trace), [trace])
+    const workbenchArtifacts = useMemo(() => deriveWorkbenchArtifacts(trace, locale), [trace, locale])
     const currentTask = taskRuns.find((run) => run.status === 'running') ?? taskRuns[0]
-    const currentRunSteps = useMemo(() => deriveAgentRunSteps(trace, currentTask), [currentTask, trace])
+    const currentRunSteps = useMemo(() => deriveAgentRunSteps(trace, currentTask, locale), [currentTask, trace, locale])
     const currentRunArtifacts = useMemo(
         () => workbenchArtifacts.filter((artifact) => (
             artifact.turnId === currentTask?.turnId && artifact.runtimeId === currentTask?.runtimeId
@@ -138,19 +141,22 @@ export default function Sandbox() {
     useEffect(() => { fetchFaceList() }, [])
 
     const handleInboundPayload = (data: {
-        type: string; id: string; content?: unknown; endpoint?: string; workingDirectory?: string; canExecute?: boolean;
+        type: string; id: string; locale?: unknown; content?: unknown; endpoint?: string; workingDirectory?: string; canExecute?: boolean;
         shellIsolation?: { available?: boolean; provider?: string; message?: string }; timestamp: number;
         messageId?: string; bot?: string;
     }) => {
+        const locale = data.type === 'ready' && data.locale === 'en' ? 'en' : data.type === 'ready' ? 'zh-CN' : localeRef.current
         if (data.type === 'ready') {
+            localeRef.current = locale
+            setLocale(locale)
             setBotName(data.endpoint || data.bot || 'sandbox-bot')
             setCanExecute(data.canExecute !== false)
-            setTransportNotice(data.canExecute === false ? '当前 Token 只有演示权限，任务运行已禁用。' : null)
+            setTransportNotice(data.canExecute === false ? sandboxText(locale, "当前 Token 只有演示权限，任务运行已禁用。") : null)
             if (data.shellIsolation) {
                 setShellIsolation({
                     available: data.shellIsolation.available === true,
                     provider: data.shellIsolation.provider || 'docker',
-                    message: data.shellIsolation.message || '未检测到隔离执行环境',
+                    message: data.shellIsolation.message || sandboxText(locale, "未检测到隔离执行环境"),
                 })
             }
             if (data.workingDirectory?.trim()) {
@@ -166,8 +172,8 @@ export default function Sandbox() {
         }
         if (data.type === 'error') {
             const notice = Array.isArray(data.content)
-                ? String((data.content[0] as { data?: { text?: unknown } } | undefined)?.data?.text ?? 'Sandbox 拒绝了本次操作')
-                : String(data.content ?? 'Sandbox 拒绝了本次操作')
+                ? String((data.content[0] as { data?: { text?: unknown } } | undefined)?.data?.text ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
+                : String(data.content ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
             setTransportNotice(notice)
             return
         }
@@ -185,10 +191,10 @@ export default function Sandbox() {
 
         const channelType: Channel['type'] = data.type === 'group' || data.type === 'channel' ? data.type : 'private'
         const channelName = channelType === 'private'
-            ? `会话 ${data.id}`
+            ? sandboxText(locale, "会话 {0}", [data.id])
             : channelType === 'group'
-            ? `群组场景 ${data.id}`
-            : `频道场景 ${data.id}`
+            ? sandboxText(locale, "群组场景 {0}", [data.id])
+            : sandboxText(locale, "频道场景 {0}", [data.id])
 
         setChannels((prev) => {
             if (prev.some((c) => c.id === data.id && c.type === channelType)) return prev
@@ -210,7 +216,7 @@ export default function Sandbox() {
     const sendInteractiveAction = (payload: string, messageId?: string) => {
         const ws = wsRef.current
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-            setTransportNotice('Sandbox 连接尚未就绪，审批选择未发送。')
+            setTransportNotice(sandboxText(locale, "Sandbox 连接尚未就绪，审批选择未发送。"))
             return
         }
         const segments: MessageSegment[] = [{ type: 'action', data: { id: payload, payload } }]
@@ -229,7 +235,7 @@ export default function Sandbox() {
                     : message))
             }
         } catch {
-            setTransportNotice('审批选择发送失败，请等待连接恢复后重试。')
+            setTransportNotice(sandboxText(locale, "审批选择发送失败，请等待连接恢复后重试。"))
         }
     }
 
@@ -329,12 +335,13 @@ export default function Sandbox() {
     useEffect(() => { setPreviewSegments(inputText.trim() ? parseTextToSegments(inputText) : []) }, [inputText])
 
     const loadTrace = useCallback(async (quiet = false) => {
+        const locale = localeRef.current
         if (!quiet) setTraceLoading(true)
         try {
             const current = traceRef.current?.sessionKey === sessionKey ? traceRef.current : null
-            let incoming = await fetchAgentTrace(sessionKey, quiet ? current?.latestSequence ?? 0 : 0)
+            let incoming = await fetchAgentTrace(sessionKey, quiet ? current?.latestSequence ?? 0 : 0, locale)
             if (quiet && current?.runtimeId && incoming.runtimeId && current.runtimeId !== incoming.runtimeId) {
-                incoming = await fetchAgentTrace(sessionKey, 0)
+                incoming = await fetchAgentTrace(sessionKey, 0, locale)
             }
             const merged = mergeTraceSnapshot(current, incoming)
             traceRef.current = merged
@@ -342,7 +349,7 @@ export default function Sandbox() {
             saveCachedAgentTrace(merged)
             setTraceNotice(null)
         } catch (error) {
-            setTraceNotice(error instanceof Error ? error.message : 'Agent Trace 暂不可用')
+            setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "Agent Trace 暂不可用"))
         } finally {
             if (!quiet) setTraceLoading(false)
         }
@@ -411,7 +418,7 @@ export default function Sandbox() {
                 case 'md':
                     return <MarkdownContent key={index} text={String(d.text ?? d.content ?? '')} className={isSent ? 'zhin-markdown--inverse' : undefined} />
                 case 'html':
-                    return <HtmlMessage key={index} html={String(d.html ?? '')} />
+                    return <HtmlMessage locale={locale} key={index} html={String(d.html ?? '')} />
                 case 'code':
                     return <CodeBlock key={index} code={String(d.code ?? d.text ?? d.content ?? '')} language={String(d.language ?? d.lang ?? '')} />
                 case 'mention':
@@ -420,13 +427,13 @@ export default function Sandbox() {
                 case 'face':
                     return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt={String(d.name ?? '')} className="w-6 h-6 inline-block align-middle mx-0.5" title={String(d.name ?? d.id ?? '')} />
                 case 'dice':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">🎲 {d.result != null ? `点数 ${String(d.result)}` : '骰子'}</span>
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">🎲 {d.result != null ? sandboxText(locale, "点数 {0}", [String(d.result)]) : sandboxText(locale, "骰子")}</span>
                 case 'rps':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">✊ {d.result != null ? `结果 ${String(d.result)}` : '猜拳'}</span>
+                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">✊ {d.result != null ? sandboxText(locale, "结果 {0}", [String(d.result)]) : sandboxText(locale, "猜拳")}</span>
                 case 'image': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'image')
-                    if (!src) return <span key={index} className="text-xs opacity-70">[图片]</span>
+                    if (!src) return <span key={index} className="text-xs opacity-70">{sandboxText(locale, "[图片]")}</span>
                     return (
                         // resolveMediaSrc allowlists non-executable URL schemes and image data MIME types.
                         // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
@@ -439,7 +446,7 @@ export default function Sandbox() {
                 case 'video': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'video')
-                    if (!src) return <span key={index} className="text-xs opacity-70">[视频无地址]</span>
+                    if (!src) return <span key={index} className="text-xs opacity-70">{sandboxText(locale, "[视频无地址]")}</span>
                     return (
                         // resolveMediaSrc allowlists non-executable URL schemes and video data MIME types.
                         // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
@@ -457,7 +464,7 @@ export default function Sandbox() {
                 case 'record': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'audio')
-                    if (!src) return <span key={index} className="text-xs opacity-70">[音频无地址]</span>
+                    if (!src) return <span key={index} className="text-xs opacity-70">{sandboxText(locale, "[音频无地址]")}</span>
                     return (
                         // resolveMediaSrc allowlists non-executable URL schemes and audio data MIME types.
                         // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
@@ -473,12 +480,12 @@ export default function Sandbox() {
                 case 'reply':
                     return (
                         <div key={index} className="mb-1 rounded-md border border-dashed px-2 py-1 text-xs opacity-90">
-                            ↩ 引用消息 #{String(d.message_id ?? d.id ?? '')}
+                            {sandboxText(locale, "↩ 引用消息 #")}{String(d.message_id ?? d.id ?? '')}
                         </div>
                     )
                 case 'forward': {
                     const messages = d.messages as Array<Array<{ type?: string; data?: Record<string, unknown> }>> | undefined
-                    const title = String(d.title ?? '聊天记录')
+                    const title = String(d.title ?? sandboxText(locale, "聊天记录"))
                     return (
                         <div key={index} className="my-1 rounded-md border bg-background/40 px-2 py-2 text-xs space-y-1">
                             <div className="font-medium">📨 {title}</div>
@@ -493,10 +500,10 @@ export default function Sandbox() {
                                             ))}
                                         </div>
                                     ))}
-                                    {messages.length > 3 && <div className="opacity-60">…共 {messages.length} 条</div>}
+                                    {messages.length > 3 && <div className="opacity-60">{sandboxText(locale, "…共")}{messages.length} {sandboxText(locale, "条")}</div>}
                                 </div>
                             ) : (
-                                <div className="opacity-70">[合并转发]</div>
+                                <div className="opacity-70">{sandboxText(locale, "[合并转发]")}</div>
                             )}
                         </div>
                     )
@@ -524,7 +531,7 @@ export default function Sandbox() {
                                     ))}
                                 </div>
                             ))}
-                            {resolved && <small><Check size={12} />已提交本次选择</small>}
+                            {resolved && <small><Check size={12} />{sandboxText(locale, "已提交本次选择")}</small>}
                         </div>
                     )
                 }
@@ -536,7 +543,7 @@ export default function Sandbox() {
 
     const handleSendMessage = (text: string, segments: MessageSegment[]) => {
         if (!canExecute || !hasRenderableSegments(segments)) return
-        const newMessage: Message = { id: `msg_${Date.now()}`, type: 'sent', channelType: activeChannel.type, channelId: activeChannel.id, channelName: activeChannel.name, senderId: 'test_user', senderName: '测试用户', content: segments, timestamp: Date.now() }
+        const newMessage: Message = { id: `msg_${Date.now()}`, type: 'sent', channelType: activeChannel.type, channelId: activeChannel.id, channelName: activeChannel.name, senderId: 'test_user', senderName: sandboxText(locale, "测试用户"), content: segments, timestamp: Date.now() }
         setMessages((prev) => [...prev, newMessage]); setInputText(''); setPreviewSegments([]); setComposerMode('write')
         editorRef.current?.clear()
         // Stamp type+id so Host sandbox endpoint preserves channel context for outbound replies.
@@ -565,7 +572,7 @@ export default function Sandbox() {
         setChannels((sessions) => sessions.map((session) => session.id === activeChannel.id && session.type === activeChannel.type ? next : session))
     }
     const addSession = () => {
-        const label = newSessionName.trim() || '未命名试验'
+        const label = newSessionName.trim() || sandboxText(locale, "未命名试验")
         const id = `${newSessionScope}-${Date.now().toString(36)}`
         const session: Channel = {
             id, name: label, type: newSessionScope, unread: 0,
@@ -600,17 +607,17 @@ export default function Sandbox() {
     const currentTaskMessage = currentTask?.sourceMessageId
         ? channelMessages.find((message) => message.id === currentTask.sourceMessageId && message.type === 'sent')
         : undefined
-    const scopeLabel = activeChannel.type === 'private' ? '单用户' : activeChannel.type === 'group' ? '群组上下文' : '频道上下文'
+    const scopeLabel = activeChannel.type === 'private' ? sandboxText(locale, "单用户") : activeChannel.type === 'group' ? sandboxText(locale, "群组上下文") : sandboxText(locale, "频道上下文")
     const runPrompt = (prompt: string) => handleSendMessage(prompt, [{ type: 'text', data: { text: prompt } }])
     const recentTraceEvents = trace?.events.slice(-8).reverse() ?? []
     const stopActiveTask = async () => {
         setStoppingTask(true)
         try {
-            const cancelled = await cancelAgentTask(sessionKey)
-            setTraceNotice(cancelled ? '已发送停止请求，正在等待任务结束。' : '当前会话没有运行中的任务。')
+            const cancelled = await cancelAgentTask(sessionKey, locale)
+            setTraceNotice(cancelled ? sandboxText(locale, "已发送停止请求，正在等待任务结束。") : sandboxText(locale, "当前会话没有运行中的任务。"))
             window.setTimeout(() => void loadTrace(true), 240)
         } catch (error) {
-            setTraceNotice(error instanceof Error ? error.message : '无法停止任务')
+            setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "无法停止任务"))
             setShowInspector(true)
         } finally {
             setStoppingTask(false)
@@ -634,7 +641,7 @@ export default function Sandbox() {
             safetyMode: activeChannel.runConfig.safetyMode,
             approvalMode: activeChannel.runConfig.approvalMode,
             networkAccess: activeChannel.runConfig.safetyMode === 'danger-full-access' || activeChannel.runConfig.networkAccess,
-        })
+        }, locale)
         const url = URL.createObjectURL(new Blob([report], { type: 'text/markdown;charset=utf-8' }))
         const link = document.createElement('a')
         link.href = url
@@ -651,24 +658,24 @@ export default function Sandbox() {
                 <span className="agent-playground-inline-run-icon"><ListChecks size={17} /></span>
                 <div className="agent-playground-inline-run-copy">
                     <span>{currentTask.status === 'running' ? 'Live agent run' : 'Agent run summary'}</span>
-                    <h3>{taskStatusLabel(currentTask.status)}</h3>
+                    <h3>{taskStatusLabel(currentTask.status, locale)}</h3>
                     {currentTaskMessage && <p>{messageText(currentTaskMessage.content)}</p>}
                 </div>
                 <div className="agent-playground-inline-run-actions">
                     {currentTask.status === 'running' ? (
-                        <button type="button" className="is-stop" onClick={() => void stopActiveTask()} disabled={stoppingTask}><Square size={12} />{stoppingTask ? '停止中' : '停止'}</button>
+                        <button type="button" className="is-stop" onClick={() => void stopActiveTask()} disabled={stoppingTask}><Square size={12} />{stoppingTask ? sandboxText(locale, "停止中") : sandboxText(locale, "停止")}</button>
                     ) : currentTaskMessage ? (
-                        <button type="button" onClick={retryCurrentTask}><RotateCcw size={13} />重试</button>
+                        <button type="button" onClick={retryCurrentTask}><RotateCcw size={13} />{sandboxText(locale, "重试")}</button>
                     ) : null}
-                    <button type="button" onClick={exportCurrentRun} title="导出 Markdown 运行报告"><FileDown size={13} />导出</button>
+                    <button type="button" onClick={exportCurrentRun} title={sandboxText(locale, "导出 Markdown 运行报告")}><FileDown size={13} />{sandboxText(locale, "导出")}</button>
                 </div>
             </div>
             <dl className="agent-playground-inline-run-metrics">
-                <div><dt>耗时</dt><dd>{currentTask.durationMs === undefined ? '进行中' : formatDuration(currentTask.durationMs)}</dd></div>
-                <div><dt>步骤</dt><dd>{currentRunSteps.length}</dd></div>
-                <div><dt>工具</dt><dd>{currentTask.toolCount}</dd></div>
-                <div><dt>Token</dt><dd>{currentTask.tokenCount.toLocaleString()}</dd></div>
-                <div className={cn(currentTask.problemCount > 0 && 'has-problem')}><dt>异常</dt><dd>{currentTask.problemCount}</dd></div>
+                <div><dt>{sandboxText(locale, "耗时")}</dt><dd>{currentTask.durationMs === undefined ? sandboxText(locale, "进行中") : formatDuration(currentTask.durationMs, locale)}</dd></div>
+                <div><dt>{sandboxText(locale, "步骤")}</dt><dd>{currentRunSteps.length}</dd></div>
+                <div><dt>{sandboxText(locale, "工具")}</dt><dd>{currentTask.toolCount}</dd></div>
+                <div><dt>Token</dt><dd>{currentTask.tokenCount.toLocaleString(locale)}</dd></div>
+                <div className={cn(currentTask.problemCount > 0 && 'has-problem')}><dt>{sandboxText(locale, "异常")}</dt><dd>{currentTask.problemCount}</dd></div>
             </dl>
             {inlineRunExpanded && (
                 currentRunSteps.length > 0 ? (
@@ -677,18 +684,18 @@ export default function Sandbox() {
                             <li key={step.id} className={cn(`is-${step.status}`)}>
                                 <i aria-hidden="true" />
                                 <div><strong>{step.title}</strong>{step.detail && <small>{step.detail}</small>}</div>
-                                <span>{step.durationMs === undefined ? runStepStatusLabel(step.status) : formatDuration(step.durationMs)}</span>
+                                <span>{step.durationMs === undefined ? runStepStatusLabel(step.status, locale) : formatDuration(step.durationMs, locale)}</span>
                             </li>
                         ))}
                     </ol>
-                ) : <div className="agent-playground-inline-run-empty">正在等待第一条运行事件…</div>
+                ) : <div className="agent-playground-inline-run-empty">{sandboxText(locale, "正在等待第一条运行事件…")}</div>
             )}
             <footer>
                 <button type="button" aria-expanded={inlineRunExpanded} onClick={() => setInlineRunExpanded((expanded) => !expanded)}>
-                    <ChevronDown size={13} />{inlineRunExpanded ? '收起步骤' : `查看 ${currentRunSteps.length} 个步骤`}
+                    <ChevronDown size={13} />{inlineRunExpanded ? sandboxText(locale, "收起步骤") : sandboxText(locale, "查看 {0} 个步骤", [currentRunSteps.length])}
                 </button>
                 <button type="button" onClick={() => { setInspectorView(currentRunArtifacts.length > 0 ? 'artifacts' : 'runs'); setShowInspector(true) }}>
-                    {currentRunArtifacts.length > 0 ? `${currentRunArtifacts.length} 个变更与产物` : '打开运行检查器'}<PanelRight size={13} />
+                    {currentRunArtifacts.length > 0 ? sandboxText(locale, "{0} 个变更与产物", [currentRunArtifacts.length]) : sandboxText(locale, "打开运行检查器")}<PanelRight size={13} />
                 </button>
             </footer>
         </article>
@@ -697,25 +704,25 @@ export default function Sandbox() {
     return (
         <section className="agent-playground-shell">
             <div className="agent-playground-mobilebar">
-                <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />测试会话</button>
-                <strong>试聊一下</strong>
-                <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />检查器</button>
+                <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "测试会话")}</button>
+                <strong>{sandboxText(locale, "试聊一下")}</strong>
+                <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />{sandboxText(locale, "检查器")}</button>
             </div>
 
-            <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label="测试会话">
+            <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "测试会话")}>
                 <div className="agent-playground-brand">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <span className="agent-playground-mark"><Sparkles size={16} /></span>
-                            <div><h2>试聊一下</h2><small>Try a chat</small></div>
+                            <div><h2>{sandboxText(locale, "试聊一下")}</h2><small>Try a chat</small></div>
                         </div>
-                        <span className={cn("agent-playground-connection", connected && "is-online")} title={connected ? 'Sandbox WebSocket 已连接' : '正在重连 Sandbox WebSocket'}>
+                        <span className={cn("agent-playground-connection", connected && "is-online")} title={connected ? sandboxText(locale, "Sandbox WebSocket 已连接") : sandboxText(locale, "正在重连 Sandbox WebSocket")}>
                             {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
                         </span>
                     </div>
                 </div>
 
-                <div className="agent-playground-section-label"><span>测试会话</span><span>{channels.length}</span></div>
+                <div className="agent-playground-section-label"><span>{sandboxText(locale, "测试会话")}</span><span>{channels.length}</span></div>
                 <div className="agent-playground-session-list">
                     {channels.map((channel) => {
                         const isActive = activeChannel.id === channel.id && activeChannel.type === channel.type
@@ -724,7 +731,7 @@ export default function Sandbox() {
                                 <span className="agent-playground-session-icon">{getChannelIcon(channel.type)}</span>
                                 <div className="flex-1 min-w-0">
                                     <div className="text-sm font-medium truncate">{channel.name}</div>
-                                    <div className="text-xs text-muted-foreground">{channel.type === 'private' ? '单用户作用域' : channel.type === 'group' ? '群组作用域' : '频道作用域'}</div>
+                                    <div className="text-xs text-muted-foreground">{channel.type === 'private' ? sandboxText(locale, "单用户作用域") : channel.type === 'group' ? sandboxText(locale, "群组作用域") : sandboxText(locale, "频道作用域")}</div>
                                 </div>
                                 {channel.unread > 0 && <span className="inline-flex items-center justify-center h-5 min-w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-medium px-1">{channel.unread}</span>}
                             </button>
@@ -735,25 +742,25 @@ export default function Sandbox() {
                 <div className="agent-playground-new-session">
                     {showNewSession ? (
                         <div className="agent-playground-new-form">
-                            <input value={newSessionName} onChange={(event) => setNewSessionName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addSession() }} placeholder="会话名称" autoFocus />
-                            <div className="agent-playground-scope-picker" role="group" aria-label="消息作用域">
+                            <input value={newSessionName} onChange={(event) => setNewSessionName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addSession() }} placeholder={sandboxText(locale, "会话名称")} autoFocus />
+                            <div className="agent-playground-scope-picker" role="group" aria-label={sandboxText(locale, "消息作用域")}>
                                 {(['private', 'group', 'channel'] as SandboxScope[]).map((scope) => (
                                     <button type="button" key={scope} aria-pressed={newSessionScope === scope} className={cn(newSessionScope === scope && 'active')} onClick={() => setNewSessionScope(scope)}>
-                                        {scope === 'private' ? '单用户' : scope === 'group' ? '群组' : '频道'}
+                                        {scope === 'private' ? sandboxText(locale, "单用户") : scope === 'group' ? sandboxText(locale, "群组") : sandboxText(locale, "频道")}
                                     </button>
                                 ))}
                             </div>
                             <div className="agent-playground-new-actions">
-                                <button type="button" onClick={() => setShowNewSession(false)}>取消</button>
-                                <button type="button" className="primary" onClick={addSession}>创建</button>
+                                <button type="button" onClick={() => setShowNewSession(false)}>{sandboxText(locale, "取消")}</button>
+                                <button type="button" className="primary" onClick={addSession}>{sandboxText(locale, "创建")}</button>
                             </div>
                         </div>
                     ) : (
-                        <button type="button" className="agent-playground-add" onClick={() => setShowNewSession(true)}><Plus size={15} />新建测试会话</button>
+                        <button type="button" className="agent-playground-add" onClick={() => setShowNewSession(true)}><Plus size={15} />{sandboxText(locale, "新建测试会话")}</button>
                     )}
                 </div>
                 <div className="agent-playground-endpoint">
-                    <span>{persistenceStatus === 'saved' ? '会话已持久化' : '会话保存失败'}</span>
+                    <span>{persistenceStatus === 'saved' ? sandboxText(locale, "会话已持久化") : sandboxText(locale, "会话保存失败")}</span>
                     <strong>{endpointId}</strong>
                 </div>
             </nav>
@@ -772,71 +779,71 @@ export default function Sandbox() {
                     <div className="agent-playground-run-actions">
                         <span className={cn("agent-playground-run-state", currentTask?.status === 'running' && "is-running", currentTask?.status === 'failed' && 'has-problem')}>
                             {currentTask?.status === 'running' ? <Activity size={14} /> : <Gauge size={14} />}
-                            {currentTask ? taskStatusLabel(currentTask.status) : `${channelMessages.length} 条消息`}
+                            {currentTask ? taskStatusLabel(currentTask.status, locale) : sandboxText(locale, "{0} 条消息", [channelMessages.length])}
                         </span>
                         {currentTask?.status === 'running' ? (
-                            <button type="button" className="agent-playground-stop" onClick={() => void stopActiveTask()} disabled={stoppingTask} aria-label="停止当前任务"><Square size={13} />{stoppingTask ? '停止中' : '停止'}</button>
+                            <button type="button" className="agent-playground-stop" onClick={() => void stopActiveTask()} disabled={stoppingTask} aria-label={sandboxText(locale, "停止当前任务")}><Square size={13} />{stoppingTask ? sandboxText(locale, "停止中") : sandboxText(locale, "停止")}</button>
                         ) : lastUserMessage ? (
-                            <button type="button" onClick={retryLastTask} aria-label="重新运行上一个任务"><RotateCcw size={14} />重试</button>
+                            <button type="button" onClick={retryLastTask} aria-label={sandboxText(locale, "重新运行上一个任务")}><RotateCcw size={14} />{sandboxText(locale, "重试")}</button>
                         ) : null}
                         <a href={agentStudioPath(sessionKey)}><ExternalLink size={14} />Agent Studio</a>
-                        <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label="配置运行环境"><SlidersHorizontal size={16} /></button>
-                        <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)} aria-label="切换运行检查器"><PanelRight size={16} /></button>
-                        <button type="button" onClick={() => setConfirmClear(true)} aria-label="清空当前会话"><Trash2 size={15} /></button>
+                        <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label={sandboxText(locale, "配置运行环境")}><SlidersHorizontal size={16} /></button>
+                        <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
+                        <button type="button" onClick={() => setConfirmClear(true)} aria-label={sandboxText(locale, "清空当前会话")}><Trash2 size={15} /></button>
                     </div>
                 </header>
 
                 {confirmClear && (
                     <div className="agent-playground-confirm" role="alert">
-                        <div><strong>清空当前测试记录？</strong><span>只移除“{activeChannel.name}”在浏览器中的消息，不影响 Agent 会话存储。</span></div>
-                        <button type="button" onClick={() => setConfirmClear(false)}>取消</button>
-                        <button type="button" className="danger" onClick={clearMessages}>确认清空</button>
+                        <div><strong>{sandboxText(locale, "清空当前测试记录？")}</strong><span>{sandboxText(locale, "只移除“")}{activeChannel.name}{sandboxText(locale, "”在浏览器中的消息，不影响 Agent 会话存储。")}</span></div>
+                        <button type="button" onClick={() => setConfirmClear(false)}>{sandboxText(locale, "取消")}</button>
+                        <button type="button" className="danger" onClick={clearMessages}>{sandboxText(locale, "确认清空")}</button>
                     </div>
                 )}
 
                 {transportNotice && (
                     <div className="agent-playground-confirm" role="status">
-                        <div><strong>运行暂不可用</strong><span>{transportNotice}</span></div>
-                        <button type="button" onClick={() => setTransportNotice(null)}>知道了</button>
+                        <div><strong>{sandboxText(locale, "运行暂不可用")}</strong><span>{transportNotice}</span></div>
+                        <button type="button" onClick={() => setTransportNotice(null)}>{sandboxText(locale, "知道了")}</button>
                     </div>
                 )}
 
                 {showRunSettings && (
-                    <section className="agent-playground-run-settings" aria-label="运行配置">
+                    <section className="agent-playground-run-settings" aria-label={sandboxText(locale, "运行配置")}>
                         <label className="agent-playground-directory-field">
-                            <span><FolderOpen size={14} />工作目录</span>
+                            <span><FolderOpen size={14} />{sandboxText(locale, "工作目录")}</span>
                             <input
                                 value={activeChannel.runConfig.workingDirectory}
                                 onChange={(event) => updateRunConfig({ workingDirectory: event.target.value })}
-                                placeholder="使用 Host 项目目录"
+                                placeholder={sandboxText(locale, "使用 Host 项目目录")}
                                 spellCheck={false}
                             />
                         </label>
                         <label>
-                            <span><ShieldCheck size={14} />安全策略</span>
+                            <span><ShieldCheck size={14} />{sandboxText(locale, "安全策略")}</span>
                             <select value={activeChannel.runConfig.safetyMode} onChange={(event) => {
                                 const safetyMode = event.target.value as SandboxAgentRunConfig['safetyMode']
                                 updateRunConfig({ safetyMode, ...(safetyMode === 'danger-full-access' ? { networkAccess: true } : {}) })
                             }}>
-                                <option value="read-only">只读</option>
-                                <option value="workspace-write">工作区写入</option>
-                                <option value="danger-full-access">完全访问</option>
+                                <option value="read-only">{sandboxText(locale, "只读")}</option>
+                                <option value="workspace-write">{sandboxText(locale, "工作区写入")}</option>
+                                <option value="danger-full-access">{sandboxText(locale, "完全访问")}</option>
                             </select>
                         </label>
                         <label>
-                            <span>审批策略</span>
+                            <span>{sandboxText(locale, "审批策略")}</span>
                             <select
                                 value={activeChannel.runConfig.safetyMode === 'read-only' ? 'auto' : activeChannel.runConfig.safetyMode === 'danger-full-access' ? 'bypass' : activeChannel.runConfig.approvalMode}
                                 disabled={activeChannel.runConfig.safetyMode !== 'workspace-write'}
                                 onChange={(event) => updateRunConfig({ approvalMode: event.target.value as SandboxAgentRunConfig['approvalMode'] })}
                             >
-                                <option value="ask">按需确认</option>
-                                <option value="auto">审核 Agent 自动判断</option>
-                                <option value="bypass">绕过审批</option>
+                                <option value="ask">{sandboxText(locale, "按需确认")}</option>
+                                <option value="auto">{sandboxText(locale, "审核 Agent 自动判断")}</option>
+                                <option value="bypass">{sandboxText(locale, "绕过审批")}</option>
                             </select>
                         </label>
                         <label className="agent-playground-network-toggle">
-                            <span><Network size={14} />网络访问</span>
+                            <span><Network size={14} />{sandboxText(locale, "网络访问")}</span>
                             <input
                                 type="checkbox"
                                 checked={activeChannel.runConfig.safetyMode === 'danger-full-access' || activeChannel.runConfig.networkAccess}
@@ -846,25 +853,25 @@ export default function Sandbox() {
                             <i aria-hidden="true" />
                         </label>
                         {activeChannel.runConfig.safetyMode === 'danger-full-access' && (
-                            <p><CircleAlert size={14} />完全访问允许 Agent 操作工作目录之外的文件并访问网络，请仅用于可信任务。</p>
+                            <p><CircleAlert size={14} />{sandboxText(locale, "完全访问允许 Agent 操作工作目录之外的文件并访问网络，请仅用于可信任务。")}</p>
                         )}
                         {activeChannel.runConfig.safetyMode !== 'danger-full-access' && shellIsolation?.available === false && (
-                            <p><CircleAlert size={14} />安全 Shell 需要可用的 Docker daemon；当前仅文件工具可运行。{shellIsolation.message}</p>
+                            <p><CircleAlert size={14} />{sandboxText(locale, "安全 Shell 需要可用的 Docker daemon；当前仅文件工具可运行。")}{shellIsolation.message}</p>
                         )}
                     </section>
                 )}
 
                 {/* Messages */}
-                <section className="agent-playground-conversation" aria-label="Agent 对话">
+                <section className="agent-playground-conversation" aria-label={sandboxText(locale, "Agent 对话")}>
                     <div className="agent-playground-message-scroll">
                         {channelMessages.length === 0 ? (
                             <div className="agent-playground-empty">
                                 <span className="agent-playground-empty-mark"><Sparkles size={24} /></span>
-                                <div><h2>开始一次可观察的 Agent 运行</h2><p>发送任务后，回复、工具调用、Token 与异常会在同一会话上下文中关联。</p></div>
+                                <div><h2>{sandboxText(locale, "开始一次可观察的 Agent 运行")}</h2><p>{sandboxText(locale, "发送任务后，回复、工具调用、Token 与异常会在同一会话上下文中关联。")}</p></div>
                                 <div className="agent-playground-prompts">
-                                    <button type="button" onClick={() => runPrompt('介绍当前 Agent 可以使用的能力，并给出三个具体示例。')}>探索可用能力</button>
-                                    <button type="button" onClick={() => runPrompt('用 Markdown 表格总结当前运行环境，并附上一段 TypeScript 示例代码。')}>测试富文本输出</button>
-                                    <button type="button" onClick={() => runPrompt('分析一个任务从推理、工具调用到最终回复的完整执行路径。')}>观察执行路径</button>
+                                    <button type="button" onClick={() => runPrompt(sandboxText(locale, "介绍当前 Agent 可以使用的能力，并给出三个具体示例。"))}>{sandboxText(locale, "探索可用能力")}</button>
+                                    <button type="button" onClick={() => runPrompt(sandboxText(locale, "用 Markdown 表格总结当前运行环境，并附上一段 TypeScript 示例代码。"))}>{sandboxText(locale, "测试富文本输出")}</button>
+                                    <button type="button" onClick={() => runPrompt(sandboxText(locale, "分析一个任务从推理、工具调用到最终回复的完整执行路径。"))}>{sandboxText(locale, "观察执行路径")}</button>
                                 </div>
                             </div>
                         ) : (
@@ -877,9 +884,9 @@ export default function Sandbox() {
                                         <span className="agent-playground-message-avatar">{msg.type === 'received' ? <Bot size={16} /> : <User size={16} />}</span>
                                         <div className="agent-playground-message-main">
                                             <div className="agent-playground-message-meta">
-                                                <strong>{isApproval ? '需要你的确认' : msg.type === 'received' ? endpointId : '你'}</strong>
+                                                <strong>{isApproval ? sandboxText(locale, "需要你的确认") : msg.type === 'received' ? endpointId : sandboxText(locale, "你")}</strong>
                                                 {isApproval && <span>approval required</span>}
-                                                <time>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+                                                <time>{new Date(msg.timestamp).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</time>
                                             </div>
                                             <div className="agent-playground-message-content">{renderMessageSegments(msg.content, msg.type === 'sent', msg.id, msg.interactionResolved === true)}</div>
                                         </div>
@@ -896,33 +903,33 @@ export default function Sandbox() {
                 </section>
 
                 {/* Input area */}
-                <section className="agent-playground-composer" aria-label="任务输入">
+                <section className="agent-playground-composer" aria-label={sandboxText(locale, "任务输入")}>
                     {/* Toolbar */}
                     <div className="flex gap-2 items-center flex-wrap">
                         <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", showFacePicker ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-                            onClick={() => { setShowFacePicker(!showFacePicker); setMediaPanel(null) }} title="插入表情">
+                            onClick={() => { setShowFacePicker(!showFacePicker); setMediaPanel(null) }} title={sandboxText(locale, "插入表情")}>
                             <Smile size={16} />
                         </button>
                         <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'image' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-                            onClick={() => { setMediaPanel((p) => (p === 'image' ? null : 'image')); setShowFacePicker(false) }} title="插入图片 URL">
+                            onClick={() => { setMediaPanel((p) => (p === 'image' ? null : 'image')); setShowFacePicker(false) }} title={sandboxText(locale, "插入图片 URL")}>
                             <Image size={16} />
                         </button>
                         <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'video' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-                            onClick={() => { setMediaPanel((p) => (p === 'video' ? null : 'video')); setShowFacePicker(false) }} title="插入视频 URL">
+                            onClick={() => { setMediaPanel((p) => (p === 'video' ? null : 'video')); setShowFacePicker(false) }} title={sandboxText(locale, "插入视频 URL")}>
                             <Video size={16} />
                         </button>
                         <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'audio' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
-                            onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} title="插入音频 URL">
+                            onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} title={sandboxText(locale, "插入音频 URL")}>
                             <Music size={16} />
                         </button>
                         <div className="flex-1 min-w-[1rem]" />
-                        <div className="sandbox-composer-tabs" role="tablist" aria-label="消息编辑模式">
-                            <button type="button" role="tab" aria-selected={composerMode === 'write'} className={cn(composerMode === 'write' && 'active')} onClick={() => setComposerMode('write')}>编写</button>
-                            <button type="button" role="tab" aria-selected={composerMode === 'preview'} className={cn(composerMode === 'preview' && 'active')} onClick={() => setComposerMode('preview')}>预览</button>
+                        <div className="sandbox-composer-tabs" role="tablist" aria-label={sandboxText(locale, "消息编辑模式")}>
+                            <button type="button" role="tab" aria-selected={composerMode === 'write'} className={cn(composerMode === 'write' && 'active')} onClick={() => setComposerMode('write')}>{sandboxText(locale, "编写")}</button>
+                            <button type="button" role="tab" aria-selected={composerMode === 'preview'} className={cn(composerMode === 'preview' && 'active')} onClick={() => setComposerMode('preview')}>{sandboxText(locale, "预览")}</button>
                         </div>
                         {inputText && (
                             <button className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-accent transition-colors"
-                                onClick={() => { editorRef.current?.clear(); setInputText(''); setPreviewSegments([]); setComposerMode('write') }} aria-label="清空输入"><X size={16} /></button>
+                                onClick={() => { editorRef.current?.clear(); setInputText(''); setPreviewSegments([]); setComposerMode('write') }} aria-label={sandboxText(locale, "清空输入")}><X size={16} /></button>
                         )}
                     </div>
 
@@ -930,7 +937,7 @@ export default function Sandbox() {
                     {showFacePicker && (
                         <div className="p-3 rounded-md border bg-muted/30 max-h-64 overflow-y-auto space-y-2">
                             <input value={faceSearchQuery} onChange={(e) => setFaceSearchQuery(e.target.value)}
-                                placeholder="搜索表情..." className="w-full h-8 rounded-md border bg-transparent px-2 text-sm" />
+                                placeholder={sandboxText(locale, "搜索表情...")} className="w-full h-8 rounded-md border bg-transparent px-2 text-sm" />
                             <div className="grid grid-cols-8 gap-1">
                                 {filteredFaces.slice(0, 80).map((face) => (
                                     <button key={face.id} onClick={() => insertFace(face.id)} title={face.name}
@@ -942,7 +949,7 @@ export default function Sandbox() {
                             {filteredFaces.length === 0 && (
                                 <div className="flex flex-col items-center gap-2 py-4">
                                     <Search size={32} className="text-muted-foreground/30" />
-                                    <span className="text-sm text-muted-foreground">未找到匹配的表情</span>
+                                    <span className="text-sm text-muted-foreground">{sandboxText(locale, "未找到匹配的表情")}</span>
                                 </div>
                             )}
                         </div>
@@ -951,14 +958,14 @@ export default function Sandbox() {
                     {mediaPanel && (
                         <div className="p-3 rounded-md border bg-muted/30 space-y-2">
                             <p className="text-xs text-muted-foreground">
-                                {mediaPanel === 'image' && '支持 http(s) 图片链接或 data URL'}
-                                {mediaPanel === 'video' && '支持浏览器可解码的视频直链（如 .mp4、.webm）'}
-                                {mediaPanel === 'audio' && '支持 .mp3、.ogg、.wav 等音频直链'}
+                                {mediaPanel === 'image' && sandboxText(locale, "支持 http(s) 图片链接或 data URL")}
+                                {mediaPanel === 'video' && sandboxText(locale, "支持浏览器可解码的视频直链（如 .mp4、.webm）")}
+                                {mediaPanel === 'audio' && sandboxText(locale, "支持 .mp3、.ogg、.wav 等音频直链")}
                             </p>
                             <input
                                 value={mediaUrl}
                                 onChange={(e) => setMediaUrl(e.target.value)}
-                                placeholder={mediaPanel === 'image' ? '图片 URL…' : mediaPanel === 'video' ? '视频 URL…' : '音频 URL…'}
+                                placeholder={mediaPanel === 'image' ? sandboxText(locale, "图片 URL…") : mediaPanel === 'video' ? sandboxText(locale, "视频 URL…") : sandboxText(locale, "音频 URL…")}
                                 className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm"
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitMediaUrl() } }}
                             />
@@ -968,8 +975,7 @@ export default function Sandbox() {
                                 onClick={commitMediaUrl}
                                 disabled={!mediaUrl.trim()}
                             >
-                                <Check size={14} /> 插入到输入框
-                            </button>
+                                <Check size={14} /> {sandboxText(locale, "插入到输入框")}</button>
                         </div>
                     )}
 
@@ -978,7 +984,8 @@ export default function Sandbox() {
                         <div className="flex-1 relative">
                             <div className={composerMode === 'write' ? 'block' : 'hidden'}>
                                 <RichTextEditor
-                                    ref={editorRef} placeholder={`向 ${activeChannel.name} 发送消息，支持 Markdown...`}
+                                    locale={locale}
+                                    ref={editorRef} placeholder={sandboxText(locale, "向 {0} 发送消息，支持 Markdown...", [activeChannel.name])}
                                     onSend={handleSendMessage} onChange={handleEditorChange} onAtTrigger={handleAtTrigger}
                                     minHeight="44px" maxHeight="200px"
                                 />
@@ -987,7 +994,7 @@ export default function Sandbox() {
                                 <div className="sandbox-markdown-preview" role="tabpanel">
                                     {inputText.trim()
                                         ? <MarkdownContent text={inputText} />
-                                        : <span className="sandbox-markdown-preview-empty">输入 Markdown 后可在这里检查最终效果</span>}
+                                        : <span className="sandbox-markdown-preview-empty">{sandboxText(locale, "输入 Markdown 后可在这里检查最终效果")}</span>}
                                 </div>
                             )}
                             {atPopoverPosition && (
@@ -1001,7 +1008,7 @@ export default function Sandbox() {
                                     )) : (
                                         <div className="flex flex-col items-center gap-2 p-4">
                                             <Search size={20} className="text-muted-foreground/50" />
-                                            <span className="text-xs text-muted-foreground">未找到匹配的用户</span>
+                                            <span className="text-xs text-muted-foreground">{sandboxText(locale, "未找到匹配的用户")}</span>
                                         </div>
                                     )}
                                 </div>
@@ -1011,52 +1018,45 @@ export default function Sandbox() {
                             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 transition-colors hover:bg-primary/90"
                             onClick={() => { const c = editorRef.current?.getContent(); if (c) handleSendMessage(c.text, c.segments) }}
                             disabled={!canExecute || !hasRenderableSegments(previewSegments)}>
-                            <Send size={16} /> 发送
-                        </button>
+                            <Send size={16} /> {sandboxText(locale, "发送")}</button>
                     </div>
 
                     {/* Hints */}
                     <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                        <Info size={12} /> 快捷操作:
-                        <span className="px-1 py-0.5 rounded border text-[10px]">Enter</span> 发送
-                        <span className="px-1 py-0.5 rounded border text-[10px]">Shift+Enter</span> 换行
-                        <span className="px-1 py-0.5 rounded border text-[10px]">```ts</span> 代码块
-                        <span className="px-1 py-0.5 rounded border text-[10px]">**文本**</span> 加粗
-                        <span className="px-1 py-0.5 rounded border text-[10px]">[@名称]</span> @某人
-                        <span className="px-1 py-0.5 rounded border text-[10px]">[video:URL]</span>
+                        <Info size={12} /> {sandboxText(locale, "快捷操作:")}<span className="px-1 py-0.5 rounded border text-[10px]">Enter</span> {sandboxText(locale, "发送")}<span className="px-1 py-0.5 rounded border text-[10px]">Shift+Enter</span> {sandboxText(locale, "换行")}<span className="px-1 py-0.5 rounded border text-[10px]">```ts</span> {sandboxText(locale, "代码块")}<span className="px-1 py-0.5 rounded border text-[10px]">{sandboxText(locale, "**文本**")}</span> {sandboxText(locale, "加粗")}<span className="px-1 py-0.5 rounded border text-[10px]">{sandboxText(locale, "[@名称]")}</span> {sandboxText(locale, "@某人")}<span className="px-1 py-0.5 rounded border text-[10px]">[video:URL]</span>
                         <span className="px-1 py-0.5 rounded border text-[10px]">[audio:URL]</span>
                     </div>
                 </section>
             </main>
 
-            <aside className={cn("agent-playground-inspector", showInspector && "show")} aria-label="运行检查器">
+            <aside className={cn("agent-playground-inspector", showInspector && "show")} aria-label={sandboxText(locale, "运行检查器")}>
                 <div className="agent-playground-inspector-head">
-                    <div><span>Run inspector</span><h2>运行检查器</h2></div>
+                    <div><span>Run inspector</span><h2>{sandboxText(locale, "运行检查器")}</h2></div>
                     <div>
-                        <button type="button" onClick={() => void loadTrace()} aria-label="刷新 Agent Trace" disabled={traceLoading}><RefreshCw size={15} className={cn(traceLoading && 'animate-spin')} /></button>
-                        <button type="button" className="agent-playground-inspector-close" onClick={() => setShowInspector(false)} aria-label="关闭运行检查器"><X size={15} /></button>
+                        <button type="button" onClick={() => void loadTrace()} aria-label={sandboxText(locale, "刷新 Agent Trace")} disabled={traceLoading}><RefreshCw size={15} className={cn(traceLoading && 'animate-spin')} /></button>
+                        <button type="button" className="agent-playground-inspector-close" onClick={() => setShowInspector(false)} aria-label={sandboxText(locale, "关闭运行检查器")}><X size={15} /></button>
                     </div>
                 </div>
 
-                <div className="agent-playground-inspector-tabs" role="tablist" aria-label="检查器视图">
-                    <button type="button" role="tab" aria-selected={inspectorView === 'runs'} className={cn(inspectorView === 'runs' && 'active')} onClick={() => setInspectorView('runs')}><Activity size={13} />任务</button>
-                    <button type="button" role="tab" aria-selected={inspectorView === 'artifacts'} className={cn(inspectorView === 'artifacts' && 'active')} onClick={() => setInspectorView('artifacts')}><FileDiff size={13} />变更与产物 <span>{workbenchArtifacts.length}</span></button>
+                <div className="agent-playground-inspector-tabs" role="tablist" aria-label={sandboxText(locale, "检查器视图")}>
+                    <button type="button" role="tab" aria-selected={inspectorView === 'runs'} className={cn(inspectorView === 'runs' && 'active')} onClick={() => setInspectorView('runs')}><Activity size={13} />{sandboxText(locale, "任务")}</button>
+                    <button type="button" role="tab" aria-selected={inspectorView === 'artifacts'} className={cn(inspectorView === 'artifacts' && 'active')} onClick={() => setInspectorView('artifacts')}><FileDiff size={13} />{sandboxText(locale, "变更与产物")}<span>{workbenchArtifacts.length}</span></button>
                 </div>
 
                 <div className={cn("agent-playground-inspector-view", inspectorView !== 'runs' && 'hidden')}>
 
                 <section className="agent-playground-inspector-section">
-                    <div className="agent-playground-inspector-title"><span>运行概览</span><small>{traceSummary.activeTurns > 0 ? 'live' : 'idle'}</small></div>
+                    <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "运行概览")}</span><small>{traceSummary.activeTurns > 0 ? 'live' : 'idle'}</small></div>
                     <div className="agent-playground-metrics">
-                        <div><Activity /><strong>{traceSummary.eventCount.toLocaleString()}</strong><span>事件</span></div>
-                        <div><Wrench /><strong>{traceSummary.toolCount.toLocaleString()}</strong><span>工具</span></div>
-                        <div><Coins /><strong>{traceSummary.tokenCount.toLocaleString()}</strong><span>Token</span></div>
-                        <div className={cn(traceSummary.problemCount > 0 && 'has-problem')}><CircleAlert /><strong>{traceSummary.problemCount}</strong><span>异常</span></div>
+                        <div><Activity /><strong>{traceSummary.eventCount.toLocaleString(locale)}</strong><span>{sandboxText(locale, "事件")}</span></div>
+                        <div><Wrench /><strong>{traceSummary.toolCount.toLocaleString(locale)}</strong><span>{sandboxText(locale, "工具")}</span></div>
+                        <div><Coins /><strong>{traceSummary.tokenCount.toLocaleString(locale)}</strong><span>Token</span></div>
+                        <div className={cn(traceSummary.problemCount > 0 && 'has-problem')}><CircleAlert /><strong>{traceSummary.problemCount}</strong><span>{sandboxText(locale, "异常")}</span></div>
                     </div>
                 </section>
 
                 <section className="agent-playground-inspector-section">
-                    <div className="agent-playground-inspector-title"><span>上下文</span></div>
+                    <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "上下文")}</span></div>
                     <dl className="agent-playground-context-list">
                         <div><dt>Endpoint</dt><dd>{endpointId}</dd></div>
                         <div><dt>Scope</dt><dd>{activeChannel.type}</dd></div>
@@ -1071,26 +1071,26 @@ export default function Sandbox() {
                 </section>
 
                 <section className="agent-playground-inspector-section agent-playground-task-section">
-                    <div className="agent-playground-inspector-title"><span>任务历史</span><small>{taskRuns.length} runs</small></div>
+                    <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "任务历史")}</span><small>{taskRuns.length} runs</small></div>
                     {taskRuns.length > 0 ? (
                         <div className="agent-playground-task-list">
                             {taskRuns.slice(0, 8).map((run) => (
                                 <article key={run.id} className={cn(`is-${run.status}`)}>
                                     <i />
-                                    <div><strong>{taskStatusLabel(run.status)}</strong><code>{run.turnId.slice(0, 10)}</code></div>
+                                    <div><strong>{taskStatusLabel(run.status, locale)}</strong><code>{run.turnId.slice(0, 10)}</code></div>
                                     <dl>
-                                        <div><dt>耗时</dt><dd>{run.durationMs === undefined ? '进行中' : `${run.durationMs.toLocaleString()} ms`}</dd></div>
-                                        <div><dt>工具</dt><dd>{run.toolCount}</dd></div>
-                                        <div><dt>Token</dt><dd>{run.tokenCount.toLocaleString()}</dd></div>
+                                        <div><dt>{sandboxText(locale, "耗时")}</dt><dd>{run.durationMs === undefined ? sandboxText(locale, "进行中") : `${run.durationMs.toLocaleString(locale)} ms`}</dd></div>
+                                        <div><dt>{sandboxText(locale, "工具")}</dt><dd>{run.toolCount}</dd></div>
+                                        <div><dt>Token</dt><dd>{run.tokenCount.toLocaleString(locale)}</dd></div>
                                     </dl>
                                 </article>
                             ))}
                         </div>
-                    ) : <div className="agent-playground-artifact-empty"><Activity size={18} /><span>运行任务后会在这里形成可回溯记录</span></div>}
+                    ) : <div className="agent-playground-artifact-empty"><Activity size={18} /><span>{sandboxText(locale, "运行任务后会在这里形成可回溯记录")}</span></div>}
                 </section>
 
                 <section className="agent-playground-inspector-section agent-playground-trace-section">
-                    <div className="agent-playground-inspector-title"><span>最近执行</span><small>2s sync</small></div>
+                    <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "最近执行")}</span><small>2s sync</small></div>
                     {traceLoading && !trace ? (
                         <div className="agent-playground-trace-loading"><i /><i /><i /></div>
                     ) : traceNotice && !trace?.events.length ? (
@@ -1098,25 +1098,25 @@ export default function Sandbox() {
                     ) : recentTraceEvents.length ? (
                         <div className="agent-playground-trace-list">
                             {recentTraceEvents.map((event) => {
-                                const item = presentTraceEvent(event)
+                                const item = presentTraceEvent(event, locale)
                                 return (
                                     <div key={event.sequence} className={cn("agent-playground-trace-item", `is-${item.tone}`)}>
                                         <span className="agent-playground-trace-dot" />
                                         <div><strong>{item.title}</strong>{item.detail ? <small>{item.detail}</small> : null}</div>
-                                        <time>{new Date(event.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
+                                        <time>{new Date(event.recordedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
                                     </div>
                                 )
                             })}
                         </div>
                     ) : (
-                        <div className="agent-playground-trace-empty"><Activity size={18} /><span>发送任务后显示推理与工具轨迹</span></div>
+                        <div className="agent-playground-trace-empty"><Activity size={18} /><span>{sandboxText(locale, "发送任务后显示推理与工具轨迹")}</span></div>
                     )}
                 </section>
                 </div>
 
                 <div className={cn("agent-playground-inspector-view", inspectorView !== 'artifacts' && 'hidden')}>
                     <section className="agent-playground-inspector-section agent-playground-artifact-section">
-                        <div className="agent-playground-inspector-title"><span>文件与命令产物</span><small>{workbenchArtifacts.length} items</small></div>
+                        <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "文件与命令产物")}</span><small>{workbenchArtifacts.length} items</small></div>
                         {workbenchArtifacts.length > 0 ? (
                             <div className="agent-playground-artifact-list">
                                 {workbenchArtifacts.map((artifact) => {
@@ -1133,30 +1133,30 @@ export default function Sandbox() {
                                             {expanded && (
                                                 <div className="agent-playground-artifact-detail">
                                                     {artifact.path && <code>{artifact.path}</code>}
-                                                    {artifact.diff ? <pre>{artifact.diff}</pre> : <pre>{artifact.detail || '暂无输出'}</pre>}
-                                                    <footer><span>{artifact.durationMs === undefined ? '等待结果' : `${artifact.durationMs.toLocaleString()} ms`}</span><code>{artifact.turnId.slice(0, 12)}</code></footer>
+                                                    {artifact.diff ? <pre>{artifact.diff}</pre> : <pre>{artifact.detail || sandboxText(locale, "暂无输出")}</pre>}
+                                                    <footer><span>{artifact.durationMs === undefined ? sandboxText(locale, "等待结果") : `${artifact.durationMs.toLocaleString(locale)} ms`}</span><code>{artifact.turnId.slice(0, 12)}</code></footer>
                                                 </div>
                                             )}
                                         </article>
                                     )
                                 })}
                             </div>
-                        ) : <div className="agent-playground-artifact-empty"><FileDiff size={18} /><span>Agent 修改文件、执行命令或测试后，产物会集中出现在这里</span></div>}
+                        ) : <div className="agent-playground-artifact-empty"><FileDiff size={18} /><span>{sandboxText(locale, "Agent 修改文件、执行命令或测试后，产物会集中出现在这里")}</span></div>}
                     </section>
                 </div>
 
-                <a className="agent-playground-studio-link" href={agentStudioPath(sessionKey)}><span><ExternalLink size={15} />在 Agent Studio 中完整诊断</span><code>{sessionKey}</code></a>
+                <a className="agent-playground-studio-link" href={agentStudioPath(sessionKey)}><span><ExternalLink size={15} />{sandboxText(locale, "在 Agent Studio 中完整诊断")}</span><code>{sessionKey}</code></a>
             </aside>
             {showInspector && <div className="agent-playground-inspector-overlay" onClick={() => setShowInspector(false)} />}
         </section>
     )
 }
 
-function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled'): string {
-    if (status === 'running') return 'Agent 运行中'
-    if (status === 'completed') return '最近任务已完成'
-    if (status === 'failed') return '最近任务失败'
-    return '最近任务已取消'
+function taskStatusLabel(status: 'running' | 'completed' | 'failed' | 'cancelled', locale: SandboxLocale = 'zh-CN'): string {
+    if (status === 'running') return sandboxText(locale, "Agent 运行中")
+    if (status === 'completed') return sandboxText(locale, "最近任务已完成")
+    if (status === 'failed') return sandboxText(locale, "最近任务失败")
+    return sandboxText(locale, "最近任务已取消")
 }
 
 function messageText(segments: readonly MessageSegment[]): string {
@@ -1170,18 +1170,18 @@ function messageText(segments: readonly MessageSegment[]): string {
     }).join(' ').trim()
 }
 
-function formatDuration(durationMs: number): string {
-    if (durationMs < 1_000) return `${durationMs.toLocaleString()} ms`
+function formatDuration(durationMs: number, locale: SandboxLocale = 'zh-CN'): string {
+    if (durationMs < 1_000) return `${durationMs.toLocaleString(locale)} ms`
     if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(durationMs < 10_000 ? 1 : 0)} s`
     return `${Math.floor(durationMs / 60_000)}m ${Math.round((durationMs % 60_000) / 1_000)}s`
 }
 
-function runStepStatusLabel(status: 'running' | 'completed' | 'failed' | 'denied' | 'cancelled'): string {
-    if (status === 'running') return '进行中'
-    if (status === 'completed') return '完成'
-    if (status === 'denied') return '已拒绝'
-    if (status === 'cancelled') return '已取消'
-    return '失败'
+function runStepStatusLabel(status: 'running' | 'completed' | 'failed' | 'denied' | 'cancelled', locale: SandboxLocale = 'zh-CN'): string {
+    if (status === 'running') return sandboxText(locale, "进行中")
+    if (status === 'completed') return sandboxText(locale, "完成")
+    if (status === 'denied') return sandboxText(locale, "已拒绝")
+    if (status === 'cancelled') return sandboxText(locale, "已取消")
+    return sandboxText(locale, "失败")
 }
 
 function safeFileName(value: string): string {

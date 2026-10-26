@@ -16,6 +16,10 @@ export default defineGamePlugin<SessionService>({
     displayName: 'Dungeon Expedition',
   },
   game: {
+    commandPath: 'dungeon',
+    titleI18n: { en: 'Dungeon Expedition' },
+    descriptionI18n: { en: 'Explore a dungeon and battle monsters' },
+    quickStartI18n: { en: 'start' },
     id: 'dungeon',
     title: '地牢远征',
     icon: '⚔️',

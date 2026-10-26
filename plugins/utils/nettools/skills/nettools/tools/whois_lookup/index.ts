@@ -11,6 +11,6 @@ export default defineAgentTool<{ domain: string }>({
   async execute({ domain }, context) {
     const service = context.use(nettoolsServiceToken);
     const callerKey = toolCallerKey(context);
-    return service.run(() => service.whois(domain, callerKey, context.signal));
+    return service.run(() => service.whois(domain, callerKey, context.signal, context.locale), context.locale);
   },
 });

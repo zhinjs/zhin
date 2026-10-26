@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { parseGameId } from '../../../../src/games/registry.js';
@@ -10,7 +11,7 @@ export default defineAgentTool<{ game: string; count?: number }>({
   async execute({ game, count }, context) {
     const runtime = context.use(lotteryRuntimeToken);
     const gid = parseGameId(game);
-    if (!gid) return 'invalid game';
+    if (!gid) return t(context.locale, 'invalidGame');
     const lim = Math.min(30, count || 10);
     return JSON.stringify(await loadDraws(runtime.db, gid, lim));
   },

@@ -1,3 +1,4 @@
+import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 import {
   definePlugin,
   logger,
@@ -17,7 +18,7 @@ import {
 import { cleanOldSeen, pollAllFeeds } from './src/poll.js';
 import { rssRuntimeToken, type RssOutboundPush } from './src/runtime.js';
 
-function defineRssTables(db: { define: (name: string, schema: Record<string, unknown>) => void }): void {
+function defineRssTables(db: { define: (name: string, schema: Record<string, unknown>, options?: { addColumns: readonly string[] }) => void }): void {
   db.define(RSS_SUBS_TABLE, {
     url: { type: 'text', nullable: false },
     feed_title: { type: 'text', default: '' },
@@ -28,7 +29,8 @@ function defineRssTables(db: { define: (name: string, schema: Record<string, unk
     creator_id: { type: 'text', default: '' },
     creator_name: { type: 'text', default: '' },
     created_at: { type: 'text', default: '' },
-  });
+    locale: { type: 'text', length: 16, default: 'zh-CN' },
+  }, { addColumns: ['locale'] });
   db.define(RSS_SEEN_TABLE, {
     feed_url: { type: 'text', nullable: false },
     item_guid: { type: 'text', nullable: false },
@@ -75,6 +77,7 @@ export default definePlugin<RssConfig>({
     }
     const runtime = Object.freeze({
       db,
+      locale: resolveLocale(context.resources.use(projectLocaleToken)),
       config: Object.freeze({ ...config }),
       outbound: outboundPush,
     });
@@ -89,7 +92,7 @@ export default definePlugin<RssConfig>({
       let state;
       try { state = database.state; } catch { /* No persistent state port: no administrator provider. */ }
       if (state) {
-        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config);
+        administrator = new AdministratorRssTasks(createAdministratorRssState(database), outbound, config, undefined, runtime.locale);
         context.resources.provide(pluginTaskProviderToken, administrator);
         context.lifecycle.add(() => administrator?.stop());
       }

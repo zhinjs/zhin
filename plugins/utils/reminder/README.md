@@ -54,9 +54,9 @@ remind cancel <任务 ID>
 
 延迟是 1 秒至一年；周期是 60 秒至一年；内容是 1–500 字符。时间必须在未来一年内。指令权限经过框架 PermissionHost；插件没有额外权限旁路或取消其他发送者任务的管理员接口。
 
-`create` 创建一次性个人提醒，不依赖 AI。缺少时间或正文时逐项补问，随后用纯文字显示绝对日期、IANA 时区、正文和完整原会话；只有明确回复 `确认` 才保存。后续回答不加命令前缀；输入 `取消` 或 `cancel` 退出后再发新命令。每步有时限且整个流程最多三分钟，输错不会无限续期。超时、取消或热重载结束旧流程，均不创建任务。确认时已过期的时间不会自动顺延。
+`create` 创建一次性个人提醒，不依赖 AI。缺少时间或正文时逐项补问，随后用纯文字显示绝对日期、IANA 时区、正文和完整原会话；只有按本次流程语言明确回复 `确认`（中文）或 `confirm`（英文）才保存。后续回答不加命令前缀；中文流程只接受 `取消`，英文流程只接受 `cancel`。流程开始后固定语言，切换个人偏好只影响新操作。每步有时限且整个流程最多三分钟，输错不会无限续期。超时、取消或热重载结束旧流程，均不创建任务。确认时已过期的时间不会自动顺延。
 
-自然时间仅支持有限中文语法：如 `10分钟后`、`一天后`（固定 24 小时）、`今天18:30`、`明天九点`、`后天九点半`、`明天下午三点半`；也支持带 offset 的 ISO 时间。裸写 `九点`、日历周期和夏令时重复／不存在时刻不会猜测。按钮、Markdown 和图片均非必需；非聊天 CLI 没有真实发送者和交互能力时不能创建。完整操作与边界见[无需 AI 的提醒指南](https://zhin.js.org/solutions/reminders)。
+自然时间按当前语言选择有限语法：中文如 `10分钟后`、`一天后`（固定 24 小时）、`今天18:30`、`明天九点`、`后天九点半`、`明天下午三点半`；英文如 `in 10 minutes`、`in 2 hours`、`today at 18:30`、`tomorrow at 09:00`、`day after tomorrow at 09:30`。英文只接受整数时长和 24 小时制时刻；两种语言均接受带 offset 的 ISO 时间，不交叉接受另一语言的自然表达。裸写 `九点`、日历周期和夏令时重复／不存在时刻不会猜测。按钮、Markdown 和图片均非必需；非聊天 CLI 没有真实发送者和交互能力时不能创建。完整操作与边界见[无需 AI 的提醒指南](https://zhin.js.org/solutions/reminders)。
 
 ## 执行与恢复
 
@@ -114,3 +114,9 @@ schedules/poll/index.ts   # 正式 Schedule Feature 入口
 ### 事务化任务存储
 
 提醒与管理员 RSS 的任务、认领、操作回执和文章明细使用独立数据表，在一个事务中提交；原 CAS JSON 只用于首次迁移。支持 SQLite、MySQL、PostgreSQL，升级须完整重启，不能与旧版本进程混写。`unknown` 投递仍不会自动重试。迁移和字段说明见[结构化存储](../../../docs/operations/structured-storage.md)。
+
+## Language / 语言
+
+聊天回复使用当前发送者的语言。提醒创建时保存语言：聊天任务使用创建者当时的语言，Console 管理员任务使用项目语言。后续切换个人、项目或 Console 语言不修改既有任务的通知语言；数据库重启和热重载也保留它。管理员列表、错误和操作回执按当前 Console 请求语言展示，不影响 CAS 版本或请求去重。旧任务没有语言字段时按原中文行为读取。
+
+English flows accept `confirm` and `cancel`, and finite expressions such as `in 10 minutes` or `tomorrow at 09:00`. Timezone remains a separate IANA setting; no locale-based timezone inference or DST guessing is performed. Command hints use the actual endpoint prefix and plugin namespace resolved by the dispatcher. Notifications keep the language captured when the task was created.

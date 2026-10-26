@@ -109,3 +109,31 @@ describe('finite natural reminder time grammar', () => {
     }
   });
 });
+
+
+describe('English natural reminder grammar', () => {
+  const now = Date.parse('2026-01-01T08:00:00Z');
+  it.each([
+    ['in 10 minutes', 600_000], ['in 1 second', 1000], ['IN 2 HOURS', 7_200_000], ['in 1 day', 86_400_000],
+  ])('parses %s with the existing bounded duration semantics', (expression, delay) => {
+    expect(parseNaturalReminderTime(expression, { now, timezone: 'UTC', locale: 'en' }).at).toBe(now + delay);
+  });
+  it.each([
+    ['today at 09:00', '2026-01-01T09:00:00Z'],
+    ['tomorrow at 09:00:30', '2026-01-02T09:00:30Z'],
+    ['the day after tomorrow at 09:00', '2026-01-03T09:00:00Z'],
+  ])('resolves %s in the configured zone', (expression, expected) => {
+    expect(parseNaturalReminderTime(expression, { now, timezone: 'UTC', locale: 'en' }).at).toBe(Date.parse(expected));
+  });
+  it('accepts only the selected natural language while keeping ISO common', () => {
+    expect(() => parseNaturalReminderTime('十分钟后', { now, timezone: 'UTC', locale: 'en' })).toThrow('not supported');
+    expect(() => parseNaturalReminderTime('in 10 minutes', { now, timezone: 'UTC', locale: 'zh-CN' })).toThrow('暂不支持');
+    for (const locale of ['en', 'zh-CN'] as const) expect(parseNaturalReminderTime('2026-01-02T09:00:00Z', { now, timezone: 'UTC', locale }).at).toBe(Date.parse('2026-01-02T09:00:00Z'));
+  });
+  it('does not bypass DST gaps, folds, time range or recurring restrictions', () => {
+    expect(() => parseNaturalReminderTime('tomorrow at 02:30', { now: Date.parse('2026-03-07T12:00:00Z'), timezone: 'America/New_York', locale: 'en' })).toThrow('does not exist');
+    expect(() => parseNaturalReminderTime('tomorrow at 01:30', { now: Date.parse('2026-10-31T12:00:00Z'), timezone: 'America/New_York', locale: 'en' })).toThrow('occurs twice');
+    expect(() => parseNaturalReminderTime('in 366 days', { now, timezone: 'UTC', locale: 'en' })).toThrow('365 days');
+    expect(() => parseNaturalReminderTime('every day at 09:00', { now, timezone: 'UTC', locale: 'en' })).toThrow('not supported');
+  });
+});

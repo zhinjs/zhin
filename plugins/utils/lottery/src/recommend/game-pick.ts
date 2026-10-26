@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import { type DrawNumbers, type GameId, type GamePick, type NormalizedDraw, type ScoreWeights, type StatsSnapshot, type AccuracySnapshot } from '../types.js';
 import { getGameMeta } from '../games/registry.js';
 import { recommendKl8Groups, resolveKl8Config, type Kl8Config } from '../games/kl8-groups.js';
@@ -30,6 +32,7 @@ function poolDraws(draws: NormalizedDraw[], extract: (n: DrawNumbers) => number[
 }
 
 export interface RecommendOptions {
+  locale?: Locale;
   pickCount: number;
   tieSeed: string;
   weights?: ScoreWeights;
@@ -42,7 +45,9 @@ export function recommendGame(
   draws: NormalizedDraw[],
   options: RecommendOptions,
 ): GamePick {
+  const locale = resolveLocale(options.locale);
   const meta = getGameMeta(gameId);
+  const name = locale === 'en' ? t(locale, `game.${gameId}`) : meta.name;
   const tieSeed = `${options.tieSeed}:${gameId}`;
   const weights = options.weights ?? { freq: 0.4, omit: 0.35, trend: 0.25 };
 
@@ -55,10 +60,11 @@ export function recommendGame(
         const pick = pickTopUnique(scores, kl8.pickCount);
         const hot = scores.slice(0, 5).map((s) => s.value);
         const cold = [...scores].reverse().slice(0, 5).map((s) => s.value);
-        const pro = computeProMetrics(gameId, pick, draws, weights, 1, 80, 40);
+        const pro = computeProMetrics(gameId, pick, draws, weights, 1, 80, 40, locale);
         return {
           gameId,
-          label: `${meta.name}（选${pick.length}）`,
+          locale,
+          label: t(locale, 'pickLabel', { name, count: pick.length }),
           numbers: { main: pick },
           weights,
           stats: buildSnapshot(
@@ -66,7 +72,7 @@ export function recommendGame(
             draws,
             hot,
             cold,
-            `频率+遗漏+趋势 | 和值${pro.sum} 跨度${pro.span}`,
+            t(locale, 'basicDetail', { sum: pro.sum, span: pro.span }),
             pro,
             options.accuracy,
             weights,
@@ -79,15 +85,17 @@ export function recommendGame(
         strategies: kl8.groupStrategies,
         tieSeed,
         baseWeights: weights,
+        locale,
       });
       const primary = multi.groups[0]?.numbers ?? [];
       const hot = multi.scores.slice(0, 5).map((s) => s.value);
       const cold = [...multi.scores].reverse().slice(0, 5).map((s) => s.value);
-      const pro = computeProMetrics(gameId, primary, draws, weights, 1, 80, 40);
+      const pro = computeProMetrics(gameId, primary, draws, weights, 1, 80, 40, locale);
       const strategyNote = multi.groups.map((g) => g.label).join('/');
       return {
         gameId,
-        label: `${meta.name}（选${kl8.pickCount}·${multi.groups.length}组）`,
+          locale,
+        label: t(locale, 'pickGroupsLabel', { name, count: kl8.pickCount, groups: multi.groups.length }),
         numbers: { main: primary },
         weights,
         kl8Groups: multi.groups,
@@ -96,7 +104,7 @@ export function recommendGame(
           draws,
           hot,
           cold,
-          `多策略 ${strategyNote} | 和值${pro.sum} 跨度${pro.span}`,
+          t(locale, 'multiDetail', { strategies: strategyNote, sum: pro.sum, span: pro.span }),
           pro,
           options.accuracy,
           weights,
@@ -110,10 +118,11 @@ export function recommendGame(
       const blueScores = scorePool(blueRows, 1, 16, `${tieSeed}:blue`, weights);
       const red = pickTopUnique(redScores, 6);
       const blue = pickTopUnique(blueScores, 1);
-      const pro = computeProMetrics(gameId, red, draws, weights, 1, 33, 17);
+      const pro = computeProMetrics(gameId, red, draws, weights, 1, 33, 17, locale);
       return {
         gameId,
-        label: meta.name,
+          locale,
+        label: name,
         numbers: { red, blue },
         weights,
         stats: buildSnapshot(
@@ -121,7 +130,7 @@ export function recommendGame(
           draws,
           redScores.slice(0, 5).map((s) => s.value),
           redScores.slice(-5).map((s) => s.value),
-          `红球 ${pro.oddEven} ${pro.bigSmall} | 蓝 ${blue.map(pad2).join(' ')}`,
+          t(locale, 'redDetail', { oddEven: pro.oddEven, bigSmall: pro.bigSmall, blue: blue.map(pad2).join(' ') }),
           pro,
           options.accuracy,
           weights,
@@ -135,10 +144,11 @@ export function recommendGame(
       const backScores = scorePool(backRows, 1, 12, `${tieSeed}:back`, weights);
       const front = pickTopUnique(frontScores, 5);
       const back = pickTopUnique(backScores, 2);
-      const pro = computeProMetrics(gameId, front, draws, weights, 1, 35, 18);
+      const pro = computeProMetrics(gameId, front, draws, weights, 1, 35, 18, locale);
       return {
         gameId,
-        label: meta.name,
+          locale,
+        label: name,
         numbers: { front, back },
         weights,
         stats: buildSnapshot(
@@ -146,7 +156,7 @@ export function recommendGame(
           draws,
           frontScores.slice(0, 5).map((s) => s.value),
           frontScores.slice(-5).map((s) => s.value),
-          `前区 ${pro.oddEven} ${pro.zones ?? ''}`.trim(),
+          t(locale, 'frontDetail', { oddEven: pro.oddEven, zones: pro.zones ?? '' }).trim(),
           pro,
           options.accuracy,
           weights,
@@ -157,10 +167,11 @@ export function recommendGame(
     case 'pl3': {
       const rows = poolDraws(draws, (n) => n.digits ?? []);
       const digits = scoreDigits(rows, 3, tieSeed, weights);
-      const pro = computeDigitProMetrics(digits, draws, weights);
+      const pro = computeDigitProMetrics(digits, draws, weights, locale);
       return {
         gameId,
-        label: meta.name,
+          locale,
+        label: name,
         numbers: { digits },
         weights,
         stats: buildSnapshot(
@@ -168,7 +179,7 @@ export function recommendGame(
           draws,
           digits,
           [],
-          `直选 ${pro.digitPos} | 和值${pro.sum}`,
+          t(locale, 'digitDetail', { positions: pro.digitPos ?? '', sum: pro.sum }),
           pro,
           options.accuracy,
           weights,
@@ -178,10 +189,11 @@ export function recommendGame(
     case 'pl5': {
       const rows = poolDraws(draws, (n) => n.digits ?? []);
       const digits = scoreDigits(rows, 5, tieSeed, weights);
-      const pro = computeDigitProMetrics(digits, draws, weights);
+      const pro = computeDigitProMetrics(digits, draws, weights, locale);
       return {
         gameId,
-        label: meta.name,
+          locale,
+        label: name,
         numbers: { digits },
         weights,
         stats: buildSnapshot(
@@ -189,7 +201,7 @@ export function recommendGame(
           draws,
           digits,
           [],
-          `直选 ${pro.digitPos} | 和值${pro.sum}`,
+          t(locale, 'digitDetail', { positions: pro.digitPos ?? '', sum: pro.sum }),
           pro,
           options.accuracy,
           weights,
@@ -201,36 +213,36 @@ export function recommendGame(
   }
 }
 
-export function formatPickLine(pick: GamePick): string {
+export function formatPickLine(pick: GamePick, locale: Locale = resolveLocale(pick.locale)): string {
   const n = pick.numbers;
   switch (pick.gameId) {
     case 'kl8': {
       if (pick.kl8Groups?.length) {
         const header = `■ ${pick.label}`;
         const rows = pick.kl8Groups.map(
-          (g) => `  组${g.index}·${g.label}：${g.numbers.map(pad2).join(' ')}`,
+          (g) => t(locale, 'groupLine', { index: g.index, label: g.label, numbers: g.numbers.map(pad2).join(' ') }),
         );
         return [header, ...rows].join('\n');
       }
-      return `■ ${pick.label}：${(n.main ?? []).map(pad2).join(' ')}`;
+      return t(locale, 'pickLine', { label: pick.label, numbers: (n.main ?? []).map(pad2).join(' ') });
     }
     case 'ssq':
-      return `■ ${pick.label}：红 ${(n.red ?? []).map(pad2).join(' ')} + 蓝 ${(n.blue ?? []).map(pad2).join(' ')}`;
+      return t(locale, 'redLine', { label: pick.label, red: (n.red ?? []).map(pad2).join(' '), blue: (n.blue ?? []).map(pad2).join(' ') });
     case 'dlt':
-      return `■ ${pick.label}：前 ${(n.front ?? []).map(pad2).join(' ')} + 后 ${(n.back ?? []).map(pad2).join(' ')}`;
+      return t(locale, 'frontLine', { label: pick.label, front: (n.front ?? []).map(pad2).join(' '), back: (n.back ?? []).map(pad2).join(' ') });
     case 'fc3d':
     case 'pl3':
     case 'pl5':
-      return `■ ${pick.label}：${(n.digits ?? []).join(' ')}`;
+      return t(locale, 'pickLine', { label: pick.label, numbers: (n.digits ?? []).join(' ') });
     default:
       return `■ ${pick.label}`;
   }
 }
 
-export function formatPickStats(pick: GamePick): string {
+export function formatPickStats(pick: GamePick, locale: Locale = resolveLocale(pick.locale)): string {
   const parts: string[] = [];
-  const hot = pick.stats.hot.length ? `热号 ${pick.stats.hot.join(',')}` : '';
-  const cold = pick.stats.cold.length ? `冷号 ${pick.stats.cold.join(',')}` : '';
+  const hot = pick.stats.hot.length ? t(locale, 'hot', { numbers: pick.stats.hot.join(',') }) : '';
+  const cold = pick.stats.cold.length ? t(locale, 'cold', { numbers: pick.stats.cold.join(',') }) : '';
   if (hot) parts.push(hot);
   if (cold) parts.push(cold);
   if (pick.stats.pro) {
@@ -241,7 +253,7 @@ export function formatPickStats(pick: GamePick): string {
   }
   if (pick.stats.accuracy) {
     const a = pick.stats.accuracy;
-    parts.push(`历史命中 ${(a.avgHitRate * 100).toFixed(1)}% (${a.evalCount}期) 近5期 ${a.recent5}`);
+    parts.push(t(locale, 'accuracy', { rate: (a.avgHitRate * 100).toFixed(1), count: a.evalCount, recent: a.recent5 }));
   }
   parts.push(pick.stats.detail);
   return `  ${parts.filter(Boolean).join('\n  ')}`;

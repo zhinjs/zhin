@@ -1,3 +1,4 @@
+import { sandboxText, type SandboxLocale } from './messages.js';
 import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 
 export interface MessageSegment {
@@ -6,6 +7,7 @@ export interface MessageSegment {
 }
 
 export interface RichTextEditorProps {
+    locale?: SandboxLocale
     placeholder?: string
     onSend?: (text: string, segments: MessageSegment[]) => void
     onChange?: (text: string, segments: MessageSegment[]) => void
@@ -27,7 +29,7 @@ export interface RichTextEditorRef {
 }
 
 const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-    ({ placeholder = '输入消息...', onSend, onChange, onAtTrigger, minHeight = '44px', maxHeight = '200px' }, ref) => {
+    ({ locale = 'zh-CN', placeholder = sandboxText(locale, "输入消息..."), onSend, onChange, onAtTrigger, minHeight = '44px', maxHeight = '200px' }, ref) => {
         const editorRef = useRef<HTMLDivElement>(null)
         const atTriggerTextRef = useRef<Text | null>(null)
 
@@ -132,7 +134,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             span.className = 'editor-video'
             span.dataset.url = u
             span.contentEditable = 'false'
-            span.textContent = '📹 视频'
+            span.textContent = sandboxText(locale, "📹 视频")
             insertNodeAtCursor(span)
             handleChange()
         }
@@ -144,7 +146,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             span.className = 'editor-audio'
             span.dataset.url = u
             span.contentEditable = 'false'
-            span.textContent = '🎵 音频'
+            span.textContent = sandboxText(locale, "🎵 音频")
             insertNodeAtCursor(span)
             handleChange()
         }

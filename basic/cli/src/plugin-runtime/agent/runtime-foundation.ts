@@ -1,3 +1,4 @@
+import { projectLocaleToken, resolveLocale } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import {
@@ -152,6 +153,7 @@ export class AgentRuntimeFoundation {
         options.projectRoot,
         options.assistantConfig,
         traceRuntime,
+        resolveLocale(options.resources.has(projectLocaleToken) ? options.resources.use(projectLocaleToken) : undefined),
       );
       options.lifecycle.add(schedule.dispose);
       const home = await createAssistantHomeRuntime(

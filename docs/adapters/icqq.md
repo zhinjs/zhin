@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4d8a536ebdbcaa42 -->
+<!-- sync-adapter-docs:sha256=679eda35efc2214c -->
 
 # @zhin.js/adapter-icqq
 
@@ -204,3 +204,9 @@ ICQQ 要求分享、文件、语音、视频、JSON 卡片和合并转发单独�
 
 - 回执的消息 ID 取第一条拿到 ID 的部分；所有部分都没有 ID（如单独一张分享）时，仍报告投递结果未知。
 - 第一条就失败时原样报告失败；后面的部分失败时报告 `partial_delivery`（结果未知），因为前面的部分已经送达，重发会重复。
+
+## 语言
+
+Endpoint 管理和工具反馈跟随当前操作语言；登录没有当前聊天发送者，LoginAssist 提示采用项目语言。提示文案变化不改变扫码、短信、滑块验证过程，群管理权限、审批与平台结果检查保持原规则。
+
+Endpoint 添加用法中的调用头由当前环境的实际命令前缀与插件命名空间提供；未知时只提示所需参数，不生成猜测命令。

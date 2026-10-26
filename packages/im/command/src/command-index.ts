@@ -5,10 +5,12 @@ import {
 } from 'segment-matcher';
 import {
   htmlRendererToken,
+  resolveLocale,
   type CapabilityId,
   type CapabilitySlot,
   type PluginId,
   type RuntimeSnapshot,
+  type Locale,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
 import { bindOperationInput } from '@zhin.js/feature-kit';
@@ -17,7 +19,8 @@ import {
   type PermissionHost,
 } from '@zhin.js/permission';
 import { commandAdapterMatches, toCommandPermissionSubject } from './permission-explanation.js';
-import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
+import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, commandValidationIssue, type CommandValidationIssue } from './arguments.js';
+import { commandDescription, commandMessages } from './messages.js';
 import { MENU_PAGE_SIZE, readMenuAppearance, renderCommandMenu, type CommandMenuSegment, type CommandMenuEntry, type CommandMenuAppearance } from './command-menu.js';
 export type { CommandMenuEntry, CommandMenuAppearance } from './command-menu.js';
 import { admitCommandExecution, admitDirectCommandExecution } from './execution-runtime.js';
@@ -77,6 +80,7 @@ export interface CommandMenuNavigation {
 
 /** Immutable page data; presentation cannot change the catalog or execute commands. */
 export interface CommandMenuPage extends CommandMenuNavigation {
+  readonly locale: Locale;
   readonly title: string;
   readonly commands: readonly CommandMenuEntry[];
   readonly plugins: readonly CommandMenuEntry[];
@@ -95,6 +99,7 @@ interface CommandMenuResult {
 interface CommandRecord extends CommandDescriptor {
   readonly slot: Readonly<CapabilitySlot<CommandDefinition>>;
   readonly segments: readonly string[];
+  readonly preferredSegments: Readonly<Partial<Record<Locale, readonly string[]>>>;
   readonly parameter?: CommandParameterDefinition;
 }
 
@@ -134,7 +139,8 @@ const segmentFields = {
 };
 
 export interface CommandMenuConfig {
-  readonly keyword: string;
+  /** Omission selects the built-in keyword for each operation's language. */
+  readonly keyword?: string;
 }
 
 export class CommandIndex {
@@ -211,6 +217,8 @@ export class CommandIndex {
         ...(shortcutKeys && shortcutKeys.length > 0 ? { shortcut: shortcutKeys } : {}),
         slot,
         segments: Object.freeze(primarySegments),
+        preferredSegments: Object.freeze(Object.fromEntries(Object.entries(slot.definition.preferredAliasI18n ?? {}).map(([locale, entry]) =>
+          [locale, Object.freeze([...namespace, ...aliasRuntimeSegments(entry, primarySegments.slice(namespace.length))])]))),
         parameter,
       });
 
@@ -264,8 +272,30 @@ export class CommandIndex {
     this.#shortcuts = shortcuts;
   }
 
-  list(): readonly CommandDescriptor[] {
-    return this.#commands.map(toDescriptor);
+  list(locale: Locale = 'zh-CN'): readonly CommandDescriptor[] {
+    return this.#commands.map(record => ({ ...toDescriptor(record),
+      name: commandDisplayName(record, locale), usage: commandUsage(commandDisplayName(record, locale), record.slot.definition),
+      description: commandDescription(record.slot.definition, locale),
+      parameters: record.parameters.map(parameter => ({ ...parameter, description: commandDescription(parameter, locale) })),
+      options: Object.freeze(Object.fromEntries(Object.entries(record.options).map(([key, schema]) =>
+        [key, { ...schema, description: commandDescription(schema, locale) }]))),
+    }));
+  }
+
+  /** Resolve a local static route without executing parameters, permission checks or commands. */
+  formatCommand(owner: PluginId, localPath: string, prefix: string | undefined, locale: Locale = 'zh-CN'): string | undefined {
+    if (prefix === undefined || typeof localPath !== 'string') return undefined;
+    const path = localPath.trim().split(/\s+/u).filter(Boolean).join(' ');
+    if (!path) return undefined;
+    const command = this.#commands.find(record => record.owner === owner
+      && record.slot.localName.split('/').filter(segment => !segment.startsWith('$')).join(' ') === path);
+    return command ? prefix + commandDisplaySegments(command, locale).filter(segment => !segment.startsWith('$')).join(' ') : undefined;
+  }
+
+  /** Return the configured menu entry only when the calling environment is known. */
+  formatMenu(prefix: string | undefined, locale: Locale): string | undefined {
+    if (prefix === undefined || !this.#menu) return undefined;
+    return prefix + (this.#menu.keyword ?? commandMessages(locale, 'menuKeyword'));
   }
 
   has(name: string): boolean {
@@ -278,6 +308,7 @@ export class CommandIndex {
   }
 
   async execute(name: string, args: readonly string[] = [], operationSnapshot: RuntimeSnapshot = this.snapshot): Promise<unknown> {
+    const locale = commandLocale(undefined, operationSnapshot);
     const match = this.#match(name, false);
     if (!match) {
       this.#diagnoseParameter(name);
@@ -286,14 +317,14 @@ export class CommandIndex {
     if (!(await this.#permitAllows(match.command, undefined, operationSnapshot))) throw new Error(`Permission denied for Command: ${match.command.name}`);
     const definition = match.command.slot.definition;
     const supplied = [...match.remaining, ...(args.length > 0 ? [{ type: 'text', data: { text: args.join(' ') } }] : [])];
-    const parsed = parseCommandArguments(definition, supplied, resolveDynamicParams(match.params, undefined), {});
-    if (parsed.issues.length > 0) throw new CommandArgumentValidationError(parsed.issues, commandHelp(match.command.name, definition));
+    const parsed = parseCommandArguments(definition, supplied, resolveDynamicParams(match.params, undefined), {}, locale);
+    if (parsed.issues.length > 0) throw new CommandArgumentValidationError(parsed.issues, commandHelp(commandDisplayName(match.command, locale), definition, '', locale));
     // No inbound source: execution policy applies per command, never as a blanket refusal.
     const admission = admitDirectCommandExecution(match.command.slot.id, match.command.execution, operationSnapshot);
     if (admission.limit) throw new CommandExecutionLimitedError(admission.limit);
     try {
       return await definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
-        textArgs(parsed.remaining), parsed.params, undefined, parsed.remaining, undefined, definition.adapter, parsed.options));
+        textArgs(parsed.remaining), parsed.params, undefined, parsed.remaining, undefined, definition.adapter, parsed.options, { locale }));
     } finally {
       admission.release();
     }
@@ -303,16 +334,20 @@ export class CommandIndex {
     input: CommandMatchInput,
     source: unknown = undefined,
     interactionFactory?: UserInteractionFactory,
-    commandPrefix = '',
+    commandPrefix?: string,
     operationSnapshot: RuntimeSnapshot = this.snapshot,
+    localeOverride?: Locale,
   ): Promise<CommandDispatchResult> {
+    const locale = localeOverride ?? commandLocale(source, operationSnapshot);
+    const prefix = commandPrefix ?? '';
     if (this.#menu) {
-      const menuResult = this.#dispatchMenu(input, commandPrefix, operationSnapshot);
+      const keyword = this.#menu.keyword ?? commandMessages(locale, 'menuKeyword');
+      const menuResult = this.#dispatchMenu(input, prefix, operationSnapshot, locale, keyword);
       if (menuResult !== undefined) {
         return Object.freeze({
           matched: true,
           status: 'executed',
-          command: this.#menu.keyword,
+          command: keyword,
           owner: operationSnapshot.root,
           ...menuResult,
         });
@@ -327,27 +362,29 @@ export class CommandIndex {
       if (!candidate) return Object.freeze({ matched: false, status: 'unmatched' });
       if (!commandAdapterMatches(candidate, source)) return Object.freeze({ matched: false, status: 'unmatched' });
       if (!(await this.#permitAllows(candidate, source, operationSnapshot))) return this.#denied(candidate);
-      const help = commandHelp(candidate.name, candidate.slot.definition, commandPrefix);
+      const help = commandHelp(commandDisplayName(candidate, locale), candidate.slot.definition, prefix, locale);
       const segments = normalizeSegments(typeof input === 'string' ? [{ type: 'text', data: { text: input } }] : input);
       if (requestsCommandHelp(segments)) return Object.freeze({ matched: true, status: 'executed', command: candidate.name, owner: candidate.slot.owner, value: help });
       return Object.freeze({ matched: true, status: 'invalid', command: candidate.name, owner: candidate.slot.owner,
-        issues: Object.freeze([{ field: candidate.parameter?.name ?? 'arguments', message: 'Missing or invalid command parameter' }]), help });
+        issues: Object.freeze([commandValidationIssue('invalidParameter', candidate.parameter?.name ?? 'arguments', locale)]), help });
     }
     if (!commandAdapterMatches(match.command, source)) return Object.freeze({ matched: false, status: 'unmatched' });
     if (!(await this.#permitAllows(match.command, source, operationSnapshot))) return this.#denied(match.command);
     const definition = match.command.slot.definition;
     const authorSource = bindOperationInput(source, match.command.slot.owner, operationSnapshot);
-    const help = commandHelp(match.command.name, definition, commandPrefix);
+    const help = commandHelp(commandDisplayName(match.command, locale), definition, prefix, locale);
     if (match.helpRequested) {
       return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: help });
     }
-    const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource));
+    const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource), locale);
     if (parsed.issues.length > 0) return Object.freeze({ matched: true, status: 'invalid', command: match.command.name,
       owner: match.command.slot.owner, issues: parsed.issues, help });
     const limit = admitCommandExecution(authorSource, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
     if (limit) return Object.freeze({ matched: true, status: 'limited', command: match.command.name, owner: match.command.slot.owner, limit });
     const value = await definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
-      textArgs(parsed.remaining), parsed.params, authorSource, parsed.remaining, interactionFactory?.(authorSource), definition.adapter, parsed.options));
+      textArgs(parsed.remaining), parsed.params, authorSource, parsed.remaining, interactionFactory?.(authorSource), definition.adapter, parsed.options,
+      { locale, formatCommand: (localPath, owner = match.command.owner) => this.formatCommand(owner, localPath,
+        source && typeof source === 'object' && 'conversation' in source ? commandPrefix : undefined, locale) }));
     return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
   }
 
@@ -459,13 +496,10 @@ export class CommandIndex {
   // 内置菜单命令
   // ==========================================================================
 
-  #dispatchMenu(input: CommandMatchInput, commandPrefix: string, snapshot: RuntimeSnapshot): CommandMenuResult | undefined {
+  #dispatchMenu(input: CommandMatchInput, commandPrefix: string, snapshot: RuntimeSnapshot, locale: Locale, keyword: string): CommandMenuResult | undefined {
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
-    const menu = this.#menu;
-    if (!menu) return undefined;
-    const keyword = menu.keyword;
-    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
+    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword, snapshot, locale);
     if (text.startsWith(keyword + ' ')) {
       const key = text.slice(keyword.length + 1).trim();
       const args = key.split(/\s+/u);
@@ -474,24 +508,24 @@ export class CommandIndex {
         const pageText = args[flag + 1] ?? '';
         if (flag > 1 || args.length !== flag + 2 || !/^[1-9]\d*$/u.test(pageText)
           || !Number.isSafeInteger(Number(pageText))) {
-          return { value: `页码必须是正整数。用法：${commandPrefix}${keyword} [插件名] --page <页码>` };
+          return { value: commandMessages(locale, 'invalidPage', { command: `${commandPrefix}${keyword}` }) };
         }
-        return this.#buildMenu(flag === 1 ? args[0] : undefined, commandPrefix, keyword, snapshot, Number(pageText));
+        return this.#buildMenu(flag === 1 ? args[0] : undefined, commandPrefix, keyword, snapshot, locale, Number(pageText));
       }
-      if (key) return this.#buildMenu(key, commandPrefix, keyword, snapshot);
-      return this.#buildMenu(undefined, commandPrefix, keyword, snapshot);
+      if (key) return this.#buildMenu(key, commandPrefix, keyword, snapshot, locale);
+      return this.#buildMenu(undefined, commandPrefix, keyword, snapshot, locale);
     }
     return undefined;
   }
 
-  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string, snapshot: RuntimeSnapshot, page = 1): CommandMenuResult {
+  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string, snapshot: RuntimeSnapshot, locale: Locale, page = 1): CommandMenuResult {
     const root = snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
       : root;
 
     const node = snapshot.tree.get(targetId);
-    if (!node) return { value: `未找到插件: ${pluginKey}` };
+    if (!node) return { value: commandMessages(locale, 'missingPlugin', { plugin: pluginKey ?? '' }) };
 
     const directCommands = this.#commands.filter((cmd) => cmd.slot.owner === targetId);
     const children = node.children
@@ -500,26 +534,27 @@ export class CommandIndex {
 
     const pages = Math.max(1, Math.ceil((directCommands.length + children.length) / MENU_PAGE_SIZE));
     const invocation = `${commandPrefix}${keyword}${pluginKey ? ` ${pluginKey}` : ''}`;
-    if (page > pages) return { value: `页码超出范围：共 ${pages} 页。请使用「${invocation} --page <页码>」。` };
+    if (page > pages) return { value: commandMessages(locale, 'pageOutOfRange', { pages, command: invocation }) };
     const offset = (page - 1) * MENU_PAGE_SIZE;
     const pageCommands = directCommands.slice(offset, offset + MENU_PAGE_SIZE);
     const pageChildren = children.slice(Math.max(0, offset - directCommands.length), Math.max(0, offset + MENU_PAGE_SIZE - directCommands.length));
 
     const displayKey = pluginKey ?? node.instanceKey;
-    const lines: string[] = [`=== ${displayKey} 指令菜单 ===`];
-    if (pages > 1) lines.push(`第 ${page}/${pages} 页 · ${directCommands.length} 条指令 · ${children.length} 个子插件`);
+    const lines: string[] = [commandMessages(locale, 'menuTitle', { plugin: displayKey })];
+    if (pages > 1) lines.push(commandMessages(locale, 'menuSummary', { page, pages, commands: directCommands.length, plugins: children.length }));
 
     if (pageCommands.length > 0) {
       lines.push('');
       for (const cmd of pageCommands) {
-        const desc = cmd.description ? `  - ${cmd.description}` : '';
-        lines.push(`  ${commandPrefix}${cmd.name}${desc}`);
+        const description = commandDescription(cmd.slot.definition, locale);
+        const desc = description ? `  - ${description}` : '';
+        lines.push(`  ${commandPrefix}${commandDisplayName(cmd, locale)}${desc}`);
       }
     }
 
     if (pageChildren.length > 0) {
       lines.push('');
-      lines.push('子插件：');
+      lines.push(commandMessages(locale, 'childPlugins'));
       for (const child of pageChildren) {
         const childKey = pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey;
         const label = child.metadata?.displayName ?? child.instanceKey;
@@ -529,13 +564,13 @@ export class CommandIndex {
 
     if (directCommands.length === 0 && children.length === 0) {
       lines.push('');
-      lines.push('（暂无指令和子插件）');
+      lines.push(commandMessages(locale, 'emptyMenu'));
     }
 
     const hints: string[] = [];
-    if (children.length > 0) hints.push(`提示：使用「${commandPrefix}${keyword} <插件名>」查看子插件的指令`);
-    if (page > 1) hints.push(`上一页：${invocation} --page ${page - 1}`);
-    if (page < pages) hints.push(`下一页：${invocation} --page ${page + 1}`);
+    if (children.length > 0) hints.push(commandMessages(locale, 'pluginHint', { command: `${commandPrefix}${keyword}` }));
+    if (page > 1) hints.push(commandMessages(locale, 'previousPage', { command: `${invocation} --page ${page - 1}` }));
+    if (page < pages) hints.push(commandMessages(locale, 'nextPage', { command: `${invocation} --page ${page + 1}` }));
     const hint = hints.length ? hints.join('\n') : undefined;
     if (hint) {
       lines.push('');
@@ -545,9 +580,9 @@ export class CommandIndex {
     const text = lines.join('\n');
     const config = snapshot.config.get(root) as Record<string, unknown> | undefined;
     const menu: CommandMenuPage = Object.freeze({
-      keyword, ...(pluginKey ? { pluginKey } : {}), page, pages, title: displayKey,
+      keyword, ...(pluginKey ? { pluginKey } : {}), page, pages, locale, title: displayKey,
       commands: Object.freeze(pageCommands.map(cmd => Object.freeze({
-        name: `${commandPrefix}${cmd.name}`, description: cmd.description,
+        name: `${commandPrefix}${commandDisplayName(cmd, locale)}`, description: commandDescription(cmd.slot.definition, locale),
       }))),
       plugins: Object.freeze(pageChildren.map(child => Object.freeze({
         name: pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey,
@@ -558,9 +593,22 @@ export class CommandIndex {
     });
     if (!snapshot.resources.get(root)?.has(htmlRendererToken.id)) return { value: text, menu };
     return { menu, value: renderCommandMenu(displayKey, menu.commands, menu.plugins, hint, text, {
-      page, pages, commandTotal: menu.commandTotal, pluginTotal: menu.pluginTotal, appearance: menu.appearance,
+      page, pages, locale, commandTotal: menu.commandTotal, pluginTotal: menu.pluginTotal, appearance: menu.appearance,
     }) };
   }
+}
+
+function commandDisplaySegments(record: CommandRecord, locale: Locale): readonly string[] {
+  return record.preferredSegments[locale] ?? record.segments;
+}
+
+function commandDisplayName(record: CommandRecord, locale: Locale): string {
+  return displayName(commandDisplaySegments(record, locale), record.parameter);
+}
+
+function commandLocale(source: unknown, snapshot: RuntimeSnapshot): Locale {
+  const locale = source && typeof source === 'object' && 'locale' in source ? source.locale : undefined;
+  return resolveLocale(locale ?? (snapshot.config.get(snapshot.root) as { locale?: unknown } | undefined)?.locale);
 }
 
 export function isCommandIndex(value: unknown): value is CommandIndex {

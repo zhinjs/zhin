@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
@@ -19,7 +20,7 @@ export default defineAgentTool<{ channel_id: string; name: string; content: stri
     const tagList = tags ? tags.split(',').map((t: string) => t.trim()) : undefined;
     const channel = await client.channels.fetch(channel_id);
     if (!channel?.threads || channel.type !== ChannelType.GuildForum) {
-      throw new Error(`Channel ${channel_id} 不是论坛频道`);
+      throw new Error(t(context.locale, 'notForumChannel', { p0: channel_id }));
     }
     const tagIds = tagList?.length
       ? channel.availableTags?.filter((tag) => tagList.includes(tag.name)).map((tag) => tag.id)
@@ -29,6 +30,6 @@ export default defineAgentTool<{ channel_id: string; name: string; content: stri
       message: { content },
       ...(tagIds?.length ? { appliedTags: tagIds } : {}),
     });
-    return { success: true, thread_id: thread.id, message: `论坛帖 "${name}" 已创建` };
+    return { success: true, thread_id: thread.id, message: t(context.locale, 'forumCreated', { p0: name }) };
   },
 });

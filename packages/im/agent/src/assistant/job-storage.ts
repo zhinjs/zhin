@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseHost } from '@zhin.js/plugin-runtime';
-import { encodeStorageIdentity, decodeStorageIdentity, retryRelationalOperation } from '@zhin.js/plugin-runtime';
+import { resolveLocale, encodeStorageIdentity, decodeStorageIdentity, retryRelationalOperation } from '@zhin.js/plugin-runtime';
 import type { ScheduleJob, ScheduleJobFile } from './types.js';
 
 const text = { type: 'text', nullable: true } as const;
@@ -8,6 +8,7 @@ const time = { type: 'bigint', nullable: true } as const;
 const flag = { type: 'boolean', nullable: true } as const;
 export const SCHEDULE_JOB_MODEL = {
   id: { type: 'text', length: 64, primary: true }, job_id: { type: 'text', nullable: false }, position: { type: 'integer', nullable: false }, label: text, enabled: flag,
+  locale: { type: 'text', length: 16, nullable: true },
   created_at: time, updated_at: time, source: text, creator_id: text, creator_name: text, creator_roles_json: text,
   schedule_kind: text, cron: text, timezone: text, every_ms: time, at_ms: time, delete_after_run: flag,
   event_id: text, event_source: text, event_type: text, schedule_options_json: text,
@@ -31,7 +32,7 @@ export function encodeScheduleJob(job: ScheduleJob, position: number): Record<st
   const scene = job.notify.channel === 'im' ? job.notify.target.scene : undefined;
   const target = job.notify.channel === 'im' ? job.notify.target : undefined;
   return { id: jobKey(job.id), job_id: encodeStorageIdentity(job.id), position, label: encode(job.label), enabled: job.enabled,
-    created_at: job.createdAt, updated_at: job.updatedAt, source: job.source ?? null,
+    locale: resolveLocale(job.locale), created_at: job.createdAt, updated_at: job.updatedAt, source: job.source ?? null,
     creator_id: encode(job.createdBy?.userId), creator_name: encode(job.createdBy?.name), creator_roles_json: json(job.createdBy?.roles),
     schedule_kind: schedule.kind, cron: 'cron' in schedule ? schedule.cron : null, timezone: 'tz' in schedule ? schedule.tz ?? null : null,
     every_ms: schedule.kind === 'every' ? schedule.everyMs : null, at_ms: schedule.kind === 'at' ? schedule.atMs : null,
@@ -69,7 +70,7 @@ export function decodeScheduleJob(row: Record<string, unknown>): ScheduleJob {
   }, ...optional('threadId', decode(row.thread_id)), ...optional('quoteId', decode(row.quote_id)) } }
     : row.notify_channel === 'ha' ? { channel: 'ha', service: decode(row.ha_service), ...optional('target', decode(row.ha_target)), ...optional('data', parse(row.ha_data_json)) }
       : { channel: row.notify_channel };
-  return { id: decodeStorageIdentity(row.job_id), ...optional('label', decode(row.label)), enabled: Boolean(row.enabled),
+  return { locale: resolveLocale(row.locale), id: decodeStorageIdentity(row.job_id), ...optional('label', decode(row.label)), enabled: Boolean(row.enabled),
     createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), ...optional('source', row.source), schedule,
     action: { kind: row.action_kind, prompt: decode(row.prompt), ...optional('agent', decode(row.agent)) }, notify,
     ...optional('notifyOnFailure', boolean(row.notify_on_failure)), ...optional('activityFeedback', boolean(row.activity_feedback)),

@@ -19,6 +19,10 @@ export default defineGamePlugin<SessionService>({
     displayName: 'Word Riddle',
   },
   game: {
+    commandPath: 'riddle',
+    titleI18n: { en: 'Word Riddle' },
+    descriptionI18n: { en: 'Solve Chinese character and idiom riddles' },
+    quickStartI18n: { en: 'start' },
     id: 'riddle',
     title: '猜谜',
     icon: '🧩',

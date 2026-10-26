@@ -2,13 +2,13 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createToken, definePlugin, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { createToken, definePlugin, projectLocaleToken, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import commandFeature, {
   CommandIndex,
   commandFeatureId,
   defineCommand,
 } from '@zhin.js/command';
-import { RootRuntime, runtimeEnvironmentToken, type ModuleRuntime } from '../src/index.js';
+import { RootRuntime, primaryConfigToken, runtimeEnvironmentToken, type ModuleRuntime, type PrimaryConfig } from '../src/index.js';
 import { Schema } from '../../../../basic/schema/src/index.js';
 
 const temporary: string[] = [];
@@ -18,6 +18,37 @@ afterEach(async () => {
 });
 
 describe('RootRuntime tracer bullet', () => {
+  it('resolves omitted project language at runtime without adding it to the configuration', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: context => context.locale }) });
+    const input = { configVersion: 2, plugins: {} };
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: input,
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    const expectOmitted = async () => {
+      const snapshot = runtime.snapshot;
+      const resources = snapshot.resources.get(snapshot.root)!;
+      const primary = resources.get(primaryConfigToken.id) as PrimaryConfig;
+      expect(primary.document).not.toHaveProperty('locale');
+      expect(primary.expanded).not.toHaveProperty('locale');
+      expect(snapshot.config.get(snapshot.root)).not.toHaveProperty('locale');
+      expect(resources.get(projectLocaleToken.id)).toBe('zh-CN');
+      expect(await commandIndex(snapshot).execute('gh issue list')).toBe('zh-CN');
+    };
+    try {
+      await runtime.start();
+      await expectOmitted();
+      expect(input).toEqual({ configVersion: 2, plugins: {} });
+      await runtime.patchConfig([{ op: 'set', path: ['locale'], value: 'en' }]);
+      expect(runtime.snapshot.resources.get(runtime.snapshot.root)?.get(projectLocaleToken.id)).toBe('en');
+      expect(await commandIndex(runtime.snapshot).execute('gh issue list')).toBe('en');
+      await runtime.patchConfig([{ op: 'remove', path: ['locale'] }]);
+      await expectOmitted();
+    } finally { await runtime.stop(); }
+  });
+
   it('publishes detached custom-resolver schemas before pending setup completes', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();

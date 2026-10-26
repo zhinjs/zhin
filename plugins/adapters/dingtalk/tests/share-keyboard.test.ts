@@ -19,3 +19,12 @@ it('preserves surrounding text in the single link card', () => {
 it.each(['audio', 'artist', 'duration', 'config'])('rejects rich share %s before losing its semantics', key => {
   expect(() => formatOutboundBody([{ type: 'text', data: { text: 'marker' } }, { type: 'share', data: { url: 'https://example.com', title: 'share', [key]: key === 'duration' ? 1 : key === 'config' ? { appid: 1 } : 'value' } }])).toThrow(expect.objectContaining({ code: 'unsupported_operation', disposition: 'not_sent' }));
 });
+
+it('localizes only generated titles while retaining explicit author titles and text', () => {
+  const share = [{ type: 'share', data: { url: 'https://example.com/article', description: '中文原文' } }];
+  expect(formatOutboundBody(share, 'en')).toMatchObject({ link: { title: 'Link', text: '中文原文' } });
+  expect(formatOutboundBody(share)).toMatchObject({ link: { title: '链接' } });
+  expect(formatOutboundBody([{ type: 'share', data: { ...share[0]!.data, title: '用户标题' } }], 'en')).toMatchObject({ link: { title: '用户标题' } });
+  expect(formatOutboundBody([{ type: 'markdown', data: { content: '正文' } }], 'en')).toMatchObject({ markdown: { title: 'Message', text: '正文' } });
+  expect(formatOutboundBody([{ type: 'markdown', data: { title: '用户标题', content: '正文' } }], 'en')).toMatchObject({ markdown: { title: '用户标题', text: '正文' } });
+});

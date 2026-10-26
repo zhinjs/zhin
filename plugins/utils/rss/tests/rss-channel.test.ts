@@ -1,3 +1,4 @@
+import { projectLocaleToken } from 'zhin.js/i18n';
 import Parser from 'rss-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import plugin from '../plugin.ts';
@@ -23,6 +24,8 @@ function context(runtime: RssRuntime, input: unknown) {
   return {
     owner: {} as never,
     generation: 4,
+    locale: 'zh-CN' as const,
+    formatCommand: (path: string) => path,
     config: {},
     args: [],
     params: { url },
@@ -175,7 +178,7 @@ describe('RSS canonical conversation addresses', () => {
       config: { get: () => ({}) },
       resources: {
         has: (token: unknown) => token === outboundHostToken,
-        use: () => ({ send }),
+        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : ({ send }),
         provide: (token: unknown, value: RssRuntime) => {
           if (token === rssRuntimeToken) runtime = value;
         },

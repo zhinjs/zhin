@@ -1,3 +1,7 @@
+import checkinCommand from '../commands/checkin/index.ts';
+import myPointsCommand from '../commands/mypoints/index.ts';
+import teachCommand from '../commands/teach/index.ts';
+import { tryTeachReply } from '../src/teach-lib.js';
 import { PluginDatabaseHost, rootPluginId } from 'zhin.js';
 import { keywords, KEYWORD_STORAGE_REQUIREMENT } from '../src/keywords.js';
 import { createGroupSuiteRuntime, groupSuiteRuntimeToken } from '../src/runtime-state.js';
@@ -51,7 +55,7 @@ it.each(['ephemeral', 'persistent'])('rejects an oversized UTF-8 dictionary atom
   const reply = '😀'.repeat(500);
   await repository.update(store => { for (let i = 0; i < 32; i++) store.set(`k${i}`, reply); });
   expect(await repository.read()).toHaveLength(32);
-  await expect(repository.update(store => { store.set('overflow', reply); })).rejects.toThrow('below 64 KiB');
+  await expect(repository.update(store => { store.set('overflow', reply); })).rejects.toThrow('小于 64 KiB');
   expect(await repository.read()).toHaveLength(32);
 });
 
@@ -89,4 +93,27 @@ it('statistics card resolves metadata-only sender identity exactly like text rep
   const reply = await statsCard.execute({ input: metadataInput, config: resolveGroupSuiteConfig({}), use: () => runtime } as never);
   expect(reply).toMatchObject({ type: 'html' });
   expect((reply as { data: { html: string } }).data.html).toContain('我的排名');
+});
+
+
+it('localizes commands, their real command hint, tools and HTML without translating user content', async () => {
+  const runtime = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
+  const context = { input, locale: 'en', config: resolveGroupSuiteConfig({ ephemeralKeywords: true }),
+    params: {}, args: [], use: () => runtime, formatCommand: (path: string) => path === 'checkin' ? '!ops checkin' : undefined };
+  expect(await myPointsCommand.execute(context as never)).toContain('!ops checkin');
+  expect(await myPointsCommand.execute({ ...context, formatCommand: () => undefined } as never)).not.toContain('“checkin”');
+  expect(await checkinCommand.execute(context as never)).toContain('Checked in!');
+  expect(await myPointsCommand.execute(context as never)).toContain('Checked in today');
+  expect(await teachCommand.execute({ ...context, args: ['你好|您好，这是用户内容'] } as never)).toContain('Learned!');
+  expect(await tryTeachReply({ ...input, locale: 'en', content: '你好' }, context.config, runtime)).toBe('您好，这是用户内容');
+  expect(await keywordAdd.execute({ ...context, params: { keyword: '中文' }, args: ['保留原文'] } as never)).toContain('Keyword added: “中文” → “保留原文”');
+  expect(await keywordList.execute(context as never)).toContain('Keywords (1)');
+  recordMessage(input, runtime); await flushStatsBuffer(runtime);
+  const card = await statsCard.execute(context as never);
+  expect(JSON.stringify(card)).toContain("Today&#39;s group message statistics");
+  expect(JSON.stringify(card)).toContain('Participants');
+  expect(JSON.stringify(card)).not.toContain('排行榜');
+  const tool = { ...context, project, origin: { kind: 'im', platform: 'test', endpoint: 'memory', scope: 'group', sceneId: 'g1' } };
+  expect(await checkinQuery.execute({ user_id: 'u1' }, tool as never)).toContain('check-ins=1 days');
+  expect(await statsQuery.execute({}, tool as never)).toContain('Messages: 1');
 });

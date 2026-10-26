@@ -5,6 +5,11 @@
     "timezone": {
       "type": "string",
       "description": "解释 create 自然时间并显示提醒的 IANA 时区；ISO 绝对时间仍须显式 offset",
+      "x-i18n": {
+        "en": {
+          "description": "IANA timezone for natural reminder times and display. Absolute ISO times still require an explicit offset."
+        }
+      },
       "default": "UTC",
       "x-zhin-config": {
         "effect": "reload"
@@ -13,6 +18,11 @@
     "maxTasks": {
       "type": "number",
       "description": "每实例聊天个人提醒池的活跃任务上限；与管理员池独立，降低上限不删除既有任务",
+      "x-i18n": {
+        "en": {
+          "description": "Maximum active personal chat reminders per instance, separate from administrator tasks. Lowering the limit does not delete existing tasks."
+        }
+      },
       "default": 20,
       "minimum": 1,
       "maximum": 32,
@@ -24,6 +34,11 @@
     "adminMaxTasks": {
       "type": "number",
       "description": "每实例管理员提醒池的活跃任务上限（待执行、暂停或未确认）；与聊天池独立，两池总量可达上限之和",
+      "x-i18n": {
+        "en": {
+          "description": "Maximum active administrator reminders (scheduled, paused or unconfirmed) per instance. Separate from chat tasks; the two quotas are additive."
+        }
+      },
       "default": 20,
       "minimum": 1,
       "maximum": 32,
@@ -35,6 +50,11 @@
     "maxTasksPerSender": {
       "type": "number",
       "description": "同一发送者在同一会话的任务上限",
+      "x-i18n": {
+        "en": {
+          "description": "Maximum tasks per sender in the same conversation."
+        }
+      },
       "default": 10,
       "minimum": 1,
       "maximum": 10,
@@ -46,6 +66,11 @@
     "batchSize": {
       "type": "number",
       "description": "每次扫描最多投递的任务数",
+      "x-i18n": {
+        "en": {
+          "description": "Maximum tasks delivered in each scan."
+        }
+      },
       "default": 5,
       "minimum": 1,
       "maximum": 5,
@@ -57,6 +82,11 @@
     "missedGraceSeconds": {
       "type": "number",
       "description": "周期轮次超过此延迟后跳过；停机期间不补历史轮次",
+      "x-i18n": {
+        "en": {
+          "description": "Skip recurring runs delayed beyond this many seconds. Missed runs during downtime are not backfilled."
+        }
+      },
       "default": 15,
       "minimum": 5,
       "maximum": 60,

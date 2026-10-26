@@ -1,3 +1,4 @@
+import { type Locale } from 'zhin.js/i18n';
 import { SCENES } from './story-scenes.js';
 
 /** 区域中文名（用于地图 / 成就展示） */
@@ -54,25 +55,25 @@ export const ENDING_LABELS: Record<string, string> = {
 };
 
 /** 地图分区（便于 adv map 分组展示） */
-export const MAP_ZONES: Array<{ name: string; sceneIds: string[] }> = [
+export const MAP_ZONES: Array<{ name: string; nameEn: string; sceneIds: string[] }> = [
   {
-    name: '入口与塔',
+    name: '入口与塔', nameEn: 'Entrance and Tower',
     sceneIds: ['start', 'rubble', 'watchtower', 'observatory', 'vine_path'],
   },
   {
-    name: '主廊与泉',
+    name: '主廊与泉', nameEn: 'Corridor and Spring',
     sceneIds: ['corridor', 'mural_room', 'whisper_gallery', 'spring', 'flooded_hall', 'bell_tower'],
   },
   {
-    name: '庭院书库',
+    name: '庭院书库', nameEn: 'Garden and Library',
     sceneIds: ['garden', 'greenhouse', 'library', 'ember_forge'],
   },
   {
-    name: '冥域水线',
+    name: '冥域水线', nameEn: 'River of the Dead',
     sceneIds: ['market_ruins', 'ghost_bridge', 'crystal_cave', 'moon_pool', 'sunken_shrine'],
   },
   {
-    name: '墓穴深处',
+    name: '墓穴深处', nameEn: 'Deep Tombs',
     sceneIds: [
       'depths',
       'crypt_entry',
@@ -101,10 +102,62 @@ export function endingIds(): string[] {
     .map((s) => s.id);
 }
 
-export function regionLabel(id: string): string {
-  return REGION_LABELS[id] ?? ENDING_LABELS[id] ?? id;
+export function regionLabel(id: string, locale: Locale = 'zh-CN'): string {
+  return (locale === 'en' ? EN_REGION_LABELS : REGION_LABELS)[id] ?? endingLabel(id, locale);
 }
 
-export function endingLabel(id: string): string {
-  return ENDING_LABELS[id] ?? id;
+export function endingLabel(id: string, locale: Locale = 'zh-CN'): string {
+  return (locale === 'en' ? EN_ENDING_LABELS : ENDING_LABELS)[id] ?? id;
 }
+
+const EN_REGION_LABELS: Readonly<Record<string,string>> = {
+  "start": "Entrance to the Ruins",
+  "rubble": "Rubble Passage",
+  "watchtower": "Watchtower",
+  "observatory": "Observatory",
+  "vine_path": "Hidden Path",
+  "corridor": "Dark Corridor",
+  "mural_room": "Inscribed Mural",
+  "whisper_gallery": "Whispering Gallery",
+  "spring": "Spirit Spring",
+  "flooded_hall": "Flooded Hall",
+  "bell_tower": "Bell Tower",
+  "garden": "Ancient Garden",
+  "greenhouse": "Greenhouse",
+  "library": "Dusty Library",
+  "ember_forge": "Forge",
+  "market_ruins": "Ruined Market",
+  "ghost_bridge": "Ghost Bridge",
+  "crystal_cave": "Crystal Cave",
+  "moon_pool": "Moon Pool",
+  "sunken_shrine": "Sunken Shrine",
+  "depths": "Tomb Crossroads",
+  "crypt_entry": "Crypt Entrance",
+  "catacombs": "Catacombs",
+  "ossuary": "Ossuary",
+  "prison_cell": "Prison Cell",
+  "spider_nest": "Spider Nest",
+  "shadow_maze": "Shadow Maze",
+  "sealed_gates": "Sealed Chamber",
+  "vault": "Treasure Antechamber",
+  "vault_open": "Vault",
+  "throne_room": "Throne Room"
+};
+
+const EN_ENDING_LABELS: Readonly<Record<string,string>> = {
+  "treasure": "Treasure of the Ruins",
+  "ascension": "Starlight Restored",
+  "wisdom": "A Scholar's Return",
+  "curse": "The Price of Greed",
+  "escape": "Survival",
+  "defeat": "Fallen",
+  "coward": "A Coward's Return",
+  "hermit": "Garden Hermit",
+  "redemption": "A Spirit Set Free",
+  "drowned": "Cold-Water Slumber",
+  "spider": "Soul in a Cocoon",
+  "labyrinth": "Lost in the Maze",
+  "star_keeper": "Star Keeper's Oath",
+  "mask_king": "King of Masks",
+  "merchant": "The Merchant's Ending"
+};

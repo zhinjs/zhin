@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; user_id: number }>({
@@ -12,10 +13,10 @@ export default defineAgentTool<{ group_id: number; user_id: number }>({
   async execute({ group_id, user_id }, context) {
     const client = context.$client;
     const groupInfo= client.pickGroup(group_id);
-    if(!groupInfo) return { success: false, message: '目标群不存在' };
+    if(!groupInfo) return { success: false, message: t(context.locale, 'groupMissing') };
     const memberInfo= client.pickMember(group_id,user_id);
-    if(memberInfo) return { success: false, message: '目标成员已加入群' };
+    if(memberInfo) return { success: false, message: t(context.locale, 'memberExists') };
     await client.inviteFriend(group_id, user_id);
-    return { success: true, message: `已尝试邀请 ${user_id} 加入群 ${group_id}` };
+    return { success: true, message: t(context.locale, 'inviteAttempted', { p0: user_id, p1: group_id }) };
   },
 });

@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import type { CapabilityRoot } from '@zhin.js/feature-kit';
 import {
   DisposeStack,
   GenerationHandoffStack,
@@ -6,6 +7,8 @@ import {
   capabilityId,
   createGenerationAdmissionGate,
   createToken,
+  projectLocaleToken,
+  resolveLocale,
   PluginDatabaseHost,
   PluginOutboundHost,
   PluginScheduleHost,
@@ -59,6 +62,8 @@ export interface PluginConfigResolver {
 }
 
 export interface RootResourceContext {
+  /** Whether this generation has loaded a provider for the requested Feature. */
+  readonly hasFeature?: (feature: FeatureId | string) => boolean;
   /** Exact shadow generation being assembled; never inferred from a latest snapshot. */
   readonly generation: number;
   /** Exact projected candidate, available during handoff activation, never the committed previous generation. */
@@ -107,6 +112,7 @@ export class PluginScopeAssembler {
   #candidateSnapshot?: RuntimeSnapshot;
   readonly #primaryConfig: PrimaryConfig;
   #setupFeatureAliases: ReadonlyMap<string, FeatureId> = new Map();
+  #setupFeatureRoots: ReadonlyMap<FeatureId, readonly CapabilityRoot[]> = new Map();
 
   constructor(
     private readonly modules: ModuleRuntime,
@@ -139,8 +145,9 @@ export class PluginScopeAssembler {
     }
   }
 
-  installSetupFeatureAliases(aliases: ReadonlyMap<string, FeatureId>): void {
+  installSetupFeatureAliases(aliases: ReadonlyMap<string, FeatureId>, roots: ReadonlyMap<FeatureId, readonly CapabilityRoot[]>): void {
     this.#setupFeatureAliases = new Map(aliases);
+    this.#setupFeatureRoots = new Map(roots);
   }
 
   async setupTree(node: PluginGraphNode, signal: AbortSignal): Promise<void> {
@@ -157,6 +164,7 @@ export class PluginScopeAssembler {
     // New setup operations shadow a retained parent's construction-time value;
     // operation contexts read the immutable projection from their own snapshot.
     scope.provide(primaryConfigToken, this.#primaryConfig);
+    scope.provide(projectLocaleToken, resolveLocale(this.#primaryConfig.get('locale')));
     const register = <TDefinition>(
       feature: FeatureId | string,
       localName: string,
@@ -168,6 +176,7 @@ export class PluginScopeAssembler {
       scope.provide(rootGenerationAdmissionToken, this.#admission);
       const config = this.#primaryConfig;
       await this.installResources?.({
+        hasFeature: (feature) => this.#setupFeatureRoots.get(featureId(String(feature)))?.some(root => root.owner === node.id) ?? false,
         generation: this.generation,
         readCandidateSnapshot: () => {
           if (!this.#candidateSnapshot) throw new Error('Candidate snapshot is not projected yet');

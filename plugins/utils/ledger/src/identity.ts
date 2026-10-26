@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import { createDeliveryTarget, type DeliveryTarget } from 'zhin.js';
 import type { CommandMessage } from 'zhin.js/command';
 
@@ -5,6 +7,7 @@ import type { CommandMessage } from 'zhin.js/command';
 export interface LedgerCaller {
   /** Stable per-user key: adapter + endpoint (bot account) + sender id. */
   readonly ownerKey: string;
+  readonly locale?: Locale;
   readonly senderId: string;
   /** The conversation the command came from. */
   readonly conversation: DeliveryTarget;
@@ -21,9 +24,9 @@ export function ledgerOwnerKey(adapter: string, endpointId: string, senderId: st
 }
 
 /** Builds the caller from a command message; commands without a real sender are refused. */
-export function ledgerCaller(input: CommandMessage | undefined): LedgerCaller {
+export function ledgerCaller(input: CommandMessage | undefined, locale: Locale = resolveLocale(input?.locale)): LedgerCaller {
   const senderId = input?.sender?.id;
-  if (!input || !senderId) throw new LedgerInputError('记账需要在真实会话中由具体用户发送');
+  if (!input || !senderId) throw new LedgerInputError(t(locale, 'actor'));
   const conversation = createDeliveryTarget(input);
   const endpoint = conversation.endpoint;
   const isPrivate = conversation.kind === 'private';
@@ -33,6 +36,7 @@ export function ledgerCaller(input: CommandMessage | undefined): LedgerCaller {
   return {
     ownerKey: ledgerOwnerKey(endpoint.adapter, endpoint.id, senderId),
     senderId,
+    locale,
     conversation,
     privateTarget,
     isPrivate,

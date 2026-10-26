@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { reminderMessages as t } from './i18n.js';
 import { randomUUID } from 'node:crypto';
 import { createDeliveryTarget, type DeliveryTarget, type OutboundHost, type PluginStateStore } from 'zhin.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
@@ -9,13 +11,19 @@ export { MAX_DELAY_SECONDS, parseReminderInstant } from './timing.js';
 export const REMINDER_STATE_KEY = 'reminders/v1';
 export class ReminderInputError extends Error {}
 
+type ReminderDetailKey = 'userCancelled' | 'skipped' | 'unknown' | 'unconfirmed' | 'delivered' | 'deliveryFailed' | 'checkUnconfirmed';
+const detailKeys: readonly ReminderDetailKey[] = ['userCancelled', 'skipped', 'unknown', 'unconfirmed', 'delivered', 'deliveryFailed', 'checkUnconfirmed'];
+function taskDetail(locale: Locale | undefined, detailKey: ReminderDetailKey, failureCode?: string) {
+  return { detailKey, detail: t(locale, detailKey, { code: failureCode ?? '' }), failureCode: failureCode ?? null };
+}
+
 type TaskStatus = 'pending' | 'unknown' | 'delivered' | 'failed' | 'cancelled';
-export type ReminderActor = { readonly senderId: string; readonly target: DeliveryTarget };
+export type ReminderActor = { readonly senderId: string; readonly target: DeliveryTarget; readonly locale?: Locale };
 export type ReminderTask = {
   readonly id: string; readonly senderId: string; readonly target: DeliveryTarget;
-  readonly text: string; readonly createdAt: number; readonly nextRunAt: number;
+  readonly locale?: Locale; readonly text: string; readonly createdAt: number; readonly nextRunAt: number;
   readonly intervalMs: number | null; readonly status: TaskStatus;
-  readonly claimId: string | null; readonly lastRunAt: number | null; readonly detail: string;
+  readonly claimId: string | null; readonly lastRunAt: number | null; readonly detail: string; readonly detailKey?: ReminderDetailKey; readonly failureCode?: string | null;
 };
 export type ReminderBook = { readonly version: 1; readonly tasks: readonly ReminderTask[] };
 
@@ -29,50 +37,51 @@ export class ReminderService {
   #stopped = false;
   #administratorFirst = false;
 
-  constructor(state: PluginStateStore, outbound: OutboundHost, config: ReminderConfig) {
+  constructor(state: PluginStateStore, outbound: OutboundHost, config: ReminderConfig, projectLocale: Locale = 'zh-CN') {
     this.#state = state;
     this.#outbound = outbound;
     this.#config = config;
-    this.administratorTasks = new AdministratorReminderTasks(state, outbound, config);
+    this.administratorTasks = new AdministratorReminderTasks(state, outbound, config, projectLocale);
   }
 
   stop(): void { this.#stopped = true; this.administratorTasks.stop(); }
 
   async add(actor: ReminderActor, text: string, at: number, intervalMs: number | null): Promise<ReminderTask> {
-    this.#assertLive();
+    this.#assertLive(actor.locale);
     assertActor(actor);
     const now = Date.now();
-    if (!text.trim() || text.length > 500) throw new ReminderInputError('提醒内容须为 1–500 个字符');
-    if (!Number.isSafeInteger(at) || at <= now || at - now > MAX_DELAY_SECONDS * 1000) throw new ReminderInputError('提醒时间须在未来一年内');
-    if (intervalMs !== null && (!Number.isSafeInteger(intervalMs) || intervalMs < 60_000 || intervalMs > MAX_DELAY_SECONDS * 1000)) throw new ReminderInputError('周期须为 60 秒至一年');
+    const locale = resolveLocale(actor.locale);
+    if (!text.trim() || text.length > 500) throw new ReminderInputError(t(locale, 'contentInvalid'));
+    if (!Number.isSafeInteger(at) || at <= now || at - now > MAX_DELAY_SECONDS * 1000) throw new ReminderInputError(t(locale, 'futureRequired'));
+    if (intervalMs !== null && (!Number.isSafeInteger(intervalMs) || intervalMs < 60_000 || intervalMs > MAX_DELAY_SECONDS * 1000)) throw new ReminderInputError(t(locale, 'intervalInvalid'));
     const task: ReminderTask = { id: randomUUID(), senderId: actor.senderId, target: createDeliveryTarget({ conversation: actor.target }),
-      text, createdAt: now, nextRunAt: at, intervalMs, status: 'pending', claimId: null, lastRunAt: null, detail: '' };
+      locale, text, createdAt: now, nextRunAt: at, intervalMs, status: 'pending', claimId: null, lastRunAt: null, detail: '' };
     await this.#state.update<ReminderBook>(REMINDER_STATE_KEY, current => {
-      const book = readBook(current);
+      const book = readBook(current, locale);
       // Completed history is disposable; unconfirmed tasks require an explicit
       // user decision and continue to count against the storage quota.
       const active = book.tasks.filter(item => item.status === 'pending' || item.status === 'unknown');
-      if (active.length >= this.#config.maxTasks) throw new ReminderInputError('此插件实例的提醒数量已达上限，请先取消任务');
-      if (active.filter(item => sameActor(item, actor)).length >= this.#config.maxTasksPerSender) throw new ReminderInputError('你在此会话的提醒数量已达上限，请先取消任务');
+      if (active.length >= this.#config.maxTasks) throw new ReminderInputError(t(locale, 'instanceLimit'));
+      if (active.filter(item => sameActor(item, actor)).length >= this.#config.maxTasksPerSender) throw new ReminderInputError(t(locale, 'actorLimit'));
       const historyLimit = Math.max(0, this.#config.maxTasks - active.length - 1);
       const history = historyLimit > 0 ? book.tasks.filter(item => item.status !== 'pending' && item.status !== 'unknown').slice(-historyLimit) : [];
-      return boundedBook([...active, ...history, task]);
+      return boundedBook([...active, ...history, task], locale);
     });
     return task;
   }
 
   async list(actor: ReminderActor): Promise<readonly ReminderTask[]> {
-    this.#assertLive();
+    this.#assertLive(actor.locale);
     assertActor(actor);
-    return readBook(await this.#state.get<ReminderBook>(REMINDER_STATE_KEY)).tasks.filter(item => sameActor(item, actor));
+    return readBook(await this.#state.get<ReminderBook>(REMINDER_STATE_KEY), actor.locale).tasks.filter(item => sameActor(item, actor));
   }
 
   async cancel(actor: ReminderActor, id: string): Promise<boolean> {
-    this.#assertLive();
+    this.#assertLive(actor.locale);
     assertActor(actor);
     const book = await this.#state.update<ReminderBook>(REMINDER_STATE_KEY, current => ({ version: 1,
-      tasks: readBook(current).tasks.map(task => task.id === id && sameActor(task, actor)
-        ? { ...task, status: 'cancelled', detail: '用户取消；已经开始的投递无法撤销' } : task),
+      tasks: readBook(current, actor.locale).tasks.map(task => task.id === id && sameActor(task, actor)
+        ? { ...task, status: 'cancelled', ...taskDetail(task.locale, 'userCancelled') } : task),
     }));
     return !!book?.tasks.some(task => task.id === id && sameActor(task, actor) && task.status === 'cancelled');
   }
@@ -97,13 +106,13 @@ export class ReminderService {
           return { version: 1, tasks: readBook(current).tasks.map(task => {
             if (task.status !== 'pending' || task.nextRunAt > now) return task;
             if (task.intervalMs !== null && now - task.nextRunAt > this.#config.missedGraceSeconds * 1000) {
-              return { ...task, nextRunAt: nextPeriodicTime(task.nextRunAt, task.intervalMs, now), detail: '已跳过错过的周期轮次' };
+              return { ...task, nextRunAt: nextPeriodicTime(task.nextRunAt, task.intervalMs, now), ...taskDetail(task.locale, 'skipped') };
             }
             if (claimed) return task;
             claimed = true;
             // Persist the conservative disposition before touching the external
             // platform. A crash here cannot cause an automatic duplicate send.
-            return { ...task, status: 'unknown', claimId, lastRunAt: now, detail: '投递中或未确认；不会自动重试' };
+            return { ...task, status: 'unknown', claimId, lastRunAt: now, ...taskDetail(task.locale, 'unknown') };
           }) };
         });
         const task = book?.tasks.find(item => item.claimId === claimId);
@@ -116,38 +125,39 @@ export class ReminderService {
           continue;
         }
         let status: TaskStatus = 'unknown';
-        let detail = '平台未返回确认的消息 ID；不会自动重试';
+        let detail = taskDetail(task.locale, 'unconfirmed');
         try {
-          const id = await this.#outbound.sendTarget!(task.target, `⏰ 提醒：${task.text}`);
-          if (id) { status = task.intervalMs === null ? 'delivered' : 'pending'; detail = '已确认投递'; }
+          const id = await this.#outbound.sendTarget!(task.target, t(resolveLocale(task.locale), 'notification', { text: task.text }));
+          if (id) { status = task.intervalMs === null ? 'delivered' : 'pending'; detail = taskDetail(task.locale, 'delivered'); }
         } catch (error) {
           if (error instanceof EndpointDeliveryError && error.disposition !== 'unknown') {
-            status = 'failed'; detail = `投递失败：${error.code}；任务已停止`;
-          } else detail = '投递结果未确认；请核对目标会话后取消或重新创建';
+            status = 'failed'; detail = taskDetail(task.locale, 'deliveryFailed', error.code);
+          } else detail = taskDetail(task.locale, 'checkUnconfirmed');
         }
         await this.#state.update<ReminderBook>(REMINDER_STATE_KEY, current => ({ version: 1,
           tasks: readBook(current).tasks.map(item => item.id === task.id && item.claimId === claimId && item.status === 'unknown'
-            ? { ...item, status, detail, ...(status === 'pending' && task.intervalMs !== null
+            ? { ...item, status, ...detail, ...(status === 'pending' && task.intervalMs !== null
               ? { nextRunAt: nextPeriodicTime(task.nextRunAt, task.intervalMs, Date.now()) } : {}) } : item),
         }));
       }
     } finally { this.#working = false; }
   }
 
-  describe(task: ReminderTask): string {
-    const date = new Intl.DateTimeFormat('zh-CN', { timeZone: this.#config.timezone, dateStyle: 'short', timeStyle: 'medium' }).format(task.nextRunAt);
-    const state = { pending: '待触发', unknown: '投递中或未确认', delivered: '已完成', failed: '投递失败', cancelled: '已取消' }[task.status];
-    return `${task.id} | ${state} | ${date} (${this.#config.timezone})${task.intervalMs === null ? '' : ` | 每 ${task.intervalMs / 1000} 秒`}`
-      + `\n${task.text}${task.detail ? `\n${task.detail}` : ''}`;
+  describe(task: ReminderTask, locale: Locale = resolveLocale(task.locale)): string {
+    const date = new Intl.DateTimeFormat(locale, { timeZone: this.#config.timezone, dateStyle: 'short', timeStyle: 'medium' }).format(task.nextRunAt);
+    const state = t(locale, { pending: 'pending', unknown: 'unknownStatus', delivered: 'deliveredStatus', failed: 'failedStatus', cancelled: 'cancelledStatus' }[task.status] as 'pending' | 'unknownStatus' | 'deliveredStatus' | 'failedStatus' | 'cancelledStatus');
+    const detail = task.detailKey ? t(locale, task.detailKey, { code: task.failureCode ?? '' }) : task.detail;
+    return `${task.id} | ${state} | ${date} (${this.#config.timezone})${task.intervalMs === null ? '' : ` | ${t(locale, 'every', { seconds: task.intervalMs / 1000 })}`}`
+      + `\n${task.text}${detail ? `\n${detail}` : ''}`;
   }
 
-  #assertLive(): void { if (this.#stopped) throw new Error('提醒服务属于已停止的插件实例'); }
+  #assertLive(locale?: Locale): void { if (this.#stopped) throw new Error(t(locale, 'serviceStopped')); }
 }
 
 function sameActor(task: ReminderTask, actor: ReminderActor): boolean {
   return task.senderId === actor.senderId && JSON.stringify(task.target) === JSON.stringify(createDeliveryTarget({ conversation: actor.target }));
 }
-function readBook(value: ReminderBook | undefined): ReminderBook {
+function readBook(value: ReminderBook | undefined, locale?: Locale): ReminderBook {
   if (value === undefined) return { version: 1, tasks: [] };
   try {
     if (value.version !== 1 || !Array.isArray(value.tasks) || value.tasks.length > 32) throw new Error('Invalid book');
@@ -156,21 +166,24 @@ function readBook(value: ReminderBook | undefined): ReminderBook {
         || typeof task.text !== 'string' || !task.text.trim() || task.text.length > 500
         || !Number.isSafeInteger(task.createdAt) || !Number.isSafeInteger(task.nextRunAt)
         || (task.intervalMs !== null && (!Number.isSafeInteger(task.intervalMs) || task.intervalMs < 60_000 || task.intervalMs > MAX_DELAY_SECONDS * 1000))
+        || (task.locale !== undefined && task.locale !== 'zh-CN' && task.locale !== 'en')
+        || (task.detailKey !== undefined && !detailKeys.includes(task.detailKey))
+        || (task.failureCode != null && typeof task.failureCode !== 'string')
         || !['pending', 'unknown', 'delivered', 'failed', 'cancelled'].includes(task.status)
         || (task.claimId !== null && typeof task.claimId !== 'string')
         || (task.lastRunAt !== null && !Number.isSafeInteger(task.lastRunAt)) || typeof task.detail !== 'string') throw new Error('Invalid task');
       createDeliveryTarget({ conversation: task.target });
     }
     return boundedBook(value.tasks);
-  } catch { throw new Error('提醒持久状态格式无效，已停止投递'); }
+  } catch { throw new Error(t(locale, 'invalidState')); }
 }
-function boundedBook(tasks: readonly ReminderTask[]): ReminderBook {
+function boundedBook(tasks: readonly ReminderTask[], locale?: Locale): ReminderBook {
   const book: ReminderBook = { version: 1, tasks };
-  if (new TextEncoder().encode(JSON.stringify(book)).byteLength > 60 * 1024) throw new ReminderInputError('提醒存储达到大小上限，请先取消旧任务');
+  if (new TextEncoder().encode(JSON.stringify(book)).byteLength > 60 * 1024) throw new ReminderInputError(t(locale, 'storageLimit'));
   return book;
 }
 
 function assertActor(actor: ReminderActor): void {
-  if (!actor.senderId) throw new ReminderInputError('提醒需要真实发送者');
+  if (!actor.senderId) throw new ReminderInputError(t(actor.locale, 'toolSender'));
   createDeliveryTarget({ conversation: actor.target });
 }

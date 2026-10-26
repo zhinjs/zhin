@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import type { GameId } from '../types.js';
 import { loadDraws, type LotteryDb } from '../db.js';
 
@@ -102,24 +104,24 @@ function signedPct(delta: number): string {
   return v >= 0 ? `+${v.toFixed(1)}` : v.toFixed(1);
 }
 
-export function formatBacktestLine(s: BacktestSummary): string {
+export function formatBacktestLine(s: BacktestSummary, locale?: Locale): string {
   const w = formatWeights(s.finalWeights);
   return [
-    `${s.gameId}: 调优 ${pct(s.adaptiveAvgHitRate)}%`,
-    `固定 ${pct(s.fixedAvgHitRate)}%`,
-    `随机 ${pct(s.randomAvgHitRate)}%`,
-    `(Δ调优-随机 ${signedPct(s.adaptiveVsRandom)}%, n=${s.periods}, 热身${s.warmupPeriods}期)`,
-    `终权重 ${w}`,
+    t(locale, 'backtestAdaptive', { game: s.gameId, rate: pct(s.adaptiveAvgHitRate) }),
+    t(locale, 'backtestFixed', { rate: pct(s.fixedAvgHitRate) }),
+    t(locale, 'backtestRandom', { rate: pct(s.randomAvgHitRate) }),
+    t(locale, 'backtestDelta', { delta: signedPct(s.adaptiveVsRandom), count: s.periods, warmup: s.warmupPeriods }),
+    t(locale, 'finalWeights', { weights: w }),
   ].join(' / ');
 }
 
-export function formatBacktestSection(summaries: BacktestSummary[]): string {
+export function formatBacktestSection(summaries: BacktestSummary[], locale?: Locale): string {
   if (!summaries.length) return '';
   const lines = [
-    '【回测可信度】近 N 期 walk-forward 抽样（全量训练请用 lottery-train）',
-    ...summaries.map(formatBacktestLine),
-    '说明：Δ 接近 0 为正常；终权重见 lottery_model_weights。',
-    '推荐时若近端调优输给随机，将自动回退默认 F40/O35/T25（见【权重保护】）。',
+    t(locale, 'backtestTitle'),
+    ...summaries.map(summary => formatBacktestLine(summary, locale)),
+    t(locale, 'backtestNote'),
+    t(locale, 'backtestFallback'),
   ];
   return lines.join('\n');
 }

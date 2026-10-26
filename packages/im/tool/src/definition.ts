@@ -8,7 +8,7 @@ import type {
   OperationClientPort,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
-import type { DeliveryTarget } from '@zhin.js/plugin-runtime';
+import type { DeliveryTarget, Locale } from '@zhin.js/plugin-runtime';
 import { isToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
@@ -79,6 +79,8 @@ export type ToolInvocationOrigin =
   | Readonly<{ kind: 'mcp'; requestId: string }>;
 
 export interface ToolInvocationContext {
+  /** Trusted turn language; never inferred from model tool arguments. */
+  readonly locale?: Locale;
   readonly signal: AbortSignal;
   readonly traceId: string;
   readonly turnId: string;
@@ -99,6 +101,7 @@ export interface ToolExecutionContext<
   TConfig = unknown,
   TAdapter extends string | undefined = undefined,
 > extends CapabilityContext<TConfig> {
+  readonly locale: Locale;
   readonly signal: AbortSignal;
   readonly traceId: string;
   readonly turnId: string;

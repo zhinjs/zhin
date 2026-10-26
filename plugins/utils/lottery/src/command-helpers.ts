@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 import {
   lotteryEnabledGames,
   lotteryKl8,
@@ -10,9 +11,11 @@ import { formatPipelineReply, runLotteryPipeline, type PipelineDeps } from './pi
 export function buildPipelineDeps(
   raw: Partial<LotteryConfig> | undefined,
   db: LotteryDb,
+  locale?: Locale,
 ): PipelineDeps {
   const config = resolveLotteryConfig(raw);
   return {
+    locale,
     db,
     enabledGames: () => lotteryEnabledGames(config),
     historyLimit: config.historyLimit,

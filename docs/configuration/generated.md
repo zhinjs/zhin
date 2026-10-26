@@ -535,6 +535,7 @@ outline: [2, 3]
 | `assistant.events.rateLimitPerMinute` | number \| string \| null | 否 | — | 每来源每分钟最大请求数（默认 60） |
 | `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
+| `locale` | string: `"zh-CN"`, `"en"` | 否 | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
 
 ## 插件实例字段
 

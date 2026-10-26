@@ -12,6 +12,36 @@ import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-run
 import { Registry } from '@zhin.js/database';
 
 describe('DatabaseHost', () => {
+  it('applies only explicitly declared additive columns before exposing models, preserving old data across restarts', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-additive-columns-'));
+    const config = { dialect: 'sqlite' as const, filename: join(directory, 'test.sqlite') };
+    let host = createDatabaseHost(config);
+    const original = { id: { type: 'integer', primary: true }, text: { type: 'text' } };
+    const updated = { ...original, locale: { type: 'text', length: 16, nullable: true } };
+    try {
+      host.define('tasks', original);
+      await host.start();
+      await host.models.get('tasks')!.insert({ id: 1, text: 'preserved' });
+      await host.stop();
+      for (let run = 0; run < 2; run++) {
+        host = createDatabaseHost(config);
+        host.define('tasks', updated, { addColumns: ['locale'] });
+        expect(host.models.get('tasks')).toBeUndefined();
+        await host.start();
+        host.define('tasks', updated, { addColumns: ['locale'] });
+        expect(await host.models.get('tasks')!.select('id', 'text', 'locale')).toEqual([{ id: 1, text: 'preserved', locale: null }]);
+        await host.stop();
+      }
+    } finally { await host.stop(); await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it('rejects undeclared, destructive or unfillable additions before touching the database', () => {
+    const host = createDatabaseHost({ dialect: 'sqlite', filename: ':memory:' });
+    expect(() => host.define('tasks', {}, { addColumns: ['missing'] })).toThrow('must be declared');
+    expect(() => host.define('tasks', { id: { type: 'integer', primary: true, default: 1 } }, { addColumns: ['id'] })).toThrow('primary key');
+    expect(() => host.define('tasks', { required: { type: 'text', nullable: false } }, { addColumns: ['required'] })).toThrow('nullable or defaulted');
+    expect(host.tables()).toEqual([]);
+  });
   it.each(['mysql', 'pg'] as const)('passes only connection options to the %s factory', (dialect) => {
     const factory = vi.spyOn(Registry, 'create');
     try {

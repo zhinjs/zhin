@@ -2,7 +2,7 @@ import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import { HttpBodyError, extractBearerToken, readJsonBody, type HttpHost } from '@zhin.js/host-http';
 import {
   GenerationAdmissionGate, generationAdmissionSource, normalizeDeliveryTarget,
-  PluginTaskError, pluginTaskProviderToken,
+  PluginTaskError, pluginTaskProviderToken, createMessages, isLocale, resolveLocale, type Locale,
   type CapabilityId, type DeliveryTarget, type JsonValue, type PluginId,
   type PluginTask, type PluginTaskAction, type PluginTaskMutationReceipt, type PluginTaskProvider, type PluginTaskSnapshot,
   type RuntimeSnapshot, type SnapshotLease, type SnapshotReader,
@@ -10,7 +10,18 @@ import {
 import type { ConsolePluginTask, ConsolePluginTaskProvider } from '@zhin.js/console-protocol';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { writeJson } from './http-response.js';
-import { pluginUseCases } from '../../plugin-management/use-cases.js';
+import { listPluginUseCases } from '../../plugin-management/use-cases.js';
+
+const taskMessages = createMessages({
+  auth: { 'zh-CN': "请配置并使用有效的 full scope Bearer Token 管理管理员任务", en: "Configure and use a valid full-scope Bearer Token to manage administrator tasks." },
+  body: { 'zh-CN': "请求正文无效或超过 64 KiB 上限", en: "The request body is invalid or exceeds 64 KiB." },
+  invalid_input: { 'zh-CN': "任务参数无效，请核对字段与目标", en: "Invalid task parameters. Check the fields and destination." },
+  conflict: { 'zh-CN': "运行代或任务版本已变化，请刷新后核对；不要盲目重试", en: "The generation or task revision changed. Refresh and reconcile before retrying." },
+  not_found: { 'zh-CN': "任务服务或目标不存在", en: "The task service or destination does not exist." },
+  unsupported: { 'zh-CN': "目标或操作不支持此任务", en: "This task is not supported for the destination or operation." },
+  unavailable: { 'zh-CN': "任务服务未就绪或返回了无效数据", en: "The task service is not ready or returned invalid data." },
+  internal_error: { 'zh-CN': "任务操作失败，请核对任务与请求回执后再决定是否重试", en: "The task operation failed. Check the task and request receipt before deciding whether to retry." },
+});
 
 const BODY_LIMIT = 64 * 1024;
 const OUTPUT_LIMIT = 2 * 1024 * 1024;
@@ -21,15 +32,19 @@ const states = new Set(['scheduled', 'paused', 'running', 'unknown', 'succeeded'
 /** Administrator task commands use the exact current owner service, never a parallel scheduler or transaction store. */
 export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; base: string; snapshots?: SnapshotReader }>): void {
   const { http, base, snapshots } = options;
-  http.route('GET', `${base}/tasks/use-cases`, (request, response, _url, authScope) => {
-    if (authorize(request, response, http, authScope)) send(response, pluginUseCases);
+  http.route('GET', `${base}/tasks/use-cases`, (request, response, url, authScope) => {
+    const displayLocale = resolveLocale(url.searchParams.get('locale'));
+    if (!authorize(request, response, http, authScope, displayLocale)) return;
+    try { send(response, listPluginUseCases(queryLocale(url))); }
+    catch (error) { failure(response, error, displayLocale); }
   }, { summary: 'List practical plugin use cases', tags: ['tasks'], description: 'Static metadata only; no plugin execution, configuration changes or message delivery.' });
   http.route('GET', `${base}/tasks/providers`, async (request, response, url, authScope) => {
-    if (!authorize(request, response, http, authScope)) return;
-    if ([...url.searchParams].length) { failure(response, new PluginTaskError('invalid_input', 'query')); return; }
+    const displayLocale = resolveLocale(url.searchParams.get('locale'));
+    if (!authorize(request, response, http, authScope, displayLocale)) return;
     let lease: SnapshotLease | undefined;
     const releases: Array<() => void> = [];
     try {
+      const locale = queryLocale(url);
       lease = acquire(snapshots);
       const snapshot = lease.value;
       const providers = [...snapshot.tree.keys()].flatMap(owner => {
@@ -40,18 +55,20 @@ export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; bas
       // Admit the entire read before the first await, so HMR cannot mix generations.
       for (const { provider } of providers) releases.push(...admit(provider));
       const rows: ConsolePluginTaskProvider[] = [];
-      for (const { owner, provider } of providers) rows.push(projectProvider(snapshot, owner, provider, await callProvider(() => provider.read())));
+      for (const { owner, provider } of providers) rows.push(projectProvider(snapshot, owner, provider, await callProvider(() => provider.read({ locale })), locale));
       send(response, { generation: snapshot.generation, providers: rows });
-    } catch (error) { failure(response, error); }
+    } catch (error) { failure(response, error, displayLocale); }
     finally { releases.reverse().forEach(release => release()); lease?.release(); }
   }, { summary: 'List administrator task providers', tags: ['tasks'], description: 'Read-only task facts. This does not probe or confirm delivery to a platform.' });
 
-  for (const operation of ['create', 'change'] as const) http.route('POST', `${base}/tasks/${operation}`, async (request, response, _url, authScope) => {
-    if (!authorize(request, response, http, authScope)) return;
+  for (const operation of ['create', 'change'] as const) http.route('POST', `${base}/tasks/${operation}`, async (request, response, url, authScope) => {
+    let displayLocale = resolveLocale(url.searchParams.get('locale'));
+    if (!authorize(request, response, http, authScope, displayLocale)) return;
     let lease: SnapshotLease | undefined;
     const releases: Array<() => void> = [];
     try {
       const input = parseMutation(await readJsonBody(request, { limit: BODY_LIMIT }), operation);
+      displayLocale = resolveLocale(input.locale);
       lease = acquire(snapshots);
       const snapshot = lease.value;
       if (input.generation !== snapshot.generation) throw new PluginTaskError('conflict', 'generation');
@@ -62,26 +79,35 @@ export function registerPluginTaskRoutes(options: Readonly<{ http: HttpHost; bas
       const provider = requireProvider(value);
       if (operation === 'create') validateEndpoint(snapshot, input.target!);
       releases.push(...admit(provider));
-      const mutation = { requestId: input.requestId, expectedRevision: input.expectedRevision };
+      const mutation = { requestId: input.requestId, expectedRevision: input.expectedRevision,
+        ...(input.locale === undefined ? {} : { locale: input.locale }) };
       // The provider owns durable CAS and idempotency. In particular, never read+404
       // before change: a repeated cancel may only exist in the durable receipt log.
       const result = await callProvider(() => operation === 'create'
         ? provider.create({ ...mutation, target: input.target!, parameters: input.parameters! })
         : provider.change({ ...mutation, id: input.id!, action: input.action!,
           ...(input.parameters === undefined ? {} : { parameters: input.parameters }) }));
-      send(response, { generation: snapshot.generation, provider: projectProvider(snapshot, owner, provider, result) });
-    } catch (error) { failure(response, error); }
+      send(response, { generation: snapshot.generation, provider: projectProvider(snapshot, owner, provider, result, input.locale) });
+    } catch (error) { failure(response, error, displayLocale); }
     finally { releases.reverse().forEach(release => release()); lease?.release(); }
   }, { summary: `${operation === 'create' ? 'Create' : 'Change'} an administrator task`, tags: ['tasks'],
     description: 'Full-scope, generation-checked persistent task command. Request UUID and revision are reconciled by the provider. No test messages or blind retries.' });
 }
 
-function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string): boolean {
+function queryLocale(url: URL): Locale {
+  if ([...url.searchParams.keys()].some(key => key !== 'locale') || url.searchParams.getAll('locale').length > 1
+    || url.searchParams.has('locale') && !isLocale(url.searchParams.get('locale'))) {
+    throw new PluginTaskError('invalid_input', 'query');
+  }
+  return resolveLocale(url.searchParams.get('locale'));
+}
+
+function authorize(request: IncomingMessage, response: ServerResponse, http: HttpHost, scope: string, locale: Locale): boolean {
   response.setHeader('cache-control', 'no-store');
   const token = extractBearerToken(request.headers.authorization, null);
   const explicit = http.tokenRegistry.resolve(token);
   if (scope === 'full' && explicit === 'full') return true;
-  writeJson(response, explicit === 'demo' ? 403 : 401, { success: false, code: 'forbidden', error: '请配置并使用有效的 full scope Bearer Token 管理管理员任务' });
+  writeJson(response, explicit === 'demo' ? 403 : 401, { success: false, code: 'forbidden', error: taskMessages(locale, 'auth') });
   return false;
 }
 function acquire(snapshots?: SnapshotReader): SnapshotLease {
@@ -128,14 +154,14 @@ function validateEndpoint(snapshot: RuntimeSnapshot, target: DeliveryTarget): vo
 }
 
 interface MutationInput {
-  generation: number; owner: string; requestId: string; expectedRevision: string;
+  generation: number; owner: string; requestId: string; expectedRevision: string; locale?: Locale;
   target?: DeliveryTarget; parameters?: Readonly<Record<string, JsonValue>>; id?: string; action?: PluginTaskAction;
 }
 function parseMutation(value: unknown, operation: 'create' | 'change'): MutationInput {
   const input = record(value);
   fields(input, operation === 'create'
-    ? ['generation', 'owner', 'requestId', 'expectedRevision', 'target', 'parameters']
-    : ['generation', 'owner', 'requestId', 'expectedRevision', 'id', 'action', 'parameters']);
+    ? ['generation', 'owner', 'requestId', 'expectedRevision', 'target', 'parameters', 'locale']
+    : ['generation', 'owner', 'requestId', 'expectedRevision', 'id', 'action', 'parameters', 'locale']);
   if (!Number.isSafeInteger(input.generation) || Number(input.generation) < 0) invalid();
   const owner = string(input.owner, 512);
   if (!/^root(?:\/[a-z0-9][a-z0-9-]*)*$/u.test(owner)) invalid();
@@ -143,7 +169,8 @@ function parseMutation(value: unknown, operation: 'create' | 'change'): Mutation
   if (!UUID.test(requestId)) invalid();
   const expectedRevision = string(input.expectedRevision, 256);
   if (hasControl(expectedRevision)) invalid();
-  const common = { generation: input.generation as number, owner, requestId, expectedRevision };
+  if (input.locale !== undefined && !isLocale(input.locale)) invalid();
+  const common = { generation: input.generation as number, owner, requestId, expectedRevision, locale: input.locale as Locale | undefined };
   if (operation === 'create') return { ...common, target: target(input.target), parameters: jsonRecord(input.parameters) };
   if (!actions.has(input.action as string)) invalid();
   if (input.parameters !== undefined && input.action !== 'update') invalid();
@@ -159,7 +186,7 @@ function target(value: unknown): DeliveryTarget {
   try { return normalizeDeliveryTarget(input); } catch { return invalid(); }
 }
 
-function projectProvider(runtime: RuntimeSnapshot, owner: PluginId, provider: PluginTaskProvider, snapshot: PluginTaskSnapshot): ConsolePluginTaskProvider {
+function projectProvider(runtime: RuntimeSnapshot, owner: PluginId, provider: PluginTaskProvider, snapshot: PluginTaskSnapshot, locale: Locale = 'zh-CN'): ConsolePluginTaskProvider {
   try {
     if (!snapshot || !Array.isArray(snapshot.tasks) || snapshot.tasks.length > 500 || !Array.isArray(snapshot.receipts) || snapshot.receipts.length > 500) invalid();
     const revision = string(snapshot.revision, 256);
@@ -179,9 +206,11 @@ function projectProvider(runtime: RuntimeSnapshot, owner: PluginId, provider: Pl
       if (!receipt || !UUID.test(receipt.requestId) || receipt.operation !== 'create' && !actions.has(receipt.operation)) invalid();
       return { requestId: receipt.requestId, taskId: string(receipt.taskId, 200), operation: receipt.operation };
     });
-    if (!Array.isArray(provider.effects) || provider.effects.length > 20) invalid();
-    return { owner, packageName: string(runtime.tree.get(owner)?.packageName, 512), title: string(provider.title, 200), description: string(provider.description, 2000, true),
-      schema: jsonRecord(provider.schema), effects: provider.effects.map(effect => string(effect, 1000)), revision, tasks, receipts };
+    const display = provider.i18n?.[locale];
+    const effects = display?.effects ?? provider.effects;
+    if (!Array.isArray(effects) || effects.length > 20) invalid();
+    return { owner, packageName: string(runtime.tree.get(owner)?.packageName, 512), title: string(display?.title ?? provider.title, 200), description: string(display?.description ?? provider.description, 2000, true),
+      schema: jsonRecord(provider.schema), effects: effects.map(effect => string(effect, 1000)), revision, tasks, receipts };
   } catch { throw new PluginTaskError('unavailable', 'invalid provider snapshot'); }
 }
 function timestamp(value: unknown): number {
@@ -232,16 +261,13 @@ function send(response: ServerResponse, data: unknown): void {
   if (Buffer.byteLength(JSON.stringify(data)) > OUTPUT_LIMIT) throw new PluginTaskError('unavailable', 'response bound');
   writeJson(response, 200, { success: true, data });
 }
-function failure(response: ServerResponse, error: unknown): void {
+function failure(response: ServerResponse, error: unknown, locale: Locale): void {
   if (error instanceof HttpBodyError) {
-    writeJson(response, error.statusCode, { success: false, code: 'invalid_input', error: '请求正文无效或超过 64 KiB 上限' });
+    writeJson(response, error.statusCode, { success: false, code: 'invalid_input', error: taskMessages(locale, 'body') });
     return;
   }
   const code = error instanceof PluginTaskError ? error.code : 'internal_error';
   const statuses = { invalid_input: 400, conflict: 409, not_found: 404, unsupported: 400, unavailable: 503, internal_error: 500 };
-  const messages = { invalid_input: '任务参数无效，请核对字段与目标', conflict: '运行代或任务版本已变化，请刷新后核对；不要盲目重试',
-    not_found: '任务服务或目标不存在', unsupported: '目标或操作不支持此任务', unavailable: '任务服务未就绪或返回了无效数据',
-    internal_error: '任务操作失败，请核对任务与请求回执后再决定是否重试' };
   writeJson(response, statuses[code], { success: false, code,
-    error: error instanceof ProviderTaskError && error.message ? error.message : messages[code] });
+    error: error instanceof ProviderTaskError && error.message ? error.message : taskMessages(locale, code) });
 }

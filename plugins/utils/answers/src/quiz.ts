@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages } from './messages.js';
 import { randomInt } from 'node:crypto';
 import { QUIZ_LETTERS, type QuizLetter, type QuizQuestion } from './quiz-types.js';
 
@@ -15,6 +17,7 @@ export interface QuizConversationInput {
 }
 
 export interface PendingQuiz {
+  readonly locale?: Locale;
   readonly kind: QuizKind;
   readonly question: QuizQuestion;
   readonly expiresAt: number;
@@ -57,19 +60,20 @@ export function pickQuestion(bank: readonly QuizQuestion[], exceptId?: string): 
   return question;
 }
 
-export function formatQuestion(kind: QuizKind, question: QuizQuestion, timeoutSeconds: number): string {
-  const head = kind === 'fun' ? '😴 好无聊？请听题！' : '🚗 科目一小测，请听题！';
+export function formatQuestion(kind: QuizKind, question: QuizQuestion, timeoutSeconds: number, locale: Locale = 'zh-CN'): string {
+  const head = messages(locale, kind);
   const options = question.options.map((option, index) => `${QUIZ_LETTERS[index]}. ${option}`);
   const letters = QUIZ_LETTERS.slice(0, question.options.length).join('/');
   return [`${head}【${question.category}】`, '', question.question, '', ...options, '',
-    `直接回复 ${letters} 作答，${timeoutSeconds} 秒内有效。`].join('\n');
+    messages(locale, 'answer', { letters, seconds: timeoutSeconds })].join('\n');
 }
 
 export function formatJudgement(judgement: QuizJudgement): string {
   const { question, kind } = judgement.pending;
+  const locale = resolveLocale(judgement.pending.locale);
   const answerText = `${question.answer}. ${question.options[QUIZ_LETTERS.indexOf(question.answer)]}`;
-  const verdict = judgement.correct ? '✅ 答对了！' : `❌ 答错了，正确答案是 ${answerText}`;
-  const footer = kind === 'driving' ? '\n（原创题面，依据公开法规整理，仅供娱乐参考，以现行规定为准）' : '';
+  const verdict = judgement.correct ? messages(locale, 'correct') : messages(locale, 'incorrect', { answer: answerText });
+  const footer = kind === 'driving' ? messages(locale, 'drivingFooter') : '';
   return `${verdict}\n💡 ${question.explanation}${footer}`;
 }
 
@@ -79,12 +83,12 @@ export class QuizService {
   readonly #lastQuestion = new Map<string, string>();
   #disposed = false;
 
-  ask(key: string, kind: QuizKind, bank: readonly QuizQuestion[], timeoutSeconds: number, now = Date.now()): QuizQuestion {
+  ask(key: string, kind: QuizKind, bank: readonly QuizQuestion[], timeoutSeconds: number, now = Date.now(), locale: Locale = 'zh-CN'): QuizQuestion {
     this.#assertLive();
     this.sweep(now);
     const question = pickQuestion(bank, this.#lastQuestion.get(key));
     this.#pending.delete(key);
-    this.#pending.set(key, { kind, question, expiresAt: now + timeoutSeconds * 1000 });
+    this.#pending.set(key, { kind, question, locale, expiresAt: now + timeoutSeconds * 1000 });
     this.#lastQuestion.delete(key);
     this.#lastQuestion.set(key, question.id);
     while (this.#pending.size > MAX_PENDING_QUIZZES) this.#pending.delete(this.#pending.keys().next().value!);

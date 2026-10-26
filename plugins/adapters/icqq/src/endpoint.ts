@@ -67,6 +67,7 @@ export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedIcqqConfig;
   readonly loginAssist: LoginAssist;
+  readonly locale?: import('zhin.js/i18n').Locale;
 }
 
 const BOUND_EVENTS = [
@@ -699,6 +700,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
     this.#logSystemEvent(`login.${step}`, event);
     void runIcqqLoginAssistStep({
       assist: this.#options.loginAssist,
+      locale: this.#options.locale,
       client: this.client,
       adapter: 'icqq',
       endpointKey: this.endpointName,

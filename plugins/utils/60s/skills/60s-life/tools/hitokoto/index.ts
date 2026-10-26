@@ -9,6 +9,6 @@ export default defineAgentTool<{ type?: string }>({
   tags: ["语录", "文学", "随机"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/hitokoto.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -16,6 +17,6 @@ export default defineAgentTool<{ guild_id: string; user_id: string; role_id: str
   async execute({ guild_id, user_id, role_id  }: { guild_id: string; user_id: string; role_id: string }, context) {
     const client = context.$client;
     const success = await client.pickGuildMember(guild_id, user_id).revoke(role_id);
-    return { success, message: success ? `已撤销用户 ${user_id} 的角色 ${role_id}` : '撤销角色失败' };
+    return { success, message: success ? t(context.locale, 'roleRevoked', { p0: user_id, p1: role_id }) : t(context.locale, 'roleRevokeFailed') };
   },
 });

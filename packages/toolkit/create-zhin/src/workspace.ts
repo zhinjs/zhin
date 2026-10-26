@@ -1,3 +1,4 @@
+import { wizardText } from '@zhin.js/scaffold-wizard';
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -22,7 +23,7 @@ import {
 } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
 import { CREATE_NODE_REQUIREMENT } from './node-requirement.js';
-import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE, AGENTS_MD_TEMPLATE, ASSISTANT_PROFILE_YML_EXAMPLE } from './templates/bootstrap.js';
+import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from './templates/bootstrap.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -49,37 +50,15 @@ function getConfigFilename(format: InitOptions['config']): string {
   }
 }
 
-function renderDatabaseReadme(database: DatabaseConfig | undefined, configFilename: string): string {
+function renderDatabaseReadme(database: DatabaseConfig | undefined, configFilename: string, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
   if (!database) return '';
   if (database.dialect === 'sqlite') {
-    return `
-## 🗄️ 数据库
-
-当前使用 SQLite，文件路径在 \`${configFilename}\` 的 \`database.filename\` 中配置，不需要连接环境变量。
-如需切换数据库，运行 \`npx zhin setup --database\`。
-`;
+    return wizardText(locale, "templates.databaseSqlite", [configFilename]);
   }
   if (database.dialect === 'memory') {
-    return `
-## 🗄️ 数据库
-
-当前使用进程内 Memory 数据库，仅适合测试，进程退出后数据不会保留。需要持久化时运行
-\`npx zhin setup --database\` 切换到 SQLite 或网络数据库。
-`;
+    return wizardText(locale, "templates.databaseMemory");
   }
-  return `
-## 🗄️ 数据库
-
-当前使用 \`${database.dialect}\`。连接字段在 \`${configFilename}\` 中引用环境变量，实际值保存在项目根目录 \`.env\`；
-\`.env.example\` 列出了该方言需要的变量，可复制后填写。启动前先确认数据库服务已创建目标数据库并允许当前机器连接，然后执行：
-
-\`\`\`bash
-npx zhin config check
-pnpm dev
-\`\`\`
-
-若端口、主机或数据库名为空，重新运行 \`npx zhin setup --database\`。PostgreSQL 的方言名固定为 \`pg\`。
-`;
+  return wizardText(locale, "templates.databaseNetwork", [database.dialect, configFilename]);
 }
 
 /** 未显式配置适配器时默认挂载 Sandbox（对齐 examples/test-bot 的 sandbox 实例） */
@@ -102,6 +81,7 @@ function resolveAdapterResult(options: InitOptions): AdapterSetupResult {
 }
 
 export async function createWorkspace(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
+  const locale = options.locale;
   const configFilename = getConfigFilename(options.config);
   const adapters = resolveAdapterResult(options);
   const aiEnabled = options.ai?.enabled === true;
@@ -210,8 +190,8 @@ export async function createWorkspace(projectPath: string, projectName: string, 
   if (aiEnabled) {
     await fs.writeFile(path.join(projectPath, 'SOUL.md'), SOUL_MD_TEMPLATE);
     await fs.writeFile(path.join(projectPath, 'TOOLS.md'), TOOLS_MD_TEMPLATE);
-    await fs.writeFile(path.join(projectPath, 'AGENTS.md'), AGENTS_MD_TEMPLATE);
-    await fs.writeFile(path.join(projectPath, 'assistant.profile.yml.example'), ASSISTANT_PROFILE_YML_EXAMPLE);
+    await fs.writeFile(path.join(projectPath, 'AGENTS.md'), wizardText(locale, 'templates.agentInstructions'));
+    await fs.writeFile(path.join(projectPath, 'assistant.profile.yml.example'), wizardText(locale, 'templates.assistantProfile'));
   }
 
   // 创建内置技能
@@ -228,32 +208,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
 
   // 创建 systemd service 配置（Linux）：当前目录用 npx 启动，不写死 nvm/node 路径
   await fs.writeFile(path.join(projectPath, `${projectName}.service`),
-`[Unit]
-Description=${projectName} - Zhin.js Endpoint
-After=network.target
-
-[Service]
-Type=simple
-User=%i
-WorkingDirectory=${path.resolve(projectPath)}
-ExecStart=/usr/bin/env npx zhin runtime start --mode production --no-watch
-Restart=always
-RestartSec=10s
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=${projectName}
-
-# 环境变量（确保 PATH 含 node/npx，如 /usr/local/bin）
-Environment="NODE_ENV=production"
-EnvironmentFile=${path.resolve(projectPath, '.env')}
-
-# 资源限制
-LimitNOFILE=65536
-MemoryMax=2G
-
-[Install]
-WantedBy=multi-user.target
-`);
+wizardText(locale, "templates.systemd", [projectName, path.resolve(projectPath), projectName, path.resolve(projectPath, '.env')]));
 
   // 创建 launchd plist 配置（macOS）：当前目录用 npx 启动，不写死 nvm/node 路径
   await fs.writeFile(path.join(projectPath, `com.zhinjs.${projectName}.plist`),
@@ -307,68 +262,7 @@ WantedBy=multi-user.target
 
   // 创建 Windows NSSM 安装脚本（PowerShell）
   await fs.writeFile(path.join(projectPath, 'install-service.ps1'),
-`# Windows 服务安装脚本（使用 NSSM）
-# 需要管理员权限运行
-
-$ServiceName = '${projectName}'
-$ProjectPath = '${path.resolve(projectPath)}'
-
-# 当前目录使用 npx 启动，不依赖 nvm 等固定 node 路径
-$NpxArgs = "runtime start --mode production --no-watch"
-
-# 检查 NSSM 是否安装
-if (-not (Get-Command nssm -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ 未找到 NSSM，请先安装：" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "方式一：使用 Chocolatey" -ForegroundColor Yellow
-    Write-Host "  choco install nssm" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "方式二：使用 Scoop" -ForegroundColor Yellow
-    Write-Host "  scoop install nssm" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "方式三：手动下载" -ForegroundColor Yellow
-    Write-Host "  https://nssm.cc/download" -ForegroundColor Cyan
-    exit 1
-}
-
-Write-Host "🔧 安装 Windows 服务: $ServiceName" -ForegroundColor Green
-
-# 停止并删除已存在的服务
-$existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($existingService) {
-    Write-Host "⚠️  服务已存在，先删除..." -ForegroundColor Yellow
-    nssm stop $ServiceName
-    nssm remove $ServiceName confirm
-}
-
-# 安装服务（npx 在项目目录下启动）
-nssm install $ServiceName npx zhin $NpxArgs
-
-# 配置服务
-nssm set $ServiceName AppDirectory $ProjectPath
-nssm set $ServiceName AppEnvironmentExtra "NODE_ENV=production"
-nssm set $ServiceName DisplayName "Zhin.js Endpoint - $ServiceName"
-nssm set $ServiceName Description "Zhin.js 聊天机器人服务"
-nssm set $ServiceName Start SERVICE_AUTO_START
-nssm set $ServiceName AppStdout "$ProjectPath\\logs\\nssm-stdout.log"
-nssm set $ServiceName AppStderr "$ProjectPath\\logs\\nssm-stderr.log"
-nssm set $ServiceName AppRotateFiles 1
-nssm set $ServiceName AppRotateOnline 1
-nssm set $ServiceName AppRotateBytes 10485760
-
-Write-Host ""
-Write-Host "✅ 服务安装成功！" -ForegroundColor Green
-Write-Host ""
-Write-Host "📝 管理命令：" -ForegroundColor Yellow
-Write-Host "  启动服务: nssm start $ServiceName" -ForegroundColor Cyan
-Write-Host "  停止服务: nssm stop $ServiceName" -ForegroundColor Cyan
-Write-Host "  重启服务: nssm restart $ServiceName" -ForegroundColor Cyan
-Write-Host "  查看状态: nssm status $ServiceName" -ForegroundColor Cyan
-Write-Host "  卸载服务: nssm remove $ServiceName confirm" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "🚀 启动服务：" -ForegroundColor Yellow
-Write-Host "  nssm start $ServiceName" -ForegroundColor Cyan
-`);
+wizardText(locale, "templates.windowsService", [projectName, path.resolve(projectPath)]));
 
   // 创建 Windows Task Scheduler XML（备选方案）
   await fs.writeFile(path.join(projectPath, `${projectName}-task.xml`),
@@ -473,128 +367,11 @@ data/
 
   // 创建 README.md
   await fs.writeFile(path.join(projectPath, 'README.md'),
-`# ${projectName}
-
-使用 Zhin.js Plugin Runtime 创建的机器人项目（约定式插件：\`plugin.ts\` + \`commands/\` + \`components/\`）。
-
-## 📁 项目结构
-
-\`\`\`
-${projectName}/
-├── plugin.ts              # definePlugin()，根插件入口
-├── schema.json            # 根插件配置契约（JSON Schema）
-├── ${configFilename}     # Host 配置 + plugins 包映射 + 顶层实例配置
-├── commands/
-│   ├── hello/index.ts     # /hello 命令（defineCommand）
-│   └── card/index.ts      # /card -> component("status-card")
-├── components/
-│   └── status-card/index.tsx # defineComponent()，JSX 状态卡片
-├── middlewares/           # 消息中间件（约定目录）
-├── pages/
-│   ├── index/index.tsx    # Console 页面（/）
-│   ├── nav/index.tsx      # 最近插件导航布局
-│   └── footer/index.tsx   # 最近插件页脚布局
-├── tools/                 # <name>/index.ts AI 工具入口
-├── skills/                # <name>/SKILL.md，可同目录放参考资料与脚本
-├── agents/                # <name>/agent.json + 核心 Markdown 子 Agent 目录
-├── plugins/               # 本地子插件 workspace（仅一级）
-├── packages/              # 贡献给 Zhin 的 Feature workspace
-├── package.json           # zhin 清单（protocol 1 / features）
-├── tsconfig.json
-└── pnpm-workspace.yaml
-\`\`\`
-
-\`package.json#zhin.features\` 声明包所需的 Feature provider。
-\`${configFilename}\` 使用 \`configVersion: 2\`：\`plugins\` 映射实例名到插件包，\`disable_plugins\` 列出停用实例，业务参数放在顶层同名实例块。
-根项目默认声明 page/layout Feature；它们只提供发现与拓扑契约，浏览器构建器并不作为项目依赖安装。
-
-${renderDatabaseReadme(options.database, configFilename)}
-
-## 🚀 快速开始
-
-### 开发模式
-
-\`\`\`bash
-pnpm dev          # zhin runtime start（监听文件变更，热重载）
-\`\`\`
-
-1. 确认终端里 Runtime 已启动（HTTP Host 一般为 \`http://127.0.0.1:8068\`）。
-2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 填 \`http://127.0.0.1:8068\`，Token 填 \`.env\` 的 \`HTTP_TOKEN\`。
-3. 进入 **Sandbox / 沙盒** 页并连接，发送 \`/hello\`；收到回复即首跑成功。
-4. 若连接失败，先运行 \`npx zhin doctor\` 查看修复建议。
-
-### 生产模式
-
-\`\`\`bash
-pnpm start        # zhin runtime start --mode production --no-watch（前台）
-pnpm pm2:start    # 或使用 PM2 守护
-\`\`\`
-
-也可以使用随项目生成的 systemd / launchd / NSSM 服务配置（命令均为 \`zhin runtime start --mode production --no-watch\`）。
-
-### 启用 AI（可选）
-
-首跑默认是 IM-only，不依赖 Ollama 或任何云模型。跑通 Sandbox 后再启用 AI：
-
-\`\`\`bash
-npx zhin setup --ai
-pnpm install
-pnpm dev
-\`\`\`
-
-本地模型用户请先启动 Ollama 并 pull 对应模型；云模型用户按向导把 API Key 写入 \`.env\`。
-
-## 🔌 插件开发
-
-### 新增命令
-
-在 \`commands/<name>/index.ts\` 创建入口文件（默认导出 \`defineCommand\`）。同目录其他文件是普通模块，可以被入口自由导入：
-
-\`\`\`typescript
-import { defineCommand } from 'zhin.js/command';
-
-export default defineCommand({
-  description: '打招呼',
-  execute: () => '你好！',
-});
-\`\`\`
-
-### Console 页面与布局
-
-在 \`pages/<name>/index.tsx\` 新增页面：\`pages/index/index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
-\`pages/nav/index.tsx\` 与 \`pages/footer/index.tsx\` 分别覆盖当前插件及其子插件的最近导航、页脚布局。
-页面元数据必须用 \`@zhin.js/console-contract\` 的 \`definePage\` 声明；默认示例不依赖 React 或浏览器构建工具。
-
-### 接入更多平台
-
-\`\`\`bash
-npx zhin setup --adapters   # 选择平台并写入主配置的插件声明与同名业务配置
-\`\`\`
-
-## 🤖 AI Agent
-
-如果初始化时启用了 AI，配置会写入 \`${configFilename}\` 的 \`ai:\` 段，API Key 会写入 \`.env\`。
-启用后 \`tools/<name>/index.ts\` 默认导出的 \`defineAgentTool\` 会被 Agent 自动发现；辅助模块与入口共置在命名目录中。
-
-## ✅ 验证项目
-
-\`\`\`bash
-pnpm build        # tsc --noEmit 类型检查
-pnpm dev -- --once  # 启动一个 generation 自检后退出
-\`\`\`
-
-## 📚 文档
-
-- [官方文档](https://zhin.js.org)
-- [GitHub](https://github.com/zhinjs/zhin)
-
-## 许可证
-
-MIT License
-`);
+wizardText(locale, "templates.projectReadme", [projectName, projectName, configFilename, configFilename, renderDatabaseReadme(options.database, configFilename, locale), configFilename]));
 }
 
 async function createRuntimeProjectFiles(projectPath: string, projectName: string, options: InitOptions): Promise<void> {
+  const locale = options.locale;
   const aiEnabled = options.ai?.enabled === true;
 
   await Promise.all([
@@ -609,28 +386,18 @@ async function createRuntimeProjectFiles(projectPath: string, projectName: strin
   ]);
 
   // 创建 .env 文件（使用简单的变量名）
-  const databaseEnvVars = options.database ? generateDatabaseEnvVars(options.database) : '';
-  const databaseEnvExample = options.database ? generateDatabaseEnvExample(options.database) : '';
-  const adapterEnvVars = options.adapters ? generateAdapterEnvVars(options.adapters) : '';
-  const aiEnvVars = options.ai ? generateAIEnvVars(options.ai) : '';
+  const databaseEnvVars = options.database ? generateDatabaseEnvVars(options.database, locale) : '';
+  const databaseEnvExample = options.database ? generateDatabaseEnvExample(options.database, locale) : '';
+  const adapterEnvVars = options.adapters ? generateAdapterEnvVars(options.adapters, locale) : '';
+  const aiEnvVars = options.ai ? generateAIEnvVars(options.ai, locale) : '';
   await fs.writeFile(path.join(projectPath, '.env'),
-`# HTTP 服务配置（Web 控制台 Token 认证）
-HTTP_TOKEN=${formatEnvValue(options.httpToken)}${databaseEnvVars}${adapterEnvVars}${aiEnvVars}
-`);
+wizardText(locale, "templates.environment", [formatEnvValue(options.httpToken), databaseEnvVars, adapterEnvVars, aiEnvVars]));
   await fs.writeFile(path.join(projectPath, '.env.development'),
-`# 调试模式
-DEBUG=true
-NODE_ENV=development
-`);
+wizardText(locale, "templates.environmentDevelopment"));
   await fs.writeFile(path.join(projectPath, '.env.production'),
-`# 调试模式
-DEBUG=false
-NODE_ENV=production
-`);
+wizardText(locale, "templates.environmentProduction"));
   await fs.writeFile(path.join(projectPath, '.env.example'),
-`# HTTP 服务配置（复制为 .env 后填写真实 Token）
-HTTP_TOKEN=change-me${databaseEnvExample}
-`);
+wizardText(locale, "templates.environmentExample", [databaseEnvExample]));
 
   // tsconfig.json（独立项目，对齐 examples/minimal-bot 的编译选项）
   await fs.writeJson(path.join(projectPath, 'tsconfig.json'), {
@@ -721,81 +488,21 @@ export default function ProjectFooter({ owner }: FooterSlotProps) {
 
   // commands/hello/index.ts
   await fs.outputFile(path.join(projectPath, 'commands', 'hello', 'index.ts'),
-`import { defineCommand } from 'zhin.js/command';
-
-export default defineCommand({
-  description: '打招呼',
-  execute: () => [
-    '你好！欢迎使用 Zhin.js！',
-    '试试 /card 查看状态卡片。',
-    '启用 AI：npx zhin setup --ai，然后在 Sandbox 发 ai: 你好',
-  ].join('\\n'),
-});
-`);
+wizardText(locale, "templates.helloCommand"));
 
   // commands/card/index.ts（组件渲染示例，对齐 examples/minimal-bot）
   await fs.outputFile(path.join(projectPath, 'commands', 'card', 'index.ts'),
-`import { defineCommand } from 'zhin.js/command';
-import { component } from 'zhin.js/component';
-
-export default defineCommand({
-  description: '渲染 JSX 状态卡片',
-  execute: () => {
-    const memory = process.memoryUsage();
-    return component('status-card', {
-      title: '${projectName}',
-      lines: [
-        { label: 'RSS', value: \`\${Math.round(memory.rss / 1024 / 1024)}MB\` },
-        { label: 'Heap', value: \`\${Math.round(memory.heapUsed / 1024 / 1024)}MB\` },
-      ],
-    });
-  },
-});
-`);
+wizardText(locale, "templates.cardCommand", [projectName]));
 
   // components/status-card/index.tsx
   await fs.outputFile(path.join(projectPath, 'components', 'status-card', 'index.tsx'),
-`import { defineComponent } from 'zhin.js/component';
-import type { JSXRenderable } from 'zhin.js/jsx';
-import { CardCanvas, Card, CardHeader, Row, StatChip } from '@zhin.js/components';
-
-interface StatusCardProps {
-  readonly title: JSXRenderable;
-  readonly lines: readonly { readonly label: JSXRenderable; readonly value: JSXRenderable }[];
-}
-
-export default defineComponent<StatusCardProps>({
-  previewProps: { title: '服务状态', lines: [{ label: 'RSS', value: '42MB' }, { label: '任务', value: 0 }] },
-  render({ title, lines }) {
-    return (
-      <html><CardCanvas>
-        <Card>
-          <CardHeader title={title} subtitle="${projectName}" />
-          <Row gap={8}>
-            {lines.map((line) => <StatChip label={line.label} value={line.value} />)}
-          </Row>
-        </Card>
-      </CardCanvas></html>
-    );
-  },
-});
-`);
+wizardText(locale, "templates.statusCard", [projectName]));
 
   // tools/echo/index.ts（AI 启用时生成，defineAgentTool 约定目录）
   if (aiEnabled) {
     await fs.ensureDir(path.join(projectPath, 'tools', 'echo'));
     await fs.writeFile(path.join(projectPath, 'tools', 'echo', 'index.ts'),
-`import { defineAgentTool } from '@zhin.js/tool';
-import { z } from 'zod';
-
-export default defineAgentTool<{ message: string }>({
-  description: '回显一条消息（defineAgentTool 示例）',
-  inputSchema: z.object({ message: z.string().min(1) }),
-  async execute({ message }) {
-    return \`echo: \${message}\`;
-  },
-});
-`);
+wizardText(locale, "templates.echoTool"));
   }
 
   // 生活助手模板额外文件
@@ -803,16 +510,7 @@ export default defineAgentTool<{ message: string }>({
     // knowledge 目录
     await fs.ensureDir(path.join(projectPath, 'knowledge'));
     await fs.writeFile(path.join(projectPath, 'knowledge', 'faq.md'),
-`# 常见问题
-
-## 如何添加新知识？
-
-在 \`knowledge/\` 目录下创建 \`.md\` 文件即可。下次查询时自动发现。
-
-## 如何更换 AI 模型？
-
-修改 \`zhin.config.yml\` 中 \`ai.agents.zhin.model\` 字段。
-`);
+wizardText(locale, "templates.knowledgeFaq"));
 
     // 三层记忆目录骨架
     await fs.ensureDir(path.join(projectPath, 'data', 'memory', 'global'));
@@ -821,53 +519,16 @@ export default defineAgentTool<{ message: string }>({
 
     // 覆盖 SOUL.md 为生活助手人设
     await fs.writeFile(path.join(projectPath, 'SOUL.md'),
-`# 你是谁
-
-你是一个生活助手。你善于聊天、记住用户喜好、查询知识库、设置提醒。
-
-## 性格
-
-- 友好、耐心、有条理
-- 回答简洁，不啰嗦
-- 遇到不确定的事情会诚实说"我不确定"
-
-## 能力
-
-1. **日常聊天** — 回答问题、闲聊、推荐
-2. **知识检索** — 使用 \`knowledge_search\` 查询本地知识库
-3. **记忆** — 记住用户告诉你的偏好和事实
-4. **时间感知** — 使用 \`get_current_time\` 了解当前时间
-
-## 限制
-
-- 你不是代码助手，不写代码
-- 你不执行危险的 bash 命令
-`);
+wizardText(locale, "templates.lifeAssistantSoul"));
 
     // 生活助手命令与工具（工具需 AI 启用才挂载 @zhin.js/tool feature）
     await fs.outputFile(path.join(projectPath, 'commands', 'remind', 'index.ts'),
-`import { defineCommand } from 'zhin.js/command';
-
-export default defineCommand({
-  description: '设置提醒',
-  execute: ({ args }) => \`✅ 已记录提醒：\${args.join(' ')}\`,
-});
-`);
+wizardText(locale, "templates.reminderCommand"));
 
     if (aiEnabled) {
       await fs.ensureDir(path.join(projectPath, 'tools', 'get_current_time'));
       await fs.writeFile(path.join(projectPath, 'tools', 'get_current_time', 'index.ts'),
-`import { defineAgentTool } from '@zhin.js/tool';
-import { z } from 'zod';
-
-export default defineAgentTool({
-  description: '获取当前日期和时间',
-  inputSchema: z.object({}),
-  async execute() {
-    return new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-  },
-});
-`);
+wizardText(locale, "templates.currentTimeTool"));
     }
   }
 

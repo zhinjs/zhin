@@ -1,8 +1,9 @@
+import { resolveLocale } from 'zhin.js/i18n';
+import { messages as t, sourceName as displayName } from '../../src/i18n.js';
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import { sessionKey, resolveMessageIds } from '../../src/session.js';
 import { shareMusicDetail, buildMusicShareSegment } from '../../src/music-lib.js';
-import { SOURCE_DISPLAY_NAME } from '../../src/config.js';
 import { musicRuntimeToken } from '../../src/runtime.js';
 
 export default defineMiddleware<Message>({
@@ -20,7 +21,7 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    const key = sessionKey(ids.endpointId, ids.conversationId, ids.senderId);
+    const key = sessionKey(ids.conversation, ids.senderId);
     const runtime = context.use(musicRuntimeToken);
     const pending = runtime.sessions.get(key);
     if (!pending) {
@@ -28,9 +29,10 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    if (raw === '取消') {
+    const locale = resolveLocale(pending.locale);
+    if (raw === (locale === 'en' ? 'cancel' : '取消')) {
       runtime.sessions.delete(key);
-      await context.input.$reply('已取消点歌');
+      await context.input.$reply(t(locale, 'cancelSelection'));
       return;
     }
 
@@ -42,16 +44,17 @@ export default defineMiddleware<Message>({
 
     runtime.sessions.delete(key);
     const selected = pending.results[num - 1]!;
-    const sourceName = SOURCE_DISPLAY_NAME[selected.source] ?? selected.source;
+    const sourceName = displayName(selected.source, locale) ?? selected.source;
 
     const detailResult = await shareMusicDetail(
       runtime,
       selected.id,
       selected.source,
+      locale,
     );
     if (!detailResult.success) {
       await context.input.$reply(
-        `[${sourceName}] 获取"${selected.title}"播放信息失败：${detailResult.error}`,
+        t(locale, 'detailFailed', { source: sourceName, title: selected.title, error: detailResult.error }),
       );
       return;
     }

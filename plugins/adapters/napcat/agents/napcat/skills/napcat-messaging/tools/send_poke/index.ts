@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -13,6 +14,6 @@ export default defineAgentTool<{ user_id: number; group_id?: number }>({
   async execute({ user_id, group_id }: { user_id: number; group_id?: number }, context) {
     const endpoint = context.$client;
       await endpoint.sendPoke(user_id, group_id);
-      return { success: true, message: `已戳 ${user_id}` };
+      return { success: true, message: t(context.locale, 'userPoked', { p0: user_id }) };
   },
 });

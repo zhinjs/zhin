@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 /**
  * 微信 iLink（ClawBot）扫码登录流程 — 向导内联实现。
  * 协议与 plugins/adapters/weixin-ilink/src/login.ts 一致（SSOT），
@@ -70,7 +71,7 @@ function buildBaseInfo(): Record<string, string> {
  * 微信 iLink 扫码登录：获取二维码 → 展示 → 长轮询直至 confirmed。
  * 成功返回 bot_token 等凭证；过期/超时/网络失败抛 IlinkQrLoginError。
  */
-export async function loginWithIlinkQr(options: IlinkQrLoginOptions): Promise<IlinkQrLoginResult> {
+export async function loginWithIlinkQr(options: IlinkQrLoginOptions, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<IlinkQrLoginResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const apiBaseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
@@ -90,7 +91,7 @@ export async function loginWithIlinkQr(options: IlinkQrLoginOptions): Promise<Il
     qr = await res.json() as QrCodeResponse;
   } catch (error) {
     throw new IlinkQrLoginError(
-      `获取登录二维码失败：${error instanceof Error ? error.message : String(error)}`,
+      wizardText(locale, "获取登录二维码失败：{v0}", [error instanceof Error ? error.message : String(error)]),
       'network',
     );
   }
@@ -130,7 +131,7 @@ export async function loginWithIlinkQr(options: IlinkQrLoginOptions): Promise<Il
 
     if (status.status === 'confirmed' || status.status === 'binded_redirect') {
       if (!status.bot_token) {
-        throw new IlinkQrLoginError('扫码成功但未返回 bot_token，请重试或改用手动输入', 'protocol');
+        throw new IlinkQrLoginError(wizardText(locale, "扫码成功但未返回 bot_token，请重试或改用手动输入"), 'protocol');
       }
       return {
         botToken: status.bot_token,
@@ -141,11 +142,11 @@ export async function loginWithIlinkQr(options: IlinkQrLoginOptions): Promise<Il
     }
 
     if (status.status === 'expired') {
-      throw new IlinkQrLoginError('二维码已过期', 'expired');
+      throw new IlinkQrLoginError(wizardText(locale, "二维码已过期"), 'expired');
     }
 
     await sleep(POLL_INTERVAL_MS);
   }
 
-  throw new IlinkQrLoginError('微信扫码登录超时', 'timeout');
+  throw new IlinkQrLoginError(wizardText(locale, "微信扫码登录超时"), 'timeout');
 }

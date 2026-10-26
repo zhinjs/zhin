@@ -1,3 +1,4 @@
+import { createMessages, resolveLocale } from 'zhin.js/i18n';
 import {
   GameSessionConflictError,
   SessionRevisionConflictError,
@@ -29,7 +30,7 @@ export async function startDungeon(
     const session = await service.createSession(message);
     return buildDungeonView(session, stateFromSession(session), message.$channel.type);
   } catch (error) {
-    if (error instanceof GameSessionConflictError) return error.message;
+    if (error instanceof GameSessionConflictError) return error.format(message.locale);
     throw error;
   }
 }
@@ -38,8 +39,9 @@ export async function continueDungeon(
   service: SessionService,
   message: GameMessageLike,
 ): Promise<GameReply> {
+  const locale = resolveLocale(message.locale);
   const session = await service.getActiveByChannel(channelKey(message));
-  if (!session) return '当前频道没有进行中的地牢远征。发送「地牢 开始」创建队伍。';
+  if (!session) return messages(locale, 'text1');
   return buildDungeonView(session, stateFromSession(session), message.$channel.type);
 }
 
@@ -49,19 +51,21 @@ export async function handleDungeonChoice(
   sessionToken: string,
   choiceId: string,
 ): Promise<GameReply> {
+  let locale = resolveLocale(message.locale);
   const token = parseDungeonSessionToken(sessionToken);
-  if (!token) return '无效的地牢操作。';
+  if (!token) return messages(locale, 'text2');
   const session = await service.getById(token.sessionId);
   if (!session || session.channel_key !== channelKey(message)) {
-    return '远征不存在，或不属于当前频道。';
+    return messages(locale, 'text3');
   }
+  locale = resolveLocale(session.locale);
   if (choiceId === 'restart') {
-    if (session.status === 'active') return '当前远征尚未结束。';
-    if (session.owner_id !== message.$sender.id) return '只有原队长可以重新创建远征。';
+    if (session.status === 'active') return messages(locale, 'text4');
+    if (session.owner_id !== message.$sender.id) return messages(locale, 'text5');
     return startDungeon(service, message);
   }
   const action = actionFromChoice(choiceId, message);
-  if (!action) return '未知的地牢操作。';
+  if (!action) return messages(locale, 'text6');
   try {
     const result = await service.performAction({
       sessionId: session.id,
@@ -77,21 +81,19 @@ export async function handleDungeonChoice(
       message.$channel.type,
     );
   } catch (error) {
-    if (error instanceof DungeonRuleError
-      || error instanceof GameSessionConflictError) {
-      return error.message;
-    }
+    if (error instanceof DungeonRuleError) return error.message;
+    if (error instanceof GameSessionConflictError) return error.format(locale);
     if (error instanceof SessionRevisionConflictError) {
       const latest = await service.getById(session.id);
-      if (!latest) return '远征状态已变化，请重新打开当前界面。';
+      if (!latest) return messages(locale, 'text7');
       const view = buildDungeonView(
         latest,
         stateFromSession(latest),
         message.$channel.type,
       );
       return Array.isArray(view)
-        ? ['操作来自旧回合，已为你刷新最新状态。', ...view]
-        : ['操作来自旧回合，已为你刷新最新状态。', view];
+        ? [messages(locale, 'text8'), ...view]
+        : [messages(locale, 'text8'), view];
     }
     throw error;
   }
@@ -124,3 +126,14 @@ function actionFromChoice(
   if (choiceId === 'abort') return { type: 'abort' };
   return null;
 }
+
+const messages = createMessages({
+  text1: { 'zh-CN': "当前频道没有进行中的地牢远征。", en: "There is no active dungeon expedition in this channel." },
+  text2: { 'zh-CN': "无效的地牢操作。", en: "Invalid dungeon action." },
+  text3: { 'zh-CN': "远征不存在，或不属于当前频道。", en: "The expedition does not exist or belongs to another channel." },
+  text4: { 'zh-CN': "当前远征尚未结束。", en: "The current expedition has not ended." },
+  text5: { 'zh-CN': "只有原队长可以重新创建远征。", en: "Only the original leader may restart the expedition." },
+  text6: { 'zh-CN': "未知的地牢操作。", en: "Unknown dungeon action." },
+  text7: { 'zh-CN': "远征状态已变化，请重新打开当前界面。", en: "The expedition state changed. Reopen its current view." },
+  text8: { 'zh-CN': "操作来自旧回合，已为你刷新最新状态。", en: "This action was from an earlier turn. The latest state is shown below." },
+});

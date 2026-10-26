@@ -1,7 +1,8 @@
+import { sandboxText, type SandboxLocale } from './messages.js';
 import React, { useEffect, useRef, useState } from 'react';
 
 /** HTML stays in an opaque-origin frame; only the size reporter can run scripts. */
-export default function HtmlMessage({ html }: { readonly html: string }) {
+export default function HtmlMessage({ html, locale = 'zh-CN' }: { readonly html: string; readonly locale?: SandboxLocale }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [nonce] = useState(createHtmlMessageNonce);
   const [height, setHeight] = useState(240);
@@ -24,7 +25,7 @@ export default function HtmlMessage({ html }: { readonly html: string }) {
 
   return <iframe
     ref={frame}
-    title="HTML 消息"
+    title={sandboxText(locale, "HTML 消息")}
     sandbox="allow-scripts"
     srcDoc={srcDoc}
     className="block w-full min-w-0 border-0 rounded-lg my-1 bg-transparent"

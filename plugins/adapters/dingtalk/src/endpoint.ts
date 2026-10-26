@@ -169,9 +169,9 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async send({ conversation, payload, locale }: EndpointSendRequest): Promise<string> {
     try {
-      const card = this.#cards.prepare(this.config, conversation, payload);
+      const card = this.#cards.prepare(this.config, conversation, payload, locale);
       if (card) {
         let stage = 'token';
         let httpStatus: number | undefined;
@@ -202,7 +202,7 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
           throw error;
         }
       }
-      const content = formatOutboundBody(payload);
+      const content = formatOutboundBody(payload, locale);
       const session = this.#sessionWebhooks.get(conversation.id);
       const sessionWebhook = session && session.expiresAt > Date.now() ? session.url : undefined;
       if (session && !sessionWebhook) this.#sessionWebhooks.delete(conversation.id);

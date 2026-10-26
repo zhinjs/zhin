@@ -135,7 +135,7 @@ async function runSubagentTurn(
     origin: parentTurn.origin,
     principal: parentTurn.principal,
     intent: Object.freeze({ kind: 'new' as const }),
-    input: Object.freeze({ text: run.task }),
+    input: Object.freeze({ text: run.task, locale: parentTurn.input.locale, commandPrefix: parentTurn.input.commandPrefix, commandMenu: parentTurn.input.commandMenu }),
     session: Object.freeze({ key: sessionKey }),
     policy,
     capabilities: Object.freeze({

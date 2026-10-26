@@ -1,3 +1,4 @@
+import { type Locale } from 'zhin.js/i18n';
 import { achievementById, ACHIEVEMENTS, totalAchievements } from './achievements.js';
 import {
   endingIds,
@@ -18,45 +19,46 @@ export function formatProgressCompact(profile: AdvProfileRow): string {
   return `🗺️ ${visited}/${totalRegions}  ·  🎬 ${endings}/${totalEndings}  ·  🏅 ${achievements}/${totalAchievements()}`;
 }
 
-export function formatMapProgress(profile: AdvProfileRow): string {
+export function formatMapProgress(profile: AdvProfileRow, locale: Locale = 'zh-CN'): string {
   const visited = parseStringSet(profile.visited_scenes);
   const total = playableSceneIds().length;
   const pct = total ? Math.round((visited.size / total) * 100) : 0;
   const lines = [
-    `🗺️ **探索进度** ${visited.size}/${total}（${pct}%）`,
+    `🗺️ **${locale === 'en' ? 'Exploration' : '探索进度'}** ${visited.size}/${total} (${pct}%)`,
     '',
   ];
 
   for (const zone of MAP_ZONES) {
     const parts = zone.sceneIds.map((id) => {
       const mark = visited.has(id) ? '✅' : '⬜';
-      return `${mark} ${regionLabel(id)}`;
+      return `${mark} ${regionLabel(id, locale)}`;
     });
-    lines.push(`**${zone.name}**`);
+    lines.push(`**${locale === 'en' ? zone.nameEn : zone.name}**`);
     lines.push(parts.join('  '));
     lines.push('');
   }
 
   const endings = parseStringSet(profile.endings_seen);
   const allEndings = endingIds();
-  lines.push(`**结局图鉴** ${endings.size}/${allEndings.length}`);
+  lines.push(`**${locale === 'en' ? 'Endings' : '结局图鉴'}** ${endings.size}/${allEndings.length}`);
   lines.push(
     allEndings
-      .map((id) => `${endings.has(id) ? '✅' : '⬜'} ${endingLabel(id)}`)
+      .map((id) => `${endings.has(id) ? '✅' : '⬜'} ${endingLabel(id, locale)}`)
       .join('  '),
   );
   return lines.join('\n').trimEnd();
 }
 
-export function formatAchievements(profile: AdvProfileRow, showHidden = false): string {
+export function formatAchievements(profile: AdvProfileRow, showHidden = false, locale: Locale = 'zh-CN'): string {
   const unlocked = parseStringSet(profile.achievements);
   const lines = [
-    `🏅 **成就** ${unlocked.size}/${totalAchievements()}`,
-    `完成局数：${profile.runs_completed}  ·  生涯步数：${profile.total_steps}`,
+    `🏅 **${locale === 'en' ? 'Achievements' : '成就'}** ${unlocked.size}/${totalAchievements()}`,
+    locale === 'en' ? `Completed adventures: ${profile.runs_completed} · Lifetime steps: ${profile.total_steps}` : `完成局数：${profile.runs_completed}  ·  生涯步数：${profile.total_steps}`,
     '',
   ];
 
-  for (const def of ACHIEVEMENTS) {
+  for (const entry of ACHIEVEMENTS) {
+    const def = achievementById(entry.id, locale)!;
     const got = unlocked.has(def.id);
     if (def.hidden && !got && !showHidden) continue;
     const mark = got ? '✅' : '⬜';
@@ -65,11 +67,11 @@ export function formatAchievements(profile: AdvProfileRow, showHidden = false): 
   return lines.join('\n');
 }
 
-export function formatNewAchievements(ids: string[]): string {
+export function formatNewAchievements(ids: string[], locale: Locale = 'zh-CN'): string {
   if (!ids.length) return '';
-  const lines = ['', '🏅 **新成就解锁！**'];
+  const lines = ['', locale === 'en' ? '🏅 **New achievement unlocked!**' : '🏅 **新成就解锁！**'];
   for (const id of ids) {
-    const def = achievementById(id);
+    const def = achievementById(id, locale);
     if (def) lines.push(`${def.icon} ${def.title} — ${def.description}`);
   }
   return lines.join('\n');

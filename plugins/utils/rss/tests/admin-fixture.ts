@@ -18,7 +18,8 @@ import type { RssConfig } from '../src/feed.js';
 export const target = { endpoint: { adapter: 'sandbox', id: 'root/sandbox\0zhin.adapter\0main~123' }, kind: 'channel', id: 'room',
   parent: { kind: 'channel', id: 'guild' }, threadId: 'topic' } as const;
 
-export async function rssFixture(options: { persistence?: boolean; outbound?: boolean; scheduler?: boolean; exactSend?: boolean; rssConfig?: Partial<RssConfig> } = {}) {
+export async function rssFixture(options: { persistence?: boolean; outbound?: boolean; scheduler?: boolean; exactSend?: boolean; locale?: 'zh-CN' | 'en'; rssConfig?: Partial<RssConfig> } = {}) {
+  let projectLocale = options.locale ?? 'zh-CN';
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-admin-rss-')));
   const modules = new Map<string, unknown>();
   const write = async (relative: string, value: unknown, module = false) => {
@@ -40,7 +41,7 @@ export async function rssFixture(options: { persistence?: boolean; outbound?: bo
     if (!modules.has(source)) throw new Error(`Missing fixture module ${source}`); return modules.get(source) as T;
   }, async close() {} };
   const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader,
-    config: { configVersion: 2, plugins: { alpha: '@test/rss', beta: '@test/rss' }, ...(options.rssConfig ? { alpha: options.rssConfig, beta: options.rssConfig } : {}) },
+    config: { configVersion: 2, locale: projectLocale, plugins: { alpha: '@test/rss', beta: '@test/rss' }, ...(options.rssConfig ? { alpha: options.rssConfig, beta: options.rssConfig } : {}) },
     environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission, handoff }) {
       const db = options.persistence === false ? { ...database, state: undefined } : database;
       resources.provide(databaseRootHostToken, db); resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), db, admission));
@@ -78,12 +79,12 @@ export async function rssFixture(options: { persistence?: boolean; outbound?: bo
     return errors;
   };
   const chat = async (definition: typeof list | typeof remove, params: Record<string, string> = {}) => definition.execute({
-    owner: {} as never, generation: runtime.snapshot.generation, config: {}, args: [], params,
+    owner: {} as never, generation: runtime.snapshot.generation, config: {}, args: [], params, locale: options.locale ?? 'zh-CN', formatCommand: (path: string) => path,
     input: { conversation: { kind: 'group', id: 'chat' }, clientAdapter: 'sandbox', endpointId: 'chat-account', sender: { id: 'alice', name: 'Alice' } },
     use: (token: unknown) => { if (token === rssRuntimeToken) return rss(); throw new Error('unexpected token'); },
   } as never);
   return { project, get runtime() { return runtime; }, database, active, jobs, send, provider, state, storage, rss, tick, hmr, chat,
-    async restart() { await runtime.stop(); await database.stop(); runtime = makeRuntime(); await runtime.start(); },
+    async restart(locale: 'zh-CN' | 'en' = projectLocale) { await runtime.stop(); await database.stop(); projectLocale = locale; runtime = makeRuntime(); await runtime.start(); },
     async close() { await runtime.stop(); await database.stop(); await rm(project, { recursive: true, force: true }); },
   };
 }

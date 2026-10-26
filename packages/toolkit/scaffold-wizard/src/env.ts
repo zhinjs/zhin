@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import type { DatabaseConfig } from './types.js';
 
 /**
@@ -63,13 +64,13 @@ export function mergeEnvText(existing: string, extra: string): string {
 }
 
 /** 生成数据库连接环境变量（连接参数落 .env，配置文件只引用 ${VAR}）。 */
-export function generateDatabaseEnvVars(config: DatabaseConfig): string {
+export function generateDatabaseEnvVars(config: DatabaseConfig, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
   const envVars: string[] = [];
 
   switch (config.dialect) {
     case 'mysql':
       envVars.push(
-        '# MySQL 数据库配置',
+        wizardText(locale, "# MySQL 数据库配置"),
         `DB_HOST=${formatEnvValue(config.host || 'localhost')}`,
         `DB_PORT=${formatEnvValue(config.port || 3306)}`,
         `DB_USER=${formatEnvValue(config.user || 'root')}`,
@@ -79,7 +80,7 @@ export function generateDatabaseEnvVars(config: DatabaseConfig): string {
       break;
     case 'pg':
       envVars.push(
-        '# PostgreSQL 数据库配置',
+        wizardText(locale, "# PostgreSQL 数据库配置"),
         `DB_HOST=${formatEnvValue(config.host || 'localhost')}`,
         `DB_PORT=${formatEnvValue(config.port || 5432)}`,
         `DB_USER=${formatEnvValue(config.user || 'postgres')}`,
@@ -89,14 +90,14 @@ export function generateDatabaseEnvVars(config: DatabaseConfig): string {
       break;
     case 'mongodb':
       envVars.push(
-        '# MongoDB 数据库配置',
+        wizardText(locale, "# MongoDB 数据库配置"),
         `DB_URL=${formatEnvValue(config.url || 'mongodb://localhost:27017')}`,
         `DB_NAME=${formatEnvValue(config.dbName || 'zhin_bot')}`
       );
       break;
     case 'redis':
       envVars.push(
-        '# Redis 数据库配置',
+        wizardText(locale, "# Redis 数据库配置"),
         `REDIS_HOST=${formatEnvValue(config.socket?.host || 'localhost')}`,
         `REDIS_PORT=${formatEnvValue(config.socket?.port || 6379)}`,
         `REDIS_PASSWORD=${formatEnvValue(config.password || '')}`,
@@ -118,12 +119,12 @@ export function generateDatabaseEnvVars(config: DatabaseConfig): string {
  * User-entered passwords and credential-bearing connection URLs are never
  * copied from the interactive wizard.
  */
-export function generateDatabaseEnvExample(config: DatabaseConfig): string {
+export function generateDatabaseEnvExample(config: DatabaseConfig, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
   let lines: string[] = [];
   switch (config.dialect) {
     case 'mysql':
       lines = [
-        '# MySQL 数据库配置',
+        wizardText(locale, "# MySQL 数据库配置"),
         'DB_HOST=127.0.0.1',
         'DB_PORT=3306',
         'DB_USER=root',
@@ -133,7 +134,7 @@ export function generateDatabaseEnvExample(config: DatabaseConfig): string {
       break;
     case 'pg':
       lines = [
-        '# PostgreSQL 数据库配置',
+        wizardText(locale, "# PostgreSQL 数据库配置"),
         'DB_HOST=127.0.0.1',
         'DB_PORT=5432',
         'DB_USER=postgres',
@@ -143,14 +144,14 @@ export function generateDatabaseEnvExample(config: DatabaseConfig): string {
       break;
     case 'mongodb':
       lines = [
-        '# MongoDB 数据库配置',
+        wizardText(locale, "# MongoDB 数据库配置"),
         'DB_URL=mongodb://127.0.0.1:27017',
         'DB_NAME=zhin_bot',
       ];
       break;
     case 'redis':
       lines = [
-        '# Redis 数据库配置',
+        wizardText(locale, "# Redis 数据库配置"),
         'REDIS_HOST=127.0.0.1',
         'REDIS_PORT=6379',
         'REDIS_PASSWORD=',

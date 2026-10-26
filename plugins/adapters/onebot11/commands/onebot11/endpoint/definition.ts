@@ -10,8 +10,8 @@ export const onebot11EndpointCommands = createEndpointCommands({
   adapterKey: 'onebot11',
   adapterDisplayName: 'OneBot 11',
   fields: [
-    { key: 'url', description: 'OneBot 实现 WebSocket URL（connection: ws 必填）' },
-    { key: 'path', description: 'reverse-wss 路径（connection: wss）' },
+    { key: 'url', description: 'OneBot 实现 WebSocket URL（connection: ws 必填）', descriptionI18n: { en: "OneBot WebSocket URL (required for connection: ws)" } },
+    { key: 'path', description: 'reverse-wss 路径（connection: wss）', descriptionI18n: { en: "Reverse WebSocket path (connection: wss)" } },
     { key: 'access_token', env: true, description: 'OneBot access token' },
   ],
   running: (use) => use(onebot11RuntimeStateToken).endpoints.values(),

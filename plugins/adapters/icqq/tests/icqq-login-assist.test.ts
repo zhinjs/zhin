@@ -16,7 +16,7 @@ const baseConfig = resolveIcqqConfig({ id: '10001', autoReconnect: false });
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-function makeEndpoint(assist: LoginAssist): IcqqEndpoint {
+function makeEndpoint(assist: LoginAssist, locale: 'zh-CN' | 'en' = 'zh-CN'): IcqqEndpoint {
   const gateway: OutboundMessageService = {
     receive: vi.fn(async () => Object.freeze({ matched: true })),
     send: vi.fn(async () => 'sent'),
@@ -26,7 +26,7 @@ function makeEndpoint(assist: LoginAssist): IcqqEndpoint {
     gateway,
     config: baseConfig,
     sideEvents: createIcqqTestPorts().sideEvents,
-    loginAssist: assist,
+    loginAssist: assist, locale,
   }), gateway, createIcqqTestPorts().sideEvents);
 }
 
@@ -55,9 +55,9 @@ describe('icqq LoginAssist wiring', () => {
     await expect(start).rejects.toThrow('candidate rolled back during request pull');
   });
 
-  it('qrcode challenge waits for submit then calls login()', async () => {
+  it.each(['zh-CN', 'en'] as const)('qrcode challenge uses project %s and waits for submit before login()', async locale => {
     const assist = new LoginAssist(null, { defaultTimeoutMs: 60_000 });
-    const endpoint = makeEndpoint(assist);
+    const endpoint = makeEndpoint(assist, locale);
     let loginCalls = 0;
     vi.mocked(endpoint.client.login).mockImplementation(async () => {
       loginCalls += 1;
@@ -74,6 +74,7 @@ describe('icqq LoginAssist wiring', () => {
       adapter: 'icqq',
       endpointKey: '10001',
     });
+    expect(assist.listPending()[0]!.payload.message).toContain(locale === 'en' ? 'Scan the QR code' : '扫码登录');
     expect(assist.listPending()[0]!.payload.image).toMatch(/^data:image\/png;base64,/);
 
     assist.submit(assist.listPending()[0]!.id, 'ok');

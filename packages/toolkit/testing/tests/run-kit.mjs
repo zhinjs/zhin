@@ -117,7 +117,7 @@ try {
     await assert.rejects(kit.patchConfig([{op:'set',path:['alpha','keywordReply'],value:'bad'}]));
     await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');
     const source=join(temporary,'plugins/group-suite/commands/keyword-list/index.ts');
-    await put(source,(await readFile(source,'utf8')).replace('关键词列表（共','热更新词库（共'));
+    await put(source,(await readFile(source,'utf8')).replace("return t(context.locale, 'keywordList',", "return '热更新词库\\n' + t(context.locale, 'keywordList',"));
     assert.equal((await kit.reloadSource(source)).status,'reloaded');
     await incoming('alpha keyword-list');assert.match(kit.deliveries.at(-1).payload,/热更新词库/);
     await incoming('hi');assert.equal(kit.deliveries.at(-1).payload,'hello');

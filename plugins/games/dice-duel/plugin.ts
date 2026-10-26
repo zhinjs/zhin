@@ -19,6 +19,10 @@ export default defineGamePlugin<SessionService>({
     displayName: 'Dice Duel',
   },
   game: {
+    commandPath: 'dice',
+    titleI18n: { en: 'Dice Duel' },
+    descriptionI18n: { en: 'Challenge the bot to a dice duel' },
+    quickStartI18n: { en: 'start' },
     id: 'dice',
     title: '骰子对决',
     icon: '🎲',

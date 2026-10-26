@@ -1,6 +1,6 @@
 import { isEmpty } from './utils.js';
 import { safeParseSchema, type SchemaSafeParseResult } from './validate.js';
-import { toJsonSchema, type ConfigFieldMetadata } from './json-schema.js';
+import { toJsonSchema, type ConfigFieldMetadata, type ConfigFieldI18n } from './json-schema.js';
 
 export { SchemaValidationError, type SchemaSafeParseResult, type SchemaValidationIssue } from './validate.js';
 export { safeParseSchema };
@@ -78,6 +78,11 @@ export class Schema<S = any, T = S> {
     /** 设置描述 */
     description(description: string): this {
         this.meta.description = description;
+        return this;
+    }
+    /** Translate form labels without changing validation, defaults or values. */
+    i18n(translations: ConfigFieldI18n): this {
+        this.meta.i18n = structuredClone(translations);
         return this;
     }
     /** 设置默认值 */
@@ -240,6 +245,7 @@ export namespace Schema {
         multiple?: boolean;
         key?: string;
         description?: string;
+        i18n?: ConfigFieldI18n;
         component?: string;
         min?: number;
         max?: number;

@@ -8,6 +8,7 @@ import { stampToolGeneration } from '../tool/tool-system.js';
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { TurnIngress, TurnRequest } from '../turn/turn-ingress.js';
+import { isLocale } from '@zhin.js/plugin-runtime';
 
 /** Core transport tool shape plus the generation stamp ToolRuntime validates. */
 export type GenerationStampedTool = Tool & { generation?: number };
@@ -52,6 +53,7 @@ export function toolsFromCapabilities(
 
 export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInvocationContext {
   return Object.freeze({
+    ...(isLocale(turn.input.locale) ? { locale: turn.input.locale } : {}),
     signal: turn.signal,
     traceId: turn.identity.traceId,
     turnId: turn.identity.turnId,

@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from "../../messages.js";
 import { formatCompact } from '@zhin.js/logger';
 import type { Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
@@ -23,20 +25,21 @@ function depsLogger() {
   };
 }
 
-export async function executeGithubBind(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
+export async function executeGithubBind(_args: Record<string, never>, client: GithubClient, commMessage?: Message, preference?: Locale) {
   const log = depsLogger();
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.clientAdapter || !msg?.sender?.id) return '❌ 无法获取当前用户信息';
+  const locale = resolveLocale(preference ?? msg?.locale);
+  if (!msg?.clientAdapter || !msg?.sender?.id) return t(locale, 'missingUser');
 
   const clientId = client.clientId;
-  if (!clientId) return '❌ Endpoint 未配置 GitHub App 或 App 无 client_id，无法进行账号绑定';
+  if (!clientId) return t(locale, 'missingClientId');
 
   const model = oauthModel(client);
-  if (!model) return '❌ 数据库未就绪';
+  if (!model) return t(locale, 'dbNotReady');
 
   const [existing] = await model.select().where({ platform: msg.clientAdapter, platform_uid: msg.sender.id });
   if (existing) {
-    return `⚠️ 你已绑定 GitHub 账号: ${existing.github_login}\n如需重新绑定，请先执行 github_unbind`;
+    return t(locale, 'alreadyBound', { login: existing.github_login });
   }
 
   try {
@@ -47,12 +50,12 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
     );
 
     const replyMsg = [
-      '🔗 请在浏览器中打开以下链接进行授权：',
+      t(locale, 'openDeviceLink'),
       `   ${codeResp.verification_uri}`,
       '',
-      `📋 输入验证码: **${codeResp.user_code}**`,
+      t(locale, 'deviceCode', { code: codeResp.user_code }),
       '',
-      `⏳ 等待授权中…（${Math.floor(codeResp.expires_in / 60)} 分钟内有效）`,
+      t(locale, 'waiting', { minutes: Math.floor(codeResp.expires_in / 60) }),
     ].join('\n');
 
     tokenPromise.then(async (tokenData) => {
@@ -76,7 +79,7 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
       log.debug(formatCompact({ op: 'bind', platform: msg.clientAdapter, sender: msg.sender!.id, login }));
 
       if (msg?.$reply) {
-        await msg.$reply(`✅ GitHub 账号绑定成功！\n👤 ${login}`);
+        await msg.$reply(t(locale, 'bound', { login }));
       }
     }).catch((err) => {
       log.error('GitHub Device Flow 错误:', err);
@@ -84,50 +87,52 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
 
     return replyMsg;
   } catch (e: unknown) {
-    return `❌ Device Flow 启动失败: ${e instanceof Error ? e.message : String(e)}`;
+    return t(locale, 'flowFailed', { error: e instanceof Error ? e.message : String(e) });
   }
 }
 
-export async function executeGithubUnbind(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
+export async function executeGithubUnbind(_args: Record<string, never>, client: GithubClient, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.clientAdapter || !msg?.sender?.id) return '❌ 无法获取当前用户信息';
+  const locale = resolveLocale(preference ?? msg?.locale);
+  if (!msg?.clientAdapter || !msg?.sender?.id) return t(locale, 'missingUser');
 
   const model = oauthModel(client);
-  if (!model) return '❌ 数据库未就绪';
+  if (!model) return t(locale, 'dbNotReady');
 
   const [existing] = await model.select().where({ platform: msg.clientAdapter, platform_uid: msg.sender.id });
-  if (!existing) return '📭 你尚未绑定 GitHub 账号';
+  if (!existing) return t(locale, 'notBound');
 
   await model.delete().where({ id: existing.id });
-  return `✅ 已解除 GitHub 账号绑定: ${existing.github_login}`;
+  return t(locale, 'unbound', { login: existing.github_login });
 }
 
-export async function executeGithubWhoami(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
+export async function executeGithubWhoami(_args: Record<string, never>, client: GithubClient, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.clientAdapter || !msg?.sender?.id) return '❌ 无法获取当前用户信息';
+  const locale = resolveLocale(preference ?? msg?.locale);
+  if (!msg?.clientAdapter || !msg?.sender?.id) return t(locale, 'missingUser');
 
   const model = oauthModel(client);
-  if (!model) return '❌ 数据库未就绪';
+  if (!model) return t(locale, 'dbNotReady');
 
   const [existing] = await model.select().where({ platform: msg.clientAdapter, platform_uid: msg.sender.id });
-  if (!existing) return '📭 你尚未绑定 GitHub 账号\n🔗 使用 github_bind 绑定你的账号';
+  if (!existing) return t(locale, 'bindHint');
 
   const userGh = new GhClient({ host: client.host, token: existing.access_token });
   const auth = await userGh.verifyAuth();
   if (auth.ok) {
-    return `👤 已绑定 GitHub 账号: ${auth.user}\n📅 绑定时间: ${new Date(existing.created_at).toLocaleString('zh-CN')}`;
+    return t(locale, 'account', { login: auth.user, date: new Date(existing.created_at).toLocaleString(locale === 'en' ? 'en-US' : 'zh-CN') });
   }
-  return `⚠️ 已绑定账号 ${existing.github_login}，但 Token 已失效\n🔗 请执行 github_unbind 后重新 github_bind`;
+  return t(locale, 'expired', { login: existing.github_login });
 }
 
-export async function executeGithubInstall(client: GithubClient) {
+export async function executeGithubInstall(client: GithubClient, locale?: Locale) {
   const slug = client.appSlug;
-  if (!slug) return '❌ Endpoint 未配置 GitHub App';
+  if (!slug) return t(locale, 'missingApp');
   const host = client.host || 'github.com';
   const installations = client.installations;
-  let msg = `🔗 请点击以下链接安装 GitHub App 到你的仓库：\n   https://${host}/apps/${slug}/installations/new`;
+  let msg = t(locale, 'install', { url: `https://${host}/apps/${slug}/installations/new` });
   if (installations.length) {
-    msg += `\n\n📋 当前已安装 (${installations.length}):`;
+    msg += t(locale, 'installed', { count: installations.length });
     for (const inst of installations) {
       msg += `\n  • ${inst.account.login} (${inst.account.type})`;
     }

@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; user_id: number; title: string }>({
@@ -20,6 +21,6 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
       duration: -1,
     });
     const success = response.status === 'ok';
-    return { success, message: success ? `已将 ${user_id} 的头衔设为 "${title}"` : '设置失败' };
+    return { success, message: success ? t(context.locale, 'titleChanged', { p0: user_id, p1: title }) : t(context.locale, 'setFailed') };
   },
 });

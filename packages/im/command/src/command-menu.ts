@@ -1,3 +1,6 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { commandMessages } from './messages.js';
+
 export interface CommandMenuEntry {
   readonly name: string;
   readonly description?: string;
@@ -73,8 +76,9 @@ export function renderCommandMenu(
   children: readonly CommandMenuEntry[],
   hint: string | undefined,
   text: string,
-  options: { readonly page?: number; readonly pages?: number; readonly commandTotal?: number; readonly pluginTotal?: number; readonly appearance?: CommandMenuAppearance } = {},
+  options: { readonly page?: number; readonly pages?: number; readonly locale?: Locale; readonly commandTotal?: number; readonly pluginTotal?: number; readonly appearance?: CommandMenuAppearance } = {},
 ): CommandMenuSegment {
+  const locale = options.locale ?? 'zh-CN';
   const appearance = options.appearance ?? {};
   const background = appearance.backgroundImage ?? `data:image/svg+xml,${encodeURIComponent(landscape)}`;
   // CSS string escaping additionally prevents an artwork URL from closing <style>.
@@ -91,7 +95,7 @@ export function renderCommandMenu(
     type: 'html',
     data: {
       width: 1080, fileName: 'command-menu.png', text,
-      html: `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+      html: `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><style>
 *{box-sizing:border-box}body{margin:0;background:#253b46;color:#f4f0e6;font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-size:18px;line-height:1.5;--accent:${appearance.accentColor ?? '#e7c993'}}
 main{padding:42px 28px 24px;background-image:linear-gradient(180deg,#0c202a0a,#0c202a55),url(${cssUrl});background-size:cover;background-position:center top}
 header{min-height:210px;padding:10px 22px 30px;position:relative}.eyebrow{font-size:12px;letter-spacing:5px;color:#f4e4c4;margin:0 0 17px}
@@ -102,11 +106,11 @@ h2{margin:0;font-size:20px;font-weight:700;letter-spacing:1px;color:var(--accent
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:#20363fdb;border-radius:0 0 13px 13px;overflow:hidden}
 .entry{display:flex;align-items:center;gap:12px;padding:19px 17px;min-width:0;min-height:106px;border-top:1px solid #e7e6d614;border-right:1px solid #e7e6d614;background:linear-gradient(120deg,#ffffff08,#ffffff00)}.entry:nth-child(3n){border-right:0}
 .icon{width:35px;height:35px;flex:0 0 35px;color:var(--accent);filter:drop-shadow(0 1px 6px #d9ba7c22)}.icon svg{display:block;width:100%;height:100%}.copy{min-width:0}.name{font-size:18px;font-weight:700;color:var(--accent)}.description{margin:4px 0 0;color:#e1e8e5;font-size:15px;line-height:1.45}
-.name,.description,h1{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;white-space:pre-wrap}
+.name{overflow-wrap:anywhere;white-space:pre-wrap}.description,h1{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;white-space:pre-wrap}
 footer{margin:6px 5px 0;padding:15px 18px;display:flex;align-items:center;justify-content:space-between;gap:22px;background:#142a34da;border:1px solid #f0e2c71c;border-radius:13px}.hint{font-size:14px;color:#cfdbd7;white-space:pre-wrap;overflow-wrap:anywhere}.page{font-size:20px;color:var(--accent);white-space:nowrap;font-family:Georgia,serif}.signature{margin:16px 0 0;text-align:center;font-size:10px;letter-spacing:4px;color:#c4d0c899}.empty{margin:0 0 20px;padding:28px;background:#142a34da;border-radius:16px;color:#dbe4de}
-</style></head><body><main><header><div class="eyebrow">ZHIN / COMMAND ATLAS</div><h1>${escape(appearance.title || `${title} · 指令指南`)}</h1><div class="subtitle">${escape(appearance.subtitle ?? '每一个灵感，都有回应。')}</div><div class="summary"><i></i>${options.commandTotal ?? commands.length} 条指令<span>·</span>${options.pluginTotal ?? children.length} 个子插件<span>·</span>${escape(title)}</div></header>
-${section('指令索引', commands, options.commandTotal ?? commands.length)}${section('插件导航', children, options.pluginTotal ?? children.length, true)}${commands.length || children.length ? '' : '<p class="empty">暂无指令和子插件</p>'}
-<footer><div class="hint">${escape(hint ?? '查看参数与用法：指令名 --help')}</div><div class="page">${String(page).padStart(2, '0')} / ${String(pages).padStart(2, '0')}</div></footer><div class="signature">ZHIN · MAKE EVERY MESSAGE MATTER</div></main></body></html>`,
+</style></head><body><main><header><div class="eyebrow">ZHIN / COMMAND ATLAS</div><h1>${escape(appearance.title || commandMessages(locale, 'guideTitle', { title }))}</h1><div class="subtitle">${escape(appearance.subtitle ?? commandMessages(locale, 'guideSubtitle'))}</div><div class="summary"><i></i>${escape(commandMessages(locale, 'commandCount', { count: options.commandTotal ?? commands.length }))}<span>·</span>${escape(commandMessages(locale, 'pluginCount', { count: options.pluginTotal ?? children.length }))}<span>·</span>${escape(title)}</div></header>
+${section(commandMessages(locale, 'commandIndex'), commands, options.commandTotal ?? commands.length)}${section(commandMessages(locale, 'pluginIndex'), children, options.pluginTotal ?? children.length, true)}${commands.length || children.length ? '' : `<p class="empty">${commandMessages(locale, 'guideEmpty')}</p>`}
+<footer><div class="hint">${escape(hint ?? commandMessages(locale, 'genericHelpHint'))}</div><div class="page">${String(page).padStart(2, '0')} / ${String(pages).padStart(2, '0')}</div></footer><div class="signature">ZHIN · MAKE EVERY MESSAGE MATTER</div></main></body></html>`,
     },
   };
 }

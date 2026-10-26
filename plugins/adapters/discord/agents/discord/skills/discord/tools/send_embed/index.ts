@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
@@ -25,14 +26,14 @@ export default defineAgentTool<{ channel_id: string; title?: string; description
       try {
         embedData.fields = JSON.parse(fields);
       } catch {
-        return { success: false, message: 'fields 格式错误，应为 JSON 数组' };
+        return { success: false, message: t(context.locale, 'invalidFields') };
       }
     }
     const channel = await client.channels.fetch(channel_id);
     if (!channel?.isTextBased() || !channel.send) {
-      throw new Error(`Channel ${channel_id} 不是文本频道`);
+      throw new Error(t(context.locale, 'notTextChannel', { p0: channel_id }));
     }
     const msg = await channel.send({ embeds: [embedData] } as never);
-    return { success: true, message_id: msg.id, message: 'Embed 已发送' };
+    return { success: true, message_id: msg.id, message: t(context.locale, 'embedSent') };
   },
 });

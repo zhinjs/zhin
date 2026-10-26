@@ -46,7 +46,9 @@ describe('resolveTodayReport', () => {
     const { db } = mockDb();
     const at = new Date('2026-07-11T14:00:00Z');
     await savePrediction(db, pick('ssq'), at);
-    const report = await resolveTodayReport(db, ['ssq'], at);
+    const report = await resolveTodayReport(db, ['ssq'], at, 'en');
+    expect(report?.locale).toBe('en');
+    expect(report?.disclaimer).toContain('not betting advice');
     expect(report?.picks).toHaveLength(1);
     expect(report?.picks[0]?.numbers.red).toEqual([1, 2, 3, 4, 5, 6]);
   });

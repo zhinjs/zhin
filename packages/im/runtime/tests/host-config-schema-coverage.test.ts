@@ -21,6 +21,16 @@ function check(value: unknown): unknown {
 }
 
 describe('Host configuration field coverage', () => {
+  it('keeps project language optional without inserting a saved default', () => {
+    expect(field(['locale'])).toMatchObject({ type: 'string', enum: ['zh-CN', 'en'] });
+    expect(field(['locale'])).not.toHaveProperty('default');
+    const input = { http: { host: '127.0.0.1' } };
+    expect(check(input)).toEqual(input);
+    expect(input).not.toHaveProperty('locale');
+    expect(check({ locale: 'en' })).toEqual({ locale: 'en' });
+    expect(check({ locale: 'zh-CN' })).toEqual({ locale: 'zh-CN' });
+  });
+
   it('declares the actual HTTP installer inputs without inventing apiBase', () => {
     expect(Object.keys(field(['http']).properties as object)).toEqual(expect.arrayContaining([
       'readiness', 'host', 'port', 'token', 'tokens', 'corsOrigins', 'base', 'tls', 'listeners',

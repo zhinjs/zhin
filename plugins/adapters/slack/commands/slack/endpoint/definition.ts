@@ -11,7 +11,7 @@ export const slackEndpointCommands = createEndpointCommands({
   adapterDisplayName: 'Slack',
   fields: [
     { key: 'token', required: true, env: true, description: 'Bot User OAuth Token（xoxb-...）' },
-    { key: 'signingSecret', env: true, description: '签名密钥（HTTP Events，socketMode: false 必填）' },
+    { key: 'signingSecret', env: true, description: '签名密钥（HTTP Events，socketMode: false 必填）', descriptionI18n: { en: "Signing secret (required for HTTP Events when socketMode is false)" } },
     { key: 'appToken', env: true, description: 'App-Level Token（xapp-...，Socket Mode）' },
   ],
   running: (use) => use(slackRuntimeStateToken).endpoints.values(),

@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { getCheckinModel } from '../../../../src/db-store.js';
@@ -16,16 +17,16 @@ export default defineAgentTool<{ limit?: number; group_id?: string }>({
   scopes: ['group'],
   async execute({ limit, group_id: requestedGroupId }, context) {
     const model = getCheckinModel(context.use(groupSuiteRuntimeToken).db);
-    if (!model) return '签到数据库尚未就绪';
+    if (!model) return t(context.locale, 'checkinDb');
     const groupId = conversationKey(toolGroupConversation(context, requestedGroupId));
     const rows = await model.select().where({ context_type: 'group', context_id: groupId });
     const count = Math.min(Math.max(Number(limit) || 10, 1), 50);
     const ranked = [...rows]
       .sort((left, right) => Number(right.points ?? 0) - Number(left.points ?? 0))
       .slice(0, count);
-    if (ranked.length === 0) return '暂无排行数据';
+    if (ranked.length === 0) return t(context.locale, 'rankEmpty');
     return ranked.map((user, index) =>
-      `${index + 1}. ${String(user.user_name ?? user.user_id)} — ${Number(user.points ?? 0)}分 (连续${Number(user.streak ?? 0)}天)`,
+      t(context.locale, 'pointsToolRow', { rank: index + 1, name: String(user.user_name ?? user.user_id), points: Number(user.points ?? 0), days: Number(user.streak ?? 0) }),
     ).join('\n');
   },
 });

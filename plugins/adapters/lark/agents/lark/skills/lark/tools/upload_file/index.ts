@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -18,6 +19,7 @@ export default defineAgentTool<{
   }, context) {
     const endpoint = context.$client;
     const result = await endpoint.uploadFile(file_path, file_type);
-    return { success: true, file_key: result, message: `文件已上传，file_key: ${result}` };
+    if (result === null) return { success: false, file_key: null, message: t(context.locale, 'fileUploadFailed') };
+    return { success: true, file_key: result, message: t(context.locale, 'fileUploaded', { p0: result }) };
   },
 });

@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { rssMessages as t } from './i18n.js';
 /**
  * RSS feed fetch/preview helpers (no Plugin host).
  */
@@ -92,15 +94,15 @@ export async function fetchFeed(
   return { title: (feed.title || url).trim(), items };
 }
 
-export function formatFeedPreview(title: string, items: FeedItem[]): string {
-  if (items.length === 0) return `${title}: 暂无内容`;
-  const lines = [`${title} (共 ${items.length} 条)`];
+export function formatFeedPreview(title: string, items: FeedItem[], locale: Locale = 'zh-CN'): string {
+  if (items.length === 0) return t(locale, 'previewEmpty', { title });
+  const lines = [t(locale, 'previewTitle', { title, count: items.length })];
   for (const item of items.slice(0, 5)) {
     lines.push('');
     lines.push(`${item.title}`);
-    if (item.date) lines.push(`  ${new Date(item.date).toLocaleString('zh-CN')}`);
+    if (item.date) lines.push(`  ${new Date(item.date).toLocaleString(locale)}`);
     if (item.link) lines.push(`  ${item.link}`);
   }
-  if (items.length > 5) lines.push(`\n...还有 ${items.length - 5} 条`);
+  if (items.length > 5) lines.push(t(locale, 'more', { count: items.length - 5 }));
   return lines.join('\n');
 }

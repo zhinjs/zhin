@@ -1,5 +1,6 @@
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { randomUUID } from 'node:crypto';
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 import type { TurnEvent } from '../event/turn-event.js';
 import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
@@ -36,6 +37,7 @@ export interface ScheduleExecutionDomain {
 }
 
 export interface ScheduleTurnExecutionRequest {
+  readonly locale?: Locale;
   readonly executionId: string;
   readonly jobId: string;
   readonly prompt: string;
@@ -116,6 +118,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
     const guarded = await guard.run(async budget => this.deps.turn.execute({
         executionId,
         jobId: job.id,
+        locale: resolveLocale(job.locale),
         prompt,
         agent: job.action.kind === 'agent' ? job.action.agent : undefined,
         preview: options.preview === true,

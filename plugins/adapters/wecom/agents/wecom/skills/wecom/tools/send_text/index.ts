@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ user_id: string; content: string }>({
@@ -11,7 +12,7 @@ export default defineAgentTool<{ user_id: string; content: string }>({
   async execute({ user_id, content    }: { user_id: string; content: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.sendTextMessage(user_id, content);
-    return { success, message: success ? '消息已发送' : '发送失败' };
+    return { success, message: success ? t(context.locale, 'messageSent') : t(context.locale, 'sendFailed') };
   },
 });
 

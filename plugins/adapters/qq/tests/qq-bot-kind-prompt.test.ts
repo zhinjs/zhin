@@ -25,13 +25,30 @@ describe('qqCommandSessionKey', () => {
           kind: 'private',
           id: 'u1',
         },
-        sender: 'u1',
+        sender: { id: 'u1' },
       }),
-    ).toBe('sandbox\0bot\0private\0u1\0u1');
+    ).toBeTruthy();
   });
 
   it('缺字段时返回 undefined', () => {
     expect(qqCommandSessionKey({})).toBeUndefined();
     expect(qqCommandSessionKey(undefined)).toBeUndefined();
   });
+});
+
+
+it('pins reply parsing to the flow language and keys every canonical identity dimension', () => {
+  expect(parseQqBotKindAnswer('公域', 'en')).toBeUndefined();
+  expect(parseQqBotKindAnswer('PRIVATE', 'en')).toBe('private');
+  const message = { sender: { id: 'alice' }, conversation: { endpoint: { adapter: 'qq', id: 'bot' },
+    kind: 'channel', id: 'room', parent: { kind: 'channel', id: 'guild' }, threadId: 'thread' } };
+  const key = qqCommandSessionKey(message);
+  expect(key).toBeTruthy();
+  for (const other of [
+    { ...message, sender: { id: 'bob' } },
+    { ...message, conversation: { ...message.conversation, threadId: 'other-thread' } },
+    { ...message, conversation: { ...message.conversation, parent: { kind: 'channel', id: 'other-guild' } } },
+    { ...message, conversation: { ...message.conversation, endpoint: { adapter: 'qq', id: 'other-bot' } } },
+  ]) expect(qqCommandSessionKey(other)).not.toBe(key);
+  expect(qqCommandSessionKey({ ...message, sender: {} })).toBeUndefined();
 });

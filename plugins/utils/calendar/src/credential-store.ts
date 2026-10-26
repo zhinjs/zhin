@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 /**
  * Persists OAuth refresh tokens in the plugin's database state (never in .env).
  */
@@ -13,6 +14,8 @@ export interface CalendarStateStore {
 /** Who completed the chat authorization and where to notify them later. */
 export interface CredentialOwner<Target = unknown> {
   readonly sender_id: string;
+  /** Fixed when authorization starts; token rotation preserves it. */
+  readonly locale?: Locale;
   readonly target: Target;
 }
 

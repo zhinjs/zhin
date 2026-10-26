@@ -1,6 +1,7 @@
 /**
  * Schedule JobStore — SQL persistence with the existing file mode as fallback
  */
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import type { DatabaseScheduleJobStorage } from './job-storage.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -13,6 +14,7 @@ const logger = getLogger('schedule-job-store');
 
 export interface ScheduleJobStoreOptions {
   dataDir: string;
+  defaultLocale?: Locale;
   /** 读盘时合并 `{ channel: im }` 等缺 target 的 notify（与 resolveEffectiveNotify 一致） */
   defaultNotify?: JobNotify;
 }
@@ -23,6 +25,7 @@ export function getScheduleJobsPath(dataDir: string): string {
 
 export class ScheduleJobStore {
   private dataDir: string;
+  private readonly defaultLocale: Locale;
   private filePath: string;
   private defaultNotify?: JobNotify;
   private cache: ScheduleJobFile | null = null;
@@ -46,6 +49,7 @@ export class ScheduleJobStore {
 
   constructor(options: ScheduleJobStoreOptions) {
     this.dataDir = options.dataDir;
+    this.defaultLocale = resolveLocale(options.defaultLocale);
     this.filePath = getScheduleJobsPath(options.dataDir);
     this.defaultNotify = options.defaultNotify;
   }
@@ -108,13 +112,15 @@ export class ScheduleJobStore {
   }
 
   async upsertJob(job: ScheduleJob): Promise<void> {
-    if (this.database) return this.database.mutateJob(job.id, existing => ({ result: undefined,
-      job: existing && isSameScheduleJobBusiness(existing, job) ? existing : { ...job,
-        createdAt: existing?.createdAt ?? (job.createdAt || Date.now()), updatedAt: Date.now() },
-    }));
+    if (this.database) return this.database.mutateJob(job.id, existing => {
+      const localized = { ...job, locale: existing ? resolveLocale(existing.locale) : resolveLocale(job.locale ?? this.defaultLocale) };
+      return { result: undefined, job: existing && isSameScheduleJobBusiness(existing, localized) ? existing : { ...localized,
+        createdAt: existing?.createdAt ?? (job.createdAt || Date.now()), updatedAt: Date.now() } };
+    });
     const store = await this.read();
     const idx = store.jobs.findIndex((j) => j.id === job.id);
     const now = Date.now();
+    job = { ...job, locale: idx >= 0 ? resolveLocale(store.jobs[idx]!.locale) : resolveLocale(job.locale ?? this.defaultLocale) };
     if (idx >= 0) {
       const existing = store.jobs[idx]!;
       if (isSameScheduleJobBusiness(existing, job)) {
@@ -197,6 +203,7 @@ function isSameScheduleJobBusiness(a: ScheduleJob, b: ScheduleJob): boolean {
 function scheduleJobBusiness(job: ScheduleJob): unknown {
   return {
     id: job.id,
+    locale: job.locale,
     label: job.label,
     enabled: job.enabled,
     schedule: job.schedule,
@@ -224,6 +231,7 @@ function normalizeJob(raw: Record<string, unknown>, defaultNotify?: JobNotify): 
   }
   return {
     id: String(raw.id),
+    locale: resolveLocale(raw.locale),
     label: raw.label != null ? String(raw.label) : undefined,
     enabled: raw.enabled !== false,
     schedule,
@@ -246,7 +254,7 @@ function normalizeJob(raw: Record<string, unknown>, defaultNotify?: JobNotify): 
 
 export function createScheduleJobStoreFromConfig(
   dataDir: string,
-  options?: { defaultNotify?: JobNotify },
+  options?: { defaultNotify?: JobNotify; defaultLocale?: Locale },
 ): ScheduleJobStore {
-  return new ScheduleJobStore({ dataDir, defaultNotify: options?.defaultNotify });
+  return new ScheduleJobStore({ dataDir, defaultNotify: options?.defaultNotify, defaultLocale: options?.defaultLocale });
 }

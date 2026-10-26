@@ -535,6 +535,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `assistant.events.rateLimitPerMinute` | number \| string \| null | no | — | 每来源每分钟最大请求数（默认 60） |
 | `log_level` | string \| number | no | — | Runtime log level. |
 | `plugin` | object | no | — | Root Plugin configuration; replaced by its project schema during composition. |
+| `locale` | string: `"zh-CN"`, `"en"` | no | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
 
 ## Plugin instance fields
 

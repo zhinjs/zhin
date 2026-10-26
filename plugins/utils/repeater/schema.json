@@ -5,6 +5,11 @@
     "threshold": {
       "type": "number",
       "description": "触发复读的最少人数",
+      "x-i18n": {
+        "en": {
+          "description": "Minimum distinct users needed to trigger repetition."
+        }
+      },
       "default": 3,
       "minimum": 2,
       "maximum": 10,
@@ -16,6 +21,11 @@
     "cooldown": {
       "type": "number",
       "description": "同一群冷却时间 (ms)",
+      "x-i18n": {
+        "en": {
+          "description": "Cooldown for the same group, in milliseconds."
+        }
+      },
       "default": 30000,
       "minimum": 5000,
       "maximum": 300000,
@@ -26,6 +36,11 @@
     "maxLength": {
       "type": "number",
       "description": "消息长度上限",
+      "x-i18n": {
+        "en": {
+          "description": "Maximum message length."
+        }
+      },
       "default": 200,
       "minimum": 10,
       "maximum": 1000,

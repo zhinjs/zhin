@@ -5,6 +5,11 @@
     "dailyStable": {
       "type": "boolean",
       "description": "同一用户同一天问同一个问题时，答案之书给出相同答案",
+      "x-i18n": {
+        "en": {
+          "description": "Return the same Book of Answers response when the same user asks the same question on the same day."
+        }
+      },
       "default": false,
       "x-zhin-config": {
         "effect": "reload"
@@ -13,6 +18,11 @@
     "timezone": {
       "type": "string",
       "description": "dailyStable 判断「同一天」所用的 IANA 时区",
+      "x-i18n": {
+        "en": {
+          "description": "IANA timezone used by dailyStable to determine the day."
+        }
+      },
       "default": "Asia/Shanghai",
       "x-zhin-config": {
         "effect": "reload"
@@ -21,6 +31,11 @@
     "quizTimeoutSeconds": {
       "type": "number",
       "description": "出题后等待作答的秒数，超时题目作废",
+      "x-i18n": {
+        "en": {
+          "description": "Seconds to wait for a quiz answer; the question expires afterward."
+        }
+      },
       "default": 120,
       "minimum": 15,
       "maximum": 600,
@@ -32,6 +47,11 @@
     "enableDrivingQuiz": {
       "type": "boolean",
       "description": "启用「科目一」交规小测（原创题面，仅供娱乐参考）",
+      "x-i18n": {
+        "en": {
+          "description": "Enable the original driving-theory quiz, for entertainment and reference only."
+        }
+      },
       "default": true,
       "x-zhin-config": {
         "effect": "reload"

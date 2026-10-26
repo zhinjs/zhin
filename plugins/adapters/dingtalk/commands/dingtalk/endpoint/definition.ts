@@ -10,9 +10,9 @@ export const dingtalkEndpointCommands = createEndpointCommands({
   adapterKey: 'dingtalk',
   adapterDisplayName: 'DingTalk',
   fields: [
-    { key: 'appKey', required: true, env: true, description: '钉钉 AppKey' },
-    { key: 'appSecret', required: true, env: true, description: '钉钉 AppSecret' },
-    { key: 'robotCode', required: true, env: true, description: '机器人 Code（出站 senderStaffId）' },
+    { key: 'appKey', required: true, env: true, description: '钉钉 AppKey', descriptionI18n: { en: "DingTalk app key" } },
+    { key: 'appSecret', required: true, env: true, description: '钉钉 AppSecret', descriptionI18n: { en: "DingTalk app secret" } },
+    { key: 'robotCode', required: true, env: true, description: '机器人 Code（出站 senderStaffId）', descriptionI18n: { en: "Robot code (outbound senderStaffId)" } },
   ],
   running: (use) => use(dingtalkRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `appKey: ${String(entry.appKey)}`,

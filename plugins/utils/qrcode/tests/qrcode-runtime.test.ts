@@ -39,7 +39,7 @@ describe('@zhin.js/plugin-qrcode', () => {
     expect(invalid.value).toBeUndefined();
     const help = await index.dispatch('gen --help', undefined, undefined, '#');
     expect(String(help.value)).toContain('#gen <text> [--size <integer>]');
-    expect(String(help.value)).toContain('default: 300');
+    expect(String(help.value)).toContain('默认值：300');
   });
 
   it('shows scan help before issuing a decode HTTP request', async () => {

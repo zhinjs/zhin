@@ -110,6 +110,8 @@ export function commandContext(runtime: BilibiliRuntime, params: Record<string, 
     ...resolveCommandSession(input),
     owner: {} as never,
     generation: 0,
+    locale: 'zh-CN' as const,
+    formatCommand: (path: string) => `!${path}`,
     config: {},
     use: (token: unknown) => {
       void token;

@@ -3,7 +3,7 @@ import { sixtySClientToken } from '../../../src/client.js';
 import handler from '../../../src/handlers/toutiao-hot.js';
 
 export default defineCommand({
-  description: '头条热搜',
+  description: '头条热搜', descriptionI18n: { en: "Toutiao trending topics" },
   params: { limit: { type: 'number', default: 10 } },
-  execute: ({ params, use }) => handler(use(sixtySClientToken), { limit: Number(params.limit) }),
+  execute: ({ params, use, locale }) => handler(use(sixtySClientToken), { limit: Number(params.limit) }, locale),
 });

@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 import { createToken } from 'zhin.js';
 import type { RssConfig } from './feed.js';
 import type { RssMemoryDb } from './memory-store.js';
@@ -12,6 +13,7 @@ export type RssOutboundPush = (input: {
 }) => Promise<void>;
 
 export interface RssRuntime {
+  readonly locale?: Locale;
   readonly db: RssMemoryDb;
   readonly config: Readonly<RssConfig>;
   readonly outbound: RssOutboundPush | null;

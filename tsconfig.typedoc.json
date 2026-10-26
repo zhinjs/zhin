@@ -170,6 +170,7 @@
     }
   },
   "include": [
+    "packages/im/zhin/src/i18n.ts",
     "packages/im/plugin-runtime/src/**/*.ts",
     "packages/im/command/src/**/*.ts",
     "packages/im/adapter/src/**/*.ts",

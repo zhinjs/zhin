@@ -11,6 +11,6 @@ export default defineAgentTool<{ host: string }>({
   async execute({ host }, context) {
     const service = context.use(nettoolsServiceToken);
     const callerKey = toolCallerKey(context);
-    return service.run(() => service.ping(host, callerKey, context.signal));
+    return service.run(() => service.ping(host, callerKey, context.signal, context.locale), context.locale);
   },
 });

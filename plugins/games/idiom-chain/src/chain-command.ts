@@ -1,25 +1,30 @@
-import {
-  channelKey,
-  type GameMessageLike,
-  type GameReply,
-} from '@zhin.js/game-kit';
+import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
+import { createMessages } from 'zhin.js/i18n';
 import { continueGame, startGame } from './game-flow.js';
 import { idiomCount, modeLabel, promptLine, type MatchMode } from './engine.js';
 
 import type { SessionService } from './session-service.js';
 
-export const CHAIN_HELP = [
-  '📜 成语接龙（文字接龙 · 四字成语）',
-  `开源词库 ${idiomCount()} 条 · 机器人先出第一句`,
-  '接龙 / chain — 帮助',
-  '接龙 开始 / 同音 — 同音接龙（默认，首字同音即可）',
-  '接龙 同字 — 严格同字接龙',
-  '接龙 继续 — 刷新界面',
-  '接龙 放弃 — 结束对局',
-  '',
-  '进行中：直接回复四字成语',
-  '按钮：提示 · 跳过 · 认输（失误 3 次判负）',
-].join('\n');
+
+const messages = createMessages({
+  dictionary: { 'zh-CN': '开源词库 {count} 条 · 机器人先出第一句', en: 'Dictionary: {count} entries · The bot plays first' },
+  pinyin: { 'zh-CN': '{command} — 同音接龙', en: '{command} — Match the pronunciation' },
+  char: { 'zh-CN': '{command} — 严格同字接龙', en: '{command} — Match the character' },
+  instructions: { 'zh-CN': '进行中直接回复四字成语。按钮：提示 · 跳过 · 认输（失误 3 次判负）。', en: 'Reply with four-character Chinese idioms. Options: Hint · Skip · Concede. Three mistakes lose the game.' },
+  active: { 'zh-CN': '进行中：{player} · {mode} · 局分 {playerScore}:{botScore} · 连击 {streak}', en: 'Playing: {player} · {mode} · Score {playerScore}:{botScore} · Streak {streak}' },
+  quit: { 'zh-CN': '已放弃成语接龙。', en: 'You quit the idiom chain.' },
+});
+
+export function getChainHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'> = {}): string {
+  const locale = message.locale ?? 'zh-CN';
+  const command = message.formatCommand?.('chain');
+  return [formatGameHelp(message, { 'zh-CN': '📜 成语接龙（文字接龙 · 四字成语）', en: '📜 Chinese Idiom Chain' }, 'chain', ['continue', 'quit']),
+    messages(locale, 'dictionary', { count: idiomCount() }),
+    ...(command ? [messages(locale, 'pinyin', { command: command + ' start_pinyin' }), messages(locale, 'char', { command: command + ' start_char' })] : []),
+    messages(locale, 'instructions'),
+  ].join('\n');
+}
+export const CHAIN_HELP = getChainHelp();
 
 export async function runChainCommand(
   services: SessionService,
@@ -31,15 +36,15 @@ export async function runChainCommand(
 
   if (!action || action === 'help') {
     const active = await services.getActiveByChannel(ch);
-    const lines = [CHAIN_HELP, ''];
+    const lines = [getChainHelp(message), ''];
     if (active) {
       const mode: MatchMode = active.match_mode === 'char' ? 'char' : 'pinyin';
       lines.push(
-        `进行中：${active.player_name} · ${modeLabel(mode)} · 局分 ${active.player_score}:${active.bot_score} · 连击 ${active.streak}`,
+        messages(active.locale ?? undefined, 'active', { player: active.player_name, mode: modeLabel(mode, active.locale ?? undefined), playerScore: active.player_score, botScore: active.bot_score, streak: active.streak }),
       );
-      if (active.last_idiom) lines.push(promptLine(active.last_idiom, mode));
+      if (active.last_idiom) lines.push(promptLine(active.last_idiom, mode, active.locale ?? undefined));
     } else {
-      lines.push('暂无对局，发送「接龙 开始」或「接龙 同字」。');
+      lines.push(gameCommandFeedback(message, 'noGame'), gameCommandHint(message, 'chain', 'start_pinyin'));
     }
     return lines.join('\n');
   }
@@ -50,10 +55,10 @@ export async function runChainCommand(
 
   if (action === 'quit') {
     const row = await services.getActiveForUser(ch, userId);
-    if (!row) return '你没有进行中的接龙。';
+    if (!row) return gameCommandFeedback(message, 'noGame');
     await services.updateSession(row.id, { status: 'aborted' });
-    return '已放弃成语接龙。';
+    return messages(row.locale ?? undefined, 'quit');
   }
 
-  return `未知子命令：${action}\n\n${CHAIN_HELP}`;
+  return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getChainHelp(message);
 }

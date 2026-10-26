@@ -1,3 +1,4 @@
+import { runRouletteCommand } from '../src/roulette-command.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FakeClock,
@@ -207,7 +208,7 @@ describe('roulette gameplay', () => {
     await seatThreeAndStart();
 
     expect(await say('alice', '开枪')).toContain('💥 砰！ALICE 中弹出局（第 1 枪）');
-    expect(await say('bob', '开枪')).toBe('本群没有进行中的轮盘，发送「轮盘 开局」创建一局。');
+    expect(await say('bob', '开枪')).toBe('本群没有进行中的轮盘。');
   });
 
   it('refuses out-of-turn shots and keeps the turn with the right player', async () => {
@@ -444,4 +445,20 @@ describe('chat entry points', () => {
     expect(aliceMessage.replies).toHaveLength(1);
     expect((await activeState())?.pullsMade).toBe(1);
   });
+});
+
+
+it('pins roulette rules and deadline notices to the opening player language', async () => {
+  const enContext = { ...fake.capabilityContext(), locale: 'en' as const, formatCommand: (path: string) => path === 'roulette' ? '!!party roulette' : undefined };
+  const opened = await runRouletteCommand(enContext, message('alice'), 'open');
+  expect(String(opened)).toContain('!!party roulette join');
+  expect(String(opened)).not.toMatch(/[\u4e00-\u9fff]/);
+  const zhContext = { ...fake.capabilityContext(), locale: 'zh-CN' as const };
+  expect(String(await runRouletteCommand(zhContext, message('bob'), 'join'))).not.toMatch(/[\u4e00-\u9fff]/);
+  await runRouletteCommand(zhContext, message('alice'), 'start');
+  expect(String(await runRouletteCommand(zhContext, message('bob'), 'fire'))).toContain('ALICE');
+  expect(String(await runRouletteCommand(zhContext, message('bob'), 'fire'))).not.toMatch(/[\u4e00-\u9fff]/);
+  await clock.advance(35_000);
+  expect(sentTexts().at(-1)).toContain('ALICE');
+  expect(sentTexts().at(-1)).not.toMatch(/[\u4e00-\u9fff]/);
 });

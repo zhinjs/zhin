@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -17,7 +18,7 @@ export default defineAgentTool<{ guild_id: string; name: string }>({
     const role = await client.pickGuild(guild_id).createRole(name);
     return {
       success: true,
-      message: `已创建角色 "${name}"`,
+      message: t(context.locale, 'roleCreated', { p0: name }),
       role: { id: role.role_id, name: role.name },
     };
   },

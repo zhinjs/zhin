@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import type { DatabaseConfig } from './types.js';
 
 export type DatabaseDialect = DatabaseConfig['dialect'];
@@ -160,11 +161,11 @@ export function getDatabaseDialectDefinition(dialect: string): DatabaseDialectDe
   return definitions.get(dialect as DatabaseDialect);
 }
 
-export function databaseChoiceLabel(definition: DatabaseDialectDefinition): string {
+export function databaseChoiceLabel(definition: DatabaseDialectDefinition, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
   const driver = definition.driver
-    ? `；驱动 ${definition.driver.package} ${definition.driver.version}`
+    ? wizardText(locale, "；驱动 {v0} {v1}", [definition.driver.package, definition.driver.version])
     : '';
-  return `${definition.name}（${definition.description}；当前支持/实机验证 ${definition.verifiedServer}${driver}）`;
+  return wizardText(locale, "{v0}（{v1}；当前支持/实机验证 {v2}{v3}）", [wizardText(locale, definition.name), wizardText(locale, definition.description), wizardText(locale, definition.verifiedServer), driver]);
 }
 
 function expandEnvReferences(
@@ -172,6 +173,7 @@ function expandEnvReferences(
   path: string,
   env: Readonly<Record<string, string | undefined>>,
   issues: DatabaseSchemaIssue[],
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): string {
   let output = '';
   let index = 0;
@@ -213,7 +215,7 @@ function expandEnvReferences(
         kind: 'env_missing',
         path,
         envKey: key,
-        message: `环境变量 ${key} 未设置（${path}）`,
+        message: wizardText(locale, "环境变量 {v0} 未设置（{v1}）", [key, path]),
       });
     } else {
       output += resolved;
@@ -239,22 +241,23 @@ function validateValue(
   path: string,
   env: Readonly<Record<string, string | undefined>>,
   issues: DatabaseSchemaIssue[],
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): void {
   let value = rawValue;
   if (typeof value === 'string') {
     const before = issues.length;
-    value = expandEnvReferences(value, path, env, issues);
+    value = expandEnvReferences(value, path, env, issues, locale);
     if (issues.length > before) return;
   }
 
   if ('const' in schema && value !== schema.const) {
-    issues.push({ kind: 'invalid', path, message: `${path} 必须是 ${JSON.stringify(schema.const)}` });
+    issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 必须是 {v1}", [path, JSON.stringify(schema.const)]) });
     return;
   }
   const type = schema.type;
   if (type === 'object') {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      issues.push({ kind: 'invalid', path, message: `${path} 必须是对象` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 必须是对象", [path]) });
       return;
     }
     const record = value as Record<string, unknown>;
@@ -262,33 +265,33 @@ function validateValue(
     if (schema.additionalProperties === false) {
       for (const key of Object.keys(record)) {
         if (!(key in properties)) {
-          issues.push({ kind: 'invalid', path: `${path}.${key}`, message: `${path}.${key} 不是受支持的配置项` });
+          issues.push({ kind: 'invalid', path: `${path}.${key}`, message: wizardText(locale, "{v0}.{v1} 不是受支持的配置项", [path, key]) });
         }
       }
     }
     for (const required of (schema.required ?? []) as string[]) {
       if (!(required in record) || record[required] === undefined || record[required] === null) {
-        issues.push({ kind: 'invalid', path: `${path}.${required}`, message: `${path}.${required} 不能为空` });
+        issues.push({ kind: 'invalid', path: `${path}.${required}`, message: wizardText(locale, "{v0}.{v1} 不能为空", [path, required]) });
       }
     }
     for (const [key, propertySchema] of Object.entries(properties)) {
-      if (record[key] !== undefined) validateValue(propertySchema, record[key], `${path}.${key}`, env, issues);
+      if (record[key] !== undefined) validateValue(propertySchema, record[key], `${path}.${key}`, env, issues, locale);
     }
     return;
   }
   if (type === 'string') {
     if (typeof value !== 'string') {
-      issues.push({ kind: 'invalid', path, message: `${path} 必须是字符串` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 必须是字符串", [path]) });
       return;
     }
     if (typeof schema.minLength === 'number' && value.length < schema.minLength) {
-      issues.push({ kind: 'invalid', path, message: `${path} 不能为空` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 不能为空", [path]) });
     }
     if (typeof schema.pattern === 'string' && !new RegExp(schema.pattern, 'u').test(value)) {
-      issues.push({ kind: 'invalid', path, message: `${path} 格式无效` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 格式无效", [path]) });
     }
     if (Array.isArray(schema.enum) && !schema.enum.includes(value)) {
-      issues.push({ kind: 'invalid', path, message: `${path} 必须是 ${schema.enum.join('、')} 之一` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 必须是 {v1} 之一", [path, schema.enum.join('、')]) });
     }
     return;
   }
@@ -299,14 +302,14 @@ function validateValue(
         ? Number(value.trim())
         : Number.NaN;
     if (!Number.isInteger(numeric)) {
-      issues.push({ kind: 'invalid', path, message: `${path} 必须是整数` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 必须是整数", [path]) });
       return;
     }
     if (typeof schema.minimum === 'number' && numeric < schema.minimum) {
-      issues.push({ kind: 'invalid', path, message: `${path} 不能小于 ${schema.minimum}` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 不能小于 {v1}", [path, schema.minimum]) });
     }
     if (typeof schema.maximum === 'number' && numeric > schema.maximum) {
-      issues.push({ kind: 'invalid', path, message: `${path} 不能大于 ${schema.maximum}` });
+      issues.push({ kind: 'invalid', path, message: wizardText(locale, "{v0} 不能大于 {v1}", [path, schema.maximum]) });
     }
   }
 }
@@ -314,23 +317,24 @@ function validateValue(
 export function validateDatabaseConfig(
   config: unknown,
   env: Readonly<Record<string, string | undefined>> = {},
+  locale: 'zh-CN' | 'en' = 'zh-CN'
 ): readonly DatabaseSchemaIssue[] {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
-    return [{ kind: 'invalid', path: 'database', message: 'database 必须是对象' }];
+    return [{ kind: 'invalid', path: 'database', message: wizardText(locale, "database 必须是对象") }];
   }
   const dialect = (config as Record<string, unknown>).dialect;
   if (typeof dialect !== 'string') {
-    return [{ kind: 'invalid', path: 'database.dialect', message: 'database.dialect 不能为空' }];
+    return [{ kind: 'invalid', path: 'database.dialect', message: wizardText(locale, "database.dialect 不能为空") }];
   }
   const definition = getDatabaseDialectDefinition(dialect);
   if (!definition) {
     return [{
       kind: 'invalid',
       path: 'database.dialect',
-      message: `不支持的数据库方言 ${JSON.stringify(dialect)}`,
+      message: wizardText(locale, "不支持的数据库方言 {v0}", [JSON.stringify(dialect)]),
     }];
   }
   const issues: DatabaseSchemaIssue[] = [];
-  validateValue(definition.schema as Record<string, unknown>, config, 'database', env, issues);
+  validateValue(definition.schema as Record<string, unknown>, config, 'database', env, issues, locale);
   return Object.freeze(issues);
 }

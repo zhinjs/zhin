@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -15,6 +16,6 @@ export default defineAgentTool<{ chat_id: string; message_id?: string }>({
   async execute({ chat_id, message_id  }: { chat_id: string; message_id?: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.unpinMessage(Number(chat_id), message_id ? Number(message_id) : undefined);
-    return { success, message: success ? '已取消置顶' : '操作失败' };
+    return { success, message: success ? t(context.locale, 'messageUnpinned') : t(context.locale, 'operationFailed') };
   },
 });

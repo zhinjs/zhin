@@ -66,6 +66,24 @@ it('lists only the provider declaration owner with exact target, package and bou
   expect(f.provider.read).toHaveBeenCalledTimes(1); expect(f.send).not.toHaveBeenCalled(); expect(f.probe).not.toHaveBeenCalled();
 });
 
+it('passes an explicit display locale while keeping task identifiers and revisions intact', async () => {
+  const f = setup(); const request = await start(f);
+  Object.assign(f.provider, { i18n: { en: { title: 'English task title', description: 'English description', effects: ['English effect'] } } });
+  const response = await request('/providers?locale=en');
+  expect(response.status).toBe(200);
+  expect(f.provider.read).toHaveBeenCalledExactlyOnceWith({ locale: 'en' });
+  expect((await response.json()).data.providers[0]).toMatchObject({ title: 'English task title', description: 'English description',
+    effects: ['English effect'], revision: 'r1', tasks: book.tasks });
+  expect((await request('/create', create({ locale: 'en' }))).status).toBe(200);
+  expect(f.provider.create).toHaveBeenCalledExactlyOnceWith({ requestId, expectedRevision: 'r1', target, parameters, locale: 'en' });
+  const useCases = await request('/use-cases?locale=en');
+  expect((await useCases.json()).data.find((item: { id: string }) => item.id === 'reminder').title).toBe('Create a scheduled reminder');
+  for (const path of ['/providers?locale=de', '/providers?locale=en&locale=zh-CN', '/use-cases?locale=de']) {
+    expect((await request(path)).status).toBe(400);
+  }
+  expect((await request('/create', create({ locale: 'de' }))).status).toBe(400);
+});
+
 it('distinguishes an unloaded provider from an unavailable runtime and provides static use cases without a runtime', async () => {
   const empty = await start(setup({ missingProvider: true }));
   expect((await (await empty()).json()).data.providers).toEqual([]);
@@ -173,4 +191,14 @@ it('keeps an admitted operation alive through HMR and rejects subsequent stale r
   finish(); expect((await pending).status).toBe(200);
   expect(f.provider.create).toHaveBeenCalledTimes(1);
   await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(1));
+});
+
+it('localizes host failures while keeping the original status and machine code', async () => {
+  const f = setup(); const request = await start(f);
+  const response = await request('/create', create({ locale: 'en', generation: 42 }));
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ success: false, code: 'conflict', error: 'The generation or task revision changed. Refresh and reconcile before retrying.' });
+  expect(f.provider.create).not.toHaveBeenCalled();
+  const unavailable = await start();
+  expect(await (await unavailable('/providers?locale=en')).json()).toMatchObject({ code: 'unavailable', error: 'The task service is not ready or returned invalid data.' });
 });

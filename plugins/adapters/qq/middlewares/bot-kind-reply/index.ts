@@ -1,3 +1,4 @@
+import { messages as t } from '../../src/i18n.js';
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { CommandMessage } from 'zhin.js/command';
 import { endpointConfigurationStoreToken } from 'zhin.js/adapter';
@@ -7,7 +8,7 @@ import {
 import {
   parseQqBotKindAnswer,
   qqCommandSessionKey,
-  QQ_BOT_KIND_PROMPT,
+  qqBotKindPrompt,
 } from '../../src/qq-bot-kind-prompt.js';
 import { qqRuntimeStateToken } from '../../src/qq-runtime-state.js';
 
@@ -35,15 +36,15 @@ export default defineMiddleware<CommandMessage>({
 
     const raw = String(context.input.content ?? '').trim();
     // 让 qq endpoint cancel 等命令继续走命令链
-    if (raw.toLowerCase().startsWith('qq endpoint')) {
+    if ([...(pending.commandHeads ?? []), ...(pending.cancelCommand ? [pending.cancelCommand] : [])].some(head => raw.toLowerCase() === head.toLowerCase() || raw.toLowerCase().startsWith(`${head.toLowerCase()} `))) {
       await next();
       return;
     }
 
-    const botKind = parseQqBotKindAnswer(raw);
+    const botKind = parseQqBotKindAnswer(raw, pending.locale);
     if (!botKind) {
       await context.input.$reply?.(
-        `未识别「${raw}」。${QQ_BOT_KIND_PROMPT}`,
+        t(pending.locale, 'kindUnrecognized', { raw, prompt: qqBotKindPrompt(pending.locale, pending.cancelCommand) }),
       );
       return;
     }
@@ -58,7 +59,7 @@ export default defineMiddleware<CommandMessage>({
       await context.input.$reply?.(text);
     } catch (error) {
       await context.input.$reply?.(
-        `写入配置失败：${error instanceof Error ? error.message : String(error)}`,
+        t(pending.locale, 'configFailed', { error: error instanceof Error ? error.message : String(error) }),
       );
     }
   },

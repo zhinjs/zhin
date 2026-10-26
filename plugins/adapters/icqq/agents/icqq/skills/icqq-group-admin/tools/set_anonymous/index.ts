@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; enable?: boolean }>({
@@ -14,8 +15,8 @@ export default defineAgentTool<{ group_id: number; enable?: boolean }>({
     const client = context.$client;
     const on = enable ?? true;
     const selfInfo= client.pickMember(group_id,client.uin);
-    if(!selfInfo.is_admin && !selfInfo.is_owner) return { success: false, message: '机器人不是群主或管理员，无法开启或关闭匿名聊天' };
+    if(!selfInfo.is_admin && !selfInfo.is_owner) return { success: false, message: t(context.locale, 'anonymousForbidden') };
     await client.setGroupAnonymous(group_id, on);
-    return { success: true, message: on ? '已开启匿名聊天' : '已关闭匿名聊天' };
+    return { success: true, message: on ? t(context.locale, 'anonymousEnabled') : t(context.locale, 'anonymousDisabled') };
   },
 });

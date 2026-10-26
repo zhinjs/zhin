@@ -1,6 +1,7 @@
 import type { JSXElement } from '@zhin.js/jsx';
-import type { CommandMenuPage } from '@zhin.js/command';
+import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
 import { operationInputBinding, operationInputSignal } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MessageOrigin } from './inbound-origin.js';
@@ -109,6 +110,8 @@ export interface IncomingContext {
 }
 
 export interface SendRequest {
+  /** Language captured by the sending operation; absent for explicit sends without a user. */
+  readonly locale?: Locale;
   readonly conversation: ConversationRef;
   readonly requester: PluginId;
   readonly content: SendContent;
@@ -163,6 +166,13 @@ export interface MessageDispatchResult {
 
 /** Canonical message value delivered to inbound middleware and handlers. */
 export interface MessageBase extends IncomingMessage {
+  /** Language resolved from the sender and project when this operation began. */
+  readonly locale: Locale;
+  /** Effective chat command environment; undefined means no resolved environment. */
+  readonly commandPrefix?: string;
+  readonly commandMenu?: string;
+  /** Read-only reference to an installed command, using this operation's actual prefix. */
+  formatCommand(localPath: string, owner?: PluginId): string | undefined;
   readonly generation: number;
   readonly metadata: Readonly<Record<string, unknown>>;
   readonly id?: string;
@@ -189,6 +199,9 @@ export type Message<T extends object = {}> = MessageBase & T;
 
 /** @internal Generation-scoped implementation of the public Message contract. */
 export class RuntimeMessage implements MessageBase {
+  readonly locale: Locale;
+  readonly commandPrefix?: string;
+  readonly commandMenu?: string;
   readonly #resolveClient: () => unknown;
   readonly #reply: (content: SendContent, requester?: PluginId, targetConversation?: ConversationAddress) => Promise<DeliveryReceipt>;
   readonly #author?: PluginId;
@@ -221,6 +234,9 @@ export class RuntimeMessage implements MessageBase {
     },
     readonly clientAdapter?: string,
     binding: Readonly<{
+      locale?: Locale;
+      commands?: Readonly<{ prefix: string; menu?: string }>;
+      resolveCommands?: (message: RuntimeMessage) => Readonly<{ prefix: string; menu?: string }>;
       requester?: PluginId;
       snapshot?: RuntimeSnapshot;
       assertActive?: () => void;
@@ -229,6 +245,7 @@ export class RuntimeMessage implements MessageBase {
       registerOperationView?: (view: object, owner: PluginId) => void;
     }> = {},
   ) {
+    this.locale = resolveLocale(binding.locale);
     this.origin = binding.origin;
     this.#resolveClient = client;
     this.#reply = reply;
@@ -270,6 +287,9 @@ export class RuntimeMessage implements MessageBase {
         ...(threadId ? { threadId } : {}),
       });
     };
+    const commands = binding.commands ?? binding.resolveCommands?.(this);
+    this.commandPrefix = commands?.prefix;
+    this.commandMenu = commands?.menu;
     Object.freeze(this);
   }
 
@@ -285,7 +305,9 @@ export class RuntimeMessage implements MessageBase {
       this.conversation, this.content, this.generation, this.#reply,
       this.sender, this.metadata, this.segments, this.message, this.endpointId,
       this.mentioned, this.replyTo, this.#resolveClient, this.clientAdapter,
-      { requester: owner, snapshot, assertActive: this.#assertActive, origin: this.origin,
+      { requester: owner, snapshot, locale: this.locale,
+        ...(this.commandPrefix !== undefined ? { commands: { prefix: this.commandPrefix, menu: this.commandMenu } } : {}),
+        assertActive: this.#assertActive, origin: this.origin,
         retirementSignal: this.#retirementSignal, registerOperationView: this.#registerOperationView },
     );
   }
@@ -309,6 +331,15 @@ export class RuntimeMessage implements MessageBase {
   /** 平台原生消息 id（`message` 未提供时为 undefined）。 */
   get id(): string | undefined {
     return this.message?.id;
+  }
+
+  formatCommand(localPath: string, owner?: PluginId): string | undefined {
+    this.#assertActive?.();
+    if (!this.#snapshot) return undefined;
+    const commands = this.#snapshot.projections.get(commandFeatureId);
+    return isCommandIndex(commands)
+      ? commands.formatCommand(owner ?? this.#author ?? this.#snapshot.root, localPath, this.commandPrefix, this.locale)
+      : undefined;
   }
 
   readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;

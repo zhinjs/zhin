@@ -1,6 +1,9 @@
+import type { Locale } from 'zhin.js/i18n';
+import { conversationRefKey, type ConversationRef } from '@zhin.js/im-contract';
 import type { MusicInfo, MusicSource } from './types.js';
 
 export interface PendingSearch {
+  readonly locale?: Locale;
   readonly results: readonly MusicInfo[];
   readonly source: MusicSource;
   readonly keyword: string;
@@ -10,24 +13,23 @@ export interface PendingSearch {
 const SEARCH_TIMEOUT_MS = 3 * 60 * 1000;
 
 export function sessionKey(
-  endpointId: string,
-  conversationId: string,
+  conversation: ConversationRef,
   senderId: string,
 ): string {
-  return `${endpointId}:${conversationId}:${senderId}`;
+  return JSON.stringify([conversationRefKey(conversation), senderId]);
 }
 
 export function resolveMessageIds(input: {
   metadata?: Record<string, unknown>;
-  conversation?: { id?: unknown; endpoint?: { id?: unknown } };
+  conversation?: ConversationRef;
   sender?: { id?: unknown };
-}): { endpointId: string; conversationId: string; senderId: string } | null {
-  const meta = input.metadata ?? {};
-  const endpointId = String(meta.endpointId ?? input.conversation?.endpoint?.id ?? '');
-  const conversationId = String(input.conversation?.id ?? '');
-  const senderId = String(input.sender?.id ?? '');
-  if (!endpointId || !conversationId || !senderId) return null;
-  return { endpointId, conversationId, senderId };
+} | undefined): { conversation: ConversationRef; senderId: string } | null {
+  const conversation = input?.conversation;
+  const senderId = input?.sender?.id;
+  if (!conversation?.endpoint?.id || !conversation.endpoint.adapter || !conversation.id
+    || !['private', 'group', 'channel'].includes(conversation.kind)
+    || typeof senderId !== 'string' || !senderId) return null;
+  return { conversation, senderId };
 }
 
 /** Generation-owned pending music selections. */

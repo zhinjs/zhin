@@ -1,5 +1,5 @@
 import { expectTypeOf } from 'vitest';
-import type { Notice, Request, SystemEvent } from 'zhin.js';
+import type { Message, Notice, Request, SystemEvent } from 'zhin.js';
 import type { Notice as CoreNotice, Request as CoreRequest, SystemEvent as CoreSystem, RuntimeSystemEvent, SystemEventBase } from '@zhin.js/core';
 import type { Notice as RuntimeNotice, Request as RuntimeRequest, SystemEvent as RuntimeSystem } from '@zhin.js/core/runtime';
 import type { Notice as FacadeNotice, Request as FacadeRequest, SystemEvent as FacadeSystem } from 'zhin.js/core/runtime';
@@ -42,3 +42,18 @@ defineHandler({
     expectTypeOf(payload.type).toEqualTypeOf<'system'>();
   },
 });
+
+// Language and command references are part of the same public/runtime Message contract.
+import { createMessages, type Locale } from 'zhin.js/i18n';
+import type { Message as CoreMessage } from '@zhin.js/core';
+import type { Message as RuntimeMessage } from '@zhin.js/core/runtime';
+expectTypeOf<Message>().toEqualTypeOf<CoreMessage>();
+expectTypeOf<Message>().toEqualTypeOf<RuntimeMessage>();
+expectTypeOf<Message['locale']>().toEqualTypeOf<Locale>();
+expectTypeOf<Message['formatCommand']>().returns.toEqualTypeOf<string | undefined>();
+const translate = createMessages({ greeting: { 'zh-CN': '你好 {name}', en: 'Hello {name}' } });
+translate('en', 'greeting', { name: 'Ada' });
+// @ts-expect-error Incomplete catalogs must not silently lose one language.
+createMessages({ missing: { 'zh-CN': '只有中文' } });
+// @ts-expect-error Catalog keys are checked at the authoring boundary.
+translate('en', 'missing');

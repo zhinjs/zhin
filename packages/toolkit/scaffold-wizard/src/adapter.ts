@@ -1,3 +1,4 @@
+import { wizardText } from './messages.js';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import {
@@ -342,25 +343,25 @@ export const ADAPTERS: AdapterDefinition[] = [
 /**
  * 适配器选择与 Endpoint 配置引导向导
  */
-export async function configureAdapters(): Promise<AdapterSetupResult> {
+export async function configureAdapters(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AdapterSetupResult> {
   console.log('');
-  console.log(chalk.blue('🔌 配置聊天适配器'));
-  console.log(chalk.gray('  Sandbox 适合本地调试；生产环境请额外勾选目标 IM 平台。'));
-  console.log(chalk.gray('  带 Webhook 的适配器需要 Endpoint 可被公网访问（或使用内网穿透）。'));
+  console.log(chalk.blue(wizardText(locale, "🔌 配置聊天适配器")));
+  console.log(chalk.gray(wizardText(locale, "  Sandbox 适合本地调试；生产环境请额外勾选目标 IM 平台。")));
+  console.log(chalk.gray(wizardText(locale, "  带 Webhook 的适配器需要 Endpoint 可被公网访问（或使用内网穿透）。")));
 
   const { selectedAdapters } = await inquirer.prompt([
     {
       type: 'checkbox',
       name: 'selectedAdapters',
-      message: '选择聊天平台适配器（空格选择，回车确认）:',
+      message: wizardText(locale, "选择聊天平台适配器（空格选择，回车确认）:"),
       choices: ADAPTERS.map(a => ({
-        name: a.description ? `${a.name} — ${a.description}` : a.name,
+        name: a.description ? `${wizardText(locale, a.name)} — ${wizardText(locale, a.description)}` : wizardText(locale, a.name),
         value: a.value,
         checked: a.value === 'sandbox',
-        disabled: a.value === 'sandbox' ? '默认必选' : false,
+        disabled: a.value === 'sandbox' ? wizardText(locale, "默认必选") : false,
       })),
       validate: (input: string[]) => {
-        if (input.length === 0) return '至少选择一个适配器';
+        if (input.length === 0) return wizardText(locale, "至少选择一个适配器");
         return true;
       },
       pageSize: 22,
@@ -377,11 +378,11 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
 
   if (httpAdapters.length > 0) {
     console.log('');
-    console.log(chalk.yellow('  ⚠ 以下适配器通常需要公网 HTTP/Webhook：'));
+    console.log(chalk.yellow(wizardText(locale, "  ⚠ 以下适配器通常需要公网 HTTP/Webhook：")));
     for (const adapter of httpAdapters) {
-      console.log(chalk.gray(`    • ${adapter.name.split(' (')[0]}`));
+      console.log(chalk.gray(`    • ${wizardText(locale, adapter.name).split(' (')[0]}`));
     }
-    console.log(chalk.gray('    开发时可先用 Sandbox；上线前请确保 http 端口（默认 8068）可从平台回调。'));
+    console.log(chalk.gray(wizardText(locale, "    开发时可先用 Sandbox；上线前请确保 http 端口（默认 8068）可从平台回调。")));
   }
 
   const result: AdapterSetupResult = {
@@ -426,19 +427,20 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
     }
 
     console.log('');
-    console.log(chalk.yellow(`  📝 配置 ${adapterDef.name.split(' (')[0]} Bot`));
+    console.log(chalk.yellow(wizardText(locale, "  📝 配置 {v0} Bot", [wizardText(locale, adapterDef.name).split(' (')[0]])));
     if (adapterDef.setupHint) {
-      console.log(chalk.gray(`     ${adapterDef.setupHint}`));
+      console.log(chalk.gray(`     ${wizardText(locale, adapterDef.setupHint)}`));
     }
     if (adapterDef.docUrl && !adapterDef.configure) {
-      console.log(chalk.gray(`     文档: ${adapterDef.docUrl}`));
+      console.log(chalk.gray(wizardText(locale, "     文档: {v0}", [adapterDef.docUrl])));
     }
-    console.log(chalk.gray(`     索引: ${ADAPTERS_DOCS_URL}`));
+    console.log(chalk.gray(wizardText(locale, "     索引: {v0}", [ADAPTERS_DOCS_URL])));
 
     if (adapterDef.configure) {
       let markedDb = false;
       const instanceConfig = await adapterDef.configure({
         envVars: result.envVars,
+        locale,
         markRequiresDatabase: () => {
           markedDb = true;
           result.requiresDatabase = true;
@@ -455,17 +457,17 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
       const promptConfig: any = {
         type: field.type || 'input',
         name: 'value',
-        message: `  ${field.message}`,
+        message: `  ${wizardText(locale, field.message)}`,
         default: field.default,
       };
 
       if (field.type === 'select' && field.choices) {
-        promptConfig.choices = field.choices;
+        promptConfig.choices = field.choices.map(choice => ({ ...choice, name: wizardText(locale, choice.name) }));
       }
 
       if (field.required) {
         promptConfig.validate = (input: string) => {
-          if (!input || !input.trim()) return `${field.message.replace(':', '')} 不能为空`;
+          if (!input || !input.trim()) return wizardText(locale, "{v0} 不能为空", [wizardText(locale, field.message).replace(':', '')]);
           return true;
         };
       }
@@ -547,11 +549,11 @@ export function buildFieldBasedInstanceConfig(adapter: AdapterDefinition, values
 /**
  * 获取适配器配置需要写入 .env 的环境变量文本
  */
-export function generateAdapterEnvVars(result: AdapterSetupResult): string {
+export function generateAdapterEnvVars(result: AdapterSetupResult, locale: 'zh-CN' | 'en' = 'zh-CN'): string {
   const entries = Object.entries(result.envVars);
   if (entries.length === 0) return '';
 
-  const lines: string[] = ['', '# 适配器配置'];
+  const lines: string[] = ['', wizardText(locale, "# 适配器配置")];
   for (const [key, value] of entries) {
     lines.push(`${key}=${formatEnvValue(value)}`);
   }
@@ -582,29 +584,29 @@ export function collectAdapterPluginManifest(result: AdapterSetupResult): Array<
 /**
  * 获取适配器配置后的简要说明（用于初始化完成提示）
  */
-export function getAdapterSetupNotes(result: AdapterSetupResult): string[] {
+export function getAdapterSetupNotes(result: AdapterSetupResult, locale: 'zh-CN' | 'en' = 'zh-CN'): string[] {
   const notes: string[] = [];
   for (const instance of result.instances) {
     const context = instance.instanceKey;
     const entry = instance.config;
     if (context === 'telegram' && entry.polling === false) {
-      notes.push('Telegram Webhook: 确保 HTTPS 域名可从公网访问，且 http 端口已放行');
+      notes.push(wizardText(locale, "Telegram Webhook: 确保 HTTPS 域名可从公网访问，且 http 端口已放行"));
     }
     if (context === 'telegram' && entry.polling !== false) {
-      notes.push('Telegram polling: 本地开发可直接 pnpm dev，无需公网');
+      notes.push(wizardText(locale, "Telegram polling: 本地开发可直接 pnpm dev，无需公网"));
     }
     if (context === 'github') {
       const endpoints = Array.isArray(entry.endpoints) ? entry.endpoints as Array<Record<string, unknown>> : [];
       const firstEndpoint = endpoints[0] ?? {};
       if (firstEndpoint.webhook_secret) {
-        notes.push('GitHub Webhook: App 设置 URL 为 https://<域名>/github/webhook');
+        notes.push(wizardText(locale, "GitHub Webhook: App 设置 URL 为 https://<域名>/github/webhook"));
       } else {
-        notes.push('GitHub polling: 无 Webhook 时将轮询 Events API（默认 60s）');
+        notes.push(wizardText(locale, "GitHub polling: 无 Webhook 时将轮询 Events API（默认 60s）"));
       }
       if (firstEndpoint.app_id) {
-        notes.push('GitHub App: 私钥路径需存在，且 App 已安装到目标仓库');
+        notes.push(wizardText(locale, "GitHub App: 私钥路径需存在，且 App 已安装到目标仓库"));
       } else {
-        notes.push('GitHub gh CLI: 运行 gh auth login 完成认证');
+        notes.push(wizardText(locale, "GitHub gh CLI: 运行 gh auth login 完成认证"));
       }
     }
   }
@@ -618,7 +620,7 @@ export function getAdapterSetupNotes(result: AdapterSetupResult): string[] {
   }
 
   if (result.requiresDatabase) {
-    notes.push('已选适配器需要 database：脚手架将自动配置 SQLite');
+    notes.push(wizardText(locale, "已选适配器需要 database：脚手架将自动配置 SQLite"));
   }
 
   return notes;

@@ -3,6 +3,6 @@ import { sixtySClientToken } from '../../src/client.js';
 import handler from '../../src/handlers/bing-image.js';
 
 export default defineCommand({
-  description: 'Bing 每日壁纸',
-  execute: ({ use }) => handler(use(sixtySClientToken)),
+  description: 'Bing 每日壁纸', descriptionI18n: { en: "Bing daily wallpaper" },
+  execute: ({ use, locale }) => handler(use(sixtySClientToken), locale),
 });

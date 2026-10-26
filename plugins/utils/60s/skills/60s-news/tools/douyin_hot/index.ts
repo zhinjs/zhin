@@ -9,6 +9,6 @@ export default defineAgentTool<{ limit?: number }>({
   tags: ["热搜", "短视频", "抖音"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/douyin-hot.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

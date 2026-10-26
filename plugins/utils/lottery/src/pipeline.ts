@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import type { GameId } from './types.js';
 import { syncGame, type LotteryDb } from './db.js';
 
@@ -19,6 +21,7 @@ import { cancelTodayPendingPredictions } from './evaluate/tracker.js';
 import type { Kl8Config } from './games/kl8-groups.js';
 
 export interface PipelineDeps {
+  locale?: Locale;
   db: LotteryDb;
   enabledGames: () => GameId[];
   historyLimit: number;
@@ -57,7 +60,7 @@ async function attachBacktestOverview(
   const summaries = holdoutSummaries.length
     ? holdoutSummaries
     : await runBacktestForGames(db, gameIds, backtestOpts(deps));
-  return formatBacktestSection(summaries);
+  return formatBacktestSection(summaries, deps.locale);
 }
 
 export interface PipelineOptions {
@@ -128,11 +131,11 @@ export async function runLotteryPipeline(
   let recommendText: string;
 
   if (!needPredict.length) {
-    const existing = await resolveTodayReport(db, gameIds);
+    const existing = await resolveTodayReport(db, gameIds, new Date(), deps.locale);
     if (existing) {
       recommendText = 'reused today picks';
       existing.weightFallbackGames = weightPlan.fallbacks.length ? weightPlan.fallbacks : undefined;
-      existing.backtestOverview = await attachBacktestOverview(db, gameIds, deps, holdoutSummaries);
+      existing.backtestOverview = await attachBacktestOverview(db, gameIds, { ...deps, locale: resolveLocale(existing.locale) }, holdoutSummaries);
       reportText = formatDailyReportText(existing, '');
     } else {
       recommendText = 'skipped (no picks available)';
@@ -141,7 +144,7 @@ export async function runLotteryPipeline(
     const report = await buildDailyReport(
       db,
       needPredict,
-      { pickCount: deps.pickCount, historyLimit: deps.historyLimit, kl8: deps.kl8 },
+      { pickCount: deps.pickCount, historyLimit: deps.historyLimit, kl8: deps.kl8, locale: deps.locale },
       new Date(),
       true,
       weightPlan.overrides,
@@ -150,7 +153,7 @@ export async function runLotteryPipeline(
     report.backtestOverview = await attachBacktestOverview(db, gameIds, deps, holdoutSummaries);
 
     if (needPredict.length < gameIds.length) {
-      const existing = await resolveTodayReport(db, gameIds);
+      const existing = await resolveTodayReport(db, gameIds, new Date(), deps.locale);
       if (existing?.picks?.length) {
         const regen = new Set(needPredict);
         report.picks = [
@@ -184,7 +187,7 @@ export async function runLotteryPipeline(
   };
 }
 
-export function formatPipelineReply(result: PipelineStepResult): string {
+export function formatPipelineReply(result: PipelineStepResult, locale?: Locale): string {
   if (result.reportText.trim()) return result.reportText.trim();
-  return '暂无推荐号码，请确认已同步开奖数据。';
+  return t(locale, 'noPicks');
 }

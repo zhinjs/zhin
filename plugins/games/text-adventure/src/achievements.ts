@@ -1,3 +1,4 @@
+import { type Locale } from 'zhin.js/i18n';
 import { ITEM_IDS } from './story-items.js';
 import { endingIds, playableSceneIds } from './story-catalog.js';
 
@@ -6,6 +7,8 @@ export interface AchievementDef {
   icon: string;
   title: string;
   description: string;
+  titleEn: string;
+  descriptionEn: string;
   hidden?: boolean;
 }
 
@@ -23,21 +26,21 @@ export interface AchievementContext {
 }
 
 export const ACHIEVEMENTS: AchievementDef[] = [
-  { id: 'first_footprint', icon: '👣', title: '初探者', description: '累计探索 5 个区域' },
-  { id: 'cartographer', icon: '🗺️', title: '制图师', description: '解锁半数区域（50%+）' },
-  { id: 'master_explorer', icon: '🧭', title: '全图行者', description: '解锁全部可探索区域' },
-  { id: 'ending_hunter', icon: '🎬', title: '结局猎人', description: '见证 3 种不同结局' },
-  { id: 'ending_collector', icon: '📚', title: '结局收藏家', description: '见证 8 种不同结局' },
-  { id: 'completionist', icon: '👑', title: '秘境通晓者', description: '见证全部 15 种结局' },
-  { id: 'star_ascendant', icon: '🌟', title: '星辉守忆', description: '达成「星辉归位」结局' },
-  { id: 'moon_guardian', icon: '🌙', title: '月池星守', description: '达成「星守誓约」结局' },
-  { id: 'mask_monarch', icon: '🎭', title: '面具之王', description: '达成「面具之王」结局' },
-  { id: 'item_hoarder', icon: '🎒', title: '拾荒大师', description: '生涯累计发现 10 种道具' },
-  { id: 'full_satchel', icon: '💎', title: '万象行囊', description: '生涯集齐全部 15 种道具' },
-  { id: 'marathon_runner', icon: '🏃', title: '马拉松探险', description: '单局步数达到 50+' },
-  { id: 'veteran', icon: '⚔️', title: '遗迹老兵', description: '完成 5 局冒险' },
-  { id: 'whisper_listener', icon: '👂', title: '低语聆听者', description: '进入低语画廊' },
-  { id: 'deep_diver', icon: '🌊', title: '沉殿潜行者', description: '抵达水下沉殿' },
+  { id: 'first_footprint', icon: '👣', title: '初探者', description: '累计探索 5 个区域', titleEn: "First Footprints", descriptionEn: "Explore 5 regions across your adventures" },
+  { id: 'cartographer', icon: '🗺️', title: '制图师', description: '解锁半数区域（50%+）', titleEn: "Cartographer", descriptionEn: "Discover at least half of all regions" },
+  { id: 'master_explorer', icon: '🧭', title: '全图行者', description: '解锁全部可探索区域', titleEn: "Master Explorer", descriptionEn: "Discover every explorable region" },
+  { id: 'ending_hunter', icon: '🎬', title: '结局猎人', description: '见证 3 种不同结局', titleEn: "Ending Hunter", descriptionEn: "Witness 3 different endings" },
+  { id: 'ending_collector', icon: '📚', title: '结局收藏家', description: '见证 8 种不同结局', titleEn: "Ending Collector", descriptionEn: "Witness 8 different endings" },
+  { id: 'completionist', icon: '👑', title: '秘境通晓者', description: '见证全部 15 种结局', titleEn: "Completionist", descriptionEn: "Witness all 15 endings" },
+  { id: 'star_ascendant', icon: '🌟', title: '星辉守忆', description: '达成「星辉归位」结局', titleEn: "Keeper of Starlight", descriptionEn: "Reach the Starlight Restored ending" },
+  { id: 'moon_guardian', icon: '🌙', title: '月池星守', description: '达成「星守誓约」结局', titleEn: "Moon Guardian", descriptionEn: "Reach the Star Keeper's Oath ending" },
+  { id: 'mask_monarch', icon: '🎭', title: '面具之王', description: '达成「面具之王」结局', titleEn: "King of Masks", descriptionEn: "Reach the King of Masks ending" },
+  { id: 'item_hoarder', icon: '🎒', title: '拾荒大师', description: '生涯累计发现 10 种道具', titleEn: "Master Scavenger", descriptionEn: "Discover 10 different items across your adventures" },
+  { id: 'full_satchel', icon: '💎', title: '万象行囊', description: '生涯集齐全部 15 种道具', titleEn: "Full Satchel", descriptionEn: "Discover all 15 items across your adventures" },
+  { id: 'marathon_runner', icon: '🏃', title: '马拉松探险', description: '单局步数达到 50+', titleEn: "Marathon Explorer", descriptionEn: "Take at least 50 steps in one adventure" },
+  { id: 'veteran', icon: '⚔️', title: '遗迹老兵', description: '完成 5 局冒险', titleEn: "Ruins Veteran", descriptionEn: "Complete 5 adventures" },
+  { id: 'whisper_listener', icon: '👂', title: '低语聆听者', description: '进入低语画廊', titleEn: "Whisper Listener", descriptionEn: "Enter the Whispering Gallery" },
+  { id: 'deep_diver', icon: '🌊', title: '沉殿潜行者', description: '抵达水下沉殿', titleEn: "Deep Diver", descriptionEn: "Reach the Sunken Shrine" },
 ];
 
 const PLAYABLE_TOTAL = playableSceneIds().length;
@@ -81,8 +84,9 @@ export function evaluateAchievements(
   return newly;
 }
 
-export function achievementById(id: string): AchievementDef | undefined {
-  return ACHIEVEMENTS.find((a) => a.id === id);
+export function achievementById(id: string, locale: Locale = 'zh-CN'): AchievementDef | undefined {
+  const def = ACHIEVEMENTS.find((a) => a.id === id);
+  return def && locale === 'en' ? { ...def, title: def.titleEn, description: def.descriptionEn } : def;
 }
 
 export function totalAchievements(): number {

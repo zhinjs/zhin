@@ -22,7 +22,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   const sql = database && ['sqlite', 'mysql', 'pg'].includes(database.dialect);
   let usage: DatabaseAgentUsageStore | undefined;
   if (sql) {
-    database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL);
+    database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL, { addColumns: ['locale'] });
     database.define('agent_schedule_migration', SCHEDULE_JOB_MIGRATION_MODEL);
     database.define('agent_usage_turns', AGENT_USAGE_TURN_MODEL);
     database.define('agent_usage_calls', AGENT_USAGE_CALL_MODEL);

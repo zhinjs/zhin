@@ -1,3 +1,4 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import type {
   CommandContext, CommandDefinition, CommandMessage, CommandParameterValue,
 } from 'zhin.js/command';
@@ -21,6 +22,7 @@ export interface FakeMessage extends CommandMessage {
 }
 
 export interface FakeMessageInit {
+  readonly locale?: Locale;
   readonly content?: string;
   readonly sender?: { readonly id: string; readonly name?: string; readonly roles?: readonly string[] };
   readonly conversation?: Partial<CommandMessage['conversation']>;
@@ -35,7 +37,7 @@ export function createFakeMessage(init: FakeMessageInit = {}): FakeMessage {
     endpoint: { id: 'test', adapter: 'test' }, kind: 'group', id: 'test-group', ...init.conversation,
   };
   return {
-    conversation, content: init.content ?? '',
+    conversation, content: init.content ?? '', locale: resolveLocale(init.locale),
     sender: init.sender ?? { id: 'test-user', name: 'Tester', roles: [] },
     ...(init.id === undefined ? {} : { id: init.id }),
     ...(init.metadata === undefined ? {} : { metadata: init.metadata }),
@@ -46,6 +48,8 @@ export function createFakeMessage(init: FakeMessageInit = {}): FakeMessage {
 }
 
 export interface RunCommandOptions<TInput extends CommandMessage = FakeMessage> {
+  readonly locale?: Locale;
+  readonly formatCommand?: CommandContext['formatCommand'];
   readonly input?: TInput;
   readonly args?: readonly string[];
   readonly params?: Readonly<Record<string, CommandParameterValue>>;
@@ -72,6 +76,8 @@ export function createCommandContext<TConfig, TInput extends CommandMessage = Fa
   const sender = input.sender;
   return {
     ...fake.capabilityContext(),
+    locale: options.locale ?? resolveLocale(input.locale),
+    formatCommand: options.formatCommand ?? (() => undefined),
     args: options.args ?? [],
     params: options.params ?? {},
     options: options.options ?? {},
@@ -146,6 +152,7 @@ export async function runHandler<TConfig>(
 }
 
 export interface RunToolOptions {
+  readonly locale?: Locale;
   /**
    * Derive `origin` (`kind: 'im'`) and `principal` from an inbound message, so a tool sees the same
    * conversation the command tests use. Explicit `origin` / `principal` win.
@@ -192,6 +199,7 @@ export function createToolContext<TConfig, TAdapter extends string | undefined =
   const policy = options.policy ?? {};
   const context = {
     ...fake.capabilityContext(),
+    locale: options.locale ?? resolveLocale(message?.locale),
     signal: options.signal ?? fake.signal,
     traceId: options.traceId ?? 'test-trace',
     turnId: options.turnId ?? 'test-turn',

@@ -17,6 +17,7 @@ export function generateScheduleJobId(): string {
 }
 
 export interface ScheduleAddInput {
+  locale?: import('@zhin.js/plugin-runtime').Locale;
   id?: string;
   label?: string;
   prompt: string;
@@ -32,7 +33,7 @@ export interface ScheduleAddInput {
 
 export type ScheduleInvocationContext = Pick<
   ToolInvocationContext,
-  'origin' | 'principal' | 'sessionKey'
+  'origin' | 'principal' | 'sessionKey' | 'locale'
 >;
 
 export async function addScheduleJob(
@@ -43,6 +44,7 @@ export async function addScheduleJob(
   return engine.addJob({
     id: input.id ?? generateScheduleJobId(),
     label: input.label,
+    locale: input.locale,
     enabled: input.enabled ?? true,
     schedule: input.schedule,
     action: { kind: 'agent', prompt: actionPrompt },
@@ -169,6 +171,7 @@ export function parseScheduleAddFromToolArgs(
     notify,
     label: args.label != null ? String(args.label) : undefined,
     source: 'schedule',
+    locale: context.locale,
     createdBy: scheduleJobCreatorFromPrincipal(context.principal),
     executionPlan,
     activityFeedback: args.activity_feedback === true ? true : undefined,

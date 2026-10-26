@@ -29,7 +29,7 @@ async function fixture(options: { host?: 'missing' | 'unverified'; empty?: boole
   const adapter = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'permission-test', source: '/private/adapter.ts',
     definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => new TestEndpoint() }) });
   const definitions = [
-    ['admin', defineCommand({ adapter: 'permission-test', description: '仅群聊管理员', permit: ['group()', 'role(admin)'],
+    ['admin', defineCommand({ adapter: 'permission-test', description: '仅群聊管理员', descriptionI18n: { en: 'Group administrators only' }, permit: ['group()', 'role(admin)'],
       params: { text: { type: 'string', default: factory, validate } }, execute })],
     ['platform', defineCommand({ permit: ['platform(permission-test,admin)'], execute })],
     ['open', defineCommand({ execute })],
@@ -175,4 +175,20 @@ it('rejects bad or oversized JSON before reading runtime and sanitizes arbitrary
   const failing = { $projection: 'zhin.command-index/1', list() { throw new Error('PRIVATE-STACK-TOKEN'); } };
   f.store.commit(0, { snapshot: { ...f.base, projections: new Map([[commandFeatureId, failing]]) }, dispose: () => undefined });
   const response = await f.request(); expect(response.status).toBe(500); expect(await response.text()).not.toContain('PRIVATE-STACK-TOKEN'); expectNoExecution(f);
+});
+
+it('localizes authority explanations without changing identity or invoking checks', async () => {
+  const f = await fixture();
+  const listing = await (await f.request('?locale=en')).json();
+  expect(listing.data.commands.find((item: { id: string }) => item.id === f.commandId('admin')).description).toBe('Group administrators only');
+  const result = await f.request('/explain?locale=en', { generation: 0, commandId: f.commandId('admin'), target: f.group, sender: { id: 'alice', roles: ['admin'] } });
+  const body = await result.json();
+  expect(body.data.target).toEqual(f.group);
+  expect(body.data.summary.outcome).toBe('match');
+  expect(JSON.stringify(body.data)).not.toMatch(/[\p{Script=Han}]/u);
+  const stale = await f.request('/explain?locale=en', { generation: 1, commandId: f.commandId('admin') });
+  expect(stale.status).toBe(409); expect((await stale.json()).error).toContain('generation changed');
+  expect((await f.request('?locale=en&locale=zh-CN')).status).toBe(400);
+  expect((await f.request('/explain?locale=de', { generation: 0, commandId: f.commandId('admin') })).status).toBe(400);
+  expectNoExecution(f);
 });

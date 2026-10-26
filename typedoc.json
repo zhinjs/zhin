@@ -2,6 +2,7 @@
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
     "packages/im/plugin-runtime/src/plugin.ts",
+    "packages/im/zhin/src/i18n.ts",
     "packages/im/core/src/feature/command-public-api.ts",
     "packages/im/adapter/src/definition.ts",
     "packages/im/component/src/definition.ts",

@@ -10,8 +10,8 @@ export default defineAgentTool<{ language: string; code: string }>({
   }),
   keywords: ['运行代码', '执行代码', 'run code', 'execute', '代码'],
   tags: ['code', 'run', 'execute', 'sandbox'],
-  async execute({ language, code }) {
-    const result = await runCode(language, code);
-    return formatResult(result);
+  async execute({ language, code }, context) {
+    const result = await runCode(language, code, undefined, context.locale);
+    return formatResult(result, context.locale);
   },
 });

@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 import { secureRandomItem } from '@zhin.js/game-kit';
 
 export const RPS_PREFIX = 'rps';
@@ -44,3 +45,6 @@ export function parseMove(raw: string): RpsMove | null {
 }
 
 export const WIN_TARGET = 3;
+
+const moveMessages = createMessages({ rock: { 'zh-CN': '✊ 石头', en: '✊ Rock' }, paper: { 'zh-CN': '✋ 布', en: '✋ Paper' }, scissors: { 'zh-CN': '✌️ 剪刀', en: '✌️ Scissors' } });
+export function moveLabel(move: RpsMove, locale?: Locale | null): string { return moveMessages(locale ?? undefined, move); }

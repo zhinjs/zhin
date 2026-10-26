@@ -154,7 +154,7 @@ async function createProject(): Promise<string> {
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
   const pageFiles = [
     'index/index.tsx', 'index/SandboxChat.tsx', 'index/RichTextEditor.tsx', 'index/HtmlMessage.tsx',
-    'index/sandboxTransport.ts', 'index/agentTrace.ts', 'index/playgroundState.ts',
+    'index/messages.ts', 'index/sandboxTransport.ts', 'index/agentTrace.ts', 'index/playgroundState.ts',
   ];
   for (const name of pageFiles) {
     const dest = join(root, 'pages', name);

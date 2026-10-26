@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -13,6 +14,6 @@ export default defineAgentTool<{ user_id: number; times?: number }>({
   async execute({ user_id, times }: { user_id: number; times?: number }, context) {
     const endpoint = context.$client;
       await endpoint.sendLike(user_id, times || 1);
-      return { success: true, message: `已给 ${user_id} 点赞 ${times || 1} 次` };
+      return { success: true, message: t(context.locale, 'likesSent', { p0: user_id, p1: times || 1 }) };
   },
 });

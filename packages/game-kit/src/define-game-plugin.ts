@@ -2,6 +2,7 @@ import {
   databaseHostToken,
   definePlugin,
   outboundHostToken,
+  resolveLocale,
   scheduleHostToken,
   type PluginMetadata,
   type PluginDatabaseHost,
@@ -28,6 +29,7 @@ import type {
   BaseGameSessionRow,
   BaseSessionService,
 } from './base-session-service.js';
+import { gameMessages } from './messages.js';
 
 export interface GamePluginSession<
   TRow extends BaseGameSessionRow = BaseGameSessionRow,
@@ -138,6 +140,7 @@ export function defineGamePlugin<
                 if (!row.adapter || !row.endpoint
                   || !row.channel_type || !row.channel_id) return;
                 const outbound = context.resources.use(outboundHostToken);
+                const locale = resolveLocale(row.locale);
                 await outbound.send({
                   adapter: row.adapter,
                   endpointKey: row.endpoint,
@@ -148,7 +151,8 @@ export function defineGamePlugin<
                   content: typeof stale.message === 'function'
                     ? stale.message(row)
                     : stale.message
-                      ?? `${options.game.icon} ${options.game.title}对局因长时间无操作已结束。`,
+                      ?? gameMessages(locale, 'stale', { icon: options.game.icon,
+                        title: options.game.titleI18n?.[locale] ?? options.game.title }),
                 });
               },
             );

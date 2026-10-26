@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -18,15 +19,15 @@ export default defineAgentTool<{ chat_id: string; question: string; options: str
     try {
       optList = JSON.parse(options);
     } catch {
-      return { success: false, message: 'options 格式错误，应为 JSON 数组' };
+      return { success: false, message: t(context.locale, 'invalidPollOptions') };
     }
     if (!Array.isArray(optList) || optList.length < 2) {
-      return { success: false, message: '至少需要 2 个选项' };
+      return { success: false, message: t(context.locale, 'pollOptionCount') };
     }
     const result = await endpoint.sendPoll(
       Number(chat_id), question, optList,
       is_anonymous ?? true, allows_multiple ?? false,
     );
-    return { success: true, message_id: result.message_id, message: '投票已发送' };
+    return { success: true, message_id: result.message_id, message: t(context.locale, 'pollSent') };
   },
 });

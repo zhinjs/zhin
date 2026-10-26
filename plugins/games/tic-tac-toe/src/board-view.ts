@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 import type { SendContent } from '@zhin.js/core/runtime';
 import {
   buildGridKeyboard,
@@ -45,6 +46,7 @@ function renderTttAscii(
 }
 
 export function buildBoardInteractive(options: {
+  locale?: Locale;
   sessionId: string;
   board: Board;
   statusLine: string;
@@ -57,6 +59,7 @@ export function buildBoardInteractive(options: {
   const { sessionId, board, statusLine, terminal, omitAsciiBoard, highlight, channelType } = options;
 
   return buildGridKeyboard({
+    locale: options.locale,
     gamePrefix: TTT_PREFIX,
     sessionId,
     rows: 3,
@@ -67,9 +70,9 @@ export function buildBoardInteractive(options: {
     omitAsciiBoard,
     renderAscii: renderTttAscii,
     highlight,
-    fallbackHint: '落子：回复数字 1-9（仅空格）',
+    fallbackHint: messages(options.locale, 'text1'),
     postChoices: terminal
-      ? [{ id: 'restart', label: '🔄 再来一局', style: 'primary' }]
+      ? [{ id: 'restart', label: messages(options.locale, 'text2'), style: 'primary' }]
       : undefined,
     channelType,
   });
@@ -96,3 +99,8 @@ export function parseCellButtonId(value: string): number | null {
 export function markName(mark: Cell): string {
   return mark === X ? '✕' : '○';
 }
+
+const messages = createMessages({
+  text1: { 'zh-CN': "落子：回复数字 1-9（仅空格）", en: "Move: reply with a number 1–9 (empty cells only)" },
+  text2: { 'zh-CN': "🔄 再来一局", en: "🔄 Play again" },
+});

@@ -5,6 +5,8 @@ description: "The structure of zhin.config.yml and every top-level key: HTTP, da
 
 # Configuration Reference
 
+See [Language and localization](./localization.md) for project, personal, and Console language settings.
+
 This is the complete reference for `zhin.config.yml`. When configuring for the first time, run `npx zhin setup` to generate a config that boots, then come back here for the fields you need to change.
 
 ## Most common changes

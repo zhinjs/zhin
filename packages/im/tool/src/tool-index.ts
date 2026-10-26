@@ -3,6 +3,7 @@ import type {
   PluginId,
   RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
+import { isLocale, projectLocaleToken, resolveLocale } from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,
   createCapabilityContext,
@@ -87,6 +88,8 @@ export class ToolIndex {
     const capability = createCapabilityContext(operationSnapshot, entry.owner);
     const context = {
       ...capability,
+      locale: isLocale(invocation.locale) ? invocation.locale
+        : resolveLocale(operationSnapshot.resources.get(entry.owner)?.get(projectLocaleToken.id)),
       signal: invocation.signal,
       traceId: invocation.traceId,
       turnId: invocation.turnId,

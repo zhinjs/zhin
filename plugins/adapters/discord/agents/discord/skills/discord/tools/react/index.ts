@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
@@ -15,10 +16,10 @@ export default defineAgentTool<{ channel_id: string; message_id: string; emoji: 
     const client = requireDiscordGatewayClient(context.$client);
     const channel = await client.channels.fetch(channel_id);
     if (!channel?.isTextBased() || !channel.messages) {
-      throw new Error(`Channel ${channel_id} 不是文本频道`);
+      throw new Error(t(context.locale, 'notTextChannel', { p0: channel_id }));
     }
     const message = await channel.messages.fetch(message_id);
     await message.react(emoji);
-    return { success: true, message: `已添加反应 ${emoji}` };
+    return { success: true, message: t(context.locale, 'reactionAdded', { p0: emoji }) };
   },
 });

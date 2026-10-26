@@ -1,3 +1,4 @@
+import { message } from './messages.js';
 /**
  * Resilient JSON-over-HTTP for third-party, keyless public APIs.
  *
@@ -118,7 +119,7 @@ export class HttpClient {
       }
       await this.#deps.sleep(delay, options.signal);
     }
-    throw lastError ?? new NettoolsError('network', `${options.provider} 请求失败`);
+    throw lastError ?? new NettoolsError('network', message('requestFailed', { provider: options.provider }));
   }
 
   async #attempt(url: URL, options: FetchJsonOptions): Promise<AttemptOutcome> {
@@ -155,7 +156,7 @@ export class HttpClient {
 
     const body = parseJsonSafely(text);
     if (body === undefined) {
-      const error = new NettoolsError('malformed', `${options.provider} 返回了无法解析的数据`);
+      const error = new NettoolsError('malformed', message('responseMalformed', { provider: options.provider }));
       return { kind: 'error', retryable: false, error };
     }
     const finalUrl = response.url || url.toString();
@@ -168,11 +169,11 @@ export class HttpClient {
     }
     if (timeoutSignal.aborted) {
       const seconds = Math.round(this.#policy.timeoutMs / 1000);
-      const timeout = new NettoolsError('timeout', `${options.provider} 响应超时（${seconds}s）`, { cause: error });
+      const timeout = new NettoolsError('timeout', message('timeout', { provider: options.provider, seconds }), { cause: error });
       return { kind: 'error', retryable: true, error: timeout };
     }
     const detail = error instanceof Error ? error.message : String(error);
-    const network = new NettoolsError('network', `无法连接 ${options.provider}：${detail}`, { cause: error });
+    const network = new NettoolsError('network', message('network', { provider: options.provider, detail }), { cause: error });
     return { kind: 'error', retryable: true, error: network };
   }
 
@@ -180,13 +181,13 @@ export class HttpClient {
     const status = response.status;
     const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'), this.#deps.now());
     if (status === 429) {
-      const error = new NettoolsError('rate_limited', `${provider} 请求过于频繁，请稍后再试`, {
+      const error = new NettoolsError('rate_limited', message('rateLimited', { provider }), {
         status,
         ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
       });
       return { kind: 'error', retryable: true, error, retryAfterMs };
     }
-    const error = new NettoolsError('http', `${provider} 返回错误 HTTP ${status}`, { status });
+    const error = new NettoolsError('http', message('http', { provider, status }), { status });
     const retryable = RETRYABLE_STATUSES.has(status);
     return { kind: 'error', retryable, error, retryAfterMs };
   }
@@ -247,7 +248,7 @@ async function readLimitedText(response: Response, maxBytes: number): Promise<st
   const declared = Number(response.headers.get('content-length') ?? '');
   if (Number.isFinite(declared) && declared > maxBytes) {
     await discardBody(response);
-    throw new NettoolsError('malformed', '响应体过大，已拒绝读取');
+    throw new NettoolsError('malformed', message('tooLarge'));
   }
   if (!response.body) {
     return await response.text();
@@ -264,7 +265,7 @@ async function readLimitedText(response: Response, maxBytes: number): Promise<st
     received += chunk.value.byteLength;
     if (received > maxBytes) {
       await reader.cancel();
-      throw new NettoolsError('malformed', '响应体过大，已拒绝读取');
+      throw new NettoolsError('malformed', message('tooLarge'));
     }
     text += decoder.decode(chunk.value, { stream: true });
   }
@@ -287,13 +288,13 @@ function throwIfAborted(signal: AbortSignal | undefined, provider: string): void
 }
 
 function abortedError(provider: string): NettoolsError {
-  return new NettoolsError('aborted', `${provider} 请求已取消`);
+  return new NettoolsError('aborted', message('providerAborted', { provider }));
 }
 
 export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new NettoolsError('aborted', '请求已取消'));
+      reject(new NettoolsError('aborted', message('aborted')));
       return;
     }
     const timer = setTimeout(() => {
@@ -302,7 +303,7 @@ export function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> 
     }, ms);
     const onAbort = (): void => {
       clearTimeout(timer);
-      reject(new NettoolsError('aborted', '请求已取消'));
+      reject(new NettoolsError('aborted', message('aborted')));
     };
     signal?.addEventListener('abort', onAbort, { once: true });
   });

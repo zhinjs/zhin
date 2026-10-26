@@ -1,3 +1,4 @@
+import { messages as t, kindText } from '../../../../src/i18n.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { bilibiliRuntimeToken } from '../../../../src/runtime.js';
@@ -11,14 +12,14 @@ export default defineAgentTool({
   inputSchema: z.object({}),
   async execute(_input, context) {
     const Subs = getBiliSubs(context.use(bilibiliRuntimeToken).db);
-    if (!Subs) return 'B 站订阅数据库尚未就绪';
+    if (!Subs) return t(context.locale, 'db');
     const rows = await Subs.select();
-    if (rows.length === 0) return '暂无任何 B 站订阅';
+    if (rows.length === 0) return t(context.locale, 'allEmpty');
     const grouped = new Map<string, string[]>();
     for (const row of rows) {
       const key = `${String(row.channel_type)}:${String(row.channel_id)}`;
       const list = grouped.get(key) ?? [];
-      list.push(`${String(row.uname || row.uid)}（UID ${String(row.uid)}，${String(row.kinds || 'all')}）`);
+      list.push(`${String(row.uname || row.uid)}（UID ${String(row.uid)}，${kindText(row.kinds, context.locale)}）`);
       grouped.set(key, list);
     }
     const lines: string[] = [];
@@ -26,6 +27,6 @@ export default defineAgentTool({
       lines.push(`[${channel}]`);
       for (const sub of subs) lines.push(`  - ${sub}`);
     }
-    return `B 站订阅总览 (${rows.length} 条)：\n${lines.join('\n')}`;
+    return t(context.locale, 'overview', { count: rows.length, items: lines.join('\n') });
   },
 });

@@ -21,6 +21,6 @@ export default defineAgentTool<RecentEarthquakesInput>({
   keywords: ['地震', '震级', '余震', '地震速报', 'earthquake', 'quake', 'seismic'],
   tags: ['地震', '查询', '实时'],
   async execute({ limit, minMagnitude, region, hours }, context) {
-    return renderRecentEarthquakes(context.use(earthquakeServiceToken), { limit, minMagnitude, region, hours });
+    return renderRecentEarthquakes(context.use(earthquakeServiceToken), { limit, minMagnitude, region, hours }, context.locale);
   },
 });

@@ -5,9 +5,9 @@ import { pointsRank } from '../../src/checkin-lib.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
-  description: '查看积分排行榜',
+  description: '查看积分排行榜', descriptionI18n: { en: "View the points leaderboard" },
   alias: ['checkin rank'],
-  execute({ config, input, owner, use }) {
-    return pointsRank(input ?? {}, resolveGroupSuiteConfig(config), resolveGroupSuiteRuntime({ owner, use }));
+  execute({ config, input, owner, use, locale }) {
+    return pointsRank({ ...input, locale }, resolveGroupSuiteConfig(config), resolveGroupSuiteRuntime({ owner, use }));
   },
 });

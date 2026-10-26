@@ -182,6 +182,9 @@
   "zhin.js/component": [
     "export * from '@zhin.js/core/feature/component';"
   ],
+  "zhin.js/i18n": [
+    "export{createMessages,DEFAULT_LOCALE,SUPPORTED_LOCALES,isLocale,resolveLocale,projectLocaleToken,type Locale,type MessageCatalog,type MessageValues}from '@zhin.js/plugin-runtime';"
+  ],
   "@zhin.js/jsx": [
     "export type{HtmlProps,HtmlRenderable}from './element.js';",
     "export type{HtmlRenderOptions}from './render.js';",

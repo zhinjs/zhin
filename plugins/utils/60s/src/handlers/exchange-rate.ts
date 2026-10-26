@@ -1,18 +1,21 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from '../i18n.js';
 import { asArray, asRecord, asString } from '../api.js';
 import type { SixtySClient } from '../client.js';
 
-export default async function (client: SixtySClient, args: { from?: string; to?: string }) {
+export default async function (client: SixtySClient, args: { from?: string; to?: string }, locale?: Locale) {
   const params: Record<string, string> = {};
   if (args.from) params.from = args.from.toUpperCase();
   if (args.to) params.to = args.to.toUpperCase();
   const data = await client.fetch(
     '/exchange-rate',
     Object.keys(params).length ? params : undefined,
+    locale,
   );
-  const lines = ['💱 汇率查询', ''];
+  const lines = [t(locale, 'exchange'), ''];
   const base = data.base_code || args.from || 'CNY';
-  lines.push(`基准货币: ${base}`);
-  if (data.updated) lines.push(`更新时间: ${data.updated}`);
+  lines.push(t(locale, 'base', { value: String(base) }));
+  if (data.updated) lines.push(t(locale, 'updated', { value: String(data.updated) }));
   lines.push('');
   const rates = asArray(data.rates);
   const targetCurrencies = args.to

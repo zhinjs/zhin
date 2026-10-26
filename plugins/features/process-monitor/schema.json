@@ -6,22 +6,42 @@
     "enabled": {
       "type": "boolean",
       "default": true,
-      "description": "是否启用进程监控"
+      "description": "是否启用进程监控",
+      "x-i18n": {
+        "en": {
+          "description": "Enable process monitoring."
+        }
+      }
     },
     "notifyOnStart": {
       "type": "boolean",
       "default": true,
-      "description": "首次启动时通知"
+      "description": "首次启动时通知",
+      "x-i18n": {
+        "en": {
+          "description": "Notify on first startup."
+        }
+      }
     },
     "notifyOnRestart": {
       "type": "boolean",
       "default": true,
-      "description": "正常重启时通知"
+      "description": "正常重启时通知",
+      "x-i18n": {
+        "en": {
+          "description": "Notify on normal restart."
+        }
+      }
     },
     "notifyOnCrash": {
       "type": "boolean",
       "default": true,
-      "description": "异常崩溃重启时通知"
+      "description": "异常崩溃重启时通知",
+      "x-i18n": {
+        "en": {
+          "description": "Notify after a crash restart."
+        }
+      }
     },
     "notifyChannels": {
       "type": "array",
@@ -30,10 +50,25 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["type", "target"],
+        "required": [
+          "type",
+          "target"
+        ],
         "properties": {
-          "type": { "type": "string", "enum": ["webhook"] },
-          "target": { "type": "string" }
+          "type": {
+            "type": "string",
+            "enum": [
+              "webhook"
+            ]
+          },
+          "target": {
+            "type": "string"
+          }
+        }
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Notification channel (slice 1 supports webhook only)."
         }
       }
     }

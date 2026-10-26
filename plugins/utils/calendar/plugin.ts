@@ -1,3 +1,4 @@
+import { projectLocaleToken } from 'zhin.js/i18n';
 import {
   databaseHostToken,
   definePlugin,
@@ -74,6 +75,7 @@ export default definePlugin<CalendarConfig>({
     });
     const auth = new CalendarAuthService<DeliveryTarget>({
       config,
+      locale: resources.use(projectLocaleToken),
       managers,
       credentials,
       notify,

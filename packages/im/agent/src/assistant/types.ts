@@ -45,6 +45,8 @@ export interface ScheduleJobCreator {
 }
 
 export interface ScheduleJob {
+  /** Captured at creation; changes to personal or project preferences do not alter it. */
+  locale?: import('@zhin.js/plugin-runtime').Locale;
   id: string;
   label?: string;
   enabled: boolean;

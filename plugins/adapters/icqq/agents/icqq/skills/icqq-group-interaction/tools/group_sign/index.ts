@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number }>({
@@ -11,8 +12,8 @@ export default defineAgentTool<{ group_id: number }>({
   async execute({ group_id }, context) {
     const client = context.$client;
     const groupInfo= client.pickGroup(group_id);
-    if(!groupInfo) return { success: false, message: '目标群不存在' };
+    if(!groupInfo) return { success: false, message: t(context.locale, 'groupMissing') };
     await client.sendGroupSign(group_id);
-    return { success: true, message: '群签到成功' };
+    return { success: true, message: t(context.locale, 'checkedIn') };
   },
 });

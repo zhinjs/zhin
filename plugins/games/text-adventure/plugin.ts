@@ -19,6 +19,10 @@ export default defineGamePlugin<GameServices>({
     displayName: 'Text Adventure',
   },
   game: {
+    commandPath: 'adv',
+    titleI18n: { en: 'Text Adventure' },
+    descriptionI18n: { en: 'Make choices in a branching story' },
+    quickStartI18n: { en: 'start' },
     id: 'adv',
     title: '秘境探险',
     icon: '🗺️',

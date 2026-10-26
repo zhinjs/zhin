@@ -71,6 +71,17 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
     expect((result as unknown[])[1]).toMatchObject({ type: 'keyboard' });
   });
 
+  it('uses the operation language and the verified invocation in help', async () => {
+    const formatCommand = vi.fn((path: string) => path === 'guess' ? '!!play guess' : undefined);
+    const result = await gameCommand.execute({ ...emptyCtx, locale: 'en', formatCommand, params: { action: 'help' } });
+    expect(result).toContain('Guess the Number');
+    expect(result).toContain('!!play guess start');
+    expect(result).not.toContain('猜数');
+    expect(formatCommand).toHaveBeenCalledWith('guess');
+    const withoutEnvironment = await gameCommand.execute({ ...emptyCtx, locale: 'en', formatCommand: () => undefined });
+    expect(withoutEnvironment).not.toContain('/guess');
+  });
+
   it('setup registers hub metadata and stale-session cron when schedule host exists', async () => {
     const { lifecycle, register, resources, addGame } = mockSetupContext({ schedule: true });
     void plugin.setup?.({

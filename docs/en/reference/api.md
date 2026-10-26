@@ -14,6 +14,7 @@ The API Reference reads Zhin's public authoring entries, Host contracts, and JSD
 | --- | --- |
 | Define a plugin | `zhin.js` |
 | Author commands | `zhin.js/command` |
+| Localize messages and display language | `zhin.js/i18n`; [localization guide](/en/configuration/localization) |
 | Build an Adapter | `zhin.js/adapter` |
 | Author components | `zhin.js/component` |
 | Author middleware | `zhin.js/middleware` |

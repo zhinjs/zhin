@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ message_id: string; action: 'add' | 'remove' }>({
@@ -17,6 +18,6 @@ export default defineAgentTool<{ message_id: string; action: 'add' | 'remove' }>
     } else {
       await client.removeEssenceMessage(message_id);
     }
-    return { success: true, message: action === 'add' ? '已设为精华' : '已移除精华' };
+    return { success: true, message: action === 'add' ? t(context.locale, 'essenceAdded') : t(context.locale, 'essenceRemoved') };
   },
 });

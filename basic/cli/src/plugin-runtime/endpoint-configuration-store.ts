@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import {
+  EndpointConfigurationError,
   type AddConfiguredEndpointRequest,
   type ConfiguredEndpointEntry,
   type EndpointConfigurationStore,
@@ -62,10 +63,7 @@ export class ProjectEndpointConfigurationStore implements EndpointConfigurationS
       const current = await this.#document.read();
       const endpoints = readConfiguredEndpoints(current.document, request.adapterKey);
       if (endpoints.some((entry) => entry.id === request.entry.id)) {
-        throw new Error(
-          `配置中已存在 ${request.adapterKey} endpoint「${request.entry.id}」，`
-          + `可先 ${request.adapterKey} endpoint remove ${request.entry.id} 再重新添加`,
-        );
+        throw new EndpointConfigurationError('duplicate_entry', { adapterKey: request.adapterKey, endpointId: request.entry.id });
       }
       const prepared = await this.#document.prepare(current, [
         endpointListPatch(current.document, request.adapterKey, [...endpoints, request.entry]),

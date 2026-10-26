@@ -14,6 +14,9 @@ export interface QqBindFlowHandle {
   /** 绑定期望的 endpoint id（未指定时为 undefined，成功后取 appId） */
   id?: string;
   stop: () => void;
+  readonly locale?: import('zhin.js/i18n').Locale;
+  readonly cancelCommand?: string;
+  readonly commandHeads?: readonly string[];
 }
 
 /**
@@ -26,6 +29,9 @@ export interface QqPendingBotKind {
   readonly appSecret: string;
   /** 发起 add 的会话键；仅同会话回复可完成选择 */
   readonly sessionKey: string;
+  readonly locale?: import('zhin.js/i18n').Locale;
+  readonly cancelCommand?: string;
+  readonly commandHeads?: readonly string[];
 }
 
 export interface QqRuntimeState {

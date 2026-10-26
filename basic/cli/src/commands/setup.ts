@@ -1,10 +1,11 @@
+import { wizardText } from '@zhin.js/scaffold-wizard';
 import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import { formatDisplayPath } from '@zhin.js/logger';
-import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
+import { readPluginConfigurationMap, resolveLocale } from '@zhin.js/plugin-runtime';
 import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
@@ -26,111 +27,19 @@ import {
   mergeFeaturesIntoPackageJson,
   finalizeWizardOptions,
   formatAIDependencyHint,
+  validateProjectLocale,
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
 
-// 引导文件模板（与 create-zhin 保持一致）
-const SOUL_MD_TEMPLATE = `# Soul
-
-我是一个能力出众、行动导向的 AI 助手，生活在聊天频道中。
-
-## 性格
-
-- 我偏好行动而非讨论。被要求做事时，我会先使用工具执行，再解释。
-- 我直接且简洁。不会用无关的废话或免责声明来填充回复。
-- 我有平静的自信。不会过度夸大自己的能力，但在遇到困难时会诚实说明。
-- 我会适应用户的语言风格——用户随意时我也随意，用户需要精确时我也精确。
-- 我有淡淡的幽默感。恰到好处的一句俏皮话让工作更轻松，但绝不让玩笑妨碍完成任务。
-- 我默认乐观。问题是拼图，错误是线索，挫折不过是情节转折。总有下一步值得尝试。
-
-## 价值观
-
-- **可靠胜过炫技。** 宁愿正确地做一件简单的事，也不愿企图做华丽的事然后失败。
-- **透明。** 如果工具失败或我不确定，会坦然说明——但带着微笑，而非耸肩。
-- **尊重上下文。** 我记住对用户重要的事情，并明智地使用这些知识。
-- **效率。** 我不会用不必要的来回浪费用户的时间。
-- **好氛围。** 人生苦短，不该忍受机器人般的单调。我给对话带来活力，但不会为此令人烦恼。
-
-## 工作方式
-
-- 对于复杂任务，我会将其分解为步骤并追踪进度。
-- 我通过执行工具来验证，而非凭空猜测。
-- 我报告结果，而非意图——"已完成"胜过"我会尝试"。
-- 当某件事失败时，我报告失败并提出下一步方案。没有戏剧化，只有解决方案。
-`;
-
-const TOOLS_MD_TEMPLATE = `# Tools Guide
-
-## 工具使用原则
-
-### 调用风格
-- **低风险操作**：直接调用，无需解释（如查询天气、读取文件、搜索）
-- **高风险操作**：简要说明理由（如删除文件、执行 shell 命令）
-- **多步骤工作流**：先概述计划，再逐步执行
-
-### 工具组合
-- 优先使用现有工具完成复杂任务
-- 合理串联多个工具以实现目标
-- 工具失败时有备选方案
-
-## 常用工具场景
-
-### 文件操作
-- \`read_file\` - 读取文件内容
-- \`write_file\` - 创建或覆盖文件
-- \`list_dir\` - 列出目录内容
-- \`grep\` - 搜索文件内容
-
-### 网络操作
-- \`web_search\` - 搜索公开网页
-- \`web_fetch\` - 获取网页内容
-
-### 系统操作
-- \`bash\` - 执行 shell 命令（需谨慎）
-- \`todo_read\` / \`todo_write\` - 查看和维护计划
-
-### 记忆与学习
-- \`memory_upsert\` - 存储语义记忆
-- \`memory_search\` - 检索语义记忆
-- \`discover\` / \`load_skill\` - 查找并载入专业技能
-
-## 注意事项
-- 工具调用后务必基于结果生成完整回答
-- 避免重复调用同一工具获取相同信息
-- 遇到权限或依赖问题时，向用户说明并提供替代方案
-`;
-
-const AGENTS_MD_TEMPLATE = `# Agent Memory
-
-这是一个长期记忆文件，用于记录重要的对话历史、用户偏好和系统状态。
-
-## 用户偏好
-- 语言：简体中文
-- 风格：简洁、行动导向
-
-## 系统信息
-- 框架：Zhin.js
-- 运行时：Node.js
-
-## 重要记录
-*(AI 可通过 memory_store 工具在此追加内容)*
-
-## 已完成任务
-*(记录重要的完成事项)*
-
-## 待办事项
-*(记录未完成的工作)*
-`;
-
-async function setupBootstrapFiles(cwd: string): Promise<void> {
+async function setupBootstrapFiles(cwd: string, locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<void> {
   console.log('');
-  console.log(chalk.blue('📝 设置引导文件'));
+  console.log(chalk.blue(wizardText(locale, "📝 设置引导文件")));
   console.log('');
 
   const files = [
-    { name: 'SOUL.md', description: 'AI 人格定义', template: SOUL_MD_TEMPLATE },
-    { name: 'TOOLS.md', description: '工具使用指南', template: TOOLS_MD_TEMPLATE },
-    { name: 'AGENTS.md', description: 'Agent 长期记忆', template: AGENTS_MD_TEMPLATE }
+    { name: 'SOUL.md', description: wizardText(locale, "AI 人格定义"), template: wizardText(locale, 'templates.setupSoul') },
+    { name: 'TOOLS.md', description: wizardText(locale, "工具使用指南"), template: wizardText(locale, 'templates.setupTools') },
+    { name: 'AGENTS.md', description: wizardText(locale, "Agent 长期记忆"), template: wizardText(locale, 'templates.setupAgentMemory') }
   ];
 
   for (const file of files) {
@@ -142,31 +51,33 @@ async function setupBootstrapFiles(cwd: string): Promise<void> {
         {
           type: 'confirm',
           name: 'overwrite',
-          message: `${file.name} 已存在，是否覆盖？`,
+          message: wizardText(locale, "{v0} 已存在，是否覆盖？", [file.name]),
           default: false
         }
       ]);
 
       if (!overwrite) {
-        console.log(chalk.gray(`  跳过 ${file.name}`));
+        console.log(chalk.gray(wizardText(locale, "  跳过 {v0}", [file.name])));
         continue;
       }
     }
 
     await fs.writeFile(filePath, file.template);
-    console.log(chalk.green(`  ✓ 创建 ${file.name} - ${file.description}`));
+    console.log(chalk.green(wizardText(locale, "  ✓ 创建 {v0} - {v1}", [file.name, file.description])));
   }
 }
 
 export const setupCommand = new Command('setup')
-  .description('交互式配置向导')
-  .option('--global', '在 ~/.zhin 初始化并配置全局实例')
-  .option('--bootstrap', '仅配置引导文件')
-  .option('--database', '仅配置数据库')
-  .option('--adapters', '仅配置适配器')
-  .option('--ai', '仅配置 AI')
-  .option('--decisions', '配置可选 TypeSafe Jev 决策服务（需要已有 AI 配置）')
+  .description('交互式配置向导 / Interactive configuration wizard')
+  .option('--locale <locale>', '项目语言 / Project language (zh-CN, en)', validateProjectLocale)
+  .option('--global', '在 ~/.zhin 初始化并配置全局实例 / Initialize and configure ~/.zhin')
+  .option('--bootstrap', '仅配置引导文件 / Configure bootstrap files only')
+  .option('--database', '仅配置数据库 / Configure the database only')
+  .option('--adapters', '仅配置适配器 / Configure adapters only')
+  .option('--ai', '仅配置 AI / Configure AI only')
+  .option('--decisions', '配置可选 TypeSafe Jev 决策服务（需要已有 AI 配置） / Configure optional TypeSafe Jev decisions (requires AI)')
   .action(async (options) => {
+    let locale = resolveLocale(options.locale);
     const cwd = options.global
       ? await ensureGlobalHome({ install: false })
       : process.cwd();
@@ -174,18 +85,12 @@ export const setupCommand = new Command('setup')
 
     if (!fs.existsSync(pkgPath)) {
       if (options.global) {
-        logger.error(`无法初始化全局实例目录 ${globalZhinHome()}`);
+        logger.error(wizardText(locale, "无法初始化全局实例目录 {v0}", [globalZhinHome()]));
       } else {
-        logger.error(`当前目录不是有效的 Zhin 项目，请先使用 ${CREATE_PROJECT_COMMAND} 创建项目，或 zhin setup --global`);
+        logger.error(wizardText(locale, "当前目录不是有效的 Zhin 项目，请先使用 {v0} 创建项目，或 zhin setup --global", [CREATE_PROJECT_COMMAND]));
       }
       process.exit(1);
     }
-
-    if (options.global) {
-      console.log(chalk.bold.cyan(`\n🌐 Zhin 全局实例（${globalZhinHome()}）\n`));
-    }
-
-    console.log(chalk.bold.cyan('\n🚀 Zhin 配置向导\n'));
 
     // 加载现有配置
     const configFile = findConfigFile(cwd);
@@ -196,13 +101,14 @@ export const setupCommand = new Command('setup')
       configPath = path.join(cwd, configFile);
       try {
         config = await readConfig(configPath);
+        locale = resolveLocale(options.locale ?? config.locale);
       } catch (error) {
         logger.error(error instanceof Error ? error.message : String(error));
         process.exit(1);
       }
-      console.log(chalk.gray(`已加载配置文件: ${configFile}\n`));
+      console.log(chalk.gray(wizardText(locale, "已加载配置文件: {v0}\n", [configFile])));
     } else {
-      console.log(chalk.yellow('未找到配置文件，将创建 zhin.config.yml\n'));
+      console.log(chalk.yellow(wizardText(locale, "未找到配置文件，将创建 zhin.config.yml\n")));
       config = {
         configVersion: 2,
         log_level: 'INFO',
@@ -212,44 +118,50 @@ export const setupCommand = new Command('setup')
       };
     }
 
+    if (options.global) {
+      console.log(chalk.bold.cyan(wizardText(locale, "\n🌐 Zhin 全局实例（{v0}）\n", [globalZhinHome()])));
+    }
+
+    console.log(chalk.bold.cyan(wizardText(locale, "\n🚀 Zhin 配置向导\n")));
+
     try {
       readPluginConfigurationMap(config, configFile ?? 'zhin.config.yml');
-      const wizardOptions: InitOptions = {};
+      const wizardOptions: InitOptions = { ...(options.locale === undefined ? {} : { locale: options.locale }) };
       const configBefore = JSON.stringify(config);
 
       if (options.bootstrap || (!options.database && !options.adapters && !options.ai && !options.decisions)) {
-        await setupBootstrapFiles(cwd);
+        await setupBootstrapFiles(cwd, locale);
       }
 
       if (options.database || (!options.bootstrap && !options.adapters && !options.ai && !options.decisions)) {
-        wizardOptions.database = await configureDatabaseOptions();
+        wizardOptions.database = await configureDatabaseOptions(locale);
       }
 
       if (options.adapters || (!options.bootstrap && !options.database && !options.ai && !options.decisions)) {
-        wizardOptions.adapters = await configureAdapters();
+        wizardOptions.adapters = await configureAdapters(locale);
       }
 
       if (options.ai || (!options.bootstrap && !options.database && !options.adapters && !options.decisions)) {
-        wizardOptions.ai = await configureAI();
+        wizardOptions.ai = await configureAI(locale);
       }
 
       finalizeWizardOptions(wizardOptions);
-      applyWizardOptionsToConfig(config, wizardOptions);
+      applyWizardOptionsToConfig(config, wizardOptions, locale);
 
       let decisions: Awaited<ReturnType<typeof configureTypeSafeDecisions>> | undefined;
       if (options.decisions) {
-        decisions = await configureTypeSafeDecisions(config);
+        decisions = await configureTypeSafeDecisions(config, locale);
         applyTypeSafeDecisionsToConfig(config, decisions);
       }
 
       // Candidate validation and the original source revision precede env/dependency writes.
       const configTransaction = await prepareConfigSave(configPath, config);
-      await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai, wizardOptions.database);
+      await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai, wizardOptions.database, locale);
       if (decisions) {
         await saveTypeSafeSetupDependencies(cwd, decisions);
         console.log(chalk.gray(options.global
-          ? '  ✓ 已配置 TypeSafe 决策服务；稍后自动安装全局实例依赖。'
-          : '  ✓ 已配置 TypeSafe 决策服务；运行 pnpm install 后启动。'));
+          ? wizardText(locale, "  ✓ 已配置 TypeSafe 决策服务；稍后自动安装全局实例依赖。")
+          : wizardText(locale, "  ✓ 已配置 TypeSafe 决策服务；运行 pnpm install 后启动。")));
       }
 
       const deps = collectWizardDependencies(wizardOptions);
@@ -257,18 +169,18 @@ export const setupCommand = new Command('setup')
       const featuresChanged = await mergeFeaturesIntoPackageJson(cwd, collectWizardFeatures(wizardOptions));
       if (depsChanged || featuresChanged) {
         console.log(chalk.gray(options.global
-          ? '  ✓ 已更新 package.json 依赖/features 清单，稍后自动安装全局实例依赖。'
-          : '  ✓ 已更新 package.json 依赖/features 清单，请运行 pnpm install'));
+          ? wizardText(locale, "  ✓ 已更新 package.json 依赖/features 清单，稍后自动安装全局实例依赖。")
+          : wizardText(locale, "  ✓ 已更新 package.json 依赖/features 清单，请运行 pnpm install")));
         if (wizardOptions.ai?.enabled) {
-          console.log(chalk.gray(`    AI 栈: ${formatAIDependencyHint(wizardOptions.ai.agentProvider)}`));
+          console.log(chalk.gray(wizardText(locale, "    AI 栈: {v0}", [formatAIDependencyHint(wizardOptions.ai.agentProvider)])));
         }
       }
 
       if (wizardOptions.adapters) {
-        const notes = getAdapterSetupNotes(wizardOptions.adapters);
+        const notes = getAdapterSetupNotes(wizardOptions.adapters, locale);
         if (notes.length > 0) {
           console.log('');
-          console.log(chalk.gray('  适配器后续步骤：'));
+          console.log(chalk.gray(wizardText(locale, "  适配器后续步骤：")));
           for (const note of notes) {
             console.log(chalk.gray(`    • ${note}`));
           }
@@ -280,30 +192,30 @@ export const setupCommand = new Command('setup')
       if (configChanged) {
         await configTransaction?.commit();
         console.log('');
-        console.log(chalk.bold.green('✅ 配置已保存'));
-        console.log(chalk.gray(`配置文件: ${formatDisplayPath(configPath)}`));
+        console.log(chalk.bold.green(wizardText(locale, "✅ 配置已保存")));
+        console.log(chalk.gray(wizardText(locale, "配置文件: {v0}", [formatDisplayPath(configPath)])));
       }
 
       if (wizardOptions.database && !['sqlite', 'memory'].includes(wizardOptions.database.dialect)) {
         console.log('');
-        console.log(chalk.gray(`数据库连接参数已写入 ${formatDisplayPath(path.join(cwd, '.env'))}，配置文件仅保留环境变量引用。`));
+        console.log(chalk.gray(wizardText(locale, "数据库连接参数已写入 {v0}，配置文件仅保留环境变量引用。", [formatDisplayPath(path.join(cwd, '.env'))])));
         console.log(chalk.gray(options.global
-          ? `启动前在 ${formatDisplayPath(cwd)} 运行 npx zhin config check；如连接失败，请确认数据库服务、端口和目标数据库均可访问。`
-          : '启动前运行 npx zhin config check；如连接失败，请确认数据库服务、端口和目标数据库均可访问。'));
+          ? wizardText(locale, "启动前在 {v0} 运行 npx zhin config check；如连接失败，请确认数据库服务、端口和目标数据库均可访问。", [formatDisplayPath(cwd)])
+          : wizardText(locale, "启动前运行 npx zhin config check；如连接失败，请确认数据库服务、端口和目标数据库均可访问。")));
       }
 
       if (options.global) {
         console.log('');
-        console.log(chalk.gray('正在安装全局实例依赖…'));
+        console.log(chalk.gray(wizardText(locale, "正在安装全局实例依赖…")));
         installGlobalHomeDeps(cwd);
       }
 
       console.log('');
       console.log(chalk.cyan(options.global
-        ? '💡 提示: 任意目录运行 "zhin runtime start" 启动全局实例'
-        : '💡 提示: 运行 "zhin dev" 启动开发服务器'));
+        ? wizardText(locale, "💡 提示: 任意目录运行 \"zhin runtime start\" 启动全局实例")
+        : wizardText(locale, "💡 提示: 运行 \"zhin dev\" 启动开发服务器")));
     } catch (error: unknown) {
-      logger.error(`配置失败: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(wizardText(locale, "配置失败: {v0}", [error instanceof Error ? error.message : String(error)]));
       process.exit(1);
     }
   });

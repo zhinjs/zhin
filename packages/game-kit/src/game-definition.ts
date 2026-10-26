@@ -1,5 +1,6 @@
 import type { GameRecordPort } from './game-records.js';
 import type { GameSessionProvider } from './session-coordinator.js';
+import type { Locale } from '@zhin.js/plugin-runtime';
 
 const gameBrand = 'zhin.game/1' as const;
 
@@ -11,10 +12,15 @@ export interface RuntimeGameMenuAction {
 export interface RuntimeRegisteredGame {
   readonly id: string;
   readonly title: string;
+  readonly titleI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly icon: string;
   readonly description: string;
+  readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly commandPrefix: string;
+  /** Canonical local command head, resolved against the owning plugin's CommandIndex. */
+  readonly commandPath?: string;
   readonly quickStart?: string;
+  readonly quickStartI18n?: Readonly<Partial<Record<Locale, string>>>;
   readonly aliases?: readonly string[];
   readonly menus?: readonly RuntimeGameMenuAction[];
 }

@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { getStatsModel } from '../../../../src/db-store.js';
@@ -21,13 +22,13 @@ export default defineAgentTool<{ user_id: string; group_id?: string }>({
     const runtime = context.use(groupSuiteRuntimeToken);
     await flushStatsBuffer(runtime);
     const model = getStatsModel(runtime.db);
-    if (!model) return '统计数据库尚未就绪';
+    if (!model) return t(context.locale, 'statsDb');
     const groupId = conversationKey(toolGroupConversation(context, requestedGroupId));
     const rows = await model.select().where({
       user_id: userId,
       group_id: groupId,
     });
-    if (rows.length === 0) return `用户 ${userId} 暂无消息记录`;
+    if (rows.length === 0) return t(context.locale, 'userStatsEmpty', { user: userId });
     const today = todayStr();
     const weekStart = weekStartStr();
     let todayCount = 0;
@@ -40,6 +41,6 @@ export default defineAgentTool<{ user_id: string; group_id?: string }>({
       if (row.date === today) todayCount += count;
     }
     const name = String(rows[0]!.user_name ?? userId);
-    return `${name} 的统计\n今日: ${todayCount}条\n本周: ${weekCount}条\n总计: ${totalCount}条\n活跃天数: ${rows.length}天`;
+    return t(context.locale, 'userStatsInfo', { name, today: todayCount, week: weekCount, total: totalCount, days: rows.length });
   },
 });

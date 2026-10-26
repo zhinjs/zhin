@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -19,6 +20,6 @@ export default defineAgentTool<{
     const client = context.$client;
     await client.conversations.setTopic({ channel, topic });
     const success = true;
-    return { success, message: success ? '已设置频道话题' : '操作失败' };
+    return { success, message: success ? t(context.locale, 'topicUpdated') : t(context.locale, 'operationFailed') };
   },
 });

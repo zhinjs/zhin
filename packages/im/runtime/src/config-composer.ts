@@ -19,7 +19,7 @@ export const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 /** Host configuration keys consumed by Runtime composition and Host installers. */
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
-const ROOT_FEATURE_CONFIG_KEYS = ['menuKeyword', 'menuStyle'] as const;
+const ROOT_FEATURE_CONFIG_KEYS = ['menuKeyword', 'menuStyle', 'locale'] as const;
 /** Command routing keys the framework injects into every Plugin config schema. */
 const COMMAND_CONFIG_KEYS = ['commandNamespace', 'disabledCommands'] as const;
 
@@ -367,6 +367,7 @@ function configurationValidator(): Ajv2020 {
     allowUnionTypes: true,
   });
   ajv.addKeyword({ keyword: 'x-descriptionZh', schemaType: 'string' });
+  ajv.addKeyword({ keyword: 'x-i18n', schemaType: 'object' });
   ajv.addKeyword({ keyword: 'x-keyPlaceholder', schemaType: 'string' });
   ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
   return ajv;

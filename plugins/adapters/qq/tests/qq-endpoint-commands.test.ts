@@ -1,3 +1,6 @@
+import botKindReply from '../middlewares/bot-kind-reply/index.js';
+import { endpointConfigurationStoreToken } from 'zhin.js/adapter';
+import { qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QqBindCallbacks } from '../src/qq-bind-flow.js';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
@@ -88,7 +91,7 @@ describe('runQqEndpointAdd', () => {
       kind: 'private' as const,
       id: 'u1',
     },
-    sender: 'u1',
+    sender: { id: 'u1' },
   };
 
   it('二维码就绪后 resolve 链接；扫码成功暂存凭据并追问公域/私域（不写文件）', async () => {
@@ -307,13 +310,13 @@ describe('runQqEndpointList', () => {
     expect(text).toContain('（无）');
   });
 
-  it('有进行中绑定时 footer 提示 qq endpoint cancel', async () => {
+  it('有进行中绑定时 footer 只使用捕获的真实取消命令', async () => {
     const state = createQqRuntimeState();
-    state.bindFlow = { id: 'a', stop: vi.fn() };
+    state.bindFlow = { id: 'a', stop: vi.fn(), cancelCommand: '!work qq endpoint cancel' };
 
     const text = await runQqEndpointList(state, store);
 
-    expect(text).toContain('qq endpoint cancel');
+    expect(text).toContain('!work qq endpoint cancel');
   });
 
   it('待选 botKind 时 footer 提示', async () => {
@@ -330,4 +333,33 @@ describe('runQqEndpointList', () => {
     expect(text).toContain('wait-bot');
     expect(text).toContain('公域/私域');
   });
+});
+
+
+it('keeps binding language and real cancel head across follow-ups without accepting another sender or thread', async () => {
+  const state = createQqRuntimeState(); startQqBindFlowMock.mockReturnValue(vi.fn());
+  const { replies, reply } = collectReplies();
+  const input = { sender: { id: 'alice' }, locale: 'en', conversation: { endpoint: { adapter: 'sandbox', id: 'bot' },
+    kind: 'channel', id: 'room', parent: { kind: 'channel', id: 'guild' }, threadId: 'thread' } };
+  const first = runQqEndpointAdd(state, 'english', reply, store, input, 'en', '!ops qq endpoint cancel', ['!ops qq endpoint cancel']);
+  lastCallbacks().onQrDisplayed?.('https://example.test/synthetic-qr');
+  expect(await first).toContain('Open this link');
+  await lastCallbacks().onSuccess([{ appId: 'fixture-app', appSecret: 'fixture-secret' }]);
+  expect(replies.at(-1)).toContain('!ops qq endpoint cancel');
+  expect(state.pendingBotKind?.locale).toBe('en');
+  const context = (message: object) => ({ input: { ...input, locale: 'zh-CN', content: 'private', $reply: reply, ...message },
+    use(token: unknown) { if (token === qqRuntimeStateToken) return state; if (token === endpointConfigurationStoreToken) return store; throw new Error('unexpected resource'); } });
+  for (const other of [{ sender: { id: 'bob' } }, { conversation: { ...input.conversation, threadId: 'other' } },
+    { conversation: { ...input.conversation, parent: { kind: 'channel', id: 'other' } } }]) {
+    const next = vi.fn(); await botKindReply.handle(context(other) as never, next);
+    expect(next).toHaveBeenCalledOnce(); expect(await store.list('qq')).toEqual([]);
+  }
+  await botKindReply.handle(context({ content: '私域' }) as never, vi.fn());
+  expect(replies.at(-1)).toContain('Unrecognized answer'); expect(await store.list('qq')).toEqual([]);
+  const next = vi.fn(); await botKindReply.handle(context({ content: '!ops qq endpoint cancel' }) as never, next);
+  expect(next).toHaveBeenCalledOnce();
+  await botKindReply.handle(context({}) as never, vi.fn());
+  expect(replies.at(-1)).toContain('Saved endpoint');
+  expect((await store.list('qq'))[0]).toMatchObject({ id: 'english', botKind: 'private' });
+  expect(state.pendingBotKind).toBeNull();
 });

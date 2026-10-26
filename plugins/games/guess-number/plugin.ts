@@ -19,6 +19,10 @@ export default defineGamePlugin<SessionService>({
     displayName: 'Guess Number',
   },
   game: {
+    commandPath: 'guess',
+    titleI18n: { en: 'Guess the Number' },
+    descriptionI18n: { en: 'Guess the secret number from 1 to 100 in seven tries' },
+    quickStartI18n: { en: 'start' },
     id: 'guess',
     title: '猜数字',
     icon: '🔢',

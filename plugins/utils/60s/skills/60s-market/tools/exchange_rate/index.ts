@@ -9,6 +9,6 @@ export default defineAgentTool<{ from?: string; to?: string }>({
   tags: ["金融", "汇率", "查询"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/exchange-rate.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

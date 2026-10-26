@@ -16,6 +16,21 @@ import { BILI_STATE_TABLE, BILI_SUBS_TABLE, getBiliState, getBiliSubs } from '..
 import { biliMessage, commandContext, dyn, harness, live } from './fixtures.js';
 
 describe('@zhin.js/plugin-bilibili commands', () => {
+  it('captures subscription language while display commands use the current language and prefix', async () => {
+    const h = harness();
+    h.client.liveStatus.set('1', live('1', 0));
+    const en = { ...commandContext(h.runtime), locale: 'en' as const, formatCommand: (path: string) => `/tools ${path}` };
+    expect(await subCommand.execute({ ...en, params: {} })).toContain('/tools bili sub');
+    expect(await subCommand.execute({ ...en, params: { uid: '1', kind: 'live' } })).toContain('Subscribed to');
+    expect((await getBiliSubs(h.db)!.select())[0]).toMatchObject({ locale: 'en' });
+    expect(await listCommand.execute(commandContext(h.runtime))).toContain('当前订阅');
+    await subCommand.execute({ ...commandContext(h.runtime), params: { uid: '1', kind: 'all' } });
+    expect((await getBiliSubs(h.db)!.select())[0]).toMatchObject({ locale: 'en' });
+    h.client.liveStatus.set('1', live('1', 1, 2000));
+    await h.watcher.tick();
+    expect(h.pushes[0]?.content).toContain('[Live] UP1 is streaming!');
+  });
+
   it('brands every command', () => {
     for (const command of [subCommand, unsubCommand, listCommand, liveCommand]) {
       expect(parseCommandDefinition(command)).toBe(command);

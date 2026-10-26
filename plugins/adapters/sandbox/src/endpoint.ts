@@ -1,3 +1,4 @@
+import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
 import { Endpoint, type EndpointSendRequest } from 'zhin.js/adapter';
 /**
  * SandboxWsEndpoint — WebSocket lifecycle and OutboundMessageService bridge for /sandbox.
@@ -111,7 +112,16 @@ export function createSandboxReadinessGate(probe: ShellIsolationProbe): Readonly
   });
 }
 
+const messages = createMessages({
+  readOnly: { 'zh-CN': '当前连接是只读演示权限，不能运行 Agent 任务。', en: 'This connection is a read-only demo and cannot run Agent tasks.' },
+  connected: { 'zh-CN': '已连接 Sandbox「{target}」', en: 'Connected to Sandbox “{target}”' },
+  protocol: { 'zh-CN': '与 Node Host 控制台沙盒协议一致（{path}）', en: 'Using the Node Host Console sandbox protocol ({path})' },
+  profile: { 'zh-CN': '「试聊一下」会话已启用持久化运行配置。', en: 'The “Try a chat” session uses a persistent runtime profile.' },
+});
+
 export interface SandboxEndpointOptions {
+  /** Project language captured from this endpoint generation's resources. */
+  readonly locale?: Locale;
   readonly id: CapabilityId;
   readonly http: HttpHost;
   readonly defaults: ResolvedSandboxBot;
@@ -126,6 +136,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SandboxEndpointOptions;
+  readonly #locale: Locale;
   readonly #connections = new Map<string, SandboxConnection>();
   readonly #readiness = createSandboxReadinessGate(probeShellIsolation);
   #wsHandleRelease?: () => void;
@@ -138,6 +149,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
     super();
     this.#logger = getAdapterLogger('sandbox', options.defaults.id);
     this.#options = options;
+    this.#locale = resolveLocale(options.locale);
     this.client = new SandboxClient(
       () => this.#wsPath,
       () => [...this.#connections.values()].map((connection) => ({
@@ -283,7 +295,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
             type: 'error',
             id: owner,
             endpoint: target,
-            content: [{ type: 'text', data: { text: '当前连接是只读演示权限，不能运行 Agent 任务。' } }],
+            content: [{ type: 'text', data: { text: messages(this.#locale, 'readOnly') } }],
             timestamp: Date.now(),
           }));
           return;
@@ -354,6 +366,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
       if (!current || current.socket !== socket) return;
       const readyPayload = JSON.stringify({
         type: 'ready',
+        locale: this.#locale,
         id: owner,
         endpoint: target,
         workingDirectory: process.cwd(),
@@ -363,9 +376,9 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
           type: 'text',
           data: {
             text: [
-              `已连接 Sandbox「${target}」`,
-              `与 Node Host 控制台沙盒协议一致（${this.#wsPath}）`,
-              '「试聊一下」会话已启用持久化运行配置。',
+              messages(this.#locale, 'connected', { target }),
+              messages(this.#locale, 'protocol', { path: this.#wsPath }),
+              messages(this.#locale, 'profile'),
             ].join('\n'),
           },
         }],

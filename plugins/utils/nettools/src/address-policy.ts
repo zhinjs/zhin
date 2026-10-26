@@ -1,3 +1,4 @@
+import { message, formatMessage, type NettoolsMessage } from './messages.js';
 /**
  * Target address policy (SSRF guard).
  *
@@ -33,7 +34,7 @@ export type ParsedHost =
 
 export type AddressVerdict =
   | { readonly blocked: false }
-  | { readonly blocked: true; readonly reason: string };
+  | { readonly blocked: true; readonly reason: string; readonly detail: NettoolsMessage };
 
 export interface ParseHostOptions {
   /** Allow `_` in labels (needed for DNS names such as `_dmarc.example.com`). */
@@ -44,8 +45,8 @@ export interface ParseHostOptions {
 
 const ALLOWED: AddressVerdict = Object.freeze({ blocked: false });
 
-function blocked(reason: string): AddressVerdict {
-  return Object.freeze({ blocked: true, reason });
+function blocked(detail: NettoolsMessage): AddressVerdict {
+  return Object.freeze({ blocked: true, reason: formatMessage(detail), detail });
 }
 
 /* ------------------------------------------------------------------ */
@@ -55,10 +56,10 @@ function blocked(reason: string): AddressVerdict {
 interface PrefixRule {
   readonly prefix: Uint8Array;
   readonly bits: number;
-  readonly reason: string;
+  readonly reason: NettoolsMessage;
 }
 
-const CLOUD_METADATA_REASON = '云服务元数据地址';
+const CLOUD_METADATA_REASON = message('cloudMetadata');
 
 /** Exact IPv4 metadata endpoints, checked before the range table for a clearer message. */
 const CLOUD_METADATA_IPV4 = new Set([
@@ -73,30 +74,30 @@ const CLOUD_METADATA_IPV4 = new Set([
 const CLOUD_METADATA_IPV6 = ['fd00:ec2::254', 'fd00:ec2::23'];
 
 const BLOCKED_IPV4_RANGES: readonly PrefixRule[] = [
-  ipv4Rule('0.0.0.0', 8, '未指定 / “本网络”地址'),
-  ipv4Rule('10.0.0.0', 8, '私有地址 (RFC 1918)'),
-  ipv4Rule('100.64.0.0', 10, '运营商级 NAT 地址 (CGNAT, RFC 6598)'),
-  ipv4Rule('127.0.0.0', 8, '回环地址'),
-  ipv4Rule('169.254.0.0', 16, '链路本地地址'),
-  ipv4Rule('172.16.0.0', 12, '私有地址 (RFC 1918)'),
-  ipv4Rule('192.0.0.0', 24, 'IETF 协议保留地址'),
-  ipv4Rule('192.0.2.0', 24, '文档示例地址'),
-  ipv4Rule('192.88.99.0', 24, '已废弃的 6to4 中继地址'),
-  ipv4Rule('192.168.0.0', 16, '私有地址 (RFC 1918)'),
-  ipv4Rule('198.18.0.0', 15, '基准测试保留地址'),
-  ipv4Rule('198.51.100.0', 24, '文档示例地址'),
-  ipv4Rule('203.0.113.0', 24, '文档示例地址'),
-  ipv4Rule('224.0.0.0', 4, '组播地址'),
-  ipv4Rule('240.0.0.0', 4, '保留地址（含广播地址）'),
+  ipv4Rule('0.0.0.0', 8, message('unspecifiedV4')),
+  ipv4Rule('10.0.0.0', 8, message('privateV4')),
+  ipv4Rule('100.64.0.0', 10, message('cgnat')),
+  ipv4Rule('127.0.0.0', 8, message('loopback')),
+  ipv4Rule('169.254.0.0', 16, message('linkLocal')),
+  ipv4Rule('172.16.0.0', 12, message('privateV4')),
+  ipv4Rule('192.0.0.0', 24, message('ietfReserved')),
+  ipv4Rule('192.0.2.0', 24, message('documentation')),
+  ipv4Rule('192.88.99.0', 24, message('relay6to4')),
+  ipv4Rule('192.168.0.0', 16, message('privateV4')),
+  ipv4Rule('198.18.0.0', 15, message('benchmark')),
+  ipv4Rule('198.51.100.0', 24, message('documentation')),
+  ipv4Rule('203.0.113.0', 24, message('documentation')),
+  ipv4Rule('224.0.0.0', 4, message('multicast')),
+  ipv4Rule('240.0.0.0', 4, message('reservedBroadcast')),
 ];
 
 /** Special IPv6 ranges inside 2000::/3 that are still refused. */
 const BLOCKED_GLOBAL_IPV6_RANGES: readonly PrefixRule[] = [
-  ipv6Rule('2001::', 32, 'Teredo 隧道地址'),
-  ipv6Rule('2001:2::', 48, '基准测试保留地址'),
-  ipv6Rule('2001:10::', 28, 'ORCHID 保留地址'),
-  ipv6Rule('2001:db8::', 32, '文档示例地址'),
-  ipv6Rule('3fff::', 20, '文档示例地址'),
+  ipv6Rule('2001::', 32, message('teredo')),
+  ipv6Rule('2001:2::', 48, message('benchmark')),
+  ipv6Rule('2001:10::', 28, message('orchid')),
+  ipv6Rule('2001:db8::', 32, message('documentation')),
+  ipv6Rule('3fff::', 20, message('documentation')),
 ];
 
 const BLOCKED_HOSTNAMES = new Set([
@@ -143,20 +144,20 @@ const MAX_LABEL_LENGTH = 63;
 export function parseHostInput(input: string, options: ParseHostOptions = {}): ParsedHost {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
-    throw invalid('请提供主机名或 IP 地址');
+    throw invalid(message('hostRequired'));
   }
   if (trimmed.length > MAX_HOSTNAME_LENGTH + 2) {
-    throw invalid('主机名过长');
+    throw invalid(message('hostTooLong'));
   }
   if (/[\s/\\@?#%]/u.test(trimmed)) {
-    throw invalid('只接受裸主机名或 IP，不要带协议、端口、路径或特殊字符');
+    throw invalid(message('bareHost'));
   }
 
   const bracketed = trimmed.startsWith('[') && trimmed.endsWith(']');
   const ipv6Candidate = bracketed ? trimmed.slice(1, -1) : trimmed;
   if (bracketed || trimmed.includes(':')) {
     if (!isIPv6(ipv6Candidate)) {
-      throw invalid('不是有效的 IPv6 地址（如需端口请去掉端口）');
+      throw invalid(message('ipv6NoPort'));
     }
     const canonical = canonicalizeWithUrlParser(`[${ipv6Candidate}]`);
     const address = canonical.slice(1, -1);
@@ -183,35 +184,35 @@ function canonicalizeWithUrlParser(host: string): string {
   const result = probe.hostname;
   const unchanged = result === placeholder && host.toLowerCase() !== placeholder;
   if (unchanged || result.length === 0) {
-    throw invalid('不是有效的主机名或 IP 地址');
+    throw invalid(message('invalidHost'));
   }
   return result;
 }
 
 function validateDomainSyntax(name: string, options: ParseHostOptions): void {
   if (name.length === 0 || name.length > MAX_HOSTNAME_LENGTH) {
-    throw invalid('主机名长度不合法');
+    throw invalid(message('hostLength'));
   }
   const labels = name.split('.');
   if (labels.length < (options.minLabels ?? 2)) {
-    throw invalid('请提供完整域名（例如 example.com）');
+    throw invalid(message('fullDomain'));
   }
   const labelPattern = options.allowUnderscore
     ? /^[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?$/u
     : /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/u;
   for (const label of labels) {
     if (label.length === 0 || label.length > MAX_LABEL_LENGTH || !labelPattern.test(label)) {
-      throw invalid(`域名标签不合法：${label || '(空)'}`);
+      throw invalid(message('invalidLabel', { label: label || message('empty') }));
     }
   }
   const topLevel = labels[labels.length - 1] ?? '';
   if (/^\d+$/u.test(topLevel)) {
-    throw invalid('顶级域不能是纯数字');
+    throw invalid(message('numericTld'));
   }
 }
 
-function invalid(message: string): NettoolsError {
-  return new NettoolsError('invalid_input', message);
+function invalid(detail: NettoolsMessage): NettoolsError {
+  return new NettoolsError('invalid_input', detail);
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,7 +234,7 @@ export function classifyParsedHost(host: ParsedHost): AddressVerdict {
 export function classifyAddress(address: string): AddressVerdict {
   const parsed = parseHostInput(address);
   if (parsed.kind === 'domain') {
-    throw invalid(`不是 IP 地址：${address}`);
+    throw invalid(message('notIp', { address }));
   }
   return classifyParsedHost(parsed);
 }
@@ -242,12 +243,12 @@ export function classifyHostname(name: string): AddressVerdict {
   const normalized = name.toLowerCase().replace(/\.$/u, '');
   if (BLOCKED_HOSTNAMES.has(normalized)) {
     return normalized.startsWith('localhost')
-      ? blocked('本机主机名')
+      ? blocked(message('localhost'))
       : blocked(CLOUD_METADATA_REASON);
   }
   for (const suffix of BLOCKED_SUFFIXES) {
     if (normalized === suffix || normalized.endsWith(`.${suffix}`)) {
-      return blocked(`内网或保留域名后缀 .${suffix}`);
+      return blocked(message('reservedSuffix', { suffix }));
     }
   }
   return ALLOWED;
@@ -279,11 +280,11 @@ const CLOUD_METADATA_IPV6_BYTES = CLOUD_METADATA_IPV6.map((address) => ipv6ToByt
 
 function classifyIpv6Bytes(bytes: Uint8Array): AddressVerdict {
   if (bytes.every((byte) => byte === 0)) {
-    return blocked('未指定地址 (::)');
+    return blocked(message('unspecifiedV6'));
   }
   const isLoopback = bytes.slice(0, 15).every((byte) => byte === 0) && bytes[15] === 1;
   if (isLoopback) {
-    return blocked('回环地址 (::1)');
+    return blocked(message('loopbackV6'));
   }
   for (const metadata of CLOUD_METADATA_IPV6_BYTES) {
     if (matchesPrefix(bytes, metadata, 128)) {
@@ -291,31 +292,31 @@ function classifyIpv6Bytes(bytes: Uint8Array): AddressVerdict {
     }
   }
   if (matchesPrefix(bytes, IPV4_MAPPED_PREFIX, 96)) {
-    return classifyEmbeddedIpv4(bytes.slice(12, 16), 'IPv4 映射地址');
+    return classifyEmbeddedIpv4(bytes.slice(12, 16), message('mappedV4'));
   }
   if (matchesPrefix(bytes, NAT64_WELL_KNOWN_PREFIX, 96)) {
-    return classifyEmbeddedIpv4(bytes.slice(12, 16), 'NAT64 地址');
+    return classifyEmbeddedIpv4(bytes.slice(12, 16), message('nat64'));
   }
   if (matchesPrefix(bytes, NAT64_LOCAL_PREFIX, 48)) {
-    return blocked('本地 NAT64 地址');
+    return blocked(message('localNat64'));
   }
   if (matchesPrefix(bytes, SIX_TO_FOUR_PREFIX, 16)) {
-    return classifyEmbeddedIpv4(bytes.slice(2, 6), '6to4 地址');
+    return classifyEmbeddedIpv4(bytes.slice(2, 6), message('sixToFour'));
   }
   if (matchesPrefix(bytes, UNIQUE_LOCAL_PREFIX, 7)) {
-    return blocked('唯一本地地址 (ULA, fc00::/7)');
+    return blocked(message('ula'));
   }
   if (matchesPrefix(bytes, LINK_LOCAL_PREFIX, 10)) {
-    return blocked('链路本地地址 (fe80::/10)');
+    return blocked(message('linkLocalV6'));
   }
   if (matchesPrefix(bytes, SITE_LOCAL_PREFIX, 10)) {
-    return blocked('已废弃的站点本地地址 (fec0::/10)');
+    return blocked(message('siteLocalV6'));
   }
   if (matchesPrefix(bytes, MULTICAST_PREFIX, 8)) {
-    return blocked('组播地址 (ff00::/8)');
+    return blocked(message('multicastV6'));
   }
   if (!matchesPrefix(bytes, GLOBAL_UNICAST_PREFIX, 3)) {
-    return blocked('非全球单播 IPv6 地址');
+    return blocked(message('notGlobalV6'));
   }
   for (const rule of BLOCKED_GLOBAL_IPV6_RANGES) {
     if (matchesPrefix(bytes, rule.prefix, rule.bits)) {
@@ -325,13 +326,13 @@ function classifyIpv6Bytes(bytes: Uint8Array): AddressVerdict {
   return ALLOWED;
 }
 
-function classifyEmbeddedIpv4(embedded: Uint8Array, wrapper: string): AddressVerdict {
+function classifyEmbeddedIpv4(embedded: Uint8Array, wrapper: NettoolsMessage): AddressVerdict {
   const verdict = classifyIpv4Bytes(embedded);
   if (!verdict.blocked) {
     return verdict;
   }
   const dotted = Array.from(embedded).join('.');
-  return blocked(`${wrapper}指向 ${dotted}（${verdict.reason}）`);
+  return blocked(message('embeddedV4', { wrapper, address: dotted, reason: verdict.detail }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -361,7 +362,7 @@ export function ipv4ToBytes(address: string): Uint8Array {
   const parts = address.split('.').map((part) => Number(part));
   const valid = parts.length === 4 && parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255);
   if (!valid) {
-    throw invalid(`不是有效的 IPv4 地址：${address}`);
+    throw invalid(message('invalidV4', { address }));
   }
   return Uint8Array.from(parts);
 }
@@ -381,13 +382,13 @@ export function ipv6ToBytes(address: string): Uint8Array {
   }
   const halves = text.split('::');
   if (halves.length > 2) {
-    throw invalid(`不是有效的 IPv6 地址：${address}`);
+    throw invalid(message('invalidV6', { address }));
   }
   const head = parseGroups(halves[0] ?? '');
   const rest = halves.length === 2 ? parseGroups(halves[1] ?? '') : [];
   const missing = 8 - head.length - rest.length;
   if (halves.length === 2 ? missing < 1 : missing !== 0) {
-    throw invalid(`不是有效的 IPv6 地址：${address}`);
+    throw invalid(message('invalidV6', { address }));
   }
   groups.push(...head);
   for (let index = 0; index < missing && halves.length === 2; index += 1) {
@@ -411,17 +412,17 @@ function parseGroups(text: string): number[] {
   }
   return text.split(':').map((group) => {
     if (!/^[0-9a-f]{1,4}$/u.test(group)) {
-      throw invalid(`IPv6 分组不合法：${group}`);
+      throw invalid(message('invalidV6Group', { group }));
     }
     return Number.parseInt(group, 16);
   });
 }
 
-function ipv4Rule(base: string, bits: number, reason: string): PrefixRule {
+function ipv4Rule(base: string, bits: number, reason: NettoolsMessage): PrefixRule {
   return Object.freeze({ prefix: ipv4ToBytes(base), bits, reason });
 }
 
-function ipv6Rule(base: string, bits: number, reason: string): PrefixRule {
+function ipv6Rule(base: string, bits: number, reason: NettoolsMessage): PrefixRule {
   return Object.freeze({ prefix: ipv6ToBytes(base), bits, reason });
 }
 
@@ -438,7 +439,7 @@ export function reverseLookupName(host: ParsedHost): string {
     }
     return `${nibbles.reverse().join('.')}.ip6.arpa`;
   }
-  throw invalid('反向解析需要 IP 地址');
+  throw invalid(message('reverseNeedsIp'));
 }
 
 /** Human label for a parsed host. */

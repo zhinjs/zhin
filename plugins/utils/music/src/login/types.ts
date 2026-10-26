@@ -1,3 +1,4 @@
+import type { Locale } from 'zhin.js/i18n';
 export type QrLoginSource = 'qq' | 'netease';
 
 export interface QrPollResult {
@@ -12,8 +13,8 @@ export interface QrCreateResult {
 }
 
 export interface QrLoginProvider {
-  createQr(): Promise<QrCreateResult>;
-  pollQr(pollData: Record<string, string>): Promise<QrPollResult>;
+  createQr(locale?: Locale): Promise<QrCreateResult>;
+  pollQr(pollData: Record<string, string>, locale?: Locale): Promise<QrPollResult>;
 }
 
 export function extractSetCookies(headers: Headers): string {

@@ -139,7 +139,7 @@ describe.each(dialects)('transactional relational state (%s)', mode => {
     const job = { id: 'job'.repeat(100), enabled: true, createdAt: 1, updatedAt: 1, schedule: { kind: 'every', everyMs: 60000 }, action: { kind: 'agent', prompt: 'text\0%' }, notify: { channel: 'silent' }, state: { retryCount: 0 } } as const;
     await scheduler.mutateJob(job.id, () => ({ job, result: undefined }));
     await Promise.all(Array.from({ length: 8 }, () => scheduler.mutateJob(job.id, current => ({ job: { ...current!, state: { retryCount: current!.state.retryCount! + 1 } }, result: undefined }))));
-    expect(await scheduler.get(job.id)).toEqual({ ...job, state: { retryCount: 8 } });
+    expect(await scheduler.get(job.id)).toEqual({ ...job, locale: 'zh-CN', state: { retryCount: 8 } });
   });
 
   it('migrates reminder/RSS claims, receipts and pending summaries losslessly into separate rows', async () => {
@@ -151,8 +151,8 @@ describe.each(dialects)('transactional relational state (%s)', mode => {
     const reminderBook = { version: 1, revision: 'v', receipts, tasks: [{ id: 'task', creation: 'f', target, text: 'hello\0%', state: 'unknown', createdAt: 1, nextRunAt: 2, intervalMs: null, claimId: 'claim', lastRunAt: null, detail: 'unknown\0%' }] };
     const rssBook = { version: 2, revision: 'r', receipts, tasks: [{ id: 'task', creation: 'f', version: 'v', target, url: 'https://test.invalid/rss', state: 'unknown', createdAt: 1, claimId: 'claim', lastCheckAt: 3, lastRunAt: null, detail: 'pending', seen: ['id\0%'], quiet: { timezone: 'UTC', start: '22:00', end: '08:00' }, pending: { from: 1, to: 3, count: 2, countCapped: true, items: [{ key: 'id\0%', title: 'title\0%', link: 'https://test.invalid/' }] } }] };
     await db.state.set(ADMIN_REMINDER_STATE_KEY, reminderBook); await db.state.set(ADMIN_RSS_STATE_KEY, rssBook);
-    expect(await reminders.get(ADMIN_REMINDER_STATE_KEY)).toEqual(reminderBook);
-    expect(await rss.get(ADMIN_RSS_STATE_KEY)).toEqual(rssBook);
+    expect(await reminders.get(ADMIN_REMINDER_STATE_KEY)).toEqual({ ...reminderBook, tasks: reminderBook.tasks.map(task => ({ ...task, locale: 'zh-CN' })) });
+    expect(await rss.get(ADMIN_RSS_STATE_KEY)).toEqual({ ...rssBook, tasks: rssBook.tasks.map(task => ({ ...task, locale: 'zh-CN' })) });
     expect(await db.state.get(ADMIN_REMINDER_STATE_KEY)).toBeUndefined(); expect(await db.state.get(ADMIN_RSS_STATE_KEY)).toBeUndefined();
     expect(await db.models.get('admin_reminder_tasks')!.select()).toHaveLength(1);
     expect(await db.models.get('admin_rss_seen')!.select()).toHaveLength(1);

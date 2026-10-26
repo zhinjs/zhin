@@ -22,6 +22,11 @@
         }
       ],
       "description": "日历后端；none 时工具返回未启用提示",
+      "x-i18n": {
+        "en": {
+          "description": "Calendar backend. Tools report that the calendar is disabled when set to none."
+        }
+      },
       "default": "none",
       "x-zhin-config": {
         "effect": "reload"
@@ -30,6 +35,11 @@
     "timezone": {
       "type": "string",
       "description": "解释无偏移时间与展示用的 IANA 时区",
+      "x-i18n": {
+        "en": {
+          "description": "IANA timezone for interpreting times without offsets and for display."
+        }
+      },
       "default": "Asia/Manila",
       "x-zhin-config": {
         "effect": "reload"
@@ -76,6 +86,11 @@
         "calendar_url": {
           "type": "string",
           "description": "日历 collection URL",
+          "x-i18n": {
+            "en": {
+              "description": "Calendar collection URL."
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -124,6 +139,11 @@
         "refresh_token": {
           "type": "string",
           "description": "${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取",
+          "x-i18n": {
+            "en": {
+              "description": "${GOOGLE_CALENDAR_REFRESH_TOKEN}; obtain using the calendar authorization flow."
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -132,6 +152,11 @@
         "calendar_id": {
           "type": "string",
           "description": "日历 ID，默认 primary；可换成其它日历的 id",
+          "x-i18n": {
+            "en": {
+              "description": "Calendar ID, primary by default; can be set to another calendar ID."
+            }
+          },
           "default": "primary",
           "x-zhin-config": {
             "effect": "reload"
@@ -166,6 +191,11 @@
         "client_secret": {
           "type": "string",
           "description": "可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET}",
+          "x-i18n": {
+            "en": {
+              "description": "Optional for public clients. ${MS_GRAPH_CLIENT_SECRET}"
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -174,6 +204,11 @@
         "refresh_token": {
           "type": "string",
           "description": "${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取",
+          "x-i18n": {
+            "en": {
+              "description": "${MS_GRAPH_REFRESH_TOKEN}; obtain using the calendar authorization flow."
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"
@@ -182,6 +217,11 @@
         "tenant": {
           "type": "string",
           "description": "Azure tenant，默认 common",
+          "x-i18n": {
+            "en": {
+              "description": "Azure tenant, common by default."
+            }
+          },
           "default": "common",
           "x-zhin-config": {
             "effect": "reload"
@@ -190,6 +230,11 @@
         "calendar_id": {
           "type": "string",
           "description": "留空或 primary/me = 默认日历；否则为 Graph calendar id",
+          "x-i18n": {
+            "en": {
+              "description": "Empty, primary or me selects the default calendar; otherwise a Graph calendar ID."
+            }
+          },
           "default": "",
           "x-zhin-config": {
             "effect": "reload"

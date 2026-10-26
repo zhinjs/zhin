@@ -1,3 +1,4 @@
+import { interactionMessages as t } from '../../built/interaction-messages.js';
 import { randomUUID } from 'node:crypto';
 import { jsx } from '@zhin.js/jsx';
 import { conversationRefKey, type Segment } from '@zhin.js/im-contract';
@@ -75,7 +76,7 @@ export class JsxButtonRegistry {
     const binding = active?.get(payload);
     // Never invoke a retired closure. The reply uses this incoming operation's scope.
     if (!binding) {
-      await message.$reply('交互已过期或不可用，请重新发起。');
+      await message.$reply(t(message.locale, 'expired'));
       return true;
     }
     if (binding.conversationKey !== conversationRefKey(message.conversation)) return true;

@@ -40,6 +40,19 @@ describe('ScheduleJobStore', () => {
     expect(parsed.jobs).toHaveLength(1);
   });
 
+  it('captures new job language and preserves it across edits, project changes and file reload', async () => {
+    const store = new ScheduleJobStore({ dataDir, defaultLocale: 'en' });
+    const job = { id: 'language', enabled: true, schedule: { kind: 'every' as const, everyMs: 60_000 },
+      action: { kind: 'agent' as const, prompt: 'report' }, notify: { channel: 'silent' as const }, createdAt: 1, updatedAt: 1, state: {} };
+    await store.upsertJob(job);
+    expect((await store.getJob('language'))?.locale).toBe('en');
+    const restarted = new ScheduleJobStore({ dataDir, defaultLocale: 'zh-CN' });
+    await restarted.upsertJob({ ...job, locale: 'zh-CN', label: 'edited' });
+    expect((await restarted.getJob('language'))?.locale).toBe('en');
+    await restarted.upsertJob({ ...job, id: 'new' });
+    expect((await restarted.getJob('new'))?.locale).toBe('zh-CN');
+  });
+
   it('读盘时 channel:im 无 target 可合并 defaultNotify', async () => {
     const defaultNotify = {
       channel: 'im' as const,

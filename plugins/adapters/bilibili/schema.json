@@ -11,7 +11,12 @@
       "type": "number",
       "minimum": 60,
       "default": 60,
-      "description": "轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动"
+      "description": "轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动",
+      "x-i18n": {
+        "en": {
+          "description": "Polling interval in seconds, at least 60; adds 0–20% random jitter."
+        }
+      }
     },
     "sendMode": {
       "type": "string",
@@ -20,7 +25,12 @@
         "off"
       ],
       "default": "review",
-      "description": "出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发"
+      "description": "出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发",
+      "x-i18n": {
+        "en": {
+          "description": "Outbound mode: review (default) queues AI replies as drafts for human confirmation; off disables outbound messages. Version 1 does not support automatic direct replies."
+        }
+      }
     },
     "videos": {
       "type": "array",
@@ -30,14 +40,24 @@
           "number"
         ]
       },
-      "description": "白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索"
+      "description": "白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索",
+      "x-i18n": {
+        "en": {
+          "description": "Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search."
+        }
+      }
     },
     "master": {
       "type": [
         "string",
         "number"
       ],
-      "description": "框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖"
+      "description": "框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Framework masters (Bilibili uid). endpoints[i].master can override this value."
+        }
+      }
     },
     "trusted": {
       "type": "array",
@@ -48,12 +68,22 @@
         ],
         "description": "Trusted Bilibili uid"
       },
-      "description": "框架 trusted 用户列表（B 站 uid）"
+      "description": "框架 trusted 用户列表（B 站 uid）",
+      "x-i18n": {
+        "en": {
+          "description": "Framework trusted users (Bilibili uid)."
+        }
+      }
     },
     "commandPrefix": {
       "type": "string",
       "default": "",
-      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
+        }
+      }
     },
     "endpoints": {
       "type": "array",
@@ -65,15 +95,30 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "Endpoint 名称（本地标识，不是 B 站账号）"
+            "description": "Endpoint 名称（本地标识，不是 B 站账号）",
+            "x-i18n": {
+              "en": {
+                "description": "Local endpoint name, not a Bilibili account ID."
+              }
+            }
           },
           "sessdata": {
             "type": "string",
-            "description": "Cookie SESSDATA（以你的账号身份操作；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库）"
+            "description": "Cookie SESSDATA（以你的账号身份操作；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库）",
+            "x-i18n": {
+              "en": {
+                "description": "SESSDATA cookie, acting as your account. Reference ${BILIBILI_SESSDATA}; never commit it to the repository."
+              }
+            }
           },
           "biliJct": {
             "type": "string",
-            "description": "Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入）"
+            "description": "Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入）",
+            "x-i18n": {
+              "en": {
+                "description": "bili_jct cookie (CSRF token). Reference ${BILIBILI_BILI_JCT}."
+              }
+            }
           },
           "videos": {
             "type": "array",
@@ -83,13 +128,23 @@
                 "number"
               ]
             },
-            "description": "白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索"
+            "description": "白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索",
+            "x-i18n": {
+              "en": {
+                "description": "Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search."
+              }
+            }
           },
           "pollIntervalSec": {
             "type": "number",
             "minimum": 60,
             "default": 60,
-            "description": "轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动"
+            "description": "轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动",
+            "x-i18n": {
+              "en": {
+                "description": "Polling interval in seconds, at least 60; adds 0–20% random jitter."
+              }
+            }
           },
           "sendMode": {
             "type": "string",
@@ -98,7 +153,12 @@
               "off"
             ],
             "default": "review",
-            "description": "出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发"
+            "description": "出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发",
+            "x-i18n": {
+              "en": {
+                "description": "Outbound mode: review (default) queues AI replies as drafts for human confirmation; off disables outbound messages. Version 1 does not support automatic direct replies."
+              }
+            }
           },
           "apiBaseUrl": {
             "type": "string",
@@ -109,7 +169,12 @@
               "string",
               "number"
             ],
-            "description": "本 endpoint 的框架 master（B 站 uid）"
+            "description": "本 endpoint 的框架 master（B 站 uid）",
+            "x-i18n": {
+              "en": {
+                "description": "Framework masters for this endpoint (Bilibili uid)."
+              }
+            }
           },
           "trusted": {
             "type": "array",
@@ -120,7 +185,12 @@
               ],
               "description": "Trusted Bilibili uid"
             },
-            "description": "本 endpoint 的 trusted 列表"
+            "description": "本 endpoint 的 trusted 列表",
+            "x-i18n": {
+              "en": {
+                "description": "Trusted users for this endpoint."
+              }
+            }
           },
           "commandPrefix": {
             "type": "string"
@@ -129,6 +199,11 @@
         "required": [
           "id"
         ]
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults."
+        }
       }
     }
   },

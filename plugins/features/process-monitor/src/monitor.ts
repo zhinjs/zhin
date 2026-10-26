@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,15 +45,15 @@ export function resolveProcessMonitorConfig(raw: ProcessMonitorConfig | undefine
   };
 }
 
-export function formatUptime(ms: number): string {
+export function formatUptime(ms: number, locale?: Locale): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
-  if (days > 0) return `${days}天${hours % 24}小时`;
-  if (hours > 0) return `${hours}小时${minutes % 60}分钟`;
-  if (minutes > 0) return `${minutes}分钟`;
-  return `${seconds}秒`;
+  if (days > 0) return t(locale, 'days', { days, hours: hours % 24 });
+  if (hours > 0) return t(locale, 'hours', { hours, minutes: minutes % 60 });
+  if (minutes > 0) return t(locale, 'minutes', { minutes });
+  return t(locale, 'seconds', { seconds });
 }
 
 export function classifyStartup(
@@ -126,19 +128,19 @@ export class ProcessMonitor {
     this.#started = false;
   }
 
-  formatStatus(): string {
+  formatStatus(locale?: Locale): string {
     const memory = process.memoryUsage();
     return [
-      '📊 进程监控状态',
+      t(locale, 'title'),
       '',
-      `🚀 当前 PID: ${process.pid}`,
-      `⏱️  运行时长: ${formatUptime(this.#now() - this.#startTime)}`,
-      `💾 内存使用: ${Math.round(memory.heapUsed / 1024 / 1024)} MB`,
-      `🔄 总重启: ${this.#state.restartCount} 次`,
-      `💥 崩溃: ${this.#state.crashCount} 次`,
-      `📈 累计运行: ${formatUptime(this.#state.totalUptime)}`,
-      `🖥️  主机: ${os.hostname()}`,
-      `💻 平台: ${os.platform()}-${os.arch()}`,
+      t(locale, 'pid', { pid: process.pid }),
+      t(locale, 'uptime', { duration: formatUptime(this.#now() - this.#startTime, locale) }),
+      t(locale, 'memory', { memory: Math.round(memory.heapUsed / 1024 / 1024) }),
+      t(locale, 'restarts', { count: this.#state.restartCount }),
+      t(locale, 'crashes', { count: this.#state.crashCount }),
+      t(locale, 'totalUptime', { duration: formatUptime(this.#state.totalUptime, locale) }),
+      t(locale, 'host', { host: os.hostname() }),
+      t(locale, 'platform', { platform: `${os.platform()}-${os.arch()}` }),
       `📦 Node: ${process.version}`,
     ].join('\n');
   }

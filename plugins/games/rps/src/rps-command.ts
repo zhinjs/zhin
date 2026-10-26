@@ -1,18 +1,14 @@
-import {
-  channelKey,
-  type GameMessageLike,
-  type GameReply,
-} from '@zhin.js/game-kit';
+import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
+import { createMessages } from 'zhin.js/i18n';
 import { continueGame, handleChoice, startGame } from './game-flow.js';
 import type { SessionService } from './session-service.js';
 
-export const RPS_HELP = [
-  '✊✋✌️ 猜拳对决（三局两胜）',
-  '猜拳 / rps — 帮助',
-  '猜拳 开始 — 新对局',
-  '猜拳 继续 — 刷新界面',
-  '猜拳 放弃 — 结束对局',
-].join('\n');
+export function getRpsHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'> = {}): string {
+  return formatGameHelp(message, { 'zh-CN': "✊✋✌️ 猜拳对决（三局两胜）", en: "✊✋✌️ Rock Paper Scissors (best of three)" }, 'rps', ['start', 'continue', 'quit'],
+    { 'zh-CN': "点击按钮或回复选项数字出拳。", en: "Choose a button or reply with its option number." });
+}
+
+export const RPS_HELP = getRpsHelp();
 
 export async function runRpsCommand(
   services: SessionService,
@@ -24,11 +20,11 @@ export async function runRpsCommand(
 
   if (!action || action === 'help') {
     const active = await services.getActiveByChannel(ch);
-    const lines = [RPS_HELP, ''];
+    const lines = [getRpsHelp(message), ''];
     if (active) {
-      lines.push(`进行中：${active.player_name} · ${active.player_wins}:${active.bot_wins}`);
+      lines.push(messages(active.locale ?? undefined, 'text1', { p0: active.player_name, p1: active.player_wins, p2: active.bot_wins }));
     } else {
-      lines.push('暂无对局，发送「猜拳 开始」或从游戏大厅进入。');
+      lines.push(gameCommandFeedback(message, 'noGame'), gameCommandHint(message, 'rps'));
     }
     return lines.join('\n');
   }
@@ -38,9 +34,13 @@ export async function runRpsCommand(
 
   if (action === 'quit') {
     const row = await services.getActiveForUser(ch, userId);
-    if (!row) return '你没有进行中的猜拳。';
+    if (!row) return gameCommandFeedback(message, 'noGame');
     return (await handleChoice(services, message, row.id, 'quit')) ?? '';
   }
 
-  return `未知子命令：${action}\n\n${RPS_HELP}`;
+  return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getRpsHelp(message);
 }
+
+const messages = createMessages({
+  text1: { 'zh-CN': "进行中：{p0} · {p1}:{p2}", en: "Playing: {p0} · {p1}:{p2}" },
+});

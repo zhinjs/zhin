@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -16,6 +17,6 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   async execute({ group_id, user_id, title }: { group_id: number; user_id: number; title: string }, context) {
     const endpoint = context.$client;
       await endpoint.setTitle(group_id, user_id, title);
-      return { success: true, message: `已设置 ${user_id} 头衔为 "${title}"` };
+      return { success: true, message: t(context.locale, 'memberTitleSet', { p0: user_id, p1: title }) };
   },
 });

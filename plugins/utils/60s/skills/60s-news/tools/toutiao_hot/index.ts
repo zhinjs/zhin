@@ -9,6 +9,6 @@ export default defineAgentTool<{ limit?: number }>({
   tags: ["热搜", "资讯", "头条"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/toutiao-hot.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

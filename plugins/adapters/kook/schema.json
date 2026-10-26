@@ -55,7 +55,12 @@
         "string",
         "number"
       ],
-      "description": "框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖"
+      "description": "框架 master（KOOK user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Framework masters (KOOK user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value."
+        }
+      }
     },
     "trusted": {
       "type": "array",
@@ -66,7 +71,12 @@
         ],
         "description": "Trusted KOOK user id"
       },
-      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
+      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加",
+      "x-i18n": {
+        "en": {
+          "description": "Framework trusted users, below master authority. endpoints[i].trusted can add users."
+        }
+      }
     },
     "endpoints": {
       "type": "array",
@@ -81,7 +91,12 @@
               "string",
               "number"
             ],
-            "description": "本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master"
+            "description": "本 endpoint 的框架 master（KOOK user id）；覆盖顶层 master",
+            "x-i18n": {
+              "en": {
+                "description": "Framework masters for this endpoint (KOOK user id), overriding the top-level master list."
+              }
+            }
           },
           "trusted": {
             "type": "array",
@@ -92,7 +107,12 @@
               ],
               "description": "Trusted KOOK user id"
             },
-            "description": "本 endpoint 的 trusted 列表"
+            "description": "本 endpoint 的 trusted 列表",
+            "x-i18n": {
+              "en": {
+                "description": "Trusted users for this endpoint."
+              }
+            }
           },
           "token": {
             "type": "string",
@@ -171,7 +191,12 @@
               "port",
               "serverName"
             ],
-            "description": "WSS故障验收固定loopback，保持真实TLS身份"
+            "description": "WSS故障验收固定loopback，保持真实TLS身份",
+            "x-i18n": {
+              "en": {
+                "description": "Pin WSS fault-injection tests to loopback while preserving the actual TLS identity."
+              }
+            }
           },
           "apiProxy": {
             "type": "object",
@@ -193,12 +218,22 @@
           "id",
           "token"
         ]
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Multiple accounts: each entry defines an endpoint. id and token are required; other fields override instance defaults."
+        }
       }
     },
     "commandPrefix": {
       "type": "string",
       "default": "",
-      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
+        }
+      }
     }
   },
   "required": [

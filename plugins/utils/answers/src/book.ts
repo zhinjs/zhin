@@ -1,12 +1,12 @@
+import { type Locale } from 'zhin.js/i18n';
+import { messages } from './messages.js';
 import { createHash, randomInt } from 'node:crypto';
 import { BOOK_ANSWERS } from './book-data.js';
 
-export const BOOK_USAGE = [
-  '📖 答案之书',
-  '用法：答案之书 <问题>',
-  '例如：答案之书 今天要不要出去走走',
-  '心里默念问题后发送，书会翻开一页给你答案。',
-].join('\n');
+export function bookUsage(locale: Locale = 'zh-CN', command?: string): string {
+  return [messages(locale, 'bookTitle'), ...(command === undefined ? [] : [messages(locale, 'bookUsage', { command })]), messages(locale, 'bookIntro')].join('\n');
+}
+export const BOOK_USAGE = bookUsage();
 
 export const MAX_QUESTION_LENGTH = 200;
 
@@ -43,6 +43,6 @@ export function pickBookAnswer(input: BookPickInput, answers: readonly string[] 
   return answers[digest.readUInt32BE(0) % answers.length]!;
 }
 
-export function replyBook(question: string, answer: string): string {
-  return `📖 你问：${question}\n✨ 答案之书：${answer}`;
+export function replyBook(question: string, answer: string, locale: Locale = 'zh-CN'): string {
+  return messages(locale, 'bookReply', { question, answer });
 }

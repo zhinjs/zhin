@@ -214,6 +214,7 @@ ai:
 | 第一次跑起 Bot | [快速开始](./docs/getting-started/index.md) · [示例项目](./docs/examples/index.md) |
 | 写插件 | [第一个插件](./docs/getting-started/first-plugin.md) · [definePlugin 全景](./docs/authoring/define-plugin.md) · [插件完整交付（测试与发布）](./docs/authoring/plugin-delivery.md) |
 | 接入平台 | [平台适配器](./docs/adapters/index.md) · [配置参考](./docs/configuration/index.md) |
+| 设置语言 | [项目、个人与 Console 语言](./docs/configuration/localization.md) |
 | 加 AI | [AI 总览](./docs/ai/index.md) · [Agent 深入](./docs/ai/agent.md) |
 | 部署运维 | [部署与恢复](./docs/operations/production.md) · [Console](./docs/console/index.md) · [故障排查](./docs/troubleshooting/index.md) |
 | 理解内部原理 | [分层架构](./docs/concepts/architecture.md) · [插件模型](./docs/concepts/plugin-model.md) · [消息流](./docs/concepts/message-flow.md) · [热重载（Generation）](./docs/concepts/generation-lifecycle.md) |

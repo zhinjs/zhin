@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 /** Shared query rendering for the `地震` command and the Agent tool. */
 import { formatEventList, formatSourceWarnings } from './format.js';
 import type { EarthquakeService } from './service.js';
@@ -13,7 +15,7 @@ export interface QueryTextOptions {
 export const DEFAULT_QUERY_HOURS = 24;
 export const MAX_QUERY_HOURS = 168;
 
-export async function renderRecentEarthquakes(service: EarthquakeService, options: QueryTextOptions): Promise<string> {
+export async function renderRecentEarthquakes(service: EarthquakeService, options: QueryTextOptions, locale: Locale = 'zh-CN'): Promise<string> {
   const config = service.config;
   const limit = Math.min(20, Math.max(1, Math.round(options.limit ?? config.queryLimit)));
   const minMagnitude = options.minMagnitude ?? config.queryMinMagnitude;
@@ -23,14 +25,15 @@ export async function renderRecentEarthquakes(service: EarthquakeService, option
   try {
     const result = await service.queryRecent({ limit, minMagnitude, regions, hours });
     const scope = region ? `「${region}」` : '';
-    const header = `最近 ${hours} 小时${scope} M${minMagnitude.toFixed(1)} 以上地震`;
-    const warning = formatSourceWarnings(result.outcomes);
-    const staleNote = result.stale ? '⚠️ 数据源暂不可用，以下为上次成功获取的数据' : undefined;
+    const header = t(locale, 'header', { hours, scope, magnitude: minMagnitude.toFixed(1) });
+    const warning = formatSourceWarnings(result.outcomes, locale);
+    const staleNote = result.stale ? t(locale, 'stale') : undefined;
     if (result.events.length === 0) {
-      return [`${header}：暂无记录`, staleNote, warning].filter(Boolean).join('\n');
+      return [t(locale, 'empty', { header }), staleNote, warning].filter(Boolean).join('\n');
     }
     return formatEventList({
-      title: `${header}（共 ${result.total} 条）：`,
+      locale,
+      title: t(locale, 'list', { header, count: result.total }),
       events: result.events,
       timezone: config.timezone,
       hiddenCount: result.total - result.events.length,
@@ -38,7 +41,7 @@ export async function renderRecentEarthquakes(service: EarthquakeService, option
     });
   } catch (error) {
     if (error instanceof EarthquakeUnavailableError) {
-      return `暂时无法获取地震数据，请稍后再试。\n${error.message}`;
+      return [t(locale, 'unavailable'), formatSourceWarnings(error.outcomes, locale)].filter(Boolean).join('\n');
     }
     throw error;
   }

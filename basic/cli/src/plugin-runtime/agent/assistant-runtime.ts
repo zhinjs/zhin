@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -53,6 +54,7 @@ export function createAssistantScheduleRuntime(
   projectRoot: string,
   assistantRaw: AssistantConfig | undefined,
   trace: AgentTraceRecorder,
+  locale: Locale = 'zh-CN',
 ): {
   tools: ReturnType<typeof createScheduleTools>;
   store: ReturnType<typeof createScheduleJobStoreFromConfig>;
@@ -114,6 +116,7 @@ export function createAssistantScheduleRuntime(
   });
 
   const store = createScheduleJobStoreFromConfig(dataDir, {
+    defaultLocale: locale,
     defaultNotify,
   });
   const jobWorker = new JobWorker({
@@ -226,7 +229,7 @@ function createRuntimeScheduleTurnPort(
           ...(creator?.name ? { displayName: creator.name } : {}),
           roles: [...(creator?.roles ?? [])],
         },
-        input: { text: input.prompt },
+        input: { text: input.prompt, locale: input.locale },
         session: { key: `schedule:${input.jobId}` },
         policy: {
           permissions: [],

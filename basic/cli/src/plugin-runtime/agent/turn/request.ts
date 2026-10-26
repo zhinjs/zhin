@@ -194,6 +194,9 @@ export function createRuntimeTurnRequest(
     intent: Object.freeze({ ...input.intent }),
     input: Object.freeze({
       text,
+      locale: message.locale,
+      ...(message.commandPrefix !== undefined ? { commandPrefix: message.commandPrefix } : {}),
+      ...(message.commandMenu !== undefined ? { commandMenu: message.commandMenu } : {}),
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
       ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),

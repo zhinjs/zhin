@@ -1,3 +1,5 @@
+import { messages as t } from './i18n.js';
+import type { Locale } from 'zhin.js/i18n';
 /**
  * DingTalk protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -250,7 +252,7 @@ export function verifySignature(
  * 钉钉机器人图片使用官方 Markdown HTTP(S) 图片链接，保留同载荷文本和图片顺序。
  * 本地媒体上传、原生引用、音频/视频/文件未接线，在请求前明确拒绝。
  */
-export function formatOutboundBody(payload: unknown): DingTalkSendBody {
+export function formatOutboundBody(payload: unknown, locale?: Locale): DingTalkSendBody {
   if (typeof payload === 'string') {
     return { msgtype: 'text', text: { content: payload } };
   }
@@ -303,7 +305,7 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
         try { url = new URL(String(data.url ?? '')); } catch { throw new EndpointDeliveryError('invalid_payload', 'DingTalk share requires an HTTP(S) URL', 'not_sent'); }
         if (!['https:', 'http:'].includes(url.protocol)) throw new EndpointDeliveryError('invalid_payload', 'DingTalk share requires an HTTP(S) URL', 'not_sent');
         if (media) throw new EndpointDeliveryError('invalid_payload', 'DingTalk accepts one link card per message', 'not_sent');
-        media = { msgtype: 'link', link: { title: String(data.title ?? '链接'), text: String(data.description ?? data.content ?? ''), messageUrl: url.toString(), ...(typeof data.image === 'string' ? { picUrl: data.image } : {}) } };
+        media = { msgtype: 'link', link: { title: String(data.title ?? t(locale, 'link')), text: String(data.description ?? data.content ?? ''), messageUrl: url.toString(), ...(typeof data.image === 'string' ? { picUrl: data.image } : {}) } };
         break;
       }
       case 'keyboard':
@@ -314,7 +316,7 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
           let url: URL;
           try { url = new URL(ref.value); } catch { throw new EndpointDeliveryError('invalid_payload', 'DingTalk image requires an HTTP(S) URL', 'not_sent'); }
           if (!['https:', 'http:'].includes(url.protocol)) throw new EndpointDeliveryError('invalid_payload', 'DingTalk image requires an HTTP(S) URL', 'not_sent');
-          markdownTitle ??= '消息';
+          markdownTitle ??= t(locale, 'message');
           textParts.push(`\n![](${ref.value.replace(/[()\s]/g, character => encodeURIComponent(character))})\n`);
           break;
         }
@@ -325,7 +327,7 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
       case 'file':
         throw new EndpointDeliveryError('unsupported_operation', 'DingTalk audio/video/file delivery is not implemented', 'not_sent');
       case 'markdown':
-        markdownTitle ??= String(data.title || '消息');
+        markdownTitle ??= String(data.title || t(locale, 'message'));
         textParts.push(String(data.content ?? data.text ?? ''));
         break;
       case 'link':
@@ -333,7 +335,7 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
           media = {
             msgtype: 'link',
             link: {
-              title: String(data.title || '链接'),
+              title: String(data.title || t(locale, 'link')),
               text: String(data.text ?? data.content ?? ''),
               messageUrl: typeof data.url === 'string' ? data.url : undefined,
               picUrl: typeof data.picUrl === 'string' ? data.picUrl : undefined,

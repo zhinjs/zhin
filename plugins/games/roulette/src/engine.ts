@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 /**
  * Pure Russian roulette rules. No I/O, no clock and no randomness: callers pass
  * the bullet position in, so every transition is deterministic and testable.
@@ -53,10 +54,12 @@ export interface TriggerResult {
 
 /** A rule violation the player should read, e.g. firing out of turn. */
 export class RouletteRuleError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(readonly code: RouletteRuleCode, readonly parameters: Readonly<Record<string, string | number>> = {}) {
+    super(ruleMessages('zh-CN', code, parameters));
     this.name = 'RouletteRuleError';
   }
+
+  format(locale?: Locale): string { return ruleMessages(locale, this.code, this.parameters); }
 }
 
 export function createLobby(host: RoulettePlayer, rules: RouletteTableRules): RouletteState {
@@ -77,12 +80,12 @@ export function joinLobby(
   player: RoulettePlayer,
   rules: RouletteTableRules,
 ): RouletteState {
-  requirePhase(state, 'lobby', '对局已经开始，不能再加入了。');
+  requirePhase(state, 'lobby', 'cannotJoin');
   if (findPlayer(state, player.id)) {
-    throw new RouletteRuleError('你已经在这局轮盘里了。');
+    throw new RouletteRuleError('alreadyJoined');
   }
   if (state.players.length >= rules.maxPlayers) {
-    throw new RouletteRuleError(`人数已满（最多 ${rules.maxPlayers} 人）。`);
+    throw new RouletteRuleError('full', { max: rules.maxPlayers });
   }
   return { ...state, players: [...state.players, player] };
 }
@@ -92,12 +95,12 @@ export function startRound(
   actorId: string,
   bulletChamber: number,
 ): RouletteState {
-  requirePhase(state, 'lobby', '对局已经开始了。');
+  requirePhase(state, 'lobby', 'started');
   if (actorId !== state.hostId) {
-    throw new RouletteRuleError('只有开局的人可以开始。');
+    throw new RouletteRuleError('hostOnly');
   }
   if (state.players.length < MIN_ROULETTE_PLAYERS) {
-    throw new RouletteRuleError(`至少需要 ${MIN_ROULETTE_PLAYERS} 名玩家才能开始。`);
+    throw new RouletteRuleError('minimum', { min: MIN_ROULETTE_PLAYERS });
   }
   if (!Number.isInteger(bulletChamber) || bulletChamber < 0 || bulletChamber >= state.chamberCount) {
     throw new RangeError(`bulletChamber must be within 0..${state.chamberCount - 1}`);
@@ -112,11 +115,11 @@ export function startRound(
 }
 
 export function pullTrigger(state: RouletteState, actorId: string): TriggerResult {
-  requirePhase(state, 'playing', '对局还没开始。');
+  requirePhase(state, 'playing', 'notStarted');
   const shooter = currentPlayer(state);
-  if (!shooter) throw new RouletteRuleError('对局没有可以开枪的玩家。');
+  if (!shooter) throw new RouletteRuleError('noPlayer');
   if (shooter.id !== actorId) {
-    throw new RouletteRuleError(`还没轮到你，现在轮到 ${shooter.name}。`);
+    throw new RouletteRuleError('notTurn', { name: shooter.name });
   }
   const firedChamber = state.pullsMade;
   const pullsMade = state.pullsMade + 1;
@@ -134,11 +137,11 @@ export function pullTrigger(state: RouletteState, actorId: string): TriggerResul
  */
 export function leaveGame(state: RouletteState, playerId: string): RouletteState {
   const leaver = findPlayer(state, playerId);
-  if (!leaver) throw new RouletteRuleError('你不在这局轮盘里。');
+  if (!leaver) throw new RouletteRuleError('notJoined');
   if (state.phase === 'playing') {
     return finishWithLoser(state, playerId, 'forfeit');
   }
-  requirePhase(state, 'lobby', '对局已经结束。');
+  requirePhase(state, 'lobby', 'ended');
   const players = state.players.filter((player) => player.id !== playerId);
   const nextHost = players[0];
   if (!nextHost) {
@@ -150,19 +153,19 @@ export function leaveGame(state: RouletteState, playerId: string): RouletteState
 
 /** The player on turn ran out of time: treated like a shot, they lose. */
 export function expireTurn(state: RouletteState): RouletteState {
-  requirePhase(state, 'playing', '对局还没开始。');
+  requirePhase(state, 'playing', 'notStarted');
   const late = currentPlayer(state);
-  if (!late) throw new RouletteRuleError('对局没有可以开枪的玩家。');
+  if (!late) throw new RouletteRuleError('noPlayer');
   return finishWithLoser(state, late.id, 'turn-timeout');
 }
 
 export function expireLobby(state: RouletteState): RouletteState {
-  requirePhase(state, 'lobby', '对局已经开始了。');
+  requirePhase(state, 'lobby', 'started');
   return { ...state, phase: 'aborted', endReason: 'lobby-expired' };
 }
 
 export function cancelGame(state: RouletteState): RouletteState {
-  if (!isOpen(state)) throw new RouletteRuleError('对局已经结束。');
+  if (!isOpen(state)) throw new RouletteRuleError('ended');
   return { ...state, phase: 'aborted', endReason: 'cancelled' };
 }
 
@@ -208,8 +211,8 @@ function finishWithLoser(
   return { ...state, phase: 'finished', loserId, endReason };
 }
 
-function requirePhase(state: RouletteState, phase: RoulettePhase, message: string): void {
-  if (state.phase !== phase) throw new RouletteRuleError(message);
+function requirePhase(state: RouletteState, phase: RoulettePhase, code: RouletteRuleCode): void {
+  if (state.phase !== phase) throw new RouletteRuleError(code);
 }
 
 function isRouletteState(value: unknown): value is RouletteState {
@@ -224,3 +227,19 @@ function isRouletteState(value: unknown): value is RouletteState {
     && typeof state.pullsMade === 'number'
     && typeof state.turnIndex === 'number';
 }
+
+const ruleCatalog = {
+  cannotJoin: { 'zh-CN': "对局已经开始，不能再加入了。", en: "The game has started; you can no longer join." },
+  alreadyJoined: { 'zh-CN': "你已经在这局轮盘里了。", en: "You are already in this game." },
+  full: { 'zh-CN': "人数已满（最多 {max} 人）。", en: "The table is full (maximum {max} players)." },
+  started: { 'zh-CN': "对局已经开始了。", en: "The game has already started." },
+  hostOnly: { 'zh-CN': "只有开局的人可以开始。", en: "Only the host may start the game." },
+  minimum: { 'zh-CN': "至少需要 {min} 名玩家才能开始。", en: "At least {min} players are required." },
+  notStarted: { 'zh-CN': "对局还没开始。", en: "The game has not started." },
+  noPlayer: { 'zh-CN': "对局没有可以开枪的玩家。", en: "There is no player who can pull the trigger." },
+  notTurn: { 'zh-CN': "还没轮到你，现在轮到 {name}。", en: "It is not your turn. {name} plays next." },
+  notJoined: { 'zh-CN': "你不在这局轮盘里。", en: "You are not in this game." },
+  ended: { 'zh-CN': "对局已经结束。", en: "The game has ended." },
+} as const;
+type RouletteRuleCode = keyof typeof ruleCatalog;
+const ruleMessages = createMessages(ruleCatalog);

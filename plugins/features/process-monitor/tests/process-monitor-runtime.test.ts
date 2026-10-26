@@ -41,6 +41,24 @@ describe('@zhin.js/process-monitor runtime', () => {
     expect(new ProcessMonitor().formatStatus()).toContain('进程监控状态');
   });
 
+  it('localizes command and tool status while preserving the same counters', async () => {
+    let now = 0;
+    const monitor = new ProcessMonitor({}, { now: () => now });
+    now = 3_665_000;
+    const context = { owner: {} as never, generation: 0, locale: 'en' as const, config: {},
+      use: () => monitor as never, args: [], params: {}, input: undefined, formatCommand: () => undefined };
+    const command = await statusCommand.execute(context);
+    const tool = await statusTool.execute({}, context as never);
+    for (const result of [command, tool]) {
+      expect(result).toContain('Process status');
+      expect(result).toContain('Uptime: 1h 1m');
+      expect(result).toContain('Total restarts: 0');
+      expect(result).not.toMatch(/\p{Script=Han}/u);
+    }
+    expect(monitor.state).toEqual({ restartCount: 0, crashCount: 0, totalUptime: 0 });
+    expect(formatUptime(86_400_000, 'en')).toBe('1d 0h');
+  });
+
   it('classifies hot reload (same pid) as start, not crash', () => {
     const now = Date.now();
     const state = {
@@ -95,6 +113,8 @@ describe('@zhin.js/process-monitor runtime', () => {
     const result = await statusCommand.execute({
       owner: {} as never,
       generation: 0,
+      locale: 'zh-CN',
+      formatCommand: () => undefined,
       config: {},
       use: () => monitor as never,
       args: [],

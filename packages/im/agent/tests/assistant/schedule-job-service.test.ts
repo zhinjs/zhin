@@ -31,6 +31,10 @@ describe('addScheduleJob', () => {
 });
 
 describe('parseScheduleAddFromToolArgs', () => {
+  it('captures trusted context language and ignores model-supplied locale', () => {
+    const result = parseScheduleAddFromToolArgs({ delay_minutes: 10, prompt: 'report', locale: 'zh-CN' }, { ...toolContext, locale: 'en' });
+    expect(result).toMatchObject({ locale: 'en' });
+  });
   it('parses workday cron schedule with execution plan', () => {
     const result = parseScheduleAddFromToolArgs({
       schedule_kind: 'workday',

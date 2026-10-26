@@ -15,6 +15,7 @@ export default defineAgentTool<{ game?: string }>({
       () => [...runtime.enabledGames],
       runtime.config.historyLimit,
       gid ?? undefined,
+      context.locale,
     );
     return JSON.stringify({ result });
   },

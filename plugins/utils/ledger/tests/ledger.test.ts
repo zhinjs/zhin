@@ -18,7 +18,7 @@ import { resolveLedgerConfig, type LedgerConfig } from '../src/config.js';
 import { ledgerServiceToken } from '../src/runtime.js';
 import { LedgerService } from '../src/service.js';
 import { ledgerCaller } from '../src/identity.js';
-import { USER_TABLE } from '../src/store.js';
+import { defineLedgerTables, USER_TABLE } from '../src/store.js';
 
 const COMMANDS: Readonly<Record<string, CommandDefinition>> = {
   'ledger-add': addCommand,
@@ -423,15 +423,23 @@ describe('opt-in daily report (FakeClock)', () => {
 describe('databases created before the private target table existed', () => {
   const LEGACY_USER_COLUMNS = ['owner_key', 'next_seq', 'report_enabled', 'report_target', 'last_report_date'];
 
-  it('never touches columns that `ledger_users` does not have on existing deployments', async () => {
+  it('declares its new nullable locale column before reading old users', async () => {
     const created = await fixture();
     const database = created.fake.database;
+    const availableColumns = [...LEGACY_USER_COLUMNS];
     const check = (names: readonly string[]) => {
-      const unknown = names.filter((name) => !LEGACY_USER_COLUMNS.includes(name));
+      const unknown = names.filter((name) => !availableColumns.includes(name));
       if (unknown.length > 0) throw new Error(`no such column: ${unknown.join(', ')}`);
     };
     const strict = {
-      define: (name: string, definition: Record<string, unknown>) => database.define(name, definition),
+      define: (name: string, definition: Record<string, unknown>, options?: { addColumns: readonly string[] }) => {
+        if (name === USER_TABLE) {
+          expect(options?.addColumns).toEqual(['report_locale']);
+          expect(definition.report_locale).toMatchObject({ nullable: true });
+          availableColumns.push(...options!.addColumns);
+        }
+        database.define(name, definition);
+      },
       models: {
         get(name: string) {
           const model = database.models.get(name);
@@ -445,6 +453,7 @@ describe('databases created before the private target table existed', () => {
         },
       },
     } as unknown as ConstructorParameters<typeof LedgerService>[0];
+    defineLedgerTables(strict);
     const outbound = created.fake.resources.use(outboundHostToken);
     const service = new LedgerService(strict, outbound, resolveLedgerConfig({ timezone: 'Asia/Shanghai', reportTime: '22:00' }));
     const dm = { conversation: { endpoint: ENDPOINT, kind: 'private', id: 'dm-7' }, sender: { id: 'alice' }, content: '' } as CommandMessage;
@@ -455,5 +464,25 @@ describe('databases created before the private target table existed', () => {
     expect(await service.periodSummary(ledgerCaller(group), 'week')).toBe('🔒 本周消费已私信发送给你');
     const target = (created.fake.sent.at(-1)!.input as { target: unknown }).target;
     expect(target).toEqual({ endpoint: ENDPOINT, kind: 'private', id: 'dm-7' });
+  });
+});
+
+
+describe('localized ledger commands and pinned report language', () => {
+  it('uses English inputs and feedback while keeping amounts private and reports pinned', async () => {
+    const created = await fixture();
+    const english = { ...privateMessage('alice'), locale: 'en' as const };
+    expect(await created.run('ledger-add Lunch 18.5', english)).toContain('Recorded #1');
+    expect(await created.run('ledger-list today', english)).toContain('Today entries');
+    expect(await created.run('ledger-list 今日', english)).toContain('Choose a period');
+    expect(await created.run('ledger-report 开启', english)).toContain('Choose an action');
+    expect(await created.run('ledger-report on', english)).toContain('Daily reports enabled');
+    expect(await created.run('ledger-today', { ...groupMessage('alice'), locale: 'en' })).toContain('sent to you privately');
+    expect(await created.run('ledger-report 状态', privateMessage('alice'))).toContain('已开启');
+    await created.clock.advance(12 * 60 * 60_000);
+    const report = created.privateMessagesTo('alice').at(-1)!;
+    expect(report).toContain('Daily expense report');
+    expect(report).toContain('¥18.50');
+    expect(report).not.toContain('记账日报');
   });
 });

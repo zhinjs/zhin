@@ -18,7 +18,12 @@
       "default": [
         "cenc",
         "usgs"
-      ]
+      ],
+      "x-i18n": {
+        "en": {
+          "description": "Enabled data sources in priority order. The first source supplies location text when merging the same earthquake; other sources cover a failed source."
+        }
+      }
     },
     "cencUrls": {
       "type": "array",
@@ -33,7 +38,12 @@
       "default": [
         "https://api.wolfx.jp/cenc_eqlist.json",
         "https://ceic.ac.cn/data/data.json"
-      ]
+      ],
+      "x-i18n": {
+        "en": {
+          "description": "CENC catalog URLs, tried in order (primary followed by mirrors). HTTPS only, up to 5 URLs."
+        }
+      }
     },
     "usgsFeed": {
       "type": "string",
@@ -48,24 +58,44 @@
         "1.0_hour",
         "1.0_day"
       ],
-      "default": "2.5_day"
+      "default": "2.5_day",
+      "x-i18n": {
+        "en": {
+          "description": "USGS GeoJSON summary feed name (minimum-magnitude_time-range)."
+        }
+      }
     },
     "pollCron": {
       "type": "string",
       "description": "订阅轮询频率（6 段 Cron：秒 分 时 日 月 周）",
-      "default": "0 */2 * * * *"
+      "default": "0 */2 * * * *",
+      "x-i18n": {
+        "en": {
+          "description": "Subscription polling schedule (6-field cron: second, minute, hour, day, month, weekday)."
+        }
+      }
     },
     "timezone": {
       "type": "string",
       "description": "显示发震时刻使用的 IANA 时区",
-      "default": "Asia/Shanghai"
+      "default": "Asia/Shanghai",
+      "x-i18n": {
+        "en": {
+          "description": "IANA timezone used to display earthquake times."
+        }
+      }
     },
     "requestTimeoutMs": {
       "type": "number",
       "description": "单次 HTTP 请求超时（毫秒）",
       "default": 10000,
       "minimum": 1000,
-      "maximum": 60000
+      "maximum": 60000,
+      "x-i18n": {
+        "en": {
+          "description": "HTTP request timeout in milliseconds."
+        }
+      }
     },
     "maxRetries": {
       "type": "number",
@@ -73,35 +103,60 @@
       "default": 2,
       "minimum": 0,
       "maximum": 5,
-      "multipleOf": 1
+      "multipleOf": 1,
+      "x-i18n": {
+        "en": {
+          "description": "Retries for network errors, timeouts, HTTP 429 and 5xx, excluding the initial request."
+        }
+      }
     },
     "retryBaseDelayMs": {
       "type": "number",
       "description": "指数退避的首次等待（毫秒），每次重试翻倍并加入随机抖动",
       "default": 1000,
       "minimum": 100,
-      "maximum": 10000
+      "maximum": 10000,
+      "x-i18n": {
+        "en": {
+          "description": "Initial exponential-backoff delay in milliseconds; doubles for each retry with random jitter."
+        }
+      }
     },
     "retryMaxDelayMs": {
       "type": "number",
       "description": "单次退避或 Retry-After 等待上限（毫秒）；服务端要求更久时本轮放弃并冷却该数据源",
       "default": 30000,
       "minimum": 1000,
-      "maximum": 120000
+      "maximum": 120000,
+      "x-i18n": {
+        "en": {
+          "description": "Maximum backoff or Retry-After wait in milliseconds. Longer server waits abandon this round and cool down the source."
+        }
+      }
     },
     "defaultMinMagnitude": {
       "type": "number",
       "description": "订阅未指定震级时使用的最小震级",
       "default": 5,
       "minimum": 0,
-      "maximum": 10
+      "maximum": 10,
+      "x-i18n": {
+        "en": {
+          "description": "Minimum magnitude for subscriptions that do not specify one."
+        }
+      }
     },
     "queryMinMagnitude": {
       "type": "number",
       "description": "「地震」查询未指定震级时使用的最小震级",
       "default": 3,
       "minimum": 0,
-      "maximum": 10
+      "maximum": 10,
+      "x-i18n": {
+        "en": {
+          "description": "Minimum magnitude for earthquake queries that do not specify one."
+        }
+      }
     },
     "queryLimit": {
       "type": "number",
@@ -109,14 +164,24 @@
       "default": 5,
       "minimum": 1,
       "maximum": 20,
-      "multipleOf": 1
+      "multipleOf": 1,
+      "x-i18n": {
+        "en": {
+          "description": "Default number of earthquake query results."
+        }
+      }
     },
     "maxEventAgeMinutes": {
       "type": "number",
       "description": "只推送发震时间在此分钟数以内的地震，避免推送迟到或重放的旧事件",
       "default": 60,
       "minimum": 5,
-      "maximum": 1440
+      "maximum": 1440,
+      "x-i18n": {
+        "en": {
+          "description": "Only notify about earthquakes from the last specified number of minutes, avoiding delayed or replayed old events."
+        }
+      }
     },
     "pushLimit": {
       "type": "number",
@@ -124,14 +189,24 @@
       "default": 3,
       "minimum": 1,
       "maximum": 60,
-      "multipleOf": 1
+      "multipleOf": 1,
+      "x-i18n": {
+        "en": {
+          "description": "Maximum notification messages per conversation in one rate-limit window."
+        }
+      }
     },
     "pushWindowMinutes": {
       "type": "number",
       "description": "推送限流窗口长度（分钟）",
       "default": 10,
       "minimum": 1,
-      "maximum": 1440
+      "maximum": 1440,
+      "x-i18n": {
+        "en": {
+          "description": "Notification rate-limit window in minutes."
+        }
+      }
     },
     "maxEventsPerMessage": {
       "type": "number",
@@ -139,7 +214,12 @@
       "default": 5,
       "minimum": 1,
       "maximum": 10,
-      "multipleOf": 1
+      "multipleOf": 1,
+      "x-i18n": {
+        "en": {
+          "description": "Maximum earthquakes listed in one notification; the remainder is summarized as a count."
+        }
+      }
     },
     "maxSubscriptions": {
       "type": "number",
@@ -147,7 +227,12 @@
       "default": 100,
       "minimum": 1,
       "maximum": 1000,
-      "multipleOf": 1
+      "multipleOf": 1,
+      "x-i18n": {
+        "en": {
+          "description": "Maximum subscriptions across this instance, at most one per conversation."
+        }
+      }
     }
   }
 }

@@ -8,6 +8,8 @@ export interface RelationalStateCodec {
   readonly key: string;
   readonly header: { readonly table: string; readonly definition: Record<string, unknown> };
   readonly tables: Readonly<Record<string, Record<string, unknown>>>;
+  /** Explicit additions for an already persisted relational table. */
+  readonly addColumns?: Readonly<Record<string, readonly string[]>>;
   encode(value: JsonValue): { header: Record<string, unknown>; rows: Record<string, readonly Record<string, unknown>[]> };
   decode(header: Record<string, unknown>, rows: Record<string, readonly Record<string, unknown>[]>): JsonValue;
 }
@@ -32,7 +34,13 @@ export function createRelationalStateStore(database: PluginDatabaseHost, codecs:
       storage_present: { type: 'boolean', nullable: false },
       storage_expires_at: { type: 'bigint', nullable: true },
     });
-    for (const [name, definition] of Object.entries(codec.tables)) database.define(name, definition);
+    for (const name of Object.keys(codec.addColumns ?? {})) {
+      if (!Object.hasOwn(codec.tables, name)) throw new TypeError(`Unknown relational migration table: ${name}`);
+    }
+    for (const [name, definition] of Object.entries(codec.tables)) {
+      const columns = codec.addColumns?.[name];
+      database.define(name, definition, columns ? { addColumns: columns } : undefined);
+    }
   }
   const migrated = new Set<string>();
   const writeRows = async (transaction: DatabaseHostTransaction, codec: RelationalStateCodec,

@@ -15,8 +15,8 @@ export const githubEndpointCommands = createEndpointCommands({
   adapterDisplayName: 'GitHub',
   fields: [
     { key: 'app_id', required: true, env: true, description: 'GitHub App ID' },
-    { key: 'private_key', required: true, description: 'PEM 文件路径（推荐，如 ./data/xxx.pem）或 PEM 内容' },
-    { key: 'webhook_secret', env: true, description: 'webhook 签名密钥（不配则 API-only）' },
+    { key: 'private_key', required: true, description: 'PEM 文件路径（推荐，如 ./data/xxx.pem）或 PEM 内容', descriptionI18n: { en: "PEM file path (recommended, such as ./data/app.pem) or PEM content" } },
+    { key: 'webhook_secret', env: true, description: 'webhook 签名密钥（不配则 API-only）', descriptionI18n: { en: "Webhook signing secret (API-only when omitted)" } },
   ],
   running: (use) => use(githubRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `app_id: ${String(entry.app_id)}`,

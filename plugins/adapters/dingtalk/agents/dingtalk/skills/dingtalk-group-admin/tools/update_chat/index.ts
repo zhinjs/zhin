@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ chat_id: string; name?: string; owner?: string; add_members?: string; remove_members?: string }>({
@@ -20,7 +21,7 @@ export default defineAgentTool<{ chat_id: string; name?: string; owner?: string;
     if (add_members) options.add_useridlist = add_members.split(',').map((s: string) => s.trim());
     if (remove_members) options.del_useridlist = remove_members.split(',').map((s: string) => s.trim());
     await endpoint.updateChat(chat_id, options);
-    return { success: true, message: '群聊设置已更新' };
+    return { success: true, message: t(context.locale, 'chatUpdated') };
   },
 });
 

@@ -22,5 +22,5 @@ export default defineAgentTool<{
   },
   requiresApproval: 'never',
   execute: ({ id, source }, context) =>
-    shareMusicDetail(context.use(musicRuntimeToken), String(id), source),
+    shareMusicDetail(context.use(musicRuntimeToken), String(id), source, context.locale),
 });

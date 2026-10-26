@@ -42,6 +42,8 @@ commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type:
 - `config` / `use()` / `owner` / `generation`：owner-scoped Runtime 上下文。
 - `signal`：真实 IM 入站操作的运行代退休时同步取消。补问、确认及其他需要随代结束的等待应观察此信号；它不会强制取消已经开始的发送，也不禁止持有旧 lease 的普通命令继续排空。没有携带运行代生命周期的输入（如普通 Host 调用）不会凭空获得 IM 生命周期。
 - `input`：派发来源；IM 中为满足 `CommandMessage` 的 Runtime `Message`。
+- `locale`：本次操作已经解析的 `zh-CN` 或 `en`，群聊也按发送者偏好；无个人偏好时沿用项目默认语言。
+- `formatCommand(localPath, owner?)`：从当前索引取得静态命令调用头，默认本插件，也可显式传入已知的插件 owner，自动拼上实际 Endpoint 前缀和显式 `commandNamespace`。例如 `formatCommand('remind list')`；参数在返回的调用头后显式附加。命令不存在、被禁用或当前没有已知聊天命令环境时返回 `undefined`，不要以硬编码 `/` 或命令名掩盖该结果。
 - `adapter` / `endpoint`：适配器实例 id 与 endpoint 名。
 - `scene`：`{ id, type, name? }` 场景对象。
 - `sender`：`{ id, name?, role: string[] }` 发送者对象。
@@ -78,7 +80,9 @@ PermissionHost 或缺少身份依据均不能被展示为“已授权”或“�
 
 ## 集中声明参数、选项与帮助
 
-**列出指令**：在 Bot 会话中发送 `菜单`，列出根插件的指令和直接子插件；`菜单 <插件实例键>` 查看子插件，嵌套实例用 `菜单 foo.bar`。菜单逐层浏览，不一次展开全树。账号设有命令前缀时同样要加前缀，如 `/菜单`。项目根配置的顶层 `menuKeyword` 可修改关键词，`false` 或空字符串关闭；默认关键词为 `菜单`，不是 `help`。详见[指令菜单](../../../docs/authoring/commands.md#查看已加载的指令菜单)。
+**列出指令**：中文操作使用 `菜单`，英文操作使用 `menu`，每次只接受该操作语言的默认关键词。列出根插件的指令和直接子插件；`菜单 <插件实例键>` 查看子插件，嵌套实例用 `菜单 foo.bar`（英文对应 `menu foo.bar`）。菜单逐层浏览，不一次展开全树。账号设有命令前缀时同样要加前缀，如 `/菜单`。项目根配置的顶层 `menuKeyword` 可显式修改关键词，不随语言翻译；`false` 或空字符串关闭。详见[指令菜单](../../../docs/authoring/commands.md#查看已加载的指令菜单)。
+
+命令、参数和选项保留 `description` 原文，可额外声明 `descriptionI18n: { en: 'English description' }`。菜单、`--help` 与 `CommandIndex.list(locale)` 使用对应说明，缺失时保留作者原文，不自动翻译机器名称、用户内容或参数值。参数错误带稳定的 `code` 与 `parameters`，`message` 是当前语言的展示；自定义 `validate` 返回的文本仍由作者负责。
 
 安装 `@zhin.js/html-renderer` 后，菜单发出带原始文本备用内容的 HTML 段，复用统一发送链的图片渲染和平台策略。渲染失败或平台无法消费图片时保留原文本；无渲染器时直接返回文本。Command Feature 不调用渲染器，也不新增 Core 或样式组件依赖。
 
@@ -170,3 +174,19 @@ pnpm --filter @zhin.js/command test
 
 完整用户契约见[命令创作指南](../../../docs/authoring/commands.md)，架构迁移背景见
 [Plugin Runtime 原位迁移](../../../docs/architecture/target-implementation/in-place-migration.md)。
+
+
+命令可声明 `descriptionI18n: { en: 'Create a reminder' }` 翻译描述。若静态目录名是中文，可沿用 `alias` 提供英文入口，并用 `preferredAliasI18n` 显式选择英文展示：
+
+```ts
+export default defineCommand({
+  alias: ['reminder subscribe'],
+  preferredAliasI18n: { en: 'reminder subscribe' },
+  execute({ locale, formatCommand }) {
+    // 参数仍由调用方明确附加；不存在或没有真实聊天环境时返回 undefined。
+    return formatCommand('提醒 订阅');
+  },
+});
+```
+
+`preferredAliasI18n` 必须引用该命令已声明的别名；它只选择菜单、帮助与指令引用的展示入口，不创建新路由或停用既有别名。实际插件挂载命名空间与当前消息前缀由同一个 `CommandIndex` 拼接。

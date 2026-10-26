@@ -1,3 +1,4 @@
+import { projectLocaleToken } from 'zhin.js/i18n';
 import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { databaseHostToken } from 'zhin.js';
@@ -25,6 +26,8 @@ function commandContext(runtime: RssRuntime) {
   return {
     owner: {} as never,
     generation: 0,
+    locale: 'zh-CN' as const,
+    formatCommand: (path: string) => path,
     config: {},
     use: (token: unknown) => {
       if (token === rssRuntimeToken) return runtime;
@@ -120,7 +123,7 @@ describe('@zhin.js/plugin-rss runtime', () => {
       config: { get: () => ({}) },
       resources: {
         has: (token: unknown) => token === databaseHostToken,
-        use: () => fakeHost,
+        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : fakeHost,
         provide: (token: unknown, value: RssRuntime) => {
           if (token === rssRuntimeToken) provided = value;
         },

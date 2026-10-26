@@ -67,6 +67,12 @@ export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, sna
 export class MessageDispatcher {
   constructor(private readonly resolvePrefix: CommandPrefixResolver = defaultCommandPrefixResolver) {}
 
+  commandEnvironment(message: Message, snapshot: RuntimeSnapshot): Readonly<{ prefix: string; menu?: string }> {
+    const prefix = this.resolvePrefix(message, snapshot);
+    const commands = snapshot.projections.get(commandFeatureId);
+    return Object.freeze({ prefix, menu: isCommandIndex(commands) ? commands.formatMenu(prefix, message.locale) : undefined });
+  }
+
   async dispatch(
     message: Message,
     snapshot: RuntimeSnapshot,
@@ -86,7 +92,7 @@ export class MessageDispatcher {
     const note = (stage: 'prefix' | 'dispatch', status: 'mismatch' | 'matched' | 'empty_input' | 'commands_unavailable' | 'started') => {
       try { observe?.(stage, status); } catch { /* Observation never controls dispatch. */ }
     };
-    const prefix = this.resolvePrefix(message, snapshot);
+    const prefix = message.commandPrefix ?? this.resolvePrefix(message, snapshot);
     let input = message.content.trim();
     if (prefix && !input.startsWith(prefix)) {
       note('prefix', 'mismatch');

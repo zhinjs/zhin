@@ -6,6 +6,7 @@ declare module '@zhin.js/core' {
   interface Models {
     ttt_sessions: {
       id: string;
+      locale?: 'zh-CN' | 'en' | null;
       adapter: string;
       endpoint: string;
       channel_type: string;
@@ -61,10 +62,11 @@ export type TttModelName = 'ttt_sessions' | 'ttt_queue' | 'ttt_moves' | 'ttt_spe
 
 
 export function defineHostTables(
-  db: { define: (name: string, definition: Record<string, unknown>) => void },
+  db: { define: (name: string, definition: Record<string, unknown>, options?: { readonly addColumns?: readonly string[] }) => void },
 ): void {
   db.define('ttt_sessions', {
     id: { type: 'text', primary: true },
+    locale: { type: 'text', nullable: true },
     adapter: { type: 'text', nullable: false },
     endpoint: { type: 'text', nullable: false },
     channel_type: { type: 'text', nullable: false },
@@ -83,7 +85,7 @@ export function defineHostTables(
     processed_actions: { type: 'text', default: '[]' },
     updated_at: { type: 'bigint', default: 0 },
     created_at: { type: 'bigint', default: 0 },
-  });
+  }, { addColumns: ['locale'] });
   db.define('ttt_queue', {
     id: { type: 'integer', primary: true },
     channel_key: { type: 'text', nullable: false },

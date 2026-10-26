@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import { createToken } from 'zhin.js';
 
 export const DEFAULT_API_BASE = 'https://60s.viki.moe';
@@ -19,6 +21,7 @@ export class SixtySClient {
   async fetch<T = Record<string, unknown>>(
     endpoint: string,
     params?: Readonly<Record<string, string>>,
+    locale?: Locale,
   ): Promise<T> {
     const url = new URL(`${this.apiBase}/v2${endpoint}`);
     for (const [key, value] of Object.entries(params ?? {})) {
@@ -30,16 +33,16 @@ export class SixtySClient {
     } catch (error) {
       const cause = error as Error;
       throw new Error(
-        cause.name === 'TimeoutError' ? '请求超时（30s）' : `请求失败: ${cause.message}`,
+        cause.name === 'TimeoutError' ? t(locale, 'requestTimeout') : t(locale, 'requestFailed', { detail: cause.message }),
         { cause: error },
       );
     }
     if (!response.ok) {
-      throw new Error(`API 请求失败: ${response.status} ${response.statusText}`);
+      throw new Error(t(locale, 'httpError', { status: response.status, text: response.statusText }));
     }
     const contentType = response.headers.get('content-type') ?? '';
     if (!contentType.includes('application/json')) {
-      throw new Error(`API 返回非 JSON 响应 (content-type: ${contentType || 'unknown'})`);
+      throw new Error(t(locale, 'jsonError', { type: contentType || 'unknown' }));
     }
     const envelope = (await response.json()) as {
       error?: string;
@@ -50,7 +53,7 @@ export class SixtySClient {
     };
     if (envelope.error) throw new Error(envelope.error);
     if (envelope.code !== undefined && envelope.code !== 200 && envelope.code !== 0) {
-      throw new Error(envelope.message || envelope.msg || `API 错误: ${envelope.code}`);
+      throw new Error(envelope.message || envelope.msg || t(locale, 'apiError', { code: envelope.code }));
     }
     return (envelope.data ?? envelope) as T;
   }

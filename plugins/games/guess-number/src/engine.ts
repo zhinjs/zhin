@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 import { secureRandomIntInclusive } from '@zhin.js/game-kit';
 
 export const GUESS_PREFIX = 'guess';
@@ -17,7 +18,12 @@ export function evaluateGuess(secret: number, value: number): GuessResult {
   return value < secret ? 'low' : 'high';
 }
 
-export function hintText(result: Exclude<GuessResult, 'win' | 'invalid'>, rangeMin: number, rangeMax: number): string {
-  if (result === 'low') return `📈 **太小了！** 范围 ${rangeMin} ~ ${rangeMax}`;
-  return `📉 **太大了！** 范围 ${rangeMin} ~ ${rangeMax}`;
+export function hintText(result: Exclude<GuessResult, 'win' | 'invalid'>, rangeMin: number, rangeMax: number, locale?: Locale): string {
+  if (result === 'low') return messages(locale, 'text1', { p0: rangeMin, p1: rangeMax });
+  return messages(locale, 'text2', { p0: rangeMin, p1: rangeMax });
 }
+
+const messages = createMessages({
+  text1: { 'zh-CN': "📈 **太小了！** 范围 {p0} ~ {p1}", en: "📈 **Too low!** Range {p0} ~ {p1}" },
+  text2: { 'zh-CN': "📉 **太大了！** 范围 {p0} ~ {p1}", en: "📉 **Too high!** Range {p0} ~ {p1}" },
+});

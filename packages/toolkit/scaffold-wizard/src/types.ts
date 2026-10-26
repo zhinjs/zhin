@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import type { AISetupConfig } from './ai.js';
 import type { AdapterSetupResult } from './adapter.js';
 import { DATABASE_DIALECT_DEFINITIONS } from './database-definitions.js';
@@ -6,6 +7,7 @@ export type { AISetupConfig } from './ai.js';
 export type { AdapterSetupResult } from './adapter.js';
 
 export interface InitOptions {
+  locale?: Locale;
   name?: string;
   template?: 'default' | 'life-assistant';
   config?: 'json' | 'yaml';

@@ -1,3 +1,4 @@
+import { messages as t } from '../../../../src/i18n.js';
 import { defineAgentTool } from "@zhin.js/tool";
 import { z } from "zod";
 import { findFreeSlots } from "../../../../src/free-time.js";
@@ -23,7 +24,7 @@ export default defineAgentTool({
   async execute({ from, to, duration_minutes }, context) {
     return runCalendarTool(async () => {
       const runtime = context.use(calendarRuntimeToken);
-      if (!runtime.provider) return "日历未启用：请先配置 provider 与凭据";
+      if (!runtime.provider) return t(context.locale, 'disabled');
       const timezone = runtime.config.timezone;
       const fromDate = parseDateTimeInZone(from, timezone);
       const toDate = parseDateTimeInZone(to, timezone);
@@ -42,9 +43,9 @@ export default defineAgentTool({
         events,
       });
       if (slots.length === 0) {
-        return `在工作时段（${runtime.config.work_day_start}-${runtime.config.work_day_end} ${timezone}）没有足够的空闲`;
+        return t(context.locale, 'noFreeTime', { start: runtime.config.work_day_start, end: runtime.config.work_day_end, timezone });
       }
       return slots.map((slot) => `• ${slot.start} → ${slot.end}`).join("\n");
-    });
+    }, context.locale);
   },
 });

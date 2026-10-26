@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import { createReminderState } from '../src/storage.js';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -32,6 +33,55 @@ const temporary: string[] = [];
 afterEach(async () => { vi.restoreAllMocks(); await Promise.all(temporary.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
 
 describe('persistent reminder through real Runtime discovery', () => {
+  it.skipIf(!sqliteAvailable)('adds locale columns to populated pre-localization tables before reopening tasks', async () => {
+    const f = await fixture({}, true, 'en'); const start = 1_800_000_000_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      await f.runtime.start();
+      await f.command('a remind after 60 legacy-chat', { ...alice, locale: 'en' });
+      const provider = f.tasks('alpha');
+      await provider.create({ requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
+        parameters: { text: 'legacy-admin', at: new Date(start + 60_000).toISOString() } });
+      await f.runtime.stop(); await f.db.stop();
+      const legacy = new DatabaseSync(join(f.project, 'state.sqlite'));
+      try {
+        const names = legacy.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+        for (const row of names) {
+          const table = String(row.name);
+          if (!table.endsWith('reminder_tasks')) continue;
+          for (const column of ['locale', 'detail_key', 'failure_code']) legacy.exec(`ALTER TABLE "${table.replaceAll('"', '""')}" DROP COLUMN "${column}"`);
+        }
+      } finally { legacy.close(); }
+      await f.restart('en');
+      expect((await f.service('alpha').list({ senderId: 'alice', target, locale: 'en' }))[0]!.locale).toBe('zh-CN');
+      clock.mockReturnValue(start + 60_000); await [...f.active][0]!.execute();
+      expect(f.send.mock.calls.map(call => call[1])).toEqual(expect.arrayContaining(['⏰ 提醒：legacy-chat', '⏰ 提醒：legacy-admin']));
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
+  it.skipIf(!sqliteAvailable)('pins administrator notification language while localizing Console reads and idempotent receipts', async () => {
+    const f = await fixture({}, true, 'en'); const start = 1_800_000_000_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    try {
+      await f.runtime.start(); const provider = f.tasks('alpha');
+      const input = { requestId: randomUUID(), expectedRevision: (await provider.read()).revision, target,
+        parameters: { text: 'pinned language', at: new Date(start + 60_000).toISOString() } };
+      const chinese = await provider.create({ ...input, locale: 'zh-CN' });
+      const english = await provider.create({ ...input, locale: 'en' });
+      expect(english.tasks[0]!.detail).toContain('Waiting to run');
+      expect(chinese.tasks[0]!.detail).toContain('等待执行');
+      expect(english.revision).toBe(chinese.revision);
+      expect(english.receipts).toEqual(chinese.receipts);
+      await expect(provider.change({ requestId: randomUUID(), expectedRevision: english.revision,
+        id: input.requestId, action: 'resume', locale: 'en' })).rejects.toThrow('Only paused tasks');
+      await f.runtime.stop(); await f.restart('zh-CN');
+      expect((await f.tasks('alpha').read({ locale: 'en' })).tasks[0]!.detail).toContain('Waiting to run');
+      clock.mockReturnValue(start + 60_000); await [...f.active][0]!.execute();
+      expect(f.send.mock.calls[0]![1]).toBe('⏰ Reminder: pinned language');
+      expect((await f.tasks('alpha').read({ locale: 'en' })).tasks[0]!.detail).toContain('Delivery confirmed');
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
   it.skipIf(!sqliteAvailable)('summarizes long administrator task titles without truncating reminder content', async () => {
     const f = await fixture(); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {
@@ -401,7 +451,7 @@ describe('persistent reminder through real Runtime discovery', () => {
   });
 });
 
-async function fixture(settings: Record<string, unknown> = {}, persistence = true) {
+async function fixture(settings: Record<string, unknown> = {}, persistence = true, projectLocale: 'zh-CN' | 'en' = 'zh-CN') {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-reminder-'))); temporary.push(project);
   const modules = new Map<string, unknown>();
   const write = async (relative: string, value: unknown, module = false) => {
@@ -425,7 +475,7 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
   const send = vi.fn<NonNullable<import('../../../../packages/im/plugin-runtime/src/index.js').OutboundRootHost['sendTarget']>>().mockResolvedValue('message-id');
   const outbound = { send: vi.fn().mockResolvedValue(null), sendTarget: send };
   const loader: ModuleRuntime = { async load<T>(source: string): Promise<T> { if (!modules.has(source)) throw new Error(`Missing fixture module ${source}`); return modules.get(source) as T; }, async close() {} };
-  const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader, config: { configVersion: 2, plugins: { alpha: '@test/reminder', beta: '@test/reminder' }, alpha: { commandNamespace: 'a', ...settings }, beta: { commandNamespace: 'b' } }, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission, handoff }) {
+  const makeRuntime = () => new RootRuntime({ projectRoot: project, modules: loader, config: { configVersion: 2, locale: projectLocale, plugins: { alpha: '@test/reminder', beta: '@test/reminder' }, alpha: { commandNamespace: 'a', ...settings }, beta: { commandNamespace: 'b' } }, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources, admission, handoff }) {
     handoff.add({ activateNext: () => db.start() });
     const database = persistence ? db : { ...db, state: undefined };
     resources.provide(databaseRootHostToken, database); resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), database, admission));
@@ -433,7 +483,7 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
     resources.provide(outboundRootHostToken, outbound); resources.provide(outboundHostToken, new PluginOutboundHost(rootPluginId(), outbound, admission));
   } });
   let runtime = makeRuntime();
-  const restart = async () => { runtime = makeRuntime(); await runtime.start(); };
+  const restart = async (locale: 'zh-CN' | 'en' = projectLocale) => { projectLocale = locale; runtime = makeRuntime(); await runtime.start(); };
   const command = async (text: string, source = alice): Promise<unknown> => {
     const index = runtime.snapshot.projections.get(commandFeatureId); if (!(index instanceof CommandIndex)) throw new Error('Missing CommandIndex');
     const result = await index.dispatch(text, { ...source, content: text }); return result.status === 'executed' ? result.value : result;

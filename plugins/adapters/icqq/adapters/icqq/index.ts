@@ -1,3 +1,4 @@
+import { projectLocaleToken } from 'zhin.js/i18n';
 /**
  * Convention entry: discover `adapters/icqq/index.ts` → defineAdapter.
  */
@@ -57,6 +58,7 @@ export default defineAdapter<IcqqEndpointConfig>({
     return new IcqqEndpoint({
       id: context.id,
       loginAssist: context.use(loginAssistToken),
+      locale: context.use(projectLocaleToken),
       config,
     });
   },

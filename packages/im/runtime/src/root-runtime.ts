@@ -928,7 +928,7 @@ class GenerationAssembler {
       // Prepare is deliberately ordered: providers define discovery, setup
       // creates owner scopes, then definitions can be projected against both.
       await this.#loadProviders(this.graph.root, signal);
-      this.#plugins.installSetupFeatureAliases(featureSetupAliases(this.#catalog.values()));
+      this.#plugins.installSetupFeatureAliases(featureSetupAliases(this.#catalog.values()), this.#rootsByFeature);
       await this.#plugins.setupTree(this.graph.root, signal);
       await this.#discover(signal);
       const projected = await new FeatureProjector(this.#catalog.values())

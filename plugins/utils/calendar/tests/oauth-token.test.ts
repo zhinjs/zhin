@@ -190,7 +190,7 @@ describe("OAuthTokenManager", () => {
       name: "OAuthTokenError",
       code: "invalid_grant",
     } satisfies Partial<OAuthTokenError>);
-    await expect(manager.getAccessToken()).rejects.toThrow(/auth google/);
+    await expect(manager.getAccessToken()).rejects.toThrow(/日历授权入口/);
   });
 });
 

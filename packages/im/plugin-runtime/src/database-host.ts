@@ -56,6 +56,12 @@ export interface DatabaseHostTable {
   readonly columns?: Readonly<Record<string, unknown>>;
 }
 
+/** Explicit, additive upgrades applied before SQL models become available. */
+export interface DatabaseTableOptions {
+  /** Names from this table's definition. Existing columns and data remain untouched. */
+  readonly addColumns?: readonly string[];
+}
+
 export interface DatabaseHostSelectResult {
   readonly rows: readonly unknown[];
   readonly total: number;
@@ -103,7 +109,7 @@ export interface DatabaseHost {
   readonly dialect: string;
   readonly started: boolean;
   /** Register a table schema before `start` (column defs match `@zhin.js/database`). */
-  define(name: string, definition: Record<string, unknown>): void;
+  define(name: string, definition: Record<string, unknown>, options?: DatabaseTableOptions): void;
   /** Names of tables registered via `define` (Console `db:tables`). */
   tables(): readonly string[];
   models: {
@@ -182,8 +188,10 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
     return this.#host.started;
   }
 
-  define(name: string, definition: Record<string, unknown>): void {
-    this.#operation.setup(() => this.#host.define(this.qualify(name), definition));
+  define(name: string, definition: Record<string, unknown>, options?: DatabaseTableOptions): void {
+    this.#operation.setup(() => options === undefined
+      ? this.#host.define(this.qualify(name), definition)
+      : this.#host.define(this.qualify(name), definition, options));
   }
 
   tables(): readonly string[] {

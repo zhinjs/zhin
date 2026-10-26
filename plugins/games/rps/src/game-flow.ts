@@ -1,3 +1,4 @@
+import { createMessages, resolveLocale } from 'zhin.js/i18n';
 import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
 import type { RpsSessionRow } from './models.js';
 import {
@@ -29,11 +30,12 @@ export async function startGame(
 ): Promise<GameReply | undefined> {
   const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
   const active = await services.getActiveByChannel(ch);
+  const locale = resolveLocale(active ? active.locale : message.locale);
   if (active) {
     if (active.player_id === message.$sender.id) {
-      return '你已有进行中的猜拳，发送「猜拳 继续」刷新，或「猜拳 放弃」。';
+      return messages(locale, 'text1');
     }
-    return `本频道 ${active.player_name} 正在猜拳对决中。`;
+    return messages(locale, 'text2', { p0: active.player_name });
   }
   const session = await services.createSession(message);
   return renderView(session, message);
@@ -46,11 +48,12 @@ export async function handleChoice(
   choiceId: string,
 ): Promise<GameReply | null> {
   const session = await services.getById(sessionId);
-  if (!session) return '对局不存在。';
+  const locale = resolveLocale(session ? session.locale : message.locale);
+  if (!session) return messages(locale, 'text3');
   if (session.status !== 'active' && choiceId !== 'restart') {
-    return '对局已结束，请点击再来一局。';
+    return messages(locale, 'text4');
   }
-  if (session.player_id !== message.$sender.id) return '这是别人的对局。';
+  if (session.player_id !== message.$sender.id) return messages(locale, 'text5');
 
   if (choiceId === 'restart') {
     await services.updateSession(session.id, { status: 'aborted' });
@@ -62,7 +65,7 @@ export async function handleChoice(
   }
 
   const player = choiceId as RpsMove;
-  if (!['rock', 'paper', 'scissors'].includes(player)) return '无效出拳。';
+  if (!['rock', 'paper', 'scissors'].includes(player)) return messages(locale, 'text6');
 
   const bot = randomBotMove();
   const result = resolveRound(player, bot);
@@ -94,8 +97,19 @@ export async function continueGame(
     `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
     message.$sender.id,
   );
-  if (!session) return '你没有进行中的猜拳，发送「猜拳 开始」。';
+  const locale = resolveLocale(session ? session.locale : message.locale);
+  if (!session) return messages(locale, 'text7');
   return renderView(session, message);
 }
 
 export { RPS_PREFIX };
+
+const messages = createMessages({
+  text1: { 'zh-CN': "你已有进行中的猜拳，请使用当前对局的操作入口。", en: "You already have an active game. Continue using its controls." },
+  text2: { 'zh-CN': "本频道 {p0} 正在猜拳对决中。", en: "{p0} is playing rock, paper, scissors in this channel." },
+  text3: { 'zh-CN': "对局不存在。", en: "This game no longer exists." },
+  text4: { 'zh-CN': "对局已结束，请点击再来一局。", en: "This game has ended. Choose Play again." },
+  text5: { 'zh-CN': "这是别人的对局。", en: "This game belongs to another player." },
+  text6: { 'zh-CN': "无效出拳。", en: "Invalid move." },
+  text7: { 'zh-CN': "你没有进行中的猜拳，请使用当前对局的操作入口。", en: "You have no active rock, paper, scissors game." },
+});

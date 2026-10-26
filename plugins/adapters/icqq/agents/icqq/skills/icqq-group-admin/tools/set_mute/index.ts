@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; user_id: number; duration?: number }>({
@@ -13,10 +14,10 @@ export default defineAgentTool<{ group_id: number; user_id: number; duration?: n
   async execute({ group_id, user_id, duration }, context) {
     const client = context.$client;
     const selfInfo= client.pickMember(group_id,client.uin);
-    if(!selfInfo.is_admin && !selfInfo.is_owner) return { success: false, message: '机器人不是群主或管理员，无法禁言/解除禁言成员' };
+    if(!selfInfo.is_admin && !selfInfo.is_owner) return { success: false, message: t(context.locale, 'muteForbidden') };
     const memberInfo= client.pickMember(group_id,user_id);
-    if(!memberInfo) return { success: false, message: '目标成员不存在' };
+    if(!memberInfo) return { success: false, message: t(context.locale, 'memberMissing') };
     await client.setGroupBan(group_id, user_id, duration === 0 ? 0 : duration);
-    return { success: true, message: `已${duration === 0 ? '解除' : ''}禁言 ${user_id} 成员${duration === 0 ? '' : `(${duration}秒)`}` };
+    return { success: true, message: duration === 0 ? t(context.locale, 'unmuted', { user: user_id }) : t(context.locale, 'muted', { user: user_id, seconds: duration ?? 0 }) };
   },
 });

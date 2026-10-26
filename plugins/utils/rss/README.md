@@ -162,3 +162,11 @@ MIT
 ### 事务化任务存储
 
 提醒与管理员 RSS 的任务、认领、操作回执和文章明细使用独立数据表，在一个事务中提交；原 CAS JSON 只用于首次迁移。支持 SQLite、MySQL、PostgreSQL，升级须完整重启，不能与旧版本进程混写。`unknown` 投递仍不会自动重试。迁移和字段说明见[结构化存储](../../../docs/operations/structured-storage.md)。
+
+## Language / 语言
+
+命令和工具的提示使用当前操作语言，源站文章标题和正文保持原样。聊天订阅保存创建者当时的语言；管理员订阅保存项目语言。轮询按每个订阅保存的语言生成通知或静默摘要，更改个人／项目语言不会重写既有订阅；暂停、恢复和进程重启仍保持原语言。旧数据没有语言字段时保持中文。
+
+Console 的界面语言仅影响任务列表、字段说明和操作错误；不参与 requestId 指纹，不改变任务版本或通知语言。新状态使用独立文案 key 展示，旧的文字 detail 原样保留。
+
+Notifications use the language captured at subscription creation. Feed content remains in its original language. Changing Console language changes presentation only, including idempotent responses; it does not change delivery settings or repeat an operation.

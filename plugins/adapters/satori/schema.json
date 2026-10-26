@@ -22,7 +22,12 @@
         "string",
         "number"
       ],
-      "description": "框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖"
+      "description": "框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value."
+        }
+      }
     },
     "trusted": {
       "type": "array",
@@ -33,7 +38,12 @@
         ],
         "description": "Trusted platform user id"
       },
-      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加"
+      "description": "框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加",
+      "x-i18n": {
+        "en": {
+          "description": "Framework trusted users, below master authority. endpoints[i].trusted can add users."
+        }
+      }
     },
     "endpoints": {
       "type": "array",
@@ -48,7 +58,12 @@
               "string",
               "number"
             ],
-            "description": "本 endpoint 的框架 master（platform user id）；覆盖顶层 master"
+            "description": "本 endpoint 的框架 master（platform user id）；覆盖顶层 master",
+            "x-i18n": {
+              "en": {
+                "description": "Framework masters for this endpoint (platform user id), overriding the top-level master list."
+              }
+            }
           },
           "trusted": {
             "type": "array",
@@ -59,7 +74,12 @@
               ],
               "description": "Trusted platform user id"
             },
-            "description": "本 endpoint 的 trusted 列表"
+            "description": "本 endpoint 的 trusted 列表",
+            "x-i18n": {
+              "en": {
+                "description": "Trusted users for this endpoint."
+              }
+            }
           },
           "baseUrl": {
             "type": "string",
@@ -95,12 +115,22 @@
           "id",
           "baseUrl"
         ]
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Multiple accounts: each entry defines an endpoint. id and baseUrl are required; other fields override instance defaults."
+        }
       }
     },
     "commandPrefix": {
       "type": "string",
       "default": "",
-      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+      "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖",
+      "x-i18n": {
+        "en": {
+          "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
+        }
+      }
     }
   },
   "required": [

@@ -7,6 +7,6 @@ export default defineAgentTool<{ game: string }>({
   description: 'Compute lottery recommendation numbers via F/O/T stats engine',
   inputSchema: z.object({ game: z.string().min(1) }),
   async execute({ game }, context) {
-    return handleComputeRecommend(context.use(lotteryRuntimeToken), game);
+    return handleComputeRecommend(context.use(lotteryRuntimeToken), game, context.locale);
   },
 });

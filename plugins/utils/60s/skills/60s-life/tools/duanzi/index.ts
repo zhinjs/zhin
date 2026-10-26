@@ -9,6 +9,6 @@ export default defineAgentTool({
   tags: ["娱乐", "笑话", "段子"],
   async execute(_input, context) {
     const handler = (await import('../../../../src/handlers/duanzi.js')).default;
-    return handler(context.use(sixtySClientToken));
+    return handler(context.use(sixtySClientToken), context.locale);
   },
 });

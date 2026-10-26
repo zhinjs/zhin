@@ -22,4 +22,10 @@ describe('messageFromCommandInput', () => {
 
     expect(message.$sender.id).toBe('carol');
   });
+
+  it('preserves the operation locale without sharing it across players', () => {
+    expect(messageFromCommandInput({ conversation, sender: 'alice', locale: 'en' }).locale).toBe('en');
+    expect(messageFromCommandInput({ conversation, sender: 'bob', locale: 'zh-CN' }).locale).toBe('zh-CN');
+    expect(messageFromCommandInput({ conversation, sender: 'carol' }).locale).toBe('zh-CN');
+  });
 });

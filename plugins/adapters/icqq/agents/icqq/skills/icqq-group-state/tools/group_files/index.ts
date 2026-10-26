@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number }>({
@@ -11,7 +12,7 @@ export default defineAgentTool<{ group_id: number }>({
   permissions: ['role(master,admin,trusted,owner)'],
   async execute({ group_id }, context) {
     const files = await context.$client.acquireGfs(group_id).ls('/');
-    if (!files.length) return { files: [], message: '群文件为空' };
+    if (!files.length) return { files: [], message: t(context.locale, 'filesEmpty') };
     return {
       files: files.slice(0, 30).map((f) => 'size' in f
         ? { name: f.name, is_dir: false, size: f.size, uploader: f.user_id, upload_time: f.create_time }

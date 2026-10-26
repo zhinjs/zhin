@@ -28,4 +28,4 @@ export {
 } from './provider.js';
 export { default } from './provider.js';
 
-export type { CommandValidationIssue } from './arguments.js';
+export type { CommandValidationIssue, CommandValidationIssueCode } from './arguments.js';

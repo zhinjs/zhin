@@ -162,6 +162,7 @@ export class SessionService extends VersionedSessionService<TttSessionRow> {
     const ch = channelKey(input.message);
     const row: TttSessionRow = {
       id,
+      locale: input.message.locale ?? 'zh-CN',
       adapter: String(input.message.$adapter),
       endpoint: input.message.$endpoint,
       channel_type: input.message.$channel.type,

@@ -1,6 +1,7 @@
 import { createPromptContextBlock, type TextContentBlock } from '@zhin.js/ai';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import type { TurnRequest } from '../turn/turn-ingress.js';
+import { isLocale } from '@zhin.js/plugin-runtime';
 
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
@@ -62,8 +63,9 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
     if (lines.length) blocks.push({ type: 'text', text: lines.splice(0).join('\n') });
   };
   const now = new Date();
+  const locale = isLocale(input.turn?.input?.locale) ? input.turn.input.locale : 'zh-CN';
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const timeStr = now.toLocaleString('zh-CN', { timeZone: tz });
+  const timeStr = now.toLocaleString(locale, { timeZone: tz });
   lines.push(`Time: ${timeStr} (${tz})`);
 
   if (input.modelLine?.trim()) lines.push(`Model: ${input.modelLine.trim()}`);
@@ -71,6 +73,12 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
   if (input.gitStatus?.trim()) lines.push(input.gitStatus.trim());
 
   if (input.turn) {
+    const display = input.turn.input;
+    if (isLocale(display?.locale)) lines.push(`Reply language: ${display.locale}. Use this turn's language rather than older profile language preferences.`);
+    if (typeof display?.commandPrefix === 'string') {
+      lines.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
+      if (display.commandMenu) lines.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);
+    }
     lines.push(formatSessionContextLine(input.turn));
     lines.push(formatSenderContextLine(input.turn));
     if (input.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') lines.push(AMBIENT_ENGAGEMENT_LINE);

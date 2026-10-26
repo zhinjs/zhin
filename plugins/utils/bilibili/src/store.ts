@@ -42,6 +42,7 @@ export const BILI_TABLE_DEFINITIONS: Readonly<Record<string, Record<string, unkn
     channel_type: { type: 'text', default: 'private' },
     channel_id: { type: 'text', nullable: false },
     creator_id: { type: 'text', default: '' },
+    locale: { type: 'text', length: 16, nullable: true },
     created_at: { type: 'text', default: '' },
   },
   [BILI_STATE_TABLE]: {
@@ -56,8 +57,8 @@ export const BILI_TABLE_DEFINITIONS: Readonly<Record<string, Record<string, unkn
   },
 });
 
-export function defineBiliTables(db: { define: (name: string, schema: Record<string, unknown>) => void }): void {
-  for (const [name, definition] of Object.entries(BILI_TABLE_DEFINITIONS)) db.define(name, definition);
+export function defineBiliTables(db: { define: (name: string, schema: Record<string, unknown>, options?: {addColumns: readonly string[]}) => void }): void {
+  for (const [name, definition] of Object.entries(BILI_TABLE_DEFINITIONS)) db.define(name, definition, name === BILI_SUBS_TABLE ? { addColumns: ['locale'] } : undefined);
 }
 
 function createMemoryModel(): BiliModel {

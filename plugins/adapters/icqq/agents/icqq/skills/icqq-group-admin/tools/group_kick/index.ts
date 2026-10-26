@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; user_id: number; reason: string }>({
@@ -18,9 +19,9 @@ export default defineAgentTool<{ group_id: number; user_id: number; reason: stri
       client.getGroupMemberInfo(group_id, user_id, true),
     ]);
     if (user_id === client.uin || (self.role !== 'owner' && self.role !== 'admin')
-      || member.role !== 'member') return { success: false, message: '当前权限或成员状态不允许踢出' };
+      || member.role !== 'member') return { success: false, message: t(context.locale, 'kickForbidden') };
     context.signal.throwIfAborted();
-    if (!await client.setGroupKick(group_id, user_id)) return { success: false, message: '平台未确认踢出成功，请勿自动重试' };
-    return { success: true, message: `已踢出 ${user_id} 成员` };
+    if (!await client.setGroupKick(group_id, user_id)) return { success: false, message: t(context.locale, 'kickUnconfirmed') };
+    return { success: true, message: t(context.locale, 'memberKicked', { p0: user_id }) };
   },
 });

@@ -28,6 +28,7 @@ import {
   type SendRequest,
 } from './contracts.js';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
+import { messageLocale } from './locale.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import type {
   RuntimeInteractionCoordinator,
@@ -332,6 +333,7 @@ export class InboundRuntime {
         }
       }
       const mentioned = routedTarget ? true : input.mentioned;
+      const locale = await messageLocale(lease.value, conversation, enrichedSender?.id);
       const operationReply: ConstructorParameters<typeof RuntimeMessage>[3] = (content, replyRequester = requester, targetConversation) => {
           if (!active) throw new Error('Message reply scope has ended');
           const effectiveConversation = targetConversation
@@ -340,6 +342,7 @@ export class InboundRuntime {
           const deliver = () => this.context.deliver({
             conversation: effectiveConversation,
             requester: replyRequester,
+            locale,
             content,
             incoming: {
               sender: enrichedSender,
@@ -378,7 +381,9 @@ export class InboundRuntime {
             return source.client;
           },
           source.endpoint.adapter,
-          { snapshot: lease.value, retirementSignal: lease.retirementSignal, registerOperationView: commandOperation?.bind, assertActive: () => {
+          { snapshot: lease.value, locale,
+            resolveCommands: (message) => this.#dispatcher.commandEnvironment(message, lease.value),
+            retirementSignal: lease.retirementSignal, registerOperationView: commandOperation?.bind, assertActive: () => {
             if (!active) throw new Error('Message author binding scope has ended');
           }, ...(origin ? { origin } : {}) },
         );

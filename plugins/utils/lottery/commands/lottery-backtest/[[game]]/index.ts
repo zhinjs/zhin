@@ -1,3 +1,4 @@
+import { messages as t } from '../../../src/i18n.js';
 import { defineCommand } from 'zhin.js/command';
 import { parseGameId } from '../../../src/games/registry.js';
 import {
@@ -12,9 +13,10 @@ import { lotteryEnabledGames } from '../../../src/config.js';
 import { lotteryRuntimeToken } from '../../../src/runtime-state.js';
 
 export default defineCommand<LotteryConfig>({
-  description: 'Walk-forward backtest vs random baseline',
+  description: '滚动回测与随机基线比较',
+  descriptionI18n: { en: 'Walk-forward backtest vs random baseline' },
   params: { game: { type: 'string', default: '' } },
-  async execute({ params, config, use }) {
+  async execute({ params, config, use, locale, formatCommand }) {
     const { db } = use(lotteryRuntimeToken);
     const cfg = resolveLotteryConfig(config);
     const gid = parseGameId(String(params.game ?? ''));
@@ -27,7 +29,9 @@ export default defineCommand<LotteryConfig>({
       historyLimit: cfg.historyLimit,
       adaptive: cfg.backtestAdaptive,
     });
-    const text = formatBacktestSection(summaries);
-    return text || '历史数据不足，请先执行 lottery 同步开奖';
+    const text = formatBacktestSection(summaries, locale);
+    if (text) return text;
+    const command = formatCommand('lottery');
+    return command ? t(locale, 'syncCommand', { command }) : t(locale, 'syncRequired');
   },
 });

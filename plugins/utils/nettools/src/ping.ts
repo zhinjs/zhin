@@ -1,3 +1,6 @@
+import { type Locale } from 'zhin.js/i18n';
+import { messages } from './presentation.js';
+import { message } from './messages.js';
 /**
  * Multi-region ping through check-host.net's public API.
  *
@@ -109,7 +112,7 @@ export function parseStartResponse(body: unknown): StartedCheck {
     throw malformed();
   }
   if (typeof body.error === 'string' && body.error.length > 0) {
-    throw new NettoolsError('http', `check-host.net 拒绝了请求：${body.error}`);
+    throw new NettoolsError('http', message('pingRefused', { detail: body.error }));
   }
   const requestId = body.request_id;
   if (typeof requestId !== 'string' || !/^[A-Za-z0-9]{1,64}$/u.test(requestId)) {
@@ -206,38 +209,38 @@ function parseNodeResult(raw: unknown): PingNodeResult {
   };
 }
 
-export function formatPingReport(report: PingReport): string {
-  const lines = [`📡 ${report.host} 多地 Ping（check-host.net）`];
+export function formatPingReport(report: PingReport, locale: Locale = 'zh-CN'): string {
+  const lines = [messages(locale, 'pingHeader', { host: report.host })];
   for (const { node, result } of report.nodes) {
     const place = [node.countryCode, node.city || node.country].filter(Boolean).join(' ') || node.id;
-    lines.push(`${place}：${describeNodeResult(result)}`);
+    lines.push(`${place}：${describeNodeResult(result, locale)}`);
   }
   if (report.permanentLink) {
-    lines.push(`详情：${report.permanentLink}`);
+    lines.push(messages(locale, 'detail', { link: report.permanentLink }));
   }
   return lines.join('\n');
 }
 
-function describeNodeResult(result: PingNodeResult): string {
+function describeNodeResult(result: PingNodeResult, locale: Locale): string {
   if (result.state === 'pending') {
-    return '未返回结果（超时）';
+    return messages(locale, 'pending');
   }
   if (result.state === 'unresolved') {
-    return '无法解析或不可达';
+    return messages(locale, 'unresolved');
   }
   const loss = Math.round(((result.sent - result.received) / result.sent) * 100);
   const via = result.address ? ` → ${result.address}` : '';
   if (result.averageMs === undefined) {
-    return `全部超时（丢包 ${loss}%）${via}`;
+    return messages(locale, 'allTimeout', { loss, via });
   }
   const average = result.averageMs.toFixed(1);
   const min = (result.minMs ?? result.averageMs).toFixed(1);
   const max = (result.maxMs ?? result.averageMs).toFixed(1);
-  return `平均 ${average}ms（${min}/${max}），丢包 ${loss}%${via}`;
+  return messages(locale, 'pingStats', { average, min, max, loss, via });
 }
 
 function malformed(): NettoolsError {
-  return new NettoolsError('malformed', 'check-host.net 返回了无法识别的数据');
+  return new NettoolsError('malformed', message('pingMalformed'));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

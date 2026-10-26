@@ -9,6 +9,6 @@ export default defineAgentTool<{ ip?: string }>({
   tags: ["网络", "查询", "IP"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/ip-query.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

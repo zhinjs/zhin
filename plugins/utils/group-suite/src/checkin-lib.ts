@@ -1,3 +1,4 @@
+import { messages as t } from './i18n.js';
 import type { ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getCheckinModel } from './db-store.js';
@@ -70,19 +71,19 @@ export async function doCheckin(
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
   const M = getCheckinModel(runtime.db);
-  if (!M) return '签到数据库尚未就绪，请稍后重试';
+  if (!M) return t(input.locale, 'checkinRetry');
 
   const { id: userId, name: userName } = resolveSender(input);
-  if (!userId) return '无法获取用户信息';
+  if (!userId) return t(input.locale, 'senderMissing');
 
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   return serializedCheckin(runtime.checkinChains, `${userId}:${ctxType}:${ctxId}`, async () => {
     const user = await getOrCreateUser(M, userId, userName, ctxType, ctxId);
-    if (!user) return '签到失败，请重试';
+    if (!user) return t(input.locale, 'checkinFailed');
 
     const today = todayStr();
     if (user.last_checkin === today) {
-      return `你今天已经签到过了哦～\n当前积分: ${user.points}\n连续签到: ${user.streak} 天`;
+      return t(input.locale, 'alreadyChecked', { points: String(user.points), days: String(user.streak) });
     }
 
     const isConsecutive = user.last_checkin === yesterdayStr();
@@ -106,9 +107,9 @@ export async function doCheckin(
       context_id: ctxId,
     });
 
-    const lines = [`签到成功！`, `基础积分: +${base}`];
-    if (bonus > 0) lines.push(`连续奖励: +${bonus} (连续${newStreak}天)`);
-    lines.push(`本次获得: +${earned}`, `当前积分: ${newPoints}`);
+    const lines = [t(input.locale, 'checkinDone'), t(input.locale, 'basePoints', { points: base })];
+    if (bonus > 0) lines.push(t(input.locale, 'bonusPoints', { points: bonus, days: newStreak }));
+    lines.push(t(input.locale, 'earnedPoints', { points: earned }), t(input.locale, 'currentPoints', { points: newPoints }));
     return lines.join('\n');
   });
 }
@@ -116,9 +117,10 @@ export async function doCheckin(
 export async function myPoints(
   input: ConversationInput,
   runtime: GroupSuiteRuntime,
+  commandHead?: string,
 ): Promise<string> {
   const M = getCheckinModel(runtime.db);
-  if (!M) return '签到数据库尚未就绪';
+  if (!M) return t(input.locale, 'checkinDb');
   const { id: userId } = resolveSender(input);
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const rows = (await M.select().where({
@@ -126,16 +128,16 @@ export async function myPoints(
     context_type: ctxType,
     context_id: ctxId,
   })) as Record<string, unknown>[];
-  if (rows.length === 0) return '你还没有签到记录哦，发送「checkin」开始吧！';
+  if (rows.length === 0) return commandHead ? t(input.locale, 'checkinHint', { command: commandHead }) : t(input.locale, 'checkinHintNoHead');
   const u = rows[0];
   const checkedToday = u.last_checkin === todayStr();
   return [
-    `${u.user_name || '用户'} 的积分信息`,
-    `积分: ${u.points}`,
-    `累计签到: ${u.total_checkins} 天`,
-    `连续签到: ${u.streak} 天`,
-    `最长连续: ${u.max_streak} 天`,
-    checkedToday ? '今日已签到 ✓' : '今日未签到',
+    t(input.locale, 'pointsTitle', { name: String(u.user_name || t(input.locale, 'user')) }),
+    t(input.locale, 'points', { points: String(u.points) }),
+    t(input.locale, 'checkinTotal', { days: String(u.total_checkins) }),
+    t(input.locale, 'checkinStreak', { days: String(u.streak) }),
+    t(input.locale, 'checkinMax', { days: String(u.max_streak) }),
+    checkedToday ? t(input.locale, 'checked') : t(input.locale, 'unchecked'),
   ].join('\n');
 }
 
@@ -145,23 +147,23 @@ export async function pointsRank(
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
   const M = getCheckinModel(runtime.db);
-  if (!M) return '签到数据库尚未就绪';
+  if (!M) return t(input.locale, 'checkinDb');
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const all = (await M.select().where(
     { context_type: ctxType, context_id: ctxId },
   )) as Record<string, unknown>[];
-  if (all.length === 0) return '还没有人签到过哦～';
+  if (all.length === 0) return t(input.locale, 'checkinEmpty');
   const sorted = all.sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
   const top = sorted.slice(0, cfg.rankSize);
   const medals = ['🥇', '🥈', '🥉'];
   const lines = top.map((u, i) => {
     const prefix = i < 3 ? medals[i] : `${i + 1}.`;
-    return `${prefix} ${u.user_name || u.user_id} — ${u.points}分 (${u.total_checkins}天)`;
+    return t(input.locale, 'pointsRow', { prefix, name: String(u.user_name || u.user_id), points: String(u.points), days: String(u.total_checkins) });
   });
-  const title = ctxType === 'group' ? '本群积分排行'
-    : ctxType === 'channel' ? '本频道积分排行' : '当前私聊积分排行';
+  const title = ctxType === 'group' ? t(input.locale, 'groupPoints')
+    : ctxType === 'channel' ? t(input.locale, 'channelPoints') : t(input.locale, 'privatePoints');
   const { id: userId } = resolveSender(input);
   const myRank = sorted.findIndex((u) => u.user_id === userId);
-  const footer = myRank >= 0 ? `\n你的排名: 第${myRank + 1}名` : '';
+  const footer = myRank >= 0 ? t(input.locale, 'myRankFooter', { rank: myRank + 1 }) : '';
   return `${title}\n${lines.join('\n')}${footer}`;
 }

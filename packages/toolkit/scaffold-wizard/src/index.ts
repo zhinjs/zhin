@@ -1,4 +1,6 @@
+export { wizardText } from './messages.js';
 export type { InitOptions, DatabaseConfig } from './types.js';
+export { configureProjectLocale, validateProjectLocale, readProjectLocaleArgument } from './locale.js';
 export { DATABASE_DRIVER_VERSIONS, DATABASE_PACKAGES } from './types.js';
 export {
   DATABASE_DIALECT_DEFINITIONS,

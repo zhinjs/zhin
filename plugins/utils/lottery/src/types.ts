@@ -54,6 +54,7 @@ export interface StatsSnapshot {
 }
 
 export interface GamePick {
+  locale?: import('zhin.js/i18n').Locale;
   gameId: GameId;
   label: string;
   numbers: DrawNumbers;
@@ -81,6 +82,7 @@ export interface HitSummary {
 }
 
 export interface DailyReport {
+  locale?: import('zhin.js/i18n').Locale;
   date: string;
   picks: GamePick[];
   disclaimer: string;

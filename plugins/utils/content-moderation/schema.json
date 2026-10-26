@@ -34,46 +34,89 @@
             "minLength": 1
           }
         }
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Exact scope for automatic advertising/abuse moderation. Disabled when unconfigured. Requires AI, atomic persistent state and adapter group-management support."
+        }
       }
     },
     "enabled": {
       "type": "boolean",
       "default": true,
-      "description": "总开关"
+      "description": "总开关",
+      "x-i18n": {
+        "en": {
+          "description": "Enable moderation."
+        }
+      }
     },
     "onError": {
       "type": "string",
-      "enum": ["open", "closed"],
+      "enum": [
+        "open",
+        "closed"
+      ],
       "default": "open",
-      "description": "审查源失败时的全局默认策略：open=视为通过，closed=视为 critical"
+      "description": "审查源失败时的全局默认策略：open=视为通过，closed=视为 critical",
+      "x-i18n": {
+        "en": {
+          "description": "Default policy when a review source fails: open treats it as passed; closed treats it as critical."
+        }
+      }
     },
     "maskChar": {
       "type": "string",
       "default": "*",
       "minLength": 1,
       "maxLength": 4,
-      "description": "文本打码字符"
+      "description": "文本打码字符",
+      "x-i18n": {
+        "en": {
+          "description": "Text masking character."
+        }
+      }
     },
     "replyTemplate": {
       "type": "string",
       "default": "消息含不当内容，已拦截。",
-      "description": "reply 动作时的提示文案"
+      "description": "reply 动作时的提示文案",
+      "x-i18n": {
+        "en": {
+          "description": "Reply text for the reply action."
+        }
+      }
     },
     "masters": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "default": [],
-      "description": "额外视为 master 的 userId（兜底，与 endpoint master 合并）"
+      "description": "额外视为 master 的 userId（兜底，与 endpoint master 合并）",
+      "x-i18n": {
+        "en": {
+          "description": "Additional user IDs treated as masters, merged with endpoint masters as a fallback."
+        }
+      }
     },
     "inbound": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": true },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
         "bypassMasters": {
           "type": "boolean",
           "default": true,
-          "description": "master 跳过入站审查"
+          "description": "master 跳过入站审查",
+          "x-i18n": {
+            "en": {
+              "description": "Skip inbound review for masters."
+            }
+          }
         },
         "whitelist": {
           "type": "object",
@@ -81,12 +124,16 @@
           "properties": {
             "userIds": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "default": []
             },
             "conversationIds": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "default": []
             }
           }
@@ -97,11 +144,19 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "enabled": { "type": "boolean", "default": true },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
         "bypass": {
           "type": "boolean",
           "default": false,
-          "description": "为 true 时跳过出站审查"
+          "description": "为 true 时跳过出站审查",
+          "x-i18n": {
+            "en": {
+              "description": "Skip outbound review when true."
+            }
+          }
         }
       }
     },
@@ -114,14 +169,28 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              "enum": [
+                "allow",
+                "log",
+                "reply",
+                "redact",
+                "drop",
+                "recall"
+              ]
             },
             {
               "type": "array",
               "minItems": 1,
               "items": {
                 "type": "string",
-                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+                "enum": [
+                  "allow",
+                  "log",
+                  "reply",
+                  "redact",
+                  "drop",
+                  "recall"
+                ]
               }
             }
           ]
@@ -130,14 +199,28 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              "enum": [
+                "allow",
+                "log",
+                "reply",
+                "redact",
+                "drop",
+                "recall"
+              ]
             },
             {
               "type": "array",
               "minItems": 1,
               "items": {
                 "type": "string",
-                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+                "enum": [
+                  "allow",
+                  "log",
+                  "reply",
+                  "redact",
+                  "drop",
+                  "recall"
+                ]
               }
             }
           ]
@@ -146,14 +229,28 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              "enum": [
+                "allow",
+                "log",
+                "reply",
+                "redact",
+                "drop",
+                "recall"
+              ]
             },
             {
               "type": "array",
               "minItems": 1,
               "items": {
                 "type": "string",
-                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+                "enum": [
+                  "allow",
+                  "log",
+                  "reply",
+                  "redact",
+                  "drop",
+                  "recall"
+                ]
               }
             }
           ]
@@ -162,14 +259,28 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              "enum": [
+                "allow",
+                "log",
+                "reply",
+                "redact",
+                "drop",
+                "recall"
+              ]
             },
             {
               "type": "array",
               "minItems": 1,
               "items": {
                 "type": "string",
-                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+                "enum": [
+                  "allow",
+                  "log",
+                  "reply",
+                  "redact",
+                  "drop",
+                  "recall"
+                ]
               }
             }
           ]
@@ -178,17 +289,36 @@
           "anyOf": [
             {
               "type": "string",
-              "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+              "enum": [
+                "allow",
+                "log",
+                "reply",
+                "redact",
+                "drop",
+                "recall"
+              ]
             },
             {
               "type": "array",
               "minItems": 1,
               "items": {
                 "type": "string",
-                "enum": ["allow", "log", "reply", "redact", "drop", "recall"]
+                "enum": [
+                  "allow",
+                  "log",
+                  "reply",
+                  "redact",
+                  "drop",
+                  "recall"
+                ]
               }
             }
           ]
+        }
+      },
+      "x-i18n": {
+        "en": {
+          "description": "Severity-to-action mapping (string or array); uses the stricter default mapping when omitted."
         }
       }
     },
@@ -197,17 +327,43 @@
       "default": [],
       "items": {
         "type": "object",
-        "required": ["id", "type"],
+        "required": [
+          "id",
+          "type"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "type": { "type": "string", "enum": ["local", "http"] },
-          "enabled": { "type": "boolean", "default": true },
-          "onError": { "type": "string", "enum": ["open", "closed"] },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "local",
+              "http"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "onError": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
           "includeBuiltin": {
             "type": "boolean",
             "default": true,
-            "description": "是否合并内置分级违禁词词库"
+            "description": "是否合并内置分级违禁词词库",
+            "x-i18n": {
+              "en": {
+                "description": "Include the built-in graded blocked-word dictionary."
+              }
+            }
           },
           "words": {
             "type": "array",
@@ -215,45 +371,97 @@
             "description": "自定义词：字符串（用 defaultSeverity）或 { word, severity }",
             "items": {
               "anyOf": [
-                { "type": "string", "minLength": 1 },
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
                 {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["word"],
+                  "required": [
+                    "word"
+                  ],
                   "properties": {
-                    "word": { "type": "string", "minLength": 1 },
-                    "text": { "type": "string", "minLength": 1 },
+                    "word": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "text": {
+                      "type": "string",
+                      "minLength": 1
+                    },
                     "severity": {
                       "type": "string",
-                      "enum": ["low", "medium", "high", "critical"]
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "critical"
+                      ]
                     }
                   }
                 }
               ]
+            },
+            "x-i18n": {
+              "en": {
+                "description": "Custom words: strings using defaultSeverity, or { word, severity } objects."
+              }
             }
           },
           "wordFiles": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "default": [],
-            "description": "词库文件；行格式 word / severity:word / word|severity"
+            "description": "词库文件；行格式 word / severity:word / word|severity",
+            "x-i18n": {
+              "en": {
+                "description": "Dictionary file; line formats: word, severity:word, or word|severity."
+              }
+            }
           },
           "defaultSeverity": {
             "type": "string",
-            "enum": ["low", "medium", "high", "critical"],
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
             "default": "high",
-            "description": "未标注分级的自定义词默认 severity"
+            "description": "未标注分级的自定义词默认 severity",
+            "x-i18n": {
+              "en": {
+                "description": "Default severity for custom words without an explicit severity."
+              }
+            }
           },
           "severity": {
             "type": "string",
-            "enum": ["low", "medium", "high", "critical"],
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
             "default": "high",
-            "description": "兼容旧字段，等同 defaultSeverity"
+            "description": "兼容旧字段，等同 defaultSeverity",
+            "x-i18n": {
+              "en": {
+                "description": "Legacy alias for defaultSeverity."
+              }
+            }
           },
-          "url": { "type": "string" },
+          "url": {
+            "type": "string"
+          },
           "headers": {
             "type": "object",
-            "additionalProperties": { "type": "string" }
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "timeoutMs": {
             "type": "number",
@@ -264,7 +472,12 @@
           "forceUpload": {
             "type": "boolean",
             "default": false,
-            "description": "强制下载图片后上传，不传 URL"
+            "description": "强制下载图片后上传，不传 URL",
+            "x-i18n": {
+              "en": {
+                "description": "Download images before uploading them instead of passing the URL."
+              }
+            }
           }
         }
       }

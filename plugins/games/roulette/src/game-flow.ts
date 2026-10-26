@@ -1,14 +1,10 @@
-import {
-  GameSessionConflictError,
-  SessionRevisionConflictError,
-  channelKey,
-  type GameMessageLike,
-} from '@zhin.js/game-kit';
+import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
+import { gameCommandHint, GameSessionConflictError, SessionRevisionConflictError, channelKey, type GameMessageLike } from '@zhin.js/game-kit';
 import type { RouletteConfig } from './config.js';
 import { RouletteRuleError, loserOf, type RouletteState } from './engine.js';
 import type { RouletteSessionRow } from './models.js';
 import type { MutePenaltyPort, PenaltyConversation } from './mute-penalty.js';
-import { ROULETTE_HELP, type RouletteCommandAction } from './roulette-actions.js';
+import { getRouletteHelp, type RouletteCommandAction } from './roulette-actions.js';
 import {
   playerFromMessage,
   stateOf,
@@ -47,7 +43,7 @@ export interface ExpiredSessionNotice {
 
 const DEADLINE_ACTOR = 'deadline';
 const MANAGER_ROLES: readonly string[] = ['master', 'trusted', 'owner', 'admin'];
-const NO_GAME_TEXT = '本群没有进行中的轮盘，发送「轮盘 开局」创建一局。';
+function noGame(message: GameMessageLike): string { return messages(message.locale, 'noGame') + gameCommandHint(message, 'roulette', 'open'); }
 
 export async function runRouletteAction(
   flow: RouletteFlow,
@@ -55,8 +51,9 @@ export async function runRouletteAction(
   action: RouletteCommandAction,
 ): Promise<string> {
   const message = actor.message;
-  if (action === 'help') return ROULETTE_HELP;
-  if (message.$channel.type === 'private') return '轮盘需要多人参与，请在群聊里玩。';
+  const locale = resolveLocale(message.locale);
+  if (action === 'help') return getRouletteHelp(message);
+  if (message.$channel.type === 'private') return messages(locale, 'text1');
   if (action === 'penalty-on' || action === 'penalty-off' || action === 'penalty-status') {
     return handlePenaltySetting(flow, actor, action);
   }
@@ -104,14 +101,15 @@ async function handleGameAction(
   session: RouletteSessionRow | null,
 ): Promise<string> {
   const message = actor.message;
+  const locale = resolveLocale(session ? session.locale : message.locale);
   if (action === 'open') return openLobby(flow, actor, session);
-  if (!session) return NO_GAME_TEXT;
-  if (action === 'status') return describeStatus(stateOf(session), flow.config);
+  if (!session) return noGame(message);
+  if (action === 'status') return describeStatus(stateOf(session), flow.config, { ...message, locale });
   if (action === 'cancel' && !mayCancel(session, message, actor.roles)) {
-    return '只有开局的人、群主、群管理员或机器人管理员可以取消本局。';
+    return messages(locale, 'text2');
   }
   const gameAction = toGameAction(action, message);
-  if (!gameAction) return NO_GAME_TEXT;
+  if (!gameAction) return noGame(message);
   try {
     const result = await flow.services.sessions.applyAction(
       session,
@@ -121,9 +119,9 @@ async function handleGameAction(
     );
     return describeResult(flow, gameAction, result, message);
   } catch (error) {
-    if (error instanceof RouletteRuleError) return error.message;
-    if (error instanceof GameSessionConflictError) return error.message;
-    if (error instanceof SessionRevisionConflictError) return '对局状态刚刚变了，请再发一次。';
+    if (error instanceof RouletteRuleError) return error.format(locale);
+    if (error instanceof GameSessionConflictError) return error.format(locale);
+    if (error instanceof SessionRevisionConflictError) return messages(locale, 'text3');
     throw error;
   }
 }
@@ -133,14 +131,15 @@ async function openLobby(
   actor: RouletteActor,
   session: RouletteSessionRow | null,
 ): Promise<string> {
+  const locale = resolveLocale(session ? session.locale : actor.message.locale);
   if (session) {
-    return `本群已经有一局轮盘了。\n${describeStatus(stateOf(session), flow.config)}`;
+    return messages(locale, 'text4', { p0: describeStatus(stateOf(session), flow.config, { ...actor.message, locale }) });
   }
   try {
     const created = await flow.services.sessions.createLobby(actor.message, actor.endpoint, flow.config);
-    return describeLobby(stateOf(created), flow.config);
+    return describeLobby(stateOf(created), flow.config, { ...actor.message, locale });
   } catch (error) {
-    if (error instanceof GameSessionConflictError) return error.message;
+    if (error instanceof GameSessionConflictError) return error.format(locale);
     throw error;
   }
 }
@@ -152,17 +151,19 @@ async function describeResult(
   message: GameMessageLike,
 ): Promise<string> {
   const state = result.state;
-  if (!result.applied) return describeStatus(state, flow.config);
+  const locale = resolveLocale(result.session.locale);
+  const presentation = { ...message, locale };
+  if (!result.applied) return describeStatus(state, flow.config, presentation);
   if (state.phase === 'finished') return finishText(flow, result.session, state);
-  if (state.phase === 'aborted') return describeAbort(state);
-  if (action.type === 'start') return describeRoundStart(state, flow.config);
+  if (state.phase === 'aborted') return describeAbort(state, presentation);
+  if (action.type === 'start') return describeRoundStart(state, flow.config, presentation);
   if (action.type === 'fire') {
-    return describeClick(playerFromMessage(message), state, flow.config);
+    return describeClick(playerFromMessage(message), state, flow.config, presentation);
   }
   if (action.type === 'leave') {
-    return `${playerFromMessage(message).name} 离开了。\n${describeLobby(state, flow.config)}`;
+    return messages(locale, 'text5', { p0: playerFromMessage(message).name, p1: describeLobby(state, flow.config, presentation) });
   }
-  return describeLobby(state, flow.config);
+  return describeLobby(state, flow.config, presentation);
 }
 
 async function expireSession(flow: RouletteFlow, session: RouletteSessionRow): Promise<string> {
@@ -180,7 +181,7 @@ async function expireSession(flow: RouletteFlow, session: RouletteSessionRow): P
     );
     if (!result.applied) return '';
     if (result.state.phase === 'finished') return finishText(flow, result.session, result.state, penaltyEnabled);
-    return describeAbort(result.state);
+    return describeAbort(result.state, { locale: resolveLocale(result.session.locale) });
   } catch (error) {
     // A player acted on the session in the meantime; the next sweep re-reads it.
     if (error instanceof SessionRevisionConflictError) return '';
@@ -195,7 +196,7 @@ async function finishText(
   penaltyEnabled?: boolean,
 ): Promise<string> {
   const penalty = await applyLoserPenalty(flow, session, state, penaltyEnabled);
-  return [describeEnding(state), penalty].filter(Boolean).join('\n');
+  return [describeEnding(state, { locale: resolveLocale(session.locale) }), penalty].filter(Boolean).join('\n');
 }
 
 /** Mute the loser only when this group opted in and the Endpoint declares muting. */
@@ -205,6 +206,7 @@ async function applyLoserPenalty(
   state: RouletteState,
   penaltyEnabled?: boolean,
 ): Promise<string> {
+  const locale = resolveLocale(session.locale);
   const loser = loserOf(state);
   if (!loser) return '';
   const enabled = penaltyEnabled
@@ -212,13 +214,13 @@ async function applyLoserPenalty(
   if (!enabled) return '';
   const conversation = conversationOfSession(session);
   if (flow.penalty.support(conversation) !== 'supported') {
-    return '（本群开启了禁言惩罚，但当前平台无法禁言，本局只计分。）';
+    return messages(locale, 'text6');
   }
   try {
     await flow.penalty.mute(conversation, loser.id, flow.config.muteSeconds);
-    return `🔇 ${loser.name} 被禁言 ${flow.config.muteSeconds} 秒。`;
+    return messages(locale, 'text7', { p0: loser.name, p1: flow.config.muteSeconds });
   } catch {
-    return '（禁言没有成功，可能是机器人没有群管理权限；本局只计分。）';
+    return messages(locale, 'text8');
   }
 }
 
@@ -228,30 +230,31 @@ async function handlePenaltySetting(
   action: 'penalty-on' | 'penalty-off' | 'penalty-status',
 ): Promise<string> {
   const message = actor.message;
-  if (message.$channel.type !== 'group') return '禁言惩罚只能在群聊里设置。';
+  const locale = resolveLocale(message.locale);
+  if (message.$channel.type !== 'group') return messages(locale, 'text9');
   const key = channelKey(message);
   const settings = flow.services.settings;
   const support = flow.penalty.support(conversationOfActor(actor));
   if (action === 'penalty-status') {
     const enabled = await settings.isMutePenaltyEnabled(key);
-    return describePenaltyStatus(enabled, support === 'supported', flow.config);
+    return describePenaltyStatus(enabled, support === 'supported', flow.config, locale);
   }
-  if (!isManager(actor.roles)) return '只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。';
+  if (!isManager(actor.roles)) return messages(locale, 'text10');
   if (action === 'penalty-off') {
     await settings.setMutePenalty(key, false, message.$sender.id);
-    return '已关闭禁言惩罚，本群轮盘只计分。';
+    return messages(locale, 'text11');
   }
   if (support !== 'supported') {
-    return '当前平台不支持禁言，禁言惩罚没有开启；本群轮盘只计分。';
+    return messages(locale, 'text12');
   }
   await settings.setMutePenalty(key, true, message.$sender.id);
-  return `已开启禁言惩罚：每局输家会被禁言 ${flow.config.muteSeconds} 秒（需要机器人有群管理权限）。`;
+  return messages(locale, 'text13', { p0: flow.config.muteSeconds });
 }
 
-function describePenaltyStatus(enabled: boolean, supported: boolean, config: RouletteConfig): string {
-  const platform = supported ? '当前平台支持禁言。' : '当前平台不支持禁言，只能计分。';
-  if (!enabled) return `本群禁言惩罚：关闭。${platform}`;
-  return `本群禁言惩罚：开启，输家禁言 ${config.muteSeconds} 秒。${platform}`;
+function describePenaltyStatus(enabled: boolean, supported: boolean, config: RouletteConfig, locale?: Locale): string {
+  const platform = supported ? messages(locale, 'text14') : messages(locale, 'text15');
+  if (!enabled) return messages(locale, 'text16', { p0: platform });
+  return messages(locale, 'text17', { p0: config.muteSeconds, p1: platform });
 }
 
 function toGameAction(action: RouletteCommandAction, message: GameMessageLike): RouletteAction | null {
@@ -297,3 +300,24 @@ function conversationOfActor(actor: RouletteActor): PenaltyConversation {
     id: actor.message.$channel.id,
   };
 }
+
+const messages = createMessages({
+  noGame: { 'zh-CN': '本群没有进行中的轮盘。', en: 'This group has no active roulette game.' },
+  text1: { 'zh-CN': "轮盘需要多人参与，请在群聊里玩。", en: "Roulette needs multiple players. Please play in a group chat." },
+  text2: { 'zh-CN': "只有开局的人、群主、群管理员或机器人管理员可以取消本局。", en: "Only the host, group owner, group admin or bot administrator may cancel this game." },
+  text3: { 'zh-CN': "对局状态刚刚变了，请再发一次。", en: "The game state just changed. Please try again." },
+  text4: { 'zh-CN': "本群已经有一局轮盘了。\n{p0}", en: "This group already has a roulette game.\n{p0}" },
+  text5: { 'zh-CN': "{p0} 离开了。\n{p1}", en: "{p0} left.\n{p1}" },
+  text6: { 'zh-CN': "（本群开启了禁言惩罚，但当前平台无法禁言，本局只计分。）", en: "(Mute penalties are enabled, but this platform cannot mute players. Only scores were recorded.)" },
+  text7: { 'zh-CN': "🔇 {p0} 被禁言 {p1} 秒。", en: "🔇 {p0} was muted for {p1} seconds." },
+  text8: { 'zh-CN': "（禁言没有成功，可能是机器人没有群管理权限；本局只计分。）", en: "(Muting failed, possibly because the bot lacks group management permission. Only scores were recorded.)" },
+  text9: { 'zh-CN': "禁言惩罚只能在群聊里设置。", en: "Mute penalties can only be configured in a group chat." },
+  text10: { 'zh-CN': "只有群主、群管理员、机器人主人或受信任用户可以修改禁言惩罚。", en: "Only the group owner, group admin, bot owner or a trusted user may change mute penalties." },
+  text11: { 'zh-CN': "已关闭禁言惩罚，本群轮盘只计分。", en: "Mute penalties are disabled. This group now records scores only." },
+  text12: { 'zh-CN': "当前平台不支持禁言，禁言惩罚没有开启；本群轮盘只计分。", en: "This platform does not support muting. Mute penalties remain disabled; only scores are recorded." },
+  text13: { 'zh-CN': "已开启禁言惩罚：每局输家会被禁言 {p0} 秒（需要机器人有群管理权限）。", en: "Mute penalties enabled: each loser is muted for {p0} seconds (the bot needs group management permission)." },
+  text14: { 'zh-CN': "当前平台支持禁言。", en: "This platform supports muting." },
+  text15: { 'zh-CN': "当前平台不支持禁言，只能计分。", en: "This platform does not support muting; only scores are recorded." },
+  text16: { 'zh-CN': "本群禁言惩罚：关闭。{p0}", en: "Group mute penalty: off. {p0}" },
+  text17: { 'zh-CN': "本群禁言惩罚：开启，输家禁言 {p0} 秒。{p1}", en: "Group mute penalty: on, the loser is muted for {p0} seconds. {p1}" },
+});

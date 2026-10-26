@@ -79,7 +79,7 @@
     "export * from './command-index.js';",
     "export * from './definition.js';",
     "export * from './permission-explanation.js';",
-    "export type{CommandValidationIssue}from './arguments.js';",
+    "export type{CommandValidationIssue,CommandValidationIssueCode}from './arguments.js';",
     "export{CONVERSATION_MANAGER_PERMIT,canManageConversation,assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
     "export{bindCommandSource,CommandPathSyntaxError,commandFeatureId,type BoundCommandSource,default as commandFeature,}from './provider.js';",
     "export{default}from './provider.js';"
@@ -155,7 +155,8 @@
     "export * from './runtime-constants.js';",
     "export * from './send-content-text.js';",
     "export * from './session-coordinator.js';",
-    "export * from './versioned-session-service.js';"
+    "export * from './versioned-session-service.js';",
+    "export{formatGameHelp,gameCommandHint,gameCommandFeedback}from './game-command-help.js';"
   ],
   "handler": [
     "export * from './context.js';",
@@ -224,6 +225,7 @@
     "export * from './dispose.js';",
     "export * from './handoff.js';",
     "export * from './html-renderer.js';",
+    "export * from './i18n.js';",
     "export * from './identity.js';",
     "export * from './inbox.js';",
     "export * from './outbound-host.js';",

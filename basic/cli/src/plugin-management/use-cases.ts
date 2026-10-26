@@ -1,3 +1,5 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
+
 /** Task-oriented entry points. Installation/configuration remain owned by their existing services. */
 export interface PluginUseCase {
   readonly id: string;
@@ -38,7 +40,7 @@ export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
       '由真实发送者在原会话执行 remind create 十分钟后 喝水；只输入 remind create 时会逐项补问。',
       '使用实际前缀与插件命名空间；后续回答不加前缀，取消后再开始新流程。',
       '核对绝对时间、时区、正文与完整原会话，明确回复“确认”才保存；用 remind list 查看个人任务。'],
-    limitations: ['仅支持有限中文自然时间与含 offset 的 ISO 时间，不猜发送者时区、裸时钟或夏令时重复时刻。',
+    limitations: ['仅支持有限中英文自然时间与含 offset 的 ISO 时间，不猜发送者时区、裸时钟或夏令时重复时刻。',
       '聊天任务归真实发送者；Console 不代为执行，管理员任务仍使用单独入口。',
       '超时或取消不创建；投递或创建结果不确定时先核对，不自动重试。'],
   },
@@ -63,6 +65,61 @@ export const pluginUseCases: readonly PluginUseCase[] = Object.freeze(([
       '两个 Bot、父频道或话题不同的同名会话互不共享词库；临时词库不是持久保存。'],
   },
 ] satisfies PluginUseCase[]).map(item => Object.freeze({ ...item, steps: Object.freeze(item.steps), limitations: Object.freeze(item.limitations) })));
+
+const englishUseCases: Readonly<Record<string, Pick<PluginUseCase, 'title' | 'summary' | 'steps' | 'limitations'>>> = {
+  'rss-subscription': {
+    title: 'Subscribe to RSS updates', summary: 'Choose an exact delivery target and create a separate administrator RSS subscription.',
+    steps: ['Install the RSS plugin through the existing installation plan. Configure persistent Database, Schedule and Outbound Hosts with exact-target support, then save and apply.',
+      'Select a loaded RSS instance in Console Tasks. Check its account, conversation, parent container and thread.',
+      'Enter an HTTP(S) RSS or Atom URL, review fetching and delivery effects, then create. Saving does not fetch the feed or send a test message.',
+      'Wait for the first successful poll to establish a baseline. Only later articles are delivered. Use Tasks to pause, edit, resume or cancel.'],
+    limitations: ['The first successful fetch after creation or resuming only establishes a baseline; it does not replay history. Each poll examines the first 20 feed entries and displays at most maxItems, with a link to the feed for the remainder; there is no later catch-up.',
+      'Administrator subscriptions and chat subscriptions are separate. Chat rss-list, rss-remove and rss-check do not manage or trigger administrator tasks.',
+      'An unconfirmed delivery is not automatically retried or resumed. Cancel it, check the destination, and create a new task only if needed.'],
+  },
+  reminder: {
+    title: 'Create a scheduled reminder', summary: 'Choose an account, conversation and time, then manage an administrator reminder.',
+    steps: ['Install the persistent reminder plugin, configure a Database Host and apply.',
+      'Select a loaded reminder instance in Console Tasks and check its current version and form.',
+      'Choose the exact account and conversation, enter a time with an offset and the content, and confirm the future delivery effect.',
+      'Check the next execution time and actual result. If delivery is uncertain, inspect the destination before creating another task.'],
+    limitations: ['Console manages administrator tasks only. Chat reminders still belong to the actual sender.',
+      'A scheduled state does not prove the platform is online or the message was displayed. Recurrence is a fixed interval, not a local calendar schedule spanning daylight-saving changes.'],
+  },
+  'personal-reminder': {
+    title: 'Set a personal reminder in chat', summary: 'Provide a time and message, then confirm saving to the original conversation without enabling AI.',
+    steps: ['Install the persistent reminder plugin, enable the Database Host and Schedule Feature, and configure an explicit IANA timezone; the default is UTC.',
+      'Use the remind create command in the original conversation with a real sender identity, for example with arguments in 10 minutes drink water. With no arguments, the command asks for the missing information.',
+      'Use the actual account prefix and plugin namespace. Follow-up answers do not need a prefix; cancel before starting a new flow.',
+      'Check the absolute time, timezone, content and complete original conversation. Reply with the current language’s confirmation input to save; use remind list to view personal tasks.'],
+    limitations: ['Only bounded Chinese and English natural-time syntax and offset-bearing ISO times are supported. Sender timezone, bare clock times and ambiguous daylight-saving times are not guessed.',
+      'Chat tasks belong to the actual sender. Console does not impersonate that sender; administrator tasks have a separate entry.',
+      'Timeout or cancellation creates no task. If creation or delivery is uncertain, check first; there is no automatic retry.'],
+  },
+  'group-welcome': {
+    title: 'Welcome new group members', summary: 'Configure welcome content for adapters that report group member additions.',
+    steps: ['Install the group suite and select an exact plugin instance. A package name is insufficient when multiple instances exist.',
+      'Set welcomeMessage in the instance form. Use {name} and {id} for the new member.',
+      'Select exact accounts and groups in welcomeConversations, including parent containers and threads when present. Check the scope, save and apply.',
+      'Verify an authorized real member-addition event and its delivery result. Successful startup is not business verification.'],
+    limitations: ['The adapter must report a standard group-member-addition notice. Without it, no welcome is sent.',
+      'Omitting welcomeConversations covers all eligible groups; an empty list covers none. Missing parent or thread only matches events that also lack it, not a wildcard.',
+      'This scope only controls welcome messages, not check-ins, keywords, statistics or command permit. An empty welcomeMessage still disables welcoming.'],
+  },
+  'keyword-reply': {
+    title: 'Configure group keyword replies', summary: 'Maintain a persistent keyword library in a specific group and verify permissions and matching.',
+    steps: ['Install the group suite, configure a persistent Database Host, enable keywordReply on the target instance, and apply.',
+      'An authorized real group member uses keyword-add, keyword-list and keyword-remove in the target group.',
+      'Use the account’s actual prefix and namespace, then verify the new entry in the same exact conversation.'],
+    limitations: ['Console does not impersonate platform users. The plugin persists entries against the full conversation identity.',
+      'Different Bot accounts, parent channels or threads do not share a keyword library just because conversation names match. Temporary entries are not persistent.'],
+  },
+};
+
+/** Locale is display-only; package IDs and workflow effects are unchanged. */
+export function listPluginUseCases(locale: Locale = 'zh-CN'): readonly PluginUseCase[] {
+  return locale === 'en' ? pluginUseCases.map(item => ({ ...item, ...englishUseCases[item.id] })) : pluginUseCases;
+}
 
 export function formatPluginUseCases(id?: string): string {
   const selected = id === undefined ? pluginUseCases : pluginUseCases.filter(item => item.id === id);

@@ -9,6 +9,6 @@ export default defineAgentTool({
   tags: ["生活", "摸鱼", "日历"],
   async execute(_input, context) {
     const handler = (await import('../../../../src/handlers/moyu.js')).default;
-    return handler(context.use(sixtySClientToken));
+    return handler(context.use(sixtySClientToken), context.locale);
   },
 });

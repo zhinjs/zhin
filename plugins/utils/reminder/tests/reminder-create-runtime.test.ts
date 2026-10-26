@@ -15,13 +15,13 @@ import { ReminderService } from '../src/service.js';
 import { reminderServiceToken } from '../src/runtime.js';
 import type { ReminderConfig } from '../src/config.js';
 
-async function fixture(options: { afterSend?: (count: number) => void } = {}) {
+async function fixture(options: { afterSend?: (count: number) => void; locale?: 'zh-CN' | 'en'; prefix?: string } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'zhin-create-reminder-'));
   const database = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'state.sqlite') }); await database.start();
   const root = rootPluginId(); const owner = childPluginId(root, 'personal'); const sent: EndpointSendRequest[] = []; let uncertainIn = 0;
   const outbound = { send: vi.fn(async () => null), sendTarget: vi.fn(async () => 'unused') };
-  const config: ReminderConfig & { commandPrefix: string } = { timezone: 'UTC', maxTasks: 20, adminMaxTasks: 20,
-    maxTasksPerSender: 10, batchSize: 5, missedGraceSeconds: 15, commandPrefix: '/' };
+  const config: ReminderConfig & { commandPrefix: string; locale: 'zh-CN' | 'en' } = { timezone: 'UTC', maxTasks: 20, adminMaxTasks: 20,
+    maxTasksPerSender: 10, batchSize: 5, missedGraceSeconds: 15, commandPrefix: options.prefix ?? '/', locale: options.locale ?? 'zh-CN' };
   const service = new ReminderService(new PluginDatabaseHost(owner, database).state, outbound, config);
   const added = vi.spyOn(service, 'add');
   class MemoryEndpoint extends Endpoint<object> {
@@ -77,6 +77,42 @@ function rendered(sent: EndpointSendRequest[]): string { return JSON.stringify(s
 describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, interaction and SQLite', () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it('uses English-only confirmation, preserves its locale and formats the actual prefix', async () => {
+    const f = await fixture({ locale: 'en', prefix: '!' });
+    const now = 1_800_000_000_000; const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      const pending = f.receive('!remind create "in 10 minutes" Ship the report');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('Create this reminder?'));
+      expect(rendered(f.sent)).not.toContain('确认创建');
+      await f.receive('确认');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('No reminder was created. Enter'));
+      expect(f.added).not.toHaveBeenCalled();
+      await f.receive('confirm'); await pending;
+      expect(f.added).toHaveBeenCalledTimes(1);
+      const tasks = await f.service.list({ senderId: 'alice', target: f.conversation });
+      expect(tasks[0]).toMatchObject({ locale: 'en', text: 'Ship the report', nextRunAt: now + 600_000 });
+      clock.mockReturnValue(now + 600_000); await f.service.tick();
+      expect(f.outbound.sendTarget).toHaveBeenCalledWith(f.conversation, '⏰ Reminder: Ship the report');
+      const incomplete = f.receive('!remind create');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('When should I remind you?'));
+      await f.receive('cancel'); await incomplete;
+      expect(rendered(f.sent)).toContain('Cancelled. No reminder was created.');
+    } finally { await f.close(); }
+  });
+
+  it('does not accept an English confirmation in a Chinese flow', async () => {
+    const f = await fixture();
+    try {
+      const pending = f.receive('/remind create 10分钟后 正文');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      await f.receive('confirm');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('请明确输入'));
+      expect(f.added).not.toHaveBeenCalled();
+      await f.receive('取消'); await pending;
+      expect(f.added).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+  });
+
   it('requires confirmation even with complete arguments and creates exactly one personal task', async () => {
     const f = await fixture(); vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {
@@ -131,7 +167,7 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     const f = await fixture();
     try {
       const pending = f.receive(step === 'time' ? '/remind create' : step === 'body' ? '/remind create 10分钟后' : '/remind create 10分钟后 正文');
-      await vi.waitFor(() => expect(rendered(f.sent)).toContain(step === 'confirmation' ? '确认创建' : step === 'body' ? '提醒你做什么' : '什么时候')); await f.receive(step === 'body' ? 'cancel' : '取消'); await pending;
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain(step === 'confirmation' ? '确认创建' : step === 'body' ? '提醒你做什么' : '什么时候')); await f.receive('取消'); await pending;
       expect(f.added).not.toHaveBeenCalled(); expect(rendered(f.sent)).toContain('已取消');
     } finally { await f.close(); }
   });

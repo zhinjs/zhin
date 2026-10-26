@@ -83,6 +83,10 @@ export interface ConversationContextPort {
 }
 
 export interface TurnInput {
+  /** Product-resolved display context, independent of untrusted adapter metadata. */
+  readonly locale?: import('@zhin.js/plugin-runtime').Locale;
+  readonly commandPrefix?: string;
+  readonly commandMenu?: string;
   readonly text: string;
   readonly media?: readonly TurnMedia[];
   readonly references?: readonly TurnReference[];

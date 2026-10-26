@@ -5,6 +5,8 @@ import {
   createCapabilitySlot,
   createSnapshotView,
   rootPluginId,
+  userLocalePreferencesToken,
+  type UserLocalePreferences,
   type CapabilitySlot,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
@@ -117,7 +119,7 @@ describe('UserInteraction via ImRuntime', () => {
       clock.mockRestore();
     }
   });
-  async function createInteractionFixture() {
+  async function createInteractionFixture(options: { preferences?: UserLocalePreferences; confirmation?: boolean } = {}) {
     const sent: unknown[] = [];
     const events: string[] = [];
     let interactionResult: unknown;
@@ -150,9 +152,9 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/commands/ask.ts',
       definition: defineCommand<{}, SendContent, Message>({
         async execute(context) {
-          commandExecuted();
+          commandExecuted(context.locale, context.formatCommand('ask'), context.input?.formatCommand('ask'));
           try {
-            interactionResult = await context.interaction!.ask({
+            interactionResult = await context.interaction!.ask(options.confirmation ? { type: 'confirm', title: 'Continue?' } : {
               type: 'text',
               title: '个人信息',
               description: '请输入你的名字',
@@ -167,7 +169,10 @@ describe('UserInteraction via ImRuntime', () => {
       }),
     });
     const slots = [adapter, command];
-    const base = baseState(slots);
+    let base = baseState(slots);
+    if (options.preferences) base = { ...base, resources: new Map([[root, new Map([
+      ...base.resources.get(root)!, [userLocalePreferencesToken.id, options.preferences],
+    ])]]) };
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
     const projections = new Map([
@@ -202,6 +207,34 @@ describe('UserInteraction via ImRuntime', () => {
       sender: { id: sender },
     };
   }
+
+  it('pins confirmation language while a personal preference changes, then uses it for the next operation', async () => {
+    let locale: 'en' | 'zh-CN' = 'en';
+    const preferences: UserLocalePreferences = { get: async () => locale, set: async (_endpoint, _sender, value) => { locale = value; } };
+    const { im, sent, commandExecuted, getResult, store } = await createInteractionFixture({ preferences, confirmation: true });
+    try {
+      const first = receive(im, incomingMessage('/ask'));
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      expect(JSON.stringify(sent[0])).toContain('Confirm');
+      expect(commandExecuted).toHaveBeenLastCalledWith('en', '/ask', '/ask');
+      locale = 'zh-CN';
+      await receive(im, incomingMessage('确认'));
+      await vi.waitFor(() => expect(sent.length).toBeGreaterThan(1));
+      expect(getResult()).toBeUndefined();
+      expect(JSON.stringify(sent.at(-1))).toContain('Choose confirm or cancel');
+      await receive(im, incomingMessage('confirm'));
+      await first;
+      expect(getResult()).toBe(true);
+      const beforeSecond = sent.length;
+      const second = receive(im, incomingMessage('/ask'));
+      await vi.waitFor(() => expect(sent.length).toBeGreaterThan(beforeSecond));
+      expect(commandExecuted).toHaveBeenLastCalledWith('zh-CN', '/ask', '/ask');
+      expect(JSON.stringify(sent.at(-1))).toContain('取消');
+      await receive(im, incomingMessage('取消'));
+      await second;
+      expect(getResult()).toBe(false);
+    } finally { await store.close(); }
+  });
 
   it('text interaction 应发送提示并等待用户输入后返回', async () => {
     const { im, sent, getResult } = await createInteractionFixture();
@@ -526,6 +559,9 @@ describe('UserInteraction via ImRuntime', () => {
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThan(sentBeforeSecondRun); });
 
     await receive(im, incomingMessage('no'));
+    await vi.waitFor(() => expect(sent.length).toBeGreaterThan(sentBeforeSecondRun + 1));
+    // Chinese flows no longer accept English text. The localized answer still cancels.
+    await receive(im, incomingMessage('取消'));
     await cancelledCommand;
     expect(interactionResult).toBe(false);
   });
@@ -611,7 +647,7 @@ describe('UserInteraction via ImRuntime', () => {
     expect(secondAnswer).toMatchObject({ matched: true, command: 'interaction' });
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(3); });
 
-    const thirdAnswer = await receive(im, incomingMessage('yes'));
+    const thirdAnswer = await receive(im, incomingMessage('确认'));
     expect(thirdAnswer).toMatchObject({ matched: true, command: 'interaction' });
     await commandPromise;
     expect(sequenceResult).toEqual({
@@ -765,7 +801,7 @@ describe('UserInteraction via ImRuntime', () => {
     const pending = interaction!.ask({ type: 'confirm', title: '请 master 确认' });
     await vi.waitFor(() => { expect(delivered.length).toBeGreaterThanOrEqual(1); });
     await expect(receive(im, incomingMessage('yes', 'user-1'))).resolves.toMatchObject({ matched: false });
-    await expect(receive(im, incomingMessage('yes', 'master-1'))).resolves.toMatchObject({
+    await expect(receive(im, incomingMessage('确认', 'master-1'))).resolves.toMatchObject({
       matched: true,
       command: 'interaction',
     });

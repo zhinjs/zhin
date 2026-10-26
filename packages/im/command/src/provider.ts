@@ -311,7 +311,7 @@ const commandFeature = defineFeatureProvider({
       const rawKeyword = rootConfig?.menuKeyword;
       const menu = rawKeyword === false || rawKeyword === ''
         ? undefined
-        : { keyword: typeof rawKeyword === 'string' ? rawKeyword : '菜单' };
+        : typeof rawKeyword === 'string' ? { keyword: rawKeyword } : {};
       return { value: new CommandIndex(slots, context.snapshot, menu) };
     },
   },

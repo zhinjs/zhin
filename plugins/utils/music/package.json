@@ -52,6 +52,7 @@
   "license": "MIT",
   "dependencies": {
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "@zhin.js/skill": "workspace:*"
   },

@@ -8,11 +8,11 @@ export const calendarConfig = Schema.object({
     Schema.const("microsoft"),
   ])
     .default("none")
-    .description("日历后端；none 时工具返回未启用提示")
+    .description("日历后端；none 时工具返回未启用提示").i18n({"en": {"description": "Calendar backend. Tools report that the calendar is disabled when set to none."}})
     .effect("reload"),
   timezone: Schema.string()
     .default("Asia/Manila")
-    .description("解释无偏移时间与展示用的 IANA 时区")
+    .description("解释无偏移时间与展示用的 IANA 时区").i18n({"en": {"description": "IANA timezone for interpreting times without offsets and for display."}})
     .effect("reload"),
   work_day_start: Schema.string().default("09:00").effect("reload"),
   work_day_end: Schema.string().default("18:00").effect("reload"),
@@ -32,7 +32,7 @@ export const calendarConfig = Schema.object({
     enabled: Schema.boolean().default(false),
     calendar_url: Schema.string()
       .default("")
-      .description("日历 collection URL")
+      .description("日历 collection URL").i18n({"en": {"description": "Calendar collection URL."}})
       .effect("reload"),
     username: Schema.string().default("").effect("reload"),
     password: Schema.string().default("").effect("reload"),
@@ -49,11 +49,11 @@ export const calendarConfig = Schema.object({
       .effect("reload"),
     refresh_token: Schema.string()
       .default("")
-      .description("${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取")
+      .description("${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取").i18n({"en": {"description": "${GOOGLE_CALENDAR_REFRESH_TOKEN}; obtain using the calendar authorization flow."}})
       .effect("reload"),
     calendar_id: Schema.string()
       .default("primary")
-      .description("日历 ID，默认 primary；可换成其它日历的 id")
+      .description("日历 ID，默认 primary；可换成其它日历的 id").i18n({"en": {"description": "Calendar ID, primary by default; can be set to another calendar ID."}})
       .effect("reload"),
     token_file: Schema.string()
       .default("")
@@ -70,19 +70,19 @@ export const calendarConfig = Schema.object({
       .effect("reload"),
     client_secret: Schema.string()
       .default("")
-      .description("可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET}")
+      .description("可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET}").i18n({"en": {"description": "Optional for public clients. ${MS_GRAPH_CLIENT_SECRET}"}})
       .effect("reload"),
     refresh_token: Schema.string()
       .default("")
-      .description("${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取")
+      .description("${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取").i18n({"en": {"description": "${MS_GRAPH_REFRESH_TOKEN}; obtain using the calendar authorization flow."}})
       .effect("reload"),
     tenant: Schema.string()
       .default("common")
-      .description("Azure tenant，默认 common")
+      .description("Azure tenant，默认 common").i18n({"en": {"description": "Azure tenant, common by default."}})
       .effect("reload"),
     calendar_id: Schema.string()
       .default("")
-      .description("留空或 primary/me = 默认日历；否则为 Graph calendar id")
+      .description("留空或 primary/me = 默认日历；否则为 Graph calendar id").i18n({"en": {"description": "Empty, primary or me selects the default calendar; otherwise a Graph calendar ID."}})
       .effect("reload"),
     token_file: Schema.string()
       .default("")

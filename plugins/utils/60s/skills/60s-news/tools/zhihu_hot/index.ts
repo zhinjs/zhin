@@ -9,6 +9,6 @@ export default defineAgentTool<{ limit?: number }>({
   tags: ["热搜", "社交", "知乎"],
   async execute(input, context) {
     const handler = (await import('../../../../src/handlers/zhihu-hot.js')).default;
-    return handler(context.use(sixtySClientToken), input);
+    return handler(context.use(sixtySClientToken), input, context.locale);
   },
 });

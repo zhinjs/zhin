@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 /**
  * 成语词库适配层 — 基于 npm `chinese-idiom-chengyu`（MIT，~3 万成语）
  * @see https://www.npmjs.com/package/chinese-idiom-chengyu
@@ -74,8 +75,8 @@ export function lastSyllableNoTone(idiom: string): string {
   return Util.pinyinToLetters(tail);
 }
 
-export function modeLabel(mode: MatchMode): string {
-  return mode === 'char' ? '同字接龙' : '同音接龙';
+export function modeLabel(mode: MatchMode, locale?: Locale): string {
+  return mode === 'char' ? messages(locale, 'text1') : messages(locale, 'text2');
 }
 
 export function getValidNext(
@@ -129,16 +130,17 @@ export function validatePlayerIdiom(
   prevIdiom: string,
   mode: MatchMode,
   used: Set<string>,
+  locale?: Locale,
 ): ValidateResult {
   const idiom = normalizeInput(text);
   if (!FOUR_CHAR.test(idiom)) {
-    return { ok: false, reason: '请输入**四字成语**（不要空格或标点）。' };
+    return { ok: false, reason: messages(locale, 'text3') };
   }
   if (!isKnownIdiom(idiom)) {
-    return { ok: false, reason: '开源词库中未收录该成语，请换一个常见四字成语。' };
+    return { ok: false, reason: messages(locale, 'text4') };
   }
   if (used.has(idiom)) {
-    return { ok: false, reason: '这个成语本局已经用过了。' };
+    return { ok: false, reason: messages(locale, 'text5') };
   }
 
   const valid = getValidNext(prevIdiom, mode, used);
@@ -146,21 +148,33 @@ export function validatePlayerIdiom(
 
   const tail = lastChar(prevIdiom);
   if (mode === 'char') {
-    return { ok: false, reason: `必须以「**${tail}**」开头（上一句尾字）。` };
+    return { ok: false, reason: messages(locale, 'text6', { p0: tail }) };
   }
 
   const py = lastSyllableNoTone(prevIdiom);
   return {
     ok: false,
-    reason: `首字需**同音**（${py}），如「${tail}」音；也可同字「${tail}」开头。`,
+    reason: messages(locale, 'text7', { p0: py, p1: tail, p2: tail }),
   };
 }
 
-export function promptLine(prevIdiom: string, mode: MatchMode): string {
+export function promptLine(prevIdiom: string, mode: MatchMode, locale?: Locale): string {
   const tail = lastChar(prevIdiom);
   if (mode === 'char') {
-    return `请接「**${tail}**」字开头的四字成语`;
+    return messages(locale, 'text8', { p0: tail });
   }
   const py = lastSyllableNoTone(prevIdiom);
-  return `请接**同音**「${py}」（尾字「${tail}」）开头的四字成语`;
+  return messages(locale, 'text9', { p0: py, p1: tail });
 }
+
+const messages = createMessages({
+  text1: { 'zh-CN': "同字接龙", en: "Matching character" },
+  text2: { 'zh-CN': "同音接龙", en: "Matching pronunciation" },
+  text3: { 'zh-CN': "请输入**四字成语**（不要空格或标点）。", en: "Enter a **four-character Chinese idiom** without spaces or punctuation." },
+  text4: { 'zh-CN': "开源词库中未收录该成语，请换一个常见四字成语。", en: "This idiom is not in the dictionary. Try a common four-character idiom." },
+  text5: { 'zh-CN': "这个成语本局已经用过了。", en: "This idiom has already been used in this game." },
+  text6: { 'zh-CN': "必须以「**{p0}**」开头（上一句尾字）。", en: "The idiom must start with **{p0}**, the last character of the previous idiom." },
+  text7: { 'zh-CN': "首字需**同音**（{p0}），如「{p1}」音；也可同字「{p2}」开头。", en: "The first character must have the **same pronunciation** ({p0}) as “{p1}”, or be the character “{p2}”." },
+  text8: { 'zh-CN': "请接「**{p0}**」字开头的四字成语", en: "Enter a four-character idiom starting with **{p0}**" },
+  text9: { 'zh-CN': "请接**同音**「{p0}」（尾字「{p1}」）开头的四字成语", en: "Enter a four-character idiom whose first character sounds like **{p0}** (last character: “{p1}”)" },
+});

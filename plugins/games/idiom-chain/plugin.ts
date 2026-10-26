@@ -19,6 +19,10 @@ export default defineGamePlugin<SessionService>({
     displayName: 'Idiom Chain',
   },
   game: {
+    commandPath: 'chain',
+    titleI18n: { en: 'Chinese Idiom Chain' },
+    descriptionI18n: { en: 'Connect Chinese idioms by sound or character' },
+    quickStartI18n: { en: 'start_pinyin' },
     id: 'chain',
     title: '成语接龙',
     icon: '📜',

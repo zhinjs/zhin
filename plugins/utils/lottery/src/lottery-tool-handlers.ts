@@ -1,3 +1,5 @@
+import { resolveLocale, type Locale } from 'zhin.js/i18n';
+import { messages as t } from './i18n.js';
 import type { GameId } from './types.js';
 
 import { parseGameId } from './games/registry.js';
@@ -25,14 +27,15 @@ export async function handleGetModelState(runtime: LotteryRuntime, game?: string
   return JSON.stringify(out);
 }
 
-export async function handleComputeRecommend(runtime: LotteryRuntime, game: string): Promise<string> {
+export async function handleComputeRecommend(runtime: LotteryRuntime, game: string, locale: Locale = resolveLocale(runtime.locale)): Promise<string> {
   const gid = parseGameId(game);
-  if (!gid) return 'invalid game';
+  if (!gid) return t(locale, 'invalidGame');
   const { db, config: cfg } = runtime;
   const kl8 = lotteryKl8(cfg);
   const draws = await loadDraws(db, gid, cfg.historyLimit);
-  if (!draws.length) return 'no data; run the lottery draw synchronization tool first';
+  if (!draws.length) return t(locale, 'syncRequired');
   const pick = recommendGame(gid, draws, {
+    locale,
     pickCount: gid === 'kl8' ? kl8.pickCount : cfg.pickCount,
     tieSeed: new Date().toISOString().slice(0, 10),
     weights: await loadGameWeights(db, gid),
@@ -42,13 +45,14 @@ export async function handleComputeRecommend(runtime: LotteryRuntime, game: stri
   return JSON.stringify(pick);
 }
 
-export async function handleSavePrediction(runtime: LotteryRuntime, game: string, numbersJson: string): Promise<string> {
+export async function handleSavePrediction(runtime: LotteryRuntime, game: string, numbersJson: string, locale: Locale = resolveLocale(runtime.locale)): Promise<string> {
   const gid = parseGameId(game);
-  if (!gid) return 'invalid game';
+  if (!gid) return t(locale, 'invalidGame');
   const { db } = runtime;
   const numbers = JSON.parse(numbersJson);
   const weights = await loadGameWeights(db, gid);
   await savePrediction(db, {
+    locale,
     gameId: gid,
     label: gid,
     numbers,
@@ -64,13 +68,14 @@ export async function handleListPending(runtime: LotteryRuntime, game?: string):
   return JSON.stringify(await listPendingPredictions(db, gid ?? undefined));
 }
 
-export async function handleStatsSnapshot(runtime: LotteryRuntime, game: string): Promise<string> {
+export async function handleStatsSnapshot(runtime: LotteryRuntime, game: string, locale: Locale = resolveLocale(runtime.locale)): Promise<string> {
   const gid = parseGameId(game);
-  if (!gid) return 'invalid game';
+  if (!gid) return t(locale, 'invalidGame');
   const { db, config: cfg } = runtime;
   const kl8 = lotteryKl8(cfg);
   const draws = await loadDraws(db, gid, Math.min(30, cfg.historyLimit));
   const pick = recommendGame(gid, draws, {
+    locale,
     pickCount: gid === 'kl8' ? kl8.pickCount : cfg.pickCount,
     tieSeed: 'snapshot',
     weights: await loadGameWeights(db, gid),

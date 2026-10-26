@@ -105,6 +105,29 @@ function extractState(reply: string): string {
 }
 
 describe("chat authorization", () => {
+  it("pins authorization language through callbacks and later loss notifications", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ access_token: 'at', refresh_token: 'rt', expires_in: 3600 })) as unknown as typeof fetch;
+    const { credentials, notifications, service } = createService(fetchImpl);
+    const person = { ...requester, locale: 'en' as 'en' | 'zh-CN' };
+    const reply = await service.startAuthorization('google', person, 'en');
+    expect(reply).toContain('Open the link');
+    person.locale = 'zh-CN';
+    const result = await service.handleCallback(new URLSearchParams({ state: extractState(reply), code: 'synthetic-code' }));
+    expect(result.message).toContain('Authorization succeeded');
+    expect(notifications.at(-1)).toContain('Google Calendar authorization succeeded');
+    expect((await credentials.get('google'))?.authorized_by?.locale).toBe('en');
+    await service.notifyAuthorizationLost('google', 'provider detail');
+    expect(notifications.at(-1)).toContain('authorization expired or was revoked');
+  });
+
+  it("uses an explicitly resolved command head in status and never invents a prefix", async () => {
+    const { service } = createService(vi.fn() as unknown as typeof fetch);
+    expect(await service.describeStatus('en', '!work calendar auth')).toContain('!work calendar auth google');
+    const withoutHead = await service.describeStatus('en');
+    expect(withoutHead).toContain('not authorized');
+    expect(withoutHead).not.toContain('calendar auth google');
+  });
+
   it("parses provider aliases", () => {
     expect(parseOAuthProvider("Google")).toBe("google");
     expect(parseOAuthProvider("outlook")).toBe("microsoft");
@@ -172,10 +195,10 @@ describe("chat authorization", () => {
     await manager.hydrate();
 
     await expect(manager.getAccessToken()).rejects.toThrow(
-      /calendar auth google/
+      /日历授权入口/
     );
     await expect(manager.getAccessToken()).rejects.toThrow(
-      /calendar auth google/
+      /日历授权入口/
     );
     expect(lost).toHaveBeenCalledTimes(1);
     expect(fetchImpl).toHaveBeenCalledTimes(1);

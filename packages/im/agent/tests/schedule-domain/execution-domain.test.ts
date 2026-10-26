@@ -41,7 +41,7 @@ describe('ScheduleExecutionDomain', () => {
       auditLogger: { write },
     });
 
-    const result = await domain.execute(job);
+    const result = await domain.execute({ ...job, locale: 'en' });
 
     expect(result.success).toBe(true);
     expect(result.output).toBe('上海今日多云。');
@@ -51,6 +51,7 @@ describe('ScheduleExecutionDomain', () => {
     expect(write).toHaveBeenCalledWith(result.audit);
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({
       prompt: '发布天气',
+      locale: 'en',
       jobId: 'sched_weather',
       signal: expect.any(AbortSignal),
     }));

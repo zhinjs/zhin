@@ -1,3 +1,4 @@
+import { messages as t } from "../../../../messages.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { platformPermission } from '@zhin.js/permission';
@@ -14,6 +15,6 @@ export default defineAgentTool<{ chat_id: string }>({
   async execute({ chat_id  }: { chat_id: string }, context) {
     const endpoint = context.$client;
     const link = await endpoint.createInviteLink(Number(chat_id));
-    return { invite_link: link, message: `邀请链接: ${link}` };
+    return { invite_link: link, message: t(context.locale, 'inviteLink', { p0: link }) };
   },
 });

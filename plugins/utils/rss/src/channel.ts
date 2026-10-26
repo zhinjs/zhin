@@ -1,3 +1,5 @@
+import type { Locale } from 'zhin.js/i18n';
+import { rssMessages as t } from './i18n.js';
 /** A subscription destination uses public Message fields, never CapabilityId internals. */
 
 export interface ChannelInfo {
@@ -26,8 +28,8 @@ function hasUnsupportedAddress(input: unknown): boolean {
 }
 
 /** Explain rejection without silently flattening a thread/container address. */
-export function channelSourceError(input: unknown): string {
-  return hasUnsupportedAddress(input) ? UNSUPPORTED_ADDRESS_MESSAGE : CHANNEL_REQUIRED_MESSAGE;
+export function channelSourceError(input: unknown, locale: Locale = 'zh-CN'): string {
+  return t(locale, hasUnsupportedAddress(input) ? 'unsupportedAddress' : 'channelRequired');
 }
 
 /** No IM source means no destination; callers must not invent a global subscription. */
