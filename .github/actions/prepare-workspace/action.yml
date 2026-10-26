@@ -28,9 +28,8 @@ runs:
 
     # changesets `baseBranch: main` compares against a **local** `main` ref.
     - name: sync local main ref for changesets
-      if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
       shell: bash
-      run: git fetch origin main:main
+      run: node scripts/ci/sync-changeset-base.mjs
 
     - name: install dependencies
       shell: bash

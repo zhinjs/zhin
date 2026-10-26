@@ -221,12 +221,9 @@ jobs:
       - name: restore pnpm store
         uses: ./.github/actions/restore-pnpm-store
 
-      # changesets `baseBranch: main` compares against a **local** `main` ref; PR and merge
-      # queue checkouts only have `origin/main`, which makes `pnpm changeset status` and
-      # `check:release-plan` fail.
+      # Match prepare-workspace: Changesets requires local main on branch and detached checkouts.
       - name: sync local main ref for changesets
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        run: git fetch origin main:main
+        run: node scripts/ci/sync-changeset-base.mjs
 
       # Existing package credential for cross-organization @icqqjs dependencies.
       # Only this script-free install receives the existing PERSONAL_TOKEN credential.
