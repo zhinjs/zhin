@@ -1,0 +1,35 @@
+package.json
+  s_079f1dc5e6308d::t_b5ba0d647dac75 190-191,193,197,208-209,214-220
+packages/host/mcp/package.json
+  s_079f1dc5e6308d::t_1962a6d217f52a 47
+packages/im/agent/package.json
+  s_079f1dc5e6308d::t_3402eca554c0de 142
+packages/im/ai/package.json
+  s_079f1dc5e6308d::t_121216caa3e75a 60
+plugins/adapters/discord/package.json
+  s_079f1dc5e6308d::t_b36efff72d776b 56
+plugins/adapters/lark/package.json
+  s_079f1dc5e6308d::t_2834aa622ee9f8 45
+plugins/adapters/wechat-mp/package.json
+  s_079f1dc5e6308d::t_8f0f45772fa912 23
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_c87b35b07bd406 8-9,11,15,26-27,32-38,376-377,935-936,1225-1226,1327-1328,1370-1371,2231-2232,2506-2507,3117-3118,4785,5024-5025,6589,6758-6759,6898-6901,7510-7511,7645-7646,7770-7771,8531-8532,9074-9075,9078-9079,9082-9083,9476,9485,9494,9833,10097,10099,10131,10380,10382-10384,10392,11467,12152,12154,12219,12247,12250,12362-12363,12675,12936,12943,12961,13053,13190,13330,13789,14072,14723,14725,14727
+pnpm-workspace.yaml
+  s_079f1dc5e6308d::t_2b7b93682ec2d6 31,40,42,53,57-59,64-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dcd49823e6c0de343462f5b101b0aea393205640",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
