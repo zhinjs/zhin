@@ -38,6 +38,7 @@ export interface ConsoleRpcConfigurationPort {
     expectedRevision: string,
   ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
   setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  patch(request: import('@zhin.js/console-protocol').ConsoleConfigPatchRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigPatchResult>;
   removeKey(pluginName: string): Promise<{ restartRequired: boolean }>;
   readEnvironmentFile(filename: string): Promise<string>;
   writeEnvironmentFile(filename: string, content: string): Promise<void>;
