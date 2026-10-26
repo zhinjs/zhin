@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
+import { TokenRegistry } from '@zhin.js/host-http';
 import {
   createConsoleHostModules,
   registerConsoleHttp,
@@ -63,7 +64,7 @@ describe('Console topology Host endpoint', () => {
         operation({ topology: () => topology }),
     } as unknown as ConsoleRuntime;
     registerConsoleHttp({
-      http: { route } as never,
+      http: { route, tokenRegistry: new TokenRegistry() } as never,
       console: consoleRuntime,
       clientOutDir: '/tmp/client',
       projectRoot: '/tmp/project',

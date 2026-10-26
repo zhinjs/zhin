@@ -13,7 +13,7 @@ import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
  * navigations). Routes outside the API base are public, so a missing token means public access.
  */
 export function requestConsoleAccess(http: HttpHost, request: IncomingMessage, url?: URL): ConsoleAccess {
-  const header = request.headers.authorization;
+  const header = request.headers?.authorization;
   const token = extractBearerToken(Array.isArray(header) ? header[0] : header, url?.searchParams.get('token') ?? null);
   return http.tokenRegistry.resolveAccess(token);
 }

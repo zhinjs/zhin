@@ -21,6 +21,7 @@ import { requestConsoleAccess } from './entry-projection.js';
 import type { ConsoleAccess } from '@zhin.js/host-http';
 
 const clientPublicBase = '/assets/client';
+const noStore = Object.freeze({ 'cache-control': 'no-store' });
 
 export interface ConsoleHostModules {
   readonly modules: ModuleRuntime;
@@ -66,12 +67,11 @@ export function registerConsoleHttp(options: {
     await serveClientAsset(options.clientOutDir, clientPublicBase, url.pathname, response);
   });
   http.route('GET', '/console/api/pages', async (request, response, url) => {
-    response.setHeader('cache-control', 'no-store');
-    writeJson(response, 200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, url)) });
+    // The list depends on the caller's token, so it must never be cached or shared.
+    writeJson(response, 200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, url)) }, noStore);
   });
   http.route('GET', '/console/api/topology', async (request, response, url) => {
     try {
-      response.setHeader('cache-control', 'no-store');
       const topology = await options.console.runView(requestConsoleAccess(http, request, url), (catalog) => {
         const topology = catalog.topology();
         const route = url.searchParams.get('route') ?? undefined;
@@ -82,7 +82,7 @@ export function registerConsoleHttp(options: {
           ...(route === undefined ? {} : { route, resolution: topology.resolve(route) }),
         });
       });
-      writeJson(response, 200, topology);
+      writeJson(response, 200, topology, noStore);
     } catch {
       response.writeHead(503);
       response.end('ConsoleRuntime is not ready');
