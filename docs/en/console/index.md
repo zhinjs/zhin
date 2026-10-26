@@ -149,6 +149,29 @@ Plugins can contribute their own pages to the Console. The mechanism has three s
 
 Page directory changes are pushed in real-time to connected UIs via SSE `sync` events.
 
+## Users and permissions
+
+Each extra token is one Console user. Give it `permissions` and `roles`, and the Console shows it only the pages whose requirements those meet. Plugin page status endpoints follow the same rules:
+
+```yaml
+http:
+  token: ${HTTP_TOKEN}            # Admin: full, can see and change everything
+  tokens:
+    - token: ${ALICE_TOKEN}
+      scope: demo                 # Ordinary user: read-only, can't change config
+      principalId: alice
+      permissions: [ambient:read] # matched against a page's requiredPermissions
+      roles: [member]             # matched against a page's requiredRoles
+```
+
+- **Full tokens**, including the primary `token`, see every page. `permissions` and `roles` don't affect them.
+- **Other tokens** see only pages whose `requiredPermissions` and `requiredRoles` their `permissions` and `roles` meet. The demo read-only limits still apply: they can't change config or run plugin actions.
+- **Without a token**, only pages with no requirements show.
+- **With no tokens configured** (local development), everyone counts as the admin, as before.
+- The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered by token and never cached.
+
+Pages choose their own permission and role names, such as `ambient:read`.
+
 ## Demo Scope (Read-Only Deployment)
 
 Issue a `scope: demo` token for demonstrations. Demo exposes only server-authorized, redacted data; a client-side mask is never a secret boundary.

@@ -152,6 +152,29 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 页面目录变化通过 SSE `sync` 事件实时推给已连接的 UI。
 
+## 用户与权限
+
+每个附加令牌就是一个 Console 用户。给它配上 `permissions` 和 `roles`，Console 就只给它看满足要求的页面，插件页面的状态接口也按同样的规则放行：
+
+```yaml
+http:
+  token: ${HTTP_TOKEN}            # 管理员：full，能看和改全部内容
+  tokens:
+    - token: ${ALICE_TOKEN}
+      scope: demo                 # 普通用户：只读，不能改配置
+      principalId: alice
+      permissions: [ambient:read] # 对应页面的 requiredPermissions
+      roles: [member]             # 对应页面的 requiredRoles
+```
+
+- **full 令牌**（包括主 `token`）能看到全部页面，`permissions` 和 `roles` 对它不起作用。
+- **其他令牌**只能看到 `permissions` 和 `roles` 满足 `requiredPermissions` 和 `requiredRoles` 的页面。它仍然受 demo 的只读限制：不能改配置、不能执行插件动作。
+- **不带令牌**只能看到没有任何要求的页面。
+- **没有配置任何令牌**时（本地开发），所有人都等同于管理员，和以前一样。
+- 页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）都按令牌过滤，且不会被缓存。
+
+权限名和角色名由页面自己约定，比如 `ambient:read`。
+
 ## Demo scope（只读部署）
 
 给演示环境签发 `scope: demo` token，Console 会进入只读模式。Demo 只展示服务端允许的脱敏数据，不能把前端遮罩当成秘密边界。

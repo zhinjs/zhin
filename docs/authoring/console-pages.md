@@ -42,8 +42,10 @@ export default function MyPluginPage() {
 | `icon` | 无 | lucide 风格的图标名，如 `'Box'`、`'Workflow'` |
 | `order` | `100` | 导航排序，越小越靠前 |
 | `hideInNav` | `false` | 不在导航中显示 |
-| `requiredPermissions` | `[]` | 访问所需权限 |
-| `requiredRoles` | `[]` | 访问所需角色 |
+| `requiredPermissions` | `[]` | 访问所需权限，对应令牌的 `permissions` |
+| `requiredRoles` | `[]` | 访问所需角色，对应令牌的 `roles` |
+
+导航和页面清单按调用者的令牌过滤：full 令牌能看到全部页面；其他令牌只能看到它的 `permissions` 和 `roles` 满足要求的页面；不带令牌只能看到没有要求的页面。令牌怎么配置见 [Console 的用户与权限](../console/index.md#用户与权限)。
 
 ## 页面的地址
 
@@ -152,8 +154,9 @@ await pluginRpc('root/ambient', 'clear-cooldown', { group: '123' });
 访问规则：
 
 - **跟随页面**：写了 `page` 时，调用者必须满足这个页面的 `requiredPermissions` 和 `requiredRoles`，方法自己声明的要求会叠加上去。页面在当前代没有加载时直接拒绝。
-- **动作**只允许 full scope 令牌调用。
-- **demo 令牌**默认不能调用。只有 `status` 写了 `demo: true`，并且页面和方法都没有权限要求时，demo 令牌才能读取。
+- **full 令牌**可以调用全部方法。
+- **其他令牌**可以读取 `status`，前提是它持有全部要求的权限和角色。`status` 完全没有要求时，只有写了 `demo: true` 才对这些令牌开放。
+- **动作**只允许 full 令牌调用。
 
 返回给页面的内容会被普通用户看到，所以：
 
