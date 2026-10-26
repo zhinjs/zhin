@@ -56,6 +56,18 @@ describe('Console Runtime', () => {
     );
   });
 
+  it('shows every page to the unrestricted operator and only permitted pages to others', async () => {
+    const store = new SnapshotStore(state());
+    const runtime = new ConsoleRuntime();
+    runtime.attach(store);
+    const names = (access: { permissions: string[]; roles: string[]; unrestricted?: boolean }) =>
+      runtime.runView(access, (catalog) => catalog.pages().map((page) => page.localName));
+    expect(await names({ permissions: [], roles: [], unrestricted: true })).toContain('secret');
+    expect(await names({ permissions: [], roles: [] })).not.toContain('secret');
+    expect(await names({ permissions: [], roles: [] })).not.toContain('status');
+    expect(await names({ permissions: ['status:read'], roles: [] })).toContain('status');
+  });
+
   it('lists every page of one owner for authorization, including pages the viewer cannot open', async () => {
     const store = new SnapshotStore(state());
     const runtime = new ConsoleRuntime();

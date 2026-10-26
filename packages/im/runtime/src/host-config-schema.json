@@ -132,6 +132,26 @@
                   "null"
                 ],
                 "description": "稳定管理主体身份。"
+              },
+              "permissions": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Console 权限，对应页面的 requiredPermissions；full 令牌忽略此项。"
+              },
+              "roles": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Console 角色，对应页面的 requiredRoles；full 令牌忽略此项。"
               }
             }
           }

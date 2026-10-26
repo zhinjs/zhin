@@ -12,9 +12,15 @@ export function parseBoundedInteger(
   return Math.min(maximum, Math.max(minimum, parsed));
 }
 
-export function writeJson(response: ServerResponse, status: number, body: unknown): void {
+export function writeJson(
+  response: ServerResponse,
+  status: number,
+  body: unknown,
+  headers: Readonly<Record<string, string>> = {},
+): void {
   const payload = JSON.stringify(body);
   response.writeHead(status, {
+    ...headers,
     'content-type': 'application/json; charset=utf-8',
     'content-length': Buffer.byteLength(payload),
   });

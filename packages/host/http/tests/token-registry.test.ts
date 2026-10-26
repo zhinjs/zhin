@@ -58,3 +58,41 @@ describe('TokenRegistry principal binding', () => {
     expect(registry.resolve('configured-secret')).toBe('full');
   });
 });
+
+describe('TokenRegistry Console access', () => {
+  it('treats a Host without tokens and full-scope tokens as the unrestricted operator', () => {
+    expect(new TokenRegistry().resolveAccess('').unrestricted).toBe(true);
+    const registry = new TokenRegistry({ primaryToken: 'admin-secret' });
+    expect(registry.resolveAccess('admin-secret').unrestricted).toBe(true);
+  });
+
+  it('gives scoped tokens exactly their configured permissions and roles', () => {
+    const registry = new TokenRegistry({
+      primaryToken: 'admin-secret',
+      scopedTokens: [{ token: 'alice-secret', scope: 'demo', principalId: 'alice', permissions: ['ambient:read', 'ambient:read'], roles: ['member'] }],
+    });
+    expect(registry.resolveAccess('alice-secret')).toEqual({ unrestricted: false, permissions: ['ambient:read'], roles: ['member'] });
+    expect(registry.resolve('alice-secret')).toBe('demo');
+  });
+
+  it('gives missing, unknown and expired tokens public access only', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-26T08:00:00Z'));
+    const registry = new TokenRegistry({ primaryToken: 'admin-secret' });
+    registry.register({ token: 'short-lived', scope: 'demo', permissions: ['a'], expiresAt: Date.now() + 1000 });
+    expect(registry.resolveAccess('short-lived').permissions).toEqual(['a']);
+    vi.advanceTimersByTime(2000);
+    for (const token of ['', 'nope', 'short-lived']) {
+      expect(registry.resolveAccess(token)).toEqual({ unrestricted: false, permissions: [], roles: [] });
+    }
+    vi.useRealTimers();
+  });
+
+  it('rejects malformed access lists and conflicting duplicate bindings', () => {
+    expect(() => new TokenRegistry({ scopedTokens: [{ token: 't', scope: 'demo', permissions: [' a '] }] })).toThrow(/permissions/u);
+    expect(() => new TokenRegistry({ scopedTokens: [
+      { token: 't', scope: 'demo', roles: ['a'] },
+      { token: 't', scope: 'demo', roles: ['b'] },
+    ] })).toThrow(/conflicting/u);
+  });
+});

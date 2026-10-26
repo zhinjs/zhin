@@ -42,8 +42,10 @@ Every `meta` field is optional; `definePage` throws on unknown keys:
 | `icon` | none | A lucide-style icon name, e.g. `'Box'`, `'Workflow'` |
 | `order` | `100` | Navigation order; lower comes first |
 | `hideInNav` | `false` | Hide from navigation |
-| `requiredPermissions` | `[]` | Permissions required to access |
-| `requiredRoles` | `[]` | Roles required to access |
+| `requiredPermissions` | `[]` | Permissions required to access, matched against the token's `permissions` |
+| `requiredRoles` | `[]` | Roles required to access, matched against the token's `roles` |
+
+Navigation and the page list are filtered by the caller's token. The full token sees every page. Any other token sees only pages whose requirements its `permissions` and `roles` meet. Without a token, only pages with no requirements show. For token setup, see [Console users and permissions](../console/index.md#users-and-permissions).
 
 ## Page addresses
 
@@ -152,8 +154,9 @@ Requests go through the existing `POST /api/console/request`, with the type `plu
 Access rules:
 
 - **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
-- **Actions** need the full-scope token.
-- **The demo token** is refused by default. It can read `status` only when `status` sets `demo: true` and neither the page nor the method has any requirements.
+- **The full token** can call every method.
+- **Any other token** can read `status` if it holds every required permission and role. A `status` with no requirements at all is open to these tokens only when it sets `demo: true`.
+- **Actions** need the full token.
 
 Ordinary users see what you return, so:
 

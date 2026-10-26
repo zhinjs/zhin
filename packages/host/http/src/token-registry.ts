@@ -8,7 +8,36 @@ export type ScopedTokenConfig = {
   readonly scope: AuthScope;
   /** Root-configured subject binding; never accepted from an HTTP payload. */
   readonly principalId?: string;
+  /**
+   * Console permissions held by this token (matched against Page `requiredPermissions`).
+   * Ignored for `full` scope, which already holds every Console permission.
+   */
+  readonly permissions?: readonly string[];
+  /** Console roles held by this token (matched against Page `requiredRoles`). */
+  readonly roles?: readonly string[];
 };
+
+/**
+ * What a Console caller may see. `unrestricted` is the operator (full scope, or a Host with no
+ * tokens configured); otherwise only the listed permissions and roles count.
+ */
+export interface ConsoleAccess {
+  readonly unrestricted: boolean;
+  readonly permissions: readonly string[];
+  readonly roles: readonly string[];
+}
+
+export const publicConsoleAccess: ConsoleAccess = Object.freeze({
+  unrestricted: false,
+  permissions: Object.freeze([]) as readonly string[],
+  roles: Object.freeze([]) as readonly string[],
+});
+
+export const unrestrictedConsoleAccess: ConsoleAccess = Object.freeze({
+  unrestricted: true,
+  permissions: Object.freeze([]) as readonly string[],
+  roles: Object.freeze([]) as readonly string[],
+});
 
 export interface AuthenticatedTokenPrincipal {
   readonly principalId: string;
@@ -28,6 +57,8 @@ export type DynamicTokenConfig = ScopedTokenConfig & {
 type TokenBinding = Readonly<{
   scope: AuthScope;
   principalId?: string;
+  permissions: readonly string[];
+  roles: readonly string[];
   expiresAt?: number;
   dynamic: boolean;
 }>;
@@ -37,20 +68,24 @@ export class TokenRegistry {
 
   constructor(config: TokenRegistryConfig = {}) {
     if (config.primaryToken) {
-      this.#entries.set(config.primaryToken, Object.freeze({ scope: 'full', dynamic: false }));
+      this.#entries.set(config.primaryToken, Object.freeze({ scope: 'full', permissions: [], roles: [], dynamic: false }));
     }
-    for (const { token, scope, principalId } of config.scopedTokens ?? []) {
+    for (const { token, scope, principalId, permissions, roles } of config.scopedTokens ?? []) {
       if (!token) continue;
       if (principalId !== undefined && (!principalId.trim() || principalId !== principalId.trim())) {
         throw new Error('HTTP token principalId is invalid');
       }
-      const candidate = Object.freeze({
+      const candidate: TokenBinding = Object.freeze({
         scope,
         ...(principalId === undefined ? {} : { principalId }),
+        permissions: accessList(permissions, 'permissions'),
+        roles: accessList(roles, 'roles'),
         dynamic: false,
       });
       const existing = this.#entries.get(token);
-      if (existing && (existing.scope !== candidate.scope || existing.principalId !== candidate.principalId)) {
+      if (existing && (existing.scope !== candidate.scope || existing.principalId !== candidate.principalId
+        || existing.permissions.join('\n') !== candidate.permissions.join('\n')
+        || existing.roles.join('\n') !== candidate.roles.join('\n'))) {
         throw new Error('HTTP token has conflicting authority bindings');
       }
       this.#entries.set(token, candidate);
@@ -80,6 +115,22 @@ export class TokenRegistry {
     return null;
   }
 
+  /**
+   * Console access for a bearer token. With no tokens configured the Host is local and open,
+   * so every caller is the operator. An unknown or missing token gets public access only.
+   */
+  resolveAccess(token: string): ConsoleAccess {
+    if (!this.hasAnyToken()) return unrestrictedConsoleAccess;
+    if (!token) return publicConsoleAccess;
+    for (const [known, binding] of this.#entries) {
+      if (!timingSafeEqualString(known, token)) continue;
+      if (this.#expired(known, binding)) return publicConsoleAccess;
+      if (binding.scope === 'full') return unrestrictedConsoleAccess;
+      return Object.freeze({ unrestricted: false, permissions: binding.permissions, roles: binding.roles });
+    }
+    return publicConsoleAccess;
+  }
+
   hasAnyToken(): boolean {
     for (const [token, binding] of this.#entries) {
       if (!this.#expired(token, binding)) return true;
@@ -101,6 +152,8 @@ export class TokenRegistry {
     const candidate: TokenBinding = Object.freeze({
       scope: config.scope,
       ...(config.principalId === undefined ? {} : { principalId: config.principalId }),
+      permissions: accessList(config.permissions, 'permissions'),
+      roles: accessList(config.roles, 'roles'),
       ...(config.expiresAt === undefined ? {} : { expiresAt: config.expiresAt }),
       dynamic: true,
     });
@@ -133,6 +186,14 @@ export class TokenRegistry {
     if (binding.dynamic) this.#entries.delete(token);
     return true;
   }
+}
+
+function accessList(value: readonly string[] | undefined, label: string): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string' && item.length > 0 && item.trim() === item)) {
+    throw new Error(`HTTP token ${label} must be non-empty trimmed strings`);
+  }
+  return Object.freeze([...new Set(value)].sort());
 }
 
 /** WebSocket upgrade paths allowed for demo scope. */

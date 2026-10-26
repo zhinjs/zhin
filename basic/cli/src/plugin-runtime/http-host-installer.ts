@@ -211,9 +211,27 @@ function parseScopedTokens(value: unknown): readonly ScopedTokenConfig[] | undef
       && record.principalId.length > 0
       ? record.principalId
       : undefined;
-    tokens.push(Object.freeze({ token: record.token, scope, ...(principalId ? { principalId } : {}) }));
+    const permissions = parseAccessList(record.permissions);
+    const roles = parseAccessList(record.roles);
+    tokens.push(Object.freeze({
+      token: record.token,
+      scope,
+      ...(principalId ? { principalId } : {}),
+      ...(permissions ? { permissions } : {}),
+      ...(roles ? { roles } : {}),
+    }));
   }
   return tokens.length > 0 ? Object.freeze(tokens) : undefined;
+}
+
+/** Console permissions / roles of a scoped token; blank or non-string entries are dropped. */
+function parseAccessList(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  return result.length > 0 ? Object.freeze([...new Set(result)]) : undefined;
 }
 
 function parseStringList(value: unknown): readonly string[] | undefined {

@@ -1,5 +1,6 @@
 import { DEFAULT_CONSOLE_BASE_PATH, type ConsoleClientEntry, type ConsoleEntriesResponse, type ConsolePluginRegister, type PluginRegisterHostApi } from '@zhin.js/contract';
 import type * as React from 'react';
+import { getToken } from '../console-utils/remoteApi.js';
 
 export type FetchConsoleEntriesOptions = {
   entriesUrl?: string;
@@ -51,6 +52,19 @@ function resolveFetchInit(init?: RequestInit | (() => RequestInit)): RequestInit
   return typeof init === "function" ? init() : (init ?? {});
 }
 
+/**
+ * The page list is filtered by the caller's token, so send the Console token unless the caller
+ * already set its own Authorization header.
+ */
+function withConsoleToken(headers: HeadersInit | undefined): Headers {
+  const result = new Headers(headers);
+  if (!result.has("Authorization")) {
+    const token = typeof window === "undefined" ? null : getToken();
+    if (token) result.set("Authorization", `Bearer ${token}`);
+  }
+  return result;
+}
+
 export async function fetchConsoleEntries(
   options?: FetchConsoleEntriesOptions,
 ): Promise<ConsoleEntriesResponse> {
@@ -59,6 +73,7 @@ export async function fetchConsoleEntries(
   const init = resolveFetchInit(options?.fetchInit);
   const res = await fetch(url, {
     ...init,
+    headers: withConsoleToken(init.headers),
     signal: options?.signal ?? init.signal,
   } as RequestInit);
   if (!res.ok) throw Object.assign(new Error(`load entries failed: ${res.status}`), { status: res.status });

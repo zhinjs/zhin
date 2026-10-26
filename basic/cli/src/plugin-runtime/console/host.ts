@@ -17,9 +17,11 @@ import { serveCanonicalEsm, serveClientAsset } from './asset-server.js';
 import { writeHtml, writeJson } from './http-response.js';
 import { renderConsoleIndex, renderPageShell } from './page-renderer.js';
 import { createTsxModuleLoader } from '../start/tsx-module-loader.js';
+import { requestConsoleAccess } from './entry-projection.js';
+import type { ConsoleAccess } from '@zhin.js/host-http';
 
-const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
 const clientPublicBase = '/assets/client';
+const noStore = Object.freeze({ 'cache-control': 'no-store' });
 
 export interface ConsoleHostModules {
   readonly modules: ModuleRuntime;
@@ -64,12 +66,13 @@ export function registerConsoleHttp(options: {
   http.route('GET', `${clientPublicBase}/*`, async (_request, response, url) => {
     await serveClientAsset(options.clientOutDir, clientPublicBase, url.pathname, response);
   });
-  http.route('GET', '/console/api/pages', async (_request, response) => {
-    writeJson(response, 200, { pages: await readConsolePages(options.console) });
+  http.route('GET', '/console/api/pages', async (request, response, url) => {
+    // The list depends on the caller's token, so it must never be cached or shared.
+    writeJson(response, 200, { pages: await readConsolePages(options.console, requestConsoleAccess(http, request, url)) }, noStore);
   });
-  http.route('GET', '/console/api/topology', async (_request, response, url) => {
+  http.route('GET', '/console/api/topology', async (request, response, url) => {
     try {
-      const topology = await options.console.runView(publicAccess, (catalog) => {
+      const topology = await options.console.runView(requestConsoleAccess(http, request, url), (catalog) => {
         const topology = catalog.topology();
         const route = url.searchParams.get('route') ?? undefined;
         return Object.freeze({
@@ -79,18 +82,18 @@ export function registerConsoleHttp(options: {
           ...(route === undefined ? {} : { route, resolution: topology.resolve(route) }),
         });
       });
-      writeJson(response, 200, topology);
+      writeJson(response, 200, topology, noStore);
     } catch {
       response.writeHead(503);
       response.end('ConsoleRuntime is not ready');
     }
   });
-  http.route('GET', '/console', async (_request, response) => {
-    writeHtml(response, renderConsoleIndex(await readConsolePages(options.console)));
+  http.route('GET', '/console', async (request, response, url) => {
+    writeHtml(response, renderConsoleIndex(await readConsolePages(options.console, requestConsoleAccess(http, request, url))));
   });
   // Catch-all page routes must be registered last among exact/prefix peers;
   // matchHttpRoute prefers longest prefix, exact page routes win over shorter prefixes.
-  http.route('GET', '/*', async (_request, response, url) => {
+  http.route('GET', '/*', async (request, response, url) => {
     if (url.pathname === '/console' || url.pathname.startsWith('/console/')
       || url.pathname.startsWith(`${clientPublicBase}/`)
       || url.pathname.startsWith('/esm/')) {
@@ -99,7 +102,7 @@ export function registerConsoleHttp(options: {
       return;
     }
     try {
-      const topology = await options.console.runView(publicAccess, (catalog) => catalog.topology());
+      const topology = await options.console.runView(requestConsoleAccess(http, request, url), (catalog) => catalog.topology());
       const match = topology.resolve(url.pathname);
       if (match.status === 'missing') {
         response.writeHead(404);
@@ -126,9 +129,9 @@ export function installConsoleRuntime(consoleRuntime: ConsoleRuntime): RootResou
   };
 }
 
-async function readConsolePages(consoleRuntime: ConsoleRuntime) {
+async function readConsolePages(consoleRuntime: ConsoleRuntime, access: ConsoleAccess) {
   try {
-    return await consoleRuntime.runView(publicAccess, (catalog) => catalog.pages());
+    return await consoleRuntime.runView(access, (catalog) => catalog.pages());
   } catch {
     return Object.freeze([]);
   }

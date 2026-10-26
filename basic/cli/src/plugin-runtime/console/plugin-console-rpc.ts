@@ -1,4 +1,4 @@
-import type { AuthScope } from '@zhin.js/host-http';
+import type { ConsoleAccess } from '@zhin.js/host-http';
 import { parsePluginConsoleRpcType } from '@zhin.js/console-protocol';
 import { ConsoleCatalog } from '@zhin.js/pagemanager/plugin-runtime';
 import {
@@ -31,7 +31,8 @@ const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as s
 
 export interface PluginConsoleRpcRequestOptions {
   readonly snapshots?: SnapshotReader;
-  readonly authScope: AuthScope;
+  /** Caller access from its bearer token (`TokenRegistry.resolveAccess`). */
+  readonly access: ConsoleAccess;
   readonly timeoutMs?: number;
   /** @internal Test seam; defaults to the generation's Console Page catalog. */
   readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
@@ -71,7 +72,7 @@ export async function dispatchPluginConsoleRpcRequest(
     const provider = ownProvider(snapshot, pluginId);
     const method = provider?.methods.get(address.method);
     if (!provider || !method) throw new Failure('not_found', '插件未提供该操作');
-    authorize(snapshot, pluginId, address.method, method, options.authScope, options.pagesOwnedBy ?? catalogPagesOwnedBy);
+    authorize(snapshot, pluginId, address.method, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
     releases.push(...admit(provider));
     const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS);
     return { status: 200, body: { success: true, data: output, ...(requestId === undefined ? {} : { requestId }) } };
@@ -88,17 +89,18 @@ export async function dispatchPluginConsoleRpcRequest(
 }
 
 /**
- * The Console currently has two principals: the full-scope operator token, which already holds
- * every Console permission, and the demo token, which holds none. A method's requirements are its
- * Page's `requiredPermissions` / `requiredRoles` plus its own; demo callers pass only when that
- * set is empty, the method is `status`, and the plugin opted in with `demo: true`.
+ * A method's requirements are its Page's `requiredPermissions` / `requiredRoles` plus its own.
+ * - The operator (full scope, or a Host without tokens) passes everything.
+ * - Any other token may read `status` when it holds every required permission and role. A
+ *   `status` with no requirements at all is open to such tokens only with `demo: true`.
+ * - Actions stay operator-only.
  */
 function authorize(
   snapshot: RuntimeSnapshot,
   pluginId: PluginId,
   name: string,
   method: NormalizedPluginConsoleRpcMethod,
-  scope: AuthScope,
+  access: ConsoleAccess,
   pagesOwnedBy: NonNullable<PluginConsoleRpcRequestOptions['pagesOwnedBy']>,
 ): void {
   const permissions = new Set(method.requiredPermissions);
@@ -110,11 +112,14 @@ function authorize(
     page.requiredPermissions.forEach((permission) => permissions.add(permission));
     page.requiredRoles.forEach((role) => roles.add(role));
   }
-  if (scope === 'full') return;
-  const readOnly = name === PLUGIN_CONSOLE_RPC_STATUS;
-  if (!readOnly || !method.demo || permissions.size > 0 || roles.size > 0) {
-    throw new Failure('forbidden', '需要管理员令牌');
-  }
+  if (access.unrestricted) return;
+  if (name !== PLUGIN_CONSOLE_RPC_STATUS) throw new Failure('forbidden', '需要管理员令牌');
+  const held = new Set(access.permissions);
+  const heldRoles = new Set(access.roles);
+  const satisfied = [...permissions].every((permission) => held.has(permission))
+    && [...roles].every((role) => heldRoles.has(role));
+  const guarded = permissions.size > 0 || roles.size > 0;
+  if (!satisfied || (!guarded && !method.demo)) throw new Failure('forbidden', '没有查看权限');
 }
 
 function acquire(snapshots?: SnapshotReader): SnapshotLease {

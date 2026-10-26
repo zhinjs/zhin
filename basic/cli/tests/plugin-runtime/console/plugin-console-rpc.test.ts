@@ -3,7 +3,12 @@ import {
   PluginConsoleRpcError, SnapshotStore, childPluginId, definePluginConsoleRpc, pluginConsoleRpcToken, rootPluginId,
   type PluginConsoleRpcDefinition, type SnapshotState,
 } from '@zhin.js/plugin-runtime';
+import { publicConsoleAccess, unrestrictedConsoleAccess, type ConsoleAccess } from '@zhin.js/host-http';
 import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/console/plugin-console-rpc.js';
+
+const scoped = (permissions: string[] = [], roles: string[] = []): ConsoleAccess => ({ unrestricted: false, permissions, roles });
+const accessFor = (scope: 'full' | 'demo' | ConsoleAccess): ConsoleAccess =>
+  scope === 'full' ? unrestrictedConsoleAccess : scope === 'demo' ? publicConsoleAccess : scope;
 
 const stores: SnapshotStore[] = [];
 afterEach(async () => { for (const store of stores.splice(0)) await store.close(); });
@@ -30,9 +35,9 @@ function setup(definition: PluginConsoleRpcDefinition, pages: readonly PageStub[
   };
   const store = new SnapshotStore(state); stores.push(store);
   const pagesOwnedBy = vi.fn((_snapshot: unknown, id: string) => (id === owner ? pages : []) as never);
-  const call = (type: string, data?: unknown, authScope: 'full' | 'demo' = 'full', timeoutMs?: number) =>
+  const call = (type: string, data?: unknown, scope: 'full' | 'demo' | ConsoleAccess = 'full', timeoutMs?: number) =>
     dispatchPluginConsoleRpcRequest({ type, requestId: 7, ...(data === undefined ? {} : { data }) },
-      { snapshots: store, authScope, pagesOwnedBy, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+      { snapshots: store, access: accessFor(scope), pagesOwnedBy, ...(timeoutMs === undefined ? {} : { timeoutMs }) });
   return { call, pagesOwnedBy };
 }
 
@@ -110,6 +115,22 @@ it('bounds output size so status cannot become a log dump', async () => {
 });
 
 it('reports an unavailable runtime instead of throwing', async () => {
-  expect(await dispatchPluginConsoleRpcRequest({ type: 'plugin.root.status' }, { authScope: 'full' }))
+  expect(await dispatchPluginConsoleRpcRequest({ type: 'plugin.root.status' }, { access: unrestrictedConsoleAccess }))
     .toMatchObject({ status: 503, body: { code: 'unavailable' } });
+});
+
+it('lets a scoped token read status when it holds the page permissions and roles', async () => {
+  const guarded = setup({ status: status({ page: 'ambient' }), actions: { reset: { page: 'ambient', handler: async () => null } } },
+    [{ localName: 'ambient', requiredPermissions: ['ambient:read'], requiredRoles: ['member'] }]);
+  expect((await guarded.call('plugin.root/ambient.status', undefined, scoped(['ambient:read'], ['member'])))?.status).toBe(200);
+  expect((await guarded.call('plugin.root/ambient.status', undefined, scoped(['ambient:read'])))?.status).toBe(403);
+  expect((await guarded.call('plugin.root/ambient.status', undefined, scoped([], ['member'])))?.status).toBe(403);
+  // Actions stay operator-only even when the token holds the page requirements.
+  expect((await guarded.call('plugin.root/ambient.reset', {}, scoped(['ambient:read'], ['member'])))?.status).toBe(403);
+  expect((await guarded.call('plugin.root/ambient.reset', {}, 'full'))?.status).toBe(200);
+});
+
+it('keeps an unguarded status closed to scoped tokens unless the plugin opts in', async () => {
+  expect((await setup({ status: status() }).call('plugin.root/ambient.status', undefined, scoped(['x'])))?.status).toBe(403);
+  expect((await setup({ status: status({ demo: true }) }).call('plugin.root/ambient.status', undefined, scoped(['x'])))?.status).toBe(200);
 });

@@ -2,7 +2,7 @@ import type { RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import type { ConsoleEventHub, HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { writeJson, writeSse } from './http-response.js';
-import { listPages } from './entry-projection.js';
+import { listPages, requestConsoleAccess } from './entry-projection.js';
 
 export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageEvent): void {
   const localName = String(event.conversation.endpoint.id).split('\0').pop()
@@ -64,7 +64,7 @@ export function registerConsoleEventRoutes(options: RegisterConsoleEventRoutesOp
     // The process control plane is available before the first generation.
     // Page discovery becomes ready after commit, while login events must flow
     // during Adapter activation.
-    const pages = await listPages(consoleRuntime).catch(() => Object.freeze([]));
+    const pages = await listPages(consoleRuntime, requestConsoleAccess(http, request, url)).catch(() => Object.freeze([]));
     const headerLastEventId = Array.isArray(request.headers['last-event-id'])
       ? request.headers['last-event-id'][0]
       : request.headers['last-event-id'];
