@@ -1,0 +1,32 @@
+basic/cli/src/plugin-runtime/agent/assistant-status.ts
+  h_b680f75345178a 1-234
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_b680f75345178a 57-58,227
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 97,131-132,150,225-231,238-239,277,717-732
+basic/cli/src/plugin-runtime/console/api-installer.ts
+  h_b680f75345178a 1,42-43,90
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  h_b680f75345178a 45,120
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  h_b680f75345178a 36-41,77-82,100-101,121
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  h_b680f75345178a 26-27
+basic/cli/src/plugin-runtime/console/rpc-route.ts
+  h_b680f75345178a 37
+basic/cli/src/plugin-runtime/start-command.ts
+  h_b680f75345178a 86,175-176,243,324,485
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  h_b680f75345178a 54-58,68-69,102,104-111,122-127,139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "67a0385d0a283058e53d992893298c79d6f30bcd",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
