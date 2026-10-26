@@ -61,6 +61,12 @@ export function parseVideoRef(value: string | number): BilibiliVideoRef {
   throw new TypeError(`Bilibili video must be a BV id or av number, got "${raw}"`);
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) end -= 1;
+  return value.slice(0, end);
+}
+
 export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedBilibiliConfig {
   const id = typeof config.id === 'string' ? config.id.trim() : '';
   if (!id) throw new TypeError('Bilibili endpoint requires a non-empty id');
@@ -83,7 +89,7 @@ export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedB
     videos: (config.videos ?? []).map(parseVideoRef),
     pollIntervalMs: interval * 1000,
     sendMode,
-    apiBaseUrl: (config.apiBaseUrl?.trim() || 'https://api.bilibili.com').replace(/\/+$/, ''),
+    apiBaseUrl: trimTrailingSlashes(config.apiBaseUrl?.trim() || 'https://api.bilibili.com'),
   };
 }
 

@@ -540,6 +540,31 @@ outline: [2, 3]
 
 以下字段通过 Runtime 的统一读取器从 trusted 插件的 `config: Schema.object(...)` 声明或 `schema.json` 生成；isolated 插件只能使用 `schema.json`。顶层 `<name>` 是默认 instanceKey；`plugins.<name>` 仅保存包引用。
 
+### bilibili
+
+[`plugins/adapters/bilibili/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/bilibili/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `bilibili.apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
+| `bilibili.pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
+| `bilibili.sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发 |
+| `bilibili.videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
+| `bilibili.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `bilibili.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `bilibili.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是 B 站账号） |
+| `bilibili.endpoints[].sessdata` | string | 否 | — | Cookie SESSDATA（以你的账号身份操作；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库） |
+| `bilibili.endpoints[].biliJct` | string | 否 | — | Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入） |
+| `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.endpoints[].pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
+| `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复先进草稿队列等人确认（默认）；off=禁止出站。v1 不提供自动直发 |
+| `bilibili.endpoints[].apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
+| `bilibili.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（B 站 uid） |
+| `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `bilibili.endpoints[].commandPrefix` | string | 否 | — | — |
+
 ### dingtalk
 
 [`plugins/adapters/dingtalk/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/dingtalk/schema.json)

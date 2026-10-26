@@ -227,6 +227,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Satori', link: '/en/adapters/satori' },
       { text: 'Email', link: '/en/adapters/email' },
       { text: 'GitHub', link: '/en/adapters/github' },
+      { text: 'Bilibili Comments', link: '/en/adapters/bilibili' },
     ]),
   ]),
   sidebarGroup('AI (Optional)', [
