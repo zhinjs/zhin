@@ -54,6 +54,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { observeAgentTurnTrace } from '../runtime-factory.js';
 import type { AgentRuntimeFoundation } from '../runtime-foundation.js';
+import type { ImToolApprovalChannel } from '../tool-approval-im-channel.js';
 import {
   completedOutput,
   flattenOutputElements,
@@ -157,6 +158,8 @@ export interface AgentTurnIngressRouteOptions {
   readonly assistantStatus?: AssistantStatus;
   /** Detached task runner (#732); a snapshot-provided `detachedTaskRunnerToken` wins. */
   readonly detachedTasks?: DetachedTaskRunner;
+  /** Hard-gate IM approval channel (G6, #1013): settles `approve <id>` / `deny <id>` for approval cards. */
+  readonly toolApprovalIm?: ImToolApprovalChannel;
 }
 
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
@@ -469,6 +472,22 @@ export class AgentTurnIngressRoute implements IngressRoute {
       if (managementReply != null) {
         await reply(managementReply);
         logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
+        return true;
+      }
+
+      // G6 (#1013): hard-gate cards (`approve tap_…` / `deny tap_…`) before the owner `/approve` commands.
+      const toolApprovalReply = !workroomAgentTurn && turnAccess.origin.kind === 'im'
+        ? options.toolApprovalIm?.handleCommand({
+            platform: turnAccess.origin.platform,
+            scope: turnAccess.origin.scope,
+            sceneId: turnAccess.origin.sceneId,
+            senderId: turnAccess.principal.subjectId,
+            commandText: managementCommandText(message.content, message.commandPrefix),
+          }) ?? null
+        : null;
+      if (toolApprovalReply != null) {
+        await reply(toolApprovalReply);
+        logger.info(formatCompact({ op: 'agent_host_tool_approval_im', handled: true }));
         return true;
       }
 

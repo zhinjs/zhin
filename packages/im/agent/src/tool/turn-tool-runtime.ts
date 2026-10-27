@@ -28,11 +28,11 @@ import {
   TOOL_HARD_GATE_POLICY,
   ToolHardGate,
   type DecisionAuditSink,
+  type ToolHardGateConfig,
   type ToolHardGateControlSource,
   type ToolHardGateLocation,
-  type ToolHardGateSettings,
 } from '../security/tool-hard-gate.js';
-import type { ToolApprovalQueue } from '../security/tool-approval-queue.js';
+import type { ToolApprovalOrigin, ToolApprovalQueue } from '../security/tool-approval-queue.js';
 
 type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
   type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
@@ -52,7 +52,7 @@ export interface TurnToolRuntimeOptions {
   /** Masks leaks in the text arguments of outbound tools and learns other-session memory reads. */
   readonly leakInspector?: OutboundLeakInspector;
   /** `ai.agent.toolHardGate`; the hard gate itself is always on (ADR 0036). */
-  readonly hardGate?: Partial<ToolHardGateSettings>;
+  readonly hardGate?: ToolHardGateConfig;
   /** Writes `tool_approval` / `tool_hard_gate` rows; failures never affect the decision. */
   readonly decisionAudit?: DecisionAuditSink;
   /** Console approval cards for dangerous calls; absent means IM approval only. */
@@ -88,6 +88,7 @@ export class TurnToolRuntime {
       ...(turn.ports.approval ? { approval: turn.ports.approval } : {}),
       signal: turn.signal,
       location: hardGateLocation(turn),
+      ...hardGateOrigin(turn),
       ...(options.decisionAudit ? { audit: options.decisionAudit } : {}),
       ...(options.approvalQueue ? { queue: options.approvalQueue } : {}),
       ...(options.controlPlane ? { controlPlane: options.controlPlane } : {}),
@@ -261,6 +262,19 @@ export class TurnToolRuntime {
       throw new TurnJournalCommitError(error);
     }
   }
+}
+
+/** IM turns record where the dangerous call came from so the IM approval channel can deliver and guard it. */
+function hardGateOrigin(turn: TurnIngress): { origin?: ToolApprovalOrigin } {
+  if (turn.origin.kind !== 'im' || !turn.origin.endpoint) return {};
+  return {
+    origin: {
+      platform: turn.origin.platform,
+      endpointKey: turn.origin.endpoint,
+      scope: turn.origin.scope,
+      sceneId: turn.origin.sceneId,
+    },
+  };
 }
 
 function hardGateLocation(turn: TurnIngress): ToolHardGateLocation {

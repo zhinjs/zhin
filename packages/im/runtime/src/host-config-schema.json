@@ -1132,6 +1132,56 @@
                   "default": 300000,
                   "description": "How long a dangerous call waits for approval before it is denied (ms).",
                   "x-descriptionZh": "危险调用等待审批的上限（毫秒），超时即拒绝。"
+                },
+                "imApproval": {
+                  "type": "object",
+                  "description": "IM approval channel for the hard gate (#1013). Off by default. When on, each new approval card is also sent to allowlisted approvers, who settle it with `approve <id>` / `deny <id>` in a private chat (or the dedicated approver group). It shares the Console approval queue: whichever answers first wins. Messages in business groups never settle a card; there is no session-wide or permanent approval.",
+                  "x-descriptionZh": "硬闸 IM 审批通道（#1013），默认关闭。开启后每张新审批卡片同时投递给 allowlist 审批人，审批人在私聊（或专用审批群）发送 `approve <id>` / `deny <id>` 结算；与 Console 共用审批队列，先到先得。业务群内的消息不能结算卡片，也没有本会话 / 永久授权。",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Turn the IM approval channel on.",
+                      "x-descriptionZh": "开启 IM 审批通道。"
+                    },
+                    "approverIds": {
+                      "description": "Approver platform user ids: a flat list applies to every platform; an object maps a platform (adapter name) to its user ids. Anyone not listed cannot settle a card over IM.",
+                      "x-descriptionZh": "审批人的平台用户 id：扁平列表对所有平台生效；对象形式为 平台（adapter 名）→ 用户 id 列表。不在名单里的人不能通过 IM 结算卡片。",
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ],
+                      "default": []
+                    },
+                    "delivery": {
+                      "type": "string",
+                      "enum": [
+                        "dm",
+                        "approver_group"
+                      ],
+                      "default": "dm",
+                      "description": "dm sends each card to every approver privately; approver_group posts it to approverGroupId, which must not be the conversation that triggered the call.",
+                      "x-descriptionZh": "dm：私聊发给每位审批人；approver_group：发到 approverGroupId，且不能是触发调用的会话。"
+                    },
+                    "approverGroupId": {
+                      "type": "string",
+                      "description": "Dedicated approver group id, required for delivery: approver_group. Without it the IM channel stays unavailable and only the Console can approve.",
+                      "x-descriptionZh": "专用审批群 id，delivery 为 approver_group 时必填；未配置时 IM 通道不可用，只能在 Console 审批。"
+                    }
+                  }
                 }
               }
             },

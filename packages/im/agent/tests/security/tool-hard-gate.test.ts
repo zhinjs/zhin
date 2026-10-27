@@ -13,7 +13,11 @@ import {
   TOOL_HARD_GATE_POLICY,
   assessToolRisk,
   coreDangerousCategory,
+  imApproversFor,
+  isImApprovalDeliverable,
+  isImApprover,
   resolveToolHardGate,
+  resolveToolHardGateImApproval,
   toolLocalName,
 } from '../../src/security/tool-hard-gate.js';
 import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
@@ -82,7 +86,12 @@ describe('assessToolRisk', () => {
   });
 
   it('defaults: funds disabled, five-minute approval timeout', () => {
-    expect(resolveToolHardGate()).toEqual({ dangerousTools: [], allowFunds: false, approvalTimeoutMs: 300_000 });
+    expect(resolveToolHardGate()).toEqual({
+      dangerousTools: [],
+      allowFunds: false,
+      approvalTimeoutMs: 300_000,
+      imApproval: { enabled: false, approverIds: {}, delivery: 'dm', approverGroupId: null },
+    });
     expect(resolveToolHardGate({ approvalTimeoutMs: -1, allowFunds: true }).approvalTimeoutMs).toBe(300_000);
   });
 });
@@ -259,6 +268,149 @@ describe('TurnToolRuntime hard gate', () => {
   });
 });
 
+describe('TurnToolRuntime hard gate × IM approval channel (G6, #1013)', () => {
+  const imApproval = { enabled: true, approverIds: { icqq: ['admin-1'] } };
+
+  it('records where the call came from on the card so the IM channel can deliver it', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const runtime = new TurnToolRuntime(fixture({ unattended: true }).turn, [tool('group_kick', vi.fn(async () => 'kicked'), 'never')], {
+      approvalQueue: queue,
+      decisionAudit: audit,
+      hardGate: { imApproval },
+    });
+
+    const outcome = await runtime.execute('group_kick', { user_id: 1 }, 'tu-1');
+
+    expect((outcome as { reason: string }).reason).toContain('Console 或 IM 审批通道');
+    expect(queue.list()[0]!.origin).toEqual({ platform: 'icqq', endpointKey: '10001', scope: 'group', sceneId: '42' });
+    expect(audit.records[0]).toMatchObject({ reasonCode: 'tool_approval_requested', payload: expect.objectContaining({ imApproval: true }) });
+  });
+
+  it('keeps the Console-only hint when the IM channel is off', async () => {
+    const queue = new ToolApprovalQueue();
+    const runtime = new TurnToolRuntime(fixture({ unattended: true }).turn, [tool('group_kick', vi.fn(async () => 'kicked'), 'never')], {
+      approvalQueue: queue,
+    });
+    const outcome = await runtime.execute('group_kick', { user_id: 1 }, 'tu-1');
+    expect((outcome as { reason: string }).reason).toContain('需管理员在 Console 批准');
+  });
+
+  it('lets an IM approval settle a call that is waiting, and audits the channel and the approver', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const execute = vi.fn(async () => 'kicked');
+    const runtime = new TurnToolRuntime(fixture({ approval: scriptedPort([]) }).turn, [tool('group_kick', execute, 'never')], {
+      approvalQueue: queue,
+      decisionAudit: audit,
+      hardGate: { imApproval },
+    });
+
+    const pending = runtime.execute('group_kick', { user_id: 1 }, 'tu-1');
+    await vi.waitFor(() => expect(queue.list({ status: 'pending' })).toHaveLength(1));
+    queue.resolve(queue.list({ status: 'pending' })[0]!.id, true, 'im:icqq:admin-1', { channel: 'im_dm' });
+
+    await expect(pending).resolves.toMatchObject({ status: 'completed' });
+    expect(execute).toHaveBeenCalledTimes(1);
+    const approval = audit.records.find((record) => record.kind === 'tool_approval' && record.outcome === 'allow');
+    expect(approval).toMatchObject({
+      actor: 'operator',
+      actorId: 'im:icqq:admin-1',
+      payload: expect.objectContaining({ channel: 'im_dm', via: 'im_dm' }),
+    });
+  });
+
+  it('audits an IM denial with its channel and fails closed', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const execute = vi.fn(async () => 'kicked');
+    const runtime = new TurnToolRuntime(fixture({ approval: scriptedPort([]) }).turn, [tool('group_kick', execute, 'never')], {
+      approvalQueue: queue,
+      decisionAudit: audit,
+      hardGate: { imApproval },
+    });
+
+    const pending = runtime.execute('group_kick', { user_id: 1 }, 'tu-1');
+    await vi.waitFor(() => expect(queue.list({ status: 'pending' })).toHaveLength(1));
+    queue.resolve(queue.list({ status: 'pending' })[0]!.id, false, 'im:icqq:admin-1', { channel: 'im_approver_group' });
+
+    await expect(pending).resolves.toMatchObject({ status: 'denied', policy: TOOL_HARD_GATE_POLICY });
+    expect(execute).not.toHaveBeenCalled();
+    expect(audit.records.find((record) => record.reasonCode === 'tool_approval_denied' && record.kind === 'tool_approval'))
+      .toMatchObject({ actorId: 'im:icqq:admin-1', payload: expect.objectContaining({ channel: 'im_approver_group' }) });
+  });
+
+  it('runs an IM-approved unattended card once, for the same arguments only, and audits its channel', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const execute = vi.fn(async () => 'kicked');
+    const capabilities = [tool('group_kick', execute, 'never')];
+    const options = { approvalQueue: queue, decisionAudit: audit, hardGate: { imApproval } };
+    await new TurnToolRuntime(fixture({ unattended: true }).turn, capabilities, options).execute('group_kick', { user_id: 1 }, 'tu-1');
+    const card = queue.list({ status: 'pending' })[0]!;
+    queue.resolve(card.id, true, 'im:icqq:admin-1', { channel: 'im_dm' });
+
+    const changed = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-2' }).turn, capabilities, options);
+    await expect(changed.execute('group_kick', { user_id: 2 }, 'tu-2')).resolves.toMatchObject({ status: 'denied' });
+    const same = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-3' }).turn, capabilities, options);
+    await expect(same.execute('group_kick', { user_id: 1 }, 'tu-3')).resolves.toMatchObject({ status: 'completed' });
+    const again = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-4' }).turn, capabilities, options);
+    await expect(again.execute('group_kick', { user_id: 1 }, 'tu-4')).resolves.toMatchObject({ status: 'denied' });
+
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(audit.records.find((record) => record.kind === 'tool_approval' && record.outcome === 'allow'))
+      .toMatchObject({ actorId: 'im:icqq:admin-1', payload: expect.objectContaining({ channel: 'im_dm', via: 'im_dm' }) });
+  });
+
+  it('still never lets bypass approve a dangerous tool when the IM channel is on', async () => {
+    const queue = new ToolApprovalQueue();
+    const execute = vi.fn(async () => 'kicked');
+    const runtime = new TurnToolRuntime(fixture({ approval: createBypassApprovalPort() }).turn, [tool('group_kick', execute, 'never')], {
+      approvalQueue: queue,
+      hardGate: { imApproval, approvalTimeoutMs: 30 },
+    });
+    await expect(runtime.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(queue.list()[0]!.status).not.toBe('approved');
+  });
+});
+
+describe('resolveToolHardGateImApproval', () => {
+  it('is off by default and normalizes flat and per-platform approver lists', () => {
+    expect(resolveToolHardGateImApproval()).toEqual({ enabled: false, approverIds: {}, delivery: 'dm', approverGroupId: null });
+    const flat = resolveToolHardGateImApproval({ enabled: true, approverIds: [' a ', 'a', '', 42 as unknown as string] });
+    expect(flat.approverIds).toEqual({ '*': ['a', '42'] });
+    const mapped = resolveToolHardGateImApproval({ enabled: true, approverIds: { icqq: ['1'], discord: [], ' ': ['x'] } });
+    expect(mapped.approverIds).toEqual({ icqq: ['1'] });
+    expect(resolveToolHardGateImApproval({ delivery: 'nope' as never }).delivery).toBe('dm');
+    expect(resolveToolHardGateImApproval({ delivery: 'approver_group', approverGroupId: ' 9 ' }).approverGroupId).toBe('9');
+  });
+
+  it('only treats allowlisted users of the platform as approvers, and only when enabled', () => {
+    const settings = resolveToolHardGateImApproval({ enabled: true, approverIds: { icqq: ['1'], '*': ['2'] } });
+    expect(imApproversFor(settings, 'icqq')).toEqual(['1', '2']);
+    expect(imApproversFor(settings, 'discord')).toEqual(['2']);
+    expect(isImApprover(settings, 'icqq', '1')).toBe(true);
+    expect(isImApprover(settings, 'discord', '1')).toBe(false);
+    expect(isImApprover(settings, 'icqq', '3')).toBe(false);
+    expect(isImApprover({ ...settings, enabled: false }, 'icqq', '1')).toBe(false);
+  });
+
+  it('is undeliverable without approvers, without an approver group, or when the group is the business conversation', () => {
+    const origin = { platform: 'icqq', endpointKey: '10001', scope: 'group' as const, sceneId: '42' };
+    const dm = resolveToolHardGateImApproval({ enabled: true, approverIds: ['1'] });
+    expect(isImApprovalDeliverable(dm, origin)).toBe(true);
+    expect(isImApprovalDeliverable(dm, null)).toBe(false);
+    expect(isImApprovalDeliverable(resolveToolHardGateImApproval({ enabled: true }), origin)).toBe(false);
+    const groupless = resolveToolHardGateImApproval({ enabled: true, approverIds: ['1'], delivery: 'approver_group' });
+    expect(isImApprovalDeliverable(groupless, origin)).toBe(false);
+    const sameGroup = resolveToolHardGateImApproval({ enabled: true, approverIds: ['1'], delivery: 'approver_group', approverGroupId: '42' });
+    expect(isImApprovalDeliverable(sameGroup, origin)).toBe(false);
+    const otherGroup = resolveToolHardGateImApproval({ enabled: true, approverIds: ['1'], delivery: 'approver_group', approverGroupId: '77' });
+    expect(isImApprovalDeliverable(otherGroup, origin)).toBe(true);
+  });
+});
+
 describe('TurnToolRuntime hard gate × control plane (#1008)', () => {
   it('denies a dangerous tool under emergency_stop without asking for approval', async () => {
     const execute = vi.fn(async () => 'kicked');
@@ -398,6 +550,41 @@ describe('ToolApprovalQueue', () => {
     vi.advanceTimersByTime(1_001);
     await expect(settled).resolves.toBe('expired');
     expect(queue.resolve(card.id, true, 'op')).toBeUndefined();
+  });
+
+  it('notifies listeners of new cards only, and a failing listener never breaks enqueue', () => {
+    const queue = new ToolApprovalQueue();
+    const seen: string[] = [];
+    queue.onEnqueue(() => { throw new Error('listener down'); });
+    const stop = queue.onEnqueue((entry) => { seen.push(entry.id); });
+    const input = { toolName: 'set_mute', category: 'member' as const, sessionKey: 's', turnId: 't', args: { user_id: 1 } };
+
+    const first = queue.enqueue(input);
+    const reused = queue.enqueue(input);
+    stop();
+    queue.enqueue({ ...input, args: { user_id: 2 } });
+
+    expect(reused.id).toBe(first.id);
+    expect(seen).toEqual([first.id]);
+  });
+
+  it('settles a card once: the first channel wins and records itself; later answers are rejected', async () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({ toolName: 'set_mute', category: 'member', sessionKey: 's', turnId: 't', args: {} });
+    const settled = queue.wait(card.id);
+
+    expect(queue.resolve(card.id, true, 'im:icqq:1', { channel: 'im_dm' })).toMatchObject({ status: 'approved', channel: 'im_dm', decidedBy: 'im:icqq:1' });
+    expect(queue.resolve(card.id, false, 'console', { channel: 'console' })).toBeUndefined();
+    await expect(settled).resolves.toBe('approved');
+    expect(queue.get(card.id)).toMatchObject({ status: 'approved', channel: 'im_dm' });
+  });
+
+  it('leaves the channel empty for timeouts', async () => {
+    vi.useFakeTimers();
+    const queue = new ToolApprovalQueue({ ttlMs: 1_000 });
+    const card = queue.enqueue({ toolName: 'set_mute', category: 'member', sessionKey: 's', turnId: 't', args: {} });
+    vi.advanceTimersByTime(1_001);
+    expect(queue.get(card.id)).toMatchObject({ status: 'expired', channel: null, decidedBy: null });
   });
 });
 
