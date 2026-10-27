@@ -1,0 +1,32 @@
+.changeset/user-profile-affinity.md
+  h_b680f75345178a 13
+docs/ai/agent.md
+  h_b680f75345178a 387-397
+docs/en/ai/agent.md
+  h_b680f75345178a 313-323
+packages/im/agent/src/index.ts
+  h_b680f75345178a 159-166
+packages/im/agent/src/tool/context-tools.ts
+  h_b680f75345178a 5,28-29,77-80
+packages/im/agent/src/user-profile.ts
+  h_b680f75345178a 21,26-60,208-209,212-220,223-232,236-237,245
+packages/im/agent/src/user-relation.ts
+  h_b680f75345178a 462-467
+packages/im/agent/tests/ai/user-profile.test.ts
+  h_b680f75345178a 5,67-101
+packages/im/agent/tests/user-relation.test.ts
+  h_b680f75345178a 220-233
+tests/snapshots/api-surface.json
+  h_b680f75345178a 94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f308ec81b23e2eee6f45405e143b4ca2e5f8624d",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
