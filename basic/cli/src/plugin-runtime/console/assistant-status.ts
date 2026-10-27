@@ -3,6 +3,7 @@ import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
 import type { AmbientDecision } from '../agent/turn/ambient-engagement.js';
 import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
+import { controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
@@ -11,7 +12,9 @@ import { decisionReplayQueries, type DecisionEventsSource } from './decision-rep
  *
  * Served as `plugin.root.ambient` and `plugin.root.skills`. Also hosts the read-only decision
  * replay (ADR 0036 slice C) as `plugin.root.decisions` / `decision-turn` / `decisions-export`,
- * reading the Agent's `ai_decision_events` through {@link AssistantStatus.bindDecisionEvents}.
+ * reading the Agent's `ai_decision_events` through {@link AssistantStatus.bindDecisionEvents}, and the
+ * control plane (ADR 0036 slice D) as `plugin.root.control` (read) / `plugin.root.control-set` (action),
+ * bound through {@link AssistantStatus.bindControlPlane}.
  */
 
 export const AMBIENT_STATUS_PERMISSION = 'ambient:read';
@@ -103,6 +106,8 @@ export class AssistantStatus {
   readonly #decisions: Array<SkillsRecentItem & Readonly<{ inputTokens: number; outputTokens: number }>> = [];
   #readAmbientConfig: AmbientConfigReader = () => undefined;
   #readDecisionEvents: DecisionEventsSource = () => undefined;
+  #readControlPlane: ControlPlaneSource = () => undefined;
+  #readControlAudit: ControlAuditSource = () => undefined;
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -114,13 +119,25 @@ export class AssistantStatus {
         ambient: { requiredPermissions: [AMBIENT_STATUS_PERMISSION], handler: () => this.ambient() as unknown as PluginConsoleRpcJson },
         skills: { requiredPermissions: [SKILLS_STATUS_PERMISSION], handler: () => this.skills() as unknown as PluginConsoleRpcJson },
         ...decisionReplayQueries(() => this.#readDecisionEvents(), this.#now),
+        ...controlQueries(() => this.#readControlPlane()),
       },
+      // ADR 0036 slice D: the only writer of the control switches (the model has no tool for them).
+      actions: controlActions(
+        () => this.#readControlPlane(),
+        () => this.#readControlAudit(),
+      ),
     });
   }
 
   /** The current generation's `ai.trigger.ambient`; the latest Agent ingress route wins. */
   bindAmbientConfig(read: AmbientConfigReader): void {
     this.#readAmbientConfig = read;
+  }
+
+  /** The current generation's control plane (ADR 0036 slice D); the latest Agent ingress route wins. */
+  bindControlPlane(read: ControlPlaneSource, audit: ControlAuditSource = () => undefined): void {
+    this.#readControlPlane = read;
+    this.#readControlAudit = audit;
   }
 
   /** The current generation's decision audit log (`ai_decision_events`); the latest Agent ingress route wins. */

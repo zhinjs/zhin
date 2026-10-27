@@ -100,6 +100,14 @@ import {
 } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 import { observeSessionAndCheckSpeak } from './session-gate.js';
+import {
+  auditControlGate,
+  auditControlOutbound,
+  checkControlAtIngress,
+  checkControlAtOutbound,
+  logControlBlocked,
+  type ControlGateTarget,
+} from './control-gate.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
 import {
   auditCannotSpeak,
@@ -168,6 +176,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
     options.assistantStatus?.bindAmbientConfig(() => options.agent.service.getTriggerConfig()?.ambient);
     options.assistantStatus?.bindDecisionEvents(() => options.agent.agent.getDecisionEvents?.());
+    options.assistantStatus?.bindControlPlane(
+      () => options.agent.agent.getControlPlane?.(),
+      () => options.agent.agent.getDecisionEvents?.(),
+    );
     this.#sceneEvents = this.#createSceneEventIngress();
   }
 
@@ -180,6 +192,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       reader: () => options.im.conversationEventReader,
       sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
       decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
       nickname: async (platform, userId) => {
         const record = await options.agent.agent.getUserProfiles?.()?.relations?.get(platform, userId);
         return record?.preferredAddress?.trim() || record?.displayName?.trim() || undefined;
@@ -506,6 +519,29 @@ export class AgentTurnIngressRoute implements IngressRoute {
             userId: turnAccess.principal.subjectId,
           }))
         : NO_DECISION_AUDIT;
+      // 控制面（ADR 0036 切片 D）：位于会话画像发言判定之前。emergency_stop → 实例 muted → 会话 muted →
+      // read_only → mention_only；拦下时不跑 session-gate / 旁听判定，不调模型。
+      const control = zhinAgent.getControlPlane?.();
+      const controlTarget: ControlGateTarget | undefined = turnAccess.origin.kind === 'im'
+        ? { platform, scope: turnAccess.origin.scope, sceneId: turnAccess.origin.sceneId }
+        : undefined;
+      if (controlTarget) {
+        const verdict = checkControlAtIngress(control, controlTarget, matched != null || controlTarget.scope === 'private');
+        if (verdict.blocked) {
+          logControlBlocked('agent_turn_skipped_control', `${platform}:${message.conversation.id}`, verdict);
+          auditControlGate(audit, verdict, { source: 'message', addressed: matched != null });
+          return matched != null;
+        }
+      }
+      /** 出站兜底：回合进行中开关变化（例如一键 emergency_stop）时，发送前再判一次。 */
+      const outboundBlocked = (stage: string): boolean => {
+        if (!controlTarget) return false;
+        const verdict = checkControlAtOutbound(control, controlTarget);
+        if (!verdict.blocked) return false;
+        logControlBlocked('agent_outbound_blocked_control', `${platform}:${message.conversation.id}`, verdict);
+        auditControlOutbound(audit, verdict, { source: stage });
+        return true;
+      };
       // 会话画像（#996）：先折叠会话事件与发送者；Bot 在此会话不能发言（禁言 / 全员禁言 / 宿主限制）时
       // 直接不进 AI 回合，也不跑旁听判定，不调用模型。
       if (!workroomAgentTurn && turnAccess.origin.kind === 'im') {
@@ -655,7 +691,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
         // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
-        if (trigger.thinkingMessage && !ambient) {
+        if (trigger.thinkingMessage && !ambient && !outboundBlocked('thinking')) {
           message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
             logger.debug(formatCompact({
               op: 'agent_host_thinking_reply_failed',
@@ -801,6 +837,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     const outcome = await sendOutputMessages(output, {
                       render: messageOutput => flattenOutputElements([...messageOutput]),
                       send: async (messageOutput) => {
+                        if (outboundBlocked('reply')) {
+                          auditOutbound(audit, { status: 'suppressed' }, { control: true });
+                          return { status: 'suppressed' as const };
+                        }
                         const reaction = reactionOf(messageOutput);
                         if (reaction !== undefined) {
                           // A gesture, not a message: best effort, and it counts as having answered.
@@ -930,7 +970,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         if (modelStartedAt !== undefined) auditModelError(audit, error, modelPayload());
         try {
           const line = renderChatTurnError(trigger, error, senderRoles.isMaster, message.locale);
-          if (line) await reply(line);
+          if (line && !outboundBlocked('error_reply')) await reply(line);
         } catch {
           /* ignore reply failure */
         }
