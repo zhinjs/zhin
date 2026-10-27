@@ -1,0 +1,21 @@
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_63710ca3ec7231 305-332
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_1a262ed3ac6838 305-332
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a5f03816adcf93e5eb080e08f88d97739d6d95d1",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
