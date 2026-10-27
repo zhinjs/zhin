@@ -21,6 +21,7 @@ import type {
 } from '@zhin.js/im-contract';
 import type {
   AgentOutputElement,
+  AiControlPlane,
   DecisionEventLog,
   DeliveryOutcome,
   SessionProfileStore,
@@ -32,6 +33,13 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import { SceneEventWake, type SceneWakeBatch } from './scene-event-wake.js';
 import { readSceneEventLines } from './scene-event-lines.js';
 import { observeSceneWakeAndCheckSpeak } from './session-gate.js';
+import {
+  auditControlGate,
+  auditControlOutbound,
+  checkControlAtIngress,
+  checkControlAtOutbound,
+  logControlBlocked,
+} from './control-gate.js';
 import { capabilityLocalName } from './request.js';
 import {
   auditCannotSpeak,
@@ -56,6 +64,8 @@ export interface SceneEventIngressDeps {
   readonly sessions: () => SessionProfileStore | undefined;
   /** 决策审计（ADR 0036 切片 B）；缺省不写。 */
   readonly decisionEvents?: () => DecisionEventLog | undefined;
+  /** 控制面四开关（ADR 0036 切片 D）；缺省不拦。 */
+  readonly controlPlane?: () => AiControlPlane | undefined;
   /** 关系称呼（`ai_user_relations` 的 preferredAddress / displayName）。 */
   readonly nickname?: (platform: string, userId: string) => Promise<string | undefined>;
   readonly readConversationContext?: (
@@ -224,6 +234,14 @@ export class SceneEventIngress {
     const turnId = randomUUID();
     const audit = this.#audit(conversation, turnId, endpoint);
     const auditPayload = { source: 'scene_event', events: batch.items.length, types, throughSequence: batch.throughSequence };
+    // 控制面在会话画像之前：scene event 唤醒不是被点名，mention_only 也直接 skip。
+    const controlTarget = { platform, scope, sceneId: conversation.id } as const;
+    const verdict = checkControlAtIngress(this.deps.controlPlane?.(), controlTarget, false);
+    if (verdict.blocked) {
+      logControlBlocked('scene_event_wake_skipped_control', batch.key, verdict);
+      auditControlGate(audit, verdict, auditPayload);
+      return { kind: 'skipped', reason: `control:${verdict.switch}` };
+    }
     const blocked = await observeSceneWakeAndCheckSpeak({
       sessions: this.deps.sessions(),
       events: this.deps.reader(),
@@ -277,6 +295,13 @@ export class SceneEventIngress {
         ports: Object.freeze({
           reply: Object.freeze({
             send: async (output: readonly AgentOutputElement[]) => {
+              const outboundVerdict = checkControlAtOutbound(this.deps.controlPlane?.(), controlTarget);
+              if (outboundVerdict.blocked) {
+                logControlBlocked('scene_event_outbound_blocked_control', batch.key, outboundVerdict);
+                auditControlOutbound(audit, outboundVerdict, { source: 'scene_event' });
+                auditOutbound(audit, { status: 'suppressed' }, { source: 'scene_event', control: true });
+                return { status: 'suppressed' as const };
+              }
               const delivered = await this.deps.deliver(conversation, output);
               auditOutbound(audit, delivered, { source: 'scene_event' });
               if (delivered.status === 'sent') spoke = true;

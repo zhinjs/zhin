@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import {
@@ -8,9 +9,12 @@ import {
   discoverWorkspaceAgents,
   publishOutboundElements,
   NO_MEDIA_AUTHORITY,
+  type AiControlPlane,
   type ApprovalPort,
   type AudioTranscriptionPort,
+  type DecisionEventLog,
   type ProactiveOutboundService,
+  type ProactiveSendContext,
   type TurnEvent,
   type TurnRequest,
 } from '@zhin.js/agent';
@@ -23,6 +27,8 @@ import {
   type AgentTraceRecorder,
 } from '@zhin.js/agent/runtime';
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
+import { auditControlOutbound, checkControlAtOutbound, logControlBlocked } from './turn/control-gate.js';
+import { auditOutbound, createDecisionAudit, decisionScopeOf } from './turn/decision-audit.js';
 
 const logger = getLogger('agent');
 
@@ -62,7 +68,11 @@ export function createRuntimeZhinAgent(
     ...(service.getAgentConfig() ?? {}),
     chatModel: binding.model,
   }, events, service.getLlmRuntime());
-  const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
+  const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(
+    im,
+    () => agent.getControlPlane(),
+    () => agent.getDecisionEvents(),
+  ));
   const mediaPerception = createRuntimeMediaPerception(service);
   composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
@@ -192,9 +202,40 @@ async function seedResourceHubAgentPresets(
   }
 }
 
-export function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService {
+/** 主动出站被控制面拦下（ADR 0036 切片 D）：不发送，调用方按发送失败处理。 */
+export class ControlBlockedOutboundError extends Error {
+  constructor(readonly reasonCode: string) {
+    super(`proactive outbound blocked by control plane: ${reasonCode}`);
+    this.name = 'ControlBlockedOutboundError';
+  }
+}
+
+/**
+ * Agent 主动出站（定时任务通知、子代理续写、ask_user 等）。控制面止损类开关
+ * （`emergency_stop` / `muted` / `read_only`）命中时不发，写 `control_gate` + `outbound`（抑制），并抛
+ * {@link ControlBlockedOutboundError}（fail closed）。
+ */
+export function createRuntimeProactiveOutbound(
+  im: ImRuntime,
+  controlPlane?: () => AiControlPlane | undefined,
+  decisionEvents?: () => DecisionEventLog | undefined,
+): ProactiveOutboundService {
+  const guard = (ctx: ProactiveSendContext): void => {
+    const scope = ctx.scene.kind === 'group' || ctx.scene.kind === 'channel' ? ctx.scene.kind : 'private';
+    const target = { platform: ctx.scene.platform, scope, sceneId: ctx.scene.sceneId } as const;
+    const verdict = checkControlAtOutbound(controlPlane?.(), target);
+    if (!verdict.blocked) return;
+    logControlBlocked('agent_proactive_blocked_control', `${ctx.scene.platform}:${ctx.scene.sceneId}`, verdict);
+    const audit = createDecisionAudit(decisionEvents?.(), decisionScopeOf({
+      turnId: randomUUID(), platform: ctx.scene.platform, scope, sceneId: ctx.scene.sceneId, endpoint: ctx.scene.endpointKey,
+    }));
+    auditControlOutbound(audit, verdict, { source: `proactive:${ctx.source}` });
+    auditOutbound(audit, { status: 'suppressed' }, { source: `proactive:${ctx.source}`, control: true });
+    throw new ControlBlockedOutboundError(verdict.reasonCode);
+  };
   return {
     async send(ctx, content) {
+      guard(ctx);
       const result = await im.endpoints.send({
         adapter: ctx.scene.platform,
         endpointKey: ctx.scene.endpointKey,
@@ -208,6 +249,7 @@ export function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutbound
       return result.messageId || 'ok';
     },
     async sendElements(ctx, elements) {
+      guard(ctx);
       // Proactive sends carry no Turn policy: only inline media, no model-referenced paths or URLs.
       const content = await publishOutboundElements(elements, ctx.scene.platform, undefined, NO_MEDIA_AUTHORITY);
       if (content.length === 0) return [];

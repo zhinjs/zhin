@@ -84,7 +84,7 @@ export function createAssistantScheduleRuntime(
     callHaServiceImpl = fn;
   };
 
-  const proactiveOutbound = createRuntimeProactiveOutbound(im);
+  const proactiveOutbound = createRuntimeProactiveOutbound(im, () => agent.getControlPlane(), () => agent.getDecisionEvents());
   const notificationRouter = createNotificationRouter({
     resolveAdapter: () => undefined,
     sendIm: async (notify, content, source, options) => {
