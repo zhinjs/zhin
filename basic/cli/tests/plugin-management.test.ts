@@ -510,6 +510,42 @@ describe('Shared CLI and Console plugin workflow', () => {
     } finally { await runtime.stop(); }
   });
 
+  it('preserves verification translations without making approval depend on display language', async () => {
+    const root = await fixture();
+    await mounted(root);
+    const descriptor = { id: 'local-test', title: '本地检查', titleI18n: { en: 'Local check' }, scope: 'local' as const,
+      effects: ['写入再删除一个探针'], effectsI18n: { en: ['Write and delete one probe'] } };
+    const run = vi.fn(async () => ({ status: 'passed' as const, summary: '通过', summaryI18n: { en: 'Passed' },
+      evidence: ['探针已清理'], evidenceI18n: { en: ['Probe cleaned up'] } }));
+    const files = new Map([
+      [join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }],
+      [join(root, 'node_modules/reminder/plugin.js'), { default: definePlugin({ name: 'reminder', setup({ resources }) {
+        resources.provide(pluginVerificationToken, { checks: () => [descriptor], run });
+      } }) }],
+    ]);
+    const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config: JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8')) });
+    await runtime.start();
+    try {
+      const workflow = createPluginManagementPort(root, { snapshots: runtime.snapshots });
+      const plan = await workflow.verificationPlan('reminder');
+      expect(plan.checks[0]).toEqual(descriptor);
+      expect((await workflow.verificationPlan('reminder')).checkRevision).toBe(plan.checkRevision);
+      expect(run).not.toHaveBeenCalled();
+      expect(await workflow.verify('reminder', 'local-test', plan.generation, plan.projectRevision, plan.checkRevision)).toMatchObject({
+        status: 'passed', summary: '通过', summaryI18n: { en: 'Passed' }, evidenceI18n: { en: ['Probe cleaned up'] },
+      });
+      descriptor.effectsI18n.en = ['Changed effect'];
+      expect(plan.checks[0]!.effectsI18n?.en).toEqual(['Write and delete one probe']);
+      await expect(workflow.verify('reminder', 'local-test', plan.generation, plan.projectRevision, plan.checkRevision)).rejects.toThrow('Verification plan changed');
+      expect(run).toHaveBeenCalledOnce();
+      descriptor.effectsI18n.en = [];
+      await expect(workflow.verificationPlan('reminder')).rejects.toThrow('Invalid plugin verification translations');
+      descriptor.effectsI18n.en = [' '];
+      await expect(workflow.verificationPlan('reminder')).rejects.toThrow('Invalid plugin verification translations');
+    } finally { await runtime.stop(); }
+  });
+
   it('starts a real Runtime owner, runs an explicit local business check, and detects pending config/version changes', async () => {
     const root = await fixture();
     await mounted(root, ['reminder', 'preferences']);

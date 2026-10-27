@@ -2,6 +2,7 @@
  * Parse GitHub Issue/PR channel context from IM messages.
  */
 import type { Message } from 'zhin.js';
+import { createMessages, type Locale } from 'zhin.js/i18n';
 import { buildChannelId, parseChannelId, type ParsedChannel } from './types.js';
 import type { GhClient } from './gh-client.js';
 
@@ -24,6 +25,7 @@ export function issueBranchName(number: number): string {
 export async function resolveWorkspaceBranch(
   gh: GhClient,
   ctx: GitHubChannelContext,
+  locale?: Locale,
 ): Promise<{ branch: string; base: string }> {
   if (ctx.type === 'pr') {
     const pr = await gh.getPR(ctx.repo, ctx.number);
@@ -31,7 +33,7 @@ export async function resolveWorkspaceBranch(
       const base = pr.data.base?.ref ?? 'main';
       return { branch: pr.data.head.ref, base };
     }
-    throw new Error(`无法读取 PR #${ctx.number} 的 head 分支`);
+    throw new Error(t(locale, 'missingHead', { number: ctx.number }));
   }
 
   const repoInfo = await gh.getRepo(ctx.repo);
@@ -44,3 +46,7 @@ export async function resolveWorkspaceBranch(
 export function formatChannelContext(ctx: GitHubChannelContext): string {
   return buildChannelId(ctx.repo, ctx.type, ctx.number);
 }
+
+const t = createMessages({
+  missingHead: { 'zh-CN': '无法读取 PR #{number} 的 head 分支', en: 'Cannot read the head branch of PR #{number}' },
+});

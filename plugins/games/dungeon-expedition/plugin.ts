@@ -4,6 +4,7 @@ import {
 } from '@zhin.js/game-kit';
 import { defineHostTables } from './src/models.js';
 import { gameServicesToken } from './src/runtime-store.js';
+import { createMessages } from 'zhin.js/i18n';
 import {
   createServices,
   type DungeonDatabase,
@@ -42,6 +43,10 @@ export default defineGamePlugin<SessionService>({
   session: (service) => service,
   stale: {
     idleMs: 30 * 60_000,
-    message: '地牢远征因 30 分钟无人操作，已自动结束。',
+    message: row => messages(row.locale ?? undefined, 'timeout'),
   },
+});
+
+const messages = createMessages({
+  timeout: { 'zh-CN': '地牢远征因 30 分钟无人操作，已自动结束。', en: 'Dungeon Expedition ended after 30 minutes of inactivity.' },
 });

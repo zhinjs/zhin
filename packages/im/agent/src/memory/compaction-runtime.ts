@@ -1,3 +1,5 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { managementMessages as t } from '../init/management-messages.js';
 import { projectPromptContext, AUTOCOMPACT_BUFFER_TOKENS, autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
@@ -161,17 +163,17 @@ export class AgentCompactionRuntime {
 
   async compactSession(
     repo: ContextRepository,
-    options: Omit<CompactionRuntimeOptions, 'host'> & { host: CompactionContextHost },
+    options: Omit<CompactionRuntimeOptions, 'host'> & { host: CompactionContextHost; locale?: Locale },
   ): Promise<{ ok: boolean; message: string }> {
     const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow, options.reservedTokens);
     if (cfg.enabled === false) {
-      return { ok: false, message: 'compaction 已禁用（ai.agent.compaction.enabled=false）' };
+      return { ok: false, message: t(options.locale, 'compactDisabled') };
     }
 
     const loaded = await repo.loadContext(options.sessionId);
     const messages = loaded.messages;
     if (messages.length < 2) {
-      return { ok: false, message: '消息过少，无需压缩' };
+      return { ok: false, message: t(options.locale, 'compactShort') };
     }
 
     const compacted = await this.transformContext(messages, undefined, {
@@ -182,7 +184,7 @@ export class AgentCompactionRuntime {
     const saved = estimateAgentMessagesTokens(projectPromptContext(messages)) - estimateAgentMessagesTokens(projectPromptContext(compacted));
     return {
       ok: true,
-      message: `已压缩会话，约节省 ${Math.max(0, saved)} tokens（保留最近 ~${cfg.keepRecentTokens ?? 20_000} tokens）`,
+      message: t(options.locale, 'compacted', { saved: Math.max(0, saved), recent: cfg.keepRecentTokens ?? 20_000 }),
     };
   }
 

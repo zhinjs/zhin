@@ -1,4 +1,5 @@
 import { outboundHostToken, type OutboundHost } from 'zhin.js';
+import { resolveLocale } from 'zhin.js/i18n';
 import { expireOverdueSessions, type ExpiredSessionNotice } from './game-flow.js';
 import { resolveRouletteFlow, type RouletteCapabilityContext } from './runtime.js';
 
@@ -30,6 +31,7 @@ async function announce(outbound: OutboundHost, notice: ExpiredSessionNotice): P
   const session = notice.session;
   try {
     await outbound.send({
+      locale: resolveLocale(session.locale),
       adapter: session.adapter,
       endpointKey: session.endpoint,
       conversation: {

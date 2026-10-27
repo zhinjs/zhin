@@ -3,7 +3,7 @@ import {
   DetachedTaskRunner,
   InMemoryDetachedTaskStore,
   classifyTaskInterjection,
-  handleDetachedTaskCommand,
+  handleDetachedTaskCommand as handleCommand,
   routeTaskInterjection,
   type DetachedTaskExecutor,
 } from '../../src/detached-task/index.js';
@@ -40,6 +40,8 @@ function gatedExecutor(effects: string[], steps = 3) {
   };
   return { executor, release, applied };
 }
+
+const handleDetachedTaskCommand: typeof handleCommand = (runner, actor, content, presentation = { commandPrefix: '/' }) => handleCommand(runner, actor, content, presentation);
 
 const actor = { sessionId: 's1', senderId: 'u1' };
 
@@ -176,4 +178,17 @@ describe('/tasks commands', () => {
     expect(await handleDetachedTaskCommand(live, actor, '/task redirect tsk_x 改成月报 再加封面')).toContain('下一步');
     expect((await live.get('tsk_x'))?.pendingSteering).toEqual(['改成月报 再加封面']);
   });
+});
+
+it('localizes task management using an explicit prefix while retaining sender/session checks', async () => {
+  const runner = new DetachedTaskRunner({ store: new InMemoryDetachedTaskStore(), executors: { g: { run: async () => ({ summary: '' }) } } });
+  const presentation = { commandPrefix: '!', locale: 'en' as const };
+  await runner.create({ kind: 'g', goal: '用户目标', sessionId: 's1', createdBy: 'u1', taskId: 'locale_task' });
+  expect(await handleCommand(runner, actor, '!tasks', presentation)).toContain('locale_task | Queued | 0 steps | 用户目标');
+  expect(await handleCommand(runner, actor, '!task', presentation)).toContain('!task stop <id>');
+  expect(await handleCommand(runner, actor, '/tasks', presentation)).toBeNull();
+  expect(await handleCommand(runner, actor, '/tasks')).toBeNull();
+  expect(await handleCommand(runner, { ...actor, senderId: 'u2' }, '!task stop locale_task', presentation)).toContain('No controllable');
+  expect(await handleCommand(runner, actor, 'task stop locale_task', { ...presentation, commandPrefix: '' })).toBe('Stopped background task locale_task.');
+  expect((await runner.get('locale_task'))?.status).toBe('cancelled');
 });

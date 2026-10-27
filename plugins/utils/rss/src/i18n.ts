@@ -1,6 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const rssMessages = createMessages({
+  toolPreviewEmpty: { 'zh-CN': '{title}: 无内容', en: '{title}: No items' },
+  toolPreviewFailed: { 'zh-CN': '解析失败: {error}', en: 'Parsing failed: {error}' },
+  allEmpty: { 'zh-CN': '暂无任何 RSS 订阅', en: 'There are no RSS subscriptions' },
+  allList: { 'zh-CN': 'RSS 订阅总览 ({count} 条):\n{items}', en: 'RSS subscriptions ({count}):\n{items}' },
   "databaseUnavailable": {
     "zh-CN": "RSS 数据库尚未就绪",
     "en": "The RSS database is not ready"

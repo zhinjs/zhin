@@ -580,3 +580,29 @@ describe('kook endpoint management', () => {
     await expect(endpoint.management.listGroups?.()).rejects.toThrow('not connected');
   });
 });
+
+
+it.each(['websocket', 'webhook'] as const)('preserves operation locale through the %s endpoint send boundary', async (connection) => {
+  const gateway: OutboundMessageService = { receive: vi.fn(async () => ({ matched: false })), send: vi.fn(async () => 'sent') };
+  const client = createMockClient();
+  const shared = { id: capabilityId(rootPluginId(), adapterFeature, 'kook'), gateway, createClient: () => client };
+  const http = createHttpHost();
+  hosts.push(http);
+  const endpoint = bindTestEndpoint(connection === 'websocket'
+    ? new KookWebsocketEndpoint({ ...shared, config: baseConfig })
+    : new KookWebhookEndpoint({ ...shared, http, config: webhookConfig }), gateway, undefined);
+  await endpoint.start();
+  endpoint.open();
+  try {
+    const conversation = { endpoint: { id: 'bot', adapter: 'kook' }, kind: 'channel' as const, id: 'channel' };
+    for (const locale of ['en', 'zh-CN'] as const) {
+      await endpoint.send({ locale, conversation, payload: [{ type: 'share', data: { title: '用户标题', url: 'https://example.com' } }] });
+    }
+    expect(JSON.stringify(client.sent[0]?.message)).toContain('Open link');
+    expect(JSON.stringify(client.sent[0]?.message)).toContain('用户标题');
+    expect(JSON.stringify(client.sent[0]?.message)).not.toContain('打开链接');
+    expect(JSON.stringify(client.sent[1]?.message)).toContain('打开链接');
+  } finally {
+    await endpoint.stop();
+  }
+});

@@ -135,7 +135,9 @@ export interface PluginVerificationResult {
   readonly status: 'passed' | 'failed' | 'not-configured';
   readonly scope: 'local' | 'platform' | null;
   readonly summary: string;
+  readonly summaryI18n?: import('@zhin.js/plugin-runtime').PluginVerificationOutcome['summaryI18n'];
   readonly evidence: readonly string[];
+  readonly evidenceI18n?: import('@zhin.js/plugin-runtime').PluginVerificationOutcome['evidenceI18n'];
 }
 
 export interface PluginManagementPort {

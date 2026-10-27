@@ -10,6 +10,6 @@ export default defineAgentTool<{ repo?: string }>({
   }),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubPrepareWorkspace(input, context.$client);
+    return executeGithubPrepareWorkspace(input, context.$client, undefined, context.locale);
   },
 });

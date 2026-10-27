@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 /**
  * Finds free slots inside work hours between `from` and `to`, given busy events.
  */
@@ -21,7 +22,7 @@ export interface FreeTimeOptions {
 
 function parseHm(value: string): { hour: number; minute: number } {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-  if (!match) throw new Error(`工作时间格式无效：${value}（示例：09:00）`);
+  if (!match) throw new CalendarError('workTime', { value });
   return { hour: Number(match[1]), minute: Number(match[2]) };
 }
 
@@ -45,7 +46,7 @@ export function findFreeSlots(options: FreeTimeOptions): FreeSlot[] {
   const startHm = parseHm(options.workDayStart);
   const endHm = parseHm(options.workDayEnd);
   const durationMs = options.durationMinutes * 60000;
-  if (durationMs <= 0) throw new Error("时长必须大于 0 分钟");
+  if (durationMs <= 0) throw new CalendarError('positiveDuration');
 
   const busy = options.events
     .map((event) => ({

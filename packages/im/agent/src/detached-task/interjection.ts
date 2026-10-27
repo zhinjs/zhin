@@ -1,3 +1,5 @@
+import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from '../init/command-presentation.js';
+import { taskMessages as t } from './interjection-messages.js';
 /**
  * Interjection, redirect and stop for detached tasks (#732, roadmap M5.4).
  *
@@ -76,30 +78,21 @@ export async function routeTaskInterjection(
   actor: TaskInterjectionActor,
   text: string,
   productIntent?: TurnIntentKind,
+  presentation: AgentCommandPresentation = {},
 ): Promise<TaskInterjectionResult> {
   const task = await findControllableTask(runner, actor);
   if (!task) return { handled: false, kind: 'unrelated' };
   const kind = classifyTaskInterjection(text, productIntent);
   if (kind === 'stop') {
     await runner.cancel(task.taskId);
-    return { handled: true, kind, taskId: task.taskId, reply: `好的，已停止后台任务 ${task.taskId}。` };
+    return { handled: true, kind, taskId: task.taskId, reply: t(presentation.locale, 'stoppedReply', { id: task.taskId }) };
   }
   if (kind === 'redirect') {
     await runner.steer(task.taskId, text.trim());
-    return { handled: true, kind, taskId: task.taskId, reply: `收到，后台任务 ${task.taskId} 会在下一步按新要求调整。` };
+    return { handled: true, kind, taskId: task.taskId, reply: t(presentation.locale, 'redirected', { id: task.taskId }) };
   }
   return { handled: false, kind, taskId: task.taskId };
 }
-
-const STATUS_LABEL: Readonly<Record<DetachedTaskStatusName, string>> = {
-  queued: '排队中',
-  running: '运行中',
-  waiting_approval: '等待确认',
-  paused: '已暂停',
-  done: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
-};
 
 function preview(text: string, max = 40): string {
   const flat = text.replace(/\s+/g, ' ').trim();
@@ -114,41 +107,45 @@ export async function handleDetachedTaskCommand(
   runner: DetachedTaskRunner,
   actor: TaskInterjectionActor,
   content: string,
+  presentation: AgentCommandPresentation = {},
 ): Promise<string | null> {
-  const text = content.trim();
-  if (/^\/tasks$/iu.test(text)) {
+  const text = managementCommandText(content, presentation.commandPrefix);
+  if (text === undefined) return null;
+  const locale = presentation.locale;
+  const taskCommand = managementCommandReference('task', presentation.commandPrefix)!;
+  if (/^tasks$/iu.test(text)) {
     const tasks = (await runner.list())
       .filter((t) => t.sessionId === actor.sessionId)
       .sort((a, b) => b.updatedAt - a.updatedAt);
     const active = tasks.filter(isActiveDetachedTask);
     const recent = tasks.filter((t) => TERMINAL_DETACHED_TASK_STATUSES.has(t.status)).slice(0, 5);
-    if (active.length === 0 && recent.length === 0) return '本会话没有后台任务。';
-    const line = (t: DetachedTaskRecord) => `- ${t.taskId}｜${STATUS_LABEL[t.status]}｜${t.steps.length} 步｜${preview(t.goal)}`;
+    if (active.length === 0 && recent.length === 0) return t(locale, 'empty');
+    const line = (task: DetachedTaskRecord) => t(locale, 'line', { id: task.taskId, status: t(locale, task.status), steps: task.steps.length, goal: preview(task.goal) });
     return [
-      ...(active.length ? ['进行中的后台任务：', ...active.map(line)] : ['没有进行中的后台任务。']),
-      ...(recent.length ? ['最近结束：', ...recent.map(line)] : []),
+      ...(active.length ? [t(locale, 'active'), ...active.map(line)] : [t(locale, 'inactive')]),
+      ...(recent.length ? [t(locale, 'recent'), ...recent.map(line)] : []),
     ].join('\n');
   }
   // Whitespace split — linear in input length; no overlapping regex quantifiers (CodeQL ReDoS).
   // "/task redirect <id> <text with spaces>" keeps everything after the id as the new goal.
   const parts = text.split(/\s+/u);
-  if (parts[0]?.toLowerCase() !== '/task') return null;
+  if (parts[0]?.toLowerCase() !== 'task') return null;
   const action = parts[1]?.toLowerCase();
   if (action !== 'stop' && action !== 'redirect') {
-    return '用法：/tasks、/task stop <id>、/task redirect <id> <新要求>';
+    return t(locale, 'usage', { tasks: managementCommandReference('tasks', presentation.commandPrefix)!, task: taskCommand });
   }
   const id = parts[2];
-  if (!id) return `用法：/task ${action} <id>${action === 'redirect' ? ' <新要求>' : ''}`;
+  if (!id) return t(locale, action === 'redirect' ? 'redirectUsage' : 'stopUsage', { task: taskCommand });
   // Rebuild the trailing text without re-scanning with an ambiguous regex.
   const rest = action === 'redirect' && parts.length > 3 ? parts.slice(3).join(' ') : undefined;
   const task = await runner.get(id);
-  if (!task || !mayControl(task, actor)) return `找不到可操作的后台任务 ${id}。`;
-  if (!isActiveDetachedTask(task)) return `后台任务 ${id} 当前状态：${STATUS_LABEL[task.status]}，无法操作。`;
+  if (!task || !mayControl(task, actor)) return t(locale, 'notFound', { id });
+  if (!isActiveDetachedTask(task)) return t(locale, 'terminal', { id, status: t(locale, task.status) });
   if (action === 'stop') {
     await runner.cancel(id);
-    return `已停止后台任务 ${id}。`;
+    return t(locale, 'stopped', { id });
   }
-  if (!rest?.trim()) return '用法：/task redirect <id> <新要求>';
+  if (!rest?.trim()) return t(locale, 'redirectUsage', { task: taskCommand });
   await runner.steer(id, rest.trim());
-  return `收到，后台任务 ${id} 会在下一步按新要求调整。`;
+  return t(locale, 'redirected', { id });
 }

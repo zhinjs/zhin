@@ -151,8 +151,9 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const messageId = await sendKookOutbound(this.#requireClient(), { conversation, payload });
+  async send(request: EndpointSendRequest): Promise<string> {
+    const { conversation } = request;
+    const messageId = await sendKookOutbound(this.#requireClient(), request);
     rememberKookConversation(this.#sentConversations, messageId, conversation);
     this.#logger.debug(formatCompact({
       op: 'kook_send',
@@ -321,8 +322,9 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const messageId = await sendKookOutbound(this.#requireClient(), { conversation, payload });
+  async send(request: EndpointSendRequest): Promise<string> {
+    const { conversation } = request;
+    const messageId = await sendKookOutbound(this.#requireClient(), request);
     rememberKookConversation(this.#sentConversations, messageId, conversation);
     this.#logger.debug(formatCompact({
       op: 'kook_send',

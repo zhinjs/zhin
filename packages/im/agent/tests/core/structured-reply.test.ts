@@ -1,9 +1,8 @@
 import { RED_CIRCLE_PNG } from '../../evals/fixtures/images.js';
 import { describe, expect, it, vi } from 'vitest';
 import { aiOutboundJsonSchema, buildAiOutboundJsonSchema, DEFAULT_AI_OUTBOUND_SEGMENT_TYPES, type AiOutboundSegmentProfile } from '@zhin.js/core';
-import type { AgentMessage, AgentTool, StreamOptions } from '@zhin.js/ai';
+import { describeProviderFailure, type AgentMessage, type AgentTool, type StreamOptions } from '@zhin.js/ai';
 import { chatFailureLine } from '../../src/outbound/chat-failure.js';
-import { describeProviderFailure } from '@zhin.js/ai';
 
 /** IM turns say a format failure in the chat voice (the host notice is for non-chat callers). */
 const STRUCTURED_REPLY_FAILURE = chatFailureLine('format', { random: 0 });
@@ -33,6 +32,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   emptyReplyRetries?: number;
   replySegments?: AiOutboundSegmentProfile;
   roles?: string[];
+  locale?: 'zh-CN' | 'en';
   initialMessages?: AgentMessage[];
   deferred?: boolean;
 } = {}) {
@@ -66,6 +66,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     host: host as never, sessionId: 's', rawContent: '请 @ Alice 提醒她',
     promptProfile: { kind: 'interactive' },
     turnContext: {
+      input: { text: 'Please respond', locale: options.locale },
       origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'g' },
       principal: { subjectId: '123', roles: options.roles ?? ['user'] }, session: { key: 's' },
     },
@@ -439,4 +440,12 @@ it('keeps the deferred catalog available when a prebuilt continuation has no use
   expect(calls[0]!.context.messages[0]).toEqual(initial);
   expect(JSON.stringify(calls[0]!.context.messages)).toContain('deferred_lookup');
   expect(calls[0]!.context.systemPrompt).not.toContain('deferred_lookup');
+});
+
+
+it('uses captured turn locale for a model format failure through the engine', async () => {
+  const { result } = await run([assistantTextReply('{"segments": invalid'), assistantTextReply('{"segments": invalid')], { locale: 'en', roles: ['master'] });
+  const rendered = renderAgentOutput(result.output);
+  expect(rendered).toContain('(Invalid reply format)');
+  expect(rendered).not.toMatch(/[\u3400-\u9fff]/u);
 });

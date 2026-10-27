@@ -1,3 +1,6 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from '../init/command-presentation.js';
+import { ownerApprovalMessages as t } from './owner-approval-messages.js';
 import * as path from 'node:path';
 import { hasSenderRole, senderRolesFromMessage, type Message } from '@zhin.js/core';
 import { workspaceRoot } from '../discovery/utils.js';
@@ -11,7 +14,7 @@ const STORE_FILE = 'owner-approve-always.json';
 
 export type ToolRequesterRole = 'master' | 'trusted' | 'other' | 'unknown';
 
-export interface OwnerApprovalCommandContext {
+export interface OwnerApprovalCommandContext extends AgentCommandPresentation {
   readonly platform: string;
   readonly endpoint: string;
   readonly ownerId?: string;
@@ -35,12 +38,12 @@ export class OwnerApprovalRuntime {
     this.#store.setBashAlways(address, value);
   }
 
-  addBashRule(address: OwnerApprovalAddress, pattern: string) {
-    return this.#store.addBashRule(address, pattern);
+  addBashRule(address: OwnerApprovalAddress, pattern: string, locale?: Locale) {
+    return this.#store.addBashRule(address, pattern, locale);
   }
 
-  removeBashRule(address: OwnerApprovalAddress, ruleId: string) {
-    return this.#store.removeBashRule(address, ruleId);
+  removeBashRule(address: OwnerApprovalAddress, ruleId: string, locale?: Locale) {
+    return this.#store.removeBashRule(address, ruleId, locale);
   }
 
   matchesBashBypass(address: OwnerApprovalAddress, commandLine: string): boolean {
@@ -52,55 +55,56 @@ export class OwnerApprovalRuntime {
     return entry.bashRules.some((rule) => new RegExp(rule.pattern).test(line));
   }
 
-  format(address: OwnerApprovalAddress): string {
+  format(address: OwnerApprovalAddress, locale?: Locale): string {
     const entry = this.#store.entry(address);
     const rules = entry?.bashRules ?? [];
     if (!entry || (!entry.bashAlways && rules.length === 0)) {
-      return 'bash 永久放行: 否\n自定义正则放行: 无';
+      return t(locale, 'empty');
     }
     return [
-      `bash 永久放行: ${entry.bashAlways ? '是' : '否'}`,
-      `自定义正则放行 (${rules.length}):`,
+      t(locale, 'status', { enabled: t(locale, entry.bashAlways ? 'yes' : 'no'), count: rules.length }),
       ...rules.map((rule) => `  • [${rule.id.slice(0, 8)}] ${rule.pattern}`),
     ].join('\n');
   }
 
   handleCommand(context: OwnerApprovalCommandContext, rawText: string): string | null {
-    const text = rawText.trim();
-    if (!/^\/approve(?:\s|$)/iu.test(text)) return null;
+    const text = managementCommandText(rawText, context.commandPrefix);
+    if (text === undefined || !/^approve(?:\s|$)/iu.test(text)) return null;
+    const locale = context.locale;
+    const command = managementCommandReference('approve', context.commandPrefix)!;
     const address = ownerCommandAddress(context);
     if (context.scope !== 'private' || !address || context.subjectId !== address.ownerId) {
-      return '⚠️ 仅 Endpoint Owner 可在私聊中使用此指令。需在插件配置中设置 master/owner。';
+      return t(locale, 'denied');
     }
 
-    if (/^\/approve\s+always\s+bash\s*$/iu.test(text)) {
+    if (/^approve\s+always\s+bash\s*$/iu.test(text)) {
       this.setBashAlways(address, true);
-      return '✅ 已对 bash 永久放行 Owner 硬确认（本 Bot）。后续 bash 需确认时将不再弹窗。';
+      return t(locale, 'always');
     }
 
-    const revokeRule = text.match(/^\/approve\s+revoke\s+rule\s+(\S+)\s*$/iu);
+    const revokeRule = text.match(/^approve\s+revoke\s+rule\s+(\S+)\s*$/iu);
     if (revokeRule) {
-      const result = this.removeBashRule(address, revokeRule[1]!);
-      return result.ok ? '✅ 已删除该放行规则。' : `⚠️ ${result.error}`;
+      const result = this.removeBashRule(address, revokeRule[1]!, locale);
+      return result.ok ? t(locale, 'removed') : `⚠️ ${result.error}`;
     }
 
     const ruleArgument = matchApproveRuleArgument(text);
     if (ruleArgument !== null) {
-      const result = this.addBashRule(address, ruleArgument.trim());
+      const result = this.addBashRule(address, ruleArgument.trim(), locale);
       return result.ok
-        ? `✅ 已添加规则 id=${result.id.slice(0, 8)}… ，匹配子命令时将不再要求 Owner 确认（仍受危险命令黑名单等约束）。`
+        ? t(locale, 'added', { id: result.id.slice(0, 8) })
         : `⚠️ ${result.error}`;
     }
 
-    if (/^\/approve\s+list\s*$/iu.test(text)) return this.format(address);
+    if (/^approve\s+list\s*$/iu.test(text)) return this.format(address, locale);
 
-    if (/^\/approve\s+revoke\s*$/iu.test(text)) {
-      if (!this.has(address, OWNER_APPROVE_ALWAYS_TOOL)) return '⚠️ 当前未对 bash 设置永久放行。';
+    if (/^approve\s+revoke\s*$/iu.test(text)) {
+      if (!this.has(address, OWNER_APPROVE_ALWAYS_TOOL)) return t(locale, 'notAlways');
       this.setBashAlways(address, false);
-      return '✅ 已撤销 bash 永久放行（正则规则仍保留，可用 /approve list 查看）。';
+      return t(locale, 'revoked', { command });
     }
 
-    return `⚠️ 无法解析指令。\n${usageLines()}`;
+    return `${t(locale, 'unknown')}\n${t(locale, 'usage', { command })}`;
   }
 }
 
@@ -147,21 +151,10 @@ function ownerCommandAddress(context: OwnerApprovalCommandContext): OwnerApprova
   });
 }
 
-function usageLines(): string {
-  return [
-    '用法（bash / icqq）：',
-    '  /approve always bash     — 永久跳过 bash 的 Owner 硬确认',
-    '  /approve rule <正则>   — 为敏感 icqq 命令增加放行规则（匹配整段子命令）',
-    '  /approve list           — 列出永久放行与规则 id',
-    '  /approve revoke rule <id> — 删除一条规则（id 可用 list 前 8 位）',
-    '  /approve revoke         — 撤销 bash 永久放行（不删规则）',
-  ].join('\n');
-}
-
 const LINE_TERMINATOR_RE = /[\n\r\u2028\u2029]/u;
 
 function matchApproveRuleArgument(text: string): string | null {
-  const head = /^\/approve\s+rule/iu.exec(text);
+  const head = /^approve\s+rule/iu.exec(text);
   if (!head) return null;
   const whitespaceStart = head[0].length;
   let whitespaceEnd = whitespaceStart;

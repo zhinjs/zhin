@@ -14,6 +14,6 @@ export default defineAgentTool<{ repo?: string; path: string; content: string; m
   }),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubPatchFile(input, context.$client);
+    return executeGithubPatchFile(input, context.$client, undefined, context.locale);
   },
 });

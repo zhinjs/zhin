@@ -2,13 +2,14 @@ import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { getRssSubs } from '../../../../src/db-store.js';
 import { rssRuntimeToken } from '../../../../src/runtime.js';
+import { rssMessages as t } from '../../../../src/i18n.js';
 
 export default defineAgentTool({
   description: '查询当前所有 RSS 订阅',
   inputSchema: z.object({}),
   async execute(_input, context) {
     const Subs = getRssSubs(context.use(rssRuntimeToken).db);
-    if (!Subs) return 'RSS 数据库尚未就绪';
+    if (!Subs) return t(context.locale, 'databaseUnavailable');
 
     const all = (await Subs.select()) as Array<{
       channel_type: string;
@@ -16,7 +17,7 @@ export default defineAgentTool({
       feed_title?: string;
       url: string;
     }>;
-    if (all.length === 0) return '暂无任何 RSS 订阅';
+    if (all.length === 0) return t(context.locale, 'allEmpty');
 
     const grouped = new Map<string, typeof all>();
     for (const sub of all) {
@@ -33,6 +34,6 @@ export default defineAgentTool({
         lines.push(`  - ${s.feed_title || s.url}`);
       }
     }
-    return `RSS 订阅总览 (${all.length} 条):\n${lines.join('\n')}`;
+    return t(context.locale, 'allList', { count: all.length, items: lines.join('\n') });
   },
 });

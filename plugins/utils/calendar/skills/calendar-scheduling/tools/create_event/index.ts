@@ -39,7 +39,7 @@ export default defineAgentTool({
         },
         context.signal
       );
-      return t(context.locale, 'eventCreated', { id: event.id, title: event.title, start: event.start, end: event.end, timezone });
+      return t(context.locale, 'eventCreated', { id: event.id, title: event.title || t(context.locale, 'untitled'), start: event.start, end: event.end, timezone });
     }, context.locale);
   },
 });

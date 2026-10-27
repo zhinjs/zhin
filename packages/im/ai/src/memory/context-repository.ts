@@ -40,6 +40,14 @@ export interface AppendMessagesOptions {
   messageExtras?: (AgentMessageExtra | undefined)[];
 }
 
+export interface SessionBranchJumpResult {
+  ok: boolean;
+  message: string;
+  /** Structured presentation facts; custom repositories may retain their own message. */
+  code?: 'not_found' | 'switched' | 'failed';
+  preview?: string;
+}
+
 export interface ContextRepository {
   loadContext(sessionId: string): Promise<Context>;
   loadMessageRows(sessionId: string): Promise<AgentMessageRow[]>;
@@ -73,7 +81,7 @@ export interface ContextRepository {
   ): Promise<number | undefined>;
   listBranchPoints(sessionId: string): Promise<SessionBranchPoint[]>;
   setActiveLeaf(sessionId: string, messageId: number): Promise<boolean>;
-  jumpToBranchIndex(sessionId: string, index: number): Promise<{ ok: boolean; message: string }>;
+  jumpToBranchIndex(sessionId: string, index: number): Promise<SessionBranchJumpResult>;
   getDeferredToolSnapshot(sessionId: string): Promise<DeferredToolSessionSnapshot>;
   setDeferredToolSnapshot(sessionId: string, snapshot: DeferredToolSessionSnapshot): Promise<void>;
 }
@@ -376,16 +384,16 @@ export class DatabaseContextRepository implements ContextRepository {
     return true;
   }
 
-  async jumpToBranchIndex(sessionId: string, index: number): Promise<{ ok: boolean; message: string }> {
+  async jumpToBranchIndex(sessionId: string, index: number): Promise<SessionBranchJumpResult> {
     const points = await this.listBranchPoints(sessionId);
     const point = points.find(p => p.index === index);
     if (!point) {
-      return { ok: false, message: `未找到分支点 #${index}` };
+      return { ok: false, code: 'not_found', message: `未找到分支点 #${index}` };
     }
     const ok = await this.setActiveLeaf(sessionId, point.messageId);
     return ok
-      ? { ok: true, message: `已跳转到分支点 #${index}：${point.preview}` }
-      : { ok: false, message: '跳转失败' };
+      ? { ok: true, code: 'switched', preview: point.preview, message: `已跳转到分支点 #${index}：${point.preview}` }
+      : { ok: false, code: 'failed', message: '跳转失败' };
   }
 
   async resolveCompactionAnchorId(
@@ -613,16 +621,16 @@ export class MemoryContextRepository implements ContextRepository {
     return true;
   }
 
-  async jumpToBranchIndex(sessionId: string, index: number): Promise<{ ok: boolean; message: string }> {
+  async jumpToBranchIndex(sessionId: string, index: number): Promise<SessionBranchJumpResult> {
     const points = await this.listBranchPoints(sessionId);
     const point = points.find(p => p.index === index);
     if (!point) {
-      return { ok: false, message: `未找到分支点 #${index}` };
+      return { ok: false, code: 'not_found', message: `未找到分支点 #${index}` };
     }
     const ok = await this.setActiveLeaf(sessionId, point.messageId);
     return ok
-      ? { ok: true, message: `已跳转到分支点 #${index}：${point.preview}` }
-      : { ok: false, message: '跳转失败' };
+      ? { ok: true, code: 'switched', preview: point.preview, message: `已跳转到分支点 #${index}：${point.preview}` }
+      : { ok: false, code: 'failed', message: '跳转失败' };
   }
 
   async resolveCompactionAnchorId(
