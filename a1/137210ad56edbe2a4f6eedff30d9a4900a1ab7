@@ -1,0 +1,20 @@
+basic/cli/src/plugin-runtime/console/decision-replay.ts
+  h_b680f75345178a 42
+basic/cli/tests/plugin-runtime/console/decision-replay.test.ts
+  h_b680f75345178a 85-91
+packages/im/agent/src/decision-events.ts
+  h_b680f75345178a 44-45,120-126
+packages/im/agent/tests/decision-events.test.ts
+  h_b680f75345178a 57,122-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1137210ad56edbe2a4f6eedff30d9a4900a1ab7",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
