@@ -275,8 +275,9 @@ export class MemberLifecycle {
       return { kind: 'skipped', reason: 'welcome_rate_limited' };
     }
 
-    // 控制面在 session-gate 之前；欢迎不是被点名，mention_only 同样跳过。
-    const verdict = checkControlAtIngress(this.deps.controlPlane?.(), { platform: batch.platform, scope: batch.scope, sceneId: batch.conversation.id }, false);
+    // 控制面在 session-gate 之前。欢迎按 addressed 判定：mention_only（含冷场临时）不拦模板欢迎；
+    // emergency_stop / muted / read_only 仍拦（与 outboundGate 同口径，Fin 拍板）。
+    const verdict = checkControlAtIngress(this.deps.controlPlane?.(), { platform: batch.platform, scope: batch.scope, sceneId: batch.conversation.id }, true);
     if (verdict.blocked) {
       logControlBlocked('welcome_skipped_control', key, verdict);
       const detail = verdict.level === 'unavailable' ? 'control_state_unavailable' : `${verdict.level}:${verdict.switch}`;

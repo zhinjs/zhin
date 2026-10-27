@@ -50,7 +50,7 @@ sidebar: false
 
 - 模板变量白名单：`{members}`（@ 新成员，合并时为列表）、`{nickname}`、`{group}`、`{rules_url}`；未知变量原样保留并在预览里标红，不报错。
 - **预览**：Console 提供「预览」按钮，用最近一次真实入群事件（无则用示例成员）渲染，不发送，不写审计。
-- **发送**：入群事件 → 合并窗口 → 渲染 → 控制面 → session-gate → 出站。被拦写 `skip`；超出 `maxPerHour` 写 `skip` / `welcome_rate_limited`。
+- **发送**：入群事件 → 合并窗口 → 渲染 → 控制面 → session-gate → 出站。被拦写 `skip`；超出 `maxPerHour` 写 `skip` / `welcome_rate_limited`。控制面按 **addressed** 判定：`mention_only`（含冷场临时覆盖）**不拦**模板欢迎；`emergency_stop` / `muted` / `read_only` 仍拦。
 - 欢迎不再交给模型临场发挥：会话开启 `welcome.enabled` 后，scene event 唤醒对入群事件（`sub_type=member_increase`）不再触发模型回合，避免双发。未开启的会话行为不变。
 
 #### 1.2 公告：草稿 → 审批 → 发送
