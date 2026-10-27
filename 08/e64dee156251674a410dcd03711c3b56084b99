@@ -1,0 +1,103 @@
+plugins/adapters/icqq/PERMITS.md
+  s_9622fd28aba994::t_a5831e9f80f4f7 1,3,5,7-14,16,18,20
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  s_9622fd28aba994::t_0d20b259acc856 16-23
+plugins/adapters/icqq/agents/icqq/skills/icqq-conversation/SKILL.md
+  s_9622fd28aba994::t_338f80088f8cdd 1-24
+packages/im/agent/evals/cases/approval-readable-arguments.case.ts
+  s_9622fd28aba994::t_63dd2149df37b1 1-23
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9622fd28aba994::t_1f0b54fc27c5b9 456-458,460,463,465
+plugins/adapters/icqq/agents/icqq/skills/icqq-messages/SKILL.md
+  s_9622fd28aba994::t_94f12f0c18c1e7 1-28
+plugins/adapters/icqq/README.md
+  s_9622fd28aba994::t_9427a196a3489b 170-175
+plugins/adapters/icqq/agents/icqq/skills/icqq-conversation/tools/conversation_info/index.ts
+  s_9622fd28aba994::t_338f80088f8cdd 1-61
+plugins/adapters/icqq/agents/icqq/skills/icqq-messages/tools/quote_reply/index.ts
+  s_9622fd28aba994::t_04bb63a01b09d6 15,17-20
+  s_9622fd28aba994::t_94f12f0c18c1e7 1-14,16,21-24
+basic/cli/tests/plugin-runtime/agent/turn/approval-localization.test.ts
+  s_9622fd28aba994::t_049705219b5efe 4-30
+plugins/adapters/icqq/src/protocol.ts
+  s_9622fd28aba994::t_0d20b259acc856 466
+  s_9622fd28aba994::t_04bb63a01b09d6 507-513
+  s_9622fd28aba994::t_338f80088f8cdd 272,540-542
+  s_9622fd28aba994::t_9427a196a3489b 398
+.changeset/icqq-conversation-tools.md
+  s_9622fd28aba994::t_a5831e9f80f4f7 1-2,5-7
+  s_9622fd28aba994::t_04bb63a01b09d6 3-4,8-9
+basic/cli/src/plugin-runtime/agent/turn/approval-messages.ts
+  s_9622fd28aba994::t_1f0b54fc27c5b9 5-6,8,11,13
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9622fd28aba994::t_606e286b5f5258 3
+  s_9622fd28aba994::t_1f0b54fc27c5b9 161,187,285,291,295-296
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  s_9622fd28aba994::t_049705219b5efe 1-31,35-53
+  s_9622fd28aba994::t_54be98edb743d2 32-34
+packages/im/core/tests/plugin-runtime/conversation-context-hygiene.test.ts
+  s_9622fd28aba994::t_0d20b259acc856 62,78,95,114-116
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_9622fd28aba994::t_0d20b259acc856 277-278
+plugins/adapters/icqq/agents/icqq/skills/icqq-messages/tools/recall_own_message/index.ts
+  s_9622fd28aba994::t_94f12f0c18c1e7 1-17
+packages/im/agent/tests/tool/turn-tool-runtime.test.ts
+  s_9622fd28aba994::t_41d568ed182aaf 99,103,108
+plugins/adapters/icqq/agents/icqq/skills/icqq-messages/tools/forward_messages/index.ts
+  s_9622fd28aba994::t_338f80088f8cdd 1-40
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9622fd28aba994::t_9427a196a3489b 517
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/SKILL.md
+  s_9622fd28aba994::t_a5831e9f80f4f7 5,13-14,23-24,37-42
+plugins/adapters/icqq/agents/icqq/conversation.ts
+  s_9622fd28aba994::t_0be7cb0e73dbc8 1-67
+plugins/adapters/icqq/agents/icqq/system.md
+  s_9622fd28aba994::t_a5831e9f80f4f7 4-7
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.ts
+  s_9622fd28aba994::t_94f12f0c18c1e7 1-32
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_9622fd28aba994::t_8c765decd2d952 417
+  s_9622fd28aba994::t_606e286b5f5258 100,241,269,295,414,419-420
+  s_9622fd28aba994::t_41d568ed182aaf 17
+.changeset/compact-operation-approval.md
+  s_9622fd28aba994::t_41d568ed182aaf 1-6
+packages/im/core/src/built/generic-segment-mapper.ts
+  s_9622fd28aba994::t_4cd466b9b46872 99-100
+plugins/adapters/icqq/tests/conversation-tools.test.ts
+  s_9622fd28aba994::t_54be98edb743d2 4,155-156,187-211
+  s_9622fd28aba994::t_26405515422f39 2
+  s_9622fd28aba994::t_fc26b6d81e7dbc 69-70
+  s_9622fd28aba994::t_821869d726a4dc 1,3,5-23,25-68,71-133,146-154,157-186,212-219
+  s_9622fd28aba994::t_04bb63a01b09d6 24,134-145
+packages/im/agent/src/context/turn-envelope.ts
+  s_9622fd28aba994::t_04bb63a01b09d6 91-93
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_leave/index.ts
+  s_9622fd28aba994::t_94f12f0c18c1e7 1-32
+packages/im/core/src/plugin-runtime/im/conversation-runtime.ts
+  s_9622fd28aba994::t_04bb63a01b09d6 431
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_9622fd28aba994::t_0d20b259acc856 942
+packages/im/agent/src/tool/approval-presentation.ts
+  s_9622fd28aba994::t_9427a196a3489b 3
+  s_9622fd28aba994::t_1f0b54fc27c5b9 1-2,4-5
+plugins/adapters/icqq/agents/icqq/messages.ts
+  s_9622fd28aba994::t_94f12f0c18c1e7 4-47
+docs/adapters/icqq.md
+  s_9622fd28aba994::t_bacf90f8c3b316 11,182-187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "08e64dee156251674a410dcd03711c3b56084b99",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
