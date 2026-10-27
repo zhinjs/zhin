@@ -155,6 +155,57 @@ describe('AiSessionOps', () => {
     expect(parsed.sessions[0]!.overrides.ops).toEqual({ cooldownMs: 0 });
   });
 
+  it('carries coldField (ADR 0037 slice C): off by default, 20 msgs / 30 min, enabled only per session', async () => {
+    const ops = new AiSessionOps();
+    expect(ops.resolve('icqq', 'group:g1').coldField).toEqual({ enabled: false, threshold: 20, durationMs: 1_800_000 });
+    // The instance level only provides default parameters; it cannot switch cold-field on for every group.
+    await expect(ops.set({ expectedRevision: 0, actorId: 'console', defaults: { coldField: { enabled: true } } }))
+      .rejects.toBeInstanceOf(SessionOpsValidationError);
+    const result = await ops.set({
+      expectedRevision: 0,
+      actorId: 'console',
+      defaults: { coldField: { threshold: 30, durationMs: 600_000 } },
+      sessions: [{ platform: 'icqq', sceneId: 'group:g1', coldField: { enabled: true, threshold: 5 } }],
+    });
+    expect(result.changes.map((change) => change.scope.level)).toEqual(['instance', 'session']);
+    expect(ops.resolve('icqq', 'group:g1').coldField).toEqual({ enabled: true, threshold: 5, durationMs: 600_000 });
+    expect(ops.resolve('icqq', 'group:g2').coldField).toEqual({ enabled: false, threshold: 30, durationMs: 600_000 });
+    await ops.set({ expectedRevision: 1, actorId: 'console', sessions: [{ platform: 'icqq', sceneId: 'group:g1', coldField: { threshold: null } }] });
+    expect(ops.resolve('icqq', 'group:g1').coldField.threshold).toBe(30);
+    for (const bad of [
+      { defaults: { coldField: { threshold: 0 } } },
+      { defaults: { coldField: { threshold: 1_001 } } },
+      { defaults: { coldField: { durationMs: 59_999 } } },
+      { defaults: { coldField: { durationMs: 86_400_001 } } },
+      { sessions: [{ platform: 'icqq', sceneId: 'group:g1', coldField: { enabled: 'yes' } }] },
+      { sessions: [{ platform: 'icqq', sceneId: 'group:g1', coldField: { window: 1 } }] },
+    ]) {
+      await expect(ops.set({ expectedRevision: 2, actorId: 'console', ...bad } as never)).rejects.toBeInstanceOf(SessionOpsValidationError);
+    }
+  });
+
+  it('persists coldField and treats it as off while the store is unavailable', async () => {
+    const parsed = parseSessionOpsDocument(JSON.stringify({
+      defaults: { coldField: { threshold: 40 } },
+      sessions: [{ platform: 'icqq', sceneId: 'group:g1', overrides: { coldField: { enabled: true } } }],
+    }));
+    expect(parsed.defaults.coldField).toEqual({ enabled: false, threshold: 40, durationMs: 1_800_000 });
+    expect(parsed.sessions[0]!.overrides.coldField).toEqual({ enabled: true });
+    expect(() => parseSessionOpsDocument(JSON.stringify({ defaults: { coldField: { enabled: true } } }))).toThrow(SessionOpsValidationError);
+
+    const model = memoryModel({
+      id: AI_SESSION_OPS_ROW_ID, revision: 1,
+      state: JSON.stringify({ sessions: [{ platform: 'icqq', sceneId: 'group:g1', overrides: { coldField: { enabled: true } } }] }),
+    });
+    const ops = new AiSessionOps();
+    await ops.upgradeToDatabase(model.model);
+    expect(ops.resolve('icqq', 'group:g1').coldField.enabled).toBe(true);
+    model.failReads(true);
+    await ops.reload();
+    expect(ops.available).toBe(false);
+    expect(ops.resolve('icqq', 'group:g1').coldField).toEqual({ enabled: false, threshold: 20, durationMs: 1_800_000 });
+  });
+
   it('refuses a stale expectedRevision without overwriting', async () => {
     const ops = new AiSessionOps();
     await ops.set({ expectedRevision: 0, actorId: 'console', sessions: [{ platform: 'icqq', sceneId: 'group:g1', welcome: { enabled: true } }] });

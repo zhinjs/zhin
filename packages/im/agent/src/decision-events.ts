@@ -111,6 +111,10 @@ export const DECISION_REASON_CODES = [
   // ADR 0037 切片 E：群管冷却（同一 platform + scene_id + 工具本地名，在硬闸之前判定）
   'ops_cooldown_hit',
   'ops_cooldown_passed',
+  // ADR 0037 切片 C：冷场 → 会话临时 mention_only（复用 control_change / control_gate，不新增 kind）
+  'cold_field_mention_only_on',
+  'cold_field_mention_only_expired',
+  'cold_field_mention_only_cleared',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

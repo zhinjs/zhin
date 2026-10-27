@@ -67,6 +67,8 @@ describe('DecisionEventLog reads (slice C)', () => {
     expect((await log.query({ platform: 'icqq' })).map((r) => r.turnId)).toEqual(['a', 'a']);
     expect((await log.query({ since: 2_000, before: 3_000 })).map((r) => r.ts)).toEqual([2_000]);
     expect((await log.query({ kind: 'model_run', outcome: 'allow' }))).toHaveLength(1);
+    expect((await log.query({ reasonCode: 'model_completed' })).map((r) => r.ts)).toEqual([2_000]);
+    expect(await log.query({ reasonCode: 'cold_field_mention_only_on' })).toEqual([]);
     expect((await log.turn('a')).map((r) => r.kind)).toEqual(['inbound_wake', 'model_run']);
     expect(await log.turn('')).toEqual([]);
   });
@@ -89,6 +91,9 @@ describe('DecisionEventLog reads (slice C)', () => {
       ['orderBy', 'ts', 'DESC'],
       ['limit', 10_000],
     ]);
+    calls.length = 0;
+    await log.query({ kind: 'control_change', reasonCode: 'cold_field_mention_only_on' });
+    expect(calls[0]).toEqual(['where', { kind: 'control_change', reason_code: 'cold_field_mention_only_on' }]);
     calls.length = 0;
     await log.turn('t');
     expect(calls).toEqual([['where', { turn_id: 't' }], ['orderBy', 'ts', 'ASC'], ['limit', 10_000]]);

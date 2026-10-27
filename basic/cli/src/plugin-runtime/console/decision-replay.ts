@@ -12,7 +12,8 @@ import { getLogger, formatCompact } from '@zhin.js/logger';
 /**
  * Console 回放（ADR 0036 切片 C）：只读查询 `ai_decision_events`。
  *
- * - `plugin.root.decisions`：倒序列表（新 → 旧），按平台 / 会话 / kind / outcome / 时间过滤，`nextBefore` 翻页。
+ * - `plugin.root.decisions`：倒序列表（新 → 旧），按平台 / 会话 / kind / outcome / reasonCode / 时间过滤，`nextBefore` 翻页。
+ *   `reasonCode` 用于复用 kind 的场景（如 ADR 0037 切片 C 冷场复用 `control_change`，按 `cold_field_mention_only_*` 区分）。
  * - `plugin.root.decision-turn`：按 `turn_id` 展开一个回合，正序时间线。
  * - `plugin.root.decisions-export`：时间窗内（可叠加同样的过滤）导出 JSON，字段与表结构一致（snake_case），
  *   按 `nextSince` 分页（单次返回受 Console RPC 256 KiB 上限约束）。
@@ -48,6 +49,8 @@ void _exhaustive;
 const KINDS: ReadonlySet<string> = new Set(KIND_LIST);
 const OUTCOMES: ReadonlySet<string> = new Set(OUTCOME_LIST);
 const MAX_TEXT = 256;
+/** `reason_code` 形状（码表在 agent 包，这里只校验形状；拼错时返回空页而不是报错）。 */
+const REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/u;
 
 export type DecisionEventsSource = () => DecisionEventReader | undefined;
 
@@ -119,6 +122,8 @@ export function parseDecisionFilter(input: PluginConsoleRpcInput): Omit<Decision
   if (kind && !KINDS.has(kind)) invalid(`未知 kind：${kind}`);
   const outcome = optionalText(input, 'outcome');
   if (outcome && !OUTCOMES.has(outcome)) invalid(`未知 outcome：${outcome}`);
+  const reasonCode = optionalText(input, 'reasonCode');
+  if (reasonCode && !REASON_CODE_PATTERN.test(reasonCode)) invalid(`reasonCode 形如 cold_field_mention_only_on：${reasonCode}`);
   const since = optionalTimestamp(input, 'since');
   const before = optionalTimestamp(input, 'before');
   if (since !== undefined && before !== undefined && since >= before) invalid('since 必须早于 before');
@@ -131,6 +136,7 @@ export function parseDecisionFilter(input: PluginConsoleRpcInput): Omit<Decision
     ...(sceneId ? { sceneId } : {}),
     ...(kind ? { kind } : {}),
     ...(outcome ? { outcome } : {}),
+    ...(reasonCode ? { reasonCode } : {}),
   };
 }
 

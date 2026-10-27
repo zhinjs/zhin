@@ -114,6 +114,14 @@ describe('reason_code registry', () => {
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
   });
 
+  it('appends the ADR 0037 slice C cold-field codes after the slice E codes (kinds are reused)', () => {
+    const slice = ['cold_field_mention_only_on', 'cold_field_mention_only_expired', 'cold_field_mention_only_cleared'];
+    const start = DECISION_REASON_CODES.indexOf('cold_field_mention_only_on');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('ops_cooldown_passed'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+    expect(DECISION_REASON_CODES.slice(-slice.length)).toEqual(slice);
+  });
+
   it('keeps deprecated codes parseable', () => {
     for (const code of DEPRECATED_DECISION_REASON_CODES) expect(isDecisionReasonCode(code)).toBe(true);
   });

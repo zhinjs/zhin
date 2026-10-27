@@ -214,3 +214,77 @@ describe('AiControlPlane persistence', () => {
     expect(() => parseControlDocument('{"sessions":{}}')).toThrow(ControlValidationError);
   });
 });
+
+describe('AiControlPlane temporary overrides (ADR 0037 §1.3, slice C · cold field)', () => {
+  const g1 = { platform: 'icqq', sceneId: 'group:g1' };
+  const g2 = { platform: 'icqq', sceneId: 'group:g2' };
+  const unaddressed = (target: typeof g1) => ({ ...target, addressed: false });
+
+  it('adds a policy mention_only with expiresAt, stored apart from manual overrides and outside revision', () => {
+    let now = 1_000;
+    const plane = new AiControlPlane(() => now);
+    const entry = plane.addTemporaryMentionOnly({ ...g1, durationMs: 60_000 });
+    expect(entry).toEqual({ ...g1, switch: 'mention_only', source: 'cold_field', actor: 'policy', since: 1_000, expiresAt: 61_000 });
+    const snap = plane.snapshot();
+    expect(snap.revision).toBe(0);
+    expect(snap.sessions).toEqual([]);
+    expect(snap.temporary).toEqual([entry]);
+    expect(plane.gate(unaddressed(g1))).toEqual({ blocked: true, switch: 'mention_only', level: 'policy', reasonCode: 'control_mention_only', outcome: 'skip' });
+    expect(plane.gate({ ...g1, addressed: true })).toEqual({ blocked: false });
+    expect(plane.outboundGate(g1.platform, g1.sceneId)).toEqual({ blocked: false });
+    expect(plane.gate(unaddressed(g2))).toEqual({ blocked: false });
+    expect(plane.effective(g1.platform, g1.sceneId).mention_only).toBe(true);
+
+    now = 61_000;
+    expect(plane.gate(unaddressed(g1))).toEqual({ blocked: false });
+    expect(plane.snapshot().temporary).toEqual([]);
+    expect(plane.expireTemporary()).toEqual([entry]);
+    expect(plane.expireTemporary()).toEqual([]);
+  });
+
+  it('only ever adds strictness: no-op when mention_only is already on, never touches manual switches', async () => {
+    const plane = new AiControlPlane(() => 1_000);
+    await plane.set({ expectedRevision: 0, sessions: [{ ...g1, flags: { mention_only: true } }], actorId: 'op' });
+    expect(plane.addTemporaryMentionOnly({ ...g1, durationMs: 60_000 })).toBeUndefined();
+    await plane.set({ expectedRevision: 1, instance: { mention_only: true }, actorId: 'op' });
+    expect(plane.addTemporaryMentionOnly({ ...g2, durationMs: 60_000 })).toBeUndefined();
+    await plane.set({ expectedRevision: 2, instance: { mention_only: false }, sessions: [{ ...g1, flags: { mention_only: false } }], actorId: 'op' });
+    expect(plane.addTemporaryMentionOnly({ ...g2, durationMs: 60_000 })).toBeDefined();
+    expect(plane.addTemporaryMentionOnly({ ...g2, durationMs: 60_000 })).toBeUndefined();
+    expect(plane.addTemporaryMentionOnly({ ...g1, durationMs: 0 })).toBeUndefined();
+    expect(plane.addTemporaryMentionOnly({ platform: 'icqq', sceneId: 'g1', durationMs: 60_000 })).toBeUndefined();
+    // A stricter manual switch still wins over the policy override.
+    await plane.set({ expectedRevision: 3, sessions: [{ ...g2, flags: { muted: true } }], actorId: 'op' });
+    expect(plane.gate(unaddressed(g2))).toMatchObject({ reasonCode: 'control_muted_session', level: 'session' });
+    expect(plane.snapshot().sessions).toEqual([{ ...g2, flags: { muted: true } }]);
+  });
+
+  it('operator turning mention_only off clears the temporary override (session or instance), even without a manual change', async () => {
+    const plane = new AiControlPlane(() => 1_000);
+    plane.addTemporaryMentionOnly({ ...g1, durationMs: 60_000 });
+    plane.addTemporaryMentionOnly({ ...g2, durationMs: 60_000 });
+    const muted = await plane.set({ expectedRevision: 0, sessions: [{ ...g1, flags: { muted: true } }], actorId: 'op' });
+    expect(muted.clearedTemporary).toEqual([]);
+    expect(plane.snapshot().temporary).toHaveLength(2);
+
+    const off = await plane.set({ expectedRevision: 1, sessions: [{ ...g1, flags: { mention_only: false } }], actorId: 'op' });
+    expect(off.changes).toEqual([]);
+    expect(off.clearedTemporary.map((entry) => entry.sceneId)).toEqual(['group:g1']);
+    expect(off.snapshot.temporary.map((entry) => entry.sceneId)).toEqual(['group:g2']);
+    expect(off.snapshot.revision).toBe(2);
+
+    const all = await plane.set({ expectedRevision: 2, instance: { mention_only: false }, actorId: 'op' });
+    expect(all.clearedTemporary.map((entry) => entry.sceneId)).toEqual(['group:g2']);
+    expect(plane.snapshot().temporary).toEqual([]);
+  });
+
+  it('keeps the temporary override when the write fails', async () => {
+    const model = memoryModel();
+    model.create.mockRejectedValueOnce(new Error('write failed'));
+    const plane = new AiControlPlane(() => 1_000);
+    await plane.upgradeToDatabase(model as unknown as ControlStateModel);
+    plane.addTemporaryMentionOnly({ ...g1, durationMs: 60_000 });
+    await expect(plane.set({ expectedRevision: 0, sessions: [{ ...g1, flags: { mention_only: false } }], actorId: 'op' })).rejects.toThrow();
+    expect(plane.snapshot().temporary).toHaveLength(1);
+  });
+});

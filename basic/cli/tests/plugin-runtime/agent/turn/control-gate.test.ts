@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { RuntimeMessage } from '../../../../../../packages/im/core/src/plugin-runtime/im/contracts.js';
 import { describe, expect, it, vi } from 'vitest';
-import { AiControlPlane, DecisionEventLog, SessionProfileStore, type TurnRequest } from '@zhin.js/agent';
+import { AiControlPlane, AiSessionOps, DecisionEventLog, SessionProfileStore, type TurnRequest } from '@zhin.js/agent';
 import { MemoryConversationEventStore, type ConversationEvent } from '@zhin.js/im-contract';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { AgentTurnIngressRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
@@ -49,9 +49,11 @@ describe('control gate helpers', () => {
 });
 
 function ingressHarness(options: { plane: AiControlPlane; log: DecisionEventLog; sessions?: SessionProfileStore;
-  execute?: (request: TurnRequest) => Promise<unknown> }) {
+  execute?: (request: TurnRequest) => Promise<unknown>; group?: boolean; sessionOps?: AiSessionOps }) {
   const endpoint = { adapter: 'root', id: 'root\u0000zhin.adapter\u0000fixture' };
-  const conversation = { endpoint, kind: 'private' as const, id: 'user' };
+  const conversation = options.group
+    ? { endpoint, kind: 'group' as const, id: 'g1' }
+    : { endpoint, kind: 'private' as const, id: 'user' };
   const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
   const reply = vi.fn(async () => ({ status: 'sent' as const }));
   const message = new RuntimeMessage(conversation, 'hello', 1, reply, { id: 'user' }, {}, [], undefined, 'bot', false, undefined, undefined, 'fixture', {});
@@ -71,6 +73,7 @@ function ingressHarness(options: { plane: AiControlPlane; log: DecisionEventLog;
       agent: {
         getControlPlane: () => options.plane,
         getDecisionEvents: () => options.log,
+        getSessionOps: () => options.sessionOps,
         getUserProfiles: () => ({ sessions: { observeInbound } }),
       },
     } as never,
@@ -104,6 +107,20 @@ describe('IM ingress with the control plane', () => {
     await flow.run();
     expect(flow.observeInbound).toHaveBeenCalledOnce();
     expect(flow.executeLeased).toHaveBeenCalledOnce();
+  });
+
+  it('a cold-field temporary mention_only (ADR 0037 slice C) skips unaddressed group messages as policy:mention_only', async () => {
+    const plane = new AiControlPlane();
+    const fresh = new DecisionEventLog();
+    plane.addTemporaryMentionOnly({ platform: 'fixture', sceneId: 'group:g1', durationMs: 60_000 });
+    const flow = ingressHarness({ plane, log: fresh, group: true });
+    await expect(flow.run()).resolves.toBe(false);
+    await fresh.idle();
+    expect(flow.observeInbound).not.toHaveBeenCalled();
+    expect(flow.executeLeased).not.toHaveBeenCalled();
+    expect(rows(fresh)).toEqual([['control_gate', 'skip', 'control_mention_only'], ['model_skip', 'skip', 'control_mention_only']]);
+    expect(fresh.recent()[0]).toMatchObject({ actor: 'policy', reasonDetail: 'policy:mention_only', sceneId: 'group:g1' });
+    expect(plane.snapshot().revision).toBe(0);
   });
 
   it('a switch flipped mid-turn suppresses the reply (outbound backstop)', async () => {

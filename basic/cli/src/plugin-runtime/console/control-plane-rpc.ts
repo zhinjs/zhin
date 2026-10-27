@@ -1,6 +1,13 @@
 // `@zhin.js/agent` 是可选 peer：这里只做类型导入，运行时不依赖它（错误按 `name` 识别）。
 import { randomUUID } from 'node:crypto';
-import type { AiControlPlane, ControlChange, ControlFlagsPatch, ControlSnapshot, DecisionEventLog } from '@zhin.js/agent';
+import type {
+  AiControlPlane,
+  ControlChange,
+  ControlFlagsPatch,
+  ControlSnapshot,
+  ControlTemporaryOverride,
+  DecisionEventLog,
+} from '@zhin.js/agent';
 import { PluginConsoleRpcError, type PluginConsoleRpcInput, type PluginConsoleRpcJson, type PluginConsoleRpcMethod, type PluginConsoleRpcStatus } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -12,6 +19,10 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
  *   且不覆盖。每个实际变化的范围写一行 `kind=control_change`、`actor=operator`，`payload` 记前后值。
  *
  * 这是唯一的写入口：**模型没有任何工具能读写这些开关**。
+ *
+ * 冷场临时覆盖（ADR 0037 §1.3，切片 C）：`control` 返回 `temporary[]`（来源、`actor=policy`、`since`、`expiresAt`），
+ * 不计入 `revision`。`control-set` 显式写 `mention_only: false` 时一并清除对应临时覆盖，并按会话各写一行
+ * `control_change` / `cold_field_mention_only_cleared`（`actor=operator`）。
  */
 
 export const CONTROL_READ_PERMISSION = 'control:read';
@@ -44,6 +55,7 @@ export function controlSnapshotJson(snapshot: ControlSnapshot): PluginConsoleRpc
     revision: snapshot.revision,
     instance: { ...snapshot.instance },
     sessions: snapshot.sessions.map((entry) => ({ platform: entry.platform, sceneId: entry.sceneId, flags: { ...entry.flags } })),
+    temporary: (snapshot.temporary ?? []).map((entry) => ({ ...entry })),
     updatedAt: snapshot.updatedAt,
     updatedBy: snapshot.updatedBy,
     persistent: snapshot.persistent,
@@ -124,6 +136,32 @@ export function auditControlChanges(
   }
 }
 
+/** 运营者手动关掉 `mention_only` 时一并清除的冷场临时覆盖：每个会话一行 `cold_field_mention_only_cleared`。 */
+export function auditClearedTemporary(
+  log: DecisionEventLog | undefined,
+  cleared: readonly ControlTemporaryOverride[],
+  revision: number,
+  actorId: string,
+): void {
+  if (!log || cleared.length === 0) return;
+  const turnId = randomUUID();
+  for (const entry of cleared) {
+    void log.record({
+      turnId,
+      instanceId: '*',
+      platform: entry.platform,
+      sceneId: entry.sceneId,
+      kind: 'control_change',
+      outcome: 'allow',
+      reasonCode: 'cold_field_mention_only_cleared',
+      reasonDetail: `policy off:${entry.switch}`,
+      payload: { level: 'policy', source: entry.source, switch: entry.switch, since: entry.since, expiresAt: entry.expiresAt, revision },
+      actor: 'operator',
+      actorId,
+    }).catch(() => undefined);
+  }
+}
+
 function mapSetError(error: unknown): never {
   if (error instanceof PluginConsoleRpcError) throw error;
   const name = error instanceof Error ? error.name : '';
@@ -150,7 +188,9 @@ export async function setControl(
     mapSetError(error);
   }
   auditControlChanges(audit(), result.changes, result.snapshot.revision, CONTROL_CONSOLE_ACTOR_ID);
-  logger.info(formatCompact({ op: 'control_set', revision: result.snapshot.revision, changes: result.changes.length }));
+  const cleared = result.clearedTemporary ?? [];
+  auditClearedTemporary(audit(), cleared, result.snapshot.revision, CONTROL_CONSOLE_ACTOR_ID);
+  logger.info(formatCompact({ op: 'control_set', revision: result.snapshot.revision, changes: result.changes.length, clearedTemporary: cleared.length }));
   return { ...(controlSnapshotJson(result.snapshot) as Record<string, PluginConsoleRpcJson>), changed: result.changes.length } as PluginConsoleRpcJson;
 }
 

@@ -113,6 +113,7 @@ import {
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { MemberLifecycle } from './member-lifecycle.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
+import { ColdFieldMonitor } from './cold-field.js';
 import {
   auditCannotSpeak,
   auditModelError,
@@ -182,6 +183,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /** ADR 0037 切片 B：批准后的公告发送（过控制面、session-gate，以审批记录作硬闸批准）。 */
   readonly #announcements: AnnouncementDispatcher;
   readonly #stopAnnouncementSweep: () => void;
+  /** ADR 0037 切片 C：冷场计数 → 会话临时 mention_only（控制面临时覆盖，到期撤销）。 */
+  readonly #coldField: ColdFieldMonitor;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -191,6 +194,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
       () => options.agent.agent.getControlPlane?.(),
       () => options.agent.agent.getDecisionEvents?.(),
     );
+    this.#coldField = new ColdFieldMonitor({
+      sessionOps: () => options.agent.agent.getSessionOps?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
+    });
     this.#memberLifecycle = this.#createMemberLifecycle();
     this.#announcements = this.#createAnnouncementDispatcher();
     this.#stopAnnouncementSweep = this.#announcements.start();
@@ -215,6 +223,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
       hardGate: () => options.agent.agent.config?.toolHardGate,
       approvals: () => options.agent.agent.toolApprovals,
+      onSpoke: (key) => this.#noteSpoke(key),
       sendNotice: async (target, content) => {
         if (target.scope !== 'group') return { status: 'unsupported' as const, code: 'group_notice_requires_group' };
         const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
@@ -281,7 +290,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         );
       },
       timeoutMs: () => resolveTriggerTimeoutMs(options.agent.service.getTriggerConfig()),
-      onSpoke: (key) => this.#ambientEngagement()?.noteSpoke(key),
+      onSpoke: (key) => this.#noteSpoke(key),
     });
   }
 
@@ -300,7 +309,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         if (content.length === 0) return { status: 'suppressed' as const };
         return deliveryOutcomeFromReceipt(await options.im.send({ conversation, requester: rootPluginId(), content }));
       },
-      onSpoke: (key) => this.#ambientEngagement()?.noteSpoke(key),
+      onSpoke: (key) => this.#noteSpoke(key),
     });
   }
 
@@ -322,7 +331,14 @@ export class AgentTurnIngressRoute implements IngressRoute {
     return this.#memberLifecycle.ownsWelcome(conversation);
   }
 
+  /** Bot 在场景里主动说过话：旁听「对话进行中」窗口 + 冷场计数清零。`key` 为 `<platform>:<群号>`。 */
+  #noteSpoke(key: string): void {
+    this.#ambientEngagement()?.noteSpoke(key);
+    this.#coldField.reset(key);
+  }
+
   dispose(): void {
+    this.#coldField.dispose();
     this.#memberLifecycle.dispose();
     this.#stopAnnouncementSweep();
     this.#sceneEvents.dispose();
@@ -455,6 +471,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
     });
     this.options.assistantStatus?.recordAmbient(key, decision);
     auditAmbientDecision(audit, decision);
+    // 冷场（ADR 0037 §1.3）：旁听参与清零；判定为不参与（declined / shadow / skipped）计 1。
+    if (decision.kind === 'engage') this.#coldField.reset(key);
+    else this.#coldField.noteNotEngaged({ platform, conversationId: message.conversation.id });
     if (decision.kind !== 'skipped' || decision.reason !== 'superseded') {
       logger.info(formatCompact({
         op: 'ambient_engagement',
@@ -632,6 +651,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const controlTarget: ControlGateTarget | undefined = turnAccess.origin.kind === 'im'
         ? { platform, scope: turnAccess.origin.scope, sceneId: turnAccess.origin.sceneId }
         : undefined;
+      // 冷场（ADR 0037 §1.3）：群里任意一条点名消息清零计数（不论之后是否被别的开关拦下）。
+      if (ambientKey && matched != null) this.#coldField.reset(ambientKey);
       if (controlTarget) {
         const verdict = checkControlAtIngress(control, controlTarget, matched != null || controlTarget.scope === 'private');
         if (verdict.blocked) {

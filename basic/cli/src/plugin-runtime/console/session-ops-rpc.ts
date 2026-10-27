@@ -15,6 +15,7 @@ import type { MemberLifecycle } from '../agent/turn/member-lifecycle.js';
  *   且不覆盖。每个实际变化的范围写一行 `kind=config_change`、`actor=operator`。
  *
  * `ops.cooldownMs`（ADR 0037 §3 群管冷却，切片 E）与欢迎 / 退群同在这里配置（实例默认 + 会话覆盖）。
+ * `coldField`（ADR 0037 §1.3 冷场，切片 C）：`enabled` 只能按会话打开，实例默认只给 `threshold` / `durationMs`。
  * 权限仍是 `control:read` / `control:write`：这里改的是运营配置，不是审批；`ops:approve` 只管结算审批卡与公告审批。
  * 模型没有工具能读写这些配置。
  */
@@ -42,7 +43,7 @@ function requireOps(source: SessionOpsSource): AiSessionOps {
 }
 
 function configJson(config: SessionOpsConfig): Record<string, PluginConsoleRpcJson> {
-  return { welcome: { ...config.welcome }, leave: { ...config.leave }, ops: { ...config.ops } } as unknown as Record<string, PluginConsoleRpcJson>;
+  return { welcome: { ...config.welcome }, leave: { ...config.leave }, ops: { ...config.ops }, coldField: { ...config.coldField } } as unknown as Record<string, PluginConsoleRpcJson>;
 }
 
 export function sessionOpsSnapshotJson(snapshot: SessionOpsSnapshot, ops?: AiSessionOps): PluginConsoleRpcJson {

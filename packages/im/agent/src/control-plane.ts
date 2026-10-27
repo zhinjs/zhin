@@ -8,6 +8,10 @@
  * - 判定是纯内存读，不依赖审计写成功；持久化读不出来时 **fail closed**（按 `emergency_stop` 处理），
  *   直到重新读成功或运营者成功写入一次。
  * - 写入只经 Console（`control-set`），必须带 `expectedRevision`；**模型没有任何工具能读写这些开关**。
+ * - 临时覆盖（ADR 0037 §1.3，第 1 期切片 C · 冷场）：策略（`actor=policy`）可给某会话加一条带 `expiresAt` 的
+ *   `mention_only`。与运营者的手动覆盖**分开存放**、只在进程内存：只会更严（判定时与手动开关按 OR 合并），
+ *   策略永远不改手动开关；不进 `revision`（不与运营者写入冲突），但在 {@link ControlSnapshot.temporary} 可见。
+ *   运营者经 `control-set` 显式写 `mention_only: false`（会话或实例）时同时清除对应临时覆盖。
  */
 import { getLogger, formatCompact } from '@zhin.js/logger';
 import type { DecisionReasonCode } from './decision-events.js';
@@ -21,6 +25,8 @@ export const AI_CONTROL_STATE_ROW_ID = 'control';
 export const CONTROL_STATE_RETRY_MS = 30_000;
 /** 会话覆盖条数上限（防止误用把整张表塞满）。 */
 export const MAX_CONTROL_SESSION_OVERRIDES = 1_000;
+/** 临时覆盖条数上限（进程内）。 */
+export const MAX_CONTROL_TEMPORARY_OVERRIDES = 1_000;
 
 export const CONTROL_SWITCHES = ['emergency_stop', 'muted', 'read_only', 'mention_only'] as const;
 export type ControlSwitch = typeof CONTROL_SWITCHES[number];
@@ -44,10 +50,35 @@ export interface ControlSessionOverride {
   readonly flags: ControlFlagsPatch;
 }
 
+/** 临时覆盖的来源；目前只有冷场（ADR 0037 §1.3）。 */
+export type ControlTemporarySource = 'cold_field';
+
+/** 策略加的临时覆盖（不进 revision，只在进程内存；到期自动失效）。 */
+export interface ControlTemporaryOverride {
+  readonly platform: string;
+  /** `<scope>:<sceneId>`。 */
+  readonly sceneId: string;
+  /** 目前只会临时打开 `mention_only`。 */
+  readonly switch: 'mention_only';
+  readonly source: ControlTemporarySource;
+  readonly actor: 'policy';
+  readonly since: number;
+  readonly expiresAt: number;
+}
+
+export interface ControlTemporaryInput {
+  readonly platform: string;
+  readonly sceneId: string;
+  readonly durationMs: number;
+  readonly source?: ControlTemporarySource;
+}
+
 export interface ControlSnapshot {
   readonly revision: number;
   readonly instance: ControlFlags;
   readonly sessions: readonly ControlSessionOverride[];
+  /** 未到期的临时覆盖（策略加的，不计入 `revision`）。 */
+  readonly temporary: readonly ControlTemporaryOverride[];
   readonly updatedAt: number | null;
   readonly updatedBy: string | null;
   /** 是否落库（未接数据库时只在进程内，重启丢失）。 */
@@ -56,7 +87,8 @@ export interface ControlSnapshot {
   readonly available: boolean;
 }
 
-export type ControlLevel = 'instance' | 'session' | 'unavailable';
+/** `policy`：命中的是策略加的临时覆盖（如冷场 `mention_only`）。 */
+export type ControlLevel = 'instance' | 'session' | 'policy' | 'unavailable';
 
 export type ControlVerdict =
   | Readonly<{ blocked: false }>
@@ -164,6 +196,7 @@ function blocked(
 }
 
 const UNAVAILABLE: ControlVerdict = blocked('emergency_stop', 'unavailable', 'control_emergency_stop', 'deny');
+const POLICY_MENTION_ONLY: ControlVerdict = blocked('mention_only', 'policy', 'control_mention_only', 'skip');
 
 /** `ai_control_state` 模型（`@zhin.js/database`）只用到这几个方法。 */
 interface ControlStateSelect extends PromiseLike<Record<string, unknown>[]> {
@@ -196,6 +229,8 @@ export interface ControlSetResult {
   readonly snapshot: ControlSnapshot;
   /** 实际变化的范围；没有变化时为空数组（revision 仍然 +1，便于前端确认写入成功）。 */
   readonly changes: readonly ControlChange[];
+  /** 因运营者显式关掉 `mention_only` 而被一并清除的临时覆盖。 */
+  readonly clearedTemporary: readonly ControlTemporaryOverride[];
 }
 
 function serializeDocument(doc: ControlDocument): string {
@@ -259,6 +294,8 @@ export class AiControlPlane {
   #lastLoadAttempt = 0;
   #loading: Promise<boolean> | undefined;
   #writes: Promise<unknown> = Promise.resolve();
+  /** 策略临时覆盖（与 `#doc` 手动覆盖分存；不落库、不进 revision）。 */
+  readonly #temporary = new Map<string, ControlTemporaryOverride>();
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -330,6 +367,8 @@ export class AiControlPlane {
       instance: this.#doc.instance,
       sessions: Object.freeze([...this.#doc.sessions.values()]
         .sort((a, b) => a.platform.localeCompare(b.platform) || a.sceneId.localeCompare(b.sceneId))),
+      temporary: Object.freeze(this.#activeTemporary()
+        .sort((a, b) => a.platform.localeCompare(b.platform) || a.sceneId.localeCompare(b.sceneId))),
       updatedAt: this.#updatedAt,
       updatedBy: this.#updatedBy,
       persistent: this.persistent,
@@ -337,7 +376,60 @@ export class AiControlPlane {
     });
   }
 
-  /** 该会话合并后的有效开关（实例 OR 会话）。 */
+  #activeTemporary(): ControlTemporaryOverride[] {
+    const now = this.now();
+    return [...this.#temporary.values()].filter((entry) => entry.expiresAt > now);
+  }
+
+  /** 该会话未到期的临时覆盖。 */
+  temporary(platform: string, sceneId: string): ControlTemporaryOverride | undefined {
+    const entry = this.#temporary.get(sessionKey(platform, sceneId));
+    return entry && entry.expiresAt > this.now() ? entry : undefined;
+  }
+
+  /**
+   * 策略加一条临时 `mention_only`（冷场，ADR 0037 §1.3）。只会更严：该会话已经处于 `mention_only`
+   * （实例 / 手动会话覆盖 / 未到期的临时覆盖）、状态不可用、参数不合法或达到上限时不加，返回 `undefined`。
+   * 不改手动覆盖、不进 revision、不落库。
+   */
+  addTemporaryMentionOnly(input: ControlTemporaryInput): ControlTemporaryOverride | undefined {
+    if (!this.#available) return undefined;
+    if (!input.platform || !/^(private|group|channel):.+/u.test(input.sceneId)) return undefined;
+    if (!Number.isSafeInteger(input.durationMs) || input.durationMs <= 0) return undefined;
+    if (this.effective(input.platform, input.sceneId).mention_only) return undefined;
+    const key = sessionKey(input.platform, input.sceneId);
+    if (!this.#temporary.has(key) && this.#temporary.size >= MAX_CONTROL_TEMPORARY_OVERRIDES) {
+      this.expireTemporary();
+      if (this.#temporary.size >= MAX_CONTROL_TEMPORARY_OVERRIDES) return undefined;
+    }
+    const since = this.now();
+    const entry: ControlTemporaryOverride = Object.freeze({
+      platform: input.platform,
+      sceneId: input.sceneId,
+      switch: 'mention_only',
+      source: input.source ?? 'cold_field',
+      actor: 'policy',
+      since,
+      expiresAt: since + input.durationMs,
+    });
+    this.#temporary.set(key, entry);
+    return entry;
+  }
+
+  /** 撤掉已到期的临时覆盖并返回它们（调用方写 `cold_field_mention_only_expired`）。判定本身不依赖这一步。 */
+  expireTemporary(): ControlTemporaryOverride[] {
+    const now = this.now();
+    const expired: ControlTemporaryOverride[] = [];
+    for (const [key, entry] of this.#temporary) {
+      if (entry.expiresAt <= now) {
+        this.#temporary.delete(key);
+        expired.push(entry);
+      }
+    }
+    return expired;
+  }
+
+  /** 该会话合并后的有效开关（实例 OR 会话 OR 未到期的临时覆盖）。 */
   effective(platform: string, sceneId: string): ControlFlags {
     const session = this.#doc.sessions.get(sessionKey(platform, sceneId))?.flags;
     const instance = this.#doc.instance;
@@ -345,7 +437,7 @@ export class AiControlPlane {
       emergency_stop: instance.emergency_stop || session?.emergency_stop === true,
       muted: instance.muted || session?.muted === true,
       read_only: instance.read_only || session?.read_only === true,
-      mention_only: instance.mention_only || session?.mention_only === true,
+      mention_only: instance.mention_only || session?.mention_only === true || this.temporary(platform, sceneId) !== undefined,
     });
   }
 
@@ -353,7 +445,11 @@ export class AiControlPlane {
   gate(input: ControlGateInput): ControlVerdict {
     this.#retryIfDue();
     if (!this.#available) return UNAVAILABLE;
-    return evaluateControl(this.#doc.instance, this.#doc.sessions.get(sessionKey(input.platform, input.sceneId))?.flags, input);
+    const verdict = evaluateControl(this.#doc.instance, this.#doc.sessions.get(sessionKey(input.platform, input.sceneId))?.flags, input);
+    if (verdict.blocked || input.addressed) return verdict;
+    // 临时覆盖只会更严，排在手动开关之后：手动 mention_only 命中时上面已返回 session / instance 级。
+    if (this.temporary(input.platform, input.sceneId)) return POLICY_MENTION_ONLY;
+    return verdict;
   }
 
   /**
@@ -447,6 +543,20 @@ export class AiControlPlane {
     this.#updatedAt = updatedAt;
     this.#updatedBy = input.actorId;
     this.#available = true;
-    return { snapshot: this.snapshot(), changes };
+    // 运营者显式关掉 mention_only：一并清除对应临时覆盖（实例级 = 全部会话）。写库成功后才清。
+    const clearedTemporary: ControlTemporaryOverride[] = [];
+    const clearKey = (key: string) => {
+      const entry = this.#temporary.get(key);
+      if (!entry) return;
+      this.#temporary.delete(key);
+      if (entry.expiresAt > updatedAt) clearedTemporary.push(entry);
+    };
+    if (instancePatch?.mention_only === false) {
+      for (const key of [...this.#temporary.keys()]) clearKey(key);
+    }
+    for (const patch of sessionPatches) {
+      if (patch.flags.mention_only === false) clearKey(sessionKey(patch.platform, patch.sceneId));
+    }
+    return { snapshot: this.snapshot(), changes, clearedTemporary };
   }
 }
