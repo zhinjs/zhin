@@ -137,8 +137,7 @@ export class ColdFieldMonitor {
       (handle as { unref?: () => void }).unref?.();
       return handle;
     });
-    let handle: unknown;
-    handle = set(() => {
+    const handle: unknown = set(() => {
       this.#timers.delete(handle);
       if (!this.#disposed) this.sweep();
     }, ms + 1);
