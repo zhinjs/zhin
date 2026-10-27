@@ -43,6 +43,7 @@ SQL databases persist structured usage independently, with a default 30-day rete
 | Hand long tasks to the background | [Sub-agents and spawn_task](#sub-agents-and-spawn-task) |
 | Where history is stored, how to reset, what happens when context gets long | [Sessions and session trees](#sessions-and-session-trees) · [Context compaction](#context-compaction) |
 | What the AI remembers, and who can change it | [Semantic memory](#semantic-memory) |
+| How the AI gets to know each person and each group, how affinity changes, and what happens when it is muted | [Session profiles](#session-profiles) |
 | Which tools the AI has built in, and file / network boundaries | [Built-in tools](#built-in-tools) |
 | Have the AI do things on a schedule | [Schedules and the assistant persona](#schedules-and-the-assistant-persona) |
 | Tune parameters for one model | [Per-model tuning](#per-model-tuning) |
@@ -301,6 +302,80 @@ ai:
 - Hosts and the Console view, edit, and delete memory in any scope through `SemanticMemoryRuntime` `list` / `upsert` / `delete`.
 
 Markdown file memory (`MEMORY.md`) is still injected whole within its character budgets; this release does not change it.
+
+## Session profiles
+
+Session profiles tell the Agent who it is talking to and where. A session is where a conversation happens: a private chat is a session with one person, a group or channel is a multi-person session. A session profile has two parts:
+
+- **Relations and affinity** (`ai_user_relations`): who this person is to the bot. Keyed by `platform + user_id`, so the same person is one person across groups and channels.
+- **Session context and speak limits** (`ai_session_profiles`): what this session is talking about, who the admins are, roughly how many people are talking, and whether the bot itself may speak. Keyed by `platform + scene_key` (`private:<id>` / `group:<id>` / `channel:<id>`); private chats and groups share the table, and in a private chat the member and admin fields stay empty.
+
+The `ai_user_profiles` key/value preferences (`set` / `get` / `delete` on the `user_profile` tool) have 8 fixed dimensions: `name`, `language`, `timezone`, `style`, `interests`, `dislikes`, `occupation`, `location` (common aliases such as `preferred_language`, `tz`, `hobbies` are normalized). Writing the same dimension overwrites it, any other key is refused, and values are capped at 80 characters and filtered for sensitive content, so each user has at most 8 rows and storage cannot grow without bound. Keys written by older versions are no longer read or injected.
+
+Every list field is replaced or deduplicated with a fixed cap:
+
+| Field | Cap | Write semantics |
+| --- | --- | --- |
+| Preferences (`ai_user_profiles`) | 8 dimensions, ≤80 chars each | overwrite per dimension |
+| `notes` | 8 items, ≤60 chars each | case-insensitive dedupe, oldest dropped on overflow |
+| `tone_hints` | 4 tags, ≤24 chars each | replaced as a whole, deduped |
+| `topics` | 5 items, ≤24 chars each | replaced as a whole, deduped |
+ Without a database, session profiles live in memory and are cleared on restart.
+
+### Relations and affinity
+
+| Field | Meaning |
+| --- | --- |
+| `display_name` / `preferred_address` | Platform nickname (refreshed every turn) / how they want to be called |
+| `notes` | Short facts or running jokes, ≤60 characters each, at most 8 (oldest dropped first) |
+| `tone_hints` | Tone tags for talking to this person, at most 4 |
+| `affinity` | Affinity from -100 to 100; new people start at 0 |
+| `relation_override` | Manually set relation; when empty it is derived from affinity and interactions |
+| `recent_scenes` | Groups or channels they appeared in recently (up to 5), for atmosphere only; a person is never split per group |
+| `interactions` / `last_seen_at` / `updated_at` | Interaction count, last seen, last updated |
+
+The relation is derived from affinity and interaction count: `stranger` → `acquaintance` (affinity ≥10 and ≥3 interactions) → `familiar` (≥30 and ≥8) → `close` (≥60 and ≥20). Hosts can pin it with `userProfiles.relations.setRelationOverride(platform, userId, relation)`; pass `null` to go back to the derived value.
+
+Affinity changes by rule, with no model call:
+
+- Normal chat that addresses the bot +1, thanks or praise +3, insults -5.
+- Using the bot only as a tool (the turn ran a business tool with no small talk) earns nothing; from the third such turn in a row each costs 1, and one normal chat resets the streak.
+- Gains have a 10-minute cooldown and a daily cap of +8; losses are capped at -20 per day.
+- Ambient turns (nobody addressed the bot) never change affinity, only last-seen and scenes, so group noise is not pinned on anyone.
+- The owner (`master`) stays at 100 and `close` and is never demoted.
+
+After the turn, once the reply is sent, affinity and presence are written back asynchronously; a failed write is only logged and never affects the reply.
+
+### Session context and speak limits
+
+| Field | Meaning |
+| --- | --- |
+| `title` | Group or channel name, when the platform provides one |
+| `topics` | Current topics, at most 5, each ≤24 characters |
+| `admins` | Owner and admins, at most 8; from sender platform roles and admin-change events |
+| `recent_speakers` / `joined_count` / `left_count` | People who spoke in the last day (at most 30, id and time only); joins and leaves since tracking began |
+| `bot_role` | The bot's role here: `unknown` / `member` / `admin` / `owner` |
+| `mute_until` / `muted_all` | When the bot's mute ends / whether the whole scene is muted (admins only) |
+| `restriction` / `restriction_until` | A restriction set by the host or a plugin, and when it ends (0 means until cleared) |
+
+Admins, the member overview, and mute state are kept by rule: every IM inbound message first folds in the `conversation_events` not seen yet (`member.joined` / `left` / `muted` / `unmuted` / `role_changed`) and the sender's role. To tell whether the muted member is the bot, the Endpoint id and a `selfId` in message metadata count as the bot's account; when the platform ids differ, hosts can write state directly with `userProfiles.sessions.setBotRole()` / `setRestriction()`. Repeated messages from one person write at most once every 5 minutes, and nothing is written when nothing changed.
+
+Topics are updated by the model through the `session_profile` tool on group and channel turns (`get` to read, `topics` to replace); they are not extracted from chat automatically.
+
+**No AI turn when the bot cannot speak**: when the bot is muted here, the whole scene is muted and the bot is not an admin, or an unexpired `restriction` is set, the inbound message is skipped before ambient judging and the AI turn: no model call, no ambient judge, and one `agent_turn_skipped_cannot_speak` log line. It resumes on its own when the mute ends or an unmute event arrives. If reading the session profile fails, the bot is treated as able to speak, so ordinary messages are never blocked by mistake.
+
+### Injection: this turn only, only the people involved, very short
+
+At the start of each turn the Agent adds a small piece of the session profile to the turn context, labelled as data rather than instructions, with a reminder not to read scores, ids, or notes back:
+
+- `[Relationship]`, at most 3 lines: a header, the sender of this message, and on ambient turns one person active in the same scene within the last 30 minutes. Other members' relations are never loaded, let alone the whole roster. At most 2 notes and 2 tone tags, each line ≤160 characters. Someone met for the first time with no profile yet is not injected.
+- `[Session]`, groups and channels only, a single line: at most 3 topics, 3 admins, roughly how many people are active, and whether the bot is an admin, ≤160 characters. Not injected in private chats.
+
+Together they are usually 2–4 lines. They form a separate block that is **valid for this turn only**: it is dropped before the message is stored in `agent_messages`, so later turns and new sessions never replay an old `[Relationship]` / `[Session]`; each turn rebuilds it from current data.
+
+### Writing notes, address, and tone
+
+Notes, preferred address, and tone are written explicitly by the model through the `user_profile` tool (`note` / `unnote` / `call_me` / `tone`); the persona is never rewritten automatically. Text that looks like a password, token, cookie, verification code, ID number, or a number of 11+ digits is refused (topics are filtered the same way). Logs record only error messages, never profile contents.
 
 ## Built-in tools
 

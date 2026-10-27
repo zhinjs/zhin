@@ -20,6 +20,7 @@ export {
   ContextSystem,
   createContextSystemForHost,
   ProfileContextBuilder,
+  SessionContextBuilder,
   ToneInjector,
   createDefaultContextBuilders,
 } from './context-system.js';

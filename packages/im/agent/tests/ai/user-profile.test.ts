@@ -2,7 +2,7 @@
  * UserProfileStore 测试
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { UserProfileStore } from '@zhin.js/agent';
+import { UserProfileStore, USER_PROFILE_KEYS } from '../../src/index.js';
 
 describe('UserProfileStore（内存模式）', () => {
   let store: UserProfileStore;
@@ -61,6 +61,41 @@ describe('UserProfileStore（内存模式）', () => {
       expect(summary).toContain('[User profile]');
       expect(summary).toContain('name: 小明');
       expect(summary).toContain('interests: 编程');
+    });
+  });
+
+  describe('固定维度', () => {
+    it('同一维度覆盖写入，别名归一化', async () => {
+      await store.set('u1', 'language', 'zh-CN');
+      await store.set('u1', 'preferred_language', 'en');
+      await store.set('u1', 'Time Zone', 'Asia/Manila');
+      expect(await store.getAll('u1')).toEqual({ language: 'en', timezone: 'Asia/Manila' });
+    });
+
+    it('拒绝固定维度之外的键、空值与敏感信息，值截断', async () => {
+      expect(await store.set('u1', 'favorite_food_2026', '火锅')).toBe(false);
+      expect(await store.set('u1', 'name', '   ')).toBe(false);
+      expect(await store.set('u1', 'occupation', '我的密码是 hunter2')).toBe(false);
+      expect(await store.set('u1', 'interests', 'x'.repeat(200))).toBe(true);
+      expect((await store.get('u1', 'interests'))!.length).toBe(80);
+      expect(Object.keys(await store.getAll('u1'))).toEqual(['interests']);
+    });
+
+    it('无论写多少次，每人最多 8 个维度', async () => {
+      for (let i = 0; i < 50; i += 1) {
+        for (const key of USER_PROFILE_KEYS) await store.set('u1', key, `v${i}`);
+        await store.set('u1', `extra_${i}`, 'x');
+      }
+      const all = await store.getAll('u1');
+      expect(Object.keys(all)).toEqual([...USER_PROFILE_KEYS]);
+      expect(all.name).toBe('v49');
+    });
+
+    it('旧版本写入的其他键不再注入', async () => {
+      const legacy = new UserProfileStore();
+      (legacy as any).store.set('u1', 'random_old_key', 'x');
+      await legacy.set('u1', 'name', '小明');
+      expect(await legacy.buildProfileSummary('u1')).toBe('[User profile]\n- name: 小明');
     });
   });
 

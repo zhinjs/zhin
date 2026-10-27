@@ -97,6 +97,7 @@ import {
   type EngagementJudge,
 } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
+import { observeSessionAndCheckSpeak } from './session-gate.js';
 import type { AssistantStatus } from '../../console/assistant-status.js';
 
 const logger = getLogger('agent');
@@ -421,6 +422,25 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const platform = turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '';
       const ambientKey = message.conversation.kind === 'group' ? `${platform}:${message.conversation.id}` : undefined;
       let ambient = false;
+      // 会话画像（#996）：先折叠会话事件与发送者；Bot 在此会话不能发言（禁言 / 全员禁言 / 宿主限制）时
+      // 直接不进 AI 回合，也不跑旁听判定，不调用模型。
+      if (!workroomAgentTurn && turnAccess.origin.kind === 'im') {
+        const blocked = await observeSessionAndCheckSpeak({
+          sessions: zhinAgent.getUserProfiles?.()?.sessions,
+          events: options.im.conversationEventReader,
+          message,
+          platform,
+          scope: turnAccess.origin.scope,
+          sceneId: turnAccess.origin.sceneId,
+          senderId: turnAccess.principal.subjectId,
+          endpointId: effectiveEndpoint,
+          conversationSequence,
+        });
+        if (blocked) {
+          logger.info(formatCompact({ op: 'agent_turn_skipped_cannot_speak', conv: `${platform}:${message.conversation.id}`, reason: blocked }));
+          return matched != null;
+        }
+      }
       if (!matched) {
         matched = workroomAgentTurn ? null : await this.#considerAmbient(
           snapshot,

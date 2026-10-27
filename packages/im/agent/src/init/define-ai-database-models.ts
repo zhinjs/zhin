@@ -9,6 +9,8 @@ import {
   MEMORY_ENTRY_MODEL,
 } from '@zhin.js/ai';
 import { AI_USER_PROFILE_MODEL } from '../user-profile.js';
+import { AI_USER_RELATION_MODEL } from '../user-relation.js';
+import { AI_SESSION_PROFILE_MODEL } from '../session-profile.js';
 
 export type AiDatabaseModelDefiner = (
   name: string,
@@ -20,6 +22,8 @@ const AI_DATABASE_MODELS: ReadonlyArray<readonly [string, Record<string, unknown
   ['agent_messages', AGENT_MESSAGE_MODEL],
   ['agent_summaries', AGENT_SUMMARY_MODEL],
   ['ai_user_profiles', AI_USER_PROFILE_MODEL],
+  ['ai_user_relations', AI_USER_RELATION_MODEL],
+  ['ai_session_profiles', AI_SESSION_PROFILE_MODEL],
   ['memory_entries', MEMORY_ENTRY_MODEL],
 ];
 

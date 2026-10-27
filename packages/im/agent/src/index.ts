@@ -156,7 +156,33 @@ export { createUserProfileTool } from './tool/context-tools.js';
 export { createSpawnTaskTool } from './spawn/spawn-task-tool.js';
 export * from './interaction/index.js';
 
-export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
+export {
+  UserProfileStore,
+  AI_USER_PROFILE_MODEL,
+  USER_PROFILE_KEYS,
+  USER_PROFILE_VALUE_MAX_CHARS,
+  normalizeUserProfileKey,
+  type UserProfileKey,
+} from './user-profile.js';
+export {
+  UserRelationStore,
+  AI_USER_RELATION_MODEL,
+  USER_RELATIONS,
+  applyAffinitySignal,
+  deriveRelation,
+  type UserRelation,
+  type UserRelationRecord,
+} from './user-relation.js';
+export {
+  SessionProfileStore,
+  AI_SESSION_PROFILE_MODEL,
+  foldConversationEvent,
+  speakBlock,
+  sceneRoleOf,
+  type SessionProfileRecord,
+  type SessionScope,
+  type SpeakBlockReason,
+} from './session-profile.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

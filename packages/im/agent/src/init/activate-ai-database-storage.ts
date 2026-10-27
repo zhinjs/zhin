@@ -63,8 +63,10 @@ export async function activateAiDatabaseStorage(
   });
 
   const profileModel = db.models?.get('ai_user_profiles');
+  const relationModel = db.models?.get('ai_user_relations');
+  const sessionModel = db.models?.get('ai_session_profiles');
   if (profileModel) {
-    refs.zhinAgent.upgradeProfilesToDatabase(profileModel);
+    refs.zhinAgent.upgradeProfilesToDatabase(profileModel, relationModel, sessionModel);
   }
 
   if (semanticActivation) {

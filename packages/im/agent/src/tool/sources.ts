@@ -6,7 +6,7 @@ import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { KEYWORD_TRIGGERS } from '../config/keyword-triggers.js';
-import { createUserProfileTool } from '../tool/context-tools.js';
+import { createSessionProfileTool, createUserProfileTool } from '../tool/context-tools.js';
 import type { UserProfileStore } from '../user-profile.js';
 import { normalizeTool } from '../resource-hub/tool-selection.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
@@ -87,7 +87,14 @@ export class BuiltinToolSource implements ToolSource {
   collectTools(context: CollectToolsContext): AgentTool[] {
     const tools: AgentTool[] = [];
     if (KEYWORD_TRIGGERS.userProfile.test(context.content)) {
-      tools.push(createUserProfileTool(context.userId, context.userProfiles));
+      const platform = String(context.message.clientAdapter ?? context.message.conversation?.endpoint?.adapter ?? '').trim();
+      tools.push(createUserProfileTool(context.userId, context.userProfiles, platform || undefined));
+    }
+    const scope = context.message.conversation?.kind;
+    const sceneId = String(context.message.conversation?.id ?? '').trim();
+    const scenePlatform = String(context.message.clientAdapter ?? context.message.conversation?.endpoint?.adapter ?? '').trim();
+    if ((scope === 'group' || scope === 'channel') && sceneId && scenePlatform && context.userProfiles.sessions) {
+      tools.push(createSessionProfileTool(context.userProfiles, { platform: scenePlatform, scope, sceneId }));
     }
     return tools;
   }

@@ -18,6 +18,7 @@ const AMBIENT_ENGAGEMENT_LINE = 'Engagement: ambient. Nobody called you; you are
 export interface TurnContextEnvelopeInput {
   turn?: TurnContextView;
   profileSummary?: string;
+  sessionSummary?: string;
   toneHint?: string;
   deferredStats?: string;
   activeSkillsContext?: string;
@@ -100,7 +101,6 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
   }
 
   if (input.deferredStats?.trim()) lines.push(`Deferred catalog: ${input.deferredStats.trim()}`);
-  if (input.profileSummary?.trim()) lines.push(input.profileSummary.trim());
   if (input.toneHint?.trim()) lines.push(`[Tone hint] ${input.toneHint.trim()}`);
   if (input.activeSkillBlocks?.length) {
     flush();
@@ -116,6 +116,10 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
 
   lines.push(TURN_CONTEXT_END);
   flush();
+  // 会话画像（人物关系 + 会话上下文）只对本轮有效：独立成块并标记 ephemeral，存储前丢弃，
+  // 之后的回合和新会话不会重放旧的 [Relationship] / [Session]。
+  const people = [input.profileSummary?.trim(), input.sessionSummary?.trim()].filter(Boolean);
+  if (people.length) blocks.splice(1, 0, { type: 'text', text: people.join('\n'), ephemeral: true });
   return blocks;
 }
 
