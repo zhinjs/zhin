@@ -407,6 +407,10 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.trigger.ambient.judgeIntervalMs` | number \| string | no | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度 |
 | `ai.trigger.ambient.minConfidence` | number \| string | no | — | 判断模型置信度门槛 0..1（默认 0.7） |
 | `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | no | — | shadow 只记录判断结果、不回复（默认 active） |
+| `ai.trigger.sceneEvents` | object | no | — | Scene awareness: high-priority social events (bot muted/unmuted, join request, member joined/left, notice updated, bot poked) wake one turn on their own without waiting for the next human message; low-priority events (reactions, card/title changes) never wake alone and only appear in the next turn's [Scene events] summary. When the bot cannot speak, only the session profile is updated and the model is not called. |
+| `ai.trigger.sceneEvents.conversations` | array&lt;string&gt; | no | — | Groups/channels that social events may wake, as platform:sceneId; * for every group. Defaults to ai.trigger.ambient.conversations (no wake when neither is set) |
+| `ai.trigger.sceneEvents.coalesceMs` | number \| string | no | — | Coalesce window per scene in ms, clamped to 3000–5000 (default 4000) |
+| `ai.trigger.sceneEvents.minIntervalMs` | number \| string | no | — | Minimum gap between two wakes in one scene in ms (default 15000); early batches are deferred, not dropped |
 | `ai.usage` | object \| null | no | — | 结构化用量存储（SQLite、MySQL、PostgreSQL）；独立于日志级别，不保存正文或工具参数。 |
 | `ai.usage.retentionDays` | integer \| string | no | `30` | 用量明细保留天数，正整数，默认 30 天；按回合结束时间清理，子调用与所属回合一起删除。 |
 | `menuKeyword` | string \| `false` | no | — | Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu. |

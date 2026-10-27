@@ -86,7 +86,9 @@ interface InboundRuntimeContext {
     input: IncomingMessage,
     sender: MessageSenderRef | undefined,
   ): Promise<number | undefined>;
-  recordNotice(notice: Notice): Promise<void>;
+  recordNotice(notice: Notice): Promise<unknown>;
+  /** #996: join requests into a group/channel are conversation facts too. */
+  recordRequest?(request: Request): Promise<unknown>;
   /** Keep a message that answered an interaction prompt out of later agent context. */
   markInteractionAnswer?(message: NonNullable<IncomingMessage['message']>): void;
   publish(event: RuntimeMessageEvent): void;
@@ -590,7 +592,14 @@ export class InboundRuntime {
         }
         case 'request':
           await withRequestActionScope(source.payload, async (input) => {
-            await dispatch(new RuntimeRequest(input, context));
+            const request = new RuntimeRequest(input, context);
+            // Recording is best effort and must not delay the request handlers.
+            const recording = Promise.resolve(this.context.recordRequest?.(request)).catch(() => undefined);
+            try {
+              await dispatch(request);
+            } finally {
+              await recording;
+            }
           });
           break;
         case 'system':

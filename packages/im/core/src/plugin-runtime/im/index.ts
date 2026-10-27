@@ -32,6 +32,8 @@ export type {
   RuntimeMessageEvent,
   RuntimeMessageEventSource,
   RuntimeMessageRendering,
+  RuntimeSceneEventSignal,
+  RuntimeSceneEventSource,
   OutboundFallbackReason,
 } from './message-events.js';
 export * from './outbound-renderer.js';

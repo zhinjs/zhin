@@ -174,6 +174,13 @@ export {
   type UserRelationRecord,
 } from './user-relation.js';
 export {
+  formatSceneEventsBlock,
+  SCENE_EVENTS_HEADER,
+  SCENE_EVENTS_MAX_CHARS,
+  SCENE_EVENTS_MAX_LINES,
+  SCENE_WAKE_METADATA_KEY,
+} from './scene-events.js';
+export {
   SessionProfileStore,
   AI_SESSION_PROFILE_MODEL,
   foldConversationEvent,

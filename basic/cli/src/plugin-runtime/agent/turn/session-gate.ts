@@ -56,3 +56,42 @@ export async function observeSessionAndCheckSpeak(input: SessionGateInput): Prom
     return null;
   }
 }
+
+export interface SceneWakeGateInput {
+  readonly sessions: SessionProfileStore | undefined;
+  readonly events: ConversationEventReader | undefined;
+  readonly conversation: Message['conversation'];
+  readonly platform: string;
+  readonly scope: 'group' | 'channel';
+  readonly sceneId: string;
+  readonly selfIds: readonly string[];
+  readonly throughSequence: number;
+}
+
+/**
+ * 状态感知唤醒（#996）走同一道门：先把这批事件折叠进会话画像（禁言 Bot、全员禁言等），
+ * 再判定能否发言。不能发言时调用方**不调模型**，只留下更新后的画像。fail-open。
+ */
+export async function observeSceneWakeAndCheckSpeak(input: SceneWakeGateInput): Promise<SpeakBlockReason | null> {
+  const { sessions } = input;
+  if (!sessions || !input.platform || !input.sceneId) return null;
+  try {
+    const { blocked } = await sessions.observeInbound({
+      platform: input.platform,
+      scope: input.scope,
+      sceneId: input.sceneId,
+      selfIds: input.selfIds,
+      throughSequence: input.throughSequence,
+      ...(input.events ? {
+        events: {
+          listBetween: (after: number, through: number, limit: number) =>
+            input.events!.listBetween(input.conversation, after, through, limit),
+        },
+      } : {}),
+    });
+    return blocked;
+  } catch (error) {
+    logger.warn(formatCompact({ op: 'session_profile_observe_failed', source: 'scene_wake', error: error instanceof Error ? error.message : String(error) }));
+    return null;
+  }
+}

@@ -18,6 +18,8 @@ import {
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import { segmentsToPlainText } from '../../built/segment-contract/text.js';
 import type { Notice } from '../../notice.js';
+import type { Request } from '../../request.js';
+import { SCENE_ONLY_EVENT_TYPES, SCENE_EVENT_TEXT_MAX, clipSceneText } from '../../side-event/scene-events.js';
 import type { IncomingMessage, MessageSenderRef, SendRequest } from './contracts.js';
 
 /**
@@ -168,10 +170,42 @@ export class ConversationRuntime {
     }));
   }
 
-  async recordNotice(notice: Notice): Promise<void> {
+  /** Records a normalized notice; returns the stored event (with its sequence) when newly appended. */
+  async recordNotice(notice: Notice): Promise<SequencedConversationEvent | undefined> {
     const event = conversationEventFromNotice(notice);
-    if (event) await this.#events.append(event);
+    if (!event) return undefined;
+    const appended = await this.#events.append(event);
+    return appended.appended ? Object.freeze({ sequence: appended.sequence, event }) : undefined;
   }
+
+  /** Join requests / invitations into a group or channel become `scene.join_requested` (#996). */
+  async recordRequest(request: Request): Promise<SequencedConversationEvent | undefined> {
+    const event = conversationEventFromRequest(request);
+    if (!event) return undefined;
+    const appended = await this.#events.append(event);
+    return appended.appended ? Object.freeze({ sequence: appended.sequence, event }) : undefined;
+  }
+}
+
+function conversationEventFromRequest(request: Request): ConversationEvent | undefined {
+  const conversation = request.conversation;
+  if (!conversation || conversation.kind === 'private' || !request.id || !request.actor?.id) return undefined;
+  const sub = request.name.split('.').slice(2).join('.');
+  if (sub !== 'add' && sub !== 'invite') return undefined;
+  const actor = Object.freeze({
+    id: String(request.actor.id),
+    ...(request.actor.name ? { displayName: request.actor.name } : {}),
+  });
+  const comment = clipSceneText(request.comment, SCENE_EVENT_TEXT_MAX);
+  return Object.freeze({
+    eventId: `request:${conversationRefKey(conversation)}:${String(request.id)}`,
+    conversation,
+    timestamp: request.timestamp,
+    type: 'scene.join_requested',
+    actor,
+    ...(comment ? { comment } : {}),
+    ...(sub === 'invite' ? { invite: true } : {}),
+  });
 }
 
 function conversationEventFromNotice(notice: Notice): ConversationEvent | undefined {
@@ -264,6 +298,31 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
         ...(actor ? { actor } : {}),
         ...(target ? { target } : {}),
       });
+    case 'card_change':
+    case 'title_change':
+    case 'remark_change': {
+      const member = target ?? actor;
+      if (!member) return undefined;
+      const value = clipSceneText(notice.value, SCENE_EVENT_TEXT_MAX);
+      const type = notice.name.endsWith('card_change')
+        ? 'member.card_changed' as const
+        : notice.name.endsWith('title_change') ? 'member.title_changed' as const : 'member.remark_changed' as const;
+      return Object.freeze({
+        ...base,
+        type,
+        member,
+        ...(actor && actor.id !== member.id ? { actor } : {}),
+        ...(value ? { value } : {}),
+      });
+    }
+    case 'notice_updated':
+    case 'announce':
+      return Object.freeze({
+        ...base,
+        type: 'scene.notice_updated',
+        ...(actor ? { actor } : {}),
+        text: clipSceneText(notice.value, SCENE_EVENT_TEXT_MAX),
+      });
     default:
       return undefined;
   }
@@ -276,6 +335,8 @@ function aggregateConversationContext(
   const ordinary: ConversationContextBlock[] = [];
   const noisy = new Map<string, { sequence: number; event: ConversationEvent; count: number }>();
   for (const { sequence, event } of events) {
+    // #996: these reach the model only through the short ephemeral `[Scene events]` block.
+    if (SCENE_ONLY_EVENT_TYPES.has(event.type)) continue;
     if (event.type === 'message.created') {
       if (excluded.has(event.message.ref.id)) continue;
       const text = describeConversationMessage(event.message);
@@ -337,6 +398,11 @@ function describeConversationEvent(event: ConversationEvent): string {
     case 'member.role_changed':
       return `${event.member.displayName ?? event.member.id} (${event.member.id}) role ${event.role} was ${event.enabled ? 'enabled' : 'disabled'}${actor ? ` by ${actor}` : ''}.`;
     case 'message.created':
+    case 'scene.join_requested':
+    case 'scene.notice_updated':
+    case 'member.card_changed':
+    case 'member.title_changed':
+    case 'member.remark_changed':
       return '';
   }
 }

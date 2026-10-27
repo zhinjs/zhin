@@ -14,6 +14,8 @@ export interface IncomingNotice extends IncomingSideEvent {
   readonly durationSeconds?: number;
   readonly role?: string;
   readonly enabled?: boolean;
+  /** Short new value of a card/title/remark change or a notice body (adapter-truncated, plain text). */
+  readonly value?: string;
 }
 
 export interface NoticeBase extends SideEventBase {
@@ -25,6 +27,7 @@ export interface NoticeBase extends SideEventBase {
   readonly durationSeconds?: number;
   readonly role?: string;
   readonly enabled?: boolean;
+  readonly value?: string;
 }
 
 export type Notice<T extends object = {}> = NoticeBase & T;
@@ -39,6 +42,7 @@ export class RuntimeNotice extends RuntimeSideEvent implements NoticeBase {
   readonly durationSeconds?: number;
   readonly role?: string;
   readonly enabled?: boolean;
+  readonly value?: string;
   constructor(input: IncomingNotice, context: EndpointEventContext) {
     super(input, context);
     this.messageId = input.messageId;
@@ -47,6 +51,7 @@ export class RuntimeNotice extends RuntimeSideEvent implements NoticeBase {
     this.durationSeconds = input.durationSeconds;
     this.role = input.role;
     this.enabled = input.enabled;
+    this.value = input.value;
     Object.freeze(this);
   }
 }

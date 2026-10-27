@@ -89,6 +89,8 @@ export function createRuntimeTurnRequest(
     commitConversationContext?: (consumer: string, cursor: number) => Promise<void>;
     /** Configuration-owned metadata; applied after untrusted adapter metadata. */
     trustedMetadata?: Readonly<Record<string, unknown>>;
+    /** #996: short scene event summaries for the ephemeral `[Scene events]` block (newest first). */
+    sceneEvents?: readonly string[];
   }>,
 ): TurnRequest {
   const access = createRuntimeTurnAccess(message, roles);
@@ -201,6 +203,7 @@ export function createRuntimeTurnRequest(
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
       ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
+      ...(input.sceneEvents?.length ? { sceneEvents: Object.freeze([...input.sceneEvents]) } : {}),
     }),
     session: Object.freeze({
       key: sessionKey,

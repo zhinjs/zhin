@@ -17,6 +17,7 @@ export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
   ProfileContextBuilder,
   SessionContextBuilder,
+  SceneEventsContextBuilder,
   ToneInjector,
   createDefaultContextBuilders,
 } from './default-builders.js';
@@ -116,6 +117,7 @@ export class ContextSystem {
       turn,
       profileSummary: envelopeParts.profileSummary,
       sessionSummary: envelopeParts.sessionSummary,
+      sceneEvents: envelopeParts.sceneEvents,
       toneHint: envelopeParts.toneHint,
       deferredStats,
       activeSkillsContext: (input.activeSkillsContext ?? host.getTurnActiveSkills()) || undefined,

@@ -407,6 +407,10 @@ outline: [2, 3]
 | `ai.trigger.ambient.judgeIntervalMs` | number \| string | 否 | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度 |
 | `ai.trigger.ambient.minConfidence` | number \| string | 否 | — | 判断模型置信度门槛 0..1（默认 0.7） |
 | `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | 否 | — | shadow 只记录判断结果、不回复（默认 active） |
+| `ai.trigger.sceneEvents` | object | 否 | — | 状态感知：禁言/解禁、入群申请、成员进出、公告变更、戳 Bot 等高优先社交事件独立唤醒一次回合（不必等下一条人话）；表情回应、名片/头衔变更等低优先事件不单独唤醒，只在下一轮 [Scene events] 摘要里出现。Bot 不能发言时只更新会话画像，不调用模型。 |
+| `ai.trigger.sceneEvents.conversations` | array&lt;string&gt; | 否 | — | 允许被社交事件唤醒的群/频道，格式 platform:sceneId；* 表示所有群。缺省沿用 ai.trigger.ambient.conversations（都没配则不唤醒） |
+| `ai.trigger.sceneEvents.coalesceMs` | number \| string | 否 | — | 同一场景的合并窗口（毫秒，限定 3000～5000，默认 4000） |
+| `ai.trigger.sceneEvents.minIntervalMs` | number \| string | 否 | — | 同一场景两次唤醒的最短间隔（毫秒，默认 15000）；未到时间的批次顺延，不丢 |
 | `ai.usage` | object \| null | 否 | — | 结构化用量存储（SQLite、MySQL、PostgreSQL）；独立于日志级别，不保存正文或工具参数。 |
 | `ai.usage.retentionDays` | integer \| string | 否 | `30` | 用量明细保留天数，正整数，默认 30 天；按回合结束时间清理，子调用与所属回合一起删除。 |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |

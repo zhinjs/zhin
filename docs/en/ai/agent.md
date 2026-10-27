@@ -373,6 +373,45 @@ At the start of each turn the Agent adds a small piece of the session profile to
 
 Together they are usually 2–4 lines. They form a separate block that is **valid for this turn only**: it is dropped before the message is stored in `agent_messages`, so later turns and new sessions never replay an old `[Relationship]` / `[Session]`; each turn rebuilds it from current data.
 
+### Scene awareness: social events can wake a turn
+
+Mutes, joins, pokes, and similar events used to land only in `conversation_events` and showed up in context with the next human message. High-priority social events now **wake one turn on their own**, without waiting for anyone to speak; low-priority events never wake alone and are attached to the next turn.
+
+| Event | Priority | Notes |
+| --- | --- | --- |
+| `member.muted` / `member.unmuted` | High | Includes mute-all; the summary says `you` when the target is the bot |
+| `scene.join_requested` | High | A request or invitation to join; the comment is truncated |
+| `member.joined` / `member.left` | High | Members joining or leaving (removals are marked) |
+| `scene.notice_updated` | High | Group notice changed; the body is truncated |
+| `conversation.poked` (target is the bot) | High | Someone poked the bot |
+| `message.reaction_changed` | Low | Emoji reactions; identical ones are counted together |
+| `member.card_changed` / `title_changed` / `remark_changed` | Low | Card / special title / remark |
+| `conversation.poked` (person to person) | Low | Aggregated |
+
+Each event keeps only the platform, scene, actor, target, a short summary, and the time; **raw platform JSON never reaches the model**. Adapters normalize through the shared `receiveOneBotLikeSideEvent`: icqq pokes, reactions, admin changes, mutes, and join requests; OneBot11 / NapCat / QQ `group_card` (card) and `notify.title` (title), and so on. The icqq SDK has no card or notice events today; they appear when a platform provides them.
+
+**Wake rules**
+
+- When a high-priority event arrives, a coalesce window opens per `platform:groupId` (4 s by default, clamped to 3–5 s); high-priority events in the window merge into **one** wake.
+- Two wakes in one group are at least 15 s apart (`minIntervalMs`); a batch that comes too early is deferred, not dropped.
+- A wake first folds the batch into the session profile, then passes the same speak gate as ordinary messages: when the bot is muted, the whole scene is muted, or a restriction is set, the profile is **updated but the model is not called**, logged as `scene_event_wake_skipped_cannot_speak`.
+- Otherwise one short turn runs, marked ambient + scene wake, with no shell, no network, and a read-only workspace; the model may stay silent (empty reply). Such turns never change affinity, and the only line stored in session history is `(scene events)`. Logged as `scene_event_wake`.
+
+Only listed groups and channels wake:
+
+```yaml
+ai:
+  trigger:
+    sceneEvents:
+      conversations: ['icqq:123456']   # platform:groupId, * for every group; defaults to ai.trigger.ambient.conversations
+      coalesceMs: 4000                 # 3000–5000
+      minIntervalMs: 15000
+```
+
+In groups that are not listed, high-priority events are still stored; they just do not wake, and they appear in the next turn's summary as usual.
+
+**`[Scene events]` injection**: every turn (human-triggered or woken) carries the social events since the last one in the same ephemeral block as `[Relationship]` / `[Session]`: at most 5 lines, ≤200 characters of body, newest first, using the address from `ai_user_relations` when there is one and never any scores. Each session sees an event once, and it is **never stored in `agent_messages`**. The new types (card, notice, join request) only appear here and no longer enter the older conversation-event context, so nothing is injected twice.
+
 ### Writing notes, address, and tone
 
 Notes, preferred address, and tone are written explicitly by the model through the `user_profile` tool (`note` / `unnote` / `call_me` / `tone`); the persona is never rewritten automatically. Text that looks like a password, token, cookie, verification code, ID number, or a number of 11+ digits is refused (topics are filtered the same way). Logs record only error messages, never profile contents.
