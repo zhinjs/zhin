@@ -1,0 +1,18 @@
+basic/cli/src/plugin-runtime/agent/turn/announcement-dispatch.ts
+  h_b680f75345178a 58-59,217-219
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 116,186-187,197-201,226,292,311,333-338,340,473-475,653-654
+basic/cli/tests/plugin-runtime/agent/turn/control-gate.test.ts
+  h_b680f75345178a 5,52,54-56,76,112-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7835e322de0b7c611552bb98853fbfdac60697ac",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
