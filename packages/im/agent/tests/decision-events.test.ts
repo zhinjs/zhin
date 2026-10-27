@@ -54,7 +54,7 @@ describe('ai_decision_events schema', () => {
     expect(DECISION_EVENT_KINDS).toEqual([
       'inbound_wake', 'speak_gate', 'control_gate', 'ambient_decision', 'model_skip', 'model_run',
       'tool_call', 'tool_hard_gate', 'tool_approval', 'outbound', 'config_change', 'control_change',
-      'member_lifecycle', 'announcement',
+      'member_lifecycle', 'announcement', 'ops_cooldown',
     ]);
     expect(DECISION_OUTCOMES).toEqual(['allow', 'deny', 'skip', 'defer', 'error']);
     expect(DECISION_ACTORS).toEqual(['system', 'model', 'operator', 'policy']);
@@ -104,6 +104,13 @@ describe('reason_code registry', () => {
     ];
     const start = DECISION_REASON_CODES.indexOf('announcement_drafted');
     expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('member_leave_recorded'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+  });
+
+  it('appends the ADR 0037 slice E ops cooldown codes after the slice B codes', () => {
+    const slice = ['ops_cooldown_hit', 'ops_cooldown_passed'];
+    const start = DECISION_REASON_CODES.indexOf('ops_cooldown_hit');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('announcement_hash_mismatch'));
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
   });
 
