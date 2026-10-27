@@ -13,6 +13,10 @@
  * - 控制面（ADR 0036 §2，#1008）：会话处于 `emergency_stop` 或 `read_only`（含控制面状态不可用）时，
  *   危险工具在弹审批之前直接拒绝；`muted` / `mention_only` 不拦硬闸管理工具。
  *
+ * - IM 审批通道（G6，#1013，`ai.agent.toolHardGate.imApproval`，默认关）：卡片入队后由宿主向 allowlist
+ *   审批人私聊（或专用审批群）投递，审批人用固定命令结算同一 {@link ToolApprovalQueue}；仍是 humanOnly、
+ *   一次一批，不提供「本会话 / 永久」授权，业务群消息不能结算。
+ *
  * 审计写 `tool_approval` / `tool_hard_gate`（`ai_decision_events`）；审计写失败不影响判定。
  */
 import type { DecisionEventInput, DecisionReasonCode } from '../decision-events.js';
@@ -23,7 +27,13 @@ import {
   type ApprovalOutcome,
   type ApprovalPort,
 } from '../session/approval-port.js';
-import { DEFAULT_TOOL_APPROVAL_TTL_MS, ToolApprovalQueue, type ToolApprovalEntry } from './tool-approval-queue.js';
+import {
+  DEFAULT_TOOL_APPROVAL_TTL_MS,
+  ToolApprovalQueue,
+  type ToolApprovalChannel,
+  type ToolApprovalEntry,
+  type ToolApprovalOrigin,
+} from './tool-approval-queue.js';
 
 export type ToolRisk = 'dangerous' | 'safe';
 /** ADR 0036 §3 危险类别：成员管理 / 内容发布 / 资金 / 身份。 */
@@ -73,6 +83,30 @@ export const CORE_DANGEROUS_TOOLS: ReadonlyMap<string, DangerousToolCategory> = 
     'set_group_portrait', 'unbind'] as const).map((name) => [name, 'identity'] as const),
 ]);
 
+/** IM 审批卡片投递方式：审批人私聊（默认），或显式配置的专用审批群（不能是业务会话）。 */
+export type ToolHardGateImDelivery = 'dm' | 'approver_group';
+
+/** `approverIds` 扁平列表在归一化后挂在这个键下，表示对所有平台生效。 */
+export const IM_APPROVER_ANY_PLATFORM = '*';
+
+/** 用户配置形态：`approverIds` 可以是扁平列表，也可以是 `platform → userIds`。 */
+export interface ToolHardGateImApprovalConfig {
+  readonly enabled?: boolean;
+  readonly approverIds?: readonly string[] | Readonly<Record<string, readonly string[]>>;
+  readonly delivery?: ToolHardGateImDelivery;
+  readonly approverGroupId?: string | null;
+}
+
+/** 归一化后的 IM 审批通道设置。 */
+export interface ToolHardGateImApprovalSettings {
+  readonly enabled: boolean;
+  /** `platform → userIds`；{@link IM_APPROVER_ANY_PLATFORM} 下的 id 对所有平台生效。 */
+  readonly approverIds: Readonly<Record<string, readonly string[]>>;
+  readonly delivery: ToolHardGateImDelivery;
+  /** `delivery: approver_group` 时的群 id；缺省时 IM 通道不可投递（fail closed，仅 Console）。 */
+  readonly approverGroupId: string | null;
+}
+
 export interface ToolHardGateSettings {
   /** 宿主额外标为 dangerous 的工具（本地名或限定名）；只能调高。 */
   readonly dangerousTools: readonly string[];
@@ -80,15 +114,30 @@ export interface ToolHardGateSettings {
   readonly allowFunds: boolean;
   /** 审批等待上限（毫秒），超时即拒绝。 */
   readonly approvalTimeoutMs: number;
+  /** IM 审批通道（G6，#1013）；默认关闭。 */
+  readonly imApproval: ToolHardGateImApprovalSettings;
 }
+
+/** `ai.agent.toolHardGate` 的输入形态；已归一化的 {@link ToolHardGateSettings} 也可直接传入。 */
+export type ToolHardGateConfig = Partial<Omit<ToolHardGateSettings, 'imApproval'>> & {
+  readonly imApproval?: ToolHardGateImApprovalConfig;
+};
+
+export const DEFAULT_TOOL_HARD_GATE_IM_APPROVAL: ToolHardGateImApprovalSettings = Object.freeze({
+  enabled: false,
+  approverIds: Object.freeze({}) as Readonly<Record<string, readonly string[]>>,
+  delivery: 'dm' as const,
+  approverGroupId: null,
+});
 
 export const DEFAULT_TOOL_HARD_GATE: ToolHardGateSettings = Object.freeze({
   dangerousTools: Object.freeze([]) as readonly string[],
   allowFunds: false,
   approvalTimeoutMs: DEFAULT_TOOL_APPROVAL_TTL_MS,
+  imApproval: DEFAULT_TOOL_HARD_GATE_IM_APPROVAL,
 });
 
-export function resolveToolHardGate(value?: Partial<ToolHardGateSettings> | null): ToolHardGateSettings {
+export function resolveToolHardGate(value?: ToolHardGateConfig | null): ToolHardGateSettings {
   const dangerousTools = Array.isArray(value?.dangerousTools)
     ? value!.dangerousTools.filter((name): name is string => typeof name === 'string' && name.trim() !== '').map((name) => name.trim())
     : [];
@@ -99,7 +148,72 @@ export function resolveToolHardGate(value?: Partial<ToolHardGateSettings> | null
     approvalTimeoutMs: typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
       ? Math.trunc(timeout)
       : DEFAULT_TOOL_HARD_GATE.approvalTimeoutMs,
+    imApproval: resolveToolHardGateImApproval(value?.imApproval),
   });
+}
+
+export function resolveToolHardGateImApproval(value?: ToolHardGateImApprovalConfig | null): ToolHardGateImApprovalSettings {
+  if (!value || typeof value !== 'object') return DEFAULT_TOOL_HARD_GATE_IM_APPROVAL;
+  const approverIds = normalizeApproverIds(value.approverIds);
+  const groupId = typeof value.approverGroupId === 'string' ? value.approverGroupId.trim() : '';
+  return Object.freeze({
+    enabled: value.enabled === true,
+    approverIds,
+    delivery: value.delivery === 'approver_group' ? 'approver_group' : 'dm',
+    approverGroupId: groupId || null,
+  });
+}
+
+/** 某平台的 IM 审批人（平台专属 + 全平台），去重。 */
+export function imApproversFor(settings: ToolHardGateImApprovalSettings, platform: string): readonly string[] {
+  const platformApprovers = settings.approverIds[platform] ?? [];
+  const anyPlatformApprovers = settings.approverIds[IM_APPROVER_ANY_PLATFORM] ?? [];
+  return [...new Set([...platformApprovers, ...anyPlatformApprovers])];
+}
+
+/** IM 通道开启且发送者在该平台的 allowlist 里。 */
+export function isImApprover(settings: ToolHardGateImApprovalSettings, platform: string, userId: string): boolean {
+  if (!settings.enabled) return false;
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) return false;
+  return imApproversFor(settings, platform).includes(normalizedUserId);
+}
+
+/** IM 通道能否为该来源投递卡片：开启、有审批人、审批群模式下配置了群且不是业务会话本身。 */
+export function isImApprovalDeliverable(settings: ToolHardGateImApprovalSettings, origin: ToolApprovalOrigin | null | undefined): boolean {
+  if (!settings.enabled || !origin) return false;
+  if (imApproversFor(settings, origin.platform).length === 0) return false;
+  if (settings.delivery === 'approver_group') {
+    if (!settings.approverGroupId) return false;
+    if (origin.scope !== 'private' && origin.sceneId === settings.approverGroupId) return false;
+  }
+  return true;
+}
+
+function normalizeApproverIds(value: ToolHardGateImApprovalConfig['approverIds']): Readonly<Record<string, readonly string[]>> {
+  const normalized: Record<string, readonly string[]> = {};
+  if (Array.isArray(value)) {
+    const ids = normalizeIdList(value);
+    if (ids.length > 0) normalized[IM_APPROVER_ANY_PLATFORM] = ids;
+    return Object.freeze(normalized);
+  }
+  if (!value || typeof value !== 'object') return Object.freeze(normalized);
+  for (const [platform, ids] of Object.entries(value as Record<string, unknown>)) {
+    const platformKey = platform.trim();
+    if (!platformKey || !Array.isArray(ids)) continue;
+    const list = normalizeIdList(ids);
+    if (list.length > 0) normalized[platformKey] = list;
+  }
+  return Object.freeze(normalized);
+}
+
+function normalizeIdList(values: readonly unknown[]): readonly string[] {
+  const ids = values
+    .map((id) => (typeof id === 'number' && Number.isFinite(id) ? String(id) : id))
+    .filter((id): id is string => typeof id === 'string')
+    .map((id) => id.trim())
+    .filter((id) => id !== '');
+  return Object.freeze([...new Set(ids)]);
 }
 
 /** 限定名（`owner__…__local` 或 `a.b`）的最后一段。 */
@@ -189,6 +303,8 @@ export interface ToolHardGateContext {
   readonly location: ToolHardGateLocation;
   readonly audit?: DecisionAuditSink;
   readonly queue?: ToolApprovalQueue;
+  /** 触发会话的原生定位；写进审批卡片，供 IM 审批通道选择 Endpoint、拒绝业务会话内结算。 */
+  readonly origin?: ToolApprovalOrigin;
   /** 控制面；未接时不做控制面判定（与入站 / 出站闸一致）。每次判定现读，回合中途开关变化也生效。 */
   readonly controlPlane?: ToolHardGateControlSource;
 }
@@ -223,7 +339,8 @@ export type ToolHardGateResult =
 /** `TurnToolOutcome.denied.policy`，便于日志 / 轨迹区分硬闸与普通审批。 */
 export const TOOL_HARD_GATE_POLICY = 'tool-hard-gate';
 
-const CATEGORY_LABELS: Readonly<Record<DangerousToolCategory, string>> = Object.freeze({
+/** 危险类别的中文标签（审批提示 / IM 审批卡片共用）。 */
+export const DANGEROUS_TOOL_CATEGORY_LABELS: Readonly<Record<DangerousToolCategory, string>> = Object.freeze({
   member: '成员管理',
   publish: '内容发布',
   funds: '资金',
@@ -239,7 +356,7 @@ export class ToolHardGate {
   readonly #deniedTools = new Set<string>();
   readonly #deniedCategories = new Set<DangerousToolCategory>();
 
-  constructor(settings: Partial<ToolHardGateSettings> | undefined, context: ToolHardGateContext) {
+  constructor(settings: ToolHardGateConfig | undefined, context: ToolHardGateContext) {
     this.#settings = resolveToolHardGate(settings);
     this.#context = context;
   }
@@ -285,7 +402,8 @@ export class ToolHardGate {
     const queue = this.#context.queue;
     const preApproved = queue?.consumeApproved(this.#context.sessionKey, name, input);
     if (preApproved) {
-      const approved = { ...payload, approvalId: preApproved.id, via: 'console' };
+      const channel = preApproved.channel ?? 'console';
+      const approved = { ...payload, approvalId: preApproved.id, via: channel, channel };
       this.#audit('tool_approval', 'allow', 'tool_approval_approved', approved, preApproved.decidedBy);
       this.#audit('tool_hard_gate', 'allow', 'tool_approval_approved', approved);
       return Object.freeze({ status: 'approved', category, approvalId: preApproved.id });
@@ -299,19 +417,27 @@ export class ToolHardGate {
       turnId: this.#context.turnId,
       args: input,
       ttlMs: this.#settings.approvalTimeoutMs,
+      ...(this.#context.origin ? { origin: this.#context.origin } : {}),
     });
-    this.#audit('tool_approval', 'defer', 'tool_approval_requested', { ...payload, ...(entry ? { approvalId: entry.id } : {}) });
+    const imDeliverable = entry ? isImApprovalDeliverable(this.#settings.imApproval, entry.origin) : false;
+    const requested = { ...payload, ...(entry ? { approvalId: entry.id, imApproval: imDeliverable } : {}) };
+    this.#audit('tool_approval', 'defer', 'tool_approval_requested', requested);
 
     const port = this.#context.approval;
     if (this.#context.unattended || !isApprovalPortAvailable(port)) {
       return this.#deny(name, category, 'tool_dangerous_no_approval', { ...payload, ...(entry ? { approvalId: entry.id } : {}) },
         this.#context.unattended ? 'unattended turn' : 'no approval channel',
-        entry ? '已生成审批卡片，需管理员在 Console 批准' : '当前没有可用的人工审批渠道');
+        entry ? pendingCardHint(imDeliverable) : '当前没有可用的人工审批渠道');
     }
 
     const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry, tool.description);
     if (settled.kind === 'cancelled') return CANCELLED;
-    const withId = { ...payload, ...(entry ? { approvalId: entry.id } : {}), via: settled.via };
+    const withId = {
+      ...payload,
+      ...(entry ? { approvalId: entry.id } : {}),
+      via: settled.via,
+      ...('channel' in settled ? { channel: settled.channel } : {}),
+    };
     if (settled.kind === 'approved') {
       if (entry) queue?.markConsumed(entry.id);
       this.#audit('tool_approval', 'allow', 'tool_approval_approved', withId, settled.decidedBy);
@@ -324,7 +450,7 @@ export class ToolHardGate {
     }
     if (settled.kind === 'unavailable') {
       return this.#deny(name, category, 'tool_dangerous_no_approval', withId, settled.detail,
-        entry ? '审批提示无法送达，已生成审批卡片，需管理员在 Console 批准' : '当前没有可用的人工审批渠道');
+        entry ? `审批提示无法送达，${pendingCardHint(imDeliverable)}` : '当前没有可用的人工审批渠道');
     }
     this.#audit('tool_approval', 'deny', 'tool_approval_denied', withId, settled.decidedBy);
     return this.#deny(name, category, 'tool_approval_denied', withId, 'approval denied', '审批人拒绝了此操作');
@@ -358,8 +484,8 @@ export class ToolHardGate {
     entry: ToolApprovalEntry | undefined,
     description?: string,
   ): Promise<
-    | { kind: 'approved'; via: string; decidedBy: string | null }
-    | { kind: 'denied'; via: string; decidedBy: string | null }
+    | { kind: 'approved'; via: string; channel: ToolApprovalAuditChannel; decidedBy: string | null }
+    | { kind: 'denied'; via: string; channel: ToolApprovalAuditChannel; decidedBy: string | null }
     | { kind: 'timed_out'; via: string }
     | { kind: 'unavailable'; via: string; detail: string }
     | { kind: 'cancelled' }
@@ -410,16 +536,18 @@ export class ToolHardGate {
         return { kind: 'timed_out', via: 'timeout' };
       }
       if (first.source === 'queue') {
-        const decided = entry ? queue?.get(entry.id)?.decidedBy ?? null : null;
-        if (first.settlement === 'approved') return { kind: 'approved', via: 'console', decidedBy: decided };
-        if (first.settlement === 'expired') return { kind: 'timed_out', via: 'console' };
-        return { kind: 'denied', via: 'console', decidedBy: decided };
+        const settledEntry = entry ? queue?.get(entry.id) : undefined;
+        const decided = settledEntry?.decidedBy ?? null;
+        const channel: ToolApprovalChannel = settledEntry?.channel ?? 'console';
+        if (first.settlement === 'approved') return { kind: 'approved', via: channel, channel, decidedBy: decided };
+        if (first.settlement === 'expired') return { kind: 'timed_out', via: channel };
+        return { kind: 'denied', via: channel, channel, decidedBy: decided };
       }
       const outcome = first.outcome;
       switch (outcome.status) {
         case 'approved':
           if (entry) queue?.resolve(entry.id, true, 'approval_port');
-          return { kind: 'approved', via: 'approval_port', decidedBy: null };
+          return { kind: 'approved', via: 'approval_port', channel: TURN_PROMPT_CHANNEL, decidedBy: null };
         case 'timed_out':
           if (entry) queue?.resolve(entry.id, false, 'timeout');
           return { kind: 'timed_out', via: 'approval_port' };
@@ -428,7 +556,7 @@ export class ToolHardGate {
           return { kind: 'unavailable', via: 'approval_port', detail: outcome.reason };
         default:
           if (entry) queue?.resolve(entry.id, false, 'approval_port');
-          return { kind: 'denied', via: 'approval_port', decidedBy: null };
+          return { kind: 'denied', via: 'approval_port', channel: TURN_PROMPT_CHANNEL, decidedBy: null };
       }
     } finally {
       if (timer) clearTimeout(timer);
@@ -486,6 +614,17 @@ export class ToolHardGate {
   }
 }
 
+/** 审计 `channel`：人工结算渠道，或回合内审批提示（`turn_prompt`，#1006 既有行为）。 */
+export type ToolApprovalAuditChannel = ToolApprovalChannel | 'turn_prompt';
+
+const TURN_PROMPT_CHANNEL: ToolApprovalAuditChannel = 'turn_prompt';
+
+function pendingCardHint(imDeliverable: boolean): string {
+  return imDeliverable
+    ? '已生成审批卡片，需审批人在 Console 或 IM 审批通道批准'
+    : '已生成审批卡片，需管理员在 Console 批准';
+}
+
 const SAFE: ToolHardGateResult = Object.freeze({ status: 'safe' });
 const CANCELLED: ToolHardGateResult = Object.freeze({ status: 'cancelled' });
 
@@ -504,7 +643,7 @@ export function formatHardGateQuestion(
   description?: string,
 ): string {
   return [
-    `危险操作：${approvalActionLabel(toolName, description)}${category ? `（${CATEGORY_LABELS[category]}）` : ''}`,
+    `危险操作：${approvalActionLabel(toolName, description)}${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}`,
     `本次参数：${stableJson(input)}`,
     entry ? `Console 审批：${entry.id}` : undefined,
     '需逐次确认，超时拒绝。',

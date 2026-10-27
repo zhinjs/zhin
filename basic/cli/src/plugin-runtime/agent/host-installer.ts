@@ -48,6 +48,8 @@ import {
   type HostAgentTool,
 } from './tool-feature-publisher.js';
 import { AgentRuntimeFoundation } from './runtime-foundation.js';
+import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
+import { ImToolApprovalChannel } from './tool-approval-im-channel.js';
 
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
@@ -158,6 +160,28 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       assistantEnabled,
     } = agentFoundation;
     if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
+    // G6 (#1013): IM approval channel for hard-gate cards; idle unless ai.agent.toolHardGate.imApproval.enabled.
+    const toolApprovalIm = new ImToolApprovalChannel({
+      queue: zhinAgent.toolApprovals,
+      settings: () => resolveToolHardGateImApproval(zhinAgent.config.toolHardGate?.imApproval),
+      send: async (target, text) => {
+        await options.im.endpoints.send({
+          adapter: target.platform,
+          endpointKey: target.endpointKey,
+          conversation: target.conversation,
+          content: text,
+        });
+      },
+      onDeliveryError: (error, target) => {
+        logger.warn(formatCompact({
+          op: 'tool_approval_im_delivery_failed',
+          platform: target.platform,
+          kind: target.conversation.kind,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      },
+    });
+    lifecycle.add(toolApprovalIm.start());
     const ingress = new CapabilityIngress();
     const assembly = options.workroom?.WorkroomHostAssembly.begin({
       generation,
@@ -228,6 +252,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       agent: agentFoundation,
       ...(workroom ? { workroom } : {}),
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
+      toolApprovalIm,
     });
     resources.provide(ingressRouteToken, ingressRoute);
     // 状态感知（#996）：社交事件落库即交给本 generation 的 ingress route；generation 结束时退订并清掉待唤醒批次。

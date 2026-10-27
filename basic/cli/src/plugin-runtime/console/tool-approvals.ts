@@ -36,6 +36,8 @@ export interface ToolApprovalCard {
   readonly status: ToolApprovalEntry['status'];
   readonly decidedAt: number | null;
   readonly decidedBy: string | null;
+  /** Channel that settled the card: `console`, `im_dm`, `im_approver_group`, or null (timeout / in-turn prompt). */
+  readonly channel: ToolApprovalEntry['channel'];
 }
 
 export class HostToolApprovals {
@@ -83,7 +85,7 @@ export class HostToolApprovals {
     if (!queue) throw new PluginConsoleRpcError('unavailable', 'The Agent is not running');
     const current = queue.get(id);
     if (!current) throw new PluginConsoleRpcError('not_found', 'Approval card not found');
-    const settled = queue.resolve(id, decision === 'approve', CONSOLE_TOOL_APPROVAL_OPERATOR);
+    const settled = queue.resolve(id, decision === 'approve', CONSOLE_TOOL_APPROVAL_OPERATOR, { channel: 'console' });
     if (!settled) throw new PluginConsoleRpcError('conflict', `Approval card is already ${current.status}`);
     return toCard(settled);
   }
@@ -118,5 +120,6 @@ function toCard(entry: ToolApprovalEntry): ToolApprovalCard {
     status: entry.status,
     decidedAt: entry.decidedAt,
     decidedBy: entry.decidedBy,
+    channel: entry.channel,
   };
 }

@@ -155,6 +155,21 @@ describe('MemberLifecycle — welcome (ADR 0037 §1.1)', () => {
     expect(flow.lifecycle.lastResult).toEqual({ kind: 'skipped', reason: 'control:muted' });
   });
 
+  it('mention_only does not block template welcome (Fin; includes cold-field temp)', async () => {
+    const flow = await harness({
+      welcome: { enabled: true, mergeWindowMs: 0 },
+      control: (plane) => plane.set({ expectedRevision: 0, sessions: [{ platform: 'icqq', sceneId: 'group:g1', flags: { mention_only: true } }], actorId: 'op' }),
+    });
+    expect(await flow.emit(join('u1'))).toBe('welcome_scheduled');
+    await flow.clock.advance(1);
+    expect(flow.send).toHaveBeenCalledOnce();
+    expect(await flow.rows()).toEqual([
+      ['outbound', 'allow', 'outbound_sent'],
+      ['member_lifecycle', 'allow', 'welcome_sent'],
+    ]);
+    expect(flow.lifecycle.lastResult).toEqual({ kind: 'sent', members: 1 });
+  });
+
   it('emergency_stop blocks too and the welcome is not re-sent later', async () => {
     const flow = await harness({
       welcome: { enabled: true, mergeWindowMs: 0 },

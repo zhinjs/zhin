@@ -177,6 +177,11 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | no | `[]` | Extra tools to treat as dangerous (local or qualified names). Cannot mark a core dangerous tool safe. |
 | `ai.agent.toolHardGate.allowFunds` | boolean | no | `false` | Allow funds tools (red packets, transfers, payments). Off by default; when on they still need approval. |
 | `ai.agent.toolHardGate.approvalTimeoutMs` | integer | no | `300000` | How long a dangerous call waits for approval before it is denied (ms). |
+| `ai.agent.toolHardGate.imApproval` | object | no | — | IM approval channel for the hard gate (#1013). Off by default. When on, each new approval card is also sent to allowlisted approvers, who settle it with `approve &lt;id&gt;` / `deny &lt;id&gt;` in a private chat (or the dedicated approver group). It shares the Console approval queue: whichever answers first wins. Messages in business groups never settle a card; there is no session-wide or permanent approval. |
+| `ai.agent.toolHardGate.imApproval.enabled` | boolean | no | `false` | Turn the IM approval channel on. |
+| `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | no | `[]` | Approver platform user ids: a flat list applies to every platform; an object maps a platform (adapter name) to its user ids. Anyone not listed cannot settle a card over IM. |
+| `ai.agent.toolHardGate.imApproval.delivery` | string: `"dm"`, `"approver_group"` | no | `"dm"` | dm sends each card to every approver privately; approver_group posts it to approverGroupId, which must not be the conversation that triggered the call. |
+| `ai.agent.toolHardGate.imApproval.approverGroupId` | string | no | — | Dedicated approver group id, required for delivery: approver_group. Without it the IM channel stays unavailable and only the Console can approve. |
 | `ai.agent.usageQuota` | object | no | — | Per-user and per-group token quotas and a per-group rate limit. All limits are off (0) by default; the owner is exempt by default. Counters are kept in memory. |
 | `ai.agent.usageQuota.windowMs` | integer | no | `86400000` | Quota window in ms. |
 | `ai.agent.usageQuota.perUserTokens` | integer | no | `0` | Tokens one user may use per window; 0 = unlimited. |

@@ -46,6 +46,28 @@ ai:
 
 Approval cards are served by the Console RPC `plugin.root.tool-approvals` (read, permission `tool_approvals:read`) and `plugin.root.resolve-tool-approval` (`{ id, decision: 'approve' | 'deny' }`, permission `tool_approvals:resolve`); the full token can call both. Every decision is written to `ai_decision_events`: `tool_approval` (`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`) `tool_hard_gate` (allow: `tool_approval_approved`; deny: `tool_dangerous_no_approval`, `tool_approval_denied`, `tool_approval_timeout`, `tool_funds_disabled`, `tool_hard_gate_latched`), and `tool_call` (allow, `tool_safe_allowed`) for safe / read-only tools, which run but are still audited. An audit write failure never changes the decision.
 
+### IM approval channel (#1013, off by default)
+
+On-call approvers can settle hard-gate cards from IM instead of the Console. The channel shares the Console approval queue: whichever answers first wins and the other sees the card as decided. It still only accepts a human, settles one call per answer, and fails closed.
+
+```yaml
+ai:
+  agent:
+    toolHardGate:
+      imApproval:
+        enabled: true
+        approverIds:            # a flat list applies to every platform; or map platform -> user ids
+          icqq: ['10001']
+        delivery: dm            # dm (default) messages approvers privately; approver_group posts to approverGroupId
+        # approverGroupId: '123456'   # required for approver_group; must not be a business group
+```
+
+- Each new card (a reused same-argument card is not re-sent) goes out through the Endpoint that saw the call, privately to every approver of that platform, with the tool, category, conversation, a redacted argument preview, the card id and its expiry.
+- Approvers reply `/approve <card id>` or `/deny <card id>` in the private chat (the prefix follows your command prefix). Only allowlisted users count; messages in groups or channels never settle a card (in `approver_group` mode only the configured approver group does), the conversation that triggered the call can never settle its own card, and saying "approve" in a business group does nothing.
+- An approval runs exactly one call with the same session and arguments (the existing `consumeApproved` fingerprint); there is no session-wide or permanent grant. The channel is a Host command, not a model-callable tool, so neither `bypass` nor the reviewer Agent can reach it.
+- When a card cannot be delivered (channel off, no approvers for the platform, `approver_group` without a group or pointing at the business conversation) or delivery fails, the card stays available in the Console and times out to a denial as usual; delivery is not retried. The queue lives in memory, so cards do not survive a restart.
+- Audit: settlements in `tool_approval` record `payload.channel` (`console` / `im_dm` / `im_approver_group`, or `turn_prompt` for the in-turn prompt) and the operator in `actor_id`: `im:<platform>:<userId>` for IM, `console` for the Console for now. `payload.imApproval` on `tool_approval_requested` says whether the card could be delivered over IM.
+
 ## Switch inventory and disposition
 
 Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**, **debug**, **internal** (code only), **deprecated**.

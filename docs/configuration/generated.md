@@ -177,6 +177,11 @@ outline: [2, 3]
 | `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | 否 | `[]` | 额外按危险工具处理的工具（本地名或限定名）；不能把核心危险工具调成安全。 |
 | `ai.agent.toolHardGate.allowFunds` | boolean | 否 | `false` | 允许资金类工具（红包、转账、付款）。默认关闭；开启后仍需审批。 |
 | `ai.agent.toolHardGate.approvalTimeoutMs` | integer | 否 | `300000` | 危险调用等待审批的上限（毫秒），超时即拒绝。 |
+| `ai.agent.toolHardGate.imApproval` | object | 否 | — | 硬闸 IM 审批通道（#1013），默认关闭。开启后每张新审批卡片同时投递给 allowlist 审批人，审批人在私聊（或专用审批群）发送 `approve &lt;id&gt;` / `deny &lt;id&gt;` 结算；与 Console 共用审批队列，先到先得。业务群内的消息不能结算卡片，也没有本会话 / 永久授权。 |
+| `ai.agent.toolHardGate.imApproval.enabled` | boolean | 否 | `false` | 开启 IM 审批通道。 |
+| `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | 否 | `[]` | 审批人的平台用户 id：扁平列表对所有平台生效；对象形式为 平台（adapter 名）→ 用户 id 列表。不在名单里的人不能通过 IM 结算卡片。 |
+| `ai.agent.toolHardGate.imApproval.delivery` | string: `"dm"`, `"approver_group"` | 否 | `"dm"` | dm：私聊发给每位审批人；approver_group：发到 approverGroupId，且不能是触发调用的会话。 |
+| `ai.agent.toolHardGate.imApproval.approverGroupId` | string | 否 | — | 专用审批群 id，delivery 为 approver_group 时必填；未配置时 IM 通道不可用，只能在 Console 审批。 |
 | `ai.agent.usageQuota` | object | 否 | — | 按用户 / 按群的 token 配额与群速率限制。默认全部关闭（0），主人默认不受限；计数保存在内存中。 |
 | `ai.agent.usageQuota.windowMs` | integer | 否 | `86400000` | 配额周期（毫秒）。 |
 | `ai.agent.usageQuota.perUserTokens` | integer | 否 | `0` | 每个用户每周期可用的 token；0 不限。 |
