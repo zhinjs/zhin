@@ -1,0 +1,68 @@
+.changeset/welcome-under-mention-only.md
+  s_9622fd28aba994::t_d87cf210f71b91 1-5
+packages/im/runtime/src/host-config-schema.json
+  s_9622fd28aba994::t_d87cf210f71b91 1135-1184
+docs/en/ai/default-behavior.md
+  s_9622fd28aba994::t_d87cf210f71b91 49-70
+basic/cli/tests/plugin-runtime/agent/turn/member-lifecycle.test.ts
+  s_9622fd28aba994::t_d87cf210f71b91 158-172
+packages/im/agent/src/tool/tool-execution-authority.ts
+  s_9622fd28aba994::t_d87cf210f71b91 16,60,150-164
+  s_9622fd28aba994::t_01c966df4c2149 165
+basic/cli/src/plugin-runtime/agent/turn/member-lifecycle.ts
+  s_9622fd28aba994::t_d87cf210f71b91 278-280
+packages/im/ai/src/types.ts
+  s_9622fd28aba994::t_d87cf210f71b91 621-634
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9622fd28aba994::t_d87cf210f71b91 1-244
+docs/ai/default-behavior.md
+  s_9622fd28aba994::t_d87cf210f71b91 49-70
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_d87cf210f71b91 57,162-163,516-528
+  s_9622fd28aba994::t_4a0c7c8a85d8ae 529-531
+basic/cli/src/plugin-runtime/console/tool-approvals.ts
+  s_9622fd28aba994::t_d87cf210f71b91 39-40,88,123
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_d87cf210f71b91 180-184
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_9622fd28aba994::t_d87cf210f71b91 1-312
+docs/adr/0037-controlled-landing-phase1-group-ops.md
+  s_9622fd28aba994::t_d87cf210f71b91 53
+packages/im/agent/src/security/tool-approval-queue.ts
+  s_9622fd28aba994::t_d87cf210f71b91 9-11,18-35,50-53,55-58,70-74,102-103,115,154-155,158,162-175,194-195,197,201,244,246,249-264,271,279,314-324
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_d87cf210f71b91 51-52,163-184,255
+docs/configuration/generated.md
+  s_9622fd28aba994::t_d87cf210f71b91 180-184
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_9622fd28aba994::t_2acb78466b880d 646
+  s_9622fd28aba994::t_d87cf210f71b91 16-19,30-36,86-109,117-118,121-132,137,140,151-163,167-218,306-307,342-343,359,405-406,420,422-424,430,435-440,453,487-488,539-544,550,559,617-626
+  s_9622fd28aba994::t_c1b4229dc98305 627
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9622fd28aba994::t_d87cf210f71b91 32,36,56,92,268-278
+  s_9622fd28aba994::t_1b3edd4b211c7e 279-280
+.changeset/hard-gate-im-approval.md
+  s_9622fd28aba994::t_d87cf210f71b91 1-13
+basic/cli/tests/plugin-runtime/agent/turn/tool-approval-im-ingress.test.ts
+  s_9622fd28aba994::t_d87cf210f71b91 1-110
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_9622fd28aba994::t_d87cf210f71b91 4,111
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  s_9622fd28aba994::t_d87cf210f71b91 16-18,20,89-94,271-413,554-588
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ba04d06e2fa760e1c00079a62b50a12b73b22371",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
