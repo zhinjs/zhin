@@ -1,0 +1,16 @@
+packages/im/agent/src/decision-events.ts
+  h_b680f75345178a 1-377
+packages/im/agent/tests/decision-events.test.ts
+  h_b680f75345178a 1-218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb2e84437ef010eae5dcc601d7516f79db7d0da2",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
