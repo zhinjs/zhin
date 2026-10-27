@@ -44,7 +44,7 @@ ai:
       approvalTimeoutMs: 300000                # 超时即拒绝
 ```
 
-审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `tool_approvals:resolve`）上；完整令牌可直接调用。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）、`tool_hard_gate`（allow：`tool_approval_approved`；deny：`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`），以及 safe / 只读工具的 `tool_call`（allow，`tool_safe_allowed`）——只读查询放行但仍写审计。审计写失败不影响判定。
+审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read` 或 `ops:approve`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `ops:approve` 或旧的 `tool_approvals:resolve`，任一即可）上；完整令牌可直接调用。群管冷却（ADR 0037 §3）：同一 `platform + scene_id + 工具本地名` 在 `ops.cooldownMs`（默认 60 秒，会话运营配置里设置）内只生成一张审批卡，冷却中直接拒绝、不生成新卡（`ops_cooldown` / `ops_cooldown_hit`）。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）、`tool_hard_gate`（allow：`tool_approval_approved`；deny：`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`），以及 safe / 只读工具的 `tool_call`（allow，`tool_safe_allowed`）——只读查询放行但仍写审计。审计写失败不影响判定。
 
 ### IM 审批通道（#1013，默认关）
 

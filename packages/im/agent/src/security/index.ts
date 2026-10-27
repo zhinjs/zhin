@@ -27,3 +27,5 @@ export * from './policy-facade.js';
 // ── 危险工具硬闸（ADR 0036 切片 E）──────────────────────────────────
 export * from './tool-hard-gate.js';
 export * from './tool-approval-queue.js';
+// ── 群管冷却（ADR 0037 切片 E）────────────────────────────────────────
+export * from './ops-cooldown.js';

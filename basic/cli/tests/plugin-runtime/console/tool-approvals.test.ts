@@ -7,6 +7,7 @@ import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/con
 import {
   CONSOLE_TOOL_APPROVAL_OPERATOR,
   HostToolApprovals,
+  OPS_APPROVE_PERMISSION,
   composeHostConsoleRpc,
 } from '../../../src/plugin-runtime/console/tool-approvals.js';
 
@@ -55,6 +56,36 @@ it('lists dangerous-tool approval cards and lets permitted tokens settle them', 
 
   unbind();
   expect(await call('plugin.root.tool-approvals', reader)).toMatchObject({ status: 200, body: { data: { available: false, pending: [] } } });
+});
+
+it('lets ops:approve or the older tool_approvals:resolve settle cards (ADR 0037 slice E)', async () => {
+  const queue = new ToolApprovalQueue();
+  const approvals = new HostToolApprovals();
+  approvals.bind(queue);
+  const call = host(approvals);
+  const enqueue = (user: number) => queue.enqueue({
+    toolName: 'group_kick', category: 'member', sessionKey: 'icqq:1:group:2', turnId: `t${user}`, args: { user_id: user },
+  });
+  const opsApprover: ConsoleAccess = { unrestricted: false, permissions: ['ops:approve'], roles: [] };
+  const legacy: ConsoleAccess = { unrestricted: false, permissions: ['tool_approvals:resolve'], roles: [] };
+  const controlWriter: ConsoleAccess = { unrestricted: false, permissions: ['control:write', 'control:read'], roles: [] };
+
+  expect(approvals.consoleRpc.methods.get('resolve-tool-approval'))
+    .toMatchObject({ requiredPermissions: [], anyOfPermissions: [OPS_APPROVE_PERMISSION, 'tool_approvals:resolve'].sort() });
+  // ops:approve can also see the cards it settles.
+  expect(await call('plugin.root.tool-approvals', opsApprover)).toMatchObject({ status: 200 });
+  expect(await call('plugin.root.tool-approvals', controlWriter)).toMatchObject({ status: 403 });
+
+  const first = enqueue(1);
+  expect(await call('plugin.root.resolve-tool-approval', controlWriter, { id: first.id, decision: 'approve' })).toMatchObject({ status: 403 });
+  expect(await call('plugin.root.resolve-tool-approval', opsApprover, { id: first.id, decision: 'deny' }))
+    .toMatchObject({ status: 200, body: { data: { id: first.id, status: 'denied', channel: 'console' } } });
+  const second = enqueue(2);
+  expect(await call('plugin.root.resolve-tool-approval', legacy, { id: second.id, decision: 'approve' }))
+    .toMatchObject({ status: 200, body: { data: { id: second.id, status: 'approved' } } });
+  const third = enqueue(3);
+  expect(await call('plugin.root.resolve-tool-approval', unrestrictedConsoleAccess, { id: third.id, decision: 'approve' }))
+    .toMatchObject({ status: 200 });
 });
 
 it('rejects duplicate Host Console RPC method names', () => {

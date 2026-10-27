@@ -7,6 +7,9 @@
  * - 持久化：`ai_session_ops` 单行 JSON 文档 + revision（乐观并发，与控制面 `expectedRevision` 同约定）；先落库再生效。
  *   读库失败时**不发欢迎**（`welcome.enabled` 视为 false），退群照常只写审计；按间隔重试。
  * - 写入只经 Console（`session-ops-set`）；模型没有工具能读写这些配置。
+ * - 群管协同（ADR 0037 §3，切片 E）：`ops.cooldownMs` 同样是「实例默认 + 会话覆盖」。硬闸在生成新审批卡之前
+ *   按 `platform + scene_id + 工具本地名` 查冷却（见 `security/ops-cooldown.ts`）；冷却时长从这里读，
+ *   冷却计时本身只在进程内存。与欢迎开关不同，冷却不受「读库失败」影响：读不出时仍用已知值（默认 60s），不会因此放开。
  */
 import { getLogger, formatCompact } from '@zhin.js/logger';
 
@@ -28,6 +31,10 @@ export const MAX_WELCOME_MERGE_WINDOW_MS = 600_000;
 export const MAX_WELCOME_PER_HOUR = 120;
 export const MAX_WELCOME_TEMPLATE_CHARS = 500;
 export const MAX_RULES_URL_CHARS = 300;
+/** 群管冷却默认值（ADR 0037 §3 `ops.cooldownMs`）。 */
+export const DEFAULT_OPS_COOLDOWN_MS = 60_000;
+/** 群管冷却上限：24 小时。`0` 表示关闭冷却（只能由运营者在 Console 显式设置）。 */
+export const MAX_OPS_COOLDOWN_MS = 86_400_000;
 
 /** 模板变量白名单（ADR 0037 §1.1）。 */
 export const WELCOME_TEMPLATE_VARS = ['members', 'nickname', 'group', 'rules_url'] as const;
@@ -58,20 +65,32 @@ export interface SessionLeaveConfig {
   readonly notify: boolean;
 }
 
+/** 群管协同（ADR 0037 §3，切片 E）。 */
+export interface SessionGroupOpsConfig {
+  /**
+   * 同一 `platform + scene_id + 动作`（工具本地名）在这段时间内只允许生成一张硬闸审批卡；
+   * 计时从审批卡创建开始，不论批准与否。`0` = 不冷却。
+   */
+  readonly cooldownMs: number;
+}
+
 export interface SessionOpsConfig {
   readonly welcome: SessionWelcomeConfig;
   readonly leave: SessionLeaveConfig;
+  readonly ops: SessionGroupOpsConfig;
 }
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 export type SessionWelcomePatch = Readonly<Partial<SessionWelcomeConfig>>;
 export type SessionLeavePatch = Readonly<Partial<SessionLeaveConfig>>;
+export type SessionGroupOpsPatch = Readonly<Partial<SessionGroupOpsConfig>>;
 /** 实例默认只接受这些字段（不含开关）。 */
 export type SessionOpsDefaultsPatch = Readonly<{
   welcome?: Readonly<Partial<Pick<SessionWelcomeConfig, 'template' | 'mergeWindowMs' | 'maxPerHour' | 'rulesUrl'>>>;
   leave?: Readonly<Partial<Pick<SessionLeaveConfig, 'record'>>>;
+  ops?: SessionGroupOpsPatch;
 }>;
-export type SessionOpsPatch = Readonly<{ welcome?: SessionWelcomePatch; leave?: SessionLeavePatch }>;
+export type SessionOpsPatch = Readonly<{ welcome?: SessionWelcomePatch; leave?: SessionLeavePatch; ops?: SessionGroupOpsPatch }>;
 
 export interface SessionOpsEntry {
   readonly platform: string;
@@ -102,6 +121,7 @@ export const BUILTIN_SESSION_OPS_DEFAULTS: SessionOpsConfig = Object.freeze({
     rulesUrl: '',
   }),
   leave: Object.freeze({ record: true, notify: false }),
+  ops: Object.freeze({ cooldownMs: DEFAULT_OPS_COOLDOWN_MS }),
 });
 
 export class SessionOpsRevisionConflictError extends Error {
@@ -250,6 +270,7 @@ const WELCOME_FIELDS = ['enabled', 'template', 'mergeWindowMs', 'maxPerHour', 'r
 const LEAVE_FIELDS = ['record', 'notify'] as const;
 const DEFAULT_WELCOME_FIELDS = ['template', 'mergeWindowMs', 'maxPerHour', 'rulesUrl'] as const;
 const DEFAULT_LEAVE_FIELDS = ['record'] as const;
+const OPS_FIELDS = ['cooldownMs'] as const;
 
 /**
  * 校验一段 welcome 补丁。`null` 表示「去掉会话覆盖、回落实例默认」，在 `allowNull` 时返回为 `undefined` 键标记。
@@ -295,17 +316,39 @@ function validateLeave(
   return { set, clear };
 }
 
-function compactPatch(patch: { welcome?: Record<string, unknown>; leave?: Record<string, unknown> }): SessionOpsPatch {
-  const out: { welcome?: SessionWelcomePatch; leave?: SessionLeavePatch } = {};
+function validateGroupOps(
+  value: unknown,
+  label: string,
+  allowNull: boolean,
+): { set: Partial<Mutable<SessionGroupOpsConfig>>; clear: string[] } {
+  if (!isObject(value)) throw new SessionOpsValidationError(`${label} must be an object`);
+  const set: Partial<Mutable<SessionGroupOpsConfig>> = {};
+  const clear: string[] = [];
+  for (const [key, item] of Object.entries(value)) {
+    if (!(OPS_FIELDS as readonly string[]).includes(key)) throw new SessionOpsValidationError(`${label}: unknown field ${key}`);
+    if (item === null && allowNull) { clear.push(key); continue; }
+    set.cooldownMs = checkInt(item, `${label}.cooldownMs`, 0, MAX_OPS_COOLDOWN_MS);
+  }
+  return { set, clear };
+}
+
+function compactPatch(patch: { welcome?: Record<string, unknown>; leave?: Record<string, unknown>; ops?: Record<string, unknown> }): SessionOpsPatch {
+  const out: { welcome?: SessionWelcomePatch; leave?: SessionLeavePatch; ops?: SessionGroupOpsPatch } = {};
   if (patch.welcome && Object.keys(patch.welcome).length) out.welcome = Object.freeze({ ...patch.welcome }) as SessionWelcomePatch;
   if (patch.leave && Object.keys(patch.leave).length) out.leave = Object.freeze({ ...patch.leave }) as SessionLeavePatch;
+  if (patch.ops && Object.keys(patch.ops).length) out.ops = Object.freeze({ ...patch.ops }) as SessionGroupOpsPatch;
   return Object.freeze(out);
+}
+
+function hasOverrides(patch: SessionOpsPatch): boolean {
+  return Boolean(patch.welcome || patch.leave || patch.ops);
 }
 
 function mergeConfig(base: SessionOpsConfig, patch: SessionOpsPatch | undefined): SessionOpsConfig {
   return Object.freeze({
     welcome: Object.freeze({ ...base.welcome, ...(patch?.welcome ?? {}) }),
     leave: Object.freeze({ ...base.leave, ...(patch?.leave ?? {}) }),
+    ops: Object.freeze({ ...base.ops, ...(patch?.ops ?? {}) }),
   });
 }
 
@@ -323,7 +366,8 @@ export function parseSessionOpsDocument(text: unknown): { defaults: SessionOpsCo
     if (!isObject(raw.defaults)) throw new SessionOpsValidationError('defaults must be an object');
     const welcome = raw.defaults.welcome === undefined ? { set: {} } : validateWelcome(raw.defaults.welcome, 'defaults.welcome', DEFAULT_WELCOME_FIELDS, false);
     const leave = raw.defaults.leave === undefined ? { set: {} } : validateLeave(raw.defaults.leave, 'defaults.leave', DEFAULT_LEAVE_FIELDS, false);
-    defaults = mergeConfig(BUILTIN_SESSION_OPS_DEFAULTS, compactPatch({ welcome: welcome.set, leave: leave.set }));
+    const ops = raw.defaults.ops === undefined ? { set: {} } : validateGroupOps(raw.defaults.ops, 'defaults.ops', false);
+    defaults = mergeConfig(BUILTIN_SESSION_OPS_DEFAULTS, compactPatch({ welcome: welcome.set, leave: leave.set, ops: ops.set }));
   }
   const sessions: SessionOpsEntry[] = [];
   if (raw.sessions !== undefined) {
@@ -336,8 +380,9 @@ export function parseSessionOpsDocument(text: unknown): { defaults: SessionOpsCo
       const overrides = isObject(item.overrides) ? item.overrides : {};
       const welcome = overrides.welcome === undefined ? { set: {} } : validateWelcome(overrides.welcome, 'overrides.welcome', WELCOME_FIELDS, false);
       const leave = overrides.leave === undefined ? { set: {} } : validateLeave(overrides.leave, 'overrides.leave', LEAVE_FIELDS, false);
-      const patch = compactPatch({ welcome: welcome.set, leave: leave.set });
-      if (patch.welcome || patch.leave) sessions.push(Object.freeze({ platform: item.platform, sceneId: item.sceneId, overrides: patch }));
+      const ops = overrides.ops === undefined ? { set: {} } : validateGroupOps(overrides.ops, 'overrides.ops', false);
+      const patch = compactPatch({ welcome: welcome.set, leave: leave.set, ops: ops.set });
+      if (hasOverrides(patch)) sessions.push(Object.freeze({ platform: item.platform, sceneId: item.sceneId, overrides: patch }));
     }
   }
   return { defaults, sessions };
@@ -350,7 +395,9 @@ function diffDefaults(defaults: SessionOpsConfig): SessionOpsDefaultsPatch {
   }
   const leave: Record<string, unknown> = {};
   if (defaults.leave.record !== BUILTIN_SESSION_OPS_DEFAULTS.leave.record) leave.record = defaults.leave.record;
-  return compactPatch({ welcome, leave }) as SessionOpsDefaultsPatch;
+  const ops: Record<string, unknown> = {};
+  if (defaults.ops.cooldownMs !== BUILTIN_SESSION_OPS_DEFAULTS.ops.cooldownMs) ops.cooldownMs = defaults.ops.cooldownMs;
+  return compactPatch({ welcome, leave, ops }) as SessionOpsDefaultsPatch;
 }
 
 function serializeDocument(doc: SessionOpsDocument): string {
@@ -398,7 +445,8 @@ export interface SessionOpsSetResult {
 
 function sameConfig(a: SessionOpsConfig, b: SessionOpsConfig): boolean {
   return WELCOME_FIELDS.every((key) => a.welcome[key] === b.welcome[key])
-    && LEAVE_FIELDS.every((key) => a.leave[key] === b.leave[key]);
+    && LEAVE_FIELDS.every((key) => a.leave[key] === b.leave[key])
+    && OPS_FIELDS.every((key) => a.ops[key] === b.ops[key]);
 }
 
 /** 会话运营配置（每个 Agent 进程一份）。读取同步、只读内存；写入串行化并先落库再生效。 */
@@ -494,7 +542,7 @@ export class AiSessionOps {
     this.#retryIfDue();
     const merged = mergeConfig(this.#doc.defaults, this.#doc.sessions.get(entryKey(platform, sceneId))?.overrides);
     if (this.#available) return merged;
-    return Object.freeze({ welcome: Object.freeze({ ...merged.welcome, enabled: false }), leave: merged.leave });
+    return Object.freeze({ welcome: Object.freeze({ ...merged.welcome, enabled: false }), leave: merged.leave, ops: merged.ops });
   }
 
   /** 运营者写入（只经 Console）。`expectedRevision` 不符抛 {@link SessionOpsRevisionConflictError}，不覆盖。 */
@@ -513,17 +561,18 @@ export class AiSessionOps {
     if (input.defaults !== undefined) {
       if (!isObject(input.defaults)) throw new SessionOpsValidationError('defaults must be an object');
       for (const key of Object.keys(input.defaults)) {
-        if (key !== 'welcome' && key !== 'leave') throw new SessionOpsValidationError(`defaults: unknown field ${key}`);
+        if (key !== 'welcome' && key !== 'leave' && key !== 'ops') throw new SessionOpsValidationError(`defaults: unknown field ${key}`);
       }
       const welcome = input.defaults.welcome === undefined ? { set: {} } : validateWelcome(input.defaults.welcome, 'defaults.welcome', DEFAULT_WELCOME_FIELDS, false);
       const leave = input.defaults.leave === undefined ? { set: {} } : validateLeave(input.defaults.leave, 'defaults.leave', DEFAULT_LEAVE_FIELDS, false);
-      defaultsPatch = compactPatch({ welcome: welcome.set, leave: leave.set });
+      const ops = input.defaults.ops === undefined ? { set: {} } : validateGroupOps(input.defaults.ops, 'defaults.ops', false);
+      defaultsPatch = compactPatch({ welcome: welcome.set, leave: leave.set, ops: ops.set });
     }
     const sessionPatches = (input.sessions ?? []).map((entry, index) => {
       const label = `sessions[${index}]`;
       if (!isObject(entry)) throw new SessionOpsValidationError(`${label} must be an object`);
       for (const key of Object.keys(entry)) {
-        if (!['platform', 'sceneId', 'welcome', 'leave', 'reset'].includes(key)) throw new SessionOpsValidationError(`${label}: unknown field ${key}`);
+        if (!['platform', 'sceneId', 'welcome', 'leave', 'ops', 'reset'].includes(key)) throw new SessionOpsValidationError(`${label}: unknown field ${key}`);
       }
       if (typeof entry.platform !== 'string' || !entry.platform.trim() || entry.platform.length > 64) {
         throw new SessionOpsValidationError(`${label}.platform is required`);
@@ -534,7 +583,8 @@ export class AiSessionOps {
       const reset = entry.reset === undefined ? false : checkBool(entry.reset, `${label}.reset`);
       const welcome = entry.welcome === undefined ? { set: {}, clear: [] } : validateWelcome(entry.welcome, `${label}.welcome`, WELCOME_FIELDS, true);
       const leave = entry.leave === undefined ? { set: {}, clear: [] } : validateLeave(entry.leave, `${label}.leave`, LEAVE_FIELDS, true);
-      return { platform: entry.platform, sceneId: entry.sceneId, reset, welcome, leave };
+      const ops = entry.ops === undefined ? { set: {}, clear: [] } : validateGroupOps(entry.ops, `${label}.ops`, true);
+      return { platform: entry.platform, sceneId: entry.sceneId, reset, welcome, leave, ops };
     });
     if (!this.#available) {
       if (!(await this.reload())) throw new SessionOpsUnavailableError();
@@ -561,8 +611,10 @@ export class AiSessionOps {
         for (const name of patch.welcome.clear) delete welcome[name];
         const leave: Record<string, unknown> = { ...(current.leave ?? {}), ...patch.leave.set };
         for (const name of patch.leave.clear) delete leave[name];
-        const overrides = compactPatch({ welcome, leave });
-        if (overrides.welcome || overrides.leave) {
+        const ops: Record<string, unknown> = { ...(current.ops ?? {}), ...patch.ops.set };
+        for (const name of patch.ops.clear) delete ops[name];
+        const overrides = compactPatch({ welcome, leave, ops });
+        if (hasOverrides(overrides)) {
           nextSessions.set(key, Object.freeze({ platform: patch.platform, sceneId: patch.sceneId, overrides }));
         } else {
           nextSessions.delete(key);

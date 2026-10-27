@@ -14,6 +14,7 @@ import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import { AI_DECISION_EVENTS_TABLE } from '../decision-events.js';
 import { AI_CONTROL_STATE_TABLE } from '../control-plane.js';
 import { AI_SESSION_OPS_TABLE } from '../session-ops.js';
+import { AI_ANNOUNCEMENTS_TABLE } from '../announcements.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
@@ -79,6 +80,9 @@ export async function activateAiDatabaseStorage(
   // ADR 0037 slice A: 读不出会话运营配置时不抛错，欢迎一律不发并稍后重试。
   const sessionOpsModel = db.models?.get(AI_SESSION_OPS_TABLE);
   if (sessionOpsModel) await refs.zhinAgent.getSessionOps?.().upgradeToDatabase(sessionOpsModel);
+  // ADR 0037 slice B: 公告草稿 / 审批 / 发送状态以表为准。
+  const announcementsModel = db.models?.get(AI_ANNOUNCEMENTS_TABLE);
+  if (announcementsModel) await refs.zhinAgent.getAnnouncements?.().upgradeToDatabase(announcementsModel);
 
   if (semanticActivation) {
     semanticActivation.runtime.activate(semanticActivation.repository);

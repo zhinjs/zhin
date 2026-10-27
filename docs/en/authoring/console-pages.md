@@ -170,7 +170,8 @@ Access rules:
 - **Follows the page**: with `page` set, the caller must meet that page's `requiredPermissions` and `requiredRoles`, plus any the method declares itself. If the page isn't loaded in the current generation, the call is refused.
 - **The full token** can call every method.
 - **Any other token** (`scope: user` / `demo`) can read `status` if it holds every required permission and role. A `status` with no requirements at all is open to these tokens only when it sets `demo: true`.
-- **Actions**: other tokens can run an action only when the action **itself** declares `requiredPermissions` or `requiredRoles` and the token meets all of them, including the page's. Otherwise the call is refused. An action with no requirements of its own needs the full token; a page's requirements never open an action on their own.
+- **Actions**: other tokens can run an action only when the action **itself** declares `requiredPermissions`, `requiredRoles` or `anyOfPermissions` and the token meets all of them, including the page's. Otherwise the call is refused. An action with no requirements of its own needs the full token; a page's requirements never open an action on their own.
+- **Any one of**: holding **one** of the permissions in `anyOfPermissions` is enough (on top of `requiredPermissions`). Use it when a new permission sits beside an older one, for example approval cards accept `ops:approve` or the older `tool_approvals:resolve`.
 
 ```ts
 actions: {
@@ -323,12 +324,45 @@ The config is keyed by `platform` + `sceneId` (like `group:123`, the same key as
 | `welcome.rulesUrl` | Value of `{rules_url}` | empty |
 | `leave.record` | Record leaves in the audit log | `true` |
 | `leave.notify` | Post a message when someone leaves (stored only for now, nothing is sent) | `false` |
+| `ops.cooldownMs` | Group-ops cooldown (slice E): one hard-gate approval card per `platform + sceneId + action` (the tool's local name, e.g. `kick_member`) within this time; `0` turns it off, max 24 hours. Settable as instance default and per session | `60000` |
 
 - `session-ops`: returns `{ revision, defaults, sessions, updatedAt, updatedBy, persistent, available }`; each session has `overrides` (fields set explicitly) and `effective` (merged with the instance defaults).
 - `session-ops-preview`: renders only. It doesn't send and doesn't write to the audit log. It uses the last real join seen in that session (in memory) or a sample member, and returns `{ text, parts, unknownVars, sample, members, enabled }`. Pass `template` to preview a template you haven't saved.
 - `session-ops-set`: `defaults` takes only the template and numbers (no switches). In `sessions[]`, the fields you send replace the old values, `null` falls back to the instance default, and `reset: true` removes the session's config. `expectedRevision` is required; a mismatch returns `conflict`. Every scope that actually changed writes one `kind=config_change`, `actor=operator` row.
 
+Group-ops cooldown (ADR 0037 §3, slice E): before the hard gate **creates a new approval card**, it checks the cooldown. The timer starts when the card is created, whether it is later approved, denied or times out. Calling the same action again during the cooldown is refused **without a new card**; the model is told it is cooling down and how many milliseconds remain. That writes `kind=ops_cooldown`, `outcome=deny`, `reason_code=ops_cooldown_hit` (`payload` has `action`, `target`, `remainingMs`, `platform`, `sceneId`) plus a `tool_hard_gate` deny row with the same `turn_id`. Outside a cooldown it writes `ops_cooldown_passed` and goes on to approval. A card an operator already approved in the Console still runs for the same arguments (that card started the timer). The timers live in process memory and reset on restart; the cooldown only throttles cards, dangerous tools still need a human approval every time.
+
 A welcome goes: join → merge window → hourly cap → control plane (a welcome isn't addressed, so `mention_only` skips it too) → session-profile speak check → send. A blocked welcome is only audited and never sent later; a failed send isn't retried. Once `welcome.enabled` is on for a session, scene event wakes no longer run the model for joins, so the template welcome isn't doubled. Rows use `kind=member_lifecycle` with `welcome_sent` / `welcome_merged` / `welcome_rate_limited` / `welcome_disabled` / `member_leave_recorded`; blocks by the control plane or the session profile keep their `control_*` / `cannot_speak_*` codes. The config lives in the `ai_session_ops` table; if it can't be read, no welcome is sent and leaves are still recorded.
+
+### Built-in: announcements (draft → approve → send)
+
+Announcements (ADR 0037 phase 1, slice B) are Host RPCs; the Console page comes later. Reads need `control:read`; create, edit and submit need `control:write`; **approve, reject and resend need the approver permission `ops:approve`** (slice E), so `control:write` alone cannot approve. `ops:approve` also lists and settles dangerous-tool approval cards (see [Dangerous-tool approval cards](#built-in-actions-dangerous-tool-approval-cards)).
+
+| Method | Call | Permission |
+| --- | --- | --- |
+| `plugin.root.announcements` | `pluginRpc('root', 'announcements', { platform, sceneId, status? })` | `control:read` |
+| `plugin.root.announcement` | `pluginRpc('root', 'announcement', { id })` | `control:read` |
+| `plugin.root.announcement-create` | `pluginRpc('root', 'announcement-create', { platform, sceneId, content, endpoint? })` | `control:write` (action) |
+| `plugin.root.announcement-edit` | `pluginRpc('root', 'announcement-edit', { id, expectedRevision, content })` | `control:write` (action) |
+| `plugin.root.announcement-submit` | `pluginRpc('root', 'announcement-submit', { id, expectedRevision })` | `control:write` (action) |
+| `plugin.root.announcement-approve` | `pluginRpc('root', 'announcement-approve', { id, expectedRevision })` | `ops:approve` (action) |
+| `plugin.root.announcement-reject` | `pluginRpc('root', 'announcement-reject', { id, expectedRevision, reason? })` | `ops:approve` (action) |
+| `plugin.root.announcement-resend` | `pluginRpc('root', 'announcement-resend', { id, expectedRevision })` | `ops:approve` (action) |
+
+Status only moves forward: `draft` → `pending` → `approved` → `sent`, with `rejected` / `expired` / `failed` on the side. Editing the text (in any non-final status) goes back to `draft` and recomputes `contentHash`; a `pending` announcement expires after 24 hours. The model can only create drafts with the `announcement_draft` tool (`risk: safe`); it can't submit, approve, or send.
+
+- `announcement-approve` sends **right away** and returns the status after sending plus `send.result` (`sent` / `failed`). Order: hash check → control plane (judged as addressed, so `mention_only` doesn't block) → session-profile speak check → hard gate (this approval counts as the hard-gate approval, **no second approval card**) → the platform's group-notice API.
+- A blocked or failed send becomes `failed` with a reason. It isn't queued or retried; `announcement-resend` puts it back to `pending` and it needs another approval. If the text no longer matches the approved hash, it's refused (`announcement_hash_mismatch`).
+- Every action needs `expectedRevision`; a mismatch returns `conflict` and nothing is overwritten. Each transition writes one `kind=announcement` row (`announcement_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_sent` / `_send_failed` / `_resend` / `_hash_mismatch`); blocks by the control plane or session profile keep their `control_*` / `cannot_speak_*` codes. Data lives in the `ai_announcements` table.
+
+### Built-in actions: dangerous-tool approval cards
+
+Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The approver permission is `ops:approve` (ADR 0037 §3, slice E), separate from `control:write`. The older permissions still work so existing tokens keep working; holding either one is enough.
+
+| Method | Call | Permission |
+| --- | --- | --- |
+| `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` or `ops:approve` |
+| `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` or `tool_approvals:resolve` (action; the admin token can always call it) |
 
 ## Saving settings from a page (config:patch)
 

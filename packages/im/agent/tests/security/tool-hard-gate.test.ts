@@ -11,6 +11,7 @@ import { createBypassApprovalPort } from '../../src/session/approval-review-agen
 import {
   CORE_DANGEROUS_TOOLS,
   TOOL_HARD_GATE_POLICY,
+  ToolHardGate,
   assessToolRisk,
   coreDangerousCategory,
   imApproversFor,
@@ -21,6 +22,7 @@ import {
   toolLocalName,
 } from '../../src/security/tool-hard-gate.js';
 import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
+import { OpsCooldown } from '../../src/security/ops-cooldown.js';
 import type { ToolHardGateControlView } from '../../src/security/tool-hard-gate.js';
 import { AiControlPlane, type ControlStateModel } from '../../src/control-plane.js';
 import { hostControlPlaneSource } from '../../src/security/host-control-plane.js';
@@ -215,6 +217,25 @@ describe('TurnToolRuntime hard gate', () => {
     const again = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-5' }).turn, capabilities, { approvalQueue: queue });
     await expect(again.execute('group_kick', { user_id: 1 }, 'tu-5')).resolves.toMatchObject({ status: 'denied' });
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks the Host ops cooldown before a new card (ADR 0037 slice E): one card per scene + action per window', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const opsCooldown = new OpsCooldown();
+    const execute = vi.fn(async () => 'kicked');
+    const capabilities = [tool('group_kick', execute, 'never')];
+    const options = { approvalQueue: queue, decisionAudit: audit, opsCooldown };
+    const first = new TurnToolRuntime(fixture({ unattended: true }).turn, capabilities, options);
+    await expect(first.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
+    const second = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-2' }).turn, capabilities, options);
+    const denied = await second.execute('group_kick', { user_id: 2 }, 'tu-2');
+    expect(denied).toMatchObject({ status: 'denied' });
+    expect(JSON.stringify(denied)).toContain('冷却中');
+    expect(queue.list()).toHaveLength(1);
+    expect(audit.codes()).toContain('ops_cooldown:deny:ops_cooldown_hit');
+    expect(audit.records.find((record) => record.reasonCode === 'ops_cooldown_hit')).toMatchObject({ platform: 'icqq', sceneId: 'group:42' });
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('lets a Console decision settle a call that is waiting on the IM prompt', async () => {
@@ -537,6 +558,60 @@ describe('TurnToolRuntime hard gate × control plane (#1008)', () => {
     });
 
     await expect(runtime.execute('foo_list_members', {}, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
+  });
+});
+
+describe('ToolHardGate.checkPreApproved (ADR 0037 slice B announcements)', () => {
+  function gate(options: { control?: ToolHardGateControlView; approval?: ApprovalOutcomePort } = {}) {
+    const audit = auditSink();
+    const queue = new ToolApprovalQueue();
+    const enqueue = vi.spyOn(queue, 'enqueue');
+    const hardGate = new ToolHardGate(undefined, {
+      turnId: 'turn-a',
+      sessionKey: 'announcement:a-1',
+      unattended: true,
+      signal: new AbortController().signal,
+      location: { instanceId: '*', platform: 'icqq', sceneId: 'group:123' },
+      audit,
+      queue,
+      ...(options.approval ? { approval: options.approval } : {}),
+      ...(options.control ? { controlPlane: () => options.control } : {}),
+    });
+    return { hardGate, audit, enqueue };
+  }
+  const approval = { source: 'announcement' as const, id: 'a-1', approvedBy: 'boss', approvedHash: 'h1', contentHash: 'h1' };
+
+  it('treats the announcement approval as the hard-gate approval: no second card, no approval prompt', () => {
+    const port = scriptedPort([{ status: 'denied' }]);
+    const { hardGate, audit, enqueue } = gate({ approval: port });
+    const result = hardGate.checkPreApproved({ name: 'send_group_notice' }, { content: 'hi' }, 'announcement:a-1', approval);
+    expect(result).toMatchObject({ status: 'approved', category: 'publish', approvalId: 'a-1' });
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(port.requests).toHaveLength(0);
+    expect(audit.codes()).toEqual([
+      'tool_approval:allow:tool_approval_approved',
+      'tool_hard_gate:allow:tool_approval_approved',
+    ]);
+    expect(audit.records[0]).toMatchObject({ actor: 'operator', actorId: 'boss' });
+    expect(audit.records[0]!.payload).toMatchObject({ via: 'announcement', approvalId: 'a-1' });
+  });
+
+  it('refuses when the content hash no longer matches the approved hash', () => {
+    const { hardGate, audit, enqueue } = gate();
+    const result = hardGate.checkPreApproved({ name: 'send_group_notice' }, { content: 'changed' }, 't', { ...approval, contentHash: 'h2' });
+    expect(result).toMatchObject({ status: 'denied', reasonCode: 'announcement_hash_mismatch' });
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(audit.codes()).toEqual(['tool_hard_gate:deny:announcement_hash_mismatch']);
+    const missing = gate().hardGate.checkPreApproved({ name: 'send_group_notice' }, {}, 't', { ...approval, approvedHash: null });
+    expect(missing).toMatchObject({ status: 'denied', reasonCode: 'announcement_hash_mismatch' });
+  });
+
+  it('still honours emergency_stop / read_only', () => {
+    const control: ToolHardGateControlView = { isEmergencyStopped: () => true, isReadOnly: () => false };
+    const { hardGate, enqueue } = gate({ control });
+    const result = hardGate.checkPreApproved({ name: 'send_group_notice' }, {}, 't', approval);
+    expect(result).toMatchObject({ status: 'denied', reasonCode: 'control_emergency_stop' });
+    expect(enqueue).not.toHaveBeenCalled();
   });
 });
 

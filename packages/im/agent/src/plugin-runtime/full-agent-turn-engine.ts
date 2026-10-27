@@ -742,13 +742,14 @@ async function recallTurnMemory(
  */
 function hardGateOptions(
   host: ZhinAgentPrivate,
-): Pick<TurnToolRuntimeOptions, 'hardGate' | 'decisionAudit' | 'approvalQueue' | 'controlPlane'> {
+): Pick<TurnToolRuntimeOptions, 'hardGate' | 'decisionAudit' | 'approvalQueue' | 'controlPlane' | 'opsCooldown'> {
   const audit = (host as { readonly decisionEvents?: Partial<DecisionAuditSink> }).decisionEvents;
   const controlPlane = hostControlPlaneSource(host);
   return {
     ...(host.config.toolHardGate ? { hardGate: host.config.toolHardGate } : {}),
     ...(controlPlane ? { controlPlane } : {}),
     ...(host.toolApprovals ? { approvalQueue: host.toolApprovals } : {}),
+    ...(host.opsCooldown ? { opsCooldown: host.opsCooldown } : {}),
     ...(audit && typeof audit.record === 'function' ? { decisionAudit: audit as DecisionAuditSink } : {}),
   };
 }

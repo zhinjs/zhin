@@ -34,6 +34,7 @@ import {
   type ToolHardGateLocation,
 } from '../security/tool-hard-gate.js';
 import type { ToolApprovalOrigin, ToolApprovalQueue } from '../security/tool-approval-queue.js';
+import type { OpsCooldownView } from '../security/ops-cooldown.js';
 
 type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
   type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
@@ -60,6 +61,8 @@ export interface TurnToolRuntimeOptions {
   readonly approvalQueue?: ToolApprovalQueue;
   /** Control plane (#1008): emergency_stop / read_only deny dangerous tools before any approval prompt. */
   readonly controlPlane?: ToolHardGateControlSource;
+  /** Group-ops cooldown (ADR 0037 §3, slice E): checked before a new approval card is created. */
+  readonly opsCooldown?: OpsCooldownView;
 }
 
 /** Sole execution authority for Tool capabilities within one fixed Turn lease. */
@@ -93,6 +96,7 @@ export class TurnToolRuntime {
       ...(options.decisionAudit ? { audit: options.decisionAudit } : {}),
       ...(options.approvalQueue ? { queue: options.approvalQueue } : {}),
       ...(options.controlPlane ? { controlPlane: options.controlPlane } : {}),
+      ...(options.opsCooldown ? { opsCooldown: options.opsCooldown } : {}),
     });
   }
 

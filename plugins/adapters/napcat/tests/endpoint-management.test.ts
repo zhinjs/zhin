@@ -23,6 +23,13 @@ const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
 const expectedCapabilities = ['listFriends', 'listGroups', 'listGroupMembers'];
 
 describe('createNapCatEndpointManagement', () => {
+  it('发群公告走 _send_group_notice（宿主内部，不进 Console 能力列表）', async () => {
+    const callApi = vi.fn(async () => null);
+    const management = createNapCatEndpointManagement({ callApi });
+    await management.sendGroupNotice?.('20001', '周六活动');
+    expect(callApi).toHaveBeenCalledWith('_send_group_notice', { group_id: 20001, content: '周六活动' });
+  });
+
   it('归一化好友列表（remark 缺省回退空串）', async () => {
     const callApi = vi.fn(async () => [
       { user_id: 10001, nickname: 'Alice', remark: '同事' },
