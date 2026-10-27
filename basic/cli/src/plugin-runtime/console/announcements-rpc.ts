@@ -3,6 +3,7 @@ import type { AiAnnouncements, AnnouncementRecord, AnnouncementStatus, Announcem
 import { PluginConsoleRpcError, type PluginConsoleRpcInput, type PluginConsoleRpcJson, type PluginConsoleRpcMethod, type PluginConsoleRpcStatus } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AnnouncementDispatcher, AnnouncementDispatchResult } from '../agent/turn/announcement-dispatch.js';
+import { OPS_APPROVE_PERMISSION } from './tool-approvals.js';
 
 /**
  * 公告 Console RPC（ADR 0037 §1.2 / §5，切片 B）。本期只做 Host RPC，Console 页面另行实现。
@@ -10,7 +11,8 @@ import type { AnnouncementDispatcher, AnnouncementDispatchResult } from '../agen
  * 读（`control:read`）：
  * - `plugin.root.announcements`：`{ platform, sceneId, status? }` → 该会话的公告（新的在前）。
  * - `plugin.root.announcement`：`{ id }` → 单条。
- * 写（`control:write`，动作；全部带 `expectedRevision`，不符返回 `conflict` 且不覆盖）：
+ * 写（动作；全部带 `expectedRevision`，不符返回 `conflict` 且不覆盖）。起草 / 编辑 / 提交要 `control:write`；
+ * 审批类（approve / reject / resend）要 `ops:approve`（ADR 0037 §3，切片 E），只有 `control:write` 不够：
  * - `announcement-create`：`{ platform, sceneId, content, endpoint? }` → 新草稿。
  * - `announcement-edit`：`{ id, expectedRevision, content }` → 改正文，任何非终态都回到 `draft`。
  * - `announcement-submit`：`draft` → `pending`。
@@ -19,13 +21,15 @@ import type { AnnouncementDispatcher, AnnouncementDispatchResult } from '../agen
  * - `announcement-reject`：`{ id, expectedRevision, reason? }`，`pending` → `rejected`。
  * - `announcement-resend`：`failed` → `pending`；之后需再 `announcement-approve` 一次才会发送。
  *
- * 权限暂复用 `control:read` / `control:write`；ADR 0037 切片 E 引入 `ops:approve` 后，approve / reject / resend
- * 改用该权限点。Console RPC 目前拿不到调用者身份，审批人记为 `console`（与 `session-ops-set` 同约定）。
+ * 读用 `control:read`。`ops:approve` 与硬闸审批卡的结算共用同一权限点。
+ * Console RPC 目前拿不到调用者身份，审批人记为 `console`（与 `session-ops-set` 同约定）。
  * 每次迁移由存储写一行 `kind=announcement` 审计。
  */
 
 export const ANNOUNCEMENTS_READ_PERMISSION = 'control:read';
 export const ANNOUNCEMENTS_WRITE_PERMISSION = 'control:write';
+/** approve / reject / resend（ADR 0037 §3：审批人 = Console 权限，与 `control:write` 分开）。 */
+export const ANNOUNCEMENTS_APPROVE_PERMISSION = OPS_APPROVE_PERMISSION;
 export const ANNOUNCEMENTS_CONSOLE_ACTOR_ID = 'console';
 const SCENE_ID_PATTERN = /^(group|channel):.+/u;
 const STATUSES: readonly AnnouncementStatus[] = ['draft', 'pending', 'approved', 'sent', 'rejected', 'expired', 'failed'];
@@ -155,6 +159,10 @@ export function announcementActions(source: AnnouncementsSource, dispatcher: Ann
     requiredPermissions: [ANNOUNCEMENTS_WRITE_PERMISSION],
     handler,
   });
+  const approve = (handler: PluginConsoleRpcMethod['handler']): PluginConsoleRpcMethod => ({
+    requiredPermissions: [ANNOUNCEMENTS_APPROVE_PERMISSION],
+    handler,
+  });
   const actorId = ANNOUNCEMENTS_CONSOLE_ACTOR_ID;
   return {
     'announcement-create': write(async (input) => {
@@ -187,7 +195,7 @@ export function announcementActions(source: AnnouncementsSource, dispatcher: Ann
       const store = requireStore(source);
       return transitionJson(await guarded(() => store.submit({ id, expectedRevision, actorId })));
     }),
-    'announcement-approve': write(async (input) => {
+    'announcement-approve': approve(async (input) => {
       onlyFields(input, ['id', 'expectedRevision']);
       const id = requireId(input);
       const expectedRevision = requireRevision(input);
@@ -199,7 +207,7 @@ export function announcementActions(source: AnnouncementsSource, dispatcher: Ann
       const dispatched = await guarded(() => engine.dispatch(transition.record.id));
       return transitionJson(transition, dispatched);
     }),
-    'announcement-reject': write(async (input) => {
+    'announcement-reject': approve(async (input) => {
       onlyFields(input, ['id', 'expectedRevision', 'reason']);
       const id = requireId(input);
       const expectedRevision = requireRevision(input);
@@ -207,7 +215,7 @@ export function announcementActions(source: AnnouncementsSource, dispatcher: Ann
       const store = requireStore(source);
       return transitionJson(await guarded(() => store.reject({ id, expectedRevision, actorId, ...(typeof input.reason === 'string' ? { reason: input.reason } : {}) })));
     }),
-    'announcement-resend': write(async (input) => {
+    'announcement-resend': approve(async (input) => {
       onlyFields(input, ['id', 'expectedRevision']);
       const id = requireId(input);
       const expectedRevision = requireRevision(input);
