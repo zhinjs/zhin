@@ -1,0 +1,22 @@
+packages/im/agent/evals/cases/hard-gate-denied-cross-turn-cooldown-group.case.ts
+  h_b680f75345178a 1-28
+packages/im/agent/evals/cases/hard-gate-denied-cross-turn-reasks-group.case.ts
+  h_b680f75345178a 8-12
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 144-146
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 201-206
+packages/im/agent/evals/long-task/interjection.eval.ts
+  h_b680f75345178a 79-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ef9f71440a54986c48fc7bdf9238af57b82e4cea",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
