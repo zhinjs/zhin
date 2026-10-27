@@ -1,0 +1,98 @@
+.changeset/tool-hard-gate.md
+  h_b680f75345178a 1-16
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_b680f75345178a 59-60,160
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  h_b680f75345178a 35-36,71-72
+basic/cli/src/plugin-runtime/console/module.ts
+  h_b680f75345178a 20-27
+basic/cli/src/plugin-runtime/console/tool-approvals.ts
+  h_b680f75345178a 1-122
+basic/cli/src/plugin-runtime/start-command.ts
+  h_b680f75345178a 50-51,180-181,250,331,493
+basic/cli/tests/plugin-runtime/console/tool-approvals.test.ts
+  h_b680f75345178a 1-63
+docs/ai/default-behavior.md
+  h_b680f75345178a 22,25-48,71
+docs/authoring/agent-tools.md
+  h_b680f75345178a 79-97,318-319
+docs/configuration/generated.md
+  h_b680f75345178a 176-179
+docs/en/ai/default-behavior.md
+  h_b680f75345178a 22,25-48,71
+docs/en/authoring/agent-tools.md
+  h_b680f75345178a 78-96,317-318
+docs/en/configuration/generated.md
+  h_b680f75345178a 176-179
+packages/im/agent/evals/cases/hard-gate-approved-runs-once.case.ts
+  h_b680f75345178a 1-23
+packages/im/agent/evals/cases/hard-gate-denied-not-retried.case.ts
+  h_b680f75345178a 1-23
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 56-58
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 378
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 66-67,104-105
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_b680f75345178a 4,110-111
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  h_b680f75345178a 4,50
+packages/im/agent/src/decision-events.ts
+  h_b680f75345178a 70-74
+packages/im/agent/src/internal/agent-host.ts
+  h_b680f75345178a 50-51
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  h_b680f75345178a 161-162
+packages/im/agent/src/plugin-runtime/capability-tools.ts
+  h_b680f75345178a 37-38
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  h_b680f75345178a 350-351
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  h_b680f75345178a 12-13,239,423,731-743
+packages/im/agent/src/plugin-runtime/host-tool-projection.ts
+  h_b680f75345178a 7-8,19-20,49-50
+packages/im/agent/src/seam/tool-service.ts
+  h_b680f75345178a 28-30
+packages/im/agent/src/security/index.ts
+  h_b680f75345178a 26-29
+packages/im/agent/src/security/tool-approval-queue.ts
+  h_b680f75345178a 1-263
+packages/im/agent/src/security/tool-hard-gate.ts
+  h_b680f75345178a 1-424
+packages/im/agent/src/tool/tool-execution-authority.ts
+  h_b680f75345178a 15,35,39-61,81-88
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  h_b680f75345178a 27-34,53-58,66,79-90,114-115,129-135,139-141,262-278
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 40,174-175
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  h_b680f75345178a 1-300
+packages/im/agent/tests/tool/turn-tool-runtime.test.ts
+  h_b680f75345178a 27,30,118,122-123
+packages/im/ai/src/types.ts
+  h_b680f75345178a 236-239,608-619
+packages/im/core/src/types.ts
+  h_b680f75345178a 299-307
+packages/im/runtime/src/host-config-schema.json
+  h_b680f75345178a 1109-1137
+packages/im/tool/src/definition.ts
+  h_b680f75345178a 18-21,132-140,249-254,323-324,368-375
+packages/im/tool/src/tool-index.ts
+  h_b680f75345178a 16-17,31-33,143-145
+scripts/check-agent-config-inventory.mjs
+  h_b680f75345178a 15
+scripts/check-api-docs-surface.mjs
+  h_b680f75345178a 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "17d13015ebc17120318ded7b16bc61ab5c335ff8",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
