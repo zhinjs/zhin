@@ -1,0 +1,27 @@
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_6192bbcbf2b661 3,274-278
+basic/cli/src/plugin-runtime/agent/turn/member-lifecycle.ts
+  s_9622fd28aba994::t_2621006f441924 91,96-100,159-167
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_9622fd28aba994::t_8141734f458a0a 23
+packages/im/core/src/plugin-runtime/im/member-welcome.ts
+  s_9622fd28aba994::t_fdb6427aa53cb8 1-19
+plugins/utils/group-suite/handlers/welcome/index.ts
+  s_9622fd28aba994::t_5411f7e20e0849 2-3,16-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9d7769fb0d843d8907803fd5515c3c479350a1f",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
