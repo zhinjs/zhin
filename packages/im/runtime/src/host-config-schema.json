@@ -1106,6 +1106,35 @@
                 }
               }
             },
+            "toolHardGate": {
+              "type": "object",
+              "description": "Dangerous-tool hard gate (ADR 0036). Always on and independent of execApprovalMode: tools that manage members, publish content, move money or change the bot's identity (a core list, plus tools that declare risk: dangerous) never run without a fresh human approval or a Console-approved card, even under bypass. A denial fails closed and is not retried in the same turn. Settings can only make it stricter.",
+              "x-descriptionZh": "危险工具硬闸（ADR 0036）。始终开启，独立于 execApprovalMode：成员管理、内容发布、资金、改 Bot 身份类工具（核心名单 + 声明 risk: dangerous 的工具）没有新鲜的人工批准或 Console 已批准的卡片就不执行，bypass 也不例外；被拒即 fail closed，同一回合不再重试。配置只能更严。",
+              "properties": {
+                "dangerousTools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "default": [],
+                  "description": "Extra tools to treat as dangerous (local or qualified names). Cannot mark a core dangerous tool safe.",
+                  "x-descriptionZh": "额外按危险工具处理的工具（本地名或限定名）；不能把核心危险工具调成安全。"
+                },
+                "allowFunds": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Allow funds tools (red packets, transfers, payments). Off by default; when on they still need approval.",
+                  "x-descriptionZh": "允许资金类工具（红包、转账、付款）。默认关闭；开启后仍需审批。"
+                },
+                "approvalTimeoutMs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 300000,
+                  "description": "How long a dangerous call waits for approval before it is denied (ms).",
+                  "x-descriptionZh": "危险调用等待审批的上限（毫秒），超时即拒绝。"
+                }
+              }
+            },
             "usageQuota": {
               "type": "object",
               "description": "Per-user and per-group token quotas and a per-group rate limit. All limits are off (0) by default; the owner is exempt by default. Counters are kept in memory.",

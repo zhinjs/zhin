@@ -34,6 +34,8 @@ export function capabilityToTool(
     keywords: tool.keywords ? [...tool.keywords] : undefined,
     hidden: tool.hidden,
     requiresApproval: tool.requiresApproval,
+    ...(tool.risk ? { risk: tool.risk } : {}),
+    ...(tool.riskCategory ? { riskCategory: tool.riskCategory } : {}),
     async execute(args) {
       return await tool.execute(args, invocation) as Awaited<ReturnType<Tool['execute']>>;
     },

@@ -67,6 +67,11 @@ export const DECISION_REASON_CODES = [
   'tool_dangerous_no_approval',
   'tool_approval_timeout',
   'tool_approval_denied',
+  // 危险工具硬闸（切片 E）
+  'tool_approval_requested',
+  'tool_approval_approved',
+  'tool_funds_disabled',
+  'tool_hard_gate_latched',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

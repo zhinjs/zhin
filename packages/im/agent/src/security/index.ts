@@ -23,3 +23,7 @@ export * from './anomaly-detection.js';
 export * from './file-role-policy.js';
 export * from './dangerous-tool-policy.js';
 export * from './policy-facade.js';
+
+// ── 危险工具硬闸（ADR 0036 切片 E）──────────────────────────────────
+export * from './tool-hard-gate.js';
+export * from './tool-approval-queue.js';

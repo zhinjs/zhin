@@ -19,7 +19,32 @@ This is the **single authoritative document** for `ai.agent.*` default behavior 
 - Sub-agents: `subagentTurnMode off`
 - Tool budget: `extendBy 10`, `progressWindow 5`, `maxTotalIterations 40`, `maxWallClockMs 600000`, `failureStreakLimit 3`, `repeatLimit 2`
 - Usage quota: all 0 (off), `exemptOwner true`
+- Dangerous-tool hard gate: always on; funds tools disabled (`allowFunds false`); a call not approved within 5 minutes (`approvalTimeoutMs 300000`) is denied
 - Compaction: `thresholdRatio 0.7`
+
+## Dangerous-tool hard gate
+
+`execApprovalMode` decides who answers an ordinary approval (`ask` asks a person, `auto` lets the reviewer Agent decide, `bypass` skips it). The dangerous-tool hard gate is a separate gate, independent of it, and **cannot be turned off** (ADR 0036 §3):
+
+| | `execApprovalMode` approval | Dangerous-tool hard gate |
+| --- | --- | --- |
+| Which tools | Tools whose `requiresApproval` asks for approval; shell / file policy | Tools that declare `risk: 'dangerous'`, the core list, `toolHardGate.dangerousTools` |
+| Who can allow it | A person, the reviewer Agent, or `bypass`; "allow for this session / always" is possible | Only a fresh human approval of this call, or a card approved in the Console for the same arguments; `bypass`, the reviewer, the owner role and remembered grants do not count |
+| After a denial | The model gets the denial | The call does not run (fail closed); the model only hears "refused, needs human approval, do not retry"; later calls to the same tool or the same dangerous category in this turn are refused without asking again |
+| Unattended turns | Denied by policy | Denied, and a Console approval card is created; once approved, the next call **in the same session with the same arguments** runs once |
+
+The core list is dangerous by category: member governance (kick, mute, set admins, roles, invite), content publishing (group announcements, channel posts, essence / pinned messages, Bilibili comments), funds (red packets, transfers, payments — **disabled by default**; with `allowFunds: true` they still need approval), and identity (bot profile, avatar, signature, unbinding accounts). Read-only queries (member lists, group info) are not gated and are still audited.
+
+```yaml
+ai:
+  agent:
+    toolHardGate:
+      dangerousTools: [my_plugin__wipe_album]  # add only; core tools cannot be lowered
+      allowFunds: false
+      approvalTimeoutMs: 300000                # denied on timeout
+```
+
+Approval cards are served by the Console RPC `plugin.root.tool-approvals` (read, permission `tool_approvals:read`) and `plugin.root.resolve-tool-approval` (`{ id, decision: 'approve' | 'deny' }`, permission `tool_approvals:resolve`); the full token can call both. Every decision is written to `ai_decision_events`: `tool_approval` (`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`) and `tool_hard_gate` (`tool_dangerous_no_approval`, `tool_approval_denied`, `tool_approval_timeout`, `tool_funds_disabled`, `tool_hard_gate_latched`). An audit write failure never changes the decision.
 
 ## Switch inventory and disposition
 
@@ -43,6 +68,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `inboundQueue` | keep | Common switch, kept |
 | `toolBudget` | keep | Common switch, kept |
 | `injectionGuard` | keep | Common switch, kept |
+| `toolHardGate` | keep | Dangerous-tool hard gate (ADR 0036); always on, can only be made stricter, see below |
 | `usageQuota` | keep | Common switch, kept |
 | `schedule` | keep | Common switch, kept |
 | `masterShell` | keep | Common switch, kept |

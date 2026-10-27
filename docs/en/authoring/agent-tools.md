@@ -75,6 +75,25 @@ export default defineAgentTool({
 
 `'never'` only skips the confirmation step — it **cannot** bypass permissions or network, filesystem and shell security policies.
 
+### Declare a dangerous tool (hard gate)
+
+Tools that kick, mute or promote members, post group announcements / channel posts / comments, send red packets or transfers, or change the bot's profile must declare `risk: 'dangerous'`:
+
+```ts
+export default defineAgentTool({
+  description: 'Kick a group member',
+  risk: 'dangerous',
+  riskCategory: 'member', // member | publish | funds | identity
+  // ...
+});
+```
+
+Dangerous tools go through the [dangerous-tool hard gate](/en/ai/default-behavior#dangerous-tool-hard-gate), which is separate from `requiresApproval`:
+
+- Every call needs a fresh human approval (or a card an operator approved in the Console for the same arguments). `requiresApproval: 'never'`, `execApprovalMode: bypass`, the automatic reviewer and the owner role cannot skip it.
+- When the call is denied, times out, or nobody can be asked, it does not run, and the model is told it was refused, needs human approval, and must not be retried. Later calls to the same tool, or to another tool in the same dangerous category, are refused for the rest of the turn.
+- Tools on the core list (such as each adapter's `group_kick`, `set_mute`, `send_group_notice`) are dangerous even without a declaration; declaring `risk: 'safe'` does not lower them. Read-only queries need no declaration.
+
 ### Offer a tool based on config
 
 When a config switch or available resource decides, register in `setup` in `plugin.ts`:
@@ -295,6 +314,8 @@ my-plugin/
 | `description` | Yes | What the tool does, for the model |
 | `inputSchema` | No | Zod 4 object or a JSON Schema with an `object` root; validated before execution |
 | `requiresApproval` | No | `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
+| `risk` | No | `'dangerous' \| 'safe'`; `dangerous` goes through the hard gate, see [Declare a dangerous tool](#declare-a-dangerous-tool-hard-gate) |
+| `riskCategory` | No | `'member' \| 'publish' \| 'funds' \| 'identity'`, shown on the approval card; `funds` is disabled by default |
 | `platforms` | No | Restrict to platforms, e.g. `['icqq']`; empty means all |
 | `scopes` | No | Restrict to `'private' \| 'group' \| 'channel'`; empty means all |
 | `permissions` | No | Permission rules; all must pass |

@@ -1,0 +1,424 @@
+/**
+ * 危险工具硬闸（ADR 0036 §3，切片 E）。
+ *
+ * 硬闸 ≠ `execApprovalMode: ask`：
+ * - ask / auto / bypass 只决定「普通审批」由谁回答；硬闸独立于它们，`bypass`、自动审核 Agent、
+ *   主人免审、会话内「记住」的授权都**不能**放行危险工具——每次都要一次新鲜的人工批准
+ *   （复用审批端口的 `humanOnly`），或运营者在 Console 批准过的同参数卡片。
+ * - 拒绝即 fail closed：本次调用不执行；给模型的结果只说明「已拒绝、需人工审批」，
+ *   同一回合内同一工具 / 同一危险类别的后续调用直接拒绝，不再弹审批，避免模型改参数反复重试。
+ * - 工具声明 `risk: 'dangerous' | 'safe'`；核心名单与宿主配置只能把工具**调高**为 dangerous，
+ *   声明 `safe` 不能把核心名单里的工具调低。
+ * - 资金类默认禁用（`ai.agent.toolHardGate.allowFunds`），开启后仍需审批。
+ *
+ * 审计写 `tool_approval` / `tool_hard_gate`（`ai_decision_events`）；审计写失败不影响判定。
+ */
+import type { DecisionEventInput, DecisionReasonCode } from '../decision-events.js';
+import {
+  isApprovalPortAvailable,
+  requestApprovalOutcome,
+  type ApprovalOutcome,
+  type ApprovalPort,
+} from '../session/approval-port.js';
+import { DEFAULT_TOOL_APPROVAL_TTL_MS, ToolApprovalQueue, type ToolApprovalEntry } from './tool-approval-queue.js';
+
+export type ToolRisk = 'dangerous' | 'safe';
+/** ADR 0036 §3 危险类别：成员管理 / 内容发布 / 资金 / 身份。 */
+export type DangerousToolCategory = 'member' | 'publish' | 'funds' | 'identity';
+
+export const TOOL_RISKS: readonly ToolRisk[] = Object.freeze(['dangerous', 'safe']);
+export const DANGEROUS_TOOL_CATEGORIES: readonly DangerousToolCategory[] = Object.freeze(['member', 'publish', 'funds', 'identity']);
+
+export function isToolRisk(value: unknown): value is ToolRisk {
+  return value === 'dangerous' || value === 'safe';
+}
+export function isDangerousToolCategory(value: unknown): value is DangerousToolCategory {
+  return typeof value === 'string' && (DANGEROUS_TOOL_CATEGORIES as readonly string[]).includes(value);
+}
+
+/**
+ * 核心危险工具名单（按工具本地名匹配，即限定名最后一段）。覆盖仓库内各 adapter 的管理类工具，
+ * 以及资金类常见名；插件声明 `risk: 'safe'` 不能把它们调低。
+ */
+export const CORE_DANGEROUS_TOOLS: ReadonlyMap<string, DangerousToolCategory> = new Map<string, DangerousToolCategory>([
+  // 成员管理：踢人、禁言、设管理员、角色、拉黑、拉人
+  ...(['group_kick', 'kick', 'kick_member', 'set_group_kick', 'set_mute', 'mute', 'mute_member', 'set_group_ban',
+    'set_group_whole_ban', 'unmute', 'ban', 'unban', 'blacklist', 'set_admin', 'set_group_admin', 'set_managers',
+    'remove_managers', 'set_title', 'grant_role', 'revoke_role', 'add_role', 'remove_role', 'create_role', 'delete_role',
+    'set_permissions', 'add_members', 'add_chat_members', 'group_invite', 'invite_to_channel', 'delete_friend',
+    'dissolve_chat', 'archive_channel'] as const).map((name) => [name, 'member'] as const),
+  // 内容发布：群公告、频道发帖、精华、置顶、B 站评论
+  ...(['send_group_notice', 'del_group_notice', 'announce', 'forum_post', 'set_essence_msg', 'delete_essence_msg',
+    'essence', 'pin_message', 'unpin_message', 'bili_comment', 'bili_reply', 'post_comment', 'publish_post'] as const)
+    .map((name) => [name, 'publish'] as const),
+  // 资金：红包、转账、付款（默认禁用）
+  ...(['send_red_packet', 'red_packet', 'send_hongbao', 'transfer', 'transfer_money', 'pay', 'payment',
+    'send_payment'] as const).map((name) => [name, 'funds'] as const),
+  // 身份：改 Bot 资料、头像、签名、解绑账号
+  ...(['set_profile', 'set_avatar', 'set_signature', 'set_nickname', 'set_online_status', 'set_group_portrait',
+    'unbind'] as const).map((name) => [name, 'identity'] as const),
+]);
+
+export interface ToolHardGateSettings {
+  /** 宿主额外标为 dangerous 的工具（本地名或限定名）；只能调高。 */
+  readonly dangerousTools: readonly string[];
+  /** 资金类危险工具是否可用；默认 false（直接拒绝），开启后仍需审批。 */
+  readonly allowFunds: boolean;
+  /** 审批等待上限（毫秒），超时即拒绝。 */
+  readonly approvalTimeoutMs: number;
+}
+
+export const DEFAULT_TOOL_HARD_GATE: ToolHardGateSettings = Object.freeze({
+  dangerousTools: Object.freeze([]) as readonly string[],
+  allowFunds: false,
+  approvalTimeoutMs: DEFAULT_TOOL_APPROVAL_TTL_MS,
+});
+
+export function resolveToolHardGate(value?: Partial<ToolHardGateSettings> | null): ToolHardGateSettings {
+  const dangerousTools = Array.isArray(value?.dangerousTools)
+    ? value!.dangerousTools.filter((name): name is string => typeof name === 'string' && name.trim() !== '').map((name) => name.trim())
+    : [];
+  const timeout = value?.approvalTimeoutMs;
+  return Object.freeze({
+    dangerousTools: Object.freeze(dangerousTools),
+    allowFunds: value?.allowFunds === true,
+    approvalTimeoutMs: typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
+      ? Math.trunc(timeout)
+      : DEFAULT_TOOL_HARD_GATE.approvalTimeoutMs,
+  });
+}
+
+/** 限定名（`owner__…__local` 或 `a.b`）的最后一段。 */
+export function toolLocalName(name: string): string {
+  const segments = name.split(/__|\./u).filter(Boolean);
+  return segments[segments.length - 1] ?? name;
+}
+
+export interface ToolRiskView {
+  readonly name: string;
+  readonly qualifiedName?: string;
+  readonly risk?: ToolRisk;
+  readonly riskCategory?: DangerousToolCategory;
+}
+
+export interface ToolRiskAssessment {
+  readonly risk: ToolRisk;
+  readonly category: DangerousToolCategory | null;
+  /** 判为 dangerous 的来源；`safe` 时为 `declared` 或 `default`。 */
+  readonly source: 'declared' | 'core' | 'host' | 'default';
+}
+
+/** 合并声明、核心名单与宿主配置：任何一方判 dangerous 即 dangerous，不能被调低。 */
+export function assessToolRisk(tool: ToolRiskView, settings: ToolHardGateSettings = DEFAULT_TOOL_HARD_GATE): ToolRiskAssessment {
+  const names = new Set([tool.name, tool.qualifiedName, toolLocalName(tool.name), tool.qualifiedName && toolLocalName(tool.qualifiedName)]
+    .filter((name): name is string => Boolean(name)));
+  const declaredCategory = isDangerousToolCategory(tool.riskCategory) ? tool.riskCategory : null;
+  const coreCategory = [...names].map((name) => CORE_DANGEROUS_TOOLS.get(name)).find(Boolean) ?? null;
+  if (coreCategory) return Object.freeze({ risk: 'dangerous', category: declaredCategory ?? coreCategory, source: 'core' });
+  if (tool.risk === 'dangerous') return Object.freeze({ risk: 'dangerous', category: declaredCategory, source: 'declared' });
+  if (settings.dangerousTools.some((name) => names.has(name))) {
+    return Object.freeze({ risk: 'dangerous', category: declaredCategory, source: 'host' });
+  }
+  return Object.freeze({ risk: 'safe', category: null, source: tool.risk === 'safe' ? 'declared' : 'default' });
+}
+
+/** 审计写入口；与切片 B 的 `DecisionEventLog.record` 结构兼容。写失败不得抛给调用方。 */
+export interface DecisionAuditSink {
+  record(input: DecisionEventInput): unknown;
+}
+
+export interface ToolHardGateLocation {
+  readonly instanceId: string;
+  readonly platform: string;
+  readonly sceneId: string;
+  readonly userId?: string | null;
+}
+
+export interface ToolHardGateContext {
+  readonly turnId: string;
+  readonly sessionKey: string;
+  readonly requesterId?: string;
+  readonly conversationScope?: 'private' | 'group' | 'channel';
+  readonly unattended: boolean;
+  readonly approval?: ApprovalPort;
+  readonly signal: AbortSignal;
+  readonly location: ToolHardGateLocation;
+  readonly audit?: DecisionAuditSink;
+  readonly queue?: ToolApprovalQueue;
+}
+
+export type ToolHardGateResult =
+  | Readonly<{ status: 'safe' }>
+  | Readonly<{ status: 'approved'; category: DangerousToolCategory | null; approvalId?: string }>
+  | Readonly<{ status: 'denied'; category: DangerousToolCategory | null; reasonCode: DecisionReasonCode; reason: string }>
+  | Readonly<{ status: 'cancelled' }>;
+
+/** `TurnToolOutcome.denied.policy`，便于日志 / 轨迹区分硬闸与普通审批。 */
+export const TOOL_HARD_GATE_POLICY = 'tool-hard-gate';
+
+const CATEGORY_LABELS: Readonly<Record<DangerousToolCategory, string>> = Object.freeze({
+  member: '成员管理',
+  publish: '内容发布',
+  funds: '资金',
+  identity: '身份',
+});
+
+/**
+ * 一个回合一个实例：记住本回合已拒绝的工具与类别，后续调用直接 fail closed。
+ */
+export class ToolHardGate {
+  readonly #settings: ToolHardGateSettings;
+  readonly #context: ToolHardGateContext;
+  readonly #deniedTools = new Set<string>();
+  readonly #deniedCategories = new Set<DangerousToolCategory>();
+
+  constructor(settings: Partial<ToolHardGateSettings> | undefined, context: ToolHardGateContext) {
+    this.#settings = resolveToolHardGate(settings);
+    this.#context = context;
+  }
+
+  assess(tool: ToolRiskView): ToolRiskAssessment {
+    return assessToolRisk(tool, this.#settings);
+  }
+
+  /**
+   * 危险工具执行前调用。`safe` 直接放行；dangerous 必须拿到新鲜的人工批准或 Console 已批准的同参数卡片。
+   */
+  async check(
+    tool: ToolRiskView,
+    input: Readonly<Record<string, unknown>>,
+    toolUseId: string,
+  ): Promise<ToolHardGateResult> {
+    const assessment = this.assess(tool);
+    if (assessment.risk !== 'dangerous') return SAFE;
+    const { category } = assessment;
+    const name = tool.name;
+    const payload = { tool: name, category, riskSource: assessment.source, toolUseId };
+
+    if (this.#deniedTools.has(name) || (category && this.#deniedCategories.has(category))) {
+      return this.#deny(name, category, 'tool_hard_gate_latched', payload,
+        'repeat after a hard-gate denial in this turn',
+        '本回合内已拒绝过同类危险操作');
+    }
+    if (category === 'funds' && !this.#settings.allowFunds) {
+      return this.#deny(name, category, 'tool_funds_disabled', payload, 'funds tools are disabled (ai.agent.toolHardGate.allowFunds)',
+        '资金类工具默认禁用');
+    }
+
+    const queue = this.#context.queue;
+    const preApproved = queue?.consumeApproved(this.#context.sessionKey, name, input);
+    if (preApproved) {
+      this.#audit('tool_approval', 'allow', 'tool_approval_approved', { ...payload, approvalId: preApproved.id, via: 'console' },
+        preApproved.decidedBy);
+      return Object.freeze({ status: 'approved', category, approvalId: preApproved.id });
+    }
+
+    const entry = queue?.enqueue({
+      toolName: name,
+      category,
+      sessionKey: this.#context.sessionKey,
+      requesterId: this.#context.requesterId ?? null,
+      turnId: this.#context.turnId,
+      args: input,
+      ttlMs: this.#settings.approvalTimeoutMs,
+    });
+    this.#audit('tool_approval', 'defer', 'tool_approval_requested', { ...payload, ...(entry ? { approvalId: entry.id } : {}) });
+
+    const port = this.#context.approval;
+    if (this.#context.unattended || !isApprovalPortAvailable(port)) {
+      return this.#deny(name, category, 'tool_dangerous_no_approval', { ...payload, ...(entry ? { approvalId: entry.id } : {}) },
+        this.#context.unattended ? 'unattended turn' : 'no approval channel',
+        entry ? '已生成审批卡片，需管理员在 Console 批准' : '当前没有可用的人工审批渠道');
+    }
+
+    const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry);
+    if (settled.kind === 'cancelled') return CANCELLED;
+    const withId = { ...payload, ...(entry ? { approvalId: entry.id } : {}), via: settled.via };
+    if (settled.kind === 'approved') {
+      if (entry) queue?.markConsumed(entry.id);
+      this.#audit('tool_approval', 'allow', 'tool_approval_approved', withId, settled.decidedBy);
+      return Object.freeze({ status: 'approved', category, ...(entry ? { approvalId: entry.id } : {}) });
+    }
+    if (settled.kind === 'timed_out') {
+      this.#audit('tool_approval', 'deny', 'tool_approval_timeout', withId);
+      return this.#deny(name, category, 'tool_approval_timeout', withId, 'approval timed out', '审批超时，默认拒绝');
+    }
+    if (settled.kind === 'unavailable') {
+      return this.#deny(name, category, 'tool_dangerous_no_approval', withId, settled.detail,
+        entry ? '审批提示无法送达，已生成审批卡片，需管理员在 Console 批准' : '当前没有可用的人工审批渠道');
+    }
+    this.#audit('tool_approval', 'deny', 'tool_approval_denied', withId, settled.decidedBy);
+    return this.#deny(name, category, 'tool_approval_denied', withId, 'approval denied', '审批人拒绝了此操作');
+  }
+
+  async #awaitApproval(
+    port: ApprovalPort,
+    toolName: string,
+    category: DangerousToolCategory | null,
+    input: Readonly<Record<string, unknown>>,
+    toolUseId: string,
+    entry: ToolApprovalEntry | undefined,
+  ): Promise<
+    | { kind: 'approved'; via: string; decidedBy: string | null }
+    | { kind: 'denied'; via: string; decidedBy: string | null }
+    | { kind: 'timed_out'; via: string }
+    | { kind: 'unavailable'; via: string; detail: string }
+    | { kind: 'cancelled' }
+  > {
+    const signal = this.#context.signal;
+    if (signal.aborted) return { kind: 'cancelled' };
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    const queue = this.#context.queue;
+    const timeoutMs = this.#settings.approvalTimeoutMs;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const fromPort = requestApprovalOutcome(port, {
+        humanOnly: true,
+        requestId: entry?.id ?? `${this.#context.turnId}:${toolUseId}`,
+        sessionKey: this.#context.sessionKey,
+        ...(this.#context.conversationScope ? { conversationScope: this.#context.conversationScope } : {}),
+        ...(this.#context.requesterId ? { requesterId: this.#context.requesterId } : {}),
+        toolName,
+        // Never matches a remembered grant: every dangerous call is confirmed on its own.
+        scopeKey: `${TOOL_HARD_GATE_POLICY}:${this.#context.turnId}:${toolUseId}`,
+        question: formatHardGateQuestion(toolName, category, input, entry),
+        timeoutMs,
+        signal: controller.signal,
+      }).then(
+        (outcome) => ({ source: 'port' as const, outcome }),
+        () => ({ source: 'port' as const, outcome: { status: 'unavailable', reason: 'the approval prompt failed' } as ApprovalOutcome }),
+      );
+      const fromQueue = entry && queue
+        ? queue.wait(entry.id, controller.signal).then((settlement) => ({ source: 'queue' as const, settlement }))
+        : new Promise<never>(() => undefined);
+      const fromTimer = new Promise<{ source: 'timer' }>((resolve) => {
+        timer = setTimeout(() => resolve({ source: 'timer' }), timeoutMs);
+        (timer as { unref?: () => void }).unref?.();
+      });
+      const cancelled = new Promise<{ source: 'cancelled' }>((resolve) => {
+        if (signal.aborted) resolve({ source: 'cancelled' });
+        signal.addEventListener('abort', () => resolve({ source: 'cancelled' }), { once: true });
+      });
+      const first = await Promise.race([fromPort, fromQueue, fromTimer, cancelled]);
+      if (first.source === 'cancelled' || signal.aborted) {
+        if (entry) queue?.resolve(entry.id, false, 'turn_cancelled');
+        return { kind: 'cancelled' };
+      }
+      if (first.source === 'timer') {
+        if (entry) queue?.resolve(entry.id, false, 'timeout');
+        return { kind: 'timed_out', via: 'timeout' };
+      }
+      if (first.source === 'queue') {
+        const decided = entry ? queue?.get(entry.id)?.decidedBy ?? null : null;
+        if (first.settlement === 'approved') return { kind: 'approved', via: 'console', decidedBy: decided };
+        if (first.settlement === 'expired') return { kind: 'timed_out', via: 'console' };
+        return { kind: 'denied', via: 'console', decidedBy: decided };
+      }
+      const outcome = first.outcome;
+      switch (outcome.status) {
+        case 'approved':
+          if (entry) queue?.resolve(entry.id, true, 'approval_port');
+          return { kind: 'approved', via: 'approval_port', decidedBy: null };
+        case 'timed_out':
+          if (entry) queue?.resolve(entry.id, false, 'timeout');
+          return { kind: 'timed_out', via: 'approval_port' };
+        case 'unavailable':
+          // Nobody can be asked here: keep the card pending for the Console and fail closed now.
+          return { kind: 'unavailable', via: 'approval_port', detail: outcome.reason };
+        default:
+          if (entry) queue?.resolve(entry.id, false, 'approval_port');
+          return { kind: 'denied', via: 'approval_port', decidedBy: null };
+      }
+    } finally {
+      if (timer) clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+      controller.abort();
+    }
+  }
+
+  #deny(
+    toolName: string,
+    category: DangerousToolCategory | null,
+    reasonCode: DecisionReasonCode,
+    payload: Record<string, unknown>,
+    detail: string,
+    why: string,
+  ): ToolHardGateResult {
+    this.#deniedTools.add(toolName);
+    if (category) this.#deniedCategories.add(category);
+    this.#audit('tool_hard_gate', 'deny', reasonCode, payload, null, detail);
+    return Object.freeze({ status: 'denied', category, reasonCode, reason: formatHardGateDenial(toolName, why) });
+  }
+
+  #audit(
+    kind: 'tool_approval' | 'tool_hard_gate',
+    outcome: 'allow' | 'deny' | 'defer',
+    reasonCode: DecisionReasonCode,
+    payload: Record<string, unknown>,
+    decidedBy?: string | null,
+    detail?: string,
+  ): void {
+    const sink = this.#context.audit;
+    if (!sink) return;
+    const location = this.#context.location;
+    const operator = decidedBy && !['approval_port', 'timeout', 'turn_cancelled'].includes(decidedBy) ? decidedBy : null;
+    try {
+      const result = sink.record({
+        turnId: this.#context.turnId,
+        instanceId: location.instanceId,
+        platform: location.platform,
+        sceneId: location.sceneId,
+        userId: location.userId ?? null,
+        kind,
+        outcome,
+        reasonCode,
+        ...(detail ? { reasonDetail: detail } : {}),
+        payload,
+        // 硬闸判定与发起审批是策略；审批端口 / 超时的结论记 system；Console 结论记 operator。
+        actor: operator ? 'operator' : kind === 'tool_hard_gate' || outcome === 'defer' ? 'policy' : 'system',
+        ...(operator ? { actorId: operator } : {}),
+      });
+      if (result && typeof (result as Promise<unknown>).catch === 'function') (result as Promise<unknown>).catch(() => undefined);
+    } catch {
+      // 审计不是门禁：写失败不影响硬闸判定。
+    }
+  }
+}
+
+const SAFE: ToolHardGateResult = Object.freeze({ status: 'safe' });
+const CANCELLED: ToolHardGateResult = Object.freeze({ status: 'cancelled' });
+
+/** 给模型的拒绝说明：只说明已拒绝、需人工审批，明确不要重试 / 改参数 / 换工具。 */
+export function formatHardGateDenial(toolName: string, why: string): string {
+  return `危险工具「${toolName}」已被硬闸拒绝（${why}），本次调用没有执行。`
+    + '不要重试这个调用，也不要改参数或换其他工具达成同样的操作；'
+    + '请直接告诉用户：该操作需要管理员人工审批后才能执行。';
+}
+
+export function formatHardGateQuestion(
+  toolName: string,
+  category: DangerousToolCategory | null,
+  input: Readonly<Record<string, unknown>>,
+  entry?: ToolApprovalEntry,
+): string {
+  return [
+    `工具「${toolName}」是危险操作${category ? `（${CATEGORY_LABELS[category]}）` : ''}，需要人工审批后才会执行。`,
+    `本次参数：${stableJson(input)}`,
+    entry ? `审批卡片：${entry.id}（也可在 Console 处理）` : undefined,
+    '超时未批准将自动拒绝。是否执行？',
+  ].filter((line): line is string => Boolean(line)).join('\n');
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(',')}}`;
+  }
+  if (typeof value === 'undefined') return 'undefined';
+  try { return JSON.stringify(value); } catch { return String(value); }
+}

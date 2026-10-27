@@ -47,6 +47,8 @@ import {
   SystemLogStore,
   resolveSystemLogConfig,
   AssistantStatus,
+  HostToolApprovals,
+  composeHostConsoleRpc,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
@@ -175,6 +177,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleEventHub = createConsoleEventHub();
   // 群聊插话 / 技能助手 Console status (#970): process-owned, survives HMR generations.
   const assistantStatus = new AssistantStatus();
+  // 危险工具硬闸审批卡片（ADR 0036）：进程持有，绑定当前 generation 的 Agent 队列。
+  const toolApprovals = new HostToolApprovals();
   const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
     projectRoot: options.root,
     configFile,
@@ -243,6 +247,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         await agentHost.install({
           im,
           assistantStatus,
+          toolApprovals,
           projectRoot: options.root,
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
@@ -323,7 +328,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     databaseHost,
     scheduleHost,
     eventHub: consoleEventHub,
-    hostConsoleRpc: assistantStatus.consoleRpc,
+    hostConsoleRpc: composeHostConsoleRpc(assistantStatus.consoleRpc, toolApprovals.consoleRpc),
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
@@ -485,6 +490,7 @@ interface ConfiguredAgentHost {
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
     readonly assistantStatus?: AssistantStatus;
+    readonly toolApprovals?: HostToolApprovals;
   }): RootResourceInstaller;
 }
 

@@ -47,6 +47,8 @@ export interface AgentSessionHost {
   /** Active semantic memory for per-turn recall (#734). Optional for custom hosts. */
   semanticMemory?: SemanticMemoryRuntime | null;
   readonly ownerApprovals: OwnerApprovalRuntime;
+  /** Dangerous-tool approval cards (ADR 0036 hard gate). Optional for custom hosts. */
+  readonly toolApprovals?: import('../security/tool-approval-queue.js').ToolApprovalQueue;
   waitForMemoryPersistence(): Promise<void>;
   emitSessionNewEvent(
     sessionId: string,

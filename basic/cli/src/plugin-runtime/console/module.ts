@@ -17,3 +17,11 @@ export {
   type AmbientStatus,
   type SkillsStatus,
 } from './assistant-status.js';
+export {
+  CONSOLE_TOOL_APPROVAL_OPERATOR,
+  HostToolApprovals,
+  TOOL_APPROVALS_READ_PERMISSION,
+  TOOL_APPROVALS_RESOLVE_PERMISSION,
+  composeHostConsoleRpc,
+  type ToolApprovalCard,
+} from './tool-approvals.js';

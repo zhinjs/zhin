@@ -76,6 +76,25 @@ export default defineAgentTool({
 
 `'never'` 只是跳过确认步骤，**不能**绕过权限、网络、文件系统和 Shell 等安全策略。
 
+### 声明危险工具（硬闸）
+
+踢人、禁言、设管理员、发群公告 / 频道帖 / 评论、红包转账、改 Bot 资料这类工具，要声明 `risk: 'dangerous'`：
+
+```ts
+export default defineAgentTool({
+  description: '踢出群成员',
+  risk: 'dangerous',
+  riskCategory: 'member', // member | publish | funds | identity
+  // ...
+});
+```
+
+危险工具走[危险工具硬闸](/ai/default-behavior#危险工具硬闸)，和 `requiresApproval` 不是一回事：
+
+- 每次调用都要一次新鲜的人工批准（或运营者在 Console 批准过的同参数卡片），`requiresApproval: 'never'`、`execApprovalMode: bypass`、自动审核 Agent、主人身份都不能跳过。
+- 被拒、超时或无人可问时本次调用不执行，模型收到「已拒绝、需人工审批、不要重试」；同一回合里同一工具或同类危险工具的后续调用直接拒绝。
+- 核心名单里的工具（如各 adapter 的 `group_kick`、`set_mute`、`send_group_notice`）即使不声明也按危险处理；声明 `risk: 'safe'` 不能把它们调低。只读查询不需要声明。
+
 ### 根据配置决定是否提供工具
 
 需要按配置开关或已有资源决定时，在 `plugin.ts` 的 `setup` 里注册：
@@ -296,6 +315,8 @@ my-plugin/
 | `description` | 是 | 给模型看的功能描述 |
 | `inputSchema` | 否 | Zod 4 对象，或根节点为 `object` 的 JSON Schema；执行前校验 |
 | `requiresApproval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always' \| 'human'`，默认 `'on-risk'` |
+| `risk` | 否 | `'dangerous' \| 'safe'`；`dangerous` 走危险工具硬闸，见[声明危险工具](#声明危险工具-硬闸) |
+| `riskCategory` | 否 | `'member' \| 'publish' \| 'funds' \| 'identity'`，显示在审批卡片上；`funds` 默认禁用 |
 | `platforms` | 否 | 限定平台，如 `['icqq']`；为空表示全部 |
 | `scopes` | 否 | 限定场景 `'private' \| 'group' \| 'channel'`；为空表示全部 |
 | `permissions` | 否 | 权限规则列表，全部满足才提供 |

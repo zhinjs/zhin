@@ -15,6 +15,10 @@ const toolBrand = 'zhin.agent-tool/1' as const;
 
 export type ToolApproval = 'never' | 'on-risk' | 'once' | 'always' | 'human';
 export type ToolScope = 'private' | 'group' | 'channel';
+/** ADR 0036 hard gate: `dangerous` tools need fresh human approval on every call, whatever `requiresApproval` says. */
+export type ToolRisk = 'dangerous' | 'safe';
+/** ADR 0036 dangerous categories: member governance, content publishing, funds (disabled by default), identity. */
+export type ToolRiskCategory = 'member' | 'publish' | 'funds' | 'identity';
 
 export interface ToolInvocationPolicy {
   readonly permissions: readonly string[];
@@ -125,6 +129,15 @@ export interface AgentToolDefinition<
   readonly description: string;
   readonly inputSchema?: ToolInputSchema<TInput>;
   readonly requiresApproval: ToolApproval;
+  /**
+   * Hard-gate risk (ADR 0036). `dangerous` tools never run without a fresh human approval
+   * (or a Console-approved card), even under `execApprovalMode: bypass`. Declare it for every
+   * tool that kicks / mutes members, publishes content, moves money or changes the bot's identity.
+   * The Host may raise a tool to `dangerous`; declaring `safe` never lowers a core dangerous tool.
+   */
+  readonly risk?: ToolRisk;
+  /** Dangerous category shown on the approval card; `funds` is disabled unless the Host allows it. */
+  readonly riskCategory?: ToolRiskCategory;
   /** Restrict this tool to one adapter and infer `context.$client`. */
   readonly adapter?: TAdapter;
   readonly platforms?: readonly string[];
@@ -233,6 +246,12 @@ export function defineAgentTool<
     && requiresApproval !== 'once' && requiresApproval !== 'always' && requiresApproval !== 'human') {
     throw new TypeError(`Invalid Agent Tool requiresApproval: ${String(requiresApproval)}`);
   }
+  if (definition.risk !== undefined && !isToolRisk(definition.risk)) {
+    throw new TypeError(`Invalid Agent Tool risk: ${String(definition.risk)}`);
+  }
+  if (definition.riskCategory !== undefined && !isToolRiskCategory(definition.riskCategory)) {
+    throw new TypeError(`Invalid Agent Tool riskCategory: ${String(definition.riskCategory)}`);
+  }
   validateStringList('platforms', definition.platforms);
   validateStringList('permissions', definition.permissions);
   validateStringList('tags', definition.tags);
@@ -301,6 +320,8 @@ export function parseAgentToolDefinition(
     || (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel') ?? false)
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
     || (definition.alwaysLoaded !== undefined && typeof definition.alwaysLoaded !== 'boolean')
+    || (definition.risk !== undefined && !isToolRisk(definition.risk))
+    || (definition.riskCategory !== undefined && !isToolRiskCategory(definition.riskCategory))
   ) throw invalidTool();
   const placement = context?.localName
     ? placementFromLocalName(context.localName)
@@ -343,4 +364,12 @@ function invalidTool(): TypeError {
 
 function validAdapterName(adapter: unknown): boolean {
   return adapter === undefined || (typeof adapter === 'string' && adapter.trim() !== '');
+}
+
+function isToolRisk(value: unknown): value is ToolRisk {
+  return value === 'dangerous' || value === 'safe';
+}
+
+function isToolRiskCategory(value: unknown): value is ToolRiskCategory {
+  return value === 'member' || value === 'publish' || value === 'funds' || value === 'identity';
 }

@@ -1,6 +1,7 @@
 import { DEFAULT_TOOL_BUDGET } from '../core/turn-progress.js';
 import { DEFAULT_INJECTION_GUARD } from '../security/provenance.js';
 import { DEFAULT_USAGE_QUOTA } from '../security/usage-quota.js';
+import { DEFAULT_TOOL_HARD_GATE } from '../security/tool-hard-gate.js';
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_FOLLOW_UP_MODE, DEFAULT_STEERING_MODE } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import {
@@ -46,6 +47,7 @@ export const DEFAULT_CONFIG = {
   toolBudget: { ...DEFAULT_TOOL_BUDGET },
   injectionGuard: { ...DEFAULT_INJECTION_GUARD, trustedOutputTools: [] },
   usageQuota: { ...DEFAULT_USAGE_QUOTA },
+  toolHardGate: { ...DEFAULT_TOOL_HARD_GATE, dangerousTools: [] },
   subagentTools: [],
   subagentTurnWaitMs: 300_000,
   modelSizeHint: '',

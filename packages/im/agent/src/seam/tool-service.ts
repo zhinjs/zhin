@@ -25,6 +25,9 @@ export interface ToolSchema {
   };
   /** Runtime policy metadata projected into the canonical Tool capability. */
   requiresApproval?: ToolApproval;
+  /** Hard-gate risk (ADR 0036); the Host may only raise it. */
+  risk?: 'dangerous' | 'safe';
+  riskCategory?: 'member' | 'publish' | 'funds' | 'identity';
   platforms?: readonly string[];
   scopes?: readonly ToolScope[];
   permissions?: readonly string[];

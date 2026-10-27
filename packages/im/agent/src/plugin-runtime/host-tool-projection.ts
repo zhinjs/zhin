@@ -4,6 +4,8 @@ import {
   toolFeatureId,
   type AgentToolDefinition,
   type ToolApproval,
+  type ToolRisk,
+  type ToolRiskCategory,
   type ToolScope,
 } from '@zhin.js/tool';
 
@@ -14,6 +16,8 @@ export interface HostToolProjectionInput {
   readonly description: string;
   readonly parameters?: unknown;
   readonly requiresApproval?: ToolApproval;
+  readonly risk?: ToolRisk;
+  readonly riskCategory?: ToolRiskCategory;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
@@ -42,6 +46,8 @@ export function projectHostTool(input: HostToolProjectionInput): HostToolProject
             `Host Tool ${input.name} parameters`,
           ),
       requiresApproval: input.requiresApproval,
+      ...(input.risk ? { risk: input.risk } : {}),
+      ...(input.riskCategory ? { riskCategory: input.riskCategory } : {}),
       platforms: input.platforms,
       scopes: input.scopes,
       permissions: input.permissions,

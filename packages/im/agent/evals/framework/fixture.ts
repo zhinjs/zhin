@@ -63,6 +63,8 @@ export interface EvalTool {
   /** Throw this message instead of returning a result. */
   readonly error?: string;
   readonly requiresApproval?: 'never' | 'once' | 'always';
+  /** Hard-gate risk (ADR 0036); core dangerous names (e.g. `group_kick`) are dangerous regardless. */
+  readonly risk?: 'dangerous' | 'safe';
   /** Keep the tool out of the always-loaded set (reachable via the deferred catalog only). */
   readonly deferred?: boolean;
 }
@@ -99,6 +101,8 @@ export interface EvalExpectations {
   /** Fail when any tool's raw result text is echoed verbatim to the user. */
   readonly noRawToolOutput?: boolean;
   readonly approvalRequested?: boolean | readonly string[];
+  /** Exact number of approval requests across the case (e.g. a hard-gate denial is never re-asked). */
+  readonly approvalRequestCount?: number;
   /** Every string must appear in at least one approval question (e.g. the provenance chain). */
   readonly approvalQuestionContains?: readonly string[];
   /** Terminal type of the last turn. Defaults to `turn_end`. */

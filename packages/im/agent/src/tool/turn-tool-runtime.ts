@@ -24,6 +24,14 @@ import {
 import type { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import { safeSessionKey } from '../memory-layers.js';
+import {
+  TOOL_HARD_GATE_POLICY,
+  ToolHardGate,
+  type DecisionAuditSink,
+  type ToolHardGateLocation,
+  type ToolHardGateSettings,
+} from '../security/tool-hard-gate.js';
+import type { ToolApprovalQueue } from '../security/tool-approval-queue.js';
 
 type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
   type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
@@ -42,6 +50,12 @@ export interface TurnToolRuntimeOptions {
   readonly provenance?: TurnProvenance;
   /** Masks leaks in the text arguments of outbound tools and learns other-session memory reads. */
   readonly leakInspector?: OutboundLeakInspector;
+  /** `ai.agent.toolHardGate`; the hard gate itself is always on (ADR 0036). */
+  readonly hardGate?: Partial<ToolHardGateSettings>;
+  /** Writes `tool_approval` / `tool_hard_gate` rows; failures never affect the decision. */
+  readonly decisionAudit?: DecisionAuditSink;
+  /** Console approval cards for dangerous calls; absent means IM approval only. */
+  readonly approvalQueue?: ToolApprovalQueue;
 }
 
 /** Sole execution authority for Tool capabilities within one fixed Turn lease. */
@@ -49,6 +63,7 @@ export class TurnToolRuntime {
   readonly #tools: ReadonlyMap<string, ToolCapability>;
   readonly #guard: InjectionGuardSettings;
   readonly #leakInspector?: OutboundLeakInspector;
+  readonly #hardGate: ToolHardGate;
   /** Lower-trust sources that reached the model during this turn (#727). */
   readonly provenance: TurnProvenance;
 
@@ -61,6 +76,18 @@ export class TurnToolRuntime {
     this.#guard = resolveInjectionGuard(options.injectionGuard);
     this.provenance = options.provenance ?? new TurnProvenance();
     this.#leakInspector = this.#guard.outboundCheck === 'redact' ? options.leakInspector : undefined;
+    this.#hardGate = new ToolHardGate(options.hardGate, {
+      turnId: turn.identity.turnId,
+      sessionKey: turn.session.key,
+      requesterId: turn.principal.subjectId,
+      ...(turn.origin.kind === 'im' ? { conversationScope: turn.origin.scope } : {}),
+      unattended: turn.policy.unattended,
+      ...(turn.ports.approval ? { approval: turn.ports.approval } : {}),
+      signal: turn.signal,
+      location: hardGateLocation(turn),
+      ...(options.decisionAudit ? { audit: options.decisionAudit } : {}),
+      ...(options.approvalQueue ? { queue: options.approvalQueue } : {}),
+    });
   }
 
   async execute(
@@ -84,7 +111,8 @@ export class TurnToolRuntime {
     let effectiveInput = decision.input;
     const highRisk = classifyHighRiskAction(tool);
     const humanOnly = tool.requiresApproval === 'human';
-    if (humanOnly) {
+    const dangerous = this.#hardGate.assess(tool).risk === 'dangerous';
+    if (humanOnly || dangerous) {
       try {
         // Caller-owned nested values must not change the operation while a person reviews it.
         effectiveInput = structuredClone(effectiveInput);
@@ -98,10 +126,19 @@ export class TurnToolRuntime {
         return this.#deny(name, toolUseId, 'approval', 'human approval requires an isolated JSON argument snapshot', causedBy);
       }
     }
+    // ADR 0036 hard gate: independent of execApprovalMode / requiresApproval; a fresh human
+    // approval here supersedes the ordinary approval and provenance prompts below.
+    const hardGate = await this.#hardGate.check(tool, effectiveInput, toolUseId);
+    if (hardGate.status === 'cancelled' || this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
+    if (hardGate.status === 'denied') {
+      return this.#deny(name, toolUseId, TOOL_HARD_GATE_POLICY, hardGate.reason, causedBy);
+    }
     const provenanceGate = highRisk !== undefined
       && this.#guard.confirmHighRisk === 'external_content'
       && this.provenance.tainted;
-    if (provenanceGate) {
+    if (hardGate.status === 'approved') {
+      // Already confirmed by a human for exactly these arguments.
+    } else if (provenanceGate) {
       // #727 M3.3: a high-risk action after lower-trust content always asks
       // first, even when the configured policy would allow it outright.
       if (this.turn.policy.unattended || !isApprovalPortAvailable(this.turn.ports.approval)) {
@@ -220,6 +257,23 @@ export class TurnToolRuntime {
       throw new TurnJournalCommitError(error);
     }
   }
+}
+
+function hardGateLocation(turn: TurnIngress): ToolHardGateLocation {
+  if (turn.origin.kind === 'im') {
+    return {
+      instanceId: turn.origin.endpoint || turn.identity.rootId,
+      platform: turn.origin.platform,
+      sceneId: `${turn.origin.scope}:${turn.origin.sceneId}`,
+      userId: turn.principal.subjectId,
+    };
+  }
+  return {
+    instanceId: turn.identity.rootId,
+    platform: turn.origin.kind,
+    sceneId: turn.session.key,
+    userId: turn.principal.subjectId,
+  };
 }
 
 function formatApprovalQuestion(

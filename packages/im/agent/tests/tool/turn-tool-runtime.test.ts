@@ -24,10 +24,10 @@ describe('TurnToolRuntime', () => {
         return true;
       });
     const { turn } = fixture({ approval: { requestApproval } });
-    const runtime = new TurnToolRuntime(turn, [{ ...tool(execute, 'human', 'group_kick'), ...(tainted ? { tags: ['outbound'] } : {}) }]);
+    const runtime = new TurnToolRuntime(turn, [{ ...tool(execute, 'human', 'member_action'), ...(tainted ? { tags: ['outbound'] } : {}) }]);
     if (tainted) runtime.provenance.record({ kind: 'conversation_context' });
 
-    await expect(runtime.execute('group_kick', args, 'snapshot')).resolves.toMatchObject({ status: 'completed' });
+    await expect(runtime.execute('member_action', args, 'snapshot')).resolves.toMatchObject({ status: 'completed' });
 
     const request = requestApproval.mock.calls[0]![0];
     expect(request.question).toContain('"group_id":129043431');
@@ -115,12 +115,12 @@ describe('TurnToolRuntime', () => {
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false);
     const { turn } = fixture({ approval: { requestApproval } });
-    const runtime = new TurnToolRuntime(turn, [{ ...tool(execute, 'human', 'group_kick'), tags: ['outbound'] }]);
+    const runtime = new TurnToolRuntime(turn, [{ ...tool(execute, 'human', 'member_action'), tags: ['outbound'] }]);
     runtime.provenance.record({ kind: 'conversation_context' });
     const args = { group_id: 129043431, user_id: 123456789, reason: '明确广告' };
 
-    await expect(runtime.execute('group_kick', args, 'tainted-1')).resolves.toMatchObject({ status: 'completed' });
-    await expect(runtime.execute('group_kick', args, 'tainted-2')).resolves.toMatchObject({
+    await expect(runtime.execute('member_action', args, 'tainted-1')).resolves.toMatchObject({ status: 'completed' });
+    await expect(runtime.execute('member_action', args, 'tainted-2')).resolves.toMatchObject({
       status: 'denied', policy: 'external-content-confirmation',
     });
 
