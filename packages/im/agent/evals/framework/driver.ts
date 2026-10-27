@@ -141,6 +141,9 @@ async function runInWorkspace(
   }, undefined, model.runtime);
   agent.activeBinding = { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] };
   agent.markMemoryPersistenceReady();
+  if (definition.sessionOps) {
+    await agent.sessionOps.set({ expectedRevision: 0, actorId: 'eval-operator', ...definition.sessionOps });
+  }
   // Semantic memory (seeds and/or memory tools) also drives per-turn recall (#734).
   const semanticMemory = await createEvalSemanticMemory(definition);
   if (semanticMemory) agent.configure({ semanticMemory });
