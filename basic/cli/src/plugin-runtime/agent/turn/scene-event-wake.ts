@@ -34,9 +34,9 @@ export interface SceneEventWakeOptions {
   readonly setTimer?: (run: () => void, ms: number) => unknown;
   readonly clearTimer?: (handle: unknown) => void;
   readonly onWake: (batch: SceneWakeBatch) => Promise<void> | void;
-  /** 批次被限频顺延时调用（只用于日志）。 */
-  readonly onDeferred?: (key: string, waitMs: number) => void;
-  readonly onError?: (key: string, error: unknown) => void;
+  /** 批次被限频顺延时调用（日志与决策审计）。 */
+  readonly onDeferred?: (key: string, waitMs: number, conversation: ConversationRef) => void;
+  readonly onError?: (key: string, error: unknown, conversation: ConversationRef) => void;
 }
 
 interface PendingScene {
@@ -102,7 +102,7 @@ export class SceneEventWake {
       : last === undefined ? 0 : last + this.#minIntervalMs - now;
     if (wait > 0) {
       // 限频（或上一次唤醒还没结束）：顺延到可以唤醒的时刻，事件继续在窗里累积。
-      this.options.onDeferred?.(key, wait);
+      this.options.onDeferred?.(key, wait, scene.conversation);
       scene.timer = this.#setTimer(() => { void this.#flush(key); }, wait);
       return;
     }
@@ -118,7 +118,7 @@ export class SceneEventWake {
         throughSequence: items[items.length - 1]!.sequence,
       }));
     } catch (error) {
-      this.options.onError?.(key, error);
+      this.options.onError?.(key, error, scene.conversation);
     } finally {
       this.#running.delete(key);
     }

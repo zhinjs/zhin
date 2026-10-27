@@ -186,6 +186,7 @@ export {
   foldConversationEvent,
   speakBlock,
   sceneRoleOf,
+  sceneKeyOf,
   type SessionProfileRecord,
   type SessionScope,
   type SpeakBlockReason,
@@ -211,8 +212,10 @@ export {
   type DecisionEventRecord,
   type DecisionEventRow,
   type DecisionOutcome,
+  type DecisionPayload,
   type DecisionReasonCode,
 } from './decision-events.js';
+export { DecisionEventLog, DECISION_EVENT_RECENT_LIMIT } from './decision-event-log.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

@@ -41,6 +41,7 @@ import { ToolApprovalQueue } from '../security/tool-approval-queue.js';
 import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import { UserProfileStore } from '../user-profile.js';
+import { DecisionEventLog } from '../decision-event-log.js';
 import { SubagentSystem, type SubagentOrigin, type SubagentResultSender, type SubagentCompletePayload } from '../subagent/index.js';
 import { buildParentContextSnapshot } from '../subagent-parent-context.js';
 import {
@@ -153,6 +154,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   contextRepository: ContextRepository;
   readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
   userProfiles: UserProfileStore;
+  /** 决策审计（ADR 0036 切片 B，`ai_decision_events`）。 */
+  readonly decisionEvents: DecisionEventLog = new DecisionEventLog();
   rateLimiter: RateLimiter;
   readonly usageQuota: UsageQuota;
   subagentSystem: SubagentSystem | null = null;
@@ -369,6 +372,10 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getUserProfiles(): UserProfileStore {
     return this.userProfiles;
+  }
+
+  getDecisionEvents(): DecisionEventLog {
+    return this.decisionEvents;
   }
 
   registerTool(tool: RegisteredAgentTool): () => void {

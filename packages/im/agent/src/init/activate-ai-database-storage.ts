@@ -11,6 +11,7 @@ import {
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
+import { AI_DECISION_EVENTS_TABLE } from '../decision-events.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
@@ -68,6 +69,8 @@ export async function activateAiDatabaseStorage(
   if (profileModel) {
     refs.zhinAgent.upgradeProfilesToDatabase(profileModel, relationModel, sessionModel);
   }
+  const decisionModel = db.models?.get(AI_DECISION_EVENTS_TABLE);
+  if (decisionModel) refs.zhinAgent.getDecisionEvents?.().upgradeToDatabase(decisionModel);
 
   if (semanticActivation) {
     semanticActivation.runtime.activate(semanticActivation.repository);
