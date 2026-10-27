@@ -1,0 +1,18 @@
+packages/im/agent/src/control-plane.ts
+  h_b680f75345178a 11-14,28-29,53-75,80-81,90-91,199,232-233,297-298,370-371,379-432,440,448-452,546-560
+packages/im/agent/src/index.ts
+  h_b680f75345178a 238,252-254
+packages/im/agent/tests/control-plane.test.ts
+  h_b680f75345178a 217-290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4874c3b70cebfb8367d02f8f74721bcceb87b823",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
