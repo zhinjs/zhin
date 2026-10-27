@@ -123,6 +123,38 @@ describe('AiSessionOps', () => {
     expect(ops.snapshot().revision).toBe(0);
   });
 
+  it('carries ops.cooldownMs (ADR 0037 slice E): 60s default, instance default + session override, null clears', async () => {
+    const ops = new AiSessionOps();
+    expect(ops.resolve('icqq', 'group:g1').ops).toEqual({ cooldownMs: 60_000 });
+    // Private scenes cannot carry overrides but still resolve the instance default.
+    expect(ops.resolve('icqq', 'private:u1').ops.cooldownMs).toBe(60_000);
+    const result = await ops.set({
+      expectedRevision: 0,
+      actorId: 'console',
+      defaults: { ops: { cooldownMs: 120_000 } },
+      sessions: [{ platform: 'icqq', sceneId: 'group:g1', ops: { cooldownMs: 5_000 } }],
+    });
+    expect(result.changes.map((change) => change.scope.level)).toEqual(['instance', 'session']);
+    expect(ops.resolve('icqq', 'group:g1').ops.cooldownMs).toBe(5_000);
+    expect(ops.resolve('icqq', 'group:g2').ops.cooldownMs).toBe(120_000);
+    await ops.set({ expectedRevision: 1, actorId: 'console', sessions: [{ platform: 'icqq', sceneId: 'group:g1', ops: { cooldownMs: null } }] });
+    expect(ops.resolve('icqq', 'group:g1').ops.cooldownMs).toBe(120_000);
+    expect(ops.snapshot().sessions).toEqual([]);
+    for (const bad of [{ defaults: { ops: { cooldownMs: -1 } } }, { defaults: { ops: { cooldownMs: 86_400_001 } } },
+      { defaults: { ops: { window: 1 } } }, { sessions: [{ platform: 'icqq', sceneId: 'group:g1', ops: { cooldownMs: 1.5 } }] }]) {
+      await expect(ops.set({ expectedRevision: 2, actorId: 'console', ...bad } as never)).rejects.toBeInstanceOf(SessionOpsValidationError);
+    }
+  });
+
+  it('persists ops.cooldownMs and keeps it when the store becomes unavailable', () => {
+    const parsed = parseSessionOpsDocument(JSON.stringify({
+      defaults: { ops: { cooldownMs: 30_000 } },
+      sessions: [{ platform: 'icqq', sceneId: 'group:g1', overrides: { ops: { cooldownMs: 0 } } }],
+    }));
+    expect(parsed.defaults.ops.cooldownMs).toBe(30_000);
+    expect(parsed.sessions[0]!.overrides.ops).toEqual({ cooldownMs: 0 });
+  });
+
   it('refuses a stale expectedRevision without overwriting', async () => {
     const ops = new AiSessionOps();
     await ops.set({ expectedRevision: 0, actorId: 'console', sessions: [{ platform: 'icqq', sceneId: 'group:g1', welcome: { enabled: true } }] });
