@@ -283,6 +283,37 @@ export {
   type WelcomeRender,
   type WelcomeTemplateVar,
 } from './session-ops.js';
+export {
+  AI_ANNOUNCEMENTS_TABLE,
+  AI_ANNOUNCEMENT_MODEL,
+  ANNOUNCEMENT_CREATED_VIA,
+  ANNOUNCEMENT_STATUSES,
+  ANNOUNCEMENT_TERMINAL_STATUSES,
+  AiAnnouncements,
+  AnnouncementNotFoundError,
+  AnnouncementRevisionConflictError,
+  AnnouncementStateError,
+  AnnouncementUnavailableError,
+  AnnouncementValidationError,
+  DEFAULT_ANNOUNCEMENT_APPROVAL_TTL_MS,
+  MAX_ANNOUNCEMENT_CONTENT_CHARS,
+  MAX_ANNOUNCEMENT_ERROR_CHARS,
+  announcementContentHash,
+  announcementFromRow,
+  announcementToRow,
+  clipAnnouncementError,
+  isAnnouncementTerminal,
+  type AnnouncementActor,
+  type AnnouncementAuditSink,
+  type AnnouncementCreatedVia,
+  type AnnouncementModel,
+  type AnnouncementMutationInput,
+  type AnnouncementRecord,
+  type AnnouncementSendResultInput,
+  type AnnouncementStatus,
+  type AnnouncementTransition,
+  type CreateAnnouncementInput,
+} from './announcements.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

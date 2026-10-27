@@ -112,6 +112,7 @@ import {
 } from './control-gate.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { MemberLifecycle } from './member-lifecycle.js';
+import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import {
   auditCannotSpeak,
   auditModelError,
@@ -178,6 +179,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #sceneEvents: SceneEventIngress;
   /** ADR 0037 切片 A：入群欢迎 / 退群记录（模板直发，过控制面与 session-gate）。 */
   readonly #memberLifecycle: MemberLifecycle;
+  /** ADR 0037 切片 B：批准后的公告发送（过控制面、session-gate，以审批记录作硬闸批准）。 */
+  readonly #announcements: AnnouncementDispatcher;
+  readonly #stopAnnouncementSweep: () => void;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -188,12 +192,50 @@ export class AgentTurnIngressRoute implements IngressRoute {
       () => options.agent.agent.getDecisionEvents?.(),
     );
     this.#memberLifecycle = this.#createMemberLifecycle();
+    this.#announcements = this.#createAnnouncementDispatcher();
+    this.#stopAnnouncementSweep = this.#announcements.start();
     this.#sceneEvents = this.#createSceneEventIngress();
     options.assistantStatus?.bindSessionOps(
       () => options.agent.agent.getSessionOps?.(),
       () => this.#memberLifecycle,
       () => options.agent.agent.getDecisionEvents?.(),
     );
+    options.assistantStatus?.bindAnnouncements(
+      () => options.agent.agent.getAnnouncements?.(),
+      () => this.#announcements,
+    );
+  }
+
+  #createAnnouncementDispatcher(): AnnouncementDispatcher {
+    const options = this.options;
+    return new AnnouncementDispatcher({
+      announcements: () => options.agent.agent.getAnnouncements?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
+      decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
+      hardGate: () => options.agent.agent.config?.toolHardGate,
+      approvals: () => options.agent.agent.toolApprovals,
+      sendNotice: async (target, content) => {
+        if (target.scope !== 'group') return { status: 'unsupported' as const, code: 'group_notice_requires_group' };
+        const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
+        if (!endpointKey) return { status: 'failed' as const, code: 'endpoint_unresolved', retryable: false };
+        const result = await options.im.endpoints.withManagement(target.platform, endpointKey, async (management) => {
+          if (typeof management.sendGroupNotice !== 'function') return 'unsupported' as const;
+          await management.sendGroupNotice(target.id, content);
+          return 'sent' as const;
+        });
+        if (result === 'sent') return { status: 'sent' as const };
+        if (result === 'unsupported') return { status: 'unsupported' as const, code: 'group_notice_unsupported' };
+        return { status: 'failed' as const, code: 'endpoint_unavailable', retryable: false };
+      },
+    });
+  }
+
+  /** 起草时没记 Bot 账号：只在该平台恰好一个在线账号时使用它（多账号时不猜）。 */
+  #soleEndpoint(platform: string): string | undefined {
+    const online = this.options.im.endpoints.list()
+      .filter((endpoint) => (endpoint.adapter === platform || endpoint.endpoint.adapter === platform) && endpoint.status === 'online');
+    return online.length === 1 ? online[0]!.name : undefined;
   }
 
   #createSceneEventIngress(): SceneEventIngress {
@@ -281,6 +323,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   dispose(): void {
     this.#memberLifecycle.dispose();
+    this.#stopAnnouncementSweep();
     this.#sceneEvents.dispose();
   }
 

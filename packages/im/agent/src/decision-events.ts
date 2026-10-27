@@ -37,6 +37,8 @@ export const DECISION_EVENT_KINDS = [
   'control_change',
   // ADR 0037 第 1 期（切片 A）：入群 / 退群事件与欢迎是否发送
   'member_lifecycle',
+  // ADR 0037 第 1 期（切片 B）：公告状态迁移（起草、提交、批准、驳回、过期、发送、失败、重发）
+  'announcement',
 ] as const;
 export type DecisionEventKind = typeof DECISION_EVENT_KINDS[number];
 
@@ -94,6 +96,16 @@ export const DECISION_REASON_CODES = [
   'welcome_rate_limited',
   'welcome_disabled',
   'member_leave_recorded',
+  // ADR 0037 切片 B：公告 草稿 → 审批 → 发送
+  'announcement_drafted',
+  'announcement_submitted',
+  'announcement_approved',
+  'announcement_rejected',
+  'announcement_expired',
+  'announcement_sent',
+  'announcement_send_failed',
+  'announcement_resend',
+  'announcement_hash_mismatch',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

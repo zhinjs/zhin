@@ -11,6 +11,12 @@ import {
   type SessionOpsAuditSource,
   type SessionOpsSource,
 } from './session-ops-rpc.js';
+import {
+  announcementActions,
+  announcementQueries,
+  type AnnouncementDispatcherSource,
+  type AnnouncementsSource,
+} from './announcements-rpc.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
@@ -23,7 +29,9 @@ import {
  * control plane (ADR 0036 slice D) as `plugin.root.control` (read) / `plugin.root.control-set` (action),
  * bound through {@link AssistantStatus.bindControlPlane}. ADR 0037 slice A adds the per-session ops config
  * (welcome / leave) as `plugin.root.session-ops` / `session-ops-preview` (read) / `session-ops-set` (action),
- * bound through {@link AssistantStatus.bindSessionOps}.
+ * bound through {@link AssistantStatus.bindSessionOps}. ADR 0037 slice B adds announcements (draft → approve → send)
+ * as `plugin.root.announcements` / `announcement` (read) and `announcement-*` (actions), bound through
+ * {@link AssistantStatus.bindAnnouncements}.
  */
 
 export const AMBIENT_STATUS_PERMISSION = 'ambient:read';
@@ -120,6 +128,8 @@ export class AssistantStatus {
   #readSessionOps: SessionOpsSource = () => undefined;
   #readMemberLifecycle: MemberLifecycleSource = () => undefined;
   #readSessionOpsAudit: SessionOpsAuditSource = () => undefined;
+  #readAnnouncements: AnnouncementsSource = () => undefined;
+  #readAnnouncementDispatcher: AnnouncementDispatcherSource = () => undefined;
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -133,6 +143,7 @@ export class AssistantStatus {
         ...decisionReplayQueries(() => this.#readDecisionEvents(), this.#now),
         ...controlQueries(() => this.#readControlPlane()),
         ...sessionOpsQueries(() => this.#readSessionOps(), () => this.#readMemberLifecycle()),
+        ...announcementQueries(() => this.#readAnnouncements()),
       },
       actions: {
         // ADR 0036 slice D: the only writer of the control switches (the model has no tool for them).
@@ -142,6 +153,8 @@ export class AssistantStatus {
         ),
         // ADR 0037 slice A: the only writer of the per-session ops config.
         ...sessionOpsActions(() => this.#readSessionOps(), () => this.#readSessionOpsAudit()),
+        // ADR 0037 slice B: announcements are submitted / approved / resent only here (the model can only draft).
+        ...announcementActions(() => this.#readAnnouncements(), () => this.#readAnnouncementDispatcher()),
       },
     });
   }
@@ -162,6 +175,12 @@ export class AssistantStatus {
     this.#readSessionOps = read;
     this.#readMemberLifecycle = lifecycle;
     this.#readSessionOpsAudit = audit;
+  }
+
+  /** The current generation's announcement store and send path (ADR 0037 slice B); the latest route wins. */
+  bindAnnouncements(read: AnnouncementsSource, dispatcher: AnnouncementDispatcherSource): void {
+    this.#readAnnouncements = read;
+    this.#readAnnouncementDispatcher = dispatcher;
   }
 
   /** The current generation's decision audit log (`ai_decision_events`); the latest Agent ingress route wins. */
