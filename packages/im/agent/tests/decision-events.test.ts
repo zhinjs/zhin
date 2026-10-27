@@ -54,6 +54,7 @@ describe('ai_decision_events schema', () => {
     expect(DECISION_EVENT_KINDS).toEqual([
       'inbound_wake', 'speak_gate', 'control_gate', 'ambient_decision', 'model_skip', 'model_run',
       'tool_call', 'tool_hard_gate', 'tool_approval', 'outbound', 'config_change', 'control_change',
+      'member_lifecycle',
     ]);
     expect(DECISION_OUTCOMES).toEqual(['allow', 'deny', 'skip', 'defer', 'error']);
     expect(DECISION_ACTORS).toEqual(['system', 'model', 'operator', 'policy']);
@@ -86,6 +87,13 @@ describe('reason_code registry', () => {
   it('uses unique lower snake_case codes', () => {
     expect(new Set(DECISION_REASON_CODES).size).toBe(DECISION_REASON_CODES.length);
     for (const code of DECISION_REASON_CODES) expect(code).toMatch(/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/);
+  });
+
+  it('appends the ADR 0037 slice A member lifecycle codes after the phase 0 codes', () => {
+    const slice = ['welcome_sent', 'welcome_merged', 'welcome_rate_limited', 'welcome_disabled', 'member_leave_recorded'];
+    const start = DECISION_REASON_CODES.indexOf('welcome_sent');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('tool_safe_allowed'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
   });
 
   it('keeps deprecated codes parseable', () => {
