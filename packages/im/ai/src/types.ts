@@ -618,6 +618,20 @@ export interface AIConfig {
       allowFunds?: boolean;
       /** 审批等待上限（毫秒），超时拒绝；默认 300000 */
       approvalTimeoutMs?: number;
+      /**
+       * IM 审批通道（#1013，默认关）：卡片同时投递给 allowlist 审批人，审批人私聊
+       * `approve <id>` / `deny <id>` 结算，与 Console 共用审批队列；业务群消息不能结算。
+       */
+      imApproval?: {
+        /** 默认 false */
+        enabled?: boolean;
+        /** 审批人平台用户 id：扁平列表对所有平台生效，或 `platform → userIds` */
+        approverIds?: string[] | Record<string, string[]>;
+        /** `dm`（默认）私聊审批人；`approver_group` 投递到 approverGroupId（不能是业务会话） */
+        delivery?: 'dm' | 'approver_group';
+        /** `delivery: approver_group` 时必填的专用审批群 id */
+        approverGroupId?: string;
+      };
     };
     /** 按用户 / 按群的 token 配额与群速率限制；默认全部关闭，主人默认不受限 */
     usageQuota?: {

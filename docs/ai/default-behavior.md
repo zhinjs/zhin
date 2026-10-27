@@ -46,6 +46,28 @@ ai:
 
 审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `tool_approvals:resolve`）上；完整令牌可直接调用。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）、`tool_hard_gate`（allow：`tool_approval_approved`；deny：`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`），以及 safe / 只读工具的 `tool_call`（allow，`tool_safe_allowed`）——只读查询放行但仍写审计。审计写失败不影响判定。
 
+### IM 审批通道（#1013，默认关）
+
+值班人员可以在 IM 里批硬闸卡片，不必登录 Console。它与 Console 共用同一个审批队列，任一渠道先给出结论算数，另一渠道看到已决；仍然只认人工、每次一批、fail closed。
+
+```yaml
+ai:
+  agent:
+    toolHardGate:
+      imApproval:
+        enabled: true
+        approverIds:            # 扁平列表对所有平台生效；也可写成 平台 → 用户 id
+          icqq: ['10001']
+        delivery: dm            # dm（默认）私聊审批人；approver_group 发到 approverGroupId
+        # approverGroupId: '123456'   # delivery: approver_group 时必填，且不能是业务群
+```
+
+- 每张新卡片（复用的同参数卡片不重复发）通过触发调用的那个 Endpoint 私聊发给该平台的每位审批人，内容含工具名、类别、会话、脱敏参数摘要、卡片 id 与过期时间。
+- 审批人在私聊里发 `/approve <卡片 id>` 或 `/deny <卡片 id>`（前缀随命令前缀配置）。只认 allowlist 内的用户；群 / 频道里的消息一律不结算（`approver_group` 模式下仅认配置的审批群），触发调用的会话永远不能结算自己的卡片；业务群里说「同意 / 批准」不会结算。
+- 批准只放行这一次同会话、同参数的调用（沿用 `consumeApproved` 指纹），没有「本会话 / 始终允许」。IM 通道是宿主命令，不是模型可调用的工具，`bypass` 和审核 Agent 都碰不到它。
+- 投递失败或不可投递（未开启、该平台没有审批人、`approver_group` 未配置群或与业务会话相同）时，卡片仍留给 Console，超时照常拒绝；不重试投递。队列在内存中，重启后旧卡片失效。
+- 审计：`tool_approval` 的结算记录 `payload.channel`（`console` / `im_dm` / `im_approver_group`，回合内审批提示为 `turn_prompt`），操作者记在 `actor_id`：IM 为 `im:<platform>:<userId>`，Console 暂为 `console`。`tool_approval_requested` 的 `payload.imApproval` 表示该卡片是否可经 IM 投递。
+
 ## 开关清单与处置
 
 处置：**keep** 保留常用；**preset** 高级调优，用默认值；**merge-candidate** 计划合并；**debug** 诊断；**internal** 仅代码；**deprecated** 已弃用。

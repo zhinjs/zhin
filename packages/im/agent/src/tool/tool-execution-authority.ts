@@ -13,6 +13,7 @@ import { resolveBuiltinToolPolicyInput } from './builtin-policy-extractors.js';
 import { runToolApprovalGate } from './tool-approval-gate.js';
 import { ToolRuntime } from './tool-runtime.js';
 import { ToolHardGate } from '../security/tool-hard-gate.js';
+import type { ToolApprovalOrigin } from '../security/tool-approval-queue.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 
 export interface ToolExecutionAuthorityOptions {
@@ -56,6 +57,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
         sceneId: `${conversation?.kind || 'private'}:${String(conversation?.id ?? options.sessionId)}`,
         userId: message.sender?.id ? String(message.sender.id) : null,
       },
+      ...legacyApprovalOrigin(message),
       ...(options.host.toolApprovals ? { queue: options.host.toolApprovals } : {}),
       ...(controlPlane ? { controlPlane } : {}),
       ...(audit && typeof audit.record === 'function'
@@ -144,4 +146,20 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
       });
     }
   }
+}
+
+/** Where a legacy-pipeline dangerous call came from; absent when the message lacks a deliverable endpoint. */
+function legacyApprovalOrigin(message: Message): { origin?: ToolApprovalOrigin } {
+  const conversation = message.conversation;
+  const endpointKey = message.endpointId ? String(message.endpointId) : '';
+  const platform = String(message.clientAdapter || conversation?.endpoint?.adapter || '');
+  if (!endpointKey || !platform || !conversation?.id || !conversation.kind) return {};
+  return {
+    origin: {
+      platform,
+      endpointKey,
+      scope: conversation.kind,
+      sceneId: String(conversation.id),
+    },
+  };
 }
