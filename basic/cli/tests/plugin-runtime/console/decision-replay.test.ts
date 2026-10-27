@@ -82,6 +82,13 @@ describe('Console decision replay (ADR 0036 slice C)', () => {
     }
   });
 
+  it('filters ADR 0037 slice D schedule rows by kind', async () => {
+    const log = await seeded();
+    await log.record({ ...base, turnId: 't3', kind: 'schedule', outcome: 'skip', reasonCode: 'schedule_wake_missed' } as never);
+    const rows = await listDecisionEvents(() => log, { kind: 'schedule' }) as unknown as { items: DecisionEventExportRow[] };
+    expect(rows.items.map((row) => [row.kind, row.reason_code])).toEqual([['schedule', 'schedule_wake_missed']]);
+  });
+
   it('rejects bad filters instead of returning an empty page', async () => {
     const log = await seeded();
     const source = () => log;

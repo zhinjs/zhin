@@ -54,7 +54,7 @@ describe('ai_decision_events schema', () => {
     expect(DECISION_EVENT_KINDS).toEqual([
       'inbound_wake', 'speak_gate', 'control_gate', 'ambient_decision', 'model_skip', 'model_run',
       'tool_call', 'tool_hard_gate', 'tool_approval', 'outbound', 'config_change', 'control_change',
-      'member_lifecycle', 'announcement', 'ops_cooldown',
+      'member_lifecycle', 'announcement', 'ops_cooldown', 'schedule',
     ]);
     expect(DECISION_OUTCOMES).toEqual(['allow', 'deny', 'skip', 'defer', 'error']);
     expect(DECISION_ACTORS).toEqual(['system', 'model', 'operator', 'policy']);
@@ -118,6 +118,16 @@ describe('reason_code registry', () => {
     const slice = ['cold_field_mention_only_on', 'cold_field_mention_only_expired', 'cold_field_mention_only_cleared'];
     const start = DECISION_REASON_CODES.indexOf('cold_field_mention_only_on');
     expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('ops_cooldown_passed'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+  });
+
+  it('appends the ADR 0037 slice D schedule codes after the slice C codes', () => {
+    const slice = [
+      'schedule_event_created', 'schedule_event_updated', 'schedule_event_cancelled',
+      'schedule_wake_fired', 'schedule_wake_missed', 'schedule_wake_merged',
+    ];
+    const start = DECISION_REASON_CODES.indexOf('schedule_event_created');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('cold_field_mention_only_cleared'));
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
     expect(DECISION_REASON_CODES.slice(-slice.length)).toEqual(slice);
   });
