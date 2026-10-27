@@ -39,6 +39,7 @@ import {
   type ImRuntime,
   type IngressRoute,
   type Message,
+  type RuntimeSceneEventSignal,
   type SendContent,
 } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -99,7 +100,6 @@ import {
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 import { observeSessionAndCheckSpeak } from './session-gate.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
-import type { RuntimeSceneEventSignal } from '@zhin.js/core/runtime';
 import type { AssistantStatus } from '../../console/assistant-status.js';
 
 const logger = getLogger('agent');

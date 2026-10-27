@@ -11,9 +11,8 @@
  * 不再额外走旁听判断模型。默认不改好感度。
  */
 import { randomUUID } from 'node:crypto';
-import { sceneEventPriority } from '@zhin.js/core';
+import { sceneEventPriority, type AITriggerConfig } from '@zhin.js/core';
 import type { RuntimeSceneEventSignal } from '@zhin.js/core/runtime';
-import type { AITriggerConfig } from '@zhin.js/core';
 import type {
   ActorRef,
   ConversationContextBlock,
