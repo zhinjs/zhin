@@ -39,6 +39,7 @@ import {
   createSubagentTurnCapability,
   type SubagentModelSelection,
 } from './subagent-turn-capability.js';
+import { recordRelationTurn } from '../user-relation-turn.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -320,6 +321,8 @@ async function* runInteractiveTurn(
             host.toldLedger?.record(prep.sessionId, completion.result.reply, 'reply', context.turn.identity.turnId);
           }
         }
+        // 画像 + 好感度：回复已发出后异步写，不阻塞、不抛错。
+        recordRelationTurn(host.userProfiles?.relations, context.turn, completion.result);
         if (context.turn.intent.kind === 'observe') {
           await host.contextRepository.appendMessages(
             prep.sessionId,

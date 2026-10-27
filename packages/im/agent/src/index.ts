@@ -156,6 +156,15 @@ export { createSpawnTaskTool } from './spawn/spawn-task-tool.js';
 export * from './interaction/index.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
+export {
+  UserRelationStore,
+  AI_USER_RELATION_MODEL,
+  USER_RELATIONS,
+  applyAffinitySignal,
+  deriveRelation,
+  type UserRelation,
+  type UserRelationRecord,
+} from './user-relation.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

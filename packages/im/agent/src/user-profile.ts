@@ -13,6 +13,7 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
+import { UserRelationStore } from './user-relation.js';
 
 const logger = getLogger('UserProfile');
 
@@ -135,15 +136,19 @@ class DatabaseProfileStore implements IProfileStore {
 
 export class UserProfileStore {
   private store: IProfileStore;
+  /** 按 platform + userId 合并的画像与好感度（`ai_user_relations`）。 */
+  readonly relations: UserRelationStore;
 
-  constructor() {
+  constructor(relations: UserRelationStore = new UserRelationStore()) {
     this.store = new MemoryProfileStore();
+    this.relations = relations;
   }
 
-  upgradeToDatabase(model: DbModel): void {
+  upgradeToDatabase(model: DbModel, relationModel?: Parameters<UserRelationStore['upgradeToDatabase']>[0]): void {
     const old = this.store;
     this.store = new DatabaseProfileStore(model);
     old.dispose();
+    if (relationModel) this.relations.upgradeToDatabase(relationModel);
     logger.debug('UserProfileStore: upgraded to database storage');
   }
 
@@ -178,5 +183,6 @@ export class UserProfileStore {
 
   dispose(): void {
     this.store.dispose();
+    this.relations.dispose();
   }
 }

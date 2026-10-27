@@ -43,6 +43,7 @@ SQL databases persist structured usage independently, with a default 30-day rete
 | Hand long tasks to the background | [Sub-agents and spawn_task](#sub-agents-and-spawn-task) |
 | Where history is stored, how to reset, what happens when context gets long | [Sessions and session trees](#sessions-and-session-trees) · [Context compaction](#context-compaction) |
 | What the AI remembers, and who can change it | [Semantic memory](#semantic-memory) |
+| How the AI gets to know each person, and how affinity changes | [User profiles and affinity](#user-profiles-and-affinity) |
 | Which tools the AI has built in, and file / network boundaries | [Built-in tools](#built-in-tools) |
 | Have the AI do things on a schedule | [Schedules and the assistant persona](#schedules-and-the-assistant-persona) |
 | Tune parameters for one model | [Per-model tuning](#per-model-tuning) |
@@ -301,6 +302,35 @@ ai:
 - Hosts and the Console view, edit, and delete memory in any scope through `SemanticMemoryRuntime` `list` / `upsert` / `delete`.
 
 Markdown file memory (`MEMORY.md`) is still injected whole within its character budgets; this release does not change it.
+
+## User profiles and affinity
+
+The Agent gradually forms an impression of each person: what to call them, running jokes, how to talk to them, and an affinity score. This lives in the `ai_user_relations` database table, one row per person keyed by `platform + user_id`, so the same person is one person across groups and channels. `recent_scenes` only records the last few groups or channels they appeared in (up to 5) for atmosphere; it never splits a person per group.
+
+| Field | Meaning |
+| --- | --- |
+| `display_name` / `preferred_address` | Platform nickname (refreshed every turn) / how they want to be called |
+| `notes` | Short facts or running jokes, ≤60 characters each, at most 8 (oldest dropped first) |
+| `tone_hints` | Tone tags for talking to this person, at most 4 |
+| `affinity` | Affinity from -100 to 100; new people start at 0 |
+| `relation_override` | Manually set relation; when empty it is derived from affinity and interactions |
+| `interactions` / `last_seen_at` / `updated_at` | Interaction count, last seen, last updated |
+
+The relation is derived from affinity and interaction count: `stranger` → `acquaintance` (affinity ≥10 and ≥3 interactions) → `familiar` (≥30 and ≥8) → `close` (≥60 and ≥20). Hosts can pin it with `userProfiles.relations.setRelationOverride(platform, userId, relation)`; pass `null` to go back to the derived value.
+
+**How affinity changes** (rule-based, no model call):
+
+- Normal chat that addresses the bot +1, thanks or praise +3, insults -5.
+- Using the bot only as a tool (the turn ran a business tool with no small talk) earns nothing; from the third such turn in a row each costs 1, and one normal chat resets the streak.
+- Gains have a 10-minute cooldown and a daily cap of +8; losses are capped at -20 per day.
+- Ambient turns (nobody addressed the bot) never change affinity, only last-seen and scenes, so group noise is not pinned on anyone.
+- The owner (`master`) stays at 100 and `close` and is never demoted.
+
+**How it is used**: at the start of each turn the Agent adds a `[Relationship]` summary to the turn context, labelled as data rather than instructions and with a reminder not to read scores or notes back. Private turns and group/channel turns that address the bot include the initiator; ambient turns also include 1–2 people active in the same scene within the last 30 minutes. Someone met for the first time with no profile yet is not injected. After the turn, once the reply is sent, affinity and presence are written back asynchronously; a failed write is only logged and never affects the reply.
+
+**Notes, preferred address, and tone** are written explicitly by the model through the `user_profile` tool (`note` / `unnote` / `call_me` / `tone`); the persona is never rewritten automatically. Text that looks like a password, token, cookie, verification code, ID number, or a number of 11+ digits is refused. Logs record only error messages, never profile contents. The existing `ai_user_profiles` key/value preferences (`set` / `get` / `delete`) are unchanged and are injected alongside.
+
+Without a database, profiles live in memory and are cleared on restart.
 
 ## Built-in tools
 

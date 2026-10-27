@@ -50,7 +50,7 @@ export interface IAgentSessionManager {
   archiveSession(sessionKey: string): Promise<boolean>;
   cancelSession(sessionKey: string): boolean;
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null;
-  upgradeProfilesToDatabase(model: any): void;
+  upgradeProfilesToDatabase(model: any, relationModel?: any): void;
 }
 
 /**

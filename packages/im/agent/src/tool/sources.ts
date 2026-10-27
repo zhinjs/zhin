@@ -87,7 +87,8 @@ export class BuiltinToolSource implements ToolSource {
   collectTools(context: CollectToolsContext): AgentTool[] {
     const tools: AgentTool[] = [];
     if (KEYWORD_TRIGGERS.userProfile.test(context.content)) {
-      tools.push(createUserProfileTool(context.userId, context.userProfiles));
+      const platform = String(context.message.clientAdapter ?? context.message.conversation?.endpoint?.adapter ?? '').trim();
+      tools.push(createUserProfileTool(context.userId, context.userProfiles, platform || undefined));
     }
     return tools;
   }
