@@ -1,0 +1,23 @@
+basic/cli/src/plugin-runtime/console/decision-replay.ts
+  s_9622fd28aba994::t_dc36d081cc8fbf 41
+packages/im/agent/src/decision-events.ts
+  s_9622fd28aba994::t_a8d77079a93e03 40-41,99-108
+packages/im/agent/tests/decision-events.test.ts
+  s_9622fd28aba994::t_0c5f60a0f6a93d 57,99-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a04494d1119718cbc9798d3ea13faa7a07c5fd25",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
