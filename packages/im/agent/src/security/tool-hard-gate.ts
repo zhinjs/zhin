@@ -10,6 +10,8 @@
  * - 工具声明 `risk: 'dangerous' | 'safe'`；核心名单与宿主配置只能把工具**调高**为 dangerous，
  *   声明 `safe` 不能把核心名单里的工具调低。
  * - 资金类默认禁用（`ai.agent.toolHardGate.allowFunds`），开启后仍需审批。
+ * - 控制面（ADR 0036 §2，#1008）：会话处于 `emergency_stop` 或 `read_only`（含控制面状态不可用）时，
+ *   危险工具在弹审批之前直接拒绝；`muted` / `mention_only` 不拦硬闸管理工具。
  *
  * 审计写 `tool_approval` / `tool_hard_gate`（`ai_decision_events`）；审计写失败不影响判定。
  */
@@ -37,8 +39,13 @@ export function isDangerousToolCategory(value: unknown): value is DangerousToolC
 }
 
 /**
- * 核心危险工具名单（按工具本地名匹配，即限定名最后一段）。覆盖仓库内各 adapter 的管理类工具，
+ * 核心危险工具名单（按工具本地名匹配，即限定名最后一段；场景管理通用工具的 `{prefix}_{suffix}`
+ * 按后缀匹配，见 {@link coreDangerousCategory}）。覆盖仓库内各 adapter 的管理类工具，
  * 以及资金类常见名；插件声明 `risk: 'safe'` 不能把它们调低。
+ *
+ * 改他人群名片属于成员管理（ADR 0037 §3）：`set_group_card`、以及场景管理通用工具
+ * `{prefix}_set_nickname`（`setMemberNickname`，改的是成员的群名片）都记 `member`。
+ * 改 Bot 自身资料的工具请用不同的本地名（如 `set_self_nickname` / `set_bot_nickname`），或声明 `riskCategory: 'identity'`。
  */
 export const CORE_DANGEROUS_TOOLS: ReadonlyMap<string, DangerousToolCategory> = new Map<string, DangerousToolCategory>([
   // 成员管理：踢人、禁言、设管理员、角色、拉黑、拉人
@@ -47,6 +54,12 @@ export const CORE_DANGEROUS_TOOLS: ReadonlyMap<string, DangerousToolCategory> = 
     'remove_managers', 'set_title', 'grant_role', 'revoke_role', 'add_role', 'remove_role', 'create_role', 'delete_role',
     'set_permissions', 'add_members', 'add_chat_members', 'group_invite', 'invite_to_channel', 'delete_friend',
     'dissolve_chat', 'archive_channel'] as const).map((name) => [name, 'member'] as const),
+  // 成员管理：场景管理通用工具后缀（`packages/im/core/src/built/common-adapter-tools.ts`）
+  ...(['remove_member', 'ban_member', 'unban_member', 'set_moderator', 'rename_scene', 'set_scene_muted'] as const)
+    .map((name) => [name, 'member'] as const),
+  // 成员管理：改他人群名片、群名、匿名开关
+  ...(['set_group_card', 'set_nickname', 'set_group_name', 'set_anonymous', 'set_group_anonymous'] as const)
+    .map((name) => [name, 'member'] as const),
   // 内容发布：群公告、频道发帖、精华、置顶、B 站评论
   ...(['send_group_notice', 'del_group_notice', 'announce', 'forum_post', 'set_essence_msg', 'delete_essence_msg',
     'essence', 'pin_message', 'unpin_message', 'bili_comment', 'bili_reply', 'post_comment', 'publish_post'] as const)
@@ -54,9 +67,9 @@ export const CORE_DANGEROUS_TOOLS: ReadonlyMap<string, DangerousToolCategory> = 
   // 资金：红包、转账、付款（默认禁用）
   ...(['send_red_packet', 'red_packet', 'send_hongbao', 'transfer', 'transfer_money', 'pay', 'payment',
     'send_payment'] as const).map((name) => [name, 'funds'] as const),
-  // 身份：改 Bot 资料、头像、签名、解绑账号
-  ...(['set_profile', 'set_avatar', 'set_signature', 'set_nickname', 'set_online_status', 'set_group_portrait',
-    'unbind'] as const).map((name) => [name, 'identity'] as const),
+  // 身份：改 Bot 资料、头像、签名、昵称、解绑账号
+  ...(['set_profile', 'set_avatar', 'set_signature', 'set_self_nickname', 'set_bot_nickname', 'set_online_status',
+    'set_group_portrait', 'unbind'] as const).map((name) => [name, 'identity'] as const),
 ]);
 
 export interface ToolHardGateSettings {
@@ -94,6 +107,25 @@ export function toolLocalName(name: string): string {
   return segments[segments.length - 1] ?? name;
 }
 
+/** 后缀匹配至少取两段（如 `remove_member`），避免 `pay` / `ban` 这类单词误伤 `file_transfer` 之类的工具。 */
+const MIN_SUFFIX_SEGMENTS = 2;
+
+/**
+ * 按本地名查核心名单：先整段精确匹配；再按 `_` 切段，从左往右去掉前缀，取最长的、至少两段的后缀匹配。
+ * 这样场景管理通用工具 `discord_remove_member` / `lark_mute_member` 能命中 `remove_member` / `mute_member`。
+ */
+export function coreDangerousCategory(localName: string): DangerousToolCategory | null {
+  const exact = CORE_DANGEROUS_TOOLS.get(localName);
+  if (exact) return exact;
+  const segments = localName.split('_');
+  for (let start = 1; start <= segments.length - MIN_SUFFIX_SEGMENTS; start += 1) {
+    const suffix = segments.slice(start).join('_');
+    const category = CORE_DANGEROUS_TOOLS.get(suffix);
+    if (category) return category;
+  }
+  return null;
+}
+
 export interface ToolRiskView {
   readonly name: string;
   readonly qualifiedName?: string;
@@ -113,7 +145,7 @@ export function assessToolRisk(tool: ToolRiskView, settings: ToolHardGateSetting
   const names = new Set([tool.name, tool.qualifiedName, toolLocalName(tool.name), tool.qualifiedName && toolLocalName(tool.qualifiedName)]
     .filter((name): name is string => Boolean(name)));
   const declaredCategory = isDangerousToolCategory(tool.riskCategory) ? tool.riskCategory : null;
-  const coreCategory = [...names].map((name) => CORE_DANGEROUS_TOOLS.get(name)).find(Boolean) ?? null;
+  const coreCategory = [...names].map((name) => coreDangerousCategory(name)).find(Boolean) ?? null;
   if (coreCategory) return Object.freeze({ risk: 'dangerous', category: declaredCategory ?? coreCategory, source: 'core' });
   if (tool.risk === 'dangerous') return Object.freeze({ risk: 'dangerous', category: declaredCategory, source: 'declared' });
   if (settings.dangerousTools.some((name) => names.has(name))) {
@@ -134,6 +166,16 @@ export interface ToolHardGateLocation {
   readonly userId?: string | null;
 }
 
+/**
+ * 硬闸读取的控制面视图（`AiControlPlane` 结构兼容，#1008）。两个方法在状态不可用时都返回 true（fail closed）。
+ */
+export interface ToolHardGateControlView {
+  isEmergencyStopped(platform?: string, sceneId?: string): boolean;
+  isReadOnly(platform?: string, sceneId?: string): boolean;
+}
+
+export type ToolHardGateControlSource = () => ToolHardGateControlView | undefined;
+
 export interface ToolHardGateContext {
   readonly turnId: string;
   readonly sessionKey: string;
@@ -145,7 +187,30 @@ export interface ToolHardGateContext {
   readonly location: ToolHardGateLocation;
   readonly audit?: DecisionAuditSink;
   readonly queue?: ToolApprovalQueue;
+  /** 控制面；未接时不做控制面判定（与入站 / 出站闸一致）。每次判定现读，回合中途开关变化也生效。 */
+  readonly controlPlane?: ToolHardGateControlSource;
 }
+
+type ControlDenial = Readonly<{
+  reasonCode: Extract<DecisionReasonCode, 'control_emergency_stop' | 'control_read_only'>;
+  controlSwitch: 'emergency_stop' | 'read_only';
+  detail: string;
+  why: string;
+}>;
+
+const CONTROL_EMERGENCY_STOP_DENIAL: ControlDenial = Object.freeze({
+  reasonCode: 'control_emergency_stop',
+  controlSwitch: 'emergency_stop',
+  detail: 'control plane: emergency_stop',
+  why: '控制面已急停',
+});
+
+const CONTROL_READ_ONLY_DENIAL: ControlDenial = Object.freeze({
+  reasonCode: 'control_read_only',
+  controlSwitch: 'read_only',
+  detail: 'control plane: read_only',
+  why: '控制面处于只读',
+});
 
 export type ToolHardGateResult =
   | Readonly<{ status: 'safe' }>
@@ -198,6 +263,12 @@ export class ToolHardGate {
     }
     const { category } = assessment;
     const payload = { tool: name, category, riskSource: assessment.source, toolUseId };
+
+    const controlDenial = this.#checkControlPlane();
+    if (controlDenial) {
+      const controlPayload = { ...payload, controlSwitch: controlDenial.controlSwitch };
+      return this.#deny(name, category, controlDenial.reasonCode, controlPayload, controlDenial.detail, controlDenial.why);
+    }
 
     if (this.#deniedTools.has(name) || (category && this.#deniedCategories.has(category))) {
       return this.#deny(name, category, 'tool_hard_gate_latched', payload,
@@ -255,6 +326,25 @@ export class ToolHardGate {
     }
     this.#audit('tool_approval', 'deny', 'tool_approval_denied', withId, settled.decidedBy);
     return this.#deny(name, category, 'tool_approval_denied', withId, 'approval denied', '审批人拒绝了此操作');
+  }
+
+  /**
+   * ADR 0036 §2：`emergency_stop` / `read_only` 下危险工具不弹审批、不执行。`muted` 不拦硬闸管理工具。
+   * 读控制面本身出错按急停处理（fail closed）。
+   */
+  #checkControlPlane(): ControlDenial | null {
+    const source = this.#context.controlPlane;
+    if (!source) return null;
+    const { platform, sceneId } = this.#context.location;
+    try {
+      const plane = source();
+      if (!plane) return null;
+      if (plane.isEmergencyStopped(platform, sceneId)) return CONTROL_EMERGENCY_STOP_DENIAL;
+      if (plane.isReadOnly(platform, sceneId)) return CONTROL_READ_ONLY_DENIAL;
+      return null;
+    } catch {
+      return CONTROL_EMERGENCY_STOP_DENIAL;
+    }
   }
 
   async #awaitApproval(
