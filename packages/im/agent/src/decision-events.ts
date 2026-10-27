@@ -41,6 +41,8 @@ export const DECISION_EVENT_KINDS = [
   'announcement',
   // ADR 0037 第 1 期（切片 E）：群管动作命中或通过冷却（`ops.cooldownMs`）
   'ops_cooldown',
+  // ADR 0037 第 1 期（切片 D）：会话日程的创建、修改、取消与到点触发结果
+  'schedule',
 ] as const;
 export type DecisionEventKind = typeof DECISION_EVENT_KINDS[number];
 
@@ -115,6 +117,13 @@ export const DECISION_REASON_CODES = [
   'cold_field_mention_only_on',
   'cold_field_mention_only_expired',
   'cold_field_mention_only_cleared',
+  // ADR 0037 切片 D：会话日程（`ai_session_events`）与到点唤醒
+  'schedule_event_created',
+  'schedule_event_updated',
+  'schedule_event_cancelled',
+  'schedule_wake_fired',
+  'schedule_wake_missed',
+  'schedule_wake_merged',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

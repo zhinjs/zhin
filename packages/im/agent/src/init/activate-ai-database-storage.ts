@@ -15,6 +15,7 @@ import { AI_DECISION_EVENTS_TABLE } from '../decision-events.js';
 import { AI_CONTROL_STATE_TABLE } from '../control-plane.js';
 import { AI_SESSION_OPS_TABLE } from '../session-ops.js';
 import { AI_ANNOUNCEMENTS_TABLE } from '../announcements.js';
+import { AI_SESSION_EVENTS_TABLE } from '../session-events.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
@@ -83,6 +84,9 @@ export async function activateAiDatabaseStorage(
   // ADR 0037 slice B: 公告草稿 / 审批 / 发送状态以表为准。
   const announcementsModel = db.models?.get(AI_ANNOUNCEMENTS_TABLE);
   if (announcementsModel) await refs.zhinAgent.getAnnouncements?.().upgradeToDatabase(announcementsModel);
+  // ADR 0037 slice D: 会话日程以表为准；接表后调度方重新排期（重启后的宕机补偿从这里开始）。
+  const sessionEventsModel = db.models?.get(AI_SESSION_EVENTS_TABLE);
+  if (sessionEventsModel) await refs.zhinAgent.getSessionEvents?.().upgradeToDatabase(sessionEventsModel);
 
   if (semanticActivation) {
     semanticActivation.runtime.activate(semanticActivation.repository);

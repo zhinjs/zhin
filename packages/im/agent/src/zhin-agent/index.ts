@@ -47,6 +47,7 @@ import { DecisionEventLog } from '../decision-event-log.js';
 import { AiControlPlane } from '../control-plane.js';
 import { AiSessionOps } from '../session-ops.js';
 import { AiAnnouncements } from '../announcements.js';
+import { AiSessionEvents } from '../session-events.js';
 import { SubagentSystem, type SubagentOrigin, type SubagentResultSender, type SubagentCompletePayload } from '../subagent/index.js';
 import { buildParentContextSnapshot } from '../subagent-parent-context.js';
 import {
@@ -168,6 +169,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly sessionOps: AiSessionOps = new AiSessionOps();
   /** 公告草稿 → 审批 → 发送（ADR 0037 切片 B）；模型只能起草，提交 / 审批 / 重发只经 Console。 */
   readonly announcements: AiAnnouncements = new AiAnnouncements({ audit: () => this.decisionEvents });
+  /** 会话日程（ADR 0037 切片 D）；模型只能为当前会话创建，修改 / 取消只经 Console。 */
+  readonly sessionEvents: AiSessionEvents = new AiSessionEvents({ audit: () => this.decisionEvents });
   rateLimiter: RateLimiter;
   readonly usageQuota: UsageQuota;
   subagentSystem: SubagentSystem | null = null;
@@ -407,6 +410,10 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getAnnouncements(): AiAnnouncements {
     return this.announcements;
+  }
+
+  getSessionEvents(): AiSessionEvents {
+    return this.sessionEvents;
   }
 
   registerTool(tool: RegisteredAgentTool): () => void {

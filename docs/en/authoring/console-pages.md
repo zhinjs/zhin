@@ -360,6 +360,24 @@ Status only moves forward: `draft` → `pending` → `approved` → `sent`, with
 - A blocked or failed send becomes `failed` with a reason. It isn't queued or retried; `announcement-resend` puts it back to `pending` and it needs another approval. If the text no longer matches the approved hash, it's refused (`announcement_hash_mismatch`).
 - Every action needs `expectedRevision`; a mismatch returns `conflict` and nothing is overwritten. Each transition writes one `kind=announcement` row (`announcement_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_sent` / `_send_failed` / `_resend` / `_hash_mismatch`); blocks by the control plane or session profile keep their `control_*` / `cannot_speak_*` codes. Data lives in the `ai_announcements` table.
 
+### Built-in: session events (reminders)
+
+Session events (ADR 0037 phase 1 slice D) have Host RPCs; the Console page is built separately. Reads need `control:read`; create, update, and cancel need `control:write`.
+
+| Method | Call | Permission needed |
+| --- | --- | --- |
+| `plugin.root.session-events` | `pluginRpc('root', 'session-events', { platform, sceneId, status? })` | `control:read` |
+| `plugin.root.session-event` | `pluginRpc('root', 'session-event', { id })` | `control:read` |
+| `plugin.root.session-event-create` | `pluginRpc('root', 'session-event-create', { platform, sceneId, title, at, remindBefore?, template?, endpoint? })` | `control:write` (action) |
+| `plugin.root.session-event-update` | `pluginRpc('root', 'session-event-update', { id, expectedRevision, title?, at?, remindBefore?, template? })` | `control:write` (action) |
+| `plugin.root.session-event-cancel` | `pluginRpc('root', 'session-event-cancel', { id, expectedRevision })` | `control:write` (action) |
+
+- `at` is a millisecond timestamp (stored in UTC; `{at}` is shown in the instance time zone `TZ`, default `Asia/Shanghai`). `remindBefore` is an array of lead times in milliseconds, at most 5, each up to 30 days. **There's always a reminder at `at` itself**; `remindBefore` only adds earlier ones. Lead times that are already in the past when you create or update the event count as fired. `title` is at most 60 characters; `template` can use `{title}` `{at}` `{in}`, and an empty one uses the default `【日程提醒】{title}：{at}（{in}）`.
+- Status: `scheduled` → `done` (every reminder fired) / `cancelled`. Updating and cancelling only happen here, including events the model created; the model can only create events for the **current group or channel** with the `session_event_create` tool (`risk: safe`).
+- When a reminder is due, reminders for the same session in the same minute become one message. Order: `inbound_wake` (`schedule_wake_fired`) → control plane (judged as addressed, so `mention_only`, including the cold-field override, doesn't block; the stop switches still do) → session-profile speak check → template sent as is (no model call). A blocked or failed reminder still counts as fired: it **isn't resent or retried**.
+- After a restart, reminders missed by more than 10 minutes aren't sent and are logged as `schedule_wake_missed`; ones within 10 minutes are sent.
+- Every write needs `expectedRevision`; a mismatch returns `conflict` and nothing is overwritten. Audit rows use `kind=schedule`: `schedule_event_created` / `_updated` / `_cancelled`, `schedule_wake_fired` (sent alone) / `schedule_wake_merged` (sent merged) / `schedule_wake_missed`; blocks by the control plane or session profile keep their `control_*` / `cannot_speak_*` codes. Data lives in the `ai_session_events` table (not `schedule-jobs.json`).
+
 ### Built-in actions: dangerous-tool approval cards
 
 Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The approver permission is `ops:approve` (ADR 0037 §3, slice E), separate from `control:write`. The older permissions still work so existing tokens keep working; holding either one is enough.
