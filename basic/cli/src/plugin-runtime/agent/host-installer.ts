@@ -12,6 +12,8 @@ import type { ConversationRef } from '@zhin.js/im-contract';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
+  LocalImageAssetStore,
+  localImageAssetsToken,
   type AssistantConfig,
   type ApprovalPort,
   type AudioTranscriptionPort,
@@ -126,6 +128,7 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
+  const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
   return async ({ generation, signal, resources, lifecycle, handoff, admission, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
@@ -142,8 +145,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       });
     }
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
+    lifecycle.add(await localAssets.acquire());
+    resources.provide(localImageAssetsToken, localAssets);
     const agentFoundation = await AgentRuntimeFoundation.create({
       config: aiConfig,
+      localAssets,
       assistantConfig,
       im: options.im,
       projectRoot: options.projectRoot,
@@ -204,6 +210,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       projectRoot: options.projectRoot,
       service,
       mcpServers: mcpEntries,
+      localAssets,
       hostTools: options.extraTools,
       runtimeTools: [...scheduleTools, ...homeTools],
       knowledgeIndex,

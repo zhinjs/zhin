@@ -9,6 +9,7 @@ export type AuthorizedFileInput =
 const FILE_PATH_ARGUMENTS: Readonly<Record<string, string>> = Object.freeze({
   bash: 'cwd',
   read_file: 'file_path',
+  upload_image: 'file_path',
   write_file: 'file_path',
   edit_file: 'file_path',
   list_dir: 'path',

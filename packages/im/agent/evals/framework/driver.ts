@@ -37,6 +37,7 @@ import type { EvalApprovalBehaviour, EvalCase, EvalMemoryEntry, EvalPromptSectio
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { createLlmMediaPerceptionPort, resolvePerceptionConfig } from '../../src/media/perception.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
+import type { ImageAssetPublisher } from '../../src/media/image-assets.js';
 
 export interface EvalToolInvocation {
   readonly name: string;
@@ -77,6 +78,8 @@ const ENDPOINT = 'eval-bot';
 const PLATFORM = 'eval';
 
 export interface RunEvalCaseOptions {
+  /** Synthetic image publisher; tests never access a real bucket. */
+  readonly imageAssets?: ImageAssetPublisher;
   /**
    * Virtual clock for provider request timeouts. Defaults to a fresh fake
    * clock, so no eval waits in real time and timers fire only on `hang` steps.
@@ -94,7 +97,7 @@ export async function runEvalCase(definition: EvalCase, options: RunEvalCaseOpti
   const workspace = definition.workspace ? await createWorkspace(definition.workspace) : undefined;
   try {
     const clock = options.clock ?? createFakeClock();
-    return await runInWorkspace(definition, workspace, clock, options.model?.(definition, clock));
+    return await runInWorkspace(definition, workspace, clock, options.model?.(definition, clock), options.imageAssets);
   } finally {
     if (workspace) await rm(workspace, { recursive: true, force: true });
   }
@@ -105,6 +108,7 @@ async function runInWorkspace(
   workspace: string | undefined,
   clock: EvalClock,
   liveModel: ScriptedModel | undefined,
+  imageAssets?: ImageAssetPublisher,
 ): Promise<EvalRunRecord> {
   const model = liveModel ?? createScriptedModel(definition.script, {
     extraModels: definition.models,
@@ -161,6 +165,7 @@ async function runInWorkspace(
     });
   }
   const host = asPrivate(agent);
+  if (imageAssets) agent.configure({ imageAssets });
   const { sessionSystem, contextSystem } = host;
   if (!sessionSystem || !contextSystem) throw new Error('ZhinAgent did not compose its session/context systems');
   const engine = createFullAgentTurnEngine({

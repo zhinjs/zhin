@@ -3145,6 +3145,43 @@
               "description": "决策审计保留天数，正整数，默认 14 天；启动时与之后每小时按事件时间清理过期行。"
             }
           }
+        },
+        "imageStorage": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional public R2 storage for generated images. Bucket access and lifecycle are managed by the operator.",
+          "required": [
+            "accountId",
+            "bucket",
+            "accessKeyId",
+            "secretAccessKey",
+            "publicBaseUrl",
+            "prefix"
+          ],
+          "properties": {
+            "accountId": {
+              "type": "string"
+            },
+            "bucket": {
+              "type": "string"
+            },
+            "accessKeyId": {
+              "type": "string",
+              "writeOnly": true
+            },
+            "secretAccessKey": {
+              "type": "string",
+              "writeOnly": true
+            },
+            "publicBaseUrl": {
+              "type": "string",
+              "description": "Public HTTPS base URL; not the S3 upload endpoint."
+            },
+            "prefix": {
+              "type": "string",
+              "description": "Object directory ending in /; must be covered by the bucket lifecycle."
+            }
+          }
         }
       }
     },

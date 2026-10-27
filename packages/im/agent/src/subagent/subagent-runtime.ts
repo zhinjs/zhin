@@ -178,6 +178,9 @@ export interface SubagentRuntimeOptions {
 // ============================================================================
 
 export class SubagentRuntime {
+  private imageAssets?: import('../media/image-assets.js').ImageAssetPublisher;
+  private localAssets?: import('../media/local-image-assets.js').LocalImageAssetStore;
+  private mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
   private provider: AIProvider;
   private readonly llmRuntime: LlmApiRuntime;
   private getProviderFn: ((alias: string) => AIProvider) | null;
@@ -241,12 +244,18 @@ export class SubagentRuntime {
   }
 
   configureRouting(deps: {
+    imageAssets?: import('../media/image-assets.js').ImageAssetPublisher;
+    localAssets?: import('../media/local-image-assets.js').LocalImageAssetStore;
+    mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
     getProvider?: (alias: string) => AIProvider;
     resolveBinding?: (agentName: string) => ResolvedAgentBinding | null;
     getMcpRegistry?: () => McpRegistry | null;
     resolveAgentMeta?: (agentName: string) => Promise<AgentMeta | null>;
     getParentContextSnapshot?: (origin: SubagentOrigin) => Promise<string | undefined>;
   }): void {
+    if (deps.imageAssets !== undefined) this.imageAssets = deps.imageAssets;
+    if (deps.localAssets !== undefined) this.localAssets = deps.localAssets;
+    if (deps.mediaPerception !== undefined) this.mediaPerception = deps.mediaPerception;
     if (deps.getProvider) this.getProviderFn = deps.getProvider;
     if (deps.resolveBinding) this.resolveBindingFn = deps.resolveBinding;
     if (deps.getMcpRegistry) this.getMcpRegistryFn = deps.getMcpRegistry;
@@ -595,6 +604,9 @@ export class SubagentRuntime {
       const result = await runAgentLoopStandaloneTurn({
         provider,
         llmRuntime: this.llmRuntime,
+        imageAssets: this.imageAssets,
+        localAssets: this.localAssets,
+        mediaPerception: this.mediaPerception,
         resolveProvider: this.getProviderFn ?? undefined,
         model,
         systemPrompt,

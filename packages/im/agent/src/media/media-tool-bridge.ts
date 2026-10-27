@@ -1,4 +1,5 @@
 import type { AgentOutputElement } from '../outbound/agent-output.js';
+import { isMediaBlockRef } from '@zhin.js/ai';
 import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 
 function parseToolResultObject(result: unknown): Record<string, unknown> | null {
@@ -43,6 +44,10 @@ export function extractMediaElementsFromToolCalls(
     }
 
     if (tc.tool === 'generate_image') {
+      if (typeof obj.image_url === 'string' && obj.image_url) {
+        out.push({ type: 'image', url: obj.image_url });
+        continue;
+      }
       const image = obj.image;
       if (typeof image !== 'string' || !image) continue;
       const mime = typeof obj.mime === 'string' ? obj.mime : 'image/png';
@@ -63,5 +68,13 @@ export function mergeToolOutboundElements(
 ): AgentOutputElement[] {
   const media = extractMediaElementsFromToolCalls(toolCalls);
   if (!media.length) return elements;
-  return [...elements, ...media];
+  const imageUrls = new Set(elements.flatMap(element => element.type === 'image' ? [element.url]
+    : element.type === 'message' ? element.segments.flatMap(segment =>
+      segment.type === 'image' && isMediaBlockRef(segment.data.media) && segment.data.media.kind === 'url' ? [segment.data.media.value] : []) : []));
+  return [...elements, ...media.filter(element => {
+    if (element.type !== 'image' || element.base64) return true;
+    if (imageUrls.has(element.url)) return false;
+    imageUrls.add(element.url);
+    return true;
+  })];
 }

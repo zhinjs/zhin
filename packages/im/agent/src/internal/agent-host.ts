@@ -1,3 +1,4 @@
+import type { LocalImageAssetStore } from '../media/local-image-assets.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 /**
@@ -25,6 +26,7 @@ import type { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js
 import type { SessionCompactInfo } from '../event/session-events.js';
 import type { AudioTranscriptionPort } from '../media/media-types.js';
 import type { MediaPerceptionPort } from '../media/perception.js';
+import type { ImageAssetPublisher } from '../media/image-assets.js';
 import type {
   HostEventEmitter,
   HostPhaseTraceConfig,
@@ -106,6 +108,8 @@ export interface ZhinAgentPrivate
   audioTranscriber?: AudioTranscriptionPort;
   /** `ai.multimodal.perception` pre-pass; absent when not configured. */
   mediaPerception?: MediaPerceptionPort;
+  imageAssets?: ImageAssetPublisher;
+  localAssets?: LocalImageAssetStore;
   getTurnProvider(): AIProvider;
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;

@@ -7,9 +7,11 @@ import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
 import type { SubagentOrigin, SubagentResultDelivery, SubagentResultSender } from '../subagent/index.js';
 import type { ProactiveOutboundService } from '../outbound/send-proactive.js';
 import type { ResultSink, SubagentResult } from './contracts.js';
+import type { ImageAssetPublisher } from '../media/image-assets.js';
 
 export interface ImResultSinkDeps {
   proactiveOutbound: ProactiveOutboundService;
+  imageAssets?: () => ImageAssetPublisher | undefined;
 }
 
 export class ImResultSink implements ResultSink {
@@ -42,6 +44,7 @@ export class ImResultSink implements ResultSink {
     await deliverSubagentResult({
       origin,
       delivery,
+      imageAssets: this.deps.imageAssets?.(),
       send: (opts: SendOptions) => this.deps.proactiveOutbound.send({
         scene,
         source: 'subagent',

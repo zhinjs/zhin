@@ -35,6 +35,8 @@ import {
 } from '@zhin.js/prompt-section';
 import { capabilitySeamToken } from '../seam/tokens.js';
 import type { SeamIntegration } from '../seam/seam-integration.js';
+import { localImageAssetsToken, type LocalImageAssetStore } from '../media/local-image-assets.js';
+import { captureMcpImages } from '../media/mcp-image-results.js';
 
 export interface ToolCapability extends ToolDescriptor {
   execute<TInput = unknown, TResult = unknown>(
@@ -45,7 +47,7 @@ export interface ToolCapability extends ToolDescriptor {
 
 export interface McpCapability extends McpDescriptor {
   listTools(): Promise<readonly McpToolDescriptor[]>;
-  callTool<TResult = unknown>(tool: string, input: unknown): Promise<TResult>;
+  callTool<TResult = unknown>(tool: string, input: unknown, invocation?: ToolInvocationContext): Promise<TResult>;
 }
 
 export interface AgentCapabilities {
@@ -111,7 +113,7 @@ export class CapabilityIngress {
       tools: Object.freeze([...featureTools, ...seamTools]),
       skills: Object.freeze([...featureSkills, ...seamSkills]),
       agents: featureAgents,
-      mcp: bindMcp(mcp, owner, isActive),
+      mcp: bindMcp(mcp, owner, isActive, snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
         .filter((section) => !section.platforms
           || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))
@@ -319,6 +321,7 @@ function bindMcp(
   index: McpIndex | undefined,
   owner: PluginId,
   isActive: () => boolean,
+  localAssets?: LocalImageAssetStore,
 ): readonly McpCapability[] {
   if (!index) return Object.freeze([]);
   return Object.freeze(index.visible(owner).map((descriptor) => Object.freeze({
@@ -327,9 +330,10 @@ function bindMcp(
       assertActive(isActive);
       return index.listTools(owner, descriptor.name);
     },
-    callTool: <TResult>(tool: string, input: unknown) => {
+    callTool: async <TResult>(tool: string, input: unknown, invocation?: ToolInvocationContext) => {
       assertActive(isActive);
-      return index.callTool<TResult>(owner, descriptor.name, tool, input);
+      const result = await index.callTool(owner, descriptor.name, tool, input);
+      return await captureMcpImages(result, localAssets, invocation, `${descriptor.qualifiedName}/${tool}`, invocation?.signal) as TResult;
     },
   })));
 }

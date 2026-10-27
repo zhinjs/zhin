@@ -6,6 +6,8 @@
 import { type AITriggerConfig, type AIAccessConfig } from '@zhin.js/core';
 import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, SdkProviderAdapter } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
+import { R2ImageAssetPublisher } from './media/r2-image-assets.js';
+import type { ImageAssetPublisher, R2ImageStorageConfig } from './media/image-assets.js';
 import { DEFAULT_CONFIG, findDeprecatedAgentBindingKeys, findDeprecatedAgentConfigKeys } from './config/index.js';
 import { getLogger } from '@zhin.js/logger';
 import { registerProviderInstances } from './config/provider-instance.js';
@@ -28,6 +30,9 @@ import {
 } from './plugin-loop-hooks.js';
 
 const logger = getLogger('AIService');
+export interface AIServiceConfig extends AIConfig {
+  imageStorage?: R2ImageStorageConfig;
+}
 /** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
 export interface ServiceAgent {
   run(userInput: AgentRunInput): Promise<ServiceAgentResult>;
@@ -60,6 +65,7 @@ export interface CreateServiceAgentOptions {
 }
 
 export class AIService {
+  readonly imageAssets?: ImageAssetPublisher;
   private providers: Map<string, AIProvider> = new Map();
   private defaultProvider: string;
   private routing: NormalizedAiRoutingConfig;
@@ -75,7 +81,8 @@ export class AIService {
   private llmRuntime!: LlmApiRuntime;
   readonly loopHooks = new PluginAILoopHookRegistry();
 
-  constructor(config: AIConfig = {}) {
+  constructor(config: AIServiceConfig = {}) {
+    this.imageAssets = config.imageStorage ? new R2ImageAssetPublisher(config.imageStorage) : undefined;
     for (const { agent, key, reason } of findDeprecatedAgentBindingKeys((config as { agents?: unknown }).agents)) {
       logger.warn(`ai.agents.${agent}.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
     }
@@ -249,6 +256,7 @@ export class AIService {
         provider,
         resolveProvider: (alias) => this.providers.get(alias),
         llmRuntime: this.llmRuntime,
+        imageAssets: this.imageAssets,
         model,
         systemPrompt,
         tools,

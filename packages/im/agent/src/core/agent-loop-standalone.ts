@@ -20,10 +20,14 @@ import {
   runWithDeferredTurnController,
   TOOLS_MUTATED_MARKER,
 } from '../tool-catalog/deferred-turn-controller.js';
-import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { ToolRuntime } from '../tool/tool-runtime.js';
 import { resolveBuiltinToolPolicyInput } from '../tool/builtin-policy-extractors.js';
 import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
+import type { ImageAssetPublisher } from '../media/image-assets.js';
+import { publishReplyImages } from '../media/publish-image-reply.js';
+import { LocalImageInspection } from '../media/local-image-inspection.js';
+import { localImageScopeFromMessage, type LocalImageAssetStore, type LocalImageScope } from '../media/local-image-assets.js';
+import { DEFAULT_PERCEPTION_SETTINGS, type MediaPerceptionPort } from '../media/perception.js';
 const logger = getLogger('AgentLoopStandalone');
 
 function toolResultToAgentMessage(
@@ -85,6 +89,10 @@ export interface AgentLoopStandaloneInput {
   provider: AIProvider;
   resolveProvider?: (alias: string) => AIProvider | undefined;
   llmRuntime?: LlmApiRuntime;
+  imageAssets?: ImageAssetPublisher;
+  localAssets?: LocalImageAssetStore;
+  localAssetScope?: LocalImageScope;
+  mediaPerception?: MediaPerceptionPort;
   model: string;
   systemPrompt: string;
   tools: AgentTool[];
@@ -141,6 +149,14 @@ export async function runAgentLoopStandaloneTurn(
   const llmModel = llmRuntime.model(provider.name, model);
   const { repository } = createMemoryContextRepository();
   const sessionId = `standalone:${Date.now()}`;
+  const assetScope = input.localAssetScope ?? localImageScopeFromMessage(commMessage, sessionId);
+  let inspectionUsage: Usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  const localInspection = input.localAssets && assetScope ? new LocalImageInspection(input.localAssets, assetScope,
+    { remaining: (input.mediaPerception?.maxItemsPerTurn ?? DEFAULT_PERCEPTION_SETTINGS.maxItemsPerTurn)
+      - (typeof userInput === 'string' ? 0 : userInput.filter(part => part.type === 'image').length) }, input.mediaPerception,
+    usage => { inspectionUsage = { prompt_tokens: inspectionUsage.prompt_tokens + usage.prompt_tokens,
+      completion_tokens: inspectionUsage.completion_tokens + usage.completion_tokens, total_tokens: inspectionUsage.total_tokens + usage.total_tokens }; },
+  ) : undefined;
   const loaded = await repository.loadContext(sessionId);
   const promptMessages = buildUserMessages(userInput);
 
@@ -150,7 +166,12 @@ export async function runAgentLoopStandaloneTurn(
   const offered = shellAllowed ? tools : withoutForbiddenShell(input.turnPolicy, tools);
   const initialTools = childDeferred
     ? [...offered.filter(tool => !childDeferred.tools.some(meta => meta.name === tool.name)), ...childDeferred.tools as unknown as AgentTool[]]
-    : offered;
+    : [...offered];
+  if (input.localAssets && assetScope && !initialTools.some(tool => tool.name === 'get_local_assets')) {
+    initialTools.push({ name: 'get_local_assets', description: 'Inspect one private MCP image by asset_id in this conversation; never publish it.',
+      parameters: { type: 'object', properties: { asset_id: { type: 'string' } }, required: ['asset_id'] }, source: 'builtin',
+      execute: args => input.localAssets!.inspect(String(args.asset_id), assetScope, signal) });
+  }
   const executableTools = new ExecutableToolRegistry(initialTools);
   let llmTools = agentToolsToLlmTools(initialTools);
 
@@ -171,6 +192,8 @@ export async function runAgentLoopStandaloneTurn(
   let lastUsage: TokenUsage | undefined;
 
   const toolRuntime = new ToolRuntime({
+    localAssets: input.localAssets,
+    localAssetScope: assetScope,
     generation: 0,
     signal: signal ?? AbortSignal.timeout(600_000),
     sessionId,
@@ -197,7 +220,8 @@ export async function runAgentLoopStandaloneTurn(
         callbacks?.onToolResult?.(toolCall.name, outcome.output);
         return toolResultToAgentMessage(toolCall, outcome.output, true);
       }
-      const rawText = typeof outcome.output === 'string' ? outcome.output : JSON.stringify(outcome.output ?? null);
+      const rawText = localInspection?.accept(outcome.output)
+        ?? (typeof outcome.output === 'string' ? outcome.output : JSON.stringify(outcome.output ?? null));
       const transformed = transformToolResult
         ? await transformToolResult({
             toolName: toolCall.name,
@@ -225,9 +249,15 @@ export async function runAgentLoopStandaloneTurn(
     tools: llmTools,
   });
 
+  const requestRuntime = localInspection ? localInspection.wrap(llmRuntime) : llmRuntime;
   const loopConfig = {
     model: llmModel,
-    transport: llmRuntime,
+    transport: input.imageAssets ? {
+      complete: async (...args: Parameters<typeof llmRuntime.complete>) =>
+        publishReplyImages(await requestRuntime.complete(...args), input.imageAssets!, args[2]?.signal),
+      completeSimple: async (...args: Parameters<typeof llmRuntime.completeSimple>) =>
+        publishReplyImages(await requestRuntime.completeSimple(...args), input.imageAssets!, args[2]?.signal),
+    } : requestRuntime,
     maxIterations,
     streamOptions: {
       promptCache: input.promptCache !== false,
@@ -319,7 +349,9 @@ export async function runAgentLoopStandaloneTurn(
 
   return {
     content,
-    usage: lastUsage ? tokenUsageToLegacy(lastUsage) : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    usage: { prompt_tokens: (lastUsage?.input ?? 0) + inspectionUsage.prompt_tokens,
+      completion_tokens: (lastUsage?.output ?? 0) + inspectionUsage.completion_tokens,
+      total_tokens: (lastUsage?.totalTokens ?? 0) + inspectionUsage.total_tokens },
     iterations,
     model,
     toolCalls,

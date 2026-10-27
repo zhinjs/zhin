@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { extractMediaElementsFromToolCalls } from '../../src/media/media-tool-bridge.js';
+import { extractMediaElementsFromToolCalls, mergeToolOutboundElements } from '../../src/media/media-tool-bridge.js';
 
 describe('extractMediaElementsFromToolCalls', () => {
+  it('sends a published image once when the final reply already includes it', () => {
+    const url = 'https://images.example.test/generated/example.gif';
+    const output = mergeToolOutboundElements([{ type: 'message', segments: [{ type: 'image', data: { media: { kind: 'url', value: url } } }] }],
+      [{ tool: 'generate_image', result: JSON.stringify({ image_url: url }) }]);
+    expect(output).toHaveLength(1);
+  });
   it('voice_tts 结果应转为 AudioElement', () => {
     const els = extractMediaElementsFromToolCalls([
       { tool: 'voice_tts', result: { audio: 'YWFh', format: 'mp3' } },

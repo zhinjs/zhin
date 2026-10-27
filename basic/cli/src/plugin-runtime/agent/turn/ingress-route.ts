@@ -223,6 +223,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           const adapter = capabilityLocalName(String(conversation.endpoint.id));
           const content = await publishOutboundElements([...messageOutput], adapter || undefined, undefined, {
             filesystem: readOnlyFilesystem,
+            imageAssets: options.agent.service.imageAssets,
           });
           if (content.length === 0) return { status: 'suppressed' as const };
           return deliveryOutcomeFromReceipt(await options.im.send({ conversation, requester: rootPluginId(), content }));
@@ -927,6 +928,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                         // Model output may name local files or URLs: hold them to this Turn's own authority.
                         const content = await publishOutboundElements([...messageOutput], effectiveAdapter || undefined, undefined, {
                           filesystem: turnPolicy.filesystem,
+                          imageAssets: options.agent.service.imageAssets,
                           ...(turnPolicy.network ? { network: turnPolicy.network } : {}),
                         });
                         logger.debug(formatCompact({

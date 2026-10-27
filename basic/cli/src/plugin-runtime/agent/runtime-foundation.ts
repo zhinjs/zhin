@@ -3,6 +3,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import {
   AIService,
+  type LocalImageAssetStore,
   ApprovalReviewAgent,
   createAutoApprovalPort,
   createBypassApprovalPort,
@@ -41,6 +42,7 @@ export interface AgentRuntimeFoundationOptions {
   readonly assistantConfig?: AssistantConfig;
   readonly im: ImRuntime;
   readonly projectRoot: string;
+  readonly localAssets?: LocalImageAssetStore;
   readonly processRuntime: AgentRuntime;
   readonly approvalPort?: ApprovalPort;
   readonly audioTranscriber?: AudioTranscriptionPort;
@@ -136,6 +138,7 @@ export class AgentRuntimeFoundation {
         defaultApprovalPort,
         options.audioTranscriber,
         knowledgeIndex,
+        options.localAssets,
       );
       options.lifecycle.add(() => created.agent.dispose());
       options.lifecycle.add(() => created.events.clear());

@@ -1,3 +1,4 @@
+export { LocalImageAssetStore, localImageAssetsToken } from './media/local-image-assets.js';
 /**
  * AI Agent runtime and generation-owned support resources.
  *
@@ -10,6 +11,7 @@
 // ── Agent-specific modules ──
 
 export { AIService } from './service.js';
+export type { AIServiceConfig } from './service.js';
 export type { ServiceAgent, ServiceAgentResult, CreateServiceAgentOptions } from './service.js';
 export { createAgentSession } from './create-agent-session.js';
 export type { AgentSessionHandle, CreateAgentSessionOptions } from './create-agent-session.js';
@@ -432,6 +434,7 @@ export {
   resolveOutboundCapabilities,
 } from './media/index.js';
 export type { AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig, OutboundMediaAuthority, OutboundMediaCapabilities } from './media/index.js';
+export type { ImageAssetPublisher, PublishedImage, R2ImageStorageConfig } from './media/image-assets.js';
 export { createLlmMediaPerceptionPort, resolvePerceptionConfig } from './media/index.js';
 export type { MediaPerception, MediaPerceptionPort, PerceptionMediaKind, ResolvedPerceptionConfig } from './media/index.js';
 

@@ -24,6 +24,8 @@ export type ConfigureZhinAgentTarget = Pick<
   | 'llmRuntime'
   | 'audioTranscriber'
   | 'mediaPerception'
+  | 'imageAssets'
+  | 'localAssets'
   | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
 > & {
   /** 接口外的运行时模块（declare 在类上，不经 ZhinAgentPrivate 暴露） */
@@ -69,6 +71,8 @@ export function applyZhinAgentConfigure(
   if (deps.llmRuntime !== undefined) target.llmRuntime = deps.llmRuntime;
   if (deps.audioTranscriber !== undefined) target.audioTranscriber = deps.audioTranscriber;
   if (deps.mediaPerception !== undefined) target.mediaPerception = deps.mediaPerception;
+  if (deps.imageAssets !== undefined) target.imageAssets = deps.imageAssets;
+  if (deps.localAssets !== undefined) target.localAssets = deps.localAssets;
   if (deps.activeBinding !== undefined) {
     target.activeBinding = deps.activeBinding;
     if (deps.activeBinding) {

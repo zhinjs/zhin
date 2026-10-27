@@ -11,6 +11,9 @@ import {
   type ToolInputJsonSchema,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
+import type { ImageAssetPublisher } from '../media/image-assets.js';
+import { decodeBase64 } from '../media/media-normalize.js';
+import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
 
 export type ImageProviderResolver = (alias: string) => AIProvider;
 export type ImageGenerationDefaultsResolver = (alias: string) => ImageGenerationDefaults;
@@ -25,6 +28,7 @@ export interface NativeImageToolFeature {
 export function createNativeImageToolFeature(
   resolveProvider: ImageProviderResolver,
   resolveDefaults: ImageGenerationDefaultsResolver = () => ({}),
+  imageAssets?: ImageAssetPublisher,
 ): NativeImageToolFeature {
   return Object.freeze({
     feature: toolFeatureId,
@@ -43,7 +47,7 @@ export function createNativeImageToolFeature(
         watermark_enabled: { type: 'boolean' },
       }, ['provider_alias', 'prompt']),
       requiresApproval: 'never',
-      execute: (input, context) => generateImage(input, context, resolveProvider, resolveDefaults),
+      execute: (input, context) => generateImage(input, context, resolveProvider, resolveDefaults, imageAssets),
     }),
   });
 }
@@ -53,6 +57,7 @@ async function generateImage(
   context: ToolExecutionContext,
   resolveProvider: ImageProviderResolver,
   resolveDefaults: ImageGenerationDefaultsResolver,
+  imageAssets?: ImageAssetPublisher,
 ): Promise<string> {
   const alias = requiredString(input.provider_alias, 'provider_alias');
   const prompt = requiredString(input.prompt, 'prompt');
@@ -76,9 +81,16 @@ async function generateImage(
     imageSize: optionalString(input.image_size) ?? defaults.imageSize,
   });
   context.signal.throwIfAborted();
+  const bytes = imageAssets ? decodeBase64(result.base64, DEFAULT_MULTIMODAL_CONFIG.maxFileBytes) : undefined;
+  if (imageAssets && !bytes) throw new Error('Generated image is invalid or exceeds 25 MiB; do not regenerate automatically');
+  const image = imageAssets
+    ? await imageAssets.publish(bytes!, context.signal).catch(error => {
+      context.signal.throwIfAborted();
+      throw new Error('Image generation completed, but upload failed. Do not regenerate automatically; report the upload failure.', { cause: error });
+    })
+    : { image: result.base64, mime: result.mimeType };
   return JSON.stringify({
-    image: result.base64,
-    mime: result.mimeType,
+    ...image,
     model: result.model,
     provider: alias,
     revised_prompt: result.revisedPrompt,

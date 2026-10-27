@@ -10,6 +10,7 @@ import type { ToolCallRecord } from '../core/tool-calls-user-format.js';
 import { mergeToolOutboundElements } from './media-tool-bridge.js';
 import { publishOutboundElements } from './media-publisher.js';
 import { NO_MEDIA_AUTHORITY } from './media-normalize.js';
+import type { ImageAssetPublisher } from './image-assets.js';
 
 export interface SubagentOutboundDelivery {
   /** 面向用户的说明文本（含任务摘要时由调用方组装） */
@@ -23,6 +24,7 @@ export interface DeliverSubagentResultParams {
   origin: SubagentOrigin;
   delivery: SubagentOutboundDelivery;
   send: (options: SendOptions) => Promise<string>;
+  imageAssets?: ImageAssetPublisher;
 }
 
 export async function deliverSubagentResult(params: DeliverSubagentResultParams): Promise<void> {
@@ -49,7 +51,7 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
     elements,
     String(message.clientAdapter ?? message.conversation.endpoint.adapter),
     undefined,
-    NO_MEDIA_AUTHORITY,
+    { ...NO_MEDIA_AUTHORITY, imageAssets: params.imageAssets },
   );
   if (!segments.length) {
     await send({ ...base, content: delivery.text });

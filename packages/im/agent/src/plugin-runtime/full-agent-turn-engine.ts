@@ -42,6 +42,7 @@ import {
 } from './subagent-turn-capability.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
+import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -91,6 +92,7 @@ async function* runInteractiveTurn(
   payload: AIEventPayload | undefined,
 ): AsyncGenerator<TurnEvent, TurnTerminalProjection> {
   const { host, sessionSystem, contextSystem } = options;
+  const imageInspectionBudget = { remaining: host.mediaPerception?.maxItemsPerTurn ?? DEFAULT_PERCEPTION_SETTINGS.maxItemsPerTurn };
   const rate = host.rateLimiter.check(prep.userId);
   if (!rate.allowed) {
     const text = rate.message || '请稍后再试';
@@ -142,6 +144,7 @@ async function* runInteractiveTurn(
       capabilities: { ...context.capabilities, tools: context.toolCapabilities },
       loopHooks: options.loopHooks,
       resolveModel: () => subagentModel.current,
+      imageInspectionBudget,
     })
     : undefined;
   const projected = {
@@ -209,6 +212,8 @@ async function* runInteractiveTurn(
       ...(outcome.provenance ? { provenance: { ...outcome.provenance } } : {}),
     });
   }
+  imageInspectionBudget.remaining = Math.max(0, imageInspectionBudget.remaining
+    - (media.perceptionItems ?? 0) - media.blocks.filter(block => block.type === 'image').length);
   const contextText = pendingContext?.blocks.length
     ? renderContextMessage({
         role: 'user-context',
@@ -272,6 +277,7 @@ async function* runInteractiveTurn(
       promptProfile: { kind: 'interactive' },
       turnContext: context.turn,
       replySegments: context.turn.ports.reply?.segments,
+      imageInspectionBudget,
       allTools: [...plan.allTools],
       resolvedTools: [...plan.resolvedTools],
       toolExecution: new TurnToolExecutionAuthority(toolRuntime),

@@ -424,6 +424,13 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.usage.retentionDays` | integer \| string | no | `30` | 用量明细保留天数，正整数，默认 30 天；按回合结束时间清理，子调用与所属回合一起删除。 |
 | `ai.audit` | object \| null | no | — | 决策审计 ai_decision_events（ADR 0036）：每次进不进模型、说不说话、调不调工具都记一行，在 Console「机器人状态 → 决策回放」查看与导出；不保存正文、提示词或密钥。 |
 | `ai.audit.retentionDays` | integer \| string | no | `14` | 决策审计保留天数，正整数，默认 14 天；启动时与之后每小时按事件时间清理过期行。 |
+| `ai.imageStorage` | object | no | — | Optional public R2 storage for generated images. Bucket access and lifecycle are managed by the operator. |
+| `ai.imageStorage.accountId` | string | yes | — | — |
+| `ai.imageStorage.bucket` | string | yes | — | — |
+| `ai.imageStorage.accessKeyId` | string | yes | — | — |
+| `ai.imageStorage.secretAccessKey` | string | yes | — | — |
+| `ai.imageStorage.publicBaseUrl` | string | yes | — | Public HTTPS base URL; not the S3 upload endpoint. |
+| `ai.imageStorage.prefix` | string | yes | — | Object directory ending in /; must be covered by the bucket lifecycle. |
 | `menuKeyword` | string \| `false` | no | — | Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu. |
 | `menuStyle` | object | no | — | Command menu appearance when an HTML renderer is available; plain text fallback remains available. |
 | `menuStyle.title` | string | no | — | Menu title. |

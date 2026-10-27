@@ -11,6 +11,7 @@ import type { AgentCapabilities, ToolCapability } from './capability-ingress.js'
 import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
 import { BASH_TOOL_NAME, turnPolicyAllowsShell } from './native-bash-tool.js';
 import { deriveSubagentPolicy } from '../security/policy-narrowing.js';
+import type { ImageInspectionBudget } from '../media/local-image-inspection.js';
 import {
   isToolAboveTrust,
   narrowPolicyForTrust,
@@ -28,6 +29,7 @@ export interface SubagentModelSelection {
 }
 
 export interface SubagentTurnCapabilityOptions {
+  readonly imageInspectionBudget?: ImageInspectionBudget;
   readonly host: ZhinAgentPrivate;
   readonly core: AgentCore;
   readonly parentTurn: TurnIngress;
@@ -164,6 +166,7 @@ async function runSubagentTurn(
     rawContent: run.task,
     promptProfile: { kind: 'interactive' },
     turnContext: turn,
+    imageInspectionBudget: options.imageInspectionBudget,
     allTools: [...plan.allTools],
     resolvedTools: [...plan.resolvedTools],
     toolExecution: new TurnToolExecutionAuthority(runtime),

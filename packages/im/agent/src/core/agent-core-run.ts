@@ -21,10 +21,13 @@ import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
 import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
+import { LocalImageInspection, type ImageInspectionBudget } from '../media/local-image-inspection.js';
+import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
+import { publishReplyImages } from '../media/publish-image-reply.js';
 import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
@@ -199,6 +202,8 @@ function toolResultToAgentMessage(
 }
 
 export interface AgentLoopTurnInput {
+  /** Shared image allowance, including media already processed at ingress. */
+  imageInspectionBudget?: ImageInspectionBudget;
   host: ZhinAgentPrivate;
   core?: AgentCore;
   sessionId: string;
@@ -666,7 +671,15 @@ export async function* runAgentLoopTextTurnRun(
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
-  const completionUsage = trackTurnCompletionUsage(host.llmRuntime);
+  const completionUsage = trackTurnCompletionUsage(host.llmRuntime, host.imageAssets
+    ? (message, replySignal) => publishReplyImages(message, host.imageAssets!, replySignal)
+    : undefined);
+  const localInspection = host.localAssets ? new LocalImageInspection(
+    host.localAssets, { ...input.turnContext, sessionKey: input.turnContext.session.key },
+    input.imageInspectionBudget ?? { remaining: host.mediaPerception?.maxItemsPerTurn ?? DEFAULT_PERCEPTION_SETTINGS.maxItemsPerTurn },
+    host.mediaPerception, completionUsage.recordMediaUsage,
+  ) : undefined;
+  if (localInspection) completionUsage.transport = localInspection.wrap(completionUsage.transport);
   const conversationBatches: Array<{
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
@@ -848,7 +861,8 @@ export async function* runAgentLoopTextTurnRun(
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
-        const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
+        const rawText = localInspection?.accept(outcome.output)
+          ?? await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
 
         // PostToolUse interception
         let resultText = rawText;

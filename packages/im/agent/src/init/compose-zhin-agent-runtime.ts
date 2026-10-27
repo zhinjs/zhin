@@ -45,7 +45,7 @@ export function composeZhinAgentRuntime(
   const memorySystem = createMemorySystemForHost(priv);
   const contextSystem = createContextSystemForHost(priv);
   const subagentSystem = new SubagentSystem({});
-  subagentSystem.addResultSink(new ImResultSink({ proactiveOutbound }));
+  subagentSystem.addResultSink(new ImResultSink({ proactiveOutbound, imageAssets: () => priv.imageAssets }));
   const deliverOutbound = subagentSystem.composeSender();
   if (!deliverOutbound) {
     throw new Error('SubagentSystem: ImResultSink failed to compose sender');

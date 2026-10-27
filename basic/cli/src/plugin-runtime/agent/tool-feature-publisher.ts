@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { AIService, McpServerEntry } from '@zhin.js/agent';
+import type { AIService, McpServerEntry, LocalImageAssetStore } from '@zhin.js/agent';
 import {
   createNativeAgentToolSuite,
   getAgentTurnDecisionRuntime,
@@ -45,6 +45,7 @@ export interface PublishAgentToolFeaturesOptions {
   readonly addFeature: AddFeature;
   readonly projectRoot: string;
   readonly service: AIService;
+  readonly localAssets?: LocalImageAssetStore;
   readonly mcpServers: readonly McpServerEntry[];
   readonly hostTools?: readonly HostAgentTool[];
   readonly runtimeTools: readonly RuntimeToolFeature[];
@@ -85,6 +86,8 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
   for (const tool of createNativeAgentToolSuite({
     resolveProvider: (alias) => options.service.getProvider(alias),
     resolveImageDefaults: (alias) => options.service.getImageGenerationDefaults(alias),
+    imageAssets: options.service.imageAssets,
+    localAssets: options.localAssets,
     knowledgeIndex: options.knowledgeIndex,
     resolveDecision: getAgentTurnDecisionRuntime,
   })) {

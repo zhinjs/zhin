@@ -1,14 +1,18 @@
-import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type TokenUsage } from '@zhin.js/ai';
+import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type TokenUsage, type Usage } from '@zhin.js/ai';
 
 import type { UsageEvent } from '../event/turn-event.js';
 import { turnUsageEvent } from './turn-event-mapper.js';
 
 /** Counts completed provider responses before reply validation, including rejected replies and retries. */
-export function trackTurnCompletionUsage(delegate: LlmCompletionPort): {
+export function trackTurnCompletionUsage(
+  delegate: LlmCompletionPort,
+  project?: (message: AssistantMessage, signal?: AbortSignal) => Promise<AssistantMessage>,
+): {
   transport: LlmCompletionPort;
   readonly usage: TokenUsage;
   drainEvents(): UsageEvent[];
   hasReported(message: object): boolean;
+  recordMediaUsage(usage: Usage, provider?: string, model?: string): void;
 } {
   const total: TokenUsage = { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } };
   const pending: UsageEvent[] = [];
@@ -32,19 +36,32 @@ export function trackTurnCompletionUsage(delegate: LlmCompletionPort): {
     total.cost.total += usage.cost.total;
     return assistant;
   };
+  const projectRecorded = async (assistant: AssistantMessage, signal?: AbortSignal): Promise<AssistantMessage> => {
+    const result = project ? await project(assistant, signal) : assistant;
+    reported.add(result);
+    return result;
+  };
   return {
     transport: {
       complete: async (model, context, options) => {
         const started = performance.now();
-        return record(await delegate.complete(model, context, options), performance.now() - started);
+        return projectRecorded(record(await delegate.complete(model, context, options), performance.now() - started), options?.signal);
       },
       completeSimple: async (model, context, options) => {
         const started = performance.now();
-        return record(await delegate.completeSimple(model, context, options), performance.now() - started);
+        return projectRecorded(record(await delegate.completeSimple(model, context, options), performance.now() - started), options?.signal);
       },
     },
     get usage() { return { ...total, cost: { ...total.cost } }; },
     drainEvents: () => pending.splice(0),
     hasReported: assistant => reported.has(assistant),
+    recordMediaUsage: (usage, provider, model) => {
+      const tokens: TokenUsage = { input: usage.prompt_tokens, output: usage.completion_tokens,
+        totalTokens: usage.total_tokens, cacheRead: 0, cacheWrite: 0, cost: { ...EMPTY_TOKEN_USAGE.cost } };
+      total.input += tokens.input;
+      total.output += tokens.output;
+      total.totalTokens += tokens.totalTokens;
+      pending.push(turnUsageEvent(tokens, { provider: provider ?? 'media-perception', model: model ?? 'unknown', stopReason: 'stop' }));
+    },
   };
 }
