@@ -1,0 +1,18 @@
+packages/im/agent/evals/cases/hard-gate-denied-category-latched-group.case.ts
+  h_b680f75345178a 1-27
+packages/im/agent/evals/cases/hard-gate-denied-cross-turn-reasks-group.case.ts
+  h_b680f75345178a 1-27
+packages/im/agent/evals/cases/hard-gate-denied-not-reinjected-group.case.ts
+  h_b680f75345178a 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "10a6e91cb5701e2c569e6ee9251c948f2c5d93f2",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
