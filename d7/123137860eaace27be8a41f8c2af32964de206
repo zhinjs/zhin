@@ -1,0 +1,24 @@
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_b680f75345178a 208
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  h_b680f75345178a 2,9,54-55,101-105
+packages/im/agent/src/plugin-runtime/index.ts
+  h_b680f75345178a 40
+packages/im/agent/src/plugin-runtime/native-announcement-tools.ts
+  h_b680f75345178a 1-87
+packages/im/agent/src/reserved-tools.ts
+  h_b680f75345178a 17
+packages/im/agent/tests/plugin-runtime/native-announcement-tools.test.ts
+  h_b680f75345178a 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d7123137860eaace27be8a41f8c2af32964de206",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
