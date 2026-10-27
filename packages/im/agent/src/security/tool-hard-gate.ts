@@ -190,9 +190,13 @@ export class ToolHardGate {
     toolUseId: string,
   ): Promise<ToolHardGateResult> {
     const assessment = this.assess(tool);
-    if (assessment.risk !== 'dangerous') return SAFE;
-    const { category } = assessment;
     const name = tool.name;
+    if (assessment.risk !== 'dangerous') {
+      // ADR 0036：只读 / safe 工具直接放行，但仍写一条 tool_call 审计。
+      this.#audit('tool_call', 'allow', 'tool_safe_allowed', { tool: name, risk: 'safe', riskSource: assessment.source, toolUseId });
+      return SAFE;
+    }
+    const { category } = assessment;
     const payload = { tool: name, category, riskSource: assessment.source, toolUseId };
 
     if (this.#deniedTools.has(name) || (category && this.#deniedCategories.has(category))) {
@@ -208,8 +212,9 @@ export class ToolHardGate {
     const queue = this.#context.queue;
     const preApproved = queue?.consumeApproved(this.#context.sessionKey, name, input);
     if (preApproved) {
-      this.#audit('tool_approval', 'allow', 'tool_approval_approved', { ...payload, approvalId: preApproved.id, via: 'console' },
-        preApproved.decidedBy);
+      const approved = { ...payload, approvalId: preApproved.id, via: 'console' };
+      this.#audit('tool_approval', 'allow', 'tool_approval_approved', approved, preApproved.decidedBy);
+      this.#audit('tool_hard_gate', 'allow', 'tool_approval_approved', approved);
       return Object.freeze({ status: 'approved', category, approvalId: preApproved.id });
     }
 
@@ -237,6 +242,7 @@ export class ToolHardGate {
     if (settled.kind === 'approved') {
       if (entry) queue?.markConsumed(entry.id);
       this.#audit('tool_approval', 'allow', 'tool_approval_approved', withId, settled.decidedBy);
+      this.#audit('tool_hard_gate', 'allow', 'tool_approval_approved', withId);
       return Object.freeze({ status: 'approved', category, ...(entry ? { approvalId: entry.id } : {}) });
     }
     if (settled.kind === 'timed_out') {
@@ -353,7 +359,7 @@ export class ToolHardGate {
   }
 
   #audit(
-    kind: 'tool_approval' | 'tool_hard_gate',
+    kind: 'tool_call' | 'tool_approval' | 'tool_hard_gate',
     outcome: 'allow' | 'deny' | 'defer',
     reasonCode: DecisionReasonCode,
     payload: Record<string, unknown>,
@@ -377,7 +383,7 @@ export class ToolHardGate {
         ...(detail ? { reasonDetail: detail } : {}),
         payload,
         // 硬闸判定与发起审批是策略；审批端口 / 超时的结论记 system；Console 结论记 operator。
-        actor: operator ? 'operator' : kind === 'tool_hard_gate' || outcome === 'defer' ? 'policy' : 'system',
+        actor: operator ? 'operator' : kind !== 'tool_approval' || outcome === 'defer' ? 'policy' : 'system',
         ...(operator ? { actorId: operator } : {}),
       });
       if (result && typeof (result as Promise<unknown>).catch === 'function') (result as Promise<unknown>).catch(() => undefined);

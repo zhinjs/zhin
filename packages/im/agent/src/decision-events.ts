@@ -85,6 +85,7 @@ export const DECISION_REASON_CODES = [
   'tool_approval_approved',
   'tool_funds_disabled',
   'tool_hard_gate_latched',
+  'tool_safe_allowed',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

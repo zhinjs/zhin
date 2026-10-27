@@ -44,7 +44,7 @@ ai:
       approvalTimeoutMs: 300000                # denied on timeout
 ```
 
-Approval cards are served by the Console RPC `plugin.root.tool-approvals` (read, permission `tool_approvals:read`) and `plugin.root.resolve-tool-approval` (`{ id, decision: 'approve' | 'deny' }`, permission `tool_approvals:resolve`); the full token can call both. Every decision is written to `ai_decision_events`: `tool_approval` (`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`) and `tool_hard_gate` (`tool_dangerous_no_approval`, `tool_approval_denied`, `tool_approval_timeout`, `tool_funds_disabled`, `tool_hard_gate_latched`). An audit write failure never changes the decision.
+Approval cards are served by the Console RPC `plugin.root.tool-approvals` (read, permission `tool_approvals:read`) and `plugin.root.resolve-tool-approval` (`{ id, decision: 'approve' | 'deny' }`, permission `tool_approvals:resolve`); the full token can call both. Every decision is written to `ai_decision_events`: `tool_approval` (`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`) `tool_hard_gate` (allow: `tool_approval_approved`; deny: `tool_dangerous_no_approval`, `tool_approval_denied`, `tool_approval_timeout`, `tool_funds_disabled`, `tool_hard_gate_latched`), and `tool_call` (allow, `tool_safe_allowed`) for safe / read-only tools, which run but are still audited. An audit write failure never changes the decision.
 
 ## Switch inventory and disposition
 

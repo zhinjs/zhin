@@ -44,7 +44,7 @@ ai:
       approvalTimeoutMs: 300000                # 超时即拒绝
 ```
 
-审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `tool_approvals:resolve`）上；完整令牌可直接调用。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）和 `tool_hard_gate`（`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`）。审计写失败不影响判定。
+审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `tool_approvals:resolve`）上；完整令牌可直接调用。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）、`tool_hard_gate`（allow：`tool_approval_approved`；deny：`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`），以及 safe / 只读工具的 `tool_call`（allow，`tool_safe_allowed`）——只读查询放行但仍写审计。审计写失败不影响判定。
 
 ## 开关清单与处置
 

@@ -164,7 +164,8 @@ describe('TurnToolRuntime hard gate', () => {
     const approved = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-4' }).turn, capabilities, { approvalQueue: queue, decisionAudit: audit });
     await expect(approved.execute('group_kick', { user_id: 1 }, 'tu-4')).resolves.toMatchObject({ status: 'completed' });
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(audit.records.at(-1)).toMatchObject({ kind: 'tool_approval', outcome: 'allow', reasonCode: 'tool_approval_approved', actor: 'operator', actorId: 'console-admin' });
+    expect(audit.records.at(-2)).toMatchObject({ kind: 'tool_approval', outcome: 'allow', reasonCode: 'tool_approval_approved', actor: 'operator', actorId: 'console-admin' });
+    expect(audit.records.at(-1)).toMatchObject({ kind: 'tool_hard_gate', outcome: 'allow', reasonCode: 'tool_approval_approved', actor: 'policy' });
 
     // The approval is one-shot.
     const again = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-5' }).turn, capabilities, { approvalQueue: queue });
@@ -205,9 +206,12 @@ describe('TurnToolRuntime hard gate', () => {
   it('leaves safe tools on the ordinary approval path', async () => {
     const execute = vi.fn(async () => 'members');
     const port = scriptedPort([]);
-    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('get_group_members', execute, 'never')]);
+    const audit = auditSink();
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('get_group_members', execute, 'never')], { decisionAudit: audit });
     await expect(runtime.execute('get_group_members', {}, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
     expect(port.requests).toHaveLength(0);
+    // Read-only queries are allowed but still audited (ADR 0036).
+    expect(audit.codes()).toEqual(['tool_call:allow:tool_safe_allowed']);
   });
 
   it('never lets an audit failure change the decision', async () => {
