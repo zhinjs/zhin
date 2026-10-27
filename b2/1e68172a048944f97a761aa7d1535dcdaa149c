@@ -1,0 +1,81 @@
+docs/adr/0035-comment-reply-adapter-contract.md
+  s_079f1dc5e6308d::t_483908656ebf55 42,55-57,73-76
+plugins/adapters/bilibili/adapters/bilibili/index.ts
+  s_079f1dc5e6308d::t_5a344a0fa83edf 3,6,9-14,35-49
+plugins/adapters/bilibili/commands/bili-login/start/index.ts
+  s_079f1dc5e6308d::t_e1c3bd7aa86ed1 1-22
+plugins/adapters/bilibili/commands/bili-login/status/index.ts
+  s_079f1dc5e6308d::t_2d61a12fbaa93a 1-10
+plugins/adapters/bilibili/package.json
+  s_079f1dc5e6308d::t_e60e67c2dce6fa 5,46-47,51-53,59-61,69-71,76-77,85,119-122
+plugins/adapters/bilibili/pages/index/CommentReview.tsx
+  s_079f1dc5e6308d::t_9ed88caa70010d 1-315
+plugins/adapters/bilibili/pages/index/index.tsx
+  s_079f1dc5e6308d::t_139fc4a9952ada 1-18
+plugins/adapters/bilibili/pages/index/messages.ts
+  s_079f1dc5e6308d::t_da37ce4dde5bd0 1-69
+plugins/adapters/bilibili/pages/index/rpc.ts
+  s_079f1dc5e6308d::t_3fee907f0d3430 1-79
+plugins/adapters/bilibili/plugin.ts
+  s_079f1dc5e6308d::t_1fdd839738ebbc 2-10,14-16,24,26-39
+plugins/adapters/bilibili/schema.json
+  s_079f1dc5e6308d::t_d9f03345e81f93 78-149,326-397
+plugins/adapters/bilibili/src/bilibili-runtime-state.ts
+  s_079f1dc5e6308d::t_4756ae2322ba1f 4-5,10,20-27
+plugins/adapters/bilibili/src/endpoint.ts
+  s_079f1dc5e6308d::t_b7a9a78730c507 14,17-24,40,70-100,113-118,123-124,141-145,152-192,209,241,257-462,506,592-593,641,683-684,712-714
+plugins/adapters/bilibili/src/index.ts
+  s_079f1dc5e6308d::t_782e9f0af04dea 9-36,40,42-46,52,55,64
+plugins/adapters/bilibili/src/login-text.ts
+  s_079f1dc5e6308d::t_524b74d957b95a 1-76
+plugins/adapters/bilibili/src/login.ts
+  s_079f1dc5e6308d::t_9312da0ea095e2 1-111
+plugins/adapters/bilibili/src/review.ts
+  s_079f1dc5e6308d::t_5cb3c334d9ac56 4,11-17,38,50-70,80,85,142
+plugins/adapters/bilibili/tests/bilibili-finish.test.ts
+  s_079f1dc5e6308d::t_f314379d2fd80e 1-335
+plugins/adapters/bilibili/tests/bilibili-page.test.ts
+  s_079f1dc5e6308d::t_68335f4fc62afd 1-33
+plugins/adapters/bilibili/tsconfig.json
+  s_079f1dc5e6308d::t_34038172c182b8 11
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_cd3f4f0df7d0f3 2106-2108,2112-2114,2127-2132,2137-2142
+docs/adapters/bilibili.md
+  s_079f1dc5e6308d::t_558eb41a73ee5d 11,15,21-22,35-36,39-43,49-53,55,68-71,76-78,81,83-109,136,145-156,158-160,162,166,168-169,178-179,181-183,186-188
+docs/en/adapters/bilibili.md
+  s_079f1dc5e6308d::t_d2c5d61f1c7ea9 15,21-22,32,35-36,39-43,49-53,55,68-71,76-78,81,83-109,136,145-156,158-160,162,166,168-169,178-179,181-183,186-188
+plugins/adapters/bilibili/README.md
+  s_079f1dc5e6308d::t_3b6668663a98b0 3,9-10,23-24,27-31,37-41,43,56-59,64-66,69,71-97,124,133-144,146-148,150,154,156-157,166-167,169-171,174-176
+plugins/adapters/bilibili/src/client.ts
+  s_90fe6eae2106d0::t_43ff7ce805c862 45-55,57-58,62-67,70-83,87,89-90,120-124,126-135,171-172,181
+plugins/adapters/bilibili/src/console.ts
+  s_90fe6eae2106d0::t_453e37c8f30d21 1-177
+plugins/adapters/bilibili/src/drafts.ts
+  s_90fe6eae2106d0::t_bd68586c54dc64 3-6,8-9,25-26,31-58,62-64,67-73,75-116,121,125,127-129,137-138,154-157,159,164-166,171
+plugins/adapters/bilibili/tests/bilibili-runtime-localization.test.ts
+  s_90fe6eae2106d0::t_2795c62deeeba8 7,15-16,22,47,60-62,83-91,123-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b21e68172a048944f97a761aa7d1535dcdaa149c",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_90fe6eae2106d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a177b8-f506-78d3-b307-a0828dac836f",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
