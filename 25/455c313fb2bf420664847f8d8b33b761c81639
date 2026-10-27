@@ -1,0 +1,24 @@
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  h_b680f75345178a 87
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  h_b680f75345178a 1,12,15,17,30-31,71-75,205-235,238,252
+basic/cli/src/plugin-runtime/agent/turn/control-gate.ts
+  h_b680f75345178a 1-76
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 103-110,179-182,195,522-544,694,840-843,973
+basic/cli/src/plugin-runtime/agent/turn/scene-event-ingress.ts
+  h_b680f75345178a 24,36-42,67-68,237-244,298-304
+basic/cli/tests/plugin-runtime/agent/turn/control-gate.test.ts
+  h_b680f75345178a 1-237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "25455c313fb2bf420664847f8d8b33b761c81639",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
