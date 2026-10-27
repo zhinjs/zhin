@@ -1,0 +1,19 @@
+basic/cli/tests/plugin-runtime/console/session-ops-rpc.test.ts
+  s_9622fd28aba994::t_2521cebc9f2b0e 1-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8f8ccfbe8a043cb620cc09b2be4b8f667a22b723",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
