@@ -274,8 +274,8 @@ describe('UserInteraction via ImRuntime', () => {
     await vi.waitFor(() => expect(sent.length).toBeGreaterThanOrEqual(2));
     const context = await im.readConversationContext(incomingMessage('').conversation, 'test', Number.MAX_SAFE_INTEGER, 50);
     expect(context.blocks.map(block => block.text)).toEqual([
-      'user-1 (user-1): /ask',
-      'You (this bot): 你好 张三',
+      'user-1 (user-1) [message_id="m-ask"]: /ask',
+      'You (this bot) [message_id="sent-2"]: 你好 张三',
     ]);
   });
 

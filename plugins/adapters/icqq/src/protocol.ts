@@ -269,6 +269,7 @@ export interface ResolvedIcqqConfig {
 export interface IcqqWireSegment {
   readonly type: string;
   readonly data?: Record<string, unknown>;
+  readonly platform?: Readonly<Record<string, unknown>>;
 }
 
 export interface IcqqInboundMessage {
@@ -394,6 +395,7 @@ const ICQQ_STANDALONE_ELEMENTS = new Set([
   'json',
   'share',
   'long_msg',
+  'multimsg',
 ] as const);
 
 /** Normalize inline image bytes before either temporary-file or native-base64 delivery. */
@@ -461,7 +463,7 @@ export function formatOutboundMessages(payload: unknown): Sendable[] {
   }
   const messages = groups.filter(group => group.some(element => typeof element === 'string'
     ? element.trim() !== ''
-    : element.type !== 'reply'));
+    : element.type !== 'reply' && element.type !== 'quote'));
   if (messages.length === 0) return ['\u200b'];
   return messages.map(group => group.length === 1 ? group[0]! : group);
 }
@@ -502,6 +504,13 @@ function formatOutboundElements(payload: readonly unknown[]): (string | MessageE
       case 'reply': {
         const id = String(item.data?.message_id ?? item.data?.id ?? '').trim();
         if (!id) throw new TypeError('ICQQ reply segment requires message_id');
+        const quote = item.platform?.icqqQuote as Record<string, unknown> | undefined;
+        if (quote) {
+          const { user_id, seq, rand, time, message } = quote;
+          if (typeof user_id !== 'number' || typeof seq !== 'number' || typeof rand !== 'number'
+            || typeof time !== 'number' || typeof message !== 'string') throw new TypeError('Invalid ICQQ quote source');
+          return { type: 'quote', user_id, seq, rand, time, message };
+        }
         return { type: 'reply', id };
       }
       case 'record':
@@ -528,6 +537,9 @@ function formatOutboundElements(payload: readonly unknown[]): (string | MessageE
       case 'forward': {
         const resid = String(item.data?.forward_id ?? item.data?.resid ?? item.data?.id ?? '').trim();
         if (!resid) throw new TypeError('ICQQ forward segment requires forward_id');
+        // Prepared merged forwards need their filename; a long_msg would expand inline.
+        const filename = item.platform?.icqqForwardFilename;
+        if (typeof filename === 'string' && filename) return { type: 'multimsg', resid, filename };
         return { type: 'long_msg', resid };
       }
       case 'share':

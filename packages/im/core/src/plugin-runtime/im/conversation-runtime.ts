@@ -428,7 +428,7 @@ function describeConversationMessage(message: ConversationMessage): string {
   const attachmentNote = attachmentTypes.length > 0
     ? ` [message also contains ${attachmentTypes.join(', ')} data; inspect its reference before relying on that content]`
     : '';
-  return `${actor}: ${text || '(no plain-text content)'}${attachmentNote}`;
+  return `${actor} [message_id=${JSON.stringify(message.ref.id)}]: ${text || '(no plain-text content)'}${attachmentNote}`;
 }
 
 function segmentsFromContent(content: unknown): readonly Segment[] {

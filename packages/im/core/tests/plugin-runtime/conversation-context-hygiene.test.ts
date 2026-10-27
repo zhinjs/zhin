@@ -59,7 +59,7 @@ describe('ConversationRuntime context hygiene', () => {
     const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
 
     expect(context.blocks.map((block) => block.text)).toEqual([
-      'User (user-1): 在吗',
+      'User (user-1) [message_id="user-old"]: 在吗',
       'user-1 (user-1) recalled message user-old.',
     ]);
     expect(context.cursor).toBe(current.sequence);
@@ -75,7 +75,7 @@ describe('ConversationRuntime context hygiene', () => {
 
     const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
 
-    expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1): 刚才那个']);
+    expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1) [message_id="recent"]: 刚才那个']);
     expect(context.cursor).toBe(current.sequence);
   });
 
@@ -92,7 +92,7 @@ describe('ConversationRuntime context hygiene', () => {
 
     const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
 
-    expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1): 顺便看下 README']);
+    expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1) [message_id="later"]: 顺便看下 README']);
   });
 
   it("labels the bot's own messages so the model can tell them from members'", async () => {
@@ -111,9 +111,9 @@ describe('ConversationRuntime context hygiene', () => {
     const current = await store.append(message('current', '好', now, 'user-1'));
     const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
     expect(context.blocks.map((block) => block.text)).toEqual([
-      'User (user-1): 谁会配代理',
-      'You (this bot): 我会，发我报错',
-      'Unknown sender (unknown): 匿名消息',
+      'User (user-1) [message_id="q"]: 谁会配代理',
+      'You (this bot) [message_id="bot-1"]: 我会，发我报错',
+      'Unknown sender (unknown) [message_id="anon"]: 匿名消息',
     ]);
   });
 
