@@ -33,8 +33,8 @@ describe('defineWorkroomDatabaseModels', () => {
     ]);
   });
 
-  it('together with agent tables registers 18 tables', () => {
-    expect(collect(defineAiDatabaseModels).count + collect(defineWorkroomDatabaseModels).count).toBe(18);
+  it('together with agent tables registers 19 tables', () => {
+    expect(collect(defineAiDatabaseModels).count + collect(defineWorkroomDatabaseModels).count).toBe(19);
   });
 });
 
