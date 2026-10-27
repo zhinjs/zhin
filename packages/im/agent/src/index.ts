@@ -190,6 +190,29 @@ export {
   type SessionScope,
   type SpeakBlockReason,
 } from './session-profile.js';
+export {
+  AI_DECISION_EVENTS_TABLE,
+  AI_DECISION_EVENT_MODEL,
+  DECISION_ACTORS,
+  DECISION_EVENT_KINDS,
+  DECISION_OUTCOMES,
+  DECISION_REASON_CODES,
+  DEFAULT_DECISION_AUDIT_RETENTION_DAYS,
+  DecisionEventValidationError,
+  createDecisionEvent,
+  decisionEventFromRow,
+  decisionEventToExport,
+  decisionEventToRow,
+  redactDecisionPayload,
+  speakBlockReasonCode,
+  type DecisionActor,
+  type DecisionEventInput,
+  type DecisionEventKind,
+  type DecisionEventRecord,
+  type DecisionEventRow,
+  type DecisionOutcome,
+  type DecisionReasonCode,
+} from './decision-events.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

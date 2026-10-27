@@ -63,6 +63,7 @@
     "export type{ZhinAgentConfig,OnChunkCallback,}from './config/index.js';",
     "export{AGENT_ROLE_CONFIGS}from './resource-hub/role-configs.js';",
     "export{AIService}from './service.js';",
+    "export{AI_DECISION_EVENTS_TABLE,AI_DECISION_EVENT_MODEL,DECISION_ACTORS,DECISION_EVENT_KINDS,DECISION_OUTCOMES,DECISION_REASON_CODES,DEFAULT_DECISION_AUDIT_RETENTION_DAYS,DecisionEventValidationError,createDecisionEvent,decisionEventFromRow,decisionEventToExport,decisionEventToRow,redactDecisionPayload,speakBlockReasonCode,type DecisionActor,type DecisionEventInput,type DecisionEventKind,type DecisionEventRecord,type DecisionEventRow,type DecisionOutcome,type DecisionReasonCode,}from './decision-events.js';",
     "export{AI_EVENT_NAMES,subscribeAIEventsOnTarget,}from './ai-event-subscriber.js';",
     "export{ActivityFeedbackManager,resolveActivityFeedbackPhaseConfig,isActivityFeedbackEnabled,toActivityFeedbackEventContext,resolveActivitySceneType,resolveActivityEventTargets,enableActivityFeedbackForBot,isGenericActivityFeedbackManager,resolveSubagentActivityTag,formatSubagentActivityPrefix,withSubagentActivityPrefix,applySubagentActivityPrefixToConfig,resolveActivityFeedbackSessionId,}from './activity-feedback/index.js';",
     "export{AgentEventBus}from './event/ai-event-bus.js';",
