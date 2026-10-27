@@ -215,7 +215,14 @@ export {
   type DecisionPayload,
   type DecisionReasonCode,
 } from './decision-events.js';
-export { DecisionEventLog, DECISION_EVENT_RECENT_LIMIT } from './decision-event-log.js';
+export {
+  DecisionEventLog,
+  DECISION_EVENT_RECENT_LIMIT,
+  DECISION_EVENT_QUERY_DEFAULT_LIMIT,
+  DECISION_EVENT_QUERY_MAX_LIMIT,
+  type DecisionEventQuery,
+  type DecisionEventReader,
+} from './decision-event-log.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

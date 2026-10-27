@@ -71,7 +71,7 @@
     "export{ApprovalReviewAgent,createAutoApprovalPort,createBypassApprovalPort,}from './session/approval-review-agent.js';",
     "export{BuiltinToolService}from './builtins/builtin-tool-service.js';",
     "export{DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG,DEFAULT_ALWAYS_LOADED_TOOLS,SECTION_SEP,}from './config/index.js';",
-    "export{DecisionEventLog,DECISION_EVENT_RECENT_LIMIT}from './decision-event-log.js';",
+    "export{DecisionEventLog,DECISION_EVENT_RECENT_LIMIT,DECISION_EVENT_QUERY_DEFAULT_LIMIT,DECISION_EVENT_QUERY_MAX_LIMIT,type DecisionEventQuery,type DecisionEventReader,}from './decision-event-log.js';",
     "export{FIVE_AGENT_ROLES,isFiveAgentRole,asFiveAgentRole,filterToolNamesForRole,filterToolsForRole,isToolAllowedForRole,}from './orchestration/five-agent/index.js';",
     "export{FileJournalStore}from './journal/index.js';",
     "export{MODEL_HARNESS_DEFAULTS,resolveModelHarness,mergeModelHarnessValues}from './config/model-harness-runtime.js';",

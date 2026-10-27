@@ -52,3 +52,66 @@ describe('DecisionEventLog', () => {
     ]) expect(DECISION_REASON_CODES).toContain(code);
   });
 });
+
+describe('DecisionEventLog reads (slice C)', () => {
+  it('lists newest-first in memory, filters, and drills a turn oldest-first', async () => {
+    let now = 1_000;
+    const log = new DecisionEventLog(() => now);
+    await log.record({ ...base, turnId: 'a', kind: 'inbound_wake', outcome: 'allow', reasonCode: 'inbound_addressed' });
+    now = 2_000;
+    await log.record({ ...base, turnId: 'a', kind: 'model_run', outcome: 'allow', reasonCode: 'model_completed', actor: 'model' });
+    now = 3_000;
+    await log.record({ ...base, turnId: 'b', platform: 'qq' });
+    expect((await log.query()).map((r) => r.ts)).toEqual([3_000, 2_000, 1_000]);
+    expect((await log.query({ order: 'asc', limit: 2 })).map((r) => r.ts)).toEqual([1_000, 2_000]);
+    expect((await log.query({ platform: 'icqq' })).map((r) => r.turnId)).toEqual(['a', 'a']);
+    expect((await log.query({ since: 2_000, before: 3_000 })).map((r) => r.ts)).toEqual([2_000]);
+    expect((await log.query({ kind: 'model_run', outcome: 'allow' }))).toHaveLength(1);
+    expect((await log.turn('a')).map((r) => r.kind)).toEqual(['inbound_wake', 'model_run']);
+    expect(await log.turn('')).toEqual([]);
+  });
+
+  it('queries ai_decision_events through select().where().orderBy().limit() once upgraded', async () => {
+    const calls: unknown[][] = [];
+    const rows = [{ id: '1', ts: 5, turn_id: 't', instance_id: 'i', platform: 'icqq', scene_id: 'group:g', kind: 'speak_gate', outcome: 'deny', reason_code: 'cannot_speak_muted', payload: '{"n":1}', actor: 'policy' }];
+    const chain: any = {
+      where: (c: unknown) => { calls.push(['where', c]); return chain; },
+      orderBy: (f: string, d: string) => { calls.push(['orderBy', f, d]); return chain; },
+      limit: (n: number) => { calls.push(['limit', n]); return chain; },
+      then: (resolve: (v: unknown) => unknown) => resolve(rows),
+    };
+    const log = new DecisionEventLog();
+    log.upgradeToDatabase({ create: async () => undefined, select: () => chain });
+    const listed = await log.query({ since: 1, before: 9, platform: 'icqq', sceneId: 'group:g', kind: 'speak_gate', limit: 99_999 });
+    expect(listed[0]).toMatchObject({ turnId: 't', reasonCode: 'cannot_speak_muted', payload: { n: 1 } });
+    expect(calls).toEqual([
+      ['where', { ts: { $gte: 1, $lt: 9 }, platform: 'icqq', scene_id: 'group:g', kind: 'speak_gate' }],
+      ['orderBy', 'ts', 'DESC'],
+      ['limit', 10_000],
+    ]);
+    calls.length = 0;
+    await log.turn('t');
+    expect(calls).toEqual([['where', { turn_id: 't' }], ['orderBy', 'ts', 'ASC'], ['limit', 10_000]]);
+    calls.length = 0;
+    await log.query();
+    expect(calls).toEqual([['orderBy', 'ts', 'DESC'], ['limit', 100]]);
+  });
+
+  it('prunes rows older than the retention window (default 14 days) and never rejects on db errors', async () => {
+    const DAY = 86_400_000;
+    let now = 0;
+    const log = new DecisionEventLog(() => now);
+    await log.record(base);
+    now = 15 * DAY;
+    await log.record({ ...base, turnId: 'fresh' });
+    expect(await log.prune()).toBe(true);
+    expect(log.recent().map((r) => r.turnId)).toEqual(['fresh']);
+    const where = vi.fn(async () => 1);
+    log.upgradeToDatabase({ create: async () => undefined, delete: () => ({ where, then: (r: any) => r(undefined) }) as never });
+    await log.prune(7);
+    expect(where).toHaveBeenCalledWith({ ts: { $lt: 15 * DAY - 7 * DAY } });
+    log.upgradeToDatabase({ create: async () => undefined, delete: () => ({ where: async () => { throw new Error('locked'); } }) as never });
+    await expect(log.prune()).resolves.toBe(false);
+    await expect(log.prune(0)).rejects.toThrow(/retentionDays/);
+  });
+});
