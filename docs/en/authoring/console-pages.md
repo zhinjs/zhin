@@ -330,6 +330,27 @@ The config is keyed by `platform` + `sceneId` (like `group:123`, the same key as
 
 A welcome goes: join → merge window → hourly cap → control plane (a welcome isn't addressed, so `mention_only` skips it too) → session-profile speak check → send. A blocked welcome is only audited and never sent later; a failed send isn't retried. Once `welcome.enabled` is on for a session, scene event wakes no longer run the model for joins, so the template welcome isn't doubled. Rows use `kind=member_lifecycle` with `welcome_sent` / `welcome_merged` / `welcome_rate_limited` / `welcome_disabled` / `member_leave_recorded`; blocks by the control plane or the session profile keep their `control_*` / `cannot_speak_*` codes. The config lives in the `ai_session_ops` table; if it can't be read, no welcome is sent and leaves are still recorded.
 
+### Built-in: announcements (draft → approve → send)
+
+Announcements (ADR 0037 phase 1, slice B) are Host RPCs; the Console page comes later. They reuse `control:read` / `control:write` for now; slice E splits approval into its own permission.
+
+| Method | Call | Permission |
+| --- | --- | --- |
+| `plugin.root.announcements` | `pluginRpc('root', 'announcements', { platform, sceneId, status? })` | `control:read` |
+| `plugin.root.announcement` | `pluginRpc('root', 'announcement', { id })` | `control:read` |
+| `plugin.root.announcement-create` | `pluginRpc('root', 'announcement-create', { platform, sceneId, content, endpoint? })` | `control:write` (action) |
+| `plugin.root.announcement-edit` | `pluginRpc('root', 'announcement-edit', { id, expectedRevision, content })` | `control:write` (action) |
+| `plugin.root.announcement-submit` | `pluginRpc('root', 'announcement-submit', { id, expectedRevision })` | `control:write` (action) |
+| `plugin.root.announcement-approve` | `pluginRpc('root', 'announcement-approve', { id, expectedRevision })` | `control:write` (action) |
+| `plugin.root.announcement-reject` | `pluginRpc('root', 'announcement-reject', { id, expectedRevision, reason? })` | `control:write` (action) |
+| `plugin.root.announcement-resend` | `pluginRpc('root', 'announcement-resend', { id, expectedRevision })` | `control:write` (action) |
+
+Status only moves forward: `draft` → `pending` → `approved` → `sent`, with `rejected` / `expired` / `failed` on the side. Editing the text (in any non-final status) goes back to `draft` and recomputes `contentHash`; a `pending` announcement expires after 24 hours. The model can only create drafts with the `announcement_draft` tool (`risk: safe`); it can't submit, approve, or send.
+
+- `announcement-approve` sends **right away** and returns the status after sending plus `send.result` (`sent` / `failed`). Order: hash check → control plane (judged as addressed, so `mention_only` doesn't block) → session-profile speak check → hard gate (this approval counts as the hard-gate approval, **no second approval card**) → the platform's group-notice API.
+- A blocked or failed send becomes `failed` with a reason. It isn't queued or retried; `announcement-resend` puts it back to `pending` and it needs another approval. If the text no longer matches the approved hash, it's refused (`announcement_hash_mismatch`).
+- Every action needs `expectedRevision`; a mismatch returns `conflict` and nothing is overwritten. Each transition writes one `kind=announcement` row (`announcement_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_sent` / `_send_failed` / `_resend` / `_hash_mismatch`); blocks by the control plane or session profile keep their `control_*` / `cannot_speak_*` codes. Data lives in the `ai_announcements` table.
+
 ## Saving settings from a page (config:patch)
 
 When a page changes a few settings, use `config:patch` to write exact paths instead of overwriting a whole section with `config:set`. Everything else in `zhin.config.yml`, including comments, is kept; the YAML/Config page stays available for advanced users.
