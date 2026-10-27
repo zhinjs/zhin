@@ -9,7 +9,7 @@ import { SCENE_WAKE_METADATA_KEY } from './scene-events.js';
 const logger = getLogger('UserRelation');
 
 /** 不算「被当工具使唤」的元工具。 */
-const SOCIAL_NEUTRAL_TOOLS = new Set(['load_skill', 'discover', 'load_tool', 'user_profile', 'tool_search']);
+const SOCIAL_NEUTRAL_TOOLS = new Set(['load_skill', 'discover', 'load_tool', 'user_profile']);
 
 export interface RelationTurnOutcome {
   toolCalls?: readonly { tool: string }[];

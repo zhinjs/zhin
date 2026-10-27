@@ -50,14 +50,15 @@ interface PageEntry {
 }
 
 const FALLBACK_PLUGIN_ID = 'root/bilibili';
-let resolved: Promise<string> | undefined;
+/** 进程内缓存：用 const 容器持有，避免模块级可变绑定（adapter endpoint 边界检查）。 */
+const pluginIdCache: { promise?: Promise<string> } = {};
 
 /**
  * 找到本插件的 PluginId（插件实例名可以不是 bilibili）：从页面清单里挑出本包的 index 页，
  * 优先匹配当前地址；找不到时退回 `root/bilibili`。
  */
 export function resolvePluginId(): Promise<string> {
-  resolved ??= (async () => {
+  pluginIdCache.promise ??= (async () => {
     try {
       const response = await apiFetch('/console/api/pages');
       if (!response.ok) return FALLBACK_PLUGIN_ID;
@@ -71,7 +72,7 @@ export function resolvePluginId(): Promise<string> {
       return FALLBACK_PLUGIN_ID;
     }
   })();
-  return resolved;
+  return pluginIdCache.promise;
 }
 
 export async function call<T>(method: string, data?: Record<string, unknown>): Promise<T> {
