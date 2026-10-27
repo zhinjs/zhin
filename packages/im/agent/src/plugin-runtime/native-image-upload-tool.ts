@@ -29,21 +29,21 @@ export function createNativeImageUploadToolFeature(imageAssets: ImageAssetPublis
         // even if a file grows after authorization. No whole-file allocation before the limit.
         const file = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         try {
-        const stat = await file.stat();
-        if (!stat.isFile()) throw new Error('Image upload requires a regular file');
-        if (stat.size > DEFAULT_MULTIMODAL_CONFIG.maxFileBytes) throw new Error('Image exceeds the 25 MiB attachment limit');
-        const stream = file.createReadStream({
-          end: DEFAULT_MULTIMODAL_CONFIG.maxFileBytes,
-          signal: context.signal,
-          autoClose: false,
-        });
-        for await (const chunk of stream) {
-          const bytes = Buffer.from(chunk);
-          size += bytes.length;
-          if (size > DEFAULT_MULTIMODAL_CONFIG.maxFileBytes) throw new Error('Image exceeds the 25 MiB attachment limit');
-          chunks.push(bytes);
-        }
-        return JSON.stringify(await imageAssets.publish(Buffer.concat(chunks, size), context.signal));
+          const stat = await file.stat();
+          if (!stat.isFile()) throw new Error('Image upload requires a regular file');
+          if (stat.size > DEFAULT_MULTIMODAL_CONFIG.maxFileBytes) throw new Error('Image exceeds the 25 MiB attachment limit');
+          const stream = file.createReadStream({
+            end: DEFAULT_MULTIMODAL_CONFIG.maxFileBytes,
+            signal: context.signal,
+            autoClose: false,
+          });
+          for await (const chunk of stream) {
+            const bytes = Buffer.from(chunk);
+            size += bytes.length;
+            if (size > DEFAULT_MULTIMODAL_CONFIG.maxFileBytes) throw new Error('Image exceeds the 25 MiB attachment limit');
+            chunks.push(bytes);
+          }
+          return JSON.stringify(await imageAssets.publish(Buffer.concat(chunks, size), context.signal));
         } finally { await file.close(); }
       },
     }),

@@ -861,8 +861,8 @@ export async function* runAgentLoopTextTurnRun(
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
-        const rawText = localInspection?.accept(outcome.output)
-          ?? await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
+        const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
+        let modelOutput = outcome.output;
 
         // PostToolUse interception
         let resultText = rawText;
@@ -882,11 +882,15 @@ export async function* runAgentLoopTextTurnRun(
             return toolResultToAgentMessage(toolCall, postDecision.reason, true);
           }
           if (postDecision.decision === 'modify') {
+            modelOutput = postDecision.modifiedOutput;
             resultText = typeof postDecision.modifiedOutput === 'string'
               ? postDecision.modifiedOutput
               : JSON.stringify(postDecision.modifiedOutput);
           }
         }
+        // MCP capture already removed bytes before execution returned. Only enqueue
+        // an authorized metadata reference after the output hook has accepted it.
+        resultText = localInspection?.accept(modelOutput) ?? resultText;
 
         const progressKind = recordProgress(resolvedName, effectiveArgs, true, resultText);
         const budgetNote = explorationBudget?.record(resolvedName, isProgress(progressKind));

@@ -6,6 +6,7 @@ import { LocalImageAssetStore, localImageAssetsToken } from '../../src/media/loc
 import { expandMcpTools } from '../../src/plugin-runtime/agent-runtime.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createNativeLocalAssetsToolFeature } from '../../src/plugin-runtime/native-local-assets-tool.js';
+import { AgentResourceHub } from '../../src/resource-hub/index.js';
 import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -67,7 +68,7 @@ import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src
 import { createConversationReferenceCapability } from '../../src/tool/conversation-reference-tool.js';
 
 describe('Agent CapabilityIngress', () => {
-  it('projects a private image for one full-engine request without persisting bytes into the next turn', async () => {
+  it.each(['accept', 'reject', 'modify'] as const)('respects %s hooks when projecting a private image without persisting bytes into the next turn', async hookDecision => {
     const directory = await mkdtemp(join(tmpdir(), 'zhin-image-full-turn-'));
     const localAssets = new LocalImageAssetStore(directory);
     const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
@@ -79,7 +80,16 @@ describe('Agent CapabilityIngress', () => {
       deferredTools: { alwaysLoadedTools: ['child__memory__search', 'get_local_assets', 'child__lookup'] } }, undefined, llm.runtime);
     agent.activeBinding = { name: 'zhin', providerAlias: 'mock', model: 'mock-model', mcpServers: ['memory'] };
     agent.markMemoryPersistenceReady();
-    agent.configure({ localAssets });
+    const resourceHub = new AgentResourceHub();
+    const observed: unknown[] = [];
+    resourceHub.hooks.addPostToolUseHook({ name: 'private-output-policy', type: 'postToolUse', priority: 0,
+      handler: event => {
+        observed.push(event.toolOutput);
+        if (event.toolName !== 'get_local_assets' || hookDecision === 'accept') return { decision: 'accept' };
+        return hookDecision === 'reject' ? { decision: 'reject', reason: 'Image hidden by output policy' }
+          : { decision: 'modify', modifiedOutput: 'Image hidden by output policy' };
+      } });
+    agent.configure({ localAssets, resourceHub });
     const host = asPrivate(agent);
     const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
       sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
@@ -106,7 +116,9 @@ describe('Agent CapabilityIngress', () => {
         expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
       }
       expect(requests).toHaveLength(5);
-      expect(JSON.stringify(requests[2])).toContain(image);
+      if (hookDecision === 'accept') expect(JSON.stringify(requests[2])).toContain(image);
+      else expect(JSON.stringify(requests[2])).not.toContain(image);
+      expect(JSON.stringify(observed)).not.toContain(image);
       for (const request of [requests[1], requests[3], requests[4]]) expect(JSON.stringify(request)).not.toContain(image);
       expect(JSON.stringify(fixture.journal.events)).not.toContain(image);
       const session = await host.agentSessionStore.findActive('mcp:stateless');

@@ -220,8 +220,7 @@ export async function runAgentLoopStandaloneTurn(
         callbacks?.onToolResult?.(toolCall.name, outcome.output);
         return toolResultToAgentMessage(toolCall, outcome.output, true);
       }
-      const rawText = localInspection?.accept(outcome.output)
-        ?? (typeof outcome.output === 'string' ? outcome.output : JSON.stringify(outcome.output ?? null));
+      const rawText = typeof outcome.output === 'string' ? outcome.output : JSON.stringify(outcome.output ?? null);
       const transformed = transformToolResult
         ? await transformToolResult({
             toolName: toolCall.name,
@@ -230,7 +229,9 @@ export async function runAgentLoopStandaloneTurn(
             result: rawText,
           })
         : rawText;
-      const resultText = typeof transformed === 'string' ? transformed : String(transformed);
+      const resultText = transformed === rawText
+        ? localInspection?.accept(outcome.output) ?? rawText
+        : typeof transformed === 'string' ? transformed : String(transformed);
       toolCalls.push({ tool: toolCall.name, args: toolCall.arguments, result: resultText });
       callbacks?.onToolResult?.(toolCall.name, resultText);
       return toolResultToAgentMessage(toolCall, resultText, false);

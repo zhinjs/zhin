@@ -15,7 +15,7 @@ let directory: string;
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'zhin-image-inspection-')); });
 afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
 
-it.each([true, false])('inspects only on demand, then removes original bytes from subsequent requests (vision=%s)', async vision => {
+it.each([[true, false], [false, false], [true, true]])('inspects only on demand and respects output replacement (vision=%s, hidden=%s)', async (vision, hidden) => {
   const store = new LocalImageAssetStore(directory);
   const callbacks = { onToolResult: vi.fn() };
   const requests: Context[] = [];
@@ -41,6 +41,8 @@ it.each([true, false])('inspects only on demand, then removes original bytes fro
   const result = await runAgentLoopStandaloneTurn({ provider: llm.provider, llmRuntime: llm.runtime, model: 'mock-model',
     systemPrompt: '', userInput: 'Inspect the screenshot', maxIterations: 5, localAssets: store, localAssetScope: scope,
     mediaPerception: perception, callbacks,
+    ...(hidden ? { transformToolResult: ({ toolName, result }: { toolName: string; result: unknown }) =>
+      toolName === 'get_local_assets' ? 'Image hidden by output policy' : result } : {}),
     tools: [
       { name: 'screenshot', description: 'Capture', source: 'mcp:browser', kind: 'mcp', parameters: {},
         execute: async () => ({ content: [{ type: 'image', data: image, mimeType: 'image/gif' }] }) },
@@ -48,9 +50,10 @@ it.each([true, false])('inspects only on demand, then removes original bytes fro
     ],
   });
   expect(requests, JSON.stringify(result)).toHaveLength(4);
-  expect(JSON.stringify(requests[2])).toContain(vision ? image : 'A tiny private image.');
+  expect(JSON.stringify(requests[2])).toContain(hidden ? 'Image hidden by output policy' : vision ? image : 'A tiny private image.');
   const transient = requests[2].messages.at(-1);
-  if (vision) expect(transient).toMatchObject({ role: 'user', media: [{ type: 'image' }] });
+  if (vision && !hidden) expect(transient).toMatchObject({ role: 'user', media: [{ type: 'image' }] });
+  if (hidden) expect(JSON.stringify(requests[2])).not.toContain(image);
   expect(JSON.stringify(requests[3])).not.toContain(image);
   expect(JSON.stringify(result)).not.toContain(image);
   expect(JSON.stringify(callbacks.onToolResult.mock.calls)).not.toContain(image);
