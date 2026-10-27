@@ -1,0 +1,175 @@
+packages/im/agent/tests/media/local-image-assets.test.ts
+  s_9622fd28aba994::t_42c5b86b1f8863 1-112
+packages/im/agent/src/subagent/subagent-runtime.ts
+  s_9622fd28aba994::t_816f2ced4d96b2 181-183,247-249,256-258,607
+  s_9622fd28aba994::t_d29e409a9d6de6 608-609
+packages/im/agent/tests/media/media-tool-bridge.test.ts
+  s_9622fd28aba994::t_4960c69a31cddd 2,5-10
+packages/im/agent/src/zhin-agent/index.ts
+  s_9622fd28aba994::t_d4392f4675649d 71,178
+  s_9622fd28aba994::t_3009df19eb497e 1,179
+packages/im/agent/src/media/media-normalize.ts
+  s_9622fd28aba994::t_b2bad94a079bbd 89
+  s_9622fd28aba994::t_d4392f4675649d 8,17
+packages/im/agent/src/subagent/im-result-sink.ts
+  s_9622fd28aba994::t_01268946fe6685 10,14,47
+packages/im/agent/src/media/media-publisher.ts
+  s_9622fd28aba994::t_d4392f4675649d 332,355-360
+packages/im/agent/src/init/configure-zhin-agent.ts
+  s_9622fd28aba994::t_d4392f4675649d 27-28,74
+  s_9622fd28aba994::t_e8bb98b9861256 75
+packages/im/agent/src/core/agent-loop-standalone.ts
+  s_9622fd28aba994::t_bb75c7f628e0d1 155-156,169
+  s_9622fd28aba994::t_66a27a86421481 26-27,92,255-256,258
+  s_9622fd28aba994::t_23b545aff7281e 28-30,93-95,152-154,157-159,170-174,195-196,223-224,252,257,259-260,352-354
+packages/im/agent/src/media/local-image-inspection.ts
+  s_9622fd28aba994::t_61187596835fc1 1-10,16-17,30-84
+  s_9622fd28aba994::t_4c0c633d63a305 11-15,18-29
+packages/im/agent/src/init/compose-zhin-agent-runtime.ts
+  s_9622fd28aba994::t_01268946fe6685 48
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_9622fd28aba994::t_a2d8024128e5e4 38-39,50,116,324,333,335-336
+packages/im/agent/src/tool/tool-runtime.ts
+  s_9622fd28aba994::t_23b545aff7281e 24-25,34-35,167-170
+  s_9622fd28aba994::t_dd8bdd702ecd25 171
+packages/im/agent/src/plugin-runtime/native-local-assets-tool.ts
+  s_9622fd28aba994::t_a2d8024128e5e4 8,13-14
+  s_9622fd28aba994::t_398849904156e2 1-7,9-12,15-21
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_9622fd28aba994::t_a2d8024128e5e4 25,486-487
+docs/ai/index.md
+  s_9622fd28aba994::t_22a4877562971d 249-275
+packages/im/agent/src/plugin-runtime/native-file-tools.ts
+  s_9622fd28aba994::t_f01ae7ff80e939 278
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_3516b8c83cc976 24-25,205-206,677-682,864-865
+  s_9622fd28aba994::t_f01ae7ff80e939 30,674-676
+packages/im/agent/tests/media/local-image-inspection.test.ts
+  s_9622fd28aba994::t_c579c53b8f3ee7 1-23,25-30,32-49,51-75
+  s_9622fd28aba994::t_bc1d48cb22295b 24,31,50
+packages/im/agent/src/media/image-assets.ts
+  s_9622fd28aba994::t_b5715ebdac8e66 1-23
+packages/im/agent/src/media/r2-image-assets.ts
+  s_9622fd28aba994::t_b5715ebdac8e66 1-16,18,21-60
+  s_9622fd28aba994::t_4c0c633d63a305 17,19-20
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_9622fd28aba994::t_d4392f4675649d 89
+  s_9622fd28aba994::t_021c4c8c07a269 2,48,90
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_9622fd28aba994::t_d4392f4675649d 20,78,94,164,175-177,237,270
+  s_9622fd28aba994::t_bb75c7f628e0d1 21,60,95,105-106,168-170
+  s_9622fd28aba994::t_816f2ced4d96b2 104
+packages/im/agent/evals/framework/driver.ts
+  s_9622fd28aba994::t_0a30b14a83012e 40,81-82,100,111,168
+.changeset/agent-image-assets.md
+  s_9622fd28aba994::t_22a4877562971d 1-9
+packages/im/agent/src/tool/tool-execution-authority.ts
+  s_9622fd28aba994::t_23b545aff7281e 68
+packages/im/agent/src/config/zhin-agent-dependencies.ts
+  s_9622fd28aba994::t_d4392f4675649d 22,41
+  s_9622fd28aba994::t_c5265efcfbbc93 1,42
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_9622fd28aba994::t_bc1d48cb22295b 117,133,1014
+  s_9622fd28aba994::t_7312662bd91e9a 70-116,126,129,131
+  s_9622fd28aba994::t_d77d6550079118 2-8,118-125,127-128,130,132,134-140,918-919,996,1012-1013,1015,1018,1025
+packages/im/agent/src/security/turn-file-authority.ts
+  s_9622fd28aba994::t_19af228a81e761 12
+packages/im/agent/src/media/local-image-assets.ts
+  s_9622fd28aba994::t_b2bad94a079bbd 1-5,7-25,34-51,55,60-61,72-89,97-117,119-123,125-136,138-173,183-187,189-201,203-206,208-240
+  s_9622fd28aba994::t_310f6db7b800bc 52-53,90-96,124
+  s_9622fd28aba994::t_4c0c633d63a305 56-59,62-71,137
+  s_9622fd28aba994::t_23b545aff7281e 6,26-30,32-33
+  s_9622fd28aba994::t_bb75c7f628e0d1 31,54,118,174-182,188,202,207
+packages/im/agent/src/media/mcp-image-results.ts
+  s_9622fd28aba994::t_310f6db7b800bc 59,61-62,64
+  s_9622fd28aba994::t_a2d8024128e5e4 1,30-34
+  s_9622fd28aba994::t_398849904156e2 2-29,35-58,60,63,65-75
+docs/ai/agent.md
+  s_9622fd28aba994::t_22a4877562971d 503
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_d4392f4675649d 226,931
+packages/im/agent/src/plugin-runtime/native-image-upload-tool.ts
+  s_9622fd28aba994::t_bb75c7f628e0d1 1-2,30-35,38,47
+  s_9622fd28aba994::t_19af228a81e761 3-5,7-23,25-29,36-37,39-46,48-51
+  s_9622fd28aba994::t_f01ae7ff80e939 6,24
+packages/im/agent/tests/media/image-assets-context.test.ts
+  s_9622fd28aba994::t_4960c69a31cddd 66
+  s_9622fd28aba994::t_0a30b14a83012e 1-65,67-76
+packages/im/agent/src/turn/inbound-media.ts
+  s_9622fd28aba994::t_cae2e89050210f 35,230
+packages/im/agent/src/media/publish-image-reply.ts
+  s_9622fd28aba994::t_4960c69a31cddd 4,37,40-42
+  s_9622fd28aba994::t_8891d4b57c8841 1,5-6,18-21
+  s_9622fd28aba994::t_f01ae7ff80e939 2-3,7-17,22-36,38-39,43-60
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  s_9622fd28aba994::t_cae2e89050210f 14,32,169
+packages/im/agent/src/plugin-runtime/native-tool-suite.ts
+  s_9622fd28aba994::t_a2d8024128e5e4 8-9,16,23,38
+  s_9622fd28aba994::t_19af228a81e761 6-7,22,36-37
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_cae2e89050210f 45,95,147,215-216,280
+packages/im/agent/src/plugin-runtime/native-image-tool.ts
+  s_9622fd28aba994::t_19af228a81e761 14,31,50,60,86,91,93
+  s_9622fd28aba994::t_310f6db7b800bc 15-16,84-85,87-90
+packages/im/agent/src/security/policy-facade.ts
+  s_9622fd28aba994::t_19af228a81e761 337
+packages/im/agent/src/tool/builtin-policy-extractors.ts
+  s_9622fd28aba994::t_19af228a81e761 63
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_01268946fe6685 14
+  s_9622fd28aba994::t_d4392f4675649d 437
+  s_9622fd28aba994::t_a768fb99ec5d7f 1
+packages/im/agent/tests/plugin-runtime/native-image-upload-tool.test.ts
+  s_9622fd28aba994::t_35299ee788736f 1-81
+packages/im/agent/src/media/deliver-subagent-result.ts
+  s_9622fd28aba994::t_01268946fe6685 13,27,54
+packages/im/agent/src/internal/agent-host.ts
+  s_9622fd28aba994::t_d4392f4675649d 29,111
+  s_9622fd28aba994::t_923cce5f854ee2 1,112
+packages/im/agent/src/media/media-tool-bridge.ts
+  s_9622fd28aba994::t_42c5b86b1f8863 2,73
+  s_9622fd28aba994::t_310f6db7b800bc 71-72,74-79
+  s_9622fd28aba994::t_d4392f4675649d 47-50
+packages/im/agent/src/service.ts
+  s_9622fd28aba994::t_d4392f4675649d 9-10,33-35,68,84-85
+  s_9622fd28aba994::t_66a27a86421481 259
+packages/im/agent/src/core/turn-completion-usage.ts
+  s_9622fd28aba994::t_3516b8c83cc976 1,15,58-65
+  s_9622fd28aba994::t_f01ae7ff80e939 7-10,39-43,48,52
+packages/im/agent/tests/media/r2-image-assets.test.ts
+  s_9622fd28aba994::t_e56d4598736de1 1-9,13-88,101-108
+  s_9622fd28aba994::t_4960c69a31cddd 10-12
+  s_9622fd28aba994::t_4d2a5b8e1c167a 89-100
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_cc18dbd37973e0 15-16,131,148-149,152,213
+basic/cli/src/plugin-runtime/agent/runtime-foundation.ts
+  s_9622fd28aba994::t_cf72f43f4c060c 6,45,141
+docs/configuration/generated.md
+  s_9622fd28aba994::t_77b8b05f101791 427-433
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_cdcbde088bca64 427-433
+packages/im/agent/package.json
+  s_9622fd28aba994::t_7c6398a7d1f848 128-129
+packages/im/runtime/src/host-config-schema.json
+  s_9622fd28aba994::t_b8ae414596017f 3148-3184
+pnpm-lock.yaml
+  s_9622fd28aba994::t_7ad53a5b338019 1323-1325,6785-6787,12291-12292
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_611e8b9ee91a8a 17,40,81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5be6f3a1595fbf165d9cb0a1c3f4a02edd09b237",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
