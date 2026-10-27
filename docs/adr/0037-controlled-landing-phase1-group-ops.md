@@ -111,7 +111,7 @@ sidebar: false
 
 ### 3. 群管协同
 
-- **踢 / 禁 / 改名片**沿用 ADR 0036 切片 E 的硬闸审批卡（`member` 类危险工具），本期不改判定逻辑。改名片（`set_group_card` 等）目前**不在** `CORE_DANGEROUS_TOOLS`（现有 `set_title` 归 `member`，`set_nickname` 归 `identity` 且指 Bot 自身），本期补上改他人群名片类工具，归 `member` 类。
+- **踢 / 禁 / 改名片**沿用 ADR 0036 切片 E 的硬闸审批卡（`member` 类危险工具），本期不改判定逻辑。改他人群名片：`set_group_card` / `set_nickname`（仓库唯一实现为场景管理工具 `{prefix}_set_nickname` → `setMemberNickname`）归 `member`（见硬闸对齐 PR #1014）；Bot 自改名用 `set_self_nickname` / `set_bot_nickname`，或在工具上声明 `riskCategory: identity`。类别只影响审批卡标签与同类 latch，两种都需硬闸审批。
 - **审批人 = Console 权限**：审批卡只能由具备相应 Console 权限的用户处理；与 `control:write` 分开，新增权限点（如 `ops:approve`，名称实现时定）。公告审批复用同一权限点。
 - **冷却**：同一 `platform + scene_id + 动作`（动作 = 工具本地名，如 `kick_member`）在 `ops.cooldownMs`（默认 `60000`）内只允许一次进入审批；命中冷却**直接 fail closed，不生成新审批卡**，给模型的结果说明「冷却中」，写 `kind=ops_cooldown`、`outcome=deny`、`reason_code=ops_cooldown_hit`，`payload` 记动作、目标、剩余毫秒。
 - 冷却计时从**审批卡创建**开始，不论最终批准与否；被驳回的动作同样冷却，避免模型换参数刷卡。
@@ -162,7 +162,7 @@ sidebar: false
 | B | 公告：`ai_announcements` 表、状态机与 revision、`announcement_draft` 工具、Console 审批、以审批记录作硬闸批准、失败不重试与手动重发 |
 | C | 冷场：计数器、临时 `mention_only` 覆盖（`expires_at`、与手动覆盖分存）、`control.get` 展示来源 |
 | D | 日程：`ai_session_events` 表、`session_event_create` 工具、调度与到点唤醒、宕机补偿、提醒合并 |
-| E | 群管协同：`ops_cooldown` 冷却、`ops:approve` 权限点、改名片补入 `member` 类、审计链对齐 |
+| E | 群管协同：`ops_cooldown` 冷却、`ops:approve` 权限点、审计链对齐（改名片归 `member` 已由 #1014 落地） |
 
 A / C / E 互不依赖，可并行；B 依赖 E 的权限点（可先用 `control:write` 占位）；D 独立。本 ADR 不含代码。
 
