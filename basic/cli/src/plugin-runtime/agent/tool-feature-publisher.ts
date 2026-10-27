@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { AIService, AiAnnouncements, McpServerEntry, LocalImageAssetStore } from '@zhin.js/agent';
+import type { AIService, AiAnnouncements, AiSessionEvents, McpServerEntry, LocalImageAssetStore } from '@zhin.js/agent';
 import {
   createNativeAgentToolSuite,
   getAgentTurnDecisionRuntime,
@@ -7,6 +7,7 @@ import {
   createNativeSemanticMemoryToolFeatures,
   createNativeTodoToolFeatures,
   createNativeAnnouncementToolFeatures,
+  createNativeSessionEventToolFeatures,
   FileTodoStore,
   projectHostMcp,
   projectHostTool,
@@ -54,6 +55,8 @@ export interface PublishAgentToolFeaturesOptions {
   readonly semanticMemory?: SemanticMemoryRuntime;
   /** ADR 0037 切片 B：`announcement_draft` 写入的公告存储；缺省时不发布该工具。 */
   readonly announcements?: () => AiAnnouncements | undefined;
+  /** ADR 0037 切片 D：`session_event_create` 写入的会话日程存储；缺省时不发布该工具。 */
+  readonly sessionEvents?: () => AiSessionEvents | undefined;
 }
 
 /** Publish every Host-owned Tool through one candidate-generation boundary. */
@@ -103,6 +106,11 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
   }
   if (options.announcements) {
     for (const tool of createNativeAnnouncementToolFeatures(options.announcements)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+  if (options.sessionEvents) {
+    for (const tool of createNativeSessionEventToolFeatures(options.sessionEvents)) {
       options.addFeature(tool.feature, tool.name, tool.definition);
     }
   }

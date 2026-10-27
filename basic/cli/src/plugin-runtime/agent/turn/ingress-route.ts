@@ -114,6 +114,7 @@ import { SceneEventIngress } from './scene-event-ingress.js';
 import { MemberLifecycle } from './member-lifecycle.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { ColdFieldMonitor } from './cold-field.js';
+import { SessionEventDispatcher } from './session-event-dispatch.js';
 import {
   auditCannotSpeak,
   auditModelError,
@@ -185,6 +186,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #stopAnnouncementSweep: () => void;
   /** ADR 0037 切片 C：冷场计数 → 会话临时 mention_only（控制面临时覆盖，到期撤销）。 */
   readonly #coldField: ColdFieldMonitor;
+  /** ADR 0037 切片 D：会话日程到点唤醒（控制面 → session-gate → 模板直发，宽限 / 合并）。 */
+  readonly #sessionEvents: SessionEventDispatcher;
+  readonly #stopSessionEvents: () => void;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -203,6 +207,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#announcements = this.#createAnnouncementDispatcher();
     this.#stopAnnouncementSweep = this.#announcements.start();
     this.#sceneEvents = this.#createSceneEventIngress();
+    this.#sessionEvents = this.#createSessionEventDispatcher();
+    this.#stopSessionEvents = this.#sessionEvents.start();
     options.assistantStatus?.bindSessionOps(
       () => options.agent.agent.getSessionOps?.(),
       () => this.#memberLifecycle,
@@ -212,6 +218,29 @@ export class AgentTurnIngressRoute implements IngressRoute {
       () => options.agent.agent.getAnnouncements?.(),
       () => this.#announcements,
     );
+    options.assistantStatus?.bindSessionEvents(() => options.agent.agent.getSessionEvents?.());
+  }
+
+  #createSessionEventDispatcher(): SessionEventDispatcher {
+    const options = this.options;
+    return new SessionEventDispatcher({
+      events: () => options.agent.agent.getSessionEvents?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
+      decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
+      onSpoke: (key) => this.#noteSpoke(key),
+      send: async (target, text) => {
+        const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
+        if (!endpointKey) return { status: 'failed' as const, code: 'endpoint_unresolved', retryable: false };
+        const result = await options.im.endpoints.send({
+          adapter: target.platform,
+          endpointKey,
+          conversation: { kind: target.scope, id: target.id },
+          content: text,
+        });
+        return { status: 'sent' as const, ...(result.messageId ? { messageId: result.messageId } : {}) };
+      },
+    });
   }
 
   #createAnnouncementDispatcher(): AnnouncementDispatcher {
@@ -341,6 +370,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#coldField.dispose();
     this.#memberLifecycle.dispose();
     this.#stopAnnouncementSweep();
+    this.#stopSessionEvents();
     this.#sceneEvents.dispose();
   }
 
