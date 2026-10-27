@@ -1,0 +1,19 @@
+basic/cli/src/plugin-runtime/agent/turn/cold-field.ts
+  s_a467b02185c88e::t_ef41c044129085 1-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8328cec5a429a9ef6fd657b9e24bf6c7281931f5",
+  "prompts": {},
+  "sessions": {
+    "s_a467b02185c88e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0319c-34d0-7a61-a360-f3203f30d70a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
