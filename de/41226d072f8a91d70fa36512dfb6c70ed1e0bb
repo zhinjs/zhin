@@ -1,0 +1,27 @@
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_9622fd28aba994::t_dcf20c29cbcc3f 9,71,83-92,119-121
+packages/im/agent/src/plugin-runtime/native-image-upload-tool.ts
+  s_9622fd28aba994::t_842fb1988d5eb0 32-46
+packages/im/agent/tests/media/local-image-inspection.test.ts
+  s_9622fd28aba994::t_dcf20c29cbcc3f 18,44-45,53,55-56
+packages/im/agent/src/core/agent-loop-standalone.ts
+  s_9622fd28aba994::t_d70fab4d091608 223,232-234
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_d70fab4d091608 864-865,885,891-893
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "de41226d072f8a91d70fa36512dfb6c70ed1e0bb",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
