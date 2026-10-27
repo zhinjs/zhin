@@ -38,7 +38,7 @@ const logger = getLogger('console');
 const KIND_LIST = [
   'inbound_wake', 'speak_gate', 'control_gate', 'ambient_decision', 'model_skip', 'model_run',
   'tool_call', 'tool_hard_gate', 'tool_approval', 'outbound', 'config_change', 'control_change',
-  'member_lifecycle',
+  'member_lifecycle', 'announcement',
 ] as const satisfies readonly DecisionEventKind[];
 const OUTCOME_LIST = ['allow', 'deny', 'skip', 'defer', 'error'] as const satisfies readonly DecisionOutcome[];
 type MissingKind = Exclude<DecisionEventKind, typeof KIND_LIST[number]>;
