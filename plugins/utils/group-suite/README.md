@@ -105,6 +105,10 @@ group-suite:
 `null`、空 ID、残缺父容器和额外字段会被拒绝。重复条目不会重复发送欢迎。
 白名单只筛选入站群成员加入事件，不改写原会话投递目标，也不限制签到、词库、统计等能力。
 
+同一群若同时开启 Agent 会话欢迎（ADR 0037 切片 A 的 `welcome.enabled`），两边会各发一条；
+在统一前每个群只开一种，见[群欢迎指南](https://github.com/zhinjs/zhin/blob/main/docs/solutions/group-welcome.md)「与 Agent 会话欢迎的关系」。
+成员退群时本插件不发送消息。
+
 这不补充平台本身缺少的入站事件或目标：未提供 canonical 群会话的成员加入事件不会发送欢迎，
 也不会推测频道。配置可热更新，校验失败保留旧配置与 generation；没有单独的范围数据库。
 
