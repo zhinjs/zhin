@@ -302,6 +302,34 @@ Each block writes a `kind=control_gate` row (`reason_code` is `control_emergency
 
 The model has no tool that can read or change these switches: it can't unmute itself or turn off `emergency_stop`. The dangerous-tool hard gate is slice E and isn't covered here.
 
+### Built-in operations: welcome and leave records
+
+The per-session ops config (ADR 0037 phase 1, slice A) is also served by the Host. The Console page comes later; only the RPC exists for now.
+
+| Method | Call | Permission |
+| --- | --- | --- |
+| `plugin.root.session-ops` | `pluginRpc('root', 'session-ops')` | `control:read` |
+| `plugin.root.session-ops-preview` | `pluginRpc('root', 'session-ops-preview', { platform, sceneId, template? })` | `control:read` |
+| `plugin.root.session-ops-set` | `pluginRpc('root', 'session-ops-set', { expectedRevision, defaults?, sessions? })` | `control:write` (an action; the admin token can always call it) |
+
+The config is keyed by `platform` + `sceneId` (like `group:123`, the same key as the session profile) and is stored apart from the session profile:
+
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `welcome.enabled` | Send a welcome (per session only) | `false` |
+| `welcome.template` | Template; variables `{members}` (mentions each one), `{nickname}`, `{group}`, `{rules_url}`; unknown variables are kept as written | `欢迎 {members} 加入{group}！` |
+| `welcome.mergeWindowMs` | Joins inside this window share one welcome; `0` turns merging off | `60000` |
+| `welcome.maxPerHour` | Most welcomes per session per hour | `10` |
+| `welcome.rulesUrl` | Value of `{rules_url}` | empty |
+| `leave.record` | Record leaves in the audit log | `true` |
+| `leave.notify` | Post a message when someone leaves (stored only for now, nothing is sent) | `false` |
+
+- `session-ops`: returns `{ revision, defaults, sessions, updatedAt, updatedBy, persistent, available }`; each session has `overrides` (fields set explicitly) and `effective` (merged with the instance defaults).
+- `session-ops-preview`: renders only. It doesn't send and doesn't write to the audit log. It uses the last real join seen in that session (in memory) or a sample member, and returns `{ text, parts, unknownVars, sample, members, enabled }`. Pass `template` to preview a template you haven't saved.
+- `session-ops-set`: `defaults` takes only the template and numbers (no switches). In `sessions[]`, the fields you send replace the old values, `null` falls back to the instance default, and `reset: true` removes the session's config. `expectedRevision` is required; a mismatch returns `conflict`. Every scope that actually changed writes one `kind=config_change`, `actor=operator` row.
+
+A welcome goes: join → merge window → hourly cap → control plane (a welcome isn't addressed, so `mention_only` skips it too) → session-profile speak check → send. A blocked welcome is only audited and never sent later; a failed send isn't retried. Once `welcome.enabled` is on for a session, scene event wakes no longer run the model for joins, so the template welcome isn't doubled. Rows use `kind=member_lifecycle` with `welcome_sent` / `welcome_merged` / `welcome_rate_limited` / `welcome_disabled` / `member_leave_recorded`; blocks by the control plane or the session profile keep their `control_*` / `cannot_speak_*` codes. The config lives in the `ai_session_ops` table; if it can't be read, no welcome is sent and leaves are still recorded.
+
 ## Saving settings from a page (config:patch)
 
 When a page changes a few settings, use `config:patch` to write exact paths instead of overwriting a whole section with `config:set`. Everything else in `zhin.config.yml`, including comments, is kept; the YAML/Config page stays available for advanced users.
