@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   AFFINITY_DAILY_GAIN_CAP,
   AFFINITY_GAIN_COOLDOWN_MS,
+  AFFINITY_MAX,
   MAX_NOTES,
+  hasSmallTalk,
   UserRelationStore,
   applyAffinitySignal,
   classifyAffinityCue,
@@ -141,6 +143,10 @@ describe('UserRelationStore', () => {
     expect(record?.notes).toHaveLength(MAX_NOTES);
     expect(record?.notes.at(-1)).toBe(`梗${MAX_NOTES + 2}`);
     expect(await store.removeNote('qq', 'u', `梗${MAX_NOTES + 2}`)).toBe(true);
+    const reloaded = await store.get('qq', 'u');
+    expect(reloaded?.notes).not.toContain(`梗${MAX_NOTES + 2}`);
+    expect(reloaded?.notes).toHaveLength(MAX_NOTES - 1);
+    expect(reloaded?.preferredAddress).toBe('明哥');
     expect(record?.preferredAddress).toBe('明哥');
     expect(record?.toneHints).toEqual(['损友', '少用敬语']);
   });
@@ -200,9 +206,12 @@ describe('turn integration', () => {
   });
 
   it('does not touch relations outside IM and swallows store errors', async () => {
-    const failing = { recordTurn: async () => { throw new Error('db down'); } } as any;
-    expect(() => recordRelationTurn(failing, imTurn(), {})).not.toThrow();
+    const recordTurn = vi.fn(async () => { throw new Error('db down'); });
+    const failing = { recordTurn } as any;
     recordRelationTurn(failing, { ...imTurn(), origin: { kind: 'http', sessionId: 'x' } }, {});
+    expect(recordTurn).not.toHaveBeenCalled();
+    expect(() => recordRelationTurn(failing, imTurn(), {})).not.toThrow();
+    expect(recordTurn).toHaveBeenCalledTimes(1);
     expect(countBusinessToolCalls([{ tool: 'user_profile' }, { tool: 'weather' }])).toBe(1);
   });
 
@@ -212,6 +221,7 @@ describe('turn integration', () => {
     expect((legacy.parameters as any).properties.action.enum).toEqual(['get', 'set', 'delete']);
     const tool = createUserProfileTool('u1', profiles, 'qq');
     expect(await tool.execute({ action: 'call_me', value: '明哥' })).toContain('明哥');
+    expect((await profiles.relations.get('qq', 'u1'))?.preferredAddress).toBe('明哥');
     expect(await tool.execute({ action: 'note', value: '密码 hunter2' })).toContain('没记');
     expect(await tool.execute({ action: 'note', value: '夜猫子' })).toBe('已记下。');
     expect(await tool.execute({ action: 'get' })).toContain('夜猫子');
@@ -229,5 +239,56 @@ describe('bounded growth', () => {
     const notes = (await store.get('qq', 'u'))!.notes;
     expect(notes).toHaveLength(MAX_NOTES);
     expect(new Set(notes).size).toBe(MAX_NOTES);
+  });
+});
+
+describe('review fixes', () => {
+  const base = { addressed: true, isMaster: false, text: 'hi', toolCalls: 0 };
+
+  it('master stays close even with a lower relation override', () => {
+    const record = { ...emptyRelation('qq', 'm', T0), relationOverride: 'stranger' as const };
+    expect(deriveRelation(record, true)).toBe('close');
+    expect(deriveRelation(record, false)).toBe('stranger');
+  });
+
+  it('only charges the daily gain allowance and cooldown for points actually awarded', () => {
+    const full = { ...emptyRelation('qq', 'u', T0), affinity: AFFINITY_MAX };
+    const capped = applyAffinitySignal(full, { ...base, text: '谢谢' }, T0);
+    expect(capped.delta).toBe(0);
+    expect(capped.record.gainToday).toBe(0);
+    expect(capped.record.lastGainAt).toBe(0);
+    const near = applyAffinitySignal({ ...full, affinity: AFFINITY_MAX - 1 }, { ...base, text: '谢谢' }, T0);
+    expect(near.delta).toBe(1);
+    expect(near.record.gainToday).toBe(1);
+  });
+
+  it('tool turns with small talk count as chat, pure tool requests do not', () => {
+    expect(classifyAffinityCue({ ...base, text: '查一下上海天气', toolCalls: 1 })).toBe('tool_only');
+    expect(classifyAffinityCue({ ...base, text: '哈哈 顺便帮我查下天气', toolCalls: 1 })).toBe('chat');
+    expect(hasSmallTalk('早上好呀，今天好冷')).toBe(true);
+    expect(hasSmallTalk('翻译这句话')).toBe(false);
+  });
+
+  it('emits a close sender line for the owner on their very first turn', async () => {
+    const profiles = new UserProfileStore(new UserRelationStore(() => T0));
+    const builder = new ProfileContextBuilder({ userProfiles: profiles } as any);
+    const envelope: Record<string, string> = {};
+    await builder.build({ turn: imTurn({ roles: ['master'], userId: 'owner' }), envelope });
+    expect(envelope.profileSummary).toContain('Sender: 小明: close (owner)');
+  });
+
+  it('treats observe intent as ambient and adds at most one recent active person', async () => {
+    const profiles = new UserProfileStore(new UserRelationStore(() => T0));
+    for (const id of ['u2', 'u3']) {
+      await profiles.relations.setPreferredAddress('qq', id, `人${id}`);
+      recordRelationTurn(profiles.relations, imTurn({ userId: id }), {});
+    }
+    await profiles.relations.setPreferredAddress('qq', 'u1', '明哥');
+    await profiles.relations.get('qq', 'u3');
+    const builder = new ProfileContextBuilder({ userProfiles: profiles } as any);
+    const envelope: Record<string, string> = {};
+    await builder.build({ turn: { ...imTurn(), intent: { kind: 'observe' } }, envelope });
+    expect(envelope.profileSummary).toContain('Also here:');
+    expect(envelope.profileSummary.match(/Also here:/g)).toHaveLength(1);
   });
 });

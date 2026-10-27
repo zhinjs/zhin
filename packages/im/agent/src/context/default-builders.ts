@@ -1,7 +1,7 @@
 import { type AgentMessage, detectTone } from '@zhin.js/ai';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { BuildContext, ContextBuilder, ContextInjector, InjectContext } from './contracts.js';
-import { AMBIENT_ENGAGEMENT_METADATA_KEY } from './turn-envelope.js';
+import { isAmbientTurn } from '../user-relation-turn.js';
 import { getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('ProfileContext');
@@ -34,11 +34,15 @@ export class ProfileContextBuilder implements ContextBuilder {
     try {
       const isMaster = principal.roles.includes('master');
       const record = await relations.get(origin.platform, principal.subjectId);
-      const ambient = context.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient';
+      const ambient = isAmbientTurn(context.turn as Parameters<typeof isAmbientTurn>[0]);
       const others = ambient && origin.scope !== 'private'
         ? await relations.recentActives(origin.platform, `${origin.scope}:${origin.sceneId}`, principal.subjectId, 1)
         : [];
-      return relations.buildSummary(record, { isMaster, others });
+      return relations.buildSummary(record, {
+        isMaster,
+        others,
+        sender: { platform: origin.platform, userId: principal.subjectId, displayName: principal.displayName },
+      });
     } catch (error) {
       logger.warn(`relation summary skipped: ${error instanceof Error ? error.message : String(error)}`);
       return '';

@@ -105,12 +105,25 @@ export interface AffinitySignal {
 const PRAISE_PATTERN = /(谢谢|多谢|感谢|谢啦|谢了|辛苦了|厉害|牛[逼批]|真棒|好棒|太强了|爱你|喜欢你|可爱|好耶|\bthx\b|\bthanks?\b|thank you|awesome|love you|good bot|\bnice\b)/i;
 const INSULT_PATTERN = /(傻[逼比Bb]|\bsb\b|煞笔|滚开|滚蛋|给我滚|废物|垃圾机器人|智障|弱智|蠢货|闭嘴|去死|\bfuck|\bstupid\b|\bidiot\b|\bdumb\b|shut up)/i;
 
+const SMALLTALK_PATTERN = /(哈哈|嘿嘿|嘻嘻|hhh|233|早安|早上好|晚安|午安|你好|在吗|在不在|最近|怎么样|心情|无聊|开心|难过|好累|累了|想你|聊聊|陪我|你觉得|你呢|顺便|对了|[~～]|\p{Extended_Pictographic}|\blol\b|\bhaha|\bhi\b|\bhello\b|\bhey\b|how are you|by the way|\bbtw\b)/iu;
+
+/**
+ * 这条消息除了让 Bot 办事，是否还带着普通聊天（寒暄、情绪、闲扯，或多句话里不止一个请求）。
+ * 用来区分「纯工具请求」与「边聊边用工具」。
+ */
+export function hasSmallTalk(text: string): boolean {
+  if (SMALLTALK_PATTERN.test(text)) return true;
+  const sentences = text.split(/[。！？!?\n]+/).map((part) => part.trim()).filter((part) => part.length >= 4);
+  return sentences.length >= 3;
+}
+
 export function classifyAffinityCue(signal: AffinitySignal): AffinityCue {
   if (signal.isMaster) return 'master';
   if (!signal.addressed) return 'ambient';
   if (INSULT_PATTERN.test(signal.text)) return 'insult';
   if (PRAISE_PATTERN.test(signal.text)) return 'praise';
-  if (signal.toolCalls > 0) return 'tool_only';
+  // 只有纯工具请求才算 tool_only；边聊边用工具按普通聊天处理。
+  if (signal.toolCalls > 0 && !hasSmallTalk(signal.text)) return 'tool_only';
   return 'chat';
 }
 
@@ -165,29 +178,30 @@ export function applyAffinitySignal(
     next.toolStreak = 0;
   }
 
+  // 先按 [-100, 100] 求出实际能变动的点数，只对真正加上/扣掉的点数计入每日额度和冷却。
+  const before = clampAffinity(record.affinity);
   if (delta > 0) {
     const cooling = now - record.lastGainAt < AFFINITY_GAIN_COOLDOWN_MS;
-    const room = AFFINITY_DAILY_GAIN_CAP - next.gainToday;
+    const room = Math.min(AFFINITY_DAILY_GAIN_CAP - next.gainToday, AFFINITY_MAX - before);
     delta = cooling ? 0 : Math.max(0, Math.min(delta, room));
     if (delta > 0) {
       next.gainToday += delta;
       next.lastGainAt = now;
     }
   } else if (delta < 0) {
-    const room = AFFINITY_DAILY_LOSS_CAP - next.lossToday;
+    const room = Math.min(AFFINITY_DAILY_LOSS_CAP - next.lossToday, before - AFFINITY_MIN);
     delta = -Math.max(0, Math.min(-delta, room));
     next.lossToday += -delta;
   }
 
-  const before = next.affinity;
-  next.affinity = clampAffinity(before + delta);
-  return { record: next, cue, delta: next.affinity - before };
+  next.affinity = before + delta;
+  return { record: next, cue, delta: next.affinity - record.affinity };
 }
 
-/** 由好感度与互动次数推导关系；`relation_override` 优先。 */
+/** 由好感度与互动次数推导关系；主人恒为 close，其次 `relation_override`。 */
 export function deriveRelation(record: Pick<UserRelationRecord, 'affinity' | 'interactions' | 'relationOverride'>, isMaster = false): UserRelation {
-  if (record.relationOverride) return record.relationOverride;
   if (isMaster) return 'close';
+  if (record.relationOverride) return record.relationOverride;
   const { affinity, interactions } = record;
   if (affinity >= 60 && interactions >= 20) return 'close';
   if (affinity >= 30 && interactions >= 8) return 'familiar';
@@ -354,6 +368,8 @@ export interface RelationSummaryOptions {
   isMaster?: boolean;
   /** 旁听回合：同场景最近活跃的其他人（最多 2 个）。 */
   others?: readonly UserRelationRecord[];
+  /** 发起人身份；主人还没有关系记录（第一次说话）时用它生成 close 的发起人行。 */
+  sender?: { platform: string; userId: string; displayName?: string };
 }
 
 const RECENT_ACTIVE_TTL_MS = 30 * 60 * 1000;
@@ -469,7 +485,7 @@ export class UserRelationStore {
     return clean;
   }
 
-  /** 宿主/主人手动指定关系（null 恢复自动推导）。 */
+  /** 宿主/主人手动指定关系（null 恢复自动推导）。对主人无效：主人恒为 close。 */
   async setRelationOverride(platform: string, userId: string, relation: UserRelation | null): Promise<void> {
     if (relation !== null && !isRelation(relation)) throw new TypeError(`Unknown relation: ${String(relation)}`);
     await this.mutate(platform, userId, (record) => ({ ...record, relationOverride: relation }));
@@ -500,8 +516,11 @@ export class UserRelationStore {
    */
   buildSummary(record: UserRelationRecord | null, options: RelationSummaryOptions = {}): string {
     const lines: string[] = [];
-    if (record && (options.isMaster || hasSubstance(record))) {
-      lines.push(clipLine(`- Sender: ${describeRelationLine(record, options.isMaster === true)}`));
+    const sender = record ?? (options.isMaster && options.sender
+      ? { ...emptyRelation(options.sender.platform, options.sender.userId, 0), displayName: options.sender.displayName ?? '' }
+      : null);
+    if (sender && (options.isMaster || hasSubstance(sender))) {
+      lines.push(clipLine(`- Sender: ${describeRelationLine(sender, options.isMaster === true)}`));
     }
     const other = (options.others ?? []).find(hasSubstance);
     if (other) lines.push(clipLine(`- Also here: ${describeRelationLine(other, false, true)}`));

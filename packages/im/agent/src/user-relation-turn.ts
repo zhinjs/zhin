@@ -18,6 +18,12 @@ export function countBusinessToolCalls(toolCalls: readonly { tool: string }[] | 
   return (toolCalls ?? []).filter((call) => !SOCIAL_NEUTRAL_TOOLS.has(call.tool)).length;
 }
 
+/** 旁听回合：意图为 observe，或带着 ambient 元数据标记。 */
+export function isAmbientTurn(turn: TurnContextView & { intent?: { kind: string } }): boolean {
+  return turn.intent?.kind === 'observe'
+    || turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient';
+}
+
 export function recordRelationTurn(
   relations: UserRelationStore | undefined,
   turn: TurnContextView & { intent?: { kind: string } },
@@ -25,8 +31,7 @@ export function recordRelationTurn(
 ): void {
   if (!relations || turn.origin.kind !== 'im') return;
   const { origin, principal } = turn;
-  const ambient = turn.intent?.kind === 'observe'
-    || turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient';
+  const ambient = isAmbientTurn(turn);
   void relations.recordTurn({
     platform: origin.platform,
     userId: principal.subjectId,
