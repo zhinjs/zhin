@@ -1,0 +1,25 @@
+packages/im/adapter/src/endpoint-management.ts
+  s_9622fd28aba994::t_66be595ec14d2d 63-68
+plugins/adapters/icqq/src/endpoint.ts
+  s_9622fd28aba994::t_bd83f60b8b8491 153-157
+plugins/adapters/napcat/src/endpoint-management.ts
+  s_9622fd28aba994::t_138962c22e1b6a 52-57
+plugins/adapters/napcat/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_e092e420cbf741 26-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1076234c75781dba68afa4adcb9cd5215464d14e",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
