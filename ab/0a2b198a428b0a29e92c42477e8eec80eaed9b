@@ -1,0 +1,20 @@
+packages/im/agent/src/index.ts
+  h_b680f75345178a 193-215
+packages/im/agent/src/init/define-ai-database-models.ts
+  h_b680f75345178a 14,28
+packages/im/agent/tests/define-ai-database-models.test.ts
+  h_b680f75345178a 17,25
+tests/snapshots/api-surface.json
+  h_b680f75345178a 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ab0a2b198a428b0a29e92c42477e8eec80eaed9b",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
