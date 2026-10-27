@@ -1,0 +1,16 @@
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 42
+basic/cli/src/plugin-runtime/agent/turn/scene-event-ingress.ts
+  h_b680f75345178a 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "456bbd0f2e937c40f51dd56d70bf3d9df6960ca0",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
