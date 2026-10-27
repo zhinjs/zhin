@@ -1,0 +1,40 @@
+.changeset/decision-events-writepath.md
+  h_b680f75345178a 1-10
+basic/cli/src/plugin-runtime/agent/turn/decision-audit.ts
+  h_b680f75345178a 1-123
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 96,104-113,181,330,352,496-507,524,535,542-547,601-610,667,819-820,832-847,894,921-923,929,944-967
+basic/cli/src/plugin-runtime/agent/turn/scene-event-ingress.ts
+  h_b680f75345178a 24,36-44,57-58,86-87,109-119,130-144,224-226,240,247,254-256,259,281,295-300,310
+basic/cli/src/plugin-runtime/agent/turn/scene-event-wake.ts
+  h_b680f75345178a 37-39,105,121
+basic/cli/tests/plugin-runtime/agent/turn/decision-audit.test.ts
+  h_b680f75345178a 1-177
+basic/cli/tests/plugin-runtime/agent/turn/scene-event-wake.test.ts
+  h_b680f75345178a 69
+packages/im/agent/src/decision-event-log.ts
+  h_b680f75345178a 1-77
+packages/im/agent/src/decision-events.ts
+  h_b680f75345178a 5,70-82
+packages/im/agent/src/index.ts
+  h_b680f75345178a 189,215,218
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  h_b680f75345178a 14,72-73
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 43,156-157,374-377
+packages/im/agent/tests/decision-event-log.test.ts
+  h_b680f75345178a 1-54
+tests/snapshots/api-surface.json
+  h_b680f75345178a 66,74,91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d507e5f9f85f513a91c7c797304f0956868b8438",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
