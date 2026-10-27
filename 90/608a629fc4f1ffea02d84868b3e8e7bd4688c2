@@ -1,0 +1,32 @@
+packages/im/agent/src/context/context-system.ts
+  h_b680f75345178a 20,120
+packages/im/agent/src/context/default-builders.ts
+  h_b680f75345178a 5,75-86,110
+packages/im/agent/src/context/envelope-parts.ts
+  h_b680f75345178a 6-7
+packages/im/agent/src/context/index.ts
+  h_b680f75345178a 24,37
+packages/im/agent/src/context/turn-envelope.ts
+  h_b680f75345178a 5,19-21,26-27,91-92,126-128
+packages/im/agent/src/index.ts
+  h_b680f75345178a 176-182
+packages/im/agent/src/scene-events.ts
+  h_b680f75345178a 1-33
+packages/im/agent/src/turn/turn-ingress.ts
+  h_b680f75345178a 94-98
+packages/im/agent/src/user-relation-turn.ts
+  h_b680f75345178a 7,34-35
+packages/im/agent/tests/scene-events.test.ts
+  h_b680f75345178a 1-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "90608a629fc4f1ffea02d84868b3e8e7bd4688c2",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
