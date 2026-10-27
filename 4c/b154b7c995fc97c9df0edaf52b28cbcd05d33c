@@ -1,0 +1,19 @@
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_9622fd28aba994::t_286d364fdb6e63 16-19,30-36,86-109,117-118,121-132,137,140,151-163,167-218,306-307,342-343,359,405-406,420,422-424,430,435-440,453,487-488,539-544,550,559,617-627,646
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4cb154b7c995fc97c9df0edaf52b28cbcd05d33c",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
