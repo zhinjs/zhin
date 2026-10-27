@@ -66,7 +66,7 @@ describe('SceneEventWake (debounce + rate limit)', () => {
     wake.offer('k', group, { sequence: 2, event: ev('member.left', { member: { id: 'u1' } }), selfIds: [] });
     await clock.advance(4_000);
     expect(onWake).toHaveBeenCalledTimes(1);
-    expect(onDeferred).toHaveBeenCalledWith('k', 11_000);
+    expect(onDeferred).toHaveBeenCalledWith('k', 11_000, group);
     await clock.advance(10_999);
     expect(onWake).toHaveBeenCalledTimes(1);
     await clock.advance(1);

@@ -93,6 +93,7 @@ import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
 import {
   AmbientEngagement,
   createAmbientDecisionJudge,
+  type AmbientDecision,
   FallbackEngagementJudge,
   LlmEngagementJudge,
   type EngagementJudge,
@@ -100,6 +101,16 @@ import {
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 import { observeSessionAndCheckSpeak } from './session-gate.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
+import {
+  auditCannotSpeak,
+  auditModelError,
+  auditModelRun,
+  auditOutbound,
+  createDecisionAudit,
+  decisionScopeOf,
+  NO_DECISION_AUDIT,
+  type DecisionAudit,
+} from './decision-audit.js';
 import type { AssistantStatus } from '../../console/assistant-status.js';
 
 const logger = getLogger('agent');
@@ -167,6 +178,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       triggerConfig: () => options.agent.service.getTriggerConfig(),
       reader: () => options.im.conversationEventReader,
       sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
+      decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
       nickname: async (platform, userId) => {
         const record = await options.agent.agent.getUserProfiles?.()?.relations?.get(platform, userId);
         return record?.preferredAddress?.trim() || record?.displayName?.trim() || undefined;
@@ -315,6 +327,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     conversationSequence: number | undefined,
     platform: string,
     botName: string,
+    audit: DecisionAudit = NO_DECISION_AUDIT,
   ): Promise<{ content: string } | null> {
     if (message.conversation.kind !== 'group' || conversationSequence === undefined) return null;
     const text = message.content.trim();
@@ -336,6 +349,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       )).blocks.map(block => block.text),
     });
     this.options.assistantStatus?.recordAmbient(key, decision);
+    auditAmbientDecision(audit, decision);
     if (decision.kind !== 'skipped' || decision.reason !== 'superseded') {
       logger.info(formatCompact({
         op: 'ambient_engagement',
@@ -479,6 +493,18 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const platform = turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '';
       const ambientKey = message.conversation.kind === 'group' ? `${platform}:${message.conversation.id}` : undefined;
       let ambient = false;
+      // 决策审计（ADR 0036 切片 B）：本条入站的所有判定共享一个 turn_id；写失败不影响回合。
+      const turnId = randomUUID();
+      const audit = !workroomAgentTurn && turnAccess.origin.kind === 'im'
+        ? createDecisionAudit(zhinAgent.getDecisionEvents?.(), decisionScopeOf({
+            turnId,
+            platform,
+            scope: turnAccess.origin.scope,
+            sceneId: turnAccess.origin.sceneId,
+            endpoint: effectiveEndpoint,
+            userId: turnAccess.principal.subjectId,
+          }))
+        : NO_DECISION_AUDIT;
       // 会话画像（#996）：先折叠会话事件与发送者；Bot 在此会话不能发言（禁言 / 全员禁言 / 宿主限制）时
       // 直接不进 AI 回合，也不跑旁听判定，不调用模型。
       if (!workroomAgentTurn && turnAccess.origin.kind === 'im') {
@@ -495,6 +521,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         });
         if (blocked) {
           logger.info(formatCompact({ op: 'agent_turn_skipped_cannot_speak', conv: `${platform}:${message.conversation.id}`, reason: blocked }));
+          auditCannotSpeak(audit, blocked, { source: 'message', addressed: matched != null });
           return matched != null;
         }
       }
@@ -505,12 +532,19 @@ export class AgentTurnIngressRoute implements IngressRoute {
           conversationSequence,
           platform,
           binding.nickname?.trim() || 'Zhin',
+          audit,
         );
         if (!matched) return false;
         ambient = true;
       } else if (ambientKey) {
         this.#ambientEngagement()?.noteSpoke(ambientKey);
       }
+      audit({
+        kind: 'inbound_wake',
+        outcome: 'allow',
+        reasonCode: ambient ? 'ambient_engaged' : 'inbound_addressed',
+        payload: { source: 'message', scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined },
+      });
       // 状态感知（#996）：上次以来的社交事件（含低优先）作为本轮 ephemeral `[Scene events]`。
       const sceneEvents = !workroomAgentTurn && turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private'
         ? await this.#sceneEvents.linesFor({
@@ -564,6 +598,16 @@ export class AgentTurnIngressRoute implements IngressRoute {
       }
 
       let capabilityActive = true;
+      /** 进入模型回合的时刻；未进入时为 undefined（审计只为真正跑过的模型写 `model_run`）。 */
+      let modelStartedAt: number | undefined;
+      let spoke = false;
+      const modelPayload = (): Record<string, unknown> => ({
+        model: binding.model,
+        provider: binding.providerAlias,
+        ambient,
+        spoke,
+        ...(modelStartedAt !== undefined ? { durationMs: Date.now() - modelStartedAt } : {}),
+      });
       let admission: Extract<TurnAdmission, { kind: 'run' }> | undefined;
       try {
         const preprocessed = await preprocessInboundTurn(
@@ -620,7 +664,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         }
 
         const traceId = randomUUID();
-        const turnId = randomUUID();
+        modelStartedAt = Date.now();
         const outcome = await withTriggerTimeout(
           async (signal) => runWithAgentDecisionTurn(snapshot, turnId, async decisionRuntime => {
             routed = await selectDecisionAgentRoute({
@@ -772,6 +816,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                             : null;
                           logger.debug(formatCompact({ op: 'agent_reaction', emoji: reaction, applied: applied !== null }));
                           admission?.markDelivered();
+                          spoke = true;
+                          auditOutbound(audit, { status: 'sent' }, { reaction: true, applied: applied !== null });
                           return { status: 'sent' as const };
                         }
                         // Model output may name local files or URLs: hold them to this Turn's own authority.
@@ -783,9 +829,22 @@ export class AgentTurnIngressRoute implements IngressRoute {
                           op: 'replychain_publish_outbound',
                           segments: content.length,
                         }));
-                        if (content.length === 0) return { status: 'suppressed' as const };
-                        const sent = deliveryOutcomeFromReceipt(await reply(content));
-                        if (sent.status === 'sent') admission?.markDelivered();
+                        if (content.length === 0) {
+                          auditOutbound(audit, { status: 'suppressed' });
+                          return { status: 'suppressed' as const };
+                        }
+                        let sent: Awaited<ReturnType<typeof deliveryOutcomeFromReceipt>>;
+                        try {
+                          sent = deliveryOutcomeFromReceipt(await reply(content));
+                        } catch (error) {
+                          auditOutbound(audit, { status: 'failed', code: error instanceof Error ? error.message : String(error), retryable: false });
+                          throw error;
+                        }
+                        auditOutbound(audit, sent, { segments: content.length });
+                        if (sent.status === 'sent') {
+                          spoke = true;
+                          admission?.markDelivered();
+                        }
                         return sent;
                       },
                     });
@@ -832,6 +891,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           }),
           resolveTriggerTimeoutMs(trigger),
         );
+        auditModelRun(audit, outcome, { ...modelPayload(), agent: routed.agent?.name ?? null });
         const elements = completedOutput(outcome);
         const outputText = flattenOutputElements(elements).trim();
         if (!outputText) {
@@ -858,11 +918,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
         if (admission?.signal.aborted) {
           // Superseded by the sender's newer message or stopped on request:
           // the replacement turn (or the stop notice) is the answer.
+          if (modelStartedAt !== undefined) {
+            audit({ kind: 'model_run', outcome: 'skip', reasonCode: 'model_superseded', payload: modelPayload(), actor: 'model' });
+          }
           logger.debug(formatCompact({ op: 'agent_host_turn_replaced', sessionKey }));
           return true;
         }
         const detail = error instanceof Error ? error.message : String(error);
         logger.warn(formatCompact({ op: 'agent_host_turn_fail', error: detail }));
+        if (modelStartedAt !== undefined) auditModelError(audit, error, modelPayload());
         try {
           const line = renderChatTurnError(trigger, error, senderRoles.isMaster, message.locale);
           if (line) await reply(line);
@@ -875,6 +939,30 @@ export class AgentTurnIngressRoute implements IngressRoute {
         admission?.release();
       }
   }
+}
+
+/**
+ * 旁听判定 → `ambient_decision`；没插话时再写一行 `model_skip`。被同场景更新消息顶替（superseded）的
+ * 判定与现有日志一致，不记。
+ */
+export function auditAmbientDecision(audit: DecisionAudit, decision: AmbientDecision): void {
+  if (decision.kind === 'skipped' && decision.reason === 'superseded') return;
+  if (decision.kind === 'engage') {
+    audit({
+      kind: 'ambient_decision',
+      outcome: 'allow',
+      reasonCode: 'ambient_engaged',
+      payload: { confidence: decision.judgment.confidence, ...(decision.judgment.source ? { judge: decision.judgment.source } : {}) },
+    });
+    return;
+  }
+  // 判定理由可能转述群聊内容，不进审计；只记判定种类与置信度。
+  const detail = decision.kind === 'skipped' ? decision.reason : decision.kind;
+  const payload = decision.kind === 'skipped'
+    ? { decision: decision.kind, reason: decision.reason }
+    : { decision: decision.kind, confidence: decision.judgment.confidence, ...(decision.judgment.source ? { judge: decision.judgment.source } : {}) };
+  audit({ kind: 'ambient_decision', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload });
+  audit({ kind: 'model_skip', outcome: 'skip', reasonCode: 'ambient_not_engaged', reasonDetail: detail, payload: { source: 'ambient' } });
 }
 
 /** The emoji of a reaction-only message from the structured reply, if this message is one. */
