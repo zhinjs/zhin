@@ -18,7 +18,7 @@ There is nothing to deploy: open <https://console.zhin.dev> and enter the API ad
 | Runtime Capabilities (Advanced) | Confirm commands, middleware, components and tools are loaded, and which plugin they come from |
 | Activity log | Browse runtime logs by time and source |
 | Config (Advanced) | Edit `zhin.config.yml` through a form or source editor; failed saves roll back automatically |
-| Bot status | See AI conversations, tool calls, approvals and cancellations |
+| Bot status | See AI conversations, tool calls, approvals and cancellations. Its decision replay lists, newest first, why the bot replied or stayed quiet each time; expand one turn into a timeline or export a time range as JSON (needs a token with `decisions:read`; kept 14 days by default, change with `ai.audit.retentionDays`) |
 | Group chime-in (群聊插话) | Choose whether the bot joins a group conversation when nobody @-mentions it (Off / Watch only / Join in), in which groups, and how often per hour, and see the last 24 hours. Saved changes take effect after a restart. Viewing needs a token with `ambient:read`; changing settings needs the admin token |
 | Skills assistant (技能助手) | Let a dedicated helper pick skills, tools and memories, choose which agent handles a request, auto-approve approvals, and judge whether to chime in to a group. Each item is Off / Watch only / On, and you can see how often it was used and how often it worked in the last 24 hours. Requires `@zhin.js/service-typesafe` (`zhin setup --decisions`). Saved changes take effect after a restart. Viewing needs a token with `skills:read`; changing settings needs the admin token |
 | Workroom (Advanced) | See persistent task spaces and task boards |
@@ -173,7 +173,7 @@ http:
 - **With no tokens configured** (local development), everyone counts as the admin, as before.
 - The page lists (`/entries`, `/console/api/pages` and `/console/api/topology`) are filtered by token and never cached.
 
-Pages choose their own permission and role names, such as `ambient:read`. The built-in ambient engagement and skills assistant status use `ambient:read` and `skills:read` (see [Built-in status](../authoring/console-pages.md#built-in-status-ambient-engagement-and-skills-assistant)).
+Pages choose their own permission and role names, such as `ambient:read`. The built-in ambient engagement and skills assistant status use `ambient:read` and `skills:read` (see [Built-in status](../authoring/console-pages.md#built-in-status-ambient-engagement-and-skills-assistant)); the decision replay uses `decisions:read` (see [Decision replay](../authoring/console-pages.md#built-in-queries-decision-replay)).
 
 ## Demo Scope (Read-Only Deployment)
 

@@ -4,7 +4,8 @@ import { databaseRootHostToken } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { AGENT_MESSAGE_QUERY_MODEL, AGENT_SESSION_SOURCE_MODEL, agentMessageQueryFields, parseAgentMessageRow } from '@zhin.js/ai';
 import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL,
-  DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL } from '@zhin.js/agent/runtime';
+  DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
+  AI_DECISION_EVENTS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS } from '@zhin.js/agent/runtime';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
 import type { AgentHostAIConfig } from './config.js';
 
@@ -21,6 +22,13 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   if (sessionsInDatabase) defineAiDatabaseModels((name, definition) => database!.define(name, definition));
   const sql = database && ['sqlite', 'mysql', 'pg'].includes(database.dialect);
   let usage: DatabaseAgentUsageStore | undefined;
+  // ADR 0036 slice C: `ai.audit.retentionDays` (default 14) for `ai_decision_events`.
+  const auditRetentionDays = Number(config.audit?.retentionDays ?? DEFAULT_DECISION_AUDIT_RETENTION_DAYS);
+  if (!Number.isSafeInteger(auditRetentionDays) || auditRetentionDays <= 0) throw new TypeError('ai.audit.retentionDays must be a positive integer');
+  const decisions = () => {
+    const log = foundation.agent.getDecisionEvents?.();
+    return log?.persistent ? log : undefined;
+  };
   if (sql) {
     database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL, { addColumns: ['locale'] });
     database.define('agent_schedule_migration', SCHEDULE_JOB_MIGRATION_MODEL);
@@ -55,6 +63,11 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       foundation.agent.markMemoryPersistenceReady();
     }
     if (sql) await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
+    if (sql && raw && decisions()) {
+      await ensureDatabaseIndex(raw, AI_DECISION_EVENTS_TABLE, 'ai_decision_events_ts', [{ name: 'ts' }]);
+      await ensureDatabaseIndex(raw, AI_DECISION_EVENTS_TABLE, 'ai_decision_events_turn', [{ name: 'turn_id', text: true }, { name: 'ts' }]);
+    }
+    await decisions()?.prune(auditRetentionDays);
     if (usage && raw) {
       await usage.prune();
       await ensureDatabaseIndex(raw, 'agent_usage_turns', 'agent_usage_turns_ended', [{ name: 'ended_at' }]);
@@ -68,12 +81,16 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       pendingStart = foundation.schedule.start().catch(() => {
         getLogger('agent').warn('op=schedule_start status=failed; 定时任务启动失败');
       });
-      if (usage) {
+      if (usage || decisions()) {
         timer = setInterval(() => {
           if (stopped || pendingPrune) return;
-          pendingPrune = usage.prune().catch(() => {
-            getLogger('agent').warn('op=usage_prune status=failed; 用量保留期清理失败');
-          }).finally(() => { pendingPrune = undefined; });
+          pendingPrune = Promise.all([
+            usage?.prune().catch(() => {
+              getLogger('agent').warn('op=usage_prune status=failed; 用量保留期清理失败');
+            }),
+            // Never rejects for database errors (only logs); see DecisionEventLog.prune.
+            decisions()?.prune(auditRetentionDays),
+          ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
         }, 3_600_000);
         timer.unref();
       }

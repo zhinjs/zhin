@@ -413,6 +413,8 @@ outline: [2, 3]
 | `ai.trigger.sceneEvents.minIntervalMs` | number \| string | 否 | — | 同一场景两次唤醒的最短间隔（毫秒，默认 15000）；未到时间的批次顺延，不丢 |
 | `ai.usage` | object \| null | 否 | — | 结构化用量存储（SQLite、MySQL、PostgreSQL）；独立于日志级别，不保存正文或工具参数。 |
 | `ai.usage.retentionDays` | integer \| string | 否 | `30` | 用量明细保留天数，正整数，默认 30 天；按回合结束时间清理，子调用与所属回合一起删除。 |
+| `ai.audit` | object \| null | 否 | — | 决策审计 ai_decision_events（ADR 0036）：每次进不进模型、说不说话、调不调工具都记一行，在 Console「机器人状态 → 决策回放」查看与导出；不保存正文、提示词或密钥。 |
+| `ai.audit.retentionDays` | integer \| string | 否 | `14` | 决策审计保留天数，正整数，默认 14 天；启动时与之后每小时按事件时间清理过期行。 |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
 | `menuStyle.title` | string | 否 | — | 菜单标题。 |

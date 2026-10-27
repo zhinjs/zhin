@@ -2,13 +2,16 @@ import type { AmbientEngagementConfig } from '@zhin.js/ai';
 import type { DecisionObservation } from '@zhin.js/agent/runtime';
 import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
 import type { AmbientDecision } from '../agent/turn/ambient-engagement.js';
+import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
  * (structured decisions) pages (#970). Process-owned and in memory only: it keeps a bounded
  * window of outcome metadata and never stores chat text, prompts, judge reasons or secrets.
  *
- * Served as `plugin.root.ambient` and `plugin.root.skills`.
+ * Served as `plugin.root.ambient` and `plugin.root.skills`. Also hosts the read-only decision
+ * replay (ADR 0036 slice C) as `plugin.root.decisions` / `decision-turn` / `decisions-export`,
+ * reading the Agent's `ai_decision_events` through {@link AssistantStatus.bindDecisionEvents}.
  */
 
 export const AMBIENT_STATUS_PERMISSION = 'ambient:read';
@@ -99,6 +102,7 @@ export class AssistantStatus {
   readonly #shadow: Array<{ at: number; agreed: boolean }> = [];
   readonly #decisions: Array<SkillsRecentItem & Readonly<{ inputTokens: number; outputTokens: number }>> = [];
   #readAmbientConfig: AmbientConfigReader = () => undefined;
+  #readDecisionEvents: DecisionEventsSource = () => undefined;
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -109,6 +113,7 @@ export class AssistantStatus {
       queries: {
         ambient: { requiredPermissions: [AMBIENT_STATUS_PERMISSION], handler: () => this.ambient() as unknown as PluginConsoleRpcJson },
         skills: { requiredPermissions: [SKILLS_STATUS_PERMISSION], handler: () => this.skills() as unknown as PluginConsoleRpcJson },
+        ...decisionReplayQueries(() => this.#readDecisionEvents(), this.#now),
       },
     });
   }
@@ -116,6 +121,11 @@ export class AssistantStatus {
   /** The current generation's `ai.trigger.ambient`; the latest Agent ingress route wins. */
   bindAmbientConfig(read: AmbientConfigReader): void {
     this.#readAmbientConfig = read;
+  }
+
+  /** The current generation's decision audit log (`ai_decision_events`); the latest Agent ingress route wins. */
+  bindDecisionEvents(read: DecisionEventsSource): void {
+    this.#readDecisionEvents = read;
   }
 
   recordAmbient(group: string, decision: AmbientDecision): void {

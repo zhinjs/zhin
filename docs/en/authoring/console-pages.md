@@ -253,6 +253,28 @@ interface SkillsStatus {
 }
 ```
 
+### Built-in queries: decision replay
+
+The decision replay on the Bot status (机器人状态) page (ADR 0036 slice C) is also provided by the Host. It reads the `ai_decision_events` decision audit table: one row each time the bot decides whether to call the model, whether to speak, or whether to call a tool. Rows from one turn share a `turn_id`.
+
+| Method | Call | Permission needed |
+| --- | --- | --- |
+| `plugin.root.decisions` | `pluginRpc('root', 'decisions', { ... })` | `decisions:read` |
+| `plugin.root.decision-turn` | `pluginRpc('root', 'decision-turn', { turnId })` | `decisions:read` |
+| `plugin.root.decisions-export` | `pluginRpc('root', 'decisions-export', { since, until, ... })` | `decisions:read` |
+
+All three are read-only. Times are millisecond timestamps. `kind` and `outcome` only accept the ADR 0036 enums; a typo returns `invalid_input` rather than an empty result.
+
+- `decisions`: the list, newest first. Optional input: `platform`, `sceneId`, `kind`, `outcome`, `since` (inclusive), `before` (exclusive), `limit` (default 50, at most 200). Returns `{ persistent, items, nextBefore }`. When `nextBefore` isn't `null`, pass it back as `before` for the next page.
+- `decision-turn`: one turn's timeline, oldest first. Returns `{ turnId, startedAt, endedAt, truncated, events }`. A turn with no rows (or past retention) returns `not_found`.
+- `decisions-export`: exports a time window. `since` and `until` are required (both inclusive, at most 31 days), and the list filters can be added. Pages come back oldest first as `{ table, exportedAt, window, filters, count, nextSince, events }`. When `nextSince` isn't `null`, pass it back as `since`; the pages' `events` joined in order are the full export.
+
+Each row uses the table's column names (`id`, `ts`, `turn_id`, `instance_id`, `platform`, `scene_id`, `user_id`, `kind`, `outcome`, `reason_code`, `reason_detail`, `payload`, `actor`, `actor_id`), with `payload` as an object. Rows are redacted when written: no secrets, cookies, tokens or full prompts.
+
+A single result is capped at 256 KB, so the list and export are paged by size. Rows from the same millisecond always land on the same page, so paging by timestamp never skips or repeats a row. Without a database (`persistent: false`) only the last 200 in-process rows are visible.
+
+Rows are kept for 14 days by default; change it with `ai.audit.retentionDays`. Expired rows are removed at startup and then hourly. There is no control switch here (`control.get` / `control.set` are slice D).
+
 ## Saving settings from a page (config:patch)
 
 When a page changes a few settings, use `config:patch` to write exact paths instead of overwriting a whole section with `config:set`. Everything else in `zhin.config.yml`, including comments, is kept; the YAML/Config page stays available for advanced users.

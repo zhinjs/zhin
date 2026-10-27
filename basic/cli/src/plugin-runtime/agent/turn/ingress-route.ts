@@ -167,6 +167,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
     options.assistantStatus?.bindAmbientConfig(() => options.agent.service.getTriggerConfig()?.ambient);
+    options.assistantStatus?.bindDecisionEvents(() => options.agent.agent.getDecisionEvents?.());
     this.#sceneEvents = this.#createSceneEventIngress();
   }
 

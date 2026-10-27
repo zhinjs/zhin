@@ -413,6 +413,8 @@ export interface AIConfig {
   agents?: Record<string, AgentBindingConfig>;
   /** Structured numeric usage records; independent of log/trace retention. */
   usage?: { /** Retention in days, default 30; positive integer. */ retentionDays?: number };
+  /** Decision audit (`ai_decision_events`, ADR 0036); independent of log/trace retention. */
+  audit?: { /** Retention in days, default 14; positive integer. */ retentionDays?: number };
   sessions?: {
     /** 最大历史消息数（数据库模式默认200，内存模式默认100） */
     maxHistory?: number;

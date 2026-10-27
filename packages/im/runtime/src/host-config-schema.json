@@ -3047,6 +3047,25 @@
               "description": "用量明细保留天数，正整数，默认 30 天；按回合结束时间清理，子调用与所属回合一起删除。"
             }
           }
+        },
+        "audit": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "description": "决策审计 ai_decision_events（ADR 0036）：每次进不进模型、说不说话、调不调工具都记一行，在 Console「机器人状态 → 决策回放」查看与导出；不保存正文、提示词或密钥。",
+          "properties": {
+            "retentionDays": {
+              "type": [
+                "integer",
+                "string"
+              ],
+              "minimum": 1,
+              "default": 14,
+              "description": "决策审计保留天数，正整数，默认 14 天；启动时与之后每小时按事件时间清理过期行。"
+            }
+          }
         }
       }
     },
