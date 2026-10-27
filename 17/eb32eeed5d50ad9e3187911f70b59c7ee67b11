@@ -1,0 +1,22 @@
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  h_b680f75345178a 7-8,25-31,66-70,84,87-93
+docs/configuration/generated.md
+  h_b680f75345178a 416-417
+docs/en/configuration/generated.md
+  h_b680f75345178a 416-417
+packages/im/ai/src/types.ts
+  h_b680f75345178a 416-417
+packages/im/runtime/src/host-config-schema.json
+  h_b680f75345178a 3050-3068
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "17eb32eeed5d50ad9e3187911f70b59c7ee67b11",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
