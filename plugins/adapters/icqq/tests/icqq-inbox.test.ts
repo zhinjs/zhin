@@ -292,3 +292,32 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
     await endpoint.stop();
   });
 });
+
+describe('icqq scene events (#996)', () => {
+  it('normalizes poke on the bot, reactions, admin set, mute and join requests', async () => {
+    const sideEvents = createSideEvents();
+    const endpoint = await startEndpoint({ sideEvents });
+    try {
+      const base = { post_type: 'notice', notice_type: 'group', group_id: 888, self_id: 10001 };
+      endpoint.client.emit('notice.group.poke', { ...base, sub_type: 'poke', operator_id: 20002, target_id: 10001, user_id: 10001, action: '戳了戳', time: 1_700_000_001 });
+      endpoint.client.emit('notice.group.reaction', { ...base, sub_type: 'reaction', user_id: 20002, id: '76', seq: 321, set: false, time: 1_700_000_002 });
+      endpoint.client.emit('notice.group.admin', { ...base, sub_type: 'admin', user_id: 20003, set: true, time: 1_700_000_003 });
+      endpoint.client.emit('notice.group.ban', { ...base, sub_type: 'ban', operator_id: 20002, user_id: 10001, duration: 600, time: 1_700_000_004 });
+      endpoint.client.emit('request.group.add', {
+        post_type: 'request', request_type: 'group', sub_type: 'add', group_id: 888, user_id: 30003, comment: '想进群', flag: 'flag-996', time: 1_700_000_005,
+      });
+      await flush();
+      expect(sideEvents.notices).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'notice.group.poke', actor: expect.objectContaining({ id: '20002' }), target: expect.objectContaining({ id: '10001' }) }),
+        expect.objectContaining({ name: 'notice.group.emoji_reaction', reaction: '76', operation: 'removed', messageId: 'seq:321' }),
+        expect.objectContaining({ name: 'notice.group.admin_change', role: 'admin', enabled: true }),
+        expect.objectContaining({ name: 'notice.group.ban', durationSeconds: 600, target: expect.objectContaining({ id: '10001' }) }),
+      ]));
+      expect(sideEvents.requests).toEqual([
+        expect.objectContaining({ name: 'request.group.add', actor: expect.objectContaining({ id: '30003' }), comment: '想进群' }),
+      ]);
+    } finally {
+      await endpoint.stop();
+    }
+  });
+});
