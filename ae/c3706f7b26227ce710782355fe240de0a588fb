@@ -1,0 +1,18 @@
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  h_b680f75345178a 6,15-17,109-110,122,124-128,137-142
+basic/cli/src/plugin-runtime/console/control-plane-rpc.ts
+  h_b680f75345178a 1-175
+basic/cli/tests/plugin-runtime/console/control-plane-rpc.test.ts
+  h_b680f75345178a 1-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aec3706f7b26227ce710782355fe240de0a588fb",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
