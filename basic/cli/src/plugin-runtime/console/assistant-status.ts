@@ -4,6 +4,13 @@ import { definePluginConsoleRpc, type PluginConsoleRpc, type PluginConsoleRpcJso
 import type { AmbientDecision } from '../agent/turn/ambient-engagement.js';
 import { decisionReplayQueries, type DecisionEventsSource } from './decision-replay.js';
 import { controlActions, controlQueries, type ControlAuditSource, type ControlPlaneSource } from './control-plane-rpc.js';
+import {
+  sessionOpsActions,
+  sessionOpsQueries,
+  type MemberLifecycleSource,
+  type SessionOpsAuditSource,
+  type SessionOpsSource,
+} from './session-ops-rpc.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
@@ -14,7 +21,9 @@ import { controlActions, controlQueries, type ControlAuditSource, type ControlPl
  * replay (ADR 0036 slice C) as `plugin.root.decisions` / `decision-turn` / `decisions-export`,
  * reading the Agent's `ai_decision_events` through {@link AssistantStatus.bindDecisionEvents}, and the
  * control plane (ADR 0036 slice D) as `plugin.root.control` (read) / `plugin.root.control-set` (action),
- * bound through {@link AssistantStatus.bindControlPlane}.
+ * bound through {@link AssistantStatus.bindControlPlane}. ADR 0037 slice A adds the per-session ops config
+ * (welcome / leave) as `plugin.root.session-ops` / `session-ops-preview` (read) / `session-ops-set` (action),
+ * bound through {@link AssistantStatus.bindSessionOps}.
  */
 
 export const AMBIENT_STATUS_PERMISSION = 'ambient:read';
@@ -108,6 +117,9 @@ export class AssistantStatus {
   #readDecisionEvents: DecisionEventsSource = () => undefined;
   #readControlPlane: ControlPlaneSource = () => undefined;
   #readControlAudit: ControlAuditSource = () => undefined;
+  #readSessionOps: SessionOpsSource = () => undefined;
+  #readMemberLifecycle: MemberLifecycleSource = () => undefined;
+  #readSessionOpsAudit: SessionOpsAuditSource = () => undefined;
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -120,12 +132,17 @@ export class AssistantStatus {
         skills: { requiredPermissions: [SKILLS_STATUS_PERMISSION], handler: () => this.skills() as unknown as PluginConsoleRpcJson },
         ...decisionReplayQueries(() => this.#readDecisionEvents(), this.#now),
         ...controlQueries(() => this.#readControlPlane()),
+        ...sessionOpsQueries(() => this.#readSessionOps(), () => this.#readMemberLifecycle()),
       },
-      // ADR 0036 slice D: the only writer of the control switches (the model has no tool for them).
-      actions: controlActions(
-        () => this.#readControlPlane(),
-        () => this.#readControlAudit(),
-      ),
+      actions: {
+        // ADR 0036 slice D: the only writer of the control switches (the model has no tool for them).
+        ...controlActions(
+          () => this.#readControlPlane(),
+          () => this.#readControlAudit(),
+        ),
+        // ADR 0037 slice A: the only writer of the per-session ops config.
+        ...sessionOpsActions(() => this.#readSessionOps(), () => this.#readSessionOpsAudit()),
+      },
     });
   }
 
@@ -138,6 +155,13 @@ export class AssistantStatus {
   bindControlPlane(read: ControlPlaneSource, audit: ControlAuditSource = () => undefined): void {
     this.#readControlPlane = read;
     this.#readControlAudit = audit;
+  }
+
+  /** The current generation's session ops config and welcome engine (ADR 0037 slice A); the latest route wins. */
+  bindSessionOps(read: SessionOpsSource, lifecycle: MemberLifecycleSource, audit: SessionOpsAuditSource = () => undefined): void {
+    this.#readSessionOps = read;
+    this.#readMemberLifecycle = lifecycle;
+    this.#readSessionOpsAudit = audit;
   }
 
   /** The current generation's decision audit log (`ai_decision_events`); the latest Agent ingress route wins. */
