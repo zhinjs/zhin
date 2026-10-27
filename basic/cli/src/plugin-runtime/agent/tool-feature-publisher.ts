@@ -1,11 +1,12 @@
 import { join } from 'node:path';
-import type { AIService, McpServerEntry } from '@zhin.js/agent';
+import type { AIService, AiAnnouncements, McpServerEntry } from '@zhin.js/agent';
 import {
   createNativeAgentToolSuite,
   getAgentTurnDecisionRuntime,
   createNativeInteractionToolFeatures,
   createNativeSemanticMemoryToolFeatures,
   createNativeTodoToolFeatures,
+  createNativeAnnouncementToolFeatures,
   FileTodoStore,
   projectHostMcp,
   projectHostTool,
@@ -50,6 +51,8 @@ export interface PublishAgentToolFeaturesOptions {
   readonly runtimeTools: readonly RuntimeToolFeature[];
   readonly knowledgeIndex?: KnowledgeIndex;
   readonly semanticMemory?: SemanticMemoryRuntime;
+  /** ADR 0037 切片 B：`announcement_draft` 写入的公告存储；缺省时不发布该工具。 */
+  readonly announcements?: () => AiAnnouncements | undefined;
 }
 
 /** Publish every Host-owned Tool through one candidate-generation boundary. */
@@ -94,6 +97,11 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
     new FileTodoStore(join(options.projectRoot, '.zhin', 'todos')),
   )) {
     options.addFeature(tool.feature, tool.name, tool.definition);
+  }
+  if (options.announcements) {
+    for (const tool of createNativeAnnouncementToolFeatures(options.announcements)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
   }
   for (const tool of createNativeInteractionToolFeatures()) {
     options.addFeature(tool.feature, tool.name, tool.definition);

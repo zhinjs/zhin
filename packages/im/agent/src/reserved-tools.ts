@@ -14,6 +14,7 @@ export const RESERVED_TOOL_NAMES = [
   'web_fetch',
   'todo_read',
   'todo_write',
+  'announcement_draft',
   'discover',
   'load_tool',
   'load_skill',

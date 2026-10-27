@@ -205,6 +205,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       runtimeTools: [...scheduleTools, ...homeTools],
       knowledgeIndex,
       semanticMemory: semanticMemory ?? undefined,
+      announcements: () => zhinAgent.getAnnouncements?.(),
     });
 
     const publicationCoordinator = new AgentHostPublicationCoordinator({

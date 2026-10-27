@@ -37,6 +37,7 @@ export * from './native-image-tool.js';
 export * from './native-knowledge-tool.js';
 export * from './native-tool-suite.js';
 export * from './native-todo-tools.js';
+export * from './native-announcement-tools.js';
 export * from './native-interaction-tools.js';
 export * from './native-semantic-memory-tools.js';
 export { FileJournalStore } from '../journal/file-journal-store.js';
