@@ -1,0 +1,24 @@
+.changeset/tool-hard-gate.md
+  h_b680f75345178a 16
+docs/ai/default-behavior.md
+  h_b680f75345178a 47
+docs/en/ai/default-behavior.md
+  h_b680f75345178a 47
+packages/im/agent/src/decision-events.ts
+  h_b680f75345178a 88
+packages/im/agent/src/security/tool-hard-gate.ts
+  h_b680f75345178a 194-199,215-217,245,362,386
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  h_b680f75345178a 167-168,209-210,213-214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c24538533be32d8a4fa44b1c8215046e301d6ddd",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
