@@ -3,6 +3,7 @@
  */
 import type { AgentTool } from '@zhin.js/ai';
 import type { UserProfileStore } from '../user-profile.js';
+import type { SessionScope } from '../session-profile.js';
 export function createUserProfileTool(userId: string, profiles: UserProfileStore, platform?: string): AgentTool {
   const relations = platform ? profiles.relations : undefined;
   const actions = relations ? ['get', 'set', 'delete', 'note', 'unnote', 'call_me', 'tone'] : ['get', 'set', 'delete'];
@@ -84,6 +85,44 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
           break;
       }
       return `不支持的操作，请使用 ${actions.join('/')}`;
+    },
+  };
+}
+
+/**
+ * 会话画像：多人会话（群/频道）的话题。仅在群/频道回合提供；覆盖式写入，最多 5 条。
+ */
+export function createSessionProfileTool(
+  profiles: UserProfileStore,
+  scene: { platform: string; scope: Exclude<SessionScope, 'private'>; sceneId: string },
+): AgentTool {
+  return {
+    name: 'session_profile',
+    source: 'builtin:context',
+    description: '读取或更新当前群/频道的会话画像。get 查看话题与概况；当聊天话题明显换了或出现长期话题时，用 topics 覆盖写入当前话题（逗号分隔，最多 5 个短语，不要写个人隐私）。',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['get', 'topics'], description: 'get（查看）或 topics（覆盖当前话题）' },
+        value: { type: 'string', description: 'topics 时为逗号分隔的话题短语' },
+      },
+      required: ['action'],
+    },
+    tags: ['session', '会话', '话题', '群'],
+    keywords: ['话题', '在聊什么', 'topic'],
+    async execute(args: Record<string, unknown>) {
+      const action = typeof args.action === 'string' ? args.action : '';
+      const value = typeof args.value === 'string' ? args.value : '';
+      const sessions = profiles.sessions;
+      if (action === 'get') {
+        const summary = sessions.buildSummary(await sessions.get(scene.platform, scene.scope, scene.sceneId));
+        return summary || '暂无会话画像。';
+      }
+      if (action === 'topics') {
+        const saved = await sessions.setTopics(scene.platform, scene.scope, scene.sceneId, value.split(/[,，、;；]/));
+        return saved.length ? `当前话题: ${saved.join('; ')}` : '已清空话题。';
+      }
+      return '不支持的操作，请使用 get/topics';
     },
   };
 }

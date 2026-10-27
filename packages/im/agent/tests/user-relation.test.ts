@@ -145,6 +145,17 @@ describe('UserRelationStore', () => {
     expect(record?.toneHints).toEqual(['损友', '少用敬语']);
   });
 
+  it('caps the summary to short lines with at most two notes', async () => {
+    const store = new UserRelationStore(() => T0);
+    for (let i = 0; i < 8; i += 1) await store.addNote('qq', 'u', `一条比较长的笔记内容第${i}条`.repeat(2));
+    await store.setToneHints('qq', 'u', ['a', 'b', 'c', 'd']);
+    const summary = store.buildSummary(await store.get('qq', 'u'));
+    const [, sender] = summary.split('\n');
+    expect(sender.length).toBeLessThanOrEqual(160);
+    expect(sender).not.toContain('第0条');
+    expect(sender).toContain('tone a/b');
+  });
+
   it('builds a compact summary and skips first-time strangers', async () => {
     const store = new UserRelationStore(() => T0);
     const first = await store.recordTurn({ platform: 'qq', userId: 'u', isMaster: false, addressed: true, text: 'hi', toolCalls: 0 });
@@ -152,8 +163,9 @@ describe('UserRelationStore', () => {
     await store.setPreferredAddress('qq', 'u', '明哥');
     const summary = store.buildSummary(await store.get('qq', 'u'));
     expect(summary).toContain('[Relationship]');
-    expect(summary).toContain('call them "明哥"');
+    expect(summary).toContain('明哥: stranger');
     expect(summary).toContain('never quote');
+    expect(summary.split('\n').length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -178,12 +190,13 @@ describe('turn integration', () => {
     const builder = new ProfileContextBuilder({ userProfiles: profiles } as any);
     const envelope: Record<string, string> = {};
     await builder.build({ turn: imTurn({ ambient: true }), envelope });
-    expect(envelope.profileSummary).toContain('Sender: 小明');
-    expect(envelope.profileSummary).toContain('(qq:u2)');
+    expect(envelope.profileSummary).toContain('Sender: 明哥');
+    expect(envelope.profileSummary).toContain('Also here: 阿强');
+    expect(envelope.profileSummary).not.toContain('qq:u');
 
     const addressed: Record<string, string> = {};
     await builder.build({ turn: imTurn(), envelope: addressed });
-    expect(addressed.profileSummary).not.toContain('Also active here');
+    expect(addressed.profileSummary).not.toContain('Also here');
   });
 
   it('does not touch relations outside IM and swallows store errors', async () => {

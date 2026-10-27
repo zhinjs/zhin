@@ -165,6 +165,16 @@ export {
   type UserRelation,
   type UserRelationRecord,
 } from './user-relation.js';
+export {
+  SessionProfileStore,
+  AI_SESSION_PROFILE_MODEL,
+  foldConversationEvent,
+  speakBlock,
+  sceneRoleOf,
+  type SessionProfileRecord,
+  type SessionScope,
+  type SpeakBlockReason,
+} from './session-profile.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

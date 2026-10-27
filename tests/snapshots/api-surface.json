@@ -86,6 +86,7 @@
     "export{SKILL_DISCLOSURE_TOOLS,SKILL_DISCLOSURE_STEPS,SKILL_DISCLOSURE_PROMPT_HINT,}from './skill/progressive-disclosure.js';",
     "export{ScheduleJobEngine,ScheduleJobStore,AssistantEventIngress,JobWorker,createScheduleJobStoreFromConfig,getScheduleJobsPath,resolveAssistantConfig,resolveAssistantDefaultsConfig,resolveAssistantEventsConfig,isAssistantEventsActive,createNotificationRouter,imNotifyToSendOptions,parseJobNotify,SCHEDULE_JOBS_VERSION,syncProfileRoutinesToStore,scheduleJobCreatorFromPrincipal,parseScheduleJobCreator,parseExecutionPlanFromArgs,parseScheduleJobExecutionPlan,addScheduleJob,parseScheduleAddFromToolArgs,parseScheduleAddFromRpcMessage,bootstrapAssistantHome,isAssistantHomeActive,resolveAssistantHomeConfig,}from './assistant/index.js';",
     "export{SeamProviderRegistry,SeamIntegration}from './seam/index.js';",
+    "export{SessionProfileStore,AI_SESSION_PROFILE_MODEL,foldConversationEvent,speakBlock,sceneRoleOf,type SessionProfileRecord,type SessionScope,type SpeakBlockReason,}from './session-profile.js';",
     "export{SkillRegistryAsService}from './skill/skill-registry-as-service.js';",
     "export{SubagentRuntime}from './subagent/subagent-runtime.js';",
     "export{SubagentSystem}from './subagent/index.js';",

@@ -21,6 +21,12 @@ export interface TextContentBlock {
    */
   contextRef?: { readonly key: string; readonly digest: string };
   /**
+   * Per-turn runtime context (e.g. who the participants are to the bot): sent to the
+   * model for this request only and dropped before the message is stored, so later
+   * turns never replay a stale copy. Provider bridges must not serialize this metadata.
+   */
+  ephemeral?: true;
+  /**
    * Gemini 3 may sign a text part (`google.thoughtSignature`); it is sent back with
    * the text on the next request. Only set on assistant text.
    */

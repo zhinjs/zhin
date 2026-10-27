@@ -1,5 +1,10 @@
 /**
- * UserProfileStore — 用户画像存储
+ * UserProfileStore — 会话画像门面
+ *
+ * 会话画像由三部分组成，都挂在本门面下：
+ * - 本表 `ai_user_profiles`：用户显式告诉 Bot 的偏好（key/value）；
+ * - `relations`：人物关系与好感度，按 `platform + user_id`（`ai_user_relations`，见 UserRelationStore）；
+ * - `sessions`：会话上下文与发言限制，按 `platform + scene_key`（`ai_session_profiles`，见 SessionProfileStore）。
  *
  * 持久化存储用户偏好和特征，让 AI 跨会话记住用户的个性化信息。
  *
@@ -14,6 +19,7 @@
 
 import { getLogger } from '@zhin.js/logger';
 import { UserRelationStore } from './user-relation.js';
+import { SessionProfileStore } from './session-profile.js';
 
 const logger = getLogger('UserProfile');
 
@@ -138,17 +144,28 @@ export class UserProfileStore {
   private store: IProfileStore;
   /** 按 platform + userId 合并的画像与好感度（`ai_user_relations`）。 */
   readonly relations: UserRelationStore;
+  /** 会话上下文（话题、管理员、成员概况、Bot 发言限制；`ai_session_profiles`）。 */
+  readonly sessions: SessionProfileStore;
 
-  constructor(relations: UserRelationStore = new UserRelationStore()) {
+  constructor(
+    relations: UserRelationStore = new UserRelationStore(),
+    sessions: SessionProfileStore = new SessionProfileStore(),
+  ) {
     this.store = new MemoryProfileStore();
     this.relations = relations;
+    this.sessions = sessions;
   }
 
-  upgradeToDatabase(model: DbModel, relationModel?: Parameters<UserRelationStore['upgradeToDatabase']>[0]): void {
+  upgradeToDatabase(
+    model: DbModel,
+    relationModel?: Parameters<UserRelationStore['upgradeToDatabase']>[0],
+    sessionModel?: Parameters<SessionProfileStore['upgradeToDatabase']>[0],
+  ): void {
     const old = this.store;
     this.store = new DatabaseProfileStore(model);
     old.dispose();
     if (relationModel) this.relations.upgradeToDatabase(relationModel);
+    if (sessionModel) this.sessions.upgradeToDatabase(sessionModel);
     logger.debug('UserProfileStore: upgraded to database storage');
   }
 
@@ -184,5 +201,6 @@ export class UserProfileStore {
   dispose(): void {
     this.store.dispose();
     this.relations.dispose();
+    this.sessions.dispose();
   }
 }

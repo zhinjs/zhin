@@ -16,6 +16,7 @@ import { resolveModelCandidates } from './model-resolver.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
   ProfileContextBuilder,
+  SessionContextBuilder,
   ToneInjector,
   createDefaultContextBuilders,
 } from './default-builders.js';
@@ -114,6 +115,7 @@ export class ContextSystem {
     const turnBlocks = buildTurnContextBlocks({
       turn,
       profileSummary: envelopeParts.profileSummary,
+      sessionSummary: envelopeParts.sessionSummary,
       toneHint: envelopeParts.toneHint,
       deferredStats,
       activeSkillsContext: (input.activeSkillsContext ?? host.getTurnActiveSkills()) || undefined,

@@ -317,8 +317,9 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   upgradeProfilesToDatabase(
     model: Parameters<UserProfileStore['upgradeToDatabase']>[0],
     relationModel?: Parameters<UserProfileStore['upgradeToDatabase']>[1],
+    sessionModel?: Parameters<UserProfileStore['upgradeToDatabase']>[2],
   ): void {
-    this.userProfiles.upgradeToDatabase(model, relationModel);
+    this.userProfiles.upgradeToDatabase(model, relationModel, sessionModel);
   }
 
   initSubagentSystem(createTools: () => AgentTool[]): void {

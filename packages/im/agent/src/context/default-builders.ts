@@ -36,13 +36,34 @@ export class ProfileContextBuilder implements ContextBuilder {
       const record = await relations.get(origin.platform, principal.subjectId);
       const ambient = context.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient';
       const others = ambient && origin.scope !== 'private'
-        ? await relations.recentActives(origin.platform, `${origin.scope}:${origin.sceneId}`, principal.subjectId, 2)
+        ? await relations.recentActives(origin.platform, `${origin.scope}:${origin.sceneId}`, principal.subjectId, 1)
         : [];
       return relations.buildSummary(record, { isMaster, others });
     } catch (error) {
       logger.warn(`relation summary skipped: ${error instanceof Error ? error.message : String(error)}`);
       return '';
     }
+  }
+}
+
+/** 会话画像：群/频道回合注入 `[Session]` 段（话题、管理员、成员概况）。读失败不影响回合。 */
+export class SessionContextBuilder implements ContextBuilder {
+  name = 'session';
+
+  constructor(private readonly host: ZhinAgentPrivate) {}
+
+  async build(context: BuildContext): Promise<AgentMessage[]> {
+    const { origin } = context.turn;
+    if (!context.envelope || origin.kind !== 'im' || origin.scope === 'private') return [];
+    const sessions = this.host.userProfiles.sessions;
+    if (!sessions) return [];
+    try {
+      const summary = sessions.buildSummary(await sessions.get(origin.platform, origin.scope, origin.sceneId));
+      if (summary) context.envelope.sessionSummary = summary;
+    } catch (error) {
+      logger.warn(`session summary skipped: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return [];
   }
 }
 
@@ -68,6 +89,7 @@ export function createDefaultContextBuilders(host: ZhinAgentPrivate): {
   return {
     builders: [
       new ProfileContextBuilder(host),
+      new SessionContextBuilder(host),
     ],
     injectors: [new ToneInjector(host)],
   };

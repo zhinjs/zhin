@@ -113,6 +113,12 @@ export function renderUserMessageForLlm(
   message: UserMessage,
   extra?: AgentMessageExtra | null,
 ): UserMessage {
+  if (message.content.some(isEphemeralBlock)) {
+    // Ephemeral blocks stay separate (and keep their flag) so storage can drop them.
+    const ephemeral = message.content.filter(isEphemeralBlock);
+    const rendered = renderUserMessageForLlm({ ...message, content: message.content.filter(block => !isEphemeralBlock(block)) }, extra);
+    return { ...rendered, content: [...ephemeral, ...rendered.content] };
+  }
   if (message.content.some(block => block.contextRef)) {
     const [first, ...rest] = message.content;
     if (!first || first.contextRef) return message;
@@ -140,6 +146,9 @@ export function normalizeUserMessageForStorage(
 ): { message: AgentMessage; extra?: AgentMessageExtra } {
   if (message.role !== 'user') return { message };
   const user = message as UserMessage;
+  if (user.content.some(isEphemeralBlock)) {
+    return normalizeUserMessageForStorage({ ...user, content: user.content.filter(block => !isEphemeralBlock(block)) }, extra);
+  }
   if (user.content.some(block => block.contextRef)) {
     const [first, ...rest] = user.content;
     // Injections have an unmarked leading presentation block. Preserve marked
@@ -160,4 +169,8 @@ export function normalizeUserMessageForStorage(
     message: withoutMedia as UserMessage,
     ...(extra?.quote ? { extra: { quote: extra.quote } } : {}),
   };
+}
+
+function isEphemeralBlock(block: UserMessage['content'][number]): boolean {
+  return block.type === 'text' && (block as { ephemeral?: unknown }).ephemeral === true;
 }
