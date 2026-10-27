@@ -1,0 +1,16 @@
+packages/im/agent/src/security/tool-hard-gate.ts
+  h_b680f75345178a 331-344,471-526
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  h_b680f75345178a 14,544-597
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c298fb19643d773de67c0da97d802e38830b8036",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
