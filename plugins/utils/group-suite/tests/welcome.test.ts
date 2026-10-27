@@ -1,6 +1,7 @@
 // group-suite 欢迎套件（#1012 A9：欢迎验收收拢到同一个 group-suite 套件，去重旧 welcome-scope* 用例）。
 // 三层各测一次、不重复：范围解析（纯函数）→ 投递（ImRuntime + handler）→ 原生链路（PluginTestKit / HMR / 回滚，子进程）。
-// 会话级欢迎模板（ADR 0037 切片 A，Agent session-ops）的合并窗口 / 限频 / 过闸由 Agent 侧测试负责，这里不复制。
+// 会话级欢迎模板（ADR 0037 切片 A，Agent session-ops）的合并窗口 / 限频 / 过闸由 Agent 侧测试负责，这里不复制；
+// 这里只测方案②的让路：会话开启 welcome.enabled 时本插件不发，由 MemberLifecycle 发唯一一条（真实 MemberLifecycle 接线）。
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +12,11 @@ import { AdapterIndex, Endpoint, defineAdapter, adapterFeatureId, endpointEventG
 import { HandlerIndex, handlerFeatureId } from '../../../../packages/im/handler/src/index.js';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '../../../../packages/im/middleware/src/index.js';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, childPluginId, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
-import { ImRuntime, outboundMessageToken, type IncomingNotice, type OutboundEnvelope } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
+import { ImRuntime, memberWelcomeOwnerToken, outboundMessageToken, type IncomingNotice, type OutboundEnvelope } from '../../../../packages/im/core/src/plugin-runtime/im/index.js';
 import { EndpointDeliveryError } from '../../../../packages/im/im-contract/src/index.js';
+import { AiControlPlane, AiSessionOps, SessionProfileStore, type ControlFlagsPatch } from '../../../../packages/im/agent/src/index.js';
+import { MemberLifecycle } from '../../../../basic/cli/src/plugin-runtime/agent/turn/member-lifecycle.js';
+import { capabilityLocalName } from '../../../../basic/cli/src/plugin-runtime/agent/turn/request.js';
 import welcome from '../handlers/welcome/index.js';
 
 const root: DeliveryTarget = { endpoint: { adapter: 'icqq', id: 'root/qq\0zhin.adapter\0icqq~main' }, kind: 'group', id: 'g1' };
@@ -63,7 +67,13 @@ describe('group-suite welcome · exact scope', () => {
   });
 });
 
-async function fixture() {
+/** Session-level welcome wiring as in the Agent host: MemberLifecycle on im.sceneEvents + memberWelcomeOwnerToken. */
+interface SessionWelcomeOptions {
+  readonly enabled: boolean;
+  readonly flags?: ControlFlagsPatch;
+}
+
+async function fixture(session?: SessionWelcomeOptions) {
   const root = rootPluginId();
   const first = childPluginId(root, 'account-one'); const second = childPluginId(root, 'account-two');
   const alpha = childPluginId(root, 'alpha'); const beta = childPluginId(root, 'beta');
@@ -93,8 +103,13 @@ async function fixture() {
     config: new Map(ids.map(id => [id, id === alpha ? { welcomeMessage: '欢迎 {name} ({id})', welcomeConversations: [] }
       : id === beta ? { welcomeMessage: 'not enabled', welcomeConversations: [] } : {}])),
     capabilities: new Map([...adapters, ...handlers, observer].map(slot => [slot.id, slot])), projections: new Map(),
-    resources: new Map(ids.map(id => [id, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }], [outboundMessageToken.id, im]])])),
+    resources: new Map(ids.map(id => [id, new Map<string, unknown>([[endpointEventGatewayToken.id, { receive: async () => undefined }], [outboundMessageToken.id, im]])])),
   };
+  const lifecycle = session ? await sessionWelcome(im, String(adapters[0]!.id), session) : undefined;
+  if (lifecycle) {
+    const owner = Object.freeze({ ownsWelcome: lifecycle.ownsWelcome.bind(lifecycle) });
+    for (const resources of state.resources.values()) (resources as Map<string, unknown>).set(memberWelcomeOwnerToken.id, owner);
+  }
   const view = createSnapshotView(0, state);
   const index = await AdapterIndex.create(adapters, view, new AbortController().signal);
   const store = new SnapshotStore({ ...state, projections: new Map([
@@ -110,10 +125,40 @@ async function fixture() {
     conversation: { kind: target.kind, id: target.id, parent: target.parent, threadId: target.threadId }, target: { id: 'new', name: 'Bob' } };
   const receive = (payload = notice, endpointId = String(adapters[0]!.id)) => im.endpointEvents.receive({ name: 'notice.receive',
     endpoint: im.endpoints.list().find(item => item.id === endpointId)!.endpoint, payload, client: {} });
-  return { target, alpha, sent, requesters, adapters, notice, receive,
+  return { target, alpha, root, sent, requesters, adapters, notice, receive, lifecycle,
     fail: (status: typeof failure) => { failure = status; },
-    close: async () => { await store.close(); await index.stop(); },
+    close: async () => { lifecycle?.dispose(); await store.close(); await index.stop(); },
   };
+}
+
+async function sessionWelcome(im: ImRuntime, endpointId: string, options: SessionWelcomeOptions): Promise<MemberLifecycle> {
+  const platform = capabilityLocalName(endpointId);
+  const ops = new AiSessionOps();
+  await ops.set({ expectedRevision: 0, actorId: 'console',
+    sessions: [{ platform, sceneId: 'group:same-group', welcome: { enabled: options.enabled, mergeWindowMs: 0, template: '会话欢迎 {members}' } }] });
+  const plane = new AiControlPlane();
+  if (options.flags) await plane.set({ expectedRevision: 0, actorId: 'op', sessions: [{ platform, sceneId: 'group:same-group', flags: options.flags }] });
+  const sessions = new SessionProfileStore();
+  const lifecycle = new MemberLifecycle({
+    sessionOps: () => ops,
+    controlPlane: () => plane,
+    sessions: () => sessions,
+    reader: () => im.conversationEventReader,
+    send: async (conversation, parts) => {
+      const content = parts.map(part => (part.type === 'text'
+        ? { type: 'text', data: { text: part.text } }
+        : { type: 'mention', data: { target: part.id } }));
+      const receipt = await im.send({ conversation, requester: rootPluginId(), content });
+      return receipt.status === 'sent' ? { status: 'sent', messageId: 'welcome' } : { status: 'failed', code: receipt.status, retryable: false };
+    },
+  });
+  im.sceneEvents.subscribe(signal => { lifecycle.handle(signal); });
+  return lifecycle;
+}
+
+/** Template welcome flushes asynchronously after the scene event; wait for its verdict (or none when disabled). */
+async function settled(lifecycle: MemberLifecycle | undefined): Promise<void> {
+  for (let i = 0; i < 50 && lifecycle && !lifecycle.lastResult; i++) await new Promise(resolve => setTimeout(resolve, 5));
 }
 
 describe('group-suite welcome · delivery', () => {
@@ -152,6 +197,63 @@ describe('group-suite welcome · delivery', () => {
     try {
       f.fail(status); await expect(f.receive()).rejects.toThrow('Group welcome delivery');
       expect(f.sent).toHaveLength(1); expect(f.sent[0]!.conversation).toEqual(f.target); expect(f.requesters).toEqual([f.alpha]);
+    } finally { await f.close(); }
+  });
+});
+
+describe('group-suite welcome · A9 option 2 redirect to the session welcome', () => {
+  it('session welcome.enabled + welcomeMessage: exactly one welcome, sent by MemberLifecycle, group-suite stays silent', async () => {
+    const f = await fixture({ enabled: true });
+    try {
+      await f.receive();
+      await settled(f.lifecycle);
+      expect(f.lifecycle!.lastResult).toEqual({ kind: 'sent', members: 1 });
+      expect(f.sent).toHaveLength(1);
+      expect(f.requesters).toEqual([f.root]);
+      expect(f.sent[0]!.payload[0]).toEqual({ type: 'text', data: { text: '会话欢迎 ' } });
+    } finally { await f.close(); }
+  });
+
+  it('session welcome disabled: group-suite keeps sending its own single welcome', async () => {
+    const f = await fixture({ enabled: false });
+    try {
+      await f.receive();
+      await settled(f.lifecycle);
+      expect(f.lifecycle!.lastResult).toBeUndefined();
+      expect(f.sent).toHaveLength(1);
+      expect(f.requesters).toEqual([f.alpha]);
+      expect(f.sent[0]!.payload).toEqual([{ type: 'text', data: { text: '欢迎 Bob (new)' } }]);
+    } finally { await f.close(); }
+  });
+
+  it('mention_only does not block the redirected welcome (#1022 / #1023)', async () => {
+    const f = await fixture({ enabled: true, flags: { mention_only: true } });
+    try {
+      await f.receive();
+      await settled(f.lifecycle);
+      expect(f.lifecycle!.lastResult).toEqual({ kind: 'sent', members: 1 });
+      expect(f.sent).toHaveLength(1);
+      expect(f.requesters).toEqual([f.root]);
+    } finally { await f.close(); }
+  });
+
+  it('muted still blocks the session welcome and group-suite does not fall back to sending', async () => {
+    const f = await fixture({ enabled: true, flags: { muted: true } });
+    try {
+      await f.receive();
+      await settled(f.lifecycle);
+      expect(f.lifecycle!.lastResult).toEqual({ kind: 'skipped', reason: 'control:muted' });
+      expect(f.sent).toHaveLength(0);
+    } finally { await f.close(); }
+  });
+
+  it('member_decrease still sends nothing from either path when the session welcome owns the group', async () => {
+    const f = await fixture({ enabled: true });
+    try {
+      await f.receive({ ...f.notice, id: 'left', name: 'notice.group.member_decrease' });
+      await settled(f.lifecycle);
+      expect(f.sent).toHaveLength(0);
+      expect(f.requesters).toEqual([]);
     } finally { await f.close(); }
   });
 });

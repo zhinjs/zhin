@@ -4,8 +4,11 @@ import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   ingressRouteToken,
+  memberWelcomeOwnerToken,
   type ImRuntime,
+  type MemberWelcomeOwner,
 } from '@zhin.js/core/runtime';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
@@ -255,6 +258,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       toolApprovalIm,
     });
     resources.provide(ingressRouteToken, ingressRoute);
+    // #1012 A9 方案②：插件旧欢迎（group-suite）发送前询问；会话开启 welcome.enabled 时让给 MemberLifecycle。
+    const memberWelcomeOwner: MemberWelcomeOwner = Object.freeze({
+      ownsWelcome: (conversation: ConversationRef) => ingressRoute.ownsMemberWelcome(conversation),
+    });
+    resources.provide(memberWelcomeOwnerToken, memberWelcomeOwner);
     // 状态感知（#996）：社交事件落库即交给本 generation 的 ingress route；generation 结束时退订并清掉待唤醒批次。
     const unsubscribeSceneEvents = options.im.sceneEvents?.subscribe((event) => ingressRoute.handleSceneEvent(event));
     const stopSceneEvents = () => {

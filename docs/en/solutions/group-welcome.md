@@ -58,12 +58,14 @@ The plugin still supports environment references. The flow reads saved source wi
 
 ## Relation to Agent session welcomes (ADR 0037)
 
-The user-facing home for group welcomes remains the group suite: configure, accept and troubleshoot `welcomeMessage` / `welcomeConversations` here ([#1012](https://github.com/zhinjs/zhin/issues/1012) A9). ADR 0037 phase 1 slice A ([#1019](https://github.com/zhinjs/zhin/pull/1019), under review, not merged) adds a per-session Agent template welcome, `welcome.enabled`, that passes the control plane and session gate. It does not read this plugin's configuration, and this plugin does not read it.
+The user-facing home for group welcomes remains the group suite: configure, accept and troubleshoot `welcomeMessage` / `welcomeConversations` here ([#1012](https://github.com/zhinjs/zhin/issues/1012) A9). ADR 0037 phase 1 slice A ([#1019](https://github.com/zhinjs/zhin/pull/1019)) adds a per-session Agent template welcome, `welcome.enabled`, that passes the control plane and session gate.
 
-If both are enabled for one conversation, each sends a welcome. Until they are unified into one path, enable only one per group:
+One join produces one welcome (A9 option 2):
 
-- Welcome with the group suite: keep the Agent session `welcome.enabled` off (the default).
-- Switch to the Agent session welcome: remove the group from `welcomeConversations`, or clear `welcomeMessage`.
+- When the conversation has the Agent session welcome `welcome.enabled` on, the group suite asks who owns the welcome before sending and stays silent. The session welcome sends the single message, with its merge window, hourly cap, control plane and session gate. `mention_only` (including the temporary cold-field mode) does not block the welcome; `emergency_stop`, `muted` and `read_only` still do, and the group suite does not send a fallback when they block it.
+- When the session welcome is off (the default), or no Agent is installed, the group suite sends from `welcomeMessage` / `welcomeConversations` as before.
+
+Enabling both therefore cannot double-send; you no longer need to enable only one per group.
 
 The group suite sends nothing when a member leaves; leave records belong to the Agent-side audit.
 
