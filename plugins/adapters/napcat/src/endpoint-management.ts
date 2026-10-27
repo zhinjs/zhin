@@ -49,6 +49,12 @@ export function createNapCatEndpointManagement(
       });
       return toArray(data);
     },
+    async sendGroupNotice(groupId: string, content: string): Promise<void> {
+      await endpoint.callApi('_send_group_notice', {
+        group_id: toNumberId(groupId, 'group_id'),
+        content,
+      });
+    },
   });
 }
 

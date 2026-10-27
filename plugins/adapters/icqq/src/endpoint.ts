@@ -150,6 +150,11 @@ export class IcqqEndpoint extends Endpoint<Client> {
     deleteFriend: async (userId) => {
       await this.client.deleteFriend(Number(userId));
     },
+    sendGroupNotice: async (groupId, content) => {
+      if (await this.client.sendGroupNotice(Number(groupId), content) === false) {
+        throw new Error('QQ did not confirm the group notice');
+      }
+    },
   });
 
   readonly control: EndpointControl = Object.freeze({

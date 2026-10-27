@@ -60,6 +60,12 @@ export interface EndpointManagement {
   muteGroupMember?(groupId: string, userId: string, durationSeconds: number): Promise<void>;
   setGroupAdmin?(groupId: string, userId: string, enabled: boolean): Promise<void>;
   deleteFriend?(userId: string): Promise<void>;
+  /**
+   * Publish a group announcement (notice). Host-internal: used by the approved-announcement send path
+   * (ADR 0037 slice B) after the human approval, control plane and session gate. Not a Console capability,
+   * so it is intentionally absent from {@link endpointManagementCapabilityIds}.
+   */
+  sendGroupNotice?(groupId: string, content: string): Promise<void>;
 }
 
 export interface GroupModerationMember {
