@@ -1,0 +1,126 @@
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_9622fd28aba994::t_f072719c8ca8c3 2,9,55-56,104-107
+  s_9622fd28aba994::t_517838a1a057a9 108
+.changeset/announcements-draft-approve-send.md
+  s_9622fd28aba994::t_885d5182d3b9bc 1-15
+.changeset/ops-cooldown-ops-approve.md
+  s_9622fd28aba994::t_6b075ee13c8d50 1-13
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_8f9be066d524e8 218
+basic/cli/src/plugin-runtime/agent/turn/announcement-dispatch.ts
+  s_9622fd28aba994::t_b747bcf3dedf15 1-229
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_70a2bba659dada 115,182-184,195-196,203-238,327
+basic/cli/src/plugin-runtime/console/announcements-rpc.ts
+  s_9622fd28aba994::t_39027b299d5ca6 1-226
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  s_9622fd28aba994::t_71095731c50bc2 14-19,32-34,131-132,146,156-157,180-185
+basic/cli/src/plugin-runtime/console/decision-replay.ts
+  s_9622fd28aba994::t_52883fa4ecc8ca 41
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  s_9622fd28aba994::t_0c9be4c72a3f84 101,124,126-128,132
+basic/cli/src/plugin-runtime/console/session-ops-rpc.ts
+  s_9622fd28aba994::t_92e76afc1b0fc1 17-18,45
+basic/cli/src/plugin-runtime/console/tool-approvals.ts
+  s_9622fd28aba994::t_9d9c28cd55877e 15-21,26-30,58,64
+basic/cli/tests/plugin-runtime/agent/turn/announcement-dispatch.test.ts
+  s_9622fd28aba994::t_4befda2666a882 1-143
+basic/cli/tests/plugin-runtime/console/announcements-rpc.test.ts
+  s_9622fd28aba994::t_9a5d68b3ff73fd 1-170
+basic/cli/tests/plugin-runtime/console/plugin-console-rpc.test.ts
+  s_9622fd28aba994::t_74dcd3da7015e7 161-173
+basic/cli/tests/plugin-runtime/console/tool-approvals.test.ts
+  s_9622fd28aba994::t_a0d86290c96cd2 10,61-90
+docs/ai/default-behavior.md
+  s_9622fd28aba994::t_a8b9a59ed40be1 47
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_eef5897970825c 173-174,327,333-334,337-366
+docs/console/index.md
+  s_9622fd28aba994::t_cd7c0b27f29d8d 179
+docs/en/ai/default-behavior.md
+  s_9622fd28aba994::t_1bc50918ca585c 47
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_8ba1550bd00e4b 173-174,327,333-334,337-366
+docs/en/console/index.md
+  s_9622fd28aba994::t_817219ff3e97c4 176
+packages/im/adapter/src/endpoint-management.ts
+  s_9622fd28aba994::t_a8615077223ae4 63-68
+packages/im/agent/src/announcements.ts
+  s_9622fd28aba994::t_f5970fdb1e853c 1-631
+packages/im/agent/src/decision-events.ts
+  s_9622fd28aba994::t_50dd4f452102d9 40-43,101-113
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_6592d707e9460e 261,265,275-276,292-322
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  s_9622fd28aba994::t_29aa711dd3cd26 17,83-85
+packages/im/agent/src/init/define-ai-database-models.ts
+  s_9622fd28aba994::t_ca4ea80ef239c7 17,34
+packages/im/agent/src/internal/agent-host.ts
+  s_9622fd28aba994::t_a974bdd661575c 54-55
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_9bfa69927f460e 745,752
+packages/im/agent/src/plugin-runtime/index.ts
+  s_9622fd28aba994::t_05a7e645419efd 40
+packages/im/agent/src/plugin-runtime/native-announcement-tools.ts
+  s_9622fd28aba994::t_ab7e8bc17fba1b 1-87
+packages/im/agent/src/reserved-tools.ts
+  s_9622fd28aba994::t_2a29f00df1c315 17
+packages/im/agent/src/security/index.ts
+  s_9622fd28aba994::t_2ca430e6fba72d 30-31
+packages/im/agent/src/security/ops-cooldown.ts
+  s_9622fd28aba994::t_e92c3a0572211c 1-135
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_9622fd28aba994::t_ff79f39bd81e5f 20-24,41,315-319,343-356,436-439,487-542,562-602,708,763-771
+packages/im/agent/src/session-ops.ts
+  s_9622fd28aba994::t_ea6cb6c79cd69a 10-12,34-37,68-76,80,86,91,93,124,273,319-336,339,343-346,351,369-370,383-385,398-400,448-449,545,564,568-569,575,586-587,614-617
+packages/im/agent/src/tool/tool-execution-authority.ts
+  s_9622fd28aba994::t_f6a8bd947981f0 62
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9622fd28aba994::t_e53e7ca9378318 37,64-65,99
+packages/im/agent/src/zhin-agent/index.ts
+  s_9622fd28aba994::t_1b4e0bf07fc7fd 42,49,169-170,193-197,408-411
+packages/im/agent/tests/announcements.test.ts
+  s_9622fd28aba994::t_cdd595f5b1d06d 1-178
+packages/im/agent/tests/decision-events.test.ts
+  s_9622fd28aba994::t_4da115e6767b15 57,99-116
+packages/im/agent/tests/define-ai-database-models.test.ts
+  s_9622fd28aba994::t_44abb01451575c 17,28
+packages/im/agent/tests/plugin-runtime/native-announcement-tools.test.ts
+  s_9622fd28aba994::t_52338c4489e4fa 1-53
+packages/im/agent/tests/security/ops-cooldown.test.ts
+  s_9622fd28aba994::t_9bbb6ea753d15a 1-237
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  s_9622fd28aba994::t_b0f8d89483debf 14,25,222-240,564-617
+packages/im/agent/tests/session-ops.test.ts
+  s_9622fd28aba994::t_4c2a6f74523e93 126-157
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  s_9622fd28aba994::t_b03a9f6f0a7885 22-25,43-47,80-81,153
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  s_9622fd28aba994::t_9f53c4794fe102 36-37
+plugins/adapters/icqq/src/endpoint.ts
+  s_9622fd28aba994::t_676294b148c61d 153-157
+plugins/adapters/napcat/src/endpoint-management.ts
+  s_9622fd28aba994::t_e2988176a9c997 52-57
+plugins/adapters/napcat/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_a2eef7c0baa1ab 26-32
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_1b7d587bbc8543 68,72
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_07cc37516bbd70 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "68e1d23db332ac2aaeb50316d5c6d156a220047a",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
