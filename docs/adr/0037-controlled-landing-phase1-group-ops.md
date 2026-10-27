@@ -51,7 +51,7 @@ sidebar: false
 - 模板变量白名单：`{members}`（@ 新成员，合并时为列表）、`{nickname}`、`{group}`、`{rules_url}`；未知变量原样保留并在预览里标红，不报错。
 - **预览**：Console 提供「预览」按钮，用最近一次真实入群事件（无则用示例成员）渲染，不发送，不写审计。
 - **发送**：入群事件 → 合并窗口 → 渲染 → 控制面 → session-gate → 出站。被拦写 `skip`；超出 `maxPerHour` 写 `skip` / `welcome_rate_limited`。
-- 欢迎不再交给模型临场发挥：会话开启 `welcome.enabled` 后，scene event 唤醒对 `member_join` 不再触发模型回合，避免双发。未开启的会话行为不变。
+- 欢迎不再交给模型临场发挥：会话开启 `welcome.enabled` 后，scene event 唤醒对入群事件（`sub_type=member_increase`）不再触发模型回合，避免双发。未开启的会话行为不变。
 
 #### 1.2 公告：草稿 → 审批 → 发送
 
@@ -111,7 +111,7 @@ sidebar: false
 
 ### 3. 群管协同
 
-- **踢 / 禁 / 改名片**沿用 ADR 0036 切片 E 的硬闸审批卡（`member` 类危险工具），本期不改判定逻辑。改名片（`set_group_card` 等）若尚未列入 `CORE_DANGEROUS_TOOLS`，本期补上，归 `member` 类。
+- **踢 / 禁 / 改名片**沿用 ADR 0036 切片 E 的硬闸审批卡（`member` 类危险工具），本期不改判定逻辑。改名片（`set_group_card` 等）目前**不在** `CORE_DANGEROUS_TOOLS`（现有 `set_title` 归 `member`，`set_nickname` 归 `identity` 且指 Bot 自身），本期补上改他人群名片类工具，归 `member` 类。
 - **审批人 = Console 权限**：审批卡只能由具备相应 Console 权限的用户处理；与 `control:write` 分开，新增权限点（如 `ops:approve`，名称实现时定）。公告审批复用同一权限点。
 - **冷却**：同一 `platform + scene_id + 动作`（动作 = 工具本地名，如 `kick_member`）在 `ops.cooldownMs`（默认 `60000`）内只允许一次进入审批；命中冷却**直接 fail closed，不生成新审批卡**，给模型的结果说明「冷却中」，写 `kind=ops_cooldown`、`outcome=deny`、`reason_code=ops_cooldown_hit`，`payload` 记动作、目标、剩余毫秒。
 - 冷却计时从**审批卡创建**开始，不论最终批准与否；被驳回的动作同样冷却，避免模型换参数刷卡。
@@ -158,7 +158,7 @@ sidebar: false
 
 | 切片 | 内容 |
 |---|---|
-| A | 欢迎 / 退群：会话运营配置、模板渲染与预览、合并窗口与小时上限、`member_lifecycle` kind 与码、对 `member_join` 唤醒的去重 |
+| A | 欢迎 / 退群：会话运营配置、模板渲染与预览、合并窗口与小时上限、`member_lifecycle` kind 与码、对 `member_increase` 唤醒的去重 |
 | B | 公告：`ai_announcements` 表、状态机与 revision、`announcement_draft` 工具、Console 审批、以审批记录作硬闸批准、失败不重试与手动重发 |
 | C | 冷场：计数器、临时 `mention_only` 覆盖（`expires_at`、与手动覆盖分存）、`control.get` 展示来源 |
 | D | 日程：`ai_session_events` 表、`session_event_create` 工具、调度与到点唤醒、宕机补偿、提醒合并 |
@@ -183,6 +183,7 @@ A / C / E 互不依赖，可并行；B 依赖 E 的权限点（可先用 `contro
 - 公告审批超时 `24` 小时；模型可建草稿但不能提交。
 - 日程错过宽限 `10` 分钟；提醒默认模板直发、不调模型。
 - 群管冷却 `60` 秒，从审批卡创建起算，驳回也计入。
+- 入群 / 退群事件口径：side-event 的 `member_increase` / `member_decrease`。
 - 新 kind 走「粗粒度 kind + 细粒度 reason_code」（如 `announcement` + `announcement_approved`），而非每个状态一个 kind。
 
 ## 非目标（第 1 期）
