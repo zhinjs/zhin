@@ -459,10 +459,12 @@ export class UserRelationStore {
   }
 
   async setToneHints(platform: string, userId: string, hints: readonly string[]): Promise<string[]> {
-    const clean = hints
-      .map((hint) => sanitizeProfileText(hint, MAX_TONE_HINT_CHARS))
-      .filter((hint): hint is string => Boolean(hint))
-      .slice(0, MAX_TONE_HINTS);
+    const clean: string[] = [];
+    for (const hint of hints) {
+      const value = sanitizeProfileText(hint, MAX_TONE_HINT_CHARS);
+      if (value && !clean.some((item) => item.toLowerCase() === value.toLowerCase())) clean.push(value);
+    }
+    clean.splice(MAX_TONE_HINTS);
     await this.mutate(platform, userId, (record) => ({ ...record, toneHints: clean }));
     return clean;
   }

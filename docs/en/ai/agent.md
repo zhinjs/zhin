@@ -310,7 +310,17 @@ Session profiles tell the Agent who it is talking to and where. A session is whe
 - **Relations and affinity** (`ai_user_relations`): who this person is to the bot. Keyed by `platform + user_id`, so the same person is one person across groups and channels.
 - **Session context and speak limits** (`ai_session_profiles`): what this session is talking about, who the admins are, roughly how many people are talking, and whether the bot itself may speak. Keyed by `platform + scene_key` (`private:<id>` / `group:<id>` / `channel:<id>`); private chats and groups share the table, and in a private chat the member and admin fields stay empty.
 
-The existing `ai_user_profiles` key/value preferences (`set` / `get` / `delete` on the `user_profile` tool) are unchanged. Without a database, session profiles live in memory and are cleared on restart.
+The `ai_user_profiles` key/value preferences (`set` / `get` / `delete` on the `user_profile` tool) have 8 fixed dimensions: `name`, `language`, `timezone`, `style`, `interests`, `dislikes`, `occupation`, `location` (common aliases such as `preferred_language`, `tz`, `hobbies` are normalized). Writing the same dimension overwrites it, any other key is refused, and values are capped at 80 characters and filtered for sensitive content, so each user has at most 8 rows and storage cannot grow without bound. Keys written by older versions are no longer read or injected.
+
+Every list field is replaced or deduplicated with a fixed cap:
+
+| Field | Cap | Write semantics |
+| --- | --- | --- |
+| Preferences (`ai_user_profiles`) | 8 dimensions, ≤80 chars each | overwrite per dimension |
+| `notes` | 8 items, ≤60 chars each | case-insensitive dedupe, oldest dropped on overflow |
+| `tone_hints` | 4 tags, ≤24 chars each | replaced as a whole, deduped |
+| `topics` | 5 items, ≤24 chars each | replaced as a whole, deduped |
+ Without a database, session profiles live in memory and are cleared on restart.
 
 ### Relations and affinity
 

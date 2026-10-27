@@ -2,7 +2,7 @@
  * 运行时上下文工具（session / profile），由 ToolSystem 按 turn 注入。
  */
 import type { AgentTool } from '@zhin.js/ai';
-import type { UserProfileStore } from '../user-profile.js';
+import { USER_PROFILE_KEYS, normalizeUserProfileKey, type UserProfileStore } from '../user-profile.js';
 import type { SessionScope } from '../session-profile.js';
 export function createUserProfileTool(userId: string, profiles: UserProfileStore, platform?: string): AgentTool {
   const relations = platform ? profiles.relations : undefined;
@@ -25,7 +25,8 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
         },
         key: {
           type: 'string',
-          description: '偏好名称，如: name, style, interests, timezone, language 等',
+          enum: [...USER_PROFILE_KEYS],
+          description: '偏好维度（固定 8 个，同一维度覆盖写入）: name 名字, language 回复语言, timezone 时区, style 回复风格, interests 兴趣, dislikes 不喜欢的, occupation 职业, location 所在地。其他内容用 note。',
         },
         value: {
           type: 'string',
@@ -73,8 +74,10 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
         }
         case 'set': {
           if (!key || !value) return '需要提供 key 和 value';
-          await profiles.set(userId, key, value);
-          return `已保存: ${key} = ${value}`;
+          const normalized = normalizeUserProfileKey(key);
+          if (!normalized) return `不支持的偏好维度: ${key}。只能用 ${USER_PROFILE_KEYS.join('/')}；其他内容用 note。`;
+          if (!await profiles.set(userId, normalized, value)) return '没保存：内容为空或像是敏感信息。';
+          return `已保存: ${normalized} = ${(await profiles.get(userId, normalized)) ?? ''}`;
         }
         case 'delete': {
           if (!key) return '需要提供 key';

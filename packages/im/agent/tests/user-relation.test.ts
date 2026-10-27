@@ -217,3 +217,17 @@ describe('turn integration', () => {
     expect(await tool.execute({ action: 'get' })).toContain('夜猫子');
   });
 });
+
+describe('bounded growth', () => {
+  it('tone hints dedupe and replace; notes roll over without duplicates', async () => {
+    const store = new UserRelationStore(() => T0);
+    await store.setToneHints('qq', 'u', ['损友', '损友', 'A', 'a', 'b', 'c', 'd']);
+    expect((await store.get('qq', 'u'))?.toneHints).toEqual(['损友', 'A', 'b', 'c']);
+    await store.setToneHints('qq', 'u', ['温柔']);
+    expect((await store.get('qq', 'u'))?.toneHints).toEqual(['温柔']);
+    for (let i = 0; i < 100; i += 1) await store.addNote('qq', 'u', `梗${i % 12}`);
+    const notes = (await store.get('qq', 'u'))!.notes;
+    expect(notes).toHaveLength(MAX_NOTES);
+    expect(new Set(notes).size).toBe(MAX_NOTES);
+  });
+});

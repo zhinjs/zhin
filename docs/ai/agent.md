@@ -384,7 +384,17 @@ Markdown 文件记忆（`MEMORY.md`）仍按原有字符预算整体注入，本
 - **人物关系与好感度**（`ai_user_relations`）：这个人对 Bot 来说是谁。键是 `platform + user_id`，同一个人在不同群和频道里是同一个人。
 - **会话上下文与发言限制**（`ai_session_profiles`）：这个会话在聊什么、谁是管理员、大概多少人在说话、Bot 自己能不能发言。键是 `platform + scene_key`（`private:<id>` / `group:<id>` / `channel:<id>`），私聊和群用同一张表；私聊没有成员和管理员，这些字段留空。
 
-原有的 `ai_user_profiles` 键值偏好（`user_profile` 工具的 `set` / `get` / `delete`）保持不变。未启用数据库时会话画像只存在内存里，重启后清空。
+`ai_user_profiles` 键值偏好（`user_profile` 工具的 `set` / `get` / `delete`）只有 8 个固定维度：`name`、`language`、`timezone`、`style`、`interests`、`dislikes`、`occupation`、`location`（`preferred_language`、`tz`、`hobbies` 等常见别名会归一化）。同一维度覆盖写入，维度之外的键直接拒绝，值最多 80 字并做敏感信息过滤，所以每人最多 8 行、不会无限增长；旧版本写入的其他键不再读取或注入。
+
+所有列表字段都是覆盖或去重滚动，有固定上限：
+
+| 字段 | 上限 | 写入方式 |
+| --- | --- | --- |
+| 偏好（`ai_user_profiles`） | 8 个维度，每个 ≤80 字 | 同维度覆盖 |
+| 笔记 `notes` | 8 条，每条 ≤60 字 | 去重（不区分大小写），超出丢最旧 |
+| 语气 `tone_hints` | 4 个，每个 ≤24 字 | 整体替换并去重 |
+| 话题 `topics` | 5 条，每条 ≤24 字 | 整体替换并去重 |
+未启用数据库时会话画像只存在内存里，重启后清空。
 
 ### 人物关系与好感度
 

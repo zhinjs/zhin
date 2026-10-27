@@ -18,10 +18,45 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
-import { UserRelationStore } from './user-relation.js';
+import { UserRelationStore, sanitizeProfileText } from './user-relation.js';
 import { SessionProfileStore } from './session-profile.js';
 
 const logger = getLogger('UserProfile');
+
+// ============================================================================
+// 固定维度
+// ============================================================================
+
+/**
+ * 偏好只有这些固定维度：同一维度覆盖写入，不在表里的键直接拒绝，所以每人最多 8 行、不会无限增长。
+ * 顺序即注入顺序。
+ */
+export const USER_PROFILE_KEYS = [
+  'name', 'language', 'timezone', 'style', 'interests', 'dislikes', 'occupation', 'location',
+] as const;
+export type UserProfileKey = typeof USER_PROFILE_KEYS[number];
+/** 每个偏好值的长度上限。 */
+export const USER_PROFILE_VALUE_MAX_CHARS = 80;
+
+const USER_PROFILE_KEY_ALIASES: Readonly<Record<string, UserProfileKey>> = {
+  preferred_language: 'language',
+  lang: 'language',
+  tz: 'timezone',
+  time_zone: 'timezone',
+  reply_style: 'style',
+  hobbies: 'interests',
+  likes: 'interests',
+  job: 'occupation',
+  city: 'location',
+};
+
+/** 归一化偏好键（大小写、空格、别名）；不是固定维度时返回 null。 */
+export function normalizeUserProfileKey(key: unknown): UserProfileKey | null {
+  if (typeof key !== 'string') return null;
+  const normalized = key.trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if ((USER_PROFILE_KEYS as readonly string[]).includes(normalized)) return normalized as UserProfileKey;
+  return USER_PROFILE_KEY_ALIASES[normalized] ?? null;
+}
 
 // ============================================================================
 // 数据库模型
@@ -170,19 +205,36 @@ export class UserProfileStore {
   }
 
   async get(userId: string, key: string): Promise<string | null> {
-    return this.store.get(userId, key);
+    const normalized = normalizeUserProfileKey(key);
+    return normalized ? this.store.get(userId, normalized) : null;
   }
 
-  async getAll(userId: string): Promise<Record<string, string>> {
-    return this.store.getAll(userId);
+  /** 只返回固定维度（旧版本写入的其他键被忽略），按固定顺序。 */
+  async getAll(userId: string): Promise<Partial<Record<UserProfileKey, string>>> {
+    const stored = await this.store.getAll(userId);
+    const result: Partial<Record<UserProfileKey, string>> = {};
+    for (const key of USER_PROFILE_KEYS) {
+      const value = stored[key];
+      if (typeof value === 'string' && value.trim()) result[key] = value;
+    }
+    return result;
   }
 
-  async set(userId: string, key: string, value: string): Promise<void> {
-    return this.store.set(userId, key, value);
+  /**
+   * 覆盖写入一个固定维度。键不在 {@link USER_PROFILE_KEYS}（含别名）里、值为空或像敏感信息时拒绝并返回 false；
+   * 值超过 {@link USER_PROFILE_VALUE_MAX_CHARS} 会被截断。
+   */
+  async set(userId: string, key: string, value: string): Promise<boolean> {
+    const normalized = normalizeUserProfileKey(key);
+    const clean = sanitizeProfileText(value, USER_PROFILE_VALUE_MAX_CHARS);
+    if (!normalized || !clean) return false;
+    await this.store.set(userId, normalized, clean);
+    return true;
   }
 
   async delete(userId: string, key: string): Promise<boolean> {
-    return this.store.delete(userId, key);
+    const normalized = normalizeUserProfileKey(key);
+    return normalized ? this.store.delete(userId, normalized) : this.store.delete(userId, key);
   }
 
   /**
@@ -190,7 +242,7 @@ export class UserProfileStore {
    * define the reply language preference; persona instructions use this for "Reply in the language specified in [User profile]".
    */
   async buildProfileSummary(userId: string): Promise<string> {
-    const profile = await this.store.getAll(userId);
+    const profile = await this.getAll(userId);
     const entries = Object.entries(profile);
     if (entries.length === 0) return '';
 
