@@ -1,0 +1,37 @@
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_acd01e7eb605d3 51-52,163-184,255
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9622fd28aba994::t_d1f195d3fda1f9 1-244
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_076613d6ec7d06 57,161-162,478-493
+basic/cli/src/plugin-runtime/console/tool-approvals.ts
+  s_9622fd28aba994::t_f4465151f17385 39-40,88,123
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_9622fd28aba994::t_ef96e5a95a71ca 1-312
+docs/configuration/generated.md
+  s_9622fd28aba994::t_e4b4669c18f9f6 180-184
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_5122904c958bde 180-184
+packages/im/agent/src/security/tool-approval-queue.ts
+  s_9622fd28aba994::t_c86bf244bb46cf 9-11,18-35,50-53,55-58,70-74,102-103,115,154-155,158,162-175,194-195,197,201,244,246,249-264,271,279,314-324
+packages/im/agent/src/tool/tool-execution-authority.ts
+  s_9622fd28aba994::t_552edf77d3c185 16,60,150-165
+packages/im/runtime/src/host-config-schema.json
+  s_9622fd28aba994::t_b7d40e3fc9bf48 1135-1184
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a3b636d9c3d15c91fb6cbfc469a34f7cefb005eb",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
