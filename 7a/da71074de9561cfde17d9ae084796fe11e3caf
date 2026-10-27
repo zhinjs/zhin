@@ -1,0 +1,38 @@
+packages/im/core/src/notice.ts
+  h_b680f75345178a 17-18,30,45,54
+packages/im/core/src/plugin-runtime/im/conversation-runtime.ts
+  h_b680f75345178a 21-22,173-174,176-178,180-208,301-325,338-339,401-405
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  h_b680f75345178a 51,54,56-57,118-123,169-170,392-408
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  h_b680f75345178a 89-91,595-602
+packages/im/core/src/plugin-runtime/im/index.ts
+  h_b680f75345178a 35-36
+packages/im/core/src/plugin-runtime/im/message-events.ts
+  h_b680f75345178a 52-87
+packages/im/core/src/side-event/dispatch.ts
+  h_b680f75345178a 65-68,71,73-77,81,83,173-186
+packages/im/core/src/side-event/index.ts
+  h_b680f75345178a 5
+packages/im/core/src/side-event/normalize.ts
+  h_b680f75345178a 47-48
+packages/im/core/src/side-event/scene-events.ts
+  h_b680f75345178a 1-172
+packages/im/core/src/side-event/types.ts
+  h_b680f75345178a 21-23,76-82
+packages/im/core/tests/scene-events.test.ts
+  h_b680f75345178a 1-122
+packages/im/im-contract/src/conversation.ts
+  h_b680f75345178a 36-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7ada71074de9561cfde17d9ae084796fe11e3caf",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
