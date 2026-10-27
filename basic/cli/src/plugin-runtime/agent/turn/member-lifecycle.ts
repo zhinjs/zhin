@@ -88,13 +88,16 @@ interface PendingWelcome extends Scene {
   timer: unknown;
 }
 
-function sceneOf(signal: RuntimeSceneEventSignal): Scene | undefined {
-  const conversation = signal.event.conversation;
+function sceneOfConversation(conversation: ConversationRef, endpointId?: string): Scene | undefined {
   if (conversation.kind !== 'group' && conversation.kind !== 'channel') return undefined;
   const platform = capabilityLocalName(String(conversation.endpoint.id));
   if (!platform || !conversation.id) return undefined;
   const scope = conversation.kind;
-  return { conversation, platform, scope, sceneKey: sceneKeyOf(scope, conversation.id), endpoint: signal.endpointId ?? platform };
+  return { conversation, platform, scope, sceneKey: sceneKeyOf(scope, conversation.id), endpoint: endpointId ?? platform };
+}
+
+function sceneOf(signal: RuntimeSceneEventSignal): Scene | undefined {
+  return sceneOfConversation(signal.event.conversation, signal.endpointId);
 }
 
 function memberOf(actor: { readonly id: string; readonly displayName?: string }): WelcomeMember {
@@ -153,7 +156,15 @@ export class MemberLifecycle {
    */
   ownsWake(signal: RuntimeSceneEventSignal): boolean {
     if (signal.event.type !== 'member.joined') return false;
-    const scene = sceneOf(signal);
+    return this.ownsWelcome(signal.event.conversation);
+  }
+
+  /**
+   * 该会话的入群欢迎是否由本模板欢迎接管（#1012 A9 方案②）：插件旧欢迎（group-suite `welcomeMessage`）
+   * 经 `memberWelcomeOwnerToken` 询问，接管时不再自行发送，避免同一次入群双发。只读配置，不发送、不写审计。
+   */
+  ownsWelcome(conversation: ConversationRef): boolean {
+    const scene = sceneOfConversation(conversation);
     return !!scene && this.#config(scene)?.welcome.enabled === true;
   }
 
