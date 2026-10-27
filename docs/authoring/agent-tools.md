@@ -94,6 +94,8 @@ export default defineAgentTool({
 - 每次调用都要一次新鲜的人工批准（或运营者在 Console 批准过的同参数卡片），`requiresApproval: 'never'`、`execApprovalMode: bypass`、自动审核 Agent、主人身份都不能跳过。
 - 被拒、超时或无人可问时本次调用不执行，模型收到「已拒绝、需人工审批、不要重试」；同一回合里同一工具或同类危险工具的后续调用直接拒绝。
 - 核心名单里的工具（如各 adapter 的 `group_kick`、`set_mute`、`send_group_notice`）即使不声明也按危险处理；声明 `risk: 'safe'` 不能把它们调低。只读查询不需要声明。
+- 核心名单按工具本地名匹配；场景管理通用工具的 `{prefix}_{suffix}`（如 `discord_remove_member`）按至少两段的后缀匹配。改他人群名片（`set_group_card`、`{prefix}_set_nickname`）归 `member`；改 Bot 自身昵称的工具请用 `set_self_nickname` / `set_bot_nickname` 之类的本地名，或声明 `riskCategory: 'identity'`。
+- 控制面处于 `emergency_stop` 或 `read_only` 时，危险工具不弹审批、直接拒绝；`muted` 不拦。
 
 ### 根据配置决定是否提供工具
 
