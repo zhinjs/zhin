@@ -1,0 +1,34 @@
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_b680f75345178a 215,228-237
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 101-102,153-154,159-211,514-525,686
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  h_b680f75345178a 92-93,206
+basic/cli/src/plugin-runtime/agent/turn/scene-event-ingress.ts
+  h_b680f75345178a 1-266
+basic/cli/src/plugin-runtime/agent/turn/scene-event-lines.ts
+  h_b680f75345178a 1-65
+basic/cli/src/plugin-runtime/agent/turn/scene-event-wake.ts
+  h_b680f75345178a 1-138
+basic/cli/src/plugin-runtime/agent/turn/session-gate.ts
+  h_b680f75345178a 59-97
+basic/cli/tests/plugin-runtime/agent/turn/scene-event-wake.test.ts
+  h_b680f75345178a 1-180
+packages/im/ai/src/index.ts
+  h_b680f75345178a 138
+packages/im/ai/src/types.ts
+  h_b680f75345178a 668-669,706-723
+packages/im/core/src/built/ai-trigger.ts
+  h_b680f75345178a 12,73-75,115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f267085dc86023902357063f2e326cfc8a9efeb5",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
