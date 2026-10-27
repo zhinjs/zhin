@@ -104,6 +104,7 @@ export type {
   OwnerApprovalCommandContext,
   ToolRequesterRole,
 } from './security/owner-approval-runtime.js';
+export { managementCommandText } from './init/command-presentation.js';
 export {
   handleRuntimeManagementCommand,
 } from './init/runtime-management-commands.js';

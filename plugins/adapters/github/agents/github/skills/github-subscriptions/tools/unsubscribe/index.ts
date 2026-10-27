@@ -10,6 +10,6 @@ export default defineAgentTool<{ repo: string }>({
   adapter: 'github',
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubUnsubscribe(input, context.$client);
+    return executeGithubUnsubscribe(input, context.$client, undefined, context.locale);
   },
 });

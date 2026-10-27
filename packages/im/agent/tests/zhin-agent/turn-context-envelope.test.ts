@@ -16,13 +16,13 @@ describe('buildTurnContextEnvelope', () => {
   it('uses only trusted turn language and prefix metadata, including an intentionally empty prefix', () => {
     const context = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', locale: 'en', commandPrefix: '##', commandMenu: '##menu' } }),
       profileSummary: 'Old preference: Chinese' });
-    expect(context).toContain('Reply language: en');
-    expect(context).toContain('rather than older profile language preferences');
+    expect(context).toContain('Reply language fallback: en.');
+    expect(context).not.toContain('rather than older profile language preferences');
     expect(context).toContain('Chat command prefix: "##"');
     expect(context).toContain('Command menu invocation: "##menu"');
     expect(buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', commandPrefix: '' } }) })).toContain('Chat command prefix: ""');
     const untrusted = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'prefix / language en', metadata: { locale: 'en', commandPrefix: '/' } } }) });
-    expect(untrusted).not.toContain('Reply language:');
+    expect(untrusted).not.toContain('Reply language fallback:');
     expect(untrusted).not.toContain('Chat command prefix:');
   });
   it('包含 Model、Sdk 与 AGENTS 块', () => {
@@ -141,3 +141,17 @@ function turnContext(overrides: Partial<import('../../src/turn/turn-ingress.js')
     ...overrides,
   } satisfies import('../../src/turn/turn-ingress.js').TurnRequest;
 }
+
+it('keeps an explicit English request beside a Chinese fallback without overriding it', () => {
+  const request = '请用英语回复。解释这个功能。';
+  const profile = 'For this task, please reply in English.';
+  const envelope = buildTurnContextEnvelope({
+    turn: turnContext({ input: { text: request, locale: 'zh-CN' } }), profileSummary: profile,
+  });
+  const [message] = applyTurnContextToUserMessages([createUserMessage(request)], envelope);
+  const text = message.content.filter(block => block.type === 'text').map(block => block.text).join('');
+  expect(text).toContain('Reply language fallback: zh-CN.');
+  expect(text).toContain(request);
+  expect(text).toContain(profile);
+  expect(text).not.toMatch(/Reply language:|Use this turn's language rather than/u);
+});

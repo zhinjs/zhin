@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 /**
  * Timezone helpers built on Intl (no dependencies).
  */
@@ -48,7 +49,7 @@ export function assertTimeZone(timeZone: string): void {
   try {
     formatterFor(timeZone);
   } catch {
-    throw new Error(`未知时区：${timeZone}`);
+    throw new CalendarError('timezone', { value: timeZone });
   }
 }
 
@@ -124,13 +125,13 @@ export function parseDateTimeInZone(value: string, timeZone: string): Date {
   const text = value.trim();
   if (/([zZ]|[+-]\d{2}:?\d{2})$/.test(text)) {
     const date = new Date(text);
-    if (Number.isNaN(date.getTime())) throw new Error(`无法解析时间：${value}`);
+    if (Number.isNaN(date.getTime())) throw new CalendarError('datetime', { value });
     return date;
   }
   const match =
     /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(text);
   if (!match)
-    throw new Error(`无法解析时间：${value}（请用 YYYY-MM-DDTHH:mm 格式）`);
+    throw new CalendarError('datetimeFormat', { value });
   return zonedTimeToUtc(
     {
       year: Number(match[1]),
@@ -161,7 +162,7 @@ export function parseDuration(value: string): number {
     consumed += match[0];
   }
   if (total <= 0 || consumed.replace(/\s/g, "") !== text.replace(/\s/g, "")) {
-    throw new Error(`无法解析时长：${value}（示例：10m、2h30m、1d）`);
+    throw new CalendarError('duration', { value });
   }
   return total;
 }

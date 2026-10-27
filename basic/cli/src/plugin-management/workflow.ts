@@ -513,9 +513,13 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       const check = checks.find(item => item.id === checkId);
       if (!host || !check || !lease || state.status !== 'enabled' || state.generation !== lease.value.generation) return { ...target, checkId, generation: lease?.value.generation ?? null, current: false, status: 'not-configured', scope: null, summary: 'No applied current plugin business verification is configured', evidence: [] };
       const outcome = await host.run(checkId);
+      const summaryI18n = verificationTranslations(outcome.summaryI18n, false);
+      const evidenceI18n = verificationTranslations(outcome.evidenceI18n, true, outcome.evidence.length);
       const after = await this.inspect(request);
       const current = after.generation === lease.value.generation && after.status === 'enabled';
-      return Object.freeze({ ...target, ...outcome, checkId, generation: lease.value.generation, current, scope: check.scope });
+      return Object.freeze({ ...target, ...outcome,
+        ...(summaryI18n ? { summaryI18n } : {}), ...(evidenceI18n ? { evidenceI18n } : {}),
+        checkId, generation: lease.value.generation, current, scope: check.scope });
     } finally { lease?.release(); }
   }
 
@@ -536,10 +540,26 @@ export class PluginManagementOperationError extends Error {
 function verificationChecks(host?: import('@zhin.js/plugin-runtime').PluginVerificationHost) {
   const checks = (host?.checks() ?? []).map(check => {
     if (!check.id || !check.title || !Array.isArray(check.effects) || !check.effects.every(effect => typeof effect === 'string') || !['local', 'platform'].includes(check.scope)) throw new Error('Invalid plugin verification descriptor');
-    return Object.freeze({ id: check.id, title: check.title, effects: Object.freeze([...check.effects]), scope: check.scope });
+    const titleI18n = verificationTranslations(check.titleI18n, false);
+    const effectsI18n = verificationTranslations(check.effectsI18n, true, check.effects.length);
+    return Object.freeze({ id: check.id, title: check.title, effects: Object.freeze([...check.effects]), scope: check.scope,
+      ...(titleI18n ? { titleI18n } : {}), ...(effectsI18n ? { effectsI18n } : {}) });
   });
   if (new Set(checks.map(check => check.id)).size !== checks.length) throw new Error('Duplicate plugin verification check id');
   return Object.freeze(checks);
+}
+function verificationTranslations<T extends boolean>(value: unknown, list: T, expectedLength?: number): Readonly<Partial<Record<'zh-CN' | 'en', T extends true ? readonly string[] : string>>> | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid plugin verification translations');
+  const result: Record<string, string | readonly string[]> = {};
+  for (const locale of ['zh-CN', 'en'] as const) {
+    const entry = (value as Record<string, unknown>)[locale];
+    if (entry === undefined) continue;
+    const nonempty = (item: unknown) => typeof item === 'string' && item.trim().length > 0;
+    if (list ? !Array.isArray(entry) || entry.length !== expectedLength || !entry.every(nonempty) : !nonempty(entry)) throw new Error('Invalid plugin verification translations');
+    result[locale] = Array.isArray(entry) ? Object.freeze([...entry]) : entry as string;
+  }
+  return Object.freeze(result) as Readonly<Partial<Record<'zh-CN' | 'en', T extends true ? readonly string[] : string>>>;
 }
 function checksRevision(incarnation: string, owner: string | undefined, checks: readonly import('@zhin.js/plugin-runtime').PluginVerificationCheck[]) {
   return createHash('sha256').update(JSON.stringify([incarnation, owner, checks])).digest('hex');

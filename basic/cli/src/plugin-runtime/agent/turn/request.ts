@@ -25,7 +25,8 @@ import {
   type ToolCapability,
   type TurnIntentResolver,
 } from '@zhin.js/agent/runtime';
-import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { approvalMessages as approvalText } from './approval-messages.js';
 import type { ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
 
 type EndpointOwnerResolver = (adapterLocalName: string, endpointKey: string) => string | undefined;
@@ -420,10 +421,12 @@ export function createRuntimeQuestionPort(
 
 /** IM approvals use UserInteraction; human-only tools also require a fresh answer from masters. */
 export function createRuntimeApprovalPort(options: {
+  readonly locale?: Locale;
   readonly isMaster: boolean;
   readonly interaction?: UserInteraction;
   readonly memory?: ApprovalDecisionMemory;
 }): ApprovalDecisionPort & ApprovalOutcomePort {
+  const locale = resolveLocale(options.locale);
   const port: ApprovalDecisionPort & ApprovalOutcomePort = {
     available: options.isMaster || options.interaction != null,
     async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
@@ -443,21 +446,20 @@ export function createRuntimeApprovalPort(options: {
         // No `default`: a timeout must surface as timed_out, not as a silent rejection.
         const selected = await options.interaction.ask({
           type: 'select',
-          title: '操作确认',
+          title: approvalText(locale, 'title'),
           description: input.question,
-          tip: input.humanOnly ? '此操作必须逐次人工确认。回复 y / 同意 允许一次，n / 拒绝 拒绝。'
-            : '回复 y / 同意 允许一次，n / 拒绝 拒绝；长期决定仅在当前 Host、当前会话和当前发起者范围内复用。',
+          tip: approvalText(locale, input.humanOnly ? 'humanTip' : 'tip'),
           options: [
-            { label: '拒绝', value: 'reject', aliases: ['n', 'no', '否'],
-              description: input.humanOnly ? '拒绝当前操作。' : '阻止当前及后续同类操作。' },
-            { label: '允许一次', value: 'approve-once', aliases: ['y', 'yes', '同意'], description: '仅执行当前操作。' },
+            { label: approvalText(locale, 'reject'), value: 'reject', aliases: locale === 'en' ? ['n', 'no'] : ['否', '拒绝'],
+              description: approvalText(locale, input.humanOnly ? 'rejectOnce' : 'rejectAlways') },
+            { label: approvalText(locale, 'once'), value: 'approve-once', aliases: locale === 'en' ? ['y', 'yes'] : ['同意', '确认'], description: approvalText(locale, 'onceDescription') },
             ...(sharedConversation && !input.humanOnly ? [
-              { label: '允许此会话', value: 'approve-session', description: '当前会话中，所有发送者的同类操作持续放行。' },
+              { label: approvalText(locale, 'session'), value: 'approve-session', description: approvalText(locale, 'sessionDescription') },
             ] : []),
             ...(!input.humanOnly ? [{
-              label: '始终允许',
+              label: approvalText(locale, 'always'),
               value: 'approve-always',
-              description: '当前会话中，此发送者的同类操作持续放行。',
+              description: approvalText(locale, 'alwaysDescription'),
             }] : []),
           ],
           ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),

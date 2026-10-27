@@ -154,7 +154,7 @@ export class LedgerService {
     const sendTarget = this.#outbound?.sendTarget;
     if (!sendTarget) return false;
     try {
-      await sendTarget.call(this.#outbound, await this.#privateTargetOf(caller), content);
+      await sendTarget.call(this.#outbound, await this.#privateTargetOf(caller), content, { locale: resolveLocale(caller.locale) });
       return true;
     } catch (error) {
       logger.debug(`private delivery unavailable: ${error instanceof Error ? error.message : String(error)}`);
@@ -209,7 +209,7 @@ export class LedgerService {
       if (entries.length === 0 && !this.#config.reportWhenEmpty) continue;
       const summary = formatPeriodSummary(summarize(entries, 'today', nowMs, timezone, subscriber.reportLocale), subscriber.reportLocale);
       try {
-        await this.#outbound.sendTarget(subscriber.reportTarget, t(subscriber.reportLocale, 'report', { text: summary.full }));
+        await this.#outbound.sendTarget(subscriber.reportTarget, t(subscriber.reportLocale, 'report', { text: summary.full }), { locale: resolveLocale(subscriber.reportLocale) });
         sent += 1;
       } catch (error) {
         logger.warn(`daily report delivery failed: ${error instanceof Error ? error.message : String(error)}`);

@@ -3,9 +3,10 @@ import { EndpointDeliveryError, isMediaRef, type MessageRef } from '@zhin.js/im-
 import type { EndpointSendRequest } from 'zhin.js/adapter';
 import { formatOutboundKmarkdown } from './protocol.js';
 import type { KookClientTransport } from './ws.js';
+import { outboundMessages as t } from './i18n.js';
 
 /** Native cards preserve mixed text/images; SDK's ordinary segments stop at first media. */
-export async function sendKookOutbound(client: KookClientTransport, { conversation, payload }: EndpointSendRequest): Promise<string> {
+export async function sendKookOutbound(client: KookClientTransport, { conversation, payload, locale }: EndpointSendRequest): Promise<string> {
   try {
     const items = Array.isArray(payload) ? payload : payload && typeof payload === 'object' ? [payload] : [payload];
     let quote: { message_id: string } | undefined;
@@ -40,7 +41,7 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
         if (['image', 'audio', 'artist', 'duration', 'platform', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'KOOK share media/app metadata is not implemented', 'not_sent');
         modules.push({ type: 'section', mode: 'left', text: { type: 'plain-text', content: data.title } });
         for (const value of [data.description, data.content]) if (typeof value === 'string' && value) modules.push({ type: 'section', mode: 'left', text: { type: 'plain-text', content: value } });
-        modules.push({ type: 'action-group', elements: [{ type: 'button', theme: 'secondary', click: 'link', value: url.href, text: { type: 'plain-text', content: '打开链接' } }] });
+        modules.push({ type: 'action-group', elements: [{ type: 'button', theme: 'secondary', click: 'link', value: url.href, text: { type: 'plain-text', content: t(locale, 'openLink') } }] });
       } else if (item && typeof item === 'object' && item.type === 'image') {
         hasImage = true;
         const media = item.data?.media;
@@ -66,11 +67,11 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
           && isMediaRef(item.data?.media) && !['url', 'file'].includes(item.data.media.kind)) {
           throw new EndpointDeliveryError('unsupported_media', 'KOOK binary uploads currently support images only', 'rejected');
         }
-        const text = formatOutboundKmarkdown([item]);
+        const text = formatOutboundKmarkdown([item], locale);
         if (text) modules.push({ type: 'section', mode: 'left', text: { type: 'kmarkdown', content: text } });
       }
     }
-    const body = hasImage || hasCard ? { __isCard: true, type: 'card', theme: 'secondary', size: 'lg', modules } : formatOutboundKmarkdown(payload);
+    const body = hasImage || hasCard ? { __isCard: true, type: 'card', theme: 'secondary', size: 'lg', modules } : formatOutboundKmarkdown(payload, locale);
     const result = conversation.kind === 'private'
       ? await client.sendPrivateMsg(conversation.id, body, quote)
       : await client.sendChannelMsg(conversation.id, body, quote);

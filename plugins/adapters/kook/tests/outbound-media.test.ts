@@ -63,3 +63,15 @@ describe('KOOK native quote and mixed media', () => {
     await client.disconnect();
   });
 });
+
+
+it('localizes generated media labels while preserving explicit filenames', async () => {
+  const { client, sendChannelMsg } = setup();
+  const payload = ['video', 'audio', 'file'].map(type => ({ type, data: { media: { kind: 'url', value: 'https://example.com/media' } } }));
+  await sendKookOutbound(client, { locale: 'en', conversation, payload });
+  expect(sendChannelMsg.mock.calls[0]?.[1]).toContain('Video');
+  expect(sendChannelMsg.mock.calls[0]?.[1]).toContain('Audio');
+  expect(sendChannelMsg.mock.calls[0]?.[1]).toContain('File: Unnamed');
+  await sendKookOutbound(client, { locale: 'en', conversation, payload: [{ type: 'file', data: { ...payload[2]!.data, name: '用户文件.zip' } }] });
+  expect(sendChannelMsg.mock.calls[1]?.[1]).toContain('File: 用户文件.zip');
+});

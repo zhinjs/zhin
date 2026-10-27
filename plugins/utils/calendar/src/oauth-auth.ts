@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 /**
  * OAuth authorization-code + PKCE helpers for the one-time auth CLI.
  */
@@ -126,17 +127,15 @@ export async function exchangeAuthorizationCode(
     const desc = String(
       data.error_description ?? data.error ?? response.statusText
     );
-    throw new Error(`${options.provider}: 换取 token 失败：${desc}`);
+    throw new CalendarError('exchange', { provider: options.provider, detail: desc });
   }
   const refreshToken = String(data.refresh_token ?? "");
   const accessToken = String(data.access_token ?? "");
   if (!refreshToken) {
-    throw new Error(
-      `${options.provider}: 响应没有 refresh_token。Google 请确认 access_type=offline&prompt=consent；Microsoft 请确认已请求 offline_access。`
-    );
+    throw new CalendarError('refreshMissing', { provider: options.provider });
   }
   if (!accessToken)
-    throw new Error(`${options.provider}: 响应缺少 access_token`);
+    throw new CalendarError('accessMissing', { provider: options.provider });
   return {
     accessToken,
     refreshToken,

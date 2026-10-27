@@ -125,6 +125,7 @@
     "export{loadAssistantProfileFile,loadBootstrapWithProfile,syncProfileHeartbeatToStore,pruneStaleProfileCronJobs,mergeProfileDeviceAliases,validateAssistantProfile,resolveAssistantProfileConfig,ASSISTANT_PROFILE_VERSION,DEFAULT_PROFILE_FILENAME,PROFILE_HEARTBEAT_JOB_ID,PROFILE_MORNING_BRIEF_JOB_ID,PROFILE_BEDTIME_CHECK_JOB_ID,}from './assistant/index.js';",
     "export{loadBootstrapFiles,buildContextFiles,buildBootstrapContextSection,buildStableContextFiles,buildStableBootstrapSection,loadSoulPersona,loadToolsGuide,loadAgentsMemory,STABLE_BOOTSTRAP_FILENAMES,}from './bootstrap.js';",
     "export{loadMemoryLayers,buildMemoryPrompt,safeSessionKey,getMemoryRoot,checkMemoryWritePath,classifyMemoryWritePath,formatMemoryPathsHint,resolveMemoryPromptOptions,DEFAULT_MEMORY_BUDGETS,}from './memory-layers.js';",
+    "export{managementCommandText}from './init/command-presentation.js';",
     "export{originFromMessage}from './spawn/spawn-task-tool.js';",
     "export{pluginToolToAgentTool,agentToolToLlmTool,agentToolsToLlmTools,}from './tool-bridge.js';",
     "export{promptAssemblyToken}from './prompt/tokens.js';",

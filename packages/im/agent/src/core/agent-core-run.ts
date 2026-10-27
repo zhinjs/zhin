@@ -523,7 +523,7 @@ export async function* runAgentLoopTextTurnRun(
   const imReply = messagePreset && input.turnContext.origin.kind === 'im'
     && input.conversationPersistence !== 'none';
   const chatFailure: ChatFailureOptions | undefined = input.turnContext.origin.kind === 'im'
-    ? { master: input.turnContext.principal.roles.includes('master') }
+    ? { master: input.turnContext.principal.roles.includes('master'), locale: input.turnContext.input?.locale }
     : undefined;
   const outputSchema = imReply ? structuredReplySchema(input.replySegments)
     : messagePreset || !configuredSchema ? undefined : configuredSchema;
@@ -943,10 +943,12 @@ export async function* runAgentLoopTextTurnRun(
   let lastAssistantNeedsHostReply = false;
   const reporter = input.progressSink && hasTools && toolBudget.progressMaxUpdates > 0
     ? new TurnProgressReporter({
+      locale: input.turnContext.input?.locale,
       sink: input.progressSink,
       minIntervalMs: toolBudget.progressMinIntervalMs,
       maxUpdates: toolBudget.progressMaxUpdates,
       summarize: () => summarizeProgress({
+        locale: input.turnContext.input?.locale,
         transport: completionUsage.transport,
         model: llmModel,
         systemPrompt: proseSystemPrompt,
@@ -1046,6 +1048,7 @@ export async function* runAgentLoopTextTurnRun(
       || hardLimitReached()
       || shouldSuppressReplyForSpawnDelegation(toolCalls)) break;
     const checkpoint = await summarizeExhaustedTurn({
+      locale: input.turnContext.input?.locale,
       transport: completionUsage.transport,
       model: llmModel,
       systemPrompt: proseSystemPrompt,
@@ -1121,6 +1124,7 @@ export async function* runAgentLoopTextTurnRun(
   let hostReply = lastAssistantNeedsHostReply;
   if (needsReplyRecovery) {
     const summary = await summarizeExhaustedTurn({
+      locale: input.turnContext.input?.locale,
       transport: completionUsage.transport,
       model: llmModel,
       systemPrompt,

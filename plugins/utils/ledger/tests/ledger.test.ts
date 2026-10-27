@@ -472,17 +472,20 @@ describe('localized ledger commands and pinned report language', () => {
   it('uses English inputs and feedback while keeping amounts private and reports pinned', async () => {
     const created = await fixture();
     const english = { ...privateMessage('alice'), locale: 'en' as const };
+    const sendTarget = vi.spyOn(created.fake.outbound, 'sendTarget');
     expect(await created.run('ledger-add Lunch 18.5', english)).toContain('Recorded #1');
     expect(await created.run('ledger-list today', english)).toContain('Today entries');
     expect(await created.run('ledger-list 今日', english)).toContain('Choose a period');
     expect(await created.run('ledger-report 开启', english)).toContain('Choose an action');
     expect(await created.run('ledger-report on', english)).toContain('Daily reports enabled');
     expect(await created.run('ledger-today', { ...groupMessage('alice'), locale: 'en' })).toContain('sent to you privately');
+    expect(sendTarget.mock.calls.at(-1)).toEqual([expect.objectContaining({ id: 'alice' }), expect.any(String), { locale: 'en' }]);
     expect(await created.run('ledger-report 状态', privateMessage('alice'))).toContain('已开启');
     await created.clock.advance(12 * 60 * 60_000);
     const report = created.privateMessagesTo('alice').at(-1)!;
     expect(report).toContain('Daily expense report');
     expect(report).toContain('¥18.50');
     expect(report).not.toContain('记账日报');
+    expect(sendTarget.mock.calls.at(-1)).toEqual([expect.objectContaining({ id: 'alice' }), expect.any(String), { locale: 'en' }]);
   });
 });

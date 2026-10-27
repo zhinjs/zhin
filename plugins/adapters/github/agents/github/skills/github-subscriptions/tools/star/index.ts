@@ -11,6 +11,6 @@ export default defineAgentTool<{ action: 'star' | 'unstar' | 'check'; repo: stri
   }),
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubStar(input, context.$client);
+    return executeGithubStar(input, context.$client, undefined, context.locale);
   },
 });

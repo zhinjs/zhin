@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentMessage, AgentTool, Context } from '@zhin.js/ai';
+import { createUserMessage, type AgentMessage, type AgentTool, type Context } from '@zhin.js/ai';
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 
 vi.mock('../../src/prompt/assembly.js', () => ({
@@ -61,6 +61,8 @@ function scripted(next: (index: number, context: Context) => Step, extra: {
 
 async function run(options: {
   llm: ReturnType<typeof wireMockLlmApi>;
+  rawContent?: string;
+  history?: AgentMessage[];
   tools: AgentTool[];
   maxIterations?: number;
   toolBudget?: Record<string, unknown>;
@@ -73,7 +75,7 @@ async function run(options: {
   const appended: AgentMessage[] = [];
   const host = {
     contextRepository: {
-      loadContext: async () => ({ messages: [] }),
+      loadContext: async () => ({ messages: options.history ?? [] }),
       appendMessages: async (_id: string, messages: AgentMessage[]) => { appended.push(...messages); },
     },
     getTurnProvider: () => ({ name: 'mock' }),
@@ -105,7 +107,7 @@ async function run(options: {
   const result = await collectAgentLoopTurnRun(runAgentLoopTextTurnRun({
     host: host as never,
     sessionId: 's',
-    rawContent: 'do the task',
+    rawContent: options.rawContent ?? 'do the task',
     promptProfile: { kind: 'interactive' } as never,
     turnContext: (options.turn ?? {
       origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'private', sceneId: 'u' },
@@ -372,4 +374,63 @@ describe('progress updates to the user', () => {
     expect(sent.length).toBeGreaterThan(0);
     expect(seen.some((text) => text.includes('Progress updates already sent to the user'))).toBe(true);
   });
+});
+
+it.each([
+  ['en', '用户用中文提问', '模型用中文回答'],
+  ['zh-CN', 'The user writes in English', 'The model replies in English'],
+  ['zh-CN', '请用英语回复。整理文件并总结。', 'The model follows the explicit English request'],
+] as const)('uses %s only as a fallback on progress, continuation and exhausted requests: %s', async (locale, text, summary) => {
+  const sent: string[] = [];
+  const llm = scripted((index) => ({ tool: 'write_file', args: { path: `f${index}` } }), {
+    summary, progress: '```json\n{"raw":"output"}\n```',
+  });
+  const { result } = await run({
+    llm, rawContent: text, tools: [tool('write_file')], maxIterations: 2,
+    toolBudget: { extendBy: 0, autoContinue: 'on', maxContinuations: 1, progressMinIntervalMs: 0, progressMaxUpdates: 1 },
+    turn: {
+      origin: { kind: 'im', platform: 'fixture', endpoint: 'bot', scope: 'private', sceneId: 'u' },
+      principal: { subjectId: 'u', roles: ['user'] }, session: { key: 'k' },
+      policy: { permissions: [], unattended: false }, input: { locale, text },
+    },
+    progressSink: async value => { sent.push(value); },
+  });
+  const progress = llm.calls.filter(call => lastUserText(call.context).includes('progress update'));
+  const exhausted = llm.calls.filter(call => lastUserText(call.context).includes('tool-call steps'));
+  expect(progress).toHaveLength(1);
+  expect(exhausted).toHaveLength(2); // continuation checkpoint, then final recovery
+  for (const call of [...progress, ...exhausted]) {
+    const instruction = lastUserText(call.context);
+    expect(instruction).toContain(`Reply language fallback: ${locale}.`);
+    expect(instruction).toContain('applicable explicit reply-language request first');
+    expect(instruction).toContain('actual request, not framework notices');
+    expect(instruction).not.toMatch(/Reply to the user directly, in (?:English|Simplified Chinese)|user in (?:English|Simplified Chinese)/u);
+    expect(JSON.stringify(call.context.messages)).toContain(text);
+    expect(call.context.tools).toBeUndefined();
+  }
+  expect(llm.calls).toHaveLength(7); // no added translation or classification calls
+  expect(sent).toEqual([`${PROGRESS_UPDATE_PREFIX}${fallbackProgressText(1, locale)}`]);
+  expect(result.reply).toBe(summary);
+  expect(result.iterations).toBe(4);
+});
+
+
+it('retains an applicable earlier language request in summary context', async () => {
+  const earlier = 'For the rest of this task, please reply in English.';
+  const history = [createUserMessage(earlier)];
+  const llm = scripted(writes(2), { summary: 'Completed the first part. Shall I continue?' });
+  const { result } = await run({ llm, history, rawContent: '继续处理', tools: [tool('write_file')], maxIterations: 1, toolBudget: { extendBy: 0 },
+    turn: {
+      origin: { kind: 'im', platform: 'fixture', endpoint: 'bot', scope: 'private', sceneId: 'u' },
+      principal: { subjectId: 'u', roles: ['user'] }, session: { key: 'k' },
+      policy: { permissions: [], unattended: false }, input: { locale: 'zh-CN', text: '继续处理' },
+    },
+  });
+  expect(llm.calls).toHaveLength(2);
+  const summary = llm.calls.find(call => lastUserText(call.context).includes('tool-call steps'))!;
+  expect(JSON.stringify(summary.context.messages)).toContain(earlier);
+  expect(lastUserText(summary.context)).toContain('applicable explicit reply-language request first');
+  expect(lastUserText(summary.context)).toContain('Reply language fallback: zh-CN.');
+  expect(result.reply).toBe('Completed the first part. Shall I continue?');
+  expect(history).toHaveLength(1);
 });

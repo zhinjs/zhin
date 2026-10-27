@@ -370,7 +370,8 @@ describe('persistent reminder through real Runtime discovery', () => {
       const host = before.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(pluginVerificationToken.id) as PluginVerificationHost;
       expect(host.checks()[0]!.effects.join()).toContain('不发送'); expect(f.send).not.toHaveBeenCalled();
       const exchange = vi.spyOn(f.db.state!, 'compareExchange');
-      expect(await host.run('local-state')).toMatchObject({ status: 'passed' });
+      expect(host.checks()[0]!.effectsI18n?.en).toEqual(['Write, read and delete an isolated probe key; no reminders are created and no messages are sent']);
+      expect(await host.run('local-state')).toMatchObject({ status: 'passed', summaryI18n: { en: 'Local persistent state read/write check passed' }, evidenceI18n: { en: expect.any(Array) } });
       const probe = exchange.mock.calls.find(call => call[2].startsWith('verification/') && call[4] !== undefined)!;
       expect(probe[5]).toBeGreaterThan(Date.now());
       expect(probe[5]).toBeLessThanOrEqual(Date.now() + 60_000);

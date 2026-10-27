@@ -2,6 +2,7 @@
  * WeChat MP webhook HTTP: URL verification + inbound message handling.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Locale } from 'zhin.js/i18n';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -36,6 +37,7 @@ export interface WeChatMpWebhookHandler {
   readonly isOpen: boolean;
   readonly id: CapabilityId;
   admit(msg: WeChatMessage): void | Promise<unknown>;
+  resolveLocale?(senderId: string): Promise<Locale | undefined>;
   /** MsgId 去重缓存（可选；实现见 WeChatMpEndpoint）。 */
   getCachedReply?(msgId: string): string | undefined;
   cacheReply?(msgId: string, replyXML: string): void;
@@ -172,7 +174,10 @@ export async function handleWeChatMpMessage(
       }
     }
 
-    let replyXML = resolveEventPassiveReply(wechatMessage);
+    const locale = wechatMessage.MsgType === 'event' && wechatMessage.Event === 'subscribe'
+      ? await handler.resolveLocale?.(wechatMessage.FromUserName)
+      : undefined;
+    let replyXML = resolveEventPassiveReply(wechatMessage, locale);
 
     if (!replyXML && handler.isOpen) {
       if (config.replyMode === 'passive') {

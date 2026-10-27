@@ -49,8 +49,8 @@ export default definePlugin<CalendarConfig>({
 
     const notify: CalendarNotifier<DeliveryTarget> | undefined =
       outbound?.sendTarget
-        ? async (target, text) => {
-            await outbound.sendTarget!(target, text);
+        ? async (target, text, locale) => {
+            await outbound.sendTarget!(target, text, { locale });
           }
         : undefined;
 

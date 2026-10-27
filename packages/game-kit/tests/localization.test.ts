@@ -22,7 +22,7 @@ it('uses the stored game locale for timeout notifications and keeps legacy rows 
       return rows.length;
     },
   };
-  const sent: { content: unknown }[] = [];
+  const sent: { content: unknown; locale?: string }[] = [];
   let execute: (() => Promise<void>) | undefined;
   const resources = new Map<string, unknown>([
     [projectLocaleToken.id, 'en'],
@@ -45,5 +45,6 @@ it('uses the stored game locale for timeout notifications and keeps legacy rows 
     '🎮 测试对局因长时间无操作已结束。',
     '🎮 测试对局因长时间无操作已结束。',
   ]);
+  expect(sent.map(item => item.locale)).toEqual(['en', 'zh-CN', 'zh-CN']);
   await lifecycle.dispose();
 });

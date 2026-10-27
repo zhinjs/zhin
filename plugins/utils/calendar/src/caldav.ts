@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 /**
  * Minimal CalDAV client (RFC 4791) for listing and creating VEVENTs.
  * Works with iCloud, Fastmail and Nextcloud calendars.
@@ -146,7 +147,7 @@ export function parseCalDavEvents(
   const blocks = extractVeventBlocks(xml);
   blocks.forEach((block, index) => {
     const uid = extractField(block, "UID") ?? hrefs[index] ?? `event-${index}`;
-    const summary = extractField(block, "SUMMARY") ?? "(无标题)";
+    const summary = extractField(block, "SUMMARY") ?? "";
     const startRaw = extractField(block, "DTSTART");
     const endRaw = extractField(block, "DTEND") ?? startRaw;
     if (!startRaw || !endRaw) return;
@@ -228,7 +229,7 @@ export function createCalDavProvider(options: CalDavOptions): CalendarProvider {
         signal,
       });
       if (!response.ok)
-        throw new Error(`CalDAV REPORT 失败：HTTP ${response.status}`);
+        throw new CalendarError('caldavHttp', { method: 'REPORT', status: response.status });
       return parseCalDavEvents(await response.text(), options.timezone);
     },
     async createEvent(input, signal) {
@@ -245,7 +246,7 @@ export function createCalDavProvider(options: CalDavOptions): CalendarProvider {
         signal,
       });
       if (response.status !== 201 && response.status !== 204) {
-        throw new Error(`CalDAV PUT 失败：HTTP ${response.status}`);
+        throw new CalendarError('caldavHttp', { method: 'PUT', status: response.status });
       }
       return {
         id: uid,

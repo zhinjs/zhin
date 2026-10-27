@@ -8,7 +8,7 @@ export function projectLocale(snapshot: RuntimeSnapshot): Locale {
 }
 
 /** Resolve once per operation; callbacks retain the original operation's language. */
-export async function messageLocale(snapshot: RuntimeSnapshot, conversation: ConversationRef,
+export async function messageLocale(snapshot: RuntimeSnapshot, conversation: Pick<ConversationRef, 'endpoint'>,
   senderId?: string): Promise<Locale> {
   const preferences = snapshot.resources.get(snapshot.root)?.get(userLocalePreferencesToken.id) as UserLocalePreferences | undefined;
   return senderId && preferences
