@@ -88,11 +88,10 @@ export class WorkspaceManager {
     });
   }
 
-  configureBotGit(repoPath: string, identity: GitHubBotIdentity, locale?: Locale): Promise<void> {
-    return Promise.all([
-      this.runGit(repoPath, ['config', 'user.name', identity.login], undefined, locale),
-      this.runGit(repoPath, ['config', 'user.email', identity.email], undefined, locale),
-    ]).then(() => undefined);
+  async configureBotGit(repoPath: string, identity: GitHubBotIdentity, locale?: Locale): Promise<void> {
+    // Both writes acquire the same .git/config.lock.
+    await this.runGit(repoPath, ['config', 'user.name', identity.login], undefined, locale);
+    await this.runGit(repoPath, ['config', 'user.email', identity.email], undefined, locale);
   }
 
   async ensureRepo(repo: string, locale?: Locale): Promise<string> {
@@ -111,7 +110,7 @@ export class WorkspaceManager {
 
     const cloneUrl = this.gh.buildCloneUrl(repo, token);
     if (!fs.existsSync(path.join(repoPath, '.git'))) {
-      await this.runGit(path.dirname(repoPath), ['clone', cloneUrl, path.basename(repoPath)], undefined, locale);
+      await this.runGit(path.dirname(repoPath), ['clone', '--', cloneUrl, path.basename(repoPath)], undefined, locale);
     } else {
       await this.runGit(repoPath, ['remote', 'set-url', 'origin', cloneUrl], undefined, locale);
       await this.runGit(repoPath, ['fetch', 'origin', '--prune'], undefined, locale);
@@ -129,19 +128,19 @@ export class WorkspaceManager {
     const localBranches = await this.runGit(repoPath, ['branch', '--list', branch], undefined, locale);
     if (localBranches.trim()) {
       await this.runGit(repoPath, ['checkout', branch], undefined, locale);
-      await this.runGit(repoPath, ['pull', '--rebase', 'origin', branch], undefined, locale).catch(async () => {
-        await this.runGit(repoPath, ['fetch', 'origin', branch], undefined, locale);
+      await this.runGit(repoPath, ['pull', '--rebase', '--', 'origin', branch], undefined, locale).catch(async () => {
+        await this.runGit(repoPath, ['fetch', '--', 'origin', branch], undefined, locale);
       });
       return repoPath;
     }
 
-    const remoteBranch = await this.runGit(repoPath, ['ls-remote', '--heads', 'origin', branch], undefined, locale);
+    const remoteBranch = await this.runGit(repoPath, ['ls-remote', '--heads', '--', 'origin', branch], undefined, locale);
     if (remoteBranch.trim()) {
       await this.runGit(repoPath, ['checkout', '-B', branch, `origin/${branch}`], undefined, locale);
       return repoPath;
     }
 
-    await this.runGit(repoPath, ['fetch', 'origin', baseRef], undefined, locale);
+    await this.runGit(repoPath, ['fetch', '--', 'origin', baseRef], undefined, locale);
     await this.runGit(repoPath, ['checkout', '-B', branch, `origin/${baseRef}`], undefined, locale);
     return repoPath;
   }
