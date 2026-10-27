@@ -88,23 +88,31 @@ export class AnnouncementValidationError extends Error {
 }
 
 export class AnnouncementNotFoundError extends Error {
-  constructor(readonly id: string) {
+  readonly id: string;
+  constructor(id: string) {
     super(`announcement ${id} not found`);
+    this.id = id;
     this.name = 'AnnouncementNotFoundError';
   }
 }
 
 export class AnnouncementRevisionConflictError extends Error {
-  constructor(readonly currentRevision: number) {
+  readonly currentRevision: number;
+  constructor(currentRevision: number) {
     super(`announcement revision conflict: current revision is ${currentRevision}`);
+    this.currentRevision = currentRevision;
     this.name = 'AnnouncementRevisionConflictError';
   }
 }
 
 /** 当前状态不允许该迁移（例如对 `sent` 改正文、对 `draft` 审批）。 */
 export class AnnouncementStateError extends Error {
-  constructor(readonly status: AnnouncementStatus, readonly action: string) {
+  readonly status: AnnouncementStatus;
+  readonly action: string;
+  constructor(status: AnnouncementStatus, action: string) {
     super(`announcement in status ${status} cannot ${action}`);
+    this.status = status;
+    this.action = action;
     this.name = 'AnnouncementStateError';
   }
 }
@@ -520,7 +528,8 @@ export class AiAnnouncements {
       try {
         const result = sink.record({
           turnId: id,
-          instanceId: this.#instanceId,
+          // 与回合审计同口径：Bot 实例用 endpoint（Bot 账号），缺省回落平台名。
+          instanceId: record.endpoint || record.platform || this.#instanceId,
           platform: record.platform,
           sceneId: record.sceneId,
           kind: 'announcement',
