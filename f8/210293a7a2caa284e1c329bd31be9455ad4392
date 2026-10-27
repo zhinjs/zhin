@@ -1,0 +1,43 @@
+packages/im/agent/src/config/agent-interfaces.ts
+  s_079f1dc5e6308d::t_42674ce1136fa9 53
+packages/im/agent/src/config/keyword-triggers.ts
+  s_079f1dc5e6308d::t_0238c7cc12761c 3
+packages/im/agent/src/context/default-builders.ts
+  s_079f1dc5e6308d::t_b17370e75487c3 4-7,17-20,24-46
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  s_079f1dc5e6308d::t_742a7f30f9ca5b 66,68
+packages/im/agent/src/init/define-ai-database-models.ts
+  s_079f1dc5e6308d::t_9df4aff2b48bba 12,24
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_079f1dc5e6308d::t_1ae95d3281b973 42,324-325
+packages/im/agent/src/tool/context-tools.ts
+  s_079f1dc5e6308d::t_af30f6c682d204 6-8,12-14,20-23,31,47-71,84,86
+packages/im/agent/src/tool/sources.ts
+  s_079f1dc5e6308d::t_6be4ffa08718be 90-91
+packages/im/agent/src/user-profile.ts
+  s_079f1dc5e6308d::t_50b728f47b454e 16,139-140,142,144,147,151,186
+packages/im/agent/src/user-relation-turn.ts
+  s_079f1dc5e6308d::t_606866b4aa83d4 1-42
+packages/im/agent/src/zhin-agent/index.ts
+  s_079f1dc5e6308d::t_68f92e0ca182b3 317-321
+packages/im/agent/tests/define-ai-database-models.test.ts
+  s_079f1dc5e6308d::t_4abd8e80d0cefc 17,23
+packages/im/agent/tests/user-relation.test.ts
+  s_079f1dc5e6308d::t_f7e216cd513846 1-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f8210293a7a2caa284e1c329bd31be9455ad4392",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
