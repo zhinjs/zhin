@@ -12,6 +12,7 @@ import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limi
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import { AI_DECISION_EVENTS_TABLE } from '../decision-events.js';
+import { AI_CONTROL_STATE_TABLE } from '../control-plane.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
@@ -71,6 +72,9 @@ export async function activateAiDatabaseStorage(
   }
   const decisionModel = db.models?.get(AI_DECISION_EVENTS_TABLE);
   if (decisionModel) refs.zhinAgent.getDecisionEvents?.().upgradeToDatabase(decisionModel);
+  // ADR 0036 slice D: 读不出持久化开关时不抛错，控制面 fail closed 并稍后重试。
+  const controlModel = db.models?.get(AI_CONTROL_STATE_TABLE);
+  if (controlModel) await refs.zhinAgent.getControlPlane?.().upgradeToDatabase(controlModel);
 
   if (semanticActivation) {
     semanticActivation.runtime.activate(semanticActivation.repository);

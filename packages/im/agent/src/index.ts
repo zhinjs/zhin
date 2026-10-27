@@ -223,6 +223,33 @@ export {
   type DecisionEventQuery,
   type DecisionEventReader,
 } from './decision-event-log.js';
+export {
+  AI_CONTROL_STATE_MODEL,
+  AI_CONTROL_STATE_ROW_ID,
+  AI_CONTROL_STATE_TABLE,
+  AiControlPlane,
+  CONTROL_OFF,
+  CONTROL_STATE_RETRY_MS,
+  CONTROL_SWITCHES,
+  ControlRevisionConflictError,
+  ControlUnavailableError,
+  ControlValidationError,
+  MAX_CONTROL_SESSION_OVERRIDES,
+  evaluateControl,
+  parseControlDocument,
+  type ControlChange,
+  type ControlFlags,
+  type ControlFlagsPatch,
+  type ControlGateInput,
+  type ControlLevel,
+  type ControlSessionOverride,
+  type ControlSetInput,
+  type ControlSetResult,
+  type ControlSnapshot,
+  type ControlStateModel,
+  type ControlSwitch,
+  type ControlVerdict,
+} from './control-plane.js';
 
 // ── Capability Seam ────────────────────────────────────────────────────────
 export type {

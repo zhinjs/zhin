@@ -41,6 +41,7 @@ import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import { UserProfileStore } from '../user-profile.js';
 import { DecisionEventLog } from '../decision-event-log.js';
+import { AiControlPlane } from '../control-plane.js';
 import { SubagentSystem, type SubagentOrigin, type SubagentResultSender, type SubagentCompletePayload } from '../subagent/index.js';
 import { buildParentContextSnapshot } from '../subagent-parent-context.js';
 import {
@@ -155,6 +156,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   userProfiles: UserProfileStore;
   /** 决策审计（ADR 0036 切片 B，`ai_decision_events`）。 */
   readonly decisionEvents: DecisionEventLog = new DecisionEventLog();
+  /** 控制面四开关（ADR 0036 切片 D）；只经 Console 写，模型没有工具能读写。 */
+  readonly controlPlane: AiControlPlane = new AiControlPlane();
   rateLimiter: RateLimiter;
   readonly usageQuota: UsageQuota;
   subagentSystem: SubagentSystem | null = null;
@@ -373,6 +376,10 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getDecisionEvents(): DecisionEventLog {
     return this.decisionEvents;
+  }
+
+  getControlPlane(): AiControlPlane {
+    return this.controlPlane;
   }
 
   registerTool(tool: RegisteredAgentTool): () => void {
