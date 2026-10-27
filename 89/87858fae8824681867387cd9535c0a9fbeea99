@@ -1,0 +1,20 @@
+packages/im/agent/src/plugin-runtime/index.ts
+  h_b680f75345178a 41
+packages/im/agent/src/plugin-runtime/native-session-event-tools.ts
+  h_b680f75345178a 1-128
+packages/im/agent/src/reserved-tools.ts
+  h_b680f75345178a 18
+packages/im/agent/tests/plugin-runtime/native-session-event-tools.test.ts
+  h_b680f75345178a 1-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8987858fae8824681867387cd9535c0a9fbeea99",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
