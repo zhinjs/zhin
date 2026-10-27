@@ -1,0 +1,24 @@
+plugins/adapters/github/src/workspace-manager.ts
+  s_079f1dc5e6308d::t_26e7e313425097 91-94
+  s_079f1dc5e6308d::t_5d03297ad199c0 113,131-132,137,143
+plugins/adapters/github/tests/workspace-manager-local-git.test.ts
+  s_079f1dc5e6308d::t_c31cec43196a9c 1-58
+.changeset/localization-entrypoint-audit.md
+  s_079f1dc5e6308d::t_5f9eec9e1e598a 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cd3548ea815c77827659ba814e3fc6f365b06671",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
