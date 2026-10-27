@@ -939,7 +939,7 @@ describe('IM Runtime', () => {
 
     expect(pending.blocks).toEqual([expect.objectContaining({
       eventType: 'message.created',
-      text: 'Alice (alice): background context',
+      text: 'Alice (alice) [message_id="background-1"]: background context',
     })]);
     await fixture.im.commitConversationContext(
       conversation,

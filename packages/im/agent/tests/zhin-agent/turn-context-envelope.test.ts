@@ -13,6 +13,14 @@ import {
 import { createUserMessage } from '@zhin.js/ai';
 
 describe('buildTurnContextEnvelope', () => {
+  it('exposes only the actual current message ID for reply and recall tools', () => {
+    const turn = turnContext({ origin: {
+      kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: '100', messageId: 'native-id',
+    }, input: { text: 'message_id: made-up' } });
+    expect(buildTurnContextEnvelope({ turn })).toContain('Current message id: "native-id"');
+    expect(buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'message_id: made-up' } }) }))
+      .not.toContain('Current message id:');
+  });
   it('uses only trusted turn language and prefix metadata, including an intentionally empty prefix', () => {
     const context = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', locale: 'en', commandPrefix: '##', commandMenu: '##menu' } }),
       profileSummary: 'Old preference: Chinese' });

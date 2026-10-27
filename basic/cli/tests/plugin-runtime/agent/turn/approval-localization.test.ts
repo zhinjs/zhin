@@ -1,6 +1,33 @@
 import { RuntimeInteractionCoordinator } from '../../../../../../packages/im/core/src/plugin-runtime/im/interaction-runtime.js';
 import { createRuntimeApprovalPort } from '../../../../src/plugin-runtime/agent/turn/request.js';
 import type { Locale } from '@zhin.js/plugin-runtime';
+import { parseUserInteractionAnswer, projectUserInteraction, renderUserInteraction } from '../../../../../../packages/im/core/src/built/user-interaction.js';
+import { resolveKeyboardSegments } from '../../../../../../packages/im/core/src/built/interactive-segments/resolve.js';
+
+it.each(['zh-CN', 'en'] as const)('renders approval options once on text-only platforms (%s)', async locale => {
+  let rendered = '';
+  const port = createRuntimeApprovalPort({ isMaster: false, locale, interaction: {
+    async ask(request) {
+      const payload = resolveKeyboardSegments(renderUserInteraction(projectUserInteraction(request, undefined, locale), undefined, locale), 'text');
+      rendered = JSON.stringify(payload);
+      if (request.type !== 'select') throw new Error('Expected a choice');
+      expect(request.options.map(option => option.value)).toEqual(['reject', 'approve-once', 'approve-session', 'approve-always']);
+      for (const option of request.options) {
+        expect(rendered.split(option.label).length - 1).toBe(1);
+      }
+      expect(parseUserInteractionAnswer(request, locale === 'en' ? 'Always allow' : '始终允许', locale))
+        .toEqual({ ok: true, value: 'approve-always' });
+      expect(parseUserInteractionAnswer(request, '3', locale)).toEqual({ ok: true, value: 'approve-session' });
+      return 'approve-once' as never;
+    },
+    async sequence() { return {} as never; },
+  } });
+  expect(await port.requestApprovalOutcome({ requestId: 'compact', conversationScope: 'group', question: '修改群设置\n群：100', timeoutMs: 1000 }))
+    .toMatchObject({ status: 'approved', decision: 'approve-once' });
+  expect(rendered).toContain(locale === 'en' ? 'everyone' : '所有人');
+  expect(rendered).toContain(locale === 'en' ? 'this conversation and sender' : '本会话、仅此人');
+  expect(rendered).toContain('群：100');
+});
 
 it('pins approval language across replies and isolates concurrent senders and endpoints', async () => {
   const coordinator = new RuntimeInteractionCoordinator();

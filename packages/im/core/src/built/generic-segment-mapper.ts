@@ -96,7 +96,8 @@ function normalizeReply(seg: MessageSegment): Segment {
   const data = seg.data as Record<string, unknown>;
   const messageId = String(data.message_id ?? data.id ?? '').trim();
   if (!messageId) return seg as Segment;
-  return { type: 'reply', data: { message_id: messageId } };
+  const platform = readPlatform(seg);
+  return { type: 'reply', data: { message_id: messageId }, ...(platform ? { platform } : {}) };
 }
 
 function normalizeLink(seg: MessageSegment): Segment {

@@ -167,6 +167,12 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 - `system.*`（登录扫码等）分发到 `system.receive`。
 - **登录辅助**：`system.login.qrcode|slider|device|auth` 经 `loginAssistToken`（`LoginAssist`）挂起待办；刷新后可用 Console `login.list` / `login.submit` 或终端 stdin 继续（对齐 icqq 官方 stdin 流程）。`system.online` / `login.error` 会清理该 endpoint 待办。
 
+## Agent 会话与消息操作
+
+ICQQ Agent 可按需加载 `icqq-conversation` 查询当前群／频道和 Bot 自身角色。`icqq-messages` 提供当前会话的引用回复、真实消息合并转发和撤回自己发言；自己的消息撤回不要求群管身份或逐次审批，时限由平台决定。
+
+`icqq-group-admin` 新增撤回他人消息与退群：前者保留群管发起权限、实时平台角色检查，无需逐次审批；退群仅主人可发起、每次审批，Bot 为群主时拒绝执行。引用／转发走统一发送链路，不支持跨会话转发。当前 guild-channel 接入仅提供身份查询，不能使用这些群／私聊操作。详见 [权限与能力说明](./PERMITS.md)。
+
 ## 故障排查
 
 | 现象 | 排查 |

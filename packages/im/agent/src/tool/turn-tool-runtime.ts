@@ -1,5 +1,6 @@
 import { runTurnToolPolicies } from '../security/policy-facade.js';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
+import { approvalActionLabel } from './approval-presentation.js';
 import { toolInvocationFromTurn } from '../plugin-runtime/capability-tools.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import {
@@ -157,7 +158,7 @@ export class TurnToolRuntime {
         // Never matches a remembered approval: each tainted call is confirmed on its own.
         scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
         question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput,
-          humanOnly),
+          humanOnly, tool.description),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -183,7 +184,7 @@ export class TurnToolRuntime {
         ...(tool.requiresApproval === 'once' || decision.policy === 'exec-policy'
           ? { remember: 'session' as const }
           : {}),
-        question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly),
+        question: formatApprovalQuestion(name, decision.reason, effectiveInput, humanOnly, tool.description),
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
@@ -281,18 +282,18 @@ function formatApprovalQuestion(
   reason: string,
   input: Readonly<Record<string, unknown>>,
   humanOnly: boolean,
+  description?: string,
 ): string {
   const command = typeof input.command === 'string' ? input.command.trim() : '';
   const cwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
   const path = ['file_path', 'path'].map((key) => input[key]).find((value) => typeof value === 'string') as string | undefined;
   return [
-    `工具「${toolName}」需要确认后执行。`,
+    approvalActionLabel(toolName, description),
     command ? `命令：${command}` : undefined,
     cwd ? `工作目录：${cwd}` : undefined,
     path ? `目标文件：${path}` : undefined,
-    humanOnly ? `本次参数：${stableApprovalValue(input)}` : undefined,
-    `风险：${reason}`,
-    '是否继续？',
+    humanOnly || (!command && !path && Object.keys(input).length > 0) ? `本次参数：${stableApprovalValue(input)}` : undefined,
+    reason.startsWith('tool approval policy is ') ? undefined : `风险：${reason}`,
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 
