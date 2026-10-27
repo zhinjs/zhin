@@ -1,0 +1,14 @@
+plugins/adapters/bilibili/pages/index/rpc.ts
+  h_b680f75345178a 53-54,61,75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dc910dd6964fc83af53e0e1a2ae15d4a346620ee",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
