@@ -461,4 +461,5 @@ it('pins roulette rules and deadline notices to the opening player language', as
   await clock.advance(35_000);
   expect(sentTexts().at(-1)).toContain('ALICE');
   expect(sentTexts().at(-1)).not.toMatch(/[\u4e00-\u9fff]/);
+  expect(fake.sent.at(-1)?.input).toMatchObject({ locale: 'en' });
 });

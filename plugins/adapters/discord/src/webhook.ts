@@ -2,6 +2,7 @@
  * Discord interactions HTTP: signature → parse → admit.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createMessages, type Locale } from 'zhin.js/i18n';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -13,6 +14,9 @@ import {
 } from './protocol.js';
 
 const logger = getLogger('discord');
+const messages = createMessages({
+  processing: { 'zh-CN': '处理命令: {command}', en: 'Processing command: {command}' },
+});
 
 const INTERACTION_TYPE_PING = 1;
 const INTERACTION_TYPE_APPLICATION_COMMAND = 2;
@@ -25,6 +29,7 @@ export interface DiscordInteractionsHandler {
   readonly config: ResolvedDiscordInteractionsConfig;
   readonly isOpen: boolean;
   admit(msg: DiscordInboundMessage): void;
+  resolveLocale?(senderId: string): Promise<Locale | undefined>;
   admitButton(interaction: DiscordButtonInbound): void;
   admitPlatform(event: Record<string, unknown>): void;
 }
@@ -82,9 +87,11 @@ export async function handleDiscordInteractionRequest(
       }
     }
     if (interaction.type === INTERACTION_TYPE_APPLICATION_COMMAND) {
+      const message = interactionToInboundMessage(interaction);
       if (handler.isOpen) {
-        handler.admit(interactionToInboundMessage(interaction));
+        handler.admit(message);
       }
+      const locale = await handler.resolveLocale?.(message.authorId);
       // 即时响应（type 4）：defer(type 5) 需要 followup PATCH，未实现会让用户端一直转圈
       const commandName = String(
         (interaction.data as { name?: unknown } | undefined)?.name ?? '',
@@ -92,7 +99,7 @@ export async function handleDiscordInteractionRequest(
       writeJson(response, 200, {
         type: INTERACTION_RESPONSE_CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: `处理命令: ${commandName}`,
+          content: messages(locale, 'processing', { command: commandName }),
           flags: INTERACTION_FLAG_EPHEMERAL,
         },
       });

@@ -5,6 +5,8 @@ import { inflateSync } from 'node:zlib';
 import type { IncomingMessage } from 'node:http';
 import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { Locale } from 'zhin.js/i18n';
+import { outboundMessages as t } from './i18n.js';
 
 const logger = getLogger('kook');
 
@@ -248,7 +250,7 @@ function resolveOutboundMediaUrl(seg: KookWireSegment): string | undefined {
  * Wire-encode an already-rendered outbound payload into KOOK KMarkdown.
  * Segment canonicalization is intentionally not done here.
  */
-export function formatOutboundKmarkdown(payload: unknown): string {
+export function formatOutboundKmarkdown(payload: unknown, locale?: Locale): string {
   if (typeof payload === 'string') return payload;
 
   const segments: Array<string | KookWireSegment> = Array.isArray(payload)
@@ -283,7 +285,7 @@ export function formatOutboundKmarkdown(payload: unknown): string {
         }
         case 'image': {
           const url = resolveOutboundMediaUrl(item);
-          return url ? `![${String(data.alt || '图片')}](${url})` : '';
+          return url ? `![${String(data.alt || t(locale, 'image'))}](${url})` : '';
         }
         case 'face':
           return `(emj)${String(data.name || 'emoji')}(emj)[${String(data.id ?? '')}]`;
@@ -291,15 +293,15 @@ export function formatOutboundKmarkdown(payload: unknown): string {
           return `[${String(data.text || data.url || '')}](${String(data.url || '')})`;
         case 'video': {
           const url = resolveOutboundMediaUrl(item);
-          return url ? `[视频](${url})` : '';
+          return url ? `[${t(locale, 'video')}](${url})` : '';
         }
         case 'audio': {
           const url = resolveOutboundMediaUrl(item);
-          return url ? `[音频](${url})` : '';
+          return url ? `[${t(locale, 'audio')}](${url})` : '';
         }
         case 'file': {
           const url = resolveOutboundMediaUrl(item);
-          return url ? `[文件: ${String(data.name || '未命名')}](${url})` : '';
+          return url ? `[${t(locale, 'file', { name: String(data.name || t(locale, 'unnamed')) })}](${url})` : '';
         }
         case 'bold':
           return `**${String(data.text ?? '')}**`;

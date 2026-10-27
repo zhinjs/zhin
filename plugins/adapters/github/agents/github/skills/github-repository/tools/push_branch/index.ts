@@ -13,6 +13,6 @@ export default defineAgentTool<{ repo?: string; branch?: string; message: string
   tags: ['github'],
   requiresApproval: 'always',
   async execute(input, context) {
-    return executeGithubPushBranch(input, context.$client);
+    return executeGithubPushBranch(input, context.$client, undefined, context.locale);
   },
 });

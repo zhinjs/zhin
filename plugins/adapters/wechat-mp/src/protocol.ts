@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 /**
  * WeChat Official Account (MP) protocol helpers — no legacy Adapter/Endpoint.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -366,10 +367,14 @@ export function formatInboundContent(msg: WeChatMessage): string {
 /**
  * Built-in passive XML for subscribe etc. Empty string = fall through to gateway.
  */
-export function resolveEventPassiveReply(msg: WeChatMessage): string {
+const passiveMessages = createMessages({
+  subscribed: { 'zh-CN': '感谢关注！', en: 'Thank you for following!' },
+});
+
+export function resolveEventPassiveReply(msg: WeChatMessage, locale?: Locale): string {
   if (msg.MsgType !== 'event') return '';
   if (msg.Event === 'subscribe') {
-    return buildTextReply(msg, '感谢关注！');
+    return buildTextReply(msg, passiveMessages(locale, 'subscribed'));
   }
   return '';
 }

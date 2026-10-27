@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import { type ContextRepository } from '@zhin.js/ai';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
@@ -49,6 +50,7 @@ export class MemorySystem {
     host: ZhinAgentPrivate,
     sessionKey: string,
     deps: SessionIODeps,
+    locale?: Locale,
   ): Promise<{ ok: boolean; message: string }> {
     const { sessionId } = await beginTurnSession(deps, sessionKey);
     const provider = host.getTurnProvider();
@@ -63,6 +65,7 @@ export class MemorySystem {
       compactionConfig: host.config.compaction,
       contextWindow,
       mode: 'text',
+      locale,
     });
   }
 }

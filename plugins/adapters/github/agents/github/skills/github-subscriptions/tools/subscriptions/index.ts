@@ -8,6 +8,6 @@ export default defineAgentTool<{}>({
   adapter: 'github',
   tags: ['github'],
   async execute(input, context) {
-    return executeGithubSubscriptions({}, context.$client);
+    return executeGithubSubscriptions({}, context.$client, undefined, context.locale);
   },
 });

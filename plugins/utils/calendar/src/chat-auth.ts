@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 /**
@@ -33,7 +34,8 @@ export const OAUTH_PROVIDERS: readonly OAuthProviderKind[] = [
 
 export type CalendarNotifier<Target> = (
   target: Target,
-  text: string
+  text: string,
+  locale: Locale
 ) => Promise<void>;
 
 export interface CalendarAuthServiceOptions<Target> {
@@ -203,7 +205,8 @@ export class CalendarAuthService<Target> {
       const detail = `${oauthError} ${description}`.trim();
       await this.#notifySafely(
         session.requester.target,
-        t(locale, 'failed', { provider: displayName, detail })
+        t(locale, 'failed', { provider: displayName, detail }),
+        locale
       );
       return { statusCode: 400, message: t(locale, 'callbackFailed', { detail }) };
     }
@@ -235,10 +238,11 @@ export class CalendarAuthService<Target> {
       );
       this.#managers[provider]?.setRefreshToken(tokens.refreshToken);
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = error instanceof CalendarError ? error.format(locale) : error instanceof Error ? error.message : String(error);
       await this.#notifySafely(
         session.requester.target,
-        t(locale, 'failed', { provider: displayName, detail: reason })
+        t(locale, 'failed', { provider: displayName, detail: reason }),
+        locale
       );
       return { statusCode: 502, message: t(locale, 'callbackFailed', { detail: reason }) };
     }
@@ -249,7 +253,8 @@ export class CalendarAuthService<Target> {
         : t(locale, 'otherProvider', { current: this.#config.provider, provider });
     await this.#notifySafely(
       session.requester.target,
-      t(locale, 'authorized', { provider: displayName, hint: providerHint })
+      t(locale, 'authorized', { provider: displayName, hint: providerHint }),
+      locale
     );
     return { statusCode: 200, message: t(locale, 'callbackSuccess') };
   }
@@ -284,7 +289,8 @@ export class CalendarAuthService<Target> {
     if (!owner) {
       return;
     }
-    await this.#notifySafely(owner.target, t(resolveLocale(owner.locale), 'lost', { provider: t(resolveLocale(owner.locale), provider) }));
+    const locale = resolveLocale(owner.locale);
+    await this.#notifySafely(owner.target, t(locale, 'lost', { provider: t(locale, provider) }), locale);
   }
 
   async #describeProvider(provider: OAuthProviderKind, locale?: Locale, authCommand?: string): Promise<string> {
@@ -337,12 +343,12 @@ export class CalendarAuthService<Target> {
     return t(locale, 'microsoftClient');
   }
 
-  async #notifySafely(target: Target, text: string): Promise<void> {
+  async #notifySafely(target: Target, text: string, locale: Locale): Promise<void> {
     if (!this.#notify) {
       return;
     }
     try {
-      await this.#notify(target, text);
+      await this.#notify(target, text, locale);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       console.warn(`[calendar] 发送授权通知失败：${reason}`);

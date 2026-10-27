@@ -88,3 +88,21 @@ describe('summarizeExhaustedTurn', () => {
     expect(result.reply).toBe(EXHAUSTED_TURN_FALLBACK_REPLY);
   });
 });
+
+it.each(['en', 'zh-CN'] as const)('uses captured %s only as the summary fallback and for fixed failure text', async locale => {
+  const complete = vi.fn(async (_model: Model, _context: Context) => textReply('用户自定义生成内容'));
+  const input = { locale, transport: transportReturning(complete), model, systemPrompt: 'unchanged cached prefix', messages: [], maxIterations: 3 };
+  const generated = await summarizeExhaustedTurn(input);
+  expect(generated.reply).toBe('用户自定义生成内容');
+  expect(complete.mock.calls[0][1].systemPrompt).toBe('unchanged cached prefix');
+  const instruction = JSON.stringify(complete.mock.calls[0][1].messages.at(-1));
+  expect(instruction).toContain(`Reply language fallback: ${locale}.`);
+  expect(instruction).toContain('applicable explicit reply-language request first');
+  expect(instruction).toContain('actual request, not framework notices');
+  complete.mockRejectedValueOnce(new Error('synthetic unavailable'));
+  const failed = await summarizeExhaustedTurn(input);
+  expect(failed.assistant).toBeUndefined();
+  if (locale === 'en') expect(failed.reply).toContain('Reply "continue"');
+  else expect(failed.reply).toBe(EXHAUSTED_TURN_FALLBACK_REPLY);
+  expect(failed.reply).not.toContain('synthetic unavailable');
+});

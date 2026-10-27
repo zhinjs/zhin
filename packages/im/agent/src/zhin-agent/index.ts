@@ -1,3 +1,4 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 /**
@@ -467,13 +468,14 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return this.promptController.cancelSession(sessionKey);
   }
 
-  async compactSession(sessionKey: string): Promise<{ ok: boolean; message: string }> {
+  async compactSession(sessionKey: string, locale?: Locale): Promise<{ ok: boolean; message: string }> {
     const priv = asPrivate(this);
     const memorySystem = this.memorySystem ?? createMemorySystemForHost(priv);
     return memorySystem.compactSession(
       priv,
       sessionKey,
       this.requireSessionSystem().sessionDeps(priv),
+      locale,
     );
   }
 

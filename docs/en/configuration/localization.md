@@ -38,7 +38,15 @@ Chat-created reminders, subscriptions, and scheduled tasks capture the creator's
 
 Console stores its independent language in the browser and defaults to Chinese. Changing it affects UI labels, schema descriptions, and management feedback; it does not change saved configuration keys, enum values, task language, or delivery identities. Untranslated third-party text, user content, logs, and previously generated reports retain their original text.
 
+Generated README files, Agent instructions and example business messages use the language selected at creation. They then belong to the project source. Personal language changes do not rewrite these files; custom commands should select text with `context.locale` as shown below.
+
 Reminders accept finite English time patterns such as `in 10 minutes` and `tomorrow at 09:00`, with the same time-zone, daylight-saving, and deadline validation as their Chinese equivalents. Ambiguous input still requires clarification.
+
+## AI-generated content
+
+AI-generated text follows the user's explicit requested reply language first, then the language of their actual message. If neither is clear, it uses `Reply language fallback: zh-CN` or `en` from `[Turn context]`, resolved from the trusted personal preference or project language. Progress and exhausted-turn summaries follow the same rule; an English framework notice does not determine the user's language. This value stays in the dynamic turn context rather than rewriting the stable system-prompt prefix per user.
+
+This does not store two language versions of every generated reply or add a model call to translate the result. Model-generated content remains unchanged. Explicit instructions specify the language; actual model compliance still requires provider validation. Framework menus, approval choices, errors and fixed generation-failure messages still use the configured language. A plugin's static Prompt Section should respect the user-language priority above instead of overriding explicit requests. It currently has no separate `contentI18n` body slot.
 
 ## Plugin integration
 
@@ -90,3 +98,7 @@ Schema.string().option(['text', 'image'])
 ```
 
 JSON Schema exports this as `x-i18n`. Enum labels are keyed by `String(value)`. External strict schema validators must register this display annotation; do not disable strict validation globally.
+
+For immediate protocol responses before normal message dispatch, a signature-verified `Endpoint` may call `await this.resolveLocale(senderId)`. This uses the same personal preferences and project language with the current Endpoint identity. Candidate or retired endpoints return `undefined` without reading user state. Keep the resolved language for that response; do not infer it from request parameters or platform profiles. Normal messages continue to use `Message.locale` without a second lookup.
+
+Plugin business checks may provide `titleI18n` and `effectsI18n`; results may provide `summaryI18n` and `evidenceI18n`, keyed by `zh-CN` / `en`. Translated effects and evidence must match the original arrays item for item with nonempty text. Empty translations cannot hide entries. Console only selects the displayed language; approval remains bound to the original check ID, generation and revision covering the complete translation definitions.

@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 /**
  * Google Calendar and Microsoft Graph providers backed by OAuthTokenManager
  * (refresh_token flow; access tokens are never stored in config).
@@ -43,7 +44,7 @@ function mapGoogleEvent(
   const endDate = new Date(end.dateTime ?? end.date ?? "");
   return {
     id: String(item.id ?? ""),
-    title: String(item.summary ?? "(无标题)"),
+    title: String(item.summary ?? ""),
     start: formatInZone(startDate, timezone),
     end: formatInZone(endDate, timezone),
     location: item.location ? String(item.location) : undefined,
@@ -68,7 +69,7 @@ function mapMicrosoftEvent(
   );
   return {
     id: String(item.id ?? ""),
-    title: String(item.subject ?? "(无标题)"),
+    title: String(item.subject ?? ""),
     start: formatInZone(startDate, timezone),
     end: formatInZone(endDate, timezone),
     location: item.location
@@ -144,9 +145,7 @@ export function createGoogleCalendarProvider(
       });
       if (!response.ok) {
         const detail = (await response.text().catch(() => "")).slice(0, 300);
-        throw new Error(
-          `Google Calendar 列表失败：HTTP ${response.status} ${detail}`
-        );
+        throw new CalendarError('listHttp', { provider: 'Google Calendar', status: response.status, detail });
       }
       const data = (await response.json()) as {
         items?: Record<string, unknown>[];
@@ -180,7 +179,7 @@ export function createGoogleCalendarProvider(
         }
       );
       if (!response.ok)
-        throw new Error(`Google Calendar 创建失败：HTTP ${response.status}`);
+        throw new CalendarError('createHttp', { provider: 'Google Calendar', status: response.status });
       return mapGoogleEvent(
         (await response.json()) as Record<string, unknown>,
         options.timezone
@@ -246,9 +245,7 @@ export function createMicrosoftCalendarProvider(
       );
       if (!response.ok) {
         const detail = (await response.text().catch(() => "")).slice(0, 300);
-        throw new Error(
-          `Microsoft Graph 列表失败：HTTP ${response.status} ${detail}`
-        );
+        throw new CalendarError('listHttp', { provider: 'Microsoft Graph', status: response.status, detail });
       }
       const data = (await response.json()) as {
         value?: Record<string, unknown>[];
@@ -288,7 +285,7 @@ export function createMicrosoftCalendarProvider(
         { prefer: `outlook.timezone="${options.timezone}"` }
       );
       if (!response.ok)
-        throw new Error(`Microsoft Graph 创建失败：HTTP ${response.status}`);
+        throw new CalendarError('createHttp', { provider: 'Microsoft Graph', status: response.status });
       return mapMicrosoftEvent(
         (await response.json()) as Record<string, unknown>,
         options.timezone

@@ -33,7 +33,7 @@ export default defineAgentTool({
       return events
         .map(
           (event) =>
-            `• ${event.start} → ${event.end}  ${event.title}${
+            `• ${event.start} → ${event.end}  ${event.title || t(context.locale, 'untitled')}${
               event.location ? ` @ ${event.location}` : ""
             }  [${event.id}]`
         )

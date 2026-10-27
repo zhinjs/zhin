@@ -12,6 +12,9 @@ import {
   type Model,
 } from '@zhin.js/ai';
 import { looksLikeRawToolMarkup, stripHallucinatedToolCalls, stripThinkBlocks } from './text-sanitize.js';
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { turnReplyMessages } from './turn-reply-messages.js';
+import { REPLY_LANGUAGE_RULE } from '../prompt/rules/reply-language.js';
 
 export type ProgressUpdateTrigger = 'progress' | 'extension' | 'continuation';
 
@@ -21,8 +24,8 @@ const MAX_PROGRESS_CHARS = 160;
 /** Extensions are milestones, but still at most one update per this interval. */
 const EXTENSION_MIN_INTERVAL_MS = 15_000;
 
-export function fallbackProgressText(steps: number): string {
-  return `还在处理，已完成 ${steps} 步，请稍候…`;
+export function fallbackProgressText(steps: number, locale?: Locale): string {
+  return turnReplyMessages(locale, 'progress', { steps });
 }
 
 /** Returns natural-language progress text, or undefined if it looks like raw tool output. */
@@ -36,15 +39,18 @@ export function friendlyProgressText(raw: string | undefined): string | undefine
   return text.length > MAX_PROGRESS_CHARS ? `${text.slice(0, MAX_PROGRESS_CHARS - 1)}…` : text;
 }
 
-export function buildProgressSummaryInstruction(): string {
+export function buildProgressSummaryInstruction(locale?: Locale): string {
   return [
     '[System notice] Tools are disabled for this reply.',
-    'Write a 1-2 sentence progress update for the user in their language: what is done so far and what you will do next.',
+    'Write a 1-2 sentence progress update for the user: what is done so far and what you will do next.',
+    REPLY_LANGUAGE_RULE,
+    ...(locale === undefined ? [] : [`Reply language fallback: ${locale}.`]),
     'Plain natural language only: no tool names, file paths, commands, code or raw output.',
   ].join('\n');
 }
 
 export interface ProgressSummaryInput {
+  readonly locale?: Locale;
   readonly transport: LlmCompletionPort;
   readonly model: Model;
   readonly systemPrompt: string;
@@ -63,7 +69,7 @@ export async function summarizeProgress(input: ProgressSummaryInput): Promise<st
       input.model,
       {
         systemPrompt: input.systemPrompt,
-        messages: [...input.messages, createUserMessage(buildProgressSummaryInstruction())],
+        messages: [...input.messages, createUserMessage(buildProgressSummaryInstruction(input.locale))],
         tools: undefined,
       },
       { signal, sessionId: input.sessionId },
@@ -81,6 +87,7 @@ export interface ProgressReportContext {
 }
 
 export interface TurnProgressReporterOptions {
+  readonly locale?: Locale;
   readonly sink: (text: string) => Promise<void>;
   readonly minIntervalMs: number;
   readonly maxUpdates: number;
@@ -123,7 +130,7 @@ export class TurnProgressReporter {
     const fresh = interim && !this.#reported.includes(interim) ? interim : undefined;
     const text = fresh
       ?? friendlyProgressText(await this.#options.summarize().catch(() => undefined))
-      ?? fallbackProgressText(context.steps);
+      ?? fallbackProgressText(context.steps, this.#options.locale);
     try {
       await this.#options.sink(`${PROGRESS_UPDATE_PREFIX}${text}`);
       this.#reported.push(text);

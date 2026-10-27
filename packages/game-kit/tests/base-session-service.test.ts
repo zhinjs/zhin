@@ -221,6 +221,7 @@ describe('BaseSessionService', () => {
       endpointKey: 'default',
       conversation: { kind: 'group', id: 'room' },
       content: 'Alpha timed out',
+      locale: 'zh-CN',
     });
     await lifecycle.dispose();
   });

@@ -1,3 +1,5 @@
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { ownerApprovalMessages as t } from './owner-approval-messages.js';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -47,13 +49,14 @@ export class OwnerApprovalStore {
   addBashRule(
     address: OwnerApprovalAddress,
     pattern: string,
+    locale?: Locale,
   ): { ok: true; id: string } | { ok: false; error: string } {
     const trimmed = pattern.trim();
-    if (!trimmed) return { ok: false, error: '正则不能为空。' };
+    if (!trimmed) return { ok: false, error: t(locale, 'emptyPattern') };
     try {
       new RegExp(trimmed);
     } catch (error) {
-      return { ok: false, error: `无效正则: ${error instanceof Error ? error.message : String(error)}` };
+      return { ok: false, error: t(locale, 'invalidPattern', { error: error instanceof Error ? error.message : String(error) }) };
     }
     const document = this.#read();
     const key = addressKey(address);
@@ -75,16 +78,17 @@ export class OwnerApprovalStore {
   removeBashRule(
     address: OwnerApprovalAddress,
     ruleId: string,
+    locale?: Locale,
   ): { ok: true } | { ok: false; error: string } {
     const id = ruleId.trim();
-    if (!id) return { ok: false, error: '请提供规则 id。' };
+    if (!id) return { ok: false, error: t(locale, 'emptyId') };
     const document = this.#read();
     const key = addressKey(address);
     const entry = document.endpoints[key];
-    if (!entry?.bashRules.length) return { ok: false, error: '当前无自定义规则。' };
+    if (!entry?.bashRules.length) return { ok: false, error: t(locale, 'noRules') };
     const next = entry.bashRules.filter((rule) => rule.id !== id && !rule.id.startsWith(id));
     if (next.length === entry.bashRules.length) {
-      return { ok: false, error: `未找到 id 前缀或全名为「${id}」的规则。` };
+      return { ok: false, error: t(locale, 'missingId', { id }) };
     }
     this.#write({
       version: STORE_VERSION,

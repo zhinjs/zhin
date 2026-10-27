@@ -1,3 +1,4 @@
+import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
 import {
   createAutoApprovalPort,
@@ -5,6 +6,7 @@ import {
   detachedTaskRunnerToken,
   handleDetachedTaskCommand,
   handleRuntimeManagementCommand,
+  managementCommandText,
   routeTaskInterjection,
   type DetachedTaskRunner,
   publishOutboundElements,
@@ -43,6 +45,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import { sendOutputMessages } from './reply-messages.js';
 import {
   rootPluginId,
+  type Locale,
   type CapabilityId,
   type PluginId,
   type RuntimeSnapshot,
@@ -372,6 +375,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
             zhinAgent,
             sessionKey,
             content: message.content,
+            commandPrefix: message.commandPrefix,
+            locale: message.locale,
             senderRoles,
             semanticMemory: options.agent.semanticMemory,
             senderId: turnAccess.principal.subjectId,
@@ -382,7 +387,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       }
 
-      const approveReply = !workroomAgentTurn && /^\/approve(?:\s|$)/iu.test(message.content.trim())
+      const approveReply = !workroomAgentTurn && /^approve(?:\s|$)/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '')
         ? zhinAgent.ownerApprovals.handleCommand(
             {
               platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
@@ -390,6 +395,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
               ownerId,
               subjectId: turnAccess.principal.subjectId,
               scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : 'private',
+              locale: message.locale,
+              commandPrefix: message.commandPrefix,
             },
             message.content,
           )
@@ -404,7 +411,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const detachedTasks = workroomAgentTurn ? undefined : resolveSnapshotDetachedTaskRunner(snapshot, requester) ?? options.detachedTasks;
       const taskActor = { sessionId: sessionKey, senderId: turnAccess.principal.subjectId, isMaster: senderRoles.isMaster };
       if (detachedTasks) {
-        const taskReply = await handleDetachedTaskCommand(detachedTasks, taskActor, message.content);
+        const taskReply = await handleDetachedTaskCommand(detachedTasks, taskActor, message.content, { locale: message.locale, commandPrefix: message.commandPrefix });
         if (taskReply != null) {
           await reply(taskReply);
           logger.info(formatCompact({ op: 'agent_host_task_command', handled: true }));
@@ -456,7 +463,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const productIntent = taskIntentResolver || message.metadata?.turnIntent !== undefined
           ? (await resolveProductTurnIntent(message, senderRoles, undefined, taskIntentResolver).catch(() => undefined))?.kind
           : undefined;
-        const routedTask = await routeTaskInterjection(detachedTasks, taskActor, matched.content, productIntent);
+        const routedTask = await routeTaskInterjection(detachedTasks, taskActor, matched.content, productIntent, { locale: message.locale });
         if (routedTask.handled) {
           if (routedTask.reply) await reply(routedTask.reply);
           logger.info(formatCompact({ op: 'agent_host_task_interjection', kind: routedTask.kind, task: routedTask.taskId }));
@@ -466,7 +473,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
       if (!workroomAgentTurn && isClearCommand(matched.content)) {
         await zhinAgent.archiveSession(sessionKey);
-        await reply('已清空本会话的 AI 多轮上下文。');
+        await reply(t(message.locale, 'cleared'));
         return true;
       }
 
@@ -480,7 +487,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       if (gate && isCancelIntent(matched.content)) {
         const stopped = gate.stop(sessionKey, senderId, senderRoles.isMaster);
         if (stopped === 'stopped') {
-          await reply('好的，已停止当前回复。');
+          await reply(t(message.locale, 'stopped'));
           logger.info(formatCompact({ op: 'agent_host_turn_stopped', sessionKey }));
           return true;
         }
@@ -509,7 +516,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           }
           if (admitted.kind === 'rejected') {
             logger.info(formatCompact({ op: 'agent_host_turn_rejected', sessionKey, reason: admitted.reason }));
-            const notice = admissionRejectionNotice(admitted.reason);
+            const notice = admissionRejectionNotice(admitted.reason, message.locale);
             if (notice) await reply(notice);
             return true;
           }
@@ -578,6 +585,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               ? options.im.createInteraction(message, { subjectId: ownerId })
               : undefined;
             const askApprovalPort = createRuntimeApprovalPort({
+              locale: message.locale,
               // Sandbox `ask` must be a real interaction, even though the
               // authenticated Console user maps to the endpoint owner.
               isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
@@ -585,6 +593,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               memory: options.agent.approvalReviewer,
             });
             const escalatedApprovalPort = createRuntimeApprovalPort({
+              locale: message.locale,
               isMaster: false,
               interaction: approvalInteraction,
               memory: options.agent.approvalReviewer,
@@ -785,7 +794,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const detail = error instanceof Error ? error.message : String(error);
         logger.warn(formatCompact({ op: 'agent_host_turn_fail', error: detail }));
         try {
-          const line = renderChatTurnError(trigger, error, senderRoles.isMaster);
+          const line = renderChatTurnError(trigger, error, senderRoles.isMaster, message.locale);
           if (line) await reply(line);
         } catch {
           /* ignore reply failure */
@@ -809,9 +818,8 @@ export function reactionOf(output: readonly AgentOutputElement[]): string | unde
   return typeof emoji === 'string' && emoji ? emoji : undefined;
 }
 
-function admissionRejectionNotice(reason: 'queue_full' | 'expired' | 'stopped'): string | undefined {
-  if (reason === 'queue_full') return '前面还有几条消息在处理，请稍后再发。';
-  if (reason === 'expired') return '这条消息排队太久，已跳过，需要的话请重新发送。';
+function admissionRejectionNotice(reason: 'queue_full' | 'expired' | 'stopped', locale?: Locale): string | undefined {
+  if (reason !== 'stopped') return t(locale, reason);
   return undefined;
 }
 

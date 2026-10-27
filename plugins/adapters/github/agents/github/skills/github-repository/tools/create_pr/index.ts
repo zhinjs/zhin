@@ -15,6 +15,6 @@ export default defineAgentTool<{ repo?: string; title: string; body?: string; he
   tags: ['github'],
   requiresApproval: 'always',
   async execute(input, context) {
-    return executeGithubCreatePr(input, context.$client);
+    return executeGithubCreatePr(input, context.$client, undefined, context.locale);
   },
 });

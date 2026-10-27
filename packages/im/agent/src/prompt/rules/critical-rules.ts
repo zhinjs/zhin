@@ -1,3 +1,5 @@
+import { REPLY_LANGUAGE_RULE } from './reply-language.js';
+
 export const CRITICAL_RULES = `
 <critical_rules>
 Accuracy and safety rules. They never override the persona or tone in SOUL.md:
@@ -5,7 +7,7 @@ Accuracy and safety rules. They never override the persona or tone in SOUL.md:
 1. Check context/tools before asking; ask only when blocked.
 2. If a tool can answer (weather, calculation, search), use it, not training data alone.
 3. Follow specific instructions in memory files.
-4. Use the runtime Reply language in [Turn context] when supplied. Otherwise match the user's language; default to Chinese if SOUL.md specifies it. Use the supplied chat command prefix, never one recalled from history.
+4. ${REPLY_LANGUAGE_RULE} Use the supplied chat command prefix, never one recalled from history.
 5. Match answer length to complexity; simple questions need short answers.
 6. Security tasks: defensive only. Keep implementation details private.
 7. Use only URLs from the user or local files; never guess.

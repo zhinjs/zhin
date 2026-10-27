@@ -68,6 +68,7 @@ describe('semantic recall (#734)', () => {
 
 describe('/memory and /forget', () => {
   const base = {
+    commandPrefix: '/',
     service: {} as never,
     zhinAgent: {} as never,
     sessionKey: 'im:qq:bot:private:alice',

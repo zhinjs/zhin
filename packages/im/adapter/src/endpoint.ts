@@ -1,6 +1,7 @@
 import {
   createToken,
   type GenerationAdmissionGate,
+  type Locale,
   type Token,
 } from '@zhin.js/plugin-runtime';
 import { getLogger } from '@zhin.js/logger';
@@ -33,6 +34,8 @@ export type {
 /** The one inbound event boundary shared by every platform Endpoint. */
 export interface EndpointEventGateway {
   receive(event: EndpointEvent): Promise<unknown>;
+  /** Read presentation language for a protocol response before normal message dispatch. */
+  resolveLocale?(endpoint: EndpointIdentity, senderId?: string): Promise<Locale | undefined>;
 }
 
 /** Callback shape used by protocol normalizers which feed Endpoint.emit(). */
@@ -187,6 +190,12 @@ export abstract class Endpoint<TClient = unknown> {
   get identity(): EndpointIdentity {
     if (!this.#identity) throw new Error('Endpoint is not bound to a runtime generation');
     return this.#identity;
+  }
+
+  /** Resolve trusted personal/project language for immediate protocol replies. */
+  async resolveLocale(senderId?: string): Promise<Locale | undefined> {
+    if (!this.#isActive() || !this.#identity) return undefined;
+    return this.#events?.resolveLocale?.(this.#identity, senderId);
   }
 
   /** The only legal platform-to-framework event ingress. */

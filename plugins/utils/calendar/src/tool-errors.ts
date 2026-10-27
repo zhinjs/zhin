@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 import { OAuthTokenError } from "./token-manager.js";
@@ -13,9 +14,10 @@ export async function runCalendarTool(
   try {
     return await operation();
   } catch (error) {
+    if (error instanceof CalendarError) throw new CalendarError(error.code, error.params, locale);
     if (error instanceof OAuthTokenError) {
       if (error.code === 'invalid_grant' || error.code === 'not_authorized') return t(locale, error.code === 'invalid_grant' ? 'lost' : 'notAuthorized', { provider: 'Calendar' });
-      return error.message;
+      return error.presentation?.format(locale) ?? error.message;
     }
     throw error;
   }

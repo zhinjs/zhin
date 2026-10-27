@@ -152,3 +152,9 @@ describe('renderChatTurnError', () => {
     expect(renderChatTurnError({ errorTemplate: '出错了：{error}' }, new Error('boom'), false)).toBe('出错了：boom');
   });
 });
+
+it('localizes fallback errors while preserving explicitly configured templates', () => {
+  expect(renderChatTurnError(undefined, new TriggerTimeoutError(60000), true, 'en')).toContain('(Turn timeout)');
+  expect(renderChatTurnError(undefined, new Error('private detail'), false, 'en')).not.toMatch(/private detail|[\u3400-\u9fff]/u);
+  expect(renderChatTurnError({ errorTemplate: '出错了：{error}' }, new Error('boom'), false, 'en')).toBe('出错了：boom');
+});

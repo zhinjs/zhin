@@ -1,4 +1,6 @@
 import type { LinkMeta, PlatformTheme } from './types.js'
+import type { Locale } from 'zhin.js/i18n'
+import { messages as t } from './i18n.js'
 
 const THEMES: Record<LinkMeta['platform'], PlatformTheme> = {
   bilibili: { name: 'Bilibili', color: '#00A1D6', bg: '#E3F6FC' },
@@ -37,8 +39,9 @@ function renderStats(stats: Record<string, string> | undefined, color: string): 
 /**
  * 生成 satori 兼容的海报 HTML
  */
-export function renderPoster(meta: LinkMeta): string {
-  const theme = THEMES[meta.platform]
+export function renderPoster(meta: LinkMeta, locale?: Locale): string {
+  const theme = { ...THEMES[meta.platform], ...(meta.platform === 'douyin' || meta.platform === 'xiaohongshu'
+    ? { name: t(locale, meta.platform) } : {}) }
 
   // ── 封面区域 ──
   const coverHtml = meta.cover

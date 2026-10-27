@@ -142,6 +142,7 @@ export function defineGamePlugin<
                 const outbound = context.resources.use(outboundHostToken);
                 const locale = resolveLocale(row.locale);
                 await outbound.send({
+                  locale,
                   adapter: row.adapter,
                   endpointKey: row.endpoint,
                   conversation: {

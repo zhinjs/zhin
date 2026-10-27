@@ -1,4 +1,6 @@
 import type { LinkMeta } from './types.js'
+import { resolveLocale, type Locale } from 'zhin.js/i18n'
+import { messages as t } from './i18n.js'
 
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -32,8 +34,9 @@ async function imageToDataUri(url: string | undefined): Promise<string | undefin
   }
 }
 
-function formatNumber(n: number | undefined): string {
+function formatNumber(n: number | undefined, locale?: Locale): string {
   if (n == null) return '-'
+  if (resolveLocale(locale) === 'en') return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(n)
   if (n >= 100_000_000) return (n / 100_000_000).toFixed(1) + '亿'
   if (n >= 10_000) return (n / 10_000).toFixed(1) + '万'
   return String(n)
@@ -59,7 +62,7 @@ function extractMeta(html: string, property: string): string | undefined {
 
 const BILIBILI_RE = /(?:bilibili\.com\/video\/|b23\.tv\/)/i
 
-async function parseBilibili(url: string): Promise<LinkMeta | null> {
+async function parseBilibili(url: string, locale?: Locale): Promise<LinkMeta | null> {
   // 短链跳转
   if (url.includes('b23.tv')) {
     const res = await fetchWithTimeout(url, { redirect: 'follow' })
@@ -85,9 +88,9 @@ async function parseBilibili(url: string): Promise<LinkMeta | null> {
     cover: await imageToDataUri(d.pic),
     url: `https://www.bilibili.com/video/${bvMatch[0]}`,
     stats: {
-      '播放': formatNumber(d.stat?.view),
-      '弹幕': formatNumber(d.stat?.danmaku),
-      '点赞': formatNumber(d.stat?.like),
+      [t(locale, 'views')]: formatNumber(d.stat?.view, locale),
+      [t(locale, 'danmaku')]: formatNumber(d.stat?.danmaku, locale),
+      [t(locale, 'likes')]: formatNumber(d.stat?.like, locale),
     },
   }
 }
@@ -96,7 +99,7 @@ async function parseBilibili(url: string): Promise<LinkMeta | null> {
 
 const GITHUB_RE = /github\.com\/([\w.-]+)\/([\w.-]+)/i
 
-async function parseGithub(url: string): Promise<LinkMeta | null> {
+async function parseGithub(url: string, locale?: Locale): Promise<LinkMeta | null> {
   const repoMatch = url.match(GITHUB_RE)
   if (!repoMatch) return null
   const [, owner, repo] = repoMatch
@@ -121,8 +124,8 @@ async function parseGithub(url: string): Promise<LinkMeta | null> {
       authorAvatar: await imageToDataUri(d.user?.avatar_url),
       url,
       stats: {
-        '状态': d.state === 'open' ? '🟢 Open' : '🟣 Closed',
-        '评论': String(d.comments ?? 0),
+        [t(locale, 'status')]: d.state === 'open' ? '🟢 Open' : '🟣 Closed',
+        [t(locale, 'comments')]: String(d.comments ?? 0),
       },
     }
   }
@@ -140,9 +143,9 @@ async function parseGithub(url: string): Promise<LinkMeta | null> {
     cover: await imageToDataUri(`https://opengraph.githubassets.com/1/${owner}/${repo}`),
     url,
     stats: {
-      'Star': formatNumber(d.stargazers_count),
-      'Fork': formatNumber(d.forks_count),
-      '语言': d.language || '-',
+      'Star': formatNumber(d.stargazers_count, locale),
+      'Fork': formatNumber(d.forks_count, locale),
+      [t(locale, 'language')]: d.language || '-',
     },
   }
 }
@@ -151,7 +154,7 @@ async function parseGithub(url: string): Promise<LinkMeta | null> {
 
 const DOUYIN_RE = /(?:douyin\.com\/video\/|v\.douyin\.com\/)/i
 
-async function parseDouyin(url: string): Promise<LinkMeta | null> {
+async function parseDouyin(url: string, locale?: Locale): Promise<LinkMeta | null> {
   try {
     const res = await fetchWithTimeout(url, {
       headers: {
@@ -170,7 +173,7 @@ async function parseDouyin(url: string): Promise<LinkMeta | null> {
       description: extractMeta(html, 'og:description'),
       cover: await imageToDataUri(extractMeta(html, 'og:image')),
       url: res.url || url,
-      author: extractMeta(html, 'og:site_name') || '抖音',
+      author: extractMeta(html, 'og:site_name') || t(locale, 'douyin'),
     }
   } catch {
     return null
@@ -181,7 +184,7 @@ async function parseDouyin(url: string): Promise<LinkMeta | null> {
 
 const XIAOHONGSHU_RE = /(?:xiaohongshu\.com\/(?:explore|discovery)|xhslink\.com\/)/i
 
-async function parseXiaohongshu(url: string): Promise<LinkMeta | null> {
+async function parseXiaohongshu(url: string, locale?: Locale): Promise<LinkMeta | null> {
   try {
     const res = await fetchWithTimeout(url, {
       headers: {
@@ -200,7 +203,7 @@ async function parseXiaohongshu(url: string): Promise<LinkMeta | null> {
       description: extractMeta(html, 'og:description'),
       cover: await imageToDataUri(extractMeta(html, 'og:image')),
       url: res.url || url,
-      author: extractMeta(html, 'author') || extractMeta(html, 'og:site_name') || '小红书',
+      author: extractMeta(html, 'author') || extractMeta(html, 'og:site_name') || t(locale, 'xiaohongshu'),
     }
   } catch {
     return null
@@ -211,7 +214,7 @@ async function parseXiaohongshu(url: string): Promise<LinkMeta | null> {
 
 interface PlatformParser {
   test: RegExp
-  parse: (url: string) => Promise<LinkMeta | null>
+  parse: (url: string, locale?: Locale) => Promise<LinkMeta | null>
 }
 
 const PARSERS: PlatformParser[] = [
@@ -225,7 +228,7 @@ const PARSERS: PlatformParser[] = [
  * 从消息文本中检测第一个匹配的平台链接并解析元数据。
  * 仅返回第一个命中结果，避免单条消息产生过多海报。
  */
-export async function detectAndParse(text: string): Promise<LinkMeta | null> {
+export async function detectAndParse(text: string, locale?: Locale): Promise<LinkMeta | null> {
   // 提取所有 URL
   const urls = text.match(/https?:\/\/[^\s<>)"']+/gi)
   if (!urls) return null
@@ -233,7 +236,7 @@ export async function detectAndParse(text: string): Promise<LinkMeta | null> {
   for (const url of urls) {
     for (const { test, parse } of PARSERS) {
       if (test.test(url)) {
-        const meta = await parse(url)
+        const meta = await parse(url, locale)
         if (meta) return meta
       }
     }

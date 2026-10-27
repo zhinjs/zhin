@@ -1,3 +1,6 @@
+import { RuntimeMessage } from '../../../../../../packages/im/core/src/plugin-runtime/im/contracts.js';
+import { MessageDispatcher } from '../../../../../../packages/im/core/src/plugin-runtime/im/message-dispatcher.js';
+import { RuntimeInteractionCoordinator } from '../../../../../../packages/im/core/src/plugin-runtime/im/interaction-runtime.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { DecisionProvider } from '@zhin.js/ai';
 import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/runtime';
@@ -148,3 +151,78 @@ function agent(name: string): AgentCapabilities['agents'][number] {
     source: `agents/${name}/agent.json`,
   };
 }
+
+
+function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; text: string; enabled?: boolean; errorTemplate?: string;
+  execute?: (request: TurnRequest) => Promise<unknown> }) {
+  const endpoint = { adapter: 'root', id: 'root\u0000zhin.adapter\u0000fixture' };
+  const conversation = { endpoint, kind: 'private' as const, id: 'user' };
+  const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
+  const dispatcher = new MessageDispatcher(() => options.prefix!);
+  const coordinator = new RuntimeInteractionCoordinator();
+  const reply = vi.fn(async (content: unknown) => {
+    if (JSON.stringify(content).includes('Confirm operation')) {
+      expect(coordinator.resolveClaim({ ...message, content: 'yes', segments: [] } as never)).toBe(true);
+    }
+    return { status: 'sent' as const };
+  });
+  const message = new RuntimeMessage(conversation, options.text, 1, reply, { id: 'user' }, {}, [], undefined,
+    'bot', false, undefined, undefined, 'fixture', { locale: options.locale,
+      ...(options.prefix === undefined ? {} : { resolveCommands: value => dispatcher.commandEnvironment(value, snapshot) }) });
+  const listModels = vi.fn(async () => [{ provider: 'fixture', models: ['fixture-model'] }]);
+  const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) =>
+    options.execute ? options.execute(request) : { status: 'completed', output: [] });
+  const route = new AgentTurnIngressRoute({
+    projectRoot: process.cwd(), runtime: { executeLeased } as never, resolveEndpointOwner: () => 'user',
+    im: { createInteraction: (source: Message) => coordinator.create(source) } as never,
+    ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
+    agent: { service: { listModels,
+      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+      getTriggerConfig: () => ({ enabled: options.enabled ?? false, masters: ['user'], errorTemplate: options.errorTemplate }),
+      getAgentConfig: () => ({ execApprovalMode: 'ask' }),
+    }, agent: {} } as never,
+  });
+  return { run: () => route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined), reply, listModels, executeLeased };
+}
+
+it.each(['!', '', '/'])('reads the real dispatcher prefix %j at the Agent management ingress', async prefix => {
+  const en = localizedIngress({ prefix, locale: 'en', text: `${prefix}models` });
+  const zh = localizedIngress({ prefix, text: `${prefix}models` });
+  await Promise.all([en.run(), zh.run()]);
+  expect(en.reply).toHaveBeenCalledWith(expect.stringContaining('Available models'));
+  expect(zh.reply).toHaveBeenCalledWith(expect.stringContaining('可用模型'));
+  expect(en.executeLeased).not.toHaveBeenCalled();
+  const namespaced = localizedIngress({ prefix, locale: 'en', text: `${prefix}plugin/models` });
+  expect(await namespaced.run()).toBe(false);
+  expect(namespaced.listModels).not.toHaveBeenCalled();
+});
+
+it('does not invent a prefix for an API message with no command environment', async () => {
+  const api = localizedIngress({ locale: 'en', text: '/models' });
+  expect(await api.run()).toBe(false);
+  expect(api.listModels).not.toHaveBeenCalled();
+});
+
+it('passes captured ingress locale into a real pending human approval', async () => {
+  const flow = localizedIngress({ prefix: '!', locale: 'en', text: 'hello', enabled: true,
+    execute: async request => {
+      const result = await request.ports.approval!.requestApprovalOutcome!({ requestId: 'approval', question: 'Custom question', humanOnly: true, timeoutMs: 1000 });
+      expect(result).toMatchObject({ status: 'approved' });
+      return { status: 'completed', output: [] };
+    },
+  });
+  expect(await flow.run()).toBe(true);
+  expect(JSON.stringify(flow.reply.mock.calls)).toContain('Confirm operation');
+});
+
+it('localizes the ingress error fallback and preserves a configured template', async () => {
+  const en = localizedIngress({ prefix: '!', locale: 'en', text: 'hello', enabled: true,
+    execute: async () => { throw new Error('custom upstream detail'); } });
+  expect(await en.run()).toBe(true);
+  expect(JSON.stringify(en.reply.mock.calls)).toContain('(custom upstream detail)');
+  expect(JSON.stringify(en.reply.mock.calls)).not.toMatch(/[\u3400-\u9fff]/u);
+  const custom = localizedIngress({ prefix: '!', locale: 'en', text: 'hello', enabled: true, errorTemplate: '原配置: {error}',
+    execute: async () => { throw new Error('upstream'); } });
+  await custom.run();
+  expect(custom.reply).toHaveBeenCalledWith('原配置: upstream');
+});
