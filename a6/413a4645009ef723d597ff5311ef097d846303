@@ -1,0 +1,14 @@
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  h_b680f75345178a 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a6413a4645009ef723d597ff5311ef097d846303",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
