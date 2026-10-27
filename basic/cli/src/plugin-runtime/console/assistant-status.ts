@@ -17,6 +17,7 @@ import {
   type AnnouncementDispatcherSource,
   type AnnouncementsSource,
 } from './announcements-rpc.js';
+import { sessionEventActions, sessionEventQueries, type SessionEventsSource } from './session-events-rpc.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
@@ -31,7 +32,9 @@ import {
  * (welcome / leave) as `plugin.root.session-ops` / `session-ops-preview` (read) / `session-ops-set` (action),
  * bound through {@link AssistantStatus.bindSessionOps}. ADR 0037 slice B adds announcements (draft → approve → send)
  * as `plugin.root.announcements` / `announcement` (read) and `announcement-*` (actions), bound through
- * {@link AssistantStatus.bindAnnouncements}.
+ * {@link AssistantStatus.bindAnnouncements}. ADR 0037 slice D adds session events (schedule reminders) as
+ * `plugin.root.session-events` / `session-event` (read) and `session-event-*` (actions), bound through
+ * {@link AssistantStatus.bindSessionEvents}.
  */
 
 export const AMBIENT_STATUS_PERMISSION = 'ambient:read';
@@ -130,6 +133,7 @@ export class AssistantStatus {
   #readSessionOpsAudit: SessionOpsAuditSource = () => undefined;
   #readAnnouncements: AnnouncementsSource = () => undefined;
   #readAnnouncementDispatcher: AnnouncementDispatcherSource = () => undefined;
+  #readSessionEvents: SessionEventsSource = () => undefined;
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -144,6 +148,7 @@ export class AssistantStatus {
         ...controlQueries(() => this.#readControlPlane()),
         ...sessionOpsQueries(() => this.#readSessionOps(), () => this.#readMemberLifecycle()),
         ...announcementQueries(() => this.#readAnnouncements()),
+        ...sessionEventQueries(() => this.#readSessionEvents()),
       },
       actions: {
         // ADR 0036 slice D: the only writer of the control switches (the model has no tool for them).
@@ -155,6 +160,8 @@ export class AssistantStatus {
         ...sessionOpsActions(() => this.#readSessionOps(), () => this.#readSessionOpsAudit()),
         // ADR 0037 slice B: announcements are submitted / approved / resent only here (the model can only draft).
         ...announcementActions(() => this.#readAnnouncements(), () => this.#readAnnouncementDispatcher()),
+        // ADR 0037 slice D: session events are updated / cancelled only here (the model can only create for its session).
+        ...sessionEventActions(() => this.#readSessionEvents()),
       },
     });
   }
@@ -181,6 +188,11 @@ export class AssistantStatus {
   bindAnnouncements(read: AnnouncementsSource, dispatcher: AnnouncementDispatcherSource): void {
     this.#readAnnouncements = read;
     this.#readAnnouncementDispatcher = dispatcher;
+  }
+
+  /** The current generation's session event store (ADR 0037 slice D); the latest route wins. */
+  bindSessionEvents(read: SessionEventsSource): void {
+    this.#readSessionEvents = read;
   }
 
   /** The current generation's decision audit log (`ai_decision_events`); the latest Agent ingress route wins. */
