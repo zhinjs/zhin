@@ -1,0 +1,23 @@
+basic/cli/src/plugin-runtime/console/announcements-rpc.ts
+  s_9622fd28aba994::t_36f5f2b5c01af2 1-218
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  s_9622fd28aba994::t_489e9a77ceda31 14-19,32-34,131-132,146,156-157,180-185
+basic/cli/tests/plugin-runtime/console/announcements-rpc.test.ts
+  s_9622fd28aba994::t_a5914a4c2b9456 1-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "075940be74ea66d47c88691a9cfdb982c2e36b5b",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
