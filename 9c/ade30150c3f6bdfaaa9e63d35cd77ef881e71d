@@ -1,0 +1,317 @@
+packages/game-kit/src/define-game-plugin.ts
+  s_079f1dc5e6308d::t_21810052941697 145
+packages/host/http/src/console-rpc.ts
+  s_079f1dc5e6308d::t_4735485e0e7854 138,140
+packages/im/agent/tests/core/chat-failure.test.ts
+  s_079f1dc5e6308d::t_48d8d9465f6c9f 34-43
+packages/im/agent/src/prompt/model-aware-builder.ts
+  s_079f1dc5e6308d::t_7f416769d52349 1,20,30,39
+plugins/utils/short-url/skills/short-url/tools/short_url/index.ts
+  s_079f1dc5e6308d::t_21810052941697 4,10-11,13,15
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_079f1dc5e6308d::t_0e3d40d7893dfb 28-29,424,429,449,451,453-455,457,460,462
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_079f1dc5e6308d::t_07d2b0afeaa2d1 279
+  s_079f1dc5e6308d::t_03427fb4d0e1e3 59,260-272,277,283
+plugins/adapters/github/agents/github/skills/github-repository/handlers.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 1,14,17,22,24,28,32,34,41,43-46,48,51,53,62,64-67,70,82,85,92,94-97,99-100,108,110-114,119,121,123-165
+  s_079f1dc5e6308d::t_93df4532cc2648 49
+packages/im/agent/src/init/command-presentation.ts
+  s_079f1dc5e6308d::t_74c7b6d251aee2 1-17
+plugins/adapters/wechat-mp/src/webhook.ts
+  s_079f1dc5e6308d::t_4b1b9e75a5e7b4 5,40,177-180
+plugins/adapters/kook/src/endpoint.ts
+  s_079f1dc5e6308d::t_e16244bb96685b 154-156,325-327
+packages/im/agent/src/security/owner-approval-messages.ts
+  s_079f1dc5e6308d::t_f1f0094c1ac7d4 1-20
+plugins/adapters/wechat-mp/tests/webhook-localization.test.ts
+  s_079f1dc5e6308d::t_cb1825d5bc90c5 1-38
+plugins/utils/calendar/src/oauth.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,47,72,148,182,248,288
+docs/en/configuration/localization.md
+  s_079f1dc5e6308d::t_0b89d81aade18e 47,49
+  s_079f1dc5e6308d::t_b0ce8562dbe60e 45-46,48,50
+  s_079f1dc5e6308d::t_212cc0259ce120 41-42,101-104
+packages/im/agent/src/security/owner-approval-store.ts
+  s_079f1dc5e6308d::t_5e36e79cf6d221 1-2,52,55,59,81,84,88,91
+basic/cli/tests/plugin-runtime/agent/turn/approval-localization.test.ts
+  s_079f1dc5e6308d::t_01a80f49202b89 1,42
+  s_079f1dc5e6308d::t_9576e405886ee8 2-41,43-44
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_079f1dc5e6308d::t_cd080b4b97e97f 373-374
+plugins/utils/calendar/src/errors.ts
+  s_079f1dc5e6308d::t_9246c0e4e890b8 24-27,30-31
+  s_079f1dc5e6308d::t_08b096543463e9 1-23,28-29,32-34
+plugins/adapters/discord/src/webhook.ts
+  s_079f1dc5e6308d::t_4b1b9e75a5e7b4 5,17-19,32,90,92,94,102
+plugins/adapters/github/agents/github/skills/github-repository/tools/push_branch/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 16
+plugins/utils/link-poster/src/platforms.ts
+  s_079f1dc5e6308d::t_26a407b99dae36 2-3,37,39,65,91-93,102,127-128,146-148,157,176,187,206,217,231,239
+plugins/adapters/github/agents/github/skills/github-repository/tools/patch_file/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 17
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_079f1dc5e6308d::t_bdcb9bcf0c8b51 1-3,154-175,177-181,183-228
+  s_079f1dc5e6308d::t_7513bcf186cb03 176,182
+packages/im/agent/tests/init/management-localization.test.ts
+  s_079f1dc5e6308d::t_01a80f49202b89 1-47
+packages/im/core/tests/plugin-runtime/endpoint-locale.test.ts
+  s_079f1dc5e6308d::t_78e97f41b40d31 1-76
+plugins/utils/calendar/src/time.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,52,128,134,165
+packages/im/agent/src/init/management-messages.ts
+  s_079f1dc5e6308d::t_74c7b6d251aee2 1-26
+basic/cli/src/plugin-runtime/agent/turn/trigger.ts
+  s_079f1dc5e6308d::t_0e3d40d7893dfb 5,31,34
+plugins/utils/calendar/src/caldav.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,150,232,249
+basic/cli/src/plugin-management/workflow.ts
+  s_079f1dc5e6308d::t_4735485e0e7854 543,545-546,552-557,560-562
+  s_079f1dc5e6308d::t_801f8cef40cedc 516-517,520-522,544,551,558-559
+  s_079f1dc5e6308d::t_ca0857fbc6b260 563
+packages/im/agent/src/prompt/rules/critical-rules.ts
+  s_079f1dc5e6308d::t_40b54d77a64547 1-2,10
+packages/im/agent/src/session/session-tree-commands.ts
+  s_079f1dc5e6308d::t_fb9ed1644280a6 1-3,7-8,17,25-28,35,43-44
+plugins/utils/rss/skills/rss/tools/rss_preview_feed/index.ts
+  s_079f1dc5e6308d::t_21810052941697 5,11,15,21
+packages/im/agent/src/detached-task/interjection.ts
+  s_079f1dc5e6308d::t_5e36e79cf6d221 1-2,81,88,92,110,112-116,122-123,125-126,132,135,138,142-143,146,148,150
+basic/cli/tests/plugin-management.test.ts
+  s_079f1dc5e6308d::t_cd080b4b97e97f 513-548
+packages/im/agent/src/core/progress-reporter.ts
+  s_079f1dc5e6308d::t_565e473167b689 15-16,27-28,42,53,72,90,133
+  s_079f1dc5e6308d::t_40b54d77a64547 17,45-47
+packages/im/agent/tests/prompt/model-aware-language.test.ts
+  s_079f1dc5e6308d::t_28ae29dff8a514 1-15
+  s_079f1dc5e6308d::t_7e50df911f3368 16-17
+tests/localization/game-aliases.test.ts
+  s_079f1dc5e6308d::t_6d6a628d58064a 1-47
+packages/im/agent/tests/detached-task/detached-task-interjection.test.ts
+  s_079f1dc5e6308d::t_01a80f49202b89 182-194
+  s_079f1dc5e6308d::t_918dfce9749cc8 6,44
+  s_079f1dc5e6308d::t_b0626d6ca13cfa 45
+plugins/adapters/github/agents/github/skills/github-subscriptions/tools/star/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 14
+plugins/games/dungeon-expedition/plugin.ts
+  s_079f1dc5e6308d::t_e16244bb96685b 7,46,49-51
+  s_079f1dc5e6308d::t_9d2faeea12bf3c 52
+packages/im/agent/src/core/agent-core-run.ts
+  s_079f1dc5e6308d::t_565e473167b689 946,951,1051,1127
+  s_079f1dc5e6308d::t_6e995bc097c9f9 526
+plugins/adapters/github/agents/github/skills/github-repository/tools/create_pr/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 18
+packages/im/core/src/plugin-runtime/im/locale.ts
+  s_079f1dc5e6308d::t_03427fb4d0e1e3 11
+plugins/utils/calendar/src/tool-errors.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,17,20
+plugins/adapters/kook/src/i18n.ts
+  s_079f1dc5e6308d::t_0f7616dd25caae 1-10
+packages/im/ai/src/memory/context-repository.ts
+  s_079f1dc5e6308d::t_fb9ed1644280a6 43-50,84,387,391,395-396,624,628,632-633
+packages/im/agent/src/init/runtime-management-commands.ts
+  s_079f1dc5e6308d::t_fb9ed1644280a6 6-7,22,50-55,60-61,63,66,71-73,76,78,80-81,84,86,88-89,92-94,98-99,101,104,107-108,110,120-121,123,125,133-134,136,140-141,146,148
+plugins/adapters/kook/src/protocol.ts
+  s_079f1dc5e6308d::t_e16244bb96685b 8-9,253,288,296,300,304
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_079f1dc5e6308d::t_ec58ad99d64a83 495
+packages/im/agent/src/index.ts
+  s_079f1dc5e6308d::t_918dfce9749cc8 107
+basic/cli/src/plugin-runtime/agent/turn/approval-messages.ts
+  s_079f1dc5e6308d::t_0e3d40d7893dfb 1-16
+plugins/adapters/github/agents/github/skills/github-subscriptions/tools/subscriptions/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 11
+packages/game-kit/tests/base-session-service.test.ts
+  s_079f1dc5e6308d::t_c3d13874645d20 224
+packages/im/plugin-runtime/src/plugin-verification.ts
+  s_079f1dc5e6308d::t_4735485e0e7854 2,8,10,17,19
+packages/im/agent/src/security/owner-approval-runtime.ts
+  s_079f1dc5e6308d::t_5e36e79cf6d221 1-3,17,41-42,45-46,58,62,65,71-74,77,80,82,85,87-88,93,95,99,101-102,104,107,157
+plugins/adapters/github/agents/github/skills/github-subscriptions/tools/unsubscribe/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 13
+plugins/adapters/kook/tests/kook-runtime.test.ts
+  s_079f1dc5e6308d::t_c3d13874645d20 583-608
+plugins/games/roulette/src/deadline-job.ts
+  s_079f1dc5e6308d::t_21810052941697 2,34
+plugins/adapters/kook/src/outbound.ts
+  s_079f1dc5e6308d::t_0f7616dd25caae 6,9,44,70,74
+tests/snapshots/api-surface.json
+  s_079f1dc5e6308d::t_4634cacbb799ee 127
+plugins/adapters/github/agents/github/skills/github-subscriptions/handlers.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 1,19,21,26,30,34,37,41,43,45,49,55,65,77,80,82,84,88,96,99,102,104,106,110,117,119,122,125-183
+plugins/utils/link-poster/middlewares/link-poster/index.ts
+  s_079f1dc5e6308d::t_26a407b99dae36 6,25-26,28
+packages/im/agent/tests/init/runtime-management-commands.test.ts
+  s_079f1dc5e6308d::t_48d8d9465f6c9f 63-86
+  s_079f1dc5e6308d::t_918dfce9749cc8 12,24,39,55
+plugins/games/roulette/tests/roulette-runtime.test.ts
+  s_079f1dc5e6308d::t_c3d13874645d20 464
+plugins/adapters/github/agents/github/skills/github-subscriptions/tools/subscribe/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 14
+plugins/utils/short-url/src/i18n.ts
+  s_079f1dc5e6308d::t_21810052941697 4
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  s_079f1dc5e6308d::t_28ae29dff8a514 19-20,25
+  s_079f1dc5e6308d::t_ca1b9e491cc321 144-157
+plugins/adapters/github/src/workspace-manager.ts
+  s_079f1dc5e6308d::t_43acc92e0bd1a8 149,154,158,162,167,170,178-181
+  s_079f1dc5e6308d::t_4735485e0e7854 7
+  s_079f1dc5e6308d::t_93df4532cc2648 27,33,41,43,52,63-64,69,81,91,93-94,98-99,101,104,106,110,114,116-117,120,124-129,131-133,138,140,144-145,150-152,159,161,164-166,171-177
+plugins/adapters/kook/tests/outbound-media.test.ts
+  s_079f1dc5e6308d::t_c3d13874645d20 66-77
+packages/im/adapter/src/endpoint.ts
+  s_079f1dc5e6308d::t_03427fb4d0e1e3 4,37-38,195-198
+  s_079f1dc5e6308d::t_25aabf8a9169d0 199-200
+packages/im/agent/tests/core/progress-budget.test.ts
+  s_079f1dc5e6308d::t_9af36fd6dfc680 2,415-421,423-436
+  s_079f1dc5e6308d::t_28ae29dff8a514 64-65,78,110,378-408
+  s_079f1dc5e6308d::t_bea272ed8531a1 409-414,422
+packages/im/agent/src/memory/compaction-runtime.ts
+  s_079f1dc5e6308d::t_fb9ed1644280a6 1-2,166,170,176,187
+plugins/utils/link-poster/src/i18n.ts
+  s_079f1dc5e6308d::t_26a407b99dae36 1-12
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_079f1dc5e6308d::t_e84bdf52cd2eff 4
+  s_079f1dc5e6308d::t_bdcb9bcf0c8b51 35,69,444-446,448-450
+  s_079f1dc5e6308d::t_60f80ed562ee90 447,451
+packages/im/agent/src/core/turn-reply-messages.ts
+  s_079f1dc5e6308d::t_565e473167b689 1-12
+basic/cli/tests/plugin-runtime/agent/turn/trigger.test.ts
+  s_079f1dc5e6308d::t_48d8d9465f6c9f 155-160
+plugins/adapters/github/agents/github/skills/github-repository/tools/prepare_workspace/index.ts
+  s_079f1dc5e6308d::t_dc5c4537fb8925 13
+packages/im/agent/src/memory/memory-system.ts
+  s_079f1dc5e6308d::t_fb9ed1644280a6 1,53,68
+plugins/utils/calendar/src/oauth-auth.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,130,135,138
+plugins/utils/calendar/src/free-time.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,25,49
+plugins/utils/calendar/src/i18n.ts
+  s_079f1dc5e6308d::t_08b096543463e9 4
+plugins/utils/calendar/src/token-manager.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,104-105,109,284-285,293-294
+  s_079f1dc5e6308d::t_9246c0e4e890b8 64-66,70
+plugins/utils/calendar/src/chat-auth.ts
+  s_079f1dc5e6308d::t_08b096543463e9 1,37-38,208-209,241
+  s_079f1dc5e6308d::t_d955daad78cbf6 244-245,256-257,292-293,346,351
+packages/im/agent/src/prompt/rules/reply-language.ts
+  s_079f1dc5e6308d::t_40b54d77a64547 1
+  s_079f1dc5e6308d::t_dede5fec9007f5 2
+plugins/utils/calendar/skills/calendar-scheduling/tools/create_event/index.ts
+  s_079f1dc5e6308d::t_08b096543463e9 42
+plugins/games/dungeon-expedition/tests/dungeon-runtime.test.ts
+  s_079f1dc5e6308d::t_c3d13874645d20 1,52-54,56,71,73-76,80-83,85-86
+  s_079f1dc5e6308d::t_0b809e3c7570f0 55,57-70,72,77-79,84
+  s_079f1dc5e6308d::t_0f85556e2289f5 87
+packages/im/agent/src/outbound/chat-failure.ts
+  s_079f1dc5e6308d::t_4fe36b99718c5c 9,21-52,54,66,79,81-82
+plugins/adapters/discord/tests/webhook-localization.test.ts
+  s_079f1dc5e6308d::t_0b809e3c7570f0 9
+  s_079f1dc5e6308d::t_cb1825d5bc90c5 1-8,10-30,32-44
+  s_079f1dc5e6308d::t_9c1d61a966c7db 31
+plugins/utils/link-poster/src/render.ts
+  s_079f1dc5e6308d::t_26a407b99dae36 2-3,42-44
+packages/im/agent/tests/memory/semantic-recall.test.ts
+  s_079f1dc5e6308d::t_918dfce9749cc8 71
+plugins/utils/rss/src/i18n.ts
+  s_079f1dc5e6308d::t_21810052941697 4-7
+plugins/utils/rss/skills/rss/tools/rss_list_subscriptions/index.ts
+  s_079f1dc5e6308d::t_21810052941697 5,12,20,37
+packages/im/agent/src/detached-task/interjection-messages.ts
+  s_079f1dc5e6308d::t_f1f0094c1ac7d4 1-20
+plugins/utils/reminder/plugin.ts
+  s_079f1dc5e6308d::t_4735485e0e7854 26-28,36-38
+plugins/adapters/github/tests/tool-localization.test.ts
+  s_079f1dc5e6308d::t_e90bec60e4bb5c 1-4,6-39,49
+  s_079f1dc5e6308d::t_0ee13e32235f07 5,40-48
+plugins/adapters/github/src/github-channel-context.ts
+  s_079f1dc5e6308d::t_43acc92e0bd1a8 5,28,36,49-52
+docs/configuration/localization.md
+  s_079f1dc5e6308d::t_b0ce8562dbe60e 45-46,48,50
+  s_079f1dc5e6308d::t_212cc0259ce120 41-42,101-104
+  s_079f1dc5e6308d::t_0b89d81aade18e 47,49
+plugins/utils/calendar/skills/calendar-scheduling/tools/list_events/index.ts
+  s_079f1dc5e6308d::t_08b096543463e9 36
+packages/im/agent/tests/security/runtime-owner-approve.test.ts
+  s_079f1dc5e6308d::t_918dfce9749cc8 36
+  s_079f1dc5e6308d::t_01a80f49202b89 107-127
+packages/im/agent/src/context/turn-envelope.ts
+  s_079f1dc5e6308d::t_40b54d77a64547 77
+packages/im/agent/src/zhin-agent/index.ts
+  s_079f1dc5e6308d::t_fb9ed1644280a6 1,467,474
+packages/im/agent/src/core/exhausted-turn-reply.ts
+  s_079f1dc5e6308d::t_40b54d77a64547 21,35-37
+  s_079f1dc5e6308d::t_565e473167b689 19-20,30,32,46,78,97
+basic/cli/src/plugin-runtime/agent/turn/ingress-messages.ts
+  s_079f1dc5e6308d::t_816c80aac36328 1-8
+plugins/adapters/wechat-mp/src/protocol.ts
+  s_079f1dc5e6308d::t_4b1b9e75a5e7b4 1,370-374,377
+packages/im/agent/tests/core/exhausted-turn-reply.test.ts
+  s_079f1dc5e6308d::t_28ae29dff8a514 92-101
+  s_079f1dc5e6308d::t_173409b90e8d49 91,102-108
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_079f1dc5e6308d::t_0b343ecb0ccefa 1,456,470,499,801-802
+  s_079f1dc5e6308d::t_0e3d40d7893dfb 568,576,777
+  s_079f1dc5e6308d::t_ec58ad99d64a83 9,389
+  s_079f1dc5e6308d::t_5e36e79cf6d221 377-378,397-398,413,446
+  s_079f1dc5e6308d::t_55dc1a61cd011a 48
+.changeset/localization-entrypoint-audit.md
+  s_079f1dc5e6308d::t_3a80f27efa6220 34-35
+  s_079f1dc5e6308d::t_4fae1c5bec5ffe 1-33
+packages/game-kit/tests/localization.test.ts
+  s_079f1dc5e6308d::t_c3d13874645d20 25,48
+plugins/adapters/wecom/src/endpoint.ts
+  s_079f1dc5e6308d::t_95d5cfb128f899 142,144
+plugins/adapters/wecom/src/protocol.ts
+  s_079f1dc5e6308d::t_cd9313f9f9e8d3 1,273-275,326
+plugins/adapters/wecom/tests/wecom-runtime.test.ts
+  s_079f1dc5e6308d::t_5a7c4bb0bcbe06 610-627
+plugins/games/blackjack/middlewares/bj-alias/index.ts
+  s_079f1dc5e6308d::t_01d9242cb02530 2,16-18,20
+plugins/games/dice-duel/middlewares/dice-alias/index.ts
+  s_079f1dc5e6308d::t_0a22f8f6a0f96f 7,13-15,17
+plugins/games/guess-number/middlewares/guess-alias/index.ts
+  s_079f1dc5e6308d::t_6333b430d35815 7,13-15,17
+plugins/games/idiom-chain/middlewares/chain-alias/index.ts
+  s_079f1dc5e6308d::t_325c8b14de089e 7,13-15,17
+plugins/games/rps/middlewares/rps-alias/index.ts
+  s_079f1dc5e6308d::t_bd9a2c88424adf 7,13-15,17
+plugins/games/text-adventure/middlewares/adv-alias/index.ts
+  s_079f1dc5e6308d::t_12bb5a62428538 7,13-15,17
+plugins/games/tic-tac-toe/middlewares/ttt-alias/index.ts
+  s_079f1dc5e6308d::t_d6ac1057dc14da 7,13-15,17
+plugins/games/word-riddle/middlewares/riddle-alias/index.ts
+  s_079f1dc5e6308d::t_45b78a92d26482 7,13-15,17
+plugins/utils/calendar/plugin.ts
+  s_079f1dc5e6308d::t_28c174e4de5068 52-53
+plugins/utils/calendar/tests/chat-auth.test.ts
+  s_079f1dc5e6308d::t_347ac0ba0093df 89,94,96,101,112,123,255-291
+plugins/utils/calendar/tests/tools-localization.test.ts
+  s_079f1dc5e6308d::t_de2c930cecb624 1-59
+plugins/utils/ledger/src/service.ts
+  s_079f1dc5e6308d::t_90bd25d6286260 157,212
+plugins/utils/ledger/tests/ledger.test.ts
+  s_079f1dc5e6308d::t_d5d80438cc5454 475,482,489
+plugins/utils/link-poster/tests/link-poster-runtime.test.ts
+  s_079f1dc5e6308d::t_8dc77e979d6e7f 1,29-62
+plugins/utils/rss/tests/tools-localization.test.ts
+  s_079f1dc5e6308d::t_aa8727ffdfd2d1 1-32
+plugins/utils/short-url/tests/tool-localization.test.ts
+  s_079f1dc5e6308d::t_3de111fb1a2783 1-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9cade30150c3f6bdfaaa9e63d35cd77ef881e71d",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
