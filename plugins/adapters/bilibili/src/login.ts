@@ -1,6 +1,9 @@
 /**
  * 扫码登录（Experimental，非官方 Web 接口 `passport.bilibili.com/x/passport-login/web/qrcode/*`）。
  *
+ * 参考（只借流程，未复制代码）：renmu123/biliAPI WebQrcodeLogin、WittF/bilibili-qr-login、
+ * Ninzore/bilibili-captain Login.loginQR、Janson20/BiliCommentBot。
+ *
  * 流程：generate → 用户用 B 站 App 扫码确认 → poll 返回 code 0，跳转 URL 的查询参数里带
  * `SESSDATA` / `bili_jct` / `DedeUserID` / `Expires`。只解析这几个字段，永远不记录它们。
  *
@@ -15,6 +18,8 @@ export interface BilibiliCredentials {
   readonly mid?: string;
   /** Cookie 过期时间（毫秒时间戳），未知时省略。 */
   readonly expiresAt?: number;
+  /** 扫码成功时返回的 refresh_token（用于后续 Cookie 刷新，v1.1）；拿不到时省略。敏感。 */
+  readonly refreshToken?: string;
   /** 扫码时间（毫秒时间戳）。 */
   readonly obtainedAt?: number;
 }
@@ -63,11 +68,11 @@ export async function generateLoginQr(fetch: BilibiliFetch, passportBaseUrl: str
 }
 
 export async function pollLoginQr(fetch: BilibiliFetch, passportBaseUrl: string, key: string, now = Date.now()): Promise<BilibiliQrPollResult> {
-  const data = await getJson<{ code?: number; url?: string }>(fetch,
+  const data = await getJson<{ code?: number; url?: string; refresh_token?: string }>(fetch,
     `${passportBaseUrl}/x/passport-login/web/qrcode/poll?qrcode_key=${encodeURIComponent(key)}`);
   switch (data?.code) {
     case QR_POLL_SUCCESS: {
-      const credentials = credentialsFromLoginUrl(data.url ?? '', now);
+      const credentials = credentialsFromLoginUrl(data.url ?? '', now, data.refresh_token);
       if (!credentials) throw new BilibiliApiError(-1, 'Bilibili login succeeded without cookies');
       return { state: 'confirmed', credentials };
     }
@@ -79,7 +84,7 @@ export async function pollLoginQr(fetch: BilibiliFetch, passportBaseUrl: string,
 }
 
 /** 从登录成功的跳转 URL 里取 Cookie。字段不全返回 undefined。 */
-export function credentialsFromLoginUrl(url: string, now = Date.now()): BilibiliCredentials | undefined {
+export function credentialsFromLoginUrl(url: string, now = Date.now(), refreshToken?: string): BilibiliCredentials | undefined {
   let params: URLSearchParams;
   try {
     params = new URL(url).searchParams;
@@ -99,6 +104,7 @@ export function credentialsFromLoginUrl(url: string, now = Date.now()): Bilibili
     biliJct,
     ...(mid && /^\d+$/u.test(mid) ? { mid } : {}),
     ...(expiresAt ? { expiresAt } : {}),
+    ...(refreshToken?.trim() ? { refreshToken: refreshToken.trim() } : {}),
     obtainedAt: now,
   });
 }

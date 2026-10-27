@@ -186,3 +186,7 @@ Without `notify`, drafts only show on the Console page and in logs (`bilibili_dr
 | Log `bilibili_notifications_disabled` | `notifications` is on but you are not signed in, so notifications are not polled |
 | Log `bilibili_notify_failed` | The `notify` conversation cannot be reached: check adapter / endpoint / id and that the adapter is online |
 | Log `bilibili_draft_persist_failed` | The data directory is not writable; check `dataDir` permissions. Drafts remain in memory |
+
+## References
+
+The QR login and overall flow borrow ideas (flow only — no copied code, no dependency) from [renmu123/biliAPI](https://github.com/renmu123/biliAPI) (WebQrcodeLogin), [WittF/bilibili-qr-login](https://github.com/WittF/bilibili-qr-login), [Ninzore/bilibili-captain](https://github.com/Ninzore/bilibili-captain) (Login.loginQR) and [Janson20/BiliCommentBot](https://github.com/Janson20/BiliCommentBot). The community API docs SocialSisterYi/bilibili-API-collect are archived; this adapter does not depend on them. Endpoints may change at any time — see the Experimental note at the top.

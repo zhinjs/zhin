@@ -174,3 +174,7 @@ bilibili:
 | 日志 `bilibili_notifications_disabled` | 开了 `notifications` 但未登录，通知不会轮询 |
 | 日志 `bilibili_notify_failed` | `notify` 指向的会话发不出去：检查 adapter / endpoint / id 是否正确、该适配器是否在线 |
 | 日志 `bilibili_draft_persist_failed` | 数据目录不可写；检查 `dataDir` 权限。草稿仍在内存里 |
+
+## 参考
+
+扫码登录与整体流程参考了以下开源项目的做法（只借鉴流程，未复制代码，也不依赖它们）：[renmu123/biliAPI](https://github.com/renmu123/biliAPI)（WebQrcodeLogin）、[WittF/bilibili-qr-login](https://github.com/WittF/bilibili-qr-login)、[Ninzore/bilibili-captain](https://github.com/Ninzore/bilibili-captain)（Login.loginQR）、[Janson20/BiliCommentBot](https://github.com/Janson20/BiliCommentBot)。社区接口文档 SocialSisterYi/bilibili-API-collect 已归档，本适配器不依赖它；接口随时可能变化，见顶部 Experimental 说明。

@@ -140,6 +140,8 @@ describe('QR login and cookie persistence', () => {
     const credentials = credentialsFromLoginUrl(loginUrl(), 1_000);
     expect(credentials).toMatchObject({ sessdata: 'qr,sess', biliJct: 'qr-jct', mid: '4242', obtainedAt: 1_000 });
     expect(credentials?.expiresAt).toBeGreaterThan(Date.now());
+    expect(credentialsFromLoginUrl(loginUrl(), 1_000, ' rt-token ')).toMatchObject({ refreshToken: 'rt-token' });
+    expect(credentialsFromLoginUrl(loginUrl(), 1_000)).not.toHaveProperty('refreshToken');
     expect(credentialsFromLoginUrl('https://x.test/?SESSDATA=a')).toBeUndefined();
     expect(credentialsFromLoginUrl('not a url')).toBeUndefined();
   });
