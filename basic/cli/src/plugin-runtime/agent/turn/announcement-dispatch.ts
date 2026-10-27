@@ -55,6 +55,8 @@ export interface AnnouncementDispatcherDeps {
   readonly approvals?: () => ToolApprovalQueue | undefined;
   /** 调平台公告接口；抛错视为失败。 */
   readonly sendNotice: (target: AnnouncementSendTarget, content: string) => Promise<DeliveryOutcome>;
+  /** Bot 在场景里发过言（公告发出）：旁听窗口 / 冷场计数清零。`key` 为 `<platform>:<群号>`。 */
+  readonly onSpoke?: (key: string) => void;
   readonly now?: () => number;
   readonly setInterval?: (run: () => void, ms: number) => unknown;
   readonly clearInterval?: (handle: unknown) => void;
@@ -212,6 +214,9 @@ export class AnnouncementDispatcher {
     if (delivered.status === 'sent') {
       const { record: sent } = await store.markSent({ id: record.id, expectedRevision: record.revision, turnId, payload: { ...(delivered.messageId ? { messageId: delivered.messageId } : {}) } });
       logger.info(formatCompact({ op: 'announcement_sent', id: record.id, conv: `${record.platform}:${record.sceneId}` }));
+      try {
+        this.deps.onSpoke?.(`${record.platform}:${scene.id}`);
+      } catch { /* 观测回调不影响发送结果 */ }
       return { kind: 'sent', record: sent };
     }
     const reason = delivered.status === 'suppressed' ? 'suppressed' : `${delivered.status}:${delivered.code}`;
