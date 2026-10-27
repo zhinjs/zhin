@@ -1,0 +1,20 @@
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 170
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  h_b680f75345178a 5,12-14,105,116,126-130
+basic/cli/src/plugin-runtime/console/decision-replay.ts
+  h_b680f75345178a 1-245
+basic/cli/tests/plugin-runtime/console/decision-replay.test.ts
+  h_b680f75345178a 1-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1b259f794cefa9a224edbed0020c2f2847c8029f",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
