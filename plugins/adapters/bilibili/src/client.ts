@@ -42,20 +42,52 @@ export class BilibiliApiError extends Error {
   }
 }
 
+/** 当前生效的 Cookie（来自配置 / 环境变量，或扫码登录后的本地凭据）。 */
+export interface BilibiliCookie {
+  readonly sessdata?: string;
+  readonly biliJct?: string;
+}
+
+export interface BilibiliNav {
+  readonly mid: string;
+  readonly uname?: string;
+}
+
 export class BilibiliClient {
+  #cookie: BilibiliCookie;
+
   constructor(
     readonly config: ResolvedBilibiliConfig,
     readonly fetch: BilibiliFetch,
-  ) {}
+  ) {
+    this.#cookie = Object.freeze({
+      ...(config.sessdata ? { sessdata: config.sessdata } : {}),
+      ...(config.biliJct ? { biliJct: config.biliJct } : {}),
+    });
+  }
 
   get hasCookie(): boolean {
-    return Boolean(this.config.sessdata);
+    return Boolean(this.#cookie.sessdata);
+  }
+
+  /** 是否具备发送所需的 SESSDATA + bili_jct。 */
+  get canWrite(): boolean {
+    return Boolean(this.#cookie.sessdata && this.#cookie.biliJct);
+  }
+
+  /** 切换 Cookie（扫码登录 / 退出 / 失效清除）。传 undefined 清空。 */
+  setCookie(cookie: BilibiliCookie | undefined): void {
+    this.#cookie = Object.freeze({
+      ...(cookie?.sessdata ? { sessdata: cookie.sessdata } : {}),
+      ...(cookie?.biliJct ? { biliJct: cookie.biliJct } : {}),
+    });
   }
 
   #headers(extra: Record<string, string> = {}): Record<string, string> {
+    const { sessdata, biliJct } = this.#cookie;
     const cookie = [
-      this.config.sessdata ? `SESSDATA=${this.config.sessdata}` : '',
-      this.config.biliJct ? `bili_jct=${this.config.biliJct}` : '',
+      sessdata ? `SESSDATA=${sessdata}` : '',
+      biliJct ? `bili_jct=${biliJct}` : '',
     ].filter(Boolean).join('; ');
     return {
       'User-Agent': USER_AGENT,
@@ -85,9 +117,22 @@ export class BilibiliClient {
 
   /** 登录态自检：返回当前账号 uid（未登录返回 undefined）。 */
   async getSelfMid(): Promise<string | undefined> {
+    return (await this.getNav())?.mid;
+  }
+
+  /** 登录态自检：uid + 昵称（未登录返回 undefined）。未登录时 B 站返回 -101。 */
+  async getNav(): Promise<BilibiliNav | undefined> {
     if (!this.hasCookie) return undefined;
-    const data = await this.request<{ isLogin?: boolean; mid?: number }>('/x/web-interface/nav');
-    return data?.isLogin && data.mid ? String(data.mid) : undefined;
+    let data: { isLogin?: boolean; mid?: number; uname?: string } | undefined;
+    try {
+      data = await this.request<{ isLogin?: boolean; mid?: number; uname?: string }>('/x/web-interface/nav');
+    } catch (error) {
+      if (error instanceof BilibiliApiError && error.code === -101) return undefined;
+      throw error;
+    }
+    return data?.isLogin && data.mid
+      ? Object.freeze({ mid: String(data.mid), ...(data.uname ? { uname: data.uname } : {}) })
+      : undefined;
   }
 
   /** BV → aid（公开接口）。 */
@@ -123,7 +168,8 @@ export class BilibiliClient {
    * 只由 `BilibiliEndpoint.approveDraft()` 在人工审批后调用；`send()` 永远不直接调用。
    */
   async addReply(input: { readonly oid: string; readonly root: string; readonly parent: string; readonly message: string }): Promise<string> {
-    if (!this.config.sessdata || !this.config.biliJct) {
+    const csrf = this.#cookie.biliJct;
+    if (!this.#cookie.sessdata || !csrf) {
       throw new BilibiliApiError(-101, 'Bilibili cookie (SESSDATA + bili_jct) is required to reply');
     }
     const body = new URLSearchParams({
@@ -132,7 +178,7 @@ export class BilibiliClient {
       root: input.root,
       parent: input.parent,
       message: input.message,
-      csrf: this.config.biliJct,
+      csrf,
     });
     const data = await this.request<{ rpid?: number; rpid_str?: string }>('/x/v2/reply/add', {
       method: 'POST',

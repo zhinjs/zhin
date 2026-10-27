@@ -50,7 +50,25 @@ export interface BilibiliEndpointConfig {
   readonly notifications?: readonly BilibiliNotificationKind[];
   /** 通知入站范围，默认 `whitelist`。 */
   readonly notificationScope?: BilibiliNotificationScope;
+  /** 草稿与扫码登录凭据的本地目录（默认 `data/bilibili`，相对进程工作目录）。不要放进仓库。 */
+  readonly dataDir?: string;
+  /** 新草稿 / 登录失效时主动提醒到哪个聊天会话（可选）。 */
+  readonly notify?: BilibiliNotifyTarget;
   readonly apiBaseUrl?: string;
+  /** 扫码登录接口地址（测试用）。 */
+  readonly passportBaseUrl?: string;
+}
+
+/** 主动提醒目标：另一个已接入聊天平台里的会话（通常是你和机器人的私聊）。 */
+export interface BilibiliNotifyTarget {
+  /** 适配器名，如 `icqq` / `telegram`。 */
+  readonly adapter: string;
+  /** 该适配器的 endpoint id（配置里的 endpoints[i].id）。 */
+  readonly endpoint: string;
+  /** 会话类型，默认 `private`。 */
+  readonly kind?: 'private' | 'group' | 'channel';
+  /** 会话 id：私聊填你的账号，群聊填群号。 */
+  readonly id: string | number;
 }
 
 export interface ResolvedBilibiliConfig {
@@ -64,7 +82,32 @@ export interface ResolvedBilibiliConfig {
   readonly minSendIntervalMs: number;
   readonly notifications: readonly BilibiliNotificationKind[];
   readonly notificationScope: BilibiliNotificationScope;
+  readonly dataDir: string;
+  readonly notify?: ResolvedBilibiliNotifyTarget;
   readonly apiBaseUrl: string;
+  readonly passportBaseUrl: string;
+}
+
+export interface ResolvedBilibiliNotifyTarget {
+  readonly adapter: string;
+  readonly endpoint: string;
+  readonly kind: 'private' | 'group' | 'channel';
+  readonly id: string;
+}
+
+export const BILIBILI_DEFAULT_DATA_DIR = 'data/bilibili';
+
+function resolveNotifyTarget(value: BilibiliNotifyTarget | undefined): ResolvedBilibiliNotifyTarget | undefined {
+  if (value === undefined || value === null) return undefined;
+  const adapter = typeof value.adapter === 'string' ? value.adapter.trim() : '';
+  const endpoint = typeof value.endpoint === 'string' ? value.endpoint.trim() : String(value.endpoint ?? '').trim();
+  const id = String(value.id ?? '').trim();
+  const kind = value.kind ?? 'private';
+  if (!adapter || !endpoint || !id) throw new TypeError('Bilibili notify requires adapter, endpoint and id');
+  if (kind !== 'private' && kind !== 'group' && kind !== 'channel') {
+    throw new TypeError(`Bilibili notify.kind must be private, group or channel, got "${String(kind)}"`);
+  }
+  return Object.freeze({ adapter, endpoint, kind, id });
 }
 
 export type BilibiliVideoRef =
@@ -113,6 +156,7 @@ export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedB
   }
   const sessdata = config.sessdata?.trim() || undefined;
   const biliJct = config.biliJct?.trim() || undefined;
+  const notify = resolveNotifyTarget(config.notify);
   return {
     context: 'bilibili',
     id,
@@ -124,7 +168,10 @@ export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedB
     minSendIntervalMs: sendInterval * 1000,
     notifications: Object.freeze(notifications),
     notificationScope,
+    dataDir: config.dataDir?.trim() || BILIBILI_DEFAULT_DATA_DIR,
+    ...(notify ? { notify } : {}),
     apiBaseUrl: trimTrailingSlashes(config.apiBaseUrl?.trim() || 'https://api.bilibili.com'),
+    passportBaseUrl: trimTrailingSlashes(config.passportBaseUrl?.trim() || 'https://passport.bilibili.com'),
   };
 }
 

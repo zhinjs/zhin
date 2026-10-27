@@ -2,7 +2,7 @@
   "name": "@zhin.js/adapter-bilibili",
   "version": "0.1.0",
   "private": true,
-  "description": "Zhin.js Bilibili comment adapter for Plugin Runtime (Experimental; cookie auth, video comments, review-then-send)",
+  "description": "Zhin.js Bilibili comment adapter for Plugin Runtime (Experimental; QR login, video comments, review-then-send with a Console approval page)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -43,16 +43,22 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
-    "@zhin.js/logger": "workspace:*"
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "react": "^19.2.8"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "zhin.js": "workspace:^",
-    "@zhin.js/command": "workspace:^"
+    "@zhin.js/command": "workspace:^",
+    "@zhin.js/page": "workspace:^",
+    "react": "^19.0.0"
   },
   "peerDependenciesMeta": {
     "zhin.js": {
@@ -60,10 +66,15 @@
     },
     "@zhin.js/command": {
       "optional": true
+    },
+    "react": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@zhin.js/pagemanager": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*"
@@ -71,6 +82,7 @@
   "files": [
     "adapters",
     "commands",
+    "pages",
     "plugin.ts",
     "schema.json",
     "src",
@@ -103,6 +115,10 @@
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],
