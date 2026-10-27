@@ -1,0 +1,28 @@
+packages/im/agent/src/index.ts
+  h_b680f75345178a 334-377
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  h_b680f75345178a 18,87-89
+packages/im/agent/src/init/define-ai-database-models.ts
+  h_b680f75345178a 18,36
+packages/im/agent/src/session-events.ts
+  h_b680f75345178a 1-743
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 50,172-173,415-418
+packages/im/agent/tests/define-ai-database-models.test.ts
+  h_b680f75345178a 17,29
+packages/im/agent/tests/session-events.test.ts
+  h_b680f75345178a 1-172
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  h_b680f75345178a 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3ea3f8010d01f7dd840c37686de2737eb9f3d586",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
