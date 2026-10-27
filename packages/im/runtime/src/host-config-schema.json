@@ -2977,6 +2977,54 @@
                   "description": "shadow 只记录判断结果、不回复（默认 active）"
                 }
               }
+            },
+            "sceneEvents": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "状态感知：禁言/解禁、入群申请、成员进出、公告变更、戳 Bot 等高优先社交事件独立唤醒一次回合（不必等下一条人话）；表情回应、名片/头衔变更等低优先事件不单独唤醒，只在下一轮 [Scene events] 摘要里出现。Bot 不能发言时只更新会话画像，不调用模型。",
+              "properties": {
+                "conversations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "允许被社交事件唤醒的群/频道，格式 platform:sceneId；* 表示所有群。缺省沿用 ai.trigger.ambient.conversations（都没配则不唤醒）",
+                  "x-i18n": {
+                    "en": {
+                      "description": "Groups/channels that social events may wake, as platform:sceneId; * for every group. Defaults to ai.trigger.ambient.conversations (no wake when neither is set)"
+                    }
+                  }
+                },
+                "coalesceMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "同一场景的合并窗口（毫秒，限定 3000～5000，默认 4000）",
+                  "x-i18n": {
+                    "en": {
+                      "description": "Coalesce window per scene in ms, clamped to 3000–5000 (default 4000)"
+                    }
+                  }
+                },
+                "minIntervalMs": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "同一场景两次唤醒的最短间隔（毫秒，默认 15000）；未到时间的批次顺延，不丢",
+                  "x-i18n": {
+                    "en": {
+                      "description": "Minimum gap between two wakes in one scene in ms (default 15000); early batches are deferred, not dropped"
+                    }
+                  }
+                }
+              },
+              "x-i18n": {
+                "en": {
+                  "description": "Scene awareness: high-priority social events (bot muted/unmuted, join request, member joined/left, notice updated, bot poked) wake one turn on their own without waiting for the next human message; low-priority events (reactions, card/title changes) never wake alone and only appear in the next turn's [Scene events] summary. When the bot cannot speak, only the session profile is updated and the model is not called."
+                }
+              }
             }
           },
           "description": "AI 触发配置"

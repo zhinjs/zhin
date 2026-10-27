@@ -447,6 +447,45 @@ Markdown 文件记忆（`MEMORY.md`）仍按原有字符预算整体注入，本
 
 两段加起来通常 2～4 行。它们是单独的一块上下文，**只对本轮有效**：存进 `agent_messages` 之前会被丢掉，之后的回合和新会话不会重放旧的 `[Relationship]` / `[Session]`，每轮都按当时的数据重新生成。
 
+### 状态感知：社交事件也能唤醒回合
+
+以前禁言、进群、戳一戳这类事件只写进 `conversation_events`，要等下一条人话才会出现在上下文里。现在高优先的社交事件会**自己唤醒一次回合**，不必等人说话；低优先的事件不单独唤醒，只在下一轮带上。
+
+| 事件 | 优先级 | 说明 |
+| --- | --- | --- |
+| `member.muted` / `member.unmuted` | 高 | 含全员禁言；摘要里目标是 Bot 时写成 `you` |
+| `scene.join_requested` | 高 | 入群/入频道申请或邀请，附言截断 |
+| `member.joined` / `member.left` | 高 | 成员进出（被移出会注明） |
+| `scene.notice_updated` | 高 | 群公告变更，正文截断 |
+| `conversation.poked`（目标是 Bot） | 高 | 戳一戳 Bot |
+| `message.reaction_changed` | 低 | 表情回应，相同的合并计数 |
+| `member.card_changed` / `title_changed` / `remark_changed` | 低 | 名片 / 头衔 / 备注 |
+| `conversation.poked`（人与人） | 低 | 可合并 |
+
+每条事件只保留平台、场景、发起人、目标、短摘要和时间，**不会把平台原始 JSON 交给模型**。各适配器经统一的 `receiveOneBotLikeSideEvent` 归一化：icqq 的戳一戳、表情回应、管理员变更、禁言、入群申请；OneBot11 / NapCat / QQ 的 `group_card`（名片）、`notify.title`（头衔）等。icqq SDK 目前没有名片和公告事件，平台提供时才会出现。
+
+**唤醒规则**
+
+- 高优先事件到达后，按 `platform:群号` 开一个 coalesce 窗（默认 4 秒，限定 3～5 秒），窗内的高优先事件合并成**一次**唤醒。
+- 同一个群两次唤醒至少间隔 15 秒（`minIntervalMs`）；还没到时间的批次顺延，事件不丢。
+- 唤醒时先把这批事件折叠进会话画像，再走和普通消息一样的发言门禁：Bot 被禁言、全员禁言或有限制时**只更新画像、不调用模型**，日志记 `scene_event_wake_skipped_cannot_speak`。
+- 能发言时跑一次短回合：标记为旁听 + 状态唤醒，没有 shell、没有网络、工作区只读；模型可以不说话（返回空）。这种回合不改好感度，写进会话历史的只有一行 `(scene events)`。日志记 `scene_event_wake`。
+
+只在名单里的群/频道唤醒：
+
+```yaml
+ai:
+  trigger:
+    sceneEvents:
+      conversations: ['icqq:123456']   # platform:群号，* 表示所有群；缺省沿用 ai.trigger.ambient.conversations
+      coalesceMs: 4000                 # 3000～5000
+      minIntervalMs: 15000
+```
+
+不在名单里的群，高优先事件同样落库，只是不唤醒，下一轮照常出现在摘要里。
+
+**注入 `[Scene events]`**：每轮（人话回合和被唤醒的回合）把上次以来的社交事件放进和 `[Relationship]` / `[Session]` 同一个 ephemeral 块，最多 5 行、正文 ≤200 字，最新的在前；称呼优先用 `ai_user_relations` 里的称呼，不带分数。每个会话只展示一次，**不写进 `agent_messages`**。名片、公告、入群申请这些新类型只走这一段，不再进入旧的会话事件上下文，避免重复。
+
 ### 写入笔记、称呼和语气
 
 笔记、称呼和语气由模型通过 `user_profile` 工具显式写入（`note` / `unnote` / `call_me` / `tone`），不会自动改写人设。疑似密码、令牌、Cookie、验证码、证件号和 11 位以上长数字的内容会被拒绝保存（话题同样过滤）；日志里只记错误信息，不输出画像内容。
