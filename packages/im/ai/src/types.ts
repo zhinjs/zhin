@@ -233,6 +233,10 @@ export interface AgentTool {
   isConcurrencySafe?: boolean;
   /** Per-tool approval policy (ADR 0039 P1); stacks with ExecPolicy. */
   requiresApproval?: import('./tool-policy.js').ToolApprovalPolicy;
+  /** Hard-gate risk (ADR 0036): `dangerous` always needs fresh human approval, independent of ExecPolicy. */
+  risk?: 'dangerous' | 'safe';
+  /** Dangerous category: member / publish / funds / identity. */
+  riskCategory?: 'member' | 'publish' | 'funds' | 'identity';
   /** Shapes tool output before it enters model context (IM rich payload may differ). */
   toModelOutput?: import('./tool-policy.js').ToolToModelOutputFn;
   /** Generation stamp — set when tools are collected; ToolRuntime validates before execution. */
@@ -602,6 +606,18 @@ export interface AIConfig {
       confirmHighRisk?: 'external_content' | 'off';
       outboundCheck?: 'redact' | 'off';
       trustedOutputTools?: string[];
+    };
+    /**
+     * 危险工具硬闸（ADR 0036）：始终开启，独立于 execApprovalMode。只能调高风险，不能关闭。
+     * dangerous 工具每次都要新鲜的人工批准或 Console 已批准的同参数卡片；被拒即 fail closed。
+     */
+    toolHardGate?: {
+      /** 额外标为 dangerous 的工具（本地名或限定名） */
+      dangerousTools?: string[];
+      /** 资金类工具是否可用；默认 false，开启后仍需审批 */
+      allowFunds?: boolean;
+      /** 审批等待上限（毫秒），超时拒绝；默认 300000 */
+      approvalTimeoutMs?: number;
     };
     /** 按用户 / 按群的 token 配额与群速率限制；默认全部关闭，主人默认不受限 */
     usageQuota?: {

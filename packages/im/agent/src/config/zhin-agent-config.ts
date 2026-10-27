@@ -1,6 +1,7 @@
 import type { ToolBudgetSettings } from '../core/turn-progress.js';
 import type { InjectionGuardSettings } from '../security/provenance.js';
 import type { UsageQuotaSettings } from '../security/usage-quota.js';
+import type { ToolHardGateSettings } from '../security/tool-hard-gate.js';
 /**
  * ZhinAgent 配置类型 SSOT — 供 host 契约与 zhin-agent 门面共用。
  */
@@ -106,6 +107,8 @@ export interface ZhinAgentConfig {
   providerResilience?: ProviderResilienceConfig;
   /** Provenance confirmation for high-risk actions and the outbound leak check (#727). */
   injectionGuard?: Partial<InjectionGuardSettings>;
+  /** Dangerous-tool hard gate (ADR 0036): extra dangerous tools, funds switch, approval timeout. Always on. */
+  toolHardGate?: Partial<ToolHardGateSettings>;
   /** Per-user / per-group token quotas and group rate limit (#727); all limits off by default. */
   usageQuota?: Partial<UsageQuotaSettings>;
   /** Test seam: timers for the provider request timeout (evals inject a virtual clock). Not a YAML option. */

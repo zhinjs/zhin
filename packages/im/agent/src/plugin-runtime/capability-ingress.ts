@@ -158,6 +158,8 @@ async function bindSeamTools(
     description: entry.schema.function.description,
     inputSchema: entry.schema.function.parameters,
     requiresApproval: entry.schema.requiresApproval ?? 'on-risk',
+    ...(entry.schema.risk ? { risk: entry.schema.risk } : {}),
+    ...(entry.schema.riskCategory ? { riskCategory: entry.schema.riskCategory } : {}),
     platforms: entry.schema.platforms,
     scopes: entry.schema.scopes,
     permissions: entry.schema.permissions,

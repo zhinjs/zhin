@@ -9,7 +9,8 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
 import type { AgentCore } from '../core/agent-core.js';
-import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
+import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
+import type { DecisionAuditSink } from '../security/tool-hard-gate.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import {
@@ -235,6 +236,7 @@ async function* runInteractiveTurn(
   const reply = guardedReply(host, context.turn, leakInspector);
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
     injectionGuard: host.config.injectionGuard,
+    ...hardGateOptions(host),
     provenance,
     leakInspector,
   });
@@ -418,6 +420,7 @@ async function* runScheduleTurn(
   });
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
     injectionGuard: host.config.injectionGuard,
+    ...hardGateOptions(host),
   });
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext,
@@ -724,4 +727,17 @@ async function recallTurnMemory(
     logger.warn(`semantic memory recall failed: ${error instanceof Error ? error.message : String(error)}`);
     return undefined;
   }
+}
+
+/**
+ * Hard-gate wiring (ADR 0036): settings, the Host's approval cards, and the decision audit when the
+ * Host exposes one (`decisionEvents.record`, slice B). The gate runs even when none are present.
+ */
+function hardGateOptions(host: ZhinAgentPrivate): Pick<TurnToolRuntimeOptions, 'hardGate' | 'decisionAudit' | 'approvalQueue'> {
+  const audit = (host as { readonly decisionEvents?: Partial<DecisionAuditSink> }).decisionEvents;
+  return {
+    ...(host.config.toolHardGate ? { hardGate: host.config.toolHardGate } : {}),
+    ...(host.toolApprovals ? { approvalQueue: host.toolApprovals } : {}),
+    ...(audit && typeof audit.record === 'function' ? { decisionAudit: audit as DecisionAuditSink } : {}),
+  };
 }

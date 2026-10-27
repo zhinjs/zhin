@@ -296,6 +296,15 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
 
   /** Per-tool approval policy; `on-risk` remains fail-closed at Agent boundaries. */
   requiresApproval?: 'always' | 'once' | 'never' | 'on-risk' | 'human';
+
+  /**
+   * Hard-gate risk (ADR 0036): `dangerous` tools never run without a fresh human approval,
+   * independent of `requiresApproval` and `execApprovalMode`. The Host may only raise it.
+   */
+  risk?: 'dangerous' | 'safe';
+
+  /** Dangerous category: member / publish / funds (disabled by default) / identity. */
+  riskCategory?: 'member' | 'publish' | 'funds' | 'identity';
   
   /**
    * 支持的平台列表

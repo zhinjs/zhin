@@ -173,6 +173,10 @@ outline: [2, 3]
 | `ai.agent.injectionGuard.confirmHighRisk` | string: `"external_content"`, `"off"` | 否 | `"external_content"` | external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。 |
 | `ai.agent.injectionGuard.outboundCheck` | string: `"redact"`, `"off"` | 否 | `"redact"` | redact：在回复和外发工具消息中屏蔽泄露的系统提示、密钥和其他会话记忆；off：关闭。 |
 | `ai.agent.injectionGuard.trustedOutputTools` | array&lt;string&gt; | 否 | `[]` | 结果不算外部内容的工具。 |
+| `ai.agent.toolHardGate` | object | 否 | — | 危险工具硬闸（ADR 0036）。始终开启，独立于 execApprovalMode：成员管理、内容发布、资金、改 Bot 身份类工具（核心名单 + 声明 risk: dangerous 的工具）没有新鲜的人工批准或 Console 已批准的卡片就不执行，bypass 也不例外；被拒即 fail closed，同一回合不再重试。配置只能更严。 |
+| `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | 否 | `[]` | 额外按危险工具处理的工具（本地名或限定名）；不能把核心危险工具调成安全。 |
+| `ai.agent.toolHardGate.allowFunds` | boolean | 否 | `false` | 允许资金类工具（红包、转账、付款）。默认关闭；开启后仍需审批。 |
+| `ai.agent.toolHardGate.approvalTimeoutMs` | integer | 否 | `300000` | 危险调用等待审批的上限（毫秒），超时即拒绝。 |
 | `ai.agent.usageQuota` | object | 否 | — | 按用户 / 按群的 token 配额与群速率限制。默认全部关闭（0），主人默认不受限；计数保存在内存中。 |
 | `ai.agent.usageQuota.windowMs` | integer | 否 | `86400000` | 配额周期（毫秒）。 |
 | `ai.agent.usageQuota.perUserTokens` | integer | 否 | `0` | 每个用户每周期可用的 token；0 不限。 |

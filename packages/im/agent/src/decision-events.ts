@@ -80,6 +80,12 @@ export const DECISION_REASON_CODES = [
   'outbound_sent',
   'outbound_suppressed',
   'outbound_failed',
+  // 危险工具硬闸（切片 E）
+  'tool_approval_requested',
+  'tool_approval_approved',
+  'tool_funds_disabled',
+  'tool_hard_gate_latched',
+  'tool_safe_allowed',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

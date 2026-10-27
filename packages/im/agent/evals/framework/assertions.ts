@@ -53,6 +53,9 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
       }
     }
   }
+  if (expect.approvalRequestCount !== undefined && run.approvalRequests.length !== expect.approvalRequestCount) {
+    fail('approvalRequestCount', `expected ${expect.approvalRequestCount} approval request(s); got ${run.approvalRequests.length} [${list(run.approvalRequests)}]`);
+  }
   for (const needle of expect.approvalQuestionContains ?? []) {
     if (!run.approvalQuestions.some((question) => question.includes(needle))) {
       fail('approvalQuestionContains', `no approval question contained "${needle}"`);

@@ -19,7 +19,32 @@
 - 子代理：`subagentTurnMode off`
 - 工具预算：`extendBy 10`、`progressWindow 5`、`maxTotalIterations 40`、`maxWallClockMs 600000`、`failureStreakLimit 3`、`repeatLimit 2`
 - 用量配额：全部为 0（关闭），`exemptOwner true`
+- 危险工具硬闸：始终开启；资金类禁用（`allowFunds false`）；审批 5 分钟（`approvalTimeoutMs 300000`）未批即拒绝
 - 上下文压缩：`thresholdRatio 0.7`
+
+## 危险工具硬闸
+
+`execApprovalMode` 决定「普通审批」由谁回答（`ask` 问人、`auto` 交给审核 Agent、`bypass` 跳过）。危险工具硬闸是另一道门，独立于它，**不能关闭**（ADR 0036 §3）：
+
+| | `execApprovalMode` 审批 | 危险工具硬闸 |
+| --- | --- | --- |
+| 管哪些工具 | `requiresApproval` 要求审批的工具、Shell / 文件策略 | 声明 `risk: 'dangerous'` 的工具、核心名单、`toolHardGate.dangerousTools` |
+| 谁能放行 | 人、审核 Agent，或 `bypass` 直接放行；可以「本会话 / 始终允许」 | 只有本次的新鲜人工批准，或 Console 已批准的同参数卡片；`bypass`、审核 Agent、主人身份、记住的授权都不算 |
+| 被拒之后 | 模型收到拒绝说明 | 本次调用不执行（fail closed）；模型只收到「已拒绝、需人工审批、不要重试」；本回合内同一工具 / 同类危险工具直接拒绝，不再弹审批 |
+| 无人值守回合 | 按策略拒绝 | 直接拒绝，并生成一张 Console 审批卡片；批准后，下一次**同会话同参数**的调用执行一次 |
+
+核心名单按类别默认危险：成员管理（踢人、禁言、设管理员、角色、拉人）、内容发布（群公告、频道发帖、精华、置顶、B 站评论）、资金（红包、转账、付款，**默认禁用**，`allowFunds: true` 后仍需审批）、身份（改 Bot 资料、头像、签名、解绑账号）。只读查询（查成员、查群信息）不受硬闸限制，照常记审计。
+
+```yaml
+ai:
+  agent:
+    toolHardGate:
+      dangerousTools: [my_plugin__wipe_album]  # 只能追加，不能把核心名单调低
+      allowFunds: false
+      approvalTimeoutMs: 300000                # 超时即拒绝
+```
+
+审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `tool_approvals:resolve`）上；完整令牌可直接调用。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）、`tool_hard_gate`（allow：`tool_approval_approved`；deny：`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`），以及 safe / 只读工具的 `tool_call`（allow，`tool_safe_allowed`）——只读查询放行但仍写审计。审计写失败不影响判定。
 
 ## 开关清单与处置
 
@@ -43,6 +68,7 @@
 | `inboundQueue` | keep | 常用开关，保留 |
 | `toolBudget` | keep | 常用开关，保留 |
 | `injectionGuard` | keep | 常用开关，保留 |
+| `toolHardGate` | keep | 危险工具硬闸（ADR 0036）；始终开启，只能调严，见下文 |
 | `usageQuota` | keep | 常用开关，保留 |
 | `schedule` | keep | 常用开关，保留 |
 | `masterShell` | keep | 常用开关，保留 |

@@ -22,7 +22,7 @@ const expectedSurface = new Map([
   ['@zhin.js/tool', [
     'AgentToolDefiner', 'AgentToolDefinition', 'ToolExecutionContext', 'ToolInvocationContext',
     'ToolInvocationPolicy', 'ToolQuestionPort', 'ToolQuestionRequest', 'ToolApproval',
-    'ToolInvocationOrigin', 'ToolQuestionAnswer', 'ToolQuestionType', 'ToolScope',
+    'ToolInvocationOrigin', 'ToolQuestionAnswer', 'ToolQuestionType', 'ToolRisk', 'ToolRiskCategory', 'ToolScope',
     'defineAgentTool',
   ]],
   ['zhin.js', [

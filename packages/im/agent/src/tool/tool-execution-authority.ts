@@ -12,6 +12,7 @@ import { runWithDeferredTurnController, type DeferredTurnController } from '../t
 import { resolveBuiltinToolPolicyInput } from './builtin-policy-extractors.js';
 import { runToolApprovalGate } from './tool-approval-gate.js';
 import { ToolRuntime } from './tool-runtime.js';
+import { ToolHardGate } from '../security/tool-hard-gate.js';
 
 export interface ToolExecutionAuthorityOptions {
   readonly host: ZhinAgentPrivate;
@@ -31,9 +32,33 @@ export interface ToolExecutionAuthorityOptions {
 export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
   readonly #options: ToolExecutionAuthorityOptions;
   readonly #runtime: ToolRuntime;
+  readonly #hardGate: ToolHardGate;
 
   constructor(options: ToolExecutionAuthorityOptions) {
     this.#options = options;
+    const message = options.message;
+    const conversation = message.conversation;
+    const audit = (options.host as { readonly decisionEvents?: { record?: unknown } }).decisionEvents;
+    // ADR 0036 hard gate on the legacy text pipeline too: same settings, same fail-closed rules.
+    this.#hardGate = new ToolHardGate(options.host.config.toolHardGate, {
+      turnId: `pipeline:${options.sessionId}:${options.generation}:${Date.now().toString(36)}`,
+      sessionKey: options.sessionId,
+      ...(message.sender?.id ? { requesterId: String(message.sender.id) } : {}),
+      ...(conversation?.kind ? { conversationScope: conversation.kind } : {}),
+      unattended: options.rejectApproval,
+      ...(isApprovalPortAvailable(options.host.approvalPort) ? { approval: options.host.approvalPort } : {}),
+      signal: options.signal,
+      location: {
+        instanceId: String(message.endpointId || conversation?.endpoint?.id || 'unknown'),
+        platform: String(message.clientAdapter || conversation?.endpoint?.adapter || 'unknown'),
+        sceneId: `${conversation?.kind || 'private'}:${String(conversation?.id ?? options.sessionId)}`,
+        userId: message.sender?.id ? String(message.sender.id) : null,
+      },
+      ...(options.host.toolApprovals ? { queue: options.host.toolApprovals } : {}),
+      ...(audit && typeof audit.record === 'function'
+        ? { audit: audit as import('../security/tool-hard-gate.js').DecisionAuditSink }
+        : {}),
+    });
     this.#runtime = new ToolRuntime({
       generation: options.generation,
       signal: options.signal,
@@ -53,7 +78,14 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
     toolUseId: string,
   ): Promise<AgentCoreToolExecutionOutcome> {
     const options = this.#options;
-    const approvalDenied = options.rejectApproval
+    const hardGate = await this.#hardGate.check(tool, input, toolUseId);
+    if (hardGate.status === 'cancelled') {
+      return Object.freeze({ status: 'cancelled', reason: 'Tool execution cancelled' });
+    }
+    if (hardGate.status === 'denied') return Object.freeze({ status: 'denied', reason: hardGate.reason });
+    const approvalDenied = hardGate.status === 'approved'
+      ? null
+      : options.rejectApproval
       && tool.requiresApproval
       && tool.requiresApproval !== 'never'
       ? 'Error: unattended execution rejects tools that require approval'

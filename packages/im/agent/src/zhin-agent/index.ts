@@ -37,6 +37,7 @@ import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
 import { AgentEventBus } from '../event/ai-event-bus.js';
 import { type ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
+import { ToolApprovalQueue } from '../security/tool-approval-queue.js';
 import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import { UserProfileStore } from '../user-profile.js';
@@ -173,6 +174,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   /** Set by database activation when `ai.memory.semantic.enabled`; drives per-turn recall (#734). */
   semanticMemory: SemanticMemoryRuntime | null = null;
   readonly ownerApprovals = new OwnerApprovalRuntime();
+  /** Dangerous-tool approval cards (ADR 0036 hard gate); read by the Console. */
+  readonly toolApprovals = new ToolApprovalQueue();
   readonly promptController: PromptController;
   /** 无交互审批面传输的 host 级回退。 */
   approvalPort?: ApprovalPort;

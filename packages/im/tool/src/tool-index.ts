@@ -13,6 +13,8 @@ import type {
   AgentToolDefinition,
   ToolApproval,
   ToolExecutionContext,
+  ToolRisk,
+  ToolRiskCategory,
   ToolInvocationContext,
   ToolScope,
 } from './definition.js';
@@ -26,6 +28,9 @@ export interface ToolDescriptor {
   readonly description: string;
   readonly inputSchema?: ToolInputSchema;
   readonly requiresApproval: ToolApproval;
+  /** Declared hard-gate risk (ADR 0036); absent means not declared. */
+  readonly risk?: ToolRisk;
+  readonly riskCategory?: ToolRiskCategory;
   readonly adapter?: string;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
@@ -135,6 +140,9 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     description: definition.description,
     inputSchema: definition.inputSchema,
     requiresApproval: definition.requiresApproval,
+    // Only declared values are copied, so existing descriptors stay unchanged.
+    ...(definition.risk ? { risk: definition.risk } : {}),
+    ...(definition.riskCategory ? { riskCategory: definition.riskCategory } : {}),
     ...(definition.adapter ? { adapter: definition.adapter } : {}),
     platforms: definition.platforms,
     scopes: definition.scopes,

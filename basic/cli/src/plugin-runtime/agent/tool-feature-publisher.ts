@@ -32,6 +32,8 @@ export interface HostAgentTool {
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
   readonly requiresApproval?: 'always' | 'once' | 'never' | 'on-risk' | 'human';
+  readonly risk?: 'dangerous' | 'safe';
+  readonly riskCategory?: 'member' | 'publish' | 'funds' | 'identity';
 }
 
 interface RuntimeToolFeature {
@@ -66,6 +68,8 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
       description: tool.description,
       parameters: tool.parameters,
       requiresApproval: tool.requiresApproval,
+      ...(tool.risk ? { risk: tool.risk } : {}),
+      ...(tool.riskCategory ? { riskCategory: tool.riskCategory } : {}),
       platforms: tool.platforms,
       scopes: tool.scopes,
       permissions: tool.permissions,
