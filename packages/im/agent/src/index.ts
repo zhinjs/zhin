@@ -237,6 +237,7 @@ export {
   ControlUnavailableError,
   ControlValidationError,
   MAX_CONTROL_SESSION_OVERRIDES,
+  MAX_CONTROL_TEMPORARY_OVERRIDES,
   evaluateControl,
   parseControlDocument,
   type ControlChange,
@@ -250,6 +251,9 @@ export {
   type ControlSnapshot,
   type ControlStateModel,
   type ControlSwitch,
+  type ControlTemporaryInput,
+  type ControlTemporaryOverride,
+  type ControlTemporarySource,
   type ControlVerdict,
 } from './control-plane.js';
 export {
