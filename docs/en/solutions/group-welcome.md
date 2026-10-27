@@ -56,6 +56,17 @@ The result is always **human-confirmed**, not Host or platform acceptance, and i
 The plugin still supports environment references. The flow reads saved source without reading or displaying expanded values. `welcomeMessage: '${WELCOME_TEXT}'` may resolve to an empty string, and references in a scope may change its actual identity. The first version conservatively treats these messages or scopes as unproven and does not let them establish readiness. Check the original configuration, environment management and real group result yourself. This is an evidence limit of the flow, not a prohibition on plugin environment variables.
 :::
 
+## Relation to Agent session welcomes (ADR 0037)
+
+The user-facing home for group welcomes remains the group suite: configure, accept and troubleshoot `welcomeMessage` / `welcomeConversations` here ([#1012](https://github.com/zhinjs/zhin/issues/1012) A9). ADR 0037 phase 1 slice A ([#1019](https://github.com/zhinjs/zhin/pull/1019), under review, not merged) adds a per-session Agent template welcome, `welcome.enabled`, that passes the control plane and session gate. It does not read this plugin's configuration, and this plugin does not read it.
+
+If both are enabled for one conversation, each sends a welcome. Until they are unified into one path, enable only one per group:
+
+- Welcome with the group suite: keep the Agent session `welcome.enabled` off (the default).
+- Switch to the Agent session welcome: remove the group from `welcomeConversations`, or clear `welcomeMessage`.
+
+The group suite sends nothing when a member leaves; leave records belong to the Agent-side audit.
+
 ## When no welcome arrives
 
 The adapter must emit `notice.group.member_increase` with an explicit group target. Missing events or targets do not cause the plugin to guess a channel. A scope match proves neither connectivity nor delivery.

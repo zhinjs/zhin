@@ -1,3 +1,4 @@
+// Native loop of the group-suite welcome suite (see welcome.test.ts): multi-instance isolation, HMR and config rollback.
 import assert from 'node:assert/strict';
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -7,7 +8,7 @@ import { PluginTestKit, FakeScheduleRootHost, FakeClock } from '../../../../pack
 import { scheduleRootHostToken, scheduleHostToken, PluginScheduleHost, rootPluginId } from '../../../../packages/im/plugin-runtime/src/index.ts';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const temporary = await mkdtemp(join(tmpdir(), 'zhin-welcome-scope-'));
+const temporary = await mkdtemp(join(tmpdir(), 'zhin-group-suite-welcome-'));
 let kit;
 const put = async (path, content) => { await mkdir(dirname(path), { recursive: true }); await writeFile(path, content); };
 try {
@@ -46,9 +47,8 @@ try {
   await kit.patchConfig([{ op: 'set', path: ['beta', 'welcomeConversations'], value: [] },
     { op: 'set', path: ['alpha', 'welcomeConversations'], value: [conversation, conversation] }]);
   assert.equal((await emit()).length, 1); assert.deepEqual(kit.deliveries[0].conversation, conversation);
-  assert.equal((await emit(notice, 'second')).length, 0);
-  assert.equal((await emit({ ...notice, conversation: { ...notice.conversation, threadId: 'topic' } })).length, 0);
-  assert.equal((await emit({ ...notice, conversation: { ...notice.conversation, parent: { kind: 'channel', id: 'parent' } } })).length, 0);
+  assert.equal((await emit(notice, 'second')).length, 0); // Same group id on another account is a different conversation.
+  // Parent/thread mismatch matrix lives once in welcome.test.ts (delivery layer); not repeated here.
   const nested = { ...conversation, parent: { kind: 'channel', id: 'parent' }, threadId: 'topic' };
   await kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeConversations'], value: [nested] }]);
   const nestedNotice = { ...notice, conversation: { ...notice.conversation, parent: nested.parent, threadId: nested.threadId } };
@@ -57,10 +57,9 @@ try {
   await kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeMessage'], value: '' }]);
   assert.equal((await emit(nestedNotice)).length, 0);
   await kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeMessage'], value: 'alpha {name} ({id})' }]);
-  for (const invalid of [null, [{ ...nested, kind: 'channel' }], [{ ...nested, endpoint: { id: '' } }],
-    [{ ...nested, threadId: null }], [{ ...nested, parent: { id: 'parent' } }], [{ ...nested, extra: true }],
-    [{ ...nested, parent: { ...nested.parent, extra: true } }], [{ ...nested, endpoint: { ...nested.endpoint, extra: true } }],
-    Array.from({ length: 101 }, () => nested)]) {
+  // Address-level invalid values are unit-tested in welcome.test.ts; here keep one of them plus the schema-only extra-field cases.
+  for (const invalid of [null, [{ ...nested, extra: true }],
+    [{ ...nested, parent: { ...nested.parent, extra: true } }], [{ ...nested, endpoint: { ...nested.endpoint, extra: true } }]]) {
     const generation = kit.generation;
     await assert.rejects(kit.patchConfig([{ op: 'set', path: ['alpha', 'welcomeConversations'], value: invalid }]));
     assert.equal(kit.generation, generation); assert.equal((await emit(nestedNotice)).length, 1);

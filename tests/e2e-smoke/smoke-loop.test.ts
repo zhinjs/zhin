@@ -26,7 +26,7 @@ describe('#829 user-experience loop smoke suite', () => {
 
   it('applies command cooldown/concurrency and the exact welcome scope, and members see the result', async () => {
     const result = await runSmokeScenario('admission-and-welcome.mjs', 60_000);
-    expect(result.steps).toHaveLength(10);
+    expect(result.steps).toHaveLength(7);
     expect(result.stdout).toContain('E2E_SMOKE_ADMISSION_WELCOME_OK');
   }, 65_000);
 
