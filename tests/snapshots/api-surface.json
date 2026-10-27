@@ -121,6 +121,7 @@
     "export{discoverWorkspaceAgents,type AgentMeta,}from './discovery/agents.js';",
     "export{executeAgentTurn}from './turn/execute-agent-turn.js';",
     "export{filterImDeliveryContent}from './segment/filter-im-delivery.js';",
+    "export{formatSceneEventsBlock,SCENE_EVENTS_HEADER,SCENE_EVENTS_MAX_CHARS,SCENE_EVENTS_MAX_LINES,SCENE_WAKE_METADATA_KEY,}from './scene-events.js';",
     "export{getFileMemoryContext,getMemoryDir}from './memory-layers.js';",
     "export{handleRuntimeManagementCommand,}from './init/runtime-management-commands.js';",
     "export{loadAssistantProfileFile,loadBootstrapWithProfile,syncProfileHeartbeatToStore,pruneStaleProfileCronJobs,mergeProfileDeviceAliases,validateAssistantProfile,resolveAssistantProfileConfig,ASSISTANT_PROFILE_VERSION,DEFAULT_PROFILE_FILENAME,PROFILE_HEARTBEAT_JOB_ID,PROFILE_MORNING_BRIEF_JOB_ID,PROFILE_BEDTIME_CHECK_JOB_ID,}from './assistant/index.js';",
