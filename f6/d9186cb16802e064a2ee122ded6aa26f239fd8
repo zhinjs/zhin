@@ -1,0 +1,66 @@
+.changeset/user-profile-affinity.md
+  h_b680f75345178a 3-4,7-12
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 97,418-436
+basic/cli/src/plugin-runtime/agent/turn/session-gate.ts
+  h_b680f75345178a 1-58
+basic/cli/tests/plugin-runtime/agent/turn/session-gate.test.ts
+  h_b680f75345178a 1-42
+docs/ai/agent.md
+  h_b680f75345178a 46,380,382-389,398,403,411-438,440,442
+docs/en/ai/agent.md
+  h_b680f75345178a 46,306,308-315,324,329,337-364,366,368
+packages/im/agent/src/config/agent-interfaces.ts
+  h_b680f75345178a 53
+packages/im/agent/src/context/context-system.ts
+  h_b680f75345178a 19,118
+packages/im/agent/src/context/default-builders.ts
+  h_b680f75345178a 39,49-69,92
+packages/im/agent/src/context/envelope-parts.ts
+  h_b680f75345178a 4-5
+packages/im/agent/src/context/index.ts
+  h_b680f75345178a 23
+packages/im/agent/src/context/turn-envelope.ts
+  h_b680f75345178a 21,119-122
+packages/im/agent/src/index.ts
+  h_b680f75345178a 168-177
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  h_b680f75345178a 67,69
+packages/im/agent/src/init/define-ai-database-models.ts
+  h_b680f75345178a 13,26
+packages/im/agent/src/session-profile.ts
+  h_b680f75345178a 1-500
+packages/im/agent/src/tool/context-tools.ts
+  h_b680f75345178a 6,91-128
+packages/im/agent/src/tool/sources.ts
+  h_b680f75345178a 9,93-98
+packages/im/agent/src/user-profile.ts
+  h_b680f75345178a 2-7,22,147-148,150-153,156,159-163,168,204
+packages/im/agent/src/user-relation.ts
+  h_b680f75345178a 495-498,502,504-505,507,525-539
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 320,322
+packages/im/agent/tests/define-ai-database-models.test.ts
+  h_b680f75345178a 17,24
+packages/im/agent/tests/session-profile.test.ts
+  h_b680f75345178a 1-189
+packages/im/agent/tests/user-relation.test.ts
+  h_b680f75345178a 148-158,166,168,193-195,199
+packages/im/ai/src/llm/types/content-block.ts
+  h_b680f75345178a 23-28
+packages/im/ai/src/memory/user-message-presentation.ts
+  h_b680f75345178a 116-121,149-151,173-176
+tests/snapshots/api-surface.json
+  h_b680f75345178a 89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f6d9186cb16802e064a2ee122ded6aa26f239fd8",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
