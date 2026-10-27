@@ -32,6 +32,7 @@ export interface InboundMediaInjection {
   readonly outcomes: InboundMediaOutcome[];
   /** Tokens spent by the perception pre-pass (not part of the turn's own completion usage). */
   readonly perceptionUsage?: Usage;
+  readonly perceptionItems?: number;
 }
 
 export interface InboundMediaOutcome {
@@ -226,7 +227,7 @@ export async function resolveTurnMediaInjection(
   }
 
   if (blocks.length === 0 && textAppends.length === 0 && outcomes.length === 0) return EMPTY_INJECTION;
-  return { blocks, textAppends, outcomes, ...(perceptionUsage ? { perceptionUsage } : {}) };
+  return { blocks, textAppends, outcomes, perceptionItems: perceived, ...(perceptionUsage ? { perceptionUsage } : {}) };
 }
 
 function addUsage(a: Usage | undefined, b: Usage): Usage {

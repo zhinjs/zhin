@@ -1,3 +1,4 @@
+import type { LocalImageAssetStore } from '../media/local-image-assets.js';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
@@ -69,6 +70,7 @@ import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { AudioTranscriptionPort } from '../media/media-types.js';
 import type { MediaPerceptionPort } from '../media/perception.js';
+import type { ImageAssetPublisher } from '../media/image-assets.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from '../prompt/assembly.js';
 import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
@@ -177,6 +179,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   llmRuntime: LlmApiRuntime;
   audioTranscriber?: AudioTranscriptionPort;
   mediaPerception?: MediaPerceptionPort;
+  imageAssets?: ImageAssetPublisher;
+  localAssets?: LocalImageAssetStore;
   readonly emitter: ZhinAgentEventEmitter;
   readonly deferred = new DeferredTurnState();
   readonly compactionRuntime = new AgentCompactionRuntime();

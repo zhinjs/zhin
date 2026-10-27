@@ -66,6 +66,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
         : {}),
     });
     this.#runtime = new ToolRuntime({
+      localAssets: options.host.localAssets,
       generation: options.generation,
       signal: options.signal,
       sessionId: options.sessionId,

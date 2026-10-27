@@ -22,7 +22,7 @@ import {
   type ToolCapability,
 } from './capability-ingress.js';
 import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime.js';
-import { requireToolInputSchema, type ToolDescriptor } from '@zhin.js/tool';
+import { requireToolInputSchema, type ToolDescriptor, type ToolInvocationContext } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
@@ -483,8 +483,8 @@ export async function expandMcpTools(
           : requireToolInputSchema(tool.inputSchema, `MCP Tool ${name} inputSchema`),
         requiresApproval: 'on-risk' as const,
         source: connection.source,
-        execute: <TInput = unknown, TResult = unknown>(input: TInput) =>
-          connection.callTool<TResult>(tool.name, input),
+        execute: <TInput = unknown, TResult = unknown>(input: TInput, invocation: ToolInvocationContext) =>
+          connection.callTool<TResult>(tool.name, input, invocation),
       }));
     }
   }

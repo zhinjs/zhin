@@ -1,3 +1,4 @@
+import type { LocalImageAssetStore } from '../media/local-image-assets.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import type {
   AIProvider,
@@ -18,6 +19,7 @@ import type { SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from './types.js';
 import type { AudioTranscriptionPort } from '../media/media-types.js';
 import type { MediaPerceptionPort } from '../media/perception.js';
+import type { ImageAssetPublisher } from '../media/image-assets.js';
 
 /** ZhinAgent 运行依赖（通过 configure() 注入） */
 export interface ZhinAgentDependencies {
@@ -36,6 +38,8 @@ export interface ZhinAgentDependencies {
   audioTranscriber: AudioTranscriptionPort;
   /** `ai.multimodal.perception` pre-pass for media the turn's model cannot take. */
   mediaPerception: MediaPerceptionPort;
+  imageAssets: ImageAssetPublisher;
+  localAssets?: LocalImageAssetStore;
   providerResolver: (alias: string) => AIProvider;
   activeBinding: ResolvedAgentBinding;
   subagentSender: SubagentResultSender;

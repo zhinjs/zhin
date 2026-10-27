@@ -334,7 +334,7 @@ function turnFilePermissionDecision(
 function resolveTurnFileOperation(toolName: string): FileOperation | undefined {
   if (toolName === 'write_file') return 'create';
   if (toolName === 'edit_file') return 'update';
-  if (toolName === 'read_file' || toolName === 'list_dir' || toolName === 'glob'
+  if (toolName === 'read_file' || toolName === 'upload_image' || toolName === 'list_dir' || toolName === 'glob'
     || toolName === 'grep') return 'read';
   return undefined;
 }

@@ -329,6 +329,7 @@ async function publishMessageSegment(
   if (kind !== 'image' && kind !== 'audio' && kind !== 'video' && kind !== 'file') return segment;
   if (!caps[kind]) return { type: 'text', data: { text: `[${kind}]` } };
   const media = segment.data.media as MediaRef;
+  if (kind === 'image' && media.kind === 'url' && authority?.imageAssets?.ownsUrl(media.value)) return segment;
   // Opaque platform references are already hosted; their bytes are not available locally.
   if (media.kind === 'file') return segment;
   const maxBytes = caps.maxAttachmentBytes ?? 26_214_400;
@@ -351,6 +352,12 @@ export async function publishOutboundElements(
   const segments: Segment[] = [];
 
   for (const el of elements) {
+    // Host-published images are already size/type checked and publicly hosted. Keep
+    // their URLs through delivery instead of downloading bytes into IM history again.
+    if (el.type === 'image' && caps.image && authority?.imageAssets?.ownsUrl(el.url)) {
+      segments.push({ type: 'image', data: { media: { kind: 'url', value: el.url }, ...(el.alt ? { alt: el.alt } : {}) } });
+      continue;
+    }
     if (el.type === 'message') {
       for (const segment of el.segments) {
         const published = await publishMessageSegment(segment, caps, platform, authority);

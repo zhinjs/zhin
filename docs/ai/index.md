@@ -246,6 +246,33 @@ IM 消息总是交给 `zhin`；其他 Agent 只按名字调用（`spawn_task`、
 `ai.agents.<name>.priority` 和 `match`（包括 `hasMedia`、`scene`、`adapter` 等全部条件）从来没有生效过。现在仍然接受，但启动时会告警，`zhin config check --fix` 会删除它们，下一个 minor 版本移除。想让文本模型看懂图片，请用 [`ai.multimodal.perception`](#ai-multimodal-perception)。
 :::
 
+### ai.imageStorage
+
+可选的公开图片存储。启用后，`generate_image` 的结果和最终结构化回复里的内联图片先上传 R2，工具结果、后续模型上下文与出站消息保留 URL。上传失败会明确报错，不退回 base64；框架不会因上传失败自动重跑生图。
+
+```yaml
+ai:
+  imageStorage:
+    accountId: ${R2_ACCOUNT_ID}
+    bucket: ${R2_BUCKET}
+    accessKeyId: ${R2_ACCESS_KEY_ID}
+    secretAccessKey: ${R2_SECRET_ACCESS_KEY}
+    publicBaseUrl: https://images.example.com
+    prefix: agent-images/
+```
+
+桶的公开域名和生命周期由运营者配置，Zhin 不修改桶权限或删除规则。临时图片建议设置 7 天删除；链接公开，持有链接的人可在删除前访问。R2 不频繁访问存储有最低存储计费期，短期资源应先核对其费用规则。
+
+启用后还提供 `upload_image(file_path)`：只接受已授权工作区的 PNG、JPEG、GIF、WebP 文件，单张上限 25 MiB，每次发布经过现有的人类审批。不能传入远程 URL 或 base64；私有 MCP 资源目录也不能通过这个工具读取。未配置 `imageStorage` 时不开放上传工具，既有生图行为保持兼容。
+
+### MCP 私有图片
+
+Host 将 MCP 标准图片块及嵌入的图片资源保存到工作区的 `data/agent-assets`，在工具日志和模型上下文里只留下资源 ID、类型、大小和到期时间，不自动上传 R2。模型需要看图时调用 `get_local_assets(asset_id)`（本地资源工具）；仅原 Host、账号、会话、发起人及继承该身份的授权子任务可读取，不增加发布审批。
+
+有视觉能力的模型只在下一次请求中收到图片输入，原图不会作为文本或历史消息保存。文本模型使用已配置的 `ai.agent.perception` 服务，原图会发送给该识图供应商；未配置、到期或识图失败会明确标为未识别。按需查看共用本回合的识图数量预算，主任务和子任务不各自重置额度；识图调用计入用量。
+
+本地图片保留 7 天，读取不延长。每 Host 最多 1 GiB 或 1,000 张，单张 25 MiB；启动、写入前和每小时清理过期资源。清理后仍满则拒存新图并返回明确说明，不删除未过期图片，也不自动上传云端。该目录仅供 Host 管理，通用文件工具不能读取；不要将整个 `data` 目录作为公开静态文件目录。程序直接使用 Agent 而不安装 Host 时，需注入本地资源存储与认证会话范围；否则 MCP 图片返回不可用提示。
+
 ### ai.mcpServers
 
 让 AI 连接**外部的 MCP 服务器**，使用对方提供的工具。需要安装 `@modelcontextprotocol/sdk`。

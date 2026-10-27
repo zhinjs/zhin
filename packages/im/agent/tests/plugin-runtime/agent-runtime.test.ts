@@ -1,4 +1,12 @@
 import { agentUsageStoreToken } from '../../src/usage/usage-store.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { LocalImageAssetStore, localImageAssetsToken } from '../../src/media/local-image-assets.js';
+import { expandMcpTools } from '../../src/plugin-runtime/agent-runtime.js';
+import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
+import { createNativeLocalAssetsToolFeature } from '../../src/plugin-runtime/native-local-assets-tool.js';
+import { AgentResourceHub } from '../../src/resource-hub/index.js';
 import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
 import {
@@ -60,6 +68,88 @@ import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src
 import { createConversationReferenceCapability } from '../../src/tool/conversation-reference-tool.js';
 
 describe('Agent CapabilityIngress', () => {
+  it.each(['accept', 'reject', 'modify'] as const)('respects %s hooks when projecting a private image without persisting bytes into the next turn', async hookDecision => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-image-full-turn-'));
+    const localAssets = new LocalImageAssetStore(directory);
+    const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const fixture = await createFixture({ localAssets, mcpResult: { content: [{ type: 'image', data: image, mimeType: 'image/gif' }] } });
+    const llm = wireMockLlmApi();
+    const model = { ...llm.runtime.model('mock', 'mock-model'), input: ['text', 'image'] as const };
+    vi.spyOn(llm.runtime, 'model').mockReturnValue(model);
+    const agent = new ZhinAgent(llm.provider, { outputSchema: false, maxIterations: 6, toolExecution: 'sequential',
+      deferredTools: { alwaysLoadedTools: ['child__memory__search', 'get_local_assets', 'child__lookup'] } }, undefined, llm.runtime);
+    agent.activeBinding = { name: 'zhin', providerAlias: 'mock', model: 'mock-model', mcpServers: ['memory'] };
+    agent.markMemoryPersistenceReady();
+    const resourceHub = new AgentResourceHub();
+    const observed: unknown[] = [];
+    resourceHub.hooks.addPostToolUseHook({ name: 'private-output-policy', type: 'postToolUse', priority: 0,
+      handler: event => {
+        observed.push(event.toolOutput);
+        if (event.toolName !== 'get_local_assets' || hookDecision === 'accept') return { decision: 'accept' };
+        return hookDecision === 'reject' ? { decision: 'reject', reason: 'Image hidden by output policy' }
+          : { decision: 'modify', modifiedOutput: 'Image hidden by output policy' };
+      } });
+    agent.configure({ localAssets, resourceHub });
+    const host = asPrivate(agent);
+    const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
+      sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
+    const snapshot = new SnapshotStore(stateWithEngine(fixture.snapshot, context => engine.run(context)));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(snapshot);
+    const requests: unknown[] = [];
+    let step = 0;
+    llm.respondWith(context => {
+      requests.push(JSON.parse(JSON.stringify(context)));
+      if (++step === 1) return assistantToolCallReply([{ id: 'capture', name: 'child__memory__search', arguments: {} }]);
+      if (step === 2) {
+        const assetId = JSON.stringify(context.messages).match(/asset_id[^a-f0-9]+([a-f0-9-]{36})/u)?.[1];
+        expect(assetId).toBeTruthy();
+        return assistantToolCallReply([{ id: 'inspect', name: 'get_local_assets', arguments: { asset_id: assetId } }]);
+      }
+      if (step === 3) return assistantToolCallReply([{ id: 'later', name: 'child__lookup', arguments: { value: 'ok' } }]);
+      return assistantTextReply('A private image.');
+    });
+    const selection = { binding: agent.activeBinding, mcpServers: ['memory'] };
+    try {
+      for (const id of ['first', 'second']) {
+        const outcome = await runtime.execute(fixture.child, { ...externalRequest(id), policy: { permissions: ['master'], unattended: false },
+          principal: { subjectId: 'owner', roles: ['master'] }, ports: { approval: { requestApproval: async () => true } } }, selection);
+        expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
+      }
+      expect(requests).toHaveLength(5);
+      if (hookDecision === 'accept') expect(JSON.stringify(requests[2])).toContain(image);
+      else expect(JSON.stringify(requests[2])).not.toContain(image);
+      expect(JSON.stringify(observed)).not.toContain(image);
+      for (const request of [requests[1], requests[3], requests[4]]) expect(JSON.stringify(request)).not.toContain(image);
+      expect(JSON.stringify(fixture.journal.events)).not.toContain(image);
+      const session = await host.agentSessionStore.findActive('mcp:stateless');
+      expect(session).toBeDefined();
+      expect(JSON.stringify(await host.contextRepository.loadContext(session!.session_id))).not.toContain(image);
+    } finally { await snapshot.close(); await fixture.mcp.stop(); await rm(directory, { recursive: true, force: true }); }
+  });
+  it('captures MCP images before the canonical journal and preserves get_local_assets identity through ToolIndex', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-mcp-ingress-'));
+    const localAssets = new LocalImageAssetStore(directory);
+    const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    const fixture = await createFixture({ localAssets, mcpResult: { content: [{ type: 'image', data: image, mimeType: 'image/gif' }] } });
+    try {
+      const capabilities = await new CapabilityIngress().read(fixture.snapshot, fixture.child);
+      const tools = await expandMcpTools(capabilities, ['memory']);
+      const events: unknown[] = [];
+      const turn = createTurnIngress({ ...accessTurn('icqq'), capabilities: { tools: [...capabilities.tools, ...tools].map(tool => tool.name), skills: [] }, ports: { journal: { append: event => { events.push(event); } }, approval: { requestApproval: async () => true } } });
+      const runtime = new TurnToolRuntime(turn, [...capabilities.tools, ...tools]);
+      const outcome = await runtime.execute(tools[0]!.name, {}, 'capture');
+      expect(outcome.status, JSON.stringify(outcome)).toBe('completed');
+      expect(JSON.stringify(events)).not.toContain(image);
+      const assetId = JSON.stringify(outcome).match(/asset_id[^a-f0-9]+([a-f0-9-]{36})/u)?.[1];
+      expect(assetId).toBeTruthy();
+      const inspectTool = capabilities.tools.find(tool => tool.name === 'get_local_assets');
+      expect(inspectTool).toBeDefined();
+      const inspected = await runtime.execute(inspectTool!.name, { asset_id: assetId }, 'inspect');
+      expect(inspected.status).toBe('completed');
+      if (inspected.status === 'completed') expect(localAssets.isInspection(inspected.output)).toBe(true);
+      expect(JSON.stringify(events)).not.toContain(image);
+    } finally { await fixture.mcp.stop(); await rm(directory, { recursive: true, force: true }); }
+  });
   it('exposes one scoped reference tool and rejects references outside the current turn', async () => {
     const calls: string[] = [];
     const request = {
@@ -837,6 +927,8 @@ permissions: [role(trusted)]
 });
 
 async function createFixture(access: {
+  readonly localAssets?: LocalImageAssetStore;
+  readonly mcpResult?: unknown;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
@@ -913,7 +1005,7 @@ async function createFixture(access: {
     definition: defineMcp({
       create: () => ({
         listTools: () => [{ name: 'search' }],
-        callTool: (_name, input) => input,
+        callTool: (_name, input) => access.mcpResult ?? input,
       }),
     }),
   });
@@ -929,16 +1021,20 @@ async function createFixture(access: {
       scopes: access.promptScopes,
     }),
   });
-  const slots: readonly CapabilitySlot[] = [tool, skill, agent, mcpSlot, promptSection];
+  const native = access.localAssets && createNativeLocalAssetsToolFeature(access.localAssets);
+  const localTool = native && createCapabilitySlot({ owner: root, feature: toolFeatureId,
+    localName: native.name, source: '/builtin/get_local_assets', definition: native.definition });
+  const slots: readonly CapabilitySlot[] = [tool, skill, agent, mcpSlot, promptSection, ...(localTool ? [localTool] : [])];
   const journal = memoryJournalStore();
   const base = baseState(slots, journal);
+  if (access.localAssets) (base.resources.get(root) as Map<string, unknown>).set(localImageAssetsToken.id, access.localAssets);
   const view = createSnapshotView(1, base);
   const mcp = await McpIndex.create([mcpSlot], view, new AbortController().signal);
   await mcp.start(new AbortController().signal);
   const snapshot = createSnapshotView(1, {
     ...base,
     projections: new Map([
-      [toolFeatureId, new ToolIndex([tool], view)],
+      [toolFeatureId, new ToolIndex([tool, ...(localTool ? [localTool] : [])], view)],
       [skillFeatureId, new SkillIndex([skill], view)],
       [agentFeatureId, new AgentIndex([agent], view)],
       [mcpFeatureId, mcp],

@@ -275,7 +275,7 @@ function workspaceRootOf(context: ToolExecutionContext): string {
   return workspaceRoot;
 }
 
-function authorizedAbsolutePath(value: unknown, context: ToolExecutionContext): string {
+export function authorizedAbsolutePath(value: unknown, context: ToolExecutionContext): string {
   const target = requiredString(value ?? context.policy.filesystem?.workspaceRoot, 'path');
   const workspaceRoot = context.policy.filesystem?.workspaceRoot;
   if (!workspaceRoot || !path.isAbsolute(target)) throw new Error('File input was not authorized by TurnToolRuntime');

@@ -17,6 +17,8 @@ import {
   type ProactiveSendContext,
   type TurnEvent,
   type TurnRequest,
+  type ImageAssetPublisher,
+  type LocalImageAssetStore,
 } from '@zhin.js/agent';
 import {
   ZhinAgent,
@@ -55,6 +57,7 @@ export function createRuntimeZhinAgent(
   approvalPort?: ApprovalPort,
   audioTranscriber?: AudioTranscriptionPort,
   knowledgeIndex?: KnowledgeIndex,
+  localAssets?: LocalImageAssetStore,
 ): {
   agent: ZhinAgent;
   events: AgentEventBus;
@@ -72,6 +75,7 @@ export function createRuntimeZhinAgent(
     im,
     () => agent.getControlPlane(),
     () => agent.getDecisionEvents(),
+    service.imageAssets,
   ));
   const mediaPerception = createRuntimeMediaPerception(service);
   composed.host.approvalPort = approvalPort;
@@ -87,6 +91,8 @@ export function createRuntimeZhinAgent(
     providerResolver: (alias) => service.getProvider(alias),
     llmRuntime: service.getLlmRuntime(),
     audioTranscriber,
+    imageAssets: service.imageAssets,
+    localAssets,
     ...(mediaPerception ? { mediaPerception } : {}),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,
@@ -95,6 +101,9 @@ export function createRuntimeZhinAgent(
 
   agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex));
   agent.getSubagentSystem()?.configureRouting({
+    imageAssets: service.imageAssets,
+    localAssets,
+    mediaPerception,
     getProvider: (alias) => service.getProvider(alias),
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
     getMcpRegistry: () => null,
@@ -152,14 +161,20 @@ function buildRuntimeSubagentAgentTools(
   const nativeTools = createNativeAgentToolSuite({
     resolveProvider: (alias) => service.getProvider(alias),
     resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
+    imageAssets: service.imageAssets,
     knowledgeIndex,
     resolveDecision: getAgentTurnDecisionRuntime,
   });
-  return nativeTools.map((native): AgentTool => ({
+  // Public file upload requires the canonical Turn approval and file-authority gateway.
+  // The legacy standalone pool cannot supply those capabilities.
+  return nativeTools.filter(native => native.name !== 'upload_image').map((native): AgentTool => ({
     name: native.name,
     description: native.definition.description,
     parameters: native.definition.inputSchema as JsonSchema,
     source: 'builtin',
+    requiresApproval: native.definition.requiresApproval,
+    risk: native.definition.risk,
+    riskCategory: native.definition.riskCategory,
     execute: (args: Record<string, unknown>, _ctx?: unknown, execCtx?: unknown) =>
       (native.definition.execute as (input: unknown, context: unknown) => Promise<unknown>)(
         args,
@@ -219,6 +234,7 @@ export function createRuntimeProactiveOutbound(
   im: ImRuntime,
   controlPlane?: () => AiControlPlane | undefined,
   decisionEvents?: () => DecisionEventLog | undefined,
+  imageAssets?: ImageAssetPublisher,
 ): ProactiveOutboundService {
   const guard = (ctx: ProactiveSendContext): void => {
     const scope = ctx.scene.kind === 'group' || ctx.scene.kind === 'channel' ? ctx.scene.kind : 'private';
@@ -251,7 +267,7 @@ export function createRuntimeProactiveOutbound(
     async sendElements(ctx, elements) {
       guard(ctx);
       // Proactive sends carry no Turn policy: only inline media, no model-referenced paths or URLs.
-      const content = await publishOutboundElements(elements, ctx.scene.platform, undefined, NO_MEDIA_AUTHORITY);
+      const content = await publishOutboundElements(elements, ctx.scene.platform, undefined, { ...NO_MEDIA_AUTHORITY, imageAssets });
       if (content.length === 0) return [];
       const id = await this.send(ctx, content);
       return [id];

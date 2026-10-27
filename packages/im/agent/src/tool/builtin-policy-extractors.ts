@@ -60,6 +60,7 @@ const webSearchExtractor: ToolPolicyInputExtractor = (toolName, _args, commMessa
 
 const BUILTIN_POLICY_EXTRACTORS: Readonly<Record<string, ToolPolicyInputExtractor>> = Object.freeze({
   read_file: fileReadExtractor,
+  upload_image: fileReadExtractor,
   write_file: fileWriteExtractor('create'),
   edit_file: fileWriteExtractor('update'),
   glob: dirExtractor,

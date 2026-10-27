@@ -5,6 +5,7 @@ import type { MediaContentBlock } from '@zhin.js/ai';
 import type { MediaBinaryPayload, MediaKind } from './media-types.js';
 import { checkUrlNetworkAccess } from '../security/network-policy.js';
 import { authorizeTurnFileInput } from '../security/turn-file-authority.js';
+import type { ImageAssetPublisher } from './image-assets.js';
 
 /**
  * Turn authority for media that model output references by local path or URL.
@@ -13,6 +14,7 @@ import { authorizeTurnFileInput } from '../security/turn-file-authority.js';
  * Omitted only by trusted host callers that already own the media.
  */
 export interface OutboundMediaAuthority {
+  readonly imageAssets?: ImageAssetPublisher;
   readonly filesystem?: Readonly<{ workspaceRoot: string; workingDirectory?: string }>;
   readonly network?: Readonly<{ enabled: boolean; httpsOnly?: boolean; allowedDomains?: readonly string[] }>;
 }
@@ -84,7 +86,7 @@ function sniffMedia(buffer: Buffer): Readonly<{ kind: MediaKind; mimeType: strin
   return null;
 }
 
-function decodeBase64(value: string, maxBytes: number): Buffer | null {
+export function decodeBase64(value: string, maxBytes: number): Buffer | null {
   const normalized = value.replace(/^base64:\/\//, '').replace(/\s+/g, '');
   if (!normalized || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return null;
   const estimatedBytes = Math.floor(normalized.length * 3 / 4);
