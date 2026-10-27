@@ -1,0 +1,22 @@
+.changeset/control-plane-switches.md
+  h_b680f75345178a 1-11
+docs/authoring/console-pages.md
+  h_b680f75345178a 276-303
+docs/console/index.md
+  h_b680f75345178a 179
+docs/en/authoring/console-pages.md
+  h_b680f75345178a 276-303
+docs/en/console/index.md
+  h_b680f75345178a 176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "291cf6e5748c4f9e75cda93d334ee2136ab9670e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
