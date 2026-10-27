@@ -75,6 +75,78 @@
         }
       }
     },
+    "dataDir": {
+      "type": "string",
+      "default": "data/bilibili",
+      "description": "本地数据目录：待审草稿与扫码登录凭据存在 <dataDir>/<endpoint id>/ 下（相对进程工作目录），重启不丢。不要放进仓库",
+      "x-i18n": {
+        "en": {
+          "description": "Local data directory. Pending drafts and QR-login credentials are stored under <dataDir>/<endpoint id>/ (relative to the working directory) and survive restarts. Keep it out of the repository."
+        }
+      }
+    },
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「评论审批」页和日志里看到",
+      "x-i18n": {
+        "en": {
+          "description": "Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Comment review page and in logs."
+        }
+      },
+      "properties": {
+        "adapter": {
+          "type": "string",
+          "description": "适配器名，如 icqq、telegram",
+          "x-i18n": {
+            "en": {
+              "description": "Adapter name, such as icqq or telegram."
+            }
+          }
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "该适配器的 endpoint id",
+          "x-i18n": {
+            "en": {
+              "description": "Endpoint id of that adapter."
+            }
+          }
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "private",
+            "group",
+            "channel"
+          ],
+          "default": "private",
+          "description": "会话类型",
+          "x-i18n": {
+            "en": {
+              "description": "Conversation type."
+            }
+          }
+        },
+        "id": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "description": "会话 id：私聊填你的账号，群聊填群号",
+          "x-i18n": {
+            "en": {
+              "description": "Conversation id: your account for a private chat, or the group id."
+            }
+          }
+        }
+      },
+      "required": [
+        "adapter",
+        "endpoint",
+        "id"
+      ]
+    },
     "videos": {
       "type": "array",
       "items": {
@@ -250,6 +322,78 @@
                 "description": "Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video."
               }
             }
+          },
+          "dataDir": {
+            "type": "string",
+            "default": "data/bilibili",
+            "description": "本地数据目录：待审草稿与扫码登录凭据存在 <dataDir>/<endpoint id>/ 下（相对进程工作目录），重启不丢。不要放进仓库",
+            "x-i18n": {
+              "en": {
+                "description": "Local data directory. Pending drafts and QR-login credentials are stored under <dataDir>/<endpoint id>/ (relative to the working directory) and survive restarts. Keep it out of the repository."
+              }
+            }
+          },
+          "notify": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「评论审批」页和日志里看到",
+            "x-i18n": {
+              "en": {
+                "description": "Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Comment review page and in logs."
+              }
+            },
+            "properties": {
+              "adapter": {
+                "type": "string",
+                "description": "适配器名，如 icqq、telegram",
+                "x-i18n": {
+                  "en": {
+                    "description": "Adapter name, such as icqq or telegram."
+                  }
+                }
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "该适配器的 endpoint id",
+                "x-i18n": {
+                  "en": {
+                    "description": "Endpoint id of that adapter."
+                  }
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "group",
+                  "channel"
+                ],
+                "default": "private",
+                "description": "会话类型",
+                "x-i18n": {
+                  "en": {
+                    "description": "Conversation type."
+                  }
+                }
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "会话 id：私聊填你的账号，群聊填群号",
+                "x-i18n": {
+                  "en": {
+                    "description": "Conversation id: your account for a private chat, or the group id."
+                  }
+                }
+              }
+            },
+            "required": [
+              "adapter",
+              "endpoint",
+              "id"
+            ]
           },
           "apiBaseUrl": {
             "type": "string",

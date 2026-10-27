@@ -11,8 +11,17 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { Endpoint, type EndpointSendRequest, type EndpointTransportState } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
+import { generateQrCode } from 'zhin.js/qrcode';
 import { BilibiliApiError, BilibiliClient, type BilibiliFetch } from './client.js';
 import { BilibiliDraftQueue, type BilibiliReplyDraft } from './drafts.js';
+import {
+  QR_LIFETIME_MS,
+  generateLoginQr,
+  isCredentials,
+  pollLoginQr,
+  type BilibiliCredentials,
+} from './login.js';
+import { BilibiliStateFiles, readJson, removeFile, writeJsonAtomic } from './storage.js';
 import {
   BILIBILI_COMMENT_MAX_LENGTH,
   bilibiliThreadConversation,
@@ -28,6 +37,7 @@ import {
 } from './protocol.js';
 
 const SEEN_CAPACITY = 5_000;
+const QR_POLL_INTERVAL_MS = 2_000;
 const CONTEXT_CAPACITY = 500;
 const CONTEXT_EXCERPT = 120;
 
@@ -57,6 +67,37 @@ export interface BilibiliSentReply {
 
 type InboundVia = 'video' | BilibiliNotificationKind;
 
+/** 登录态：none=没有 Cookie；ok=Cookie 有效；expired=Cookie 失效需要重新登录。 */
+export type BilibiliLoginState = 'none' | 'ok' | 'expired';
+/** Cookie 来源：config=配置 / 环境变量注入；qr=扫码登录后存在本地数据目录。 */
+export type BilibiliCookieSource = 'config' | 'qr';
+
+export interface BilibiliLoginStatus {
+  readonly state: BilibiliLoginState;
+  readonly source?: BilibiliCookieSource;
+  readonly mid?: string;
+  readonly uname?: string;
+  /** 扫码凭据的过期时间（毫秒时间戳），未知时省略。 */
+  readonly expiresAt?: number;
+}
+
+export type BilibiliQrState = 'idle' | 'waiting' | 'scanned' | 'confirmed' | 'expired' | 'failed';
+
+export interface BilibiliQrStatus {
+  readonly state: BilibiliQrState;
+  /** 二维码图片（PNG data URL），只在 waiting / scanned 时提供。 */
+  readonly image?: string;
+  readonly expiresAt?: number;
+  /** 失败原因（给人看的简短说明，不含凭据）。 */
+  readonly error?: string;
+}
+
+/** 主动提醒的事件；文案由插件层按语言渲染。 */
+export type BilibiliNotice =
+  | { readonly kind: 'draft'; readonly draft: BilibiliReplyDraft }
+  | { readonly kind: 'login_expired'; readonly source?: BilibiliCookieSource }
+  | { readonly kind: 'login_ok'; readonly uname?: string; readonly mid: string };
+
 export interface BilibiliEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedBilibiliConfig;
@@ -69,11 +110,18 @@ export interface BilibiliEndpointOptions {
   readonly now?: () => number;
   /** stop() 时从插件实例的审批注册表里移除自己。 */
   readonly registry?: Map<string, BilibiliEndpoint>;
+  /**
+   * 本地状态目录（草稿、扫码凭据）。省略 = 只存内存（测试用）；adapter 默认传 `config.dataDir`。
+   */
+  readonly stateDir?: string;
+  /** 新草稿 / 登录变化时的主动提醒（失败只记日志，不影响草稿）。 */
+  readonly notify?: (notice: BilibiliNotice) => void | Promise<void>;
 }
 
 export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   readonly client: BilibiliClient;
-  readonly drafts = new BilibiliDraftQueue();
+  readonly drafts: BilibiliDraftQueue;
+  readonly #files?: BilibiliStateFiles;
   readonly #options: BilibiliEndpointOptions;
   readonly #logger: ReturnType<typeof getAdapterLogger>;
   readonly #aids: string[] = [];
@@ -90,12 +138,58 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   #open = false;
   #started = false;
   #tripped?: { readonly code: number; readonly message: string };
+  #login: BilibiliLoginStatus = Object.freeze({ state: 'none' });
+  #qr: BilibiliQrStatus = Object.freeze({ state: 'idle' });
+  #qrKey?: string;
+  #qrTimer?: ReturnType<typeof setTimeout>;
+  #qrSeq = 0;
 
   constructor(options: BilibiliEndpointOptions) {
     super();
     this.#options = options;
     this.#logger = getAdapterLogger('bilibili', options.config.id);
     this.client = new BilibiliClient(options.config, options.fetch ?? (globalThis.fetch as unknown as BilibiliFetch));
+    this.#files = options.stateDir ? new BilibiliStateFiles(options.stateDir, options.config.id) : undefined;
+    this.drafts = new BilibiliDraftQueue({
+      ...(this.#files ? { file: this.#files.draftsFile } : {}),
+      onPersistError: (error) => this.#logger.warn(formatCompact({
+        op: 'bilibili_draft_persist_failed', error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    if (this.drafts.size > 0) {
+      this.#logger.info(formatCompact({ op: 'bilibili_drafts_restored', count: this.drafts.size }));
+    }
+  }
+
+  /** 当前登录态（不含 Cookie 本身）。 */
+  get login(): BilibiliLoginStatus {
+    return this.#login;
+  }
+
+  /** 扫码登录进度。 */
+  get qrLogin(): BilibiliQrStatus {
+    return this.#qr;
+  }
+
+  /** 草稿是否落盘（配置了数据目录）。 */
+  get persistent(): boolean {
+    return this.#files !== undefined;
+  }
+
+  /** 配置里的白名单视频（原样）与已解析的 aid。 */
+  get videos(): readonly { readonly ref: string; readonly aid?: string }[] {
+    return Object.freeze(this.#options.config.videos.map((video, index) => Object.freeze({
+      ref: video.kind === 'bvid' ? video.bvid : `av${video.aid}`,
+      ...(this.#aids[index] ? { aid: this.#aids[index] } : {}),
+    })));
+  }
+
+  get sendMode(): ResolvedBilibiliConfig['sendMode'] {
+    return this.#options.config.sendMode;
+  }
+
+  get localId(): string {
+    return this.#options.config.id;
   }
 
   override get transportState(): EndpointTransportState {
@@ -112,10 +206,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     this.#started = true;
     this.#state = 'connecting';
     try {
-      this.#selfMid = await this.client.getSelfMid();
-      if (this.client.hasCookie && !this.#selfMid) {
-        this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', hint: 'SESSDATA 失效，请重新获取 Cookie' }));
-      }
+      await this.#resolveLogin();
       this.reportSelfUserId(this.#selfMid);
       for (const video of this.#options.config.videos) {
         this.#aids.push(video.kind === 'aid' ? video.aid : await this.client.resolveAid(video.bvid));
@@ -147,6 +238,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     this.#open = false;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = undefined;
+    this.#cancelQr();
     this.#started = false;
     this.#state = 'stopped';
     const registry = this.#options.registry;
@@ -160,6 +252,212 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   /** 已解析的白名单视频 aid。 */
   get videoAids(): readonly string[] {
     return Object.freeze([...this.#aids]);
+  }
+
+  #readStoredCredentials(): BilibiliCredentials | undefined {
+    if (!this.#files) return undefined;
+    const raw = readJson(this.#files.credentialsFile);
+    if (!isCredentials(raw)) return undefined;
+    if (typeof raw.expiresAt === 'number' && raw.expiresAt <= this.#now) {
+      removeFile(this.#files.credentialsFile);
+      this.#logger.warn(formatCompact({ op: 'bilibili_login_expired', source: 'qr', hint: '扫码登录已过期，请重新扫码' }));
+      return undefined;
+    }
+    return raw;
+  }
+
+  /**
+   * 选 Cookie：配置 / 环境变量里的优先（覆盖），失效或没配时再用扫码登录存下的。
+   * 都无效时登录态为 expired（有 Cookie）或 none（没有 Cookie），只读轮询照常。
+   */
+  async #resolveLogin(): Promise<void> {
+    const { sessdata, biliJct } = this.#options.config;
+    let expiredSource: BilibiliCookieSource | undefined;
+    if (sessdata) {
+      this.client.setCookie({ sessdata, ...(biliJct ? { biliJct } : {}) });
+      const nav = await this.client.getNav();
+      if (nav) {
+        this.#setLoggedIn(nav.mid, nav.uname, 'config');
+        return;
+      }
+      expiredSource = 'config';
+      this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', source: 'config', hint: '配置里的 SESSDATA 已失效，改用扫码登录或更新环境变量' }));
+    }
+    const stored = this.#readStoredCredentials();
+    if (stored) {
+      this.client.setCookie(stored);
+      const nav = await this.client.getNav();
+      if (nav) {
+        this.#setLoggedIn(nav.mid, nav.uname, 'qr', stored.expiresAt);
+        return;
+      }
+      expiredSource = 'qr';
+      if (this.#files) removeFile(this.#files.credentialsFile);
+      this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', source: 'qr', hint: '扫码登录已失效，请重新扫码' }));
+    }
+    // 回到配置 Cookie（可能已失效，但保持「配置优先」的语义），否则清空。
+    this.client.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
+    this.#selfMid = undefined;
+    this.#login = Object.freeze(expiredSource ? { state: 'expired' as const, source: expiredSource } : { state: 'none' as const });
+  }
+
+  #setLoggedIn(mid: string, uname: string | undefined, source: BilibiliCookieSource, expiresAt?: number): void {
+    this.#selfMid = mid;
+    this.#login = Object.freeze({
+      state: 'ok' as const, source, mid,
+      ...(uname ? { uname } : {}),
+      ...(expiresAt ? { expiresAt } : {}),
+    });
+  }
+
+  /** Cookie 被平台判定失效（-101）：清掉本地扫码凭据，登录态置为 expired，并提醒一次。 */
+  #markLoginExpired(stage: string): void {
+    if (this.#login.state === 'expired') return;
+    const source = this.#login.source;
+    if (source === 'qr') {
+      if (this.#files) removeFile(this.#files.credentialsFile);
+      const { sessdata, biliJct } = this.#options.config;
+      this.client.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
+    }
+    this.#login = Object.freeze({ state: 'expired' as const, ...(source ? { source } : {}) });
+    this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', stage, source, hint: 'Cookie 已失效，请在 Console「评论审批」页或用 bili-login 重新扫码登录' }));
+    this.#emitNotice({ kind: 'login_expired', ...(source ? { source } : {}) });
+  }
+
+  #emitNotice(notice: BilibiliNotice): void {
+    const notify = this.#options.notify;
+    if (!notify) return;
+    void Promise.resolve().then(() => notify(notice)).catch((error: unknown) => {
+      this.#logger.warn(formatCompact({
+        op: 'bilibili_notify_failed', kind: notice.kind,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+  }
+
+  /**
+   * 开始扫码登录：生成二维码（本机渲染为 PNG data URL），后台每 2 秒查一次扫码结果，约 3 分钟失效。
+   * 已有未过期的二维码时直接返回它。
+   */
+  async startQrLogin(): Promise<BilibiliQrStatus> {
+    if ((this.#qr.state === 'waiting' || this.#qr.state === 'scanned') && (this.#qr.expiresAt ?? 0) > this.#now) {
+      return this.#qr;
+    }
+    this.#cancelQr();
+    const seq = ++this.#qrSeq;
+    let code;
+    try {
+      code = await generateLoginQr(this.client.fetch, this.#options.config.passportBaseUrl);
+    } catch (error) {
+      this.#handleQrFailure(error);
+      return this.#qr;
+    }
+    if (seq !== this.#qrSeq) return this.#qr;
+    const image = (await generateQrCode(code.url, { width: 280, margin: 2 })).toDataUrl();
+    if (seq !== this.#qrSeq) return this.#qr;
+    this.#qrKey = code.key;
+    this.#qr = Object.freeze({ state: 'waiting' as const, image, expiresAt: this.#now + QR_LIFETIME_MS });
+    this.#logger.info(formatCompact({ op: 'bilibili_qr_login_started' }));
+    if (this.#options.autoPoll !== false) this.#scheduleQrPoll(seq);
+    return this.#qr;
+  }
+
+  #scheduleQrPoll(seq: number): void {
+    this.#qrTimer = setTimeout(() => {
+      void this.pollQrLoginOnce().finally(() => {
+        if (seq === this.#qrSeq && (this.#qr.state === 'waiting' || this.#qr.state === 'scanned')) this.#scheduleQrPoll(seq);
+      });
+    }, QR_POLL_INTERVAL_MS);
+    (this.#qrTimer as { unref?: () => void }).unref?.();
+  }
+
+  /** 查一次扫码结果（后台定时调用；测试可手动调用）。 */
+  async pollQrLoginOnce(): Promise<BilibiliQrStatus> {
+    const key = this.#qrKey;
+    if (!key || (this.#qr.state !== 'waiting' && this.#qr.state !== 'scanned')) return this.#qr;
+    const seq = this.#qrSeq;
+    if ((this.#qr.expiresAt ?? 0) <= this.#now) {
+      this.#finishQr({ state: 'expired' });
+      return this.#qr;
+    }
+    try {
+      const result = await pollLoginQr(this.client.fetch, this.#options.config.passportBaseUrl, key, this.#now);
+      if (seq !== this.#qrSeq) return this.#qr;
+      switch (result.state) {
+        case 'waiting': break;
+        case 'scanned':
+          if (this.#qr.state !== 'scanned') this.#qr = Object.freeze({ ...this.#qr, state: 'scanned' as const });
+          break;
+        case 'expired': this.#finishQr({ state: 'expired' }); break;
+        case 'confirmed': await this.#applyQrCredentials(result.credentials); break;
+      }
+    } catch (error) {
+      if (seq === this.#qrSeq) this.#handleQrFailure(error);
+    }
+    return this.#qr;
+  }
+
+  async #applyQrCredentials(credentials: BilibiliCredentials): Promise<void> {
+    this.client.setCookie(credentials);
+    const nav = await this.client.getNav();
+    if (!nav) {
+      this.#finishQr({ state: 'failed', error: '登录未生效，请重新扫码' });
+      await this.#resolveLogin().catch(() => undefined);
+      return;
+    }
+    if (this.#files) {
+      try {
+        writeJsonAtomic(this.#files.credentialsFile, { ...credentials, mid: nav.mid }, 0o600);
+      } catch (error) {
+        this.#logger.warn(formatCompact({ op: 'bilibili_credentials_persist_failed', error: error instanceof Error ? error.message : String(error) }));
+      }
+    }
+    this.#setLoggedIn(nav.mid, nav.uname, 'qr', credentials.expiresAt);
+    this.reportSelfUserId(nav.mid);
+    this.#finishQr({ state: 'confirmed' });
+    this.#logger.info(formatCompact({ op: 'bilibili_qr_login_ok', mid: nav.mid }));
+    this.#emitNotice({ kind: 'login_ok', mid: nav.mid, ...(nav.uname ? { uname: nav.uname } : {}) });
+  }
+
+  #handleQrFailure(error: unknown): void {
+    const risk = error instanceof BilibiliApiError && error.risk;
+    this.#finishQr({ state: 'failed', error: risk ? 'B 站风控拦截，请稍后再试' : '获取扫码结果失败，请重试' });
+    this.#logger.warn(formatCompact({
+      op: 'bilibili_qr_login_failed',
+      error: error instanceof BilibiliApiError ? `code ${error.code}` : error instanceof Error ? error.name : 'unknown',
+    }));
+  }
+
+  #finishQr(status: BilibiliQrStatus): void {
+    if (this.#qrTimer) clearTimeout(this.#qrTimer);
+    this.#qrTimer = undefined;
+    this.#qrKey = undefined;
+    this.#qr = Object.freeze({ ...status });
+  }
+
+  #cancelQr(): void {
+    this.#qrSeq += 1;
+    this.#finishQr({ state: 'idle' });
+  }
+
+  /** 取消正在进行的扫码。 */
+  cancelQrLogin(): void {
+    this.#cancelQr();
+  }
+
+  /**
+   * 退出扫码登录：删除本地凭据。配置 / 环境变量注入的 Cookie 无法在这里退出（返回 false）。
+   */
+  async logout(): Promise<boolean> {
+    if (this.#login.source === 'config' && this.#login.state === 'ok') return false;
+    this.#cancelQr();
+    if (this.#files) removeFile(this.#files.credentialsFile);
+    await this.#resolveLogin().catch(() => {
+      this.client.setCookie(undefined);
+      this.#login = Object.freeze({ state: 'none' as const });
+    });
+    this.#logger.info(formatCompact({ op: 'bilibili_logout' }));
+    return true;
   }
 
   #schedule(delayMs: number): void {
@@ -205,7 +503,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
    */
   async pollNotificationsOnce(): Promise<void> {
     const { notifications, notificationScope } = this.#options.config;
-    if (notifications.length === 0 || !this.client.hasCookie || !this.#selfMid) return;
+    if (notifications.length === 0 || !this.client.hasCookie || !this.#selfMid || this.#login.state !== 'ok') return;
     for (const kind of notifications) {
       if (this.#tripped) return;
       try {
@@ -291,8 +589,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   }
 
   #handleError(op: string, error: unknown, aid?: string): void {
-    if (error instanceof BilibiliApiError && error.code === -101 && op.startsWith('notify_')) {
-      this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', stage: op, hint: 'SESSDATA 失效，请重新获取 Cookie' }));
+    if (error instanceof BilibiliApiError && error.code === -101 && (op.startsWith('notify_') || op === 'send')) {
+      this.#markLoginExpired(op);
       return;
     }
     if (error instanceof BilibiliApiError && error.risk) {
@@ -340,6 +638,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       ...(context ? { context } : {}),
     }, this.#now);
     this.#logger.info(formatCompact({ op: 'bilibili_draft_queued', draft: draft.id, target: conversation.id }));
+    this.#emitNotice({ kind: 'draft', draft });
     throw new EndpointDeliveryError('approval_pending',
       `Reply queued as draft ${draft.id}; master approval is required before posting`, 'not_sent');
   }
@@ -381,8 +680,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       throw new BilibiliReviewError('circuit_open',
         `Circuit breaker open (${this.#tripped.code}); check the account on bilibili.com and restart`);
     }
-    if (!this.client.config.sessdata || !this.client.config.biliJct) {
-      throw new BilibiliReviewError('no_cookie', 'SESSDATA and bili_jct are required to post replies');
+    if (!this.client.canWrite || this.#login.state === 'expired') {
+      throw new BilibiliReviewError('no_cookie', 'A valid login (SESSDATA and bili_jct) is required to post replies');
     }
     const invalid = validateReplyText(draft.message);
     if (invalid) throw new BilibiliReviewError('invalid_message', invalid);
@@ -409,6 +708,9 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       if (error instanceof BilibiliApiError && error.risk) {
         throw new BilibiliReviewError('circuit_open',
           `Bilibili risk control (${error.code}); endpoint stopped, draft kept`);
+      }
+      if (error instanceof BilibiliApiError && error.code === -101) {
+        throw new BilibiliReviewError('no_cookie', 'Bilibili login expired; scan the QR code again, draft kept');
       }
       throw new BilibiliReviewError('platform_error', error instanceof Error ? error.message : String(error));
     }

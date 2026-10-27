@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { PermissionHost, permissionHostToken } from '../../../../packages/im/permission/src/index.js';
 import commandFeature, { CommandIndex, commandFeatureId } from '@zhin.js/command';
 import { defineFeatureProvider } from '@zhin.js/feature-kit';
-import { capabilityId, childPluginId, definePlugin, featureId, rootPluginId } from 'zhin.js';
+import { capabilityId, childPluginId, definePlugin, featureId, pluginConsoleRpcToken, rootPluginId, type PluginConsoleRpc } from 'zhin.js';
 import { RootRuntime, type ModuleRuntime } from '../../../../packages/im/runtime/src/index.js';
 import plugin from '../plugin.js';
 import listCommand from '../commands/bili-draft/list/index.js';
@@ -12,11 +12,14 @@ import showCommand from '../commands/bili-draft/show/[id]/index.js';
 import editCommand from '../commands/bili-draft/edit/[id]/index.js';
 import sendCommand from '../commands/bili-draft/send/[id]/index.js';
 import dropCommand from '../commands/bili-draft/drop/[id]/index.js';
+import loginStartCommand from '../commands/bili-login/start/index.js';
+import loginStatusCommand from '../commands/bili-login/status/index.js';
 import { BilibiliEndpoint, bilibiliEndpointRegistryToken, resolveBilibiliConfig, type BilibiliEndpointRegistry } from '../src/index.js';
 
 const definitions = new Map([
   ['bili-draft/list', listCommand], ['bili-draft/show/[id]', showCommand], ['bili-draft/edit/[id]', editCommand],
   ['bili-draft/send/[id]', sendCommand], ['bili-draft/drop/[id]', dropCommand],
+  ['bili-login/start', loginStartCommand], ['bili-login/status', loginStatusCommand],
 ]);
 class Modules implements ModuleRuntime {
   readonly values = new Map<string, unknown>();
@@ -41,6 +44,7 @@ it('discovers the private source plugin and protects localized review commands i
   };
   await write(join(directory, 'package.json'), { name: '@test/root', dependencies: {
     '@zhin.js/adapter-bilibili': 'workspace:*', '@zhin.js/adapter': 'workspace:*', '@zhin.js/command': 'workspace:*',
+    '@zhin.js/page': 'workspace:*',
   }, zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } });
   await write(join(directory, 'plugin.ts'), '');
   modules.values.set(join(directory, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
@@ -53,7 +57,9 @@ it('discovers the private source plugin and protects localized review commands i
   }
   const syntheticAdapter = defineFeatureProvider({ protocol: 1, id: featureId('zhin.adapter'),
     authoring: { conventions: [], validate(value) { return value; } }, runtime: { project() { return { value: undefined }; } } });
-  for (const [name, definition] of [['adapter', syntheticAdapter], ['command', commandFeature]] as const) {
+  const syntheticPage = defineFeatureProvider({ protocol: 1, id: featureId('zhin.page'),
+    authoring: { conventions: [], validate(value) { return value; } }, runtime: { project() { return { value: undefined }; } } });
+  for (const [name, definition] of [['adapter', syntheticAdapter], ['command', commandFeature], ['page', syntheticPage]] as const) {
     await write(join(directory, `packages/${name}/package.json`), { name: `@zhin.js/${name}`, zhin: { protocol: 1, type: 'feature', featureApi: '1.0.0', entry: './index.ts' } });
     await write(join(directory, `packages/${name}/index.ts`), '');
     modules.values.set(join(directory, `packages/${name}/index.ts`), { default: definition });
@@ -74,8 +80,15 @@ it('discovers the private source plugin and protects localized review commands i
     const commands = runtime.snapshot.projections.get(commandFeatureId);
     expect(commands).toBeInstanceOf(CommandIndex);
     const index = commands as CommandIndex;
-    expect(index.list()).toHaveLength(5);
-    const registry = runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'bilibili'))?.get(bilibiliEndpointRegistryToken.id) as BilibiliEndpointRegistry;
+    expect(index.list()).toHaveLength(7);
+    const resources = runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'bilibili'));
+    const registry = resources?.get(bilibiliEndpointRegistryToken.id) as BilibiliEndpointRegistry;
+    const rpc = resources?.get(pluginConsoleRpcToken.id) as PluginConsoleRpc;
+    expect([...rpc.methods.keys()].sort()).toEqual(['drop', 'edit', 'login', 'login-cancel', 'logout', 'send', 'status']);
+    for (const [name, method] of rpc.methods) {
+      expect(method.page).toBe('index');
+      expect(method.requiredPermissions.length, name).toBeGreaterThan(0);
+    }
     registry.set('bili', endpoint);
     const draft = endpoint.drafts.add({ oid: '123', root: '1', parent: '1', message: '回复原文 保持不变', context: { author: '原作者', text: '原评论 {command}' } });
     const denied = await index.dispatch(`review bili-draft send ${draft.id}`, input('en', false), undefined, '!');
@@ -107,5 +120,9 @@ it('discovers the private source plugin and protects localized review commands i
     expect(new URLSearchParams(posts[0]).get('message')).toBe('最终 用户文案');
     expect((await index.dispatch(`review bili-draft send ${draft.id}`, input('en'), undefined, '!')).value).toContain('was not found');
     expect(posts).toHaveLength(1);
+    expect((await index.dispatch('review bili-login status', input('zh-CN'), undefined, '!')).value).toContain('[bili]');
+    const group = { ...input('zh-CN'), conversation: { ...input('zh-CN').conversation, kind: 'group' as const, id: 'g1' } };
+    expect((await index.dispatch('review bili-login start', group, undefined, '!')).value).toContain('只能在私聊');
+    expect((await index.dispatch('review bili-login status', input('en', false), undefined, '!')).status).toBe('denied');
   } finally { endpoint.stop(); await runtime.stop(); await rm(directory, { recursive: true, force: true }); }
 });

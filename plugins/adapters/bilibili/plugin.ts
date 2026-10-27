@@ -1,11 +1,19 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js';
-import { bilibiliEndpointRegistryToken, bilibiliRuntimeStateToken } from './src/bilibili-runtime-state.js';
+import { definePlugin, outboundHostToken, pluginConsoleRpcToken } from 'zhin.js';
+import {
+  bilibiliEndpointRegistryToken,
+  bilibiliNotifierToken,
+  bilibiliRuntimeStateToken,
+  type BilibiliEndpointRegistry,
+  type BilibiliNotifier,
+} from './src/bilibili-runtime-state.js';
+import { createBilibiliConsoleRpc } from './src/console.js';
 
 /**
  * Plugin Runtime:
- * - Adapter: `adapters/bilibili` 轮询白名单视频评论（可选「回复我的 / @我的」），出站只进草稿队列。
- * - Commands: `bili-draft list|show|edit|send|drop`（仅 master）人工审批后才真正发出。
+ * - Adapter: `adapters/bilibili` 轮询白名单视频评论（可选「回复我的 / @我的」），出站只进草稿队列（落盘，重启不丢）。
+ * - Commands: `bili-draft list|show|edit|send|drop`、`bili-login start|status`（仅 master）。
+ * - Page: `pages/index` →「评论审批」：扫码登录、白名单视频、待审草稿的发送 / 改写 / 丢弃。
  */
 export default definePlugin({
   name: 'bilibili',
@@ -13,7 +21,21 @@ export default definePlugin({
     displayName: 'Bilibili Comment Adapter (Experimental)',
   },
   setup(context) {
+    const registry: BilibiliEndpointRegistry = new Map();
     context.resources.provide(bilibiliRuntimeStateToken, createEndpointRuntimeState());
-    context.resources.provide(bilibiliEndpointRegistryToken, new Map());
+    context.resources.provide(bilibiliEndpointRegistryToken, registry);
+    const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
+    const notifier: BilibiliNotifier = async (target, text) => {
+      if (!outbound) return false;
+      await outbound.send({
+        adapter: target.adapter,
+        endpointKey: target.endpoint,
+        conversation: { kind: target.kind, id: target.id },
+        content: text,
+      });
+      return true;
+    };
+    context.resources.provide(bilibiliNotifierToken, notifier);
+    context.resources.provide(pluginConsoleRpcToken, createBilibiliConsoleRpc(registry));
   },
 });
