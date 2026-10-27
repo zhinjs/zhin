@@ -1,0 +1,19 @@
+.changeset/announcements-draft-approve-send.md
+  s_5883cc4b3df16c::t_d282fc320f0bb9 1-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "334e92d8d18463d5b6dff1f44e6e0fe898a818e7",
+  "prompts": {},
+  "sessions": {
+    "s_5883cc4b3df16c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17c4c-7a37-7b62-a9f6-816624f9c879",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
