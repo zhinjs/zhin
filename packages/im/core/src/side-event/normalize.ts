@@ -44,7 +44,8 @@ function resolveNotifyNoticeParts(
       : { scene_type: 'friend', sub_type: 'poke' };
   }
   if (subType === 'input_status') return { scene_type: 'notify', sub_type: 'input_status' };
-  if (subType === 'title') return { scene_type: 'notify', sub_type: 'title_change' };
+  // 群头衔变更属于群场景（否则没有 conversation，进不了 conversation_events）
+  if (subType === 'title') return { scene_type: isGroup ? 'group' : 'notify', sub_type: 'title_change' };
   if (subType === 'profile_like') return { scene_type: 'notify', sub_type: 'profile_like' };
   return { scene_type: 'notify', sub_type: subType ?? 'unknown' };
 }

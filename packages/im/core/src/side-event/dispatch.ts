@@ -62,17 +62,25 @@ export async function receiveOneBotLikeSideEvent(
       actor: senderFromId(actorId),
       target: senderFromId(targetId),
       timestamp: toMillis(raw.time),
-      ...(raw.message_id != null ? { messageId: String(raw.message_id) } : {}),
+      ...(raw.message_id != null
+        ? { messageId: String(raw.message_id) }
+        // icqq 群表情回应只给被回应消息的 seq
+        : parts.sub_type === 'emoji_reaction' && raw.seq != null ? { messageId: `seq:${String(raw.seq)}` } : {}),
       ...(raw.emoji_id != null || raw.code != null
         ? { reaction: String(raw.emoji_id ?? raw.code) }
-        : {}),
+        : parts.sub_type === 'emoji_reaction' && raw.id != null ? { reaction: String(raw.id) } : {}),
       ...(parts.sub_type === 'emoji_reaction'
-        ? { operation: /delete|remove/i.test(String(raw.sub_type ?? noticeType)) ? 'removed' as const : 'added' as const }
+        ? {
+          operation: raw.set === false || /delete|remove/i.test(String(raw.sub_type ?? noticeType))
+            ? 'removed' as const
+            : 'added' as const,
+        }
         : {}),
       ...(raw.duration != null ? { durationSeconds: Math.max(0, Number(raw.duration) || 0) } : {}),
       ...(parts.sub_type === 'admin_change'
-        ? { role: 'admin', enabled: String(raw.sub_type ?? '') === 'set' }
+        ? { role: 'admin', enabled: typeof raw.set === 'boolean' ? raw.set : String(raw.sub_type ?? '') === 'set' }
         : {}),
+      ...sideEventValue(parts.sub_type, raw),
     });
     await emit('notice.receive', notice);
     return 'notice';
@@ -160,6 +168,20 @@ export async function receiveOneBotLikeSideEvent(
   }
 
   return null;
+}
+
+/** 名片/头衔/备注的新值或公告正文：只取短文本（≤40 字），不带原始结构。 */
+function sideEventValue(subType: string, raw: OneBotLikeRawEvent): { value?: string } {
+  const pick = (...values: unknown[]) => values.find((value) => typeof value === 'string');
+  const value = subType === 'card_change' ? pick(raw.card_new, raw.card)
+    : subType === 'title_change' ? pick(raw.title)
+      : subType === 'remark_change' ? pick(raw.remark)
+        : subType === 'notice_updated' ? pick(raw.content, raw.text, raw.msg)
+          : undefined;
+  if (typeof value !== 'string') return {};
+  // eslint-disable-next-line no-control-regex
+  const flat = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return { value: flat.length > 40 ? `${flat.slice(0, 39)}…` : flat };
 }
 
 function oneBotConversation(sceneType: string, raw: OneBotLikeRawEvent) {

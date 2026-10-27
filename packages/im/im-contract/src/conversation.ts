@@ -33,7 +33,15 @@ export type ConversationEvent =
   | (ConversationEventBase & Readonly<{ type: 'member.left'; member: ActorRef; actor?: ActorRef; reason?: 'left' | 'removed' }>)
   | (ConversationEventBase & Readonly<{ type: 'member.muted'; member: ActorRef; actor?: ActorRef; durationSeconds: number }>)
   | (ConversationEventBase & Readonly<{ type: 'member.unmuted'; member: ActorRef; actor?: ActorRef }>)
-  | (ConversationEventBase & Readonly<{ type: 'member.role_changed'; member: ActorRef; actor?: ActorRef; role: string; enabled: boolean }>);
+  | (ConversationEventBase & Readonly<{ type: 'member.role_changed'; member: ActorRef; actor?: ActorRef; role: string; enabled: boolean }>)
+  /** Someone asked to join (or was invited into) the group/channel. `comment` is user text, already truncated. */
+  | (ConversationEventBase & Readonly<{ type: 'scene.join_requested'; actor: ActorRef; inviter?: ActorRef; comment?: string; invite?: boolean }>)
+  /** The group/channel notice (announcement) changed; `text` is a truncated body, never raw platform JSON. */
+  | (ConversationEventBase & Readonly<{ type: 'scene.notice_updated'; actor?: ActorRef; text: string }>)
+  /** Member display card / special title / remark changed; `value` is the new (truncated) value. */
+  | (ConversationEventBase & Readonly<{ type: 'member.card_changed'; member: ActorRef; actor?: ActorRef; value?: string }>)
+  | (ConversationEventBase & Readonly<{ type: 'member.title_changed'; member: ActorRef; actor?: ActorRef; value?: string }>)
+  | (ConversationEventBase & Readonly<{ type: 'member.remark_changed'; member: ActorRef; actor?: ActorRef; value?: string }>);
 
 export interface SequencedConversationEvent {
   readonly sequence: number;

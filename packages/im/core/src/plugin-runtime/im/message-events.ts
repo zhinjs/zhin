@@ -49,6 +49,42 @@ export class RuntimeMessageEventStream implements RuntimeMessageEventSource {
   }
 }
 
+/**
+ * #996: a social/scene fact just landed in `conversation_events` (notice or join request).
+ * Observers (the Agent's scene-event wake) decide priority themselves; no raw platform payload.
+ */
+export interface RuntimeSceneEventSignal {
+  readonly sequence: number;
+  readonly event: import('@zhin.js/im-contract').ConversationEvent;
+  /** Live endpoint key of the receiving bot account. */
+  readonly endpointId?: string;
+  /** Bot account candidates (endpoint key, platform self id) for "is the target the bot". */
+  readonly selfIds: readonly string[];
+}
+
+export interface RuntimeSceneEventSource {
+  subscribe(listener: (signal: RuntimeSceneEventSignal) => void): () => void;
+}
+
+export class RuntimeSceneEventStream implements RuntimeSceneEventSource {
+  readonly #listeners = new Set<(signal: RuntimeSceneEventSignal) => void>();
+
+  subscribe(listener: (signal: RuntimeSceneEventSignal) => void): () => void {
+    this.#listeners.add(listener);
+    return () => { this.#listeners.delete(listener); };
+  }
+
+  publish(signal: RuntimeSceneEventSignal): void {
+    for (const listener of this.#listeners) {
+      try {
+        listener(signal);
+      } catch {
+        // Observers never participate in ingress success or failure.
+      }
+    }
+  }
+}
+
 /** Log-safe structured conversation summary. */
 export function formatConversationLog(conversation: ConversationRef): string {
   const base = `${conversation.kind}:${conversation.id}`;

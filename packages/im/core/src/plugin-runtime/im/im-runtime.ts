@@ -48,9 +48,13 @@ import {
 } from './endpoint-runtime.js';
 import {
   RuntimeMessageEventStream,
+  RuntimeSceneEventStream,
   type RuntimeMessageEvent,
   type RuntimeMessageEventSource,
+  type RuntimeSceneEventSource,
 } from './message-events.js';
+import type { Notice } from '../../notice.js';
+import type { Request } from '../../request.js';
 import {
   OutboundDeliveryRuntime,
   failedDeliveryReceipt,
@@ -111,6 +115,12 @@ export class ImRuntime implements OutboundMessageService {
     subscribe: (listener: (event: RuntimeMessageEvent) => void) =>
       this.#messageEventStream.subscribe(listener),
   });
+  readonly #sceneEventStream = new RuntimeSceneEventStream();
+  /** #996: scene facts (mute, join request, poke, …) as soon as they are stored, for wake-up observers. */
+  readonly sceneEvents: RuntimeSceneEventSource = Object.freeze({
+    subscribe: (listener: Parameters<RuntimeSceneEventSource['subscribe']>[0]) =>
+      this.#sceneEventStream.subscribe(listener),
+  });
   readonly #interactions = new RuntimeInteractionCoordinator<GenerationAdmissionGate>(
     undefined,
     (message) => this.#conversations.markInteractionAnswer(message),
@@ -156,7 +166,8 @@ export class ImRuntime implements OutboundMessageService {
       release: (lease) => this.#release(lease),
       deliver: (request, snapshot) => this.#deliver(request, snapshot),
       recordIncoming: (input, sender) => this.#conversations.recordIncoming(input, sender),
-      recordNotice: (notice) => this.#conversations.recordNotice(notice),
+      recordNotice: async (notice) => this.#publishSceneEvent(notice, await this.#conversations.recordNotice(notice)),
+      recordRequest: async (request) => this.#publishSceneEvent(request, await this.#conversations.recordRequest(request)),
       markInteractionAnswer: (message) => this.#conversations.markInteractionAnswer(message),
       publish: (event) => this.#messageEventStream.publish(event),
     }, options.commandPrefix);
@@ -376,6 +387,23 @@ export class ImRuntime implements OutboundMessageService {
     const delivery = this.#outbound.deliver(request, snapshot);
     this.#commandOperation.getStore()?.trackSend(delivery);
     return delivery;
+  }
+
+  #publishSceneEvent(
+    source: Notice | Request,
+    stored: Awaited<ReturnType<ConversationRuntime['recordNotice']>>,
+  ): void {
+    if (!stored) return;
+    const metadata = source.metadata as Record<string, unknown>;
+    const selfIds = [source.endpointId, metadata.self_id, metadata.selfId]
+      .filter((value): value is string | number => (typeof value === 'string' && value !== '') || typeof value === 'number')
+      .map(String);
+    this.#sceneEventStream.publish(Object.freeze({
+      sequence: stored.sequence,
+      event: stored.event,
+      ...(source.endpointId ? { endpointId: source.endpointId } : {}),
+      selfIds: Object.freeze([...new Set(selfIds)]),
+    }));
   }
 
   #acquire(): SnapshotLease {

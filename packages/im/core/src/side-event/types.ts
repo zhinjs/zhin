@@ -18,6 +18,9 @@ export type ComposedNoticeName =
   | 'notice.group.upload'
   | 'notice.group.emoji_reaction'
   | 'notice.group.card_change'
+  | 'notice.group.title_change'
+  | 'notice.group.remark_change'
+  | 'notice.group.notice_updated'
   | 'notice.group.essence_add'
   | 'notice.group.essence_delete'
   | 'notice.friend.recall'
@@ -70,6 +73,13 @@ export const ONEBOT_NOTICE_PARTS_MAP: Record<string, SideEventParts> = {
   'friend.increase': { scene_type: 'friend', sub_type: 'increase' },
   'friend.decrease': { scene_type: 'friend', sub_type: 'recall' },
   'friend.recall': { scene_type: 'friend', sub_type: 'recall' },
+  // icqq: notice_type=group + sub_type（#996 状态感知补齐）
+  'group.poke': { scene_type: 'group', sub_type: 'poke' },
+  'group.reaction': { scene_type: 'group', sub_type: 'emoji_reaction' },
+  'group.transfer': { scene_type: 'group', sub_type: 'transfer' },
+  'group.card': { scene_type: 'group', sub_type: 'card_change' },
+  'group.notice': { scene_type: 'group', sub_type: 'notice_updated' },
+  group_notice: { scene_type: 'group', sub_type: 'notice_updated' },
 };
 
 /** KOOK extra.type 原始值 → 标准 scene_type + sub_type */
