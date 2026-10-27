@@ -14,7 +14,7 @@ function collect(register: (define: (name: string, definition: Record<string, un
 describe('defineAiDatabaseModels', () => {
   it('registers agent persistence tables', () => {
     const { names, count } = collect(defineAiDatabaseModels);
-    expect(count).toBe(9);
+    expect(count).toBe(10);
     expect(names).toEqual([
       'agent_sessions',
       'agent_messages',
@@ -24,6 +24,7 @@ describe('defineAiDatabaseModels', () => {
       'ai_session_profiles',
       'ai_decision_events',
       'ai_control_state',
+      'ai_session_ops',
       'memory_entries',
     ]);
   });

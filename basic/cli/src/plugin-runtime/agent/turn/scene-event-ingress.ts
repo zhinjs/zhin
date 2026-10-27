@@ -66,6 +66,11 @@ export interface SceneEventIngressDeps {
   readonly decisionEvents?: () => DecisionEventLog | undefined;
   /** 控制面四开关（ADR 0036 切片 D）；缺省不拦。 */
   readonly controlPlane?: () => AiControlPlane | undefined;
+  /**
+   * 事件已由模板运营接管（ADR 0037 切片 A：会话开启 `welcome.enabled` 时的入群事件），不再唤醒模型回合。
+   * 事件仍在 `conversation_events`，下一轮 `[Scene events]` 可见。
+   */
+  readonly ownsWake?: (signal: RuntimeSceneEventSignal) => boolean;
   /** 关系称呼（`ai_user_relations` 的 preferredAddress / displayName）。 */
   readonly nickname?: (platform: string, userId: string) => Promise<string | undefined>;
   readonly readConversationContext?: (
@@ -157,7 +162,7 @@ export class SceneEventIngress {
   }
 
   /** ImRuntime.sceneEvents 的订阅入口；同步返回，不阻塞入站。 */
-  handle(signal: RuntimeSceneEventSignal): 'ignored' | 'low' | 'disabled' | 'scheduled' | 'coalesced' | 'disposed' {
+  handle(signal: RuntimeSceneEventSignal): 'ignored' | 'low' | 'disabled' | 'suppressed' | 'scheduled' | 'coalesced' | 'disposed' {
     const conversation = signal.event.conversation;
     if (conversation.kind !== 'group' && conversation.kind !== 'channel') return 'ignored';
     const priority = sceneEventPriority(signal.event, new Set(signal.selfIds));
@@ -166,6 +171,10 @@ export class SceneEventIngress {
     if (priority === 'low') return 'low';
     const platform = capabilityLocalName(String(conversation.endpoint.id));
     const key = `${platform}:${conversation.id}`;
+    if (this.#owned(signal)) {
+      logger.debug(formatCompact({ op: 'scene_event_wake_suppressed', conv: key, type: signal.event.type, reason: 'welcome_enabled' }));
+      return 'suppressed';
+    }
     if (!this.enabledFor(platform, conversation.id)) {
       logger.debug(formatCompact({ op: 'scene_event_wake_disabled', conv: key, type: signal.event.type }));
       return 'disabled';
@@ -176,6 +185,14 @@ export class SceneEventIngress {
       selfIds: signal.selfIds,
       ...(signal.endpointId ? { endpointId: signal.endpointId } : {}),
     });
+  }
+
+  #owned(signal: RuntimeSceneEventSignal): boolean {
+    try {
+      return this.deps.ownsWake?.(signal) === true;
+    } catch {
+      return false;
+    }
   }
 
   /**

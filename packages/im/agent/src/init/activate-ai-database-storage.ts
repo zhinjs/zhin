@@ -13,6 +13,7 @@ import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-me
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 import { AI_DECISION_EVENTS_TABLE } from '../decision-events.js';
 import { AI_CONTROL_STATE_TABLE } from '../control-plane.js';
+import { AI_SESSION_OPS_TABLE } from '../session-ops.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
@@ -75,6 +76,9 @@ export async function activateAiDatabaseStorage(
   // ADR 0036 slice D: 读不出持久化开关时不抛错，控制面 fail closed 并稍后重试。
   const controlModel = db.models?.get(AI_CONTROL_STATE_TABLE);
   if (controlModel) await refs.zhinAgent.getControlPlane?.().upgradeToDatabase(controlModel);
+  // ADR 0037 slice A: 读不出会话运营配置时不抛错，欢迎一律不发并稍后重试。
+  const sessionOpsModel = db.models?.get(AI_SESSION_OPS_TABLE);
+  if (sessionOpsModel) await refs.zhinAgent.getSessionOps?.().upgradeToDatabase(sessionOpsModel);
 
   if (semanticActivation) {
     semanticActivation.runtime.activate(semanticActivation.repository);
