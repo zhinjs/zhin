@@ -91,6 +91,11 @@ export interface TurnInput {
   readonly media?: readonly TurnMedia[];
   readonly references?: readonly TurnReference[];
   readonly metadata?: Readonly<Record<string, unknown>>;
+  /**
+   * #996 product-resolved scene event summaries (newest first, already short and truncated).
+   * Injected as the ephemeral `[Scene events]` block; never stored in agent_messages.
+   */
+  readonly sceneEvents?: readonly string[];
 }
 
 export interface TurnSessionAddress {

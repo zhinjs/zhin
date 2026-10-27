@@ -2,6 +2,7 @@ import { type AgentMessage, detectTone } from '@zhin.js/ai';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { BuildContext, ContextBuilder, ContextInjector, InjectContext } from './contracts.js';
 import { isAmbientTurn } from '../user-relation-turn.js';
+import { formatSceneEventsBlock } from '../scene-events.js';
 import { getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('ProfileContext');
@@ -71,6 +72,18 @@ export class SessionContextBuilder implements ContextBuilder {
   }
 }
 
+/** 状态感知（#996）：把入站给出的最近社交事件摘要放进 ephemeral `[Scene events]` 段。 */
+export class SceneEventsContextBuilder implements ContextBuilder {
+  name = 'scene-events';
+
+  async build(context: BuildContext): Promise<AgentMessage[]> {
+    if (!context.envelope || context.turn.origin.kind !== 'im') return [];
+    const block = formatSceneEventsBlock(context.turn.input?.sceneEvents);
+    if (block) context.envelope.sceneEvents = block;
+    return [];
+  }
+}
+
 export class ToneInjector implements ContextInjector {
   name = 'tone';
 
@@ -94,6 +107,7 @@ export function createDefaultContextBuilders(host: ZhinAgentPrivate): {
     builders: [
       new ProfileContextBuilder(host),
       new SessionContextBuilder(host),
+      new SceneEventsContextBuilder(),
     ],
     injectors: [new ToneInjector(host)],
   };

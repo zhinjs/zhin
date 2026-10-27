@@ -21,6 +21,7 @@ export {
   createContextSystemForHost,
   ProfileContextBuilder,
   SessionContextBuilder,
+  SceneEventsContextBuilder,
   ToneInjector,
   createDefaultContextBuilders,
 } from './context-system.js';
@@ -33,6 +34,7 @@ export {
   TURN_CONTEXT_END,
   AMBIENT_ENGAGEMENT_METADATA_KEY,
 } from './turn-envelope.js';
+export { SCENE_WAKE_METADATA_KEY, formatSceneEventsBlock } from '../scene-events.js';
 
 export {
   buildTurnUserMessages,

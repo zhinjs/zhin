@@ -2,6 +2,7 @@ import { createPromptContextBlock, type TextContentBlock } from '@zhin.js/ai';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import type { TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
+import { SCENE_WAKE_METADATA_KEY } from '../scene-events.js';
 
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
@@ -15,10 +16,15 @@ export const AMBIENT_ENGAGEMENT_METADATA_KEY = 'zhinEngagement';
 const AMBIENT_ENGAGEMENT_LINE = 'Engagement: ambient. Nobody called you; you are reading the group chat and chose to look. '
   + 'Reply only if a group member like you would naturally chime in here; otherwise return {"messages":[]} and stay quiet.';
 
+const SCENE_WAKE_ENGAGEMENT_LINE = 'Engagement: scene events. Nobody spoke; you woke up because of the [Scene events] listed for this turn. '
+  + 'React only if a group member like you naturally would (welcome a newcomer, answer a poke); otherwise return {"messages":[]} and stay quiet.';
+
 export interface TurnContextEnvelopeInput {
   turn?: TurnContextView;
   profileSummary?: string;
   sessionSummary?: string;
+  /** 状态感知 `[Scene events]` 段（#996），与会话画像同块、ephemeral。 */
+  sceneEvents?: string;
   toneHint?: string;
   deferredStats?: string;
   activeSkillsContext?: string;
@@ -82,7 +88,8 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
     }
     lines.push(formatSessionContextLine(input.turn));
     lines.push(formatSenderContextLine(input.turn));
-    if (input.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') lines.push(AMBIENT_ENGAGEMENT_LINE);
+    if (input.turn.input?.metadata?.[SCENE_WAKE_METADATA_KEY] === true) lines.push(SCENE_WAKE_ENGAGEMENT_LINE);
+    else if (input.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') lines.push(AMBIENT_ENGAGEMENT_LINE);
     if (input.turn.policy?.filesystem) {
       const filesystem = input.turn.policy.filesystem;
       lines.push(`Workspace: ${filesystem.workingDirectory ?? filesystem.workspaceRoot} | access:${filesystem.access ?? 'workspace-write'}`);
@@ -116,9 +123,9 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
 
   lines.push(TURN_CONTEXT_END);
   flush();
-  // 会话画像（人物关系 + 会话上下文）只对本轮有效：独立成块并标记 ephemeral，存储前丢弃，
-  // 之后的回合和新会话不会重放旧的 [Relationship] / [Session]。
-  const people = [input.profileSummary?.trim(), input.sessionSummary?.trim()].filter(Boolean);
+  // 会话画像（人物关系 + 会话上下文）与状态感知（#996 [Scene events]）只对本轮有效：独立成块并标记 ephemeral，
+  // 存储前丢弃，之后的回合和新会话不会重放旧的 [Relationship] / [Session] / [Scene events]。
+  const people = [input.profileSummary?.trim(), input.sessionSummary?.trim(), input.sceneEvents?.trim()].filter(Boolean);
   if (people.length) blocks.splice(1, 0, { type: 'text', text: people.join('\n'), ephemeral: true });
   return blocks;
 }

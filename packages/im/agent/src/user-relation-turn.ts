@@ -4,6 +4,7 @@
 import { getLogger } from '@zhin.js/logger';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY, type TurnContextView } from './context/turn-envelope.js';
 import type { UserRelationStore } from './user-relation.js';
+import { SCENE_WAKE_METADATA_KEY } from './scene-events.js';
 
 const logger = getLogger('UserRelation');
 
@@ -30,6 +31,8 @@ export function recordRelationTurn(
   outcome: RelationTurnOutcome,
 ): void {
   if (!relations || turn.origin.kind !== 'im') return;
+  // #996 非目标：社交事件唤醒的回合不改好感度/画像（没有真人发言）。
+  if (turn.input?.metadata?.[SCENE_WAKE_METADATA_KEY] === true) return;
   const { origin, principal } = turn;
   const ambient = isAmbientTurn(turn);
   void relations.recordTurn({
