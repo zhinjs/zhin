@@ -1,0 +1,16 @@
+docs/authoring/console-pages.md
+  h_b680f75345178a 363-380
+docs/en/authoring/console-pages.md
+  h_b680f75345178a 363-380
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1716b417edfbb89548eb17ad6dbfaca488c81e41",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

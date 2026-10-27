@@ -1,0 +1,36 @@
+packages/im/agent/src/index.ts
+  h_b680f75345178a 334-363,364,365-378
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  h_b680f75345178a 18,87-89
+packages/im/agent/src/init/define-ai-database-models.ts
+  h_b680f75345178a 18,36
+packages/im/agent/src/session-events.ts
+  h_b680f75345178a 1-228,229,230,231-237,238-336,337-343,344-525,526-528,529,530,531-532,533-538,539-540,541,542-706,707,708-750
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 50,172-173,415-418
+packages/im/agent/tests/define-ai-database-models.test.ts
+  h_b680f75345178a 17,29
+packages/im/agent/tests/session-events.test.ts
+  h_b680f75345178a 1-120,121-124,125-127,128,129-174
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  h_b680f75345178a 36-37
+packages/im/agent/src/plugin-runtime/index.ts
+  h_b680f75345178a 41
+packages/im/agent/src/plugin-runtime/native-session-event-tools.ts
+  h_b680f75345178a 1-128
+packages/im/agent/src/reserved-tools.ts
+  h_b680f75345178a 18
+packages/im/agent/tests/plugin-runtime/native-session-event-tools.test.ts
+  h_b680f75345178a 1-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d672f91cd670d53b1781454d28b7be9a7589bfbe",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

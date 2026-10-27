@@ -1,0 +1,22 @@
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_b680f75345178a 219
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  h_b680f75345178a 2,10,58-59,112-116
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 117,189-191,210-211,221-243,373
+basic/cli/src/plugin-runtime/agent/turn/session-event-dispatch.ts
+  h_b680f75345178a 1-363
+basic/cli/tests/plugin-runtime/agent/turn/session-event-dispatch.test.ts
+  h_b680f75345178a 1-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "01187f28f49b182a3e6da8b37549a84e027f0104",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
