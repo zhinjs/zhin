@@ -28,6 +28,7 @@ import {
   TOOL_HARD_GATE_POLICY,
   ToolHardGate,
   type DecisionAuditSink,
+  type ToolHardGateControlSource,
   type ToolHardGateLocation,
   type ToolHardGateSettings,
 } from '../security/tool-hard-gate.js';
@@ -56,6 +57,8 @@ export interface TurnToolRuntimeOptions {
   readonly decisionAudit?: DecisionAuditSink;
   /** Console approval cards for dangerous calls; absent means IM approval only. */
   readonly approvalQueue?: ToolApprovalQueue;
+  /** Control plane (#1008): emergency_stop / read_only deny dangerous tools before any approval prompt. */
+  readonly controlPlane?: ToolHardGateControlSource;
 }
 
 /** Sole execution authority for Tool capabilities within one fixed Turn lease. */
@@ -87,6 +90,7 @@ export class TurnToolRuntime {
       location: hardGateLocation(turn),
       ...(options.decisionAudit ? { audit: options.decisionAudit } : {}),
       ...(options.approvalQueue ? { queue: options.approvalQueue } : {}),
+      ...(options.controlPlane ? { controlPlane: options.controlPlane } : {}),
     });
   }
 

@@ -12,10 +12,14 @@ import {
   CORE_DANGEROUS_TOOLS,
   TOOL_HARD_GATE_POLICY,
   assessToolRisk,
+  coreDangerousCategory,
   resolveToolHardGate,
   toolLocalName,
 } from '../../src/security/tool-hard-gate.js';
 import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
+import type { ToolHardGateControlView } from '../../src/security/tool-hard-gate.js';
+import { AiControlPlane, type ControlStateModel } from '../../src/control-plane.js';
+import { hostControlPlaneSource } from '../../src/security/host-control-plane.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -29,6 +33,37 @@ describe('assessToolRisk', () => {
     expect(CORE_DANGEROUS_TOOLS.get('send_group_notice')).toBe('publish');
     expect(CORE_DANGEROUS_TOOLS.get('send_red_packet')).toBe('funds');
     expect(CORE_DANGEROUS_TOOLS.get('set_avatar')).toBe('identity');
+  });
+
+  it('treats group-card edits as member management (ADR 0037 §3)', () => {
+    expect(assessToolRisk({ name: 'set_group_card' })).toEqual({ risk: 'dangerous', category: 'member', source: 'core' });
+    // Scene-management `{prefix}_set_nickname` edits another member's group card (setMemberNickname).
+    expect(assessToolRisk({ name: 'discord_set_nickname' })).toEqual({ risk: 'dangerous', category: 'member', source: 'core' });
+    expect(assessToolRisk({ name: 'set_nickname' })).toEqual({ risk: 'dangerous', category: 'member', source: 'core' });
+    // Bot self-profile renames keep the identity category under a distinct local name.
+    expect(assessToolRisk({ name: 'set_self_nickname' })).toEqual({ risk: 'dangerous', category: 'identity', source: 'core' });
+    expect(assessToolRisk({ name: 'icqq__agents__icqq__skills__icqq-group-admin__set_anonymous' }).category).toBe('member');
+  });
+
+  it('matches scene-management `{prefix}_{suffix}` tool names by their core suffix', () => {
+    const memberSuffixes = ['remove_member', 'mute_member', 'ban_member', 'unban_member', 'set_moderator', 'rename_scene',
+      'set_scene_muted', 'set_nickname'];
+    for (const suffix of memberSuffixes) {
+      expect(assessToolRisk({ name: `foo_${suffix}` })).toEqual({ risk: 'dangerous', category: 'member', source: 'core' });
+    }
+    expect(assessToolRisk({ name: 'lark_mute_member' }).category).toBe('member');
+    expect(assessToolRisk({ name: 'my_bot_remove_member' }).category).toBe('member');
+    expect(assessToolRisk({ name: 'plugin__discord_remove_member' }).category).toBe('member');
+    expect(coreDangerousCategory('discord_send_payment')).toBe('funds');
+  });
+
+  it('does not suffix-match single-word core names or read-only scene tools', () => {
+    expect(coreDangerousCategory('file_transfer')).toBeNull();
+    expect(coreDangerousCategory('auto_mute')).toBeNull();
+    expect(assessToolRisk({ name: 'foo_list_members' })).toEqual({ risk: 'safe', category: null, source: 'default' });
+    expect(assessToolRisk({ name: 'foo_get_scene_info' })).toEqual({ risk: 'safe', category: null, source: 'default' });
+    // Exact single-word matches still work.
+    expect(coreDangerousCategory('mute')).toBe('member');
   });
 
   it('never lets a declaration lower a core dangerous tool', () => {
@@ -224,6 +259,135 @@ describe('TurnToolRuntime hard gate', () => {
   });
 });
 
+describe('TurnToolRuntime hard gate × control plane (#1008)', () => {
+  it('denies a dangerous tool under emergency_stop without asking for approval', async () => {
+    const execute = vi.fn(async () => 'kicked');
+    const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const plane = await controlPlane({ instance: { emergency_stop: true } });
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('foo_remove_member', execute, 'never')], {
+      approvalQueue: queue,
+      decisionAudit: audit,
+      controlPlane: () => plane,
+    });
+
+    const outcome = await runtime.execute('foo_remove_member', { user_id: 1 }, 'tu-1');
+
+    expect(outcome).toMatchObject({ status: 'denied', policy: TOOL_HARD_GATE_POLICY });
+    expect((outcome as { reason: string }).reason).toContain('急停');
+    expect(execute).not.toHaveBeenCalled();
+    expect(port.requests).toHaveLength(0);
+    expect(queue.list()).toHaveLength(0);
+    expect(audit.codes()).toEqual(['tool_hard_gate:deny:control_emergency_stop']);
+    expect(audit.records[0]).toMatchObject({ actor: 'policy', payload: expect.objectContaining({ controlSwitch: 'emergency_stop', category: 'member' }) });
+  });
+
+  it('denies a dangerous tool when the session is read_only, without asking for approval', async () => {
+    const execute = vi.fn(async () => 'renamed');
+    const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const audit = auditSink();
+    const plane = await controlPlane({ sessions: [{ platform: 'icqq', sceneId: 'group:42', flags: { read_only: true } }] });
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('set_group_card', execute, 'never')], {
+      decisionAudit: audit,
+      controlPlane: () => plane,
+    });
+
+    const outcome = await runtime.execute('set_group_card', { user_id: 1, card: 'x' }, 'tu-1');
+
+    expect(outcome).toMatchObject({ status: 'denied', policy: TOOL_HARD_GATE_POLICY });
+    expect(execute).not.toHaveBeenCalled();
+    expect(port.requests).toHaveLength(0);
+    expect(audit.codes()).toEqual(['tool_hard_gate:deny:control_read_only']);
+  });
+
+  it('only applies read_only to the overridden session', async () => {
+    const execute = vi.fn(async () => 'kicked');
+    const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const plane = await controlPlane({ sessions: [{ platform: 'icqq', sceneId: 'group:other', flags: { read_only: true } }] });
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('group_kick', execute, 'never')], {
+      controlPlane: () => plane,
+    });
+
+    await expect(runtime.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
+    expect(port.requests).toHaveLength(1);
+  });
+
+  it('lets muted sessions still reach the hard-gate approval path (ADR 0036)', async () => {
+    const execute = vi.fn(async () => 'muted');
+    const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const audit = auditSink();
+    const plane = await controlPlane({ instance: { muted: true, mention_only: true } });
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('lark_mute_member', execute, 'never')], {
+      decisionAudit: audit,
+      controlPlane: () => plane,
+    });
+
+    await expect(runtime.execute('lark_mute_member', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
+    expect(port.requests).toHaveLength(1);
+    expect(port.requests[0]).toMatchObject({ humanOnly: true, toolName: 'lark_mute_member' });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(audit.codes()).toEqual([
+      'tool_approval:defer:tool_approval_requested',
+      'tool_approval:allow:tool_approval_approved',
+      'tool_hard_gate:allow:tool_approval_approved',
+    ]);
+  });
+
+  it('fails closed when the control state is unavailable', async () => {
+    const execute = vi.fn(async () => 'kicked');
+    const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const audit = auditSink();
+    const plane = new AiControlPlane();
+    await plane.upgradeToDatabase(failingControlModel());
+    expect(plane.available).toBe(false);
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('group_kick', execute, 'never')], {
+      decisionAudit: audit,
+      controlPlane: () => plane,
+    });
+
+    await expect(runtime.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(port.requests).toHaveLength(0);
+    expect(audit.codes()).toEqual(['tool_hard_gate:deny:control_emergency_stop']);
+  });
+
+  it('fails closed when reading the control plane throws', async () => {
+    const execute = vi.fn(async () => 'kicked');
+    const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const broken: ToolHardGateControlView = {
+      isEmergencyStopped: () => { throw new Error('boom'); },
+      isReadOnly: () => false,
+    };
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('group_kick', execute, 'never')], {
+      controlPlane: () => broken,
+    });
+
+    await expect(runtime.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
+    expect(port.requests).toHaveLength(0);
+  });
+
+  it('reads the control plane from the Host live, and skips it for Hosts without one', async () => {
+    const plane = new AiControlPlane();
+    const source = hostControlPlaneSource({ getControlPlane: () => plane });
+    expect(source?.()?.isEmergencyStopped('icqq', 'group:42')).toBe(false);
+    await plane.set({ expectedRevision: 0, actorId: 'op-1', instance: { emergency_stop: true } });
+    expect(source?.()?.isEmergencyStopped('icqq', 'group:42')).toBe(true);
+    expect(hostControlPlaneSource({ controlPlane: plane })?.()).toBe(plane);
+    expect(hostControlPlaneSource({})).toBeUndefined();
+  });
+
+  it('does not block safe tools under emergency_stop (ingress / outbound gates own that)', async () => {
+    const execute = vi.fn(async () => 'members');
+    const plane = await controlPlane({ instance: { emergency_stop: true } });
+    const runtime = new TurnToolRuntime(fixture().turn, [tool('foo_list_members', execute, 'never')], {
+      controlPlane: () => plane,
+    });
+
+    await expect(runtime.execute('foo_list_members', {}, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
+  });
+});
+
 describe('ToolApprovalQueue', () => {
   it('expires pending cards after the ttl', async () => {
     vi.useFakeTimers();
@@ -300,5 +464,26 @@ function auditSink() {
     // Validates every row the same way the slice-B writer does.
     record(input: DecisionEventInput) { records.push(createDecisionEvent(input)); },
     codes: () => records.map((record) => `${record.kind}:${record.outcome}:${record.reasonCode}`),
+  };
+}
+
+async function controlPlane(input: {
+  instance?: Parameters<AiControlPlane['set']>[0]['instance'];
+  sessions?: Parameters<AiControlPlane['set']>[0]['sessions'];
+}): Promise<AiControlPlane> {
+  const plane = new AiControlPlane();
+  await plane.set({ expectedRevision: 0, actorId: 'op-1', ...input });
+  return plane;
+}
+
+function failingControlModel(): ControlStateModel {
+  const failingSelect = {
+    where: () => Promise.reject(new Error('db down')),
+    then: (_resolve: unknown, reject: (reason: unknown) => void) => reject(new Error('db down')),
+  };
+  return {
+    select: () => failingSelect as unknown as ReturnType<ControlStateModel['select']>,
+    create: () => Promise.reject(new Error('db down')),
+    update: () => ({ where: () => Promise.reject(new Error('db down')) }),
   };
 }

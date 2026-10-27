@@ -13,6 +13,7 @@ import { resolveBuiltinToolPolicyInput } from './builtin-policy-extractors.js';
 import { runToolApprovalGate } from './tool-approval-gate.js';
 import { ToolRuntime } from './tool-runtime.js';
 import { ToolHardGate } from '../security/tool-hard-gate.js';
+import { hostControlPlaneSource } from '../security/host-control-plane.js';
 
 export interface ToolExecutionAuthorityOptions {
   readonly host: ZhinAgentPrivate;
@@ -39,6 +40,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
     const message = options.message;
     const conversation = message.conversation;
     const audit = (options.host as { readonly decisionEvents?: { record?: unknown } }).decisionEvents;
+    const controlPlane = hostControlPlaneSource(options.host);
     // ADR 0036 hard gate on the legacy text pipeline too: same settings, same fail-closed rules.
     this.#hardGate = new ToolHardGate(options.host.config.toolHardGate, {
       turnId: `pipeline:${options.sessionId}:${options.generation}:${Date.now().toString(36)}`,
@@ -55,6 +57,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
         userId: message.sender?.id ? String(message.sender.id) : null,
       },
       ...(options.host.toolApprovals ? { queue: options.host.toolApprovals } : {}),
+      ...(controlPlane ? { controlPlane } : {}),
       ...(audit && typeof audit.record === 'function'
         ? { audit: audit as import('../security/tool-hard-gate.js').DecisionAuditSink }
         : {}),
