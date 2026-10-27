@@ -9,7 +9,7 @@
  * 4. 关键词触发 - 非群/频道场景下匹配关键词时触发
  */
 
-import type { AmbientEngagementConfig } from '@zhin.js/ai';
+import type { AmbientEngagementConfig, SceneEventWakeConfig } from '@zhin.js/ai';
 import type { Message } from "../plugin-runtime/im/contracts.js";
 import type { 
   MessageElement,
@@ -70,6 +70,9 @@ export interface AITriggerConfig {
   /** 群聊旁听：没人叫机器人时，由判断模型决定是否接话 */
   ambient?: AmbientEngagementConfig;
 
+  /** 状态感知（#996）：高优先社交事件独立唤醒回合（debounce + 限频） */
+  sceneEvents?: SceneEventWakeConfig;
+
 }
 
 /**
@@ -109,6 +112,7 @@ export const DEFAULT_AI_TRIGGER_CONFIG: Required<AITriggerConfig> = {
   masters: [],
   trusted: [],
   ambient: {},
+  sceneEvents: {},
 };
 
 // ============================================================================

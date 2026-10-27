@@ -212,7 +212,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig);
     const binding = service.getBindingRegistry().requireZhinBinding();
 
-    resources.provide(ingressRouteToken, new AgentTurnIngressRoute({
+    const ingressRoute = new AgentTurnIngressRoute({
       projectRoot: options.projectRoot,
       runtime: options.runtime,
       im: options.im,
@@ -225,7 +225,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       agent: agentFoundation,
       ...(workroom ? { workroom } : {}),
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
-    }));
+    });
+    resources.provide(ingressRouteToken, ingressRoute);
+    // 状态感知（#996）：社交事件落库即交给本 generation 的 ingress route；generation 结束时退订并清掉待唤醒批次。
+    const unsubscribeSceneEvents = options.im.sceneEvents?.subscribe((event) => ingressRoute.handleSceneEvent(event));
+    const stopSceneEvents = () => {
+      unsubscribeSceneEvents?.();
+      ingressRoute.dispose();
+    };
+    if (signal.aborted) stopSceneEvents();
+    else signal.addEventListener('abort', stopSceneEvents, { once: true });
 
     const providers = service.listProviders();
     const features = [

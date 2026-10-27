@@ -665,6 +665,8 @@ export interface AIConfig {
     errorTemplate?: string;
     /** 群聊旁听：没人叫机器人时，由判断模型决定是否接话 */
     ambient?: AmbientEngagementConfig;
+    /** 状态感知（#996）：禁言/入群申请/成员进出/公告/戳 Bot 等高优先社交事件可独立唤醒回合 */
+    sceneEvents?: SceneEventWakeConfig;
   };
 }
 
@@ -699,6 +701,24 @@ export interface AmbientEngagementConfig {
   minConfidence?: number;
   /** `shadow` logs the judgment without replying (default `active`). */
   mode?: 'active' | 'shadow';
+}
+
+/**
+ * Scene-event wake (#996): high-priority social events (bot muted, join request, member joined/left,
+ * notice updated, bot poked) wake one light Agent turn without waiting for the next human message.
+ * Low-priority events (reactions, card/title changes, person-to-person pokes) never wake on their own;
+ * they appear in the next turn's ephemeral `[Scene events]` block.
+ */
+export interface SceneEventWakeConfig {
+  /**
+   * Groups/channels whose high-priority events may wake the bot, as `platform:sceneId`; `*` for all.
+   * Default: the `ai.trigger.ambient.conversations` list (none when that is unset).
+   */
+  conversations?: string[];
+  /** Coalesce window per scene in ms, clamped to 3000–5000 (default 4000). */
+  coalesceMs?: number;
+  /** Minimum gap between two wakes in one scene in ms (default 15000). */
+  minIntervalMs?: number;
 }
 
 /** Consumer policy; the decision transport itself remains independent of Agent/IM. */

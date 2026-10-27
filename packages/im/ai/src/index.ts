@@ -135,6 +135,7 @@ export type { FinishFailureKind, FinishInput, FinishOutcome } from './llm/index.
 export type {
   AIConfig,
   AmbientEngagementConfig,
+  SceneEventWakeConfig,
   DecisionTaskConfig,
   AIProvider,
   ProviderConfig,

@@ -98,6 +98,8 @@ import {
 } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 import { observeSessionAndCheckSpeak } from './session-gate.js';
+import { SceneEventIngress } from './scene-event-ingress.js';
+import type { RuntimeSceneEventSignal } from '@zhin.js/core/runtime';
 import type { AssistantStatus } from '../../console/assistant-status.js';
 
 const logger = getLogger('agent');
@@ -148,10 +150,65 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /** Decision route for `ai.decisions.ambient` per group, kept while provider and policy are unchanged. */
   readonly #ambientDecisionJudges = new Map<string, { provider: DecisionProvider; policy: DecisionTaskConfig; judge: EngagementJudge }>();
   private readonly workroomPort: AgentWorkroomPort;
+  /** 状态感知（#996）：高优先社交事件独立唤醒；所有回合的 `[Scene events]` 摘要。 */
+  readonly #sceneEvents: SceneEventIngress;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
     options.assistantStatus?.bindAmbientConfig(() => options.agent.service.getTriggerConfig()?.ambient);
+    this.#sceneEvents = this.#createSceneEventIngress();
+  }
+
+  #createSceneEventIngress(): SceneEventIngress {
+    const options = this.options;
+    const readOnlyFilesystem = Object.freeze({ workspaceRoot: options.projectRoot, access: 'read-only' as const });
+    return new SceneEventIngress({
+      projectRoot: options.projectRoot,
+      triggerConfig: () => options.agent.service.getTriggerConfig(),
+      reader: () => options.im.conversationEventReader,
+      sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
+      nickname: async (platform, userId) => {
+        const record = await options.agent.agent.getUserProfiles?.()?.relations?.get(platform, userId);
+        return record?.preferredAddress?.trim() || record?.displayName?.trim() || undefined;
+      },
+      readConversationContext: (conversation, consumer, through) =>
+        options.im.readConversationContext(conversation, consumer, through, 50),
+      commitConversationContext: (conversation, consumer, cursor) =>
+        options.im.commitConversationContext(conversation, consumer, cursor),
+      deliver: (conversation, output) => sendOutputMessages(output, {
+        render: messageOutput => flattenOutputElements([...messageOutput]),
+        send: async (messageOutput) => {
+          // 没有原消息可回应：表情回应类输出直接视为不发。
+          if (reactionOf(messageOutput) !== undefined) return { status: 'suppressed' as const };
+          const adapter = capabilityLocalName(String(conversation.endpoint.id));
+          const content = await publishOutboundElements([...messageOutput], adapter || undefined, undefined, {
+            filesystem: readOnlyFilesystem,
+          });
+          if (content.length === 0) return { status: 'suppressed' as const };
+          return deliveryOutcomeFromReceipt(await options.im.send({ conversation, requester: rootPluginId(), content }));
+        },
+      }),
+      executeTurn: (request) => {
+        const binding = options.agent.service.getBindingRegistry().requireZhinBinding();
+        return options.runtime.execute(
+          rootPluginId(),
+          request,
+          { binding, mcpServers: binding.mcpServers },
+          observeAgentTurnTrace(options.agent.traceRuntime, request),
+        );
+      },
+      timeoutMs: () => resolveTriggerTimeoutMs(options.agent.service.getTriggerConfig()),
+      onSpoke: (key) => this.#ambientEngagement()?.noteSpoke(key),
+    });
+  }
+
+  /** ImRuntime.sceneEvents 订阅入口（#996）：高优先事件 coalesce + 限频后唤醒一次。 */
+  handleSceneEvent(signal: RuntimeSceneEventSignal): void {
+    this.#sceneEvents.handle(signal);
+  }
+
+  dispose(): void {
+    this.#sceneEvents.dispose();
   }
 
   /**
@@ -454,6 +511,18 @@ export class AgentTurnIngressRoute implements IngressRoute {
       } else if (ambientKey) {
         this.#ambientEngagement()?.noteSpoke(ambientKey);
       }
+      // 状态感知（#996）：上次以来的社交事件（含低优先）作为本轮 ephemeral `[Scene events]`。
+      const sceneEvents = !workroomAgentTurn && turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private'
+        ? await this.#sceneEvents.linesFor({
+          sessionKey,
+          conversation: message.conversation,
+          platform,
+          throughSequence: conversationSequence,
+          selfIds: [effectiveEndpoint, message.metadata?.selfId, message.metadata?.self_id]
+            .filter((value): value is string | number => (typeof value === 'string' && value !== '') || typeof value === 'number')
+            .map(String),
+        })
+        : [];
 
       // #732: a message in a session with an active background task may stop
       // or redirect it; anything else continues as an ordinary new turn.
@@ -614,6 +683,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               shell: turnPolicy.shell,
               network: turnPolicy.network,
               sessionKey,
+              ...(sceneEvents.length ? { sceneEvents } : {}),
               ...(workroomAgentTurn ? {
                 trustedMetadata: Object.freeze({
                   workroom: Object.freeze({
