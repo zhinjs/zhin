@@ -1,0 +1,14 @@
+docs/adr/0037-controlled-landing-phase1-group-ops.md
+  h_b680f75345178a 54,114,161,186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "514d57bf811f49fdca5d1c16d75e9969e56d651c",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
