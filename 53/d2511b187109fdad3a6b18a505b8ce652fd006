@@ -1,0 +1,14 @@
+basic/cli/src/plugin-runtime/agent/turn/cold-field.ts
+  h_b680f75345178a 140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "53d2511b187109fdad3a6b18a505b8ce652fd006",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

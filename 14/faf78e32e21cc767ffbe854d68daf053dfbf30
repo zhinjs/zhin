@@ -1,0 +1,20 @@
+basic/cli/src/plugin-runtime/console/session-ops-rpc.ts
+  h_b680f75345178a 18,46
+packages/im/agent/src/index.ts
+  h_b680f75345178a 261-262,267-268,271,280-281
+packages/im/agent/src/session-ops.ts
+  h_b680f75345178a 13-14,40-46,86-95,100,107,113-119,152,302-303,365-392,396,401,409,428-429,443-444,460-464,513-514,604,610-615,634,639-640,646,658-659,688-690
+packages/im/agent/tests/session-ops.test.ts
+  h_b680f75345178a 158-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "14faf78e32e21cc767ffbe854d68daf053dfbf30",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
