@@ -1,0 +1,26 @@
+import { createMessages } from '@zhin.js/plugin-runtime';
+
+export const managementMessages = createMessages({
+  denied: { 'zh-CN': '⚠️ 仅 master / trusted 可使用此管理指令。', en: '⚠️ Only master / trusted users can use this management command.' },
+  models: { 'zh-CN': '🤖 可用模型:', en: '🤖 Available models:' },
+  more: { 'zh-CN': '  ... 还有 {count} 个', en: '  ... {count} more' },
+  usage: { 'zh-CN': 'ℹ️ 用法：{command}', en: 'ℹ️ Usage: {command}' },
+  archived: { 'zh-CN': '✅ 已归档当前会话，下次 @ 将使用新上下文', en: '✅ The current session was archived. The next mention will start a new context.' },
+  noSession: { 'zh-CN': 'ℹ️ 无活跃会话可归档', en: 'ℹ️ No active session to archive.' },
+  health: { 'zh-CN': '🏥 AI 服务健康状态:', en: '🏥 AI service health:' },
+  noMemory: { 'zh-CN': 'ℹ️ 目前没有关于你的记忆。', en: 'ℹ️ There are no memories about you.' },
+  memories: { 'zh-CN': '🧠 关于你的记忆（{count} 条）：', en: '🧠 Memories about you ({count}):' },
+  forgetHint: { 'zh-CN': '发送 {command} <key 或 id> 遗忘一条，{command} all 全部遗忘。', en: 'Send {command} <key or id> to forget one memory, or {command} all to forget all.' },
+  forgetUsage: { 'zh-CN': 'ℹ️ 用法：{command} <key 或 id>，或 {command} all', en: 'ℹ️ Usage: {command} <key or id>, or {command} all' },
+  noMatch: { 'zh-CN': 'ℹ️ 没有找到关于你的记忆 "{target}"。', en: 'ℹ️ No memory about you matches "{target}".' },
+  forgotten: { 'zh-CN': '✅ 已遗忘 {count} 条关于你的记忆。', en: '✅ Forgot {count} memories about you.' },
+  branches: { 'zh-CN': '🌳 会话分支点', en: '🌳 Session branch points' },
+  branchHint: { 'zh-CN': '（{tree} N 跳转，{fork} N 从该点继续）：', en: ' (jump with {tree} N; continue from a point with {fork} N):' },
+  noBranches: { 'zh-CN': '当前会话无 user 分支点', en: 'This session has no user branch points.' },
+  not_found: { 'zh-CN': '未找到分支点 #{index}', en: 'Branch point #{index} was not found.' },
+  switched: { 'zh-CN': '已跳转到分支点 #{index}：{preview}', en: 'Switched to branch point #{index}: {preview}' },
+  failed: { 'zh-CN': '跳转失败', en: 'Failed to switch branch points.' },
+  compactDisabled: { 'zh-CN': 'compaction 已禁用（ai.agent.compaction.enabled=false）', en: 'Compaction is disabled (ai.agent.compaction.enabled=false).' },
+  compactShort: { 'zh-CN': '消息过少，无需压缩', en: 'Too few messages to compact.' },
+  compacted: { 'zh-CN': '已压缩会话，约节省 {saved} tokens（保留最近 ~{recent} tokens）', en: 'Compacted the session, saving about {saved} tokens (keeping the most recent ~{recent} tokens).' },
+});

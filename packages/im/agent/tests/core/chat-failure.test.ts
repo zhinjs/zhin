@@ -31,3 +31,13 @@ describe('chatFailureKindOf', () => {
     expect(chatFailureKindOf(undefined)).toBe('unknown');
   });
 });
+
+it('localizes user-safe failures and preserves owner-only custom details', () => {
+  for (const kind of ['rate_limit', 'auth', 'context_overflow', 'format', 'turn_timeout', 'safety_block'] as const) {
+    expect(chatFailureLine(kind, { locale: 'en', master: true, random: 0 })).not.toMatch(/[\u3400-\u9fff]/u);
+  }
+  expect(chatFailureLine('turn_timeout', { locale: 'en', master: true, random: 0 })).toContain('(Turn timeout)');
+  expect(chatFailureLine('turn_error', { locale: 'en', master: true, detail: '自定义错误' })).toContain('(自定义错误)');
+  expect(chatFailureLine('turn_error', { locale: 'en', detail: '自定义错误' })).not.toContain('自定义错误');
+  expect(chatFailureLine('aborted', { locale: 'en', master: true })).toBe('');
+});

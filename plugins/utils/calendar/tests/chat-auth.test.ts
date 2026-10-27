@@ -86,17 +86,19 @@ function createService(fetchImpl: typeof fetch) {
     now: () => 0,
   });
   const notifications: string[] = [];
+  const notificationLocales: string[] = [];
   const service = new CalendarAuthService({
     config: googleConfig,
     managers: { google: manager },
     credentials,
-    notify: async (_target, text) => {
+    notify: async (_target, text, locale) => {
       notifications.push(text);
+      notificationLocales.push(locale);
     },
     resolveRedirectUri: () => "http://127.0.0.1:8068/calendar/oauth/callback",
     fetchImpl,
   });
-  return { state, credentials, manager, notifications, service };
+  return { state, credentials, manager, notifications, notificationLocales, service };
 }
 
 function extractState(reply: string): string {
@@ -107,7 +109,7 @@ function extractState(reply: string): string {
 describe("chat authorization", () => {
   it("pins authorization language through callbacks and later loss notifications", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ access_token: 'at', refresh_token: 'rt', expires_in: 3600 })) as unknown as typeof fetch;
-    const { credentials, notifications, service } = createService(fetchImpl);
+    const { credentials, notifications, notificationLocales, service } = createService(fetchImpl);
     const person = { ...requester, locale: 'en' as 'en' | 'zh-CN' };
     const reply = await service.startAuthorization('google', person, 'en');
     expect(reply).toContain('Open the link');
@@ -118,6 +120,7 @@ describe("chat authorization", () => {
     expect((await credentials.get('google'))?.authorized_by?.locale).toBe('en');
     await service.notifyAuthorizationLost('google', 'provider detail');
     expect(notifications.at(-1)).toContain('authorization expired or was revoked');
+    expect(notificationLocales).toEqual(['en', 'en']);
   });
 
   it("uses an explicitly resolved command head in status and never invents a prefix", async () => {
@@ -248,4 +251,41 @@ describe("OAuthSessionRegistry", () => {
     now = 1001;
     expect(registry.consume("s1")).toBeUndefined();
   });
+});
+
+
+it('forwards the captured authorization language through the plugin outbound facade', async () => {
+  const { default: plugin } = await import('../plugin.js');
+  const { databaseHostToken, outboundHostToken } = await import('zhin.js');
+  const { projectLocaleToken } = await import('zhin.js/i18n');
+  const { calendarRuntimeToken } = await import('../src/runtime.js');
+  const sendTarget = vi.fn();
+  const values = new Map<string, unknown>([
+    [databaseHostToken.id, { state: createMemoryState() }],
+    [outboundHostToken.id, { sendTarget }],
+    [projectLocaleToken.id, 'zh-CN'],
+  ]);
+  vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ access_token: 'fixture-access', refresh_token: 'fixture-refresh', expires_in: 3600 })));
+  try {
+    await plugin.setup?.({ config: { get: () => ({ ...googleConfig, oauth_redirect_base_url: 'http://localhost' }) }, resources: {
+      has: (token: { id: string }) => values.has(token.id),
+      use: (token: { id: string }) => values.get(token.id),
+      provide: (token: { id: string }, value: unknown) => values.set(token.id, value),
+    } } as never);
+    const { auth } = values.get(calendarRuntimeToken.id) as { auth: CalendarAuthService<unknown> };
+    const reply = await auth.startAuthorization('google', { ...requester, locale: 'en' }, 'en');
+    await auth.handleCallback(new URLSearchParams({ state: extractState(reply), code: 'fixture-code' }));
+    expect(sendTarget).toHaveBeenCalledExactlyOnceWith(requester.target, expect.stringContaining('authorization succeeded'), { locale: 'en' });
+  } finally { vi.unstubAllGlobals(); }
+});
+
+
+it('localizes owned OAuth exchange errors in both callback and notification without translating provider detail', async () => {
+  const { service, notifications, notificationLocales } = createService(async () => jsonResponse({ error: 'denied', error_description: '原始服务原因' }, 400));
+  const reply = await service.startAuthorization('google', { ...requester, locale: 'en' }, 'en');
+  const result = await service.handleCallback(new URLSearchParams({ state: extractState(reply), code: 'fixture-code' }));
+  expect(result.statusCode).toBe(502);
+  expect(result.message).toBe('Authorization failed: google: token exchange failed: 原始服务原因');
+  expect(notifications).toEqual(['Google Calendar authorization failed: google: token exchange failed: 原始服务原因']);
+  expect(notificationLocales).toEqual(['en']);
 });

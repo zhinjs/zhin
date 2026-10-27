@@ -56,6 +56,7 @@ import {
   failedDeliveryReceipt,
 } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
+import { messageLocale } from './locale.js';
 import { InboundDeduper } from './inbound-dedup.js';
 import { OutboundLedger, ledgerScopeOf } from './outbound-ledger.js';
 import { createInboundOriginClassifier } from './inbound-origin.js';
@@ -256,15 +257,30 @@ export class ImRuntime implements OutboundMessageService {
     [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway;
   } = (() => {
     const self = this;
+    const resolveLocale: NonNullable<EndpointEventGateway['resolveLocale']> = async (endpoint, senderId) => {
+      const lease = self.#acquire();
+      try {
+        const adapters = requireAdapters(lease.value);
+        // Trust the current index's canonical Endpoint identity, never a protocol payload.
+        adapters.owner(endpoint.id);
+        return await messageLocale(lease.value, {
+          endpoint: { id: endpoint.id, adapter: adapters.clientAdapter(endpoint.id) },
+        }, senderId);
+      } finally {
+        self.#release(lease);
+      }
+    };
     const gateway: EndpointEventGateway & {
       [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway;
     } = {
       receive: (event) => self.#inbound.receive(event),
+      resolveLocale,
       [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway {
-        return Object.freeze({
+        return Object.freeze<EndpointEventGateway>({
           receive: async (event: EndpointEvent) => gate.enter(
             () => self.#inbound.receive(event, gate),
           ),
+          resolveLocale: async (endpoint, senderId) => gate.enter(() => resolveLocale(endpoint, senderId)),
         });
       },
     };

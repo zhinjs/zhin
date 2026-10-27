@@ -9,6 +9,7 @@ describe('handleRuntimeManagementCommand', () => {
       service: {} as never,
       zhinAgent: {} as never,
       sessionKey: 'test:session',
+      commandPrefix: '/',
       content: 'hello',
       senderRoles,
     });
@@ -20,6 +21,7 @@ describe('handleRuntimeManagementCommand', () => {
       service: { listModels: vi.fn() } as never,
       zhinAgent: {} as never,
       sessionKey: 'test:session',
+      commandPrefix: '/',
       content: '/models',
       senderRoles: { isMaster: false, isTrusted: false },
     });
@@ -34,6 +36,7 @@ describe('handleRuntimeManagementCommand', () => {
       service: { listModels } as never,
       zhinAgent: {} as never,
       sessionKey: 'test:session',
+      commandPrefix: '/',
       content: '/models',
       senderRoles,
     });
@@ -49,10 +52,35 @@ describe('handleRuntimeManagementCommand', () => {
       service: { healthCheck } as never,
       zhinAgent: {} as never,
       sessionKey: 'test:session',
+      commandPrefix: '/',
       content: 'ai.health',
       senderRoles: { isMaster: false, isTrusted: true },
     });
     expect(reply).toContain('✅ openai');
     expect(reply).toContain('❌ local');
   });
+});
+
+it.each(['!', '', '/'])('uses the actual %j prefix and keeps plugin namespaces distinct', async commandPrefix => {
+  const listModels = vi.fn().mockResolvedValue([{ provider: 'custom', models: ['中文模型名'] }]);
+  const base = { service: { listModels } as never, zhinAgent: {} as never, sessionKey: 's',
+    senderRoles: { isMaster: true, isTrusted: false }, commandPrefix, locale: 'en' as const };
+  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('Available models');
+  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('中文模型名');
+  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}plugin/models` })).toBeNull();
+  expect(await handleRuntimeManagementCommand({ ...base, commandPrefix: undefined, content: '/models' })).toBeNull();
+  expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models`, senderRoles: { isMaster: false, isTrusted: false } })).toContain('Only master / trusted');
+});
+
+it('uses immutable per-invocation presentation for concurrent locales', async () => {
+  let release!: () => void;
+  const ready = new Promise<void>(resolve => { release = resolve; });
+  const base = { service: { listModels: async () => { await ready; return []; } } as never,
+    zhinAgent: {} as never, sessionKey: 's', content: '!models', commandPrefix: '!',
+    senderRoles: { isMaster: true, isTrusted: false } };
+  const en = handleRuntimeManagementCommand({ ...base, locale: 'en' });
+  const zh = handleRuntimeManagementCommand({ ...base, locale: 'zh-CN' });
+  release();
+  await expect(en).resolves.toContain('Available models');
+  await expect(zh).resolves.toContain('可用模型');
 });

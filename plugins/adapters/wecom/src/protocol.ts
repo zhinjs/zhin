@@ -1,3 +1,4 @@
+import { createMessages, type Locale } from 'zhin.js/i18n';
 /**
  * WeCom (企业微信) protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -269,7 +270,9 @@ export function wecomInboundConversation(endpointKey: string, msg: WecomMessage)
 /**
  * Wire-encode an already-rendered outbound payload into WeCom message/send body parts.
  */
-export function formatOutboundBody(payload: unknown): WecomSendBody {
+const outboundMessages = createMessages({ link: { 'zh-CN': '链接', en: 'Link' } });
+
+export function formatOutboundBody(payload: unknown, locale?: Locale): WecomSendBody {
   if (typeof payload === 'string') {
     return { msgtype: 'text', data: { content: payload } };
   }
@@ -320,7 +323,7 @@ export function formatOutboundBody(payload: unknown): WecomSendBody {
           mediaType = 'news';
           mediaData = {
             articles: [{
-              title: data.title || '链接',
+              title: data.title || outboundMessages(locale, 'link'),
               description: data.text || data.content || '',
               url: data.url,
               picurl: data.picUrl,

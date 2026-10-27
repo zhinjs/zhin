@@ -3,6 +3,8 @@
  *
  * 由 Agent Host 在 unmatched route 前拦截，不进入普通 Agent turn。
  */
+import { managementMessages as t } from './management-messages.js';
+import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from './command-presentation.js';
 import type { AIService } from '../service.js';
 import { asPrivate } from '../internal/as-private.js';
 import {
@@ -17,7 +19,7 @@ export type RuntimeManagementSenderRoles = {
   readonly isTrusted: boolean;
 };
 
-export type RuntimeManagementDeps = {
+export type RuntimeManagementDeps = AgentCommandPresentation & {
   readonly service: AIService;
   readonly zhinAgent: ZhinAgent;
   readonly sessionKey: string;
@@ -34,10 +36,6 @@ export type RuntimeManagementDeps = {
 
 const MEMORY_LIST_LIMIT = 20;
 
-function denyOperator(): string {
-  return '⚠️ 仅 master / trusted 可使用此管理指令。';
-}
-
 function parseLeadingInt(rest: string): number | undefined {
   const n = Number.parseInt(rest.trim(), 10);
   return Number.isFinite(n) && n >= 1 ? n : undefined;
@@ -49,63 +47,67 @@ function parseLeadingInt(rest: string): number | undefined {
 export async function handleRuntimeManagementCommand(
   deps: RuntimeManagementDeps,
 ): Promise<string | null> {
-  const text = deps.content.trim();
-  if (!text) return null;
+  // ai.health is an existing explicit bare entry, independent of the prefixed commands.
+  const bareHealth = /^ai\.health\s*$/iu.test(deps.content.trim());
+  const text = managementCommandText(deps.content, deps.commandPrefix);
+  if (!text && !bareHealth) return null;
+  const locale = deps.locale;
+  const command = (name: string) => managementCommandReference(name, deps.commandPrefix)!;
 
   const isOperator = deps.senderRoles.isMaster || deps.senderRoles.isTrusted;
   const agent = asPrivate(deps.zhinAgent);
 
-  if (/^\/models\s*$/iu.test(text)) {
-    if (!isOperator) return denyOperator();
+  if (/^models\s*$/iu.test(text ?? '')) {
+    if (!isOperator) return t(locale, 'denied');
     const models = await deps.service.listModels();
-    let r = '🤖 可用模型:\n';
+    let r = t(locale, 'models') + '\n';
     for (const { provider, models: ml } of models) {
       r += `\n【${provider}】\n` + ml.slice(0, 5).map((m) => `  • ${m}`).join('\n');
-      if (ml.length > 5) r += `\n  ... 还有 ${ml.length - 5} 个`;
+      if (ml.length > 5) r += '\n' + t(locale, 'more', { count: ml.length - 5 });
     }
     return r;
   }
 
-  if (/^\/tree\s*$/iu.test(text)) {
-    if (!isOperator) return denyOperator();
-    return listSessionTree(agent, deps.sessionKey);
+  if (/^tree\s*$/iu.test(text ?? '')) {
+    if (!isOperator) return t(locale, 'denied');
+    return listSessionTree(agent, deps.sessionKey, deps);
   }
 
-  const treeJump = text.match(/^\/tree\s+(\d+)\s*$/iu);
+  const treeJump = text?.match(/^tree\s+(\d+)\s*$/iu);
   if (treeJump) {
-    if (!isOperator) return denyOperator();
+    if (!isOperator) return t(locale, 'denied');
     const n = parseLeadingInt(treeJump[1] ?? '');
-    if (n == null) return 'ℹ️ 用法：/tree 2';
-    return jumpSessionTree(agent, deps.sessionKey, n);
+    if (n == null) return t(locale, 'usage', { command: command('tree') + ' 2' });
+    return jumpSessionTree(agent, deps.sessionKey, n, locale);
   }
 
-  const fork = text.match(/^\/fork\s+(\d+)\s*$/iu);
+  const fork = text?.match(/^fork\s+(\d+)\s*$/iu);
   if (fork) {
-    if (!isOperator) return denyOperator();
+    if (!isOperator) return t(locale, 'denied');
     const n = parseLeadingInt(fork[1] ?? '');
-    if (n == null) return 'ℹ️ 用法：/fork 2';
-    return jumpSessionTree(agent, deps.sessionKey, n);
+    if (n == null) return t(locale, 'usage', { command: command('fork') + ' 2' });
+    return jumpSessionTree(agent, deps.sessionKey, n, locale);
   }
 
-  if (/^\/compact\s*$/iu.test(text)) {
-    if (!isOperator) return denyOperator();
-    const result = await deps.zhinAgent.compactSession(deps.sessionKey);
+  if (/^compact\s*$/iu.test(text ?? '')) {
+    if (!isOperator) return t(locale, 'denied');
+    const result = await deps.zhinAgent.compactSession(deps.sessionKey, locale);
     return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
   }
 
-  if (/^\/reset\s*$/iu.test(text)) {
-    if (!isOperator) return denyOperator();
+  if (/^reset\s*$/iu.test(text ?? '')) {
+    if (!isOperator) return t(locale, 'denied');
     const ok = await deps.zhinAgent.archiveSession(deps.sessionKey);
-    return ok ? '✅ 已归档当前会话，下次 @ 将使用新上下文' : 'ℹ️ 无活跃会话可归档';
+    return t(locale, ok ? 'archived' : 'noSession');
   }
 
-  const memoryReply = await handleOwnMemoryCommand(deps, text);
+  const memoryReply = await handleOwnMemoryCommand(deps, text ?? '');
   if (memoryReply != null) return memoryReply;
 
-  if (/^ai\.health\s*$/iu.test(text)) {
-    if (!isOperator) return denyOperator();
+  if (bareHealth) {
+    if (!isOperator) return t(locale, 'denied');
     const health = await deps.service.healthCheck();
-    return ['🏥 AI 服务健康状态:'].concat(
+    return [t(locale, 'health')].concat(
       Object.entries(health).map(([p, ok]) => `  ${ok ? '✅' : '❌'} ${p}`),
     ).join('\n');
   }
@@ -115,10 +117,12 @@ export async function handleRuntimeManagementCommand(
 
 /** `/memory` lists and `/forget <key|id|all>` deletes the sender's own user-scope memory. */
 async function handleOwnMemoryCommand(deps: RuntimeManagementDeps, text: string): Promise<string | null> {
+  const locale = deps.locale;
+  const command = managementCommandReference('forget', deps.commandPrefix)!;
   const runtime = deps.semanticMemory;
-  const isList = /^\/memory\s*$/iu.test(text);
+  const isList = /^memory\s*$/iu.test(text ?? '');
   // Prefix test plus slice (no backtracking regex over user input).
-  const isForget = /^\/forget(?:\s|$)/iu.test(text);
+  const isForget = /^forget(?:\s|$)/iu.test(text ?? '');
   if (!isList && !isForget) return null;
   if (!runtime?.active || !deps.senderId) return null;
   const signal = new AbortController().signal;
@@ -126,20 +130,20 @@ async function handleOwnMemoryCommand(deps: RuntimeManagementDeps, text: string)
 
   if (isList) {
     const entries = await runtime.list({ ...scope, limit: MEMORY_LIST_LIMIT }, signal);
-    if (entries.length === 0) return 'ℹ️ 目前没有关于你的记忆。';
-    return [`🧠 关于你的记忆（${entries.length} 条）：`]
+    if (entries.length === 0) return t(locale, 'noMemory');
+    return [t(locale, 'memories', { count: entries.length })]
       .concat(entries.map((entry, index) => `${index + 1}. ${entry.key}: ${entry.content}  [id ${entry.id}]`))
-      .concat('发送 /forget <key 或 id> 遗忘一条，/forget all 全部遗忘。')
+      .concat(t(locale, 'forgetHint', { command }))
       .join('\n');
   }
 
-  const target = text.slice('/forget'.length).trim();
-  if (!target) return 'ℹ️ 用法：/forget <key 或 id>，或 /forget all';
+  const target = text.slice('forget'.length).trim();
+  if (!target) return t(locale, 'forgetUsage', { command });
   const entries = await runtime.list({ ...scope, limit: Number.MAX_SAFE_INTEGER }, signal);
   const matches = target.toLowerCase() === 'all'
     ? entries
     : entries.filter((entry) => entry.id === target || entry.key === target);
-  if (matches.length === 0) return `ℹ️ 没有找到关于你的记忆 "${target}"。`;
+  if (matches.length === 0) return t(locale, 'noMatch', { target });
   for (const entry of matches) await runtime.delete(entry.id, signal);
-  return `✅ 已遗忘 ${matches.length} 条关于你的记忆。`;
+  return t(locale, 'forgotten', { count: matches.length });
 }

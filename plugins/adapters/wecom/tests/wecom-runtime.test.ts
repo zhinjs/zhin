@@ -607,3 +607,21 @@ describe('wecom plugin runtime adapter', () => {
     await endpoint.stop();
   });
 });
+
+
+it('uses each send operation language for link defaults while preserving explicit titles', async () => {
+  const fetchMock = mockFetchOk();
+  const http = createHttpHost();
+  hosts.push(http);
+  const gateway = { receive: vi.fn(async () => ({ matched: false })), send: vi.fn(async () => 'sent') };
+  const endpoint = bindTestEndpoint(new WecomEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'wecom'), gateway, http, config: baseConfig, fetch: fetchMock }), gateway, undefined);
+  await endpoint.start();
+  try {
+    for (const [locale, title] of [['en', undefined], ['zh-CN', undefined], ['en', '用户标题']] as const) {
+      await endpoint.send({ locale, conversation: privateConversation('person'), payload: [{ type: 'link', data: { url: 'https://example.com', ...(title ? { title } : {}) } }] });
+    }
+    const bodies = fetchMock.mock.calls.filter(call => String(call[0]).includes('/message/send')).map(call => JSON.parse(call[1].body));
+    expect(bodies.map(body => body.news.articles[0].title)).toEqual(['Link', '链接', '用户标题']);
+    expect(bodies.map(body => body.touser)).toEqual(['person', 'person', 'person']);
+  } finally { await endpoint.stop(); }
+});

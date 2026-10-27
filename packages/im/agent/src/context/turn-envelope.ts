@@ -74,7 +74,7 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
 
   if (input.turn) {
     const display = input.turn.input;
-    if (isLocale(display?.locale)) lines.push(`Reply language: ${display.locale}. Use this turn's language rather than older profile language preferences.`);
+    if (isLocale(display?.locale)) lines.push(`Reply language fallback: ${display.locale}.`);
     if (typeof display?.commandPrefix === 'string') {
       lines.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
       if (display.commandMenu) lines.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);

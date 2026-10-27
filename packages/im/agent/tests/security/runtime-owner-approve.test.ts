@@ -33,6 +33,7 @@ describe('OwnerApprovalRuntime commands', () => {
 
   function ownerContext(subjectId = '1659488338') {
     return {
+      commandPrefix: '/',
       platform: 'icqq',
       endpoint: '8596238',
       ownerId: '1659488338',
@@ -102,4 +103,25 @@ describe('OwnerApprovalRuntime commands', () => {
     expect(performance.now() - start).toBeLessThan(100);
     expect(reply).toMatch(/已添加规则/);
   });
+});
+
+it('uses the operation prefix and language without changing owner-only private approval', () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-approval-locale-'));
+  try {
+    const runtime = new OwnerApprovalRuntime(workspace);
+    const context = { platform: 'fixture', endpoint: 'bot', ownerId: 'owner', subjectId: 'owner',
+      scope: 'private' as const, locale: 'en' as const, commandPrefix: '!' };
+    expect(runtime.handleCommand(context, '!approve')).toContain('!approve always bash');
+    expect(runtime.handleCommand(context, '/approve always bash')).toBeNull();
+    expect(runtime.handleCommand({ ...context, commandPrefix: undefined }, '/approve always bash')).toBeNull();
+    expect(runtime.handleCommand({ ...context, scope: 'group' }, '!approve always bash')).toContain('Only the Endpoint Owner');
+    expect(runtime.handleCommand({ ...context, subjectId: 'other' }, '!approve always bash')).toContain('Only the Endpoint Owner');
+    expect(runtime.handleCommand(context, '!approve rule [')).toContain('Invalid regular expression');
+    expect(runtime.handleCommand(context, '!approve revoke rule missing')).toContain('no custom rules');
+    expect(runtime.handleCommand(context, '!approve rule ^中文命令')).toContain('Added rule');
+    expect(runtime.handleCommand(context, '!approve list')).toContain('^中文命令');
+    expect(runtime.handleCommand(context, '!approve revoke rule missing')).toContain('No rule matches');
+    expect(runtime.handleCommand({ ...context, commandPrefix: '' }, 'approve always bash')).toContain('Permanently approved bash');
+    expect(runtime.handleCommand(context, '!approve revoke')).toContain('!approve list');
+  } finally { fs.rmSync(workspace, { recursive: true, force: true }); }
 });

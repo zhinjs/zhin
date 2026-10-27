@@ -139,9 +139,9 @@ export class WecomEndpoint extends Endpoint<WecomClient> {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async send({ conversation, payload, locale }: EndpointSendRequest): Promise<string> {
     const materialized = await this.#materializeOutboundMedia(payload);
-    const content = formatOutboundBody(materialized);
+    const content = formatOutboundBody(materialized, locale);
     const body = buildSendRequestBody(
       conversation.id,
       content,

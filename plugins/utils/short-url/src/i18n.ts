@@ -1,6 +1,7 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  toolInvalid: { 'zh-CN': '无效的 URL，需要 http:// 或 https:// 开头', en: 'Invalid URL; use http:// or https://' },
   "invalid": {
     "zh-CN": "请提供有效的 HTTP/HTTPS 链接",
     "en": "Provide a valid HTTP or HTTPS URL."

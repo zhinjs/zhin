@@ -1,3 +1,4 @@
+import { CalendarError } from './errors.js';
 /**
  * In-memory OAuth access-token cache with proactive refresh, single-flight,
  * refresh-token rotation handling, and clear invalid_grant errors.
@@ -60,10 +61,13 @@ export interface TokenManagerOptions {
 
 export class OAuthTokenError extends Error {
   readonly code: string;
-  constructor(code: string, message: string) {
+  readonly presentation?: CalendarError;
+
+  constructor(code: string, message: string, presentation?: CalendarError) {
     super(message);
     this.name = "OAuthTokenError";
     this.code = code;
+    this.presentation = presentation;
   }
 }
 
@@ -97,11 +101,12 @@ export class OAuthTokenManager {
     if (!options.clientId.trim()) {
       throw new OAuthTokenError(
         "config",
-        `${options.provider}: 缺少 client_id`
+        `${options.provider}: 缺少 client_id`,
+        new CalendarError('clientMissing', { provider: options.provider, field: 'client_id' })
       );
     }
     if (options.provider === "google" && !options.clientSecret?.trim()) {
-      throw new OAuthTokenError("config", "google: 缺少 client_secret");
+      throw new OAuthTokenError("config", "google: 缺少 client_secret", new CalendarError('clientMissing', { provider: 'google', field: 'client_secret' }));
     }
     this.#provider = options.provider;
     this.#clientId = options.clientId.trim();
@@ -276,7 +281,8 @@ export class OAuthTokenManager {
         errCode || "http_error",
         `${this.#provider}: token 刷新失败 HTTP ${response.status}：${
           errDesc || response.statusText
-        }`
+        }`,
+        new CalendarError('refreshHttp', { provider: this.#provider, status: response.status, detail: errDesc || response.statusText })
       );
     }
 
@@ -284,7 +290,8 @@ export class OAuthTokenManager {
     if (!accessToken) {
       throw new OAuthTokenError(
         "response",
-        `${this.#provider}: 刷新响应缺少 access_token`
+        `${this.#provider}: 刷新响应缺少 access_token`,
+        new CalendarError('refreshAccessMissing', { provider: this.#provider })
       );
     }
     const expiresIn = Number(data.expires_in ?? 3600);

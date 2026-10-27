@@ -1,6 +1,7 @@
 import { createMessages } from 'zhin.js/i18n';
 
 export const messages = createMessages({
+  untitled: { 'zh-CN': '(无标题)', en: '(Untitled)' },
   "google": {
     "zh-CN": "Google 日历",
     "en": "Google Calendar"

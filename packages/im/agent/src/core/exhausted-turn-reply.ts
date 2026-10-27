@@ -16,6 +16,9 @@ import {
   type Model,
 } from '@zhin.js/ai';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
+import type { Locale } from '@zhin.js/plugin-runtime';
+import { turnReplyMessages } from './turn-reply-messages.js';
+import { REPLY_LANGUAGE_RULE } from '../prompt/rules/reply-language.js';
 
 const logger = getLogger('ZhinAgent:ExhaustedTurnReply');
 
@@ -24,12 +27,14 @@ export const EXHAUSTED_TURN_SUMMARY_TIMEOUT_MS = 30_000;
 
 /** Shown when the summary call itself fails. Must never contain tool output. */
 export const EXHAUSTED_TURN_FALLBACK_REPLY =
-  '这一轮的处理步数已经用完，任务还没有完成。回复「继续」我会接着处理，或者把需求说得更具体一些再试。';
+  turnReplyMessages('zh-CN', 'exhausted');
 
-export function buildExhaustedTurnInstruction(maxIterations: number): string {
+export function buildExhaustedTurnInstruction(maxIterations: number, locale?: Locale): string {
   return [
     `[System notice] You have used all ${maxIterations} tool-call steps for this turn, and tools are now disabled.`,
-    'Reply to the user directly, in the same language the user wrote in, in a few short sentences:',
+    REPLY_LANGUAGE_RULE,
+    ...(locale === undefined ? [] : [`Reply language fallback: ${locale}.`]),
+    'Reply to the user directly in a few short sentences:',
     '1. What you have done or found so far.',
     '2. What is still left to do.',
     '3. Ask whether they want you to continue.',
@@ -38,6 +43,7 @@ export function buildExhaustedTurnInstruction(maxIterations: number): string {
 }
 
 export interface ExhaustedTurnSummaryInput {
+  readonly locale?: Locale;
   readonly transport: LlmCompletionPort;
   readonly model: Model;
   readonly systemPrompt: string;
@@ -69,7 +75,7 @@ export async function summarizeExhaustedTurn(
         systemPrompt: input.systemPrompt,
         messages: [
           ...input.messages,
-          createUserMessage(buildExhaustedTurnInstruction(input.maxIterations)),
+          createUserMessage(buildExhaustedTurnInstruction(input.maxIterations, input.locale)),
         ],
         tools: undefined,
       },
@@ -88,6 +94,6 @@ export async function summarizeExhaustedTurn(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.warn(formatCompact({ exhaustedTurnSummary: 'fail', error: truncatePreview(message) }));
-    return { reply: EXHAUSTED_TURN_FALLBACK_REPLY };
+    return { reply: turnReplyMessages(input.locale, 'exhausted') };
   }
 }

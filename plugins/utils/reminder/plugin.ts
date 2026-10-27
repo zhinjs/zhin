@@ -23,7 +23,9 @@ export default definePlugin<ReminderConfig>({
     context.resources.provide(reminderServiceToken, service);
     context.resources.provide(pluginTaskProviderToken, service.administratorTasks);
     context.resources.provide(pluginVerificationToken, {
-      checks: () => [{ id: 'local-state', title: '持久状态读写检查', scope: 'local', effects: ['写入、读取并删除一个独立探针键；不创建提醒、不发送消息'] }],
+      checks: () => [{ id: 'local-state', title: '持久状态读写检查', titleI18n: { en: 'Persistent state read/write check' }, scope: 'local',
+        effects: ['写入、读取并删除一个独立探针键；不创建提醒、不发送消息'],
+        effectsI18n: { en: ['Write, read and delete an isolated probe key; no reminders are created and no messages are sent'] } }],
       async run(checkId) {
         if (checkId !== 'local-state') throw new Error('Unknown reminder verification check');
         const key = `verification/${randomUUID()}`;
@@ -31,7 +33,9 @@ export default definePlugin<ReminderConfig>({
           await state.set(key, { probe: true }, { ttlMs: 60_000 });
           const value = await state.get<{ probe: boolean }>(key);
           if (value?.probe !== true) throw new Error('持久状态读写结果不一致');
-          return { status: 'passed', summary: '本地持久状态读写通过', evidence: ['独立探针写入并成功读回；清理后删除', '仅验证当前 owner 的数据库状态；不证明调度或平台投递健康'] };
+          return { status: 'passed', summary: '本地持久状态读写通过', summaryI18n: { en: 'Local persistent state read/write check passed' },
+            evidence: ['独立探针写入并成功读回；清理后删除', '仅验证当前 owner 的数据库状态；不证明调度或平台投递健康'],
+            evidenceI18n: { en: ['An isolated probe was written, read back and deleted during cleanup', 'Checks only this owner’s database state; does not verify scheduling or platform delivery'] } };
         } finally { await state.delete(key); }
       },
     });

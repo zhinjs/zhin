@@ -1,3 +1,4 @@
+import { REPLY_LANGUAGE_RULE } from './rules/reply-language.js';
 import { type ModelPromptStrategy, resolveModelStrategy, DEFAULT_STRATEGY } from './model-prompt-strategy.js';
 
 export class ModelAwarePromptBuilder {
@@ -16,7 +17,7 @@ export class ModelAwarePromptBuilder {
           ' - Simple question = short answer; complex task = structured reply',
           ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
           ' - Focus on actions and results, not explanations',
-          ' - Match the user\'s language; follow SOUL.md for default language',
+          ` - ${REPLY_LANGUAGE_RULE}`,
         ].join('\n');
       case 'detailed':
         return [
@@ -26,7 +27,7 @@ export class ModelAwarePromptBuilder {
           ' - Use Markdown formatting (headings, lists, tables) for multi-part answers',
           ' - Match reply length to complexity: 1 line for greetings, structured format for multi-step results',
           ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
-          ' - Match the user\'s language; follow SOUL.md for default language',
+          ` - ${REPLY_LANGUAGE_RULE}`,
         ].join('\n');
       default:
         return [
@@ -35,7 +36,7 @@ export class ModelAwarePromptBuilder {
           ' - Be concise, direct, and useful — match reply length to question complexity',
           ' - Use Markdown when helpful for structure',
           ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
-          ' - Match the user\'s language; follow SOUL.md for default language',
+          ` - ${REPLY_LANGUAGE_RULE}`,
         ].join('\n');
     }
   }
