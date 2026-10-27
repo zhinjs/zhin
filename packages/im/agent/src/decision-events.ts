@@ -2,7 +2,7 @@
  * 决策审计表 `ai_decision_events`（ADR 0036 切片 A）。
  *
  * append-only：每一次「进不进模型 / 说不说话 / 调不调工具 / 开关变了」写一行，只增不改。
- * 本文件只定义表结构、枚举、码表与序列化（截断 / 脱敏 / 校验）；写路径埋点在切片 B。
+ * 本文件只定义表结构、枚举、码表与序列化（截断 / 脱敏 / 校验）；写入见 `decision-event-log.ts`（切片 B）。
  *
  * - `scene_id` 与会话画像 `sceneKey` 同口径：`<scope>:<sceneId>`（见 `sceneKeyOf`）；
  *   和 `platform` 一起对齐 `ai_session_profiles` 的 `platform + scene_key`。
@@ -67,6 +67,19 @@ export const DECISION_REASON_CODES = [
   'tool_dangerous_no_approval',
   'tool_approval_timeout',
   'tool_approval_denied',
+  // 写路径（切片 B）：入站 / 旁听 / scene event / 模型 / 出站
+  'inbound_addressed',
+  'ambient_engaged',
+  'scene_event_high_priority',
+  'scene_event_rate_limited',
+  'scene_event_wake_failed',
+  'model_completed',
+  'model_failed',
+  'model_cancelled',
+  'model_superseded',
+  'outbound_sent',
+  'outbound_suppressed',
+  'outbound_failed',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

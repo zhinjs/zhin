@@ -21,6 +21,7 @@ import type {
 } from '@zhin.js/im-contract';
 import type {
   AgentOutputElement,
+  DecisionEventLog,
   DeliveryOutcome,
   SessionProfileStore,
   TurnOutcome,
@@ -32,6 +33,15 @@ import { SceneEventWake, type SceneWakeBatch } from './scene-event-wake.js';
 import { readSceneEventLines } from './scene-event-lines.js';
 import { observeSceneWakeAndCheckSpeak } from './session-gate.js';
 import { capabilityLocalName } from './request.js';
+import {
+  auditCannotSpeak,
+  auditModelError,
+  auditModelRun,
+  auditOutbound,
+  createDecisionAudit,
+  decisionScopeOf,
+  type DecisionAudit,
+} from './decision-audit.js';
 
 const logger = getLogger('agent');
 
@@ -44,6 +54,8 @@ export interface SceneEventIngressDeps {
   readonly triggerConfig: () => AITriggerConfig | undefined;
   readonly reader: () => ConversationEventReader | undefined;
   readonly sessions: () => SessionProfileStore | undefined;
+  /** 决策审计（ADR 0036 切片 B）；缺省不写。 */
+  readonly decisionEvents?: () => DecisionEventLog | undefined;
   /** 关系称呼（`ai_user_relations` 的 preferredAddress / displayName）。 */
   readonly nickname?: (platform: string, userId: string) => Promise<string | undefined>;
   readonly readConversationContext?: (
@@ -71,6 +83,8 @@ export type SceneWakeResult =
 export class SceneEventIngress {
   #wake: SceneEventWake | undefined;
   readonly #shown = new Map<string, number>();
+  /** 正在跑的唤醒回合的 turn_id（失败时让 `inbound_wake/error` 串进同一回合）。 */
+  readonly #turnIds = new Map<string, string>();
   /** 测试/诊断：最近一次唤醒的结果。 */
   lastResult: SceneWakeResult | undefined;
 
@@ -92,6 +106,17 @@ export class SceneEventIngress {
     return config.conversations.includes('*') || config.conversations.includes(`${platform}:${sceneId}`);
   }
 
+  #audit(conversation: ConversationRef, turnId: string, endpoint?: string): DecisionAudit {
+    const platform = capabilityLocalName(String(conversation.endpoint.id));
+    return createDecisionAudit(this.deps.decisionEvents?.(), decisionScopeOf({
+      turnId,
+      platform,
+      scope: conversation.kind === 'channel' ? 'channel' : 'group',
+      sceneId: conversation.id,
+      ...(endpoint ? { endpoint } : {}),
+    }));
+  }
+
   #wakeEngine(): SceneEventWake {
     if (this.#wake) return this.#wake;
     const config = this.#config();
@@ -102,8 +127,21 @@ export class SceneEventIngress {
       ...(this.deps.setTimer ? { setTimer: this.deps.setTimer } : {}),
       ...(this.deps.clearTimer ? { clearTimer: this.deps.clearTimer } : {}),
       onWake: async (batch) => { this.lastResult = await this.wakeScene(batch); },
-      onDeferred: (key, waitMs) => logger.debug(formatCompact({ op: 'scene_event_wake_deferred', conv: key, waitMs })),
-      onError: (key, error) => logger.warn(formatCompact({ op: 'scene_event_wake_failed', conv: key, error: error instanceof Error ? error.message : String(error) })),
+      onDeferred: (key, waitMs, conversation) => {
+        logger.debug(formatCompact({ op: 'scene_event_wake_deferred', conv: key, waitMs }));
+        this.#audit(conversation, randomUUID())({
+          kind: 'inbound_wake', outcome: 'defer', reasonCode: 'scene_event_rate_limited', payload: { source: 'scene_event', waitMs },
+        });
+      },
+      onError: (key, error, conversation) => {
+        const detail = error instanceof Error ? error.message : String(error);
+        logger.warn(formatCompact({ op: 'scene_event_wake_failed', conv: key, error: detail }));
+        const turnId = this.#turnIds.get(key) ?? randomUUID();
+        this.#turnIds.delete(key);
+        this.#audit(conversation, turnId)({
+          kind: 'inbound_wake', outcome: 'error', reasonCode: 'scene_event_wake_failed', reasonDetail: detail, payload: { source: 'scene_event' },
+        });
+      },
     });
     return this.#wake;
   }
@@ -183,6 +221,9 @@ export class SceneEventIngress {
     const selfIds = [...new Set(batch.items.flatMap((item) => item.selfIds))];
     const endpoint = last.endpointId ?? platform;
     const types = [...new Set(batch.items.map((item) => item.event.type))].join(',');
+    const turnId = randomUUID();
+    const audit = this.#audit(conversation, turnId, endpoint);
+    const auditPayload = { source: 'scene_event', events: batch.items.length, types, throughSequence: batch.throughSequence };
     const blocked = await observeSceneWakeAndCheckSpeak({
       sessions: this.deps.sessions(),
       events: this.deps.reader(),
@@ -196,21 +237,26 @@ export class SceneEventIngress {
     if (blocked) {
       // 与 #995 session-gate 一致：画像已更新（例如记下 Bot 被禁言到何时），但不调模型。
       logger.info(formatCompact({ op: 'scene_event_wake_skipped_cannot_speak', conv: batch.key, reason: blocked, events: batch.items.length, types }));
+      auditCannotSpeak(audit, blocked, auditPayload);
       return { kind: 'skipped', reason: `cannot_speak:${blocked}` };
     }
     const sessionKey = `${platform}:${endpoint}:${scope}:${conversation.id}`;
     const lines = await this.linesFor({ sessionKey, conversation, platform, throughSequence: batch.throughSequence, selfIds });
     if (lines.length === 0) {
       logger.info(formatCompact({ op: 'scene_event_wake_skipped', conv: batch.key, reason: 'nothing_new', types }));
+      audit({ kind: 'model_skip', outcome: 'skip', reasonCode: 'scene_event_nothing_new', payload: auditPayload });
       return { kind: 'skipped', reason: 'nothing_new' };
     }
     const consumer = `agent-session:${sessionKey}`;
     const readContext = this.deps.readConversationContext;
     const commitContext = this.deps.commitConversationContext;
     let spoke = false;
+    audit({ kind: 'inbound_wake', outcome: 'allow', reasonCode: 'scene_event_high_priority', payload: { ...auditPayload, lines: lines.length } });
+    const startedAt = Date.now();
+    this.#turnIds.set(batch.key, turnId);
     const outcome = await withTimeout(async (signal) => {
       const request: TurnRequest = Object.freeze({
-        identity: Object.freeze({ traceId: randomUUID(), turnId: randomUUID() }),
+        identity: Object.freeze({ traceId: randomUUID(), turnId }),
         origin: Object.freeze({ kind: 'im' as const, conversation, platform, endpoint, scope, sceneId: conversation.id }),
         intent: Object.freeze({ kind: 'new' as const }),
         // 合成入口：没有真人发起者（principal.origin 缺省），只有普通用户权限。
@@ -232,6 +278,7 @@ export class SceneEventIngress {
           reply: Object.freeze({
             send: async (output: readonly AgentOutputElement[]) => {
               const delivered = await this.deps.deliver(conversation, output);
+              auditOutbound(audit, delivered, { source: 'scene_event' });
               if (delivered.status === 'sent') spoke = true;
               return delivered;
             },
@@ -245,7 +292,12 @@ export class SceneEventIngress {
         }),
       }) as TurnRequest;
       return this.deps.executeTurn(request);
-    }, this.deps.timeoutMs());
+    }, this.deps.timeoutMs()).catch((error: unknown) => {
+      auditModelError(audit, error, { source: 'scene_event', durationMs: Date.now() - startedAt });
+      throw error;
+    });
+    if (this.#turnIds.get(batch.key) === turnId) this.#turnIds.delete(batch.key);
+    auditModelRun(audit, outcome, { source: 'scene_event', durationMs: Date.now() - startedAt, spoke });
     if (spoke) this.deps.onSpoke?.(batch.key);
     logger.info(formatCompact({ op: 'scene_event_wake', conv: batch.key, events: batch.items.length, types, lines: lines.length, status: outcome.status, spoke }));
     return { kind: 'woke', status: outcome.status, lines: lines.length };
@@ -255,6 +307,7 @@ export class SceneEventIngress {
     this.#wake?.dispose();
     this.#wake = undefined;
     this.#shown.clear();
+    this.#turnIds.clear();
   }
 }
 
