@@ -1,0 +1,14 @@
+plugins/adapters/icqq/tests/icqq-inbox.test.ts
+  h_b680f75345178a 295-323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a4b346db4012b8e09bec3ae8849412e8ba9d828c",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
