@@ -273,7 +273,34 @@ Each row uses the table's column names (`id`, `ts`, `turn_id`, `instance_id`, `p
 
 A single result is capped at 256 KB, so the list and export are paged by size. Rows from the same millisecond always land on the same page, so paging by timestamp never skips or repeats a row. Without a database (`persistent: false`) only the last 200 in-process rows are visible.
 
-Rows are kept for 14 days by default; change it with `ai.audit.retentionDays`. Expired rows are removed at startup and then hourly. There is no control switch here (`control.get` / `control.set` are slice D).
+Rows are kept for 14 days by default; change it with `ai.audit.retentionDays`. Expired rows are removed at startup and then hourly. For the switches, see the control plane below.
+
+### Built-in actions: control plane
+
+The control plane on the Bot status (机器人状态) page (ADR 0036 slice D) is also provided by the Host. It is the one place to make the bot go quiet right away.
+
+| Method | Call | Permission needed |
+| --- | --- | --- |
+| `plugin.root.control` | `pluginRpc('root', 'control')` | `control:read` |
+| `plugin.root.control-set` | `pluginRpc('root', 'control-set', { expectedRevision, instance?, sessions? })` | `control:write` (an action; the admin token can always call it) |
+
+Four switches:
+
+| Switch | Effect |
+| --- | --- |
+| `emergency_stop` | No model calls and no outbound messages (including proactive ones such as scheduled notices); only the audit and Console reads remain |
+| `muted` | Doesn't speak: incoming messages, ambient engagement and scene event wakes never reach the model |
+| `read_only` | No writes: no model calls, no outbound messages |
+| `mention_only` | Only messages that @ the bot (match the trigger) or private chats reach the model; ambient engagement and scene event wakes are skipped |
+
+There are two levels: the instance default (`instance`) and per-session overrides (`sessions`, by `platform` + `sceneId`; `sceneId` looks like `group:123`, the same key as the session profile). An override can only be stricter: `false` in a session just removes that override and never relaxes an instance switch. The order is `emergency_stop → instance muted → session muted → read_only → mention_only → normal speak / ambient / scene event policy`, and the first match wins. The control plane runs before the session profile's can-speak check, so a blocked message skips that check and ambient judging. If a switch changes while a turn is running, the bot checks again before sending, and any of the first three switches stops the message.
+
+- `control`: returns `{ revision, instance, sessions, updatedAt, updatedBy, persistent, available, precedence }`. `available: false` means the saved state can't be read right now. Until it can, every check acts as `emergency_stop` (fail closed) and writes are refused.
+- `control-set`: changes only the switches you send. `expectedRevision` is required (read it with `control` first); if it doesn't match you get `conflict` and nothing is overwritten. On success it returns the new state and `changed` (how many scopes actually changed).
+
+Each block writes a `kind=control_gate` row (`reason_code` is `control_emergency_stop`, `control_muted_instance`, `control_muted_session`, `control_read_only` or `control_mention_only`). Each change writes one `kind=control_change` row per changed scope with `actor=operator` and the before and after values in `payload`; both show up in the decision replay. The switches are saved in the `ai_control_state` table and survive a restart; without a database they live only in the process.
+
+The model has no tool that can read or change these switches: it can't unmute itself or turn off `emergency_stop`. The dangerous-tool hard gate is slice E and isn't covered here.
 
 ## Saving settings from a page (config:patch)
 
