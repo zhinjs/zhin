@@ -1,0 +1,23 @@
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_d9f44c38611f9a 114,181-183,194-195,202-237,320
+basic/cli/tests/plugin-runtime/agent/turn/announcement-dispatch.test.ts
+  s_9622fd28aba994::t_432a9bb15bf60e 1-143
+basic/cli/src/plugin-runtime/agent/turn/announcement-dispatch.ts
+  s_9622fd28aba994::t_28a729a82ffdca 1-229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2931c7a972a7889710c41bf3152b79719c8e6b07",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
