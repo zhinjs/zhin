@@ -52,6 +52,8 @@ export interface DecisionEventQuery {
   readonly turnId?: string;
   readonly kind?: string;
   readonly outcome?: string;
+  /** 按 `reason_code` 过滤（如冷场复用 `control_change` 时用 `cold_field_mention_only_*` 区分）。 */
+  readonly reasonCode?: string;
   /** 默认 `desc`（新 → 旧）；导出按 `asc` 翻页。 */
   readonly order?: 'asc' | 'desc';
   /** 默认 {@link DECISION_EVENT_QUERY_DEFAULT_LIMIT}，上限 {@link DECISION_EVENT_QUERY_MAX_LIMIT}。 */
@@ -81,6 +83,7 @@ function whereOf(filter: DecisionEventQuery): Record<string, unknown> {
   if (filter.turnId) where.turn_id = filter.turnId;
   if (filter.kind) where.kind = filter.kind;
   if (filter.outcome) where.outcome = filter.outcome;
+  if (filter.reasonCode) where.reason_code = filter.reasonCode;
   return where;
 }
 
@@ -91,7 +94,8 @@ function matches(record: DecisionEventRecord, filter: DecisionEventQuery): boole
     && (!filter.sceneId || record.sceneId === filter.sceneId)
     && (!filter.turnId || record.turnId === filter.turnId)
     && (!filter.kind || record.kind === filter.kind)
-    && (!filter.outcome || record.outcome === filter.outcome);
+    && (!filter.outcome || record.outcome === filter.outcome)
+    && (!filter.reasonCode || record.reasonCode === filter.reasonCode);
 }
 
 export class DecisionEventLog implements DecisionEventReader {

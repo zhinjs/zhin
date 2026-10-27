@@ -63,6 +63,8 @@ describe('Console decision replay (ADR 0036 slice C)', () => {
 
     const filtered = await call('plugin.root.decisions', reader, { platform: 'icqq', kind: 'speak_gate' });
     expect((filtered.body as any).data.items.map((row: DecisionEventExportRow) => row.kind)).toEqual(['speak_gate']);
+    const byReason = await call('plugin.root.decisions', reader, { reasonCode: 'cannot_speak_muted' });
+    expect((byReason.body as any).data.items.map((row: DecisionEventExportRow) => row.kind)).toEqual(['model_skip', 'speak_gate']);
     const paged = await call('plugin.root.decisions', reader, { limit: 2 });
     expect((paged.body as any).data).toMatchObject({ nextBefore: 1_200 });
     const next = await call('plugin.root.decisions', reader, { limit: 2, before: 1_200 });
@@ -85,6 +87,7 @@ describe('Console decision replay (ADR 0036 slice C)', () => {
     const source = () => log;
     await expect(listDecisionEvents(source, { kind: 'speak' })).rejects.toMatchObject({ code: 'invalid_input' });
     await expect(listDecisionEvents(source, { outcome: 'maybe' })).rejects.toMatchObject({ code: 'invalid_input' });
+    await expect(listDecisionEvents(source, { reasonCode: 'Cold Field' })).rejects.toMatchObject({ code: 'invalid_input' });
     await expect(listDecisionEvents(source, { since: 5, before: 5 })).rejects.toMatchObject({ code: 'invalid_input' });
     await expect(listDecisionEvents(source, { limit: 0 })).rejects.toMatchObject({ code: 'invalid_input' });
     await expect(exportDecisionEvents(source, { since: 0 })).rejects.toMatchObject({ code: 'invalid_input' });
