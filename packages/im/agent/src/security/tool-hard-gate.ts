@@ -17,7 +17,11 @@
  *   审批人私聊（或专用审批群）投递，审批人用固定命令结算同一 {@link ToolApprovalQueue}；仍是 humanOnly、
  *   一次一批，不提供「本会话 / 永久」授权，业务群消息不能结算。
  *
- * 审计写 `tool_approval` / `tool_hard_gate`（`ai_decision_events`）；审计写失败不影响判定。
+ * - 群管冷却（ADR 0037 §3，切片 E / G4）：在生成**新**审批卡之前按 `platform + scene_id + 工具本地名` 查冷却
+ *   （{@link ToolHardGateContext.opsCooldown}）；命中即 fail closed、不生成卡片，写 `ops_cooldown` / `ops_cooldown_hit`；
+ *   通过写 `ops_cooldown_passed` 并开始计时，再进入审批。消费 Console 已批准的同参数卡片不受冷却影响（那张卡创建时已计时）。
+ *
+ * 审计写 `tool_approval` / `tool_hard_gate` / `ops_cooldown`（`ai_decision_events`）；审计写失败不影响判定。
  */
 import type { DecisionEventInput, DecisionReasonCode } from '../decision-events.js';
 import { approvalActionLabel } from '../tool/approval-presentation.js';
@@ -34,6 +38,7 @@ import {
   type ToolApprovalEntry,
   type ToolApprovalOrigin,
 } from './tool-approval-queue.js';
+import { opsCooldownTarget, type OpsCooldownView } from './ops-cooldown.js';
 
 export type ToolRisk = 'dangerous' | 'safe';
 /** ADR 0036 §3 危险类别：成员管理 / 内容发布 / 资金 / 身份。 */
@@ -307,6 +312,11 @@ export interface ToolHardGateContext {
   readonly origin?: ToolApprovalOrigin;
   /** 控制面；未接时不做控制面判定（与入站 / 出站闸一致）。每次判定现读，回合中途开关变化也生效。 */
   readonly controlPlane?: ToolHardGateControlSource;
+  /**
+   * 群管冷却表（ADR 0037 §3，切片 E）；宿主持有、跨回合共享。未接时不做冷却判定。
+   * 键用 {@link location} 的 `platform` / `sceneId` 与工具本地名。
+   */
+  readonly opsCooldown?: OpsCooldownView;
 }
 
 type ControlDenial = Readonly<{
@@ -422,6 +432,10 @@ export class ToolHardGate {
       this.#audit('tool_hard_gate', 'allow', 'tool_approval_approved', approved);
       return Object.freeze({ status: 'approved', category, approvalId: preApproved.id });
     }
+
+    // ADR 0037 §3：冷却判定在生成新审批卡之前；命中不入队、不弹审批。
+    const cooldownDenial = this.#checkOpsCooldown(name, category, input, payload);
+    if (cooldownDenial) return cooldownDenial;
 
     const entry = queue?.enqueue({
       toolName: name,
@@ -545,6 +559,47 @@ export class ToolHardGate {
     }
   }
 
+  /**
+   * 群管冷却：通过时（含 `cooldownMs=0`）写 `ops_cooldown_passed` 并已开始计时，返回 null；
+   * 命中时写 `ops_cooldown` 拒绝 + `tool_hard_gate` 拒绝（同一 turn，回放串成一条链），本回合同类 latch，返回拒绝结果。
+   * 冷却表本身出错时不拦（冷却是节流不是授权，后面仍要人工审批）。
+   */
+  #checkOpsCooldown(
+    name: string,
+    category: DangerousToolCategory | null,
+    input: Readonly<Record<string, unknown>>,
+    payload: Record<string, unknown>,
+  ): ToolHardGateResult | null {
+    const cooldown = this.#context.opsCooldown;
+    if (!cooldown) return null;
+    const { platform, sceneId } = this.#context.location;
+    const action = toolLocalName(name);
+    const target = opsCooldownTarget(input);
+    let decision: ReturnType<OpsCooldownView['acquire']>;
+    try {
+      decision = cooldown.acquire({ platform, sceneId, action });
+    } catch {
+      return null;
+    }
+    const base = { action, ...(target ? { target } : {}), platform, sceneId, cooldownMs: decision.cooldownMs, tool: name, toolUseId: payload.toolUseId };
+    if (decision.status === 'passed') {
+      this.#audit('ops_cooldown', 'allow', 'ops_cooldown_passed', base);
+      return null;
+    }
+    const hit = { ...base, remainingMs: decision.remainingMs };
+    const detail = `ops cooldown: ${action} in ${platform}/${sceneId}, ${decision.remainingMs}ms left`;
+    this.#audit('ops_cooldown', 'deny', 'ops_cooldown_hit', hit, null, detail);
+    this.#deniedTools.add(name);
+    if (category) this.#deniedCategories.add(category);
+    this.#audit('tool_hard_gate', 'deny', 'ops_cooldown_hit', { ...payload, action, remainingMs: decision.remainingMs }, null, detail);
+    return Object.freeze({
+      status: 'denied',
+      category,
+      reasonCode: 'ops_cooldown_hit',
+      reason: formatOpsCooldownDenial(name, action, decision.cooldownMs, decision.remainingMs),
+    });
+  }
+
   async #awaitApproval(
     port: ApprovalPort,
     toolName: string,
@@ -650,7 +705,7 @@ export class ToolHardGate {
   }
 
   #audit(
-    kind: 'tool_call' | 'tool_approval' | 'tool_hard_gate',
+    kind: 'tool_call' | 'tool_approval' | 'tool_hard_gate' | 'ops_cooldown',
     outcome: 'allow' | 'deny' | 'defer',
     reasonCode: DecisionReasonCode,
     payload: Record<string, unknown>,
@@ -703,6 +758,15 @@ export function formatHardGateDenial(toolName: string, why: string): string {
   return `危险工具「${toolName}」已被硬闸拒绝（${why}），本次调用没有执行。`
     + '不要重试这个调用，也不要改参数或换其他工具达成同样的操作；'
     + '请直接告诉用户：该操作需要管理员人工审批后才能执行。';
+}
+
+/** 冷却命中时给模型的说明：冷却中、剩余毫秒、没有生成新审批卡，明确不要重试 / 改参数 / 换工具。 */
+export function formatOpsCooldownDenial(toolName: string, action: string, cooldownMs: number, remainingMs: number): string {
+  const seconds = Math.max(1, Math.round(cooldownMs / 1000));
+  return `危险工具「${toolName}」冷却中：本会话的「${action}」${seconds} 秒内只能发起一次审批，还需等待约 ${remainingMs} 毫秒。`
+    + '本次调用没有执行，也没有生成新的审批卡。'
+    + '不要重试这个调用，也不要改参数或换其他工具达成同样的操作；'
+    + '请直接告诉用户：该操作冷却中，请稍后再试，或等待已有审批卡的结果。';
 }
 
 export function formatHardGateQuestion(

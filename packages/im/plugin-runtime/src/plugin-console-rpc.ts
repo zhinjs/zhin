@@ -19,8 +19,10 @@ import { createToken } from './token.js';
  * satisfy that page's `requiredPermissions` / `requiredRoles`, plus the method's own. The full
  * (admin) token may call everything. Other tokens (`user` / `demo`) may call a method when they
  * hold every required permission and role. An action is open to them only when it declares its
- * own `requiredPermissions` / `requiredRoles` (the page's requirements apply on top, but never
- * grant an action by themselves); an unguarded `status` needs `demo: true`.
+ * own `requiredPermissions` / `requiredRoles` / `anyOfPermissions` (the page's requirements apply on
+ * top, but never grant an action by themselves); an unguarded `status` needs `demo: true`.
+ * `anyOfPermissions` is satisfied by holding at least one of the listed permissions (for a new
+ * permission that coexists with an older one, e.g. `ops:approve` beside `tool_approvals:resolve`).
  */
 
 export type PluginConsoleRpcJson = JsonValue;
@@ -38,6 +40,11 @@ export interface PluginConsoleRpcMethod<TInput = PluginConsoleRpcInput> {
   readonly requiredPermissions?: readonly string[];
   /** Extra roles on top of the page's own requirements. */
   readonly requiredRoles?: readonly string[];
+  /**
+   * The caller must also hold at least one of these (in addition to every `requiredPermissions`).
+   * Counts as the method's own requirement for actions.
+   */
+  readonly anyOfPermissions?: readonly string[];
   /**
    * Return a small, user-facing JSON shape. Never return raw log records, prompts, chat lines,
    * secrets or exception text: the Console shows this to ordinary users.
@@ -70,6 +77,8 @@ export interface NormalizedPluginConsoleRpcMethod {
   readonly page?: string;
   readonly requiredPermissions: readonly string[];
   readonly requiredRoles: readonly string[];
+  /** Empty when the method has no either-of requirement. */
+  readonly anyOfPermissions: readonly string[];
   readonly demo: boolean;
   /** `status` and `queries` are read-only; actions are not. */
   readonly readOnly: boolean;
@@ -141,6 +150,7 @@ function normalizeMethod(
     ...(method.page === undefined ? {} : { page: method.page }),
     requiredPermissions: stringList(method.requiredPermissions, `${name} requiredPermissions`),
     requiredRoles: stringList(method.requiredRoles, `${name} requiredRoles`),
+    anyOfPermissions: stringList(method.anyOfPermissions, `${name} anyOfPermissions`),
     demo,
     readOnly,
     handler: method.handler as PluginConsoleRpcMethod['handler'],

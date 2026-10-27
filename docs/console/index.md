@@ -176,7 +176,7 @@ http:
 - **没有配置任何令牌**时（本地开发），所有人都等同于管理员，和以前一样。
 - 页面清单（`/entries`、`/console/api/pages`、`/console/api/topology`）都按令牌过滤，且不会被缓存。
 
-权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#内置状态群聊插话和技能助手)），决策回放使用 `decisions:read`（见 [决策回放](../authoring/console-pages.md#内置查询决策回放)），控制面使用 `control:read` 和 `control:write`（见 [控制面](../authoring/console-pages.md#内置操作控制面)）。
+权限名和角色名由页面自己约定，比如 `ambient:read`。内置的群聊插话和技能助手状态使用 `ambient:read` 和 `skills:read`（见 [内置状态](../authoring/console-pages.md#内置状态群聊插话和技能助手)），决策回放使用 `decisions:read`（见 [决策回放](../authoring/console-pages.md#内置查询决策回放)），控制面使用 `control:read` 和 `control:write`（见 [控制面](../authoring/console-pages.md#内置操作控制面)），审批人（危险工具审批卡、公告批准 / 驳回 / 重发）使用 `ops:approve`（见 [危险工具审批卡](../authoring/console-pages.md#内置操作危险工具审批卡)）。
 
 ## Demo scope（只读部署）
 

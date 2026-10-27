@@ -38,6 +38,7 @@ import type { EventSystem } from '../event/event-system.js';
 import { AgentEventBus } from '../event/ai-event-bus.js';
 import { type ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
 import { ToolApprovalQueue } from '../security/tool-approval-queue.js';
+import { OpsCooldown } from '../security/ops-cooldown.js';
 import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import { UserProfileStore } from '../user-profile.js';
@@ -185,6 +186,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly ownerApprovals = new OwnerApprovalRuntime();
   /** Dangerous-tool approval cards (ADR 0036 hard gate); read by the Console. */
   readonly toolApprovals = new ToolApprovalQueue();
+  /**
+   * Group-ops cooldown (ADR 0037 §3, slice E): one approval card per `platform + scene_id + tool local name`
+   * within `ops.cooldownMs` (session ops: instance default + per-session override). Process-local.
+   */
+  readonly opsCooldown = new OpsCooldown({ resolveCooldownMs: (platform, sceneId) => this.sessionOps.resolve(platform, sceneId).ops.cooldownMs });
   readonly promptController: PromptController;
   /** 无交互审批面传输的 host 级回退。 */
   approvalPort?: ApprovalPort;

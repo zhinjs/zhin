@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AiAnnouncements, DecisionEventLog } from '@zhin.js/agent';
+import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import type { ConsoleAccess } from '@zhin.js/host-http';
 import { AssistantStatus } from '../../../src/plugin-runtime/console/assistant-status.js';
 import {
+  ANNOUNCEMENTS_APPROVE_PERMISSION,
   ANNOUNCEMENTS_READ_PERMISSION,
   ANNOUNCEMENTS_WRITE_PERMISSION,
 } from '../../../src/plugin-runtime/console/announcements-rpc.js';
+import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/console/plugin-console-rpc.js';
 import { AnnouncementDispatcher } from '../../../src/plugin-runtime/agent/turn/announcement-dispatch.js';
 
 const signal = new AbortController().signal;
@@ -27,16 +31,72 @@ function harness(options: { bound?: boolean; dispatcher?: boolean; send?: () => 
 
 const scene = { platform: 'icqq', sceneId: 'group:123' };
 
+const stores: SnapshotStore[] = [];
+afterEach(async () => { for (const store of stores.splice(0)) await store.close(); });
+
+/** Runs a method through the real Console RPC authorization (`plugin.root.*`). */
+function consoleDispatch(status: AssistantStatus) {
+  const root = rootPluginId();
+  const state: SnapshotState = {
+    root,
+    tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: '/app', children: [] }]]),
+    config: new Map(), capabilities: new Map(), projections: new Map(), resources: new Map([[root, new Map()]]),
+  };
+  const store = new SnapshotStore(state); stores.push(store);
+  return (type: string, access: ConsoleAccess, data?: unknown) => dispatchPluginConsoleRpcRequest(
+    { type, requestId: 1, ...(data === undefined ? {} : { data }) },
+    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: status.consoleRpc },
+  );
+}
+
 describe('announcements Console RPC (ADR 0037 slice B)', () => {
-  it('declares read queries and write actions on control:read / control:write', () => {
+  it('declares reads on control:read, drafting on control:write and approval on ops:approve (slice E)', () => {
     const { status } = harness();
+    expect(ANNOUNCEMENTS_APPROVE_PERMISSION).toBe('ops:approve');
     for (const name of ['announcements', 'announcement']) {
       expect(status.consoleRpc.methods.get(name)).toMatchObject({ readOnly: true, requiredPermissions: [ANNOUNCEMENTS_READ_PERMISSION] });
     }
-    for (const name of ['announcement-create', 'announcement-edit', 'announcement-submit', 'announcement-approve', 'announcement-reject', 'announcement-resend']) {
+    for (const name of ['announcement-create', 'announcement-edit', 'announcement-submit']) {
       expect(status.consoleRpc.methods.get(name)).toMatchObject({ readOnly: false, requiredPermissions: [ANNOUNCEMENTS_WRITE_PERMISSION] });
     }
+    for (const name of ['announcement-approve', 'announcement-reject', 'announcement-resend']) {
+      expect(status.consoleRpc.methods.get(name)).toMatchObject({ readOnly: false, requiredPermissions: ['ops:approve'] });
+    }
     expect(status.consoleRpc.methods.get('session-ops-set')).toBeDefined();
+  });
+
+  it('refuses approve / reject / resend without ops:approve, even with control:write; allows them with it', async () => {
+    const { status, sendNotice } = harness();
+    const dispatch = consoleDispatch(status);
+    const writer: ConsoleAccess = { unrestricted: false, permissions: ['control:read', 'control:write'], roles: [] };
+    const approver: ConsoleAccess = { unrestricted: false, permissions: ['ops:approve'], roles: [] };
+
+    const created = await dispatch('plugin.root.announcement-create', writer, { ...scene, content: '周六活动' });
+    expect(created).toMatchObject({ status: 200 });
+    const id = (created.body as any).data.announcement.id as string;
+    expect(await dispatch('plugin.root.announcement-submit', writer, { id, expectedRevision: 1 })).toMatchObject({ status: 200 });
+    // control:write alone cannot approve or reject; ops:approve alone cannot draft.
+    expect(await dispatch('plugin.root.announcement-approve', writer, { id, expectedRevision: 2 })).toMatchObject({ status: 403 });
+    expect(await dispatch('plugin.root.announcement-reject', writer, { id, expectedRevision: 2 })).toMatchObject({ status: 403 });
+    expect(await dispatch('plugin.root.announcement-create', approver, { ...scene, content: 'x' })).toMatchObject({ status: 403 });
+    expect(sendNotice).not.toHaveBeenCalled();
+
+    expect(await dispatch('plugin.root.announcement-approve', approver, { id, expectedRevision: 2 }))
+      .toMatchObject({ status: 200, body: { data: { to: 'approved', send: { result: 'sent' } } } });
+    expect(sendNotice).toHaveBeenCalledTimes(1);
+
+    // resend (failed → pending) is an approval step too.
+    const failing = harness({ send: async () => { throw new Error('offline'); } });
+    const dispatchFailing = consoleDispatch(failing.status);
+    const draft = await failing.call('announcement-create', { ...scene, content: 'retry me' });
+    const failedId = draft.announcement.id as string;
+    await failing.call('announcement-submit', { id: failedId, expectedRevision: 1 });
+    const sent = await failing.call('announcement-approve', { id: failedId, expectedRevision: 2 });
+    expect(sent.announcement.status).toBe('failed');
+    const revision = sent.announcement.revision as number;
+    expect(await dispatchFailing('plugin.root.announcement-resend', writer, { id: failedId, expectedRevision: revision })).toMatchObject({ status: 403 });
+    expect(await dispatchFailing('plugin.root.announcement-resend', approver, { id: failedId, expectedRevision: revision }))
+      .toMatchObject({ status: 200, body: { data: { to: 'pending' } } });
   });
 
   it('create → submit → approve sends immediately and audits every transition', async () => {

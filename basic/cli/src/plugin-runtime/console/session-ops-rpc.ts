@@ -14,7 +14,8 @@ import type { MemberLifecycle } from '../agent/turn/member-lifecycle.js';
  * - `plugin.root.session-ops-set`（`control:write`，动作）：改配置；必须带 `expectedRevision`，不符返回 `conflict`
  *   且不覆盖。每个实际变化的范围写一行 `kind=config_change`、`actor=operator`。
  *
- * 权限暂复用控制面的 `control:read` / `control:write`；ADR 0037 切片 E 引入 `ops:approve` 后再评估是否拆分。
+ * `ops.cooldownMs`（ADR 0037 §3 群管冷却，切片 E）与欢迎 / 退群同在这里配置（实例默认 + 会话覆盖）。
+ * 权限仍是 `control:read` / `control:write`：这里改的是运营配置，不是审批；`ops:approve` 只管结算审批卡与公告审批。
  * 模型没有工具能读写这些配置。
  */
 
@@ -41,7 +42,7 @@ function requireOps(source: SessionOpsSource): AiSessionOps {
 }
 
 function configJson(config: SessionOpsConfig): Record<string, PluginConsoleRpcJson> {
-  return { welcome: { ...config.welcome }, leave: { ...config.leave } } as unknown as Record<string, PluginConsoleRpcJson>;
+  return { welcome: { ...config.welcome }, leave: { ...config.leave }, ops: { ...config.ops } } as unknown as Record<string, PluginConsoleRpcJson>;
 }
 
 export function sessionOpsSnapshotJson(snapshot: SessionOpsSnapshot, ops?: AiSessionOps): PluginConsoleRpcJson {

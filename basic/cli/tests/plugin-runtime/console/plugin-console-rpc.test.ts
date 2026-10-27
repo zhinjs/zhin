@@ -158,6 +158,19 @@ describe('plugin Console actions for non-admin tokens', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts any one of anyOfPermissions on top of requiredPermissions', async () => {
+    const handler = save();
+    const { call } = setup({ status: status(), actions: { approve: { anyOfPermissions: ['ops:approve', 'legacy:resolve'], handler } } });
+    expect(await call('plugin.root/ambient.approve', {}, scoped(['ops:approve']))).toMatchObject({ status: 200 });
+    expect(await call('plugin.root/ambient.approve', {}, scoped(['legacy:resolve']))).toMatchObject({ status: 200 });
+    expect(await call('plugin.root/ambient.approve', {}, scoped(['control:write']))).toMatchObject({ status: 403 });
+    expect(await call('plugin.root/ambient.approve', {}, anonymous)).toMatchObject({ status: 403 });
+    const both = setup({ status: status(), actions: { approve: { requiredPermissions: ['ambient:write'], anyOfPermissions: ['ops:approve'], handler } } });
+    expect(await both.call('plugin.root/ambient.approve', {}, scoped(['ops:approve']))).toMatchObject({ status: 403 });
+    expect(await both.call('plugin.root/ambient.approve', {}, scoped(['ops:approve', 'ambient:write']))).toMatchObject({ status: 200 });
+    expect(handler).toHaveBeenCalledTimes(3);
+  });
+
   it('adds the bound page requirements to the action and still lets the admin run it', async () => {
     const handler = save();
     const { call } = setup(

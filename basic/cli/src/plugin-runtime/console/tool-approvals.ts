@@ -12,13 +12,22 @@ import {
  * Console approval cards for the dangerous-tool hard gate (ADR 0036 §3, slice E).
  *
  * Served as `plugin.root.tool-approvals` (read) and `plugin.root.resolve-tool-approval` (action).
- * Both declare their own permission, so only admin tokens or tokens granted
- * `tool_approvals:read` / `tool_approvals:resolve` can see or settle a card. The Agent owns the
- * queue for its generation; the newest installed Agent binds it here.
+ * Both declare their own permission, so only admin tokens or tokens granted the permission can see
+ * or settle a card:
+ * - read: `tool_approvals:read` **or** `ops:approve`;
+ * - settle: `ops:approve` (ADR 0037 §3, slice E: the approver permission, shared with announcement
+ *   approval) **or** the older `tool_approvals:resolve`, kept for backward compatibility so existing
+ *   tokens keep working. Either one is enough (`anyOfPermissions`); the full token passes as before.
+ * The Agent owns the queue for its generation; the newest installed Agent binds it here.
  */
 
 export const TOOL_APPROVALS_READ_PERMISSION = 'tool_approvals:read';
 export const TOOL_APPROVALS_RESOLVE_PERMISSION = 'tool_approvals:resolve';
+/**
+ * Console approver permission (ADR 0037 §3, slice E): settles hard-gate approval cards and approves /
+ * rejects / resends announcements. Separate from `control:write`.
+ */
+export const OPS_APPROVE_PERMISSION = 'ops:approve';
 /** Recorded as the deciding operator: the Console RPC call does not carry a per-user identity yet. */
 export const CONSOLE_TOOL_APPROVAL_OPERATOR = 'console';
 
@@ -46,13 +55,13 @@ export class HostToolApprovals {
   readonly consoleRpc: PluginConsoleRpc = definePluginConsoleRpc({
     queries: {
       'tool-approvals': {
-        requiredPermissions: [TOOL_APPROVALS_READ_PERMISSION],
+        anyOfPermissions: [TOOL_APPROVALS_READ_PERMISSION, OPS_APPROVE_PERMISSION],
         handler: () => this.snapshot() as unknown as PluginConsoleRpcJson,
       },
     },
     actions: {
       'resolve-tool-approval': {
-        requiredPermissions: [TOOL_APPROVALS_RESOLVE_PERMISSION],
+        anyOfPermissions: [OPS_APPROVE_PERMISSION, TOOL_APPROVALS_RESOLVE_PERMISSION],
         handler: (input) => this.resolve(input) as unknown as PluginConsoleRpcJson,
       },
     },
