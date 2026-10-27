@@ -1,5 +1,24 @@
 # @zhin.js/plugin-content-moderation
 
+## 1.1.16
+
+### Patch Changes
+
+- 53bc6a0: 官方工具插件与游戏支持中英文反馈、帮助和配置标签；提醒增加与中文对应的有限英文时间语法。聊天后台任务记录创建者当时语言，管理员任务记录项目语言，旧任务保持中文；多轮选择与游戏使用开始时语言，保留第三方内容和已生成报告。
+- 66b6404: 让活动反馈、内容审核默认提示和后台任务通知保持发起操作或任务创建时的语言，并将语言沿现有 Host、精确投递目标与主动发送链传给适配器。
+
+  显式配置的提示、用户及模型原文保持不变；审核默认提示仅在未配置模板时本地化，异步审核固定入队时语言，不修改审核规则、调度、权限或重试行为。
+
+- Updated dependencies [18296cf]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [66b6404]
+- Updated dependencies [adb4af2]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+  - @zhin.js/core@1.1.51
+
 ## 1.1.15
 
 ### Patch Changes

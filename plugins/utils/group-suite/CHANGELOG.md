@@ -1,5 +1,27 @@
 # @zhin.js/plugin-group-suite
 
+## 1.1.16
+
+### Patch Changes
+
+- a0393e5: 群欢迎用例收拢到同一个 group-suite 欢迎套件并去重（#1012 A9）；README 说明与 Agent 会话欢迎（ADR 0037 切片 A）同群同时开启会双发，统一前每个群只开一种。运行时行为不变。
+- 18296cf: 群欢迎 A9 方案 ②（#1012）：新增 `memberWelcomeOwnerToken`，Agent host 在根作用域提供。group-suite 欢迎发送前询问归属；会话开启 session-ops `welcome.enabled` 时让路不发，由 MemberLifecycle 发唯一一条，两边同时开启不再双发。未装 Agent 或会话未开启时行为不变。
+- 53bc6a0: 官方工具插件与游戏支持中英文反馈、帮助和配置标签；提醒增加与中文对应的有限英文时间语法。聊天后台任务记录创建者当时语言，管理员任务记录项目语言，旧任务保持中文；多轮选择与游戏使用开始时语言，保留第三方内容和已生成报告。
+- Updated dependencies [18296cf]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [7595136]
+- Updated dependencies [66b6404]
+- Updated dependencies [adb4af2]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+  - @zhin.js/core@1.1.51
+  - @zhin.js/tool@1.1.10
+  - @zhin.js/skill@1.1.10
+  - @zhin.js/jsx@1.1.6
+  - @zhin.js/components@1.1.6
+
 ## 1.1.15
 
 ### Patch Changes

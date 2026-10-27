@@ -1,5 +1,14 @@
 # @zhin.js/plugin-game-hub
 
+## 1.1.16
+
+### Patch Changes
+
+- 53bc6a0: 官方工具插件与游戏支持中英文反馈、帮助和配置标签；提醒增加与中文对应的有限英文时间语法。聊天后台任务记录创建者当时语言，管理员任务记录项目语言，旧任务保持中文；多轮选择与游戏使用开始时语言，保留第三方内容和已生成报告。
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+  - @zhin.js/game-kit@1.1.16
+
 ## 1.1.15
 
 ### Patch Changes

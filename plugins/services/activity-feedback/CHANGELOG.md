@@ -1,5 +1,37 @@
 # @zhin.js/service-activity-feedback
 
+## 1.1.19
+
+### Patch Changes
+
+- 66b6404: 让活动反馈、内容审核默认提示和后台任务通知保持发起操作或任务创建时的语言，并将语言沿现有 Host、精确投递目标与主动发送链传给适配器。
+
+  显式配置的提示、用户及模型原文保持不变；审核默认提示仅在未配置模板时本地化，异步审核固定入队时语言，不修改审核规则、调度、权限或重试行为。
+
+- Updated dependencies [5be6f3a]
+- Updated dependencies [334e92d]
+- Updated dependencies [0bdd5df]
+- Updated dependencies [08e64de]
+- Updated dependencies [291cf6e]
+- Updated dependencies [ff87195]
+- Updated dependencies [d6158d5]
+- Updated dependencies [d507e5f]
+- Updated dependencies [cffaa8f]
+- Updated dependencies [a3b636d]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [7595136]
+- Updated dependencies [e7b72a4]
+- Updated dependencies [66b6404]
+- Updated dependencies [dcd4982]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [9dfdaf4]
+- Updated dependencies [a5f0381]
+- Updated dependencies [17d1301]
+- Updated dependencies [f821029]
+  - @zhin.js/agent@1.1.42
+
 ## 1.1.18
 
 ### Patch Changes

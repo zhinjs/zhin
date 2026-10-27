@@ -1,5 +1,28 @@
 # @zhin.js/plugin-link-poster
 
+## 1.1.16
+
+### Patch Changes
+
+- 9cade30: 修复国际化调用链遗漏：Agent 审批、管理命令和错误反馈采用可信语言及实际命令前缀；游戏快捷帮助、工具反馈、平台默认卡片和后台通知贯通语言。协议即时回复复用受运行代约束的个人语言查询，业务验证支持不改变审批身份的双语展示元数据。
+
+  AI 正文、进度与耗尽摘要统一优先遵从用户明确语言要求，再跟随实际输入；个人／项目语言仅作兜底，固定界面文案继续使用配置语言，不增加翻译调用。
+
+  GitHub 工作区为 Git clone/pull/fetch/ls-remote 显式分隔选项与位置参数，保留仓库和分支校验；顺序写入 Bot 名称和邮箱，避免竞争同一配置文件锁。
+
+- Updated dependencies [18296cf]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [7595136]
+- Updated dependencies [66b6404]
+- Updated dependencies [adb4af2]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+  - @zhin.js/core@1.1.51
+  - @zhin.js/skill@1.1.10
+  - @zhin.js/html-renderer@1.1.3
+
 ## 1.1.15
 
 ### Patch Changes

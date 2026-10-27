@@ -1,5 +1,28 @@
 # @zhin.js/pagemanager
 
+## 1.1.15
+
+### Patch Changes
+
+- 658a5fb: Console access is now per token. Entries in `http.tokens` can set `permissions` and `roles`. The Console filters navigation and page lists (`/entries`, `/console/api/pages`, `/console/api/topology`, page shells and the `pages:list` RPC) by the caller's token. Plugin `status` RPC is open to a non-admin token that holds the bound page's requirements. Full-scope tokens, and Hosts with no tokens configured, still see everything. Page lists are no longer evaluated with empty access, so pages that declare `requiredPermissions` are now visible to the users allowed to see them.
+- af29996: 为 Page 元数据增加可选 titleI18n，在页面目录、导航与 Console 客户端注册链路中保留显式标题翻译。Sandbox 页面提供英文导航标题，缺少对应语言时保留插件原题，不修改路由或访问规则。
+- b8e594e: Plugins can register Console status and limited actions with `definePluginConsoleRpc` and `pluginConsoleRpcToken`. Pages call them as `plugin.<pluginId>.status` and `plugin.<pluginId>.<action>` through the existing Console request, using `pluginRpc()` from `@zhin.js/client`. Access follows the bound page's `requiredPermissions` and `requiredRoles`. Actions need the full-scope token, and the demo token can read status only when the plugin opts in. Input, output and run time are bounded, and raw errors never reach the page.
+- Updated dependencies [0fc0219]
+- Updated dependencies [560c549]
+- Updated dependencies [658a5fb]
+- Updated dependencies [144a17b]
+- Updated dependencies [af29996]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [e7b72a4]
+- Updated dependencies [b8e594e]
+- Updated dependencies [66b6404]
+  - @zhin.js/plugin-runtime@1.1.17
+  - @zhin.js/console-contract@1.1.3
+  - @zhin.js/page@1.1.10
+  - @zhin.js/contract@1.1.14
+  - @zhin.js/layout@1.1.10
+
 ## 1.1.14
 
 ### Patch Changes

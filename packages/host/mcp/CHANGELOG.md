@@ -1,5 +1,21 @@
 # @zhin.js/mcp
 
+## 1.1.17
+
+### Patch Changes
+
+- dcd4982: Upgrade runtime dependencies to clear security advisories: `undici` (6.29.1 / 8.12.2+), `axios` 1.20.0, and `@modelcontextprotocol/sdk` 1.32.0+ (bringing patched `hono`, `body-parser`, `proxy-addr`, `follow-redirects` and `ip-address` through the lockfile).
+- Updated dependencies [18296cf]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [66b6404]
+- Updated dependencies [adb4af2]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+  - @zhin.js/core@1.1.51
+  - @zhin.js/tool@1.1.10
+
 ## 1.1.16
 
 ### Patch Changes

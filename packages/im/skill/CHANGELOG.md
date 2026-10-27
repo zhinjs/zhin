@@ -1,5 +1,21 @@
 # @zhin.js/skill
 
+## 1.1.10
+
+### Patch Changes
+
+- 7595136: Upgrade `nodemailer` to 10.1.4+ and `js-yaml` to 5.4.1+ to clear security advisories.
+- Updated dependencies [0fc0219]
+- Updated dependencies [560c549]
+- Updated dependencies [144a17b]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [e7b72a4]
+- Updated dependencies [b8e594e]
+- Updated dependencies [66b6404]
+  - @zhin.js/plugin-runtime@1.1.17
+  - @zhin.js/feature-kit@1.1.9
+
 ## 1.1.9
 
 ### Patch Changes

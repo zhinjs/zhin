@@ -1,5 +1,23 @@
 # @zhin.js/plugin-qrcode
 
+## 1.1.16
+
+### Patch Changes
+
+- 53bc6a0: 官方工具插件与游戏支持中英文反馈、帮助和配置标签；提醒增加与中文对应的有限英文时间语法。聊天后台任务记录创建者当时语言，管理员任务记录项目语言，旧任务保持中文；多轮选择与游戏使用开始时语言，保留第三方内容和已生成报告。
+- Updated dependencies [18296cf]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [7595136]
+- Updated dependencies [66b6404]
+- Updated dependencies [adb4af2]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+  - @zhin.js/core@1.1.51
+  - @zhin.js/tool@1.1.10
+  - @zhin.js/skill@1.1.10
+
 ## 1.1.15
 
 ### Patch Changes

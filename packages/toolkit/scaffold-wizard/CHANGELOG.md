@@ -1,5 +1,28 @@
 # @zhin.js/scaffold-wizard
 
+## 1.1.11
+
+### Patch Changes
+
+- 53bc6a0: 提供简体中文和英文的项目与个人语言能力，复用 SQL 用户状态并固定多轮交互语言。命令提示使用当前命令索引、实例命名空间和实际前缀；可信语言贯穿消息、工具与计划任务。新增双语目录和 Schema 显示元数据，创建及配置向导支持语言选择；保留既有配置、权限、时区与投递语义。修复 Root Feature 热更新时 setup 能力丢失，并为已有任务表显式增补语言字段。
+- Updated dependencies [5be6f3a]
+- Updated dependencies [0fc0219]
+- Updated dependencies [560c549]
+- Updated dependencies [658a5fb]
+- Updated dependencies [144a17b]
+- Updated dependencies [ff87195]
+- Updated dependencies [a3b636d]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [e7b72a4]
+- Updated dependencies [b8e594e]
+- Updated dependencies [66b6404]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+  - @zhin.js/runtime@1.1.14
+  - @zhin.js/plugin-runtime@1.1.17
+  - @zhin.js/config-file@1.1.9
+
 ## 1.1.10
 
 ### Patch Changes

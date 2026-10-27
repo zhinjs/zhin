@@ -1,5 +1,22 @@
 # @zhin.js/contract
 
+## 1.1.14
+
+### Patch Changes
+
+- af29996: 为 Page 元数据增加可选 titleI18n，在页面目录、导航与 Console 客户端注册链路中保留显式标题翻译。Sandbox 页面提供英文导航标题，缺少对应语言时保留插件原题，不修改路由或访问规则。
+- Updated dependencies [f3b7c9f]
+- Updated dependencies [ff87195]
+- Updated dependencies [a3b636d]
+- Updated dependencies [9cade30]
+- Updated dependencies [b8e594e]
+- Updated dependencies [dcd4982]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+- Updated dependencies [f821029]
+  - @zhin.js/console-protocol@1.1.12
+  - @zhin.js/ai@1.1.46
+
 ## 1.1.13
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-ledger",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Personal expense ledger for Zhin.js (Plugin Runtime): per-user entries in integer cents, period and category summaries, group privacy and an opt-in daily report",
   "type": "module",
   "main": "./lib/index.js",
