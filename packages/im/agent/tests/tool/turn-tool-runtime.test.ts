@@ -96,16 +96,16 @@ describe('TurnToolRuntime', () => {
     expect(execute).toHaveBeenCalledExactlyOnceWith(approved, expect.anything());
   });
 
-  it('keeps existing non-human approval prompts unchanged', async () => {
+  it('shows the action and exact arguments without internal approval-policy boilerplate', async () => {
     const requestApproval = vi.fn<import('../../src/session/approval-port.js').ApprovalPort['requestApproval']>()
       .mockResolvedValue(false);
     const { turn } = fixture({ approval: { requestApproval } });
-    const runtime = new TurnToolRuntime(turn, [tool(async () => 'done', 'always')]);
+    const runtime = new TurnToolRuntime(turn, [{ ...tool(async () => 'done', 'always'), description: '调整当前会话设置。内部细节' }]);
 
     await runtime.execute('danger', { arbitrary: 'value' }, 'ordinary');
 
     expect(requestApproval.mock.calls[0]![0].question).toBe(
-      '工具「danger」需要确认后执行。\n风险：tool approval policy is always\n是否继续？',
+      '调整当前会话设置\n本次参数：{"arbitrary":"value"}',
     );
   });
 

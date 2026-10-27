@@ -88,6 +88,9 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
     }
     lines.push(formatSessionContextLine(input.turn));
     lines.push(formatSenderContextLine(input.turn));
+    if (input.turn.origin.kind === 'im' && input.turn.origin.messageId) {
+      lines.push(`Current message id: ${JSON.stringify(input.turn.origin.messageId)}`);
+    }
     if (input.turn.input?.metadata?.[SCENE_WAKE_METADATA_KEY] === true) lines.push(SCENE_WAKE_ENGAGEMENT_LINE);
     else if (input.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') lines.push(AMBIENT_ENGAGEMENT_LINE);
     if (input.turn.policy?.filesystem) {

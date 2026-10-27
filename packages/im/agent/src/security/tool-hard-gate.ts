@@ -20,6 +20,7 @@
  * 审计写 `tool_approval` / `tool_hard_gate`（`ai_decision_events`）；审计写失败不影响判定。
  */
 import type { DecisionEventInput, DecisionReasonCode } from '../decision-events.js';
+import { approvalActionLabel } from '../tool/approval-presentation.js';
 import {
   isApprovalPortAvailable,
   requestApprovalOutcome,
@@ -242,6 +243,7 @@ export function coreDangerousCategory(localName: string): DangerousToolCategory 
 
 export interface ToolRiskView {
   readonly name: string;
+  readonly description?: string;
   readonly qualifiedName?: string;
   readonly risk?: ToolRisk;
   readonly riskCategory?: DangerousToolCategory;
@@ -442,7 +444,7 @@ export class ToolHardGate {
         entry ? pendingCardHint(imDeliverable) : '当前没有可用的人工审批渠道');
     }
 
-    const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry);
+    const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry, tool.description);
     if (settled.kind === 'cancelled') return CANCELLED;
     const withId = {
       ...payload,
@@ -550,6 +552,7 @@ export class ToolHardGate {
     input: Readonly<Record<string, unknown>>,
     toolUseId: string,
     entry: ToolApprovalEntry | undefined,
+    description?: string,
   ): Promise<
     | { kind: 'approved'; via: string; channel: ToolApprovalAuditChannel; decidedBy: string | null }
     | { kind: 'denied'; via: string; channel: ToolApprovalAuditChannel; decidedBy: string | null }
@@ -575,7 +578,7 @@ export class ToolHardGate {
         toolName,
         // Never matches a remembered grant: every dangerous call is confirmed on its own.
         scopeKey: `${TOOL_HARD_GATE_POLICY}:${this.#context.turnId}:${toolUseId}`,
-        question: formatHardGateQuestion(toolName, category, input, entry),
+        question: formatHardGateQuestion(toolName, category, input, entry, description),
         timeoutMs,
         signal: controller.signal,
       }).then(
@@ -707,12 +710,13 @@ export function formatHardGateQuestion(
   category: DangerousToolCategory | null,
   input: Readonly<Record<string, unknown>>,
   entry?: ToolApprovalEntry,
+  description?: string,
 ): string {
   return [
-    `工具「${toolName}」是危险操作${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}，需要人工审批后才会执行。`,
+    `危险操作：${approvalActionLabel(toolName, description)}${category ? `（${DANGEROUS_TOOL_CATEGORY_LABELS[category]}）` : ''}`,
     `本次参数：${stableJson(input)}`,
-    entry ? `审批卡片：${entry.id}（也可在 Console 处理）` : undefined,
-    '超时未批准将自动拒绝。是否执行？',
+    entry ? `Console 审批：${entry.id}` : undefined,
+    '需逐次确认，超时拒绝。',
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 

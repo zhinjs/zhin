@@ -58,12 +58,14 @@ group-suite:
 
 ## 与 Agent 会话欢迎的关系（ADR 0037）
 
-群欢迎的用户入口仍是群运营套件：`welcomeMessage` / `welcomeConversations` 在这里配置、验收和排查（[#1012](https://github.com/zhinjs/zhin/issues/1012) A9）。ADR 0037 第 1 期切片 A（[#1019](https://github.com/zhinjs/zhin/pull/1019)，评审中，不能当作已合入）另在 Agent 侧按会话提供模板欢迎 `welcome.enabled`，过控制面与 session-gate；它不读取本插件配置，本插件也不读取它。
+群欢迎的用户入口仍是群运营套件：`welcomeMessage` / `welcomeConversations` 在这里配置、验收和排查（[#1012](https://github.com/zhinjs/zhin/issues/1012) A9）。ADR 0037 第 1 期切片 A（[#1019](https://github.com/zhinjs/zhin/pull/1019)）另在 Agent 侧按会话提供模板欢迎 `welcome.enabled`，过控制面与 session-gate。
 
-两者在同一会话同时开启会各发一条欢迎。统一为单一路径之前，每个群只开一种：
+同一次入群只发一条欢迎（A9 方案②）：
 
-- 用群运营套件欢迎：保持 Agent 会话的 `welcome.enabled` 关闭（默认即关闭）。
-- 改用 Agent 会话欢迎：把该群从 `welcomeConversations` 中去掉，或清空 `welcomeMessage`。
+- 会话开启了 Agent 会话欢迎 `welcome.enabled`：群运营套件发送前询问归属，让路不发；由会话欢迎发唯一一条，合并窗口、小时上限、控制面与 session-gate 都按会话欢迎走。`mention_only`（含冷场临时）不拦欢迎；`emergency_stop` / `muted` / `read_only` 仍拦，被拦时群运营套件也不补发。
+- 会话未开启（默认），或没有装 Agent：群运营套件照常按 `welcomeMessage` / `welcomeConversations` 发送。
+
+所以两边同时开启不会双发，不需要再「每个群只开一种」。
 
 退群时群运营套件不发送任何消息；退群记录由 Agent 侧审计负责。
 

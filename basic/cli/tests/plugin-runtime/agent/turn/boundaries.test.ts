@@ -514,7 +514,7 @@ describe('canonical IM interaction adapter', () => {
     })).resolves.toBe(true);
     expect(seen[0]?.title).toBe('操作确认');
     expect(seen[0]?.description).toContain('是否继续');
-    expect(seen[0]?.tip).toContain('当前 Host、当前会话和当前发起者');
+    expect(seen[0]?.tip).toContain('当前 Host 和会话');
   });
 
   it.each([

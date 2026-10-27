@@ -1,5 +1,6 @@
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import {
   createAutoApprovalPort,
   createBypassApprovalPort,
@@ -313,6 +314,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
       logger.warn(formatCompact({ op: 'member_lifecycle_failed', error: error instanceof Error ? error.message : String(error) }));
     }
     this.#sceneEvents.handle(signal);
+  }
+
+  /** #1012 A9 方案②：插件旧欢迎发送前询问；会话开启 `welcome.enabled` 时由模板欢迎接管。 */
+  ownsMemberWelcome(conversation: ConversationRef): boolean {
+    return this.#memberLifecycle.ownsWelcome(conversation);
   }
 
   dispose(): void {

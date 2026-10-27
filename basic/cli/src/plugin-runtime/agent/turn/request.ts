@@ -453,16 +453,16 @@ export function createRuntimeApprovalPort(options: {
           description: input.question,
           tip: approvalText(locale, input.humanOnly ? 'humanTip' : 'tip'),
           options: [
-            { label: approvalText(locale, 'reject'), value: 'reject', aliases: locale === 'en' ? ['n', 'no'] : ['否', '拒绝'],
-              description: approvalText(locale, input.humanOnly ? 'rejectOnce' : 'rejectAlways') },
-            { label: approvalText(locale, 'once'), value: 'approve-once', aliases: locale === 'en' ? ['y', 'yes'] : ['同意', '确认'], description: approvalText(locale, 'onceDescription') },
+            { label: approvalText(locale, input.humanOnly ? 'reject' : 'rejectAlways'), value: 'reject',
+              aliases: locale === 'en' ? ['n', 'no', 'Reject'] : ['否', '拒绝'] },
+            { label: approvalText(locale, 'once'), value: 'approve-once', aliases: locale === 'en' ? ['y', 'yes'] : ['同意', '确认'] },
             ...(sharedConversation && !input.humanOnly ? [
-              { label: approvalText(locale, 'session'), value: 'approve-session', description: approvalText(locale, 'sessionDescription') },
+              { label: approvalText(locale, 'sessionLabel'), value: 'approve-session', aliases: [approvalText(locale, 'session')] },
             ] : []),
             ...(!input.humanOnly ? [{
-              label: approvalText(locale, 'always'),
+              label: approvalText(locale, 'alwaysLabel'),
               value: 'approve-always',
-              description: approvalText(locale, 'alwaysDescription'),
+              aliases: [approvalText(locale, 'always')],
             }] : []),
           ],
           ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
