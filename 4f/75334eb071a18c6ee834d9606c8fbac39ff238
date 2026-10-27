@@ -1,0 +1,37 @@
+plugins/utils/group-suite/tests/welcome-native.mjs
+  s_9622fd28aba994::t_2efffac65ba5ee 1,11,50-51,60-62
+plugins/utils/group-suite/README.md
+  s_9622fd28aba994::t_fedfa7adfea565 112-113
+tests/e2e-smoke/README.md
+  s_9622fd28aba994::t_0dc15c1113ce0a 11
+tests/e2e-smoke/scenarios/admission-and-welcome.mjs
+  s_9622fd28aba994::t_a06c01c9f0ab91 163-172,175-176
+tests/e2e-smoke/smoke-loop.test.ts
+  s_9622fd28aba994::t_57386fa06e237b 29
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_6192bbcbf2b661 3,274-278
+basic/cli/src/plugin-runtime/agent/turn/member-lifecycle.ts
+  s_9622fd28aba994::t_2621006f441924 91,96-100,159-167
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_9622fd28aba994::t_8141734f458a0a 23
+packages/im/core/src/plugin-runtime/im/member-welcome.ts
+  s_9622fd28aba994::t_fdb6427aa53cb8 1-19
+plugins/utils/group-suite/handlers/welcome/index.ts
+  s_9622fd28aba994::t_5411f7e20e0849 2-3,16-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4f75334eb071a18c6ee834d9606c8fbac39ff238",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
