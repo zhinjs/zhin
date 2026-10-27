@@ -1,0 +1,28 @@
+.changeset/hard-gate-group-ops-align.md
+  h_b680f75345178a 1-9
+docs/authoring/agent-tools.md
+  h_b680f75345178a 97-98
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  h_b680f75345178a 44,737-739,741,744
+packages/im/agent/src/security/host-control-plane.ts
+  h_b680f75345178a 1-23
+packages/im/agent/src/security/tool-hard-gate.ts
+  h_b680f75345178a 13-14,42-43,45-48,57-62,70-72,110-128,148,169-178,190-191,194-214,267-272,331-349
+packages/im/agent/src/tool/tool-execution-authority.ts
+  h_b680f75345178a 16,43,60
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  h_b680f75345178a 31,60-61,93
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  h_b680f75345178a 15,20-22,38-68,262-390,469-489
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cffaa8f4a8c83b64455eb56a17cd93bf0d2bc7b6",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
