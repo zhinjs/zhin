@@ -59,6 +59,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
       },
       ...legacyApprovalOrigin(message),
       ...(options.host.toolApprovals ? { queue: options.host.toolApprovals } : {}),
+      ...(options.host.opsCooldown ? { opsCooldown: options.host.opsCooldown } : {}),
       ...(controlPlane ? { controlPlane } : {}),
       ...(audit && typeof audit.record === 'function'
         ? { audit: audit as import('../security/tool-hard-gate.js').DecisionAuditSink }

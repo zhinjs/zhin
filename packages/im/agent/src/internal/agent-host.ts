@@ -49,6 +49,8 @@ export interface AgentSessionHost {
   readonly ownerApprovals: OwnerApprovalRuntime;
   /** Dangerous-tool approval cards (ADR 0036 hard gate). Optional for custom hosts. */
   readonly toolApprovals?: import('../security/tool-approval-queue.js').ToolApprovalQueue;
+  /** Group-ops cooldown (ADR 0037 §3, slice E), shared across turns. Optional for custom hosts. */
+  readonly opsCooldown?: import('../security/ops-cooldown.js').OpsCooldownView;
   waitForMemoryPersistence(): Promise<void>;
   emitSessionNewEvent(
     sessionId: string,

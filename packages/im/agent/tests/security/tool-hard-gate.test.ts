@@ -22,6 +22,7 @@ import {
   toolLocalName,
 } from '../../src/security/tool-hard-gate.js';
 import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
+import { OpsCooldown } from '../../src/security/ops-cooldown.js';
 import type { ToolHardGateControlView } from '../../src/security/tool-hard-gate.js';
 import { AiControlPlane, type ControlStateModel } from '../../src/control-plane.js';
 import { hostControlPlaneSource } from '../../src/security/host-control-plane.js';
@@ -216,6 +217,25 @@ describe('TurnToolRuntime hard gate', () => {
     const again = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-5' }).turn, capabilities, { approvalQueue: queue });
     await expect(again.execute('group_kick', { user_id: 1 }, 'tu-5')).resolves.toMatchObject({ status: 'denied' });
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks the Host ops cooldown before a new card (ADR 0037 slice E): one card per scene + action per window', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const opsCooldown = new OpsCooldown();
+    const execute = vi.fn(async () => 'kicked');
+    const capabilities = [tool('group_kick', execute, 'never')];
+    const options = { approvalQueue: queue, decisionAudit: audit, opsCooldown };
+    const first = new TurnToolRuntime(fixture({ unattended: true }).turn, capabilities, options);
+    await expect(first.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'denied' });
+    const second = new TurnToolRuntime(fixture({ unattended: true, turnId: 'turn-2' }).turn, capabilities, options);
+    const denied = await second.execute('group_kick', { user_id: 2 }, 'tu-2');
+    expect(denied).toMatchObject({ status: 'denied' });
+    expect(JSON.stringify(denied)).toContain('冷却中');
+    expect(queue.list()).toHaveLength(1);
+    expect(audit.codes()).toContain('ops_cooldown:deny:ops_cooldown_hit');
+    expect(audit.records.find((record) => record.reasonCode === 'ops_cooldown_hit')).toMatchObject({ platform: 'icqq', sceneId: 'group:42' });
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('lets a Console decision settle a call that is waiting on the IM prompt', async () => {
