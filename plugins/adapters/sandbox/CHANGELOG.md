@@ -1,5 +1,37 @@
 # @zhin.js/adapter-process
 
+## 1.1.18
+
+### Patch Changes
+
+- d5d7294: Console 里的 sandbox 页面改名为「试聊一下」（原「Agent 试验台」），面向普通用户（#970）。只改显示名称，路由 `/sandbox`、配置项和协议不变；导出的执行报告落款同步改名。若有脚本按旧标题 “Agent 试验台” 匹配页面，请改为 “试聊一下”，或改用路由 `/sandbox`。
+- af29996: 为 Page 元数据增加可选 titleI18n，在页面目录、导航与 Console 客户端注册链路中保留显式标题翻译。Sandbox 页面提供英文导航标题，缺少对应语言时保留插件原题，不修改路由或访问规则。
+- 53bc6a0: 适配器配置标签、端点命令和工具反馈支持中英文；复用当前操作语言，保持协议值、用户内容、身份、权限与发送链路不变。Sandbox 展示使用项目语言，QQ 绑定与交互状态保留完整会话身份。
+- Updated dependencies [334e92d]
+- Updated dependencies [f3b7c9f]
+- Updated dependencies [658a5fb]
+- Updated dependencies [144a17b]
+- Updated dependencies [af29996]
+- Updated dependencies [18296cf]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [7595136]
+- Updated dependencies [b8e594e]
+- Updated dependencies [66b6404]
+- Updated dependencies [adb4af2]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+  - @zhin.js/adapter@1.1.23
+  - @zhin.js/host-http@1.1.10
+  - @zhin.js/client@1.1.19
+  - @zhin.js/console-contract@1.1.3
+  - @zhin.js/page@1.1.10
+  - @zhin.js/core@1.1.51
+  - @zhin.js/skill@1.1.10
+  - @zhin.js/im-contract@1.1.7
+  - @zhin.js/feature-kit@1.1.9
+
 ## 1.1.17
 
 ### Patch Changes

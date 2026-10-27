@@ -1,5 +1,161 @@
 # @zhin.js/cli
 
+## 1.1.20
+
+### Patch Changes
+
+- 5be6f3a: Add optional public R2 publishing for generated and outbound inline images, plus approval-gated workspace image uploads. Keep image bytes out of tool results and subsequent context when storage is enabled.
+
+  Keep MCP image originals in a scoped local store with seven-day retention and bounded capacity. Expose on-demand inspection through `get_local_assets`, projecting images only into the next model request and sharing perception limits with authorized child turns.
+
+- 334e92d: 公告：草稿 → 审批 → 发送（ADR 0037 第 1 期切片 B）。
+
+  - 新表 `ai_announcements` 与 `AiAnnouncements`：状态只前进 `draft` → `pending` → `approved` → `sent`，旁路 `rejected` / `expired` / `failed`；`revision` 乐观并发；改正文回到 `draft` 并重算 `content_hash`；待审批默认 24 小时超时。
+  - 新工具 `announcement_draft`（`risk: safe`）：模型只能建草稿，不能提交、审批或发送。
+  - Console `plugin.root.announcements` / `announcement`（读）与 `announcement-create` / `-edit` / `-submit` / `-approve` / `-reject` / `-resend`（动作，暂用 `control:read` / `control:write`）。
+  - 批准即发送：摘要复核 → 控制面 → 会话画像 → 硬闸以公告审批记录作批准（`ToolHardGate.checkPreApproved`，不弹第二张卡）→ `EndpointManagement.sendGroupNotice`（icqq / napcat）。被拦或失败置 `failed`，不自动重试；重发回到 `pending` 需再批一次；摘要不符拒绝（`announcement_hash_mismatch`）。
+  - 审计追加 kind `announcement` 与码 `announcement_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_sent` / `_send_failed` / `_resend` / `_hash_mismatch`。
+
+- 0bdd5df: 冷场 → 会话临时 `mention_only`（ADR 0037 第 1 期切片 C，§1.3）。
+
+  - 会话运营配置新增 `coldField.enabled`（默认关，只能按会话打开）/ `coldField.threshold`（默认 20）/ `coldField.durationMs`（默认 30 分钟）；读库失败时视为关闭。
+  - 只统计群消息：未点名且旁听判定不参与计 1；点名、旁听参与、Bot 主动发言（scene event 唤醒、模板欢迎、公告）清零。命中阈值给该会话加控制面临时 `mention_only`（`actor=policy`、`expiresAt`），到期自动撤销。
+  - 临时覆盖与运营者手动覆盖分存、只会更严、不进 `revision`，在 `control` 查询的 `temporary[]` 里可见；`control-set` 显式写 `mention_only: false` 时一并清除。计数与临时覆盖只在进程内存。
+  - 审计复用 `control_change` / `control_gate`，追加码 `cold_field_mention_only_on` / `cold_field_mention_only_expired` / `cold_field_mention_only_cleared`；决策回放 `decisions` / `decisions-export` 新增可选 `reasonCode` 过滤（`DecisionEventQuery.reasonCode`）。
+
+- 08e64de: Shorten operation confirmation prompts: display action descriptions and exact arguments, omit internal approval-policy boilerplate, and render choices once with their existing authorization scopes visible in the labels.
+- f3b7c9f: 新增 Console RPC `config:patch`：按路径写入配置，供面向普通用户的简单页面使用（#970）。
+
+  - 路径白名单：带 `instanceKey` 时只能写该插件实例自己的配置块，以及插件 `schema.json` 根部 `x-zhin-config.patchPaths` 声明的 Host 子路径；省略时只能写 `HOST_CONFIG_PATCH_PATHS`（目前为 `ai.trigger.ambient`）。
+  - `expectedRevision` 必填；文件已变时返回 `status: 'conflict'` 和最新值，不覆盖。
+  - 写入前按 schema 校验每个被改动的配置块；成功响应带 `restartRequired`，`config:updated` 事件新增 `paths` 与 `revision` 字段。
+  - `@zhin.js/client` 新增 `patchConfig()`；`@zhin.js/service-typesafe` 声明可写 `ai.decisions`。
+
+  纯新增能力：`config:set`、`config:replace-source` 与 YAML 编辑器行为不变，无需迁移。`config:patch` 只接受 full scope Token，Demo 部署不可用。
+
+- 560c549: Console 页面现在可以读到群聊插话和技能助手的真实状态：`plugin.root.ambient`（需要 `ambient:read`）和 `plugin.root.skills`（需要 `skills:read`）。只返回最近 24 小时的结果统计，不含聊天内容、提示词或判断理由。插件 RPC 新增 `queries`，可以注册多个只读查询。
+- 658a5fb: Console access is now per token. Entries in `http.tokens` can set `permissions` and `roles`. The Console filters navigation and page lists (`/entries`, `/console/api/pages`, `/console/api/topology`, page shells and the `pages:list` RPC) by the caller's token. Plugin `status` RPC is open to a non-admin token that holds the bound page's requirements. Full-scope tokens, and Hosts with no tokens configured, still see everything. Page lists are no longer evaluated with empty access, so pages that declare `requiredPermissions` are now visible to the users allowed to see them.
+- 144a17b: Console 令牌新增 `scope: user`（与 `demo` 等价，表示普通用户）。普通用户现在可以执行插件 Console 动作，前提是动作自己声明了 `requiredPermissions` 或 `requiredRoles`，并且令牌全部满足；没有声明要求的动作仍然只给管理员。用户仍然就是 `zhin.config.yml` 里的 `http.tokens` 条目。
+- 291cf6e: 控制面四开关（ADR 0036 切片 D）：`emergency_stop` / `muted` / `read_only` / `mention_only`。
+
+  - 两级：实例默认 + 会话覆盖（`platform + scene_id`），会话覆盖只能更严；生效顺序 `emergency_stop → 实例 muted → 会话 muted → read_only → mention_only → 常规策略`，先命中先返回。
+  - 接入 IM 入站、旁听、scene event 唤醒（位于 #995 会话画像发言判定之前，拦下时不调模型），回合中途变更时回复 / scene event / 主动出站在发送前再判一次止损类开关。
+  - Console `plugin.root.control`（`control:read`）/ `plugin.root.control-set`（`control:write`，必须带 `expectedRevision`，不符返回 conflict）。拦截写 `control_gate`，变更写 `control_change`（`actor=operator`，前后值）。
+  - 持久化到新表 `ai_control_state`；读不出时 fail closed（按 `emergency_stop` 处理）并拒绝写入，直到重新读成功。模型没有任何工具能读写这些开关。
+
+- ff87195: 决策审计 Console 回放（ADR 0036 切片 C）：
+
+  - Host 新增只读查询 `plugin.root.decisions`（倒序列表，按平台 / 会话 / kind / outcome / 时间过滤，`nextBefore` 翻页）、`plugin.root.decision-turn`（按 `turn_id` 展开时间线）、`plugin.root.decisions-export`（时间窗导出 JSON，字段与表结构一致，`nextSince` 分页），都需要 `decisions:read`；入口在「机器人状态」页。
+  - `DecisionEventLog` 增加 `query` / `turn` / `prune` 读取与保留期清理；新增配置 `ai.audit.retentionDays`（默认 14 天），启动时与之后每小时清理过期行，并为 `ts`、`turn_id` 建索引（SQLite / MySQL / PostgreSQL）。
+  - 不含控制面开关（切片 D）与危险工具硬闸（切片 E）。
+
+- d507e5f: 决策审计开始写入 `ai_decision_events`（ADR 0036 切片 B，写路径埋点）：
+
+  - 每条 IM 入站与每次 scene event 唤醒按回合写 append-only 记录，同一回合共享 `turn_id`：入站唤醒（`inbound_wake`）、会话画像不能发言（`speak_gate` + `model_skip`，码 `cannot_speak_muted` / `cannot_speak_muted_all` / `cannot_speak_restricted`，scene event 唤醒同码）、旁听判定（`ambient_decision`）、scene event 无新内容（`scene_event_nothing_new`）、模型调用摘要（`model_run`：模型、耗时、状态、是否发言，不记提示词）、出站（`outbound`：已发 / 抑制 / 失败）。
+  - 码表追加写路径用码（只增不改）。
+  - 审计写失败只记日志，不阻断、不拖慢回合；现有日志不变。
+
+- 18296cf: 群欢迎 A9 方案 ②（#1012）：新增 `memberWelcomeOwnerToken`，Agent host 在根作用域提供。group-suite 欢迎发送前询问归属；会话开启 session-ops `welcome.enabled` 时让路不发，由 MemberLifecycle 发唯一一条，两边同时开启不再双发。未装 Agent 或会话未开启时行为不变。
+- a3b636d: 危险工具硬闸 IM 审批通道（G6，#1013）：`ai.agent.toolHardGate.imApproval`，默认关闭。
+
+  - 配置：`enabled`、`approverIds`（扁平列表或 `platform → userIds`）、`delivery: dm | approver_group`、`approverGroupId`（审批群模式必填，且不能是业务会话）。
+  - 新审批卡片经触发调用的 Endpoint 私聊投递给 allowlist 审批人（或发到专用审批群），内容含工具、类别、会话、脱敏参数摘要、卡片 id、过期时间；投递失败不重试，卡片照常留给 Console、超时拒绝。
+  - 审批人私聊 `/approve <id>` / `/deny <id>` 结算同一个 `ToolApprovalQueue`，与 Console 先到先得；群 / 频道消息与触发会话一律不能结算；仍是 humanOnly、一次一批，不提供本会话 / 永久授权，`bypass` 与审核 Agent 不能放行。
+  - 审计：`tool_approval` 结算记录 `payload.channel`（`console` / `im_dm` / `im_approver_group` / `turn_prompt`），IM 操作者记 `actor_id = im:<platform>:<userId>`；Console 审批卡片 RPC 返回 `channel`。
+
+- 9cade30: 修复国际化调用链遗漏：Agent 审批、管理命令和错误反馈采用可信语言及实际命令前缀；游戏快捷帮助、工具反馈、平台默认卡片和后台通知贯通语言。协议即时回复复用受运行代约束的个人语言查询，业务验证支持不改变审批身份的双语展示元数据。
+
+  AI 正文、进度与耗尽摘要统一优先遵从用户明确语言要求，再跟随实际输入；个人／项目语言仅作兜底，固定界面文案继续使用配置语言，不增加翻译调用。
+
+  GitHub 工作区为 Git clone/pull/fetch/ls-remote 显式分隔选项与位置参数，保留仓库和分支校验；顺序写入 Bot 名称和邮箱，避免竞争同一配置文件锁。
+
+- 53bc6a0: 提供简体中文和英文的项目与个人语言能力，复用 SQL 用户状态并固定多轮交互语言。命令提示使用当前命令索引、实例命名空间和实际前缀；可信语言贯穿消息、工具与计划任务。新增双语目录和 Schema 显示元数据，创建及配置向导支持语言选择；保留既有配置、权限、时区与投递语义。修复 Root Feature 热更新时 setup 能力丢失，并为已有任务表显式增补语言字段。
+- e7b72a4: 群管冷却与 `ops:approve` 审批权限（ADR 0037 第 1 期切片 E，§3）。
+
+  - 会话运营配置新增 `ops.cooldownMs`（实例默认 60 秒 + 会话覆盖，`0` 关闭）；同一 `platform + scene_id + 工具名` 在冷却期内只能发起一张硬闸审批卡。冷却记录为进程内，重启清空。
+  - 冷却判定在控制面之后、生成新审批卡之前：命中不入队、不弹卡，本回合同类危险工具 latch，模型收到"冷却中、勿重试/换工具"说明。冷却表自身出错时不拦（冷却是节流不是授权）。
+  - 审计新增 kind `ops_cooldown` 与码 `ops_cooldown_passed` / `ops_cooldown_hit`；命中同时写一条 `tool_hard_gate` 拒绝，回放串成一条链。
+  - Console 新权限点 `ops:approve`：结算硬闸审批卡（与旧的 `tool_approvals:resolve` 任一即可）、读审批卡（与 `tool_approvals:read` 任一即可），以及公告 approve / reject / resend（不再接受只有 `control:write` 的令牌）。
+  - `PluginConsoleRpcMethod` 新增可选 `anyOfPermissions`：持有其中任一权限即满足，对动作算作方法自身的要求。
+
+- b8e594e: Plugins can register Console status and limited actions with `definePluginConsoleRpc` and `pluginConsoleRpcToken`. Pages call them as `plugin.<pluginId>.status` and `plugin.<pluginId>.<action>` through the existing Console request, using `pluginRpc()` from `@zhin.js/client`. Access follows the bound page's `requiredPermissions` and `requiredRoles`. Actions need the full-scope token, and the demo token can read status only when the plugin opts in. Input, output and run time are bounded, and raw errors never reach the page.
+- 66b6404: 让活动反馈、内容审核默认提示和后台任务通知保持发起操作或任务创建时的语言，并将语言沿现有 Host、精确投递目标与主动发送链传给适配器。
+
+  显式配置的提示、用户及模型原文保持不变；审核默认提示仅在未配置模板时本地化，异步审核固定入队时语言，不修改审核规则、调度、权限或重试行为。
+
+- 69f9ef6: Scene awareness (#996): high-priority social events (bot muted/unmuted, join request, member joined/left, group notice updated, bot poked) now wake one short Agent turn on their own after a 3–5 s coalesce window (at most one wake per scene every 15 s), without waiting for the next human message. Low-priority events (reactions, card/title/remark changes, person-to-person pokes) never wake alone. Every turn carries the recent scene events as a short ephemeral `[Scene events]` block (≤5 lines / ≤200 chars) that is never stored in `agent_messages`. When the bot cannot speak, the wake only updates the session profile and skips the model, same as the session-profile speak gate. Configure with `ai.trigger.sceneEvents` (`conversations` defaults to `ai.trigger.ambient.conversations`).
+- 9dfdaf4: 会话日程 `ai_session_events` 与到点提醒（ADR 0037 第 1 期切片 D，§2）。
+
+  - 新表 `ai_session_events`（`revision` 乐观并发）与存储 `AiSessionEvents`：`at` 本身总会提醒，`remind_before` 追加提前量；已触发的偏移记入 `fired`，全部触发后 `done`；创建 / 修改时已过去的偏移直接记为已触发。
+  - 模型工具 `session_event_create`（`risk: safe`）只能为当前群 / 频道建事件；修改 / 取消只经 Console RPC `session-events` / `session-event` / `session-event-create` / `session-event-update` / `session-event-cancel`（`control:read` / `control:write`）。
+  - 到点唤醒复用 job-scheduler 的 `ScheduleEngine` 计时（不写 `schedule-jobs.json`）：`inbound_wake` / `schedule_wake_fired` → 控制面（按被点名判定，`mention_only` 不拦）→ 会话画像 → 模板直发（不调模型）。被拦 / 失败记为已触发、不补发；同一会话同一分钟的提醒合并为一条；重启后错过超过 10 分钟（`DEFAULT_SESSION_EVENT_GRACE_MS`）的写 `schedule_wake_missed` 不发。Bot 经日程发言后旁听窗口与冷场计数清零。
+  - 审计新增 kind `schedule` 与码 `schedule_event_created` / `_updated` / `_cancelled`、`schedule_wake_fired` / `_missed` / `_merged`；决策回放可按 `kind=schedule` 过滤。
+
+- a5f0381: 入群欢迎 / 退群记录（ADR 0037 第 1 期切片 A）。
+
+  - 会话运营配置 `AiSessionOps` 与新表 `ai_session_ops`：按 `platform + scene_id` 存放，与会话画像分开；`welcome.enabled`（默认关）/ `template` / `mergeWindowMs`（60s）/ `maxPerHour`（10）/ `rulesUrl`，`leave.record`（默认开，只写审计）/ `leave.notify`（默认关，本期不发）。读不出时一律不发欢迎。
+  - 模板变量白名单 `{members}` `{nickname}` `{group}` `{rules_url}`，未知变量原样保留。
+  - 欢迎：入群 → 合并窗口 → 小时上限 → 控制面 → 会话画像发言判定 → 出站；被拦只写审计不补发，失败不重试。会话开启欢迎后 scene event 不再因入群唤醒模型（避免双发）。
+  - 审计追加 kind `member_lifecycle` 与码 `welcome_sent` / `welcome_merged` / `welcome_rate_limited` / `welcome_disabled` / `member_leave_recorded`。
+  - Console `plugin.root.session-ops` / `session-ops-preview`（只渲染，不发送不审计）/ `session-ops-set`（`expectedRevision`，变更写 `config_change`）。
+
+- 17d1301: 新增危险工具硬闸（ADR 0036 切片 E，fail-closed）：
+
+  - 工具可以声明 `risk: 'dangerous' | 'safe'` 和 `riskCategory: 'member' | 'publish' | 'funds' | 'identity'`。宿主内置一份危险工具清单，`ai.toolHardGate.dangerousTools` 只能把工具调高为危险，插件声明 `safe` 不能调低。
+  - 危险工具执行前必须拿到一次全新的人工审批（`humanOnly`），`execApprovalMode: bypass`、自动审核、主人自动放行和已记住的授权都不能越过。拒绝、超时（默认 5 分钟）、无人可批都按拒绝处理，本轮不再重试同一工具或同一类别。
+  - 资金类（`funds`）默认禁用；打开 `ai.toolHardGate.allowFunds` 后仍需审批。
+  - 无人值守的轮次会排进审批队列，Console 通过 `plugin.root.tool-approvals` 查看、`plugin.root.resolve-tool-approval` 批准或拒绝（权限 `tool_approvals:read` / `tool_approvals:resolve`），批准后下一次同参数调用只放行一次。
+  - 结果写进 `ai_decision_events`：`tool_hard_gate`（allow / deny）、`tool_approval`（defer / allow / deny），safe / 只读工具放行但仍写 `tool_call`（allow）；新增码 `tool_approval_requested`、`tool_approval_approved`、`tool_funds_disabled`、`tool_hard_gate_latched`、`tool_safe_allowed`（追加在码表末尾）。
+
+- f821029: 新增会话画像。私聊是一个人的会话，群和频道是多人会话，两者共用一套模型：
+
+  - **人物关系与好感度**（新表 `ai_user_relations`，按 `platform + user_id` 合并同一个人）：称呼、短笔记、语气标签、好感度 -100 ～ 100、关系 stranger/acquaintance/familiar/close。好感度按规则变化（聊天/夸奖加分，辱骂与连续只当工具用扣分，加分有冷却和每日上限，主人恒定满分），回合结束后异步写回，不阻塞回复。
+  - **会话上下文与发言限制**（新表 `ai_session_profiles`，按 `platform + scene_key`）：话题、管理员、成员概况、Bot 自己的禁言/全员禁言/宿主限制。由会话事件和发送者角色按规则维护；话题由模型经 `session_profile` 工具更新。Bot 在会话里不能发言时，入站消息直接不进 AI 回合，也不跑旁听判定。
+  - **注入很短且只对本轮有效**：`[Relationship]` 只放本条消息的发起人（旁听时再加 1 个最近活跃的人），`[Session]` 只有一行；两者作为 ephemeral 内容块发给模型，存入 `agent_messages` 前丢弃，不会在之后的回合重放。`@zhin.js/ai` 的 `TextContentBlock` 新增 `ephemeral` 标记。
+  - `user_profile` 工具新增 `note` / `unnote` / `call_me` / `tone`，并拒绝保存疑似密钥或证件号的内容。
+  - `ai_user_profiles` 偏好收紧为 8 个固定维度（name/language/timezone/style/interests/dislikes/occupation/location，常见别名归一化），同维度覆盖写入，其他键拒绝，值 ≤80 字；笔记、语气标签、话题都是去重 + 固定上限，不会无限增长。
+
+- 7051ead: Welcome templates still send when mention_only is on (Fin); emergency_stop / muted / read_only still block.
+- Updated dependencies [5be6f3a]
+- Updated dependencies [334e92d]
+- Updated dependencies [0fc0219]
+- Updated dependencies [f3b7c9f]
+- Updated dependencies [560c549]
+- Updated dependencies [658a5fb]
+- Updated dependencies [144a17b]
+- Updated dependencies [ff87195]
+- Updated dependencies [af29996]
+- Updated dependencies [18296cf]
+- Updated dependencies [a3b636d]
+- Updated dependencies [08e64de]
+- Updated dependencies [9cade30]
+- Updated dependencies [53bc6a0]
+- Updated dependencies [e7b72a4]
+- Updated dependencies [b8e594e]
+- Updated dependencies [66b6404]
+- Updated dependencies [adb4af2]
+- Updated dependencies [dcd4982]
+- Updated dependencies [69f9ef6]
+- Updated dependencies [17d1301]
+- Updated dependencies [f821029]
+  - @zhin.js/runtime@1.1.14
+  - @zhin.js/adapter@1.1.23
+  - @zhin.js/plugin-runtime@1.1.17
+  - @zhin.js/console-protocol@1.1.12
+  - @zhin.js/host-http@1.1.10
+  - @zhin.js/pagemanager@1.1.15
+  - @zhin.js/ai@1.1.46
+  - @zhin.js/core@1.1.51
+  - @zhin.js/command@1.1.11
+  - @zhin.js/permission@1.1.9
+  - @zhin.js/scaffold-wizard@1.1.11
+  - @zhin.js/im-contract@1.1.7
+  - @zhin.js/workroom@0.0.11
+  - @zhin.js/config-file@1.1.9
+  - @zhin.js/component@1.1.10
+  - @zhin.js/middleware@1.1.10
+  - @zhin.js/prompt-section@1.1.9
+
 ## 1.1.19
 
 ### Patch Changes
