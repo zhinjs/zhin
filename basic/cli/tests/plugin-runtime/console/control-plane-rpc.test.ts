@@ -99,3 +99,31 @@ describe('control plane Console RPC (ADR 0036 slice D)', () => {
     await expect(call('control-set', { expectedRevision: 0, instance: { muted: true } })).rejects.toMatchObject({ code: 'unavailable' });
   });
 });
+
+describe('control plane Console RPC · cold-field temporary overrides (ADR 0037 slice C)', () => {
+  it('shows temporary overrides with source and expiresAt without touching revision', async () => {
+    const { call, plane } = harness();
+    const entry = plane.addTemporaryMentionOnly({ platform: 'icqq', sceneId: 'group:g1', durationMs: 60_000 })!;
+    await expect(call('control')).resolves.toMatchObject({
+      revision: 0,
+      sessions: [],
+      temporary: [{ platform: 'icqq', sceneId: 'group:g1', switch: 'mention_only', source: 'cold_field', actor: 'policy', expiresAt: entry.expiresAt }],
+    });
+  });
+
+  it('turning mention_only off manually clears the temporary override and audits cold_field_mention_only_cleared', async () => {
+    const { call, plane, log } = harness();
+    plane.addTemporaryMentionOnly({ platform: 'icqq', sceneId: 'group:g1', durationMs: 60_000 });
+    const result = await call('control-set', {
+      expectedRevision: 0,
+      sessions: [{ platform: 'icqq', sceneId: 'group:g1', flags: { mention_only: false } }],
+    });
+    expect(result).toMatchObject({ revision: 1, changed: 0, temporary: [] });
+    await log.idle();
+    const rows = log.recent();
+    expect(rows.map((r) => [r.kind, r.reasonCode, r.actor, r.actorId, r.platform, r.sceneId])).toEqual([
+      ['control_change', 'cold_field_mention_only_cleared', 'operator', 'console', 'icqq', 'group:g1'],
+    ]);
+    expect(rows[0]!.payload).toMatchObject({ level: 'policy', source: 'cold_field', switch: 'mention_only', revision: 1 });
+  });
+});
