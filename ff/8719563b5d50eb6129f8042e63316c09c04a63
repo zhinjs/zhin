@@ -1,0 +1,22 @@
+.changeset/decision-events-replay.md
+  h_b680f75345178a 1-12
+docs/authoring/console-pages.md
+  h_b680f75345178a 256-277
+docs/console/index.md
+  h_b680f75345178a 21,179
+docs/en/authoring/console-pages.md
+  h_b680f75345178a 256-277
+docs/en/console/index.md
+  h_b680f75345178a 21,176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ff8719563b5d50eb6129f8042e63316c09c04a63",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
