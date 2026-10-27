@@ -198,6 +198,12 @@ export interface EvalCase {
   readonly promptSections?: readonly EvalPromptSection[];
   /** Agent config overrides (budget, sub-agent mode, …). */
   readonly agentConfig?: Partial<ZhinAgentConfig>;
+  /**
+   * Session ops written before the first turn, as an operator would via Console
+   * (`AiSessionOps.set`, ADR 0037). E.g. `{ defaults: { ops: { cooldownMs: 0 } } }`
+   * turns off the group-ops approval cooldown (slice E) for a case that is not about it.
+   */
+  readonly sessionOps?: Readonly<{ defaults?: unknown; sessions?: readonly unknown[] }>;
   /** Context window of the scripted model (default: the provider preset), for compaction cases. */
   readonly contextWindow?: number;
   /** Per-model input overrides, e.g. `{ 'scripted-fallback': ['text'] }` for a text-only fallback. */

@@ -76,7 +76,8 @@ describe('agent evals (long-task interjection)', () => {
     void runner.start(task.taskId);
     await r.release();
     await waitFor(() => posted.length === 1);
-    const stop = handleDetachedTaskCommand(runner, actor, `/task stop ${task.taskId}`);
+    // The Host passes its real command prefix (9cade3015); without one the text is not a management command.
+    const stop = handleDetachedTaskCommand(runner, actor, `/task stop ${task.taskId}`, { commandPrefix: '/' });
     await r.release();
     expect(await stop).toBe(`已停止后台任务 ${task.taskId}。`);
     await new Promise((res) => setTimeout(res, 20));
