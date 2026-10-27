@@ -35,6 +35,8 @@ export const DECISION_EVENT_KINDS = [
   'outbound',
   'config_change',
   'control_change',
+  // ADR 0037 第 1 期（切片 A）：入群 / 退群事件与欢迎是否发送
+  'member_lifecycle',
 ] as const;
 export type DecisionEventKind = typeof DECISION_EVENT_KINDS[number];
 
@@ -86,6 +88,12 @@ export const DECISION_REASON_CODES = [
   'tool_funds_disabled',
   'tool_hard_gate_latched',
   'tool_safe_allowed',
+  // ADR 0037 切片 A：入群欢迎 / 退群记录
+  'welcome_sent',
+  'welcome_merged',
+  'welcome_rate_limited',
+  'welcome_disabled',
+  'member_leave_recorded',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

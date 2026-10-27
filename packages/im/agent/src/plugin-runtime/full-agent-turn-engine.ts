@@ -41,6 +41,7 @@ import {
   type SubagentModelSelection,
 } from './subagent-turn-capability.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
+import { hostControlPlaneSource } from '../security/host-control-plane.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -733,10 +734,14 @@ async function recallTurnMemory(
  * Hard-gate wiring (ADR 0036): settings, the Host's approval cards, and the decision audit when the
  * Host exposes one (`decisionEvents.record`, slice B). The gate runs even when none are present.
  */
-function hardGateOptions(host: ZhinAgentPrivate): Pick<TurnToolRuntimeOptions, 'hardGate' | 'decisionAudit' | 'approvalQueue'> {
+function hardGateOptions(
+  host: ZhinAgentPrivate,
+): Pick<TurnToolRuntimeOptions, 'hardGate' | 'decisionAudit' | 'approvalQueue' | 'controlPlane'> {
   const audit = (host as { readonly decisionEvents?: Partial<DecisionAuditSink> }).decisionEvents;
+  const controlPlane = hostControlPlaneSource(host);
   return {
     ...(host.config.toolHardGate ? { hardGate: host.config.toolHardGate } : {}),
+    ...(controlPlane ? { controlPlane } : {}),
     ...(host.toolApprovals ? { approvalQueue: host.toolApprovals } : {}),
     ...(audit && typeof audit.record === 'function' ? { decisionAudit: audit as DecisionAuditSink } : {}),
   };

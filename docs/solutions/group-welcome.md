@@ -56,6 +56,17 @@ group-suite:
 插件仍支持环境变量引用；但用途页只读取原始保存配置，不读取或展示展开值。`welcomeMessage: '${WELCOME_TEXT}'` 在实际运行时可能展开为空，范围中的引用也可能改变真实身份。首版遇到这些引用会保守标记为无法证明文案或范围，不允许据此记录可用；请通过原配置、环境管理和真实群结果自行核对。这是用途页的证据限制，不是禁止插件使用环境变量。
 :::
 
+## 与 Agent 会话欢迎的关系（ADR 0037）
+
+群欢迎的用户入口仍是群运营套件：`welcomeMessage` / `welcomeConversations` 在这里配置、验收和排查（[#1012](https://github.com/zhinjs/zhin/issues/1012) A9）。ADR 0037 第 1 期切片 A（[#1019](https://github.com/zhinjs/zhin/pull/1019)，评审中，不能当作已合入）另在 Agent 侧按会话提供模板欢迎 `welcome.enabled`，过控制面与 session-gate；它不读取本插件配置，本插件也不读取它。
+
+两者在同一会话同时开启会各发一条欢迎。统一为单一路径之前，每个群只开一种：
+
+- 用群运营套件欢迎：保持 Agent 会话的 `welcome.enabled` 关闭（默认即关闭）。
+- 改用 Agent 会话欢迎：把该群从 `welcomeConversations` 中去掉，或清空 `welcomeMessage`。
+
+退群时群运营套件不发送任何消息；退群记录由 Agent 侧审计负责。
+
 ## 没有欢迎时看哪里
 
 适配器必须上报带明确群目标的 `notice.group.member_increase`。没有这类事件，或事件没有可回复目标时，不会猜测一个频道发送。配置匹配只证明范围符合，不证明平台在线或消息已送达。

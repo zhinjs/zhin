@@ -160,38 +160,27 @@ try {
   };
   const otherGroup = { kind: 'group', id: 'other-group' };
 
-  await smokeStep('welcome: with welcomeConversations omitted, every group is welcomed', async () => {
-    assert.equal((await welcomesIn(group)).length, 1);
-    assert.equal((await welcomesIn(otherGroup)).length, 1);
+  // Welcome acceptance lives in the group-suite welcome suite (plugins/utils/group-suite/tests/welcome.test.ts,
+  // #1012 A9). This smoke keeps one user-visible loop only: welcome once, then narrow / turn off via applied config.
+  await smokeStep('welcome: a joined member is welcomed once in the original group; leaving sends nothing', async () => {
+    const deliveries = await welcomesIn(group);
+    assert.equal(deliveries.length, 1);
+    assert.equal(deliveries[0].conversation.id, group.id);
+    assert.equal(deliveryText(deliveries[0].payload), '欢迎 Carol');
+    kit.clearDeliveries();
+    await kit.emit('notice.receive', { ...welcomeNotice(group), id: 'left-smoke-group', name: 'notice.group.member_decrease' });
+    assert.equal(kit.deliveries.length, 0);
   });
 
-  let exactGroup;
-  await smokeStep('welcome: applying an exact welcomeConversations entry limits welcomes to that group', async () => {
-    const deliveries = await welcomesIn(group);
-    exactGroup = deliveries[0].conversation;
+  await smokeStep('welcome: an applied exact welcomeConversations entry limits welcomes to that group; [] turns them off', async () => {
+    const exactGroup = (await welcomesIn(group))[0].conversation;
     const generationBefore = kit.generation;
     const generationAfter = await kit.patchConfig([{ op: 'set', path: ['suite', 'welcomeConversations'], value: [exactGroup] }]);
     assert.equal(generationAfter, generationBefore + 1);
     const inScope = await welcomesIn(group);
     assert.equal(inScope.length, 1);
     assert.deepEqual(inScope[0].conversation, exactGroup);
-    assert.equal(deliveryText(inScope[0].payload), '欢迎 Carol');
     assert.equal((await welcomesIn(otherGroup)).length, 0);
-  });
-
-  await smokeStep('welcome: a topic inside the configured group is a different conversation and is not welcomed', async () => {
-    assert.equal((await welcomesIn({ ...group, threadId: 'topic' })).length, 0);
-  });
-
-  await smokeStep('welcome: an invalid scope is rejected and the previous generation keeps working', async () => {
-    const generationBefore = kit.generation;
-    const invalidEntry = { ...exactGroup, kind: 'unknown-kind' };
-    await assert.rejects(kit.patchConfig([{ op: 'set', path: ['suite', 'welcomeConversations'], value: [invalidEntry] }]));
-    assert.equal(kit.generation, generationBefore);
-    assert.equal((await welcomesIn(group)).length, 1);
-  });
-
-  await smokeStep('welcome: an empty welcomeConversations list turns welcomes off', async () => {
     await kit.patchConfig([{ op: 'set', path: ['suite', 'welcomeConversations'], value: [] }]);
     assert.equal((await welcomesIn(group)).length, 0);
   });

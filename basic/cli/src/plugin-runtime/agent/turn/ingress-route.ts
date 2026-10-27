@@ -109,6 +109,7 @@ import {
   type ControlGateTarget,
 } from './control-gate.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
+import { MemberLifecycle } from './member-lifecycle.js';
 import {
   auditCannotSpeak,
   auditModelError,
@@ -171,6 +172,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
   private readonly workroomPort: AgentWorkroomPort;
   /** 状态感知（#996）：高优先社交事件独立唤醒；所有回合的 `[Scene events]` 摘要。 */
   readonly #sceneEvents: SceneEventIngress;
+  /** ADR 0037 切片 A：入群欢迎 / 退群记录（模板直发，过控制面与 session-gate）。 */
+  readonly #memberLifecycle: MemberLifecycle;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -180,7 +183,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
       () => options.agent.agent.getControlPlane?.(),
       () => options.agent.agent.getDecisionEvents?.(),
     );
+    this.#memberLifecycle = this.#createMemberLifecycle();
     this.#sceneEvents = this.#createSceneEventIngress();
+    options.assistantStatus?.bindSessionOps(
+      () => options.agent.agent.getSessionOps?.(),
+      () => this.#memberLifecycle,
+      () => options.agent.agent.getDecisionEvents?.(),
+    );
   }
 
   #createSceneEventIngress(): SceneEventIngress {
@@ -193,6 +202,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
       decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
       controlPlane: () => options.agent.agent.getControlPlane?.(),
+      ownsWake: (signal) => this.#memberLifecycle.ownsWake(signal),
       nickname: async (platform, userId) => {
         const record = await options.agent.agent.getUserProfiles?.()?.relations?.get(platform, userId);
         return record?.preferredAddress?.trim() || record?.displayName?.trim() || undefined;
@@ -228,12 +238,40 @@ export class AgentTurnIngressRoute implements IngressRoute {
     });
   }
 
-  /** ImRuntime.sceneEvents 订阅入口（#996）：高优先事件 coalesce + 限频后唤醒一次。 */
+  #createMemberLifecycle(): MemberLifecycle {
+    const options = this.options;
+    return new MemberLifecycle({
+      sessionOps: () => options.agent.agent.getSessionOps?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
+      reader: () => options.im.conversationEventReader,
+      decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
+      send: async (conversation, parts) => {
+        const content = parts.map((part) => (part.type === 'text'
+          ? { type: 'text', data: { text: part.text } }
+          : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }));
+        if (content.length === 0) return { status: 'suppressed' as const };
+        return deliveryOutcomeFromReceipt(await options.im.send({ conversation, requester: rootPluginId(), content }));
+      },
+      onSpoke: (key) => this.#ambientEngagement()?.noteSpoke(key),
+    });
+  }
+
+  /**
+   * ImRuntime.sceneEvents 订阅入口：先交给入群欢迎 / 退群记录（ADR 0037 切片 A），
+   * 再按 #996 把高优先事件 coalesce + 限频后唤醒一次（已由模板欢迎接管的入群事件不再唤醒）。
+   */
   handleSceneEvent(signal: RuntimeSceneEventSignal): void {
+    try {
+      this.#memberLifecycle.handle(signal);
+    } catch (error) {
+      logger.warn(formatCompact({ op: 'member_lifecycle_failed', error: error instanceof Error ? error.message : String(error) }));
+    }
     this.#sceneEvents.handle(signal);
   }
 
   dispose(): void {
+    this.#memberLifecycle.dispose();
     this.#sceneEvents.dispose();
   }
 
