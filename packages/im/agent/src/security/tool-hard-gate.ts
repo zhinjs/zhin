@@ -328,6 +328,20 @@ const CONTROL_READ_ONLY_DENIAL: ControlDenial = Object.freeze({
   why: '控制面处于只读',
 });
 
+/** {@link ToolHardGate.checkPreApproved} 的审批记录：来自领域对象自己的人工审批（如公告）。 */
+export interface ToolHardGatePreApproval {
+  /** 审批记录来源（审计 `via`）。 */
+  readonly source: 'announcement';
+  /** 领域对象 id（审计 `approvalId`）。 */
+  readonly id: string;
+  /** 审批人（Console 用户）；审计 `actor=operator`。 */
+  readonly approvedBy: string | null;
+  /** 审批时绑定的内容摘要。 */
+  readonly approvedHash: string | null;
+  /** 发送前对正文现算的摘要。 */
+  readonly contentHash: string;
+}
+
 export type ToolHardGateResult =
   | Readonly<{ status: 'safe' }>
   | Readonly<{ status: 'approved'; category: DangerousToolCategory | null; approvalId?: string }>
@@ -452,6 +466,62 @@ export class ToolHardGate {
     }
     this.#audit('tool_approval', 'deny', 'tool_approval_denied', withId, settled.decidedBy);
     return this.#deny(name, category, 'tool_approval_denied', withId, 'approval denied', '审批人拒绝了此操作');
+  }
+
+  /**
+   * 以一条**已存在的人工审批记录**作为硬闸批准（ADR 0037 §1.2：公告「草稿 → 审批 → 发送」）。
+   *
+   * - 不入审批队列、不问审批端口——**不弹第二张卡**；运营者在 Console 批准公告这一步就是本次发送的人工批准。
+   * - 仍做硬闸的其他判定：控制面 `emergency_stop` / `read_only`、本回合 latch、资金禁用。
+   * - 审批绑定内容摘要：`approvedHash` 缺失或与 `contentHash`（发送前对正文现算的摘要）不符时直接拒绝，
+   *   `reason_code=announcement_hash_mismatch`，不执行。
+   * - 只对这一次调用生效（不写入队列，也不留「记住」授权）。
+   */
+  checkPreApproved(
+    tool: ToolRiskView,
+    input: Readonly<Record<string, unknown>>,
+    toolUseId: string,
+    approval: ToolHardGatePreApproval,
+  ): ToolHardGateResult {
+    const assessment = this.assess(tool);
+    const name = tool.name;
+    if (assessment.risk !== 'dangerous') {
+      this.#audit('tool_call', 'allow', 'tool_safe_allowed', { tool: name, risk: 'safe', riskSource: assessment.source, toolUseId });
+      return SAFE;
+    }
+    const { category } = assessment;
+    const payload = {
+      tool: name,
+      category,
+      riskSource: assessment.source,
+      toolUseId,
+      approvalId: approval.id,
+      via: approval.source,
+      channel: 'console' as const,
+      argKeys: Object.keys(input).sort(),
+    };
+    const controlDenial = this.#checkControlPlane();
+    if (controlDenial) {
+      return this.#deny(name, category, controlDenial.reasonCode, { ...payload, controlSwitch: controlDenial.controlSwitch },
+        controlDenial.detail, controlDenial.why);
+    }
+    if (this.#deniedTools.has(name) || (category && this.#deniedCategories.has(category))) {
+      return this.#deny(name, category, 'tool_hard_gate_latched', payload,
+        'repeat after a hard-gate denial in this turn', '本回合内已拒绝过同类危险操作');
+    }
+    if (category === 'funds' && !this.#settings.allowFunds) {
+      return this.#deny(name, category, 'tool_funds_disabled', payload, 'funds tools are disabled (ai.agent.toolHardGate.allowFunds)',
+        '资金类工具默认禁用');
+    }
+    if (!approval.approvedHash || !approval.contentHash || approval.approvedHash !== approval.contentHash) {
+      return this.#deny(name, category, 'announcement_hash_mismatch',
+        { ...payload, approvedHash: approval.approvedHash ?? null, contentHash: approval.contentHash },
+        'content changed after approval', '内容与审批时不一致，需要重新审批');
+    }
+    const approved = { ...payload, contentHash: approval.contentHash };
+    this.#audit('tool_approval', 'allow', 'tool_approval_approved', approved, approval.approvedBy);
+    this.#audit('tool_hard_gate', 'allow', 'tool_approval_approved', approved);
+    return Object.freeze({ status: 'approved', category, approvalId: approval.id });
   }
 
   /**
