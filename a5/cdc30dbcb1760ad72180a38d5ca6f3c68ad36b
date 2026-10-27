@@ -1,0 +1,18 @@
+packages/im/agent/src/index.ts
+  h_b680f75345178a 364
+packages/im/agent/src/session-events.ts
+  h_b680f75345178a 229,231-237,337-343,526-528,530,533-538,541,707
+packages/im/agent/tests/session-events.test.ts
+  h_b680f75345178a 121-124,128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a5cdc30dbcb1760ad72180a38d5ca6f3c68ad36b",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
