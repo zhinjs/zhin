@@ -1,0 +1,18 @@
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  h_b680f75345178a 20,35-37,136,151,163-164,193-197
+basic/cli/src/plugin-runtime/console/session-events-rpc.ts
+  h_b680f75345178a 1-215
+basic/cli/tests/plugin-runtime/console/session-events-rpc.test.ts
+  h_b680f75345178a 1-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "60e81d0546d9ea3187bc46e44d9ccc14456f13aa",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
