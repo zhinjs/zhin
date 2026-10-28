@@ -40,24 +40,34 @@ const STALE_TRIAL_DIR_MS = 60 * 60 * 1000;
 const MAX_CHILD_OUTPUT = 256 * 1024;
 const MAX_MESSAGE_CHARS = 1_000;
 /** Never copied: dependencies, build output, VCS, Host state and secrets. */
-const SKIPPED_DIRS = new Set(['node_modules', '.git', '.zhin', 'data', 'lib', 'dist', 'logs', 'coverage', '.turbo', '.cache']);
+export const SKIPPED_DIRS = new Set(['node_modules', '.git', '.zhin', 'data', 'lib', 'dist', 'logs', 'coverage', '.turbo', '.cache']);
 const SKIPPED_FILE = /^\.env(?:\..*)?$/iu;
 /** Only what module loading needs; tokens and Host settings stay out of the trial. */
 const CHILD_ENV_KEYS = ['PATH', 'LANG', 'LC_ALL', 'TZ', 'SYSTEMROOT'] as const;
 
-class CopyLimitError extends Error {}
+export class CopyLimitError extends Error {}
+
+/**
+ * One trial copy at a time across the sandbox loader and the plugin-test runner (§3.2 / §3.3), so at
+ * most one `zhin-change-trial-*` copy exists per Host.
+ */
+let trialQueue: Promise<unknown> = Promise.resolve();
+export function runTrialExclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = trialQueue.then(task);
+  trialQueue = run.catch(() => undefined);
+  return run;
+}
 
 export function createSelfChangeSandboxLoader(options: SelfChangeSandboxOptions): SelfChangeSandboxLoader {
   const projectRoot = resolve(options.projectRoot);
   const tmpRoot = options.tmpRoot ?? tmpdir();
   const now = options.now ?? Date.now;
   const runner = options.runner ?? fileURLToPath(new URL('./self-change-sandbox-runner.js', import.meta.url));
-  let queue: Promise<unknown> = sweepStaleTrialDirs(tmpRoot, now()).catch(() => undefined);
-  return request => {
-    const run = queue.then(() => loadOnce(request));
-    queue = run.catch(() => undefined);
-    return run;
-  };
+  const swept = sweepStaleTrialDirs(tmpRoot, now()).catch(() => undefined);
+  return request => runTrialExclusive(async () => {
+    await swept;
+    return loadOnce(request);
+  });
 
   async function loadOnce(request: SelfChangeSandboxLoadRequest): Promise<SelfChangeSandboxLoadResult> {
     const source = resolve(projectRoot, request.pluginRoot);
@@ -80,23 +90,36 @@ export function createSelfChangeSandboxLoader(options: SelfChangeSandboxOptions)
     const dir = await fs.mkdtemp(join(tmpRoot, SELF_CHANGE_TRIAL_DIR_PREFIX));
     try {
       try {
-        await copyTree(source, dir, { bytes: 0, files: 0, maxBytes: options.maxCopyBytes ?? DEFAULT_MAX_COPY_BYTES, maxFiles: options.maxCopyFiles ?? DEFAULT_MAX_COPY_FILES });
+        await copyPluginRootWithDraft(source, dir, request, options);
       } catch (error) {
         if (error instanceof CopyLimitError) return { status: 'skipped', message: error.message };
         throw error;
       }
-      await rewriteTsconfigExtends(source, dir);
       await fs.symlink(modules, join(dir, 'node_modules'), 'junction');
-      for (const target of request.deletes) await fs.rm(inside(dir, localPath(request.pluginRoot, target)), { recursive: true, force: true });
-      for (const file of request.writes) {
-        const destination = inside(dir, localPath(request.pluginRoot, file.path));
-        await fs.mkdir(dirname(destination), { recursive: true });
-        await fs.writeFile(destination, file.content, 'utf8');
-      }
       return await spawnRunner(runner, dir, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     } finally {
       await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
+  }
+}
+
+/**
+ * Copies `source` (a plugin root) into `dir` and applies the draft there. Throws
+ * {@link CopyLimitError} when the root is larger than the copy limit. Never links `node_modules`.
+ */
+export async function copyPluginRootWithDraft(
+  source: string,
+  dir: string,
+  request: SelfChangeSandboxLoadRequest,
+  limits: { readonly maxCopyBytes?: number; readonly maxCopyFiles?: number } = {},
+): Promise<void> {
+  await copyTree(source, dir, { bytes: 0, files: 0, maxBytes: limits.maxCopyBytes ?? DEFAULT_MAX_COPY_BYTES, maxFiles: limits.maxCopyFiles ?? DEFAULT_MAX_COPY_FILES });
+  await rewriteTsconfigExtends(source, dir);
+  for (const target of request.deletes) await fs.rm(inside(dir, localPath(request.pluginRoot, target)), { recursive: true, force: true });
+  for (const file of request.writes) {
+    const destination = inside(dir, localPath(request.pluginRoot, file.path));
+    await fs.mkdir(dirname(destination), { recursive: true });
+    await fs.writeFile(destination, file.content, 'utf8');
   }
 }
 
@@ -216,7 +239,7 @@ async function rewriteTsconfigExtends(source: string, dir: string): Promise<void
   }
 }
 
-async function nearestNodeModules(start: string): Promise<string | undefined> {
+export async function nearestNodeModules(start: string): Promise<string | undefined> {
   for (let dir = start; ; dir = dirname(dir)) {
     const candidate = join(dir, 'node_modules');
     if (existsSync(candidate)) return fs.realpath(candidate);
@@ -235,7 +258,7 @@ function inside(root: string, target: string): string {
   return resolved;
 }
 
-function isWithin(root: string, target: string): boolean {
+export function isWithin(root: string, target: string): boolean {
   const rel = relative(root, target);
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
 }

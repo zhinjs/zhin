@@ -52,7 +52,7 @@ export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeTool
           + '(commands/, middlewares/, handlers/, tools/, components/, skills/, agents/), root AGENTS.md, skills/**. '
           + 'Root config files only via config_patch; lockfiles, node_modules, .env*, .zhin/** and security settings '
           + '(ai.agent.toolHardGate, execApprovalMode, masterShell) are always refused. The host trial-runs the draft right away '
-          + '(syntax, default export, forbidden imports, SKILL.md, then loading it in an offline trial runtime); a failed trial closes it and you start a new change. '
+          + '(syntax, default export, forbidden imports, SKILL.md, then loading it in an offline trial runtime and running the plugin\'s own tests in an isolated container); a failed trial closes it and you start a new change. '
           + 'Never write these files with other tools.',
         inputSchema: Object.freeze({
           type: 'object',
@@ -201,8 +201,10 @@ function describeDraft(record: SelfChangeRecord, preview: SelfChangePreview): st
   const trial = record.trial as SelfChangeTrialResult | null;
   const skipped = trial?.checks.filter(check => check.status === 'skipped').length ?? 0;
   const loaded = trial?.checks.some(check => check.check === 'sandbox_load' && check.status === 'passed') ?? false;
+  const tested = trial?.checks.some(check => check.check === 'plugin_tests' && check.status === 'passed') ?? false;
+  const stages = loaded ? `static checks + trial-runtime load${tested ? ' + plugin tests' : ''}` : '';
   return [
-    `Change draft ${record.id} saved (revision ${record.revision}) and passed the ${loaded ? 'trial run (static checks + trial-runtime load)' : 'static trial run'}${skipped ? ` (${skipped} check(s) skipped)` : ''}. `
+    `Change draft ${record.id} saved (revision ${record.revision}) and passed the ${stages ? `trial run (${stages})` : 'static trial run'}${skipped ? ` (${skipped} check(s) skipped)` : ''}. `
       + 'It is NOT live: it is staged outside the project and still needs the owner\'s approval.',
     ...lines,
     impact,
