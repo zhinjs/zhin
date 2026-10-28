@@ -62,36 +62,47 @@ describe('change_draft tool', () => {
     const { store, tool } = await harness(impact);
     const result = await tool.definition.execute({ files: [ping], summary: '加 /ping 指令' }, context());
     expect(result).toContain('NOT live');
+    expect(result).toContain('passed the static trial run');
     expect(result).toContain('create commands/ping.ts (+2 -0)');
     expect(result).toContain('hot reload — 1 plugin(s): root');
     expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
     const [record] = await store.list();
-    expect(record).toMatchObject({ status: 'draft', origin: { platform: 'icqq', sceneId: 'private:42', userId: '42', endpoint: 'bot-1' } });
+    expect(record).toMatchObject({ status: 'ready', trial: { passed: true, contentHash: record!.contentHash }, origin: { platform: 'icqq', sceneId: 'private:42', userId: '42', endpoint: 'bot-1' } });
     const plan = record!.plan as SelfChangePreview;
     expect(plan).toMatchObject({ version: 1, contentHash: record!.contentHash, summary: '加 /ping 指令' });
     expect(plan.files).toEqual([expect.objectContaining({ path: 'commands/ping.ts', kind: 'create', added: 2 })]);
     expect(plan.impact).toMatchObject({ kind: 'generation', subtrees: ['root'] });
-    expect(events.map(event => event.reasonCode)).toEqual(['change_drafted']);
+    expect(events.map(event => event.reasonCode)).toEqual(['change_drafted', 'change_drafted', 'change_trial_passed']);
   });
 
-  it('revises its own draft and replaces the stale preview', async () => {
+  it('closes a trialed change to edits; another call starts a new change', async () => {
     mkdirSync(join(project, 'commands'), { recursive: true });
     writeFileSync(join(project, 'commands', 'ping.ts'), 'old\n');
     const { store, tool } = await harness();
     await tool.definition.execute({ files: [ping], summary: 'v1' }, context());
     const [first] = await store.list();
-    const result = await tool.definition.execute({ change_id: first!.id, files: [{ path: 'commands/ping.ts', content: 'old\nnew\n' }], summary: 'v2' }, context());
-    expect(result).toContain('modify commands/ping.ts (+1 -0)');
-    const updated = await store.get(first!.id);
-    expect((updated!.plan as SelfChangePreview)).toMatchObject({ summary: 'v2', contentHash: updated!.contentHash });
-    expect(updated!.contentHash).not.toBe(first!.contentHash);
+    expect(first!.status).toBe('ready');
+    await expect(tool.definition.execute({ change_id: first!.id, files: [ping], summary: 'v2' }, context())).rejects.toBeInstanceOf(SelfChangeStateError);
+    await expect(tool.definition.execute({ change_id: first!.id, files: [ping], summary: 'theirs' }, context('99'))).rejects.toBeInstanceOf(SelfChangeStateError);
+    const result = await tool.definition.execute({ files: [{ ...ping, content: `${ping.content}// v2\n` }], summary: 'v2' }, context());
+    expect(result).toContain('modify commands/ping.ts');
+    expect((await store.list()).map(record => record.status)).toEqual(['ready', 'ready']);
   });
 
-  it('cannot revise someone else\'s draft', async () => {
+  it('returns trial errors to the model and closes the failed change without an approval', async () => {
     const { store, tool } = await harness();
-    await tool.definition.execute({ files: [ping], summary: 'mine' }, context('42'));
+    const result = await tool.definition.execute({
+      files: [{ path: 'commands/ping.ts', content: "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ run: () => 'pong' );\n" }],
+      summary: 'broken',
+    }, context());
+    expect(result).toContain('FAILED its trial run');
+    expect(result).toContain('commands/ping.ts [syntax]');
+    expect(result).toContain('WITHOUT change_id');
     const [record] = await store.list();
-    await expect(tool.definition.execute({ change_id: record!.id, files: [ping], summary: 'theirs' }, context('99'))).rejects.toBeInstanceOf(SelfChangeStateError);
+    expect(record).toMatchObject({ status: 'trial_failed', slimmed: true });
+    expect(await store.readStagedFile(record!.id, 'commands/ping.ts')).toBeNull();
+    expect(events.map(event => event.reasonCode)).toEqual(['change_drafted', 'change_drafted', 'change_trial_failed']);
+    expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
   });
 
   it('decodes value_json for field-level config patches and rejects security keys', async () => {

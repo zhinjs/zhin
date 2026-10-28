@@ -5,6 +5,7 @@
  *   **自己发起的** `draft`。路径白名单、禁止的配置键、配额都由 `SelfChangeStore` 在写盘前校验。
  * - 写入后宿主生成预览（diff 摘要 + `InvalidationPlanner` 影响面 + 配置补丁重载级别）并挂到草稿上，
  *   作为后续试跑（切片 C）与审批卡（切片 D）的展示内容。
+ * - 随后宿主自动试跑（§3）：通过 → `ready`；失败 → `trial_failed`（终态），错误交回模型重新起草。
  * - 只在 IM 会话里可用：审计与回报需要发起会话与发起人。
  */
 import {
@@ -21,6 +22,7 @@ import {
   type SelfChangePreview,
 } from '../self-change/preview.js';
 import type { SelfChangeDraftFile, SelfChangeRecord, SelfChangeStore } from '../self-change/store.js';
+import { runSelfChangeTrial, type SelfChangeTrialOptions, type SelfChangeTrialResult } from '../self-change/trial.js';
 
 export const SELF_CHANGE_DRAFT_TOOL_NAME = 'change_draft';
 
@@ -34,6 +36,8 @@ export interface NativeSelfChangeToolSources {
   readonly store: () => SelfChangeStore | undefined;
   /** 影响面判定；缺省时按保守估计（文件 → 热重载，配置 → 重启）。 */
   readonly impact?: () => SelfChangeImpactPort | undefined;
+  /** 试跑选项（JSX 语法检查器、插件根）。 */
+  readonly trial?: () => SelfChangeTrialOptions | undefined;
 }
 
 export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeToolSources): readonly NativeSelfChangeToolFeature[] {
@@ -47,14 +51,15 @@ export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeTool
           + 'not live until the host trial-runs it and the owner approves it. Writable: plugin convention dirs '
           + '(commands/, middlewares/, handlers/, tools/, components/, skills/, agents/), root AGENTS.md, skills/**. '
           + 'Root config files only via config_patch; lockfiles, node_modules, .env*, .zhin/** and security settings '
-          + '(ai.agent.toolHardGate, execApprovalMode, masterShell) are always refused. Pass change_id to revise your own draft '
-          + '(send the full file list again). Never write these files with other tools.',
+          + '(ai.agent.toolHardGate, execApprovalMode, masterShell) are always refused. The host trial-runs the draft right away '
+          + '(syntax, default export, forbidden imports, SKILL.md); a failed trial closes it and you start a new change. '
+          + 'Never write these files with other tools.',
         inputSchema: Object.freeze({
           type: 'object',
           properties: Object.freeze({
             change_id: Object.freeze({
               type: 'string',
-              description: 'Id of your own draft to revise. Omit to start a new change.',
+              description: 'Id of your own change still in draft to revise. Usually omit: every call starts a new change.',
             }),
             files: Object.freeze({
               type: 'array',
@@ -137,8 +142,9 @@ async function draftSelfChange(
     impact: sources.impact?.(),
     summary: typeof input.summary === 'string' ? input.summary : null,
   });
-  const attached = await store.attachPlan(record.id, record.contentHash, preview);
-  return describeDraft(attached, preview);
+  await store.attachPlan(record.id, record.contentHash, preview);
+  const trialed = await runSelfChangeTrial(store, record.id, { ...(sources.trial?.() ?? {}), turnId: context.turnId });
+  return describeDraft(trialed, preview);
 }
 
 function toDraftFile(raw: unknown): SelfChangeDraftFile {
@@ -181,11 +187,25 @@ function describeDraft(record: SelfChangeRecord, preview: SelfChangePreview): st
   if (record.configPatch) {
     lines.push(`- config: ${record.configPatch.patches.map(patch => `${patch.op} ${patch.path.join('.')}`).join(', ')}`);
   }
+  const impact = `Impact: ${describeSelfChangeImpact(preview.impact)}.`;
+  if (record.status === 'trial_failed') {
+    return [
+      `Change draft ${record.id} FAILED its trial run and is closed; nothing was applied and no approval was requested.`,
+      ...lines,
+      'Problems:',
+      ...(record.error ?? 'trial failed').split('\n').map(line => `- ${line}`),
+      'Fix the problems and call change_draft again WITHOUT change_id (start a new change) with the full file list. '
+        + 'Do not write these files with other tools.',
+    ].join('\n');
+  }
+  const trial = record.trial as SelfChangeTrialResult | null;
+  const skipped = trial?.checks.filter(check => check.status === 'skipped').length ?? 0;
   return [
-    `Change draft ${record.id} saved (revision ${record.revision}). It is NOT live: it is staged outside the project and still needs a trial run and the owner's approval.`,
+    `Change draft ${record.id} saved (revision ${record.revision}) and passed the static trial run${skipped ? ` (${skipped} check(s) skipped)` : ''}. `
+      + 'It is NOT live: it is staged outside the project and still needs the owner\'s approval.',
     ...lines,
-    `Impact: ${describeSelfChangeImpact(preview.impact)}.`,
+    impact,
     'Tell the user briefly what was drafted and that it is waiting; do not claim it is active and do not write these files with other tools. '
-      + `To fix it, call change_draft again with change_id "${record.id}" and the full file list.`,
+      + 'To change it further, call change_draft again WITHOUT change_id (start a new change) with the full file list.',
   ].join('\n');
 }
