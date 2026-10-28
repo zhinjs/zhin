@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import type { ToolExecutionContext } from '@zhin.js/tool';
+import { handleRuntimeManagementCommand } from '../../src/init/runtime-management-commands.js';
 import {
   createNativeSemanticMemoryToolFeatures,
   SemanticMemoryRuntime,
@@ -32,6 +33,51 @@ const context = Object.freeze({
 }) as unknown as ToolExecutionContext;
 
 describe('native semantic-memory tools', () => {
+  it('recalls written facts in a fresh runtime without crossing user or group scopes', async () => {
+    const repository = new InMemoryMemoryEntryRepository();
+    const writer = new SemanticMemoryRuntime();
+    writer.activate(repository);
+    const upsert = createNativeSemanticMemoryToolFeatures(writer).find(tool => tool.name === 'memory_upsert')!;
+    await upsert.definition.execute({ key: 'preference:drink', content: 'prefers oolong tea', scope: 'user' }, context);
+    await upsert.definition.execute({ key: 'task:tea', content: 'tea delivery for group one', scope: 'session' }, context);
+
+    // A new consumer of the same repository has no previous turn's in-memory context.
+    const reader = new SemanticMemoryRuntime();
+    reader.activate(repository);
+    const nextGroup = { sessionKey: 'session-2', subjectId: 'user-1', platform: 'telegram' };
+    const ownRecall = await reader.recall(nextGroup, 'tea', context.signal);
+    expect(ownRecall?.entries.map(entry => entry.content)).toEqual(['prefers oolong tea']);
+    expect(await reader.recall({ ...nextGroup, subjectId: 'user-2' }, 'tea', context.signal)).toBeNull();
+    const originalGroup = await reader.recall({ ...nextGroup, sessionKey: context.sessionKey, subjectId: 'user-2' }, 'tea', context.signal);
+    expect(originalGroup?.entries.map(entry => entry.content)).toEqual(['tea delivery for group one']);
+  });
+
+  it('uses the corrected value on a later turn and stops recalling it after the sender forgets it', async () => {
+    const repository = new InMemoryMemoryEntryRepository();
+    const runtime = new SemanticMemoryRuntime();
+    runtime.activate(repository);
+    const upsert = createNativeSemanticMemoryToolFeatures(runtime).find(tool => tool.name === 'memory_upsert')!;
+    await upsert.definition.execute({ key: 'preference:drink', content: 'prefers oolong tea', scope: 'user' }, context);
+    await upsert.definition.execute({ key: 'preference:drink', content: 'prefers jasmine tea', scope: 'user' }, {
+      ...context, turnId: 'turn-correction', sessionKey: 'session-2',
+    });
+    const reader = new SemanticMemoryRuntime();
+    reader.activate(repository);
+    const view = { sessionKey: 'session-3', subjectId: 'user-1', platform: 'telegram' };
+    const recalled = await reader.recall(view, 'tea', context.signal);
+    expect(recalled?.entries.map(entry => entry.content)).toEqual(['prefers jasmine tea']);
+    expect(recalled?.text).not.toContain('oolong');
+    expect(recalled?.entries[0]?.source_turn).toBe('turn-correction');
+
+    const forgotten = await handleRuntimeManagementCommand({
+      commandPrefix: '/', content: '/forget preference:drink', service: {} as never,
+      zhinAgent: {} as never, senderRoles: { isMaster: false, isTrusted: false },
+      senderId: view.subjectId, sessionKey: view.sessionKey, semanticMemory: reader,
+    });
+    expect(forgotten).toContain('已遗忘 1 条');
+    expect(await reader.recall(view, 'tea', context.signal)).toBeNull();
+  });
+
   it('fails closed until the candidate database activation succeeds', async () => {
     const runtime = new SemanticMemoryRuntime();
     const search = createNativeSemanticMemoryToolFeatures(runtime)
