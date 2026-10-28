@@ -38,6 +38,12 @@ describe('bilibili live config', () => {
     expect(config).toMatchObject({ roomId: '123', sendMode: 'direct', maxLength: 100, maxChunks: 1, minSendIntervalMs: 2000 });
     expect(resolveBilibiliLiveConfig({ id: 'live', roomId: '9', sendMode: 'off' }).sendMode).toBe('off');
   });
+
+  it('trims trailing slashes from api base urls', () => {
+    const config = resolveBilibiliLiveConfig({ id: 'live', roomId: 1, apiBaseUrl: 'http://a.test///', liveApiBaseUrl: '/'.repeat(50_000) });
+    expect(config.apiBaseUrl).toBe('http://a.test');
+    expect(config.liveApiBaseUrl).toBe('');
+  });
 });
 
 describe('bilibili live packets', () => {

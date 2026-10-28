@@ -109,9 +109,16 @@ export function resolveBilibiliLiveConfig(raw: unknown): ResolvedBilibiliLiveCon
       BILIBILI_LIVE_MIN_SEND_INTERVAL_SEC,
       3600,
     ) * 1000,
-    apiBaseUrl: (optionalString(config.apiBaseUrl) ?? 'https://api.bilibili.com').replace(/\/+$/, ''),
-    liveApiBaseUrl: (optionalString(config.liveApiBaseUrl) ?? 'https://api.live.bilibili.com').replace(/\/+$/, ''),
+    apiBaseUrl: trimTrailingSlashes(optionalString(config.apiBaseUrl) ?? 'https://api.bilibili.com'),
+    liveApiBaseUrl: trimTrailingSlashes(optionalString(config.liveApiBaseUrl) ?? 'https://api.live.bilibili.com'),
   });
+}
+
+/** 去掉末尾的 `/`；逐字符扫描，避免 `/\/+$/` 在长串 `/` 上的多项式回溯。 */
+function trimTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url.charCodeAt(end - 1) === 47) end--;
+  return url.slice(0, end);
 }
 
 /** 编码一个弹幕 WebSocket 包。 */
