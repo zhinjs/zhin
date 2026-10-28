@@ -19,6 +19,11 @@ export async function migrateConversationColumns(database: StructuredDatabase): 
   }
   await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_conversation_time', [{ name: 'conversation_key', text: true }, { name: 'time' }]);
   await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_type_time', [{ name: 'event_type', text: true }, { name: 'time' }]);
+  await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_scene', [
+    { name: 'endpoint_adapter', text: true }, { name: 'endpoint_id', text: true },
+    { name: 'conversation_kind', text: true }, { name: 'conversation_id', text: true },
+    { name: 'id' },
+  ]);
 }
 
 /** Older observations without canonical addresses remain explicitly unknown. */
