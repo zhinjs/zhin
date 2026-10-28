@@ -1,0 +1,65 @@
+packages/im/agent/tests/self-change/store.test.ts
+  s_368de0d6d5c902::t_dfd1c7e05e963c 116-136
+basic/cli/src/plugin-runtime/agent/module.ts
+  s_368de0d6d5c902::t_d560b4084bd2d4 17
+packages/im/agent/src/self-change/store.ts
+  s_368de0d6d5c902::t_d174dab06afee5 72,337-352,355
+  s_368de0d6d5c902::t_b532884b7414e0 353-354,356
+.changeset/0040-slice-b-change-draft.md
+  s_368de0d6d5c902::t_a0029917932298 1-6
+tests/snapshots/api-surface.json
+  s_368de0d6d5c902::t_1d20a11e4334ac 86
+basic/cli/src/plugin-runtime/agent/self-change-impact.ts
+  s_368de0d6d5c902::t_4cac9f07bc1390 1-17
+docs/ai/default-behavior.md
+  s_368de0d6d5c902::t_a0029917932298 45-46
+packages/im/agent/tests/self-change/preview.test.ts
+  s_368de0d6d5c902::t_a8edb8af3a8671 1-147
+packages/im/agent/src/reserved-tools.ts
+  s_368de0d6d5c902::t_e6340156fff861 20
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_368de0d6d5c902::t_9562a729a4c41c 247
+  s_368de0d6d5c902::t_d2109a187318de 23,124-125
+packages/im/agent/src/index.ts
+  s_368de0d6d5c902::t_e6340156fff861 431-444
+  s_368de0d6d5c902::t_61aca074fd899c 430
+packages/im/agent/src/plugin-runtime/index.ts
+  s_368de0d6d5c902::t_e6340156fff861 44
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_368de0d6d5c902::t_9562a729a4c41c 12-13,65-66,129-130
+  s_368de0d6d5c902::t_68eee184112458 131-133
+docs/en/ai/default-behavior.md
+  s_368de0d6d5c902::t_a0029917932298 45-46
+packages/im/agent/src/plugin-runtime/native-self-change-tools.ts
+  s_368de0d6d5c902::t_e40a29d7c7f6fc 85,152-155,160-173
+  s_368de0d6d5c902::t_82830aa58d67be 1-84,86-147,150-151,156-159,174-191
+  s_368de0d6d5c902::t_4a55893da3871d 148-149
+packages/im/agent/src/self-change/preview.ts
+  s_368de0d6d5c902::t_a26d15a13415e1 1-65,68-136,138-148,150-193,195-288
+  s_368de0d6d5c902::t_b7d63bfe39274e 66-67,137,149,194
+packages/im/agent/tests/plugin-runtime/native-self-change-tools.test.ts
+  s_368de0d6d5c902::t_a8edb8af3a8671 1-133
+tests/snapshots/plugin-runtime-api.json
+  s_368de0d6d5c902::t_1d20a11e4334ac 47
+basic/cli/src/plugin-runtime/start-command.ts
+  s_368de0d6d5c902::t_d2109a187318de 314,482-485,524,534,536
+  s_368de0d6d5c902::t_4cac9f07bc1390 553
+basic/cli/tests/plugin-runtime/agent/self-change-impact.test.ts
+  s_368de0d6d5c902::t_dfd1c7e05e963c 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "97bf33791eba9c5817afd9576817d87eb3db8ece",
+  "prompts": {},
+  "sessions": {
+    "s_368de0d6d5c902": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8e839841-ebfc-48b7-a986-67e0266ed903",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
