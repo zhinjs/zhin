@@ -1,5 +1,4 @@
 import { messages as t } from "../../../../messages.js";
-import { publishQunNotice } from "../../../../../../src/group-notice.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; content: string }>({
@@ -13,7 +12,7 @@ export default defineAgentTool<{ group_id: number; content: string }>({
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],
   async execute({ group_id, content }, context) {
-    await publishQunNotice(context.$client, group_id, content);
+    await context.$client.sendGroupNotice(group_id, content);
     return { success: true, message: t(context.locale, 'announcementSent') };
   },
 });
