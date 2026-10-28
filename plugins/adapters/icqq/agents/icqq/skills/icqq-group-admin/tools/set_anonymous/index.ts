@@ -1,4 +1,5 @@
 import { messages as t } from "../../../../messages.js";
+import { freshMember, isGroupManager } from "../../../../members.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; enable?: boolean }>({
@@ -14,8 +15,7 @@ export default defineAgentTool<{ group_id: number; enable?: boolean }>({
   async execute({ group_id, enable }, context) {
     const client = context.$client;
     const on = enable ?? true;
-    const selfInfo= client.pickMember(group_id,client.uin);
-    if(!selfInfo.is_admin && !selfInfo.is_owner) return { success: false, message: t(context.locale, 'anonymousForbidden') };
+    if (!isGroupManager(await freshMember(client, group_id, client.uin))) return { success: false, message: t(context.locale, 'anonymousForbidden') };
     await client.setGroupAnonymous(group_id, on);
     return { success: true, message: on ? t(context.locale, 'anonymousEnabled') : t(context.locale, 'anonymousDisabled') };
   },

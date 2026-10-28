@@ -23,6 +23,8 @@ export interface ConversationRef {
   }>;
   /** Optional platform thread/topic identifier. */
   readonly threadId?: string;
+  /** Optional human-readable title (e.g. group name). Display only: never part of identity or keys. */
+  readonly name?: string;
 }
 
 export interface ActorRef {

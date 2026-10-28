@@ -128,6 +128,23 @@ describe('ImRuntime side-event handlers', () => {
     });
   });
 
+  it('threads the joining member nickname from the notice into target.name', async () => {
+    const receiveNotice = vi.fn(async (_notice: unknown) => undefined);
+    const emit: EndpointEventEmitter = async (name, payload) => {
+      if (name === 'notice.receive') await receiveNotice(payload);
+    };
+    await receiveOneBotLikeSideEvent(emit, {
+      adapter: 'icqq',
+      platform: 'icqq',
+      endpointKey: 'bot',
+      raw: { post_type: 'notice', notice_type: 'group', sub_type: 'increase', group_id: 1, user_id: 2, nickname: ' 小明 ', time: 3 },
+    });
+    expect(receiveNotice.mock.calls[0]?.[0]).toMatchObject({
+      name: 'notice.group.member_increase',
+      target: { id: '2', name: '小明' },
+    });
+  });
+
   it('does not use a user or bot id as a missing group conversation', async () => {
     const emit = vi.fn(async (_name: string, _payload: unknown) => undefined);
     await receiveOneBotLikeSideEvent(emit, {

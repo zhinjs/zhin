@@ -31,7 +31,10 @@ export function resolveSideEventDedupeKey(
   const type = data.notice_type ?? data.request_type ?? kind;
   const scope = data.group_id ?? data.user_id ?? '';
   const sub = data.sub_type ?? '';
-  return `${kind}:${time}_${type}_${scope}_${sub}`;
+  // 群事件的 scope 是群号：不带成员和操作人时，同一群的两次入群（平台不给 time 时尤甚）会撞成同一个键，后一次被当重复丢掉。
+  const member = data.group_id != null ? (data.user_id ?? '') : '';
+  const operator = data.operator_id ?? '';
+  return `${kind}:${time}_${type}_${scope}_${sub}_${member}_${operator}`;
 }
 
 function resolveNotifyNoticeParts(
