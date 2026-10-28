@@ -43,9 +43,36 @@ function stringArg(input: Readonly<Record<string, unknown>>, ...keys: string[]):
 /** Package-manager commands that change installed dependencies, i.e. the code the host loads. */
 const DEPENDENCY_CHANGE = /(?:^|[;&|]\s*)(?:pnpm|npm|yarn|bun)\s+(?:-\S+\s+)*(?:add|install|i|remove|rm|uninstall|un|update|up|upgrade|link|unlink|patch-commit|dlx)\b/iu;
 
+/** Strip leading `=`/`:` and trailing `,`/`:` without a regex (avoids ReDoS on long comma runs). */
+function stripShellPunctuation(word: string): string {
+  let start = 0;
+  let end = word.length;
+  while (start < end && (word[start] === '=' || word[start] === ':')) start += 1;
+  while (end > start && (word[end - 1] === ',' || word[end - 1] === ':')) end -= 1;
+  return word.slice(start, end);
+}
+
+const SHELL_WORD_BREAK = new Set([' ', '\t', '\n', '\r', ';', '&', '|', '<', '>', '(', ')', '`', '$', "'", '"']);
+
 /** Words of a shell command that could name a file (quotes and redirections stripped). */
 function commandWords(command: string): string[] {
-  return command.split(/[\s;&|<>()`$'"]+/u).map(word => word.replace(/^[=:]+|[,:]+$/gu, '')).filter(Boolean);
+  const words: string[] = [];
+  let buf = '';
+  const flush = () => {
+    if (!buf) return;
+    const cleaned = stripShellPunctuation(buf);
+    if (cleaned) words.push(cleaned);
+    buf = '';
+  };
+  for (const ch of command) {
+    if (SHELL_WORD_BREAK.has(ch)) {
+      flush();
+    } else {
+      buf += ch;
+    }
+  }
+  flush();
+  return words;
 }
 
 /**
