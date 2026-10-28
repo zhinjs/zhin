@@ -2,13 +2,15 @@
 layout: home
 ---
 
-<ZhinHero tagline="用 TypeScript 写一次聊天机器人，同时跑在 QQ、微信、Discord、Telegram 等 20+ 平台。默认只是小巧的 IM 框架，需要时再加 AI。" />
+<ZhinHero tagline="一个 Bot 同时管好 QQ、微信、Discord、Telegram 等 20+ 平台的群：运营和群主在浏览器里管，开发者用 TypeScript 写一次、到处运行。默认小巧，需要时再加 AI。" />
 
 <ZhinTerminal>
 <b>$</b> npm create zhin-app my-bot -y<br>
 <b>$</b> cd my-bot && pnpm dev<br>
 <span>✔ Bot 已启动 —— 不需要平台账号，也不需要模型 Key</span>
 </ZhinTerminal>
+
+<ZhinAudienceSplit />
 
 <ZhinRolePaths />
 
@@ -61,6 +63,7 @@ cd my-bot && pnpm dev
 
 **接下来**
 
+- 运营 / 群主，不写代码？→ [运营与群管指南](/customer/)
 - 名词看不懂？→ [核心概念速览](/getting-started/concepts)
 - 写自己的命令 → [第一个插件](/getting-started/first-plugin)
 - 接入真实平台 → [平台适配器](/adapters/)

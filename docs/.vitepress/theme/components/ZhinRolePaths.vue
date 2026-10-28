@@ -15,10 +15,10 @@ withDefaults(defineProps<{
   heading: '你想做什么？',
   intro: '不需要先读完整套架构。挑一个眼下的目标，每条路径都能在一次会话内走完。',
   items: () => [
-    { eyebrow: 'LEARN', title: '先弄懂它是什么', description: '一页看懂 Zhin 能做什么、一个 Bot 由哪几部分组成。', href: '/getting-started/introduction', action: '5 分钟了解' },
     { eyebrow: 'RUN', title: '跑起第一个 Bot', description: '不需要平台账号和模型 Key，在浏览器 Sandbox 里收到第一条回复。', href: '/getting-started/', action: '开始首跑' },
     { eyebrow: 'BUILD', title: '写自己的功能', description: '命令、关键词回复、定时推送、AI 工具——把文件放进约定目录就生效。', href: '/getting-started/first-plugin', action: '写第一个插件' },
     { eyebrow: 'SHIP', title: '接平台并上线', description: '选适配器接入 QQ / 微信 / Discord 等，再完成部署、监控与升级。', href: '/adapters/', action: '选择平台' },
+    { eyebrow: 'OPERATE', title: '不写代码运营 Bot', description: '运营 / 群主：在 Console 里看消息、改配置、装功能、管群欢迎与公告审批。', href: '/customer/', action: '运营与群管指南' },
   ],
 })
 </script>
