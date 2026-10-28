@@ -45,6 +45,7 @@ describe('Console Host module boundary', () => {
       'configuration-projection.ts',
       'console-schema.ts',
       'conversation-session.ts',
+      'conversation-history-routes.ts',
       'data-lifecycle-routes.ts',
       'display-path.ts',
       'effect-sponsor-routes.ts',
