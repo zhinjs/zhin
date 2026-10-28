@@ -54,7 +54,7 @@ describe('ai_decision_events schema', () => {
     expect(DECISION_EVENT_KINDS).toEqual([
       'inbound_wake', 'speak_gate', 'control_gate', 'ambient_decision', 'model_skip', 'model_run',
       'tool_call', 'tool_hard_gate', 'tool_approval', 'outbound', 'config_change', 'control_change',
-      'member_lifecycle', 'announcement', 'ops_cooldown', 'schedule',
+      'member_lifecycle', 'announcement', 'ops_cooldown', 'schedule', 'group_rule', 'rule_enforcement',
     ]);
     expect(DECISION_OUTCOMES).toEqual(['allow', 'deny', 'skip', 'defer', 'error']);
     expect(DECISION_ACTORS).toEqual(['system', 'model', 'operator', 'policy']);
@@ -128,6 +128,18 @@ describe('reason_code registry', () => {
     ];
     const start = DECISION_REASON_CODES.indexOf('schedule_event_created');
     expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('cold_field_mention_only_cleared'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+  });
+
+  it('appends the ADR 0039 group rule codes after the ADR 0037 slice D codes', () => {
+    const slice = [
+      'rule_drafted', 'rule_submitted', 'rule_approved', 'rule_rejected', 'rule_expired', 'rule_disabled',
+      'rule_superseded', 'rule_hash_mismatch', 'rule_draft_forbidden',
+      'rule_hit_remind', 'rule_hit_warn', 'rule_hit_mute', 'rule_hit_kick_suggested', 'rule_hit_exempt',
+      'rule_hit_bot_not_admin', 'rule_hit_flood',
+    ];
+    const start = DECISION_REASON_CODES.indexOf('rule_drafted');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('schedule_wake_merged'));
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
     expect(DECISION_REASON_CODES.slice(-slice.length)).toEqual(slice);
   });

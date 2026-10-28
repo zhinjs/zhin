@@ -5,7 +5,7 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { AGENT_MESSAGE_QUERY_MODEL, AGENT_SESSION_SOURCE_MODEL, agentMessageQueryFields, parseAgentMessageRow } from '@zhin.js/ai';
 import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL,
   DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
-  AI_DECISION_EVENTS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS } from '@zhin.js/agent/runtime';
+  AI_DECISION_EVENTS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS, DEFAULT_GROUP_RULE_RETENTION_DAYS } from '@zhin.js/agent/runtime';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
 import type { AgentHostAIConfig } from './config.js';
 
@@ -28,6 +28,14 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   const decisions = () => {
     const log = foundation.agent.getDecisionEvents?.();
     return log?.persistent ? log : undefined;
+  };
+  // ADR 0039 slice A: 终态群管规则按保留期 / 每群条数清理（启动 + 每小时）；失败只记日志。
+  const pruneGroupRules = async () => {
+    const rules = foundation.agent.getGroupRules?.();
+    if (!rules?.persistent) return;
+    await rules.prune(DEFAULT_GROUP_RULE_RETENTION_DAYS).catch(() => {
+      getLogger('agent').warn('op=group_rule_prune status=failed; 群管规则保留期清理失败');
+    });
   };
   if (sql) {
     database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL, { addColumns: ['locale'] });
@@ -68,6 +76,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       await ensureDatabaseIndex(raw, AI_DECISION_EVENTS_TABLE, 'ai_decision_events_turn', [{ name: 'turn_id', text: true }, { name: 'ts' }]);
     }
     await decisions()?.prune(auditRetentionDays);
+    await pruneGroupRules();
     if (usage && raw) {
       await usage.prune();
       await ensureDatabaseIndex(raw, 'agent_usage_turns', 'agent_usage_turns_ended', [{ name: 'ended_at' }]);
@@ -81,7 +90,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       pendingStart = foundation.schedule.start().catch(() => {
         getLogger('agent').warn('op=schedule_start status=failed; 定时任务启动失败');
       });
-      if (usage || decisions()) {
+      if (usage || decisions() || foundation.agent.getGroupRules?.()?.persistent) {
         timer = setInterval(() => {
           if (stopped || pendingPrune) return;
           pendingPrune = Promise.all([
@@ -90,6 +99,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
             }),
             // Never rejects for database errors (only logs); see DecisionEventLog.prune.
             decisions()?.prune(auditRetentionDays),
+            pruneGroupRules(),
           ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
         }, 3_600_000);
         timer.unref();
