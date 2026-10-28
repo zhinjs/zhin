@@ -1,4 +1,5 @@
 import { messages as t } from "../../../../messages.js";
+import { freshMember, isGroupManager } from "../../../../members.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; user_id: number; duration?: number }>({
@@ -13,10 +14,9 @@ export default defineAgentTool<{ group_id: number; user_id: number; duration?: n
   requiresApproval: 'always',
   async execute({ group_id, user_id, duration }, context) {
     const client = context.$client;
-    const selfInfo= client.pickMember(group_id,client.uin);
-    if(!selfInfo.is_admin && !selfInfo.is_owner) return { success: false, message: t(context.locale, 'muteForbidden') };
-    const memberInfo= client.pickMember(group_id,user_id);
-    if(!memberInfo) return { success: false, message: t(context.locale, 'memberMissing') };
+    const [self, member] = await Promise.all([freshMember(client, group_id, client.uin), freshMember(client, group_id, user_id)]);
+    if (!isGroupManager(self)) return { success: false, message: t(context.locale, 'muteForbidden') };
+    if (!member) return { success: false, message: t(context.locale, 'memberMissing') };
     await client.setGroupBan(group_id, user_id, duration === 0 ? 0 : duration);
     return { success: true, message: duration === 0 ? t(context.locale, 'unmuted', { user: user_id }) : t(context.locale, 'muted', { user: user_id, seconds: duration ?? 0 }) };
   },

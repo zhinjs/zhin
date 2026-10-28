@@ -28,12 +28,12 @@ it('keeps trusted operation locale independent of platform administration result
 
 it('localizes mute/unmute outcomes without weakening the existing platform role check', async () => {
   const setGroupBan = vi.fn();
-  const client = { uin: 7, pickMember: vi.fn().mockReturnValue({ is_admin: true }), setGroupBan };
+  const client = { uin: 7, getGroupMemberInfo: vi.fn().mockResolvedValue({ role: 'admin' }), setGroupBan };
   expect(await mute.execute({ group_id: 1, user_id: 2, duration: 0 }, { locale: 'en', $client: client } as never))
     .toMatchObject({ message: 'Unmuted member 2' });
   expect(await mute.execute({ group_id: 1, user_id: 2, duration: 60 }, { locale: 'en', $client: client } as never))
     .toMatchObject({ message: 'Muted member 2 (60 seconds)' });
-  client.pickMember.mockReturnValue({ is_admin: false });
+  client.getGroupMemberInfo.mockResolvedValue({ role: 'member' });
   expect(await mute.execute({ group_id: 1, user_id: 2, duration: 60 }, { locale: 'en', $client: client } as never))
     .toMatchObject({ success: false, message: 'The bot must be a group owner or administrator to mute or unmute members' });
   expect(setGroupBan).toHaveBeenCalledTimes(2);
