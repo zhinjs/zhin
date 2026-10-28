@@ -21,6 +21,21 @@ export function isIcqqNoticePayload(payload: unknown): boolean {
 }
 
 /**
+ * notice 去重键。成员与操作人分开记：同一管理员先后拉两个人进群时，`operator_id ?? user_id`
+ * 会撞键（icqq 群通知又常不带 time），后一次入群被当重复吞掉。
+ */
+export function icqqNoticeDedupeKey(payload: Record<string, unknown>): string {
+  return `notice:${[
+    payload.time,
+    payload.group_id,
+    payload.user_id,
+    payload.operator_id,
+    payload.notice_type ?? payload.type,
+    payload.sub_type,
+  ].join('_')}`;
+}
+
+/**
  * request 事件载荷 → unified_inbox_request 行。
  * platform_request_id 取 flag（审批回执句柄），缺省回退 seq；两者皆无则无法审批，丢弃。
  */
