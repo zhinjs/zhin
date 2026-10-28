@@ -121,7 +121,7 @@ export class TurnToolRuntime {
     let effectiveInput = decision.input;
     const highRisk = classifyHighRiskAction(tool);
     const humanOnly = tool.requiresApproval === 'human';
-    const dangerous = this.#hardGate.assess(tool).risk === 'dangerous';
+    const dangerous = this.#hardGate.assess(tool, effectiveInput).risk === 'dangerous';
     if (humanOnly || dangerous) {
       try {
         // Caller-owned nested values must not change the operation while a person reviews it.

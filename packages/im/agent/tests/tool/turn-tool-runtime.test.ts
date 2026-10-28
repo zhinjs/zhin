@@ -548,7 +548,8 @@ describe('TurnToolRuntime', () => {
     expect(requestApproval).not.toHaveBeenCalled();
   });
 
-  it('still asks the owner before writing a protected project file', async () => {
+  // #1030 P0: package.json is host self-configuration, so the hard gate asks (once, humanOnly).
+  it('still asks a human before the owner writes a protected project file', async () => {
     const execute = vi.fn(async () => 'written');
     const requestApproval = vi.fn(async () => false);
     const { turn } = fixture({
@@ -559,8 +560,9 @@ describe('TurnToolRuntime', () => {
     const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'write_file')]);
 
     await expect(runtime.execute('write_file', { file_path: 'package.json', content: '{}' }, 'owner-write'))
-      .resolves.toMatchObject({ status: 'denied', policy: 'file-permission-matrix' });
+      .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
     expect(requestApproval).toHaveBeenCalledTimes(1);
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ humanOnly: true }));
     expect(execute).not.toHaveBeenCalled();
   });
 

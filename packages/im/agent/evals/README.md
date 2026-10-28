@@ -157,6 +157,7 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `group-member-no-outbound` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
+| `hard-gate-self-config-write` | approval, injection | #1030 P0: owner turns rewrote host config (`zhin.config.yml`) without a fresh human approval |
 | `multimodal-group-image-described` | multimodal | #769 Gemini switch — group images were replaced by a text placeholder |
 | `multimodal-image-question-answered` | multimodal | #769 Gemini switch — image + question in one message |
 | `multimodal-text-follow-up` | multimodal, memory | #769 Gemini switch — text follow-up about an earlier image |

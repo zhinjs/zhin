@@ -39,13 +39,17 @@ import {
   type ToolApprovalOrigin,
 } from './tool-approval-queue.js';
 import { opsCooldownTarget, type OpsCooldownView } from './ops-cooldown.js';
+import { hostConfigWriteTarget } from './host-config-paths.js';
 
 export type ToolRisk = 'dangerous' | 'safe';
-/** ADR 0036 §3 危险类别：成员管理 / 内容发布 / 资金 / 身份。 */
-export type DangerousToolCategory = 'member' | 'publish' | 'funds' | 'identity';
+/**
+ * ADR 0036 §3 危险类别：成员管理 / 内容发布 / 资金 / 身份；`self`（#1030 P0）是改宿主自身——
+ * 写宿主配置、依赖或仓库钩子，按本次调用的目标判定，不由工具声明。
+ */
+export type DangerousToolCategory = 'member' | 'publish' | 'funds' | 'identity' | 'self';
 
 export const TOOL_RISKS: readonly ToolRisk[] = Object.freeze(['dangerous', 'safe']);
-export const DANGEROUS_TOOL_CATEGORIES: readonly DangerousToolCategory[] = Object.freeze(['member', 'publish', 'funds', 'identity']);
+export const DANGEROUS_TOOL_CATEGORIES: readonly DangerousToolCategory[] = Object.freeze(['member', 'publish', 'funds', 'identity', 'self']);
 
 export function isToolRisk(value: unknown): value is ToolRisk {
   return value === 'dangerous' || value === 'safe';
@@ -257,8 +261,25 @@ export interface ToolRiskView {
 export interface ToolRiskAssessment {
   readonly risk: ToolRisk;
   readonly category: DangerousToolCategory | null;
-  /** 判为 dangerous 的来源；`safe` 时为 `declared` 或 `default`。 */
-  readonly source: 'declared' | 'core' | 'host' | 'default';
+  /** 判为 dangerous 的来源；`safe` 时为 `declared` 或 `default`；`invocation` 为按本次参数判定（`self`）。 */
+  readonly source: 'declared' | 'core' | 'host' | 'default' | 'invocation';
+  /** `self`：本次调用会写入的宿主配置路径。 */
+  readonly target?: string;
+}
+
+/**
+ * 按本次调用评估：在 {@link assessToolRisk} 之上，写宿主配置 / 依赖 / 仓库钩子的调用一律升为
+ * dangerous `self`（只升不降）。没有参数时与 {@link assessToolRisk} 相同。
+ */
+export function assessToolInvocation(
+  tool: ToolRiskView,
+  input: Readonly<Record<string, unknown>> | undefined,
+  settings: ToolHardGateSettings = DEFAULT_TOOL_HARD_GATE,
+): ToolRiskAssessment {
+  const base = assessToolRisk(tool, settings);
+  const target = input ? hostConfigWriteTarget(tool.name, input) : undefined;
+  if (!target) return base;
+  return Object.freeze({ risk: 'dangerous', category: 'self', source: base.risk === 'dangerous' ? base.source : 'invocation', target });
 }
 
 /** 合并声明、核心名单与宿主配置：任何一方判 dangerous 即 dangerous，不能被调低。 */
@@ -369,6 +390,7 @@ export const DANGEROUS_TOOL_CATEGORY_LABELS: Readonly<Record<DangerousToolCatego
   publish: '内容发布',
   funds: '资金',
   identity: '身份',
+  self: '改宿主配置',
 });
 
 /**
@@ -385,8 +407,9 @@ export class ToolHardGate {
     this.#context = context;
   }
 
-  assess(tool: ToolRiskView): ToolRiskAssessment {
-    return assessToolRisk(tool, this.#settings);
+  /** 传入本次参数时按调用评估（写宿主配置升为 `self`）。 */
+  assess(tool: ToolRiskView, input?: Readonly<Record<string, unknown>>): ToolRiskAssessment {
+    return assessToolInvocation(tool, input, this.#settings);
   }
 
   /**
@@ -397,7 +420,7 @@ export class ToolHardGate {
     input: Readonly<Record<string, unknown>>,
     toolUseId: string,
   ): Promise<ToolHardGateResult> {
-    const assessment = this.assess(tool);
+    const assessment = this.assess(tool, input);
     const name = tool.name;
     if (assessment.risk !== 'dangerous') {
       // ADR 0036：只读 / safe 工具直接放行，但仍写一条 tool_call 审计。
@@ -405,7 +428,8 @@ export class ToolHardGate {
       return SAFE;
     }
     const { category } = assessment;
-    const payload = { tool: name, category, riskSource: assessment.source, toolUseId };
+    const payload = { tool: name, category, riskSource: assessment.source, toolUseId,
+      ...(assessment.target ? { target: assessment.target } : {}) };
 
     const controlDenial = this.#checkControlPlane();
     if (controlDenial) {
@@ -499,7 +523,7 @@ export class ToolHardGate {
     toolUseId: string,
     approval: ToolHardGatePreApproval,
   ): ToolHardGateResult {
-    const assessment = this.assess(tool);
+    const assessment = this.assess(tool, input);
     const name = tool.name;
     if (assessment.risk !== 'dangerous') {
       this.#audit('tool_call', 'allow', 'tool_safe_allowed', { tool: name, risk: 'safe', riskSource: assessment.source, toolUseId });

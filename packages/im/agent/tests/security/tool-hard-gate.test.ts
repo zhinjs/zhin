@@ -12,6 +12,7 @@ import {
   CORE_DANGEROUS_TOOLS,
   TOOL_HARD_GATE_POLICY,
   ToolHardGate,
+  assessToolInvocation,
   assessToolRisk,
   coreDangerousCategory,
   imApproversFor,
@@ -696,6 +697,55 @@ function fixture(options: { approval?: ApprovalOutcomePort; unattended?: boolean
 }
 
 /** Answers with the scripted outcomes in order; with none left it never answers (until aborted). */
+describe('self: writing the host configuration (#1030 P0)', () => {
+  function gate(approval: ApprovalOutcomePort) {
+    const audit = auditSink();
+    const hardGate = new ToolHardGate(undefined, {
+      turnId: 'turn-s',
+      sessionKey: 'icqq:bot:private:owner',
+      signal: new AbortController().signal,
+      location: { instanceId: '*', platform: 'icqq', sceneId: 'private:owner' },
+      audit,
+      queue: new ToolApprovalQueue(),
+      approval,
+    });
+    return { hardGate, audit };
+  }
+
+  it('turns a config write into a dangerous self call, judged by its target', () => {
+    expect(assessToolInvocation({ name: 'write_file' }, { file_path: '/ws/zhin.config.yml' }))
+      .toEqual({ risk: 'dangerous', category: 'self', source: 'invocation', target: '/ws/zhin.config.yml' });
+    expect(assessToolInvocation({ name: 'write_file' }, { file_path: '/ws/notes.md' })).toMatchObject({ risk: 'safe' });
+    expect(assessToolInvocation({ name: 'write_file', risk: 'safe' }, { file_path: '/ws/.env' }).category).toBe('self');
+    expect(assessToolInvocation({ name: 'write_file' }, undefined)).toMatchObject({ risk: 'safe' });
+  });
+
+  it('never lets bypass approve it, so an injected owner turn cannot loosen its own gates', async () => {
+    const { hardGate, audit } = gate(createBypassApprovalPort());
+    const result = await hardGate.check({ name: 'write_file' }, { file_path: '/ws/zhin.config.yml', content: 'execApprovalMode: bypass' }, 'tu-1');
+    expect(result.status).toBe('denied');
+    expect(audit.records.some(record => (record.payload as { target?: string } | undefined)?.target === '/ws/zhin.config.yml')).toBe(true);
+  });
+
+  it('runs only after a fresh human approval that names the self category', async () => {
+    const port = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const { hardGate } = gate(port);
+    await expect(hardGate.check({ name: 'bash' }, { command: 'pnpm add left-pad' }, 'tu-1'))
+      .resolves.toMatchObject({ status: 'approved', category: 'self' });
+    expect(port.requests).toHaveLength(1);
+    expect(port.requests[0]).toMatchObject({ humanOnly: true, toolName: 'bash' });
+    expect(port.requests[0]!.question).toContain('改宿主配置');
+  });
+
+  it('leaves ordinary workspace writes to the ordinary approval path', async () => {
+    const port = scriptedPort([]);
+    const { hardGate } = gate(port);
+    await expect(hardGate.check({ name: 'write_file' }, { file_path: '/ws/notes.md', content: 'hi' }, 'tu-1'))
+      .resolves.toMatchObject({ status: 'safe' });
+    expect(port.requests).toHaveLength(0);
+  });
+});
+
 function scriptedPort(outcomes: ApprovalOutcome[]) {
   const requests: ApprovalRequestInput[] = [];
   let aborted = false;

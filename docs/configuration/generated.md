@@ -173,7 +173,7 @@ outline: [2, 3]
 | `ai.agent.injectionGuard.confirmHighRisk` | string: `"external_content"`, `"off"` | 否 | `"external_content"` | external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。 |
 | `ai.agent.injectionGuard.outboundCheck` | string: `"redact"`, `"off"` | 否 | `"redact"` | redact：在回复和外发工具消息中屏蔽泄露的系统提示、密钥和其他会话记忆；off：关闭。 |
 | `ai.agent.injectionGuard.trustedOutputTools` | array&lt;string&gt; | 否 | `[]` | 结果不算外部内容的工具。 |
-| `ai.agent.toolHardGate` | object | 否 | — | 危险工具硬闸（ADR 0036）。始终开启，独立于 execApprovalMode：成员管理、内容发布、资金、改 Bot 身份类工具（核心名单 + 声明 risk: dangerous 的工具）没有新鲜的人工批准或 Console 已批准的卡片就不执行，bypass 也不例外；被拒即 fail closed，同一回合不再重试。配置只能更严。 |
+| `ai.agent.toolHardGate` | object | 否 | — | 危险工具硬闸（ADR 0036）。始终开启，独立于 execApprovalMode：成员管理、内容发布、资金、改 Bot 身份类工具（核心名单 + 声明 risk: dangerous 的工具），以及写宿主自身配置 / 依赖 / git 钩子的调用（zhin.config.*、.env*、package.json、锁文件、node_modules/、.git/ 等）没有新鲜的人工批准或 Console 已批准的卡片就不执行，bypass 也不例外；被拒即 fail closed，同一回合不再重试。配置只能更严。 |
 | `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | 否 | `[]` | 额外按危险工具处理的工具（本地名或限定名）；不能把核心危险工具调成安全。 |
 | `ai.agent.toolHardGate.allowFunds` | boolean | 否 | `false` | 允许资金类工具（红包、转账、付款）。默认关闭；开启后仍需审批。 |
 | `ai.agent.toolHardGate.approvalTimeoutMs` | integer | 否 | `300000` | 危险调用等待审批的上限（毫秒），超时即拒绝。 |
