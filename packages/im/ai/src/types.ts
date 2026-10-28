@@ -625,6 +625,8 @@ export interface AIConfig {
       allowFunds?: boolean;
       /** 审批等待上限（毫秒），超时拒绝；默认 300000 */
       approvalTimeoutMs?: number;
+      /** 同一群同时待审批的卡片上限（ADR 0038）；超出 fail closed；默认 3 */
+      maxPendingPerScene?: number;
       /**
        * IM 审批通道（#1013，默认关）：卡片同时投递给 allowlist 审批人，审批人私聊
        * `approve <id>` / `deny <id>` 结算，与 Console 共用审批队列；业务群消息不能结算。

@@ -22,6 +22,7 @@ import {
   isCancelIntent,
   narrowMergedAccess,
   normalizeInboundQueueConfig,
+  withMergeMembers,
   TurnAdmissionGate,
   type TurnAccessContext,
   type TurnAdmission,
@@ -917,15 +918,18 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const members = admission && admission.participants.length > 1
           ? mergedMemberAccess(admission.participants, turnAccess)
           : undefined;
-        const turnAccessForTurn = members ? narrowMergedAccess(turnAccess, members) : turnAccess;
-        const capabilities = restrictWorkroomAgentCapabilities(await readTurnCapabilities(
+        const read = await readTurnCapabilities(
           ingress,
           snapshot,
           requester,
           turnAccess,
           members,
           () => capabilityActive,
-        ), workroomAgentTurn != null);
+        );
+        const turnAccessForTurn = members
+          ? withMergeMembers(narrowMergedAccess(turnAccess, members), read.members, read.memberTools)
+          : turnAccess;
+        const capabilities = restrictWorkroomAgentCapabilities(read.capabilities, workroomAgentTurn != null);
         let routed = routeSpecialistAgent(
           inbound.text,
           capabilities,
@@ -1336,13 +1340,21 @@ async function readTurnCapabilities(
   carrier: TurnAccessContext,
   members: readonly TurnAccessContext[] | undefined,
   isActive: () => boolean,
-): Promise<AgentCapabilities> {
+): Promise<Readonly<{
+  capabilities: AgentCapabilities;
+  /** Merged turn only: every member (carrier first) and the Tool names each sees alone. */
+  members: readonly TurnAccessContext[];
+  memberTools: readonly (readonly string[])[];
+}>> {
   const own = await ingress.read(snapshot, requester, isActive, carrier);
-  if (!members) return own;
-  const others = await Promise.all(members
-    .filter((member) => member !== carrier)
-    .map((member) => ingress.read(snapshot, requester, isActive, member)));
-  return intersectCapabilities(own, others);
+  if (!members) return { capabilities: own, members: [], memberTools: [] };
+  const others = members.filter((member) => member !== carrier);
+  const reads = await Promise.all(others.map((member) => ingress.read(snapshot, requester, isActive, member)));
+  return {
+    capabilities: intersectCapabilities(own, reads),
+    members: [carrier, ...others],
+    memberTools: [own, ...reads].map((read) => read.tools.map((tool) => tool.name)),
+  };
 }
 
 /**

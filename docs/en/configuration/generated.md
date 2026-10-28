@@ -149,7 +149,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.inboundQueue.ttlMs` | integer | no | `180000` | A queued turn that waited longer than this is dropped with a short notice. 0 disables expiry. |
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | no | `5` | Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply. |
 | `ai.agent.inboundQueue.merge` | object | no | — | Group merge window (ADR 0038): mentions from several members within a short window get one combined reply. Private chats, the master, commands, stop words and messages with media, quotes or forwards never merge. |
-| `ai.agent.inboundQueue.merge.enabled` | boolean | no | `false` | Turn the group merge window on. Off by default until merged turns narrow permissions per sender. |
+| `ai.agent.inboundQueue.merge.enabled` | boolean | no | `true` | Turn the group merge window on (group chats only). Set false to answer every member one by one as before. |
 | `ai.agent.inboundQueue.merge.quietMs` | integer | no | `1500` | The window is answered once no new message joined it for this long. |
 | `ai.agent.inboundQueue.merge.maxWaitMs` | integer | no | `6000` | The window is answered at the latest this long after its first message. |
 | `ai.agent.inboundQueue.merge.maxSenders` | integer | no | `5` | Senders one merged reply covers; further senders wait for the next window. |
@@ -182,6 +182,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | no | `[]` | Extra tools to treat as dangerous (local or qualified names). Cannot mark a core dangerous tool safe. |
 | `ai.agent.toolHardGate.allowFunds` | boolean | no | `false` | Allow funds tools (red packets, transfers, payments). Off by default; when on they still need approval. |
 | `ai.agent.toolHardGate.approvalTimeoutMs` | integer | no | `300000` | How long a dangerous call waits for approval before it is denied (ms). |
+| `ai.agent.toolHardGate.maxPendingPerScene` | integer | no | `3` | Approval cards one group (scene) may have pending at once (ADR 0038). Beyond it a dangerous call is denied without a new card; asking again for an already pending card does not count. |
 | `ai.agent.toolHardGate.imApproval` | object | no | — | IM approval channel for the hard gate (#1013). Off by default. When on, each new approval card is also sent to allowlisted approvers, who settle it with `approve &lt;id&gt;` / `deny &lt;id&gt;` in a private chat (or the dedicated approver group). It shares the Console approval queue: whichever answers first wins. Messages in business groups never settle a card; there is no session-wide or permanent approval. |
 | `ai.agent.toolHardGate.imApproval.enabled` | boolean | no | `false` | Turn the IM approval channel on. |
 | `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | no | `[]` | Approver platform user ids: a flat list applies to every platform; an object maps a platform (adapter name) to its user ids. Anyone not listed cannot settle a card over IM. |

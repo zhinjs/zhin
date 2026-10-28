@@ -13,7 +13,7 @@
  */
 
 import type { AgentCapabilities } from '../plugin-runtime/capability-ingress.js';
-import type { TurnAccessContext } from './turn-ingress.js';
+import type { TurnAccessContext, TurnMergedMember } from './turn-ingress.js';
 
 /**
  * The carrier's access narrowed to what all members share. Origin and subject
@@ -63,7 +63,86 @@ export function intersectCapabilities(
   });
 }
 
+/** A display name that two senders share names neither of them. */
+function onlyOne<T>(items: readonly T[]): T | undefined {
+  return items.length === 1 ? items[0] : undefined;
+}
+
 function intersect(base: readonly string[], others: readonly (readonly string[])[]): string[] {
   const sets = others.map((values) => new Set(values));
   return [...new Set(base)].filter((value) => sets.every((set) => set.has(value)));
+}
+
+/**
+ * Attaches the per-sender Tool lists a merged turn needs for `onBehalfOf`
+ * re-checks (ADR 0038 §2). `members` and `tools` line up by index; a sender
+ * listed twice keeps only the Tools both entries allow.
+ */
+export function withMergeMembers(
+  access: TurnAccessContext,
+  members: readonly TurnAccessContext[],
+  tools: readonly (readonly string[])[],
+): TurnAccessContext {
+  const bySubject = new Map<string, TurnMergedMember>();
+  members.forEach((member, index) => {
+    const subjectId = member.principal.subjectId;
+    const own = tools[index] ?? [];
+    const seen = bySubject.get(subjectId);
+    bySubject.set(subjectId, Object.freeze({
+      subjectId,
+      ...(seen?.displayName ?? member.principal.displayName
+        ? { displayName: seen?.displayName ?? member.principal.displayName }
+        : {}),
+      tools: Object.freeze(seen ? seen.tools.filter((name) => own.includes(name)) : [...new Set(own)]),
+    }));
+  });
+  return Object.freeze({
+    ...access,
+    policy: Object.freeze({
+      ...access.policy,
+      merge: Object.freeze({ members: Object.freeze([...bySubject.values()]) }),
+    }),
+  });
+}
+
+/** Reserved argument a merged turn's side-effect calls carry (ADR 0038 §2). */
+export const ON_BEHALF_OF_ARG = 'onBehalfOf';
+
+export type OnBehalfOfResolution =
+  | Readonly<{ status: 'allowed'; member: TurnMergedMember; fallback: boolean }>
+  | Readonly<{ status: 'denied'; reason: string; fallback: boolean; subjectId?: string }>;
+
+/**
+ * Re-checks one side-effect call against the sender it acts for.
+ *
+ * `onBehalfOf` names a sender of the merge by subject id (or, failing that,
+ * by a display name no other sender shares). A missing or unknown sender falls back to the
+ * lowest member: the call passes only if every member could make it.
+ */
+export function resolveOnBehalfOf(
+  merge: NonNullable<TurnAccessContext['policy']['merge']>,
+  toolName: string,
+  onBehalfOf: unknown,
+): OnBehalfOfResolution {
+  const named = typeof onBehalfOf === 'string' ? onBehalfOf.trim() : '';
+  const member = named
+    ? merge.members.find((entry) => entry.subjectId === named)
+      ?? onlyOne(merge.members.filter((entry) => entry.displayName === named))
+    : undefined;
+  if (member) {
+    return member.tools.includes(toolName)
+      ? Object.freeze({ status: 'allowed', member, fallback: false })
+      : Object.freeze({ status: 'denied', reason: `${member.subjectId} may not use ${toolName}`, fallback: false, subjectId: member.subjectId });
+  }
+  const lacking = merge.members.find((entry) => !entry.tools.includes(toolName));
+  if (lacking || merge.members.length === 0) {
+    return Object.freeze({
+      status: 'denied',
+      reason: `${named ? `unknown onBehalfOf "${named}"` : 'missing onBehalfOf'}; not every sender may use ${toolName}`,
+      fallback: true,
+      ...(lacking ? { subjectId: lacking.subjectId } : {}),
+    });
+  }
+  // Every member may make the call; attribute it to the turn's first sender.
+  return Object.freeze({ status: 'allowed', member: merge.members[0]!, fallback: true });
 }

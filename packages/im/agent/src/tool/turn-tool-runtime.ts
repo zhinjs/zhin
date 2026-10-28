@@ -35,6 +35,10 @@ import {
 } from '../security/tool-hard-gate.js';
 import type { ToolApprovalOrigin, ToolApprovalQueue } from '../security/tool-approval-queue.js';
 import type { OpsCooldownView } from '../security/ops-cooldown.js';
+import { ON_BEHALF_OF_ARG, resolveOnBehalfOf } from '../turn/merged-principal.js';
+
+/** `TurnToolOutcome.denied.policy` for a merged-turn call that failed its `onBehalfOf` re-check. */
+export const MERGE_ON_BEHALF_POLICY = 'merge-on-behalf';
 
 type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
   type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
@@ -98,6 +102,8 @@ export class TurnToolRuntime {
       ...(options.approvalQueue ? { queue: options.approvalQueue } : {}),
       ...(options.controlPlane ? { controlPlane: options.controlPlane } : {}),
       ...(options.opsCooldown ? { opsCooldown: options.opsCooldown } : {}),
+      // ADR 0038 §2: a merged turn asks for at most one approval card.
+      ...(turn.policy.merge ? { maxCardsPerTurn: 1 } : {}),
     });
   }
 
@@ -112,6 +118,27 @@ export class TurnToolRuntime {
     if (!tool) return this.#deny(name, toolUseId, 'capability', `Unknown Tool capability: ${name}`, causedBy);
     await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId }, causedBy);
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
+    let actingFor: string | undefined;
+    const merge = this.turn.policy.merge;
+    if (merge) {
+      // ADR 0038 §2: every side-effect call of a merged turn acts for one sender and is
+      // re-checked against that sender's own Tools; `onBehalfOf` never reaches the Tool.
+      const { [ON_BEHALF_OF_ARG]: onBehalfOf, ...rest } = input;
+      input = rest;
+      if (classifyHighRiskAction(tool) !== undefined || this.#hardGate.assess(tool, input).risk === 'dangerous') {
+        const resolution = resolveOnBehalfOf(merge, name, onBehalfOf);
+        if (resolution.status === 'denied') {
+          this.#hardGate.recordOnBehalfDenied(name, toolUseId, {
+            fallback: resolution.fallback,
+            ...(resolution.subjectId ? { subjectId: resolution.subjectId } : {}),
+            senders: merge.members.length,
+          }, resolution.reason);
+          return this.#deny(name, toolUseId, MERGE_ON_BEHALF_POLICY,
+            `${resolution.reason}. In a merged turn, pass ${ON_BEHALF_OF_ARG} with the id of a sender who may do this.`, causedBy);
+        }
+        actingFor = resolution.member.subjectId;
+      }
+    }
     const decision = await runTurnToolPolicies({ turn: this.turn, tool, input });
     // File/cwd authorization is asynchronous: cancellation can arrive after
     // the ingress check but before an allowed decision reaches execution.
@@ -139,7 +166,7 @@ export class TurnToolRuntime {
     }
     // ADR 0036 hard gate: independent of execApprovalMode / requiresApproval; a fresh human
     // approval here supersedes the ordinary approval and provenance prompts below.
-    const hardGate = await this.#hardGate.check(tool, effectiveInput, toolUseId);
+    const hardGate = await this.#hardGate.check(tool, effectiveInput, toolUseId, actingFor ? { requesterId: actingFor } : {});
     if (hardGate.status === 'cancelled' || this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
     if (hardGate.status === 'denied') {
       return this.#deny(name, toolUseId, TOOL_HARD_GATE_POLICY, hardGate.reason, causedBy);
@@ -163,7 +190,7 @@ export class TurnToolRuntime {
         ...(this.turn.origin.kind === 'im'
           ? { conversationScope: this.turn.origin.scope }
           : {}),
-        requesterId: this.turn.principal.subjectId,
+        requesterId: actingFor ?? this.turn.principal.subjectId,
         toolName: name,
         // Never matches a remembered approval: each tainted call is confirmed on its own.
         scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
@@ -186,7 +213,7 @@ export class TurnToolRuntime {
         ...(this.turn.origin.kind === 'im'
           ? { conversationScope: this.turn.origin.scope }
           : {}),
-        requesterId: this.turn.principal.subjectId,
+        requesterId: actingFor ?? this.turn.principal.subjectId,
         toolName: name,
         scopeKey: tool.requiresApproval === 'once'
           ? name

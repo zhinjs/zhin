@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { intersectCapabilities, narrowMergedAccess } from '../../src/turn/merged-principal.js';
+import {
+  intersectCapabilities,
+  narrowMergedAccess,
+  resolveOnBehalfOf,
+  withMergeMembers,
+} from '../../src/turn/merged-principal.js';
 import type { AgentCapabilities } from '../../src/plugin-runtime/capability-ingress.js';
 import type { TurnAccessContext } from '../../src/turn/turn-ingress.js';
 
@@ -90,5 +95,54 @@ describe('intersectCapabilities (ADR 0038 §2)', () => {
     const carrier = capabilities(['search']);
     expect(intersectCapabilities(carrier, [])).toBe(carrier);
     expect(intersectCapabilities(carrier, [carrier])).toBe(carrier);
+  });
+});
+
+describe('withMergeMembers (ADR 0038 §2)', () => {
+  it('records each sender with the Tools they see alone, merging a sender listed twice', () => {
+    const carrier = access('alice', ['admin', 'user']);
+    const merged = withMergeMembers(carrier, [carrier, access('bob', ['user']), access('alice', ['admin'])], [
+      ['kick', 'weather'],
+      ['weather'],
+      ['kick'],
+    ]);
+    expect(merged.principal).toBe(carrier.principal);
+    expect(merged.policy.permissions).toEqual(carrier.policy.permissions);
+    expect(merged.policy.merge?.members).toEqual([
+      { subjectId: 'alice', displayName: 'ALICE', tools: ['kick'] },
+      { subjectId: 'bob', displayName: 'BOB', tools: ['weather'] },
+    ]);
+    expect(Object.isFrozen(merged.policy.merge?.members)).toBe(true);
+  });
+});
+
+describe('resolveOnBehalfOf (ADR 0038 §2)', () => {
+  const merge = {
+    members: [
+      { subjectId: 'alice', displayName: 'Alice', tools: ['kick', 'notice'] },
+      { subjectId: 'bob', displayName: 'Bob', tools: ['notice'] },
+      { subjectId: 'carol', displayName: 'Bob', tools: ['notice'] },
+    ],
+  };
+
+  it('allows a call for a named sender who may make it', () => {
+    expect(resolveOnBehalfOf(merge, 'kick', 'alice')).toMatchObject({ status: 'allowed', member: { subjectId: 'alice' }, fallback: false });
+    expect(resolveOnBehalfOf(merge, 'kick', 'Alice')).toMatchObject({ status: 'allowed', member: { subjectId: 'alice' } });
+  });
+
+  it('denies a named sender who may not make it, even when another sender may', () => {
+    expect(resolveOnBehalfOf(merge, 'kick', 'bob')).toMatchObject({ status: 'denied', fallback: false, subjectId: 'bob' });
+  });
+
+  it('falls back to the lowest sender for a missing, unknown or ambiguous reference', () => {
+    expect(resolveOnBehalfOf(merge, 'kick', undefined)).toMatchObject({ status: 'denied', fallback: true, subjectId: 'bob' });
+    expect(resolveOnBehalfOf(merge, 'kick', 'master')).toMatchObject({ status: 'denied', fallback: true });
+    // Two senders display as "Bob": the name picks neither.
+    expect(resolveOnBehalfOf(merge, 'notice', 'Bob')).toMatchObject({ status: 'allowed', fallback: true, member: { subjectId: 'alice' } });
+    expect(resolveOnBehalfOf(merge, 'notice', 42)).toMatchObject({ status: 'allowed', fallback: true });
+  });
+
+  it('denies everything for an empty merge', () => {
+    expect(resolveOnBehalfOf({ members: [] }, 'notice', undefined)).toMatchObject({ status: 'denied' });
   });
 });

@@ -129,6 +129,22 @@ export interface TurnPolicyContext {
     readonly workingDirectory?: string;
     readonly access?: 'read-only' | 'workspace-write' | 'danger-full-access';
   }>;
+  /**
+   * ADR 0038 §2: present only on a merged group turn. Lists every sender the
+   * turn answers, each with the Tool names visible to that sender alone, so a
+   * side-effect call can be re-checked against the person it acts for.
+   */
+  readonly merge?: Readonly<{
+    readonly members: readonly TurnMergedMember[];
+  }>;
+}
+
+/** One sender of a merged turn (ADR 0038 §2). */
+export interface TurnMergedMember {
+  readonly subjectId: string;
+  readonly displayName?: string;
+  /** Tool names this sender could use in a turn of their own. */
+  readonly tools: readonly string[];
 }
 
 export type TurnExecutionProfile =

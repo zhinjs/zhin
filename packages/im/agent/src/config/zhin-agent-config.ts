@@ -31,7 +31,7 @@ export interface InboundQueueConfig {
 
 /** ADR 0038 §1 group merge window. Private chats never merge. */
 export interface InboundMergeConfig {
-  /** Default `false` until merged turns narrow permissions per sender (ADR 0038 slice B). */
+  /** Default `true` (group chats only); `false` answers every member one by one as before. */
   enabled?: boolean;
   /** Flush after this long without a new message in the window. Default 1500. */
   quietMs?: number;

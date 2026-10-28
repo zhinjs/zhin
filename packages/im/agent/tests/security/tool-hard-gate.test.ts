@@ -4,7 +4,7 @@ import { defineAgentTool } from '@zhin.js/tool';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
-import { createTurnIngress } from '../../src/turn/turn-ingress.js';
+import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { createDecisionEvent, type DecisionEventInput, type DecisionEventRecord } from '../../src/decision-events.js';
 import type { ApprovalOutcome, ApprovalOutcomePort, ApprovalRequestInput } from '../../src/session/approval-port.js';
 import { createBypassApprovalPort } from '../../src/session/approval-review-agent.js';
@@ -94,9 +94,13 @@ describe('assessToolRisk', () => {
       dangerousTools: [],
       allowFunds: false,
       approvalTimeoutMs: 300_000,
+      maxPendingPerScene: 3,
       imApproval: { enabled: false, approverIds: {}, delivery: 'dm', approverGroupId: null },
     });
     expect(resolveToolHardGate({ approvalTimeoutMs: -1, allowFunds: true }).approvalTimeoutMs).toBe(300_000);
+    expect(resolveToolHardGate({ maxPendingPerScene: 0 }).maxPendingPerScene).toBe(3);
+    expect(resolveToolHardGate({ maxPendingPerScene: 1.5 }).maxPendingPerScene).toBe(3);
+    expect(resolveToolHardGate({ maxPendingPerScene: 5 }).maxPendingPerScene).toBe(5);
   });
 });
 
@@ -288,6 +292,124 @@ describe('TurnToolRuntime hard gate', () => {
       decisionAudit: { record: () => { throw new Error('db down'); } },
     });
     await expect(runtime.execute('group_kick', { user_id: 1 }, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
+  });
+});
+
+describe('TurnToolRuntime hard gate × merged turns (ADR 0038 §2)', () => {
+  const members = (tools: Record<string, string[]>) => ({
+    members: Object.entries(tools).map(([subjectId, names]) => ({ subjectId, displayName: `name-${subjectId}`, tools: names })),
+  });
+
+  it('caps pending cards per scene and fails closed beyond it, without touching other scenes', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const execute = vi.fn(async () => 'kicked');
+    const capabilities = [tool('group_kick', execute, 'never')];
+    for (let index = 0; index < 3; index += 1) {
+      const runtime = new TurnToolRuntime(fixture({ unattended: true, turnId: `t-${index}` }).turn, capabilities, { approvalQueue: queue });
+      await runtime.execute('group_kick', { user_id: index }, `tu-${index}`);
+    }
+    expect(queue.list({ status: 'pending' })).toHaveLength(3);
+
+    const fourth = new TurnToolRuntime(fixture({ unattended: true, turnId: 't-4' }).turn, capabilities, { approvalQueue: queue, decisionAudit: audit });
+    const denied = await fourth.execute('group_kick', { user_id: 9 }, 'tu-4');
+    expect(denied).toMatchObject({ status: 'denied', policy: TOOL_HARD_GATE_POLICY });
+    expect(JSON.stringify(denied)).toContain('待审批');
+    expect(queue.list({ status: 'pending' })).toHaveLength(3);
+    expect(audit.codes()).toEqual(['tool_hard_gate:deny:hard_gate_scene_pending_cap']);
+    expect(audit.records[0]!.payload).toMatchObject({ pending: 3, maxPendingPerScene: 3 });
+
+    // Re-asking for an already pending card is not a new card.
+    const retry = new TurnToolRuntime(fixture({ unattended: true, turnId: 't-5' }).turn, capabilities, { approvalQueue: queue, decisionAudit: audit });
+    await retry.execute('group_kick', { user_id: 1 }, 'tu-5');
+    expect(audit.codes().at(-1)).toBe('tool_hard_gate:deny:tool_dangerous_no_approval');
+
+    const elsewhere = new TurnToolRuntime(fixture({ unattended: true, turnId: 't-6', sceneId: '77' }).turn, capabilities, { approvalQueue: queue });
+    await elsewhere.execute('group_kick', { user_id: 1 }, 'tu-6');
+    expect(queue.list({ status: 'pending' })).toHaveLength(4);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('honours a configured maxPendingPerScene', async () => {
+    const queue = new ToolApprovalQueue();
+    const capabilities = [tool('group_kick', vi.fn(async () => 'kicked'), 'never')];
+    const options = { approvalQueue: queue, hardGate: { maxPendingPerScene: 1 } };
+    await new TurnToolRuntime(fixture({ unattended: true, turnId: 'a' }).turn, capabilities, options).execute('group_kick', { user_id: 1 }, 'a');
+    const second = await new TurnToolRuntime(fixture({ unattended: true, turnId: 'b' }).turn, capabilities, options)
+      .execute('group_kick', { user_id: 2 }, 'b');
+    expect(second).toMatchObject({ status: 'denied' });
+    expect(queue.list({ status: 'pending' })).toHaveLength(1);
+  });
+
+  it('asks at most one approval card per merged turn', async () => {
+    const queue = new ToolApprovalQueue();
+    const audit = auditSink();
+    const capabilities = [tool('group_kick', vi.fn(async () => 'kicked'), 'never'), tool('set_avatar', vi.fn(async () => 'set'), 'never')];
+    const merge = members({ 'user-1': ['group_kick', 'set_avatar'], 'user-2': ['group_kick', 'set_avatar'] });
+    const runtime = new TurnToolRuntime(fixture({ unattended: true, merge }).turn, capabilities, { approvalQueue: queue, decisionAudit: audit });
+    await runtime.execute('group_kick', { user_id: 1, onBehalfOf: 'user-2' }, 'tu-1');
+    // A different category, so only the per-turn cap can stop it.
+    const second = await runtime.execute('set_avatar', { url: 'x', onBehalfOf: 'user-1' }, 'tu-2');
+    expect(second).toMatchObject({ status: 'denied' });
+    expect(queue.list({ status: 'pending' })).toHaveLength(1);
+    expect(audit.records.at(-1)).toMatchObject({ reasonCode: 'tool_hard_gate_latched', payload: { cap: 'turn', maxCardsPerTurn: 1 } });
+  });
+
+  it('puts the sender it acts for on the card and in the prompt, and strips onBehalfOf from the Tool input', async () => {
+    const queue = new ToolApprovalQueue();
+    const port = scriptedPort([{ status: 'approved' }]);
+    const execute = vi.fn(async () => 'kicked');
+    const merge = members({ 'user-1': ['group_kick'], 'user-2': ['group_kick'] });
+    const runtime = new TurnToolRuntime(fixture({ approval: port, merge }).turn, [tool('group_kick', execute, 'never')], { approvalQueue: queue });
+    await expect(runtime.execute('group_kick', { user_id: 5, onBehalfOf: 'user-2' }, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
+    expect(execute).toHaveBeenCalledWith({ user_id: 5 }, expect.anything());
+    expect(port.requests[0]).toMatchObject({ requesterId: 'user-2' });
+    expect(queue.list()[0]).toMatchObject({ requesterId: 'user-2', args: { user_id: 5 } });
+  });
+
+  it('denies a side-effect call for a sender who may not make it, and audits merge_on_behalf_denied', async () => {
+    const audit = auditSink();
+    const port = scriptedPort([]);
+    const execute = vi.fn(async () => 'kicked');
+    const merge = members({ 'user-1': ['group_kick'], 'user-2': [] });
+    const runtime = new TurnToolRuntime(fixture({ approval: port, merge }).turn, [tool('group_kick', execute, 'never')], { decisionAudit: audit });
+
+    const named = await runtime.execute('group_kick', { user_id: 5, onBehalfOf: 'user-2' }, 'tu-1');
+    expect(named).toMatchObject({ status: 'denied', policy: 'merge-on-behalf' });
+    // Without onBehalfOf the lowest sender decides: user-2 cannot, so neither can the turn.
+    const missing = await runtime.execute('group_kick', { user_id: 5 }, 'tu-2');
+    expect(missing).toMatchObject({ status: 'denied', policy: 'merge-on-behalf' });
+    const spoofed = await runtime.execute('group_kick', { user_id: 5, onBehalfOf: 'master-9' }, 'tu-3');
+    expect(spoofed).toMatchObject({ status: 'denied', policy: 'merge-on-behalf' });
+
+    expect(audit.codes()).toEqual([
+      'tool_call:deny:merge_on_behalf_denied',
+      'tool_call:deny:merge_on_behalf_denied',
+      'tool_call:deny:merge_on_behalf_denied',
+    ]);
+    expect(audit.records[1]!.payload).toMatchObject({ fallback: true, subjectId: 'user-2', senders: 2 });
+    expect(port.requests).toHaveLength(0);
+    expect(execute).not.toHaveBeenCalled();
+
+    // Not latched: acting for a sender who may do it still works.
+    const allowed = new TurnToolRuntime(fixture({ approval: scriptedPort([{ status: 'approved' }]), merge }).turn,
+      [tool('group_kick', execute, 'never')]);
+    await expect(allowed.execute('group_kick', { user_id: 5, onBehalfOf: 'user-1' }, 'tu-4')).resolves.toMatchObject({ status: 'completed' });
+  });
+
+  it('leaves read-only calls alone and never forwards onBehalfOf to them', async () => {
+    const execute = vi.fn(async () => 'list');
+    const merge = members({ 'user-1': [], 'user-2': [] });
+    const runtime = new TurnToolRuntime(fixture({ merge }).turn, [tool('get_group_members', execute, 'never')]);
+    await expect(runtime.execute('get_group_members', { onBehalfOf: 'user-2' }, 'tu-1')).resolves.toMatchObject({ status: 'completed' });
+    expect(execute).toHaveBeenCalledWith({}, expect.anything());
+  });
+
+  it('keeps onBehalfOf as an ordinary argument outside merged turns', async () => {
+    const execute = vi.fn(async () => 'list');
+    const runtime = new TurnToolRuntime(fixture().turn, [tool('get_group_members', execute, 'never')]);
+    await runtime.execute('get_group_members', { onBehalfOf: 'x' }, 'tu-1');
+    expect(execute).toHaveBeenCalledWith({ onBehalfOf: 'x' }, expect.anything());
   });
 });
 
@@ -677,16 +799,27 @@ function tool(name: string, execute: (...args: any[]) => Promise<unknown>, requi
   };
 }
 
-function fixture(options: { approval?: ApprovalOutcomePort; unattended?: boolean; turnId?: string; roles?: string[] } = {}) {
+function fixture(options: {
+  approval?: ApprovalOutcomePort;
+  unattended?: boolean;
+  turnId?: string;
+  roles?: string[];
+  sceneId?: string;
+  merge?: TurnPolicyContext['merge'];
+} = {}) {
   const events: TurnEvent[] = [];
   const turn = createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: options.turnId ?? 'turn' },
-    origin: { kind: 'im', platform: 'icqq', endpoint: '10001', scope: 'group', sceneId: '42' },
+    origin: { kind: 'im', platform: 'icqq', endpoint: '10001', scope: 'group', sceneId: options.sceneId ?? '42' },
     principal: { subjectId: 'user-1', roles: options.roles ?? ['user'] },
     input: { text: 'run' },
-    session: { key: 'icqq:10001:group:42' },
-    policy: { permissions: options.roles ?? ['user'], unattended: options.unattended ?? false },
+    session: { key: `icqq:10001:group:${options.sceneId ?? '42'}` },
+    policy: {
+      permissions: options.roles ?? ['user'],
+      unattended: options.unattended ?? false,
+      ...(options.merge ? { merge: options.merge } : {}),
+    },
     capabilities: { tools: [], skills: [] },
     signal: new AbortController().signal,
     ports: {

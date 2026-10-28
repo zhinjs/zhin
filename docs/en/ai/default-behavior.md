@@ -19,7 +19,8 @@ This is the **single authoritative document** for `ai.agent.*` default behavior 
 - Sub-agents: `subagentTurnMode off`
 - Tool budget: `extendBy 10`, `progressWindow 5`, `maxTotalIterations 40`, `maxWallClockMs 600000`, `failureStreakLimit 3`, `repeatLimit 2`
 - Usage quota: all 0 (off), `exemptOwner true`
-- Dangerous-tool hard gate: always on; funds tools disabled (`allowFunds false`); a call not approved within 5 minutes (`approvalTimeoutMs 300000`) is denied
+- Dangerous-tool hard gate: always on; funds tools disabled (`allowFunds false`); a call not approved within 5 minutes (`approvalTimeoutMs 300000`) is denied; at most 3 pending cards per group (`maxPendingPerScene 3`), beyond that a call is denied outright
+- Group merge window: on (`inboundQueue.merge.enabled true`, group chats only; `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`)
 - Compaction: `thresholdRatio 0.7`
 - Request traces: `recordRequestBodies true` stores redacted model-input text and tool definitions locally on the Host. Defaults retain at most seven days and 64 MiB in total. Capacity cleanup removes the oldest traces first; an oversized body leaves statistics and an explicit unavailable-body status. Set this to `false` to stop recording new bodies without disabling usage statistics or deleting existing records.
 
@@ -49,9 +50,10 @@ ai:
       dangerousTools: [my_plugin__wipe_album]  # add only; core tools cannot be lowered
       allowFunds: false
       approvalTimeoutMs: 300000                # denied on timeout
+      maxPendingPerScene: 3                    # pending cards per group; fail closed beyond it
 ```
 
-Approval cards are served by the Console RPC `plugin.root.tool-approvals` (read, permission `tool_approvals:read` or `ops:approve`) and `plugin.root.resolve-tool-approval` (`{ id, decision: 'approve' | 'deny' }`, permission `ops:approve` or the older `tool_approvals:resolve`, either one is enough); the full token can call both. Group-ops cooldown (ADR 0037 §3): one approval card per `platform + scene_id + tool local name` within `ops.cooldownMs` (default 60 seconds, set in session ops); during the cooldown the call is refused without a new card (`ops_cooldown` / `ops_cooldown_hit`). Every decision is written to `ai_decision_events`: `tool_approval` (`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`) `tool_hard_gate` (allow: `tool_approval_approved`; deny: `tool_dangerous_no_approval`, `tool_approval_denied`, `tool_approval_timeout`, `tool_funds_disabled`, `tool_hard_gate_latched`), and `tool_call` (allow, `tool_safe_allowed`) for safe / read-only tools, which run but are still audited. An audit write failure never changes the decision.
+Approval cards are served by the Console RPC `plugin.root.tool-approvals` (read, permission `tool_approvals:read` or `ops:approve`) and `plugin.root.resolve-tool-approval` (`{ id, decision: 'approve' | 'deny' }`, permission `ops:approve` or the older `tool_approvals:resolve`, either one is enough); the full token can call both. Group-ops cooldown (ADR 0037 §3): one approval card per `platform + scene_id + tool local name` within `ops.cooldownMs` (default 60 seconds, set in session ops); during the cooldown the call is refused without a new card (`ops_cooldown` / `ops_cooldown_hit`). Every decision is written to `ai_decision_events`: `tool_approval` (`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`) `tool_hard_gate` (allow: `tool_approval_approved`; deny: `tool_dangerous_no_approval`, `tool_approval_denied`, `tool_approval_timeout`, `tool_funds_disabled`, `tool_hard_gate_latched`, `hard_gate_scene_pending_cap` (the group already has its maximum of pending cards)), and `tool_call` (allow, `tool_safe_allowed`) for safe / read-only tools, which run but are still audited. An audit write failure never changes the decision.
 
 ### IM approval channel (#1013, off by default)
 

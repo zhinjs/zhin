@@ -462,8 +462,8 @@ ai:
       groupMode: supersede        # 默认：同一发起人的新消息替换他尚未回复的回合；fifo：全部按到达顺序排队
       maxQueuedTurns: 5           # 每个会话最多排队的回合数
       ttlMs: 180000               # 排队超时
-      merge:                      # 群聊合流（ADR 0038），默认关闭
-        enabled: false
+      merge:                      # 群聊合流（ADR 0038），仅群聊
+        enabled: true
         quietMs: 1500             # 安静多久发车
         maxWaitMs: 6000           # 窗口最多等多久
         maxSenders: 5             # 一次合并回复最多几个人
