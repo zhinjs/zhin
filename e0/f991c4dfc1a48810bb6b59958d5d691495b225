@@ -1,0 +1,62 @@
+.changeset/0039-slice-a-group-rules.md
+  s_871908dba214fa::t_29e364c1a5abfd 1-6
+tests/snapshots/api-surface.json
+  s_871908dba214fa::t_06da3d61b1194f 72
+packages/im/agent/src/decision-events.ts
+  s_871908dba214fa::t_e1f8833e109d0b 46-49,132-149
+packages/im/agent/src/group-rules.ts
+  s_871908dba214fa::t_e1f8833e109d0b 75
+  s_871908dba214fa::t_46bebd42f414f5 1-74,77-314,316-341,343-470,472-477,479-567,569-848
+  s_871908dba214fa::t_f46d05a3a004bb 76,315,342,471,478,568
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  s_871908dba214fa::t_e1f8833e109d0b 18,91-93
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  s_871908dba214fa::t_b04544ac540094 36-37
+tests/snapshots/plugin-runtime-api.json
+  s_871908dba214fa::t_06da3d61b1194f 57
+packages/im/agent/tests/define-ai-database-models.test.ts
+  s_871908dba214fa::t_decac3704f7404 17,30
+packages/im/agent/tests/group-rules.test.ts
+  s_871908dba214fa::t_decac3704f7404 1-312
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_871908dba214fa::t_d5447cf3dceaae 8,32-39,79,93,102
+packages/im/agent/src/init/define-ai-database-models.ts
+  s_871908dba214fa::t_e1f8833e109d0b 19,38
+packages/im/agent/src/plugin-runtime/index.ts
+  s_871908dba214fa::t_d5447cf3dceaae 17
+packages/im/agent/tests/decision-events.test.ts
+  s_871908dba214fa::t_decac3704f7404 57,132-142
+  s_ecdb6766b9ebd2::t_66485f13c24bd2 143
+packages/im/agent/src/zhin-agent/index.ts
+  s_871908dba214fa::t_d5447cf3dceaae 52,176-177,425-426
+  s_871908dba214fa::t_83b0e362d81f9f 427-428
+basic/cli/src/plugin-runtime/console/decision-replay.ts
+  s_871908dba214fa::t_ed38712ea35149 42
+packages/im/agent/src/index.ts
+  s_871908dba214fa::t_d5447cf3dceaae 342-388
+  s_871908dba214fa::t_e33d2107e4a485 341
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e0f991c4dfc1a48810bb6b59958d5d691495b225",
+  "prompts": {},
+  "sessions": {
+    "s_871908dba214fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb870304-22d7-41fd-95af-f028f495bd55",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ecdb6766b9ebd2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "faad7f0b-8177-417b-bb3f-ffaa9af295c1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
