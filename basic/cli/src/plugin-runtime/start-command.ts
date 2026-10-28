@@ -48,6 +48,7 @@ import {
   resolveSystemLogConfig,
   AssistantStatus,
   HostToolApprovals,
+  HostSelfChanges,
   composeHostConsoleRpc,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
@@ -179,6 +180,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const assistantStatus = new AssistantStatus();
   // 危险工具硬闸审批卡片（ADR 0036）：进程持有，绑定当前 generation 的 Agent 队列。
   const toolApprovals = new HostToolApprovals();
+  // 受控自我进化审批（ADR 0040 §4）：进程持有，绑定当前 generation 的变更暂存区与审批。
+  const selfChanges = new HostSelfChanges();
   const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
     projectRoot: options.root,
     configFile,
@@ -248,6 +251,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           im,
           assistantStatus,
           toolApprovals,
+          selfChanges,
           projectRoot: options.root,
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
@@ -328,7 +332,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     databaseHost,
     scheduleHost,
     eventHub: consoleEventHub,
-    hostConsoleRpc: composeHostConsoleRpc(assistantStatus.consoleRpc, toolApprovals.consoleRpc),
+    hostConsoleRpc: composeHostConsoleRpc(assistantStatus.consoleRpc, toolApprovals.consoleRpc, selfChanges.consoleRpc),
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
@@ -494,6 +498,7 @@ interface ConfiguredAgentHost {
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
     readonly assistantStatus?: AssistantStatus;
     readonly toolApprovals?: HostToolApprovals;
+    readonly selfChanges?: HostSelfChanges;
   }): RootResourceInstaller;
 }
 

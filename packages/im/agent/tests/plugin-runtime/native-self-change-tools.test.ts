@@ -9,6 +9,8 @@ import { createHostProtectedPaths } from '../../src/security/host-config-paths.j
 import { SelfChangeConfigKeyError, SelfChangePathError } from '../../src/self-change/policy.js';
 import type { SelfChangePreview, SelfChangeImpactPort } from '../../src/self-change/preview.js';
 import { SelfChangeStateError, SelfChangeStore } from '../../src/self-change/store.js';
+import { SelfChangeApprovals } from '../../src/self-change/approval.js';
+import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
 
 let project: string;
 let events: DecisionEventInput[];
@@ -19,15 +21,17 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(project, { recursive: true, force: true }));
 
-async function harness(impact?: SelfChangeImpactPort) {
+async function harness(impact?: SelfChangeImpactPort, withApprovals = false) {
   const store = new SelfChangeStore({
     root: join(project, '.zhin', 'changes'),
     projectRoot: project,
     protectedPaths: await createHostProtectedPaths({ projectRoot: project }),
     audit: () => ({ record: (input) => { events.push(input); } }),
   });
-  const [feature] = createNativeSelfChangeToolFeatures({ store: () => store, impact: () => impact });
-  return { store, tool: feature! };
+  const queue = new ToolApprovalQueue();
+  const approvals = withApprovals ? new SelfChangeApprovals({ store, queue }) : undefined;
+  const [feature] = createNativeSelfChangeToolFeatures({ store: () => store, impact: () => impact, approvals: () => approvals });
+  return { store, tool: feature!, queue };
 }
 
 function context(subjectId = '42', origin: Partial<Extract<ToolExecutionContext['origin'], { kind: 'im' }>> = {}): ToolExecutionContext {
@@ -140,5 +144,20 @@ describe('change_draft tool', () => {
     const http = { ...context(), origin: { kind: 'http', sessionId: 's' } } as unknown as ToolExecutionContext;
     await expect(tool.definition.execute({ files: [ping], summary: 'x' }, http)).rejects.toThrow('IM conversation');
     await expect(tool.definition.execute({ files: [ping], summary: 'x' }, context(''))).rejects.toThrow('known requester');
+  });
+
+  it('submits a passing change for approval and refuses a second one while it waits', async () => {
+    const { store, tool, queue } = await harness(undefined, true);
+    const result = await tool.definition.execute({ files: [ping], summary: '加 /ping 指令' }, context('42', { scope: 'group', sceneId: '500' }));
+    const [record] = await store.list();
+    expect(record).toMatchObject({ status: 'pending' });
+    const [card] = queue.list();
+    expect(card).toMatchObject({ category: 'self', toolName: 'self_change', origin: { scope: 'group', sceneId: '500' }, args: { changeId: record!.id } });
+    expect(result).toContain(`Submitted for approval (card ${card!.id})`);
+    expect(result).toContain('never in a group');
+
+    const second = await tool.definition.execute({ files: [{ ...ping, path: 'commands/pong.ts' }], summary: 'again' }, context('42', { scope: 'group', sceneId: '500' }));
+    expect(second).toContain(`Change ${record!.id} from this conversation is still waiting`);
+    expect(await store.list()).toHaveLength(1);
   });
 });

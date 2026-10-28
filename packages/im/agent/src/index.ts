@@ -443,6 +443,17 @@ export {
   type SelfChangePreview,
 } from './self-change/preview.js';
 export {
+  SELF_CHANGE_APPROVAL_TOOL,
+  SelfChangeApprovals,
+  SelfChangePendingLimitError,
+  approvalOrigin as selfChangeApprovalOrigin,
+  selfChangeApprovalArgs,
+  type SelfChangeApprovalArgs,
+  type SelfChangeApprovalsOptions,
+  type SelfChangeDecisionResult,
+  type SelfChangeSubmitOptions,
+} from './self-change/approval.js';
+export {
   checkSelfChangeFiles,
   runSelfChangeTrial,
   type SelfChangePluginTestResult,

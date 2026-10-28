@@ -310,3 +310,86 @@ describe('formatImApprovalCard', () => {
     expect(text).toContain('Console');
   });
 });
+
+describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
+  const SELF_CHANGE: ToolApprovalEnqueueInput = {
+    toolName: 'self_change',
+    category: 'self',
+    sessionKey: 'self-change:icqq:group:42',
+    requesterId: 'owner-1',
+    turnId: 'turn-9',
+    args: {
+      changeId: 'c-1',
+      contentHash: 'sha256:abc',
+      summary: '加一个 /ping 指令',
+      files: [{ path: 'commands/ping.ts', kind: 'create', added: 2, removed: 0 }],
+      configPaths: [],
+      impact: 'generation',
+      impactDetail: ['reload app'],
+      trial: 'passed',
+    },
+    origin: { platform: 'icqq', endpointKey: '10001', scope: 'group', sceneId: BUSINESS_GROUP },
+  };
+
+  function selfSetup(config: ToolHardGateImApprovalConfig = { enabled: false }) {
+    const queue = new ToolApprovalQueue();
+    const sent: Array<{ target: ImApprovalDeliveryTarget; text: string }> = [];
+    const send = vi.fn(async (target: ImApprovalDeliveryTarget, text: string) => { sent.push({ target, text }); });
+    const channel = new ImToolApprovalChannel({
+      queue,
+      settings: () => resolveToolHardGateImApproval(config),
+      send,
+      resolveOwner: (platform, endpointKey) => platform === 'icqq' && endpointKey === '10001' ? 'owner-1' : undefined,
+    });
+    channel.start();
+    return { queue, channel, sent, send };
+  }
+
+  it('delivers a group-started change to the owner privately, even with the G6 channel off', async () => {
+    const { queue, channel, sent } = selfSetup();
+    const card = queue.enqueue(SELF_CHANGE);
+    await channel.drain();
+    expect(sent.map((item) => item.target.conversation)).toEqual([{ kind: 'private', id: 'owner-1' }]);
+    const text = sent[0]!.text;
+    expect(text).toContain('【变更审批】加一个 /ping 指令');
+    expect(text).toContain('create commands/ping.ts（+2 -0）');
+    expect(text).toContain('影响：热重载（reload app）');
+    expect(text).toContain('试跑：通过');
+    expect(text).toContain(`/approve ${card.id}`);
+    expect(text).not.toContain('contentHash');
+  });
+
+  it('adds allowlisted approvers when G6 is on, without sending the owner twice', async () => {
+    const { queue, channel, sent } = selfSetup({ enabled: true, approverIds: ['owner-1', 'admin-1'] });
+    queue.enqueue(SELF_CHANGE);
+    await channel.drain();
+    expect(sent.map((item) => item.target.conversation.id).sort()).toEqual(['admin-1', 'owner-1']);
+  });
+
+  it('lets the owner settle in a private chat but never in the business group', async () => {
+    const { queue, channel } = selfSetup();
+    const card = queue.enqueue(SELF_CHANGE);
+    expect(channel.handleCommand(command(`approve ${card.id}`, { scope: 'group', sceneId: BUSINESS_GROUP, senderId: 'owner-1' })))
+      .toContain('群内消息不会结算');
+    expect(queue.get(card.id)?.status).toBe('pending');
+    expect(channel.handleCommand(command(`approve ${card.id}`, { sceneId: 'stranger', senderId: 'stranger' })))
+      .toContain('IM 审批通道未开启');
+    expect(channel.handleCommand(command(`approve ${card.id}`, { sceneId: 'owner-1', senderId: 'owner-1' })))
+      .toBe(`已批准变更 c-1（${card.id}）。`);
+    expect(queue.get(card.id)).toMatchObject({ status: 'approved', channel: 'im_dm', decidedBy: imApprovalOperatorId('icqq', 'owner-1') });
+  });
+
+  it('does not let the owner settle ordinary hard-gate cards while G6 is off', () => {
+    const { queue, channel } = selfSetup();
+    const card = queue.enqueue(DANGEROUS_CALL);
+    expect(channel.handleCommand(command(`approve ${card.id}`, { sceneId: 'owner-1', senderId: 'owner-1' })))
+      .toContain('IM 审批通道未开启');
+    expect(queue.get(card.id)?.status).toBe('pending');
+  });
+
+  it('formats the self-change card through formatImApprovalCard', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue(SELF_CHANGE);
+    expect(formatImApprovalCard(card, 'dm')).toContain('【变更审批】');
+  });
+});
