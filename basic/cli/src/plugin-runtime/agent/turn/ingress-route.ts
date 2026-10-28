@@ -19,6 +19,7 @@ import { DecisionApprovalJudgment } from '@zhin.js/agent/session';
 import { noteTurnTrace } from '@zhin.js/agent/trace';
 import {
   intersectCapabilities,
+  isActingTurnEvent,
   isCancelIntent,
   mergedReplyAuditPayload,
   narrowMergedAccess,
@@ -28,6 +29,7 @@ import {
   type TurnAccessContext,
   type TurnAdmission,
   type TurnMergedSender,
+  type TurnStaleVerdict,
 } from '@zhin.js/agent/turn';
 import {
   CapabilityIngress,
@@ -974,6 +976,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
         ...(modelStartedAt !== undefined ? { durationMs: Date.now() - modelStartedAt } : {}),
       });
       let admission: Extract<TurnAdmission, { kind: 'run' }> | undefined;
+      /** ADR 0038 §4: the stale verdict is audited once per turn. */
+      let staleAudited = false;
+      const staleReplyBlocked = (): boolean => {
+        const verdict = admission?.staleCheck();
+        if (!verdict || verdict.kind === 'fresh') return false;
+        if (!staleAudited) {
+          staleAudited = true;
+          auditStaleReply(audit, verdict);
+        }
+        return verdict.kind === 'discard';
+      };
       try {
         const preprocessed = await preprocessInboundTurn(
           message,
@@ -1209,6 +1222,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     const outcome = await sendOutputMessages(output, {
                       render: messageOutput => flattenOutputElements([...messageOutput]),
                       send: async (messageOutput) => {
+                        if (staleReplyBlocked()) {
+                          logger.debug(formatCompact({ op: 'agent_host_reply_stale_discarded', sessionKey }));
+                          return { status: 'suppressed' as const };
+                        }
                         if (outboundBlocked('reply')) {
                           auditOutbound(audit, { status: 'suppressed' }, { control: true });
                           return { status: 'suppressed' as const };
@@ -1395,16 +1412,30 @@ function admissionRejectionNotice(reason: 'queue_full' | 'expired' | 'stopped', 
   return undefined;
 }
 
-/** Records how the turn was admitted on its TurnTrace once the trace exists. */
+/** ADR 0038 §4 / §6: a stale reply that was dropped, or sent anyway because the turn acted or the sender was dropped once. */
+export function auditStaleReply(audit: DecisionAudit, verdict: Exclude<TurnStaleVerdict, { kind: 'fresh' }>): void {
+  if (verdict.kind === 'discard') {
+    audit({ kind: 'outbound', outcome: 'skip', reasonCode: 'merge_reply_stale_discarded', payload: { senders: verdict.senders } });
+  } else {
+    audit({ kind: 'outbound', outcome: 'allow', reasonCode: 'merge_reply_stale_sent', payload: { senders: verdict.senders, reason: verdict.reason } });
+  }
+}
+
+/**
+ * Records how the turn was admitted on its TurnTrace once the trace exists,
+ * and tells the gate when the turn acts (ADR 0038 §4: such replies are never dropped).
+ */
 function observeWithAdmission(
   observe: ReturnType<typeof observeAgentTurnTrace>,
   turnId: string,
   admission: Extract<TurnAdmission, { kind: 'run' }> | undefined,
 ): ReturnType<typeof observeAgentTurnTrace> {
-  const facts = admission?.facts;
-  if (!facts || (facts.queuedMs === 0 && facts.mergedMessages <= 1 && !facts.supersededPrevious)) return observe;
-  let noted = false;
+  if (!admission) return observe;
+  const facts = admission.facts;
+  const noteFacts = facts.queuedMs > 0 || facts.mergedMessages > 1 || facts.supersededPrevious;
+  let noted = !noteFacts;
   return (event) => {
+    if (isActingTurnEvent(event)) admission.markActed();
     if (!noted) {
       noted = true;
       noteTurnTrace(turnId, {

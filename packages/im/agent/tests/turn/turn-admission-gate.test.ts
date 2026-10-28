@@ -472,3 +472,141 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     expect(gate.queuedTurns(SESSION)).toBe(0);
   });
 });
+
+describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
+  function createStaleGate() {
+    let clock = 0;
+    let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
+    const gate = new TurnAdmissionGate({
+      maxQueuedTurns: 5,
+      queueTtlMs: 180_000,
+      supersedeSameSender: true,
+      merge: { quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 3 },
+      now: () => clock,
+      setTimer: (run, delayMs) => {
+        const timer = { at: clock + delayMs, run, cancelled: false };
+        timers.push(timer);
+        return () => { timer.cancelled = true; };
+      },
+    });
+    const advance = (ms: number) => {
+      const until = clock + ms;
+      for (;;) {
+        const due = timers.filter((t) => !t.cancelled && t.at <= until).sort((a, b) => a.at - b.at)[0];
+        if (!due) break;
+        clock = due.at;
+        due.cancelled = true;
+        due.run();
+      }
+      clock = until;
+      timers = timers.filter((t) => !t.cancelled);
+    };
+    return { gate, advance };
+  }
+
+  function mention(senderId: string, text: string, extra: Partial<TurnAdmissionRequest> = {}): TurnAdmissionRequest {
+    return { sessionKey: SESSION, senderId, text, plainText: true, mergeable: true, ...extra };
+  }
+
+  async function startMerged(gate: TurnAdmissionGate, advance: (ms: number) => void): Promise<RunAdmission> {
+    const carrier = gate.admit(mention('alice', 'a1', { messageId: 'm1' }));
+    await gate.admit(mention('bob', 'b1', { messageId: 'm2' }));
+    advance(1_500);
+    return expectRun(carrier);
+  }
+
+  it('stays fresh when nobody it answers follows up', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    // A new sender queues behind, but does not make this reply stale.
+    void gate.admit(mention('carol', 'c1'));
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('drops the reply when an answered sender follows up, and answers old and new messages together', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    const followUp = gate.admit(mention('alice', 'a2', { messageId: 'm3' }));
+    expect(run.staleCheck()).toEqual({ kind: 'discard', senders: ['alice'] });
+    // Later sends of the same turn are dropped as well.
+    expect(run.staleCheck()).toEqual({ kind: 'discard', senders: ['alice'] });
+    run.release();
+    advance(1_500);
+    const next = await expectRun(followUp);
+    expect(next.participants).toEqual([
+      { senderId: 'alice', texts: ['a1', 'a2'], messageIds: ['m1', 'm3'] },
+      { senderId: 'bob', texts: ['b1'], messageIds: ['m2'] },
+    ]);
+    next.release();
+  });
+
+  it('drops a reply at most once per sender chain (starvation guard)', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    const followUp = gate.admit(mention('alice', 'a2'));
+    expect(run.staleCheck().kind).toBe('discard');
+    run.release();
+    advance(1_500);
+    const second = await expectRun(followUp);
+    const again = gate.admit(mention('bob', 'b2'));
+    expect(second.staleCheck()).toEqual({ kind: 'send', senders: ['bob'], reason: 'starvation' });
+    second.release();
+    advance(1_500);
+    const third = await expectRun(again);
+    // The guard is spent once the senders were answered: a new chain may be dropped again.
+    void gate.admit(mention('bob', 'b3'));
+    expect(third.staleCheck().kind).toBe('discard');
+    third.release();
+  });
+
+  it('sends a stale reply when the turn already acted (tool call / hard gate)', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    run.markActed();
+    void gate.admit(mention('bob', 'b2'));
+    expect(run.staleCheck()).toEqual({ kind: 'send', senders: ['bob'], reason: 'acted' });
+    run.release();
+  });
+
+  it('does not cut a reply in half once part of it was delivered', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    run.markDelivered();
+    void gate.admit(mention('alice', 'a2'));
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('keeps the reply when the follow-up left the queue', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    const followUp = gate.admit(mention('alice', 'a2'));
+    expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+    await expect(followUp).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('applies to an ordinary turn whose sender follows up into a window', async () => {
+    const { gate, advance } = createStaleGate();
+    const carrier = gate.admit(mention('alice', 'a1'));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    const followUp = gate.admit(mention('alice', 'a2'));
+    expect(run.staleCheck().kind).toBe('discard');
+    run.release();
+    advance(1_500);
+    const next = await expectRun(followUp);
+    expect(next.text).toBe('a1\na2');
+    next.release();
+  });
+
+  it('never marks a turn stale while no merge window is configured', async () => {
+    const { gate } = createGate();
+    const run = await expectRun(gate.admit(message('alice', 'a1')));
+    void gate.admit(message('bob', 'b1'));
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+});
