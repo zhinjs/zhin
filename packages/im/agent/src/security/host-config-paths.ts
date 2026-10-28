@@ -18,14 +18,14 @@
  * Not managed in P0: `pnpm-workspace.yaml`, `tsconfig*.json`.
  *
  * The project root and host-declared extras are injected by the host through
- * {@link installHostProtectedPaths} (the agent package cannot read `basic/cli`). When nothing was
+ * {@link hostProtectedPathsToken} (the agent package cannot read `basic/cli`). When nothing was
  * injected the matcher fails **closed**: it cannot anchor, so list B degrades to "this name at any
  * depth" instead of gating nothing.
  */
 import { realpathSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
-import { ROOT_CONFIG_FILE_NAMES } from '@zhin.js/plugin-runtime';
+import { ROOT_CONFIG_FILE_NAMES, createToken } from '@zhin.js/plugin-runtime';
 import { checkFileAccess } from './file-policy.js';
 import { classifyBashFileOperation } from './file-role-policy.js';
 
@@ -150,32 +150,21 @@ export async function createHostProtectedPaths(input: HostProtectedPathsInput): 
   });
 }
 
-let installed: HostProtectedPaths | undefined;
-
 /**
- * Host injection point. Process-wide because the file/bash policy runs at many Turn construction
- * sites (main turn, subagents, workroom). Returns a disposer; disposing only clears this
- * registration, not a newer one.
+ * Generation-scoped host injection: `installAgentHost` provides the value on the generation's
+ * resource scope, so it is disposed and rebuilt with the generation. Absent (tests, embedders) the
+ * matcher fails closed, see the module comment.
  */
-export function installHostProtectedPaths(paths: HostProtectedPaths): () => void {
-  installed = paths;
-  return () => {
-    if (installed === paths) installed = undefined;
-  };
-}
-
-export function currentHostProtectedPaths(): HostProtectedPaths | undefined {
-  return installed;
-}
+export const hostProtectedPathsToken = createToken<HostProtectedPaths>('zhin.agent.host-protected-paths');
 
 /**
- * Classifies one path. `base` resolves relative paths (default: the project root, or the cwd when
- * the host injected nothing). Symlinks are resolved here too, so a link inside the workspace that
+ * Classifies one path. `paths` is `undefined` when the host injected nothing (fail-closed fallback).
+ * `base` resolves relative paths (default: the project root, or the cwd without one). Symlinks are resolved here too, so a link inside the workspace that
  * points at a protected file is classified as that file.
  */
 export function classifyHostPath(
   filePath: string,
-  paths: HostProtectedPaths | undefined = installed,
+  paths: HostProtectedPaths | undefined,
   base?: string,
 ): HostPathClass | undefined {
   const raw = filePath.trim();
@@ -299,7 +288,7 @@ function strongest(
 export function hostWriteImpact(
   toolName: string,
   input: Readonly<Record<string, unknown>>,
-  paths: HostProtectedPaths | undefined = installed,
+  paths: HostProtectedPaths | undefined,
 ): HostWriteImpact | undefined {
   const localName = toolName.split(/[.:/]/u).pop() ?? toolName;
   if (FILE_WRITE_TOOLS.has(localName)) {
@@ -331,7 +320,7 @@ export function hostWriteImpact(
 export function hostConfigWriteTarget(
   toolName: string,
   input: Readonly<Record<string, unknown>>,
-  paths?: HostProtectedPaths,
+  paths: HostProtectedPaths | undefined,
 ): string | undefined {
   return hostWriteImpact(toolName, input, paths)?.target;
 }

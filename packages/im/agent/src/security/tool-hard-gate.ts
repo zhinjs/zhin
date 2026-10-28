@@ -277,7 +277,7 @@ export function assessToolInvocation(
   tool: ToolRiskView,
   input: Readonly<Record<string, unknown>> | undefined,
   settings: ToolHardGateSettings = DEFAULT_TOOL_HARD_GATE,
-  protectedPaths?: HostProtectedPaths,
+  protectedPaths: HostProtectedPaths | undefined = undefined,
 ): ToolRiskAssessment {
   const base = assessToolRisk(tool, settings);
   const impact = input ? hostWriteImpact(tool.name, input, protectedPaths) : undefined;
@@ -349,7 +349,7 @@ export interface ToolHardGateContext {
    * 键用 {@link location} 的 `platform` / `sceneId` 与工具本地名。
    */
   readonly opsCooldown?: OpsCooldownView;
-  /** 覆盖宿主注入的受保护路径集（测试 / 嵌入方）；缺省读 `installHostProtectedPaths` 的注册。 */
+  /** 本代宿主注入的受保护路径集（Turn 带入）；缺省为 fail-closed 回退（按文件名任意层级匹配）。 */
   readonly protectedPaths?: HostProtectedPaths;
 }
 

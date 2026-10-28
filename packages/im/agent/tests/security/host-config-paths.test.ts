@@ -5,10 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   classifyHostPath,
   createHostProtectedPaths,
-  currentHostProtectedPaths,
   hostConfigWriteTarget,
   hostWriteImpact,
-  installHostProtectedPaths,
   type HostProtectedPaths,
 } from '../../src/security/host-config-paths.js';
 
@@ -104,7 +102,6 @@ describe('classifyHostPath with an injected project root', () => {
 
 describe('classifyHostPath without an injected root (fail closed)', () => {
   it('matches the same names at any depth instead of gating nothing', () => {
-    expect(currentHostProtectedPaths()).toBeUndefined();
     expect(classifyHostPath('/ws/package.json', undefined)).toBe('self');
     expect(classifyHostPath('/ws/plugins/x/package.json', undefined)).toBe('self');
     expect(classifyHostPath('/ws/zhin.config.yml', undefined)).toBe('self');
@@ -114,20 +111,6 @@ describe('classifyHostPath without an injected root (fail closed)', () => {
     expect(classifyHostPath('/ws/notes.md', undefined)).toBeUndefined();
     expect(classifyHostPath('/ws/pnpm-workspace.yaml', undefined)).toBeUndefined();
     expect(classifyHostPath('/ws/tsconfig.json', undefined)).toBeUndefined();
-  });
-});
-
-describe('installHostProtectedPaths', () => {
-  it('is the default for the matcher and its disposer only clears its own registration', () => {
-    const dispose = installHostProtectedPaths(paths);
-    expect(currentHostProtectedPaths()).toBe(paths);
-    expect(classifyHostPath(join(root, 'plugins/x/package.json'))).toBeUndefined();
-    const newer = { ...paths };
-    installHostProtectedPaths(newer);
-    dispose();
-    expect(currentHostProtectedPaths()).toBe(newer);
-    installHostProtectedPaths(paths)();
-    expect(currentHostProtectedPaths()).toBeUndefined();
   });
 });
 

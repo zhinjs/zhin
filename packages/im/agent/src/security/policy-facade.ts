@@ -61,7 +61,7 @@ import type { ToolNetworkPolicy } from './network-policy-context.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { authorizeTurnFileInput } from './turn-file-authority.js';
-import { hostWriteImpact } from './host-config-paths.js';
+import { hostWriteImpact, type HostProtectedPaths } from './host-config-paths.js';
 
 // ── 输入 / 输出类型 ─────────────────────────────────────────────────
 
@@ -152,7 +152,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
     }
     authorizedInput = fileAuthority.input;
     if (fileOperation !== 'read') {
-      const denied = protectedPathDenial(input.tool.name, authorizedInput);
+      const denied = protectedPathDenial(input.tool.name, authorizedInput, input.turn.hostProtectedPaths);
       if (denied) return denied;
     }
     const path = stringArgument(authorizedInput, 'path', 'file_path', 'filePath');
@@ -182,7 +182,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       return Object.freeze({ status: 'denied', policy: 'workspace-access', reason: cwdAuthority.reason });
     }
     authorizedInput = cwdAuthority.input;
-    const protectedDenial = protectedPathDenial('bash', authorizedInput);
+    const protectedDenial = protectedPathDenial('bash', authorizedInput, input.turn.hostProtectedPaths);
     if (protectedDenial) return protectedDenial;
     const command = stringArgument(authorizedInput, 'command');
     if (command) {
@@ -342,8 +342,9 @@ function turnFilePermissionDecision(
 function protectedPathDenial(
   toolName: string,
   input: Readonly<Record<string, unknown>>,
+  paths: HostProtectedPaths | undefined,
 ): TurnToolPolicyDecision | undefined {
-  const impact = hostWriteImpact(toolName, input);
+  const impact = hostWriteImpact(toolName, input, paths);
   if (impact?.level !== 'deny') return undefined;
   return Object.freeze({
     status: 'denied',

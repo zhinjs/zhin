@@ -109,7 +109,7 @@ export type {
 export {
   classifyHostPath,
   createHostProtectedPaths,
-  installHostProtectedPaths,
+  hostProtectedPathsToken,
   type HostProtectedPaths,
   type HostProtectedPathsInput,
 } from './security/host-config-paths.js';
