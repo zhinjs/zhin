@@ -97,13 +97,25 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 - **`recover()`**：每次启动扫描 `.zhin/changes/` 中 `applying` / `verifying` 的记录，按上面的规则继续；回报目标不可达（会话已不存在、Bot 不在群里）时改投主人私聊。
 - 回报消息过控制面与 session-gate；被拦写审计但不影响变更状态。
 
+### 6a. 暂存区清理与磁盘上限
+
+`.zhin/changes/` 是宿主替用户占用的磁盘，必须有界：
+
+- **终态即瘦身**：进入 `applied` / `rolled_back` / `rejected` / `expired` / `trial_failed` 时，立即删除 `files/` 暂存内容；`applied` 在健康检查通过后同时删除 `snapshot/`（已不再需要回滚）。终态只保留 `change.json`（不含文件正文，仅路径与摘要）。
+- **元数据保留期**：终态 `change.json` 保留 `14` 天（与决策审计默认保留期一致，ADR 0036），之后删除整个目录；审计行另由 `ai_decision_events` 的保留策略管理，不依赖这里。
+- **未完成的草稿**：`draft` / `ready` 超过 `24` 小时未提交、`pending` 超时 `expired`，都按终态清理。
+- **`failed`（已急停）例外**：保留 `snapshot/` 与 `files/` 直到人处理（Console 标记已处理或手动回滚），这是排查现场；Console 与急停回报里显示其占用大小。
+- **硬上限**：单个变更暂存内容 ≤ `5 MB`、文件数 ≤ `50`；整个 `.zhin/changes/` ≤ `50 MB`。`change_draft` 超限直接拒绝（`change_quota_exceeded`），不先写再删。
+- **清理时机**：每次启动 `recover()` 结束后扫一次，之后每 `6` 小时一次；清理只删 `.zhin/changes/` 下、状态与时间都满足条件的目录，删除前校验路径仍在暂存区内（防 symlink 逃逸）。
+- 试跑（§3）产生的临时目录放系统临时目录，试跑结束即删，不进 `.zhin/`。
+
 ### 7. 审计扩展
 
 新增 `kind`：`self_change`（一次变更的每次状态迁移）。新增 `reason_code`：
 
 | 分组 | 码 |
 |---|---|
-| 起草 / 试跑 | `change_drafted`、`change_path_forbidden`、`change_config_key_forbidden`、`change_trial_passed`、`change_trial_failed` |
+| 起草 / 试跑 | `change_drafted`、`change_quota_exceeded`、`change_pruned`、`change_path_forbidden`、`change_config_key_forbidden`、`change_trial_passed`、`change_trial_failed` |
 | 审批 | `change_submitted`、`change_approved`、`change_rejected`、`change_expired`、`change_hash_mismatch` |
 | 生效 / 恢复 | `change_applied_none`、`change_applied_reload`、`change_restart_requested`、`change_verified`、`change_rolled_back`、`change_failed_emergency_stop`、`change_report_sent`、`change_report_redirected` |
 
@@ -113,7 +125,7 @@ payload 记 `changeId`、文件列表（路径 + 摘要，不含内容）、影�
 
 | 切片 | 内容 |
 |---|---|
-| A | 变更对象与暂存区：`.zhin/changes/` 存储、状态机、`content_hash`、路径白名单与禁止的配置键、审计 kind / 码 |
+| A | 变更对象与暂存区：`.zhin/changes/` 存储、状态机、`content_hash`、路径白名单与禁止的配置键、**清理与磁盘上限（§6a）**、审计 kind / 码 |
 | B | `change_draft` 工具与预览：diff 摘要、`InvalidationPlanner` 影响面、配置补丁重载级别 |
 | C | 试跑：静态检查、隔离容器内插件测试、sandbox 试跑运行时加载 |
 | D | 审批：G6 `self` 卡（禁业务群结算，改投主人私聊）、Console 列表 / 批准 / 驳回 |
@@ -129,10 +141,12 @@ A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation`
 4. 补丁试图改 `ai.agent.toolHardGate` 或写 `pnpm-lock.yaml`：直接拒绝，不进审批；bypass / 记住授权 / 主人身份均无效。
 5. 生效后健康检查失败：自动回滚并回报「失败，已回滚」；人为制造回滚后仍失败：进入急停、回报主人，不循环重启。
 6. 在业务群里由主人发起的变更：审批卡出现在主人私聊，群内不能结算。
-7. 生效过程中强杀进程：重启后 `recover()` 接着完成校验或回滚，并完成回报。
+7. 变更终态后 `.zhin/changes/<id>/` 只剩 `change.json`，14 天后整个目录消失；超过配额的草稿被拒绝。
+8. 生效过程中强杀进程：重启后 `recover()` 接着完成校验或回滚，并完成回报。
 
 ## 待 Fin 确认的默认值
 
+- 暂存清理：终态删正文、元数据留 14 天、未提交草稿 24 小时、单变更 5 MB / 50 文件、总量 50 MB、每 6 小时清理一次。
 - 健康检查窗口 `60` 秒；回滚只自动一次，之后急停。
 - 每个发起会话同时最多 1 个待审变更；审批超时 24 小时。
 - 可写范围 = 插件约定目录 + 根 `AGENTS.md` + `skills/**`；根配置只能走字段级 `configPatch`。
