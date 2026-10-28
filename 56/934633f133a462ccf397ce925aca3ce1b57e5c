@@ -1,0 +1,21 @@
+plugins/adapters/bilibili-live/tests/bilibili-live-protocol.test.ts
+  s_edf4235821908c::t_b4b9eaf1cc07b4 41-46
+plugins/adapters/bilibili-live/src/protocol.ts
+  s_edf4235821908c::t_3d72f91cb13062 112-113,117-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "56934633f133a462ccf397ce925aca3ce1b57e5c",
+  "prompts": {},
+  "sessions": {
+    "s_edf4235821908c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "135b358a-b3f3-4871-a0f0-2734f19f799b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
