@@ -129,6 +129,8 @@ export interface NormalizedIcqqInbound {
   channelId: string;
   /** 群临时会话：来源群号 */
   channelParentGroupId?: string;
+  /** 群聊时来自 group_name */
+  groupName?: string;
   userId: string;
   nickname: string;
   /** 群聊时来自 sender.role（私聊无） */
@@ -847,6 +849,9 @@ export function normalizeIcqqInboundMessage(
     channelType,
     channelId,
     channelParentGroupId,
+    ...(channelType === "group" && typeof ext.group_name === "string" && ext.group_name.trim()
+      ? { groupName: ext.group_name.trim() }
+      : {}),
     userId: String(userIdNum),
     nickname,
     senderRole,

@@ -17,6 +17,7 @@ import {
   shouldSkipSelfInboundMessage,
   unwrapIcqqEventPayload,
 } from "../src/icqq-inbound.js";
+import { icqqInboundConversation } from "../src/protocol.js";
 
 const ntPrivatePayload = {
   post_type: "message",
@@ -216,6 +217,30 @@ describe("normalizeIcqqInboundMessage", () => {
     } as any);
     expect(n?.channelType).toBe("group");
     expect(n?.senderRole).toBe("owner");
+  });
+});
+
+describe("群名", () => {
+  const base = {
+    post_type: "message",
+    message_id: "m-gn",
+    user_id: 1,
+    time: 1780471049,
+    message: [{ type: "text", text: "x" }],
+    raw_message: "x",
+    message_type: "group",
+    sender: { user_id: 1, nickname: "a" },
+    group_id: 201193925,
+  };
+  it("群消息携带 group_name 时进入 groupName 与 conversation.name", () => {
+    const n = normalizeIcqqInboundMessage({ ...base, group_name: " 测试群 " } as any);
+    expect(n?.groupName).toBe("测试群");
+    const conv = icqqInboundConversation("ep", { channelType: "group", channelId: "201193925", name: n?.groupName });
+    expect(conv).toMatchObject({ kind: "group", id: "201193925", name: "测试群" });
+  });
+  it("无 group_name 或私聊时不设置名称", () => {
+    expect(normalizeIcqqInboundMessage(base as any)?.groupName).toBeUndefined();
+    expect(icqqInboundConversation("ep", { channelType: "private", channelId: "1", name: "x" })).not.toHaveProperty("name");
   });
 });
 

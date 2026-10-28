@@ -342,6 +342,8 @@ export function icqqInboundConversation(endpointKey: string, input: {
   readonly channelId: string;
   readonly channelParentGroupId?: string;
   readonly guildId?: string;
+  /** 群名（仅 group 会话使用） */
+  readonly name?: string;
 }): ConversationRef {
   const endpoint = { id: endpointKey, adapter: ICQQ_ADAPTER_NAME };
   if (input.channelType === 'private' && input.channelParentGroupId) {
@@ -360,7 +362,8 @@ export function icqqInboundConversation(endpointKey: string, input: {
       parent: { kind: 'channel', id: input.guildId },
     };
   }
-  return { endpoint, kind: input.channelType, id: input.channelId };
+  const name = input.channelType === 'group' ? input.name?.trim() : undefined;
+  return { endpoint, kind: input.channelType, id: input.channelId, ...(name ? { name } : {}) };
 }
 
 /**
@@ -487,7 +490,8 @@ function formatOutboundElements(payload: readonly unknown[]): (string | MessageE
         if (!Number.isSafeInteger(qq) || qq <= 0) {
           throw new TypeError(`Invalid ICQQ mention target: ${String(target ?? '')}`);
         }
-        return { type: 'at', qq };
+        const name = typeof item.data?.name === 'string' ? item.data.name.trim() : '';
+        return name ? { type: 'at', qq, text: name.startsWith('@') ? name : `@${name}` } : { type: 'at', qq };
       }
       case 'image': {
         const arg = resolveIcqqMediaFile(normalizeIcqqImageData(item.data));

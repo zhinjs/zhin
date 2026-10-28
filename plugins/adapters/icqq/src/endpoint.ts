@@ -824,6 +824,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
       channelType: normalized.channelType,
       channelId: normalized.channelId,
       channelParentGroupId: normalized.channelParentGroupId,
+      name: normalized.groupName,
     });
     const quoteId = resolveIcqqQuoteIdFromEvent(data);
     const quoted = messageLookupFromIcqqSource(findIcqqNestedMessageSource(data));
