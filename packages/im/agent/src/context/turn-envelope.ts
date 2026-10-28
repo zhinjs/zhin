@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createPromptContextBlock, type TextContentBlock } from '@zhin.js/ai';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import type { TurnRequest } from '../turn/turn-ingress.js';
@@ -102,11 +103,21 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
       const sessionKey = input.turn.session.key;
       const memoryPaths = formatMemoryPathsHint(platform, sessionKey);
       if (memoryPaths) lines.push(`Memory paths: ${memoryPaths}`);
-      const fileMemory = getFileMemoryContext(undefined, platform, sessionKey);
-      if (fileMemory?.trim()) {
-        lines.push('Memory snapshot:');
-        lines.push(fileMemory.trim());
-      }
+      const fileMemory = getFileMemoryContext(undefined, platform, sessionKey).trim();
+      const origin = input.turn.origin;
+      const memoryScope = JSON.stringify([
+        process.cwd(), sessionKey, input.turn.principal.subjectId,
+        platform, origin.endpoint, origin.scope, origin.sceneId,
+        origin.conversation?.endpoint.adapter, origin.conversation?.endpoint.id,
+        origin.conversation?.kind, origin.conversation?.id,
+        origin.conversation?.parent?.kind, origin.conversation?.parent?.id,
+        origin.conversation?.threadId ?? origin.threadId,
+      ]);
+      const memoryKey = `file-memory:${createHash('sha256').update(memoryScope).digest('hex')}`;
+      flush();
+      // No snapshot may mean absence or a read failure; version it without claiming either.
+      blocks.push(createPromptContextBlock(memoryKey, fileMemory
+        ? `Memory snapshot:\n${fileMemory}` : 'Memory snapshot: not supplied for this turn.'));
     }
   }
 
