@@ -1,0 +1,44 @@
+.changeset/0039-slice-a-group-rules.md
+  h_b680f75345178a 1-6
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  h_b680f75345178a 8,32-39,83,99,109
+basic/cli/src/plugin-runtime/console/decision-replay.ts
+  h_b680f75345178a 42
+packages/im/agent/src/decision-events.ts
+  h_b680f75345178a 46-49,142-159
+packages/im/agent/src/group-rules.ts
+  h_b680f75345178a 1-848
+packages/im/agent/src/index.ts
+  h_b680f75345178a 341-388
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  h_b680f75345178a 18,91-93
+packages/im/agent/src/init/define-ai-database-models.ts
+  h_b680f75345178a 19,38
+packages/im/agent/src/plugin-runtime/index.ts
+  h_b680f75345178a 17
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 52,176-177,425-428
+packages/im/agent/tests/decision-events.test.ts
+  h_b680f75345178a 57,144-156,165
+packages/im/agent/tests/define-ai-database-models.test.ts
+  h_b680f75345178a 17,30
+packages/im/agent/tests/group-rules.test.ts
+  h_b680f75345178a 1-312
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  h_b680f75345178a 36-37
+tests/snapshots/api-surface.json
+  h_b680f75345178a 72
+tests/snapshots/plugin-runtime-api.json
+  h_b680f75345178a 57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6c7d7a8d7b19b3b92aa8d84ff16779d25189c2b8",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
