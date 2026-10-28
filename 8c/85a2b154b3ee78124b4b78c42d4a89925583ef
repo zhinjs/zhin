@@ -1,0 +1,37 @@
+basic/cli/src/plugin-runtime/agent/turn/group-rule-enforcer.ts
+  s_37073a789df8e8::t_c0129b1bb95d03 38,71-72,140-141,213,292,306,425-426,568,570-571,573
+  s_37073a789df8e8::t_94c1fadd0800bc 1-37,39-70,73-139,142-145,147-212,214-291,293-305,307-424,427-567,569,572,574-615
+  s_37073a789df8e8::t_2175b2a0d9184a 146
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_37073a789df8e8::t_f6fc4eeadb6990 120,201-202,225,259-324,476
+docs/en/authoring/console-pages.md
+  s_37073a789df8e8::t_94bcbc31ea3c16 398-405
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_37073a789df8e8::t_ab8bcddd1b05dc 377-380,383,386,388-389,534-535,537,561,578,582-583
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-enforcer.test.ts
+  s_37073a789df8e8::t_c13897e5636fdd 1-150,153-155,160-221,223-257
+  s_37073a789df8e8::t_4ce68206ec21da 222
+  s_37073a789df8e8::t_36c1c8788ae653 151-152,156-159
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  s_37073a789df8e8::t_37d2efe18e58bf 620-664
+docs/authoring/console-pages.md
+  s_37073a789df8e8::t_94bcbc31ea3c16 398-405
+.changeset/0039-slice-c-rule-enforcer.md
+  s_37073a789df8e8::t_94bcbc31ea3c16 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8c85a2b154b3ee78124b4b78c42d4a89925583ef",
+  "prompts": {},
+  "sessions": {
+    "s_37073a789df8e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09cdde0e-313a-47a2-bcc2-9980bf2f0d30",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
