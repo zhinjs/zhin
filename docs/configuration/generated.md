@@ -153,6 +153,10 @@ outline: [2, 3]
 | `ai.agent.inboundQueue.merge.quietMs` | integer | 否 | `1500` | 窗口内最后一条消息后安静多久就发车。 |
 | `ai.agent.inboundQueue.merge.maxWaitMs` | integer | 否 | `6000` | 窗口从第一条消息起最多等多久。 |
 | `ai.agent.inboundQueue.merge.maxSenders` | integer | 否 | `5` | 一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。 |
+| `ai.agent.inboundQueue.live` | object | 否 | — | 弹幕模式（ADR 0038）：声明了 liveDanmaku 的直播适配器把一段时间内的弹幕收进窗口后只回一次；只开放只读工具，不出审批卡。 |
+| `ai.agent.inboundQueue.live.mode` | string: `"pick-one"`, `"summary"` | 否 | `"pick-one"` | pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。 |
+| `ai.agent.inboundQueue.live.windowMs` | integer | 否 | `10000` | 弹幕窗口从第一条弹幕起收集多久。 |
+| `ai.agent.inboundQueue.live.minIntervalMs` | integer | 否 | `15000` | 同一直播间两次弹幕回复的最小间隔。 |
 | `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | 否 | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |

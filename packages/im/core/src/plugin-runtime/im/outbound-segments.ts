@@ -164,6 +164,16 @@ export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot
 }
 
 /**
+ * ADR 0038 §5: the adapter declares `liveDanmaku`, so its inbound messages are
+ * live-stream danmaku the Agent answers one window at a time.
+ */
+export function adapterDeclaresLiveDanmaku(adapter: CapabilityId, snapshot: RuntimeSnapshot): boolean {
+  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  const capabilities = (slot?.definition as { capabilities?: unknown } | undefined)?.capabilities;
+  return Array.isArray(capabilities) && capabilities.includes('liveDanmaku');
+}
+
+/**
  * What a model may author for this endpoint: every segment type the outbound
  * projection would deliver rather than reject (markdown and keyboards outside the
  * declared list still qualify when the endpoint degrades them to text), plus the

@@ -61,7 +61,7 @@ export default defineAdapter<{ readonly token: string }>({
 
 | 部分 | 作用 |
 | --- | --- |
-| `capabilities` | 声明支持收（`inbound`）、发（`outbound`）或两者，至少一个 |
+| `capabilities` | 声明支持收（`inbound`）、发（`outbound`）或两者，至少一个；直播弹幕平台再加 `liveDanmaku`（需同时有 `inbound`），Agent 会按弹幕模式把弹幕收进窗口、一窗只回一次（ADR 0038 §5，配置 `ai.agent.inboundQueue.live`） |
 | `create(context)` | 每个账号调用一次；`context.config` 是这个账号的配置 |
 | `client` | 平台 SDK 实例。命令里通过 `context.$client` 取得，事件处理里通过 `event.client` 取得 |
 | `connect()` | 连接平台，**等平台可用后再返回** |

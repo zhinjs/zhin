@@ -1,8 +1,20 @@
 import type { Message } from '../resource-hub/types.js';
 
-import type { InboundQueueConfig, InboundGroupQueueMode, InboundMergeConfig } from '../config/zhin-agent-config.js';
+import type {
+  InboundQueueConfig,
+  InboundGroupQueueMode,
+  InboundMergeConfig,
+  InboundLiveConfig,
+  InboundLiveMode,
+} from '../config/zhin-agent-config.js';
 
-export type { InboundQueueConfig, InboundGroupQueueMode, InboundMergeConfig } from '../config/zhin-agent-config.js';
+export type {
+  InboundQueueConfig,
+  InboundGroupQueueMode,
+  InboundMergeConfig,
+  InboundLiveConfig,
+  InboundLiveMode,
+} from '../config/zhin-agent-config.js';
 
 export interface ResolvedInboundMergeConfig {
   enabled: boolean;
@@ -11,12 +23,19 @@ export interface ResolvedInboundMergeConfig {
   maxSenders: number;
 }
 
+export interface ResolvedInboundLiveConfig {
+  mode: InboundLiveMode;
+  windowMs: number;
+  minIntervalMs: number;
+}
+
 export interface ResolvedInboundQueueConfig {
   groupMode: InboundGroupQueueMode;
   ttlMs: number;
   coalesceWindowMs: number;
   maxQueuedTurns: number;
   merge: ResolvedInboundMergeConfig;
+  live: ResolvedInboundLiveConfig;
 }
 
 export const DEFAULT_INBOUND_MERGE_CONFIG: ResolvedInboundMergeConfig = {
@@ -26,12 +45,19 @@ export const DEFAULT_INBOUND_MERGE_CONFIG: ResolvedInboundMergeConfig = {
   maxSenders: 5,
 };
 
+export const DEFAULT_INBOUND_LIVE_CONFIG: ResolvedInboundLiveConfig = {
+  mode: 'pick-one',
+  windowMs: 10_000,
+  minIntervalMs: 15_000,
+};
+
 export const DEFAULT_INBOUND_QUEUE_CONFIG: ResolvedInboundQueueConfig = {
   groupMode: 'supersede',
   ttlMs: 180_000,
   coalesceWindowMs: 30_000,
   maxQueuedTurns: 5,
   merge: DEFAULT_INBOUND_MERGE_CONFIG,
+  live: DEFAULT_INBOUND_LIVE_CONFIG,
 };
 
 export function normalizeInboundQueueConfig(
@@ -47,7 +73,24 @@ export function normalizeInboundQueueConfig(
   const maxQueuedTurns = typeof raw?.maxQueuedTurns === 'number' && Number.isInteger(raw.maxQueuedTurns) && raw.maxQueuedTurns >= 0
     ? raw.maxQueuedTurns
     : DEFAULT_INBOUND_QUEUE_CONFIG.maxQueuedTurns;
-  return { groupMode, ttlMs, coalesceWindowMs, maxQueuedTurns, merge: normalizeInboundMergeConfig(raw?.merge) };
+  return {
+    groupMode,
+    ttlMs,
+    coalesceWindowMs,
+    maxQueuedTurns,
+    merge: normalizeInboundMergeConfig(raw?.merge),
+    live: normalizeInboundLiveConfig(raw?.live),
+  };
+}
+
+function normalizeInboundLiveConfig(raw?: InboundLiveConfig | null): ResolvedInboundLiveConfig {
+  const defaults = DEFAULT_INBOUND_LIVE_CONFIG;
+  const ms = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback;
+  return {
+    mode: raw?.mode === 'summary' ? 'summary' : defaults.mode,
+    windowMs: ms(raw?.windowMs, defaults.windowMs),
+    minIntervalMs: ms(raw?.minIntervalMs, defaults.minIntervalMs),
+  };
 }
 
 function normalizeInboundMergeConfig(raw?: InboundMergeConfig | null): ResolvedInboundMergeConfig {
@@ -102,6 +145,18 @@ export function validateInboundQueueConfig(raw?: InboundQueueConfig | null): str
       && (typeof merge.maxSenders !== 'number' || !Number.isInteger(merge.maxSenders) || merge.maxSenders < 1)
     ) {
       errors.push('ai.agent.inboundQueue.merge.maxSenders must be a positive integer');
+    }
+  }
+  const live = raw.live;
+  if (live !== undefined) {
+    if (live.mode !== undefined && live.mode !== 'pick-one' && live.mode !== 'summary') {
+      errors.push('ai.agent.inboundQueue.live.mode must be pick-one or summary');
+    }
+    for (const key of ['windowMs', 'minIntervalMs'] as const) {
+      const value = live[key];
+      if (value !== undefined && (typeof value !== 'number' || !Number.isFinite(value) || value < 0)) {
+        errors.push(`ai.agent.inboundQueue.live.${key} must be a non-negative number`);
+      }
     }
   }
   return errors;

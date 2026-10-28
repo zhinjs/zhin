@@ -938,6 +938,35 @@
                     }
                   }
                 },
+                "live": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Danmaku mode (ADR 0038): live-stream adapters that declare liveDanmaku collect danmaku in a window and reply once, with read-only tools and no approval cards.",
+                  "x-descriptionZh": "弹幕模式（ADR 0038）：声明了 liveDanmaku 的直播适配器把一段时间内的弹幕收进窗口后只回一次；只开放只读工具，不出审批卡。",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": ["pick-one", "summary"],
+                      "default": "pick-one",
+                      "description": "pick-one answers one danmaku of the window; summary answers the window as a whole once.",
+                      "x-descriptionZh": "pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。"
+                    },
+                    "windowMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 10000,
+                      "description": "How long a danmaku window collects messages from its first danmaku.",
+                      "x-descriptionZh": "弹幕窗口从第一条弹幕起收集多久。"
+                    },
+                    "minIntervalMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 15000,
+                      "description": "Minimum time between two danmaku replies in one live room.",
+                      "x-descriptionZh": "同一直播间两次弹幕回复的最小间隔。"
+                    }
+                  }
+                },
                 "coalesceWindowMs": {
                   "type": [
                     "number",

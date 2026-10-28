@@ -27,6 +27,11 @@
  *   the turn already acted (`markActed`) or a sender's reply was dropped once
  *   already (starvation guard). A dropped turn's messages move into the
  *   follow-up's window so the next turn answers old and new together.
+ * - **Danmaku window** (ADR 0038 §5, opt-in via `live`): every danmaku of a
+ *   live room waits in one window that closes `windowMs` after its first
+ *   message, but never sooner than `minIntervalMs` after the room's previous
+ *   danmaku turn ended. The window has no sender limit and keeps the newest
+ *   `LIVE_WINDOW_MAX_MESSAGES` messages; one turn answers it.
  *
  * At most one turn runs per session; the queue is bounded by
  * `maxQueuedTurns` and entries older than `queueTtlMs` expire. The gate only
@@ -46,6 +51,8 @@ export interface TurnAdmissionGateOptions {
   readonly supersedeSameSender: boolean;
   /** ADR 0038 merge window; omitted = disabled (every sender gets its own turn). */
   readonly merge?: TurnMergeWindowOptions;
+  /** ADR 0038 §5 danmaku window; omitted = disabled. */
+  readonly live?: TurnLiveWindowOptions;
   readonly now?: () => number;
   /** Schedules a window check; returns a cancel function. Defaults to an unref'd `setTimeout`. */
   readonly setTimer?: (callback: () => void, delayMs: number) => () => void;
@@ -60,7 +67,16 @@ export interface TurnMergeWindowOptions {
   readonly maxSenders: number;
 }
 
+export interface TurnLiveWindowOptions {
+  /** Answer the window this long after its first danmaku. */
+  readonly windowMs: number;
+  /** Never start a danmaku turn sooner than this after the room's previous one ended. */
+  readonly minIntervalMs: number;
+}
+
 export const DEFAULT_MAX_QUEUED_TURNS = 5;
+/** Danmaku one window keeps for the model; older ones are counted but dropped. */
+export const LIVE_WINDOW_MAX_MESSAGES = 100;
 
 export interface TurnAdmissionRequest {
   readonly sessionKey: string;
@@ -77,6 +93,11 @@ export interface TurnAdmissionRequest {
    * approval. Ignored while the gate has no `merge` options.
    */
   readonly mergeable?: boolean;
+  /**
+   * A danmaku of a `liveDanmaku` conversation (ADR 0038 §5): it joins the
+   * room's danmaku window. Ignored while the gate has no `live` options.
+   */
+  readonly live?: boolean;
   /** Display name for the merged turn text. */
   readonly senderName?: string;
   /** Platform message id; a merged turn lists it so the reply can point at it (ADR 0038 §3). */
@@ -117,6 +138,17 @@ export interface TurnAdmissionFacts {
   readonly supersededPrevious: boolean;
   /** Present when the turn was flushed from a merge window. */
   readonly mergeWindow?: TurnMergeWindowSnapshot & Readonly<{ waitedMs: number }>;
+  /** Present when the turn answers a danmaku window. */
+  readonly liveWindow?: TurnLiveWindowSnapshot;
+}
+
+export interface TurnLiveWindowSnapshot {
+  /** Danmaku that arrived in the window, including dropped ones. */
+  readonly candidates: number;
+  /** Danmaku the turn sees (at most `LIVE_WINDOW_MAX_MESSAGES`). */
+  readonly kept: number;
+  readonly senders: number;
+  readonly waitedMs: number;
 }
 
 /**
@@ -182,6 +214,8 @@ interface MergeWindow {
   }>;
   lastJoinedAt: number;
   cancelTimer?: () => void;
+  /** Set for a danmaku window: every danmaku received, kept or not. */
+  live?: { received: number };
 }
 
 interface RunningTurn {
@@ -212,10 +246,15 @@ interface SessionState {
   readonly discardedSenders: Set<string>;
 }
 
-type ResolvedOptions = Omit<Required<TurnAdmissionGateOptions>, 'merge'> & { merge?: TurnMergeWindowOptions };
+type ResolvedOptions = Omit<Required<TurnAdmissionGateOptions>, 'merge' | 'live'> & {
+  merge?: TurnMergeWindowOptions;
+  live?: TurnLiveWindowOptions;
+};
 
 export class TurnAdmissionGate {
   readonly #sessions = new Map<string, SessionState>();
+  /** When each live room's last danmaku turn ended; entries go once `minIntervalMs` passed. */
+  readonly #liveEndedAt = new Map<string, number>();
   readonly #options: ResolvedOptions;
 
   constructor(options: TurnAdmissionGateOptions) {
@@ -230,6 +269,12 @@ export class TurnAdmissionGate {
           quietMs: Math.max(0, options.merge.quietMs),
           maxWaitMs: Math.max(0, options.merge.maxWaitMs),
           maxSenders: Math.max(1, Math.floor(options.merge.maxSenders)),
+        },
+      } : {}),
+      ...(options.live ? {
+        live: {
+          windowMs: Math.max(0, options.live.windowMs),
+          minIntervalMs: Math.max(0, options.live.minIntervalMs),
         },
       } : {}),
     };
@@ -248,6 +293,9 @@ export class TurnAdmissionGate {
     const state = this.#state(request.sessionKey);
     const running = state.running;
 
+    if (this.#options.live && request.live) {
+      return this.#admitToLiveWindow(request, state);
+    }
     if (this.#options.merge && request.mergeable && request.plainText) {
       return this.#admitToWindow(request, state, this.#options.merge);
     }
@@ -316,7 +364,7 @@ export class TurnAdmissionGate {
     merge: TurnMergeWindowOptions,
   ): Promise<TurnAdmission> {
     const now = this.#options.now();
-    const windows = state.queue.filter((entry) => entry.window);
+    const windows = state.queue.filter((entry) => entry.window && !entry.window.live);
     let target = findLast(windows, (entry) => entry.window!.participants.some((p) => p.senderId === request.senderId));
     if (target) {
       const own = target.window!.participants.find((p) => p.senderId === request.senderId)!;
@@ -331,7 +379,7 @@ export class TurnAdmissionGate {
       const window = target.window!;
       window.lastJoinedAt = now;
       request.onWindowJoined?.(snapshotWindow(window));
-      this.#armWindow(request.sessionKey, state, target, merge);
+      this.#armWindow(request.sessionKey, state, target);
       return Promise.resolve(Object.freeze({ kind: 'merged' as const }));
     }
 
@@ -353,18 +401,70 @@ export class TurnAdmissionGate {
     }, 'back');
     markStale(state.running, request.senderId);
     request.onWindowJoined?.(snapshotWindow(window));
-    this.#armWindow(request.sessionKey, state, state.queue[state.queue.length - 1]!, merge);
+    this.#armWindow(request.sessionKey, state, state.queue[state.queue.length - 1]!);
     return opened;
   }
 
+  /**
+   * ADR 0038 §5: every danmaku joins the room's one waiting window (no sender
+   * limit); only the window's first sender gets the `run` admission.
+   */
+  #admitToLiveWindow(request: TurnAdmissionRequest, state: SessionState): Promise<TurnAdmission> {
+    const now = this.#options.now();
+    this.#pruneLiveEnded(now);
+    const target = findLast(state.queue, (entry) => entry.window?.live !== undefined);
+    if (target) {
+      joinLiveWindow(target.window!, request);
+      target.window!.lastJoinedAt = now;
+      this.#armWindow(request.sessionKey, state, target);
+      return Promise.resolve(Object.freeze({ kind: 'merged' as const }));
+    }
+    if (state.queue.length >= this.#options.maxQueuedTurns) {
+      return Promise.resolve(Object.freeze({ kind: 'rejected' as const, reason: 'queue_full' as const }));
+    }
+    const window: MergeWindow = { participants: [], lastJoinedAt: now, live: { received: 0 } };
+    joinLiveWindow(window, request);
+    const opened = this.#enqueue(state, {
+      senderId: request.senderId,
+      senderName: request.senderName,
+      access: request.access,
+      texts: [],
+      plainText: true,
+      supersededPrevious: false,
+      window,
+    }, 'back');
+    this.#armWindow(request.sessionKey, state, state.queue[state.queue.length - 1]!);
+    return opened;
+  }
+
+  #pruneLiveEnded(now: number): void {
+    const minIntervalMs = this.#options.live?.minIntervalMs ?? 0;
+    for (const [sessionKey, endedAt] of this.#liveEndedAt) {
+      if (now - endedAt >= minIntervalMs) this.#liveEndedAt.delete(sessionKey);
+    }
+  }
+
+  /** When a queued window may be answered. */
+  #windowDueAt(sessionKey: string, entry: QueuedTurn): number {
+    const window = entry.window!;
+    const live = this.#options.live;
+    if (window.live && live) {
+      const endedAt = this.#liveEndedAt.get(sessionKey);
+      return Math.max(entry.enqueuedAt + live.windowMs, endedAt === undefined ? 0 : endedAt + live.minIntervalMs);
+    }
+    const merge = this.#options.merge;
+    if (!merge) return entry.enqueuedAt;
+    return Math.min(window.lastJoinedAt + merge.quietMs, entry.enqueuedAt + merge.maxWaitMs);
+  }
+
   /** (Re)schedules the flush check of a window at the head of an idle session. */
-  #armWindow(sessionKey: string, state: SessionState, entry: QueuedTurn, merge: TurnMergeWindowOptions): void {
+  #armWindow(sessionKey: string, state: SessionState, entry: QueuedTurn): void {
     const window = entry.window!;
     window.cancelTimer?.();
     window.cancelTimer = undefined;
     if (state.running || state.queue[0] !== entry) return;
     const now = this.#options.now();
-    const due = Math.min(window.lastJoinedAt + merge.quietMs, entry.enqueuedAt + merge.maxWaitMs);
+    const due = this.#windowDueAt(sessionKey, entry);
     if (due <= now) {
       this.#pump(sessionKey, state);
       return;
@@ -416,6 +516,7 @@ export class TurnAdmissionGate {
       }
     }
     this.#sessions.clear();
+    this.#liveEndedAt.clear();
   }
 
   #state(sessionKey: string): SessionState {
@@ -494,7 +595,14 @@ export class TurnAdmissionGate {
         queuedMs: turn.queuedMs,
         mergedMessages: texts.length,
         supersededPrevious: turn.supersededPrevious,
-        ...(turn.window ? {
+        ...(turn.window?.live ? {
+          liveWindow: Object.freeze({
+            candidates: turn.window.live.received,
+            kept: texts.length,
+            senders: participants.length,
+            waitedMs: turn.queuedMs,
+          }),
+        } : turn.window ? {
           mergeWindow: Object.freeze({ ...snapshotWindow(turn.window), waitedMs: turn.queuedMs }),
         } : {}),
       }),
@@ -506,6 +614,7 @@ export class TurnAdmissionGate {
       release: () => {
         if (released) return;
         released = true;
+        if (turn.window?.live) this.#liveEndedAt.set(sessionKey, this.#options.now());
         if (state.running === running) state.running = undefined;
         this.#pump(sessionKey, state);
       },
@@ -539,12 +648,10 @@ export class TurnAdmissionGate {
         next.settle(Object.freeze({ kind: 'rejected', reason: 'expired' }));
         continue;
       }
-      const merge = this.#options.merge;
-      if (next.window && merge) {
-        const due = Math.min(next.window.lastJoinedAt + merge.quietMs, next.enqueuedAt + merge.maxWaitMs);
-        if (due > now) {
+      if (next.window) {
+        if (this.#windowDueAt(sessionKey, next) > now) {
           // Still filling: wait for the window (FIFO — later turns wait behind it).
-          if (!next.window.cancelTimer) this.#armWindow(sessionKey, state, next, merge);
+          if (!next.window.cancelTimer) this.#armWindow(sessionKey, state, next);
           return;
         }
         next.window.cancelTimer?.();
@@ -591,6 +698,30 @@ function carryIntoWindow(window: MergeWindow, carried: readonly TurnParticipant[
     });
   }
   window.participants.push(...fresh);
+}
+
+/**
+ * Adds one danmaku to a live window. Past `LIVE_WINDOW_MAX_MESSAGES` the
+ * earliest sender's oldest message is dropped, so memory stays bounded however
+ * busy the room is; `received` still counts every danmaku.
+ */
+function joinLiveWindow(window: MergeWindow, request: TurnAdmissionRequest): void {
+  window.live!.received += 1;
+  const own = window.participants.find((p) => p.senderId === request.senderId);
+  if (own) {
+    own.texts.push(request.text);
+    if (request.messageId) own.messageIds.push(request.messageId);
+  } else {
+    window.participants.push(windowParticipant(request));
+  }
+  let kept = window.participants.reduce((sum, p) => sum + p.texts.length, 0);
+  while (kept > LIVE_WINDOW_MAX_MESSAGES && window.participants.length > 0) {
+    const oldest = window.participants[0]!;
+    if (oldest.messageIds.length === oldest.texts.length) oldest.messageIds.shift();
+    oldest.texts.shift();
+    if (oldest.texts.length === 0) window.participants.shift();
+    kept -= 1;
+  }
 }
 
 function windowParticipant(request: TurnAdmissionRequest): MergeWindow['participants'][number] {

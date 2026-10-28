@@ -175,6 +175,12 @@ export interface AgentToolDefinition<
    * and a hidden (placement-bound) tool is never made resident by it.
    */
   readonly alwaysLoaded?: boolean;
+  /**
+   * The tool only reads: it changes nothing on the platform, in storage or for
+   * other people. Restricted turns (ADR 0038 §5 danmaku turns) expose only
+   * tools that declare `readOnly: true`; undeclared counts as not read-only.
+   */
+  readonly readOnly?: boolean;
   /** @internal Filesystem-derived private capability binding. */
   readonly placement?: ToolPlacement;
   execute(
@@ -281,6 +287,9 @@ export function defineAgentTool<
   if (definition.alwaysLoaded !== undefined && typeof definition.alwaysLoaded !== 'boolean') {
     throw new TypeError('Agent Tool alwaysLoaded must be a boolean');
   }
+  if (definition.readOnly !== undefined && typeof definition.readOnly !== 'boolean') {
+    throw new TypeError('Agent Tool readOnly must be a boolean');
+  }
   if (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel')) {
     throw new TypeError('Agent Tool scopes must be private, group, or channel');
   }
@@ -339,6 +348,7 @@ export function parseAgentToolDefinition(
     || (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel') ?? false)
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
     || (definition.alwaysLoaded !== undefined && typeof definition.alwaysLoaded !== 'boolean')
+    || (definition.readOnly !== undefined && typeof definition.readOnly !== 'boolean')
     || (definition.risk !== undefined && !isToolRisk(definition.risk))
     || (definition.riskCategory !== undefined && !isToolRiskCategory(definition.riskCategory))
   ) throw invalidTool();

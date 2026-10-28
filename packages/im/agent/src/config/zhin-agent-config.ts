@@ -27,7 +27,21 @@ export interface InboundQueueConfig {
   maxQueuedTurns?: number;
   /** ADR 0038 §1: merge mentions from several group members into one reply. */
   merge?: InboundMergeConfig;
+  /** ADR 0038 §5: danmaku mode for adapters that declare `liveDanmaku`. */
+  live?: InboundLiveConfig;
 }
+
+/** ADR 0038 §5 danmaku window. Applies only to conversations of a `liveDanmaku` adapter. */
+export interface InboundLiveConfig {
+  /** `pick-one` answers one danmaku of the window; `summary` answers the window once. Default `pick-one`. */
+  mode?: InboundLiveMode;
+  /** Danmaku window length from its first message. Default 10000. */
+  windowMs?: number;
+  /** Minimum time between two danmaku replies of one room. Default 15000. */
+  minIntervalMs?: number;
+}
+
+export type InboundLiveMode = 'pick-one' | 'summary';
 
 /** ADR 0038 §1 group merge window. Private chats never merge. */
 export interface InboundMergeConfig {

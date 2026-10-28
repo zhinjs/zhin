@@ -21,6 +21,7 @@ This is the **single authoritative document** for `ai.agent.*` default behavior 
 - Usage quota: all 0 (off), `exemptOwner true`
 - Dangerous-tool hard gate: always on; funds tools disabled (`allowFunds false`); a call not approved within 5 minutes (`approvalTimeoutMs 300000`) is denied; at most 3 pending cards per group (`maxPendingPerScene 3`), beyond that a call is denied outright
 - Group merge window: on (`inboundQueue.merge.enabled true`, group chats only; `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`)
+- Danmaku mode: only for live-stream adapters that declare `liveDanmaku` (`inboundQueue.live`: `mode pick-one` / `windowMs 10000` / `minIntervalMs 15000`; read-only tools, no approval cards)
 - Compaction: `thresholdRatio 0.7`
 - Request traces: `recordRequestBodies true` stores redacted model-input text and tool definitions locally on the Host. Defaults retain at most seven days and 64 MiB in total. Capacity cleanup removes the oldest traces first; an oversized body leaves statistics and an explicit unavailable-body status. Set this to `false` to stop recording new bodies without disabling usage statistics or deleting existing records.
 
