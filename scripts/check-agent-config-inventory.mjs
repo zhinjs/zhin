@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(path.join(repoRoot, rel), 'utf8');
 
-/** 非弃用开关数量基线（#735 时为 59；新增 `network` 后为 60：出网权限从 execPreset 拆出为独立开关）。 */
-const BASELINE = 61;
+/** Includes recordRequestBodies: an explicit opt-out of the approved default-on local request recording. */
+const BASELINE = 62;
 
 function schemaAgentKeys() {
   const schema = JSON.parse(read('packages/im/runtime/src/host-config-schema.json'));

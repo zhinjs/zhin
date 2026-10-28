@@ -77,13 +77,14 @@ export {
 export type { InboundQueueActivityEmitter } from './inbound-turn-queue.js';
 
 export {
+  DEFAULT_INBOUND_MERGE_CONFIG,
   DEFAULT_INBOUND_QUEUE_CONFIG,
   normalizeInboundQueueConfig,
   validateInboundQueueConfig,
   isGroupOrChannelMessage,
   shouldUseGroupFifoQueue,
 } from './inbound-queue-config.js';
-export type { ResolvedInboundQueueConfig } from './inbound-queue-config.js';
+export type { ResolvedInboundMergeConfig, ResolvedInboundQueueConfig } from './inbound-queue-config.js';
 
 export { createInboundTurnQueue, runWithInboundQueue } from './inbound-queue-runtime.js';
 
@@ -149,6 +150,9 @@ export type {
   TurnAdmissionFacts,
   TurnAdmissionGateOptions,
   TurnAdmissionRequest,
+  TurnMergeWindowOptions,
+  TurnMergeWindowSnapshot,
+  TurnParticipant,
   TurnStopResult,
 } from './turn-admission-gate.js';
 

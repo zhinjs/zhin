@@ -903,6 +903,41 @@
                   "description": "Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply.",
                   "x-descriptionZh": "同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。"
                 },
+                "merge": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Group merge window (ADR 0038): mentions from several members within a short window get one combined reply. Private chats, the master, commands, stop words and messages with media, quotes or forwards never merge.",
+                  "x-descriptionZh": "群聊合流窗口（ADR 0038）：短时间内多人点名 Bot 时合并为一次回复。私聊、主人、指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Turn the group merge window on. Off by default until merged turns narrow permissions per sender.",
+                      "x-descriptionZh": "开启群聊合流。合并回合按发送者收窄权限之前默认关闭。"
+                    },
+                    "quietMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 1500,
+                      "description": "The window is answered once no new message joined it for this long.",
+                      "x-descriptionZh": "窗口内最后一条消息后安静多久就发车。"
+                    },
+                    "maxWaitMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 6000,
+                      "description": "The window is answered at the latest this long after its first message.",
+                      "x-descriptionZh": "窗口从第一条消息起最多等多久。"
+                    },
+                    "maxSenders": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "default": 5,
+                      "description": "Senders one merged reply covers; further senders wait for the next window.",
+                      "x-descriptionZh": "一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。"
+                    }
+                  }
+                },
                 "coalesceWindowMs": {
                   "type": [
                     "number",
@@ -1817,6 +1852,9 @@
                 "boolean",
                 "string"
               ]
+            },
+            "recordRequestBodies": {
+              "type": "boolean"
             },
             "promptCache": {
               "type": [

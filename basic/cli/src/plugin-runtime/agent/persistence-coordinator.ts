@@ -13,7 +13,7 @@ type Context = Parameters<RootResourceInstaller>[0];
 
 /** Agent owns its storage with or without the optional Workroom package. */
 export function installAgentPersistence(context: Pick<Context, 'resources' | 'handoff' | 'lifecycle' | 'admission'>,
-  foundation: AgentRuntimeFoundation, config: AgentHostAIConfig): void {
+  foundation: AgentRuntimeFoundation, config: AgentHostAIConfig, pruneTraces?: () => Promise<unknown>): void {
   const { resources, handoff, lifecycle, admission } = context;
   const database = resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken) : undefined;
   const sessionsInDatabase = config.sessions?.useDatabase !== false;
@@ -54,6 +54,10 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   let pendingStart: Promise<void> | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
   let off = () => {};
+  const pruneTraceArchive = async () => {
+    try { await pruneTraces?.(); }
+    catch { getLogger('agent').warn('op=trace_prune status=failed; 轨迹保留期清理失败'); }
+  };
   lifecycle.add(async () => {
     stopped = true;
     off();
@@ -90,7 +94,9 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       pendingStart = foundation.schedule.start().catch(() => {
         getLogger('agent').warn('op=schedule_start status=failed; 定时任务启动失败');
       });
-      if (usage || decisions() || foundation.agent.getGroupRules?.()?.persistent) {
+      // Diagnostic storage must not delay generation publication or Agent admission.
+      pendingPrune = pruneTraceArchive().finally(() => { pendingPrune = undefined; });
+      if (usage || decisions() || pruneTraces || foundation.agent.getGroupRules?.()?.persistent) {
         timer = setInterval(() => {
           if (stopped || pendingPrune) return;
           pendingPrune = Promise.all([
@@ -99,6 +105,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
             }),
             // Never rejects for database errors (only logs); see DecisionEventLog.prune.
             decisions()?.prune(auditRetentionDays),
+            pruneTraceArchive(),
             pruneGroupRules(),
           ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
         }, 3_600_000);

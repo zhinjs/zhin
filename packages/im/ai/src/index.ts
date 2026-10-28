@@ -93,6 +93,8 @@ export type {
   ThinkingLevel,
   ToolExecutionMode,
   QueueMode,
+  LlmRequestInput,
+  LlmRequestObservation,
   StreamOptions,
   AssistantStreamEvent,
   AssistantMessageEventStream,

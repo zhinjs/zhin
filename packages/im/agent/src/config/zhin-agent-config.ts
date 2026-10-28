@@ -25,6 +25,20 @@ export interface InboundQueueConfig {
    * turn of one session. Further messages get a short "busy" reply. Default 5.
    */
   maxQueuedTurns?: number;
+  /** ADR 0038 §1: merge mentions from several group members into one reply. */
+  merge?: InboundMergeConfig;
+}
+
+/** ADR 0038 §1 group merge window. Private chats never merge. */
+export interface InboundMergeConfig {
+  /** Default `false` until merged turns narrow permissions per sender (ADR 0038 slice B). */
+  enabled?: boolean;
+  /** Flush after this long without a new message in the window. Default 1500. */
+  quietMs?: number;
+  /** Flush at the latest this long after the window opened. Default 6000. */
+  maxWaitMs?: number;
+  /** Senders per merged turn; further senders wait for the next window. Default 5. */
+  maxSenders?: number;
 }
 
 /** ADR 0010 — session compaction config. */
@@ -116,6 +130,8 @@ export interface ZhinAgentConfig {
   phaseTrace?: boolean;
   promptTrace?: boolean;
   promptTraceVerbose?: boolean;
+  /** Retain redacted semantic model inputs in the local trace archive. Defaults to true. */
+  recordRequestBodies?: boolean;
   promptCache?: boolean;
   promptCacheRetention?: 'in_memory' | '24h';
   promptCacheKeyPrefix?: string;

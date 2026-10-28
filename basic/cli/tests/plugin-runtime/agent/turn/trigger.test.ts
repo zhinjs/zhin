@@ -3,6 +3,7 @@ import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
 import {
+  isMergeableGroupTurn,
   renderChatTurnError,
   TriggerTimeoutError,
   matchAiTrigger,
@@ -157,4 +158,34 @@ it('localizes fallback errors while preserving explicitly configured templates',
   expect(renderChatTurnError(undefined, new TriggerTimeoutError(60000), true, 'en')).toContain('(Turn timeout)');
   expect(renderChatTurnError(undefined, new Error('private detail'), false, 'en')).not.toMatch(/private detail|[\u3400-\u9fff]/u);
   expect(renderChatTurnError({ errorTemplate: '出错了：{error}' }, new Error('boom'), false, 'en')).toBe('出错了：boom');
+});
+
+describe('isMergeableGroupTurn (ADR 0038 §1)', () => {
+  const base = (content: string, target = 'group:100') => ({
+    message: makeMessage({ content, target }),
+    trigger: undefined,
+    plainText: true,
+    isMaster: false,
+    content,
+  });
+
+  it('lets a plain-text group mention from a member join the window', () => {
+    expect(isMergeableGroupTurn(base('今晚几点开会'))).toBe(true);
+    expect(isMergeableGroupTurn(base('今晚几点开会', 'channel:7'))).toBe(true);
+  });
+
+  it('keeps private chats, the master, media and stop words out', () => {
+    expect(isMergeableGroupTurn(base('你好', 'private:1'))).toBe(false);
+    expect(isMergeableGroupTurn({ ...base('你好'), isMaster: true })).toBe(false);
+    expect(isMergeableGroupTurn({ ...base('看图'), plainText: false })).toBe(false);
+    expect(isMergeableGroupTurn(base('取消'))).toBe(false);
+  });
+
+  it('keeps trigger-prefix and command messages out', () => {
+    expect(isMergeableGroupTurn({ ...base('ai: 查天气'), content: '查天气' })).toBe(false);
+    expect(isMergeableGroupTurn({ ...base('#帮助'), content: '帮助' })).toBe(false);
+    const custom: AITriggerConfig = { prefixes: ['小智'] };
+    expect(isMergeableGroupTurn({ ...base('小智 你好'), trigger: custom, content: '你好' })).toBe(false);
+    expect(isMergeableGroupTurn(base('/status'))).toBe(false);
+  });
 });

@@ -64,6 +64,7 @@ import {
 } from './content.js';
 import {
   hasIgnoredTriggerPrefix,
+  isMergeableGroupTurn,
   renderChatTurnError,
   resolveRuntimeAgentTrigger,
   resolveTriggerTimeoutMs,
@@ -385,6 +386,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         maxQueuedTurns: queue.maxQueuedTurns,
         queueTtlMs: queue.ttlMs,
         supersedeSameSender: queue.groupMode === 'supersede',
+        // ADR 0038 §1: group merge window (opt-in in slice A).
+        ...(queue.merge.enabled ? { merge: queue.merge } : {}),
       });
     }
     return this.#admissionGate;
@@ -812,11 +815,26 @@ export class AgentTurnIngressRoute implements IngressRoute {
         );
         let inbound = preprocessed;
         if (gate) {
+          const plainText = isPlainTextRuntimeMessage(message);
           const admitted = await gate.admit({
             sessionKey,
             senderId,
             text: preprocessed.text,
-            plainText: isPlainTextRuntimeMessage(message),
+            plainText,
+            mergeable: isMergeableGroupTurn({
+              message,
+              trigger,
+              plainText,
+              isMaster: senderRoles.isMaster,
+              content: matched.content,
+            }),
+            ...(message.sender?.name ? { senderName: message.sender.name } : {}),
+            onWindowJoined: (window) => audit({
+              kind: 'inbound_wake',
+              outcome: 'defer',
+              reasonCode: 'merge_window_joined',
+              payload: { source: 'message', senders: window.senders.length, messages: window.messages },
+            }),
           });
           if (admitted.kind === 'merged') {
             logger.debug(formatCompact({ op: 'agent_host_turn_merged', sessionKey }));
@@ -830,6 +848,20 @@ export class AgentTurnIngressRoute implements IngressRoute {
           }
           admission = admitted;
           inbound = { ...preprocessed, text: admitted.text };
+          const window = admitted.facts.mergeWindow;
+          if (window) {
+            audit({
+              kind: 'inbound_wake',
+              outcome: 'allow',
+              reasonCode: 'merge_window_flushed',
+              payload: {
+                source: 'message',
+                senders: window.senders,
+                messages: window.messages,
+                waitedMs: window.waitedMs,
+              },
+            });
+          }
         }
         const capabilities = restrictWorkroomAgentCapabilities(await readCapabilities(
           ingress,
@@ -1198,6 +1230,7 @@ function observeWithAdmission(
         queued_ms: facts.queuedMs,
         merged_messages: facts.mergedMessages,
         superseded_previous: facts.supersededPrevious,
+        ...(facts.mergeWindow ? { merged_senders: facts.mergeWindow.senders.length } : {}),
       });
     }
     observe(event);

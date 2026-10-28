@@ -20,6 +20,40 @@ const request = {
 } as unknown as TurnRequest;
 
 const dialects = ['sqlite', ...(process.env.ZHIN_TEST_STRUCTURED_SQL === '1' ? ['mysql', 'pg'] : [])];
+describe('trace archive maintenance lifecycle', () => {
+  it('prunes at activation and while idle, isolates errors, and stops with the generation', async () => {
+    vi.useFakeTimers();
+    const lifecycle = new DisposeStack(), handoff = new GenerationHandoffStack();
+    let publish!: () => void;
+    const off = vi.fn();
+    const admission = { onActivate: (listener: () => void) => { publish = listener; return off; } };
+    const foundation = { agent: { markMemoryPersistenceReady: vi.fn() }, semanticMemory: null,
+      schedule: { start: vi.fn(async () => {}) } };
+    const prune = vi.fn(async () => {});
+    try {
+      installAgentPersistence({ resources: new Scope(rootPluginId()), handoff, lifecycle, admission: admission as never },
+        foundation as never, { sessions: { useDatabase: false } } as never, prune);
+      lifecycle.seal(); handoff.seal();
+      await handoff.activateNext(new AbortController().signal);
+      expect(prune).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(prune).not.toHaveBeenCalled();
+      publish();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(prune).toHaveBeenCalledTimes(1);
+      prune.mockRejectedValueOnce(new Error('synthetic prune failure'));
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(prune).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(prune).toHaveBeenCalledTimes(3);
+      await lifecycle.dispose();
+      expect(off).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(prune).toHaveBeenCalledTimes(3);
+    } finally { await lifecycle.dispose(); vi.useRealTimers(); }
+  });
+});
+
 describe.each(dialects)('Agent structured persistence without Workroom (%s)', dialect => {
   let dir: string;
   let host: ReturnType<typeof createDatabaseHost>;

@@ -227,3 +227,217 @@ describe('TurnAdmissionGate (#725)', () => {
     bob.release();
   });
 });
+
+describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
+  const MERGE = { quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 3 };
+
+  function createMergeGate(overrides: Partial<ConstructorParameters<typeof TurnAdmissionGate>[0]> = {}) {
+    let clock = 0;
+    let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
+    const gate = new TurnAdmissionGate({
+      maxQueuedTurns: 5,
+      queueTtlMs: 180_000,
+      supersedeSameSender: true,
+      merge: MERGE,
+      now: () => clock,
+      setTimer: (run, delayMs) => {
+        const timer = { at: clock + delayMs, run, cancelled: false };
+        timers.push(timer);
+        return () => { timer.cancelled = true; };
+      },
+      ...overrides,
+    });
+    const advance = (ms: number) => {
+      const until = clock + ms;
+      for (;;) {
+        const due = timers
+          .filter((timer) => !timer.cancelled && timer.at <= until)
+          .sort((a, b) => a.at - b.at)[0];
+        if (!due) break;
+        clock = due.at;
+        due.cancelled = true;
+        due.run();
+      }
+      clock = until;
+      timers = timers.filter((timer) => !timer.cancelled);
+    };
+    return { gate, advance };
+  }
+
+  function mention(senderId: string, text: string, extra: Partial<TurnAdmissionRequest> = {}): TurnAdmissionRequest {
+    return { sessionKey: SESSION, senderId, text, plainText: true, mergeable: true, ...extra };
+  }
+
+  it('waits for the window to go quiet, then answers every sender in one turn', async () => {
+    const { gate, advance } = createMergeGate();
+    const joined: number[] = [];
+    const carrier = gate.admit(mention('alice', '今晚几点开会', { senderName: 'Alice', onWindowJoined: (w) => joined.push(w.senders.length) }));
+    advance(500);
+    await expect(gate.admit(mention('bob', '会议链接在哪', { onWindowJoined: (w) => joined.push(w.senders.length) })))
+      .resolves.toEqual({ kind: 'merged' });
+    advance(1_000);
+    await expect(gate.admit(mention('carol', '我能旁听吗'))).resolves.toEqual({ kind: 'merged' });
+    expect(await isSettled(carrier)).toBe(false);
+
+    advance(1_499);
+    expect(await isSettled(carrier)).toBe(false);
+    advance(1);
+    const run = await expectRun(carrier);
+    expect(run.text).toBe('Alice: 今晚几点开会\nbob: 会议链接在哪\ncarol: 我能旁听吗');
+    expect(run.participants.map((p) => p.senderId)).toEqual(['alice', 'bob', 'carol']);
+    expect(run.facts).toEqual({
+      queuedMs: 3_000,
+      mergedMessages: 3,
+      supersededPrevious: false,
+      mergeWindow: { senders: ['alice', 'bob', 'carol'], messages: 3, waitedMs: 3_000 },
+    });
+    expect(joined).toEqual([1, 2]);
+    run.release();
+  });
+
+  it('flushes at maxWaitMs even while messages keep arriving', async () => {
+    const { gate, advance } = createMergeGate({ merge: { ...MERGE, maxSenders: 10 } });
+    const carrier = gate.admit(mention('u0', 'q0'));
+    for (let index = 1; index <= 5; index += 1) {
+      advance(1_000);
+      void gate.admit(mention(`u${index}`, `q${index}`));
+    }
+    advance(1_000);
+    const run = await expectRun(carrier);
+    expect(run.facts.mergeWindow?.waitedMs).toBe(6_000);
+    expect(run.participants).toHaveLength(6);
+    run.release();
+  });
+
+  it('folds a sender burst into their own entry instead of adding a sender', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', '帮我看下'));
+    await gate.admit(mention('bob', '我也想问'));
+    await gate.admit(mention('alice', '明天的安排'));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    expect(run.participants).toEqual([
+      { senderId: 'alice', texts: ['帮我看下', '明天的安排'] },
+      { senderId: 'bob', texts: ['我也想问'] },
+    ]);
+    expect(run.facts.mergeWindow).toEqual({ senders: ['alice', 'bob'], messages: 3, waitedMs: 1_500 });
+    run.release();
+  });
+
+  it('keeps the window open while a turn runs and flushes it after release', async () => {
+    const { gate, advance } = createMergeGate();
+    const master = await expectRun(gate.admit(message('owner', '主人的问题')));
+    const carrier = gate.admit(mention('alice', 'a'));
+    await gate.admit(mention('bob', 'b'));
+    advance(10_000);
+    expect(await isSettled(carrier)).toBe(false);
+    master.release();
+    const run = await expectRun(carrier);
+    expect(run.participants.map((p) => p.senderId)).toEqual(['alice', 'bob']);
+    run.release();
+  });
+
+  it('never lets a merged turn be superseded by one of its senders', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', 'a'));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    const next = gate.admit(message('alice', 'ai: 换个问题'));
+    expect(run.signal.aborted).toBe(false);
+    run.release();
+    expect((await expectRun(next)).text).toBe('ai: 换个问题');
+  });
+
+  it('moves senders past maxSenders into the next window', async () => {
+    const { gate, advance } = createMergeGate();
+    const first = gate.admit(mention('u1', '1'));
+    await gate.admit(mention('u2', '2'));
+    await gate.admit(mention('u3', '3'));
+    const second = gate.admit(mention('u4', '4'));
+    await gate.admit(mention('u1', '1+'));
+    expect(gate.queuedTurns(SESSION)).toBe(2);
+    advance(1_500);
+    const run1 = await expectRun(first);
+    expect(run1.participants.map((p) => [p.senderId, p.texts.length])).toEqual([['u1', 2], ['u2', 1], ['u3', 1]]);
+    expect(await isSettled(second)).toBe(false);
+    run1.release();
+    const run2 = await expectRun(second);
+    expect(run2.participants.map((p) => p.senderId)).toEqual(['u4']);
+    expect(run2.text).toBe('4');
+    run2.release();
+  });
+
+  it('keeps non-mergeable messages FIFO behind an open window', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', 'a'));
+    const media = gate.admit(message('bob', '[图片]', false));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    expect(await isSettled(media)).toBe(false);
+    run.release();
+    (await expectRun(media)).release();
+  });
+
+  it('counts windows against maxQueuedTurns', async () => {
+    const { gate } = createMergeGate({ maxQueuedTurns: 1, merge: { ...MERGE, maxSenders: 1 } });
+    void gate.admit(mention('alice', 'a'));
+    await expect(gate.admit(mention('bob', 'b'))).resolves.toEqual({ kind: 'rejected', reason: 'queue_full' });
+  });
+
+  it('expires a window that waited past the queue ttl', async () => {
+    const { gate, advance } = createMergeGate({ queueTtlMs: 5_000 });
+    const running = await expectRun(gate.admit(message('owner', 'x')));
+    const carrier = gate.admit(mention('alice', 'a'));
+    advance(6_000);
+    running.release();
+    await expect(carrier).resolves.toEqual({ kind: 'rejected', reason: 'expired' });
+  });
+
+  it('drops only the stopping sender from a waiting window', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', 'a'));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    const next = gate.admit(mention('alice', 'again'));
+    await gate.admit(mention('bob', 'b'));
+    expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+    run.release();
+    advance(1_500);
+    const after = await expectRun(next);
+    expect(after.participants.map((p) => p.senderId)).toEqual(['bob']);
+    expect(after.text).toBe('b');
+    after.release();
+  });
+
+  it('rejects a window when every sender in it stopped', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', 'a'));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    const next = gate.admit(mention('alice', 'again'));
+    expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+    await expect(next).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
+    run.release();
+  });
+
+  it('ignores `mergeable` when no merge window is configured (#725 behaviour)', async () => {
+    const { gate } = createGate();
+    const first = await expectRun(gate.admit(mention('alice', 'a')));
+    const second = gate.admit(mention('bob', 'b'));
+    first.release();
+    const run = await expectRun(second);
+    expect(run.text).toBe('b');
+    expect(run.facts.mergeWindow).toBeUndefined();
+    expect(run.participants).toEqual([{ senderId: 'bob', texts: ['b'] }]);
+    run.release();
+  });
+
+  it('cancels window timers on dispose', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', 'a'));
+    gate.dispose();
+    await expect(carrier).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
+    advance(10_000);
+    expect(gate.queuedTurns(SESSION)).toBe(0);
+  });
+});

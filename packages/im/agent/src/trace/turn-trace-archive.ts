@@ -7,16 +7,17 @@
  * It implements {@link TurnTraceStore}, so it drops in where the recent-N
  * `recent.json` store was used. That legacy file is still read as a fallback.
  */
-import { appendFile, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { collectEnvironmentSecrets } from '../security/outbound-leak-guard.js';
 import { scrubSecrets, type TurnTrace } from './turn-trace.js';
+import { randomUUID } from 'node:crypto';
+import { DEFAULT_TRACE_MAX_BYTES } from './request-trace.js';
 import type { TurnTraceStore } from './turn-trace-store.js';
 
 export const DEFAULT_TRACE_RETENTION_DAYS = 7;
-export const DEFAULT_TRACE_MAX_BYTES = 64 * 1024 * 1024;
+export { DEFAULT_TRACE_MAX_BYTES } from './request-trace.js';
 const DAY_MS = 24 * 60 * 60 * 1000;
-const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
 const DAY_FILE = /^(\d{4}-\d{2}-\d{2})\.jsonl$/;
 
 export interface TurnTraceQuery {
@@ -42,7 +43,7 @@ export interface TurnTraceSessionSummary {
 export interface TurnTraceArchive extends TurnTraceStore {
   query(query?: TurnTraceQuery): Promise<readonly TurnTrace[]>;
   sessions(query?: Omit<TurnTraceQuery, 'sessionKey'>): Promise<readonly TurnTraceSessionSummary[]>;
-  /** Delete day files past retention, then oldest days until under the size cap. Returns deleted file names. */
+  /** Delete expired records, then oldest complete records until under the hard size cap. */
   prune(): Promise<readonly string[]>;
 }
 
@@ -66,7 +67,6 @@ export function createTurnTraceArchive(dir: string, options: TurnTraceArchiveOpt
   const now = options.now ?? Date.now;
   const secrets = [...(options.secrets ?? collectEnvironmentSecrets())].filter(Boolean).sort((a, b) => b.length - a.length);
   let tail: Promise<unknown> = Promise.resolve();
-  let lastPrune = Number.NEGATIVE_INFINITY;
 
   const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
     const next = tail.then(operation);
@@ -87,8 +87,9 @@ export function createTurnTraceArchive(dir: string, options: TurnTraceArchiveOpt
     let raw: string;
     try {
       raw = await readFile(join(dir, name), 'utf8');
-    } catch {
-      return [];
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
     }
     const traces: TurnTrace[] = [];
     for (const line of raw.split('\n')) {
@@ -105,12 +106,47 @@ export function createTurnTraceArchive(dir: string, options: TurnTraceArchiveOpt
 
   const readLegacy = async (): Promise<TurnTrace[]> => {
     if (!options.legacyFile) return [];
-    try {
-      const parsed = JSON.parse(await readFile(options.legacyFile, 'utf8')) as { traces?: TurnTrace[] };
-      return Array.isArray(parsed.traces) ? parsed.traces : [];
-    } catch {
-      return [];
+    let raw: string;
+    try { raw = await readFile(options.legacyFile, 'utf8'); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
     }
+    const parsed = JSON.parse(raw) as { traces?: TurnTrace[] };
+    if (!Array.isArray(parsed.traces)) throw new Error('Invalid legacy trace archive');
+    return parsed.traces;
+  };
+
+  const writeDay = async (name: string, traces: readonly TurnTrace[]): Promise<void> => {
+    if (!traces.length) { await rm(join(dir, name), { force: true }); return; }
+    const path = join(dir, name);
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    try {
+      await writeFile(temporary, traces.map(trace => JSON.stringify(trace)).join('\n') + '\n', { encoding: 'utf8', mode: 0o600 });
+      await rename(temporary, path);
+    } finally { await rm(temporary, { force: true }); }
+  };
+
+  // One composition-root writer owns this archive across generations. API/CLI instances only read.
+  // Import legacy records before enforcing capacity, so removed records cannot reappear via fallback.
+  const migrateLegacy = async (): Promise<void> => {
+    const legacy = await readLegacy();
+    if (!options.legacyFile) return;
+    const byDay = new Map<string, TurnTrace[]>();
+    for (const trace of legacy) {
+      const name = `${dayKey(trace.started_at)}.jsonl`;
+      const rows = byDay.get(name) ?? [];
+      rows.push(redactStrings(trace, secrets));
+      byDay.set(name, rows);
+    }
+    await mkdir(dir, { recursive: true });
+    for (const [name, rows] of byDay) {
+      const all = new Map(rows.map(trace => [trace.turn_id, trace]));
+      for (const trace of await readDay(name)) all.set(trace.turn_id, trace);
+      await writeDay(name, [...all.values()].sort((a, b) => a.started_at - b.started_at));
+    }
+    // All canonical writes succeeded. A failure above preserves the only remaining source.
+    await rm(options.legacyFile, { force: true });
   };
 
   /** All traces oldest first; a re-saved turn keeps its latest record. */
@@ -133,47 +169,73 @@ export function createTurnTraceArchive(dir: string, options: TurnTraceArchiveOpt
       const day = name.slice(0, 10);
       return (sinceDay === undefined || day >= sinceDay) && (untilDay === undefined || day <= untilDay);
     });
-    const matching = (await readAll(days)).filter((trace) =>
-      (q.sessionKey === undefined || trace.session_key === q.sessionKey)
+    const cutoff = now() - retentionDays * DAY_MS;
+    const matching = (await readAll(days)).filter((trace) => trace.started_at >= cutoff
+      && (q.sessionKey === undefined || trace.session_key === q.sessionKey)
       && (q.since === undefined || trace.started_at >= q.since)
       && (q.until === undefined || trace.started_at < q.until));
     const limit = positive(q.limit, Number.POSITIVE_INFINITY);
     return Number.isFinite(limit) ? matching.slice(-limit) : matching;
   };
 
-  const prune = (): Promise<readonly string[]> => serialize(async () => {
-    lastPrune = now();
+  const pruneToFit = async (reservedBytes = 0, reservedStartedAt = Number.POSITIVE_INFINITY): Promise<{ deleted: readonly string[]; accepted: boolean }> => {
+    let accepted = true;
     const deleted: string[] = [];
-    const cutoff = dayKey(now() - retentionDays * DAY_MS);
-    const files = await dayFiles();
+    const cutoff = now() - retentionDays * DAY_MS;
+    const cutoffDay = dayKey(cutoff);
     const kept: Array<{ name: string; size: number }> = [];
-    for (const name of files) {
-      if (name.slice(0, 10) < cutoff) {
-        await rm(join(dir, name), { force: true });
+    for (const name of await dayFiles()) {
+      if (name.slice(0, 10) < cutoffDay) {
+        await rm(join(dir, name));
         deleted.push(name);
-      } else {
-        kept.push({ name, size: (await stat(join(dir, name)).catch(() => ({ size: 0 }))).size });
+        continue;
       }
+      if (name.startsWith(cutoffDay)) {
+        const original = await readDay(name);
+        const live = original.filter(trace => trace.started_at >= cutoff);
+        if (live.length !== original.length) await writeDay(name, live);
+        if (!live.length) { deleted.push(name); continue; }
+      }
+      kept.push({ name, size: (await stat(join(dir, name))).size });
     }
     let total = kept.reduce((sum, file) => sum + file.size, 0);
-    // Never delete today's file for size: it is the one being written.
-    while (total > maxBytes && kept.length > 1) {
-      const oldest = kept.shift()!;
-      await rm(join(dir, oldest.name), { force: true });
-      deleted.push(oldest.name);
-      total -= oldest.size;
+    for (const file of kept) {
+      if (total + reservedBytes <= maxBytes) break;
+      const traces = await readDay(file.name);
+      const retained = traces.sort((a, b) => a.started_at - b.started_at);
+      let size = retained.reduce((sum, trace) => sum + lineBytes(trace), 0);
+      while (retained.length && total - file.size + size + reservedBytes > maxBytes) {
+        if (reservedBytes && retained[0]!.started_at > reservedStartedAt) {
+          // A turn that completes late is still older than later-started turns already archived.
+          reservedBytes = 0;
+          accepted = false;
+        } else size -= lineBytes(retained.shift()!);
+      }
+      await writeDay(file.name, retained);
+      total += size - file.size;
+      if (!retained.length) deleted.push(file.name);
     }
-    return deleted;
+    return { deleted, accepted };
+  };
+  const prune = (): Promise<readonly string[]> => serialize(async () => {
+    await migrateLegacy();
+    return (await pruneToFit()).deleted;
   });
 
   return Object.freeze({
-    async save(trace: TurnTrace): Promise<void> {
-      await serialize(async () => {
+    maxBytes,
+    save(trace: TurnTrace): Promise<void> {
+      return serialize(async () => {
         await mkdir(dir, { recursive: true });
-        const line = JSON.stringify(redactStrings(trace, secrets));
-        await appendFile(join(dir, `${dayKey(trace.started_at || now())}.jsonl`), `${line}\n`, 'utf8');
+        await migrateLegacy();
+        const record = fitTrace(redactStrings(trace, secrets), maxBytes - 1);
+        const bytes = lineBytes(record) + 1;
+        if (bytes > maxBytes) throw new Error('Trace metadata exceeds archive capacity');
+        if (record.started_at < now() - retentionDays * DAY_MS) { await pruneToFit(); return; }
+        if (!(await pruneToFit(bytes, record.started_at)).accepted) return;
+        // Leading newline isolates this complete record from a possible crash-torn last line.
+        await appendFile(join(dir, `${dayKey(record.started_at || now())}.jsonl`), `\n${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 });
       });
-      if (now() - lastPrune >= PRUNE_INTERVAL_MS) await prune();
     },
     list: () => query(),
     async latest() {
@@ -204,6 +266,35 @@ export function createTurnTraceArchive(dir: string, options: TurnTraceArchiveOpt
     },
     prune,
   });
+}
+
+function lineBytes(trace: TurnTrace): number { return Buffer.byteLength(JSON.stringify(trace)) + 1; }
+
+/** Keep complete request bodies where they fit; never present truncated text as a captured request. */
+function fitTrace(trace: TurnTrace, maxBytes: number): TurnTrace {
+  if (lineBytes(trace) <= maxBytes) return trace;
+  const bodies: Array<{ id: string; bytes: number }> = [];
+  const visit = (turn: TurnTrace) => {
+    for (const request of turn.requests ?? []) if (request.body) bodies.push({ id: request.request_id, bytes: Buffer.byteLength(JSON.stringify(request.body)) });
+    turn.subagents.forEach(visit);
+  };
+  visit(trace);
+  const removed = new Set<string>();
+  const project = (turn: TurnTrace): TurnTrace => ({ ...turn,
+    ...(turn.requests ? { requests: turn.requests.map(request => {
+      if (!removed.has(request.request_id)) return request;
+      const { body: _body, ...rest } = request;
+      return { ...rest, body_status: 'too_large' as const };
+    }) } : {}),
+    subagents: turn.subagents.map(project),
+  });
+  let result = trace;
+  for (const body of bodies.sort((a, b) => b.bytes - a.bytes)) {
+    removed.add(body.id);
+    result = project(trace);
+    if (lineBytes(result) <= maxBytes) break;
+  }
+  return result;
 }
 
 /** UTC day key `YYYY-MM-DD` for an epoch ms. */

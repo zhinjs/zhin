@@ -131,7 +131,17 @@ describe('reason_code registry', () => {
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
   });
 
-  it('appends the ADR 0039 group rule codes after the ADR 0037 slice D codes', () => {
+  it('appends the ADR 0038 merge codes after the ADR 0037 slice D codes', () => {
+    const slice = [
+      'merge_window_joined', 'merge_window_flushed', 'merge_reply_stale_discarded', 'merge_reply_stale_sent',
+      'merge_on_behalf_denied', 'danmaku_window_picked', 'hard_gate_scene_pending_cap',
+    ];
+    const start = DECISION_REASON_CODES.indexOf('merge_window_joined');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('schedule_wake_merged'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+  });
+
+  it('appends the ADR 0039 group rule codes after the ADR 0038 merge codes', () => {
     const slice = [
       'rule_drafted', 'rule_submitted', 'rule_approved', 'rule_rejected', 'rule_expired', 'rule_disabled',
       'rule_superseded', 'rule_hash_mismatch', 'rule_draft_forbidden',
@@ -139,7 +149,7 @@ describe('reason_code registry', () => {
       'rule_hit_bot_not_admin', 'rule_hit_flood',
     ];
     const start = DECISION_REASON_CODES.indexOf('rule_drafted');
-    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('schedule_wake_merged'));
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('hard_gate_scene_pending_cap'));
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
     expect(DECISION_REASON_CODES.slice(-slice.length)).toEqual(slice);
   });

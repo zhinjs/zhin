@@ -545,6 +545,13 @@ export interface AIConfig {
       coalesceWindowMs?: number;
       /** Turns allowed to wait behind the running turn of one session (default 5). */
       maxQueuedTurns?: number;
+      /** ADR 0038: merge mentions from several group members into one reply. */
+      merge?: {
+        enabled?: boolean;
+        quietMs?: number;
+        maxWaitMs?: number;
+        maxSenders?: number;
+      };
     };
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';
