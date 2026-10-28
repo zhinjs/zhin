@@ -1,0 +1,43 @@
+docs/en/ai/agent.md
+  s_b4f8bb488cf07c::t_ae507514e20ef5 83
+packages/im/agent/tests/turn/turn-admission-gate.test.ts
+  s_b4f8bb488cf07c::t_eea1b5d7ef8924 9,436-448
+  s_b4f8bb488cf07c::t_c4fe9d6c7be6b3 449-451
+packages/im/agent/src/turn/turn-admission-gate.ts
+  s_b4f8bb488cf07c::t_315890b4f42867 32,76-80,90-91,138,149,213,241,254,279,293,299,398,411,417,478,491-497
+  s_b4f8bb488cf07c::t_49823e42968946 498-499
+packages/im/agent/tests/turn/merged-principal.test.ts
+  s_b4f8bb488cf07c::t_eea1b5d7ef8924 1-94
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_b4f8bb488cf07c::t_8ba9a655bee55f 69-73,101
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_b4f8bb488cf07c::t_b42b3759b6e795 10,229-248
+  s_b4f8bb488cf07c::t_5421101785510a 249
+packages/im/agent/src/turn/merged-principal.ts
+  s_b4f8bb488cf07c::t_9ee8c1005fd837 1-69
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_b4f8bb488cf07c::t_c1a9dae3adce59 21,23,26,834,869-874,878-879,956,1285,1289-1290,1293-1318
+  s_b4f8bb488cf07c::t_46632f79fb3b28 920
+docs/ai/agent.md
+  s_b4f8bb488cf07c::t_ae507514e20ef5 83
+.changeset/adr-0038-slice-b1-merged-principal.md
+  s_b4f8bb488cf07c::t_ae507514e20ef5 1-6
+packages/im/agent/src/turn/index.ts
+  s_b4f8bb488cf07c::t_71465644659d19 148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7f34293b8361a714976f4ac419a648f45b83eced",
+  "prompts": {},
+  "sessions": {
+    "s_b4f8bb488cf07c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b5a8a5f8-4113-4183-a094-aaa376612560",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
