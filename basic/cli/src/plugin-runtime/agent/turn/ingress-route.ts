@@ -18,9 +18,12 @@ import {
 import { DecisionApprovalJudgment } from '@zhin.js/agent/session';
 import { noteTurnTrace } from '@zhin.js/agent/trace';
 import {
+  intersectCapabilities,
   isCancelIntent,
+  narrowMergedAccess,
   normalizeInboundQueueConfig,
   TurnAdmissionGate,
+  type TurnAccessContext,
   type TurnAdmission,
 } from '@zhin.js/agent/turn';
 import {
@@ -89,7 +92,6 @@ import {
   resolveSnapshotTurnIntentResolver,
   resolveTrustedForRuntimeMessage,
   runtimeImSessionKey,
-  type RuntimeSenderRoles,
 } from './request.js';
 import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
@@ -829,6 +831,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               content: matched.content,
             }),
             ...(message.sender?.name ? { senderName: message.sender.name } : {}),
+            access: turnAccess,
             onWindowJoined: (window) => audit({
               kind: 'inbound_wake',
               outcome: 'defer',
@@ -863,12 +866,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
             });
           }
         }
-        const capabilities = restrictWorkroomAgentCapabilities(await readCapabilities(
+        // ADR 0038 §2: a merged turn may only do what every member may do.
+        const members = admission && admission.participants.length > 1
+          ? mergedMemberAccess(admission.participants, turnAccess)
+          : undefined;
+        const turnAccessForTurn = members ? narrowMergedAccess(turnAccess, members) : turnAccess;
+        const capabilities = restrictWorkroomAgentCapabilities(await readTurnCapabilities(
           ingress,
           snapshot,
           requester,
-          message,
-          senderRoles,
+          turnAccess,
+          members,
           () => capabilityActive,
         ), workroomAgentTurn != null);
         let routed = routeSpecialistAgent(
@@ -909,7 +917,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                   baseline: options.agent.approvalJudgment,
                   observe: decisionRuntime.observe,
                   intent: routed.userText,
-                  principal: turnAccess.principal,
+                  principal: turnAccessForTurn.principal,
                 })
               : undefined;
             const turnPolicy = resolveSandboxTurnPolicy({
@@ -945,6 +953,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               replyConversation.kind,
             );
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
+              ...(members ? { access: turnAccessForTurn } : {}),
               traceId,
               turnId,
               signal: admission ? AbortSignal.any([signal, admission.signal]) : signal,
@@ -1273,15 +1282,40 @@ function resolveApprovalPort(input: Readonly<{
   return input.ask;
 }
 
-async function readCapabilities(
+async function readTurnCapabilities(
   ingress: CapabilityIngress,
   snapshot: RuntimeSnapshot,
   requester: PluginId,
-  message: Message,
-  roles: RuntimeSenderRoles,
+  carrier: TurnAccessContext,
+  members: readonly TurnAccessContext[] | undefined,
   isActive: () => boolean,
 ): Promise<AgentCapabilities> {
-  return ingress.read(snapshot, requester, isActive, createRuntimeTurnAccess(message, roles));
+  const own = await ingress.read(snapshot, requester, isActive, carrier);
+  if (!members) return own;
+  const others = await Promise.all(members
+    .filter((member) => member !== carrier)
+    .map((member) => ingress.read(snapshot, requester, isActive, member)));
+  return intersectCapabilities(own, others);
+}
+
+/**
+ * Every member's own access (ADR 0038 §2). A participant admitted without one
+ * cannot be checked, so the turn falls back to the anonymous `user` floor:
+ * nothing beyond what an unknown group member could use.
+ */
+export function mergedMemberAccess(
+  participants: readonly Readonly<{ senderId: string; access?: TurnAccessContext }>[],
+  carrier: TurnAccessContext,
+): readonly TurnAccessContext[] {
+  return participants.map((participant) => participant.access ?? anonymousMemberAccess(carrier, participant.senderId));
+}
+
+function anonymousMemberAccess(carrier: TurnAccessContext, senderId: string): TurnAccessContext {
+  return Object.freeze({
+    ...carrier,
+    principal: Object.freeze({ subjectId: senderId, roles: Object.freeze(['user']) }),
+    policy: Object.freeze({ ...carrier.policy, permissions: Object.freeze(['user']) }),
+  });
 }
 
 export function resolveSnapshotDetachedTaskRunner(

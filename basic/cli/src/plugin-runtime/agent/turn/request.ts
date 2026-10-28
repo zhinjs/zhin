@@ -66,6 +66,11 @@ export function createRuntimeTurnRequest(
   text: string,
   roles: RuntimeSenderRoles,
   input: Readonly<{
+    /**
+     * Pre-narrowed access (ADR 0038 §2 merged turn); must originate from this
+     * message's conversation. Default: the message sender's own access.
+     */
+    access?: TurnAccessContext;
     traceId: string;
     turnId: string;
     signal: AbortSignal;
@@ -93,7 +98,7 @@ export function createRuntimeTurnRequest(
     sceneEvents?: readonly string[];
   }>,
 ): TurnRequest {
-  const access = createRuntimeTurnAccess(message, roles);
+  const access = input.access ?? createRuntimeTurnAccess(message, roles);
   const origin = access.origin;
   if (origin.kind !== 'im') throw new Error('Runtime IM ingress must produce an IM origin');
   const clientAdapter = message.clientAdapter;
