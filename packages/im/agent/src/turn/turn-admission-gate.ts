@@ -21,6 +21,12 @@
  *   The window holds at most `maxSenders` senders; the next sender opens the
  *   following window. Only the gate decides *how many* turns run — who may
  *   do what in a merged turn is the caller's job (`participants`).
+ * - **Stale reply** (ADR 0038 §4): the running turn is never interrupted, but
+ *   when one of its senders follows up into a merge window before anything
+ *   was delivered, `staleCheck()` tells the caller to drop the reply — unless
+ *   the turn already acted (`markActed`) or a sender's reply was dropped once
+ *   already (starvation guard). A dropped turn's messages move into the
+ *   follow-up's window so the next turn answers old and new together.
  *
  * At most one turn runs per session; the queue is bounded by
  * `maxQueuedTurns` and entries older than `queueTtlMs` expire. The gate only
@@ -113,6 +119,16 @@ export interface TurnAdmissionFacts {
   readonly mergeWindow?: TurnMergeWindowSnapshot & Readonly<{ waitedMs: number }>;
 }
 
+/**
+ * Pre-send verdict (ADR 0038 §4). `discard` drops the reply; `send` with a
+ * reason means the reply is stale but goes out anyway. `senders` are the
+ * turn's senders who followed up while it ran.
+ */
+export type TurnStaleVerdict =
+  | Readonly<{ kind: 'fresh' }>
+  | Readonly<{ kind: 'discard'; senders: readonly string[] }>
+  | Readonly<{ kind: 'send'; senders: readonly string[]; reason: 'acted' | 'starvation' }>;
+
 export type TurnAdmission =
   | Readonly<{
       kind: 'run';
@@ -128,6 +144,13 @@ export type TurnAdmission =
       signal: AbortSignal;
       /** Call once a reply has been delivered; later messages then queue instead of superseding. */
       markDelivered: () => void;
+      /** Call when the turn did something that must be reported (tool call, hard gate). */
+      markActed: () => void;
+      /**
+       * Ask before each send. The first `discard` moves this turn's messages
+       * into the follow-up window; later calls keep answering `discard`.
+       */
+      staleCheck: () => TurnStaleVerdict;
       /** Must be called exactly once when the turn ends. */
       release: () => void;
     }>
@@ -163,17 +186,30 @@ interface MergeWindow {
 
 interface RunningTurn {
   readonly senderId: string;
+  readonly participants: readonly TurnParticipant[];
   readonly texts: readonly string[];
   readonly plainText: boolean;
   /** Merged turns are never superseded by one of their senders. */
   readonly merged: boolean;
   readonly controller: AbortController;
   delivered: boolean;
+  /** A tool ran or the hard gate was hit: the reply must go out (ADR 0038 §4). */
+  acted: boolean;
+  /** One of the senders already had a reply dropped: never drop again (starvation guard). */
+  readonly discardedBefore: boolean;
+  /** Senders of this turn who followed up into a merge window while it ran. */
+  readonly staleSenders: Set<string>;
+  discarded: boolean;
 }
 
 interface SessionState {
   running?: RunningTurn;
   readonly queue: QueuedTurn[];
+  /**
+   * Senders whose reply was dropped and who have not been answered since.
+   * Emptied as their next turn starts; dropped with the idle session.
+   */
+  readonly discardedSenders: Set<string>;
 }
 
 type ResolvedOptions = Omit<Required<TurnAdmissionGateOptions>, 'merge'> & { merge?: TurnMergeWindowOptions };
@@ -291,6 +327,7 @@ export class TurnAdmissionGate {
       target?.window!.participants.push(windowParticipant(request));
     }
     if (target) {
+      markStale(state.running, request.senderId);
       const window = target.window!;
       window.lastJoinedAt = now;
       request.onWindowJoined?.(snapshotWindow(window));
@@ -314,6 +351,7 @@ export class TurnAdmissionGate {
       supersededPrevious: false,
       window,
     }, 'back');
+    markStale(state.running, request.senderId);
     request.onWindowJoined?.(snapshotWindow(window));
     this.#armWindow(request.sessionKey, state, state.queue[state.queue.length - 1]!, merge);
     return opened;
@@ -383,7 +421,7 @@ export class TurnAdmissionGate {
   #state(sessionKey: string): SessionState {
     let state = this.#sessions.get(sessionKey);
     if (!state) {
-      state = { queue: [] };
+      state = { queue: [], discardedSenders: new Set() };
       this.#sessions.set(sessionKey, state);
     }
     return state;
@@ -430,13 +468,22 @@ export class TurnAdmissionGate {
         ...(turn.access ? { access: turn.access } : {}),
       })]);
     const texts = participants.flatMap((p) => p.texts);
+    let discardedBefore = false;
+    for (const participant of participants) {
+      if (state.discardedSenders.delete(participant.senderId)) discardedBefore = true;
+    }
     const running: RunningTurn = {
       senderId: turn.senderId,
+      participants,
       texts: Object.freeze(texts),
       plainText: turn.plainText,
       merged: turn.window !== undefined,
       controller: new AbortController(),
       delivered: false,
+      acted: false,
+      discardedBefore,
+      staleSenders: new Set(),
+      discarded: false,
     };
     state.running = running;
     let released = false;
@@ -454,6 +501,8 @@ export class TurnAdmissionGate {
       participants,
       signal: running.controller.signal,
       markDelivered: () => { running.delivered = true; },
+      markActed: () => { running.acted = true; },
+      staleCheck: () => this.#staleCheck(state, running),
       release: () => {
         if (released) return;
         released = true;
@@ -461,6 +510,22 @@ export class TurnAdmissionGate {
         this.#pump(sessionKey, state);
       },
     });
+  }
+
+  #staleCheck(state: SessionState, running: RunningTurn): TurnStaleVerdict {
+    const senders = Object.freeze([...running.staleSenders]);
+    if (running.discarded) return Object.freeze({ kind: 'discard' as const, senders });
+    // Part of the reply is already out: finish it rather than cut it in half.
+    if (senders.length === 0 || running.delivered) return FRESH;
+    if (running.acted) return Object.freeze({ kind: 'send' as const, senders, reason: 'acted' as const });
+    if (running.discardedBefore) return Object.freeze({ kind: 'send' as const, senders, reason: 'starvation' as const });
+    const target = findLast(state.queue, (entry) => entry.window?.participants.some((p) => running.staleSenders.has(p.senderId)) ?? false);
+    // The follow-up already left the queue (stopped / expired): nothing would answer the old messages.
+    if (!target) return FRESH;
+    running.discarded = true;
+    carryIntoWindow(target.window!, running.participants);
+    for (const participant of running.participants) state.discardedSenders.add(participant.senderId);
+    return Object.freeze({ kind: 'discard' as const, senders });
   }
 
   #pump(sessionKey: string, state: SessionState): void {
@@ -499,6 +564,33 @@ export class TurnAdmissionGate {
     }
     if (this.#sessions.get(sessionKey) === state) this.#sessions.delete(sessionKey);
   }
+}
+
+const FRESH: TurnStaleVerdict = Object.freeze({ kind: 'fresh' });
+
+function markStale(running: RunningTurn | undefined, senderId: string): void {
+  if (running?.participants.some((p) => p.senderId === senderId)) running.staleSenders.add(senderId);
+}
+
+/**
+ * Puts a dropped turn's messages in front of the follow-up window so its next
+ * turn answers both. Carried senders stay even past `maxSenders`: they were
+ * already admitted together once and must not lose their answer.
+ */
+function carryIntoWindow(window: MergeWindow, carried: readonly TurnParticipant[]): void {
+  const fresh = window.participants.splice(0);
+  for (const old of carried) {
+    const index = fresh.findIndex((p) => p.senderId === old.senderId);
+    const next = index >= 0 ? fresh.splice(index, 1)[0] : undefined;
+    window.participants.push({
+      senderId: old.senderId,
+      ...(old.senderName ?? next?.senderName ? { senderName: old.senderName ?? next?.senderName } : {}),
+      texts: [...old.texts, ...(next?.texts ?? [])],
+      messageIds: [...(old.messageIds ?? []), ...(next?.messageIds ?? [])],
+      ...(old.access ?? next?.access ? { access: old.access ?? next?.access } : {}),
+    });
+  }
+  window.participants.push(...fresh);
 }
 
 function windowParticipant(request: TurnAdmissionRequest): MergeWindow['participants'][number] {

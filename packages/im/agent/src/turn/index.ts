@@ -153,6 +153,7 @@ export {
   withMergeMembers,
   type OnBehalfOfResolution,
 } from './merged-principal.js';
+export { isActingTurnEvent } from './stale-reply.js';
 export {
   answeredMergedSenders,
   formatMergedTurnBlock,
@@ -168,6 +169,7 @@ export type {
   TurnMergeWindowOptions,
   TurnMergeWindowSnapshot,
   TurnParticipant,
+  TurnStaleVerdict,
   TurnStopResult,
 } from './turn-admission-gate.js';
 

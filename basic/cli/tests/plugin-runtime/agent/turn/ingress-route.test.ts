@@ -7,7 +7,7 @@ import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/run
 import type { TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { AgentTurnIngressRoute, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
 describe('AgentTurnIngressRoute', () => {
   it.each([
@@ -255,5 +255,15 @@ it('turns merged participants into the turn context sender list (ADR 0038 §3)',
   ])).toEqual([
     { subjectId: 'alice', displayName: 'Alice', messageIds: ['m1', 'm3'], texts: ['a', 'a2'] },
     { subjectId: 'bob', texts: ['b'] },
+  ]);
+});
+
+it('audits a dropped stale reply and one sent anyway (ADR 0038 §4)', () => {
+  const audit = vi.fn();
+  auditStaleReply(audit, { kind: 'discard', senders: ['alice'] });
+  auditStaleReply(audit, { kind: 'send', senders: ['bob'], reason: 'starvation' });
+  expect(audit.mock.calls.map(([event]) => event)).toEqual([
+    { kind: 'outbound', outcome: 'skip', reasonCode: 'merge_reply_stale_discarded', payload: { senders: ['alice'] } },
+    { kind: 'outbound', outcome: 'allow', reasonCode: 'merge_reply_stale_sent', payload: { senders: ['bob'], reason: 'starvation' } },
   ]);
 });
