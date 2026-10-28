@@ -119,6 +119,7 @@ import { MemberLifecycle } from './member-lifecycle.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { GroupRuleImChannel } from './group-rule-im.js';
 import { GroupRuleEnforcer, type GroupRuleEnforcementResult, type GroupRuleViolation } from './group-rule-enforcer.js';
+import { GroupFloodDetector } from './group-flood-detector.js';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ColdFieldMonitor } from './cold-field.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
@@ -201,6 +202,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #stopGroupRules: () => void;
   /** ADR 0039 切片 C：群规执行器（命中 → 阶梯档：提醒 / 警告 / 自动禁言 / 建议踢人出卡）。 */
   readonly #groupRuleEnforcer: GroupRuleEnforcer;
+  /** ADR 0039 切片 D：复读刷屏检测（进程内、有界，不落盘）。 */
+  readonly #floodDetector = new GroupFloodDetector();
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -321,6 +324,42 @@ export class AgentTurnIngressRoute implements IngressRoute {
    */
   enforceGroupRule(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
     return this.#groupRuleEnforcer.enforce(violation);
+  }
+
+  /**
+   * 复读刷屏（ADR 0039 §2 `flood`）：群里每条真人消息先记指纹；同一成员窗口内重复达阈值时交给规则执行器
+   * （该群没有生效的 `flood` 规则时执行器什么都不做）。不阻塞本条消息的后续处理，失败只记日志。
+   */
+  #observeFlood(message: Message, platform: string, endpoint: string | undefined): void {
+    if (message.conversation.kind !== 'group') return;
+    if (message.origin !== undefined && message.origin !== 'human') return;
+    const memberId = message.sender?.id;
+    if (!platform || !memberId) return;
+    const at = Date.now();
+    const verdict = this.#floodDetector.observe({
+      platform,
+      groupId: message.conversation.id,
+      memberId,
+      content: message.content,
+      ...(message.segments ? { segments: message.segments } : {}),
+      at,
+    });
+    if (!verdict.hit) return;
+    void this.#groupRuleEnforcer.enforce({
+      platform,
+      ...(endpoint ? { endpoint } : {}),
+      groupId: message.conversation.id,
+      memberId,
+      ...(message.sender?.name ? { memberName: message.sender.name } : {}),
+      ...(message.sender?.roles ? { memberRoles: message.sender.roles } : {}),
+      trigger: 'flood',
+      sentAt: at,
+      ...(message.message?.id ? { messageId: message.message.id } : {}),
+      evidence: verdict.samples,
+      detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
+    }).then((result) => {
+      if (result.kind !== 'no_rule') logger.info(formatCompact({ op: 'group_rule_flood', conv: `${platform}:${message.conversation.id}`, result: result.kind }));
+    });
   }
 
   #createSessionEventDispatcher(): SessionEventDispatcher {
@@ -475,6 +514,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#stopSessionEvents();
     this.#stopGroupRules();
     this.#groupRuleEnforcer.dispose();
+    this.#floodDetector.clear();
     this.#sceneEvents.dispose();
   }
 
@@ -697,6 +737,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
         }));
         return receipt;
       };
+
+      if (!workroomAgentTurn && turnAccess.origin.kind === 'im') {
+        this.#observeFlood(message, turnAccess.origin.platform, effectiveEndpoint);
+      }
 
       // Agent 管理命令（/models /tree /reset…）— 在 AI trigger 前拦截
       const managementReply = workroomAgentTurn

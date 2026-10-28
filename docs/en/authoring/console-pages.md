@@ -402,7 +402,8 @@ Group moderation rules (ADR 0039 slice B) are an "approve once" violation ladder
   - `suggest_kick`: **never kicks on its own**. It raises a `member` approval card (with the evidence and the rule code) and kicks only once a human approves; repeat hits within the cool-down raise no new card; `rule_hit_kick_suggested`.
   - Owners / admins or whitelisted members: `rule_hit_exempt`. The bot is not an admin: `rule_hit_bot_not_admin`, with one notice per group per day.
   - Ladder: a repeat within the quiet window moves up one stage; past the last stage, the last stage repeats; messages sent before the reminder was delivered do not count as repeats; an action that did not happen (blocked, cooling down, platform error) does not move the ladder. Progress is kept in memory only (capped, expired entries pruned) and resets on restart.
-  - The detectors (`flood`, and content-moderation after migration) come in later slices.
+  - `flood` (repeat spam): detected locally, no model call. It fires when **one member** sends the same or a highly similar message 3 times within 60 seconds (several members each saying the line once does not count). Text is compared after stripping whitespace, punctuation and case; lines of 6+ characters also match at a character-bigram similarity ≥ 0.8; pure images / faces are compared by a content digest; reply quotes are ignored. A hit is handed to the group's active `flood` rule and writes an extra `rule_hit_flood` row (same `turn_id` as the action row); with no active rule nothing happens. Detection lives in memory only (≤ 20 fingerprints per member, ≤ 5 000 tracked members, pruned after the window) and writes nothing to disk.
+  - The `advertising` / `abuse` detector (content-moderation after migration) comes in a later slice.
 
 ### Built-in actions: dangerous-tool approval cards
 
