@@ -384,6 +384,7 @@ export {
   type GroupRuleStage,
   type GroupRuleStatus,
   type GroupRuleTransition,
+  type GroupRuleTransitionListener,
   type GroupRuleTrigger,
 } from './group-rules.js';
 export {

@@ -378,6 +378,25 @@ interface SkillsStatus {
 - 重启补偿：错过超过 10 分钟的提醒不再发送，写 `schedule_wake_missed`；10 分钟内的照常发送。
 - 全部写操作带 `expectedRevision`，不一致返回 `conflict`，不覆盖。审计写 `kind=schedule`：`schedule_event_created` / `_updated` / `_cancelled`、`schedule_wake_fired`（单条发出）/ `schedule_wake_merged`（合并发出）/ `schedule_wake_missed`，被控制面或会话画像拦下时沿用 `control_*` / `cannot_speak_*`。数据存在 `ai_session_events` 表里（不写 `schedule-jobs.json`）。
 
+### 内置操作：群管规则（起草 → 群内审批 → 生效）
+
+群管规则（ADR 0039 切片 B）是「批准一次的违规阶梯」：例如「发广告先提醒，再犯禁言 10 分钟」。读用 `control:read`，起草 / 停用用 `control:write`，批准 / 驳回用 `ops:approve`。
+
+| 方法 | 调用 | 需要的权限 |
+| --- | --- | --- |
+| `plugin.root.group-rules` | `pluginRpc('root', 'group-rules', { platform, sceneId, status? })` | `control:read` |
+| `plugin.root.group-rule` | `pluginRpc('root', 'group-rule', { id })` | `control:read` |
+| `plugin.root.group-rule-create` | `pluginRpc('root', 'group-rule-create', { platform, sceneId, trigger, ladder, windowMs?, exempt?, content })` | `control:write`（动作） |
+| `plugin.root.group-rule-disable` | `pluginRpc('root', 'group-rule-disable', { id, expectedRevision, reason? })` | `control:write`（动作） |
+| `plugin.root.group-rule-approve` | `pluginRpc('root', 'group-rule-approve', { id, expectedRevision, contentHash? })` | `ops:approve`（动作） |
+| `plugin.root.group-rule-reject` | `pluginRpc('root', 'group-rule-reject', { id, expectedRevision, reason? })` | `ops:approve`（动作） |
+
+- `sceneId` 只能是 `group:<群号>`；`trigger` 为 `advertising` / `abuse` / `flood`；`ladder` 每档 `{ action: 'remind' | 'warn' | 'mute' | 'suggest_kick', durationSec? }`，`mute` 时长 60 秒–24 小时；`windowMs` 冷静期默认 30 分钟。
+- `group-rule-create` 起草后**立即送审**（`pending`），并把预览卡发回该群。模型只有 `rule_draft` 工具（`risk: safe`，只在群里可用）：发起人必须是本群群主 / 管理员（按消息携带的平台实时角色判定），否则拒绝并写 `rule_draft_forbidden`。
+- 群里的审批命令（只在规则所在的群生效）：`/rule approve <短码>`、`/rule reject <短码>`、`/rule disable <短码|trigger>`、`/rules`（列出本群规则，任何人可看）。短码是卡片上的 `content_hash` 前 8 位，规则改过一个字短码就变，旧卡片批不了新内容。审批人 = 本群群主 / 管理员 ∪ `ai.agent.toolHardGate.imApproval.approverIds`；Console 侧是 `ops:approve`。
+- 状态只前进：`draft` → `pending` → `active`，旁路 `rejected` / `expired`（24 小时未批）/ `disabled`。同群同 `trigger` 只有一条 `active`，批准新规则会把旧规则停用（`rule_superseded`）。停用不需要审批；放宽 = 停用后另起新规则。
+- 审计写 `kind=group_rule`（`rule_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_disabled` / `_superseded` / `_hash_mismatch`、`rule_draft_forbidden`）。数据存在 `ai_group_rules` 表；终态规则 30 天后或每群超过 50 条时删除（启动时与每小时清理）。规则的执行（提醒 / 自动禁言 / 出踢人审批卡）见后续切片。
+
 ### 内置操作：危险工具审批卡
 
 硬闸（ADR 0036 §3）拦下的危险调用在这里留审批卡。审批人权限是 `ops:approve`（ADR 0037 §3，切片 E），与 `control:write` 分开；为了兼容已有令牌，旧权限仍然有效，持有任意一个即可。

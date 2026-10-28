@@ -116,6 +116,8 @@ import {
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { MemberLifecycle } from './member-lifecycle.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
+import { GroupRuleImChannel } from './group-rule-im.js';
+import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ColdFieldMonitor } from './cold-field.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
 import {
@@ -192,6 +194,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /** ADR 0037 切片 D：会话日程到点唤醒（控制面 → session-gate → 模板直发，宽限 / 合并）。 */
   readonly #sessionEvents: SessionEventDispatcher;
   readonly #stopSessionEvents: () => void;
+  /** ADR 0039 切片 B：群规预览卡与群内审批命令。 */
+  readonly #groupRules: GroupRuleImChannel;
+  readonly #stopGroupRules: () => void;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -212,6 +217,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#sceneEvents = this.#createSceneEventIngress();
     this.#sessionEvents = this.#createSessionEventDispatcher();
     this.#stopSessionEvents = this.#sessionEvents.start();
+    this.#groupRules = this.#createGroupRuleChannel();
+    this.#stopGroupRules = this.#groupRules.start();
     options.assistantStatus?.bindSessionOps(
       () => options.agent.agent.getSessionOps?.(),
       () => this.#memberLifecycle,
@@ -222,6 +229,27 @@ export class AgentTurnIngressRoute implements IngressRoute {
       () => this.#announcements,
     );
     options.assistantStatus?.bindSessionEvents(() => options.agent.agent.getSessionEvents?.());
+    options.assistantStatus?.bindGroupRules(() => options.agent.agent.getGroupRules?.());
+  }
+
+  #createGroupRuleChannel(): GroupRuleImChannel {
+    const options = this.options;
+    return new GroupRuleImChannel({
+      // 构造时就订阅；测试桩可能不带 agent。
+      rules: () => options.agent?.agent?.getGroupRules?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      imApproval: () => resolveToolHardGateImApproval(options.agent.agent.config?.toolHardGate?.imApproval),
+      send: async (target, text) => {
+        const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
+        if (!endpointKey) throw new Error('endpoint_unresolved');
+        await options.im.endpoints.send({
+          adapter: target.platform,
+          endpointKey,
+          conversation: { kind: 'group', id: target.groupId },
+          content: text,
+        });
+      },
+    });
   }
 
   #createSessionEventDispatcher(): SessionEventDispatcher {
@@ -374,6 +402,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#memberLifecycle.dispose();
     this.#stopAnnouncementSweep();
     this.#stopSessionEvents();
+    this.#stopGroupRules();
     this.#sceneEvents.dispose();
   }
 
@@ -614,6 +643,24 @@ export class AgentTurnIngressRoute implements IngressRoute {
       if (managementReply != null) {
         await reply(managementReply);
         logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
+        return true;
+      }
+
+      // ADR 0039 slice B: `rule approve|reject|disable <code>` / `rules` in the rule's own group.
+      const groupRuleReply = !workroomAgentTurn && turnAccess.origin.kind === 'im'
+        ? await this.#groupRules.handleCommand({
+            platform: turnAccess.origin.platform,
+            scope: turnAccess.origin.scope,
+            sceneId: turnAccess.origin.sceneId,
+            senderId: turnAccess.principal.subjectId,
+            senderRoles: message.sender?.roles,
+            endpoint: effectiveEndpoint,
+            commandText: managementCommandText(message.content, message.commandPrefix),
+          })
+        : null;
+      if (groupRuleReply != null) {
+        await reply(groupRuleReply);
+        logger.info(formatCompact({ op: 'agent_host_group_rule', handled: true }));
         return true;
       }
 

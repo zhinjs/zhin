@@ -10,7 +10,8 @@
  *   - 驳回：`pending` → `rejected`；`pending` 超过审批时限（默认 24 小时）→ `expired`。
  *   - 停用：`draft` / `pending` / `active` → `disabled`，不需要审批。
  * - 每次状态迁移写一行 `kind=group_rule` 审计；审计写失败不影响迁移。
- * - 谁能起草 / 审批（实时群主 / 管理员）与执行器不在本切片（见切片 B / C）。
+ * - 谁能起草 / 审批（实时群主 / 管理员）由调用方判定（切片 B：`rule_draft` 工具与群内命令）；执行器见切片 C。
+ * - 迁移监听（{@link AiGroupRules.onTransition}）：宿主据此把预览卡 / 结果回发到群里；监听抛错不影响迁移。
  * - 磁盘有界：单条规则字段有上限；每会话未终结规则（`draft` + `pending`）有上限；
  *   进入终态即清空人读摘要 `content`；终态行超过保留期（默认 30 天）或超过每会话保留条数即删除（{@link AiGroupRules.prune}）。
  */
@@ -381,7 +382,11 @@ export interface GroupRuleTransition {
   readonly turnId: string;
   /** 批准时被替换（→ `disabled`）的旧规则。 */
   readonly superseded?: readonly GroupRuleRecord[];
+  /** 发起迁移的 Bot 账号（不落库，只给宿主选 Endpoint 回发卡片用）。 */
+  readonly endpoint?: string;
 }
+
+export type GroupRuleTransitionListener = (transition: GroupRuleTransition) => void;
 
 export interface GroupRuleOptions {
   readonly now?: () => number;
@@ -405,6 +410,8 @@ export interface GroupRuleMutationInput {
   readonly turnId?: string;
   /** 操作者身份：群内成员 / Console 用户记 `operator`（默认）。 */
   readonly actor?: DecisionActor;
+  /** 发起迁移的 Bot 账号；只透传到 {@link GroupRuleTransition.endpoint}。 */
+  readonly endpoint?: string;
 }
 
 export interface GroupRulePruneResult {
@@ -435,6 +442,7 @@ export class AiGroupRules {
   readonly approvalTtlMs: number;
   readonly #audit: () => GroupRuleAuditSink | undefined;
   readonly #instanceId: string;
+  readonly #listeners = new Set<GroupRuleTransitionListener>();
 
   constructor(options: GroupRuleOptions = {}) {
     this.#now = options.now ?? Date.now;
@@ -446,6 +454,38 @@ export class AiGroupRules {
 
   get persistent(): boolean {
     return this.#model !== undefined;
+  }
+
+  /** 订阅状态迁移（含过期、被替换）；返回取消订阅。监听在迁移落库之后同步调用，抛错被吞掉。 */
+  onTransition(listener: GroupRuleTransitionListener): () => void {
+    this.#listeners.add(listener);
+    return () => { this.#listeners.delete(listener); };
+  }
+
+  /**
+   * 记一次被拒的起草（`rule_draft_forbidden`，`deny`）：发起人不是本群群主 / 管理员。不写规则行。
+   */
+  recordDraftForbidden(input: Readonly<{ platform: string; sceneId: string; actorId: string; turnId?: string; actor?: DecisionActor }>): void {
+    let sink: GroupRuleAuditSink | undefined;
+    try { sink = this.#audit(); } catch { sink = undefined; }
+    if (!sink) return;
+    try {
+      const result = sink.record({
+        turnId: input.turnId ?? randomUUID(),
+        instanceId: input.platform || this.#instanceId,
+        platform: input.platform,
+        sceneId: input.sceneId,
+        kind: 'group_rule',
+        outcome: 'deny',
+        reasonCode: 'rule_draft_forbidden',
+        payload: { requiredRole: 'owner_or_admin' },
+        actor: input.actor ?? 'model',
+        actorId: input.actorId,
+      });
+      if (result && typeof (result as Promise<unknown>).catch === 'function') (result as Promise<unknown>).catch(() => undefined);
+    } catch {
+      // 审计不是门禁。
+    }
   }
 
   /** 接上 `ai_group_rules`；之后读写都以表为准。 */
@@ -546,7 +586,7 @@ export class AiGroupRules {
     return this.#mutate(input, 'submit', (current) => {
       if (current.status !== 'draft') throw new GroupRuleStateError(current.status, 'submit');
       return { patch: { status: 'pending', submittedAt: this.#now() }, reasonCode: 'rule_submitted', outcome: 'defer' };
-    });
+    }, input.endpoint);
   }
 
   /**
@@ -582,8 +622,8 @@ export class AiGroupRules {
         ladder: next.ladder,
         windowMs: next.windowMs,
         ...(superseded.length ? { superseded: superseded.map((rule) => rule.id) } : {}),
-      });
-      return Object.freeze({ ...transition, superseded: Object.freeze(superseded) });
+      }, input.endpoint, Object.freeze(superseded));
+      return transition;
     });
   }
 
@@ -592,7 +632,7 @@ export class AiGroupRules {
     return this.#mutate(input, 'reject', (current) => {
       if (current.status !== 'pending') throw new GroupRuleStateError(current.status, 'reject');
       return { patch: { status: 'rejected', content: '', reason: clipReason(input.reason) }, reasonCode: 'rule_rejected', outcome: 'deny' };
-    });
+    }, input.endpoint);
   }
 
   /** 停用：`draft` / `pending` / `active` → `disabled`（终态，不需要审批）。 */
@@ -600,7 +640,7 @@ export class AiGroupRules {
     return this.#mutate(input, 'disable', (current) => {
       if (isGroupRuleTerminal(current.status)) throw new GroupRuleStateError(current.status, 'disable');
       return { patch: { status: 'disabled', content: '', reason: clipReason(input.reason) }, reasonCode: 'rule_disabled', outcome: 'skip' };
-    });
+    }, input.endpoint);
   }
 
   /** 把超过审批时限的 `pending` 置为 `expired`（读取时顺带执行；宿主也可定时调用）。 */
@@ -690,13 +730,14 @@ export class AiGroupRules {
       outcome: DecisionOutcome;
       payload?: Record<string, unknown>;
     },
+    endpoint?: string,
   ): Promise<GroupRuleTransition> {
     return this.#serial(async () => {
       const current = await this.#prepare(input, action);
       const step = plan(current);
       const next = this.#next(current, step.patch, input.actorId);
       await this.#update(next, current.revision);
-      return this.#transition(next, current.status, step.reasonCode, step.outcome, input.actor ?? 'operator', input.actorId, input.turnId, step.payload);
+      return this.#transition(next, current.status, step.reasonCode, step.outcome, input.actor ?? 'operator', input.actorId, input.turnId, step.payload, endpoint);
     });
   }
 
@@ -719,6 +760,8 @@ export class AiGroupRules {
     actorId: string | null,
     turnId?: string,
     payload?: Record<string, unknown>,
+    endpoint?: string,
+    superseded?: readonly GroupRuleRecord[],
   ): GroupRuleTransition {
     const id = turnId ?? randomUUID();
     let sink: GroupRuleAuditSink | undefined;
@@ -753,7 +796,19 @@ export class AiGroupRules {
         // 审计不是门禁。
       }
     }
-    return Object.freeze({ record, from, to: record.status, reasonCode, turnId: id });
+    const transition: GroupRuleTransition = Object.freeze({
+      record,
+      from,
+      to: record.status,
+      reasonCode,
+      turnId: id,
+      ...(superseded ? { superseded } : {}),
+      ...(endpoint ? { endpoint } : {}),
+    });
+    for (const listener of this.#listeners) {
+      try { listener(transition); } catch { /* 监听不是门禁。 */ }
+    }
+    return transition;
   }
 
   #wrap(error: unknown): GroupRuleUnavailableError {

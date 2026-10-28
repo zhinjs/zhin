@@ -1,0 +1,6 @@
+---
+"@zhin.js/agent": patch
+"@zhin.js/cli": patch
+---
+
+ADR 0039 slice B: group owners and admins can now set group moderation rules. A new `rule_draft` tool (`risk: safe`, group chats only) turns "remind advertisers first, then mute for 10 minutes" into a rule and submits it for approval; it refuses anyone who is not the group owner or an admin (by the live platform role on the message) and records `rule_draft_forbidden`. Each submitted rule posts a preview card to its group (trigger, ladder, durations, cool-down, exemptions and a short `content_hash` code), gated by the control plane. In the group, the owner/admins (plus `toolHardGate.imApproval.approverIds`) answer with `/rule approve <code>` / `/rule reject <code>` / `/rule disable <code|trigger>`, and anyone can list rules with `/rules`; the code changes whenever the rule changes, so an old card can't approve new content. The Console gets `plugin.root.group-rules` / `group-rule` (read, `control:read`), `group-rule-create` / `group-rule-disable` (`control:write`) and `group-rule-approve` / `group-rule-reject` (`ops:approve`). `AiGroupRules` gains `onTransition` listeners and `recordDraftForbidden`. No new disk state: rules use the existing bounded `ai_group_rules` table. Rules are not enforced yet; the executor lands in slice C.

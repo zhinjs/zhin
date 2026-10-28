@@ -378,6 +378,25 @@ Session events (ADR 0037 phase 1 slice D) have Host RPCs; the Console page is bu
 - After a restart, reminders missed by more than 10 minutes aren't sent and are logged as `schedule_wake_missed`; ones within 10 minutes are sent.
 - Every write needs `expectedRevision`; a mismatch returns `conflict` and nothing is overwritten. Audit rows use `kind=schedule`: `schedule_event_created` / `_updated` / `_cancelled`, `schedule_wake_fired` (sent alone) / `schedule_wake_merged` (sent merged) / `schedule_wake_missed`; blocks by the control plane or session profile keep their `control_*` / `cannot_speak_*` codes. Data lives in the `ai_session_events` table (not `schedule-jobs.json`).
 
+### Built-in actions: group moderation rules (draft → approve in group → active)
+
+Group moderation rules (ADR 0039 slice B) are an "approve once" violation ladder, such as "remind advertisers first, then mute for 10 minutes". Reads need `control:read`, drafting / disabling need `control:write`, and approving / rejecting need `ops:approve`.
+
+| Method | Call | Permission |
+| --- | --- | --- |
+| `plugin.root.group-rules` | `pluginRpc('root', 'group-rules', { platform, sceneId, status? })` | `control:read` |
+| `plugin.root.group-rule` | `pluginRpc('root', 'group-rule', { id })` | `control:read` |
+| `plugin.root.group-rule-create` | `pluginRpc('root', 'group-rule-create', { platform, sceneId, trigger, ladder, windowMs?, exempt?, content })` | `control:write` (action) |
+| `plugin.root.group-rule-disable` | `pluginRpc('root', 'group-rule-disable', { id, expectedRevision, reason? })` | `control:write` (action) |
+| `plugin.root.group-rule-approve` | `pluginRpc('root', 'group-rule-approve', { id, expectedRevision, contentHash? })` | `ops:approve` (action) |
+| `plugin.root.group-rule-reject` | `pluginRpc('root', 'group-rule-reject', { id, expectedRevision, reason? })` | `ops:approve` (action) |
+
+- `sceneId` must be `group:<id>`; `trigger` is `advertising` / `abuse` / `flood`; each `ladder` stage is `{ action: 'remind' | 'warn' | 'mute' | 'suggest_kick', durationSec? }`, with mutes between 60 seconds and 24 hours; `windowMs` (the cool-down) defaults to 30 minutes.
+- `group-rule-create` drafts the rule and **submits it right away** (`pending`), posting a preview card to that group. The model only has the `rule_draft` tool (`risk: safe`, group chats only): the person asking must be the group owner or an admin (judged from the live platform role on their message); otherwise it is refused and `rule_draft_forbidden` is recorded.
+- Commands in the group (they only work in the rule's own group): `/rule approve <code>`, `/rule reject <code>`, `/rule disable <code|trigger>`, `/rules` (lists the group's rules; anyone can read it). The code is the first 8 characters of the `content_hash` on the card; changing any part of the rule changes the code, so an old card can't approve new content. Approvers are the group owner / admins plus `ai.agent.toolHardGate.imApproval.approverIds`; in the Console it is `ops:approve`.
+- Status only moves forward: `draft` → `pending` → `active`, with `rejected` / `expired` (not approved within 24 hours) / `disabled` on the side. A group has at most one `active` rule per `trigger`; approving a new one disables the old one (`rule_superseded`). Disabling needs no approval; to relax a rule, disable it and draft a new one.
+- Each transition writes `kind=group_rule` (`rule_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_disabled` / `_superseded` / `_hash_mismatch`, `rule_draft_forbidden`). Data lives in the `ai_group_rules` table; final-state rules are deleted after 30 days or beyond 50 per group (pruned at startup and hourly). Enforcement (reminders, automatic mutes, kick approval cards) comes in a later slice.
+
 ### Built-in actions: dangerous-tool approval cards
 
 Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The approver permission is `ops:approve` (ADR 0037 §3, slice E), separate from `control:write`. The older permissions still work so existing tokens keep working; holding either one is enough.

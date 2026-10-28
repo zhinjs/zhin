@@ -310,3 +310,30 @@ async function activeRuleFrom(store: AiGroupRules, id: string) {
   await store.submit({ id, expectedRevision: 1, actorId: 'owner-1' });
   return store.approve({ id, expectedRevision: 2, actorId: 'admin-1', approvedVia: 'im' });
 }
+
+describe('AiGroupRules transition listeners (slice B)', () => {
+  const scene = { platform: 'icqq', sceneId: 'group:1' };
+  const spec = { trigger: 'abuse', ladder: [{ action: 'warn' }], content: 'x' };
+
+  it('notifies listeners after each transition, passes the endpoint hint, and swallows listener errors', async () => {
+    const store = new AiGroupRules();
+    const seen: string[] = [];
+    store.onTransition(() => { throw new Error('boom'); });
+    const stop = store.onTransition((t) => seen.push(`${t.reasonCode}:${t.endpoint ?? '-'}`));
+    const created = await store.create({ ...scene, ...spec, createdBy: 'u', createdVia: 'console' });
+    const submitted = await store.submit({ id: created.record.id, expectedRevision: 1, actorId: 'u', endpoint: 'bot-1' });
+    await store.approve({ id: created.record.id, expectedRevision: submitted.record.revision, actorId: 'u', approvedVia: 'im' });
+    stop();
+    const other = await store.create({ ...scene, ...spec, createdBy: 'u', createdVia: 'console' });
+    expect(other.record.status).toBe('draft');
+    expect(seen).toEqual(['rule_drafted:-', 'rule_submitted:bot-1', 'rule_approved:-']);
+  });
+
+  it('records a forbidden draft without writing a rule', async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const store = new AiGroupRules({ audit: () => ({ record: (input) => { events.push(input as never); } }) });
+    store.recordDraftForbidden({ ...scene, actorId: 'u-2', turnId: 't' });
+    expect(await store.list(scene)).toHaveLength(0);
+    expect(events).toEqual([expect.objectContaining({ kind: 'group_rule', outcome: 'deny', reasonCode: 'rule_draft_forbidden', actorId: 'u-2', turnId: 't' })]);
+  });
+});

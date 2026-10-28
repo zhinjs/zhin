@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { AIService, AiAnnouncements, AiSessionEvents, McpServerEntry, LocalImageAssetStore } from '@zhin.js/agent';
+import type { AIService, AiAnnouncements, AiGroupRules, AiSessionEvents, McpServerEntry, LocalImageAssetStore } from '@zhin.js/agent';
 import {
   createNativeAgentToolSuite,
   getAgentTurnDecisionRuntime,
@@ -8,6 +8,7 @@ import {
   createNativeTodoToolFeatures,
   createNativeAnnouncementToolFeatures,
   createNativeSessionEventToolFeatures,
+  createNativeGroupRuleToolFeatures,
   FileTodoStore,
   projectHostMcp,
   projectHostTool,
@@ -57,6 +58,8 @@ export interface PublishAgentToolFeaturesOptions {
   readonly announcements?: () => AiAnnouncements | undefined;
   /** ADR 0037 切片 D：`session_event_create` 写入的会话日程存储；缺省时不发布该工具。 */
   readonly sessionEvents?: () => AiSessionEvents | undefined;
+  /** ADR 0039 切片 B：`rule_draft` 写入的群管规则存储；缺省时不发布该工具。 */
+  readonly groupRules?: () => AiGroupRules | undefined;
 }
 
 /** Publish every Host-owned Tool through one candidate-generation boundary. */
@@ -111,6 +114,11 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
   }
   if (options.sessionEvents) {
     for (const tool of createNativeSessionEventToolFeatures(options.sessionEvents)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+  if (options.groupRules) {
+    for (const tool of createNativeGroupRuleToolFeatures(options.groupRules)) {
       options.addFeature(tool.feature, tool.name, tool.definition);
     }
   }
