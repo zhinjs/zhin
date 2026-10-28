@@ -38,6 +38,7 @@ import {
   shouldSkipSelfInboundMessage,
   type IcqqMessageEvent,
 } from './icqq-inbound.js';
+import { publishQunNotice } from './group-notice.js';
 import {
   icqqNoticeDedupeKey,
   isIcqqNoticePayload,
@@ -152,9 +153,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
       await this.client.deleteFriend(Number(userId));
     },
     sendGroupNotice: async (groupId, content) => {
-      if (await this.client.sendGroupNotice(Number(groupId), content) === false) {
-        throw new Error('QQ did not confirm the group notice');
-      }
+      await publishQunNotice(this.client, Number(groupId), content);
     },
   });
 
