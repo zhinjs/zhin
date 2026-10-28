@@ -10,7 +10,7 @@
  * - 同一发起会话同时最多 1 个 `pending`；默认 24 小时超时 → `expired`。
  * - 队列只在内存里：每次启动 {@link SelfChangeApprovals.restore} 为磁盘上仍 `pending` 的变更按剩余时限重建卡片。
  *
- * 批准后停在 `approved`，生效（快照、写入、热重载 / 重启、回报）由切片 E 接手。
+ * 批准后停在 `approved`，经 `onApproved` 交给生效（快照、写入、热重载 / 重启、回报，见 `apply.ts`）。
  */
 import type { DecisionActor, DecisionReasonCode } from '../decision-events.js';
 import {
@@ -56,6 +56,8 @@ export interface SelfChangeApprovalsOptions {
   readonly ttlMs?: number;
   readonly now?: () => number;
   readonly onError?: (error: unknown) => void;
+  /** 结算为 `approved` 后调用（切片 E：交给 {@link import('./apply.js').SelfChangeApplier} 生效）。出错只上报。 */
+  readonly onApproved?: (record: SelfChangeRecord) => void | Promise<void>;
 }
 
 export interface SelfChangeSubmitOptions {
@@ -73,6 +75,7 @@ export class SelfChangeApprovals {
   readonly #ttlMs: number;
   readonly #now: () => number;
   readonly #onError: (error: unknown) => void;
+  readonly #onApproved?: (record: SelfChangeRecord) => void | Promise<void>;
   /** changeId → 审批卡 id。 */
   readonly #cards = new Map<string, string>();
   /** changeId → 结算写回（Console 等它完成后再返回）。 */
@@ -86,6 +89,7 @@ export class SelfChangeApprovals {
     this.#ttlMs = options.ttlMs ?? DEFAULT_CHANGE_IDLE_TTL_MS;
     this.#now = options.now ?? Date.now;
     this.#onError = options.onError ?? (() => undefined);
+    this.#onApproved = options.onApproved;
   }
 
   /** 发起会话里仍在等待审批的变更（每个会话最多 1 个）。 */
@@ -228,7 +232,12 @@ export class SelfChangeApprovals {
       const reasonCode: DecisionReasonCode = 'change_hash_mismatch';
       return this.#store.transition(changeId, 'rejected', { actor, actorId: card.decidedBy, reasonCode, error: 'content changed after the approval card was issued', auditPayload });
     }
-    return this.#store.transition(changeId, 'approved', { actor, actorId: card.decidedBy, approvedBy: card.decidedBy, auditPayload });
+    const approved = await this.#store.transition(changeId, 'approved', { actor, actorId: card.decidedBy, approvedBy: card.decidedBy, auditPayload });
+    if (this.#onApproved) {
+      // 生效可能热重载 / 重启并释放本代审批对象：不等它，也不让它的失败影响结算结果。
+      void Promise.resolve().then(() => this.#onApproved?.(approved)).catch(error => this.#onError(error));
+    }
+    return approved;
   }
 
   #serialize<T>(task: () => Promise<T>): Promise<T> {

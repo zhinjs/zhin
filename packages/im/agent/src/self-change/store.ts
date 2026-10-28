@@ -46,6 +46,7 @@ import {
 const CHANGE_FILE = 'change.json';
 const FILES_DIR = 'files';
 const SNAPSHOT_DIR = 'snapshot';
+const SNAPSHOT_MANIFEST = 'manifest.json';
 const CHANGE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const RECORD_VERSION = 1;
 
@@ -89,6 +90,31 @@ export interface SelfChangeRecord {
   readonly resolvedAt: number | null;
   /** `files/` 与 `snapshot/` 是否已删除。 */
   readonly slimmed: boolean;
+  /** 生效进度（切片 E，先落盘再动手；`recover()` 据此接续）。旧记录没有这个字段。 */
+  readonly apply?: SelfChangeApplyState | null;
+}
+
+/** 生效进度：正向生效还是回滚，以及为它重启过几次。 */
+export interface SelfChangeApplyState {
+  readonly phase: 'forward' | 'rollback';
+  /** 本次生效走的方式（§5.4）。 */
+  readonly mode: 'none' | 'generation' | 'process';
+  /** 为这次变更受控重启的次数（防重启循环）。 */
+  readonly restarts: number;
+  /** 正向生效失败的原因（回滚后回报用）。 */
+  readonly failure: string | null;
+}
+
+/** 回滚快照里的一个文件：`content: null` 表示原本不存在。 */
+export interface SelfChangeSnapshotFile {
+  readonly path: string;
+  readonly content: string | null;
+}
+
+/** 回滚快照（§5.2）：目标文件原文 + 生效前的根配置源文。 */
+export interface SelfChangeSnapshot {
+  readonly files: readonly SelfChangeSnapshotFile[];
+  readonly config: Readonly<{ source: string; revision: string }> | null;
 }
 
 export interface SelfChangeDraftFile {
@@ -121,6 +147,8 @@ export interface SelfChangeTransitionInput {
   readonly turnId?: string;
   /** 额外审计字段（不得含文件正文或配置值）。 */
   readonly auditPayload?: Readonly<Record<string, unknown>>;
+  /** 生效进度（切片 E）。 */
+  readonly apply?: SelfChangeApplyState | null;
 }
 
 export interface SelfChangeAuditSink {
@@ -398,6 +426,82 @@ export class SelfChangeStore {
     });
   }
 
+  /**
+   * 写回滚快照（§5.2）。只在 `approved` 时写，且必须在任何生产文件改动之前；覆盖同一变更的旧快照。
+   * 快照算进暂存区占用，但不再做配额拒绝——批准后的变更不能因配额卡在半路。
+   */
+  writeSnapshot(id: string, snapshot: SelfChangeSnapshot): Promise<void> {
+    return this.#serialize(async () => {
+      const current = await this.#loadOrThrow(id);
+      if (current.status !== 'approved') throw new SelfChangeStateError(current.status, 'take a snapshot');
+      const dir = this.#dirFor(id);
+      const next = path.join(dir, `${SNAPSHOT_DIR}.next-${randomUUID()}`);
+      try {
+        const manifest: { path: string; existed: boolean }[] = [];
+        for (const file of snapshot.files) {
+          const target = normalizeSnapshotPath(file.path);
+          manifest.push({ path: target, existed: file.content !== null });
+          if (file.content === null) continue;
+          const out = path.join(next, FILES_DIR, ...target.split('/'));
+          await mkdir(path.dirname(out), { recursive: true });
+          await writeFile(out, file.content, 'utf8');
+        }
+        await mkdir(next, { recursive: true });
+        await writeFile(path.join(next, SNAPSHOT_MANIFEST), `${JSON.stringify({ files: manifest, config: snapshot.config }, null, 2)}\n`, 'utf8');
+        await rm(path.join(dir, SNAPSHOT_DIR), { recursive: true, force: true });
+        await rename(next, path.join(dir, SNAPSHOT_DIR));
+      } catch (error) {
+        await rm(next, { recursive: true, force: true }).catch(() => undefined);
+        throw error;
+      }
+    });
+  }
+
+  /** 读回滚快照；没有或已瘦身返回 `null`。 */
+  async readSnapshot(id: string): Promise<SelfChangeSnapshot | null> {
+    const record = await this.#loadOrThrow(id);
+    if (record.slimmed) return null;
+    const dir = path.join(this.#dirFor(id), SNAPSHOT_DIR);
+    let manifest: { files?: unknown; config?: unknown };
+    try {
+      manifest = JSON.parse(await readFile(path.join(dir, SNAPSHOT_MANIFEST), 'utf8')) as typeof manifest;
+    } catch {
+      return null;
+    }
+    if (!Array.isArray(manifest.files)) return null;
+    const files: SelfChangeSnapshotFile[] = [];
+    for (const raw of manifest.files as { path?: unknown; existed?: unknown }[]) {
+      const target = normalizeSnapshotPath(raw?.path);
+      files.push(Object.freeze({
+        path: target,
+        content: raw.existed === true ? await readFile(path.join(dir, FILES_DIR, ...target.split('/')), 'utf8') : null,
+      }));
+    }
+    const config = manifest.config as { source?: unknown; revision?: unknown } | null | undefined;
+    return Object.freeze({
+      files: Object.freeze(files),
+      config: config && typeof config.source === 'string' && typeof config.revision === 'string'
+        ? Object.freeze({ source: config.source, revision: config.revision })
+        : null,
+    });
+  }
+
+  /** 更新生效进度（不迁移状态）；只在 `applying` / `verifying` 时允许。 */
+  setApplyState(id: string, apply: SelfChangeApplyState): Promise<SelfChangeRecord> {
+    return this.#serialize(async () => {
+      const current = await this.#loadOrThrow(id);
+      if (current.status !== 'applying' && current.status !== 'verifying') throw new SelfChangeStateError(current.status, 'record apply progress');
+      const record: SelfChangeRecord = Object.freeze({ ...current, apply, revision: current.revision + 1, updatedAt: this.#now() });
+      await this.#save(record);
+      return record;
+    });
+  }
+
+  /** 写一行 `self_change` 审计（迁移之外的事件，例如回报已送达 / 改投）。 */
+  audit(record: SelfChangeRecord, code: DecisionReasonCode, actor: DecisionActor, payload: Readonly<Record<string, unknown>>, detail?: string): void {
+    this.#emit({ origin: record.origin, changeId: record.id, code, actor, payload: { ...payload }, ...(detail ? { detail } : {}) });
+  }
+
   /** 暂存区当前占用（字节，不跟随符号链接）。 */
   usage(): Promise<number> {
     return this.#totalBytes();
@@ -434,6 +538,7 @@ export class SelfChangeStore {
       ...(input.plan !== undefined ? { plan: input.plan } : {}),
       ...(input.trial !== undefined ? { trial: input.trial } : {}),
       ...(input.reportTarget !== undefined ? { reportTarget: input.reportTarget } : {}),
+      ...(input.apply !== undefined ? { apply: input.apply } : {}),
       ...(input.error !== undefined ? { error: input.error === null ? null : clipChangeError(input.error) } : {}),
       // `failed` 的保留期从人标记已处理时开始算。
       ...(terminal && to !== 'failed' ? { terminalAt: now } : {}),
@@ -634,6 +739,16 @@ export class SelfChangeStore {
       // 审计不是门禁。
     }
   }
+}
+
+/** 快照里的路径只能是变更目标那种相对路径（不含 `..` / 绝对路径）。 */
+function normalizeSnapshotPath(value: unknown): string {
+  const text = typeof value === 'string' ? value.replace(/\\/g, '/') : '';
+  const segments = text.split('/');
+  if (!text || text.startsWith('/') || /^[a-z]:\//iu.test(text) || segments.some(segment => segment === '..' || segment === '') || text.includes('\0')) {
+    throw new SelfChangeValidationError(`invalid snapshot path ${JSON.stringify(text.slice(0, 64))}`);
+  }
+  return text;
 }
 
 function normalizeOrigin(origin: SelfChangeOrigin): SelfChangeOrigin {
