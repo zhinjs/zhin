@@ -3,6 +3,7 @@ import type { Message } from '@zhin.js/core/runtime';
 import { aiCompletionToken, createDeliveryTarget, databaseHostToken, getLogger, hasResource,
   outboundHostToken, usageSubjectFromMessage } from 'zhin.js';
 import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
+import { groupRuleViolationToken, type GroupRuleViolationSink } from '@zhin.js/core/runtime';
 import { generationAdmissionSource } from 'zhin.js/plugin-runtime';
 import { resolveLocale } from 'zhin.js/i18n';
 import {
@@ -136,6 +137,19 @@ async function enqueueGroupModeration(
     const destination = createDeliveryTarget({ conversation });
     const scope = JSON.stringify(destination);
     const remembered = engine.groupModerator.remember(scope, message.sender?.id ?? '', text);
+    // ADR 0039 §5: punishment is the group rule's job. A configured group gets default pending rules once,
+    // and stays reminder / warning only until an owner or admin confirms them.
+    const rules: GroupRuleViolationSink | undefined = hasResource(context, groupRuleViolationToken)
+      ? context.use(groupRuleViolationToken) : undefined;
+    if (rules) {
+      engine.groupModerator.ensureRules(scope, async () => {
+        for (const trigger of ['advertising', 'abuse'] as const) {
+          const outcome = await rules.ensureDefaultRule({ conversation, trigger });
+          if (outcome === 'unavailable') throw new Error('Group rule storage unavailable');
+          if (outcome === 'created') logger.info({ event: 'group_rule_migrated', trigger, endpoint: conversation.endpoint.id, group: conversation.id });
+        }
+      });
+    }
     if (!bypass && message.sender?.id && message.origin !== 'self'
       && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)
       && hasResource(context, outboundHostToken)) {
@@ -163,10 +177,18 @@ async function enqueueGroupModeration(
             inspectGroupMember: endpoint.management?.inspectGroupMember ? async (group, member, operationSignal) => {
               assertTarget(); return endpoint.management!.inspectGroupMember!(group, member, operationSignal);
             } : undefined,
-            moderateGroupMember: endpoint.management?.moderateGroupMember ? async (group, member, action, operationSignal) => {
-              assertTarget(); return endpoint.management!.moderateGroupMember!(group, member, action, operationSignal);
-            } : undefined,
           },
+          ...(rules ? { rules: async (hit) => {
+            assertTarget();
+            return rules.report({
+              conversation, memberId: message.sender!.id, trigger: hit.category, newcomer: hit.newcomer,
+              sentAt: Number(message.metadata?.platformSentAt), evidence: hit.evidence,
+              ...(message.sender?.name ? { memberName: message.sender.name } : {}),
+              ...(message.sender?.roles ? { memberRoles: message.sender.roles } : {}),
+              ...(messageId ? { messageId } : {}),
+              ...(hit.recall ? { recall: hit.recall } : {}),
+            });
+          } } : {}),
           onBehalfOf: usageSubjectFromMessage(message),
           reply: async (content, mention) => {
             assertTarget();

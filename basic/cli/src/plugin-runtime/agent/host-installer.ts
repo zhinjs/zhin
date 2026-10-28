@@ -5,8 +5,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  groupRuleViolationToken,
   ingressRouteToken,
   memberWelcomeOwnerToken,
+  type GroupRuleViolationSink,
   type ImRuntime,
   type MemberWelcomeOwner,
 } from '@zhin.js/core/runtime';
@@ -302,6 +304,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ownsWelcome: (conversation: ConversationRef) => ingressRoute.ownsMemberWelcome(conversation),
     });
     resources.provide(memberWelcomeOwnerToken, memberWelcomeOwner);
+    // ADR 0039 §5：插件（content-moderation）判定违规后交给群规执行器；迁移时按默认模板生成待确认规则。
+    const groupRuleViolations = Object.freeze<GroupRuleViolationSink>({
+      report: (violation) => ingressRoute.reportGroupRuleViolation(violation),
+      ensureDefaultRule: (input) => ingressRoute.ensureDefaultGroupRule(input),
+    });
+    resources.provide(groupRuleViolationToken, groupRuleViolations);
     // 状态感知（#996）：社交事件落库即交给本 generation 的 ingress route；generation 结束时退订并清掉待唤醒批次。
     const unsubscribeSceneEvents = options.im.sceneEvents?.subscribe((event) => ingressRoute.handleSceneEvent(event));
     const stopSceneEvents = () => {

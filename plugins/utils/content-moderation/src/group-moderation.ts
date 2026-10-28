@@ -74,12 +74,38 @@ export interface GroupModerationInput {
   readonly recall: () => Promise<void>;
   readonly audit: (event: Readonly<Record<string, unknown>>) => void;
   readonly onReview?: () => void;
+  /**
+   * 群规执行器（ADR 0039 §5，Agent host 提供）。判定后做什么交给它：`handled` 时本插件不再提醒或处罚；
+   * `no_rule`（该群还没确认规则）或未装 Agent 时，本插件只提醒 / 警告，不禁言、不踢人。
+   */
+  readonly rules?: (violation: GroupRuleHit) => Promise<'handled' | 'no_rule'>;
+}
+
+/** 交给群规执行器的一次命中（目标、群号由中间件绑定，模型够不着）。 */
+export interface GroupRuleHit {
+  readonly category: Category;
+  readonly evidence: readonly string[];
+  /** 入群 10 分钟内发广告：执行器出踢人审批卡（每次人批），不再无人审批直接踢。 */
+  readonly newcomer: boolean;
+  readonly recall?: () => Promise<void>;
 }
 
 /** Generation-owned history only; enforcement state uses the existing atomic Database Host. */
 export class GroupModerator {
   readonly #history = new Map<string, readonly (GroupContextEntry & { at: number })[]>();
+  /** Groups whose default rules were already requested this generation (bounded by the configured group list). */
+  readonly #rulesEnsured = new Set<string>();
   #sequence = 0;
+
+  /**
+   * ADR 0039 §5 migration: once per generation per configured group, ask the Agent host for the default
+   * pending rules (advertising / abuse). Failures are retried on a later message.
+   */
+  ensureRules(scope: string, ensure: () => Promise<void>): void {
+    if (this.#rulesEnsured.has(scope)) return;
+    this.#rulesEnsured.add(scope);
+    void ensure().catch(() => this.#rulesEnsured.delete(scope));
+  }
 
   /** A full queue must still respect a review started by a previous generation. */
   async ownsRecall(input: GroupModerationInput): Promise<boolean> {
@@ -107,7 +133,7 @@ export class GroupModerator {
 
   async review(input: GroupModerationInput, classify?: (signal: AbortSignal) => Promise<AiCompletionResult>): Promise<void> {
     const { state, management } = input;
-    if (!management.inspectGroupMember || !management.moderateGroupMember
+    if (!management.inspectGroupMember
       || !input.messageId || !Number.isSafeInteger(input.sentAt) || input.sentAt <= 0
       || input.sentAt > Date.now() || Date.now() - input.sentAt >= QUIET_MS
       || !input.text.trim() || input.text.length > 12_000) return;
@@ -189,28 +215,33 @@ export class GroupModerator {
         && Date.now() - member.joinedAt <= NEWCOMER_MS;
       // Messages already sent before the last delivered notice cannot advance escalation.
       if (input.sentAt <= stage.notifiedAt) return;
-      const count = Math.min(stage.count + 1, 3);
       input.audit({ event: 'group_review', category: review.category, messageId: input.messageId,
         evidence: review.evidence, recall: review.recall, recallReason: review.recallReason });
-      if (!newcomer && stage.count >= 3) {
-        await state.update<MemberState>(memberKey, (value) => value?.lease === token
-          ? { ...value, [review.category]: { ...stage, lastViolationAt: input.sentAt } } : value,
-        { ttlMs: QUIET_MS });
-        return;
-      }
       signal.throwIfAborted();
       // Persisted lease predates every side effect. Unknown outcomes retain it, preventing retries.
       effectStarted = true;
-      if (newcomer) {
-        await management.moderateGroupMember(input.group, input.sender, {
-          type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: NEWCOMER_MS,
-        }, signal);
-      } else if (count === 3) {
-        await management.moderateGroupMember(input.group, input.sender, { type: 'mute', durationSeconds: 600 }, signal);
+      // ADR 0039 §5: punishment belongs to the approved group rule. The enforcer owns its own ladder,
+      // mutes only under an approved rule, and turns a newcomer ad into a per-kick approval card.
+      if (input.rules) {
+        const outcome = await input.rules({ category: review.category, evidence: review.evidence, newcomer,
+          ...(review.recall ? { recall: input.recall } : {}) });
+        if (outcome === 'handled') {
+          completed = true;
+          return;
+        }
+        signal.throwIfAborted();
       }
-      signal.throwIfAborted();
+      // No confirmed rule (or no Agent host): remind, then warn. Never mute or kick here.
+      if (stage.count >= 2) {
+        await state.update<MemberState>(memberKey, (value) => value?.lease === token
+          ? { ...value, [review.category]: { ...stage, lastViolationAt: input.sentAt } } : value,
+        { ttlMs: QUIET_MS });
+        completed = true;
+        return;
+      }
+      const count = stage.count + 1;
       const rule = moderationMessages(input.locale, review.category);
-      const action = moderationMessages(input.locale, newcomer ? 'kicked' : count === 3 ? 'muted' : count === 2 ? 'warning' : 'reminder');
+      const action = moderationMessages(input.locale, count === 2 ? 'warning' : 'reminder');
       await input.reply(moderationMessages(input.locale, 'notice', { action, rule }), input.sender);
       const notifiedAt = Date.now();
       // Commit the delivered stage and release together, before optional recall.
@@ -220,7 +251,7 @@ export class GroupModerator {
       completed = true;
       claimed = false;
       // Optional recall is independent of escalation and cannot undo a successfully delivered notice.
-      if (!newcomer && count < 3 && review.recall && !signal.aborted) {
+      if (review.recall && !signal.aborted) {
         try { await input.recall(); }
         catch { input.audit({ event: 'group_recall_failed', messageId: input.messageId }); }
       }

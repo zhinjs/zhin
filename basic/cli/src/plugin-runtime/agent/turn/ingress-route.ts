@@ -43,6 +43,10 @@ import {
 import type { DecisionProvider, DecisionTaskConfig } from '@zhin.js/ai';
 import {
   resolveAiOutboundSegments,
+  type GroupRuleDefaultOutcome,
+  type GroupRuleViolationOutcome,
+  type GroupRuleViolationReport,
+  type GroupRuleViolationTrigger,
   type ImRuntime,
   type IngressRoute,
   type Message,
@@ -122,6 +126,7 @@ import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { GroupRuleImChannel } from './group-rule-im.js';
 import { GroupRuleEnforcer, type GroupRuleEnforcementResult, type GroupRuleViolation } from './group-rule-enforcer.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
+import { GroupRuleDefaults } from './group-rule-defaults.js';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ColdFieldMonitor } from './cold-field.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
@@ -206,6 +211,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #groupRuleEnforcer: GroupRuleEnforcer;
   /** ADR 0039 切片 D：复读刷屏检测（进程内、有界，不落盘）。 */
   readonly #floodDetector = new GroupFloodDetector();
+  readonly #groupRuleDefaults: GroupRuleDefaults;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -229,6 +235,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#groupRules = this.#createGroupRuleChannel();
     this.#stopGroupRules = this.#groupRules.start();
     this.#groupRuleEnforcer = this.#createGroupRuleEnforcer();
+    this.#groupRuleDefaults = new GroupRuleDefaults(() => options.agent?.agent?.getGroupRules?.());
     options.assistantStatus?.bindSessionOps(
       () => options.agent.agent.getSessionOps?.(),
       () => this.#memberLifecycle,
@@ -326,6 +333,45 @@ export class AgentTurnIngressRoute implements IngressRoute {
    */
   enforceGroupRule(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
     return this.#groupRuleEnforcer.enforce(violation);
+  }
+
+  /**
+   * 插件违规上报（ADR 0039 §5，经 `groupRuleViolationToken`）：content-moderation 判定后交给规则执行器。
+   * 执行器找到规则（含被控制面 / 豁免 / 冷却跳过）→ `handled`，插件不得再自行提醒或处罚；没有可用规则 → `no_rule`。
+   */
+  async reportGroupRuleViolation(report: GroupRuleViolationReport): Promise<GroupRuleViolationOutcome> {
+    const { conversation } = report;
+    if (conversation.kind !== 'group' || !report.memberId) return 'no_rule';
+    const result = await this.#groupRuleEnforcer.enforce({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      groupId: conversation.id,
+      memberId: report.memberId,
+      ...(report.memberName ? { memberName: report.memberName } : {}),
+      ...(report.memberRoles ? { memberRoles: report.memberRoles } : {}),
+      trigger: report.trigger,
+      sentAt: report.sentAt,
+      ...(report.messageId ? { messageId: report.messageId } : {}),
+      ...(report.evidence?.length ? { evidence: report.evidence } : {}),
+      ...(report.newcomer ? { newcomer: true } : {}),
+      ...(report.recall ? { recall: report.recall } : {}),
+    });
+    if (result.kind !== 'no_rule') {
+      logger.info(formatCompact({ op: 'group_rule_moderation', conv: `${conversation.endpoint.adapter}:${conversation.id}`, trigger: report.trigger, result: result.kind }));
+    }
+    return result.kind === 'no_rule' ? 'no_rule' : 'handled';
+  }
+
+  /** content-moderation 迁移：原 `groupModeration` 群按默认模板生成一条待确认规则（ADR 0039 §5）。 */
+  ensureDefaultGroupRule(input: Readonly<{ conversation: ConversationRef; trigger: GroupRuleViolationTrigger }>): Promise<GroupRuleDefaultOutcome> {
+    const { conversation } = input;
+    if (conversation.kind !== 'group') return Promise.resolve('unavailable');
+    return this.#groupRuleDefaults.ensure({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      groupId: conversation.id,
+      trigger: input.trigger,
+    });
   }
 
   /**
