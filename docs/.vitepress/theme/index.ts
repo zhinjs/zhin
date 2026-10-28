@@ -12,6 +12,7 @@ import ZhinFeatureGrid from './components/ZhinFeatureGrid.vue'
 import ZhinDuo from './components/ZhinDuo.vue'
 import ZhinSidebarFoot from './components/ZhinSidebarFoot.vue'
 import ZhinRolePaths from './components/ZhinRolePaths.vue'
+import ZhinAudienceSplit from './components/ZhinAudienceSplit.vue'
 import DocsInsightsConsent from './components/DocsInsightsConsent.vue'
 import { installDocsInsights } from './docs-insights.js'
 import './custom.css'
@@ -37,6 +38,7 @@ export default {
     app.component('ZhinDuo', ZhinDuo)
     app.component('ZhinSidebarFoot', ZhinSidebarFoot)
     app.component('ZhinRolePaths', ZhinRolePaths)
+    app.component('ZhinAudienceSplit', ZhinAudienceSplit)
     app.component('DocsInsightsConsent', DocsInsightsConsent)
     if (!import.meta.env.SSR) {
       const disposeInsights = installDocsInsights(router, {

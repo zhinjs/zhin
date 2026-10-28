@@ -28,6 +28,7 @@ withDefaults(defineProps<{
         <p class="zhin-hero__tagline"><slot>{{ tagline }}</slot></p>
         <div class="zhin-hero__actions">
           <a class="zhin-btn zhin-btn--brand" :href="isEn ? '/en/getting-started/' : '/getting-started/'">{{ isEn ? 'Quick Start' : '快速开始' }}</a>
+          <a class="zhin-btn zhin-btn--ghost" :href="isEn ? '/en/customer/' : '/customer/'">{{ isEn ? 'For operators' : '运营 / 群主入口' }}</a>
           <a class="zhin-btn zhin-btn--ghost" :href="isEn ? '/en/getting-started/introduction' : '/getting-started/introduction'">{{ isEn ? 'What is Zhin?' : 'Zhin 是什么？' }}</a>
           <a class="zhin-btn zhin-btn--ghost" href="https://github.com/zhinjs/zhin" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>

@@ -7,6 +7,10 @@ description: "Pick a path by goal: a command bot, an AI assistant, or managing y
 
 Not sure where to start reading? Pick a path by what you want to build. Each path covers only the concepts needed to finish it; switch to another when you're done.
 
+::: tip Operator or group owner, no code?
+You can skip the developer paths below. Go straight to the [Operator & Group Admin Guide](../customer/index.md): connect Console, change settings without code, welcomes / announcements / approvals, and when to call a developer.
+:::
+
 | I want to… | Take this path | Time | You'll end up with |
 |------|------|------|------|
 | Build a bot that answers commands and sends notifications, no AI yet | [IM Bot path](./im-bot.md) | 1 hour | Custom commands + scheduled notifications + one real platform online |
