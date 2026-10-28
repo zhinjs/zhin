@@ -6,6 +6,7 @@
  * - 写入后宿主生成预览（diff 摘要 + `InvalidationPlanner` 影响面 + 配置补丁重载级别）并挂到草稿上，
  *   作为后续试跑（切片 C）与审批卡（切片 D）的展示内容。
  * - 随后宿主自动试跑（§3）：通过 → `ready`；失败 → `trial_failed`（终态），错误交回模型重新起草。
+ * - 试跑通过即提交审批（§4，切片 D）：`pending` + G6 `self` 审批卡；同一会话已有待审变更时不起草新变更。
  * - 只在 IM 会话里可用：审计与回报需要发起会话与发起人。
  */
 import {
@@ -21,6 +22,7 @@ import {
   type SelfChangeImpactPort,
   type SelfChangePreview,
 } from '../self-change/preview.js';
+import { SelfChangePendingLimitError, type SelfChangeApprovals } from '../self-change/approval.js';
 import type { SelfChangeDraftFile, SelfChangeRecord, SelfChangeStore } from '../self-change/store.js';
 import { runSelfChangeTrial, type SelfChangeTrialOptions, type SelfChangeTrialResult } from '../self-change/trial.js';
 
@@ -38,6 +40,8 @@ export interface NativeSelfChangeToolSources {
   readonly impact?: () => SelfChangeImpactPort | undefined;
   /** 试跑选项（JSX 语法检查器、插件根）。 */
   readonly trial?: () => SelfChangeTrialOptions | undefined;
+  /** 审批提交（切片 D）；缺省时试跑通过的变更停在 `ready`。 */
+  readonly approvals?: () => SelfChangeApprovals | undefined;
 }
 
 export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeToolSources): readonly NativeSelfChangeToolFeature[] {
@@ -125,9 +129,14 @@ async function draftSelfChange(
   const files = Array.isArray(input.files) ? input.files.map(toDraftFile) : [];
   const configPatch = toConfigPatch(input.config_patch);
   const changeId = typeof input.change_id === 'string' && input.change_id.trim() ? input.change_id.trim() : undefined;
+  const changeOrigin = { platform: origin.platform, sceneId: `${origin.scope}:${origin.sceneId}`, userId, endpoint: origin.endpoint };
+  const approvals = sources.approvals?.();
+  // §4：同一会话同时最多 1 个待审变更——先拒绝，不写暂存、不试跑。
+  const waiting = approvals ? await approvals.pendingFor(changeOrigin) : null;
+  if (waiting) return describeWaiting(waiting);
   const record = await store.draft({
     ...(changeId ? { id: changeId } : {}),
-    origin: { platform: origin.platform, sceneId: `${origin.scope}:${origin.sceneId}`, userId, endpoint: origin.endpoint },
+    origin: changeOrigin,
     files,
     ...(configPatch !== undefined ? { configPatch } : {}),
     actor: 'model',
@@ -144,7 +153,23 @@ async function draftSelfChange(
   });
   await store.attachPlan(record.id, record.contentHash, preview);
   const trialed = await runSelfChangeTrial(store, record.id, { ...(sources.trial?.() ?? {}), turnId: context.turnId });
-  return describeDraft(trialed, preview);
+  if (trialed.status !== 'ready' || !approvals) return describeDraft(trialed, preview);
+  try {
+    const submitted = await approvals.submit(trialed.id, { turnId: context.turnId });
+    return describeDraft(submitted.record, preview, { approvalId: submitted.approvalId });
+  } catch (error) {
+    // 并发起草时另一个变更先提交：这个留在 `ready`，24 小时后按 §6a 过期清理。
+    if (error instanceof SelfChangePendingLimitError) return describeDraft(trialed, preview, { blockedBy: error.pendingId });
+    throw error;
+  }
+}
+
+function describeWaiting(record: SelfChangeRecord): string {
+  return [
+    `Change ${record.id} from this conversation is still waiting for the owner's approval, so no new change was drafted.`,
+    'Tell the user it is waiting for approval (the owner settles it in a private chat or in the Console); '
+      + 'draft the next change only after it is approved, rejected, or expired. Do not write these files with other tools.',
+  ].join('\n');
 }
 
 function toDraftFile(raw: unknown): SelfChangeDraftFile {
@@ -179,7 +204,11 @@ function toConfigOperation(raw: unknown): unknown {
   }
 }
 
-function describeDraft(record: SelfChangeRecord, preview: SelfChangePreview): string {
+function describeDraft(
+  record: SelfChangeRecord,
+  preview: SelfChangePreview,
+  submission: { approvalId?: string; blockedBy?: string } = {},
+): string {
   const lines = preview.files.map((file) => {
     const counts = file.kind === 'delete' ? `-${file.removed}` : `+${file.added} -${file.removed}`;
     return `- ${file.kind} ${file.path} (${counts}${file.truncated ? ', not compared' : ''})`;
@@ -208,6 +237,11 @@ function describeDraft(record: SelfChangeRecord, preview: SelfChangePreview): st
       + 'It is NOT live: it is staged outside the project and still needs the owner\'s approval.',
     ...lines,
     impact,
+    ...(submission.approvalId
+      ? [`Submitted for approval (card ${submission.approvalId}): the owner gets it in a private chat or in the Console, never in a group; it expires in 24 hours.`]
+      : submission.blockedBy
+        ? [`Not submitted: change ${submission.blockedBy} from this conversation is still waiting for approval.`]
+        : []),
     'Tell the user briefly what was drafted and that it is waiting; do not claim it is active and do not write these files with other tools. '
       + 'To change it further, call change_draft again WITHOUT change_id (start a new change) with the full file list.',
   ].join('\n');

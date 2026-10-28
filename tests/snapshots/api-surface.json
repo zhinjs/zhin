@@ -95,6 +95,7 @@
     "export{REACTION_SEGMENT_TYPE}from './outbound/structured-reply.js';",
     "export{RESERVED_TOOL_NAMES,RESERVED_TOOL_NAME_PREFIXES}from './reserved-tools.js';",
     "export{ResourceRegistry,canAccessTool,normalizeTool,SkillRegistry,SubAgentRegistry,McpRegistry,HookRegistry,createAIHookEvent,}from './resource-hub/index.js';",
+    "export{SELF_CHANGE_APPROVAL_TOOL,SelfChangeApprovals,SelfChangePendingLimitError,approvalOrigin as selfChangeApprovalOrigin,selfChangeApprovalArgs,type SelfChangeApprovalArgs,type SelfChangeApprovalsOptions,type SelfChangeDecisionResult,type SelfChangeSubmitOptions,}from './self-change/approval.js';",
     "export{SKILL_DISCLOSURE_TOOLS,SKILL_DISCLOSURE_STEPS,SKILL_DISCLOSURE_PROMPT_HINT,}from './skill/progressive-disclosure.js';",
     "export{ScheduleJobEngine,ScheduleJobStore,AssistantEventIngress,JobWorker,createScheduleJobStoreFromConfig,getScheduleJobsPath,resolveAssistantConfig,resolveAssistantDefaultsConfig,resolveAssistantEventsConfig,isAssistantEventsActive,createNotificationRouter,imNotifyToSendOptions,parseJobNotify,SCHEDULE_JOBS_VERSION,syncProfileRoutinesToStore,scheduleJobCreatorFromPrincipal,parseScheduleJobCreator,parseExecutionPlanFromArgs,parseScheduleJobExecutionPlan,addScheduleJob,parseScheduleAddFromToolArgs,parseScheduleAddFromRpcMessage,bootstrapAssistantHome,isAssistantHomeActive,resolveAssistantHomeConfig,}from './assistant/index.js';",
     "export{SeamProviderRegistry,SeamIntegration}from './seam/index.js';",

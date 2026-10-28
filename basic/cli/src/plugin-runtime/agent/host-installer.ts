@@ -21,6 +21,7 @@ import {
   type AssistantConfig,
   type ApprovalPort,
   hostProtectedPathsToken,
+  SelfChangeApprovals,
   SelfChangeStore,
   selfChangeStoreToken,
   type SelfChangeImpactPort,
@@ -75,6 +76,8 @@ export interface InstallAgentHostOptions {
   readonly assistantStatus?: import('../console/assistant-status.js').AssistantStatus;
   /** Process-owned Console approval cards for the dangerous-tool hard gate (ADR 0036). */
   readonly toolApprovals?: import('../console/tool-approvals.js').HostToolApprovals;
+  /** Process-owned Console surface for self-change approval (ADR 0040 §4). */
+  readonly selfChanges?: import('../console/self-changes.js').HostSelfChanges;
   /** Root-private self-delivery authentication/integration configuration. Never accepts model-supplied policy. */
   readonly selfDelivery?: SelfDeliveryHostConfiguration;
   /**
@@ -199,10 +202,22 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const selfChangeTrialOptions = createSelfChangeTrialOptions(options.projectRoot);
     lifecycle.add(selfChanges.startPruning());
     if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
+    // ADR 0040 §4: ready changes go to the same approval queue as hard-gate cards (category `self`, humanOnly).
+    const selfChangeApprovals = new SelfChangeApprovals({
+      store: selfChanges,
+      queue: zhinAgent.toolApprovals,
+      onError: error => logger.warn(formatCompact({
+        op: 'self_change_approval_failed',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    lifecycle.add(() => selfChangeApprovals.dispose());
+    if (options.selfChanges) lifecycle.add(options.selfChanges.bind(selfChanges, selfChangeApprovals));
     // G6 (#1013): IM approval channel for hard-gate cards; idle unless ai.agent.toolHardGate.imApproval.enabled.
     const toolApprovalIm = new ImToolApprovalChannel({
       queue: zhinAgent.toolApprovals,
       settings: () => resolveToolHardGateImApproval(zhinAgent.config.toolHardGate?.imApproval),
+      resolveOwner: options.resolveEndpointOwner,
       send: async (target, text) => {
         await options.im.endpoints.send({
           adapter: target.platform,
@@ -221,6 +236,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       },
     });
     lifecycle.add(toolApprovalIm.start());
+    // The queue lives in memory: re-issue cards for changes still pending on disk (and re-deliver them).
+    void selfChangeApprovals.restore().catch(error => logger.warn(formatCompact({
+      op: 'self_change_restore_failed',
+      error: error instanceof Error ? error.message : String(error),
+    })));
     const ingress = new CapabilityIngress();
     const assembly = options.workroom?.WorkroomHostAssembly.begin({
       generation,
@@ -248,7 +268,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       announcements: () => zhinAgent.getAnnouncements?.(),
       sessionEvents: () => zhinAgent.getSessionEvents?.(),
       groupRules: () => zhinAgent.getGroupRules?.(),
-      selfChanges: { store: () => selfChanges, impact: () => options.selfChangeImpact, trial: () => selfChangeTrialOptions },
+      selfChanges: { store: () => selfChanges, impact: () => options.selfChangeImpact, trial: () => selfChangeTrialOptions, approvals: () => selfChangeApprovals },
     });
 
     const publicationCoordinator = new AgentHostPublicationCoordinator({
