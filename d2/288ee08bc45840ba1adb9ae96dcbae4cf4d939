@@ -1,0 +1,34 @@
+basic/cli/src/plugin-runtime/agent/turn/group-rule-enforcer.ts
+  s_79c0dd38b091b8::t_a5fd240939a4bc 104-108,273-281
+.changeset/0039-slice-d-flood.md
+  s_79c0dd38b091b8::t_d5c292036cde1e 1-5
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_79c0dd38b091b8::t_61578e41c2f92f 122,205-206,329-364,517,741-743
+  s_79c0dd38b091b8::t_f3ea1db7aa74f2 744
+basic/cli/tests/plugin-runtime/agent/turn/group-flood-detector.test.ts
+  s_79c0dd38b091b8::t_e0f5210835045d 1-136
+docs/authoring/console-pages.md
+  s_79c0dd38b091b8::t_a5a92f5461250d 405-406
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-enforcer.test.ts
+  s_79c0dd38b091b8::t_93df799b6bae13 257-275
+basic/cli/src/plugin-runtime/agent/turn/group-flood-detector.ts
+  s_79c0dd38b091b8::t_5175cef50eaa9d 1-230
+docs/en/authoring/console-pages.md
+  s_79c0dd38b091b8::t_a5a92f5461250d 405-406
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d2288ee08bc45840ba1adb9ae96dcbae4cf4d939",
+  "prompts": {},
+  "sessions": {
+    "s_79c0dd38b091b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "40172ba8-13b0-4dfa-8965-dc85dffe3e3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
