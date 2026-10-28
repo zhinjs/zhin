@@ -1,0 +1,57 @@
+packages/im/agent/evals/cases/merged-turn-mentions-each-sender.case.ts
+  s_463da459dae66e::t_1e4f3f94e15cd5 1-46
+packages/im/agent/tests/turn/merged-turn-context.test.ts
+  s_463da459dae66e::t_f6a7ef926d20a5 12,22
+  s_463da459dae66e::t_ba1e7509d9ee1a 1-11,13-21,23-100
+packages/im/agent/evals/framework/driver.ts
+  s_463da459dae66e::t_aebb081fc66867 285
+packages/im/agent/src/turn/turn-admission-gate.ts
+  s_463da459dae66e::t_f0500594332251 76-77,92-93,153-159,286-288,423,509
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_463da459dae66e::t_57080418a237ce 23,30,884,935-936,1023,1093,1142,1379-1388
+  s_463da459dae66e::t_f7b07ac8406792 1389-1390
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_463da459dae66e::t_bf74514038278b 19,100-101,215
+packages/im/agent/src/turn/index.ts
+  s_463da459dae66e::t_bf74514038278b 156-162
+packages/im/agent/src/context/turn-envelope.ts
+  s_463da459dae66e::t_bf74514038278b 7,96-97
+packages/im/agent/evals/README.md
+  s_463da459dae66e::t_fb9d60f2747ad8 161-162
+packages/im/agent/evals/framework/fixture.ts
+  s_463da459dae66e::t_1e4f3f94e15cd5 9
+  s_463da459dae66e::t_aebb081fc66867 36-40
+packages/im/agent/evals/cases/merged-turn-skipped-sender-not-mentioned.case.ts
+  s_463da459dae66e::t_1e4f3f94e15cd5 1-33
+packages/im/agent/src/turn/turn-ingress.ts
+  s_463da459dae66e::t_bf74514038278b 100-104
+docs/ai/agent.md
+  s_463da459dae66e::t_5a5d41895895ac 83
+.changeset/adr-0038-slice-c-merged-context.md
+  s_463da459dae66e::t_5a5d41895895ac 1-6
+packages/im/agent/tests/turn/turn-admission-gate.test.ts
+  s_463da459dae66e::t_be99b73522ff3f 436-449
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_463da459dae66e::t_d5c261c1e81d4e 10,250-258
+  s_463da459dae66e::t_f1b9ed155d92a0 259
+docs/en/ai/agent.md
+  s_463da459dae66e::t_5a5d41895895ac 83
+packages/im/agent/src/turn/merged-turn-context.ts
+  s_463da459dae66e::t_03ec0273f6fc60 1-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "42e630d6f1df041e48ae237bc6e0b935a7ce5b2e",
+  "prompts": {},
+  "sessions": {
+    "s_463da459dae66e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "96a04faf-7211-4d40-97d9-91167d435c1e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
