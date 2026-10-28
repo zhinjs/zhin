@@ -1,0 +1,45 @@
+packages/im/agent/tests/self-change/trial.test.ts
+  s_2ed8f22dcddeac::t_b26c54f83eaabc 290-385
+basic/cli/src/plugin-runtime/agent/self-change-plugin-tests.ts
+  s_2ed8f22dcddeac::t_1bf736f560daf1 1-228
+basic/cli/src/plugin-runtime/agent/self-change-sandbox.ts
+  s_2ed8f22dcddeac::t_3db099c3315ed4 43,48-59,66-70,93,106-125,242,261
+packages/im/agent/src/index.ts
+  s_2ed8f22dcddeac::t_b46ab9faa8d788 448-449
+tests/snapshots/api-surface.json
+  s_2ed8f22dcddeac::t_ec443edbe652bd 120
+.changeset/0040-slice-c3-plugin-tests.md
+  s_2ed8f22dcddeac::t_3aae9fb79c46a3 1-6
+packages/im/agent/src/plugin-runtime/native-self-change-tools.ts
+  s_2ed8f22dcddeac::t_c1dea8e1c3023f 55
+  s_2ed8f22dcddeac::t_d04f7445f5b359 204-205,207
+docs/en/ai/default-behavior.md
+  s_2ed8f22dcddeac::t_3aae9fb79c46a3 50-52
+packages/im/agent/src/self-change/trial.ts
+  s_2ed8f22dcddeac::t_a99e9e5f54a032 17-21,39-40,55,91-102,108-109,265-268,280-283,311,342-384
+  s_2ed8f22dcddeac::t_47ea7342cfbb0e 385
+basic/cli/src/plugin-runtime/agent/self-change-trial.ts
+  s_2ed8f22dcddeac::t_1cb1a87c0fda22 2,8-9,12-16
+basic/cli/tests/plugin-runtime/agent/self-change-plugin-tests.test.ts
+  s_2ed8f22dcddeac::t_f82d42df01e030 153-154
+  s_2ed8f22dcddeac::t_2bea186ea6e76e 1-152,155-183,185-189
+  s_2ed8f22dcddeac::t_616f26945336a2 184
+docs/ai/default-behavior.md
+  s_2ed8f22dcddeac::t_3aae9fb79c46a3 50-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee9d38a2d2600a8e448a232e21cc14034e82fa71",
+  "prompts": {},
+  "sessions": {
+    "s_2ed8f22dcddeac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "746bd4e8-397c-42dc-8f3c-ab415769b16e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
