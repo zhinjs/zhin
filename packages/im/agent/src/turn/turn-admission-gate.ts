@@ -29,6 +29,7 @@
  */
 import { TriggerCancelledError } from './trigger-cancelled-error.js';
 import { TurnSupersededError } from './prompt-controller.js';
+import type { TurnAccessContext } from './turn-ingress.js';
 
 export interface TurnAdmissionGateOptions {
   /** Queued (not yet running) turns allowed per session. */
@@ -72,6 +73,11 @@ export interface TurnAdmissionRequest {
   readonly mergeable?: boolean;
   /** Display name for the merged turn text. */
   readonly senderName?: string;
+  /**
+   * The sender's own access (ADR 0038 §2). Carried into `participants` so a
+   * merged turn can narrow capabilities to what every member may use.
+   */
+  readonly access?: TurnAccessContext;
   /** Called synchronously when the message joins a merge window (audit `merge_window_joined`). */
   readonly onWindowJoined?: (window: TurnMergeWindowSnapshot) => void;
 }
@@ -81,6 +87,8 @@ export interface TurnParticipant {
   readonly senderId: string;
   readonly senderName?: string;
   readonly texts: readonly string[];
+  /** The access given with the sender's first message, when the caller passed one. */
+  readonly access?: TurnAccessContext;
 }
 
 export interface TurnMergeWindowSnapshot {
@@ -127,6 +135,7 @@ export type TurnStopResult = 'stopped' | 'not_running' | 'forbidden';
 interface QueuedTurn {
   readonly senderId: string;
   readonly senderName?: string;
+  readonly access?: TurnAccessContext;
   readonly texts: string[];
   readonly enqueuedAt: number;
   plainText: boolean;
@@ -137,7 +146,7 @@ interface QueuedTurn {
 }
 
 interface MergeWindow {
-  readonly participants: Array<{ senderId: string; senderName?: string; texts: string[] }>;
+  readonly participants: Array<{ senderId: string; senderName?: string; texts: string[]; access?: TurnAccessContext }>;
   lastJoinedAt: number;
   cancelTimer?: () => void;
 }
@@ -201,6 +210,7 @@ export class TurnAdmissionGate {
       return Promise.resolve(this.#start(request.sessionKey, state, {
         senderId: request.senderId,
         senderName: request.senderName,
+        access: request.access,
         texts: [request.text],
         plainText: request.plainText,
         queuedMs: 0,
@@ -228,6 +238,7 @@ export class TurnAdmissionGate {
       return this.#enqueue(state, {
         senderId: request.senderId,
         senderName: request.senderName,
+        access: request.access,
         texts: [...running.texts, request.text],
         plainText: true,
         supersededPrevious: true,
@@ -240,6 +251,7 @@ export class TurnAdmissionGate {
     return this.#enqueue(state, {
       senderId: request.senderId,
       senderName: request.senderName,
+      access: request.access,
       texts: [request.text],
       plainText: request.plainText,
       supersededPrevious: false,
@@ -264,7 +276,7 @@ export class TurnAdmissionGate {
       target.window!.participants.find((p) => p.senderId === request.senderId)!.texts.push(request.text);
     } else {
       target = findLast(windows, (entry) => entry.window!.participants.length < merge.maxSenders);
-      target?.window!.participants.push({ senderId: request.senderId, senderName: request.senderName, texts: [request.text] });
+      target?.window!.participants.push(windowParticipant(request));
     }
     if (target) {
       const window = target.window!;
@@ -278,12 +290,13 @@ export class TurnAdmissionGate {
       return Promise.resolve(Object.freeze({ kind: 'rejected' as const, reason: 'queue_full' as const }));
     }
     const window: MergeWindow = {
-      participants: [{ senderId: request.senderId, senderName: request.senderName, texts: [request.text] }],
+      participants: [windowParticipant(request)],
       lastJoinedAt: now,
     };
     const opened = this.#enqueue(state, {
       senderId: request.senderId,
       senderName: request.senderName,
+      access: request.access,
       texts: [],
       plainText: true,
       supersededPrevious: false,
@@ -382,6 +395,7 @@ export class TurnAdmissionGate {
     turn: Readonly<{
       senderId: string;
       senderName?: string;
+      access?: TurnAccessContext;
       texts: readonly string[];
       plainText: boolean;
       queuedMs: number;
@@ -394,11 +408,13 @@ export class TurnAdmissionGate {
         senderId: p.senderId,
         ...(p.senderName ? { senderName: p.senderName } : {}),
         texts: Object.freeze([...p.texts]),
+        ...(p.access ? { access: p.access } : {}),
       }))
       : [Object.freeze({
         senderId: turn.senderId,
         ...(turn.senderName ? { senderName: turn.senderName } : {}),
         texts: Object.freeze([...turn.texts]),
+        ...(turn.access ? { access: turn.access } : {}),
       })]);
     const texts = participants.flatMap((p) => p.texts);
     const running: RunningTurn = {
@@ -459,6 +475,7 @@ export class TurnAdmissionGate {
       next.settle(this.#start(sessionKey, state, {
         senderId: next.senderId,
         senderName: next.senderName,
+        access: next.access,
         texts: next.texts,
         plainText: next.plainText,
         queuedMs: now - next.enqueuedAt,
@@ -469,6 +486,15 @@ export class TurnAdmissionGate {
     }
     if (this.#sessions.get(sessionKey) === state) this.#sessions.delete(sessionKey);
   }
+}
+
+function windowParticipant(request: TurnAdmissionRequest): MergeWindow['participants'][number] {
+  return {
+    senderId: request.senderId,
+    ...(request.senderName ? { senderName: request.senderName } : {}),
+    texts: [request.text],
+    ...(request.access ? { access: request.access } : {}),
+  };
 }
 
 function snapshotWindow(window: MergeWindow): TurnMergeWindowSnapshot {

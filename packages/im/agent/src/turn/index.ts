@@ -145,6 +145,7 @@ export {
   DEFAULT_MAX_QUEUED_TURNS,
   TurnAdmissionGate,
 } from './turn-admission-gate.js';
+export { intersectCapabilities, narrowMergedAccess } from './merged-principal.js';
 export type {
   TurnAdmission,
   TurnAdmissionFacts,

@@ -6,6 +6,7 @@ import {
 } from '../../src/turn/turn-admission-gate.js';
 import { TriggerCancelledError } from '../../src/turn/trigger-cancelled-error.js';
 import { TurnSupersededError } from '../../src/turn/prompt-controller.js';
+import type { TurnAccessContext } from '../../src/turn/turn-ingress.js';
 
 type RunAdmission = Extract<TurnAdmission, { kind: 'run' }>;
 
@@ -429,6 +430,22 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     expect(run.text).toBe('b');
     expect(run.facts.mergeWindow).toBeUndefined();
     expect(run.participants).toEqual([{ senderId: 'bob', texts: ['b'] }]);
+    run.release();
+  });
+
+  it('carries each sender\'s own access into participants (ADR 0038 §2)', async () => {
+    const { gate, advance } = createMergeGate();
+    const access = (subjectId: string) => ({ principal: { subjectId } }) as unknown as TurnAccessContext;
+    const alice = access('alice');
+    const bob = access('bob');
+    const carrier = gate.admit(mention('alice', 'a', { access: alice }));
+    await expect(gate.admit(mention('bob', 'b', { access: bob }))).resolves.toEqual({ kind: 'merged' });
+    // A burst keeps the access of the sender's first message.
+    await expect(gate.admit(mention('bob', 'b2', { access: access('bob') }))).resolves.toEqual({ kind: 'merged' });
+    advance(1_500);
+    const run = await expectRun(carrier);
+    expect(run.participants.map((p) => p.access)).toEqual([alice, bob]);
+    expect(run.participants[1]!.access).toBe(bob);
     run.release();
   });
 

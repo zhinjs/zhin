@@ -7,7 +7,7 @@ import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/run
 import type { TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { AgentTurnIngressRoute, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import { AgentTurnIngressRoute, mergedMemberAccess, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
 describe('AgentTurnIngressRoute', () => {
   it.each([
@@ -225,4 +225,25 @@ it('localizes the ingress error fallback and preserves a configured template', a
     execute: async () => { throw new Error('upstream'); } });
   await custom.run();
   expect(custom.reply).toHaveBeenCalledWith('原配置: upstream');
+});
+
+it('falls back to the anonymous user floor for a merged participant without access (ADR 0038 §2)', () => {
+  const carrier = {
+    origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'group', sceneId: 'g1' },
+    principal: { subjectId: 'alice', roles: ['admin', 'user'] },
+    policy: { permissions: ['admin', 'user'], unattended: false },
+  } as any;
+  const bob = { ...carrier, principal: { subjectId: 'bob', roles: ['user'] } };
+  const members = mergedMemberAccess([
+    { senderId: 'alice', access: carrier },
+    { senderId: 'bob', access: bob },
+    { senderId: 'carol' },
+  ], carrier);
+  expect(members[0]).toBe(carrier);
+  expect(members[1]).toBe(bob);
+  expect(members[2]).toMatchObject({
+    origin: carrier.origin,
+    principal: { subjectId: 'carol', roles: ['user'] },
+    policy: { permissions: ['user'], unattended: false },
+  });
 });
