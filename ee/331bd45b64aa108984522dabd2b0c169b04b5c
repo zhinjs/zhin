@@ -1,0 +1,131 @@
+basic/cli/src/plugin-runtime/start-command.ts
+  s_871908dba214fa::t_46b245432ff7ed 509,541
+basic/cli/tests/plugin-runtime/agent/turn/trigger.test.ts
+  s_871908dba214fa::t_46b245432ff7ed 6,162-190
+  s_871908dba214fa::t_c1fac19890e908 191
+docs/ai/default-behavior.md
+  s_871908dba214fa::t_46b245432ff7ed 24,142
+docs/ai/index.md
+  s_871908dba214fa::t_46b245432ff7ed 465-469
+basic/cli/tests/plugin-runtime/console/trace-archive-routes.test.ts
+  s_871908dba214fa::t_46b245432ff7ed 1-94
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_871908dba214fa::t_46b245432ff7ed 67,389-390,818,823-837,851-864,1233
+.changeset/request-trace-usage.md
+  s_871908dba214fa::t_46b245432ff7ed 1-8
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_871908dba214fa::t_c4f8a2eb3a4d9e 99
+  s_871908dba214fa::t_46b245432ff7ed 16,57-60,97-98,108
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  s_871908dba214fa::t_46b245432ff7ed 23-56
+packages/im/agent/src/decision-events.ts
+  s_871908dba214fa::t_c4f8a2eb3a4d9e 132-139
+basic/cli/src/plugin-runtime/console/trace-archive-routes.ts
+  s_871908dba214fa::t_46b245432ff7ed 6-7,36,46,80-81,84,90-93,104,106-119,121-164
+docs/ai/agent.md
+  s_871908dba214fa::t_46b245432ff7ed 83
+.changeset/adr-0038-slice-a-merge-window.md
+  s_871908dba214fa::t_46b245432ff7ed 1-8
+docs/en/ai/agent.md
+  s_871908dba214fa::t_46b245432ff7ed 83
+docs/en/ai/default-behavior.md
+  s_871908dba214fa::t_46b245432ff7ed 24,142
+docs/console/index.md
+  s_871908dba214fa::t_46b245432ff7ed 115-120
+docs/en/ai/index.md
+  s_871908dba214fa::t_46b245432ff7ed 431-435
+docs/en/configuration/generated.md
+  s_871908dba214fa::t_46b245432ff7ed 151-155,278
+basic/cli/src/plugin-runtime/agent/turn/trigger.ts
+  s_871908dba214fa::t_46b245432ff7ed 5,98-119
+  s_871908dba214fa::t_051a4bb92aed99 120-121
+packages/im/agent/tests/decision-events.test.ts
+  s_871908dba214fa::t_c4f8a2eb3a4d9e 141-144,152
+  s_871908dba214fa::t_5726576a195773 134-140
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_871908dba214fa::t_46b245432ff7ed 66-67,259
+docs/configuration/generated.md
+  s_871908dba214fa::t_46b245432ff7ed 151-155,278
+docs/en/console/index.md
+  s_871908dba214fa::t_46b245432ff7ed 115-120
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_871908dba214fa::t_bdb8d50c7e410a 28-41,133-134
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  s_871908dba214fa::t_770254779bf197 59
+packages/im/agent/src/core/agent-core-run.ts
+  s_871908dba214fa::t_d2dae591ddac67 676
+packages/im/agent/src/core/turn-completion-usage.ts
+  s_871908dba214fa::t_f775d11dab3d76 1-2,6,8-12,16,27,30,51-83,86-87
+packages/im/agent/src/core/turn-event-mapper.ts
+  s_871908dba214fa::t_d0f6a675fcb8e5 9
+packages/im/agent/src/event/turn-event.ts
+  s_871908dba214fa::t_03dd6f1f1250a6 150-151
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_871908dba214fa::t_32901872dcec3c 350-351
+packages/im/agent/src/trace/index.ts
+  s_871908dba214fa::t_9ac6c895711518 56-57
+packages/im/agent/src/trace/request-trace.ts
+  s_871908dba214fa::t_3e5dd5668bb37a 1-240
+packages/im/agent/src/trace/trace-redaction.ts
+  s_871908dba214fa::t_6a322928a924b8 1-11
+packages/im/agent/src/trace/turn-trace-archive.ts
+  s_871908dba214fa::t_3c022b205afced 10,14-15,19,46,90-92,109-123,125-140,142-149,172-174,181-182,184-185,187-189,191-197,199,202-216,218-222,226-228,230-237,271-299
+packages/im/agent/src/trace/turn-trace-store.ts
+  s_871908dba214fa::t_42bd306cc72808 13
+packages/im/agent/src/trace/turn-trace.ts
+  s_871908dba214fa::t_6bd89108294a69 13-16,38,101-102,124-125,135-136,162-165,185-186,208,211,229-257,285,408-409,460-463,490-513
+packages/im/agent/src/turn/inbound-queue-config.ts
+  s_871908dba214fa::t_155a9092acb7ed 3,5-12,19,22-28,34,50-65,89-106
+packages/im/agent/src/turn/index.ts
+  s_871908dba214fa::t_ed9013fbde2c5d 80,87,153-155
+packages/im/agent/src/turn/turn-admission-gate.ts
+  s_871908dba214fa::t_ced5e2f2bc6100 18-24,40-41,43-53,67-89,100-101,109-114,129,134-135,139-144,149-150,160-161,164,172-179,196-199,203,221,230,242,249-315,326,329-339,351,384,389,392-403,406,408,416,419,421-423,425,441,443-444,448-458,461,466,474-501
+packages/im/agent/tests/core/turn-request-trace.test.ts
+  s_871908dba214fa::t_5cbde959ed13f8 1-166
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_871908dba214fa::t_466c4a24300815 69-114,500-507,530-532,537-539,548
+packages/im/agent/tests/trace/request-trace.test.ts
+  s_871908dba214fa::t_c9eb75d474d753 1-184
+packages/im/agent/tests/trace/turn-trace-archive.test.ts
+  s_871908dba214fa::t_0130aacd414aa6 50,60,70-71,107-193
+packages/im/agent/tests/turn/turn-admission-gate.test.ts
+  s_871908dba214fa::t_b5c05298820e8d 230-443
+packages/im/agent/tests/zhin-agent/inbound-queue-config.test.ts
+  s_871908dba214fa::t_9220f1eb266a45 3,26,30-46
+packages/im/ai/src/index.ts
+  s_871908dba214fa::t_7899f223366ca3 96-97
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  s_871908dba214fa::t_cdf403a4633f34 16,437,603
+packages/im/ai/src/llm/bridge/request-observation.ts
+  s_871908dba214fa::t_f005ad5b51da11 1-47
+packages/im/ai/src/llm/index.ts
+  s_871908dba214fa::t_705066c2715361 85-86
+packages/im/ai/src/llm/llm-api-runtime.ts
+  s_871908dba214fa::t_5cc9fd4f248bc9 11-22,40-41
+packages/im/ai/src/types.ts
+  s_871908dba214fa::t_8b64828854e343 548-554
+packages/im/ai/tests/llm/request-observation.test.ts
+  s_871908dba214fa::t_0283430f8129f0 1-101
+packages/im/runtime/src/host-config-schema.json
+  s_871908dba214fa::t_e44d741ff9a9d1 906-940,1856-1858
+packages/im/runtime/tests/host-config-schema-coverage.test.ts
+  s_871908dba214fa::t_6e0523c932b700 72,80-82
+scripts/check-agent-config-inventory.mjs
+  s_871908dba214fa::t_06002427174901 14-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee331bd45b64aa108984522dabd2b0c169b04b5c",
+  "prompts": {},
+  "sessions": {
+    "s_871908dba214fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eb870304-22d7-41fd-95af-f028f495bd55",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
