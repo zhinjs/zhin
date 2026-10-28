@@ -2,7 +2,7 @@
 layout: home
 ---
 
-<ZhinHero tagline="Write a chat bot once in TypeScript and run it on QQ, WeChat, Discord, Telegram and 20+ other platforms. A small IM framework by default — add AI when you need it." />
+<ZhinHero tagline="One bot for your groups on QQ, WeChat, Discord, Telegram and 20+ other platforms: operators run it from the browser, developers write it once in TypeScript. Small by default — add AI when you need it." />
 
 <ZhinTerminal>
 <b>$</b> npm create zhin-app my-bot -y<br>
@@ -10,11 +10,16 @@ layout: home
 <span>✔ Bot started — no platform account or model key required</span>
 </ZhinTerminal>
 
+<ZhinAudienceSplit heading="Which kind of user are you?" intro="One bot, two ways to use it: operators manage it in the browser, developers extend it in code. Pick your role, then a goal." :audiences="[
+  { eyebrow: 'CUSTOMER · OPERATORS / GROUP OWNERS', title: 'Run your bot without code', who: 'Group owners, community operators, support leads', description: 'Read messages, change settings, install features and manage welcomes and reminders in Console. Risky actions wait for approval.', links: [ { text: 'Connect Console', href: '/en/customer/#connect-console' }, { text: 'Change settings without code', href: '/en/customer/#no-code-config' }, { text: 'Group ops, announcements and approvals', href: '/en/customer/#group-ops' }, { text: 'Online demo', href: 'https://demo.zhin.dev' } ], primary: { text: 'Operator guide', href: '/en/customer/' } },
+  { eyebrow: 'DEVELOPER · PLUGIN / ADAPTER AUTHORS', title: 'Extend your bot in TypeScript', who: 'People who write commands, plugins, AI tools and adapters', description: 'One command to scaffold, a feature is a file, hot reload on save — one codebase on 20+ platforms.', links: [ { text: 'Quick start', href: '/en/getting-started/' }, { text: 'First plugin', href: '/en/getting-started/first-plugin' }, { text: 'Adapter authoring', href: '/en/authoring/adapters' }, { text: 'Agent tools', href: '/en/authoring/agent-tools' } ], primary: { text: 'Start building', href: '/en/getting-started/' } },
+]" />
+
 <ZhinRolePaths heading="What do you want to do?" intro="You don't need the full architecture first. Pick a goal — each path fits in one sitting." :items="[
-  { eyebrow: 'LEARN', title: 'Understand what it is', description: 'One page on what Zhin does and which parts make up a bot.', href: '/en/getting-started/introduction', action: '5-minute overview' },
   { eyebrow: 'RUN', title: 'Run your first bot', description: 'No platform account or model key — get a reply in the browser Sandbox.', href: '/en/getting-started/', action: 'Start the quick start' },
   { eyebrow: 'BUILD', title: 'Write your own features', description: 'Commands, keyword replies, schedules, AI tools — drop a file in a folder and it works.', href: '/en/getting-started/first-plugin', action: 'Write a first plugin' },
   { eyebrow: 'SHIP', title: 'Connect platforms and go live', description: 'Pick adapters for QQ / WeChat / Discord and more, then deploy, monitor and upgrade.', href: '/en/adapters/', action: 'Choose a platform' },
+  { eyebrow: 'OPERATE', title: 'Run it without code', description: 'Operators and group owners: read messages, change settings, install features, manage welcomes and announcement approvals in Console.', href: '/en/customer/', action: 'Operator guide' },
 ]" />
 
 <ZhinFeatureGrid heading="Why Zhin.js" :features="[
@@ -73,6 +78,7 @@ cd my-bot && pnpm dev
 
 **Next**
 
+- Operator or group owner, no code? → [Operator guide](/en/customer/)
 - Confused by a term? → [Core concepts](/en/getting-started/concepts)
 - Write your own command → [First plugin](/en/getting-started/first-plugin)
 - Connect a real platform → [Adapters](/en/adapters/)

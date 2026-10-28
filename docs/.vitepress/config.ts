@@ -18,6 +18,7 @@ function sidebarGroup(
 // ─── Chinese (root) sidebar ───
 
 const USE_DOC_PREFIXES = [
+  '/customer/',
   '/getting-started/',
   '/solutions/',
   '/concepts/',
@@ -39,6 +40,12 @@ const USE_DOC_PREFIXES = [
 const DEV_DOC_PREFIXES = ['/contributing/', '/target-architecture']
 
 const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
+  sidebarGroup('运营与群管（无代码）', [
+    { text: '运营与群管指南', link: '/customer/' },
+    { text: 'Console 管理路径', link: '/paths/console' },
+    { text: '只在选定的群欢迎', link: '/solutions/group-welcome' },
+    { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
+  ]),
   sidebarGroup('开始', [
     { text: 'Zhin.js 是什么', link: '/getting-started/introduction' },
     { text: '快速开始（10 分钟）', link: '/getting-started/' },
@@ -172,6 +179,7 @@ const zhDevDocsSidebar: DefaultTheme.SidebarItem[] = [
 // ─── English (/en/) sidebar ───
 
 const EN_USE_DOC_PREFIXES = [
+  '/en/customer/',
   '/en/getting-started/',
   '/en/solutions/',
   '/en/concepts/',
@@ -193,6 +201,12 @@ const EN_USE_DOC_PREFIXES = [
 const EN_DEV_DOC_PREFIXES = ['/en/contributing/']
 
 const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
+  sidebarGroup('Operate (No Code)', [
+    { text: 'Operator & Group Admin Guide', link: '/en/customer/' },
+    { text: 'Console Admin Path', link: '/en/paths/console' },
+    { text: 'Welcome Only Selected Groups', link: '/en/solutions/group-welcome' },
+    { text: 'Multi-Endpoint Operations', link: '/en/solutions/multi-endpoint-operations' },
+  ]),
   sidebarGroup('Start', [
     { text: 'What is Zhin.js', link: '/en/getting-started/introduction' },
     { text: 'Quick Start (10 min)', link: '/en/getting-started/' },
@@ -359,6 +373,7 @@ export default withMermaid(defineConfig({
         nav: [
           { text: '首页', link: '/' },
           { text: `v${zhinVersion}`, link: '/CHANGELOG' },
+          { text: '运营指南', link: '/customer/', activeMatch: '^/customer/' },
           {
             text: '使用文档',
             activeMatch: '^/(getting-started|solutions|concepts|authoring|examples|paths|showcase)/',
@@ -443,6 +458,7 @@ export default withMermaid(defineConfig({
         nav: [
           { text: 'Home', link: '/en/' },
           { text: `v${zhinVersion}`, link: '/CHANGELOG' },
+          { text: 'Operators', link: '/en/customer/', activeMatch: '^/en/customer/' },
           {
             text: 'Guide',
             activeMatch: '^/en/(getting-started|solutions|concepts|authoring|examples|paths|showcase)/',

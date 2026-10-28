@@ -7,7 +7,8 @@
 <h1 align="center">Zhin.js</h1>
 
 <p align="center">
-  <strong>用 TypeScript 写一次聊天机器人，同时跑在 20+ 平台</strong><br />
+  <strong>一个 Bot，管好 20+ 聊天平台上的群</strong><br />
+  运营在浏览器里管，开发者用 TypeScript 写一次、到处运行<br />
   QQ · 微信 · 企业微信 · 钉钉 · 飞书 · Discord · Telegram · Slack · KOOK · LINE · …
 </p>
 
@@ -28,6 +29,7 @@
 
 <p align="center">
   <a href="https://zhin.js.org">文档</a> ·
+  <a href="./docs/customer/index.md">运营指南</a> ·
   <a href="https://demo.zhin.dev">在线 Demo</a> ·
   <a href="https://console.zhin.dev">Remote Console</a> ·
   <a href="https://github.com/zhinjs/zhin/wiki">Wiki</a> ·
@@ -36,9 +38,20 @@
 
 ---
 
+## 选择你的路径
+
+Zhin 服务两类人。先选你是哪一类——这份 README 后面也按同样的方式分开。
+
+| | 🧭 **Customer · 运营 / 群主** | 🛠 **Developer · 插件 / 适配器开发者** |
+|---|---|---|
+| **你是** | 群主、社群运营、客服负责人。你负责把 Bot 用好，不写 TypeScript。 | 写命令、插件、AI 工具或平台适配器的人。 |
+| **你用** | 浏览器里的 [Console](https://console.zhin.dev) 和一份配置文件 | TypeScript、`create-zhin-app`、`zhin` CLI |
+| **你得到** | 入群欢迎、签到、提醒、订阅推送、内容审核、人批了再发的公告、一键止损 | 一套代码跑 20+ 平台、写功能 = 放一个文件、热重载不会把 Bot 弄挂 |
+| **从这里开始** | [先玩在线 Demo](https://demo.zhin.dev) → [运营与群管指南](./docs/customer/index.md) | [开发者快速开始](#开发者快速开始) → [第一个插件](./docs/getting-started/first-plugin.md) |
+
 ## Zhin.js 是什么？
 
-Zhin.js 是一个**开发聊天平台机器人**的框架——社区群 Bot、个人助手、通知 / 客服 Bot、AI 对话助手都可以用它来写。
+Zhin.js 是一个**聊天平台机器人**框架：运营在浏览器 Console 里管，开发者用 TypeScript 写。社区群 Bot、个人助手、通知 / 客服 Bot、AI 对话助手都可以用它来做。
 
 - **一套代码，多个平台。** 适配器把各平台的消息统一成一种格式，你的命令和回复到处都能用。一个 Bot 还能同时登录多个平台的多个账号。
 - **写功能 = 放一个文件。** `commands/hello/index.ts` 就是 `/hello` 命令。中间件、消息卡片、定时任务、AI 工具同理，不需要手写注册代码。
@@ -48,7 +61,33 @@ Zhin.js 是一个**开发聊天平台机器人**的框架——社区群 Bot、�
 
 > Zhin **不是** Cursor / Claude Code 那类写代码的 Agent。它的 AI 能力服务于聊天平台里的机器人。
 
-## 快速开始
+## 运营 / 群主：不写代码管好 Bot
+
+运营好一个 Zhin Bot 不需要写代码。开发者（或运维）部署一次之后，日常工作都在浏览器里完成。
+
+**连接。** 打开 [console.zhin.dev](https://console.zhin.dev)，填入 Bot 的 API 地址和 Token（`HTTP_TOKEN`）。只看状态的同事给只读的 Demo token 即可。还没部署？先玩 [在线 Demo](https://demo.zhin.dev)。
+
+| 我想…… | 在 Console 里 |
+|--------|---------------|
+| 看 Bot 和各个账号是否在线 | 首页 |
+| 在任意群里收发消息、回看聊天 | 聊天账号 · 聊天记录 |
+| 安装或停用功能（群运营套件、提醒、RSS、内容审核……） | 功能商店 · 功能管理 |
+| 不改文件也能改设置 | 各插件的配置表单；密钥放在「高级 → 环境变量」 |
+| 只在指定群欢迎新成员 | 任务中心 → 按用途开始（[指南](./docs/solutions/group-welcome.md)） |
+| 看 AI 为什么回 / 不回 | 机器人状态 → 决策回放 |
+| 让 Bot *立刻*安静 | 机器人状态 → 控制面：紧急停止 / 静音 / 只读 / 仅 @ 时回复 |
+
+**带护栏的群管。** AI 可以起草公告，但只有有审批权限的人才能发出；踢人这类危险群管动作会变成带冷却的审批卡；每个决定都能在决策回放里追溯。
+
+**什么时候找开发者：** 第一次部署或换服务器、现有插件做不到的新功能、接新平台、让 AI 对接你们的业务系统、运行记录里看不懂的报错。
+
+👉 完整指南：[运营与群管指南](./docs/customer/index.md) · [Console 管理路径](./docs/paths/console.md) · [故障排查](./docs/troubleshooting/index.md)
+
+## 开发者：用 TypeScript 扩展 Bot
+
+以下内容写给用 TypeScript 写插件和适配器的人。
+
+### 开发者快速开始
 
 不需要任何平台账号，也不需要模型 Key。
 
@@ -69,7 +108,7 @@ pnpm dev
 > [!IMPORTANT]
 > **从 1.1.13 及更早版本升级已有 Bot？** Runtime 现在只接受 `configVersion: 2`。先停止 Bot，把 `zhin.js` / `@zhin.js/cli` 升级到最新，再运行 `zhin migrate instances`（预览）和 `zhin migrate instances --apply`（自动备份）。完整步骤与恢复方式：[升级到 configVersion 2](./docs/operations/upgrades.md#configversion-2)。
 
-## 一个 Bot 由什么组成
+### 一个 Bot 由什么组成
 
 ```text
  聊天平台            你的项目（一个插件）                              聊天平台
@@ -89,7 +128,7 @@ pnpm dev
 
 文档里的名词看不懂？读 [核心概念速览](./docs/getting-started/concepts.md)，每个词都有大白话解释。
 
-## 编写功能
+### 编写功能
 
 整个 Bot 可以只有一个文件：
 
@@ -143,7 +182,7 @@ my-bot/
 
 下一步：[编写第一个插件](./docs/getting-started/first-plugin.md) · [全部约定目录](./docs/authoring/conventions.md) · [命令详解](./docs/authoring/commands.md)
 
-## 接入真实平台
+### 接入真实平台
 
 ```bash
 npx zhin setup --adapters   # 选择平台、填写凭据
@@ -163,7 +202,7 @@ pnpm install && pnpm dev
 
 每个适配器都标注了成熟度（Stable / Advanced / Experimental）并有独立接入文档：[平台适配器概览](./docs/adapters/index.md)。
 
-## 接入 AI（可选）
+### 接入 AI（可选）
 
 ```bash
 npx zhin setup --ai   # 选择模型服务（OpenAI、Ollama…）并写入配置
@@ -189,11 +228,11 @@ ai:
 
 下一步：[AI 总览](./docs/ai/index.md) · [Agent 工具、Skill 与 Prompt Section](./docs/authoring/agent-tools.md) · [AI Agent 学习路径](./docs/paths/ai-agent.md)
 
-## 按需安装
+### 按需安装
 
 默认只装 IM 核心；AI、模型 SDK、MCP、图片渲染、语音都是可选包。启用 AI 时推荐使用 `npx zhin setup --ai`，它会一并写好依赖与 Feature 声明。
 
-### Install tiers（zhin.js 1.1.x）
+#### Install tiers（zhin.js 1.1.x）
 
 | 档位 | 安装 | 约 production 体积 | 能力 |
 |------|------|-------------------|------|
@@ -207,6 +246,17 @@ ai:
 1.1 起，`ZhinAgent` / `AIService` 需从 `zhin.js/agent` / `zhin.js/ai` 导入，不再从 `zhin.js` 导出。表格来源：[`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md)。
 
 ## 文档导航
+
+**运营 / 群主**
+
+| 我想…… | 从这里开始 |
+|--------|------------|
+| 不写代码运营 Bot | [运营与群管指南](./docs/customer/index.md) · [在线 Demo](https://demo.zhin.dev) |
+| 在浏览器里管理 | [Console 管理路径](./docs/paths/console.md) · [Console 参考](./docs/console/index.md) |
+| 配群欢迎、提醒、订阅推送 | [按问题选方案](./docs/solutions/index.md) |
+| 查 Bot 为什么没回 | [消息没有回复](./docs/troubleshooting/messages.md) |
+
+**开发者**
 
 | 我想…… | 从这里开始 |
 |--------|------------|
