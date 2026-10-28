@@ -424,9 +424,25 @@ export {
   type SelfChangeOrigin,
   type SelfChangePruneResult,
   type SelfChangeRecord,
+  type SelfChangeApplyState,
+  type SelfChangeSnapshot,
+  type SelfChangeSnapshotFile,
   type SelfChangeStoreOptions,
   type SelfChangeTransitionInput,
 } from './self-change/store.js';
+export {
+  DEFAULT_CHANGE_HEALTH_WINDOW_MS,
+  SelfChangeApplier,
+  type SelfChangeApplierOptions,
+  type SelfChangeApplyOutcome,
+  type SelfChangeApplyPorts,
+  type SelfChangeConfigPort,
+  type SelfChangeHealth,
+  type SelfChangeHealthInput,
+  type SelfChangeReportInput,
+  type SelfChangeReportKind,
+  type SelfChangeReportOutcome,
+} from './self-change/apply.js';
 export {
   MAX_CHANGE_PREVIEW_BYTES,
   buildSelfChangePreview,
