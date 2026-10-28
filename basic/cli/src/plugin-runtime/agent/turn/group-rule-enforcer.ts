@@ -101,6 +101,11 @@ export interface GroupRuleViolation {
   readonly evidence?: readonly string[];
   /** `remind` / `warn` 档的附加动作：撤回原消息（调用方绑定到这条原消息）。 */
   readonly recall?: () => Promise<void>;
+  /**
+   * 判定方的命中记录（如 `flood` 的 `rule_hit_flood`）：找到生效规则后先写一行 `rule_enforcement`，
+   * 与随后的执行行共享 `turn_id`，回放能看到「为什么判定为违规」。
+   */
+  readonly detection?: Readonly<{ reasonCode: DecisionReasonCode; payload?: DecisionPayload }>;
 }
 
 export type GroupRuleEnforcementResult =
@@ -265,6 +270,15 @@ export class GroupRuleEnforcer {
       ...(violation.messageId ? { messageId: violation.messageId } : {}),
       ...(violation.evidence?.length ? { evidence: evidence(violation.evidence) } : {}),
     };
+    if (violation.detection) {
+      audit({
+        kind: 'rule_enforcement',
+        outcome: 'allow',
+        reasonCode: violation.detection.reasonCode,
+        payload: { ...payload, ...violation.detection.payload },
+        actor: 'policy',
+      });
+    }
     const skip = (reasonCode: DecisionReasonCode, extra: DecisionPayload = {}, outcome: 'skip' | 'deny' = 'skip'): GroupRuleEnforcementResult => {
       audit({ kind: 'rule_enforcement', outcome, reasonCode, payload: { ...payload, ...extra }, actor: 'policy' });
       return { kind: 'skipped', reasonCode, ruleId: rule.id };

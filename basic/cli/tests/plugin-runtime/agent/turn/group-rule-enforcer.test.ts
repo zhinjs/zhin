@@ -254,4 +254,23 @@ describe('GroupRuleEnforcer (ADR 0039 slice C)', () => {
     expect(enforcer.progressSize).toBe(0);
     await expect(hit()).resolves.toEqual({ kind: 'no_rule' });
   });
+
+  it('writes the detector hit row (rule_hit_flood) on the same turn as the action', async () => {
+    const { store, hit, log } = harness();
+    const rule = await activate(store, { trigger: 'flood', ladder: [{ action: 'remind' }, { action: 'mute', durationSec: 300 }], content: '刷屏先提醒，再犯禁言五分钟' });
+    await expect(hit({ trigger: 'flood', detection: { reasonCode: 'rule_hit_flood', payload: { count: 3, windowMs: 60_000 } } }))
+      .resolves.toMatchObject({ kind: 'enforced', action: 'remind' });
+    await log.idle();
+    const detected = log.recent().find((row) => row.reasonCode === 'rule_hit_flood');
+    const reminded = log.recent().find((row) => row.reasonCode === 'rule_hit_remind');
+    expect(detected).toMatchObject({ kind: 'rule_enforcement', outcome: 'allow' });
+    expect(detected!.payload).toMatchObject({ ruleId: rule.id, trigger: 'flood', count: 3, windowMs: 60_000 });
+    expect(detected!.turnId).toBe(reminded!.turnId);
+  });
+
+  it('writes no detector row when the group has no active rule', async () => {
+    const { hit, codes } = harness();
+    await expect(hit({ trigger: 'flood', detection: { reasonCode: 'rule_hit_flood' } })).resolves.toEqual({ kind: 'no_rule' });
+    expect(await codes()).toEqual([]);
+  });
 });
