@@ -274,3 +274,58 @@ describe('GroupRuleEnforcer (ADR 0039 slice C)', () => {
     expect(await codes()).toEqual([]);
   });
 });
+
+describe('GroupRuleEnforcer newcomer ads (ADR 0039 slice E)', () => {
+  async function submitDefault(store: AiGroupRules) {
+    const created = await store.create({ ...scene, ...remindThenMute, createdBy: 'content-moderation', createdVia: 'console' });
+    return (await store.submit({ id: created.record.id, expectedRevision: created.record.revision, actorId: 'content-moderation' })).record;
+  }
+
+  it('raises a fresh kick card against a still-pending migrated rule, never kicks unapproved (acceptance 7)', async () => {
+    const { store, queue, hit, kick, mute, send, enforcer, codes } = harness();
+    const pending = await submitDefault(store);
+    await expect(hit({ newcomer: true })).resolves.toMatchObject({ kind: 'enforced', action: 'suggest_kick', ruleId: pending.id });
+    const cards = queue.list({ status: 'pending' });
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({ toolName: GROUP_RULE_KICK_TOOL_NAME, category: 'member' });
+    expect(kick).not.toHaveBeenCalled();
+    expect(mute).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    queue.resolve(cards[0]!.id, false, 'admin-2');
+    await enforcer.drain();
+    expect(kick).not.toHaveBeenCalled();
+    const rows = (await codes()).filter((code) => code.startsWith('rule_enforcement:'));
+    expect(rows).toEqual(['rule_enforcement:defer:rule_hit_kick_suggested']);
+  });
+
+  it('a pending rule alone does not punish ordinary hits: only newcomer kick cards use it', async () => {
+    const { store, hit, send, mute } = harness();
+    await submitDefault(store);
+    await expect(hit()).resolves.toEqual({ kind: 'no_rule' });
+    expect(send).not.toHaveBeenCalled();
+    expect(mute).not.toHaveBeenCalled();
+  });
+
+  it('newcomer kick card does not advance the ladder of an active rule', async () => {
+    const { store, hit, advance, mute } = harness();
+    await activate(store);
+    await expect(hit({ newcomer: true })).resolves.toMatchObject({ action: 'suggest_kick' });
+    advance(61_000);
+    await expect(hit()).resolves.toMatchObject({ action: 'remind', stage: 1 });
+    expect(mute).not.toHaveBeenCalled();
+  });
+
+  it('ignores the newcomer flag for abuse and without any rule', async () => {
+    const { hit, queue } = harness();
+    await expect(hit({ newcomer: true })).resolves.toEqual({ kind: 'no_rule' });
+    await expect(hit({ newcomer: true, trigger: 'abuse' })).resolves.toEqual({ kind: 'no_rule' });
+    expect(queue.list({ status: 'pending' })).toHaveLength(0);
+  });
+
+  it('still exempts owners / admins from newcomer kick cards', async () => {
+    const { store, hit, queue } = harness();
+    await submitDefault(store);
+    await expect(hit({ newcomer: true, memberRoles: ['admin'] })).resolves.toMatchObject({ kind: 'skipped', reasonCode: 'rule_hit_exempt' });
+    expect(queue.list({ status: 'pending' })).toHaveLength(0);
+  });
+});

@@ -47,27 +47,25 @@ describe('contextual group moderation', () => {
     const f = fixture();
     f.completeText.mockResolvedValue({ text: verdict(true), model: 'fixture', durationMs: 0 });
     await f.send(1, { locale: 'en' }); await f.send(2, { locale: 'en' }); await f.send(3, { locale: 'en' });
+    // ADR 0039 §5: without a confirmed group rule the plugin only reminds and warns, never mutes.
     expect(f.reply.mock.calls.map(([message]) => message)).toEqual([
       'Reminder. Do not post unsolicited advertising or promotional invitations.',
       'Warning. Do not post unsolicited advertising or promotional invitations.',
-      'Muted for 10 minutes. Do not post unsolicited advertising or promotional invitations.',
     ]);
     expect(f.input.audit).toHaveBeenCalledWith(expect.objectContaining({
       event: 'group_review', evidence: [text], recallReason: '避免继续引流', recall: true,
     }));
     expect(f.recall).toHaveBeenCalledTimes(2);
-    expect(f.moderateGroupMember).toHaveBeenCalledExactlyOnceWith('129043431', '123',
-      { type: 'mute', durationSeconds: 600 }, expect.any(AbortSignal));
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
   });
 
-  it('localizes newcomer and abuse notices while preserving their different actions', async () => {
+  it('never kicks a newcomer by itself and localizes abuse notices', async () => {
     const newcomer = fixture();
     newcomer.inspectGroupMember.mockResolvedValue({ canModerate: true, joinedAt: NOW - 1000 });
     await newcomer.send(1, { locale: 'en' });
-    expect(newcomer.reply).toHaveBeenCalledWith(
-      'Removed from the group for posting clear advertising within 10 minutes of joining. Do not post unsolicited advertising or promotional invitations.', '123');
-    expect(newcomer.moderateGroupMember).toHaveBeenCalledWith('129043431', '123',
-      { type: 'kick', joinedAt: NOW - 1000, maxMembershipAgeMs: 600_000 }, expect.any(AbortSignal));
+    expect(newcomer.reply).toHaveBeenCalledExactlyOnceWith(
+      'Reminder. Do not post unsolicited advertising or promotional invitations.', '123');
+    expect(newcomer.moderateGroupMember).not.toHaveBeenCalled();
     const abuse = fixture();
     abuse.completeText.mockResolvedValue({ text: verdict(false, 'abuse'), model: 'fixture', durationMs: 0 });
     await abuse.send(2, { locale: 'en' });
@@ -99,11 +97,10 @@ describe('contextual group moderation', () => {
     f.completeText.mockResolvedValue({ text: verdict(recallChoice), model: 'fixture', durationMs: 0 });
     await f.send(1); await f.send(2); await f.send(3);
     expect(f.reply.mock.calls.map(([message]) => message)).toEqual([
-      expect.stringContaining('提醒'), expect.stringContaining('警告'), expect.stringContaining('禁言 10 分钟'),
+      expect.stringContaining('提醒'), expect.stringContaining('警告'),
     ]);
     expect(f.recall).toHaveBeenCalledTimes(recallChoice ? 2 : 0);
-    expect(f.moderateGroupMember).toHaveBeenCalledExactlyOnceWith('129043431', '123',
-      { type: 'mute', durationSeconds: 600 }, expect.any(AbortSignal));
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
   });
 
   it('recall failure neither retries nor increments the escalation stage', async () => {
@@ -141,20 +138,61 @@ describe('contextual group moderation', () => {
     expect(f.reply).toHaveBeenLastCalledWith(expect.stringContaining('提醒'), '123');
   });
 
-  it.each([0, 600_000])('automatically kicks a clear ad at newcomer age %d ms', async (age) => {
+  it.each([0, 600_000])('hands a clear ad at newcomer age %d ms to the rule executor as a kick suggestion', async (age) => {
     const f = fixture();
+    const rules = vi.fn(async () => 'handled' as const);
     f.inspectGroupMember.mockResolvedValue({ canModerate: true, joinedAt: NOW - age });
-    await f.moderator.review(f.input);
-    expect(f.moderateGroupMember).toHaveBeenCalledWith('129043431', '123',
-      { type: 'kick', joinedAt: NOW - age, maxMembershipAgeMs: 600_000 }, expect.any(AbortSignal));
+    await f.moderator.review({ ...f.input, rules });
+    expect(rules).toHaveBeenCalledExactlyOnceWith({ category: 'advertising', evidence: [text], newcomer: true });
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
+    expect(f.reply).not.toHaveBeenCalled();
     expect(f.recall).not.toHaveBeenCalled();
   });
 
-  it.each([600_001, 3600_000])('does not automatically kick an older member (%d ms)', async (age) => {
+  it.each([600_001, 3600_000])('does not mark an older member as a newcomer (%d ms)', async (age) => {
     const f = fixture();
+    const rules = vi.fn(async () => 'handled' as const);
     f.inspectGroupMember.mockResolvedValue({ canModerate: true, joinedAt: NOW - age });
-    await f.moderator.review(f.input);
+    await f.moderator.review({ ...f.input, rules });
+    expect(rules).toHaveBeenCalledWith(expect.objectContaining({ newcomer: false }));
     expect(f.moderateGroupMember).not.toHaveBeenCalled();
+  });
+
+  it('leaves notices, recall and punishment to the rule executor once it handles a hit', async () => {
+    const f = fixture();
+    const rules = vi.fn(async () => 'handled' as const);
+    f.completeText.mockResolvedValue({ text: verdict(true), model: 'fixture', durationMs: 0 });
+    await f.send(1, { rules }); await f.send(2, { rules }); await f.send(3, { rules });
+    expect(rules).toHaveBeenCalledTimes(3);
+    expect(rules).toHaveBeenCalledWith({ category: 'advertising', evidence: [text], newcomer: false, recall: f.recall });
+    expect(f.reply).not.toHaveBeenCalled();
+    expect(f.recall).not.toHaveBeenCalled();
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
+  });
+
+  it('falls back to reminder and warning only while no group rule is confirmed', async () => {
+    const f = fixture();
+    const rules = vi.fn(async () => 'no_rule' as const);
+    f.inspectGroupMember.mockResolvedValue({ canModerate: true, joinedAt: NOW - 1000 });
+    await f.send(1, { rules }); await f.send(2, { rules }); await f.send(3, { rules });
+    expect(rules).toHaveBeenCalledTimes(3);
+    expect(f.reply.mock.calls.map(([message]) => message)).toEqual([
+      expect.stringContaining('提醒'), expect.stringContaining('警告'),
+    ]);
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
+  });
+
+  it('requests default rules once per group scope and retries after a failure', async () => {
+    const moderator = new GroupModerator();
+    const ensure = vi.fn().mockRejectedValueOnce(new Error('unavailable')).mockResolvedValue(undefined);
+    moderator.ensureRules('scope', ensure);
+    await vi.waitFor(() => expect(ensure).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    moderator.ensureRules('scope', ensure);
+    moderator.ensureRules('scope', ensure);
+    await vi.waitFor(() => expect(ensure).toHaveBeenCalledTimes(2));
+    moderator.ensureRules('scope', ensure);
+    expect(ensure).toHaveBeenCalledTimes(2);
   });
 
   it('does not kick a newcomer for abuse', async () => {
@@ -203,12 +241,12 @@ describe('contextual group moderation', () => {
     await started;
     const nextModerator = replacement ? new GroupModerator() : f.moderator;
     await nextModerator.review({ ...f.input, messageId: 'ad' });
-    expect(f.moderateGroupMember).toHaveBeenCalledTimes(1);
+    expect(f.reply).toHaveBeenCalledTimes(1);
     release({ text: verdict(false, 'none'), model: 'fixture', durationMs: 0 });
     await first;
     expect(f.completeText).toHaveBeenCalledTimes(2);
-    expect(f.moderateGroupMember).toHaveBeenCalledExactlyOnceWith('129043431', '123',
-      { type: 'kick', joinedAt: NOW - 1000, maxMembershipAgeMs: 600_000 }, expect.any(AbortSignal));
+    expect(f.reply).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('提醒'), '123');
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
     await f.moderator.review({ ...f.input, messageId: 'ad' });
     expect(f.completeText).toHaveBeenCalledTimes(2);
   });
@@ -228,7 +266,7 @@ describe('contextual group moderation', () => {
     release({ text: verdict(), model: 'fixture', durationMs: 0 });
     await first;
     expect(f.completeText).toHaveBeenCalledTimes(2);
-    expect(f.moderateGroupMember).toHaveBeenCalledTimes(1);
+    expect(f.moderateGroupMember).not.toHaveBeenCalled();
     expect(f.reply).toHaveBeenCalledTimes(1);
   });
 

@@ -1860,7 +1860,7 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `content-moderation.groupModeration` | array&lt;object&gt; | 否 | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。 |
+| `content-moderation.groupModeration` | array&lt;object&gt; | 否 | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。禁言 / 踢人交给 Agent 群规（ADR 0039），名单内的群会生成待确认的默认规则，确认前只提醒 / 警告。 |
 | `content-moderation.groupModeration[].adapter` | string | 是 | — | — |
 | `content-moderation.groupModeration[].endpoint` | string | 是 | — | — |
 | `content-moderation.groupModeration[].account` | string | 是 | — | — |

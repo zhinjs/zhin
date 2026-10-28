@@ -114,6 +114,7 @@
     "export * from '../../request.js';",
     "export * from '../../system-event.js';",
     "export * from './contracts.js';",
+    "export * from './group-rule-violation.js';",
     "export * from './im-runtime.js';",
     "export * from './ingress-route.js';",
     "export * from './login-assist-host.js';",

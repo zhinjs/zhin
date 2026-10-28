@@ -21,6 +21,7 @@
  *   - `suggest_kick`：**不自动执行**。Bot 须是管理员；随后走普通硬闸（`member` 类）：过控制面与 `ops_cooldown`，
  *     生成一张新鲜的人批审批卡（IM 审批通道 / Console），后台等结算；批准才踢，驳回 / 超时不踢。
  * - Bot 不是管理员：`rule_hit_bot_not_admin`（`skip`），每群每天首次在群里提示一次。
+ * - 新人发广告（content-moderation 迁移，切片 E）：不按阶梯，直接出踢人审批卡；规则引用取生效规则，没有则取待确认的默认规则。
  * - 审计：每次命中一行 `kind=rule_enforcement`（码见 ADR 0039 §6）；实际禁言 / 踢人另有硬闸 `tool_hard_gate`
  *   与 `outbound` 行，共享 `turn_id`，回放能从禁言追到规则、批准人与命中证据。
  * - 磁盘有界：执行器不落盘。阶梯进度只在进程内，条目有上限并按最长冷静期过期清理；重启后阶梯归零（偏宽松，不偏严）。
@@ -106,6 +107,12 @@ export interface GroupRuleViolation {
    * 与随后的执行行共享 `turn_id`，回放能看到「为什么判定为违规」。
    */
   readonly detection?: Readonly<{ reasonCode: DecisionReasonCode; payload?: DecisionPayload }>;
+  /**
+   * 入群不久即发广告（content-moderation 迁移，ADR 0039 §5）：不按阶梯，直接出一张踢人审批卡（每次人批），
+   * 不推进阶梯。规则引用取该群 `advertising` 的生效规则，没有则取待确认规则（迁移生成的默认模板）；
+   * 都没有 → `no_rule`。只对 `advertising` 生效。
+   */
+  readonly newcomer?: boolean;
 }
 
 export type GroupRuleEnforcementResult =
@@ -251,7 +258,9 @@ export class GroupRuleEnforcer {
     const store = this.deps.rules();
     if (!store || this.#dispose.signal.aborted || !violation.groupId || !violation.memberId) return { kind: 'no_rule' };
     const sceneId = `group:${violation.groupId}`;
-    const rule = await store.getActive({ platform: violation.platform, sceneId, trigger: violation.trigger });
+    const newcomer = violation.newcomer === true && violation.trigger === 'advertising';
+    const rule = await store.getActive({ platform: violation.platform, sceneId, trigger: violation.trigger })
+      ?? (newcomer ? await latestPending(store, violation.platform, sceneId, violation.trigger) : null);
     if (!rule) return { kind: 'no_rule' };
 
     const turnId = randomUUID();
@@ -269,6 +278,7 @@ export class GroupRuleEnforcer {
       memberId: violation.memberId,
       ...(violation.messageId ? { messageId: violation.messageId } : {}),
       ...(violation.evidence?.length ? { evidence: evidence(violation.evidence) } : {}),
+      ...(newcomer ? { newcomer: true, ruleStatus: rule.status } : {}),
     };
     if (violation.detection) {
       audit({
@@ -295,6 +305,13 @@ export class GroupRuleEnforcer {
       return skip('rule_hit_exempt');
     }
 
+    const target: GroupRuleTarget = { platform: violation.platform, endpoint: violation.endpoint ?? null, groupId: violation.groupId };
+    // 3a. 新人发广告：不按阶梯，出一张踢人审批卡（每次人批），不推进阶梯。
+    if (newcomer) {
+      const context = { rule, violation, target, audit, turnId, payload: { ...payload, action: 'suggest_kick' }, stage: 0 };
+      return this.#suggestKick(context, () => undefined);
+    }
+
     // 3. 阶梯（同一规则同一成员串行）。
     const key = `${rule.id}\u0000${violation.memberId}`;
     return this.#serialize(key, async () => {
@@ -311,7 +328,6 @@ export class GroupRuleEnforcer {
       const stageIndex = Math.min(progress.count, rule.ladder.length - 1);
       const stage = rule.ladder[stageIndex]!;
       const stagePayload = { ...payload, stage: stageIndex + 1, action: stage.action, ...(stage.durationSec ? { durationSec: stage.durationSec } : {}) };
-      const target: GroupRuleTarget = { platform: violation.platform, endpoint: violation.endpoint ?? null, groupId: violation.groupId };
       const advance = (notified: boolean) => {
         this.#progress.set(key, {
           count: progress.count + 1,
@@ -610,6 +626,12 @@ interface StageContext {
 
 function evidence(items: readonly string[]): string[] {
   return items.slice(0, MAX_EVIDENCE_ITEMS).map((item) => item.slice(0, MAX_EVIDENCE_CHARS));
+}
+
+/** 该群该类型最近送审的待确认规则（新人踢人卡的规则引用；卡本身每次人批，不依赖规则批准）。 */
+async function latestPending(store: AiGroupRules, platform: string, sceneId: string, trigger: GroupRuleTrigger): Promise<GroupRuleRecord | null> {
+  const pending = await store.list({ platform, sceneId, status: 'pending', trigger });
+  return pending.reduce<GroupRuleRecord | null>((latest, rule) => (!latest || (rule.submittedAt ?? 0) > (latest.submittedAt ?? 0) ? rule : latest), null);
 }
 
 /** 按记录现算摘要；字段已不合法（被改坏）时返回 undefined。 */
