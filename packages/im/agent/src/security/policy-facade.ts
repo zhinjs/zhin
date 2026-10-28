@@ -61,6 +61,7 @@ import type { ToolNetworkPolicy } from './network-policy-context.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { authorizeTurnFileInput } from './turn-file-authority.js';
+import { hostWriteImpact } from './host-config-paths.js';
 
 // ── 输入 / 输出类型 ─────────────────────────────────────────────────
 
@@ -150,6 +151,10 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       return Object.freeze({ status: 'denied', policy: 'workspace-access', reason: fileAuthority.reason });
     }
     authorizedInput = fileAuthority.input;
+    if (fileOperation !== 'read') {
+      const denied = protectedPathDenial(input.tool.name, authorizedInput);
+      if (denied) return denied;
+    }
     const path = stringArgument(authorizedInput, 'path', 'file_path', 'filePath');
     const permission = checkFilePermission(
       toolRequesterRoleToFileRole(requesterRole),
@@ -177,6 +182,8 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       return Object.freeze({ status: 'denied', policy: 'workspace-access', reason: cwdAuthority.reason });
     }
     authorizedInput = cwdAuthority.input;
+    const protectedDenial = protectedPathDenial('bash', authorizedInput);
+    if (protectedDenial) return protectedDenial;
     const command = stringArgument(authorizedInput, 'command');
     if (command) {
       if (input.turn.policy.shell?.preset) {
@@ -329,6 +336,20 @@ function turnFilePermissionDecision(
     });
   }
   return undefined;
+}
+
+/** #1030 list A (node_modules, lockfiles, host-declared files): no role may write, no approval card. */
+function protectedPathDenial(
+  toolName: string,
+  input: Readonly<Record<string, unknown>>,
+): TurnToolPolicyDecision | undefined {
+  const impact = hostWriteImpact(toolName, input);
+  if (impact?.level !== 'deny') return undefined;
+  return Object.freeze({
+    status: 'denied',
+    policy: 'host-protected-path',
+    reason: `${impact.target} is maintained by the package manager / host and cannot be written by the agent`,
+  });
 }
 
 function resolveTurnFileOperation(toolName: string): FileOperation | undefined {

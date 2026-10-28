@@ -39,7 +39,7 @@ import {
   type ToolApprovalOrigin,
 } from './tool-approval-queue.js';
 import { opsCooldownTarget, type OpsCooldownView } from './ops-cooldown.js';
-import { hostConfigWriteTarget } from './host-config-paths.js';
+import { hostWriteImpact, type HostProtectedPaths } from './host-config-paths.js';
 
 export type ToolRisk = 'dangerous' | 'safe';
 /**
@@ -265,6 +265,8 @@ export interface ToolRiskAssessment {
   readonly source: 'declared' | 'core' | 'host' | 'default' | 'invocation';
   /** `self`：本次调用会写入的宿主配置路径。 */
   readonly target?: string;
+  /** #1030 A 名单：本次调用写入永不可写路径（node_modules / lockfile…）；不弹审批，直接拒绝且不 latch。 */
+  readonly denied?: true;
 }
 
 /**
@@ -275,11 +277,20 @@ export function assessToolInvocation(
   tool: ToolRiskView,
   input: Readonly<Record<string, unknown>> | undefined,
   settings: ToolHardGateSettings = DEFAULT_TOOL_HARD_GATE,
+  protectedPaths?: HostProtectedPaths,
 ): ToolRiskAssessment {
   const base = assessToolRisk(tool, settings);
-  const target = input ? hostConfigWriteTarget(tool.name, input) : undefined;
-  if (!target) return base;
-  return Object.freeze({ risk: 'dangerous', category: 'self', source: base.risk === 'dangerous' ? base.source : 'invocation', target });
+  const impact = input ? hostWriteImpact(tool.name, input, protectedPaths) : undefined;
+  if (!impact) return base;
+  if (impact.level === 'deny') {
+    return Object.freeze({ risk: 'dangerous', category: null, source: 'invocation', target: impact.target, denied: true });
+  }
+  return Object.freeze({
+    risk: 'dangerous',
+    category: 'self',
+    source: base.risk === 'dangerous' ? base.source : 'invocation',
+    target: impact.target,
+  });
 }
 
 /** 合并声明、核心名单与宿主配置：任何一方判 dangerous 即 dangerous，不能被调低。 */
@@ -338,6 +349,8 @@ export interface ToolHardGateContext {
    * 键用 {@link location} 的 `platform` / `sceneId` 与工具本地名。
    */
   readonly opsCooldown?: OpsCooldownView;
+  /** 覆盖宿主注入的受保护路径集（测试 / 嵌入方）；缺省读 `installHostProtectedPaths` 的注册。 */
+  readonly protectedPaths?: HostProtectedPaths;
 }
 
 type ControlDenial = Readonly<{
@@ -409,7 +422,7 @@ export class ToolHardGate {
 
   /** 传入本次参数时按调用评估（写宿主配置升为 `self`）。 */
   assess(tool: ToolRiskView, input?: Readonly<Record<string, unknown>>): ToolRiskAssessment {
-    return assessToolInvocation(tool, input, this.#settings);
+    return assessToolInvocation(tool, input, this.#settings, this.#context.protectedPaths);
   }
 
   /**
@@ -427,6 +440,7 @@ export class ToolHardGate {
       this.#audit('tool_call', 'allow', 'tool_safe_allowed', { tool: name, risk: 'safe', riskSource: assessment.source, toolUseId });
       return SAFE;
     }
+    if (assessment.denied) return this.#denyProtectedPath(name, assessment, toolUseId);
     const { category } = assessment;
     const payload = { tool: name, category, riskSource: assessment.source, toolUseId,
       ...(assessment.target ? { target: assessment.target } : {}) };
@@ -529,6 +543,7 @@ export class ToolHardGate {
       this.#audit('tool_call', 'allow', 'tool_safe_allowed', { tool: name, risk: 'safe', riskSource: assessment.source, toolUseId });
       return SAFE;
     }
+    if (assessment.denied) return this.#denyProtectedPath(name, assessment, toolUseId);
     const { category } = assessment;
     const payload = {
       tool: name,
@@ -712,6 +727,21 @@ export class ToolHardGate {
       signal.removeEventListener('abort', abort);
       controller.abort();
     }
+  }
+
+  /**
+   * #1030 list A: a path no one may write through the agent. No approval card, and — unlike
+   * {@link #deny} — no latch: the tool and category stay usable for ordinary calls this turn.
+   */
+  #denyProtectedPath(toolName: string, assessment: ToolRiskAssessment, toolUseId: string): ToolHardGateResult {
+    this.#audit('tool_hard_gate', 'deny', 'host_path_protected',
+      { tool: toolName, category: null, riskSource: assessment.source, toolUseId, target: assessment.target });
+    return Object.freeze({
+      status: 'denied',
+      category: null,
+      reasonCode: 'host_path_protected',
+      reason: formatHardGateDenial(toolName, `${assessment.target ?? '该路径'} 由依赖管理器 / 宿主维护，禁止通过 Agent 写入`),
+    });
   }
 
   #deny(

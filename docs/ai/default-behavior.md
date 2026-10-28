@@ -35,7 +35,7 @@
 
 核心名单按类别默认危险：成员管理（踢人、禁言、设管理员、角色、拉人）、内容发布（群公告、频道发帖、精华、置顶、B 站评论）、资金（红包、转账、付款，**默认禁用**，`allowFunds: true` 后仍需审批）、身份（改 Bot 资料、头像、签名、解绑账号）。
 
-另有一类按**本次调用的目标**判定，而不是按工具名：**改宿主自身（`self`）**。`write_file` / `edit_file` 等写文件工具写入宿主配置、依赖或仓库钩子时，这一次调用就升为危险，包括 `zhin.config.*`、`.env*`、`package.json`、锁文件、`pnpm-workspace.yaml`、`.npmrc`、`.pnpmfile.cjs`、`assistant.profile.yml`、`node_modules/`、`.git/`。`bash` 命令通过重定向、`tee` 等方式写这些文件，或用 `pnpm` / `npm` / `yarn` / `bun` 增删改依赖时，同样按 `self` 处理。这类写入可能放松硬闸、改变宿主运行的代码或触发重启，所以和其他危险类别一样，每次都要新鲜的人工批准，bypass、自动审核、主人免审和"记住授权"都不能放行。只读查询（查成员、查群信息）不受硬闸限制，照常记审计。
+另有一类按**本次调用的目标**判定，而不是按工具名：**改宿主自身**，分两档，路径都经过 realpath、`../` 折叠和大小写折叠后再匹配。**直接拒绝（不弹审批）**：`node_modules/**`（任意层）、锁文件（`pnpm-lock.yaml`、`package-lock.json`、`yarn.lock`、`bun.lock(b)`、`npm-shrinkwrap.json`）、`ZHIN_PLUGIN_LIFECYCLE_FILE` 指向的文件，以及文件策略本来就拒绝的 `.env*`、`.zhin/`、根 `data/`、`config.json`、`.npmrc`；任何角色都不能写。**`self` 硬闸**：写**项目根**下的根配置（`zhin.config.*`、`config.yml|yaml`）、`package.json`、`schema.json`、根插件入口（`package.json#zhin.entry`）、`AGENTS.md`、`skills/`、`.agents/skills/`、`.git/`、`.pnpmfile.cjs`、`assistant.profile.yml`；只匹配项目根，`plugins/x/package.json` 这类嵌套文件不受影响，`pnpm-workspace.yaml` 与 `tsconfig*.json` 本阶段不管。项目根和根插件入口由宿主注入；宿主没注入时按文件名在任意层级匹配（宁可多拦）。`bash` 命令通过重定向、`tee`、`rm`/`cp`/`mv` 等写这些路径时按同样两档处理，用 `pnpm` / `npm` / `yarn` / `bun` 增删改依赖按 `self` 处理。`self` 写入可能放松硬闸、改变宿主运行的代码或触发重启，所以和其他危险类别一样，每次都要新鲜的人工批准，bypass、自动审核、主人免审、`danger-full-access` 和"记住授权"都不能放行。只读查询（查成员、查群信息）不受硬闸限制，照常记审计。
 
 ```yaml
 ai:

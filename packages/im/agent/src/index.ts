@@ -106,6 +106,13 @@ export type {
   OwnerApprovalCommandContext,
   ToolRequesterRole,
 } from './security/owner-approval-runtime.js';
+export {
+  classifyHostPath,
+  createHostProtectedPaths,
+  installHostProtectedPaths,
+  type HostProtectedPaths,
+  type HostProtectedPathsInput,
+} from './security/host-config-paths.js';
 export { managementCommandText } from './init/command-presentation.js';
 export {
   handleRuntimeManagementCommand,

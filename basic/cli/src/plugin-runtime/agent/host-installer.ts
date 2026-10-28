@@ -1,3 +1,4 @@
+import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ import {
   localImageAssetsToken,
   type AssistantConfig,
   type ApprovalPort,
+  installHostProtectedPaths,
   type AudioTranscriptionPort,
 } from '@zhin.js/agent';
 import type {
@@ -145,6 +147,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       });
     }
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
+    // #1030 P0: tell the file/bash policy where the project root is and which files only a person may change.
+    lifecycle.add(installHostProtectedPaths(await resolveHostProtectedPaths(options.projectRoot)));
     lifecycle.add(await localAssets.acquire());
     resources.provide(localImageAssetsToken, localAssets);
     const agentFoundation = await AgentRuntimeFoundation.create({
