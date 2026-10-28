@@ -107,6 +107,8 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |
 
+Tree `preview` values remain short summaries. Read a complete user message on demand with `GET /api/agent/sessions/<encoded-sessionKey>/message?sessionId=<tree.sessionId>&messageId=<positive-safe-integer>` under the existing session HTTP authentication boundary. The response is `data: { messageId, text }`, without image payloads or branch mutation. A changed session incarnation returns `409`; a missing message, a message from another session, or a non-user message returns `404`; an older runtime without the reader returns `501`. Only retained message text is available.
+
 Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events).
 
 Fixed string choices, such as the calendar `provider`, can use the existing select field instead of

@@ -761,9 +761,103 @@ describe('console-rest-pages agent sessions', () => {
     expect(releases).toBe(1);
   });
 
+  it('reads one full user message without reading the tree or switching a branch', async () => {
+    const calls: Array<[string, number]> = [];
+    const text = '    indented first line\n\n' + '完整消息\n'.repeat(40) + '\n\n';
+    const tree = {
+      ...fakeSessionTree(),
+      readBranchMessage: async (sessionId: string, messageId: number) => {
+        calls.push([sessionId, messageId]);
+        return messageId === 3 ? text : messageId === 4 ? '' : null;
+      },
+      listBranchPoints: () => { throw new Error('detail must not load all previews'); },
+      switchActiveLeaf: () => { throw new Error('read must not switch branches'); },
+    };
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease({ sessionTree: tree }) }));
+    const detail = await fetch(`${base}/api/agent/sessions/known/message?sessionId=sid-1&messageId=3`);
+    expect(detail.status).toBe(200);
+    expect(detail.headers.get('cache-control')).toBe('no-store');
+    expect(await json(detail)).toEqual({ success: true, data: { messageId: 3, text } });
+    const empty = await fetch(`${base}/api/agent/sessions/known/message?sessionId=sid-1&messageId=4`);
+    expect(await json(empty)).toEqual({ success: true, data: { messageId: 4, text: '' } });
+    expect(calls).toEqual([['sid-1', 3], ['sid-1', 4]]);
+  });
+
+  it('rejects missing/unsafe identifiers and stale session incarnations before reading message content', async () => {
+    let reads = 0;
+    const tree = { ...fakeSessionTree(), readBranchMessage: async () => { reads += 1; return null; } };
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease({ sessionTree: tree }) }));
+    for (const query of ['messageId=3', 'sessionId=sid-1', 'sessionId=sid-1&messageId=0', 'sessionId=sid-1&messageId=-1', 'sessionId=sid-1&messageId=1.5', 'sessionId=sid-1&messageId=9007199254740992', 'sessionId=sid-1&messageId=NaN']) {
+      const response = await fetch(`${base}/api/agent/sessions/known/message?${query}`);
+      expect(response.status).toBe(400);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    }
+    expect((await fetch(`${base}/api/agent/sessions/known/message?sessionId=old-session&messageId=3`)).status).toBe(409);
+    expect(reads).toBe(0);
+    expect((await fetch(`${base}/api/agent/sessions/ghost/message?sessionId=sid-1&messageId=3`)).status).toBe(404);
+    expect((await fetch(`${base}/api/agent/sessions/known/message?sessionId=sid-1&messageId=99`)).status).toBe(404);
+    expect(reads).toBe(1);
+  });
+
+  it('reports unsupported old readers and releases leases on unsupported, absent and failed reads', async () => {
+    let releases = 0;
+    const tree = fakeSessionTree();
+    const old = await startHost(baseCtx({ acquireAgentRuntime: () => ({value: {sessionTree: tree}, release: () => { releases += 1; }}) }));
+    const unsupported = await fetch(`${old}/api/agent/sessions/known/message?sessionId=sid-1&messageId=3`);
+    expect(unsupported.status).toBe(501);
+    expect(unsupported.headers.get('cache-control')).toBe('no-store');
+    expect(await json(unsupported)).toMatchObject({success: false, error: expect.stringContaining('不支持')});
+    expect(releases).toBe(1);
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => ({
+      value: {sessionTree: {...tree, readBranchMessage: async (_sessionId: string, messageId: number) => {
+        if (messageId === 5) throw new Error('fixture read failed');
+        return null;
+      }}}, release: () => { releases += 1; },
+    }) }));
+    expect((await fetch(`${base}/api/agent/sessions/known/message?sessionId=sid-1&messageId=3`)).status).toBe(404);
+    expect((await fetch(`${base}/api/agent/sessions/known/message?sessionId=sid-1&messageId=5`)).status).toBe(500);
+    expect(releases).toBe(3);
+    const bare = await startHost(baseCtx());
+    expect((await fetch(`${bare}/api/agent/sessions/known/message?sessionId=sid-1&messageId=3`)).status).toBe(503);
+  });
+
+  it('retains the generation lease while an on-demand message read is pending', async () => {
+    let resolveRead!: (value: string) => void;
+    let entered!: () => void;
+    const reading = new Promise<void>(resolve => { entered = resolve; });
+    let releases = 0;
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => ({
+      value: {sessionTree: {...fakeSessionTree(), readBranchMessage: () => new Promise<string>(resolve => { resolveRead = resolve; entered(); })}},
+      release: () => { releases += 1; },
+    }) }));
+    const pending = fetch(`${base}/api/agent/sessions/known/message?sessionId=sid-1&messageId=3`);
+    await reading;
+    expect(releases).toBe(0);
+    resolveRead('untruncated text');
+    expect(await json(await pending)).toMatchObject({data: {text: 'untruncated text'}});
+    expect(releases).toBe(1);
+  });
+
+  it('uses the existing HTTP authentication boundary for full message reads', async () => {
+    let reads = 0;
+    const host = createHttpHost({host: '127.0.0.1', port: 0, token: 'synthetic-full', tokens: [{token: 'synthetic-demo', scope: 'demo'}]});
+    hosts.push(host);
+    registerConsoleRestPages(host, baseCtx({acquireAgentRuntime: () => lease({sessionTree: {...fakeSessionTree(), readBranchMessage: async () => { reads += 1; return 'message'; }}})}));
+    const {port} = await host.listen();
+    const url = `http://127.0.0.1:${port}/api/agent/sessions/known/message?sessionId=sid-1&messageId=3`;
+    expect((await fetch(url)).status).toBe(401);
+    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-wrong'}})).status).toBe(401);
+    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-demo'}})).status).toBe(403);
+    expect(reads).toBe(0);
+    expect((await fetch(url, {headers: {Authorization: 'Bearer synthetic-full'}})).status).toBe(200);
+    expect(reads).toBe(1);
+  });
+
   it('GET /api/agent/sessions/:key/tree 返回 legacy 形状', async () => {
     const base = await startHost(sessionCtx());
-    const body = await json(await fetch(`${base}/api/agent/sessions/known/tree`));
+    const response = await fetch(`${base}/api/agent/sessions/known/tree`);
+    expect(response.headers.get('cache-control')).not.toBe('no-store');
+    const body = await json(response);
     expect(body).toMatchObject({
       success: true,
       data: {

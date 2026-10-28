@@ -107,6 +107,8 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 
+会话树的 `preview` 仍是短摘要。按需读取完整用户正文使用 `GET /api/agent/sessions/<encoded-sessionKey>/message?sessionId=<tree.sessionId>&messageId=<positive-safe-integer>`，沿用会话接口的 HTTP 鉴权，响应 `data: { messageId, text }`，不返回图片内容，也不切换分支。会话实例已变化返回 `409`，消息不存在或不是该会话的用户消息返回 `404`，旧 runtime 未提供读取能力返回 `501`；完整正文只限仍保留的消息。
+
 实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
 
 插件写操作都采用“计划后提交”：Console 先调用 `plugin:plan-install`、
