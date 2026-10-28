@@ -21,7 +21,7 @@ const expectedSurface = new Map([
   ['@zhin.js/skill', ['SkillDefinition', 'SkillScope', 'parseSkillMarkdown']],
   ['@zhin.js/tool', [
     'AgentToolDefiner', 'AgentToolDefinition', 'ToolExecutionContext', 'ToolInvocationContext',
-    'ToolInvocationPolicy', 'ToolQuestionPort', 'ToolQuestionRequest', 'ToolApproval',
+    'ToolInvocationPolicy', 'ToolProtectedPathData', 'ToolQuestionPort', 'ToolQuestionRequest', 'ToolApproval',
     'ToolInvocationOrigin', 'ToolQuestionAnswer', 'ToolQuestionType', 'ToolRisk', 'ToolRiskCategory', 'ToolScope',
     'defineAgentTool',
   ]],

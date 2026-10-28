@@ -47,6 +47,8 @@ export const DECISION_EVENT_KINDS = [
   'group_rule',
   // ADR 0039：一次规则命中的判定与执行结果（执行器见切片 C）
   'rule_enforcement',
+  // ADR 0040 切片 A：受控自我进化——变更的每次状态迁移
+  'self_change',
 ] as const;
 export type DecisionEventKind = typeof DECISION_EVENT_KINDS[number];
 
@@ -155,6 +157,27 @@ export const DECISION_REASON_CODES = [
   'rule_hit_exempt',
   'rule_hit_bot_not_admin',
   'rule_hit_flood',
+  // ADR 0040 §7：受控自我进化 起草 / 试跑 → 审批 → 生效 / 恢复
+  'change_drafted',
+  'change_quota_exceeded',
+  'change_pruned',
+  'change_path_forbidden',
+  'change_config_key_forbidden',
+  'change_trial_passed',
+  'change_trial_failed',
+  'change_submitted',
+  'change_approved',
+  'change_rejected',
+  'change_expired',
+  'change_hash_mismatch',
+  'change_applied_none',
+  'change_applied_reload',
+  'change_restart_requested',
+  'change_verified',
+  'change_rolled_back',
+  'change_failed_emergency_stop',
+  'change_report_sent',
+  'change_report_redirected',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

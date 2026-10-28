@@ -54,7 +54,7 @@ describe('ai_decision_events schema', () => {
     expect(DECISION_EVENT_KINDS).toEqual([
       'inbound_wake', 'speak_gate', 'control_gate', 'ambient_decision', 'model_skip', 'model_run',
       'tool_call', 'tool_hard_gate', 'tool_approval', 'outbound', 'config_change', 'control_change',
-      'member_lifecycle', 'announcement', 'ops_cooldown', 'schedule', 'group_rule', 'rule_enforcement',
+      'member_lifecycle', 'announcement', 'ops_cooldown', 'schedule', 'group_rule', 'rule_enforcement', 'self_change',
     ]);
     expect(DECISION_OUTCOMES).toEqual(['allow', 'deny', 'skip', 'defer', 'error']);
     expect(DECISION_ACTORS).toEqual(['system', 'model', 'operator', 'policy']);
@@ -150,6 +150,19 @@ describe('reason_code registry', () => {
     ];
     const start = DECISION_REASON_CODES.indexOf('rule_drafted');
     expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('hard_gate_scene_pending_cap'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+  });
+
+  it('appends the ADR 0040 self-change codes after the ADR 0039 group rule codes', () => {
+    const slice = [
+      'change_drafted', 'change_quota_exceeded', 'change_pruned', 'change_path_forbidden',
+      'change_config_key_forbidden', 'change_trial_passed', 'change_trial_failed',
+      'change_submitted', 'change_approved', 'change_rejected', 'change_expired', 'change_hash_mismatch',
+      'change_applied_none', 'change_applied_reload', 'change_restart_requested', 'change_verified',
+      'change_rolled_back', 'change_failed_emergency_stop', 'change_report_sent', 'change_report_redirected',
+    ];
+    const start = DECISION_REASON_CODES.indexOf('change_drafted');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('rule_hit_flood'));
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
     expect(DECISION_REASON_CODES.slice(-slice.length)).toEqual(slice);
   });
