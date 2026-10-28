@@ -617,6 +617,38 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `bilibili.endpoints[].commandPrefix` | string | no | — | — |
 
+### bilibili-live
+
+[`plugins/adapters/bilibili-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/bilibili-live/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `bilibili-live.roomId` | string \| number | no | — | Live room id (short or full); use your own room only. |
+| `bilibili-live.sendMode` | string: `"direct"`, `"off"` | no | `"direct"` | Outbound mode: direct (default, needs login) posts the reply as danmaku; off only listens. |
+| `bilibili-live.maxLength` | number | no | `20` | Maximum characters per danmaku (default 20; higher live levels allow more). |
+| `bilibili-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2); the rest is truncated. |
+| `bilibili-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
+| `bilibili-live.apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
+| `bilibili-live.liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
+| `bilibili-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `bilibili-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `bilibili-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Bilibili account ID. |
+| `bilibili-live.endpoints[].sessdata` | string | no | — | SESSDATA cookie, acting as your account. Reference ${BILIBILI_SESSDATA}; never commit it. Omit to listen anonymously. |
+| `bilibili-live.endpoints[].biliJct` | string | no | — | bili_jct cookie (csrf token) needed to send danmaku. Reference ${BILIBILI_BILI_JCT}. |
+| `bilibili-live.endpoints[].buvid3` | string | no | — | Optional buvid3 cookie; requested from the platform at startup when omitted. |
+| `bilibili-live.endpoints[].roomId` | string \| number | no | — | Live room id (short or full); use your own room only. |
+| `bilibili-live.endpoints[].sendMode` | string: `"direct"`, `"off"` | no | `"direct"` | Outbound mode: direct (default, needs login) posts the reply as danmaku; off only listens. |
+| `bilibili-live.endpoints[].maxLength` | number | no | `20` | Maximum characters per danmaku (default 20; higher live levels allow more). |
+| `bilibili-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2); the rest is truncated. |
+| `bilibili-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
+| `bilibili-live.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
+| `bilibili-live.endpoints[].liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.endpoints[].master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
+| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+
 ### dingtalk
 
 [`plugins/adapters/dingtalk/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/dingtalk/schema.json)

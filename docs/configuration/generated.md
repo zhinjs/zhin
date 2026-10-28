@@ -617,6 +617,38 @@ outline: [2, 3]
 | `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `bilibili.endpoints[].commandPrefix` | string | 否 | — | — |
 
+### bilibili-live
+
+[`plugins/adapters/bilibili-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/bilibili-live/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `bilibili-live.roomId` | string \| number | 否 | — | 直播间号（短号或长号都可以）；只填你自己的直播间 |
+| `bilibili-live.sendMode` | string: `"direct"`, `"off"` | 否 | `"direct"` | 出站模式：direct=回合结束直接发弹幕（默认，需登录）；off=只听不说 |
+| `bilibili-live.maxLength` | number | 否 | `20` | 单条弹幕最多字符数（默认 20，直播等级高的账号可调大） |
+| `bilibili-live.maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2），放不下的截断 |
+| `bilibili-live.minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
+| `bilibili-live.apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
+| `bilibili-live.liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
+| `bilibili-live.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili-live.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `bilibili-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `bilibili-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是 B 站账号） |
+| `bilibili-live.endpoints[].sessdata` | string | 否 | — | Cookie SESSDATA（以你的账号身份发弹幕；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库）。不填则匿名只读 |
+| `bilibili-live.endpoints[].biliJct` | string | 否 | — | Cookie bili_jct（csrf token，发弹幕需要；请用 ${BILIBILI_BILI_JCT} 注入） |
+| `bilibili-live.endpoints[].buvid3` | string | 否 | — | Cookie buvid3（可选；不填时启动时向平台申请） |
+| `bilibili-live.endpoints[].roomId` | string \| number | 否 | — | 直播间号（短号或长号都可以）；只填你自己的直播间 |
+| `bilibili-live.endpoints[].sendMode` | string: `"direct"`, `"off"` | 否 | `"direct"` | 出站模式：direct=回合结束直接发弹幕（默认，需登录）；off=只听不说 |
+| `bilibili-live.endpoints[].maxLength` | number | 否 | `20` | 单条弹幕最多字符数（默认 20，直播等级高的账号可调大） |
+| `bilibili-live.endpoints[].maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2），放不下的截断 |
+| `bilibili-live.endpoints[].minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
+| `bilibili-live.endpoints[].apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
+| `bilibili-live.endpoints[].liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.endpoints[].master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
+| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+
 ### dingtalk
 
 [`plugins/adapters/dingtalk/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/dingtalk/schema.json)

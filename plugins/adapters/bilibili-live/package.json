@@ -1,0 +1,103 @@
+{
+  "name": "@zhin.js/adapter-bilibili-live",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zhin.js Bilibili live danmaku adapter for Plugin Runtime (Experimental; danmaku WebSocket, one reply per danmaku window)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "bot",
+    "adapter",
+    "bilibili",
+    "live",
+    "danmaku",
+    "chatbot"
+  ],
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "license": "MIT",
+  "repository": {
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "type": "git",
+    "directory": "plugins/adapters/bilibili-live"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../../.. plugins/adapters/bilibili-live/tests",
+    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
+  },
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/logger": "workspace:*"
+  },
+  "peerDependencies": {
+    "@zhin.js/adapter": "workspace:^",
+    "@zhin.js/core": "workspace:^",
+    "zhin.js": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "zhin.js": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*"
+  },
+  "files": [
+    "adapters",
+    "plugin.ts",
+    "schema.json",
+    "src",
+    "lib",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      }
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.ts",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  }
+}
