@@ -1,3 +1,4 @@
+import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ import {
   localImageAssetsToken,
   type AssistantConfig,
   type ApprovalPort,
+  hostProtectedPathsToken,
   type AudioTranscriptionPort,
 } from '@zhin.js/agent';
 import type {
@@ -147,6 +149,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       });
     }
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
+    // #1030 P0: tell the file/bash policy where the project root is and which files only a person may change.
+    const hostProtectedPaths = await resolveHostProtectedPaths(options.projectRoot);
+    resources.provide(hostProtectedPathsToken, hostProtectedPaths);
     lifecycle.add(await localAssets.acquire());
     resources.provide(localImageAssetsToken, localAssets);
     const agentFoundation = await AgentRuntimeFoundation.create({
@@ -170,6 +175,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
+    zhinAgent.hostProtectedPaths = hostProtectedPaths;
     if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
     // G6 (#1013): IM approval channel for hard-gate cards; idle unless ai.agent.toolHardGate.imApproval.enabled.
     const toolApprovalIm = new ImToolApprovalChannel({

@@ -1,3 +1,4 @@
+import type { HostProtectedPaths } from '../security/host-config-paths.js';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
 import type { Usage } from '@zhin.js/ai';
 import type { ApprovalPort } from '../session/approval-port.js';
@@ -207,6 +208,12 @@ export interface TurnIngress {
   readonly capabilities: Readonly<FrozenCapabilityCatalog>;
   readonly signal: AbortSignal;
   readonly ports: Readonly<TurnPorts>;
+  /**
+   * #1030: the generation's host-protected path set (project root anchored). `undefined` means the
+   * host injected none, and the file/bash policy fails closed to name matching at any depth.
+   * Production Turn construction sites must pass it explicitly (see the construction-site test).
+   */
+  readonly hostProtectedPaths?: HostProtectedPaths;
 }
 
 export type TurnIngressInput = Omit<TurnIngress, 'execution'> & {
@@ -277,6 +284,7 @@ export function createTurnIngress(input: TurnIngressInput): TurnIngress {
     capabilities: freezeData(input.capabilities),
     signal: input.signal,
     ports: Object.freeze({ ...input.ports }),
+    ...(input.hostProtectedPaths ? { hostProtectedPaths: input.hostProtectedPaths } : {}),
   });
 }
 

@@ -120,6 +120,7 @@ export interface ZhinAgentPrivate
   toolSystem: ToolSystem | null;
   /** Optional host-level fallback, for transports without an interactive approval surface. */
   approvalPort?: ApprovalPort;
+  hostProtectedPaths?: import('../security/host-config-paths.js').HostProtectedPaths;
   readonly externalTools: Map<string, RegisteredAgentTool>;
   readonly userProfiles: UserProfileStore;
   subagentSystem: SubagentSystem | null;

@@ -58,6 +58,7 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
         userId: message.sender?.id ? String(message.sender.id) : null,
       },
       ...legacyApprovalOrigin(message),
+      ...(options.host.hostProtectedPaths ? { protectedPaths: options.host.hostProtectedPaths } : {}),
       ...(options.host.toolApprovals ? { queue: options.host.toolApprovals } : {}),
       ...(options.host.opsCooldown ? { opsCooldown: options.host.opsCooldown } : {}),
       ...(controlPlane ? { controlPlane } : {}),

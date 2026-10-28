@@ -152,6 +152,10 @@ const { repository, sessionStore } = createMemoryContextRepository({ tailMessage
 
 管理上下文窗口，防止 token 超限：
 
+Agent 历史摘要保留工具调用的参数、调用关联和结果状态，不包含私有推理或供应商签名。
+`agentLoop` 的溢出恢复只在修复、投影后的消息 token 估算量减少时重试；
+恢复失败保留原始溢出错误，取消后不再重试。估算量不等于供应商实际计费 token。
+
 ```typescript
 import {
   estimateTokens,

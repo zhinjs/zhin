@@ -113,6 +113,7 @@
     "export{capabilitySeamToken}from './seam/index.js';",
     "export{chatFailureLine,chatFailureKindOf}from './outbound/chat-failure.js';",
     "export{checkExecPolicy,applyExecPolicyToTools,resolveExecAllowlist,EXEC_PRESETS,isDangerousCommand,stripEnvVarPrefix,stripSafeWrappers,splitCompoundCommand,extractCommandName,type ExecPolicyResult,}from './security/exec-policy.js';",
+    "export{classifyHostPath,createHostProtectedPaths,hostProtectedPathsToken,type HostProtectedPaths,type HostProtectedPathsInput,}from './security/host-config-paths.js';",
     "export{createAIHookBusPayload,isAISessionNewPayload,isAISessionCompactPayload,}from './ai-event-bus.js';",
     "export{createAgentSession}from './create-agent-session.js';",
     "export{createLlmMediaPerceptionPort,resolvePerceptionConfig}from './media/index.js';",
