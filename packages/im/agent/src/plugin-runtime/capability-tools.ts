@@ -9,6 +9,7 @@ import type { AgentCapabilities, ToolCapability } from './capability-ingress.js'
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { TurnIngress, TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
+import { toProtectedPathData } from '../security/host-config-paths.js';
 
 /** Core transport tool shape plus the generation stamp ToolRuntime validates. */
 export type GenerationStampedTool = Tool & { generation?: number };
@@ -54,6 +55,7 @@ export function toolsFromCapabilities(
 }
 
 export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInvocationContext {
+  const hostPaths = 'hostProtectedPaths' in turn ? turn.hostProtectedPaths : undefined;
   return Object.freeze({
     ...(isLocale(turn.input.locale) ? { locale: turn.input.locale } : {}),
     signal: turn.signal,
@@ -78,7 +80,12 @@ export function toolInvocationFromTurn(turn: TurnIngress | TurnRequest): ToolInv
         ? { shell: Object.freeze({ ...turn.policy.shell }) }
         : {}),
       ...(turn.policy.filesystem
-        ? { filesystem: Object.freeze({ ...turn.policy.filesystem }) }
+        ? {
+            filesystem: Object.freeze({
+              ...turn.policy.filesystem,
+              ...(hostPaths ? { protectedPaths: toProtectedPathData(hostPaths) } : {}),
+            }),
+          }
         : {}),
     }),
     ...(turn.ports.question ? { question: turn.ports.question } : {}),

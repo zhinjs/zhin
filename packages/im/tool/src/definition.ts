@@ -20,6 +20,23 @@ export type ToolRisk = 'dangerous' | 'safe';
 /** ADR 0036 dangerous categories: member governance, content publishing, funds (disabled by default), identity. */
 export type ToolRiskCategory = 'member' | 'publish' | 'funds' | 'identity';
 
+/**
+ * Host-protected paths (#1030) as plain data, so a Tool can enforce them where it executes
+ * (e.g. read-only container mounts). Folded entries are lower-case, posix, root-relative.
+ */
+export interface ToolProtectedPathData {
+  /** Original-case canonical project root, when the host knows it. */
+  readonly projectRoot?: string;
+  /** Case-folded roots (canonical first). */
+  readonly roots: readonly string[];
+  /** Case-folded root-relative files (list B). */
+  readonly selfFiles: readonly string[];
+  /** Case-folded root-relative directories (list B). */
+  readonly selfDirs: readonly string[];
+  /** Case-folded absolute files (list A). */
+  readonly denyFiles: readonly string[];
+}
+
 export interface ToolInvocationPolicy {
   readonly permissions: readonly string[];
   readonly unattended: boolean;
@@ -39,6 +56,8 @@ export interface ToolInvocationPolicy {
     readonly workspaceRoot: string;
     readonly workingDirectory?: string;
     readonly access?: 'read-only' | 'workspace-write' | 'danger-full-access';
+    /** Host self-configuration paths; absent means the host injected none (fail-closed fallback). */
+    readonly protectedPaths?: ToolProtectedPathData;
   }>;
 }
 

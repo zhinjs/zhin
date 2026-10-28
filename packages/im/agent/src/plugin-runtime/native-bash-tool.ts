@@ -7,6 +7,7 @@ import {
 } from '@zhin.js/tool';
 import { classifyBashCommand } from '../security/file-policy.js';
 import { Sandbox, type SandboxConfig } from '../security/sandbox.js';
+import { computeReadOnlyOverlays } from '../security/sandbox-mounts.js';
 
 export interface BashExecutionRequest {
   readonly command: string;
@@ -79,6 +80,13 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
     const access = filesystem.access;
     const unrestricted = request.policy.shell?.isolation === 'none';
 
+    // Mounts are the enforcement behind the policy layer's string detection (#1030 P0-c). A
+    // read-only mount needs none; danger-full-access has no container (documented residual risk).
+    const mountDir = request.cwd || filesystem.workingDirectory || filesystem.workspaceRoot;
+    const readOnlyOverlays = !unrestricted && access === 'workspace-write'
+      ? computeReadOnlyOverlays(mountDir, filesystem.protectedPaths)
+      : [];
+
     const sandbox = unrestricted
       ? new Sandbox({ ...this.#baseConfig, enabled: false })
       : new Sandbox({
@@ -88,6 +96,7 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
           enableNetwork: request.policy.network.enabled,
           filesystemAccess: access === 'read-only' ? 'read-only' : 'workspace-write',
           useDocker: 'always',
+          readOnlyOverlays,
         });
     const result = await sandbox.execute(request.command, {
       cwd: request.cwd,

@@ -17,6 +17,7 @@ import * as os from 'node:os';
 import * as fs from 'node:fs';
 import { matchHardBlockedCommand } from './exec-policy.js';
 import { executeInDocker, isDockerAvailable } from './sandbox-docker.js';
+import type { ReadOnlyOverlay } from './sandbox-mounts.js';
 
 // ── 资源限制包装 ────────────────────────────────────────────────────
 
@@ -117,6 +118,11 @@ export interface SandboxConfig {
   dockerImage?: string;
   /** Host workspace mount access when a container boundary is required. */
   filesystemAccess?: 'read-only' | 'workspace-write';
+  /**
+   * Paths bound read-only on top of a writable workspace mount (#1030 P0-c). Ignored for a
+   * read-only mount; see `sandbox-mounts.ts`.
+   */
+  readOnlyOverlays?: readonly ReadOnlyOverlay[];
 }
 
 const DEFAULT_CONFIG: SandboxConfig = {
