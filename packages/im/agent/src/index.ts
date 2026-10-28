@@ -443,6 +443,16 @@ export {
   type SelfChangePreview,
 } from './self-change/preview.js';
 export {
+  checkSelfChangeFiles,
+  runSelfChangeTrial,
+  type SelfChangeSyntaxCheck,
+  type SelfChangeTrialCheck,
+  type SelfChangeTrialCheckName,
+  type SelfChangeTrialFile,
+  type SelfChangeTrialOptions,
+  type SelfChangeTrialResult,
+} from './self-change/trial.js';
+export {
   AI_SESSION_EVENTS_TABLE,
   AI_SESSION_EVENT_MODEL,
   AiSessionEvents,

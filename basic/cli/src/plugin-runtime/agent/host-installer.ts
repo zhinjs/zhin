@@ -1,5 +1,6 @@
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
+import { createSelfChangeTrialOptions } from './self-change-trial.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -193,6 +194,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       })),
     });
     resources.provide(selfChangeStoreToken, selfChanges);
+    const selfChangeTrialOptions = createSelfChangeTrialOptions();
     lifecycle.add(selfChanges.startPruning());
     if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
     // G6 (#1013): IM approval channel for hard-gate cards; idle unless ai.agent.toolHardGate.imApproval.enabled.
@@ -244,7 +246,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       announcements: () => zhinAgent.getAnnouncements?.(),
       sessionEvents: () => zhinAgent.getSessionEvents?.(),
       groupRules: () => zhinAgent.getGroupRules?.(),
-      selfChanges: { store: () => selfChanges, impact: () => options.selfChangeImpact },
+      selfChanges: { store: () => selfChanges, impact: () => options.selfChangeImpact, trial: () => selfChangeTrialOptions },
     });
 
     const publicationCoordinator = new AgentHostPublicationCoordinator({
