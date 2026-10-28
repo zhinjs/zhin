@@ -60,7 +60,13 @@ export async function receiveOneBotLikeSideEvent(
       conversation: oneBotConversation(parts.scene_type, raw),
       name: composeSideEventName('notice', parts.scene_type, parts.sub_type),
       actor: senderFromId(actorId),
-      target: senderFromId(targetId),
+      target: senderFromId(
+        targetId,
+        // icqq/OneBot 入群通知携带新成员昵称；无则保持缺省（不在 core 内发起网络查询）
+        parts.sub_type === 'member_increase' && typeof raw.nickname === 'string' && raw.nickname.trim()
+          ? raw.nickname.trim()
+          : undefined,
+      ),
       timestamp: toMillis(raw.time),
       ...(raw.message_id != null
         ? { messageId: String(raw.message_id) }

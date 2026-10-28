@@ -76,5 +76,16 @@ describe('side-event normalize', () => {
     it('优先使用 flag', () => {
       expect(resolveSideEventDedupeKey({ flag: 'abc' }, 'request')).toBe('request:abc');
     });
+
+    it('同一群两个人入群（平台不给 time）键不同，不会互相去重', () => {
+      const a = resolveSideEventDedupeKey({ notice_type: 'group', sub_type: 'increase', group_id: 1048877509, user_id: 1001 }, 'notice');
+      const b = resolveSideEventDedupeKey({ notice_type: 'group', sub_type: 'increase', group_id: 1048877509, user_id: 1002 }, 'notice');
+      expect(a).not.toBe(b);
+    });
+
+    it('同一事件重复投递键相同', () => {
+      const raw = { time: 1700000000, notice_type: 'group', sub_type: 'decrease', group_id: 1, user_id: 2, operator_id: 3 };
+      expect(resolveSideEventDedupeKey(raw, 'notice')).toBe(resolveSideEventDedupeKey({ ...raw }, 'notice'));
+    });
   });
 });

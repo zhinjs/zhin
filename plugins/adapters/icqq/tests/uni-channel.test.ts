@@ -262,6 +262,26 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
     await endpoint.stop();
   });
 
+  it('带 name 的 mention 作为 at.text 显示名透传；无名则省略', async () => {
+    const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
+    await endpoint.start(new AbortController().signal);
+    endpoint.open();
+
+    await endpoint.send({
+      conversation: { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group', id: '100' },
+      payload: [
+        { type: 'mention', data: { target: '2', name: '小明' } },
+        { type: 'mention', data: { target: '3' } },
+      ],
+    });
+
+    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, [
+      { type: 'at', qq: 2, text: '@小明' },
+      { type: 'at', qq: 3 },
+    ]);
+    await endpoint.stop();
+  });
+
   it('image 的 canonical MediaRef（url/base64）映射为 ICQQ 原生图片元素', async () => {
     const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
     await endpoint.start(new AbortController().signal);

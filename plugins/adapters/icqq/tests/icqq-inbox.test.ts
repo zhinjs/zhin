@@ -10,6 +10,7 @@ import {
   buildIcqqInboxNoticeRow,
   buildIcqqInboxRequestRow,
   buildIcqqSystemRequestRow,
+  icqqNoticeDedupeKey,
   isIcqqNoticePayload,
   isIcqqRequestPayload,
 } from '../src/icqq-inbox.js';
@@ -74,6 +75,18 @@ describe('icqq inbox payload guards', () => {
     expect(isIcqqNoticePayload({ post_type: 'notice' })).toBe(true);
     expect(isIcqqNoticePayload({ post_type: 'notice.group' })).toBe(true);
     expect(isIcqqNoticePayload({ post_type: 'message' })).toBe(false);
+  });
+});
+
+describe('icqqNoticeDedupeKey', () => {
+  it('同一管理员先后拉两人进群（无 time）不撞键', () => {
+    const base = { post_type: 'notice', notice_type: 'group', sub_type: 'increase', group_id: 888, operator_id: 1 };
+    expect(icqqNoticeDedupeKey({ ...base, user_id: 2 })).not.toBe(icqqNoticeDedupeKey({ ...base, user_id: 3 }));
+  });
+
+  it('重复投递同一通知键相同', () => {
+    const raw = { post_type: 'notice', notice_type: 'group', sub_type: 'increase', group_id: 888, user_id: 2, time: 1 };
+    expect(icqqNoticeDedupeKey(raw)).toBe(icqqNoticeDedupeKey({ ...raw }));
   });
 });
 

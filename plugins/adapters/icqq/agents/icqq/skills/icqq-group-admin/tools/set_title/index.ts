@@ -1,4 +1,5 @@
 import { messages as t } from "../../../../messages.js";
+import { freshMember, isGroupManager } from "../../../../members.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; user_id: number; title: string; duration?: number }>({
@@ -14,10 +15,9 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   requiresApproval: 'always',
   async execute({ group_id, user_id, title, duration }, context) {
     const client = context.$client;
-    const selfInfo= client.pickMember(group_id,client.uin);
-    if(!selfInfo.is_admin && !selfInfo.is_owner) return { success: false, message: t(context.locale, 'titleForbidden') };
-    const memberInfo= client.pickMember(group_id,user_id);
-    if(!memberInfo) return { success: false, message: t(context.locale, 'memberMissing') };
+    const [self, member] = await Promise.all([freshMember(client, group_id, client.uin), freshMember(client, group_id, user_id)]);
+    if (!isGroupManager(self)) return { success: false, message: t(context.locale, 'titleForbidden') };
+    if (!member) return { success: false, message: t(context.locale, 'memberMissing') };
     await client.setGroupSpecialTitle(group_id, user_id, title, duration ?? -1);
     return { success: true, message: t(context.locale, 'titleChanged', { p0: user_id, p1: title }) };
   },

@@ -9,6 +9,9 @@ import forward from '../agents/icqq/skills/icqq-messages/tools/forward_messages/
 import ownRecall from '../agents/icqq/skills/icqq-messages/tools/recall_own_message/index.js';
 import memberRecall from '../agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.js';
 import leave from '../agents/icqq/skills/icqq-group-admin/tools/group_leave/index.js';
+import mute from '../agents/icqq/skills/icqq-group-admin/tools/set_mute/index.js';
+import invite from '../agents/icqq/skills/icqq-group-admin/tools/group_invite/index.js';
+import memberInfo from '../agents/icqq/skills/icqq-group-directory/tools/group_member_info/index.js';
 import type { IcqqToolContext } from '../agents/icqq/conversation.js';
 
 function fixture(kind: 'private' | 'group' | 'channel' = 'group') {
@@ -215,5 +218,50 @@ describe('ICQQ current conversation tools', () => {
     const f = fixture('channel');
     await expect(ownRecall.execute({ message_id: f.id }, f.ctx)).rejects.toThrow('channel');
     expect(f.client.getMsg).not.toHaveBeenCalled(); expect(f.client.deleteMsg).not.toHaveBeenCalled();
+  });
+});
+
+describe('group_member_info', () => {
+  it('returns a fresh, serializable member record', async () => {
+    const f = fixture();
+    f.client.getGroupMemberInfo.mockResolvedValue({ group_id: 100, user_id: 5, nickname: 'n', card: 'c', role: 'member' } as never);
+    const result = await memberInfo.execute({ group_id: 100, user_id: 5 }, f.ctx);
+    expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 5, true);
+    expect(JSON.parse(JSON.stringify(result))).toMatchObject({ success: true, member: { user_id: 5, nickname: 'n', card: 'c', role: 'member' } });
+  });
+
+  it('reports a missing member when the lookup fails', async () => {
+    const f = fixture();
+    f.client.getGroupMemberInfo.mockRejectedValue(new Error('not a member'));
+    expect(await memberInfo.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: false });
+  });
+});
+
+describe('group admin tools read fresh membership', () => {
+  it('set_mute trusts a just-granted admin role from a fresh lookup', async () => {
+    const f = fixture();
+    f.self.role = 'admin';
+    const setGroupBan = vi.fn(async () => true);
+    Object.assign(f.client, { setGroupBan });
+    expect(await mute.execute({ group_id: 100, user_id: 5, duration: 60 }, f.ctx)).toMatchObject({ success: true });
+    expect(f.client.getGroupMemberInfo).toHaveBeenCalledWith(100, 7, true);
+    expect(setGroupBan).toHaveBeenCalledWith(100, 5, 60);
+  });
+
+  it('group_invite invites someone who is not in the group', async () => {
+    const f = fixture();
+    f.client.getGroupMemberInfo.mockRejectedValue(new Error('not a member'));
+    const inviteFriend = vi.fn(async () => true);
+    Object.assign(f.client, { inviteFriend });
+    expect(await invite.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: true });
+    expect(inviteFriend).toHaveBeenCalledWith(100, 5);
+  });
+
+  it('group_invite refuses someone already in the group', async () => {
+    const f = fixture();
+    const inviteFriend = vi.fn(async () => true);
+    Object.assign(f.client, { inviteFriend });
+    expect(await invite.execute({ group_id: 100, user_id: 5 }, f.ctx)).toMatchObject({ success: false });
+    expect(inviteFriend).not.toHaveBeenCalled();
   });
 });

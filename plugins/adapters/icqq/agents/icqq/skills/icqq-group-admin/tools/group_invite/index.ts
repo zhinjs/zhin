@@ -1,4 +1,5 @@
 import { messages as t } from "../../../../messages.js";
+import { freshMember } from "../../../../members.js";
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 export default defineAgentTool<{ group_id: number; user_id: number }>({
@@ -14,8 +15,7 @@ export default defineAgentTool<{ group_id: number; user_id: number }>({
     const client = context.$client;
     const groupInfo= client.pickGroup(group_id);
     if(!groupInfo) return { success: false, message: t(context.locale, 'groupMissing') };
-    const memberInfo= client.pickMember(group_id,user_id);
-    if(memberInfo) return { success: false, message: t(context.locale, 'memberExists') };
+    if (await freshMember(client, group_id, user_id)) return { success: false, message: t(context.locale, 'memberExists') };
     await client.inviteFriend(group_id, user_id);
     return { success: true, message: t(context.locale, 'inviteAttempted', { p0: user_id, p1: group_id }) };
   },

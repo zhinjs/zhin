@@ -101,7 +101,9 @@ function sceneOf(signal: RuntimeSceneEventSignal): Scene | undefined {
 }
 
 function memberOf(actor: { readonly id: string; readonly displayName?: string }): WelcomeMember {
-  const name = actor.displayName?.trim();
+  const trimmed = actor.displayName?.trim();
+  // senderFromId 在没有昵称时回落为 id；id 当名字没有信息量，视为未知。
+  const name = trimmed && trimmed !== String(actor.id) ? trimmed : undefined;
   return Object.freeze({ id: String(actor.id), ...(name ? { name } : {}) });
 }
 

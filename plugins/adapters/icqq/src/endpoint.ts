@@ -39,6 +39,7 @@ import {
   type IcqqMessageEvent,
 } from './icqq-inbound.js';
 import {
+  icqqNoticeDedupeKey,
   isIcqqNoticePayload,
   isIcqqRequestPayload,
 } from './icqq-inbox.js';
@@ -823,6 +824,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
       channelType: normalized.channelType,
       channelId: normalized.channelId,
       channelParentGroupId: normalized.channelParentGroupId,
+      name: normalized.groupName,
     });
     const quoteId = resolveIcqqQuoteIdFromEvent(data);
     const quoted = messageLookupFromIcqqSource(findIcqqNestedMessageSource(data));
@@ -942,13 +944,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
 
   #onNoticeEvent(payload: Record<string, unknown> | null): void {
     if (!payload || !isIcqqNoticePayload(payload)) return;
-    const key = [
-      payload.time,
-      payload.operator_id ?? payload.user_id,
-      payload.notice_type ?? payload.type,
-      payload.sub_type,
-    ].join('_');
-    if (!this.#sideEventDeduper.shouldProcess(`notice:${key}`)) return;
+    if (!this.#sideEventDeduper.shouldProcess(icqqNoticeDedupeKey(payload))) return;
     this.#dispatchIcqqSideEvent(payload);
   }
 
