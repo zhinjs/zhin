@@ -169,7 +169,7 @@ function isMediaRecord(record: Record<string, unknown>): boolean {
     || (typeof record.mimeType === 'string' && /^(?:image|audio|video)\//.test(record.mimeType) && 'data' in record);
 }
 function omitMediaText(value: string): string {
-  const text = value.replace(/(?:data:[^\s,]*;base64,|base64:\/\/)[A-Za-z0-9+/_=-]+/gi, '[media omitted]');
+  const text = omitInlineMedia(value);
   // Tool results may arrive as JSON text rather than structured SDK parts.
   if (!/^[\s]*[\[{]/.test(text)) return text;
   let changed = false;
@@ -184,6 +184,42 @@ function omitMediaText(value: string): string {
     });
     return changed ? JSON.stringify(parsed) : text;
   } catch { return text; }
+}
+
+function omitInlineMedia(value: string): string {
+  const markers = /data:|base64:\/\//gi;
+  const headerBoundary = /[\s,]/g;
+  const payload = /[A-Za-z0-9+/_=-]+/y;
+  const parts: string[] = [];
+  let headerEnd = 0;
+  let headerPayloadEnd = 0;
+  let copiedUntil = 0;
+  let match: RegExpExecArray | null;
+  while ((match = markers.exec(value)) !== null) {
+    let mediaEnd: number;
+    if (match[0].toLowerCase() === 'data:') {
+      // Nested prefixes share both the header boundary and payload scan.
+      if (headerEnd < markers.lastIndex) {
+        headerBoundary.lastIndex = markers.lastIndex;
+        headerEnd = headerBoundary.exec(value)?.index ?? value.length;
+        payload.lastIndex = headerEnd + 1;
+        headerPayloadEnd = value[headerEnd] === ','
+          && value.slice(headerEnd - 7, headerEnd).toLowerCase() === ';base64'
+          && payload.test(value) ? payload.lastIndex : 0;
+      }
+      if (headerPayloadEnd === 0) continue;
+      mediaEnd = headerPayloadEnd;
+    } else {
+      payload.lastIndex = markers.lastIndex;
+      if (!payload.test(value)) continue;
+      mediaEnd = payload.lastIndex;
+    }
+    // Scan overlapping markers too: an outer payload can end in the next marker's "data".
+    if (match.index >= copiedUntil) parts.push(value.slice(copiedUntil, match.index), '[media omitted]');
+    copiedUntil = Math.max(copiedUntil, mediaEnd);
+  }
+  parts.push(value.slice(copiedUntil));
+  return parts.join('');
 }
 
 function freezeJson<T>(value: T): T {

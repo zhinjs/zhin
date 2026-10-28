@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { captureRequestBody, RequestBodyTooLargeError } from '../../src/trace/request-trace.js';
 import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
 
@@ -50,6 +51,41 @@ it('estimates original text rather than redacted text, and excludes media from t
   expect(redacted.estimated_tokens.basis).toBe('model_input_text');
   const image = (data: string) => captureRequestBody({ messages: [{ role: 'user', content: [{ type: 'image', image: data }] }] }, []);
   expect(image('x'.repeat(50000)).estimated_tokens).toEqual(image('x').estimated_tokens);
+});
+
+it.each([
+  ['data:'.repeat(20), 'data:'.repeat(20)],
+  ['data:broken,plain data:image/png;base64,YWJj', 'data:broken,plain [media omitted]'],
+  ['data:broken;base64, data:image/png;base64,YWJj', 'data:broken;base64, [media omitted]'],
+  ['data:broken;base64://YWJj', 'data:broken;[media omitted]'],
+  ['data:data:image/png;base64,YWJj', '[media omitted]'],
+  ['data:broken;base64,data:image/png;base64,YWJj', '[media omitted]'],
+  ['base64://data:image/png;base64,YWJj', '[media omitted]'],
+  ['data:;base64,base64://YWJj', '[media omitted]'],
+  ['base64://base64://YWJj', '[media omitted]'],
+  ['DATA:image/png;name=fixture:icon;BASE64,YWJj', '[media omitted]'],
+  ['before data:;base64,YWJj-_==,after base64://YWJj!', 'before [media omitted],after [media omitted]!'],
+])('preserves inline media redaction for %s', (input, expected) => {
+  expect(captureRequestBody({ messages: [{ role: 'tool', content: input }] }, []).body.messages[0]?.content).toBe(expected);
+});
+
+it('captures repeated malformed media prefixes without blocking on rescans', () => {
+  // A subprocess deadline can interrupt synchronous regex work; a Vitest timeout cannot.
+  const source = new URL('../../src/trace/request-trace.ts', import.meta.url).href;
+  const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', `
+    import { strict as assert } from 'node:assert';
+    import { captureRequestBody } from ${JSON.stringify(source)};
+    const prefix = 'data:'.repeat(80_000);
+    const input = prefix + ' data:image/png;base64,YWJj';
+    const captured = captureRequestBody({ messages: [{ role: 'tool', content: input }] }, []);
+    assert.equal(captured.body.messages[0].content, prefix + ' [media omitted]');
+    const nested = 'data:base64://x'.repeat(20_000) + ';base64,' + 'A'.repeat(80_000);
+    assert.equal(captureRequestBody({ messages: [{ role: 'tool', content: nested }] }, []).body.messages[0].content, '[media omitted]');
+    process.stdout.write('ok');
+  `], { encoding: 'utf8', timeout: 5_000 });
+  expect(result.error).toBeUndefined();
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toBe('ok');
 });
 
 it('bounds a captured body before retaining it and preserves the estimate on overflow', () => {
