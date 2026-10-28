@@ -14,7 +14,11 @@
  *
  * 切片 C2——§3.3 沙箱加载：静态检查通过后，按插件根把草稿交给宿主注入的 `sandboxLoad`（CLI 在一次性
  * 子进程里用只挂 IM 运行时、无适配器的试跑运行时装配草稿后的插件树），确认装配成功、草稿里的能力文件
- * 都被发现。未注入加载器时该阶段留在 `pendingStages`。插件自带测试（§3.2）在切片 C3。
+ * 都被发现。未注入加载器时该阶段留在 `pendingStages`。
+ *
+ * 切片 C3——§3.2 插件自带测试：沙箱加载通过后，同一插件根交给宿主注入的 `pluginTests`（CLI 在 P0-c
+ * 隔离容器里跑：项目依赖只读、草稿拷贝可写、无网络）。插件没有测试或本机没有隔离容器时记 `skipped`。
+ * 未注入时该阶段留在 `pendingStages`。
  */
 import { stripTypeScriptTypes } from 'node:module';
 import { parseSkillMarkdown } from '@zhin.js/skill';
@@ -32,7 +36,8 @@ export type SelfChangeTrialCheckName =
   | 'skill'
   | 'agent_manifest'
   | 'sandbox_load'
-  | 'capability_discovered';
+  | 'capability_discovered'
+  | 'plugin_tests';
 
 export interface SelfChangeTrialCheck {
   readonly check: SelfChangeTrialCheckName;
@@ -47,7 +52,7 @@ export interface SelfChangeTrialResult {
   /** 试跑所针对的内容摘要；审批时与 `content_hash` 对得上才算数。 */
   readonly contentHash: string;
   readonly checks: readonly SelfChangeTrialCheck[];
-  /** 本次没有执行的试跑阶段（插件测试在切片 C3；宿主未注入沙箱加载器时含 `sandbox_load`）。 */
+  /** 本次没有执行的试跑阶段（宿主未注入对应执行器的 `sandbox_load` / `plugin_tests`）。 */
   readonly pendingStages: readonly string[];
   readonly startedAt: number;
   readonly durationMs: number;
@@ -83,11 +88,25 @@ export interface SelfChangeSandboxLoadResult {
 /** 宿主注入的沙箱加载器：必须在宿主进程之外执行草稿代码，且不连接任何真实平台、不调用模型。 */
 export type SelfChangeSandboxLoader = (request: SelfChangeSandboxLoadRequest) => Promise<SelfChangeSandboxLoadResult>;
 
+/** 插件自带测试的结果：`skipped` 表示插件没有测试或本机无法在隔离容器里跑，原因写在 `message`。 */
+export interface SelfChangePluginTestResult {
+  readonly status: 'passed' | 'failed' | 'skipped';
+  readonly message?: string;
+}
+
+/**
+ * 宿主注入的插件测试执行器（§3.2）：必须在隔离容器里执行（项目只读、草稿拷贝可写、无网络），
+ * 不能在宿主进程或宿主 shell 里跑草稿代码。请求与沙箱加载同形。
+ */
+export type SelfChangePluginTestRunner = (request: SelfChangeSandboxLoadRequest) => Promise<SelfChangePluginTestResult>;
+
 export interface SelfChangeTrialOptions {
   /** `.tsx` / `.jsx` 的语法检查器（宿主注入）；缺省时这两类文件记 `skipped`。 */
   readonly jsxSyntax?: SelfChangeSyntaxCheck;
   /** §3.3 沙箱加载（宿主注入）；缺省时该阶段留在 `pendingStages`。 */
   readonly sandboxLoad?: SelfChangeSandboxLoader;
+  /** §3.2 插件自带测试（宿主注入）；缺省时该阶段留在 `pendingStages`。 */
+  readonly pluginTests?: SelfChangePluginTestRunner;
   /** 额外的本地插件根（相对项目根），与暂存区白名单同口径。 */
   readonly pluginRoots?: readonly string[];
   readonly now?: () => number;
@@ -243,6 +262,10 @@ export async function runSelfChangeTrial(
       const deletes = trialing.files.filter(entry => entry.op !== 'write').map(entry => entry.path);
       checks = Object.freeze([...checks, ...await sandboxLoadChecks(files, deletes, options.sandboxLoad, options.pluginRoots ?? [])]);
     }
+    if (options.pluginTests && !checks.some(check => check.status === 'failed')) {
+      const deletes = trialing.files.filter(entry => entry.op !== 'write').map(entry => entry.path);
+      checks = Object.freeze([...checks, ...await pluginTestChecks(files, deletes, options.pluginTests, options.pluginRoots ?? [])]);
+    }
   } catch (error) {
     checks = Object.freeze([]);
     crash = clipTrialMessage(`trial could not run: ${errorMessage(error)}`);
@@ -254,7 +277,10 @@ export async function runSelfChangeTrial(
     passed,
     contentHash: trialing.contentHash,
     checks,
-    pendingStages: Object.freeze(options.sandboxLoad ? ['plugin_tests'] : ['plugin_tests', 'sandbox_load']),
+    pendingStages: Object.freeze([
+      ...(options.pluginTests ? [] : ['plugin_tests']),
+      ...(options.sandboxLoad ? [] : ['sandbox_load']),
+    ]),
     startedAt,
     durationMs: Math.max(0, now() - startedAt),
   });
@@ -281,20 +307,8 @@ async function sandboxLoadChecks(
   load: SelfChangeSandboxLoader,
   pluginRoots: readonly string[],
 ): Promise<readonly SelfChangeTrialCheck[]> {
-  const groups = new Map<string, { writes: SelfChangeTrialFile[]; deletes: string[]; loads: boolean }>();
-  const group = (target: string) => {
-    const { root, local } = splitPluginRoot(target, pluginRoots);
-    let entry = groups.get(root);
-    if (!entry) groups.set(root, entry = { writes: [], deletes: [], loads: false });
-    if (CHANGE_CONVENTION_DIRS.includes(local.split('/')[0]!.toLowerCase())) entry.loads = true;
-    return entry;
-  };
-  for (const file of writes) group(file.path).writes.push(file);
-  for (const target of deletes) group(target).deletes.push(target);
-
   const checks: SelfChangeTrialCheck[] = [];
-  for (const [pluginRoot, entry] of [...groups].sort(([left], [right]) => left.localeCompare(right))) {
-    if (!entry.loads) continue;
+  for (const [pluginRoot, entry] of groupByPluginRoot(writes, deletes, pluginRoots)) {
     const label = pluginRoot || '.';
     let result: SelfChangeSandboxLoadResult;
     try {
@@ -323,6 +337,50 @@ async function sandboxLoadChecks(
     }
   }
   return checks;
+}
+
+/**
+ * §3.2：沙箱加载通过后，对改到约定目录的每个插件根跑一次插件自带测试。执行器自身出错按失败记
+ * （不能借执行器崩溃绕过测试）。
+ */
+async function pluginTestChecks(
+  writes: readonly SelfChangeTrialFile[],
+  deletes: readonly string[],
+  run: SelfChangePluginTestRunner,
+  pluginRoots: readonly string[],
+): Promise<readonly SelfChangeTrialCheck[]> {
+  const checks: SelfChangeTrialCheck[] = [];
+  for (const [pluginRoot, entry] of groupByPluginRoot(writes, deletes, pluginRoots)) {
+    let result: SelfChangePluginTestResult;
+    try {
+      result = await run(Object.freeze({ pluginRoot, writes: Object.freeze(entry.writes), deletes: Object.freeze(entry.deletes) }));
+    } catch (error) {
+      result = { status: 'failed', message: `plugin tests could not run: ${errorMessage(error)}` };
+    }
+    checks.push(trialCheck('plugin_tests', pluginRoot || '.', result.status, result.message));
+  }
+  return checks;
+}
+
+/** 按插件根分组，只保留改到约定目录（插件代码、Skill、Agent）的根；按根路径排序。 */
+function groupByPluginRoot(
+  writes: readonly SelfChangeTrialFile[],
+  deletes: readonly string[],
+  pluginRoots: readonly string[],
+): [string, { writes: SelfChangeTrialFile[]; deletes: string[] }][] {
+  const groups = new Map<string, { writes: SelfChangeTrialFile[]; deletes: string[]; loads: boolean }>();
+  const group = (target: string) => {
+    const { root, local } = splitPluginRoot(target, pluginRoots);
+    let entry = groups.get(root);
+    if (!entry) groups.set(root, entry = { writes: [], deletes: [], loads: false });
+    if (CHANGE_CONVENTION_DIRS.includes(local.split('/')[0]!.toLowerCase())) entry.loads = true;
+    return entry;
+  };
+  for (const file of writes) group(file.path).writes.push(file);
+  for (const target of deletes) group(target).deletes.push(target);
+  return [...groups]
+    .filter(([, entry]) => entry.loads)
+    .sort(([left], [right]) => left.localeCompare(right));
 }
 
 function trialCheck(check: SelfChangeTrialCheckName, target: string, status: SelfChangeTrialCheck['status'], message?: string): SelfChangeTrialCheck {

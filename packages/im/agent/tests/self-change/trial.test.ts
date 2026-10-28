@@ -287,6 +287,102 @@ describe('runSelfChangeTrial', () => {
     });
   });
 
+  describe('plugin tests (§3.2)', () => {
+    const loaded: SelfChangeSandboxLoader = async request => ({
+      status: 'passed',
+      capabilities: request.writes.map(file => ({ feature: 'zhin.command', localName: 'x', source: file.path.replace(/^plugins\/weather\//u, '') })),
+    });
+
+    it('runs the plugin tests after a passed load and records the result', async () => {
+      const changes = await store();
+      const draft = await changes.draft({ origin, files: [
+        { path: 'commands/ping/index.ts', content: command },
+        { path: 'commands/old/index.ts', delete: true },
+      ] });
+      const seen: SelfChangeSandboxLoadRequest[] = [];
+      const ready = await runSelfChangeTrial(changes, draft.id, {
+        sandboxLoad: loaded,
+        pluginTests: async request => {
+          seen.push(request);
+          return { status: 'passed' };
+        },
+      });
+      expect(ready.status).toBe('ready');
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({ pluginRoot: '', deletes: ['commands/old/index.ts'] });
+      const trial = ready.trial as SelfChangeTrialResult;
+      expect(trial.pendingStages).toEqual([]);
+      expect(trial.checks.at(-1)).toEqual({ check: 'plugin_tests', path: '.', status: 'passed' });
+    });
+
+    it('fails the trial when the tests fail or the runner throws', async () => {
+      const changes = await store();
+      const first = await changes.draft({ origin, files: [{ path: 'commands/ping/index.ts', content: command }] });
+      const failed = await runSelfChangeTrial(changes, first.id, {
+        sandboxLoad: loaded,
+        pluginTests: async () => ({ status: 'failed', message: 'FAIL tests/ping.test.ts > replies pong' }),
+      });
+      expect(failed).toMatchObject({ status: 'trial_failed', error: '. [plugin_tests]: FAIL tests/ping.test.ts > replies pong' });
+      expect(readdirSync(join(project, '.zhin', 'changes', first.id))).toEqual(['change.json']);
+
+      const second = await changes.draft({ origin, files: [{ path: 'commands/pong/index.ts', content: command }] });
+      const crashed = await runSelfChangeTrial(changes, second.id, {
+        sandboxLoad: loaded,
+        pluginTests: async () => { throw new Error('docker: not found'); },
+      });
+      expect(crashed.status).toBe('trial_failed');
+      expect(crashed.error).toContain('plugin tests could not run: docker: not found');
+    });
+
+    it('records skipped tests without failing; does not run tests when loading failed or nothing loadable changed', async () => {
+      const changes = await store();
+      const draft = await changes.draft({ origin, files: [{ path: 'commands/ping/index.ts', content: command }] });
+      const ready = await runSelfChangeTrial(changes, draft.id, {
+        sandboxLoad: loaded,
+        pluginTests: async () => ({ status: 'skipped', message: 'the plugin has no tests' }),
+      });
+      expect(ready.status).toBe('ready');
+      expect((ready.trial as SelfChangeTrialResult).checks.at(-1)).toEqual({ check: 'plugin_tests', path: '.', status: 'skipped', message: 'the plugin has no tests' });
+
+      const seen: SelfChangeSandboxLoadRequest[] = [];
+      const run = async (request: SelfChangeSandboxLoadRequest) => {
+        seen.push(request);
+        return { status: 'passed' as const };
+      };
+      const broken = await changes.draft({ origin, files: [{ path: 'commands/x/index.ts', content: command }] });
+      await runSelfChangeTrial(changes, broken.id, { sandboxLoad: async () => ({ status: 'failed', message: 'boom' }), pluginTests: run });
+      const docs = await changes.draft({ origin, files: [{ path: 'AGENTS.md', content: '# rules\n' }] });
+      const docsReady = await runSelfChangeTrial(changes, docs.id, { sandboxLoad: loaded, pluginTests: run });
+      expect(seen).toEqual([]);
+      expect(docsReady.status).toBe('ready');
+    });
+
+    it('runs tests per local plugin root, also without a sandbox loader', async () => {
+      const changes = new SelfChangeStore({
+        root: join(project, '.zhin', 'changes'),
+        projectRoot: project,
+        protectedPaths: await createHostProtectedPaths({ projectRoot: project }),
+        pluginRoots: ['plugins/weather'],
+        now: () => 1_000,
+      });
+      const draft = await changes.draft({ origin, files: [
+        { path: 'plugins/weather/commands/now/index.ts', content: command },
+        { path: 'commands/ping/index.ts', content: command },
+      ] });
+      const roots: string[] = [];
+      const ready = await runSelfChangeTrial(changes, draft.id, {
+        pluginRoots: ['plugins/weather'],
+        pluginTests: async request => {
+          roots.push(request.pluginRoot);
+          return { status: 'passed' };
+        },
+      });
+      expect(ready.status).toBe('ready');
+      expect(roots).toEqual(['', 'plugins/weather']);
+      expect((ready.trial as SelfChangeTrialResult).pendingStages).toEqual(['sandbox_load']);
+    });
+  });
+
   it('only trials drafts', async () => {
     const changes = await store();
     const draft = await changes.draft({ origin, files: [{ path: 'commands/ping.ts', content: command }] });

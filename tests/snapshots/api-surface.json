@@ -117,7 +117,7 @@
     "export{capabilitySeamToken}from './seam/index.js';",
     "export{chatFailureLine,chatFailureKindOf}from './outbound/chat-failure.js';",
     "export{checkExecPolicy,applyExecPolicyToTools,resolveExecAllowlist,EXEC_PRESETS,isDangerousCommand,stripEnvVarPrefix,stripSafeWrappers,splitCompoundCommand,extractCommandName,type ExecPolicyResult,}from './security/exec-policy.js';",
-    "export{checkSelfChangeFiles,runSelfChangeTrial,type SelfChangeSyntaxCheck,type SelfChangeSandboxCapability,type SelfChangeSandboxLoader,type SelfChangeSandboxLoadRequest,type SelfChangeSandboxLoadResult,type SelfChangeTrialCheck,type SelfChangeTrialCheckName,type SelfChangeTrialFile,type SelfChangeTrialOptions,type SelfChangeTrialResult,}from './self-change/trial.js';",
+    "export{checkSelfChangeFiles,runSelfChangeTrial,type SelfChangePluginTestResult,type SelfChangePluginTestRunner,type SelfChangeSyntaxCheck,type SelfChangeSandboxCapability,type SelfChangeSandboxLoader,type SelfChangeSandboxLoadRequest,type SelfChangeSandboxLoadResult,type SelfChangeTrialCheck,type SelfChangeTrialCheckName,type SelfChangeTrialFile,type SelfChangeTrialOptions,type SelfChangeTrialResult,}from './self-change/trial.js';",
     "export{classifyHostPath,createHostProtectedPaths,hostProtectedPathsToken,type HostProtectedPaths,type HostProtectedPathsInput,}from './security/host-config-paths.js';",
     "export{createAIHookBusPayload,isAISessionNewPayload,isAISessionCompactPayload,}from './ai-event-bus.js';",
     "export{createAgentSession}from './create-agent-session.js';",

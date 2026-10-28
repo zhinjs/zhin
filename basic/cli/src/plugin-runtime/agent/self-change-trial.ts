@@ -1,13 +1,19 @@
 import type { SelfChangeSyntaxCheck, SelfChangeTrialOptions } from '@zhin.js/agent';
+import { createSelfChangePluginTestRunner } from './self-change-plugin-tests.js';
 import { createSelfChangeSandboxLoader } from './self-change-sandbox.js';
 
 /**
  * ADR 0040 §3: `.tsx` / `.jsx` drafts are loaded by the tsx loader (esbuild), so the trial checks
  * their syntax with the same transformer (in memory; esbuild is loaded on first use). §3.3 loads
- * the drafted plugin tree in a child-process trial runtime (`self-change-sandbox.ts`).
+ * the drafted plugin tree in a child-process trial runtime (`self-change-sandbox.ts`); §3.2 runs the
+ * plugin's own tests in an isolated container (`self-change-plugin-tests.ts`).
  */
 export function createSelfChangeTrialOptions(projectRoot: string): SelfChangeTrialOptions {
-  return Object.freeze({ jsxSyntax: esbuildJsxSyntax, sandboxLoad: createSelfChangeSandboxLoader({ projectRoot }) });
+  return Object.freeze({
+    jsxSyntax: esbuildJsxSyntax,
+    sandboxLoad: createSelfChangeSandboxLoader({ projectRoot }),
+    pluginTests: createSelfChangePluginTestRunner({ projectRoot }),
+  });
 }
 
 let esbuild: Promise<typeof import('esbuild')> | undefined;

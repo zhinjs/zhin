@@ -445,6 +445,8 @@ export {
 export {
   checkSelfChangeFiles,
   runSelfChangeTrial,
+  type SelfChangePluginTestResult,
+  type SelfChangePluginTestRunner,
   type SelfChangeSyntaxCheck,
   type SelfChangeSandboxCapability,
   type SelfChangeSandboxLoader,
