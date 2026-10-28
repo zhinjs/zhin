@@ -1,0 +1,26 @@
+packages/im/agent/src/trace/request-trace.ts
+  s_12b1e02705543f::t_979931315a4134 195,199,201-203,205-208,210-215,217-219
+  s_12b1e02705543f::t_2075f0f398a0e5 172,189-194,196-198,200,204,209,216,220-222
+  s_12b1e02705543f::t_176d74986bd7c1 223-224
+packages/im/agent/tests/trace/request-trace.test.ts
+  s_12b1e02705543f::t_5549a1908e8fba 62-65
+  s_12b1e02705543f::t_507643bdf7750a 1,56-61,66-81,84-89
+  s_12b1e02705543f::t_979931315a4134 82-83
+  s_12b1e02705543f::t_f6c8a5c51448ae 90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ea8bf6fabcaf86faabcc249449aec4d9fc246cd8",
+  "prompts": {},
+  "sessions": {
+    "s_12b1e02705543f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18193-fbf7-76b3-b33e-f286cdc167c7",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
