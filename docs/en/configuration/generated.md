@@ -148,6 +148,11 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | no | — | supersede (default): a sender's new message replaces their own unanswered turn; fifo: every message waits in arrival order. Other members' messages always queue. |
 | `ai.agent.inboundQueue.ttlMs` | integer | no | `180000` | A queued turn that waited longer than this is dropped with a short notice. 0 disables expiry. |
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | no | `5` | Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply. |
+| `ai.agent.inboundQueue.merge` | object | no | — | Group merge window (ADR 0038): mentions from several members within a short window get one combined reply. Private chats, the master, commands, stop words and messages with media, quotes or forwards never merge. |
+| `ai.agent.inboundQueue.merge.enabled` | boolean | no | `false` | Turn the group merge window on. Off by default until merged turns narrow permissions per sender. |
+| `ai.agent.inboundQueue.merge.quietMs` | integer | no | `1500` | The window is answered once no new message joined it for this long. |
+| `ai.agent.inboundQueue.merge.maxWaitMs` | integer | no | `6000` | The window is answered at the latest this long after its first message. |
+| `ai.agent.inboundQueue.merge.maxSenders` | integer | no | `5` | Senders one merged reply covers; further senders wait for the next window. |
 | `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | no | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | no | — | Shell command security boundary. |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | no | — | Command allowlist preset used outside full mode. |

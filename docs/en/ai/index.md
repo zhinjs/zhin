@@ -428,6 +428,11 @@ ai:
       groupMode: supersede        # default: a sender's new message replaces their own unanswered turn; fifo queues everything
       maxQueuedTurns: 5           # queued turns allowed per conversation
       ttlMs: 180000               # queue timeout
+      merge:                      # group merge window (ADR 0038), off by default
+        enabled: false
+        quietMs: 1500             # flush after this much quiet
+        maxWaitMs: 6000           # longest a window waits
+        maxSenders: 5             # senders per merged reply
 ```
 
 **Command allowlists**: `execPreset` widens step by step — `readonly` (ls, cat, grep, find…) → `network` (adds curl, wget, ping…) → `development` (adds npm, node, git, python…). In every mode, dangerous commands such as `sudo`, `eval`, `dd` and `export` are refused, and operations like `rm -rf node_modules` are hard-blocked.

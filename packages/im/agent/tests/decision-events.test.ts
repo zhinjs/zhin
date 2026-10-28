@@ -129,6 +129,16 @@ describe('reason_code registry', () => {
     const start = DECISION_REASON_CODES.indexOf('schedule_event_created');
     expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('cold_field_mention_only_cleared'));
     expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
+  });
+
+  it('appends the ADR 0038 merge codes after the ADR 0037 slice D codes', () => {
+    const slice = [
+      'merge_window_joined', 'merge_window_flushed', 'merge_reply_stale_discarded', 'merge_reply_stale_sent',
+      'merge_on_behalf_denied', 'danmaku_window_picked', 'hard_gate_scene_pending_cap',
+    ];
+    const start = DECISION_REASON_CODES.indexOf('merge_window_joined');
+    expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('schedule_wake_merged'));
+    expect(DECISION_REASON_CODES.slice(start, start + slice.length)).toEqual(slice);
     expect(DECISION_REASON_CODES.slice(-slice.length)).toEqual(slice);
   });
 

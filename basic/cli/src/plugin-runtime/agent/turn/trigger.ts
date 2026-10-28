@@ -2,6 +2,7 @@ import type { AITriggerConfig } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core/runtime';
 import type { AgentCapabilities } from '@zhin.js/agent/runtime';
 import { chatFailureLine } from '@zhin.js/agent';
+import { isCancelIntent } from '@zhin.js/agent/turn';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import type { WorkroomTurnContinuation } from '../workroom-port.js';
 
@@ -92,6 +93,30 @@ export function hasIgnoredTriggerPrefix(text: string, trigger: AITriggerConfig |
     ? trigger.ignorePrefixes
     : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
   return ignorePrefixes.some(prefix => prefix && text.startsWith(prefix));
+}
+
+/**
+ * ADR 0038 §1: may this addressed message join a group merge window? Only
+ * plain-text group / channel messages from non-master senders that are not a
+ * trigger-prefix command or a stop word. Everything else keeps its own turn.
+ */
+export function isMergeableGroupTurn(input: Readonly<{
+  message: Message;
+  trigger: AITriggerConfig | undefined;
+  plainText: boolean;
+  isMaster: boolean;
+  /** Addressed content after trigger stripping. */
+  content: string;
+}>): boolean {
+  const kind = input.message.conversation.kind;
+  if (kind !== 'group' && kind !== 'channel') return false;
+  if (!input.plainText || input.isMaster) return false;
+  if (isCancelIntent(input.content)) return false;
+  const text = input.message.content.trim();
+  const prefixes = input.trigger?.prefixes?.length ? input.trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
+  if (prefixes.some((prefix) => prefix && text.startsWith(prefix))) return false;
+  if (input.message.commandPrefix && text.startsWith(input.message.commandPrefix)) return false;
+  return !/^[/#]/u.test(input.content.trim());
 }
 
 export function matchAiTrigger(
