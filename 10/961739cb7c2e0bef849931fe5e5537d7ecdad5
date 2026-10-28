@@ -1,0 +1,41 @@
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_b38ca7c4740ca4::t_e23ca3cb940b48 22,32,935-945,1181-1184,1371-1383,1389-1392,1394
+packages/im/agent/tests/turn/stale-reply.test.ts
+  s_b38ca7c4740ca4::t_dc8497509e0f21 1-22
+packages/im/agent/src/turn/turn-admission-gate.ts
+  s_b38ca7c4740ca4::t_3f246c4a407b78 24-29,122-131,147-153,189,196-202,208-212,330,354,424,471-474,477,483-486,504-505,515-530,569-594
+  s_b38ca7c4740ca4::t_7688dfddc3c41e 595
+.changeset/adr-0038-slice-d-stale-reply.md
+  s_b38ca7c4740ca4::t_eb994db90a58dd 1-6
+docs/en/ai/agent.md
+  s_b38ca7c4740ca4::t_eb994db90a58dd 83
+packages/im/agent/src/turn/index.ts
+  s_b38ca7c4740ca4::t_3f246c4a407b78 172
+  s_b38ca7c4740ca4::t_462b10b8646cf8 156
+docs/ai/agent.md
+  s_b38ca7c4740ca4::t_eb994db90a58dd 83
+packages/im/agent/src/turn/stale-reply.ts
+  s_b38ca7c4740ca4::t_e23ca3cb940b48 6,17
+  s_b38ca7c4740ca4::t_462b10b8646cf8 1-5,7-16,18-24
+packages/im/agent/tests/turn/turn-admission-gate.test.ts
+  s_b38ca7c4740ca4::t_dc8497509e0f21 475-612
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_b38ca7c4740ca4::t_eb994db90a58dd 10,260-267
+  s_b38ca7c4740ca4::t_72ac3048e50d85 268-269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "10961739cb7c2e0bef849931fe5e5537d7ecdad5",
+  "prompts": {},
+  "sessions": {
+    "s_b38ca7c4740ca4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd2e8341-d9ca-4477-9ab7-99474324dda8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
