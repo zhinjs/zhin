@@ -1,6 +1,7 @@
 import {
   NativeDevelopmentModuleRuntime,
   RootRuntime,
+  type HmrCoordinator,
   type EnvironmentLayers,
   type EnvironmentLayersPort,
   type InvalidationPlan,
@@ -59,6 +60,9 @@ export class RootHost {
   readonly #onReload?: RootHostOptions['onReload'];
   readonly #stopGenerationObservation: () => void;
   #stopHmr?: Dispose;
+  #hmr?: HmrCoordinator;
+  /** The HMR path has asked for a process restart (it never reloads again in this process). */
+  #restartPending = false;
   #started = false;
   #stopPromise?: Promise<void>;
 
@@ -100,15 +104,7 @@ export class RootHost {
     this.#started = true;
     try {
       const snapshot = await this.runtime.start();
-      if (this.#watch) {
-        this.#stopHmr = this.runtime.createHmrCoordinator({
-          onRestartRequired: this.#onRestartRequired,
-          onError: this.#onError,
-          onPlan: this.#onPlan,
-          onReload: (plan, durationMs) =>
-            this.#onReload?.(plan, this.runtime.snapshot.generation, durationMs),
-        }).start();
-      }
+      if (this.#watch) this.#startHmr();
       return describeSnapshot(snapshot);
     } catch (error) {
       await this.runtime.stop().catch(() => undefined);
@@ -116,11 +112,48 @@ export class RootHost {
     }
   }
 
+  /**
+   * ADR 0040 §5: reload explicitly written sources through the same HMR path as file watching
+   * (module invalidation + `InvalidationPlanner`), also under `--no-watch`. Returns `restart` when the
+   * change needs a process restart; the restart itself stays with `onRestartRequired` / the caller.
+   */
+  async reloadSources(sources: readonly string[]): Promise<'reloaded' | 'restart'> {
+    if (!this.#started) throw new Error('RootHost is not started');
+    if (this.#stopPromise) throw new Error('RootHost is stopping');
+    if (this.#restartPending) return 'restart';
+    const hmr = this.#hmr ?? this.#startHmr();
+    try {
+      await Promise.all(sources.map(source => hmr.enqueue(source)));
+    } catch (error) {
+      if (this.#restartPending) return 'restart';
+      throw error;
+    }
+    return this.#restartPending ? 'restart' : 'reloaded';
+  }
+
+  #startHmr(): HmrCoordinator {
+    const hmr = this.runtime.createHmrCoordinator({
+      onRestartRequired: (plan) => {
+        this.#restartPending = true;
+        return this.#onRestartRequired(plan);
+      },
+      onError: this.#onError,
+      onPlan: this.#onPlan,
+      onReload: (plan, durationMs) =>
+        this.#onReload?.(plan, this.runtime.snapshot.generation, durationMs),
+    });
+    // Without `watch` the module runtime's watcher is a no-op; the coordinator only serves reloadSources().
+    this.#stopHmr = hmr.start();
+    this.#hmr = hmr;
+    return hmr;
+  }
+
   stop(): Promise<void> {
     if (this.#stopPromise) return this.#stopPromise;
     this.#stopPromise = (async () => {
       await this.#stopHmr?.();
       this.#stopHmr = undefined;
+      this.#hmr = undefined;
       try {
         if (this.#started) await this.runtime.stop();
       } finally {

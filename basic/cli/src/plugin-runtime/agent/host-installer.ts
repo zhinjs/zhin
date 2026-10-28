@@ -1,6 +1,7 @@
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
+import { createSelfChangeGenerationPorts } from './self-change-report.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -21,6 +22,7 @@ import {
   type AssistantConfig,
   type ApprovalPort,
   hostProtectedPathsToken,
+  SelfChangeApplier,
   SelfChangeApprovals,
   SelfChangeStore,
   selfChangeStoreToken,
@@ -78,6 +80,8 @@ export interface InstallAgentHostOptions {
   readonly toolApprovals?: import('../console/tool-approvals.js').HostToolApprovals;
   /** Process-owned Console surface for self-change approval (ADR 0040 §4). */
   readonly selfChanges?: import('../console/self-changes.js').HostSelfChanges;
+  /** Process-owned host side of self-change apply / recover (ADR 0040 §5 / §6). Absent: approved changes wait. */
+  readonly selfChangeApply?: import('../self-change-apply.js').HostSelfChangeApply;
   /** Root-private self-delivery authentication/integration configuration. Never accepts model-supplied policy. */
   readonly selfDelivery?: SelfDeliveryHostConfiguration;
   /**
@@ -202,14 +206,42 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const selfChangeTrialOptions = createSelfChangeTrialOptions(options.projectRoot);
     lifecycle.add(selfChanges.startPruning());
     if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
+    // ADR 0040 §5 / §6: approved changes are applied by the process-owned host (reload / exit 75 / health),
+    // reported through this generation's IM and control plane; the newest generation's applier is the bound one.
+    const selfChangeApplyHost = options.selfChangeApply;
+    const reportSelfChangeError = (op: string) => (error: unknown) => logger.warn(formatCompact({
+      op,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    if (selfChangeApplyHost) {
+      const applier = new SelfChangeApplier({
+        store: selfChanges,
+        projectRoot: options.projectRoot,
+        protectedPaths: hostProtectedPaths,
+        ports: selfChangeApplyHost.ports(createSelfChangeGenerationPorts({
+          send: (target, text) => options.im.endpoints.send({
+            adapter: target.adapter,
+            endpointKey: target.endpointKey,
+            conversation: target.conversation,
+            content: text,
+          }),
+          resolveOwner: options.resolveEndpointOwner,
+          control: () => zhinAgent.controlPlane,
+          onError: reportSelfChangeError('self_change_report_failed'),
+        })),
+        onError: reportSelfChangeError('self_change_apply_failed'),
+      });
+      lifecycle.add(selfChangeApplyHost.bind(applier, async () =>
+        (await selfChanges.list()).filter(record => record.status === 'approved').map(record => record.id)));
+    }
     // ADR 0040 §4: ready changes go to the same approval queue as hard-gate cards (category `self`, humanOnly).
     const selfChangeApprovals = new SelfChangeApprovals({
       store: selfChanges,
       queue: zhinAgent.toolApprovals,
-      onError: error => logger.warn(formatCompact({
-        op: 'self_change_approval_failed',
-        error: error instanceof Error ? error.message : String(error),
-      })),
+      onError: reportSelfChangeError('self_change_approval_failed'),
+      ...(selfChangeApplyHost
+        ? { onApproved: (record: { readonly id: string }) => selfChangeApplyHost.apply(record.id, reportSelfChangeError('self_change_apply_failed')) }
+        : {}),
     });
     lifecycle.add(() => selfChangeApprovals.dispose());
     if (options.selfChanges) lifecycle.add(options.selfChanges.bind(selfChanges, selfChangeApprovals));
