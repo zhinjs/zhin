@@ -145,6 +145,7 @@ async function runSubagentTurn(
       skills: Object.freeze([]),
     }),
     signal: parentTurn.signal,
+    hostProtectedPaths: parentTurn.hostProtectedPaths,
     ports: Object.freeze({
       // Child tool events land in the parent's journal for one audit trail.
       journal: createScopedTraceJournal(parentTurn.ports.journal, { turnId, sessionKey }),

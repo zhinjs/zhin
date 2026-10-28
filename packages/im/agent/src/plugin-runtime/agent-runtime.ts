@@ -1,4 +1,5 @@
 import type { TurnEvent } from '../event/turn-event.js';
+import { hostProtectedPathsToken, type HostProtectedPaths } from '../security/host-config-paths.js';
 import { AgentUsageCollector, agentUsageStoreToken, type AgentUsageStore } from '../usage/usage-store.js';
 import { getLogger } from '@zhin.js/logger';
 import { logTurnUsage, type UsageLogContext } from '../trace/turn-usage-log.js';
@@ -506,6 +507,7 @@ function createIngressTurn(
   const observed = usage ? { append(event: TurnEvent) { usage.record(event); return traced.append(event); } } : traced;
   return createTurnIngress({
     ...request,
+    hostProtectedPaths: resolveHostProtectedPaths(snapshot),
     identity: {
       rootId: String(snapshot.root),
       generation: snapshot.generation,
@@ -523,6 +525,13 @@ function createIngressTurn(
       }),
     },
   });
+}
+
+/** The generation's host-protected paths; absent for embedders, which keeps the fail-closed fallback. */
+function resolveHostProtectedPaths(
+  snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot,
+): HostProtectedPaths | undefined {
+  return snapshot.resources.get(snapshot.root)?.get(hostProtectedPathsToken.id) as HostProtectedPaths | undefined;
 }
 
 function resolveJournalStore(snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot): JournalStore {

@@ -21,10 +21,11 @@ import {
   resolveToolHardGate,
   resolveToolHardGateImApproval,
   toolLocalName,
+  type ToolHardGateControlView,
 } from '../../src/security/tool-hard-gate.js';
 import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
+import { createHostProtectedPaths } from '../../src/security/host-config-paths.js';
 import { OpsCooldown } from '../../src/security/ops-cooldown.js';
-import type { ToolHardGateControlView } from '../../src/security/tool-hard-gate.js';
 import { AiControlPlane, type ControlStateModel } from '../../src/control-plane.js';
 import { hostControlPlaneSource } from '../../src/security/host-control-plane.js';
 
@@ -716,7 +717,7 @@ describe('self: writing the host configuration (#1030 P0)', () => {
     expect(assessToolInvocation({ name: 'write_file' }, { file_path: '/ws/zhin.config.yml' }))
       .toEqual({ risk: 'dangerous', category: 'self', source: 'invocation', target: '/ws/zhin.config.yml' });
     expect(assessToolInvocation({ name: 'write_file' }, { file_path: '/ws/notes.md' })).toMatchObject({ risk: 'safe' });
-    expect(assessToolInvocation({ name: 'write_file', risk: 'safe' }, { file_path: '/ws/.env' }).category).toBe('self');
+    expect(assessToolInvocation({ name: 'write_file', risk: 'safe' }, { file_path: '/ws/package.json' }).category).toBe('self');
     expect(assessToolInvocation({ name: 'write_file' }, undefined)).toMatchObject({ risk: 'safe' });
   });
 
@@ -743,6 +744,68 @@ describe('self: writing the host configuration (#1030 P0)', () => {
     await expect(hardGate.check({ name: 'write_file' }, { file_path: '/ws/notes.md', content: 'hi' }, 'tu-1'))
       .resolves.toMatchObject({ status: 'safe' });
     expect(port.requests).toHaveLength(0);
+  });
+});
+
+describe('self vs denied host paths, anchored to the project root (#1030 P0)', () => {
+  async function anchoredGate(approval: ApprovalOutcomePort) {
+    const audit = auditSink();
+    const queue = new ToolApprovalQueue();
+    const protectedPaths = await createHostProtectedPaths({ projectRoot: '/proj-1030' });
+    const hardGate = new ToolHardGate(undefined, {
+      turnId: 'turn-a',
+      sessionKey: 'icqq:bot:private:owner',
+      signal: new AbortController().signal,
+      location: { instanceId: '*', platform: 'icqq', sceneId: 'private:owner' },
+      audit,
+      queue,
+      approval,
+      protectedPaths,
+    });
+    return { hardGate, audit, queue, protectedPaths };
+  }
+
+  it('classifies only root-anchored B paths as self, A paths as denied, the rest as safe', async () => {
+    const { protectedPaths: p } = await anchoredGate(scriptedPort([]));
+    const assess = (file: string) => assessToolInvocation({ name: 'write_file' }, { file_path: file }, undefined, p);
+    expect(assess('/proj-1030/package.json')).toMatchObject({ risk: 'dangerous', category: 'self' });
+    expect(assess('/proj-1030/AGENTS.md')).toMatchObject({ category: 'self' });
+    expect(assess('/proj-1030/skills/a/SKILL.md')).toMatchObject({ category: 'self' });
+    expect(assess('/proj-1030/plugins/x/package.json')).toMatchObject({ risk: 'safe' });
+    expect(assess('/proj-1030/pnpm-workspace.yaml')).toMatchObject({ risk: 'safe' });
+    expect(assess('/proj-1030/tsconfig.json')).toMatchObject({ risk: 'safe' });
+    expect(assess('/proj-1030/pnpm-lock.yaml')).toMatchObject({ risk: 'dangerous', category: null, denied: true });
+    expect(assess('/proj-1030/a/node_modules/b.js')).toMatchObject({ denied: true });
+  });
+
+  it('denies an A path outright: no approval card, no approval request, and no latch', async () => {
+    const port = scriptedPort([]);
+    const { hardGate, audit, queue } = await anchoredGate(port);
+    const denied = await hardGate.check({ name: 'write_file' }, { file_path: '/proj-1030/pnpm-lock.yaml', content: '' }, 'tu-1');
+    expect(denied).toMatchObject({ status: 'denied', reasonCode: 'host_path_protected', category: null });
+    expect(port.requests).toHaveLength(0);
+    expect(queue.list()).toHaveLength(0);
+    expect(audit.codes()).toContain('tool_hard_gate:deny:host_path_protected');
+    await expect(hardGate.check({ name: 'write_file' }, { file_path: '/proj-1030/notes.md', content: '' }, 'tu-2'))
+      .resolves.toMatchObject({ status: 'safe' });
+  });
+
+  it('asks a fresh human for B and ignores bypass', async () => {
+    const approve = scriptedPort([{ status: 'approved', decision: 'approve-once' }]);
+    const first = await anchoredGate(approve);
+    await expect(first.hardGate.check({ name: 'edit_file' }, { file_path: '/proj-1030/zhin.config.yml' }, 'tu-1'))
+      .resolves.toMatchObject({ status: 'approved', category: 'self' });
+    expect(approve.requests[0]).toMatchObject({ humanOnly: true });
+
+    const bypass = await anchoredGate(createBypassApprovalPort());
+    await expect(bypass.hardGate.check({ name: 'write_file' }, { file_path: '/proj-1030/package.json', content: '{}' }, 'tu-2'))
+      .resolves.toMatchObject({ status: 'denied' });
+  });
+
+  it('applies the same A/B split to shell commands', async () => {
+    const { hardGate } = await anchoredGate(scriptedPort([]));
+    await expect(hardGate.check({ name: 'bash' }, { command: 'rm -rf node_modules', cwd: '/proj-1030' }, 'tu-1'))
+      .resolves.toMatchObject({ status: 'denied', reasonCode: 'host_path_protected' });
   });
 });
 

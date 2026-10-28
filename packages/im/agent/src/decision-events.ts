@@ -92,6 +92,7 @@ export const DECISION_REASON_CODES = [
   'tool_approval_requested',
   'tool_approval_approved',
   'tool_funds_disabled',
+  'host_path_protected',
   'tool_hard_gate_latched',
   'tool_safe_allowed',
   // ADR 0037 切片 A：入群欢迎 / 退群记录

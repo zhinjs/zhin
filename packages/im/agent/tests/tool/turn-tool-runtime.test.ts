@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
@@ -10,6 +10,8 @@ import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-i
 import * as policyFacade from '../../src/security/policy-facade.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 import { OutboundLeakInspector } from '../../src/security/outbound-leak-guard.js';
+import { createHostProtectedPaths, type HostProtectedPaths } from '../../src/security/host-config-paths.js';
+import { createBypassApprovalPort } from '../../src/session/approval-review-agent.js';
 
 describe('TurnToolRuntime', () => {
   it.each([false, true])('binds human approval to an isolated nested argument snapshot (provenance: %s)', async (tainted) => {
@@ -688,6 +690,145 @@ describe('TurnToolRuntime', () => {
   });
 });
 
+describe('TurnToolRuntime host-protected paths (#1030 P0)', () => {
+  let workspace: string;
+  let protectedPaths: HostProtectedPaths;
+
+  beforeEach(async () => {
+    workspace = await realpath(await mkdtemp(join(tmpdir(), 'zhin-protected-turn-')));
+    await mkdir(join(workspace, 'plugins', 'x'), { recursive: true });
+    await writeFile(join(workspace, 'package.json'), '{}');
+    await writeFile(join(workspace, 'pnpm-lock.yaml'), '');
+    await writeFile(join(workspace, 'plugins', 'x', 'package.json'), '{}');
+    protectedPaths = await createHostProtectedPaths({ projectRoot: workspace });
+  });
+
+  afterEach(async () => {
+    await rm(workspace, { recursive: true, force: true });
+  });
+
+  const writer = (execute: ToolCapability['execute'], name = 'write_file') => tool(execute, 'never', name);
+
+  it.each(['master', 'user'])('denies a %s writing a lockfile or node_modules without any approval card', async (role) => {
+    const execute = vi.fn(async () => 'written');
+    const requestApproval = vi.fn(async () => true);
+    const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: [role], workspaceRoot: workspace, approval: { available: true, requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [writer(execute)]);
+
+    for (const file of ['pnpm-lock.yaml', 'node_modules/x/index.js', 'plugins/x/node_modules/y.js']) {
+      const result = await runtime.execute('write_file', { file_path: file, content: 'x' }, `deny-${file}`);
+      expect(result.status).toBe('denied');
+      expect(result).not.toMatchObject({ policy: 'tool-hard-gate' });
+    }
+    expect(requestApproval).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('denies a shell write to node_modules with no approval card', async () => {
+    const execute = vi.fn(async () => 'ran');
+    const requestApproval = vi.fn(async () => true);
+    const { turn } = fixture({
+      roles: ['master'],
+      workspaceRoot: workspace,
+      shell: { security: 'full', approvalMode: 'bypass', isolation: 'none' },
+      approval: { available: true, requestApproval },
+    });
+    const runtime = new TurnToolRuntime(turn, [writer(execute, 'bash')]);
+
+    await expect(runtime.execute('bash', { command: 'rm -rf node_modules' }, 'bash-deny'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'host-protected-path' });
+    expect(requestApproval).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not latch the turn: an ordinary write still works after an A denial', async () => {
+    const execute = vi.fn(async () => 'written');
+    const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace });
+    const runtime = new TurnToolRuntime(turn, [writer(execute)]);
+    await runtime.execute('write_file', { file_path: 'pnpm-lock.yaml', content: 'x' }, 'a');
+    await expect(runtime.execute('write_file', { file_path: 'notes.md', content: 'x' }, 'b'))
+      .resolves.toMatchObject({ status: 'completed' });
+  });
+
+  it('keeps a nested plugins/x/schema.json an ordinary workspace file, but gates the root one', async () => {
+    const execute = vi.fn(async () => 'written');
+    const requestApproval = vi.fn(async () => false);
+    const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace, approval: { available: true, requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [writer(execute)]);
+
+    await expect(runtime.execute('write_file', { file_path: 'plugins/x/schema.json', content: '{}' }, 'nested'))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(requestApproval).not.toHaveBeenCalled();
+
+    await expect(runtime.execute('write_file', { file_path: 'plugins/x/../../schema.json', content: '{}' }, 'root'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({ humanOnly: true }));
+  });
+
+  it('reaches B through a symlink and a case variant', async () => {
+    await symlink(join(workspace, 'package.json'), join(workspace, 'plugins', 'x', 'alias.txt'));
+    const execute = vi.fn(async () => 'written');
+    const requestApproval = vi.fn(async () => false);
+    for (const file of ['plugins/x/alias.txt', 'ZHIN.CONFIG.YML']) {
+      // A fresh runtime per call: a denial latches the self category for the rest of its turn.
+      const { turn } = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace, approval: { available: true, requestApproval } });
+      await new TurnToolRuntime(turn, [writer(execute)]).execute('write_file', { file_path: file, content: '{}' }, file);
+    }
+    expect(requestApproval).toHaveBeenCalledTimes(2);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('never lets a bypass approval port, a missing approval port or a filesystem-root workspace write B', async () => {
+    const execute = vi.fn(async () => 'written');
+    const bypass = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace, approval: createBypassApprovalPort() });
+    await expect(new TurnToolRuntime(bypass.turn, [writer(execute)]).execute('write_file', { file_path: 'zhin.config.yml', content: 'x' }, 'bypass'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
+    // The fixture's origin is http (no IM identity) and has no approval port at all.
+    const none = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], workspaceRoot: workspace });
+    await expect(new TurnToolRuntime(none.turn, [writer(execute)]).execute('write_file', { file_path: 'AGENTS.md', content: 'x' }, 'none'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
+    // danger-full-access sandbox runs use the filesystem root as workspace; B is anchored to the project root regardless.
+    const full = fixture({ hostProtectedPaths: protectedPaths, roles: ['master'], filesystem: { workspaceRoot: '/', workingDirectory: workspace, access: 'workspace-write' } });
+    await expect(new TurnToolRuntime(full.turn, [writer(execute)]).execute('write_file', { file_path: join(workspace, 'skills', 'a', 'SKILL.md'), content: 'x' }, 'full'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'tool-hard-gate' });
+    expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('TurnToolRuntime host-protected paths come from the Turn (#1030 P0)', () => {
+  it('anchors to the provided root, follows a new generation value, and falls back when absent', async () => {
+    const rootA = await realpath(await mkdtemp(join(tmpdir(), 'zhin-gen-a-')));
+    const rootB = await realpath(await mkdtemp(join(tmpdir(), 'zhin-gen-b-')));
+    try {
+      const run = async (hostProtectedPaths: HostProtectedPaths | undefined, file: string) => {
+        const requestApproval = vi.fn(async () => false);
+        const { turn } = fixture({
+          roles: ['master'],
+          hostProtectedPaths,
+          filesystem: { workspaceRoot: '/', workingDirectory: rootA, access: 'workspace-write' },
+          approval: { available: true, requestApproval },
+        });
+        await new TurnToolRuntime(turn, [tool(vi.fn(async () => 'ok'), 'never', 'write_file')])
+          .execute('write_file', { file_path: file, content: 'x' }, 'x');
+        return requestApproval.mock.calls.length;
+      };
+      const generationA = await createHostProtectedPaths({ projectRoot: rootA });
+      const generationB = await createHostProtectedPaths({ projectRoot: rootB });
+      // Provided value anchors: generation A gates A's root schema.json, not B's.
+      expect(await run(generationA, join(rootA, 'schema.json'))).toBe(1);
+      expect(await run(generationA, join(rootB, 'schema.json'))).toBe(0);
+      // Reload: the next generation's value replaces the previous one.
+      expect(await run(generationB, join(rootA, 'schema.json'))).toBe(0);
+      expect(await run(generationB, join(rootB, 'schema.json'))).toBe(1);
+      // Absence: name matching at any depth (over-blocking), never "gate nothing".
+      expect(await run(undefined, join(rootA, 'plugins', 'schema.json'))).toBe(1);
+    } finally {
+      await rm(rootA, { recursive: true, force: true });
+      await rm(rootB, { recursive: true, force: true });
+    }
+  });
+});
+
 function fixture(options: {
   signal?: AbortSignal;
   approval?: import('../../src/session/approval-port.js').ApprovalPort;
@@ -695,6 +836,7 @@ function fixture(options: {
   shell?: TurnPolicyContext['shell'];
   journalError?: Error;
   roles?: readonly string[];
+  hostProtectedPaths?: HostProtectedPaths;
   workspaceRoot?: string;
   filesystem?: TurnPolicyContext['filesystem'];
 } = {}) {
@@ -717,6 +859,7 @@ function fixture(options: {
     },
     capabilities: { tools: ['danger'], skills: [] },
     signal: options.signal ?? new AbortController().signal,
+    ...(options.hostProtectedPaths ? { hostProtectedPaths: options.hostProtectedPaths } : {}),
     ports: {
       journal: {
         append: (event) => {

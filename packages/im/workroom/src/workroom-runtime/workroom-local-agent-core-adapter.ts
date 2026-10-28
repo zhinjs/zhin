@@ -84,6 +84,7 @@ async function runAgentCoreLocalTurn(
       skills: Object.freeze([]),
     }),
     signal,
+    hostProtectedPaths: options.host.hostProtectedPaths,
     ports: Object.freeze({ journal: Object.freeze({ append: publish }) }),
   });
   const runtime = new TurnToolRuntime(turn, plan.capabilities);
