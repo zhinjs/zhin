@@ -1,0 +1,57 @@
+docs/ai/default-behavior.md
+  s_9b7204e93a2a0a::t_c17b8edbdce1d6 47,55
+  s_9b7204e93a2a0a::t_10488622e51564 56
+packages/im/agent/src/index.ts
+  s_9b7204e93a2a0a::t_9dc82646a3a2c1 446-455
+  s_9b7204e93a2a0a::t_20a139d53becd6 445
+tests/snapshots/api-surface.json
+  s_9b7204e93a2a0a::t_d9d39d9594c7ca 98
+basic/cli/src/plugin-runtime/console/self-changes.ts
+  s_9b7204e93a2a0a::t_ebc633a27fb07b 1-170
+.changeset/0040-slice-d-approval.md
+  s_9b7204e93a2a0a::t_c17b8edbdce1d6 1-6
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9b7204e93a2a0a::t_873c1ee6d3512f 183-184,254,335,501
+  s_9b7204e93a2a0a::t_fc3c5550f3f0b6 51
+packages/im/agent/tests/self-change/approval.test.ts
+  s_9b7204e93a2a0a::t_965d1fcc62e6e2 164,169-170,187
+  s_9b7204e93a2a0a::t_0d07dc53503cb9 1-163,165-168,171-186,188-195
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9b7204e93a2a0a::t_71d0ce3c3dfc21 1,25-28,67-68,104-110,112,136-146,148,152,167-170,175-186,195,214-247
+  s_9b7204e93a2a0a::t_6823358eb89e92 248
+docs/en/ai/default-behavior.md
+  s_9b7204e93a2a0a::t_c17b8edbdce1d6 47,55
+  s_9b7204e93a2a0a::t_58cdb951cb6a5f 56
+packages/im/agent/src/self-change/approval.ts
+  s_9b7204e93a2a0a::t_333d6059961c46 25,106,157,209-211,213
+  s_9b7204e93a2a0a::t_a519d0d3092bce 1-24,26-105,107-156,158-208,212,214-285
+basic/cli/tests/plugin-runtime/console/self-changes.test.ts
+  s_9b7204e93a2a0a::t_c3287a9fed1930 1-86
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9b7204e93a2a0a::t_873c1ee6d3512f 24,79-80,205-215,220,239-243,271
+packages/im/agent/src/plugin-runtime/native-self-change-tools.ts
+  s_9b7204e93a2a0a::t_17fd223fd45d94 9,25,43-44,132-136,139,156-172,207-211,240-244
+packages/im/agent/tests/plugin-runtime/native-self-change-tools.test.ts
+  s_9b7204e93a2a0a::t_0a8c0ff02831f1 12-13,24,31-34,148-161
+  s_9b7204e93a2a0a::t_1097d152d6df73 162
+basic/cli/src/plugin-runtime/console/module.ts
+  s_9b7204e93a2a0a::t_fc3c5550f3f0b6 28
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_9b7204e93a2a0a::t_c3287a9fed1930 313-395
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eb306e1c2053768f617036fccd6e530eb15e2ffd",
+  "prompts": {},
+  "sessions": {
+    "s_9b7204e93a2a0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e87a9d40-9e9d-48f9-9bb7-cc4ee0ba1461",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
