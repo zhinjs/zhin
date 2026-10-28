@@ -1108,8 +1108,8 @@
             },
             "toolHardGate": {
               "type": "object",
-              "description": "Dangerous-tool hard gate (ADR 0036). Always on and independent of execApprovalMode: tools that manage members, publish content, move money or change the bot's identity (a core list, plus tools that declare risk: dangerous) never run without a fresh human approval or a Console-approved card, even under bypass. A denial fails closed and is not retried in the same turn. Settings can only make it stricter.",
-              "x-descriptionZh": "危险工具硬闸（ADR 0036）。始终开启，独立于 execApprovalMode：成员管理、内容发布、资金、改 Bot 身份类工具（核心名单 + 声明 risk: dangerous 的工具）没有新鲜的人工批准或 Console 已批准的卡片就不执行，bypass 也不例外；被拒即 fail closed，同一回合不再重试。配置只能更严。",
+              "description": "Dangerous-tool hard gate (ADR 0036). Always on and independent of execApprovalMode: tools that manage members, publish content, move money or change the bot's identity (a core list, plus tools that declare risk: dangerous), and any call that writes the host's own configuration, dependencies or git hooks (zhin.config.*, .env*, package.json, lockfiles, node_modules/, .git/, …) never run without a fresh human approval or a Console-approved card, even under bypass. A denial fails closed and is not retried in the same turn. Settings can only make it stricter.",
+              "x-descriptionZh": "危险工具硬闸（ADR 0036）。始终开启，独立于 execApprovalMode：成员管理、内容发布、资金、改 Bot 身份类工具（核心名单 + 声明 risk: dangerous 的工具），以及写宿主自身配置 / 依赖 / git 钩子的调用（zhin.config.*、.env*、package.json、锁文件、node_modules/、.git/ 等）没有新鲜的人工批准或 Console 已批准的卡片就不执行，bypass 也不例外；被拒即 fail closed，同一回合不再重试。配置只能更严。",
               "properties": {
                 "dangerousTools": {
                   "type": "array",
