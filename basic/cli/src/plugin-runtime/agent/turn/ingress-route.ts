@@ -117,6 +117,7 @@ import { SceneEventIngress } from './scene-event-ingress.js';
 import { MemberLifecycle } from './member-lifecycle.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { GroupRuleImChannel } from './group-rule-im.js';
+import { GroupRuleEnforcer, type GroupRuleEnforcementResult, type GroupRuleViolation } from './group-rule-enforcer.js';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ColdFieldMonitor } from './cold-field.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
@@ -197,6 +198,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /** ADR 0039 切片 B：群规预览卡与群内审批命令。 */
   readonly #groupRules: GroupRuleImChannel;
   readonly #stopGroupRules: () => void;
+  /** ADR 0039 切片 C：群规执行器（命中 → 阶梯档：提醒 / 警告 / 自动禁言 / 建议踢人出卡）。 */
+  readonly #groupRuleEnforcer: GroupRuleEnforcer;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -219,6 +222,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#stopSessionEvents = this.#sessionEvents.start();
     this.#groupRules = this.#createGroupRuleChannel();
     this.#stopGroupRules = this.#groupRules.start();
+    this.#groupRuleEnforcer = this.#createGroupRuleEnforcer();
     options.assistantStatus?.bindSessionOps(
       () => options.agent.agent.getSessionOps?.(),
       () => this.#memberLifecycle,
@@ -250,6 +254,72 @@ export class AgentTurnIngressRoute implements IngressRoute {
         });
       },
     });
+  }
+
+  #createGroupRuleEnforcer(): GroupRuleEnforcer {
+    const options = this.options;
+    const endpointOf = (target: { platform: string; endpoint: string | null }) => {
+      const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
+      if (!endpointKey) throw new Error('endpoint_unresolved');
+      return endpointKey;
+    };
+    return new GroupRuleEnforcer({
+      rules: () => options.agent?.agent?.getGroupRules?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
+      decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
+      hardGate: () => options.agent.agent.config?.toolHardGate,
+      approvals: () => options.agent.agent.toolApprovals,
+      opsCooldown: () => options.agent.agent.opsCooldown,
+      onSpoke: (key) => this.#noteSpoke(key),
+      send: async (target, parts) => {
+        const content = parts.map((part) => (part.type === 'text'
+          ? { type: 'text', data: { text: part.text } }
+          : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }));
+        const result = await options.im.endpoints.send({
+          adapter: target.platform,
+          endpointKey: endpointOf(target),
+          conversation: { kind: 'group', id: target.groupId },
+          content,
+        });
+        return { status: 'sent' as const, ...(result.messageId ? { messageId: result.messageId } : {}) };
+      },
+      inspect: async (target, memberId, signal) => {
+        const result = await options.im.endpoints.withManagement(target.platform, endpointOf(target), (management) =>
+          management.inspectGroupMember ? management.inspectGroupMember(target.groupId, memberId, signal) : undefined);
+        return result ?? undefined;
+      },
+      mute: async (target, memberId, durationSec, signal) => {
+        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
+          // 优先走「执行前复核权限」的接口。
+          if (management.moderateGroupMember) {
+            await management.moderateGroupMember(target.groupId, memberId, { type: 'mute', durationSeconds: durationSec }, signal);
+          } else if (management.muteGroupMember) {
+            await management.muteGroupMember(target.groupId, memberId, durationSec);
+          } else {
+            throw new Error('mute_unsupported');
+          }
+          return true;
+        });
+        if (!done) throw new Error('endpoint_unavailable');
+      },
+      kick: async (target, memberId) => {
+        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
+          if (!management.kickGroupMember) throw new Error('kick_unsupported');
+          await management.kickGroupMember(target.groupId, memberId);
+          return true;
+        });
+        if (!done) throw new Error('endpoint_unavailable');
+      },
+    });
+  }
+
+  /**
+   * 群规执行入口（ADR 0039 §4）：违规判定方（`flood` 检测、content-moderation）报告一次命中，
+   * 这里按该群生效规则的阶梯档执行。没有生效规则时什么都不做。
+   */
+  enforceGroupRule(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
+    return this.#groupRuleEnforcer.enforce(violation);
   }
 
   #createSessionEventDispatcher(): SessionEventDispatcher {
@@ -403,6 +473,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#stopAnnouncementSweep();
     this.#stopSessionEvents();
     this.#stopGroupRules();
+    this.#groupRuleEnforcer.dispose();
     this.#sceneEvents.dispose();
   }
 

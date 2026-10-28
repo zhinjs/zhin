@@ -617,6 +617,51 @@ describe('ToolHardGate.checkPreApproved (ADR 0037 slice B announcements)', () =>
   });
 });
 
+describe('ToolHardGate.checkPreApproved (ADR 0039 slice C group rules)', () => {
+  function gate(opsCooldown?: OpsCooldown) {
+    const audit = auditSink();
+    const queue = new ToolApprovalQueue();
+    const enqueue = vi.spyOn(queue, 'enqueue');
+    const hardGate = new ToolHardGate(undefined, {
+      turnId: 'turn-r',
+      sessionKey: 'group-rule:r-1',
+      unattended: true,
+      signal: new AbortController().signal,
+      location: { instanceId: 'bot', platform: 'icqq', sceneId: 'group:123' },
+      audit,
+      queue,
+      ...(opsCooldown ? { opsCooldown } : {}),
+    });
+    return { hardGate, audit, enqueue };
+  }
+  const rule = { source: 'rule' as const, id: 'r-1', approvedBy: 'owner-1', channel: 'im_group' as const, approvedHash: 'h1', contentHash: 'h1' };
+
+  it('treats the rule approval as the mute approval and records the in-group channel', () => {
+    const { hardGate, audit, enqueue } = gate();
+    const result = hardGate.checkPreApproved({ name: 'mute_member' }, { target: 'u1', durationSec: 600 }, 'rule:r-1', rule);
+    expect(result).toMatchObject({ status: 'approved', category: 'member', approvalId: 'r-1' });
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(audit.records[0]!.payload).toMatchObject({ via: 'rule', channel: 'im_group', approvalId: 'r-1' });
+  });
+
+  it('uses rule_hash_mismatch for a tampered rule', () => {
+    const { hardGate } = gate();
+    const result = hardGate.checkPreApproved({ name: 'mute_member' }, { target: 'u1' }, 't', { ...rule, contentHash: 'h2' });
+    expect(result).toMatchObject({ status: 'denied', reasonCode: 'rule_hash_mismatch' });
+  });
+
+  it('passes the ops cooldown before executing and fails closed on a hit', () => {
+    const cooldown = new OpsCooldown();
+    const first = gate(cooldown);
+    expect(first.hardGate.checkPreApproved({ name: 'mute_member' }, { target: 'u1' }, 't1', rule)).toMatchObject({ status: 'approved' });
+    expect(first.audit.codes()).toContain('ops_cooldown:allow:ops_cooldown_passed');
+    const second = gate(cooldown);
+    expect(second.hardGate.checkPreApproved({ name: 'mute_member' }, { target: 'u2' }, 't2', rule))
+      .toMatchObject({ status: 'denied', reasonCode: 'ops_cooldown_hit' });
+    expect(second.audit.codes()).toContain('ops_cooldown:deny:ops_cooldown_hit');
+  });
+});
+
 describe('ToolApprovalQueue', () => {
   it('expires pending cards after the ttl', async () => {
     vi.useFakeTimers();

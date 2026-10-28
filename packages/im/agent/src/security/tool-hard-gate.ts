@@ -374,14 +374,19 @@ const CONTROL_READ_ONLY_DENIAL: ControlDenial = Object.freeze({
   why: '控制面处于只读',
 });
 
-/** {@link ToolHardGate.checkPreApproved} 的审批记录：来自领域对象自己的人工审批（如公告）。 */
+/**
+ * {@link ToolHardGate.checkPreApproved} 的审批记录：来自领域对象自己的人工审批
+ * （公告 ADR 0037 §1.2；群规 ADR 0039 §4：规则批准即对「命中时禁言」的预先人批）。
+ */
 export interface ToolHardGatePreApproval {
   /** 审批记录来源（审计 `via`）。 */
-  readonly source: 'announcement';
+  readonly source: 'announcement' | 'rule';
   /** 领域对象 id（审计 `approvalId`）。 */
   readonly id: string;
-  /** 审批人（Console 用户）；审计 `actor=operator`。 */
+  /** 审批人（Console 用户或群主 / 管理员）；审计 `actor=operator`。 */
   readonly approvedBy: string | null;
+  /** 审批渠道（审计 `channel`）；缺省 `console`。群规在群内批准时为 `im_group`。 */
+  readonly channel?: 'console' | 'im_group';
   /** 审批时绑定的内容摘要。 */
   readonly approvedHash: string | null;
   /** 发送前对正文现算的摘要。 */
@@ -526,9 +531,10 @@ export class ToolHardGate {
    * 以一条**已存在的人工审批记录**作为硬闸批准（ADR 0037 §1.2：公告「草稿 → 审批 → 发送」）。
    *
    * - 不入审批队列、不问审批端口——**不弹第二张卡**；运营者在 Console 批准公告这一步就是本次发送的人工批准。
-   * - 仍做硬闸的其他判定：控制面 `emergency_stop` / `read_only`、本回合 latch、资金禁用。
+   * - 仍做硬闸的其他判定：控制面 `emergency_stop` / `read_only`、本回合 latch、资金禁用；
+   *   上下文接了 {@link ToolHardGateContext.opsCooldown} 时同样过群管冷却（群规自动禁言，ADR 0039 §4）。
    * - 审批绑定内容摘要：`approvedHash` 缺失或与 `contentHash`（发送前对正文现算的摘要）不符时直接拒绝，
-   *   `reason_code=announcement_hash_mismatch`，不执行。
+   *   `reason_code=announcement_hash_mismatch`（群规为 `rule_hash_mismatch`），不执行。
    * - 只对这一次调用生效（不写入队列，也不留「记住」授权）。
    */
   checkPreApproved(
@@ -552,7 +558,7 @@ export class ToolHardGate {
       toolUseId,
       approvalId: approval.id,
       via: approval.source,
-      channel: 'console' as const,
+      channel: approval.channel ?? 'console',
       argKeys: Object.keys(input).sort(),
     };
     const controlDenial = this.#checkControlPlane();
@@ -569,10 +575,12 @@ export class ToolHardGate {
         '资金类工具默认禁用');
     }
     if (!approval.approvedHash || !approval.contentHash || approval.approvedHash !== approval.contentHash) {
-      return this.#deny(name, category, 'announcement_hash_mismatch',
+      return this.#deny(name, category, approval.source === 'rule' ? 'rule_hash_mismatch' : 'announcement_hash_mismatch',
         { ...payload, approvedHash: approval.approvedHash ?? null, contentHash: approval.contentHash },
         'content changed after approval', '内容与审批时不一致，需要重新审批');
     }
+    const cooldownDenial = this.#checkOpsCooldown(name, category, input, payload);
+    if (cooldownDenial) return cooldownDenial;
     const approved = { ...payload, contentHash: approval.contentHash };
     this.#audit('tool_approval', 'allow', 'tool_approval_approved', approved, approval.approvedBy);
     this.#audit('tool_hard_gate', 'allow', 'tool_approval_approved', approved);
