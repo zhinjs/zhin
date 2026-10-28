@@ -40,6 +40,7 @@
     "export * from './native-announcement-tools.js';",
     "export * from './native-bash-tool.js';",
     "export * from './native-file-tools.js';",
+    "export * from './native-group-rule-tools.js';",
     "export * from './native-image-tool.js';",
     "export * from './native-interaction-tools.js';",
     "export * from './native-knowledge-tool.js';",
