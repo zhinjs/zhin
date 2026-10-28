@@ -1,0 +1,14 @@
+packages/im/agent/src/security/host-config-paths.ts
+  h_b680f75345178a 46-56,59-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a926e428f00fab6067a732f46314169a66ced358",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
