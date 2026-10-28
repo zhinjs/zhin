@@ -6,6 +6,8 @@ import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import {
   createUserMessage,
   type AgentMessage,
+  type AssistantMessage,
+  type ToolResultMessage,
   type UserMessage,
 } from '../llm/types/agent-message.js';
 
@@ -96,10 +98,25 @@ function agentMessageToTranscriptLine(message: AgentMessage): string {
     return `[User:${name} id=${actor.subjectId} roles=${roles}] ${text}`;
   }
   if (message.role === 'assistant') {
-    return `[Assistant] ${textBlocks(message)}`;
+    const assistant = message as AssistantMessage;
+    const content = assistant.content.flatMap((block) => {
+      if (block.type === 'text') return [block.text];
+      if (block.type === 'toolCall') {
+        return [`[Tool call] ${JSON.stringify({
+          id: block.id,
+          name: block.name,
+          arguments: block.arguments,
+          ...(block.inputError ? { inputError: block.inputError } : {}),
+        })}`];
+      }
+      return [];
+    }).join('\n');
+    return `[Assistant] ${content}`;
   }
   if (message.role === 'toolResult') {
-    return `[Tool:${'toolName' in message ? message.toolName : 'tool'}] ${textBlocks(message)}`;
+    const result = message as ToolResultMessage;
+    const outcome = JSON.stringify({ toolCallId: result.toolCallId, toolName: result.toolName, isError: result.isError });
+    return `[Tool:${result.toolName}] ${outcome}\n${textBlocks(message)}`;
   }
   return `[${message.role}] ${JSON.stringify(message)}`;
 }

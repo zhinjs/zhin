@@ -4,6 +4,7 @@ import type { AgentEvent, ThinkingLevel, ToolExecutionMode } from './types/agent
 import type { Model } from './types/model.js';
 import type { LlmTool, ParsedToolCall } from './types/tool.js';
 import { isContextOverflowError } from '../compaction/agent-message-compaction.js';
+import { estimateAgentMessagesTokens } from '../compaction/agent-message-tokens.js';
 import type { LlmCompletionPort, StreamOptions } from './llm-api-runtime.js';
 import { createIncrementalRepair } from './repair-agent-messages.js';
 import { validateToolCall } from './validate-tool-call.js';
@@ -72,6 +73,7 @@ export interface AgentLoopConfig {
   maxRecompletePerIteration?: number;
   getSteeringMessages?: () => Promise<AgentMessage[]>;
   getFollowUpMessages?: () => Promise<AgentMessage[]>;
+  /** Recover history after overflow; the loop retries only a smaller projected request. */
   onContextOverflow?: (
     messages: AgentMessage[],
     signal?: AbortSignal,
@@ -283,29 +285,46 @@ export async function* agentLoop(
     };
 
     let assistant: AssistantMessage;
+    let requestContext: Context | undefined;
     try {
-      assistant = await config.transport.complete(config.model, await buildLlmContext(), {
+      requestContext = await buildLlmContext();
+      assistant = await config.transport.complete(config.model, requestContext, {
         ...config.streamOptions,
         signal,
         sessionId: config.sessionId,
         thinkingLevel: config.reasoning,
       });
     } catch (error) {
-      if (config.onContextOverflow && isContextOverflowError(error)) {
+      if (config.onContextOverflow && requestContext && !signal?.aborted && isContextOverflowError(error)) {
+        // System and tools are unchanged in this path. Compare the repaired,
+        // projected messages actually sent, before recovery can mutate them.
+        // This shares compaction's token estimate, not provider billing tokens.
+        const failedTokens = estimateAgentMessagesTokens(requestContext.messages);
+        let retryContext: Context | undefined;
         try {
           const compacted = await config.onContextOverflow(messages, signal);
           if (compacted?.length) {
             repairer.reset();
             messages.splice(0, messages.length, ...compacted);
           }
-          assistant = await config.transport.complete(config.model, await buildLlmContext(), {
-            ...config.streamOptions,
-            signal,
-            sessionId: config.sessionId,
-            thinkingLevel: config.reasoning,
-          });
-        } catch (retryError) {
-          error = retryError as Error; // eslint-disable-line no-ex-assign -- intentional re-assignment for retry
+          if (!signal?.aborted) {
+            const candidate = await buildLlmContext();
+            if (estimateAgentMessagesTokens(candidate.messages) < failedTokens) retryContext = candidate;
+          }
+        } catch (_recoveryError) {
+          // Failed recovery does not replace the known provider overflow.
+        }
+        if (retryContext && !signal?.aborted) {
+          try {
+            assistant = await config.transport.complete(config.model, retryContext, {
+              ...config.streamOptions,
+              signal,
+              sessionId: config.sessionId,
+              thinkingLevel: config.reasoning,
+            });
+          } catch (retryError) {
+            error = retryError as Error; // eslint-disable-line no-ex-assign -- intentional re-assignment for retry
+          }
         }
       }
       if (!assistant!) {

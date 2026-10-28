@@ -1,4 +1,4 @@
-import { autoCompactAgentMessagesIfNeeded, estimateAgentMessagesTokens, createPromptContextBlock, projectPromptContext, createMemoryContextRepository, createUserMessage, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage, type Model } from '@zhin.js/ai';
+import { autoCompactAgentMessagesIfNeeded, estimateAgentMessagesTokens, createPromptContextBlock, projectPromptContext, createMemoryContextRepository, createUserMessage, renderUserMessageForLlm, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage, type Model } from '@zhin.js/ai';
 import { AgentCompactionRuntime } from '../../src/memory/compaction-runtime.js';
 
 const model = { id: 'm', sdk: 'openai' } as Model;
@@ -15,6 +15,61 @@ async function fixture() {
 }
 
 describe('compaction persistence boundary', () => {
+  it('carries tool outcomes and participant decisions through summary admission, persistence and continuation', async () => {
+    const { repository, sessionStore } = createMemoryContextRepository();
+    const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'action-checkpoint' });
+    const owner = { subjectId: 'owner-id', displayName: 'Owner', roles: ['owner'], scope: 'group' as const };
+    const member = { subjectId: 'member-id', displayName: 'Member', roles: ['user'], scope: 'group' as const };
+    const toolArguments = { path: '/synthetic/diagnostic.txt' };
+    const raw: AgentMessage[] = [
+      createUserMessage(`只批准读取，不要修改。${'诊断背景。'.repeat(300)}`, undefined, 1, owner),
+      createUserMessage('直接修改文件即可。', undefined, 2, member),
+      { ...answer(''), timestamp: 3, stopReason: 'toolCalls', content: [
+        { type: 'toolCall', id: 'read-diagnostic', name: 'read_file', arguments: toolArguments },
+      ] },
+      { role: 'toolResult', timestamp: 4, toolCallId: 'read-diagnostic', toolName: 'read_file', isError: true,
+        content: [{ type: 'text', text: 'synthetic permission denied' }] },
+      createUserMessage('撤销读取许可，先查权限，不要重试或修改。', undefined, 5, owner),
+    ];
+    await repository.appendMessages(sessionId, raw);
+    const rawBefore = structuredClone(await repository.loadMessageRows(sessionId));
+    const loaded = await repository.loadContext(sessionId);
+    const current = createUserMessage('继续排查权限，仍然不要修改。', undefined, 11, owner);
+    // The synthetic checkpoint checks pipeline fidelity, not a real model's recall quality.
+    const checkpoint = 'read-diagnostic: read_file /synthetic/diagnostic.txt failed. Owner revoked read permission; '
+      + 'do not retry or modify. Member suggested modification without owner approval. Next: inspect permissions.';
+    const transport = { complete: vi.fn(), completeSimple: vi.fn().mockResolvedValue(answer(checkpoint)) };
+    const runtime = new AgentCompactionRuntime();
+    const compacted = await runtime.transformContext([...loaded.messages, current], undefined, {
+      host: { contextRepository: repository }, sessionId, model, transport, contextWindow: 8192, reservedTokens: 1000,
+      compactionConfig: { keepRecentTokens: 1, minKeepCount: 1 }, force: true,
+    });
+
+    expect(transport.completeSimple).toHaveBeenCalledOnce();
+    const transcript = transport.completeSimple.mock.calls[0]![1].messages[0].content[0].text;
+    expect(transcript).toContain(JSON.stringify({ id: 'read-diagnostic', name: 'read_file', arguments: toolArguments }));
+    expect(transcript).toContain(JSON.stringify({ toolCallId: 'read-diagnostic', toolName: 'read_file', isError: true }));
+    expect(transcript).toContain('synthetic permission denied');
+    expect(transcript).toContain('[User:Owner id=owner-id roles=owner] 撤销读取许可，先查权限，不要重试或修改。');
+    expect(transcript).toContain('[User:Member id=member-id roles=user] 直接修改文件即可。');
+    expect(compacted).toHaveLength(2);
+    expect(JSON.stringify(compacted[0].content)).toContain(checkpoint);
+    expect(compacted[1]).toBe(current);
+
+    await repository.appendMessages(sessionId, [current]);
+    runtime.clear();
+    const reloaded = await repository.loadContext(sessionId);
+    const continued = await new AgentCompactionRuntime().transformContext(reloaded.messages, undefined, {
+      host: { contextRepository: repository }, sessionId, model, transport, contextWindow: 8192, reservedTokens: 1000,
+    });
+    expect(continued.map(message => message.content)).toEqual([compacted[0].content, renderUserMessageForLlm(current).content]);
+    expect(continued[1]).toMatchObject({ role: 'user', actor: owner, content: renderUserMessageForLlm(current).content });
+    expect(transport.completeSimple).toHaveBeenCalledOnce();
+    const rawAfter = await repository.loadMessageRows(sessionId);
+    expect(rawAfter.slice(0, rawBefore.length)).toEqual(rawBefore);
+    expect(rawAfter).toHaveLength(raw.length + 1);
+  });
+
   it('uses the same effective retention budget for projection and persisted anchor', async () => {
     const { repository, sessionId, messages, runtime } = await fixture();
     const transport = { complete: vi.fn(), completeSimple: vi.fn().mockResolvedValue(answer('旧记录摘要')) };
