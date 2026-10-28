@@ -66,6 +66,14 @@ describe('checkSelfChangeFiles', () => {
     expect(checks.find(check => check.path === 'commands/legacy.ts' && check.status === 'failed')!.message).toContain('bootstrapNode');
   });
 
+  it('strips comments in linear time and never lets an unclosed /* hide an import', async () => {
+    const content = `${command}const s = "/*${'a/*'.repeat(50_000)}";\nimport 'koa';\n`;
+    const started = Date.now();
+    const checks = await checkSelfChangeFiles([{ path: 'commands/slow.ts', content }]);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(failures(checks)).toEqual(['commands/slow.ts:forbidden_import']);
+  });
+
   it('validates SKILL.md and agent.json', async () => {
     const checks = await checkSelfChangeFiles([
       { path: 'skills/weather/SKILL.md', content: '---\nname: other\n---\n# x\n' },

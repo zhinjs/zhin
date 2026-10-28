@@ -272,7 +272,20 @@ function stripSyntaxError(source: string): string | null {
 
 /** 粗略去掉注释，避免注释里的示例代码触发规则（字符串里的 `//` 可能被误删，只用于规则匹配）。 */
 function stripComments(source: string): string {
-  return source.replace(/\/\*[\s\S]*?\*\//gu, ' ').replace(/(^|[^:'"`\\])\/\/[^\n]*/gu, '$1');
+  // 块注释用线性扫描去掉（正则 `/\*[\s\S]*?\*\/` 在未闭合的 `/*` 上会回溯成多项式，CodeQL js/polynomial-redos）。
+  let withoutBlocks = '';
+  let cursor = 0;
+  while (cursor < source.length) {
+    const open = source.indexOf('/*', cursor);
+    if (open < 0) break;
+    const close = source.indexOf('*/', open + 2);
+    // 未闭合的 `/*` 保持原样（与原正则一致），不能借此藏住后面的禁止导入。
+    if (close < 0) break;
+    withoutBlocks += `${source.slice(cursor, open)} `;
+    cursor = close + 2;
+  }
+  withoutBlocks += source.slice(cursor);
+  return withoutBlocks.replace(/(^|[^:'"`\\])\/\/[^\n]*/gu, '$1');
 }
 
 function importSpecifiers(source: string): string[] {
