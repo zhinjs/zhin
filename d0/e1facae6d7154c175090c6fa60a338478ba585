@@ -1,0 +1,189 @@
+packages/im/agent/src/schedule-domain/prompt-assembler.ts
+  s_12b1e02705543f::t_5c727c81a25266 13-14,73
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_12b1e02705543f::t_f723ab2aab4afa 8-9,37,44-45,48-50,54-79,140,603,619
+  s_12b1e02705543f::t_cdc63513327097 21,33,46-47,51-53,80-81,134-135,250
+packages/im/agent/src/prompt/system-prompt.ts
+  s_12b1e02705543f::t_5c727c81a25266 256,270
+  s_12b1e02705543f::t_6772cc009afedd 89-91,258-259,261-266,274,378
+  s_12b1e02705543f::t_a834190b0c9a73 357-359,489,491
+  s_12b1e02705543f::t_d1807733c91ace 92-93,257,260
+packages/im/agent/tests/turn/turn-ingress.test.ts
+  s_12b1e02705543f::t_1a1ccb3999c550 80-91
+  s_12b1e02705543f::t_979978a3081512 79
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_leave/index.ts
+  s_12b1e02705543f::t_e5da760702adfc 10
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_12b1e02705543f::t_62d994e42bc4eb 62,941-950,961,963,966-983
+  s_12b1e02705543f::t_037f2272012290 50,933-936,938-940,951-960,962,964-965,984-994,1056,1171,1177
+  s_12b1e02705543f::t_e0ffce59ad80d4 41,937,1057
+packages/im/agent/src/prompt/prompts/orchestrator.openai-compatible.md
+  s_12b1e02705543f::t_85127b543da70c 3
+packages/im/tool/tests/tool.test.ts
+  s_12b1e02705543f::t_037f2272012290 167,188,196-205
+plugins/adapters/icqq/tests/group-moderation.test.ts
+  s_12b1e02705543f::t_305d218c6e6cd5 34,39-63
+  s_12b1e02705543f::t_b8b92c4a13cf90 64
+packages/im/tool/src/tool-index.ts
+  s_12b1e02705543f::t_e5da760702adfc 37,150
+packages/im/agent/src/prompt/prompt-budget.ts
+  s_12b1e02705543f::t_a834190b0c9a73 12-13,19,45-47
+packages/im/agent/src/prompt/prompt-assembly-registry.ts
+  s_12b1e02705543f::t_6772cc009afedd 14-15,72-73
+  s_12b1e02705543f::t_a834190b0c9a73 16-17,92
+plugins/adapters/icqq/src/group-moderation.ts
+  s_12b1e02705543f::t_305d218c6e6cd5 11,13-14,18-20,26
+packages/im/tool/src/definition.ts
+  s_12b1e02705543f::t_e5da760702adfc 96-97,165-166,278,295,340
+packages/im/agent/src/index.ts
+  s_12b1e02705543f::t_cdc63513327097 69
+packages/im/ai/src/memory/user-message-presentation.ts
+  s_12b1e02705543f::t_6da4a77580ddf3 76
+  s_12b1e02705543f::t_281e3c31f2e6b4 92-112,118-119,131-136,141,153-159,164,166,176-185
+packages/im/agent/tests/trace/context-budget.test.ts
+  s_12b1e02705543f::t_cd9e5e052fead0 107,138-141,143-147,149-154,156-158
+  s_12b1e02705543f::t_f7be1d5a6552a3 10-11,60-81
+  s_12b1e02705543f::t_39218c572a827b 9,82-106
+  s_12b1e02705543f::t_70969f54bf490e 142,148,155
+  s_12b1e02705543f::t_39920b9bf4a3bf 108
+packages/im/agent/src/turn/turn-ingress.ts
+  s_12b1e02705543f::t_f723ab2aab4afa 93-94,260-262
+  s_12b1e02705543f::t_cdc63513327097 86-92,95-105,115
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_12b1e02705543f::t_80a2155dd0b357 25
+  s_12b1e02705543f::t_0405ec1609f41b 14-24,26-71
+  s_12b1e02705543f::t_1a1ccb3999c550 10,90-95,130
+.changeset/scoped-prompt-context.md
+  s_12b1e02705543f::t_2acb0a9b74e91f 1-12
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_12b1e02705543f::t_e5da760702adfc 23
+packages/im/agent/tests/prompt/prompt-assembly-registry.test.ts
+  s_12b1e02705543f::t_be32acf1062697 2,9,80-84,87,98-100,102
+  s_12b1e02705543f::t_6dc58a51ccfb9a 142-145
+  s_12b1e02705543f::t_cbf810492ec301 62-79,85-86,88-97,103-104
+  s_12b1e02705543f::t_ea4335334b9049 101
+  s_12b1e02705543f::t_e500bbc66eda2a 129-141,146-152
+packages/im/agent/src/trace/context-budget.ts
+  s_12b1e02705543f::t_7047049e344c1a 150-155
+  s_12b1e02705543f::t_cf235f402938d4 13,68,84-85,96,100-104,126-133
+packages/im/agent/tests/plugin-runtime/capability-seam-ingress.test.ts
+  s_12b1e02705543f::t_ccb0879126cf0a 82-116
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  s_12b1e02705543f::t_037f2272012290 31,40-45,54-57,64-73
+packages/im/agent/src/prompt/assembly.ts
+  s_12b1e02705543f::t_5c727c81a25266 8,33,158-159,170,188
+  s_12b1e02705543f::t_3ba9c57f3b6973 10,25,41,85-104,116-120,137,140,143,154,160,168
+  s_12b1e02705543f::t_1f4e4d0eb5e5a8 161
+docs/authoring/agent-tools.md
+  s_12b1e02705543f::t_0ea37e60b0cc1a 262-263,326-327
+packages/im/agent/src/turn/index.ts
+  s_12b1e02705543f::t_cdc63513327097 29
+tests/snapshots/api-surface.json
+  s_12b1e02705543f::t_6553acacc2c11a 20
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_12b1e02705543f::t_21d618f725e788 186,196-197,209,213,220-222,228-270
+  s_12b1e02705543f::t_1a1ccb3999c550 6,17,187-195,198-208,210-212,214-219,223-227,271-272
+packages/im/agent/src/seam/tool-service.ts
+  s_12b1e02705543f::t_e5da760702adfc 33-34
+packages/im/agent/tests/prompt/explicit-turn-prompt-profile.test.ts
+  s_12b1e02705543f::t_e500bbc66eda2a 2,5,50,55-58,62,68,86,88-90,92,97-100,102-104
+  s_12b1e02705543f::t_5c727c81a25266 91
+  s_12b1e02705543f::t_6dc58a51ccfb9a 4,101
+  s_12b1e02705543f::t_d8f19e8a1cce52 46-49,51-54,59-61,63-67,69-85,87,93-96
+  s_12b1e02705543f::t_5a717f33648fe6 105
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_12b1e02705543f::t_a834190b0c9a73 31,251-268,270,276,624,629
+  s_12b1e02705543f::t_6772cc009afedd 273-275,452-454,535
+  s_12b1e02705543f::t_94c38f9310271a 1,440
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_12b1e02705543f::t_e5da760702adfc 40,111-113,117-118,171,293,307-309
+  s_12b1e02705543f::t_e1643a16e7f362 310
+packages/im/adapter/src/endpoint-management.ts
+  s_12b1e02705543f::t_305d218c6e6cd5 73-74
+packages/im/agent/src/plugin-runtime/skill-tool-resolution.ts
+  s_12b1e02705543f::t_e5da760702adfc 1-23
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.ts
+  s_12b1e02705543f::t_e5da760702adfc 10
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_12b1e02705543f::t_1a39af7ba43282 57,62,78-81,106-136
+  s_12b1e02705543f::t_cbc12a102ce104 137
+plugins/adapters/icqq/agents/icqq/system.md
+  s_12b1e02705543f::t_6da4a77580ddf3 3,5,7
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_12b1e02705543f::t_cbf810492ec301 149
+  s_12b1e02705543f::t_be32acf1062697 11,222,230,254-266
+  s_12b1e02705543f::t_ea4335334b9049 12
+  s_12b1e02705543f::t_7b20585c6ff5d2 35,142-148,150,162,169,218-219,221,223-229,231-232,236-247,250-253,267
+  s_12b1e02705543f::t_6dc58a51ccfb9a 13,84,133,152-158,220,233-235,248-249,749,791
+  s_12b1e02705543f::t_82a87cb9b7625e 794-799
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_12b1e02705543f::t_6da4a77580ddf3 151-155
+  s_12b1e02705543f::t_6d096aa0626bf4 2,5-8,10,12-13,30,42,62,72-73,81-84,91-150,156-225
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_12b1e02705543f::t_cdc63513327097 90
+  s_12b1e02705543f::t_e120f48830995b 17,867-900,902-904,958,965,1132-1134,1289,1292
+evals/chat/README.md
+  s_12b1e02705543f::t_7cc1066e10d309 29-32,74
+evals/chat/run.ts
+  s_12b1e02705543f::t_d2a26bce92a789 18,56-57
+evals/chat/src/scenario.ts
+  s_12b1e02705543f::t_da8ae41646e151 33
+evals/chat/src/turn.ts
+  s_12b1e02705543f::t_254e2474558f54 19,22,31,45,54,79-99,103-105,114-118
+evals/chat/tests/eval.test.ts
+  s_12b1e02705543f::t_31ff4a96467e88 2-4,6,11,47-49,51-69,71-97
+packages/im/agent/src/context/context-system.ts
+  s_12b1e02705543f::t_e81c5a445eb62b 116-121,124,141,156,190
+packages/im/agent/src/context/turn-envelope.ts
+  s_12b1e02705543f::t_9603322831b656 2,25,68-71,74,76-106,108-111,113-114,117-118,120-122,125-126,128-141,143-150,152
+packages/im/agent/src/context/turn-user-message.ts
+  s_12b1e02705543f::t_1065ed10bd2193 70-75,79-89
+packages/im/agent/src/core/agent-core-run.ts
+  s_12b1e02705543f::t_ea09757063c187 638-643
+packages/im/agent/src/session/session-io.ts
+  s_12b1e02705543f::t_9490cea4b8bcba 77-83
+packages/im/agent/src/session/turn-ingress-session.ts
+  s_12b1e02705543f::t_ccc7a28974f438 26-41
+packages/im/agent/tests/context/context-system.test.ts
+  s_12b1e02705543f::t_ba18314f460db4 102-103,113-143
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  s_12b1e02705543f::t_86c86d99a315b3 56-58
+packages/im/agent/tests/session/turn-ingress-session.test.ts
+  s_12b1e02705543f::t_f7c0141919ba26 68,71
+packages/im/agent/tests/zhin-agent/file-memory-context.test.ts
+  s_12b1e02705543f::t_51df8d37ba3a89 30,44,47,52-55,128,133
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  s_12b1e02705543f::t_26dcb8beb072b3 16,20-23,37-38,41,53,67-68,74,81-83,95
+packages/im/ai/src/index.ts
+  s_12b1e02705543f::t_0acaeac86f8000 530
+packages/im/ai/src/llm/types/agent-message.ts
+  s_12b1e02705543f::t_9bf2fba73ace59 18-19,62-63
+packages/im/ai/src/llm/types/content-block.ts
+  s_12b1e02705543f::t_c1f8b87b231472 3-9,25-26,31
+packages/im/ai/src/memory/agent-db-models.ts
+  s_12b1e02705543f::t_23bee5e5ca899f 160-161
+packages/im/ai/src/memory/prompt-context.ts
+  s_12b1e02705543f::t_991e22fbc5b9ac 3,15-43,45-48,51,57-58,60-77,79,83
+packages/im/ai/tests/memory/compaction-checkpoint.test.ts
+  s_12b1e02705543f::t_edb46d0bb2eaac 6,50-70
+packages/im/ai/tests/memory/prompt-context.test.ts
+  s_12b1e02705543f::t_ef6bbcafc21a21 1-3,9-10,64-65,86-215
+packages/im/ai/tests/memory/user-message-presentation.test.ts
+  s_12b1e02705543f::t_270d81ebda1d6d 2-3,124-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d0e1facae6d7154c175090c6fa60a338478ba585",
+  "prompts": {},
+  "sessions": {
+    "s_12b1e02705543f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18193-fbf7-76b3-b33e-f286cdc167c7",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
