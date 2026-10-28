@@ -26,6 +26,7 @@ import { realpathSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 import { ROOT_CONFIG_FILE_NAMES, createToken } from '@zhin.js/plugin-runtime';
+import type { ToolProtectedPathData } from '@zhin.js/tool';
 import { checkFileAccess } from './file-policy.js';
 import { classifyBashFileOperation } from './file-role-policy.js';
 
@@ -69,6 +70,8 @@ export interface HostProtectedPathsInput {
 
 /** Resolved, case-folded, canonical form of {@link HostProtectedPathsInput}. */
 export interface HostProtectedPaths {
+  /** Original-case canonical project root (the folded {@link roots} cannot name a host path). */
+  readonly projectRoot?: string;
   /** Canonical root first, lexical root second (when they differ). Case-folded, posix separators. */
   readonly roots: readonly string[];
   /** Root-relative (case-folded, posix) list-B files. */
@@ -150,10 +153,22 @@ export async function createHostProtectedPaths(input: HostProtectedPathsInput): 
     deny.add(stripTrailingSlash(fold(await canonicalize(file))));
   }
   return Object.freeze({
+    projectRoot: canonicalRoot,
     roots: Object.freeze(roots),
     selfFiles: new Set([...DEFAULT_SELF_FILES, ...(input.selfFiles ?? [])].map(relativeToRoot)),
     selfDirs: Object.freeze([...DEFAULT_SELF_DIRS, ...(input.selfDirs ?? [])].map(relativeToRoot)),
     denyFiles: deny,
+  });
+}
+
+/** Plain-data form of {@link HostProtectedPaths}, carried on the Tool invocation policy. */
+export function toProtectedPathData(paths: HostProtectedPaths): ToolProtectedPathData {
+  return Object.freeze({
+    ...(paths.projectRoot ? { projectRoot: paths.projectRoot } : {}),
+    roots: Object.freeze([...paths.roots]),
+    selfFiles: Object.freeze([...paths.selfFiles]),
+    selfDirs: Object.freeze([...paths.selfDirs]),
+    denyFiles: Object.freeze([...paths.denyFiles]),
   });
 }
 

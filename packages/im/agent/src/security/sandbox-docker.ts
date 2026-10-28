@@ -13,6 +13,12 @@
 import * as child_process from 'node:child_process';
 import * as fs from 'node:fs';
 import type { SandboxConfig, SandboxResult } from './sandbox.js';
+import {
+  CONTAINER_WORKSPACE,
+  missingMountPointDirs,
+  overlayDockerArgs,
+  removeMountPointDirs,
+} from './sandbox-mounts.js';
 
 /** Docker 沙箱配置 */
 export interface DockerSandboxConfig extends SandboxConfig {
@@ -75,6 +81,47 @@ function ensureImage(image: string): { ok: boolean; error?: string } {
 }
 
 /**
+ * `docker run` arguments (pure). Read-only overlays only apply on top of a writable workspace
+ * mount, and always come after it so parent mounts precede child mounts.
+ */
+export function buildDockerRunArgs(
+  command: string,
+  config: Partial<DockerSandboxConfig>,
+  cwd: string,
+  env: NodeJS.ProcessEnv = {},
+): string[] {
+  const merged: DockerSandboxConfig = { ...DEFAULT_DOCKER_CONFIG, ...config };
+  const writable = merged.filesystemAccess === 'workspace-write';
+  const dockerArgs: string[] = [
+    'run',
+    '--rm',                          // 执行完自动删除容器
+    '--read-only',                    // 只读文件系统
+    '--tmpfs', '/tmp:size=64m',      // /tmp 可写，限制 64MB
+    '--memory', `${merged.maxMemoryMB}m`,
+    '--cpus', `${(merged.maxCpuPercent || 50) / 100}`,
+    '--pids-limit', '64',            // 进程数限制
+    '--security-opt', 'no-new-privileges',  // 禁止提权
+    '--cap-drop', 'ALL',             // 丢弃所有 capabilities
+    '--workdir', CONTAINER_WORKSPACE,
+    '-v', `${cwd}:${CONTAINER_WORKSPACE}:${writable ? 'rw' : 'ro'}`,
+  ];
+  if (writable && merged.readOnlyOverlays?.length) {
+    dockerArgs.push(...overlayDockerArgs(merged.readOnlyOverlays));
+  }
+  if (!merged.enableNetwork) {
+    dockerArgs.push('--network', 'none');
+  }
+  if (merged.allowedEnvVars) {
+    for (const varName of merged.allowedEnvVars) {
+      const value = env[varName];
+      if (value) dockerArgs.push('-e', `${varName}=${value}`);
+    }
+  }
+  dockerArgs.push(merged.dockerImage!, 'sh', '-c', command);
+  return dockerArgs;
+}
+
+/**
  * 在 Docker 容器中执行命令
  */
 export async function executeInDocker(
@@ -103,38 +150,12 @@ export async function executeInDocker(
   const maxOutput = merged.maxOutputSize || 10 * 1024 * 1024;
   const cwd = merged.workingDirectory || process.cwd();
 
-  // 构建 docker run 参数
-  const dockerArgs: string[] = [
-    'run',
-    '--rm',                          // 执行完自动删除容器
-    '--read-only',                    // 只读文件系统
-    '--tmpfs', '/tmp:size=64m',      // /tmp 可写，限制 64MB
-    '--memory', `${merged.maxMemoryMB}m`,
-    '--cpus', `${(merged.maxCpuPercent || 50) / 100}`,
-    '--pids-limit', '64',            // 进程数限制
-    '--security-opt', 'no-new-privileges',  // 禁止提权
-    '--cap-drop', 'ALL',             // 丢弃所有 capabilities
-    '--workdir', '/workspace',
-    '-v', `${cwd}:/workspace:${merged.filesystemAccess === 'workspace-write' ? 'rw' : 'ro'}`,
-  ];
-
-  // 网络隔离
-  if (!merged.enableNetwork) {
-    dockerArgs.push('--network', 'none');
-  }
-
-  // 环境变量清理
-  if (merged.allowedEnvVars) {
-    for (const varName of merged.allowedEnvVars) {
-      const value = process.env[varName];
-      if (value) {
-        dockerArgs.push('-e', `${varName}=${value}`);
-      }
-    }
-  }
-
-  // 镜像和命令
-  dockerArgs.push(merged.dockerImage!, 'sh', '-c', command);
+  const writable = merged.filesystemAccess === 'workspace-write';
+  const overlays = writable ? (merged.readOnlyOverlays ?? []) : [];
+  const dockerArgs = buildDockerRunArgs(command, merged, cwd, process.env);
+  // Docker creates missing mount points on the host; remember which ones are ours to remove.
+  const createdMountPoints = missingMountPointDirs(cwd, overlays);
+  const cleanup = () => removeMountPointDirs(createdMountPoints);
 
   return new Promise((resolve) => {
     let timedOut = false;
@@ -178,6 +199,7 @@ export async function executeInDocker(
 
     child.on('close', (exitCode) => {
       clearTimeout(timer);
+      cleanup();
       resolve({
         success: exitCode === 0 && !timedOut,
         stdout: stdoutChunks.join('').slice(0, maxOutput),
@@ -191,6 +213,7 @@ export async function executeInDocker(
 
     child.on('error', (error) => {
       clearTimeout(timer);
+      cleanup();
       resolve({
         success: false,
         stdout: stdoutChunks.join(''),
