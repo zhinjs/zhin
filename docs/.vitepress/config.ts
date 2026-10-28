@@ -84,6 +84,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Email', link: '/adapters/email' },
       { text: 'GitHub', link: '/adapters/github' },
       { text: 'Bilibili 评论', link: '/adapters/bilibili' },
+      { text: 'Bilibili 直播弹幕', link: '/adapters/bilibili-live' },
     ]),
   ]),
   sidebarGroup('AI 能力（可选）', [
@@ -245,6 +246,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Email', link: '/en/adapters/email' },
       { text: 'GitHub', link: '/en/adapters/github' },
       { text: 'Bilibili Comments', link: '/en/adapters/bilibili' },
+      { text: 'Bilibili Live Danmaku', link: '/en/adapters/bilibili-live' },
     ]),
   ]),
   sidebarGroup('AI (Optional)', [

@@ -68,6 +68,7 @@ _（当前无）_
 | 企业微信 | `@zhin.js/adapter-wecom` | — | [企业微信](/adapters/wecom) |
 | 微信 iLink | `@zhin.js/adapter-weixin-ilink` | — | [微信 iLink](/adapters/weixin-ilink) |
 | Bilibili 评论 | `@zhin.js/adapter-bilibili` | — | [Bilibili 评论](/adapters/bilibili) |
+| Bilibili 直播弹幕 | `@zhin.js/adapter-bilibili-live` | — | [Bilibili 直播弹幕](/adapters/bilibili-live) |
 | Email | `@zhin.js/adapter-email` | — | [Email](/adapters/email) |
 | GitHub | `@zhin.js/adapter-github` | — | [GitHub](/adapters/github) |
 | LINE | `@zhin.js/adapter-line` | — | [LINE](/adapters/line) |

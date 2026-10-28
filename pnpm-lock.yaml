@@ -2153,6 +2153,37 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/zhin
 
+  plugins/adapters/bilibili-live:
+    dependencies:
+      '@zhin.js/adapter':
+        specifier: workspace:*
+        version: link:../../../packages/im/adapter
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../../../packages/im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../../packages/im/feature-kit
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../../../packages/im/im-contract
+      '@zhin.js/logger':
+        specifier: workspace:*
+        version: link:../../../basic/logger
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.12
+        version: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@26.1.2)(@vitest/coverage-v8@4.1.12)(@vitest/ui@4.1.12)(vite@6.4.5(@types/node@26.1.2)(tsx@4.23.1)(yaml@2.9.0))
+      zhin.js:
+        specifier: workspace:*
+        version: link:../../../packages/im/zhin
+
   plugins/adapters/dingtalk:
     dependencies:
       '@zhin.js/adapter':
