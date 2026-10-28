@@ -20,6 +20,7 @@ import {
   hostProtectedPathsToken,
   SelfChangeStore,
   selfChangeStoreToken,
+  type SelfChangeImpactPort,
   type AudioTranscriptionPort,
 } from '@zhin.js/agent';
 import type {
@@ -120,6 +121,8 @@ export interface InstallAgentHostOptions {
   readonly workroomTrustedPackPublishers?: readonly string[];
   /** Self-hosted Root-private KMS and signed governance decision issuer. */
   readonly workroomLocalDataGovernance?: LocalWorkroomDataGovernanceAuthority;
+  /** ADR 0040 §2: `InvalidationPlanner` over the committed source ownership, for `change_draft` previews. */
+  readonly selfChangeImpact?: SelfChangeImpactPort;
 }
 
 /**
@@ -241,6 +244,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       announcements: () => zhinAgent.getAnnouncements?.(),
       sessionEvents: () => zhinAgent.getSessionEvents?.(),
       groupRules: () => zhinAgent.getGroupRules?.(),
+      selfChanges: { store: () => selfChanges, impact: () => options.selfChangeImpact },
     });
 
     const publicationCoordinator = new AgentHostPublicationCoordinator({

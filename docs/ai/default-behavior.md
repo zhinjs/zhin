@@ -43,6 +43,8 @@
 
 **自我变更暂存区（ADR 0040 §6a，切片 A）。** 宿主在 `.zhin/changes/<id>/` 暂存 Agent 起草的变更（`change.json` 元数据 + `files/` 草稿 + `snapshot/` 回滚快照）；该目录属 P0 A 名单，Agent 的文件工具与 shell 都不能写。可写目标只有插件约定目录（`commands/`、`middlewares/`、`handlers/`、`tools/`、`components/`、`skills/`、`agents/`）、根 `AGENTS.md` 与 `skills/**`；根配置只能走字段级 `configPatch`，且补丁触及 `ai.agent.toolHardGate*`、`ai.agent.execApprovalMode`、`ai.agent.masterShell`（含整体覆盖其祖先）直接拒绝。磁盘有界：进入终态（`applied` / `rolled_back` / `rejected` / `expired` / `trial_failed`）立即删除 `files/` 与 `snapshot/`，只留 `change.json`，14 天后删除整个目录；`draft` / `ready` / `pending` 闲置 24 小时即 `expired`；`failed`（已急停）保留现场直到人标记已处理。单个变更 ≤ 5 MB / 50 个文件，整个暂存区 ≤ 50 MB，超限在写入前拒绝（`change_quota_exceeded`）。清理在启动时与之后每 6 小时各跑一次，只删暂存区内的目录且不跟随符号链接。状态迁移写入 `ai_decision_events`，`kind=self_change`，payload 只含路径与摘要，不含文件正文与配置值。
 
+**起草变更：`change_draft`（ADR 0040 §2，切片 B）。** 用户要「加个指令 / 改个配置」时，Agent 调 `change_draft`（`risk: safe`）提交完整文件内容与可选的字段级 `config_patch`（值用 `value_json` 传 JSON 字符串）；宿主校验后写入暂存区，**不碰生产目录、不生效**。只在 IM 会话中可用，只能改自己发起的 `draft`（`change_id`），改草稿会作废旧预览。写入后宿主生成预览挂到 `change.json` 的 `plan`：每个文件的新建 / 修改 / 删除与增删行数（按行比较，移动的行不计）；影响面复用开发态文件监听的 `InvalidationPlanner`（当前代的源码归属索引），得到 `none` / `generation`（列出将热重载的插件子树与能力槽）/ `process`（需重启）；配置补丁按 Console `config:patch` 同一口径并入——宿主配置段（`http`、`database`、`ai` 等）需重启，插件段热重载对应插件。拿不到归属索引时按保守估计（文件 → 热重载，配置 → 重启）并标「估计」。预览本身 ≤ 64 KB，计入暂存区配额。试跑与审批见后续切片。
+
 ```yaml
 ai:
   agent:

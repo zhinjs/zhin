@@ -14,3 +14,4 @@ export {
   loadWorkroomHostModule,
   type WorkroomHostModule,
 } from './workroom-loader.js';
+export { createSelfChangeImpactPort } from './self-change-impact.js';

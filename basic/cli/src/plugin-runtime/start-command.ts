@@ -311,7 +311,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // Attach before start so the generation-owned Endpoint event boundary is
   // available while the first generation is still being prepared.
   im.attach(host.runtime.snapshots);
-  agentHost?.attach(host.runtime.snapshots);
+  agentHost?.attach(host.runtime.snapshots, () => host.runtime.sourceOwnership);
   consoleHost.console.attach(host.runtime.snapshots);
   registerConsoleHttp({
     http: httpHost,
@@ -479,7 +479,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
 
 interface ConfiguredAgentHost {
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
-  attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotReader): void;
+  attach(
+    snapshots: import('@zhin.js/plugin-runtime').SnapshotReader,
+    sourceOwnership?: () => import('@zhin.js/runtime').SourceOwnershipIndex,
+  ): void;
   install(options: {
     readonly im: ImRuntime;
     readonly projectRoot: string;
@@ -518,6 +521,7 @@ async function loadConfiguredAgentHost(
     turnTraceStore,
   });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
+  let sourceOwnership: (() => import('@zhin.js/runtime').SourceOwnershipIndex) | undefined;
   let localWorkroomDataGovernance: ReturnType<
     NonNullable<typeof workroom>['createLocalWorkroomDataGovernanceAuthority']
   > | undefined;
@@ -527,8 +531,9 @@ async function loadConfiguredAgentHost(
         import('@zhin.js/agent/runtime').AgentHostPort | undefined;
       return port?.protocol.listBindings() ?? [];
     },
-    attach: (snapshots) => {
+    attach: (snapshots, ownership) => {
       snapshotReader = snapshots;
+      sourceOwnership = ownership;
       runtime.attach(snapshots);
     },
     install: (options) => {
@@ -545,6 +550,7 @@ async function loadConfiguredAgentHost(
         workroomStorageMode,
         workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,
+        selfChangeImpact: agentHost.createSelfChangeImpactPort(sourceOwnership),
         extraTools: options.extraTools as Parameters<typeof agentHost.installAgentHost>[0]['extraTools'],
       });
     },
