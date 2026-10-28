@@ -1853,6 +1853,9 @@
                 "string"
               ]
             },
+            "recordRequestBodies": {
+              "type": "boolean"
+            },
             "promptCache": {
               "type": [
                 "boolean",

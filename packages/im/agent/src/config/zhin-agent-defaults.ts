@@ -56,6 +56,7 @@ export const DEFAULT_CONFIG = {
   phaseTrace: false,
   onPhaseTrace: () => {},
   promptTraceVerbose: false,
+  recordRequestBodies: true,
   promptCacheRetention: 'in_memory',
   promptCacheKeyPrefix: 'zhin',
   deferredTools: { ...DEFAULT_DEFERRED_TOOLS_CONFIG },

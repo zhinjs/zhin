@@ -69,6 +69,7 @@ describe('Host configuration field coverage', () => {
       ['ai', 'multimodal', 'perception', 'timeoutMs'], ['ai', 'memory', 'budgets', 'global'],
       ['ai', 'agent', 'modelHarness'], ['ai', 'agent', 'providerResilience'],
       ['ai', 'agent', 'schedule'], ['ai', 'agent', 'thinkingPreviewMaxLength'],
+      ['ai', 'agent', 'recordRequestBodies'],
     ]) expect(field(path)).toBeTypeOf('object');
     const providers = field(['ai', 'providers']).additionalProperties as Schema;
     expect(providers).toMatchObject({ properties: {
@@ -76,6 +77,9 @@ describe('Host configuration field coverage', () => {
       maxOutputTokens: { type: ['number', 'string'] },
       headers: { type: 'object' }, providerOptions: { type: 'object' },
     } });
+    expect(check({ ai: { agent: { recordRequestBodies: false } } })).toMatchObject({ ai: { agent: { recordRequestBodies: false } } });
+    // The runtime option is boolean; accepting "false" would silently leave recording enabled.
+    expect(parsePluginConfigSchema(hostSchema, { ai: { agent: { recordRequestBodies: 'false' } } }).errors).not.toEqual([]);
     expect((providers.properties as Record<string, Schema>).maxOutputTokens).not.toHaveProperty('writeOnly');
     check({ ai: { enabled: '${AI_ENABLED}', providers: { test: {
       sdk: 'openai', apiKey: '${AI_KEY}', models: ['fixture'], contextWindow: '${WINDOW}',

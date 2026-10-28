@@ -130,6 +130,8 @@ export interface ZhinAgentConfig {
   phaseTrace?: boolean;
   promptTrace?: boolean;
   promptTraceVerbose?: boolean;
+  /** Retain redacted semantic model inputs in the local trace archive. Defaults to true. */
+  recordRequestBodies?: boolean;
   promptCache?: boolean;
   promptCacheRetention?: 'in_memory' | '24h';
   promptCacheKeyPrefix?: string;

@@ -10,6 +10,7 @@ import { TURN_TRACE_VERSION, type TurnTrace } from './turn-trace.js';
 export const DEFAULT_TURN_TRACE_LIMIT = 50;
 
 export interface TurnTraceStore {
+  readonly maxBytes?: number;
   save(trace: TurnTrace): Promise<void>;
   /** Oldest first. */
   list(): Promise<readonly TurnTrace[]>;

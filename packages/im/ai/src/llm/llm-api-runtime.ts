@@ -8,6 +8,18 @@ import type { LanguageModel } from 'ai';
 import { createLanguageModel } from './sdk-registry.js';
 import type { ProviderResilienceConfig } from './provider-resilience.js';
 
+/** Final semantic input to the SDK, not an HTTP request or proof of upstream receipt. */
+export interface LlmRequestInput {
+  readonly system?: unknown;
+  readonly messages: readonly unknown[];
+  readonly tools: readonly Readonly<{ name: string; description?: string; inputSchema?: unknown }>[];
+  readonly output_schema?: unknown;
+}
+
+export type LlmRequestObservation =
+  | Readonly<{ status: 'captured'; input: LlmRequestInput }>
+  | Readonly<{ status: 'capture_failed' }>;
+
 export interface StreamOptions {
   signal?: AbortSignal;
   temperature?: number;
@@ -25,6 +37,8 @@ export interface StreamOptions {
    */
   outputSchema?: Record<string, unknown>;
   onPayload?: (payload: unknown) => void;
+  /** Optional semantic-input observer; the SDK can repeat it for same-input retries. Failures are isolated. */
+  onRequest?: (request: LlmRequestObservation) => void;
   onResponse?: (response: unknown) => void;
   /** Override the AI SDK's built-in retry count (SDK default 2). The resilient port sets 0. */
   maxRetries?: number;
