@@ -71,6 +71,7 @@ export interface ConsoleAgentSessionTree {
   resolveActiveSessionId(sessionKey: string): Promise<string | null>;
   getActiveLeafMessageId(sessionId: string): Promise<number | null>;
   listBranchPoints(sessionId: string): Promise<readonly unknown[]>;
+  readBranchMessage?(sessionId: string, messageId: number): Promise<string | null>;
   switchActiveLeaf(sessionId: string, messageId: number): Promise<boolean>;
   jumpToBranchIndex(
     sessionId: string,
@@ -872,11 +873,19 @@ function registerAgentSessionRoutes(
     });
   };
 
-  // HttpHost 无 `:param` 路由，用前缀路由匹配 `<sessionKey>/tree|leaf`。
+  // HttpHost 无 `:param` 路由，用前缀路由匹配 `<sessionKey>/tree|message|leaf`。
   route('GET', `${base}/agent/sessions/*`, async (_request, response, url) => {
-    const parsed = parseSessionAction(url.pathname, prefix, 'tree');
+    const messageAction = parseSessionAction(url.pathname, prefix, 'message');
+    if (messageAction) response.setHeader('Cache-Control', 'no-store');
+    const parsed = messageAction ?? parseSessionAction(url.pathname, prefix, 'tree');
     if (!parsed) {
       writeJson(response, 404, { success: false, error: 'Not found' });
+      return;
+    }
+    const messageId = Number(url.searchParams.get('messageId'));
+    const expectedSessionId = url.searchParams.get('sessionId');
+    if (messageAction && (!Number.isSafeInteger(messageId) || messageId < 1 || !expectedSessionId)) {
+      writeJson(response, 400, { success: false, error: '需要 sessionId 和正安全整数 messageId' });
       return;
     }
     const lease = acquireSessionTree();
@@ -886,7 +895,28 @@ function registerAgentSessionRoutes(
     }
     const runtime = lease.tree;
     try {
+      if (messageAction && !runtime.readBranchMessage) {
+        writeJson(response, 501, { success: false, error: '当前 Agent runtime 不支持读取完整消息' });
+        return;
+      }
       const sessionId = await runtime.resolveActiveSessionId(parsed.sessionKey);
+      if (messageAction) {
+        if (!sessionId) {
+          writeJson(response, 404, { success: false, error: '未找到活跃会话' });
+          return;
+        }
+        if (sessionId !== expectedSessionId) {
+          writeJson(response, 409, { success: false, error: '会话已变化，请重新读取会话列表' });
+          return;
+        }
+        const text = await runtime.readBranchMessage!(sessionId, messageId);
+        if (text === null) {
+          writeJson(response, 404, { success: false, error: '未找到此会话的用户消息' });
+          return;
+        }
+        writeJson(response, 200, { success: true, data: { messageId, text } });
+        return;
+      }
       if (!sessionId) {
         if (!isRuntimeImSessionKey(parsed.sessionKey)) {
           writeJson(response, 404, {
@@ -934,7 +964,7 @@ function registerAgentSessionRoutes(
     } finally {
       lease.release();
     }
-  }, { summary: 'Get agent session tree', tags: ['console', 'agent'] });
+  }, { summary: 'Get agent session tree or message', tags: ['console', 'agent'] });
 
   route('POST', `${base}/agent/sessions/*`, async (request, response, url, authScope) => {
     const parsed = parseSessionAction(url.pathname, prefix, 'leaf');
@@ -1038,7 +1068,7 @@ function isRuntimeImSessionKey(value: string): boolean {
 function parseSessionAction(
   pathname: string,
   prefix: string,
-  action: 'tree' | 'leaf',
+  action: 'tree' | 'message' | 'leaf',
 ): { sessionKey: string } | null {
   if (!pathname.startsWith(prefix)) return null;
   const rest = pathname.slice(prefix.length).replace(/\/+$/u, '');
