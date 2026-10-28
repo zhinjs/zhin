@@ -395,7 +395,14 @@ interface SkillsStatus {
 - `group-rule-create` 起草后**立即送审**（`pending`），并把预览卡发回该群。模型只有 `rule_draft` 工具（`risk: safe`，只在群里可用）：发起人必须是本群群主 / 管理员（按消息携带的平台实时角色判定），否则拒绝并写 `rule_draft_forbidden`。
 - 群里的审批命令（只在规则所在的群生效）：`/rule approve <短码>`、`/rule reject <短码>`、`/rule disable <短码|trigger>`、`/rules`（列出本群规则，任何人可看）。短码是卡片上的 `content_hash` 前 8 位，规则改过一个字短码就变，旧卡片批不了新内容。审批人 = 本群群主 / 管理员 ∪ `ai.agent.toolHardGate.imApproval.approverIds`；Console 侧是 `ops:approve`。
 - 状态只前进：`draft` → `pending` → `active`，旁路 `rejected` / `expired`（24 小时未批）/ `disabled`。同群同 `trigger` 只有一条 `active`，批准新规则会把旧规则停用（`rule_superseded`）。停用不需要审批；放宽 = 停用后另起新规则。
-- 审计写 `kind=group_rule`（`rule_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_disabled` / `_superseded` / `_hash_mismatch`、`rule_draft_forbidden`）。数据存在 `ai_group_rules` 表；终态规则 30 天后或每群超过 50 条时删除（启动时与每小时清理）。规则的执行（提醒 / 自动禁言 / 出踢人审批卡）见后续切片。
+- 审计写 `kind=group_rule`（`rule_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_disabled` / `_superseded` / `_hash_mismatch`、`rule_draft_forbidden`）。数据存在 `ai_group_rules` 表；终态规则 30 天后或每群超过 50 条时删除（启动时与每小时清理）。
+- 执行（切片 C）：违规判定方报告一次命中后，按该群生效规则的当前档执行，审计写 `kind=rule_enforcement`：
+  - `remind` / `warn`：模板提醒 @ 当事人（不调模型），过控制面（`emergency_stop` / `muted` / `read_only` 拦）与会话画像；`rule_hit_remind` / `rule_hit_warn`。
+  - `mute`：**自动执行、不弹卡**——规则的审批记录就是这次禁言的硬闸批准（`tool_approval` 行 `via: rule`、`approvalId` = 规则 id、`actor` = 批准人），仍过控制面 `emergency_stop` / `read_only` 与 `ops_cooldown`；`rule_hit_mute`。
+  - `suggest_kick`：**不自动踢**，出一张 `member` 类审批卡（附证据与规则短码），批准才踢；冷却期内重复命中不再出卡；`rule_hit_kick_suggested`。
+  - 当事人是群主 / 管理员或在豁免名单：`rule_hit_exempt`；Bot 不是管理员：`rule_hit_bot_not_admin`，每群每天提示一次。
+  - 阶梯：冷静期内再犯升一档，走完后重复最后一档；提醒送达前发出的消息不算再犯；没落地的动作（被拦、冷却、平台失败）不升档。阶梯进度只在进程内（有上限、过期清理），重启后归零。
+  - 判定违规的一方（`flood` 刷屏检测、迁移后的 content-moderation）见后续切片。
 
 ### 内置操作：危险工具审批卡
 
