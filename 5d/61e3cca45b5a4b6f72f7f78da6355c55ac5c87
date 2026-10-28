@@ -1,0 +1,46 @@
+basic/cli/src/plugin-runtime/root-host.ts
+  s_af543e8ce94428::t_9bf1154a35a25a 4,63-65,107,115-150,156
+basic/cli/tests/plugin-runtime/root-host.test.ts
+  s_af543e8ce94428::t_710389a0723e27 59-117
+.changeset/0040-slice-e2-host-wiring.md
+  s_af543e8ce94428::t_dab8ed87a0a2c2 1-5
+docs/ai/default-behavior.md
+  s_af543e8ce94428::t_dab8ed87a0a2c2 57-58
+  s_af543e8ce94428::t_a132bf2c49a1be 59
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_af543e8ce94428::t_e9e9c1b995459c 96,100,103-104
+  s_af543e8ce94428::t_1ef5899c613724 58,107-112,114,117-119,147-158
+  s_af543e8ce94428::t_6370cce664f63c 1-57,59-60,62-75,88-95,97-99,101-102,105-106,113,115-116,120-146,159-164,168-241
+  s_af543e8ce94428::t_6d173744790b41 61,76-87,165-167
+docs/en/ai/default-behavior.md
+  s_af543e8ce94428::t_a132bf2c49a1be 59
+  s_af543e8ce94428::t_dab8ed87a0a2c2 57-58
+basic/cli/tests/plugin-runtime/agent/self-change-apply.test.ts
+  s_af543e8ce94428::t_6d173744790b41 278-295
+  s_af543e8ce94428::t_3ac0b7eaae0fe8 1-277
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_af543e8ce94428::t_d40d0189018258 4,25,83-84,209-233,236,241-244
+  s_af543e8ce94428::t_1ef5899c613724 234-235
+basic/cli/src/plugin-runtime/start-command.ts
+  s_af543e8ce94428::t_6d173744790b41 306,308-309
+  s_af543e8ce94428::t_b80720683e1f0b 65,207-216,266,307,330,361,363-372,475-476,506-512,531
+  s_af543e8ce94428::t_57e622b7d11e2e 310-311
+basic/cli/src/plugin-runtime/agent/self-change-report.ts
+  s_af543e8ce94428::t_99730367931b1c 1-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5d61e3cca45b5a4b6f72f7f78da6355c55ac5c87",
+  "prompts": {},
+  "sessions": {
+    "s_af543e8ce94428": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8c3af922-5d28-4a47-842f-455891bf3d7e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
