@@ -83,8 +83,15 @@ function fold(value: string): string {
   return value.replace(/\\/g, '/').toLowerCase();
 }
 
+/**
+ * Drop trailing `/` characters (keeping a lone `/`). Linear scan instead of
+ * `/\/+$/` — that regex backtracks polynomially on inputs with many `/` (ReDoS).
+ */
 function stripTrailingSlash(value: string): string {
-  return value.length > 1 ? value.replace(/\/+$/u, '') : value;
+  if (value.length <= 1) return value;
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) end -= 1;
+  return value.slice(0, end);
 }
 
 function canonicalizeSync(target: string): string {

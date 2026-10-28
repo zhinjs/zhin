@@ -21,11 +21,11 @@ import {
   resolveToolHardGate,
   resolveToolHardGateImApproval,
   toolLocalName,
+  type ToolHardGateControlView,
 } from '../../src/security/tool-hard-gate.js';
 import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
 import { createHostProtectedPaths } from '../../src/security/host-config-paths.js';
 import { OpsCooldown } from '../../src/security/ops-cooldown.js';
-import type { ToolHardGateControlView } from '../../src/security/tool-hard-gate.js';
 import { AiControlPlane, type ControlStateModel } from '../../src/control-plane.js';
 import { hostControlPlaneSource } from '../../src/security/host-control-plane.js';
 
