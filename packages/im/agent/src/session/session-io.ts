@@ -74,9 +74,13 @@ export function resolveTurnUserMessage(
   rawContent: string,
 ): { content: string; llmMessage: UserMessage } {
   const { content, actor } = prepareUserContentForSession(commMessage, rawContent);
-  const llmMessage = renderUserMessageForLlm(
-    createUserMessage(content, undefined, Date.now(), actor),
-  );
+  const user = createUserMessage(content, undefined, Date.now(), {
+    ...actor, authorizationRoles: [...senderRolesFromMessage(commMessage)],
+  });
+  const llmMessage = renderUserMessageForLlm({
+    ...user,
+    ...(commMessage.id ? { messageId: String(commMessage.id) } : {}),
+  });
   return { content, llmMessage };
 }
 

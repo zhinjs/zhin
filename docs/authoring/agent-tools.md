@@ -259,6 +259,8 @@ tools:
 
 例如 ICQQ 的点赞放在通用 `icqq-interaction`，戳一戳和签到放在 `icqq-group-interaction`；后者的 SKILL.md frontmatter 和每个私有 Tool 都声明 `scopes: ['group']`。私聊不会获得这个 Skill 的目录、正文或工具，之前加载过也不会绕过本轮筛选。未声明 `scopes` 表示所有场景，不代表拥有所有权限。
 
+绑定当前会话的工具还可声明 `currentConversationBotRoles: ['owner', 'admin']`，由可信入站提供 Bot 平台角色。它与发起人的 `permissions` 同时满足才披露，角色未知时该工具不可发现或加载。角色条件只适用于当前会话：如果工具参数可以选择其他群，须在执行时检查目标群角色，不能用当前群角色代替。入站筛选也不能替代执行前的实时平台检查。
+
 群管理只在群聊披露，服务器/频道管理使用适配器实际归一化后的场景：Slack 的频道是 `group`，Discord、KOOK、QQ 频道是 `channel`。创建新群、账号查询、用户资料等通用能力独立保留；混合场景的 Skill 应拆分。
 
 ### 定义子 Agent
@@ -321,7 +323,8 @@ my-plugin/
 | `riskCategory` | 否 | `'member' \| 'publish' \| 'funds' \| 'identity'`，显示在审批卡片上；`funds` 默认禁用 |
 | `platforms` | 否 | 限定平台，如 `['icqq']`；为空表示全部 |
 | `scopes` | 否 | 限定场景 `'private' \| 'group' \| 'channel'`；为空表示全部 |
-| `permissions` | 否 | 权限规则列表，全部满足才提供 |
+| `currentConversationBotRoles` | 否 | Bot 在当前会话必须具备的平台角色；未知或不匹配时不提供工具 |
+| `permissions` | 否 | 发起人的权限规则列表，全部满足才提供 |
 | `hidden` | 否 | 注册但不提供给模型，仍可按名字调用 |
 | `alwaysLoaded` | 否 | 设为 `true` 时参数定义每轮常驻给模型；默认 `false`（延迟加载），见[让工具常驻](#让工具常驻) |
 | `execute(input, context)` | 是 | 执行函数，`context` 见上文 |

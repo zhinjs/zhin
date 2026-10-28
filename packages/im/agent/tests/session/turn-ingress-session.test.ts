@@ -65,8 +65,10 @@ describe('TurnIngress session projection', () => {
       subjectId: 'user-7',
       displayName: 'Ada Lovelace',
       roles: ['trusted', 'admin'],
+      authorizationRoles: ['trusted', 'admin'],
       scope: 'group',
     });
+    expect(result.llmMessage.messageId).toBe('message-2');
     expect(result.llmMessage.cause).toEqual({
       turnId: 'turn',
       intent: 'new',

@@ -164,6 +164,7 @@ describe('Tool Feature', () => {
       description: 'Moderate a QQ group',
       platforms: ['qq'],
       scopes: ['group'],
+      currentConversationBotRoles: ['owner', 'admin'],
       permissions: ['platform(qq,scene_admin)'],
       tags: ['moderation'],
       keywords: ['admin'],
@@ -184,6 +185,7 @@ describe('Tool Feature', () => {
     expect(descriptor).toMatchObject({
       platforms: ['qq'],
       scopes: ['group'],
+      currentConversationBotRoles: ['owner', 'admin'],
       permissions: ['platform(qq,scene_admin)'],
       tags: ['moderation'],
       keywords: ['admin'],
@@ -191,6 +193,16 @@ describe('Tool Feature', () => {
       requiresApproval: 'always',
     });
     expect(Object.isFrozen(definition.permissions)).toBe(true);
+    expect(Object.isFrozen(definition.currentConversationBotRoles)).toBe(true);
+  });
+
+  it('validates current-conversation Bot roles at authoring and discovery boundaries', () => {
+    const valid = defineAgentTool({ description: 'Moderate', currentConversationBotRoles: ['admin'], execute() {} });
+    expect(parseAgentToolDefinition(valid).currentConversationBotRoles).toEqual(['admin']);
+    expect(() => defineAgentTool({ description: 'Invalid', currentConversationBotRoles: [1] as never, execute() {} }))
+      .toThrow('currentConversationBotRoles');
+    expect(() => parseAgentToolDefinition({ ...valid, currentConversationBotRoles: 'admin' }))
+      .toThrow();
   });
 
   it('keeps tools deferred unless alwaysLoaded is explicitly true (#857)', () => {

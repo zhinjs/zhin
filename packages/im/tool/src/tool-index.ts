@@ -34,6 +34,7 @@ export interface ToolDescriptor {
   readonly adapter?: string;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
+  readonly currentConversationBotRoles?: readonly string[];
   readonly permissions?: readonly string[];
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
@@ -146,6 +147,7 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     ...(definition.adapter ? { adapter: definition.adapter } : {}),
     platforms: definition.platforms,
     scopes: definition.scopes,
+    currentConversationBotRoles: definition.currentConversationBotRoles,
     permissions: definition.permissions,
     tags: definition.tags,
     keywords: definition.keywords,

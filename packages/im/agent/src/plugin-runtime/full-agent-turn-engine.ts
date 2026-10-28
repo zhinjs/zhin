@@ -1,3 +1,4 @@
+import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
 import { createUserMessage, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
@@ -27,6 +28,7 @@ import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
+import { BOOTSTRAP_PROMPT_ORDER, fillPromptSlots } from '../prompt/system-prompt.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
 import { TurnProvenance } from '../security/provenance.js';
@@ -246,18 +248,32 @@ async function* runInteractiveTurn(
     provenance,
     leakInspector,
   });
+  const promptRegistry = createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner);
+  const capabilityContext = buildCapabilityContext(
+    context.capabilities.agents,
+    context.capabilities.skills,
+    context.selection.agent,
+  );
+  if (capabilityContext) {
+    // Capabilities vary with the current principal and selected specialist. Keep
+    // their system role and retention, but place them after stable instructions.
+    promptRegistry.register('§11_capabilities', {
+      layer: 'system',
+      title: 'Turn capabilities',
+      content: fillPromptSlots(capabilityContext, host.activeBinding?.nickname),
+      order: BOOTSTRAP_PROMPT_ORDER.task - 1,
+      budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat : BOOTSTRAP_PROMPT_ORDER.task,
+      retention: 'preferred',
+    });
+  }
   const promptRuntime = Object.freeze({
-    bootstrapContext: buildCapabilityBootstrap(
-      options.bootstrapContext,
-      context.capabilities.agents,
-      context.capabilities.skills,
-      context.selection.agent,
-    ),
+    bootstrapContext: options.bootstrapContext?.trim() ?? '',
     activeSkillsContext,
     agentNickname: host.activeBinding?.nickname,
-    modelId: host.activeBinding?.model,
-    providerAlias: host.activeBinding?.providerAlias,
-    registry: createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner),
+    modelId: prompt.modelId,
+    providerAlias: prompt.providerAlias,
+    modelSdk: prompt.modelSdk,
+    registry: promptRegistry,
   });
 
   const stream = host.promptController.scheduleStream({
@@ -421,7 +437,7 @@ async function* runScheduleTurn(
     content: rawContent,
     turnUser: {
       rawContent,
-      promptMessages: [createUserMessage(rawContent)],
+      promptMessages: [resolveIngressUserMessage({ ...context.turn, input: { ...context.turn.input, text: rawContent } }).llmMessage],
     },
     activeSkillsContext,
   });
@@ -433,8 +449,9 @@ async function* runScheduleTurn(
     bootstrapContext: options.bootstrapContext,
     activeSkillsContext,
     agentNickname: host.activeBinding?.nickname,
-    modelId: host.activeBinding?.model,
-    providerAlias: host.activeBinding?.providerAlias,
+    modelId: prompt.modelId,
+    providerAlias: prompt.providerAlias,
+    modelSdk: prompt.modelSdk,
     registry: createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner),
   });
   const stream = host.promptController.scheduleStream({
@@ -515,6 +532,7 @@ function createTurnPromptRegistry(
       title: section.title,
       content: thirdParty ? labelThirdPartyGuidance(`plugin:${String(section.owner)}`, section.content) : section.content,
       order: section.order,
+      placement: section.platforms?.length ? 'tail' : undefined,
       retention: section.retention,
       maxChars: section.maxChars,
       metadata: {
@@ -603,13 +621,12 @@ function emitActivityStop(
   });
 }
 
-function buildCapabilityBootstrap(
-  base: string | undefined,
+function buildCapabilityContext(
   agents: readonly AgentDescriptor[],
   skills: readonly SkillDescriptor[],
   selectedName?: string,
 ): string {
-  const parts = base?.trim() ? [base.trim()] : [];
+  const parts: string[] = [];
   const selected = selectedName
     ? agents.find((agent) => agent.qualifiedName === selectedName || agent.name === selectedName)
     : undefined;

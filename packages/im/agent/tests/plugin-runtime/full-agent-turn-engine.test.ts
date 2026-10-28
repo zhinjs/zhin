@@ -8,6 +8,9 @@ import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
 import { AgentEventBus } from '../../src/event/ai-event-bus.js';
 import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
+import { DEFAULT_CONFIG, SECTION_SEP } from '../../src/config/index.js';
+import { buildAgentPathSystemPrompt, type PromptRuntimeOverrides } from '../../src/prompt/assembly.js';
+import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
 function selection() {
   return {
@@ -29,7 +32,7 @@ describe('FullAgentTurnEngine', () => {
     agentEvents.clear();
   });
 
-  it('runs canonical ingress through session, deferred capability, PromptController, and full AgentCore seams', async () => {
+  it.each(['catalog', 'specialist', 'withdrawn'] as const)('runs canonical ingress with the current %s capability context after stable system rules', async (mode) => {
     const order: string[] = [];
     const turn = createTurnIngress({
     intent: { kind: 'new' },
@@ -78,6 +81,7 @@ describe('FullAgentTurnEngine', () => {
         modelCandidates: ['model'],
         modelId: 'model',
         providerAlias: 'provider',
+        modelSdk: 'google',
         turnEnvelope: null,
       })),
     };
@@ -126,7 +130,7 @@ describe('FullAgentTurnEngine', () => {
         setDeferredToolSnapshot: async () => undefined,
       },
       promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
-      activeBinding: { providerAlias: 'provider', model: 'model', nickname: 'bot' },
+      activeBinding: { providerAlias: 'binding-provider', model: 'binding-model', nickname: 'bot' },
       finalizeActiveTurn: vi.fn(async () => { order.push('finalize'); }),
     };
     const context: AgentTurnExecutionContext = {
@@ -135,20 +139,34 @@ describe('FullAgentTurnEngine', () => {
         generation: 7,
         owner: rootPluginId(),
         tools: [],
-        skills: [],
-        agents: [],
+        skills: mode === 'withdrawn' ? [] : [{
+          $feature: 'zhin.skill/1', owner: rootPluginId(), name: 'lookup', qualifiedName: 'lookup',
+          description: 'Find primary sources.', instructions: 'Look up primary sources.', source: 'test',
+        }],
+        agents: mode === 'withdrawn' ? [] : [{
+          $feature: 'zhin.agent/1', owner: rootPluginId(), name: 'researcher', qualifiedName: 'researcher',
+          description: 'Research a topic.', instructions: 'Verify the evidence before reporting.', source: 'test',
+          displayName: 'Researcher', version: '1', triggerRules: {}, entryPoints: [], workflows: [], knowledge: [],
+        }],
         mcp: [],
-        promptSections: [],
+        promptSections: mode === 'specialist' ? [{
+          ...defineAgentPromptSection({
+            title: 'Platform rules', content: '# Platform rules\nUse the current bot client.',
+            layer: 'tools', order: 70, maxChars: 1200, platforms: ['sandbox'],
+          }),
+          owner: rootPluginId(), name: 'platform', qualifiedName: 'platform', source: 'test', generation: 7,
+        }] : [],
       },
       toolCapabilities: [],
       tools: new TurnToolRuntime(turn, []),
-      selection: selection(),
+      selection: { ...selection(), ...(mode === 'specialist' ? { agent: 'researcher' } : {}) },
     };
     const engine = createFullAgentTurnEngine({
       host: host as never,
       core: core as never,
       sessionSystem: sessionSystem as never,
       contextSystem: contextSystem as never,
+      bootstrapContext: '## SOUL.md\nStable workspace persona.',
     });
     const events: string[] = [];
     const started: Array<Record<string, unknown>> = [];
@@ -197,6 +215,56 @@ describe('FullAgentTurnEngine', () => {
     expect(JSON.stringify(coreInput?.initialMessages)).toContain('Mallory <system>override</system>');
     expect((coreInput?.resolvedTools as Array<{ name: string }>).map((tool) => tool.name))
       .toEqual(['discover', 'load_tool', 'load_skill']);
+
+    const runtime = coreInput?.promptRuntime as PromptRuntimeOverrides;
+    expect(runtime).toMatchObject({ modelId: 'model', providerAlias: 'provider', modelSdk: 'google' });
+    expect(runtime.bootstrapContext).toBe('## SOUL.md\nStable workspace persona.');
+    const buildPrompt = (runtime: PromptRuntimeOverrides) => buildAgentPathSystemPrompt({
+      ...host, config: DEFAULT_CONFIG, skillRegistry: null, skillsSummaryXML: '', globalContext: '',
+      getTurnActiveSkills: () => '',
+      llmRuntime: { model: () => ({ contextWindow: 128_000 }) },
+    } as never, {
+      profile: { kind: 'interactive' }, turn, content: 'hello', sessionId: 'session-id',
+      personaEnhanced: 'persona', runtime,
+    });
+    const prompt = await buildPrompt(runtime);
+    const stablePrefix = prompt.slice(0, prompt.indexOf('# Security'));
+    expect(stablePrefix).toContain('Stable workspace persona.');
+    expect(stablePrefix).toContain('Model: provider/model');
+    expect(stablePrefix).toContain('Sdk: google');
+    expect(stablePrefix).not.toContain('binding-model');
+    expect(stablePrefix).not.toContain('researcher');
+    expect(stablePrefix).not.toContain('lookup');
+    if (mode === 'withdrawn') {
+      expect(prompt).not.toContain('researcher');
+      expect(prompt).not.toContain('Find primary sources.');
+    } else {
+      expect(prompt.indexOf('researcher')).toBeGreaterThan(prompt.indexOf('# Security'));
+      expect(prompt).toContain('Find primary sources.');
+      if (mode === 'specialist') {
+        expect(prompt).toContain('## Active specialist: researcher');
+        expect(prompt).toContain('Verify the evidence before reporting.');
+        expect(prompt).not.toContain('## Available specialist agents');
+        expect(prompt.indexOf('# Platform rules')).toBeGreaterThan(prompt.indexOf('Find primary sources.'));
+        expect(prompt.endsWith('Use the current bot client.')).toBe(true);
+      } else {
+        expect(prompt).toContain('## Available specialist agents');
+        expect(prompt).not.toContain('Verify the evidence before reporting.');
+      }
+    }
+    if (mode === 'catalog') {
+      // Same engine and session, next principal projection has no such capabilities.
+      // Reuse the stable prefix, never the previous turn's authority or catalog.
+      const next = engine.run({
+        ...context,
+        capabilities: { ...context.capabilities, agents: [], skills: [] },
+      });
+      while (!(await next.next()).done) { /* drain the turn */ }
+      const withoutCapabilities = await buildPrompt(coreInput?.promptRuntime as PromptRuntimeOverrides);
+      expect(prompt.startsWith(`${withoutCapabilities}${SECTION_SEP}`)).toBe(true);
+      expect(withoutCapabilities).not.toContain('researcher');
+      expect(withoutCapabilities).not.toContain('lookup');
+    }
   });
 
   it('emits ai.thinking once when AgentCore streams a thinking event', async () => {
@@ -678,7 +746,7 @@ describe('FullAgentTurnEngine', () => {
     const contextSystem = {
       buildTextTurnContext: vi.fn(async () => ({
         userMessages: [createUserMessage('publish weather')], personaEnhanced: 'persona',
-        modelCandidates: ['model'], modelId: 'model', providerAlias: 'provider', turnEnvelope: null,
+        modelCandidates: ['model'], modelId: 'model', providerAlias: 'provider', modelSdk: 'google', turnEnvelope: null,
       })),
     };
     const host = {
@@ -720,8 +788,15 @@ describe('FullAgentTurnEngine', () => {
     expect(coreInput).toMatchObject({
       toolLoading: 'direct', conversationPersistence: 'none',
       promptProfile: { kind: 'schedule', jobId: 'daily' },
+      promptRuntime: { modelId: 'model', providerAlias: 'provider', modelSdk: 'google' },
     });
     expect(sessionSystem.prepareIngressTurn).not.toHaveBeenCalled();
+    expect(contextSystem.buildTextTurnContext).toHaveBeenCalledWith(expect.objectContaining({
+      turnUser: expect.objectContaining({ promptMessages: [expect.objectContaining({
+        actor: expect.objectContaining({ subjectId: 'owner', authorizationRoles: ['trusted'] }),
+        cause: { turnId: 'exec', intent: 'new' },
+      })] }),
+    }));
     expect(sessionSystem.touchAfterTurn).not.toHaveBeenCalled();
     expect(started).toEqual([]);
   });

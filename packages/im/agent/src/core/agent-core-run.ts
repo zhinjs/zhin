@@ -635,9 +635,12 @@ export async function* runAgentLoopTextTurnRun(
       const userIndex = promptMessages.map(message => message.role === 'user' && Array.isArray(message.content)).lastIndexOf(true);
       promptMessages = userIndex < 0
         ? [...promptMessages, { ...createUserMessage(''), content: [block] }]
-        : promptMessages.map((message, index) => index === userIndex && Array.isArray(message.content)
-          ? { ...message, content: [...message.content, block] }
-          : message);
+        : promptMessages.map((message, index) => {
+          if (index !== userIndex || !Array.isArray(message.content)) return message;
+          const bodyIndex = message.content.findIndex(part => part.type === 'text' && part.presentation === 'user-input');
+          const insertion = bodyIndex >= 0 ? bodyIndex : 0;
+          return { ...message, content: [...message.content.slice(0, insertion), block, ...message.content.slice(insertion)] };
+        });
     }
   }
   if (networkWithheld) systemPrompt = `${systemPrompt}\n\n${NETWORK_DISABLED_PROMPT_NOTE}`;

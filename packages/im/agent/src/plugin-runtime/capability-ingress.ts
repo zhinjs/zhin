@@ -37,6 +37,7 @@ import { capabilitySeamToken } from '../seam/tokens.js';
 import type { SeamIntegration } from '../seam/seam-integration.js';
 import { localImageAssetsToken, type LocalImageAssetStore } from '../media/local-image-assets.js';
 import { captureMcpImages } from '../media/mcp-image-results.js';
+import { resolveSkillTools } from './skill-tool-resolution.js';
 
 export interface ToolCapability extends ToolDescriptor {
   execute<TInput = unknown, TResult = unknown>(
@@ -107,11 +108,14 @@ export class CapabilityIngress {
       turn,
       resolvePermissionHost(snapshot),
     );
+    const availableTools = Object.freeze([...featureTools, ...seamTools]);
+    const availableSkills = Object.freeze([...featureSkills, ...seamSkills]
+      .filter(skill => !skill.toolNames?.length || resolveSkillTools(skill, availableTools).length > 0));
     return Object.freeze({
       generation: snapshot.generation,
       owner,
-      tools: Object.freeze([...featureTools, ...seamTools]),
-      skills: Object.freeze([...featureSkills, ...seamSkills]),
+      tools: availableTools,
+      skills: availableSkills,
       agents: featureAgents,
       mcp: bindMcp(mcp, owner, isActive, snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
@@ -164,6 +168,7 @@ async function bindSeamTools(
     ...(entry.schema.riskCategory ? { riskCategory: entry.schema.riskCategory } : {}),
     platforms: entry.schema.platforms,
     scopes: entry.schema.scopes,
+    currentConversationBotRoles: entry.schema.currentConversationBotRoles,
     permissions: entry.schema.permissions,
     hidden: entry.schema.hidden,
     source: entry.schema.source ?? `seam:${entry.providerId}`,
@@ -285,7 +290,7 @@ function isSelectedAgentTool(
 }
 
 async function canAccessDescriptor(
-  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions'>,
+  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions' | 'currentConversationBotRoles'>,
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
 ): Promise<boolean> {
@@ -298,6 +303,10 @@ async function canAccessDescriptor(
     if (turn?.origin.kind !== 'im' || !descriptor.scopes.includes(turn.origin.scope)) {
       return false;
     }
+  }
+  if (descriptor.currentConversationBotRoles?.length) {
+    const role = turn?.origin.kind === 'im' ? turn.input?.contextState?.bot?.platformRole : undefined;
+    if (!role || !descriptor.currentConversationBotRoles.includes(role)) return false;
   }
   if (!descriptor.permissions?.length) return true;
   if (!turn || !host) return false;

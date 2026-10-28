@@ -86,6 +86,11 @@ export interface RichSystemPromptContext {
   globalContext?: string;
   /** 当前模型 id（用于模型感知提示词策略） */
   modelId?: string;
+  /** Resolved primary model configuration; retries are reported by request traces. */
+  providerAlias?: string;
+  modelSdk?: string;
+  /** Controlled evaluation clock; live turns default to the Host timezone. */
+  timeZone?: string;
   /** 模型上下文窗口大小 */
   contextWindow?: number;
   /** 可选的提示词组装注册表；默认段会先注册，再应用该注册表中的覆盖/扩展。 */
@@ -248,20 +253,25 @@ function resolvePersonaLead(
 /**
  * 稳定运行时（可缓存）：不含时间、会话、deferred 统计、memory 正文。
  */
-function buildContextSection(
-  config: Required<ZhinAgentConfig>,
-  bootstrapContext?: string,
-  agentNickname?: string,
-  gitStatus?: string,
-): string {
+export function buildStableRuntimeLines(
+  model: Pick<RichSystemPromptContext, 'modelId' | 'providerAlias' | 'modelSdk' | 'timeZone'>,
+): string[] {
+  return [
+    `Timezone: ${model.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}`,
+    ...(model.modelId ? [`Model: ${model.providerAlias ? `${model.providerAlias}/` : ''}${model.modelId}`] : []),
+    ...(model.modelSdk ? [`Sdk: ${model.modelSdk}`] : []),
+  ];
+}
+
+function buildContextSection(ctx: RichSystemPromptContext): string {
   const envItems = [
     `CWD: ${process.cwd()}`,
     `Host: ${os.platform()} | Node ${process.version}`,
-    ...(gitStatus ? [gitStatus] : []),
+    ...buildStableRuntimeLines(ctx),
   ];
 
   return [
-    resolvePersonaLead(config, bootstrapContext, agentNickname),
+    resolvePersonaLead(ctx.config, ctx.bootstrapContext, ctx.agentNickname),
     '',
     '# Runtime',
     ...prependBullets(envItems),
@@ -344,6 +354,9 @@ interface DefaultPromptSectionDefinition {
   content: (ctx: RichSystemPromptContext) => string | null;
 }
 
+/** The split capability tail keeps the original bootstrap's budget priority. */
+export const BOOTSTRAP_PROMPT_ORDER = { task: 10, chat: 155 } as const;
+
 /** IM conversation turns talk in a chat; other origins keep the task-agent prompt. */
 function isChatTurn(ctx: RichSystemPromptContext): boolean {
   return ctx.turn?.origin.kind === 'im';
@@ -362,7 +375,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     order: 160,
     retention: 'required',
     // Git status changes between turns, so it lives in §12 at the end (#730, cache-friendly order).
-    content: (ctx) => buildContextSection(ctx.config, ctx.bootstrapContext, ctx.agentNickname),
+    content: buildContextSection,
   },
   {
     id: '§1b_critical_rules',
@@ -473,9 +486,9 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     id: '§11_bootstrap',
     layer: 'context',
     title: 'Bootstrap',
-    order: 10,
+    order: BOOTSTRAP_PROMPT_ORDER.task,
     // In chat the workspace persona (SOUL.md) leads, right after the identity line.
-    chatOrder: 155,
+    chatOrder: BOOTSTRAP_PROMPT_ORDER.chat,
     retention: 'preferred',
     content: (ctx) => ctx.bootstrapContext?.trim() ? fillPromptSlots(ctx.bootstrapContext, ctx.agentNickname) : null,
   },

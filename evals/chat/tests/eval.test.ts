@@ -1,10 +1,14 @@
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { userMessagePlainText } from '../../../packages/im/ai/src/index.js';
 import { runChecks } from '../src/checks.js';
 import { parseJudgment, rateLimitDelayMs } from '../src/judge.js';
 import { buildReport, renderMarkdown, runPassed, type RunRecord } from '../src/report.js';
 import { loadScenarios, parseScenarios, selectScenarios, type Scenario } from '../src/scenario.js';
-import { buildUserMessages, outputMessages, type TurnResult } from '../src/turn.js';
+import { buildSystemPrompt, scenarioPromptKey, scenarioTurn, buildUserMessages, outputMessages, type TurnResult } from '../src/turn.js';
 import { parseDotEnv, resolveEnvReferences } from '../src/workspace.js';
 
 const scenariosPath = fileURLToPath(new URL('../scenarios.yaml', import.meta.url));
@@ -40,16 +44,57 @@ describe('scenarios', () => {
     expect(selectScenarios(all, [])).toHaveLength(2);
   });
 
-  it('builds the turn the way production does: background events, then the enveloped message', () => {
-    const messages = buildUserMessages(scenario);
+  it('builds the production order: background events, state and owned participant body', () => {
+    const messages = buildUserMessages({ ...scenario, sender: { id: 'person', name: 'Alice', master: true },
+      time: '2026/10/23 03:10:00 (Asia/Shanghai)' });
     expect(messages).toHaveLength(2);
-    expect(JSON.stringify(messages[0])).toContain('You (this bot): 早啊');
-    expect(JSON.stringify(messages[1])).toContain('[Turn context]');
-    expect(JSON.stringify(messages[1])).toContain('你好呀');
-    const ambient = buildUserMessages({ ...scenario, addressed: false, time: '2026/10/23 03:10:00 (Asia/Shanghai)' });
-    expect(JSON.stringify(ambient[1])).toContain('Engagement: ambient');
-    expect(JSON.stringify(ambient[1])).toContain('Time: 2026/10/23 03:10:00');
+    expect(userMessagePlainText(messages[0]!)).toContain('You (this bot): 早啊');
+    expect(userMessagePlainText(messages[0]!)).not.toContain('你好呀');
+    const current = messages[1]!;
+    const bodyIndex = current.content.findIndex(block => block.presentation === 'user-input');
+    expect(bodyIndex).toBeGreaterThan(0);
+    expect(current.content[0]?.text).toContain('[Session snapshot]');
+    const body = current.content[bodyIndex]!.text;
+    expect(body).toContain('[User]');
+    expect(body).toContain('"id": "person"');
+    expect(body).toContain('"name": "Alice"');
+    expect(body).toContain('"authorizationRoles": [\n    "master"');
+    expect(body).toContain('"messageId": null');
+    expect(body).toContain('你好呀');
+    expect(current.timestamp).toBe(Date.parse('2026-10-22T19:10:00Z'));
+    expect(body).toContain(`"observedAt": ${current.timestamp}`);
+    const ambient = buildUserMessages({ ...scenario, addressed: false, time: '2026/10/26 08:05:00 (Asia/Shanghai)' });
+    expect(userMessagePlainText(ambient[1]!)).toContain('Engagement: ambient');
+    expect(ambient[1]!.timestamp).toBe(Date.parse('2026-10-26T00:05:00Z'));
+    expect(userMessagePlainText(ambient[1]!)).not.toContain('Time:');
   });
+
+  it('uses the pinned scenario timezone in system runtime and does not share cached prompts across zones', async () => {
+    const shanghai = { ...scenario, time: '2026/10/23 03:10:00 (Asia/Shanghai)' };
+    const newYork = { ...scenario, time: '2026/10/23 03:10:00 (America/New_York)' };
+    expect(scenarioPromptKey(shanghai)).not.toBe(scenarioPromptKey(newYork));
+    expect(scenarioPromptKey(shanghai)).toBe(scenarioPromptKey({ ...shanghai, time: '2026/10/26 08:05:00 (Asia/Shanghai)' }));
+    const workspace = await mkdtemp(join(tmpdir(), 'zhin-chat-timezone-'));
+    try {
+      const prompts = new Map<string, Promise<string>>();
+      const promptFor = (item: Scenario) => {
+        const key = scenarioPromptKey(item);
+        if (!prompts.has(key)) prompts.set(key, buildSystemPrompt(workspace, undefined, scenarioTurn(item), item.time));
+        return prompts.get(key)!;
+      };
+      const [east, west, host] = await Promise.all([promptFor(shanghai), promptFor(newYork), promptFor(scenario)]);
+      expect(east).toContain('Timezone: Asia/Shanghai');
+      expect(west).toContain('Timezone: America/New_York');
+      expect(host).toContain(`Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+      expect(buildUserMessages(newYork)[1]!.timestamp).toBe(Date.parse('2026-10-23T07:10:00Z'));
+    } finally { await rm(workspace, { recursive: true, force: true }); }
+  });
+
+  it.each(['tomorrow', '2026/02/30 03:10:00 (Asia/Shanghai)', '2026/10/23 03:10:00 (Unknown/Zone)',
+    '2026/03/08 02:30:00 (America/New_York)'])('rejects an invalid pinned scenario time: %s', time => {
+    expect(() => buildUserMessages({ ...scenario, time })).toThrow('scenario.time');
+  });
+
 });
 
 describe('checks', () => {

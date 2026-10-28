@@ -93,7 +93,8 @@ export type ToolInvocationOrigin =
       messageId?: string;
       threadId?: string;
       /** Canonical endpoint/parent/thread address, when supplied by IM ingress. */
-      conversation?: DeliveryTarget;
+      /** Display name is not part of the canonical delivery identity. */
+      conversation?: DeliveryTarget & Readonly<{ name?: string }>;
     }>
   | Readonly<{ kind: 'http'; sessionId: string }>
   | Readonly<{ kind: 'a2a'; taskId: string }>
@@ -161,6 +162,8 @@ export interface AgentToolDefinition<
   readonly adapter?: TAdapter;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
+  /** Required Bot platform roles in the current conversation, not a parameter-selected target. */
+  readonly currentConversationBotRoles?: readonly string[];
   readonly permissions?: readonly string[];
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
@@ -272,6 +275,7 @@ export function defineAgentTool<
     throw new TypeError(`Invalid Agent Tool riskCategory: ${String(definition.riskCategory)}`);
   }
   validateStringList('platforms', definition.platforms);
+  validateStringList('currentConversationBotRoles', definition.currentConversationBotRoles);
   validateStringList('permissions', definition.permissions);
   validateStringList('tags', definition.tags);
   validateStringList('keywords', definition.keywords);
@@ -288,6 +292,7 @@ export function defineAgentTool<
     ...definition,
     platforms: freezeList(typeof adapter === 'string' ? [adapter] : definition.platforms),
     scopes: freezeList(definition.scopes),
+    currentConversationBotRoles: freezeList(definition.currentConversationBotRoles),
     permissions: freezeList(definition.permissions),
     tags: freezeList(definition.tags),
     keywords: freezeList(definition.keywords),
@@ -332,6 +337,7 @@ export function parseAgentToolDefinition(
       && definition.requiresApproval !== 'once'
       && definition.requiresApproval !== 'always' && definition.requiresApproval !== 'human')
     || !validStringList(definition.platforms)
+    || !validStringList(definition.currentConversationBotRoles)
     || !validStringList(definition.permissions)
     || !validStringList(definition.tags)
     || !validStringList(definition.keywords)

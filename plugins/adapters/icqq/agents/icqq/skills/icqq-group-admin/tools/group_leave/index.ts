@@ -7,6 +7,7 @@ export default defineAgentTool({
   description: '让机器人退出当前 QQ 群；仅主人可发起且每次人工审批，机器人是群主时拒绝执行以免解散群',
   adapter: 'icqq',
   scopes: ['group'],
+  currentConversationBotRoles: ['admin', 'member'],
   permissions: ['role(master)'],
   requiresApproval: 'human',
   risk: 'dangerous',

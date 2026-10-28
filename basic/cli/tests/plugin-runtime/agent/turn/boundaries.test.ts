@@ -3,6 +3,7 @@ import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
 import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
+import { adapterFeatureId } from '@zhin.js/adapter';
 import {
   createDeterministicApprovalPort,
   createRuntimeApprovalPort,
@@ -13,6 +14,7 @@ import {
   isPlainTextRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
+  resolveRuntimeTurnContextState,
   resolveRuntimeTurnIntent,
   resolveSnapshotTurnIntentResolver,
   runtimeApprovalPolicy,
@@ -181,6 +183,93 @@ describe('turn admission message classification (#725)', () => {
 });
 
 describe('canonical IM TurnRequest ingress', () => {
+  it('uses the receiving generation and exact Endpoint account without trusting metadata', async () => {
+    const message = makeMessage({
+      content: 'hello',
+      metadata: { endpoint: 'configured-name', selfId: 'forged-account', contextState: { bot: { id: 'forged-account' } } },
+    });
+    const endpointId = message.conversation.endpoint.id;
+    const connection = vi.fn((adapterKey, endpointKey) => adapterKey === endpointId && endpointKey === endpointId
+      ? { selfUserId: 'platform-account' }
+      : undefined);
+    const snapshot = { projections: new Map([[adapterFeatureId, { $projection: 'zhin.adapter-index/1', connection }]]) };
+    const signal = new AbortController().signal;
+    const state = await resolveRuntimeTurnContextState(snapshot as never, message.conversation, signal);
+    const request = createRuntimeTurnRequest(message, 'hello', { isMaster: false, isTrusted: false }, {
+      traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
+      workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, contextState: state,
+    });
+
+    expect(connection).toHaveBeenCalledExactlyOnceWith(endpointId, endpointId);
+    expect(request.input.contextState).toEqual({ bot: { id: 'platform-account' } });
+    expect(Object.isFrozen(state?.bot)).toBe(true);
+    const nextGeneration = { projections: new Map([[adapterFeatureId, {
+      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: 'replacement-account' }),
+    }]]) };
+    expect(await resolveRuntimeTurnContextState(nextGeneration as never, message.conversation, signal)).toEqual({ bot: { id: 'replacement-account' } });
+    expect(request.input.contextState?.bot?.id).toBe('platform-account');
+  });
+
+  it('leaves unknown platform state absent even when configuration and metadata look like accounts', async () => {
+    const message = makeMessage({ content: 'hello', metadata: {
+      endpoint: '10001', self_id: '20002', botRole: 'owner', muteAll: false,
+    } });
+    const unknownAccount = { projections: new Map([[adapterFeatureId, {
+      $projection: 'zhin.adapter-index/1', connection: () => ({ name: '10001' }),
+    }]]) };
+    const signal = new AbortController().signal;
+    expect(await resolveRuntimeTurnContextState(unknownAccount as never, message.conversation, signal)).toBeUndefined();
+    expect(await resolveRuntimeTurnContextState({ projections: new Map() }, message.conversation, signal)).toBeUndefined();
+    const request = createRuntimeTurnRequest(message, 'hello', { isMaster: true, isTrusted: false }, {
+      traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
+      workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
+    });
+    expect(request.input.contextState).toBeUndefined();
+  });
+
+  it.each(['owner', 'admin', 'member'] as const)('propagates the queried Bot %s role through capability access', async platformRole => {
+    const message = makeMessage({ content: 'hello', metadata: { endpoint: 'configured-name' } });
+    const conversation = { ...message.conversation, endpoint: { ...message.conversation.endpoint, adapter: 'icqq' } };
+    const inspectGroupMember = vi.fn(async () => ({ canModerate: false, platformRole }));
+    const snapshot = { projections: new Map([[adapterFeatureId, {
+      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: '8596238', management: { inspectGroupMember } }),
+    }]]) };
+    const signal = new AbortController().signal;
+    const contextState = await resolveRuntimeTurnContextState(snapshot as never, conversation, signal);
+    expect(inspectGroupMember).toHaveBeenCalledExactlyOnceWith('100', '8596238', signal);
+    expect(createRuntimeTurnAccess(message, { isMaster: false, isTrusted: false }, contextState).input)
+      .toEqual({ contextState: { bot: { id: '8596238', platformRole } } });
+  });
+
+  it.each([
+    { adapter: 'icqq', kind: 'private' },
+    { adapter: 'icqq', kind: 'channel' },
+    { adapter: 'telegram', kind: 'group' },
+  ] as const)('does not query a Bot role outside ICQQ groups: %j', async scope => {
+    const inspectGroupMember = vi.fn();
+    const conversation = { endpoint: { id: 'endpoint', adapter: scope.adapter }, kind: scope.kind, id: 'scene' };
+    const snapshot = { projections: new Map([[adapterFeatureId, {
+      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: 'actual-account', management: { inspectGroupMember } }),
+    }]]) };
+    expect(await resolveRuntimeTurnContextState(snapshot as never, conversation, new AbortController().signal))
+      .toEqual({ bot: { id: 'actual-account' } });
+    expect(inspectGroupMember).not.toHaveBeenCalled();
+  });
+
+  it('keeps unsupported, unavailable and failed role reads distinct from a member role', async () => {
+    const conversation = { endpoint: { id: 'endpoint', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
+    const signal = new AbortController().signal;
+    const snapshot = (management?: object) => ({ projections: new Map([[adapterFeatureId, {
+      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: '8596238', management }),
+    }]]) });
+    expect(await resolveRuntimeTurnContextState(snapshot() as never, conversation, signal))
+      .toEqual({ bot: { id: '8596238', platformRoleError: 'unsupported' } });
+    expect(await resolveRuntimeTurnContextState(snapshot({ inspectGroupMember: async () => ({ canModerate: false }) }) as never, conversation, signal))
+      .toEqual({ bot: { id: '8596238', platformRoleError: 'unavailable' } });
+    expect(await resolveRuntimeTurnContextState(snapshot({ inspectGroupMember: async () => { throw new Error('member lookup failed'); } }) as never, conversation, signal))
+      .toEqual({ bot: { id: '8596238', platformRoleError: 'lookup_failed' } });
+  });
+
   it('defaults shared-session overlap to supersede and permits an explicit FIFO policy', () => {
     const message = makeMessage({
       content: 'next', sender: { id: 'u' }, metadata: { endpoint: 'bot' },

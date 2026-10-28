@@ -5,7 +5,9 @@ import {
   FIXED_DISCIPLINE_RULES,
   fillPromptSlots,
   describePromptSectionsForDebug,
+  buildStableRuntimeLines,
   type PromptSectionDebugInfo,
+  type RichSystemPromptContext,
 } from './system-prompt.js';
 import { resolveWorkspacePrompt } from './workspace-prompt.js';
 import type { AgentContextHost, ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -20,7 +22,7 @@ function scheduleSystemPrompt(
   agent: ZhinAgentPrivate,
   profile: Extract<AgentPromptProfile, { kind: 'schedule' }>,
   platformContext?: string,
-  registry?: import('./prompt-assembly-registry.js').PromptAssemblyRegistry,
+  runtime?: PromptRuntimeOverrides,
 ): string {
   const base = assembleSchedulePrompt({
     jobId: profile.jobId,
@@ -28,6 +30,7 @@ function scheduleSystemPrompt(
     createdBy: profile.createdBy,
     security: profile.security,
     platformContext,
+    runtimeContext: buildStableRuntimeLines(runtime ?? {}).join('\n'),
     skillContext: agent.getTurnActiveSkills(),
     bootstrapContext: fillPromptSlots([agent.globalContext, agent.bootstrapContext].filter(Boolean).join('\n\n'), agent.activeBinding?.nickname),
   }).systemPrompt;
@@ -35,7 +38,7 @@ function scheduleSystemPrompt(
     base,
     'Schedule Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
-    registry,
+    runtime?.registry,
   );
 }
 
@@ -79,7 +82,26 @@ export async function describeAgentPathPromptSections(
     runtime?: PromptRuntimeOverrides;
   },
 ): Promise<PromptSectionDebugInfo[]> {
-  return describePromptSectionsForDebug({
+  return describePromptSectionsForDebug(agentPathPromptContext(agent, options));
+}
+
+function agentPathPromptContext(
+  agent: ZhinAgentPrivate,
+  options: {
+    turn: TurnContextView;
+    deferredStats?: string;
+    modelSdk?: string;
+    runtime?: PromptRuntimeOverrides;
+  },
+): RichSystemPromptContext {
+  const bindingModel = options.runtime?.modelId ?? agent.activeBinding?.model;
+  const providerAlias = options.runtime?.providerAlias
+    ?? agent.activeBinding?.providerAlias
+    ?? agent.getTurnProvider().name;
+  const llmModel = bindingModel
+    ? agent.llmRuntime.model(providerAlias, bindingModel)
+    : undefined;
+  return {
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
@@ -91,7 +113,11 @@ export async function describeAgentPathPromptSections(
     toolSearchDeferredStats: options.deferredStats,
     orchestratorSdk: options.modelSdk,
     agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
-  });
+    modelId: bindingModel,
+    providerAlias,
+    modelSdk: options.runtime?.modelSdk ?? options.modelSdk,
+    contextWindow: llmModel?.contextWindow ?? agent.config.contextTokens,
+  };
 }
 
 export async function buildAgentPathSystemPrompt(
@@ -108,36 +134,13 @@ export async function buildAgentPathSystemPrompt(
     runtime?: PromptRuntimeOverrides;
   },
 ): Promise<string> {
-  const { preData, deferredStats, modelSdk } = options;
+  const { preData } = options;
 
   if (options.profile.kind === 'schedule') {
-    return scheduleSystemPrompt(agent, options.profile, undefined, options.runtime?.registry);
+    return scheduleSystemPrompt(agent, options.profile, undefined, options.runtime);
   }
 
-  const bindingModel = options.runtime?.modelId ?? agent.activeBinding?.model;
-  const providerAlias = options.runtime?.providerAlias
-    ?? agent.activeBinding?.providerAlias
-    ?? agent.getTurnProvider().name;
-  const llmModel = bindingModel
-    ? agent.llmRuntime.model(providerAlias, bindingModel)
-    : undefined;
-
-  const promptCtx = {
-    config: agent.config,
-    skillRegistry: agent.skillRegistry,
-    skillsSummaryXML: agent.skillsSummaryXML,
-    registry: options.runtime?.registry,
-    activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
-    bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
-    globalContext: agent.globalContext,
-    turn: options.turn,
-    toolSearchDeferredStats: deferredStats,
-    orchestratorSdk: modelSdk,
-    agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
-    modelId: bindingModel,
-    contextWindow: llmModel?.contextWindow ?? agent.config.contextTokens,
-  };
-  const richPrompt = buildRichSystemPrompt(promptCtx);
+  const richPrompt = buildRichSystemPrompt(agentPathPromptContext(agent, options));
 
   return `${richPrompt}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`;
 }
@@ -148,7 +151,12 @@ export interface PromptRuntimeOverrides {
   readonly agentNickname?: string;
   readonly modelId?: string;
   readonly providerAlias?: string;
+  readonly modelSdk?: string;
   readonly registry?: import('./prompt-assembly-registry.js').PromptAssemblyRegistry;
+}
+
+function withStableRuntime(base: string, runtime?: PromptRuntimeOverrides): string {
+  return `${base}\n\n# Runtime\n${buildStableRuntimeLines(runtime ?? {}).join('\n')}`;
 }
 
 export function buildChatPathSystemPrompt(
@@ -157,9 +165,9 @@ export function buildChatPathSystemPrompt(
   profile: AgentPromptProfile,
   runtime?: PromptRuntimeOverrides,
 ): string {
-  if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile, undefined, runtime?.registry);
+  if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile, undefined, runtime);
   return mergeRequiredBasePrompt(
-    buildDisciplinedPrompt(agent, personaEnhanced),
+    buildDisciplinedPrompt(agent, withStableRuntime(personaEnhanced, runtime)),
     'Agent Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
     runtime?.registry,
@@ -177,7 +185,7 @@ export async function buildMultimodalVisionSystemPrompt(
   },
 ): Promise<string> {
   return mergeRequiredBasePrompt(
-    buildLiteSystemPrompt(options.personaEnhanced),
+    buildLiteSystemPrompt(withStableRuntime(options.personaEnhanced, options.runtime)),
     'Vision Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
     options.runtime?.registry,

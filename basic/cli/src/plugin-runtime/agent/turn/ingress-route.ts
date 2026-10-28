@@ -14,6 +14,7 @@ import {
   REACTION_SEGMENT_TYPE,
   type AgentOutputElement,
   type ApprovalPort,
+  type TurnAccessContext,
 } from '@zhin.js/agent';
 import { DecisionApprovalJudgment } from '@zhin.js/agent/session';
 import { noteTurnTrace } from '@zhin.js/agent/trace';
@@ -86,10 +87,10 @@ import {
   resolveOwnerForRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
+  resolveRuntimeTurnContextState,
   resolveSnapshotTurnIntentResolver,
   resolveTrustedForRuntimeMessage,
   runtimeImSessionKey,
-  type RuntimeSenderRoles,
 } from './request.js';
 import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
@@ -863,37 +864,44 @@ export class AgentTurnIngressRoute implements IngressRoute {
             });
           }
         }
-        const capabilities = restrictWorkroomAgentCapabilities(await readCapabilities(
-          ingress,
-          snapshot,
-          requester,
-          message,
-          senderRoles,
-          () => capabilityActive,
-        ), workroomAgentTurn != null);
-        let routed = routeSpecialistAgent(
-          inbound.text,
-          capabilities,
-          workroomAgentTurn?.agentDefinitionId,
-          binding.name,
-          turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : undefined,
-        );
-        // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
-        // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
-        // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
-        if (trigger.thinkingMessage && !ambient && !outboundBlocked('thinking')) {
-          message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
-            logger.debug(formatCompact({
-              op: 'agent_host_thinking_reply_failed',
-              error: error instanceof Error ? error.message : String(error),
-            }));
-          });
-        }
+        const { outcome, capabilities, routed } = await withTriggerTimeout(async (timeoutSignal) => {
+          const signal = AbortSignal.any([
+            timeoutSignal,
+            ...(admission ? [admission.signal] : []),
+            ...(lease.retirementSignal ? [lease.retirementSignal] : []),
+          ]);
+          const contextState = await resolveRuntimeTurnContextState(snapshot, message.conversation, signal);
+          signal.throwIfAborted();
+          const capabilities = restrictWorkroomAgentCapabilities(await readCapabilities(
+            ingress,
+            snapshot,
+            requester,
+            createRuntimeTurnAccess(message, senderRoles, contextState),
+            () => capabilityActive,
+          ), workroomAgentTurn != null);
+          signal.throwIfAborted();
+          let routed = routeSpecialistAgent(
+            inbound.text,
+            capabilities,
+            workroomAgentTurn?.agentDefinitionId,
+            binding.name,
+            turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : undefined,
+          );
+          // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
+          // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
+          // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
+          if (trigger.thinkingMessage && !ambient && !outboundBlocked('thinking')) {
+            message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
+              logger.debug(formatCompact({
+                op: 'agent_host_thinking_reply_failed',
+                error: error instanceof Error ? error.message : String(error),
+              }));
+            });
+          }
 
-        const traceId = randomUUID();
-        modelStartedAt = Date.now();
-        const outcome = await withTriggerTimeout(
-          async (signal) => runWithAgentDecisionTurn(snapshot, turnId, async decisionRuntime => {
+          const traceId = randomUUID();
+          modelStartedAt = Date.now();
+          const outcome = await runWithAgentDecisionTurn(snapshot, turnId, async decisionRuntime => {
             routed = await selectDecisionAgentRoute({
               routed,
               capabilities,
@@ -947,13 +955,14 @@ export class AgentTurnIngressRoute implements IngressRoute {
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
               traceId,
               turnId,
-              signal: admission ? AbortSignal.any([signal, admission.signal]) : signal,
+              signal,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
               filesystemAccess: turnPolicy.filesystem.access,
               shell: turnPolicy.shell,
               network: turnPolicy.network,
               sessionKey,
+              contextState,
               ...(sceneEvents.length ? { sceneEvents } : {}),
               ...(workroomAgentTurn ? {
                 trustedMetadata: Object.freeze({
@@ -1120,9 +1129,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 outputTokens: observation.usage?.outputTokens,
               }));
             },
-          }),
-          resolveTriggerTimeoutMs(trigger),
-        );
+          });
+          return { outcome, capabilities, routed };
+        }, resolveTriggerTimeoutMs(trigger));
         auditModelRun(audit, outcome, { ...modelPayload(), agent: routed.agent?.name ?? null });
         const elements = completedOutput(outcome);
         const outputText = flattenOutputElements(elements).trim();
@@ -1277,11 +1286,10 @@ async function readCapabilities(
   ingress: CapabilityIngress,
   snapshot: RuntimeSnapshot,
   requester: PluginId,
-  message: Message,
-  roles: RuntimeSenderRoles,
+  access: TurnAccessContext,
   isActive: () => boolean,
 ): Promise<AgentCapabilities> {
-  return ingress.read(snapshot, requester, isActive, createRuntimeTurnAccess(message, roles));
+  return ingress.read(snapshot, requester, isActive, access);
 }
 
 export function resolveSnapshotDetachedTaskRunner(

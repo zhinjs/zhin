@@ -66,6 +66,7 @@ export type {
   ReplyPort,
   TurnIdentity,
   TurnAccessContext,
+  TurnContextState,
   TurnIngress,
   TurnIngressInput,
   TurnIntent,

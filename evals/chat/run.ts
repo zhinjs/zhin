@@ -15,7 +15,7 @@ import { runChecks } from './src/checks.js';
 import { judgeReply } from './src/judge.js';
 import { buildReport, renderMarkdown, type EvalReport, type RunRecord } from './src/report.js';
 import { loadScenarios, selectScenarios, type Scenario } from './src/scenario.js';
-import { buildSystemPrompt, runScenarioTurn, scenarioTurn } from './src/turn.js';
+import { buildSystemPrompt, runScenarioTurn, scenarioTurn, scenarioPromptKey } from './src/turn.js';
 import { loadEvalWorkspace } from './src/workspace.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -53,8 +53,8 @@ print(`chat eval: ${scenarios.length} scenarios × ${runs} runs, model ${modelRe
 
 const prompts = new Map<string, Promise<string>>();
 const systemPromptFor = (scenario: Scenario) => {
-  const key = `${scenario.scope}:${scenario.addressed}`;
-  if (!prompts.has(key)) prompts.set(key, buildSystemPrompt(workspaceDir, workspace.nickname, scenarioTurn(scenario)));
+  const key = scenarioPromptKey(scenario);
+  if (!prompts.has(key)) prompts.set(key, buildSystemPrompt(workspaceDir, workspace.nickname, scenarioTurn(scenario), scenario.time));
   return prompts.get(key)!;
 };
 

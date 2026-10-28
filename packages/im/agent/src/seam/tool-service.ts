@@ -30,6 +30,8 @@ export interface ToolSchema {
   riskCategory?: 'member' | 'publish' | 'funds' | 'identity';
   platforms?: readonly string[];
   scopes?: readonly ToolScope[];
+  /** Bot role in the current conversation; parameter-selected targets are checked at execution. */
+  currentConversationBotRoles?: readonly string[];
   permissions?: readonly string[];
   hidden?: boolean;
   source?: string;

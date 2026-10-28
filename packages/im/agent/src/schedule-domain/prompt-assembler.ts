@@ -10,6 +10,8 @@ export interface SchedulePromptAssemblerInput {
   memoryContext?: string;
   skillContext?: string;
   bootstrapContext?: string;
+  /** Host timezone and resolved primary model configuration. */
+  runtimeContext?: string;
   security?: Readonly<{ execPreset: 'readonly' | 'network' }>;
 }
 
@@ -68,6 +70,7 @@ export function assembleSchedulePrompt(input: SchedulePromptAssemblerInput): Sch
   return {
     systemPrompt: [
       identity,
+      section('Runtime', input.runtimeContext),
       runtime,
       section('平台上下文', input.platformContext),
       safety,

@@ -8,17 +8,22 @@ export async function inspectGroupMember(
   signal.throwIfAborted();
   const group = numericId(groupId);
   const user = numericId(userId);
+  const selfLookup = client.getGroupMemberInfo(group, client.uin, true);
   const [self, member] = await Promise.all([
-    client.getGroupMemberInfo(group, client.uin, true),
-    client.getGroupMemberInfo(group, user, true),
+    selfLookup,
+    user === client.uin ? selfLookup : client.getGroupMemberInfo(group, user, true),
   ]);
   signal.throwIfAborted();
   const joinedAt = member.join_time * 1000;
+  const platformRole = member.user_id === user && member.group_id === group
+    && (member.role === 'owner' || member.role === 'admin' || member.role === 'member')
+    ? member.role : undefined;
   return {
     canModerate: client.isOnline() && user !== client.uin
       && self.user_id === client.uin && self.group_id === group
       && member.user_id === user && member.group_id === group
       && (self.role === 'owner' || self.role === 'admin') && member.role === 'member',
+    ...(platformRole ? { platformRole } : {}),
     ...(Number.isSafeInteger(joinedAt) && joinedAt > 0 && joinedAt <= Date.now() ? { joinedAt } : {}),
   };
 }

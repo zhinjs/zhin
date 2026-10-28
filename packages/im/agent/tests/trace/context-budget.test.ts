@@ -6,7 +6,9 @@ import {
   estimatePromptTokens,
   formatTurnTrace,
 } from '../../src/trace/index.js';
-import { renderDeferredToolIndex, renderSkillCatalog } from '../../src/skill/capability-catalog.js';
+import { renderAgentCatalog, renderDeferredToolIndex, renderSkillCatalog } from '../../src/skill/capability-catalog.js';
+import { DEFAULT_CONFIG, SECTION_SEP } from '../../src/config/index.js';
+import { buildRichSystemPrompt, describePromptSectionsForDebug } from '../../src/prompt/system-prompt.js';
 
 const skillCatalog = renderSkillCatalog([{ name: 'weekly-report', description: 'Write the weekly report.' }])!;
 const bootstrap = `## SOUL.md\nBe kind.\n\n${skillCatalog}`;
@@ -55,6 +57,55 @@ describe('buildContextBudgetReport', () => {
     expect(budget.sections[0]!.id).toBe('§11_bootstrap');
   });
 
+  it('attributes resolved primary Model/Sdk to the system once, without charging current user context', () => {
+    const context = {
+      config: DEFAULT_CONFIG, skillRegistry: null, skillsSummaryXML: '', activeSkillsContext: '', bootstrapContext: '',
+      turn: {
+        origin: { kind: 'im', platform: 'sandbox', endpoint: 'main', scope: 'private', sceneId: 'user' },
+        principal: { subjectId: 'user', roles: ['user'] }, session: { key: 'session' },
+      },
+    } as const;
+    const models = [context, { ...context, modelId: 'primary', providerAlias: 'gateway', modelSdk: 'google' }];
+    const budgets = models.map(modelContext => {
+      const prompt = buildRichSystemPrompt(modelContext);
+      return buildContextBudgetReport({
+        systemPrompt: prompt, sections: describePromptSectionsForDebug(modelContext),
+        loadedTools: [], deferredToolCount: 0, historyMessages: [], userMessages: [createUserMessage('hello')],
+      });
+    });
+    const delta = estimatePromptTokens(buildRichSystemPrompt(models[1]!)) - estimatePromptTokens(buildRichSystemPrompt(models[0]!));
+    expect(delta).toBeGreaterThan(0);
+    expect(budgets[1]!.segments.system - budgets[0]!.segments.system).toBe(delta);
+    expect(budgets[1]!.fixed_tokens - budgets[0]!.fixed_tokens).toBe(delta);
+    expect(budgets[1]!.segments.user).toBe(budgets[0]!.segments.user);
+    expect(budgets[1]!.total_tokens - budgets[0]!.total_tokens).toBe(delta);
+  });
+
+  it.each(['catalog', 'specialist'] as const)('attributes a separate %s section without counting the following reply contract as catalog text', mode => {
+    const stableBootstrap = '## SOUL.md\nBe kind.';
+    const agentCatalog = mode === 'catalog'
+      ? renderAgentCatalog([{ name: 'researcher', description: 'Check primary sources.' }])!
+      : '## Active specialist: researcher\nVerify evidence before reporting.';
+    const capabilities = `${agentCatalog}\n\n${skillCatalog}`;
+    const finalSystem = ['Rules.', stableBootstrap, capabilities, '# Final reply contract\nUse message segments.'].join(SECTION_SEP);
+    const budget = buildContextBudgetReport({
+      systemPrompt: finalSystem,
+      bootstrapContext: stableBootstrap,
+      sections: [
+        { id: '§11_bootstrap', approxChars: stableBootstrap.length, approxTokens: estimatePromptTokens(stableBootstrap) },
+        { id: '§11_capabilities', approxChars: capabilities.length, approxTokens: estimatePromptTokens(capabilities) },
+      ],
+      loadedTools: [], deferredToolCount: 0, historyMessages: [], userMessages: [],
+    });
+
+    expect(budget.segments.skill_catalog).toBe(estimatePromptTokens(skillCatalog));
+    expect(budget.segments.agent_catalog).toBe(mode === 'catalog' ? estimatePromptTokens(agentCatalog) : 0);
+    expect(budget.segments.bootstrap).toBe(estimatePromptTokens(stableBootstrap) + estimatePromptTokens(capabilities)
+      - budget.segments.skill_catalog - budget.segments.agent_catalog);
+    expect(budget.total_tokens).toBe(estimatePromptTokens(finalSystem));
+    expect(budget.fixed_tokens).toBe(budget.total_tokens);
+  });
+
   it('is kept once per trace and rendered by zhin trace', () => {
     const trace = new TurnTraceCollector({ turnId: 't1', sessionKey: 's1' });
     const first = report();
@@ -83,4 +134,25 @@ it('counts the output schema and projected instruction references without double
   expect(budget.total_tokens).toBe(estimateAgentMessagesTokens(projectPromptContext([...historyMessages, ...userMessages])) + budget.segments.output_schema);
   expect(budget.fixed_tokens).toBe(budget.segments.output_schema);
   expect(budget.segments.active_skills).toBeLessThan(estimatePromptTokens('Skill body '.repeat(30)));
+});
+
+it('attributes surviving context blocks by identity after unchanged blocks are omitted', () => {
+  const rules = createPromptContextBlock('workspace-rules', 'Stable workspace instructions.');
+  const activeSkill = createPromptContextBlock('skill:report', 'Check primary sources before writing.');
+  const deferredTools = createPromptContextBlock('deferred-tools', toolIndex);
+  const historyMessages = [{ ...createUserMessage(''), content: [rules] }];
+  const userMessages = [{ ...createUserMessage(''), content: [
+    rules,
+    { type: 'text' as const, text: 'Write the report.' },
+    activeSkill,
+    deferredTools,
+  ] }];
+  const budget = buildContextBudgetReport({
+    systemPrompt: '', loadedTools: [], deferredToolCount: 1, historyMessages, userMessages,
+  });
+
+  expect(budget.segments.active_skills).toBe(estimatePromptTokens(activeSkill.text));
+  expect(budget.segments.tool_index).toBe(estimatePromptTokens(deferredTools.text));
+  expect(budget.total_tokens).toBe(estimateAgentMessagesTokens(projectPromptContext([...historyMessages, ...userMessages])));
+  expect(budget.fixed_tokens).toBe(0);
 });

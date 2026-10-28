@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createPromptContextBlock } from '../../src/memory/prompt-context.js';
+import { agentMessagesToAiSdk } from '../../src/llm/bridge/ai-sdk-messages.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import {
   buildActorPrefix,
@@ -118,4 +120,51 @@ describe('user-message-presentation', () => {
     const restored = agentMessageRowToLlm(row);
     expect(restored).toMatchObject({ role: 'user', cause, actor: message.actor });
   });
+});
+
+
+it('renders only the explicitly owned body after stable context and preserves it through storage', () => {
+  const actor = { subjectId: 'alice', displayName: 'Alice', roles: ['master'], scope: 'group' as const };
+  const extra = { quote: { messageId: 'q', block: `${QUOTED_MESSAGE_CONTEXT_MARKER}\nquoted text` } };
+  const stable = createPromptContextBlock('workspace-rules', 'stable instructions');
+  const current = { type: 'text' as const, text: '[Turn context]\nTime: now\n[/Turn context]' };
+  const ephemeral = { type: 'text' as const, text: '[Relationship] current only', ephemeral: true as const };
+  const message = { ...createUserMessage('', undefined, 1, actor), content: [stable,
+    { type: 'text' as const, text: 'first body', presentation: 'user-input' as const },
+    { type: 'text' as const, text: 'second body\nexact lines', presentation: 'user-input' as const }, current, ephemeral] };
+  const rendered = renderUserMessageForLlm(message, extra);
+  expect(rendered.content[0]).toBe(stable);
+  expect(rendered.content[1]?.text).toContain('"id": "alice"');
+  expect(rendered.content[1]?.text).toContain('quoted text');
+  expect(rendered.content[2]?.text).toBe('second body\nexact lines');
+  expect(rendered.content.at(-1)).toBe(ephemeral);
+  expect(userMessageBody(rendered, extra)).toBe('first body second body\nexact lines');
+  expect(renderUserMessageForLlm(rendered, extra)).toEqual(rendered);
+  const stored = normalizeUserMessageForStorage(rendered, extra).message;
+  expect(stored.content[1]).toMatchObject({ text: 'first body', presentation: 'user-input' });
+  expect(stored.content).toContainEqual(stable);
+  expect(stored.content).toContainEqual(current);
+  expect(JSON.stringify(stored)).not.toContain('current only');
+  const restored = agentMessageRowToLlm(serializeAgentMessage(rendered, extra));
+  expect(restored).toEqual({ ...rendered, content: rendered.content.slice(0, -1) });
+  expect(JSON.stringify(agentMessagesToAiSdk([rendered]))).not.toMatch(/presentation|user-input|contextRef|ephemeral/);
+});
+
+it('renders owned messages with one identity, explicit authorization and message-local observations', () => {
+  const actor = { subjectId: 'alice', displayName: 'Alice', roles: ['scene_admin', 'master'], authorizationRoles: ['master'], scope: 'group' as const };
+  const extra = { quote: { messageId: 'q', block: `${QUOTED_MESSAGE_CONTEXT_MARKER}\nquoted text` } };
+  const input = { ...createUserMessage('', undefined, 123, actor), messageId: 'm1', content: [{ type: 'text' as const, text: 'actual question', presentation: 'user-input' as const }] };
+  const rendered = renderUserMessageForLlm(input, extra);
+  const text = rendered.content[0]!.text;
+  expect(text).toContain('[User]');
+  expect(text).toContain('"platformRoles": null');
+  expect(text).toContain('"authorizationRoles": [');
+  expect(text).toContain('"messageId": "m1"');
+  expect(text).toContain('"observedAt": 123');
+  expect(text).not.toContain('[sender:');
+  expect(text).toContain('"reportedRoles": [\n    "scene_admin",\n    "master"');
+  expect(userMessageBody(rendered, extra)).toBe('actual question');
+  expect(renderUserMessageForLlm(rendered, extra)).toEqual(rendered);
+  const restored = agentMessageRowToLlm(serializeAgentMessage(rendered, extra));
+  expect(restored).toEqual(rendered);
 });

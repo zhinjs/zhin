@@ -30,7 +30,7 @@ export interface Scenario {
   /** Earlier chat lines shown as background events, e.g. `阿明 (1001): 早` or `You (this bot): 早啊`. */
   readonly context: readonly string[];
   readonly message: string;
-  /** Pinned `Time:` line for time-of-day scenarios, e.g. `2026/10/23 03:10:00 (Asia/Shanghai)`. */
+  /** Pinned user observation time for time-of-day scenarios, e.g. `2026/10/23 03:10:00 (Asia/Shanghai)`. */
   readonly time?: string;
   readonly expect: ScenarioExpectation;
 }

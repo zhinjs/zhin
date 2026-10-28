@@ -77,6 +77,19 @@ describe('TurnIngress', () => {
     expect(Object.isFrozen(turn.intent)).toBe(true);
   });
 
+  it('captures trusted context facts without retaining mutable ingress objects', () => {
+    const contextState = { bot: { id: 'account-1', mutedUntil: 0 }, conversation: { rules: ['no advertising'], muteAll: false } };
+    const turn = createTurnIngress(input({ input: { text: 'hello', contextState } }));
+    contextState.bot.id = 'account-2';
+    contextState.conversation.rules.push('changed later');
+
+    expect(turn.input.contextState).toEqual({
+      bot: { id: 'account-1', mutedUntil: 0 }, conversation: { rules: ['no advertising'], muteAll: false },
+    });
+    expect(Object.isFrozen(turn.input.contextState?.bot)).toBe(true);
+    expect(Object.isFrozen(turn.input.contextState?.conversation?.rules)).toBe(true);
+  });
+
   it('fails closed when product intent resolution is omitted', () => {
     const source = input();
     expect(() => createTurnIngress({ ...source, intent: undefined } as never))

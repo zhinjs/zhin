@@ -5,6 +5,8 @@ import {
 } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
+import { adapterFeatureId, isAdapterIndex, resolveEndpointManagement } from '@zhin.js/adapter';
+import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   approvalOutcomeToDecision,
   type AIService,
@@ -16,6 +18,7 @@ import {
   type ApprovalRequestInput,
   type DeliveryOutcome,
   type TurnAccessContext,
+  type TurnContextState,
   type TurnIntent,
   type TurnRequest,
   type TurnRequestPorts,
@@ -27,14 +30,53 @@ import {
 } from '@zhin.js/agent/runtime';
 import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { approvalMessages as approvalText } from './approval-messages.js';
-import type { ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
+import type { ConversationRef, ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
 
 type EndpointOwnerResolver = (adapterLocalName: string, endpointKey: string) => string | undefined;
 type EndpointTrustedResolver = (adapterLocalName: string, endpointKey: string) => readonly string[];
+const logger = getLogger('agent');
 
 export interface RuntimeSenderRoles {
   readonly isMaster: boolean;
   readonly isTrusted: boolean;
+}
+
+/** Resolve this turn's account and, for ICQQ groups, its platform role before tool discovery. */
+export async function resolveRuntimeTurnContextState(
+  snapshot: Pick<RuntimeSnapshot, 'projections'>,
+  conversation: ConversationRef,
+  signal: AbortSignal,
+): Promise<TurnContextState | undefined> {
+  signal.throwIfAborted();
+  const adapters = snapshot.projections?.get(adapterFeatureId);
+  if (!isAdapterIndex(adapters)) return undefined;
+  const endpointId = conversation.endpoint.id;
+  const endpoint = adapters.connection(endpointId, endpointId);
+  const id = endpoint?.selfUserId;
+  if (!id) return undefined;
+  const bot: NonNullable<TurnContextState['bot']> = { id };
+  if (conversation.endpoint.adapter !== 'icqq' || conversation.kind !== 'group') {
+    return Object.freeze({ bot: Object.freeze(bot) });
+  }
+  const management = resolveEndpointManagement(endpoint);
+  if (!management?.inspectGroupMember) {
+    return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'unsupported' }) });
+  }
+  try {
+    const member = await management.inspectGroupMember(conversation.id, id, signal);
+    signal.throwIfAborted();
+    return Object.freeze({ bot: Object.freeze({
+      ...bot,
+      ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }),
+    }) });
+  } catch (error) {
+    signal.throwIfAborted();
+    logger.warn(formatCompact({
+      op: 'agent_bot_role_lookup_failed', endpoint: endpointId, group: conversation.id,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'lookup_failed' }) });
+  }
 }
 
 /**
@@ -89,11 +131,13 @@ export function createRuntimeTurnRequest(
     commitConversationContext?: (consumer: string, cursor: number) => Promise<void>;
     /** Configuration-owned metadata; applied after untrusted adapter metadata. */
     trustedMetadata?: Readonly<Record<string, unknown>>;
+    /** Facts read from the operation's Endpoint, independently of message metadata. */
+    contextState?: TurnContextState;
     /** #996: short scene event summaries for the ephemeral `[Scene events]` block (newest first). */
     sceneEvents?: readonly string[];
   }>,
 ): TurnRequest {
-  const access = createRuntimeTurnAccess(message, roles);
+  const access = createRuntimeTurnAccess(message, roles, input.contextState);
   const origin = access.origin;
   if (origin.kind !== 'im') throw new Error('Runtime IM ingress must produce an IM origin');
   const clientAdapter = message.clientAdapter;
@@ -203,6 +247,7 @@ export function createRuntimeTurnRequest(
       ...(media.length > 0 ? { media: Object.freeze(media) } : {}),
       ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
+      ...(input.contextState ? { contextState: input.contextState } : {}),
       ...(input.sceneEvents?.length ? { sceneEvents: Object.freeze([...input.sceneEvents]) } : {}),
     }),
     session: Object.freeze({
@@ -555,6 +600,7 @@ export function interactiveNetworkPolicy(
 export function createRuntimeTurnAccess(
   message: Message,
   roles: RuntimeSenderRoles,
+  contextState?: TurnContextState,
 ): TurnAccessContext {
   const platform = capabilityLocalName(String(message.conversation.endpoint.id));
   const endpoint = message.endpointId?.trim();
@@ -570,6 +616,7 @@ export function createRuntimeTurnAccess(
   const trustRole = roles.isMaster ? 'master' : roles.isTrusted ? 'trusted' : 'user';
   const principalRoles = [...new Set([...(message.sender?.roles ?? []), trustRole])];
   return Object.freeze({
+    ...(contextState ? { input: Object.freeze({ contextState }) } : {}),
     origin: Object.freeze({
       kind: 'im' as const,
       conversation: message.conversation,

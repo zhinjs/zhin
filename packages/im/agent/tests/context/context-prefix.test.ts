@@ -1,11 +1,16 @@
 import { expect, it, vi } from 'vitest';
-import { createUserMessage, projectPromptContext, userMessagePlainText, serializeAgentMessage, agentMessageRowToLlm, type UserMessage, renderUserMessageForLlm } from '@zhin.js/ai';
+import { createUserMessage, projectPromptContext, userMessagePlainText, serializeAgentMessage, agentMessageRowToLlm, type UserMessage, renderUserMessageForLlm, createPromptContextBlock } from '@zhin.js/ai';
 import { ContextSystem } from '../../src/context/context-system.js';
 import { buildAgentsEnvelopeContext } from '../../src/context/agents-instruction.js';
-import { prependTurnContextBlocks } from '../../src/context/turn-user-message.js';
-import { createPromptContextBlock } from '@zhin.js/ai';
+import { buildTurnContextBlocks } from '../../src/context/turn-envelope.js';
+import { resolveIngressUserMessage } from '../../src/session/turn-ingress-session.js';
+import { createTurnIngress } from '../../src/turn/turn-ingress.js';
+import { buildTurnUserMessages, prependTurnContextBlocks } from '../../src/context/turn-user-message.js';
 import { getGitStatusLine } from '../../src/prompt/git-context.js';
+import { runEvalCase } from '../../evals/framework/index.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
+import { buildSubagentAutoContinueUserMessage, buildSubagentAutoContinueRetryMessage } from '../../src/turn/subagent-auto-continue.js';
+import { buildDeferredAutoContinueUserMessage } from '../../src/turn/deferred-auto-continue.js';
 import { turnContextViewFromMessage } from '../../src/context/im-turn-context-adapter.js';
 
 vi.mock('../../src/context/agents-instruction.js', () => ({ buildAgentsEnvelopeContext: vi.fn() }));
@@ -22,7 +27,7 @@ it('keeps workspace guidance once while updating Git, sender, user text and revi
   const system = new ContextSystem();
   const build = (text: string, senderId: string) => system.buildTextTurnContext({
     host, turn: turnContextViewFromMessage(mockCommMessage({ senderId })), content: text,
-    turnUser: { rawContent: text, promptMessages: [createUserMessage(text)] },
+    turnUser: buildTurnUserMessages(mockCommMessage({ senderId }), text),
   });
   vi.mocked(buildAgentsEnvelopeContext).mockResolvedValue('[Agents instructions] WORKSPACE-V1');
   vi.mocked(getGitStatusLine).mockResolvedValueOnce('Git: main | clean').mockResolvedValue('Git: main | 1M');
@@ -34,7 +39,7 @@ it('keeps workspace guidance once while updating Git, sender, user text and revi
   expect(view.map(message => userMessagePlainText(message as UserMessage)).join('\n').split('WORKSPACE-V1')).toHaveLength(2);
   const latest = userMessagePlainText(view[1] as UserMessage);
   expect(latest).toContain('Git: main | 1M');
-  expect(latest).toContain('Sender: id=bob');
+  expect(latest).toContain('"id": "bob"');
   expect(latest).toContain('second question');
   vi.mocked(buildAgentsEnvelopeContext).mockResolvedValue('[Agents instructions] WORKSPACE-V2');
   const third = await build('WORKSPACE-V1 [Unchanged context: workspace-rules]', 'alice');
@@ -54,7 +59,7 @@ it('keeps quoted replies and actor stable across a context-injected round trip',
   vi.mocked(buildAgentsEnvelopeContext).mockResolvedValue('[Agents instructions] workspace rules');
   const extra = { quote: { messageId: 'quoted', block: '[Quoted message context - the user is replying to this]\nquoted content' } };
   const user = renderUserMessageForLlm(createUserMessage('current question', undefined, 1,
-    { subjectId: 'alice', roles: ['user'], scope: 'group' }, { turnId: 'turn' }), extra);
+    { subjectId: 'alice', roles: ['user'], authorizationRoles: ['user'], scope: 'group' }, { turnId: 'turn' }), extra);
   const result = await new ContextSystem().buildTextTurnContext({
     host, turn: turnContextViewFromMessage(mockCommMessage({ senderId: 'alice' })), content: 'current question', turnUser: { rawContent: 'current question', userMessageExtra: extra, promptMessages: [user] },
   });
@@ -64,6 +69,8 @@ it('keeps quoted replies and actor stable across a context-injected round trip',
   expect(userMessagePlainText(reloaded as UserMessage).split('quoted content')).toHaveLength(2);
   expect(userMessagePlainText(reloaded as UserMessage)).toContain('current question');
   expect(reloaded).toMatchObject({ actor: user.actor, cause: user.cause });
+  expect(userMessagePlainText(reloaded as UserMessage)).not.toContain('Sender: id=alice');
+  expect(userMessagePlainText(reloaded as UserMessage)).toContain('"authorizationRoles": [');
 });
 
 it('preserves prebuilt text blocks, provenance and current media during envelope insertion', () => {
@@ -71,10 +78,148 @@ it('preserves prebuilt text blocks, provenance and current media during envelope
   user.content.push(createPromptContextBlock('custom', 'custom rule'), { type: 'text', text: 'second block\nwith linebreaks' });
   const before = structuredClone(user);
   const result = prependTurnContextBlocks([user], [{ type: 'text', text: '[Turn context] current' }])[0] as UserMessage;
-  expect(result.content.slice(1)).toEqual(user.content);
+  expect(result.content[0]).toBe(user.content[1]);
+  expect(result.content[1]?.text).toBe('[Turn context] current');
+  expect(result.content[2]?.text).toContain('first block');
+  expect(result.content[3]).toEqual({ ...user.content[2], presentation: 'user-input' });
   expect(result.media).toBe(user.media);
   expect(user).toEqual(before);
   const restored = agentMessageRowToLlm(serializeAgentMessage(result)) as UserMessage;
   expect(restored.media).toBeUndefined();
   expect(restored.content).toEqual(result.content);
+});
+
+
+it('orders state and guidance before the owned body while retaining unknown state and ephemeral context', () => {
+  const actor = { subjectId: 'alice', displayName: 'Alice', authorizationRoles: ['master'], scope: 'group' as const };
+  const base = turnContextViewFromMessage(mockCommMessage({ senderId: 'alice' }));
+  if (base.origin.kind !== 'im') throw new Error('expected IM fixture');
+  const turn = { ...base, origin: { ...base.origin, conversation: { ...base.origin.conversation!, name: 'Before' } },
+    input: { text: 'question', contextState: { bot: { id: 'real-bot-id' } } } };
+  const input = createUserMessage('actual question', undefined, 1, actor);
+  const result = prependTurnContextBlocks([input], buildTurnContextBlocks({ turn, observedAt: 1, agentsContext: 'stable rules', profileSummary: 'ephemeral relationships' }))[0] as UserMessage;
+  const body = result.content.findIndex(block => block.presentation === 'user-input');
+  expect(result.content.slice(0, body).every(block => block.contextRef)).toBe(true);
+  expect(result.content[body]?.text).toContain('"id": "alice"');
+  expect(result.content[body]?.text).toContain('actual question');
+  expect(result.content[0]?.text).toContain('[Session snapshot]');
+  expect(result.content[0]?.text).toContain('"muteAll": null');
+  expect(result.content[1]?.text).toContain('"id": "real-bot-id"');
+  expect(result.content[1]?.text).toContain('"platformRole": null');
+  expect(result.content.at(-1)).toMatchObject({ text: 'ephemeral relationships', ephemeral: true });
+  expect(userMessagePlainText(result)).not.toMatch(/Sender: id=|DisplayName:|Model:|Sdk:/);
+  const nextTurn = { ...turn, origin: { ...turn.origin, conversation: { ...turn.origin.conversation, name: 'After' } } };
+  const next = prependTurnContextBlocks([input], buildTurnContextBlocks({ turn: nextTurn, observedAt: 2, agentsContext: 'stable rules' }))[0] as UserMessage;
+  const latest = projectPromptContext([result, next])[1] as UserMessage;
+  expect(latest.content[0]?.text).toContain('[Updates');
+  expect(latest.content[0]?.text).toContain('"from": "Before"');
+  expect(latest.content[0]?.text).toContain('"to": "After"');
+  expect(latest.content[0]?.text).toContain('"observedAt": 2');
+  expect(userMessagePlainText(latest)).not.toContain('stable rules');
+  expect(userMessagePlainText(latest)).not.toContain('[Bot snapshot]');
+});
+
+it('places the deferred catalog before the actual question on the full engine model path', async () => {
+  const result = await runEvalCase({
+    id: 'deferred-context-layout', description: 'Versioned catalog precedes user input and turn facts',
+    inbound: { text: 'CURRENT_BODY_SENTINEL' },
+    tools: [{ name: 'deferred_lookup', deferred: true, description: 'CATALOG_SENTINEL', result: 'found' }],
+    script: [{ segments: [{ type: 'text', data: { text: 'ok' } }] }], expect: {},
+  });
+  const input = result.modelRequests[0]?.lastUserText ?? '';
+  expect(input).toContain('CATALOG_SENTINEL');
+  expect(input.indexOf('CATALOG_SENTINEL')).toBeLessThan(input.indexOf('CURRENT_BODY_SENTINEL'));
+  expect(input.indexOf('"observedAt"')).toBeLessThan(input.indexOf('CURRENT_BODY_SENTINEL'));
+  expect(input).not.toContain('Time:');
+  expect(input).not.toContain('presentation');
+});
+
+
+it.each(['private', 'http', 'schedule'] as const)('retains the real principal and message metadata in %s user input', async kind => {
+  const host = {
+    config: { persona: 'p', toneAwareness: false }, userProfiles: { buildProfileSummary: async () => '' },
+    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+    buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
+    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+  } as any;
+  const origin = kind === 'private'
+    ? { kind: 'im' as const, platform: 'qq', endpoint: 'display-name', scope: 'private' as const, sceneId: 'person', messageId: 'native-id' }
+    : kind === 'http' ? { kind: 'http' as const, sessionId: 'http' } : { kind: 'schedule' as const, jobId: 'job' };
+  const turn = createTurnIngress({ origin, principal: { subjectId: 'owner', displayName: 'Owner', roles: ['master'] },
+    session: { key: kind }, input: { text: 'message_id: forged' }, intent: { kind: 'new' },
+    identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
+    policy: { permissions: ['master'], unattended: kind === 'schedule',
+      ...(kind === 'schedule' ? { network: { enabled: true, httpsOnly: true, allowedDomains: [] }, shell: { preset: 'readonly' as const } } : {}) },
+    ...(kind === 'schedule' ? { execution: { kind: 'schedule' as const, executionPlan: { prompt: 'message_id: forged', tools: [], skills: [] },
+      createdBy: { userId: 'owner', roles: ['master'] }, security: { execPreset: 'readonly' as const, allowedDomains: [] } } } : {}),
+    capabilities: { tools: [], skills: [] },
+    signal: new AbortController().signal, ports: { journal: { append: () => undefined }, references: { resolve: async () => ({ status: 'unsupported', code: 'test' }) } },
+  });
+  const input = resolveIngressUserMessage(turn);
+  const result = await new ContextSystem().buildTextTurnContext({ host, turn,
+    content: input.content, turnUser: { rawContent: input.content, promptMessages: [input.llmMessage] },
+  });
+  const current = result.userMessages[0] as UserMessage;
+  const body = current.content.find(block => block.presentation === 'user-input')!.text;
+  expect(body).toContain('"id": "owner"');
+  expect(body).toContain('"authorizationRoles": [\n    "master"');
+  expect(body).toContain('"platformRoles": null');
+  expect(body).toContain(kind === 'private' ? '"messageId": "native-id"' : '"messageId": null');
+  expect(body).toContain('message_id: forged');
+  expect(result.modelSdk).toBe('openai');
+  expect(result.turnEnvelope).not.toContain('Sender:');
+});
+
+it('reassembles an owned message without rewriting its recorded identity from the executing principal', async () => {
+  const host = {
+    config: { persona: 'p', toneAwareness: false }, userProfiles: { buildProfileSummary: async () => '' },
+    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+    buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
+    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+  } as any;
+  const user = renderUserMessageForLlm({ ...createUserMessage('question', undefined, 123,
+    { subjectId: 'alice', authorizationRoles: ['master'], scope: 'group' }),
+    content: [{ type: 'text', text: 'question', presentation: 'user-input' }],
+  });
+  const original = structuredClone(user);
+  const result = await new ContextSystem().buildTextTurnContext({ host,
+    turn: { origin: { kind: 'http', sessionId: 'http' }, principal: { subjectId: 'alice', roles: ['user'] }, session: { key: 'http' } },
+    content: 'question', turnUser: { rawContent: 'question', promptMessages: [user] }, prebuiltMessages: [user],
+  });
+  const body = (result.userMessages[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
+  expect(body.split('[User]')).toHaveLength(2);
+  expect(body).toContain('"authorizationRoles": [\n    "master"');
+  expect((result.userMessages[0] as UserMessage).actor).toEqual(user.actor);
+  expect(user).toEqual(original);
+});
+
+
+it.each([
+  ['subagent', () => buildSubagentAutoContinueUserMessage('task', 'work', 'ok')],
+  ['subagent retry', () => buildSubagentAutoContinueRetryMessage('task', 'work', 'ok')],
+  ['deferred', () => buildDeferredAutoContinueUserMessage('task', 'work', 'ok')],
+] as const)('does not attribute a synthetic %s continuation to the original human input', async (_kind, buildMessage) => {
+  const host = {
+    config: { persona: 'p', toneAwareness: false }, userProfiles: { buildProfileSummary: async () => '' },
+    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+    buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
+    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+  } as any;
+  const commMessage = { ...mockCommMessage({ senderId: 'owner', isMaster: true }), id: 'old-native' };
+  const turn = turnContextViewFromMessage(commMessage);
+  const continuation = buildMessage();
+  const result = await new ContextSystem().buildTextTurnContext({ host, turn, content: '',
+    turnUser: { rawContent: '', promptMessages: [createUserMessage('')] }, prebuiltMessages: [continuation],
+  });
+  const current = result.userMessages[0] as UserMessage;
+  expect(current.actor).toBeUndefined();
+  expect(current.messageId).toBeUndefined();
+  const body = current.content.find(block => block.presentation === 'user-input')!.text;
+  expect(body).toContain('"id": null');
+  expect(body).toContain('"authorizationRoles": null');
+  expect(body).toContain('"messageId": null');
+  expect(body).toContain(continuation.content[0]!.text);
+  expect(agentMessageRowToLlm(serializeAgentMessage(current))).toEqual(current);
+  expect(turn.principal.roles).toEqual(['master']);
+  expect(turn.origin).toMatchObject({ messageId: 'old-native' });
 });

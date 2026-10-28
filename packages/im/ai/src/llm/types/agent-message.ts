@@ -15,6 +15,8 @@ export interface ConversationActor {
   readonly subjectId: string;
   readonly displayName?: string;
   readonly roles?: readonly string[];
+  /** Current product authorization, separate from an adapter's platform role labels. */
+  readonly authorizationRoles?: readonly string[];
   /** Shared-scene hint used only when rendering participant labels. */
   readonly scope?: 'private' | 'group' | 'channel';
   /**
@@ -57,6 +59,8 @@ export function renderContextMessage(message: ContextMessage): string {
 
 export interface UserMessage extends AgentMessageBase {
   role: 'user';
+  /** Native message identity supplied by a trusted ingress, absent for synthetic/legacy messages. */
+  messageId?: string;
   content: UserContentBlock[];
   actor?: ConversationActor;
   cause?: ConversationTurnCause;

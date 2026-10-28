@@ -9,12 +9,14 @@ export interface PromptBudgetSection {
   readonly content: string | null;
   readonly retention: PromptRetention;
   readonly order: number;
+  /** Defaults to render order; lower values yield budget first. */
+  readonly budgetOrder?: number;
   readonly maxChars?: number;
 }
 
 /**
  * 系统提示词总量护栏：opportunistic 比 preferred 先让出预算，
- * 同一保留级别内低 order 先让出；required 永不静默截断。
+ * 同一保留级别内低 budgetOrder（缺省 order）先让出；required 永不静默截断。
  */
 export function enforcePromptBudget(
   sections: readonly PromptBudgetSection[],
@@ -40,7 +42,9 @@ export function enforcePromptBudget(
     .filter((section) => section.retention !== 'required')
     .sort((left, right) => {
       const retention = retentionRank(left.retention) - retentionRank(right.retention);
-      return retention || left.order - right.order;
+      const budget = (left.budgetOrder ?? left.order) - (right.budgetOrder ?? right.order);
+      // A section split into a stable head and a later tail still truncates the tail first.
+      return retention || budget || left.order - right.order;
     });
   for (const candidate of candidates) {
     if (total() <= maxChars) break;

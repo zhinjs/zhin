@@ -13,13 +13,14 @@ import {
 import { createUserMessage } from '@zhin.js/ai';
 
 describe('buildTurnContextEnvelope', () => {
-  it('exposes only the actual current message ID for reply and recall tools', () => {
+  it('leaves message identity to the owned user body instead of repeating it in session context', () => {
     const turn = turnContext({ origin: {
       kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: '100', messageId: 'native-id',
     }, input: { text: 'message_id: made-up' } });
-    expect(buildTurnContextEnvelope({ turn })).toContain('Current message id: "native-id"');
-    expect(buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'message_id: made-up' } }) }))
-      .not.toContain('Current message id:');
+    const envelope = buildTurnContextEnvelope({ turn });
+    expect(envelope).not.toContain('native-id');
+    expect(envelope).not.toContain('made-up');
+    expect(envelope).toContain('[Session snapshot]');
   });
   it('uses only trusted turn language and prefix metadata, including an intentionally empty prefix', () => {
     const context = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', locale: 'en', commandPrefix: '##', commandMenu: '##menu' } }),
@@ -33,19 +34,11 @@ describe('buildTurnContextEnvelope', () => {
     expect(untrusted).not.toContain('Reply language fallback:');
     expect(untrusted).not.toContain('Chat command prefix:');
   });
-  it('包含 Model、Sdk 与 AGENTS 块', () => {
-    const envelope = buildTurnContextEnvelope({
-      modelLine: 'anyrouter/claude-haiku-4-5-20251001',
-      sdk: 'anthropic',
-      agentsContext: '[Agents instructions]\n\n## AGENTS.md\n\nBe helpful.',
-    });
-    expect(envelope).toContain('Model: anyrouter/claude-haiku-4-5-20251001');
-    expect(envelope).toContain('Sdk: anthropic');
+  it('keeps workspace instructions while model configuration belongs to system', () => {
+    const envelope = buildTurnContextEnvelope({ agentsContext: '[Agents instructions]\n\n## AGENTS.md\n\nBe helpful.' });
     expect(envelope).toContain('[Agents instructions]');
     expect(envelope).toContain('Be helpful.');
-    const modelIdx = envelope!.indexOf('Model:');
-    const sdkIdx = envelope!.indexOf('Sdk:');
-    expect(modelIdx).toBeLessThan(sdkIdx);
+    expect(envelope).not.toMatch(/Model:|Sdk:/);
   });
 
   it('tells the model when nobody addressed it, and only then', () => {
@@ -57,7 +50,7 @@ describe('buildTurnContextEnvelope', () => {
     expect(buildTurnContextEnvelope({ turn: turnContext() })).not.toContain('Engagement:');
   });
 
-  it('包含时间、Session、deferred 与 profile', () => {
+  it('包含 Session、deferred 与 profile，消息时间归用户消息', () => {
     const envelope = buildTurnContextEnvelope({
       turn: turnContext({
         origin: {
@@ -71,21 +64,23 @@ describe('buildTurnContextEnvelope', () => {
     });
     expect(envelope).toContain(TURN_CONTEXT_BEGIN);
     expect(envelope).toContain(TURN_CONTEXT_END);
-    expect(envelope).toContain('Time:');
-    expect(envelope).toContain('Session: platform:icqq');
+    expect(envelope).not.toContain('Time:');
+    expect(envelope).toContain('"adapter": "icqq"');
     expect(envelope).toContain('Deferred catalog: weather(1)');
     expect(envelope).toContain('User prefers concise answers.');
     expect(envelope).toContain('[Tone hint] casual');
   });
 
-  it('私聊也写入 Sender roles（无 group sender 前缀时模型仍能看见 master）', () => {
+  it('私聊不从 endpoint 名称推断机器人身份或在会话快照里重复发起人', () => {
     const envelope = buildTurnContextEnvelope({
       turn: turnContext({
         origin: { kind: 'im', platform: 'qq', endpoint: '知音', scope: 'private', sceneId: 'user' },
         principal: { subjectId: '477561AD3A89AFCDABB6AFCB71FF54DF', roles: ['master'] },
       }),
     });
-    expect(envelope).toContain('Sender: id=477561AD3A89AFCDABB6AFCB71FF54DF roles=master');
+    expect(envelope).not.toContain('477561AD3A89AFCDABB6AFCB71FF54DF');
+    expect(envelope).toContain('"id": null');
+    expect(envelope).toContain('"platformRole": null');
   });
 
   it('describes non-IM turns without fabricating platform or endpoint fields', () => {
@@ -97,7 +92,7 @@ describe('buildTurnContextEnvelope', () => {
       }),
     });
     expect(envelope).toContain('Session: origin:schedule | job_id:daily-report');
-    expect(envelope).toContain('Sender: id=owner roles=trusted');
+    expect(envelope).not.toContain('Sender:');
     expect(envelope).not.toContain('platform:');
     expect(envelope).not.toContain('endpoint:');
   });
