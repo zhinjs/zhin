@@ -462,6 +462,11 @@ ai:
       groupMode: supersede        # 默认：同一发起人的新消息替换他尚未回复的回合；fifo：全部按到达顺序排队
       maxQueuedTurns: 5           # 每个会话最多排队的回合数
       ttlMs: 180000               # 排队超时
+      merge:                      # 群聊合流（ADR 0038），默认关闭
+        enabled: false
+        quietMs: 1500             # 安静多久发车
+        maxWaitMs: 6000           # 窗口最多等多久
+        maxSenders: 5             # 一次合并回复最多几个人
 ```
 
 **命令白名单**：`execPreset` 逐级放宽——`readonly`（ls、cat、grep、find 等）→ `network`（再加 curl、wget、ping 等）→ `development`（再加 npm、node、git、python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 这类操作直接阻断。

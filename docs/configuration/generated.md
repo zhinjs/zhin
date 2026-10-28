@@ -148,6 +148,11 @@ outline: [2, 3]
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。 |
 | `ai.agent.inboundQueue.ttlMs` | integer | 否 | `180000` | 排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。 |
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | 否 | `5` | 同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。 |
+| `ai.agent.inboundQueue.merge` | object | 否 | — | 群聊合流窗口（ADR 0038）：短时间内多人点名 Bot 时合并为一次回复。私聊、主人、指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。 |
+| `ai.agent.inboundQueue.merge.enabled` | boolean | 否 | `false` | 开启群聊合流。合并回合按发送者收窄权限之前默认关闭。 |
+| `ai.agent.inboundQueue.merge.quietMs` | integer | 否 | `1500` | 窗口内最后一条消息后安静多久就发车。 |
+| `ai.agent.inboundQueue.merge.maxWaitMs` | integer | 否 | `6000` | 窗口从第一条消息起最多等多久。 |
+| `ai.agent.inboundQueue.merge.maxSenders` | integer | 否 | `5` | 一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。 |
 | `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | 否 | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |

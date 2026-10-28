@@ -15,6 +15,13 @@
  *   aborts, or merges into, another member's turn, so replies cannot cross
  *   principals or inherit someone else's permissions.
  *
+ * - **Merge window** (ADR 0038 §1, opt-in via `merge`): mergeable group
+ *   messages from different senders wait in one window and are answered by a
+ *   single turn once the window goes quiet (`quietMs`) or hits `maxWaitMs`.
+ *   The window holds at most `maxSenders` senders; the next sender opens the
+ *   following window. Only the gate decides *how many* turns run — who may
+ *   do what in a merged turn is the caller's job (`participants`).
+ *
  * At most one turn runs per session; the queue is bounded by
  * `maxQueuedTurns` and entries older than `queueTtlMs` expire. The gate only
  * orders admission — the turn itself still runs through `AgentRuntime` and
@@ -30,7 +37,20 @@ export interface TurnAdmissionGateOptions {
   readonly queueTtlMs: number;
   /** When true, a new message from the running turn's sender replaces that turn. */
   readonly supersedeSameSender: boolean;
+  /** ADR 0038 merge window; omitted = disabled (every sender gets its own turn). */
+  readonly merge?: TurnMergeWindowOptions;
   readonly now?: () => number;
+  /** Schedules a window check; returns a cancel function. Defaults to an unref'd `setTimeout`. */
+  readonly setTimer?: (callback: () => void, delayMs: number) => () => void;
+}
+
+export interface TurnMergeWindowOptions {
+  /** Flush once no new message joined the window for this long. */
+  readonly quietMs: number;
+  /** Flush at the latest this long after the window opened. */
+  readonly maxWaitMs: number;
+  /** Senders one window may hold; further senders open the next window. */
+  readonly maxSenders: number;
 }
 
 export const DEFAULT_MAX_QUEUED_TURNS = 5;
@@ -44,6 +64,29 @@ export interface TurnAdmissionRequest {
    * merged, because a merged turn keeps the first message's attachments only.
    */
   readonly plainText: boolean;
+  /**
+   * May join a merge window (ADR 0038 §1): the caller has checked it is a
+   * plain-text group message from a non-master sender, not a command, stop or
+   * approval. Ignored while the gate has no `merge` options.
+   */
+  readonly mergeable?: boolean;
+  /** Display name for the merged turn text. */
+  readonly senderName?: string;
+  /** Called synchronously when the message joins a merge window (audit `merge_window_joined`). */
+  readonly onWindowJoined?: (window: TurnMergeWindowSnapshot) => void;
+}
+
+/** One sender's messages in a merged turn, in arrival order. */
+export interface TurnParticipant {
+  readonly senderId: string;
+  readonly senderName?: string;
+  readonly texts: readonly string[];
+}
+
+export interface TurnMergeWindowSnapshot {
+  /** Senders in the window, in join order. */
+  readonly senders: readonly string[];
+  readonly messages: number;
 }
 
 /** Facts about how a turn was admitted; recorded on its TurnTrace. */
@@ -54,6 +97,8 @@ export interface TurnAdmissionFacts {
   readonly mergedMessages: number;
   /** True when this turn replaced the sender's own unanswered turn. */
   readonly supersededPrevious: boolean;
+  /** Present when the turn was flushed from a merge window. */
+  readonly mergeWindow?: TurnMergeWindowSnapshot & Readonly<{ waitedMs: number }>;
 }
 
 export type TurnAdmission =
@@ -61,6 +106,12 @@ export type TurnAdmission =
       kind: 'run';
       text: string;
       facts: TurnAdmissionFacts;
+      /**
+       * Whose messages this turn answers. One entry for an ordinary turn; a
+       * merged turn lists every sender (the carrier whose handler runs the turn
+       * may be absent when it stopped its own messages).
+       */
+      participants: readonly TurnParticipant[];
       /** Aborted when the turn is superseded or stopped by the gate. */
       signal: AbortSignal;
       /** Call once a reply has been delivered; later messages then queue instead of superseding. */
@@ -75,17 +126,28 @@ export type TurnStopResult = 'stopped' | 'not_running' | 'forbidden';
 
 interface QueuedTurn {
   readonly senderId: string;
+  readonly senderName?: string;
   readonly texts: string[];
   readonly enqueuedAt: number;
   plainText: boolean;
   supersededPrevious: boolean;
+  /** Set for a merge window; `texts` is then unused. */
+  readonly window?: MergeWindow;
   settle: (admission: TurnAdmission) => void;
+}
+
+interface MergeWindow {
+  readonly participants: Array<{ senderId: string; senderName?: string; texts: string[] }>;
+  lastJoinedAt: number;
+  cancelTimer?: () => void;
 }
 
 interface RunningTurn {
   readonly senderId: string;
   readonly texts: readonly string[];
   readonly plainText: boolean;
+  /** Merged turns are never superseded by one of their senders. */
+  readonly merged: boolean;
   readonly controller: AbortController;
   delivered: boolean;
 }
@@ -95,9 +157,11 @@ interface SessionState {
   readonly queue: QueuedTurn[];
 }
 
+type ResolvedOptions = Omit<Required<TurnAdmissionGateOptions>, 'merge'> & { merge?: TurnMergeWindowOptions };
+
 export class TurnAdmissionGate {
   readonly #sessions = new Map<string, SessionState>();
-  readonly #options: Required<TurnAdmissionGateOptions>;
+  readonly #options: ResolvedOptions;
 
   constructor(options: TurnAdmissionGateOptions) {
     this.#options = {
@@ -105,6 +169,14 @@ export class TurnAdmissionGate {
       queueTtlMs: Math.max(0, options.queueTtlMs),
       supersedeSameSender: options.supersedeSameSender,
       now: options.now ?? Date.now,
+      setTimer: options.setTimer ?? defaultSetTimer,
+      ...(options.merge ? {
+        merge: {
+          quietMs: Math.max(0, options.merge.quietMs),
+          maxWaitMs: Math.max(0, options.merge.maxWaitMs),
+          maxSenders: Math.max(1, Math.floor(options.merge.maxSenders)),
+        },
+      } : {}),
     };
   }
 
@@ -121,9 +193,14 @@ export class TurnAdmissionGate {
     const state = this.#state(request.sessionKey);
     const running = state.running;
 
+    if (this.#options.merge && request.mergeable && request.plainText) {
+      return this.#admitToWindow(request, state, this.#options.merge);
+    }
+
     if (!running && state.queue.length === 0) {
       return Promise.resolve(this.#start(request.sessionKey, state, {
         senderId: request.senderId,
+        senderName: request.senderName,
         texts: [request.text],
         plainText: request.plainText,
         queuedMs: 0,
@@ -141,6 +218,7 @@ export class TurnAdmissionGate {
       this.#options.supersedeSameSender
       && running
       && running.senderId === request.senderId
+      && !running.merged
       && !running.delivered
       && running.plainText
       && request.plainText
@@ -149,6 +227,7 @@ export class TurnAdmissionGate {
       running.controller.abort(new TurnSupersededError(request.sessionKey));
       return this.#enqueue(state, {
         senderId: request.senderId,
+        senderName: request.senderName,
         texts: [...running.texts, request.text],
         plainText: true,
         supersededPrevious: true,
@@ -160,10 +239,78 @@ export class TurnAdmissionGate {
     }
     return this.#enqueue(state, {
       senderId: request.senderId,
+      senderName: request.senderName,
       texts: [request.text],
       plainText: request.plainText,
       supersededPrevious: false,
     }, 'back');
+  }
+
+  /**
+   * ADR 0038 §1: a sender already waiting in a window appends to their entry
+   * (burst); otherwise the newest window with room takes them; otherwise a new
+   * window opens behind the queue. Only the window's first sender (the
+   * carrier) gets the `run` admission; everyone else is answered by it.
+   */
+  #admitToWindow(
+    request: TurnAdmissionRequest,
+    state: SessionState,
+    merge: TurnMergeWindowOptions,
+  ): Promise<TurnAdmission> {
+    const now = this.#options.now();
+    const windows = state.queue.filter((entry) => entry.window);
+    let target = findLast(windows, (entry) => entry.window!.participants.some((p) => p.senderId === request.senderId));
+    if (target) {
+      target.window!.participants.find((p) => p.senderId === request.senderId)!.texts.push(request.text);
+    } else {
+      target = findLast(windows, (entry) => entry.window!.participants.length < merge.maxSenders);
+      target?.window!.participants.push({ senderId: request.senderId, senderName: request.senderName, texts: [request.text] });
+    }
+    if (target) {
+      const window = target.window!;
+      window.lastJoinedAt = now;
+      request.onWindowJoined?.(snapshotWindow(window));
+      this.#armWindow(request.sessionKey, state, target, merge);
+      return Promise.resolve(Object.freeze({ kind: 'merged' as const }));
+    }
+
+    if (state.queue.length >= this.#options.maxQueuedTurns) {
+      return Promise.resolve(Object.freeze({ kind: 'rejected' as const, reason: 'queue_full' as const }));
+    }
+    const window: MergeWindow = {
+      participants: [{ senderId: request.senderId, senderName: request.senderName, texts: [request.text] }],
+      lastJoinedAt: now,
+    };
+    const opened = this.#enqueue(state, {
+      senderId: request.senderId,
+      senderName: request.senderName,
+      texts: [],
+      plainText: true,
+      supersededPrevious: false,
+      window,
+    }, 'back');
+    request.onWindowJoined?.(snapshotWindow(window));
+    this.#armWindow(request.sessionKey, state, state.queue[state.queue.length - 1]!, merge);
+    return opened;
+  }
+
+  /** (Re)schedules the flush check of a window at the head of an idle session. */
+  #armWindow(sessionKey: string, state: SessionState, entry: QueuedTurn, merge: TurnMergeWindowOptions): void {
+    const window = entry.window!;
+    window.cancelTimer?.();
+    window.cancelTimer = undefined;
+    if (state.running || state.queue[0] !== entry) return;
+    const now = this.#options.now();
+    const due = Math.min(window.lastJoinedAt + merge.quietMs, entry.enqueuedAt + merge.maxWaitMs);
+    if (due <= now) {
+      this.#pump(sessionKey, state);
+      return;
+    }
+    window.cancelTimer = this.#options.setTimer(() => {
+      window.cancelTimer = undefined;
+      if (this.#sessions.get(sessionKey) !== state) return;
+      this.#pump(sessionKey, state);
+    }, due - now);
   }
 
   /**
@@ -176,9 +323,20 @@ export class TurnAdmissionGate {
     if (!state || !running) return 'not_running';
     if (running.senderId !== senderId && !isMaster) return 'forbidden';
     running.controller.abort(new TriggerCancelledError(sessionKey));
+    const dropped = (id: string) => id === senderId || id === running.senderId;
     for (let index = state.queue.length - 1; index >= 0; index -= 1) {
       const entry = state.queue[index]!;
-      if (entry.senderId !== senderId && entry.senderId !== running.senderId) continue;
+      if (entry.window) {
+        // Drop only the stopping senders' messages; the rest of the window stays.
+        const participants = entry.window.participants;
+        for (let p = participants.length - 1; p >= 0; p -= 1) {
+          if (dropped(participants[p]!.senderId)) participants.splice(p, 1);
+        }
+        if (participants.length > 0) continue;
+        entry.window.cancelTimer?.();
+      } else if (!dropped(entry.senderId)) {
+        continue;
+      }
       state.queue.splice(index, 1);
       entry.settle(Object.freeze({ kind: 'rejected', reason: 'stopped' }));
     }
@@ -190,6 +348,7 @@ export class TurnAdmissionGate {
     for (const [sessionKey, state] of this.#sessions) {
       state.running?.controller.abort(new TriggerCancelledError(sessionKey));
       for (const entry of state.queue.splice(0)) {
+        entry.window?.cancelTimer?.();
         entry.settle(Object.freeze({ kind: 'rejected', reason: 'stopped' }));
       }
     }
@@ -222,16 +381,31 @@ export class TurnAdmissionGate {
     state: SessionState,
     turn: Readonly<{
       senderId: string;
+      senderName?: string;
       texts: readonly string[];
       plainText: boolean;
       queuedMs: number;
       supersededPrevious: boolean;
+      window?: MergeWindow;
     }>,
   ): TurnAdmission {
+    const participants: readonly TurnParticipant[] = Object.freeze(turn.window
+      ? turn.window.participants.map((p) => Object.freeze({
+        senderId: p.senderId,
+        ...(p.senderName ? { senderName: p.senderName } : {}),
+        texts: Object.freeze([...p.texts]),
+      }))
+      : [Object.freeze({
+        senderId: turn.senderId,
+        ...(turn.senderName ? { senderName: turn.senderName } : {}),
+        texts: Object.freeze([...turn.texts]),
+      })]);
+    const texts = participants.flatMap((p) => p.texts);
     const running: RunningTurn = {
       senderId: turn.senderId,
-      texts: Object.freeze([...turn.texts]),
+      texts: Object.freeze(texts),
       plainText: turn.plainText,
+      merged: turn.window !== undefined,
       controller: new AbortController(),
       delivered: false,
     };
@@ -239,12 +413,16 @@ export class TurnAdmissionGate {
     let released = false;
     return Object.freeze({
       kind: 'run' as const,
-      text: turn.texts.filter((text) => text.trim()).join('\n'),
+      text: renderTurnText(participants),
       facts: Object.freeze({
         queuedMs: turn.queuedMs,
-        mergedMessages: turn.texts.length,
+        mergedMessages: texts.length,
         supersededPrevious: turn.supersededPrevious,
+        ...(turn.window ? {
+          mergeWindow: Object.freeze({ ...snapshotWindow(turn.window), waitedMs: turn.queuedMs }),
+        } : {}),
       }),
+      participants,
       signal: running.controller.signal,
       markDelivered: () => { running.delivered = true; },
       release: () => {
@@ -260,22 +438,65 @@ export class TurnAdmissionGate {
     if (state.running) return;
     const now = this.#options.now();
     while (state.queue.length > 0) {
-      const next = state.queue.shift()!;
+      const next = state.queue[0]!;
       if (this.#options.queueTtlMs > 0 && now - next.enqueuedAt > this.#options.queueTtlMs) {
+        state.queue.shift();
+        next.window?.cancelTimer?.();
         next.settle(Object.freeze({ kind: 'rejected', reason: 'expired' }));
         continue;
       }
+      const merge = this.#options.merge;
+      if (next.window && merge) {
+        const due = Math.min(next.window.lastJoinedAt + merge.quietMs, next.enqueuedAt + merge.maxWaitMs);
+        if (due > now) {
+          // Still filling: wait for the window (FIFO — later turns wait behind it).
+          if (!next.window.cancelTimer) this.#armWindow(sessionKey, state, next, merge);
+          return;
+        }
+        next.window.cancelTimer?.();
+      }
+      state.queue.shift();
       next.settle(this.#start(sessionKey, state, {
         senderId: next.senderId,
+        senderName: next.senderName,
         texts: next.texts,
         plainText: next.plainText,
         queuedMs: now - next.enqueuedAt,
         supersededPrevious: next.supersededPrevious,
+        window: next.window,
       }));
       return;
     }
     if (this.#sessions.get(sessionKey) === state) this.#sessions.delete(sessionKey);
   }
+}
+
+function snapshotWindow(window: MergeWindow): TurnMergeWindowSnapshot {
+  return Object.freeze({
+    senders: Object.freeze(window.participants.map((p) => p.senderId)),
+    messages: window.participants.reduce((sum, p) => sum + p.texts.length, 0),
+  });
+}
+
+/**
+ * One sender: their messages joined as before. Several senders: one line per
+ * sender so the model can tell who asked what (ADR 0038 §3 builds the full
+ * merged turn context on top of `participants`).
+ */
+function renderTurnText(participants: readonly TurnParticipant[]): string {
+  const lines = (p: TurnParticipant) => p.texts.filter((text) => text.trim());
+  if (participants.length === 1) return lines(participants[0]!).join('\n');
+  return participants
+    .map((p) => ({ name: p.senderName?.trim() || p.senderId, texts: lines(p) }))
+    .filter((p) => p.texts.length > 0)
+    .map((p) => `${p.name}: ${p.texts.join('\n')}`)
+    .join('\n');
+}
+
+function defaultSetTimer(callback: () => void, delayMs: number): () => void {
+  const handle = setTimeout(callback, delayMs);
+  handle.unref?.();
+  return () => clearTimeout(handle);
 }
 
 function findLast<T>(items: readonly T[], predicate: (item: T) => boolean): T | undefined {

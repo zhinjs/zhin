@@ -125,6 +125,14 @@ export const DECISION_REASON_CODES = [
   'schedule_wake_fired',
   'schedule_wake_missed',
   'schedule_wake_merged',
+  // ADR 0038：连续输入合流（复用 inbound_wake / model_skip / outbound，不新增 kind）
+  'merge_window_joined',
+  'merge_window_flushed',
+  'merge_reply_stale_discarded',
+  'merge_reply_stale_sent',
+  'merge_on_behalf_denied',
+  'danmaku_window_picked',
+  'hard_gate_scene_pending_cap',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 
