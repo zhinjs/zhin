@@ -196,7 +196,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       })),
     });
     resources.provide(selfChangeStoreToken, selfChanges);
-    const selfChangeTrialOptions = createSelfChangeTrialOptions();
+    const selfChangeTrialOptions = createSelfChangeTrialOptions(options.projectRoot);
     lifecycle.add(selfChanges.startPruning());
     if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
     // G6 (#1013): IM approval channel for hard-gate cards; idle unless ai.agent.toolHardGate.imApproval.enabled.

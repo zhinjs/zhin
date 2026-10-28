@@ -3,7 +3,8 @@ import { createSelfChangeTrialOptions, esbuildJsxSyntax } from '../../../src/plu
 
 describe('self-change trial options', () => {
   it('checks .tsx drafts with esbuild like the tsx loader', async () => {
-    expect(createSelfChangeTrialOptions().jsxSyntax).toBe(esbuildJsxSyntax);
+    expect(createSelfChangeTrialOptions(process.cwd()).jsxSyntax).toBe(esbuildJsxSyntax);
+    expect(typeof createSelfChangeTrialOptions(process.cwd()).sandboxLoad).toBe('function');
     const ok = "import { defineComponent } from 'zhin.js/component';\nexport default defineComponent(() => <text>hi</text>);\n";
     expect(await esbuildJsxSyntax('components/hi.tsx', ok)).toBeNull();
     expect(await esbuildJsxSyntax('components/hi.tsx', 'export default () => <text>hi</div>;\n')).toMatch(/\(1:\d+\)$/u);
