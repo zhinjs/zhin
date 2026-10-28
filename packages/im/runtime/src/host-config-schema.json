@@ -911,9 +911,9 @@
                   "properties": {
                     "enabled": {
                       "type": "boolean",
-                      "default": false,
-                      "description": "Turn the group merge window on. Off by default until merged turns narrow permissions per sender.",
-                      "x-descriptionZh": "开启群聊合流。合并回合按发送者收窄权限之前默认关闭。"
+                      "default": true,
+                      "description": "Turn the group merge window on (group chats only). Set false to answer every member one by one as before.",
+                      "x-descriptionZh": "开启群聊合流（仅群聊）。设为 false 则恢复逐人逐条回复。"
                     },
                     "quietMs": {
                       "type": "integer",
@@ -1167,6 +1167,13 @@
                   "default": 300000,
                   "description": "How long a dangerous call waits for approval before it is denied (ms).",
                   "x-descriptionZh": "危险调用等待审批的上限（毫秒），超时即拒绝。"
+                },
+                "maxPendingPerScene": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 3,
+                  "description": "Approval cards one group (scene) may have pending at once (ADR 0038). Beyond it a dangerous call is denied without a new card; asking again for an already pending card does not count.",
+                  "x-descriptionZh": "同一群（场景）同时待审批的卡片上限（ADR 0038）。超出后危险调用直接拒绝、不生成新卡；对已有待审卡的重复请求不计数。"
                 },
                 "imApproval": {
                   "type": "object",

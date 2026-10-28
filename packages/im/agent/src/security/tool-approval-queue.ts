@@ -224,6 +224,16 @@ export class ToolApprovalQueue {
     return undefined;
   }
 
+  /** 同指纹的 pending 卡片（{@link enqueue} 会复用它）；没有则 undefined。 */
+  findPending(sessionKey: string, toolName: string, args: Readonly<Record<string, unknown>>): ToolApprovalEntry | undefined {
+    this.#expireDue();
+    const fingerprint = ToolApprovalQueue.fingerprint(sessionKey, toolName, args);
+    for (const entry of this.#entries.values()) {
+      if (entry.fingerprint === fingerprint && entry.status === 'pending') return snapshot(entry);
+    }
+    return undefined;
+  }
+
   get(id: string): ToolApprovalEntry | undefined {
     this.#expireDue();
     const entry = this.#entries.get(id);

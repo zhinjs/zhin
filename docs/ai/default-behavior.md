@@ -19,7 +19,8 @@
 - 子代理：`subagentTurnMode off`
 - 工具预算：`extendBy 10`、`progressWindow 5`、`maxTotalIterations 40`、`maxWallClockMs 600000`、`failureStreakLimit 3`、`repeatLimit 2`
 - 用量配额：全部为 0（关闭），`exemptOwner true`
-- 危险工具硬闸：始终开启；资金类禁用（`allowFunds false`）；审批 5 分钟（`approvalTimeoutMs 300000`）未批即拒绝
+- 危险工具硬闸：始终开启；资金类禁用（`allowFunds false`）；审批 5 分钟（`approvalTimeoutMs 300000`）未批即拒绝；每群同时最多 3 张待审卡（`maxPendingPerScene 3`），超出直接拒绝
+- 群聊合流：开启（`inboundQueue.merge.enabled true`，仅群聊；窗口 `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`）
 - 上下文压缩：`thresholdRatio 0.7`
 - 请求轨迹：`recordRequestBodies true`，在 Host 本地保存脱敏后的模型输入文本与工具定义；默认最多保留 7 天、总量 64 MiB。达到容量会先清理最旧轨迹，单条正文仍放不下时仅保留统计和未保存状态。设置为 `false` 停止记录新请求正文，不影响用量统计，也不删除已有记录。
 
@@ -49,9 +50,10 @@ ai:
       dangerousTools: [my_plugin__wipe_album]  # 只能追加，不能把核心名单调低
       allowFunds: false
       approvalTimeoutMs: 300000                # 超时即拒绝
+      maxPendingPerScene: 3                    # 每群同时待审卡上限，超出 fail closed
 ```
 
-审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read` 或 `ops:approve`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `ops:approve` 或旧的 `tool_approvals:resolve`，任一即可）上；完整令牌可直接调用。群管冷却（ADR 0037 §3）：同一 `platform + scene_id + 工具本地名` 在 `ops.cooldownMs`（默认 60 秒，会话运营配置里设置）内只生成一张审批卡，冷却中直接拒绝、不生成新卡（`ops_cooldown` / `ops_cooldown_hit`）。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）、`tool_hard_gate`（allow：`tool_approval_approved`；deny：`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`），以及 safe / 只读工具的 `tool_call`（allow，`tool_safe_allowed`）——只读查询放行但仍写审计。审计写失败不影响判定。
+审批卡片在 Console RPC `plugin.root.tool-approvals`（读，权限 `tool_approvals:read` 或 `ops:approve`）和 `plugin.root.resolve-tool-approval`（`{ id, decision: 'approve' | 'deny' }`，权限 `ops:approve` 或旧的 `tool_approvals:resolve`，任一即可）上；完整令牌可直接调用。群管冷却（ADR 0037 §3）：同一 `platform + scene_id + 工具本地名` 在 `ops.cooldownMs`（默认 60 秒，会话运营配置里设置）内只生成一张审批卡，冷却中直接拒绝、不生成新卡（`ops_cooldown` / `ops_cooldown_hit`）。每次判定写入 `ai_decision_events`：`tool_approval`（`tool_approval_requested` / `tool_approval_approved` / `tool_approval_denied` / `tool_approval_timeout`）、`tool_hard_gate`（allow：`tool_approval_approved`；deny：`tool_dangerous_no_approval`、`tool_approval_denied`、`tool_approval_timeout`、`tool_funds_disabled`、`tool_hard_gate_latched`、`hard_gate_scene_pending_cap`（每群待审卡已满）），以及 safe / 只读工具的 `tool_call`（allow，`tool_safe_allowed`）——只读查询放行但仍写审计。审计写失败不影响判定。
 
 ### IM 审批通道（#1013，默认关）
 

@@ -149,7 +149,7 @@ outline: [2, 3]
 | `ai.agent.inboundQueue.ttlMs` | integer | 否 | `180000` | 排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。 |
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | 否 | `5` | 同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。 |
 | `ai.agent.inboundQueue.merge` | object | 否 | — | 群聊合流窗口（ADR 0038）：短时间内多人点名 Bot 时合并为一次回复。私聊、主人、指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。 |
-| `ai.agent.inboundQueue.merge.enabled` | boolean | 否 | `false` | 开启群聊合流。合并回合按发送者收窄权限之前默认关闭。 |
+| `ai.agent.inboundQueue.merge.enabled` | boolean | 否 | `true` | 开启群聊合流（仅群聊）。设为 false 则恢复逐人逐条回复。 |
 | `ai.agent.inboundQueue.merge.quietMs` | integer | 否 | `1500` | 窗口内最后一条消息后安静多久就发车。 |
 | `ai.agent.inboundQueue.merge.maxWaitMs` | integer | 否 | `6000` | 窗口从第一条消息起最多等多久。 |
 | `ai.agent.inboundQueue.merge.maxSenders` | integer | 否 | `5` | 一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。 |
@@ -182,6 +182,7 @@ outline: [2, 3]
 | `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | 否 | `[]` | 额外按危险工具处理的工具（本地名或限定名）；不能把核心危险工具调成安全。 |
 | `ai.agent.toolHardGate.allowFunds` | boolean | 否 | `false` | 允许资金类工具（红包、转账、付款）。默认关闭；开启后仍需审批。 |
 | `ai.agent.toolHardGate.approvalTimeoutMs` | integer | 否 | `300000` | 危险调用等待审批的上限（毫秒），超时即拒绝。 |
+| `ai.agent.toolHardGate.maxPendingPerScene` | integer | 否 | `3` | 同一群（场景）同时待审批的卡片上限（ADR 0038）。超出后危险调用直接拒绝、不生成新卡；对已有待审卡的重复请求不计数。 |
 | `ai.agent.toolHardGate.imApproval` | object | 否 | — | 硬闸 IM 审批通道（#1013），默认关闭。开启后每张新审批卡片同时投递给 allowlist 审批人，审批人在私聊（或专用审批群）发送 `approve &lt;id&gt;` / `deny &lt;id&gt;` 结算；与 Console 共用审批队列，先到先得。业务群内的消息不能结算卡片，也没有本会话 / 永久授权。 |
 | `ai.agent.toolHardGate.imApproval.enabled` | boolean | 否 | `false` | 开启 IM 审批通道。 |
 | `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | 否 | `[]` | 审批人的平台用户 id：扁平列表对所有平台生效；对象形式为 平台（adapter 名）→ 用户 id 列表。不在名单里的人不能通过 IM 结算卡片。 |

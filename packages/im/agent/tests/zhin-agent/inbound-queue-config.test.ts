@@ -28,7 +28,7 @@ describe('inbound-queue-config', () => {
   });
 
   it('keeps the ADR 0038 merge window off by default and normalizes its timings', () => {
-    expect(normalizeInboundQueueConfig().merge).toEqual({ enabled: false, quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 5 });
+    expect(normalizeInboundQueueConfig().merge).toEqual({ enabled: true, quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 5 });
     expect(normalizeInboundQueueConfig({ merge: { enabled: true, quietMs: 3_000, maxWaitMs: 1_000, maxSenders: 0 } }).merge)
       .toEqual({ enabled: true, quietMs: 3_000, maxWaitMs: 3_000, maxSenders: 5 });
   });

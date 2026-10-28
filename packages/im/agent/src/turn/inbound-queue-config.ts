@@ -20,7 +20,7 @@ export interface ResolvedInboundQueueConfig {
 }
 
 export const DEFAULT_INBOUND_MERGE_CONFIG: ResolvedInboundMergeConfig = {
-  enabled: false,
+  enabled: true,
   quietMs: 1_500,
   maxWaitMs: 6_000,
   maxSenders: 5,
