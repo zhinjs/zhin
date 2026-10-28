@@ -16,6 +16,7 @@ import {
   type ApprovalRequestInput,
   type DeliveryOutcome,
   type TurnAccessContext,
+  type TurnInput,
   type TurnIntent,
   type TurnRequest,
   type TurnRequestPorts,
@@ -96,6 +97,8 @@ export function createRuntimeTurnRequest(
     trustedMetadata?: Readonly<Record<string, unknown>>;
     /** #996: short scene event summaries for the ephemeral `[Scene events]` block (newest first). */
     sceneEvents?: readonly string[];
+    /** ADR 0038 §3: senders of a merged turn (two or more). */
+    mergedSenders?: TurnInput['mergedSenders'];
   }>,
 ): TurnRequest {
   const access = input.access ?? createRuntimeTurnAccess(message, roles);
@@ -209,6 +212,7 @@ export function createRuntimeTurnRequest(
       ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
       ...(input.sceneEvents?.length ? { sceneEvents: Object.freeze([...input.sceneEvents]) } : {}),
+      ...(input.mergedSenders && input.mergedSenders.length > 1 ? { mergedSenders: Object.freeze([...input.mergedSenders]) } : {}),
     }),
     session: Object.freeze({
       key: sessionKey,

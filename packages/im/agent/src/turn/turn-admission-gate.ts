@@ -73,6 +73,8 @@ export interface TurnAdmissionRequest {
   readonly mergeable?: boolean;
   /** Display name for the merged turn text. */
   readonly senderName?: string;
+  /** Platform message id; a merged turn lists it so the reply can point at it (ADR 0038 §3). */
+  readonly messageId?: string;
   /**
    * The sender's own access (ADR 0038 §2). Carried into `participants` so a
    * merged turn can narrow capabilities to what every member may use.
@@ -87,6 +89,8 @@ export interface TurnParticipant {
   readonly senderId: string;
   readonly senderName?: string;
   readonly texts: readonly string[];
+  /** Merge-window participants only: ids of the messages behind `texts`, when known. */
+  readonly messageIds?: readonly string[];
   /** The access given with the sender's first message, when the caller passed one. */
   readonly access?: TurnAccessContext;
 }
@@ -146,7 +150,13 @@ interface QueuedTurn {
 }
 
 interface MergeWindow {
-  readonly participants: Array<{ senderId: string; senderName?: string; texts: string[]; access?: TurnAccessContext }>;
+  readonly participants: Array<{
+    senderId: string;
+    senderName?: string;
+    texts: string[];
+    messageIds: string[];
+    access?: TurnAccessContext;
+  }>;
   lastJoinedAt: number;
   cancelTimer?: () => void;
 }
@@ -273,7 +283,9 @@ export class TurnAdmissionGate {
     const windows = state.queue.filter((entry) => entry.window);
     let target = findLast(windows, (entry) => entry.window!.participants.some((p) => p.senderId === request.senderId));
     if (target) {
-      target.window!.participants.find((p) => p.senderId === request.senderId)!.texts.push(request.text);
+      const own = target.window!.participants.find((p) => p.senderId === request.senderId)!;
+      own.texts.push(request.text);
+      if (request.messageId) own.messageIds.push(request.messageId);
     } else {
       target = findLast(windows, (entry) => entry.window!.participants.length < merge.maxSenders);
       target?.window!.participants.push(windowParticipant(request));
@@ -408,6 +420,7 @@ export class TurnAdmissionGate {
         senderId: p.senderId,
         ...(p.senderName ? { senderName: p.senderName } : {}),
         texts: Object.freeze([...p.texts]),
+        ...(p.messageIds.length ? { messageIds: Object.freeze([...p.messageIds]) } : {}),
         ...(p.access ? { access: p.access } : {}),
       }))
       : [Object.freeze({
@@ -493,6 +506,7 @@ function windowParticipant(request: TurnAdmissionRequest): MergeWindow['particip
     senderId: request.senderId,
     ...(request.senderName ? { senderName: request.senderName } : {}),
     texts: [request.text],
+    messageIds: request.messageId ? [request.messageId] : [],
     ...(request.access ? { access: request.access } : {}),
   };
 }
