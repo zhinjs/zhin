@@ -61,6 +61,8 @@ const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
 export interface InstallAgentHostOptions {
+  /** Process-owned trace archive; reuse the generation's existing persistence maintenance. */
+  readonly pruneTraces?: () => Promise<unknown>;
   /** Process-owned 群聊插话 / 技能助手 Console status (#970). */
   readonly assistantStatus?: import('../console/assistant-status.js').AssistantStatus;
   /** Process-owned Console approval cards for the dangerous-tool hard gate (ADR 0036). */
@@ -248,7 +250,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       : undefined;
     const presetCount = workroom ? workroom.presetCount : await agentFoundation.seedPresets();
     // Workroom validates its authority first; the candidate Agent remains unadmitted until all handoffs finish.
-    installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig);
+    installAgentPersistence({ resources, handoff, lifecycle, admission }, agentFoundation, aiConfig, options.pruneTraces);
     const binding = service.getBindingRegistry().requireZhinBinding();
 
     const ingressRoute = new AgentTurnIngressRoute({

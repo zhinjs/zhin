@@ -270,6 +270,7 @@ outline: [2, 3]
 | `ai.agent.skillInstructionMaxChars` | number \| string | 否 | — | — |
 | `ai.agent.promptTrace` | boolean \| string | 否 | — | — |
 | `ai.agent.promptTraceVerbose` | boolean \| string | 否 | — | — |
+| `ai.agent.recordRequestBodies` | boolean | 否 | — | — |
 | `ai.agent.promptCache` | boolean \| string | 否 | — | — |
 | `ai.agent.promptCacheKeyPrefix` | string | 否 | — | — |
 | `ai.agent.deferredAutoContinue` | boolean \| string | 否 | — | — |

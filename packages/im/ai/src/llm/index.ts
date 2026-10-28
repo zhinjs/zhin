@@ -82,6 +82,8 @@ export {
 } from './provider-gateway-presets.js';
 export type { ProviderGatewayPreset } from './provider-gateway-presets.js';
 export type {
+  LlmRequestInput,
+  LlmRequestObservation,
   StreamOptions,
   StreamFn,
   StreamSimpleFn,

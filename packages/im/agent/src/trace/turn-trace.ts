@@ -10,6 +10,10 @@
 import type { TurnEvent } from '../event/turn-event.js';
 import { redactTraceValue } from '../plugin-runtime/agent-trace-runtime.js';
 import type { ContextBudgetReport } from './context-budget.js';
+import { scrubSecrets } from './trace-redaction.js';
+export { scrubSecrets } from './trace-redaction.js';
+import type { ToolInvocationOrigin } from '@zhin.js/tool';
+import { captureRequestBody, DEFAULT_TRACE_MAX_BYTES, RequestBodyTooLargeError, type TurnTraceRequest, type TurnTraceRequestStart } from './request-trace.js';
 
 export const TURN_TRACE_VERSION = 1;
 
@@ -31,6 +35,7 @@ export interface TurnTracePrincipal {
 }
 
 export interface TurnTraceModelCall {
+  readonly request_id?: string;
   readonly provider?: string;
   readonly model?: string;
   readonly duration_ms?: number;
@@ -93,6 +98,8 @@ export interface TurnTrace {
   readonly turn_id: string;
   readonly session_key: string;
   readonly principal?: TurnTracePrincipal;
+  readonly origin?: ToolInvocationOrigin;
+  readonly requests?: readonly TurnTraceRequest[];
   /** Epoch milliseconds. */
   readonly started_at: number;
   readonly ended_at?: number;
@@ -114,6 +121,8 @@ export interface TurnTrace {
 
 /** Facts that are not TurnEvents but belong in the trace. */
 export type TurnTraceNote =
+  | Readonly<{ kind: 'model_request'; request: TurnTraceRequestStart }>
+  | Readonly<{ kind: 'model_request_end'; request_id: string; status: 'completed' | 'failed' | 'cancelled'; duration_ms: number; stop_reason?: string }>
   | Readonly<{ kind: 'budget_extended'; from: number; to: number }>
   | Readonly<{ kind: 'continuation'; index: number }>
   | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>
@@ -123,6 +132,8 @@ export type TurnTraceNote =
 export interface TurnTraceInit {
   readonly turnId: string;
   readonly sessionKey: string;
+  readonly origin?: ToolInvocationOrigin;
+  readonly maxRequestBytes?: number;
   readonly principal?: Readonly<{
     subjectId: string;
     displayName?: string;
@@ -148,6 +159,10 @@ export class TurnTraceCollector {
   readonly turnId: string;
   readonly sessionKey: string;
   readonly #principal?: TurnTracePrincipal;
+  readonly #origin?: ToolInvocationOrigin;
+  readonly #requests = new Map<string, TurnTraceRequest>();
+  readonly #requestBytes = new Map<string, number>();
+  #requestBudget: { used: number; max: number };
   readonly #now: () => number;
   readonly #startedAt: number;
   #endedAt: number | undefined;
@@ -167,6 +182,8 @@ export class TurnTraceCollector {
     this.sessionKey = init.sessionKey;
     this.#now = now;
     this.#startedAt = now();
+    this.#requestBudget = { used: 0, max: init.maxRequestBytes ?? DEFAULT_TRACE_MAX_BYTES };
+    this.#origin = init.origin ? snapshotOrigin(init.origin) : undefined;
     if (init.principal) {
       this.#principal = Object.freeze({
         subject_id: init.principal.subjectId,
@@ -188,8 +205,10 @@ export class TurnTraceCollector {
     const created = new TurnTraceCollector({ turnId, sessionKey, principal: this.#principalInit() }, this.#now);
     if (this.#children.size >= MAX_SUBAGENTS) {
       this.#dropped += 1;
+      created.#requestBudget = { used: 0, max: 0 };
       return created;
     }
+    created.#requestBudget = this.#requestBudget;
     this.#children.set(turnId, created);
     this.#addTimeline('subagent_turn', turnId);
     return created;
@@ -207,7 +226,35 @@ export class TurnTraceCollector {
 
   note(note: TurnTraceNote): void {
     const at = this.#elapsed();
-    if (note.kind === 'budget_extended') {
+    if (note.kind === 'model_request') {
+      const { body, ...metadata } = note.request;
+      const previous = this.#requests.get(metadata.request_id);
+      let capture: Partial<TurnTraceRequest> = {};
+      if (body && metadata.body_status === 'recorded') {
+        try {
+          const captured = captureRequestBody(body, undefined, this.#requestBudget.max - this.#requestBudget.used + (this.#requestBytes.get(metadata.request_id) ?? 0));
+          capture = { body: captured.body, estimated_tokens: captured.estimated_tokens };
+          this.#requestBudget.used += captured.bytes - (this.#requestBytes.get(metadata.request_id) ?? 0);
+          this.#requestBytes.set(metadata.request_id, captured.bytes);
+        } catch (error) {
+          this.#requestBudget.used -= this.#requestBytes.get(metadata.request_id) ?? 0;
+          this.#requestBytes.delete(metadata.request_id);
+          capture = { body: undefined, body_status: error instanceof RequestBodyTooLargeError ? 'too_large' : 'capture_failed',
+            estimated_tokens: error instanceof RequestBodyTooLargeError ? error.estimatedTokens : undefined };
+        }
+      } else if (metadata.body_status !== 'recorded' && previous?.body) {
+        this.#requestBudget.used -= this.#requestBytes.get(metadata.request_id) ?? 0;
+        this.#requestBytes.delete(metadata.request_id);
+        capture = { body: undefined, estimated_tokens: undefined };
+      }
+      this.#requests.set(metadata.request_id, Object.freeze({ ...previous, ...metadata,
+        index: previous?.index ?? this.#requests.size + 1, ...capture }));
+      if (!previous) this.#addTimeline('model_request', `#${this.#requests.size} ${metadata.provider}/${metadata.model}`);
+    } else if (note.kind === 'model_request_end') {
+      const previous = this.#requests.get(note.request_id);
+      if (previous) this.#requests.set(note.request_id, Object.freeze({ ...previous, status: note.status,
+        duration_ms: note.duration_ms, ...(note.stop_reason === undefined ? {} : { stop_reason: note.stop_reason }) }));
+    } else if (note.kind === 'budget_extended') {
       this.#extensions.push(Object.freeze({ from: note.from, to: note.to, at_ms: at }));
       this.#addTimeline('budget_extended', `${note.from} → ${note.to} steps`);
     } else if (note.kind === 'context_budget') {
@@ -235,6 +282,7 @@ export class TurnTraceCollector {
       case 'usage': {
         const call = Object.freeze({
           index: this.#modelCalls.length + 1,
+          ...(event.requestId === undefined ? {} : { request_id: event.requestId }),
           ...(event.provider !== undefined ? { provider: event.provider } : {}),
           ...(event.model !== undefined ? { model: event.model } : {}),
           ...(event.durationMs !== undefined ? { duration_ms: event.durationMs } : {}),
@@ -357,6 +405,8 @@ export class TurnTraceCollector {
       turn_id: this.turnId,
       session_key: this.sessionKey,
       ...(this.#principal ? { principal: this.#principal } : {}),
+      ...(this.#origin ? { origin: this.#origin } : {}),
+      ...(this.#requests.size ? { requests: Object.freeze([...this.#requests.values()]) } : {}),
       started_at: this.#startedAt,
       ...(this.#endedAt !== undefined
         ? { ended_at: this.#endedAt, duration_ms: this.#endedAt - this.#startedAt }
@@ -407,6 +457,10 @@ export class TurnTraceCollector {
     for (const tool of this.#toolCalls.values()) {
       if (tool.status === 'running') tool.status = 'cancelled';
     }
+    for (const [id, request] of this.#requests) {
+      if (request.status === 'running') this.#requests.set(id, Object.freeze({ ...request,
+        status: termination.status === 'cancelled' ? 'cancelled' : 'unknown' }));
+    }
     this.#addTimeline('end', [termination.status, termination.code, termination.reason].filter(Boolean).join(' '));
   }
 
@@ -433,6 +487,30 @@ export class TurnTraceCollector {
   }
 }
 
+function snapshotOrigin(origin: ToolInvocationOrigin): ToolInvocationOrigin {
+  if (origin.kind !== 'im') {
+    switch (origin.kind) {
+      case 'http': return Object.freeze({ kind: origin.kind, sessionId: origin.sessionId });
+      case 'a2a': return Object.freeze({ kind: origin.kind, taskId: origin.taskId });
+      case 'schedule': return Object.freeze({ kind: origin.kind, jobId: origin.jobId });
+      case 'internal': return Object.freeze({ kind: origin.kind, source: origin.source });
+      case 'mcp': return Object.freeze({ kind: origin.kind, requestId: origin.requestId });
+    }
+  }
+  const conversation = origin.conversation;
+  return Object.freeze({ kind: origin.kind, platform: origin.platform, endpoint: origin.endpoint,
+    scope: origin.scope, sceneId: origin.sceneId,
+    ...(origin.messageId === undefined ? {} : { messageId: origin.messageId }),
+    ...(origin.threadId === undefined ? {} : { threadId: origin.threadId }),
+    ...(conversation ? { conversation: Object.freeze({
+      endpoint: Object.freeze({ adapter: conversation.endpoint.adapter, id: conversation.endpoint.id }),
+      kind: conversation.kind, id: conversation.id,
+      ...(conversation.parent ? { parent: Object.freeze({ kind: conversation.parent.kind, id: conversation.parent.id }) } : {}),
+      ...(conversation.threadId === undefined ? {} : { threadId: conversation.threadId }),
+    }) } : {}),
+  });
+}
+
 /** Redacted, single-line, length-bounded summary of tool arguments. */
 function describeAdmission(note: Extract<TurnTraceNote, { kind: 'admission' }>): string {
   const parts = [`queued ${Math.round(note.queued_ms)}ms`];
@@ -454,17 +532,6 @@ function summarizeText(value: unknown, max = TEXT_SUMMARY_LENGTH): string {
   return clip(scrubSecrets(text.replace(/\s+/g, ' ').trim()), max);
 }
 
-const INLINE_SECRET_RULES: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [redacted]'],
-  [/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{12,}/g, '[redacted]'],
-  [/\b(?:ghp|gho|ghs|github_pat|xox[abpr])[_-][A-Za-z0-9_-]{12,}/g, '[redacted]'],
-  [/("?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)"?\s*[:=]\s*"?)[^"\s,}]+/gi, '$1[redacted]'],
-];
-
-/** Masks credentials that appear inline in free text (error messages, string args). */
-export function scrubSecrets(text: string): string {
-  return INLINE_SECRET_RULES.reduce((current, [pattern, replacement]) => current.replace(pattern, replacement), text);
-}
 
 function outputSize(output: unknown): number {
   if (output == null) return 0;

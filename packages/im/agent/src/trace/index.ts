@@ -53,6 +53,8 @@ export {
   buildContextBudgetReport,
   estimatePromptTokens,
 } from './context-budget.js';
+export { captureRequestBody } from './request-trace.js';
+export type { TraceJson, RequestBodyStatus, TurnTraceRequestBodyInput, TurnTraceRequestBody, RequestTokenEstimate, TurnTraceRequest, TurnTraceRequestStart } from './request-trace.js';
 export type {
   ContextBudgetReport,
   ContextBudgetSection,

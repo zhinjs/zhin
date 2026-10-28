@@ -112,6 +112,12 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 聊天记录接口仅允许 full scope，固定每页最近 50 条 canonical 事件，并按 sequence 升序返回。响应为 `data: { conversation, items, nextBeforeSequence, hasMore }`，加载更早记录时传入排他的 `beforeSequence`。消息事件含完整正文与安全媒体引用，撤回事件含 `messageRef`；其他事件仅返回类型、时间和 sequence，仍计入分页。不会返回本地图片路径、base64 或平台原始数据。未保存记录返回 `404 history_not_recorded`，同一 sessionKey 对应多个父频道／话题返回 `409 conversation_ambiguous`，当前账号地址或存储无法解析返回 `503 history_unavailable`，不以 Agent 内部历史代替。响应禁止缓存；客户端拼接分页前应核对完整 `conversation` 未变化。
 
+聊天的“此轮用量”和“轨迹”读取现有 Agent 归档。`GET /api/agent/trace-archive/turns` 返回回合摘要、可信来源和包含子 Agent 的用量明细；`GET /api/agent/trace-archive/turn` 按需返回一次回合的执行详情，正文通过 `GET /api/agent/trace-archive/request?sessionKey=...&turnId=...&requestId=...` 单独读取。当前聊天需传完整 canonical `conversation` JSON，不能仅凭时间或粗粒度 sessionKey 关联消息；旧记录缺少来源时不作为该聊天的事实。接口均要求 full scope，并禁止 HTTP 缓存。
+
+用量是供应商报告的输入、输出和缓存／推理分项，缺报不显示为零；分类 token 为估算，不能当作计费分摊。请求正文是在模型 SDK 调用边界捕获的输入，按系统提示、工具定义、消息序列和输出格式展示，不是 HTTP 抓包，也不证明上游已接收。框架发起的重试和降级分别记录；SDK 内部对相同输入的重试合并在同一次语义请求中，不作为逐次 HTTP 尝试记录。旧请求没有正文时不从当前配置重建。
+
+请求正文默认保存在 Host 的 `data/agent-traces`，只记录脱敏文本，图片／音频等二进制仅留占位。默认保留最多 7 天、归档硬上限 64 MiB；容量不足会清理最旧记录，正文过大时保留统计并标记未保存。`ai.agent.recordRequestBodies: false` 可停止新增正文留存。现有 `ZHIN_TRACE_RETENTION_DAYS` / `ZHIN_TRACE_MAX_MB` 配置仍可显式调整保留范围；用量数据库的保留规则独立。过期记录立即停止返回；文件在启动后的维护、写入和既有每小时维护中清理。每个数据目录由一个 Host 进程写入。64 MiB 是归档容量，不是进程内存上限；原子替换期间可能短暂存在临时副本，并发回合和待写队列也会占用内存。
+
 实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
 
 插件写操作都采用“计划后提交”：Console 先调用 `plugin:plan-install`、

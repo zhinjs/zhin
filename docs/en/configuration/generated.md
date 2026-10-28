@@ -270,6 +270,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.skillInstructionMaxChars` | number \| string | no | — | — |
 | `ai.agent.promptTrace` | boolean \| string | no | — | — |
 | `ai.agent.promptTraceVerbose` | boolean \| string | no | — | — |
+| `ai.agent.recordRequestBodies` | boolean | no | — | — |
 | `ai.agent.promptCache` | boolean \| string | no | — | — |
 | `ai.agent.promptCacheKeyPrefix` | string | no | — | — |
 | `ai.agent.deferredAutoContinue` | boolean \| string | no | — | — |

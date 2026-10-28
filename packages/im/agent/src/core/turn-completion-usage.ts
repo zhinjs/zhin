@@ -1,12 +1,19 @@
-import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type TokenUsage, type Usage } from '@zhin.js/ai';
+import { randomUUID } from 'node:crypto';
+import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type TokenUsage, type Usage, type LlmRequestObservation } from '@zhin.js/ai';
 
 import type { UsageEvent } from '../event/turn-event.js';
 import { turnUsageEvent } from './turn-event-mapper.js';
+import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 
-/** Counts completed provider responses before reply validation, including rejected replies and retries. */
+/**
+ * Counts completed provider responses before reply validation, including rejected replies.
+ * Each completion is one semantic request. Framework retries/fallbacks invoke it again;
+ * the SDK may retry the same input internally, which does not create another request.
+ */
 export function trackTurnCompletionUsage(
   delegate: LlmCompletionPort,
   project?: (message: AssistantMessage, signal?: AbortSignal) => Promise<AssistantMessage>,
+  trace?: Readonly<{ turnId?: string; recordBodies?: boolean }>,
 ): {
   transport: LlmCompletionPort;
   readonly usage: TokenUsage;
@@ -17,10 +24,10 @@ export function trackTurnCompletionUsage(
   const total: TokenUsage = { ...EMPTY_TOKEN_USAGE, cost: { ...EMPTY_TOKEN_USAGE.cost } };
   const pending: UsageEvent[] = [];
   const reported = new WeakSet<object>();
-  const record = (assistant: AssistantMessage, durationMs: number): AssistantMessage => {
+  const record = (assistant: AssistantMessage, durationMs: number, requestId: string): AssistantMessage => {
     const usage = assistant.usage;
     pending.push(turnUsageEvent(usage, {
-      provider: assistant.provider, model: assistant.model, stopReason: assistant.stopReason, durationMs,
+      provider: assistant.provider, model: assistant.model, stopReason: assistant.stopReason, durationMs, requestId,
     }));
     reported.add(assistant);
     total.input += usage.input;
@@ -41,16 +48,43 @@ export function trackTurnCompletionUsage(
     reported.add(result);
     return result;
   };
+  const complete = (method: keyof LlmCompletionPort): LlmCompletionPort['complete'] => async (model, context, options) => {
+    const requestId = randomUUID();
+    const started = performance.now();
+    const request = { request_id: requestId, provider: model.provider, model: model.id, started_at: Date.now(), status: 'running' as const };
+    const recordBody = trace?.recordBodies !== false;
+    noteTurnTrace(trace?.turnId, { kind: 'model_request', request: {
+      ...request, body_status: recordBody ? 'unsupported' : 'disabled',
+    } });
+    const onRequest = (observation: LlmRequestObservation) => {
+      if (recordBody) noteTurnTrace(trace?.turnId, { kind: 'model_request', request: {
+        ...request,
+        body_status: observation.status === 'captured' ? 'recorded' : 'capture_failed',
+        ...(observation.status === 'captured' ? { body: observation.input } : {}),
+      } });
+      try { void Promise.resolve(options?.onRequest?.(observation)).catch(() => undefined); } catch { /* Diagnostic observer only. */ }
+    };
+    let assistant: AssistantMessage;
+    try {
+      assistant = await delegate[method](model, context, {
+        ...options,
+        ...((recordBody && trace?.turnId) || options?.onRequest ? { onRequest } : {}),
+      });
+    } catch (error) {
+      noteTurnTrace(trace?.turnId, { kind: 'model_request_end', request_id: requestId,
+        status: options?.signal?.aborted ? 'cancelled' : 'failed', duration_ms: performance.now() - started });
+      throw error;
+    }
+    const durationMs = performance.now() - started;
+    noteTurnTrace(trace?.turnId, { kind: 'model_request_end', request_id: requestId,
+      status: assistant.stopReason === 'aborted' ? 'cancelled' : assistant.stopReason === 'error' ? 'failed' : 'completed',
+      duration_ms: durationMs, stop_reason: assistant.stopReason });
+    return projectRecorded(record(assistant, durationMs, requestId), options?.signal);
+  };
   return {
     transport: {
-      complete: async (model, context, options) => {
-        const started = performance.now();
-        return projectRecorded(record(await delegate.complete(model, context, options), performance.now() - started), options?.signal);
-      },
-      completeSimple: async (model, context, options) => {
-        const started = performance.now();
-        return projectRecorded(record(await delegate.completeSimple(model, context, options), performance.now() - started), options?.signal);
-      },
+      complete: complete('complete'),
+      completeSimple: complete('completeSimple'),
     },
     get usage() { return { ...total, cost: { ...total.cost } }; },
     drainEvents: () => pending.splice(0),

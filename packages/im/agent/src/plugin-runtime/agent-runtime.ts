@@ -346,6 +346,8 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         ? new TurnTraceCollector({
           turnId: request.identity.turnId,
           sessionKey: request.session.key,
+          origin: request.origin,
+          maxRequestBytes: this.options.turnTraceStore?.maxBytes,
           principal: { ...request.principal, trustLevel: trust.level },
         })
         : undefined;

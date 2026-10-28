@@ -673,7 +673,7 @@ export async function* runAgentLoopTextTurnRun(
   let lastAssistantText = '';
   const completionUsage = trackTurnCompletionUsage(host.llmRuntime, host.imageAssets
     ? (message, replySignal) => publishReplyImages(message, host.imageAssets!, replySignal)
-    : undefined);
+    : undefined, { turnId: traceTurnId(input.turnContext), recordBodies: host.config.recordRequestBodies });
   const localInspection = host.localAssets ? new LocalImageInspection(
     host.localAssets, { ...input.turnContext, sessionKey: input.turnContext.session.key },
     input.imageInspectionBudget ?? { remaining: host.mediaPerception?.maxItemsPerTurn ?? DEFAULT_PERCEPTION_SETTINGS.maxItemsPerTurn },

@@ -506,12 +506,11 @@ async function loadConfiguredAgentHost(
   if (!workroom) getLogger('runtime').info('Workroom 未安装，仅启用 Agent');
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
   const { createTurnTraceArchive, defaultTurnTraceDir, defaultTurnTraceFile, resolveTraceArchiveOptions } = await import('@zhin.js/agent/trace');
-  // Persistent trace archive with retention and a size cap (#728); pruned now and hourly on save.
+  // One writer across generations; persistence maintenance also prunes while the bot is idle.
   const turnTraceStore = createTurnTraceArchive(defaultTurnTraceDir(projectRoot), {
     ...resolveTraceArchiveOptions(),
     legacyFile: defaultTurnTraceFile(projectRoot),
   });
-  void turnTraceStore.prune().catch(() => undefined);
   const initialAi = await agentHost.resolveAiConfig(document);
   const workroomStorageMode = agentHost.resolveWorkroomStorageMode(initialAi);
   const runtime = new agentHost.AgentRuntime({
@@ -539,6 +538,7 @@ async function loadConfiguredAgentHost(
       });
       return agentHost.installAgentHost({
         ...options,
+        pruneTraces: () => turnTraceStore.prune(),
         runtime,
         snapshots: snapshotReader,
         workroom,

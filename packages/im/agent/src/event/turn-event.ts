@@ -147,6 +147,8 @@ export interface ThinkingEvent {
 /** Per-model-iteration usage, emitted before the next tool/model iteration. */
 export interface UsageEvent {
   type: 'usage';
+  /** Correlates usage with the observed model attempt; absent in older/custom producers. */
+  requestId?: string;
   provider?: string;
   model?: string;
   durationMs?: number;

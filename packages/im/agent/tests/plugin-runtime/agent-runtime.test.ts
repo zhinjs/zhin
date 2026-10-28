@@ -66,6 +66,52 @@ import { asPrivate } from '../../src/internal/as-private.js';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
 import { createConversationReferenceCapability } from '../../src/tool/conversation-reference-tool.js';
+import { createProviderHarness, anthropicMessages } from '../../../ai/tests/helpers/provider-harness/index.js';
+import type { TurnTrace } from '../../src/trace/turn-trace.js';
+
+describe('full Agent request tracing', () => {
+  it.each([
+    { recordRequestBodies: undefined, maxBytes: undefined, bodyStatus: 'recorded' },
+    { recordRequestBodies: false, maxBytes: undefined, bodyStatus: 'disabled' },
+    { recordRequestBodies: undefined, maxBytes: 128, bodyStatus: 'too_large' },
+  ] as const)('binds the SDK request to origin and usage with body status $bodyStatus', async ({ recordRequestBodies, maxBytes, bodyStatus }) => {
+    const fixture = await createFixture();
+    const h = createProviderHarness({ sdk: 'anthropic' }).reply(anthropicMessages.reply({ text: 'Done.' }));
+    const agent = new ZhinAgent(h.adapter(), { outputSchema: false, maxIterations: 2,
+      ...(recordRequestBodies === undefined ? {} : { recordRequestBodies }),
+    }, undefined, h.runtime);
+    const binding = { name: 'zhin', providerAlias: h.alias, model: h.modelId, mcpServers: [] };
+    agent.activeBinding = binding;
+    agent.markMemoryPersistenceReady();
+    const host = asPrivate(agent);
+    const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
+      sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
+    const snapshot = new SnapshotStore(stateWithEngine(fixture.snapshot, context => engine.run(context)));
+    const traces: TurnTrace[] = [];
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator(), turnTraceStore: {
+      maxBytes, save: async trace => { traces.push(trace); }, list: async () => [], latest: async () => undefined, find: async () => undefined,
+    } });
+    runtime.attach(snapshot);
+    const request = { ...externalRequest('sdk-trace'), input: { text: 'Please say Done.' } };
+    try {
+      const result = await runtime.execute(fixture.child, request, { binding, mcpServers: [] });
+      expect(result.status).toBe('completed');
+      expect(h.requests).toHaveLength(1);
+      expect(traces).toHaveLength(1);
+      const trace = traces[0]!;
+      expect(trace.origin).toEqual(request.origin);
+      expect(trace.requests).toHaveLength(1);
+      const captured = trace.requests![0]!;
+      expect(captured).toMatchObject({ provider: h.alias, model: h.modelId, status: 'completed', body_status: bodyStatus });
+      expect(trace.model_calls).toContainEqual(expect.objectContaining({ request_id: captured.request_id }));
+      if (bodyStatus === 'recorded') {
+        expect(JSON.stringify(captured.body)).toContain('Please say Done.');
+        expect(captured.body?.system).toContain('Prefer repository-local conventions.');
+        expect(JSON.stringify(captured.body)).not.toContain('test-key');
+      } else expect(captured.body).toBeUndefined();
+    } finally { await fixture.mcp.stop(); await snapshot.close(); }
+  });
+});
 
 describe('Agent CapabilityIngress', () => {
   it.each(['accept', 'reject', 'modify'] as const)('respects %s hooks when projecting a private image without persisting bytes into the next turn', async hookDecision => {
@@ -451,7 +497,14 @@ describe('Agent CapabilityIngress', () => {
     await store.close();
   });
 
-  it('saves a TurnTrace with tool events from the journal when a trace store is configured (#722)', async () => {
+  it.each([
+    { kind: 'http', sessionId: 'http-t' },
+    { kind: 'schedule', jobId: 'schedule-t' },
+    { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'channel', sceneId: 'channel-t', messageId: 'incoming-t',
+      conversation: { endpoint: { adapter: 'icqq', id: 'canonical-bot' }, kind: 'channel', id: 'channel-t',
+        parent: { kind: 'channel', id: 'guild-t' }, threadId: 'topic-t' } },
+  ] satisfies import('../../src/turn/turn-ingress.js').TurnOrigin[])(
+    'saves journal tool events and the trusted $kind origin in the turn trace', async origin => {
     const fixture = await createFixture();
     const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* ({ turn }) {
       yield { type: 'usage', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } };
@@ -474,12 +527,16 @@ describe('Agent CapabilityIngress', () => {
 
     await runtime.execute(fixture.child, {
       identity: { traceId: 'trace-t', turnId: 'turn-t' },
-      origin: { kind: 'http', sessionId: 'http-t' },
+      origin,
+      ...(origin.kind === 'schedule' ? { execution: { kind: 'schedule' as const,
+        security: { execPreset: 'readonly' as const, allowedDomains: [] } } } : {}),
       intent: { kind: 'new' },
       principal: { subjectId: 'user-1', roles: ['user'] },
       input: { text: 'hello' },
       session: { key: 'http:http-t' },
-      policy: { permissions: ['user'], unattended: false },
+      policy: { permissions: ['user'], unattended: origin.kind === 'schedule',
+        ...(origin.kind === 'schedule' ? { network: { enabled: true, httpsOnly: true, allowedDomains: [] },
+          shell: { preset: 'readonly' as const } } : {}) },
       signal: new AbortController().signal,
       ports: {},
     }, selection([]));
@@ -488,6 +545,7 @@ describe('Agent CapabilityIngress', () => {
     expect(saved[0]).toMatchObject({
       turn_id: 'turn-t',
       session_key: 'http:http-t',
+      origin,
       principal: { subject_id: 'user-1' },
       usage: { total_tokens: 15 },
       termination: { status: 'completed' },

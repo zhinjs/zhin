@@ -21,6 +21,7 @@ This is the **single authoritative document** for `ai.agent.*` default behavior 
 - Usage quota: all 0 (off), `exemptOwner true`
 - Dangerous-tool hard gate: always on; funds tools disabled (`allowFunds false`); a call not approved within 5 minutes (`approvalTimeoutMs 300000`) is denied
 - Compaction: `thresholdRatio 0.7`
+- Request traces: `recordRequestBodies true` stores redacted model-input text and tool definitions locally on the Host. Defaults retain at most seven days and 64 MiB in total. Capacity cleanup removes the oldest traces first; an oversized body leaves statistics and an explicit unavailable-body status. Set this to `false` to stop recording new bodies without disabling usage statistics or deleting existing records.
 
 ## Dangerous-tool hard gate
 
@@ -136,6 +137,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `phaseTrace` | debug | Diagnostics only |
 | `promptTrace` | debug | Diagnostics only |
 | `promptTraceVerbose` | debug | Diagnostics only |
+| `recordRequestBodies` | keep | Records redacted request bodies locally by default; false disables new body retention while preserving usage statistics |
 | `onPhaseTrace` | internal | Code-only callback, not YAML-configurable |
 | `maxSkills` | deprecated | Unused at runtime; deprecated (#735), removed by --fix |
 | `policyDenialStopAfter` | deprecated | Unused at runtime; deprecated (#735), removed by --fix |

@@ -13,6 +13,7 @@ import { streamPartError } from './stream-error.js';
 import { parseLenientJsonObject } from './lenient-json.js';
 import { normalizePromptStructuredText, structuredOutputMode, withStructuredOutputInstruction } from './prompt-structured-output.js';
 import { toolCallInput } from './tool-call-input.js';
+import { observeModelRequest } from './request-observation.js';
 import { createToolNameCodec } from './tool-name-wire.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
@@ -433,6 +434,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         model: languageModel,
         system,
         messages: applyPromptCacheToMessages(messages, cacheCtx),
+        onLanguageModelCallStart: options?.onRequest ? event => observeModelRequest(options.onRequest, event, options.outputSchema) : undefined,
         tools,
         toolChoice: tools ? 'auto' : undefined,
         temperature: options?.temperature,
@@ -598,6 +600,7 @@ export async function generateTextViaAiSdk(
       model: languageModel,
       system,
       messages: applyPromptCacheToMessages(messages, cacheCtx),
+      onLanguageModelCallStart: options?.onRequest ? event => observeModelRequest(options.onRequest, event, options.outputSchema) : undefined,
       tools,
       toolChoice: tools ? 'auto' : undefined,
       temperature: options?.temperature,

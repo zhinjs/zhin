@@ -21,6 +21,7 @@
 - 用量配额：全部为 0（关闭），`exemptOwner true`
 - 危险工具硬闸：始终开启；资金类禁用（`allowFunds false`）；审批 5 分钟（`approvalTimeoutMs 300000`）未批即拒绝
 - 上下文压缩：`thresholdRatio 0.7`
+- 请求轨迹：`recordRequestBodies true`，在 Host 本地保存脱敏后的模型输入文本与工具定义；默认最多保留 7 天、总量 64 MiB。达到容量会先清理最旧轨迹，单条正文仍放不下时仅保留统计和未保存状态。设置为 `false` 停止记录新请求正文，不影响用量统计，也不删除已有记录。
 
 ## 危险工具硬闸
 
@@ -136,6 +137,7 @@ ai:
 | `phaseTrace` | debug | 仅诊断用 |
 | `promptTrace` | debug | 仅诊断用 |
 | `promptTraceVerbose` | debug | 仅诊断用 |
+| `recordRequestBodies` | keep | 默认记录本地脱敏请求正文；设为 false 可关闭新增正文留存，保留用量统计 |
 | `onPhaseTrace` | internal | 代码回调，YAML 不可配置 |
 | `maxSkills` | deprecated | 运行时无读取，已弃用（#735），--fix 可移除 |
 | `policyDenialStopAfter` | deprecated | 运行时无读取，已弃用（#735），--fix 可移除 |
