@@ -7,6 +7,7 @@ import { RESERVED_TOOL_NAME_PREFIXES, RESERVED_TOOL_NAMES } from '../../src/rese
 import type { ZhinAgentConfig } from '../../src/config/zhin-agent-config.js';
 import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import type { TurnMergedSender } from '../../src/turn/merged-turn-context.js';
+import type { TurnLiveDanmaku } from '../../src/turn/live-turn-context.js';
 import type { ScriptStep } from './scripted-model.js';
 import type { EvalRunRecord } from './driver.js';
 import type { EvalLiveCheck } from './live-checks.js';
@@ -38,6 +39,11 @@ export interface EvalInboundMessage {
    * them over (`TurnInput.mergedSenders`). `sender` is the carrier.
    */
   readonly mergedSenders?: readonly TurnMergedSender[];
+  /**
+   * ADR 0038 §5: the danmaku window of a live-stream turn, as the IM ingress
+   * hands it over (`TurnInput.liveDanmaku`). `sender` is the carrier.
+   */
+  readonly liveDanmaku?: TurnLiveDanmaku;
 }
 
 export interface EvalImage {

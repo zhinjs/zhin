@@ -102,6 +102,11 @@ export interface TurnInput {
    * `[Merged turn]` lines of the turn context.
    */
   readonly mergedSenders?: readonly import('./merged-turn-context.js').TurnMergedSender[];
+  /**
+   * ADR 0038 §5: the danmaku window a live-stream turn answers, rendered as
+   * the `[Danmaku window]` lines of the turn context.
+   */
+  readonly liveDanmaku?: import('./live-turn-context.js').TurnLiveDanmaku;
 }
 
 export interface TurnSessionAddress {

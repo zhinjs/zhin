@@ -552,6 +552,12 @@ export interface AIConfig {
         maxWaitMs?: number;
         maxSenders?: number;
       };
+      /** ADR 0038 §5: danmaku mode for adapters that declare `liveDanmaku`. */
+      live?: {
+        mode?: 'pick-one' | 'summary';
+        windowMs?: number;
+        minIntervalMs?: number;
+      };
     };
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';

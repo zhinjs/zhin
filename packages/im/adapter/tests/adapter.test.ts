@@ -391,6 +391,14 @@ describe('Adapter Feature', () => {
     expect(() => defineAdapter({ capabilities: [], create: () => ({}) })).toThrow(
       'capabilities',
     );
+    // ADR 0038 §5: liveDanmaku marks a live-stream adapter and needs inbound.
+    const live = defineAdapter({ capabilities: ['inbound', 'outbound', 'liveDanmaku'], create: () => ({}) });
+    expect(parseAdapterDefinition(live).capabilities).toEqual(['inbound', 'outbound', 'liveDanmaku']);
+    expect(() => defineAdapter({ capabilities: ['outbound', 'liveDanmaku'], create: () => ({}) }))
+      .toThrow('liveDanmaku requires inbound');
+    expect(() => defineAdapter({ capabilities: ['liveDanmaku'], create: () => ({}) })).toThrow('capabilities');
+    expect(() => parseAdapterDefinition({ ...live, capabilities: ['outbound', 'liveDanmaku'] }))
+      .toThrow('Adapter module must default-export defineAdapter(...)');
 
     const source = '/project/adapters/discord/index.ts';
     const host = new MemoryDiscoveryHost({

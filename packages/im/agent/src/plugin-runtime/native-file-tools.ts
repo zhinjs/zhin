@@ -40,6 +40,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         limit: { type: 'number', description: 'Maximum lines to return' },
       }, ['file_path']),
       requiresApproval: 'never',
+      readOnly: true,
       execute: readFile,
     })),
     feature('write_file', defineAgentTool({
@@ -65,6 +66,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
       description: `List up to ${MAX_LIST_ENTRIES} entries in a directory inside the authorized workspace.`,
       inputSchema: objectSchema({ path: { type: 'string', description: 'Directory path' } }, ['path']),
       requiresApproval: 'never',
+      readOnly: true,
       execute: listDir,
     })),
     feature('glob', defineAgentTool({
@@ -75,6 +77,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         cwd: { type: 'string', description: 'Search directory inside the workspace' },
       }, ['pattern']),
       requiresApproval: 'never',
+      readOnly: true,
       execute: globFiles,
     })),
     feature('grep', defineAgentTool({
@@ -89,6 +92,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         limit: { type: 'number', description: `Maximum matching lines (default ${DEFAULT_GREP_MATCHES}, max ${MAX_GREP_MATCHES})` },
       }, ['pattern']),
       requiresApproval: 'never',
+      readOnly: true,
       execute: grepFiles,
     })),
   ]);

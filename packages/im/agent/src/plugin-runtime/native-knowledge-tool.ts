@@ -127,6 +127,7 @@ export function createNativeKnowledgeToolFeature(
         limit: { type: 'number', minimum: 1, maximum: 20 },
       }, ['query']),
       requiresApproval: 'never',
+      readOnly: true,
       tags: Object.freeze(['knowledge', 'file']),
       keywords: Object.freeze(['knowledge', 'search', '知识', '检索', '文档', 'FAQ']),
       execute: (input, context) => searchKnowledge(index, input, context, resolveDecision),

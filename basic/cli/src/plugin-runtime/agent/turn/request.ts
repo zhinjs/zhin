@@ -99,6 +99,8 @@ export function createRuntimeTurnRequest(
     sceneEvents?: readonly string[];
     /** ADR 0038 §3: senders of a merged turn (two or more). */
     mergedSenders?: TurnInput['mergedSenders'];
+    /** ADR 0038 §5: the danmaku window of a live-stream turn. */
+    liveDanmaku?: TurnInput['liveDanmaku'];
   }>,
 ): TurnRequest {
   const access = input.access ?? createRuntimeTurnAccess(message, roles);
@@ -213,6 +215,7 @@ export function createRuntimeTurnRequest(
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
       ...(input.sceneEvents?.length ? { sceneEvents: Object.freeze([...input.sceneEvents]) } : {}),
       ...(input.mergedSenders && input.mergedSenders.length > 1 ? { mergedSenders: Object.freeze([...input.mergedSenders]) } : {}),
+      ...(input.liveDanmaku ? { liveDanmaku: input.liveDanmaku } : {}),
     }),
     session: Object.freeze({
       key: sessionKey,

@@ -467,6 +467,10 @@ ai:
         quietMs: 1500             # 安静多久发车
         maxWaitMs: 6000           # 窗口最多等多久
         maxSenders: 5             # 一次合并回复最多几个人
+      live:                       # 弹幕模式（ADR 0038），仅 liveDanmaku 适配器
+        mode: pick-one            # pick-one 挑一条回 / summary 概括后回一次
+        windowMs: 10000           # 弹幕窗口
+        minIntervalMs: 15000      # 两次弹幕回复的最小间隔
 ```
 
 **命令白名单**：`execPreset` 逐级放宽——`readonly`（ls、cat、grep、find 等）→ `network`（再加 curl、wget、ping 等）→ `development`（再加 npm、node、git、python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 这类操作直接阻断。

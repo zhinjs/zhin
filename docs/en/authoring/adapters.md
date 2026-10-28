@@ -61,7 +61,7 @@ Piece by piece:
 
 | Part | Purpose |
 | --- | --- |
-| `capabilities` | Declares receiving (`inbound`), sending (`outbound`), or both — at least one |
+| `capabilities` | Declares receiving (`inbound`), sending (`outbound`), or both — at least one. Live-stream danmaku platforms add `liveDanmaku` (requires `inbound`): the Agent then collects danmaku in a window and replies once per window (ADR 0038 §5, configured by `ai.agent.inboundQueue.live`) |
 | `create(context)` | Called once per account; `context.config` is that account's config |
 | `client` | The platform SDK instance. Commands get it as `context.$client`, event handlers as `event.client` |
 | `connect()` | Connects to the platform and **returns only once it is usable** |

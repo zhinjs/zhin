@@ -21,6 +21,7 @@
 - 用量配额：全部为 0（关闭），`exemptOwner true`
 - 危险工具硬闸：始终开启；资金类禁用（`allowFunds false`）；审批 5 分钟（`approvalTimeoutMs 300000`）未批即拒绝；每群同时最多 3 张待审卡（`maxPendingPerScene 3`），超出直接拒绝
 - 群聊合流：开启（`inboundQueue.merge.enabled true`，仅群聊；窗口 `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`）
+- 弹幕模式：仅对声明 `liveDanmaku` 的直播适配器生效（`inboundQueue.live`：`mode pick-one` / `windowMs 10000` / `minIntervalMs 15000`；只读工具、无审批卡）
 - 上下文压缩：`thresholdRatio 0.7`
 - 请求轨迹：`recordRequestBodies true`，在 Host 本地保存脱敏后的模型输入文本与工具定义；默认最多保留 7 天、总量 64 MiB。达到容量会先清理最旧轨迹，单条正文仍放不下时仅保留统计和未保存状态。设置为 `false` 停止记录新请求正文，不影响用量统计，也不删除已有记录。
 

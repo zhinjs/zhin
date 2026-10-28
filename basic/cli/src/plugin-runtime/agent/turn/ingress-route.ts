@@ -21,13 +21,16 @@ import {
   intersectCapabilities,
   isActingTurnEvent,
   isCancelIntent,
+  liveReplyAuditPayload,
   mergedReplyAuditPayload,
   narrowMergedAccess,
   normalizeInboundQueueConfig,
+  readOnlyCapabilities,
   withMergeMembers,
   TurnAdmissionGate,
   type TurnAccessContext,
   type TurnAdmission,
+  type TurnLiveDanmaku,
   type TurnMergedSender,
   type TurnStaleVerdict,
 } from '@zhin.js/agent/turn';
@@ -44,6 +47,7 @@ import {
 } from '@zhin.js/agent/runtime';
 import type { DecisionProvider, DecisionTaskConfig } from '@zhin.js/ai';
 import {
+  adapterDeclaresLiveDanmaku,
   resolveAiOutboundSegments,
   type ImRuntime,
   type IngressRoute,
@@ -535,6 +539,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         supersedeSameSender: queue.groupMode === 'supersede',
         // ADR 0038 §1: group merge window (opt-in in slice A).
         ...(queue.merge.enabled ? { merge: queue.merge } : {}),
+        // ADR 0038 §5: only conversations of a `liveDanmaku` adapter ask for it.
+        live: { windowMs: queue.live.windowMs, minIntervalMs: queue.live.minIntervalMs },
       });
     }
     return this.#admissionGate;
@@ -892,6 +898,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
           return matched != null;
         }
       }
+      // ADR 0038 §5: in a live room every danmaku is a candidate; viewers do not @ the Bot.
+      const liveRoom = !workroomAgentTurn
+        && turnAccess.origin.kind === 'im'
+        && turnAccess.origin.scope !== 'private'
+        && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
+      if (!matched && liveRoom) {
+        const text = message.content.trim();
+        if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
+      }
       if (!matched) {
         matched = workroomAgentTurn ? null : await this.#considerAmbient(
           snapshot,
@@ -1001,7 +1016,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
             senderId,
             text: preprocessed.text,
             plainText,
-            mergeable: isMergeableGroupTurn({
+            // Masters keep their own turn (ADR 0038 §0.3), in a live room too.
+            live: liveRoom && !senderRoles.isMaster,
+            mergeable: !liveRoom && isMergeableGroupTurn({
               message,
               trigger,
               plainText,
@@ -1045,24 +1062,42 @@ export class AgentTurnIngressRoute implements IngressRoute {
             });
           }
         }
+        // ADR 0038 §5: a danmaku turn answers its window as an anonymous viewer, read-only.
+        const liveWindow = admission?.facts.liveWindow;
+        const liveDanmaku: TurnLiveDanmaku | undefined = liveWindow && admission
+          ? Object.freeze({
+              mode: normalizeInboundQueueConfig(service.getAgentConfig()?.inboundQueue).live.mode,
+              candidates: liveWindow.candidates,
+              senders: mergedTurnSenders(admission.participants),
+            })
+          : undefined;
+        const liveAccess = liveDanmaku ? anonymousMemberAccess(turnAccess, senderId) : undefined;
+        if (liveWindow) {
+          logger.debug(formatCompact({ op: 'agent_host_danmaku_window', sessionKey, candidates: liveWindow.candidates, kept: liveWindow.kept }));
+        }
         // ADR 0038 §2: a merged turn may only do what every member may do.
-        const members = admission && admission.participants.length > 1
+        const members = !liveDanmaku && admission && admission.participants.length > 1
           ? mergedMemberAccess(admission.participants, turnAccess)
           : undefined;
         const read = await readTurnCapabilities(
           ingress,
           snapshot,
           requester,
-          turnAccess,
+          liveAccess ?? turnAccess,
           members,
           () => capabilityActive,
         );
         const turnAccessForTurn = members
           ? withMergeMembers(narrowMergedAccess(turnAccess, members), read.members, read.memberTools)
-          : turnAccess;
+          : liveAccess ?? turnAccess;
         // ADR 0038 §3: the model sees who it is answering; outbound audits "merged N, answered M".
         const mergedSenders = members && admission ? mergedTurnSenders(admission.participants) : undefined;
-        const capabilities = restrictWorkroomAgentCapabilities(read.capabilities, workroomAgentTurn != null);
+        const capabilities = restrictWorkroomAgentCapabilities(
+          liveDanmaku ? readOnlyCapabilities(read.capabilities) : read.capabilities,
+          workroomAgentTurn != null,
+        );
+        /** `danmaku_window_picked` is written once, for the first delivered reply. */
+        let danmakuAudited = false;
         let routed = routeSpecialistAgent(
           inbound.text,
           capabilities,
@@ -1073,7 +1108,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
         // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
-        if (trigger.thinkingMessage && !ambient && !outboundBlocked('thinking')) {
+        if (trigger.thinkingMessage && !ambient && !liveDanmaku && !outboundBlocked('thinking')) {
           message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
             logger.debug(formatCompact({
               op: 'agent_host_thinking_reply_failed',
@@ -1137,18 +1172,19 @@ export class AgentTurnIngressRoute implements IngressRoute {
               replyConversation.kind,
             );
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
-              ...(members ? { access: turnAccessForTurn } : {}),
+              ...(members || liveAccess ? { access: turnAccessForTurn } : {}),
               traceId,
               turnId,
               signal: admission ? AbortSignal.any([signal, admission.signal]) : signal,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
-              filesystemAccess: turnPolicy.filesystem.access,
-              shell: turnPolicy.shell,
+              filesystemAccess: liveDanmaku ? 'read-only' : turnPolicy.filesystem.access,
+              shell: liveDanmaku ? undefined : turnPolicy.shell,
               network: turnPolicy.network,
               sessionKey,
               ...(sceneEvents.length ? { sceneEvents } : {}),
               ...(mergedSenders ? { mergedSenders } : {}),
+              ...(liveDanmaku ? { liveDanmaku } : {}),
               ...(workroomAgentTurn ? {
                 trustedMetadata: Object.freeze({
                   workroom: Object.freeze({
@@ -1195,7 +1231,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 },
               }),
               ports: {
-                approval: options.approvalPort ?? resolveApprovalPort({
+                // ADR 0038 §5: a danmaku turn never puts an approval card in front of anyone.
+                approval: liveDanmaku ? NO_APPROVAL_PORT : options.approvalPort ?? resolveApprovalPort({
                   mode: turnPolicy.shell?.approvalMode
                     ?? service.getAgentConfig()?.execApprovalMode
                     ?? 'auto',
@@ -1272,6 +1309,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
                           throw error;
                         }
                         auditOutbound(audit, sent, { segments: content.length, ...mergeAudit });
+                        if (liveDanmaku && sent.status === 'sent' && !danmakuAudited) {
+                          danmakuAudited = true;
+                          audit({
+                            kind: 'outbound',
+                            outcome: 'allow',
+                            reasonCode: 'danmaku_window_picked',
+                            payload: liveReplyAuditPayload(liveDanmaku, output),
+                          });
+                        }
                         if (sent.status === 'sent') {
                           spoke = true;
                           admission?.markDelivered();
@@ -1296,7 +1342,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               request,
               {
                 binding,
-                mcpServers: binding.mcpServers,
+                mcpServers: liveDanmaku ? [] : binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
               observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
@@ -1533,6 +1579,12 @@ export function mergedTurnSenders(
     texts: participant.texts,
   })));
 }
+
+/** A danmaku turn cannot ask anyone: every approval request is unavailable. */
+const NO_APPROVAL_PORT: ApprovalPort = Object.freeze({
+  available: false,
+  requestApproval: async () => false,
+});
 
 function anonymousMemberAccess(carrier: TurnAccessContext, senderId: string): TurnAccessContext {
   return Object.freeze({

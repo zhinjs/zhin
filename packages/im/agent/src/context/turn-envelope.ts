@@ -5,6 +5,7 @@ import type { TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import { SCENE_WAKE_METADATA_KEY } from '../scene-events.js';
 import { formatMergedTurnBlock } from '../turn/merged-turn-context.js';
+import { formatLiveDanmakuBlock } from '../turn/live-turn-context.js';
 
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
@@ -95,6 +96,8 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
     }
     const merged = formatMergedTurnBlock(input.turn.input?.mergedSenders);
     if (merged) lines.push(merged);
+    const danmaku = formatLiveDanmakuBlock(input.turn.input?.liveDanmaku);
+    if (danmaku) lines.push(danmaku);
     if (input.turn.input?.metadata?.[SCENE_WAKE_METADATA_KEY] === true) lines.push(SCENE_WAKE_ENGAGEMENT_LINE);
     else if (input.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') lines.push(AMBIENT_ENGAGEMENT_LINE);
     if (input.turn.policy?.filesystem) {

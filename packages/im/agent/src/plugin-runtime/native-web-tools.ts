@@ -39,6 +39,7 @@ export function createNativeWebToolFeatures(
         max_length: { type: 'number', description: 'Maximum returned characters' },
       }, ['url']),
       requiresApproval: 'on-risk',
+      readOnly: true,
       execute: (input, context) => fetchWeb(input, context, transport),
     })),
     feature('web_search', defineAgentTool({
@@ -51,6 +52,7 @@ export function createNativeWebToolFeatures(
         blocked_domains: { type: 'array', items: { type: 'string' } },
       }, ['query']),
       requiresApproval: 'never',
+      readOnly: true,
       execute: (input, context) => searchWeb(input, context, transport),
     })),
   ]);

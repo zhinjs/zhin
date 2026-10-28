@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LIVE_WINDOW_MAX_MESSAGES,
   TurnAdmissionGate,
   type TurnAdmission,
   type TurnAdmissionRequest,
@@ -607,6 +608,147 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const run = await expectRun(gate.admit(message('alice', 'a1')));
     void gate.admit(message('bob', 'b1'));
     expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+});
+
+describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
+  const ROOM = 'bilibili:live:room:1';
+
+  function createLiveGate(overrides: Partial<ConstructorParameters<typeof TurnAdmissionGate>[0]> = {}) {
+    let clock = 0;
+    let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
+    const gate = new TurnAdmissionGate({
+      maxQueuedTurns: 5,
+      queueTtlMs: 180_000,
+      supersedeSameSender: true,
+      merge: { quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 5 },
+      live: { windowMs: 10_000, minIntervalMs: 15_000 },
+      now: () => clock,
+      setTimer: (run, delayMs) => {
+        const timer = { at: clock + delayMs, run, cancelled: false };
+        timers.push(timer);
+        return () => { timer.cancelled = true; };
+      },
+      ...overrides,
+    });
+    const advance = (ms: number) => {
+      const until = clock + ms;
+      for (;;) {
+        const due = timers.filter((t) => !t.cancelled && t.at <= until).sort((a, b) => a.at - b.at)[0];
+        if (!due) break;
+        clock = due.at;
+        due.cancelled = true;
+        due.run();
+      }
+      clock = until;
+      timers = timers.filter((t) => !t.cancelled);
+    };
+    return { gate, advance };
+  }
+
+  function danmaku(senderId: string, text: string, extra: Partial<TurnAdmissionRequest> = {}): TurnAdmissionRequest {
+    return { sessionKey: ROOM, senderId, text, plainText: true, live: true, ...extra };
+  }
+
+  it('answers 50 danmaku in 10 seconds with one turn and counts every candidate', async () => {
+    const { gate, advance } = createLiveGate();
+    const carrier = gate.admit(danmaku('v0', '主播好'));
+    const others: Promise<TurnAdmission>[] = [];
+    for (let index = 1; index < 50; index += 1) {
+      advance(200);
+      others.push(gate.admit(danmaku(`v${index % 20}`, `弹幕${index}`)));
+    }
+    for (const other of others) expect((await other).kind).toBe('merged');
+    expect(await isSettled(carrier)).toBe(false);
+    advance(10_000 - 49 * 200);
+    const run = await expectRun(carrier);
+    expect(run.facts.liveWindow).toEqual({ candidates: 50, kept: 50, senders: 20, waitedMs: 10_000 });
+    expect(run.facts.mergeWindow).toBeUndefined();
+    expect(run.participants).toHaveLength(20);
+    run.release();
+  });
+
+  it('has no sender limit and ignores the merge window quiet time', async () => {
+    const { gate, advance } = createLiveGate();
+    const carrier = gate.admit(danmaku('v0', 'a'));
+    for (let index = 1; index <= 8; index += 1) await gate.admit(danmaku(`v${index}`, 'x'));
+    advance(1_500);
+    expect(await isSettled(carrier)).toBe(false);
+    advance(8_500);
+    const run = await expectRun(carrier);
+    expect(run.participants).toHaveLength(9);
+    run.release();
+  });
+
+  it('keeps at most LIVE_WINDOW_MAX_MESSAGES danmaku, dropping the oldest', async () => {
+    const { gate, advance } = createLiveGate();
+    const carrier = gate.admit(danmaku('v0', 'first', { messageId: 'd0' }));
+    for (let index = 1; index < LIVE_WINDOW_MAX_MESSAGES + 20; index += 1) {
+      await gate.admit(danmaku(`v${index}`, `d${index}`, { messageId: `d${index}` }));
+    }
+    advance(10_000);
+    const run = await expectRun(carrier);
+    expect(run.facts.liveWindow).toMatchObject({ candidates: LIVE_WINDOW_MAX_MESSAGES + 20, kept: LIVE_WINDOW_MAX_MESSAGES });
+    expect(run.participants.some((p) => p.senderId === 'v0')).toBe(false);
+    expect(run.participants.at(-1)).toMatchObject({ senderId: `v${LIVE_WINDOW_MAX_MESSAGES + 19}`, messageIds: [`d${LIVE_WINDOW_MAX_MESSAGES + 19}`] });
+    run.release();
+  });
+
+  it('collects danmaku while a turn runs and waits minIntervalMs after it ended', async () => {
+    const { gate, advance } = createLiveGate();
+    const first = gate.admit(danmaku('v1', 'q1'));
+    advance(10_000);
+    const run = await expectRun(first);
+
+    const next = gate.admit(danmaku('v2', 'q2'));
+    advance(12_000);
+    run.release();
+    // Window age is already past windowMs, but the previous reply ended just now.
+    advance(14_999);
+    expect(await isSettled(next)).toBe(false);
+    advance(1);
+    const second = await expectRun(next);
+    expect(second.facts.liveWindow?.candidates).toBe(1);
+    second.release();
+  });
+
+  it('never marks a danmaku turn stale or supersedes it', async () => {
+    const { gate, advance } = createLiveGate();
+    const first = gate.admit(danmaku('v1', 'q1'));
+    advance(10_000);
+    const run = await expectRun(first);
+    void gate.admit(danmaku('v2', 'opens the next window'));
+    expect((await gate.admit(danmaku('v1', 'q2'))).kind).toBe('merged');
+    expect(run.signal.aborted).toBe(false);
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('leaves non-live messages to the ordinary and merge paths', async () => {
+    const { gate } = createLiveGate();
+    const run = await expectRun(gate.admit({ sessionKey: ROOM, senderId: 'streamer', text: '我来了', plainText: true }));
+    expect(run.facts.liveWindow).toBeUndefined();
+    run.release();
+  });
+
+  it('ignores `live` when no danmaku window is configured', async () => {
+    const { gate } = createLiveGate({ live: undefined });
+    const run = await expectRun(gate.admit(danmaku('v1', 'q1')));
+    expect(run.facts.liveWindow).toBeUndefined();
+    run.release();
+  });
+
+  it('forgets a room\'s last reply once minIntervalMs passed', async () => {
+    const { gate, advance } = createLiveGate();
+    const first = gate.admit(danmaku('v1', 'q1'));
+    advance(10_000);
+    (await expectRun(first)).release();
+    advance(15_000);
+    const next = gate.admit(danmaku('v2', 'q2'));
+    advance(10_000);
+    const run = await expectRun(next);
+    expect(run.facts.liveWindow?.waitedMs).toBe(10_000);
     run.release();
   });
 });
