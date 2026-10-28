@@ -4,7 +4,13 @@ import { join } from 'node:path';
 import type { DecisionEventInput } from '../../src/decision-events.js';
 import { createHostProtectedPaths } from '../../src/security/host-config-paths.js';
 import { SelfChangeStateError, SelfChangeStore } from '../../src/self-change/store.js';
-import { checkSelfChangeFiles, runSelfChangeTrial, type SelfChangeTrialResult } from '../../src/self-change/trial.js';
+import {
+  checkSelfChangeFiles,
+  runSelfChangeTrial,
+  type SelfChangeSandboxLoader,
+  type SelfChangeSandboxLoadRequest,
+  type SelfChangeTrialResult,
+} from '../../src/self-change/trial.js';
 
 const origin = { platform: 'icqq', sceneId: 'private:42', userId: '42' };
 const command = "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ run: () => 'pong' });\n";
@@ -66,6 +72,14 @@ describe('checkSelfChangeFiles', () => {
     expect(checks.find(check => check.path === 'commands/legacy.ts' && check.status === 'failed')!.message).toContain('bootstrapNode');
   });
 
+  it('strips comments in linear time and never lets an unclosed /* hide an import', async () => {
+    const content = `${command}const s = "/*${'a/*'.repeat(50_000)}";\nimport 'koa';\n`;
+    const started = Date.now();
+    const checks = await checkSelfChangeFiles([{ path: 'commands/slow.ts', content }]);
+    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(failures(checks)).toEqual(['commands/slow.ts:forbidden_import']);
+  });
+
   it('validates SKILL.md and agent.json', async () => {
     const checks = await checkSelfChangeFiles([
       { path: 'skills/weather/SKILL.md', content: '---\nname: other\n---\n# x\n' },
@@ -86,6 +100,15 @@ describe('checkSelfChangeFiles', () => {
     });
     expect(seen).toEqual(['components/hi.tsx']);
     expect(failures(checked)).toEqual(['components/hi.tsx:syntax']);
+  });
+
+  it('does not require defineCommand from helper modules beside a command index', async () => {
+    const checks = await checkSelfChangeFiles([
+      { path: 'commands/ping/index.ts', content: command },
+      { path: 'commands/ping/format.ts', content: 'export const f = (s: string) => s;\n' },
+    ]);
+    expect(failures(checks)).toEqual([]);
+    expect(checks.filter(check => check.check === 'default_export').map(check => check.path)).toEqual(['commands/ping/index.ts']);
   });
 
   it('resolves convention dirs under a local plugin root', async () => {
@@ -162,6 +185,106 @@ describe('runSelfChangeTrial', () => {
     const failed = await runSelfChangeTrial(changes, draft.id, { jsxSyntax: () => { throw new Error('boom'); } });
     expect(failed.status).toBe('trial_failed');
     expect(failed.error).toContain('boom');
+  });
+
+  describe('sandbox load (§3.3)', () => {
+    function loader(result: Awaited<ReturnType<SelfChangeSandboxLoader>>, seen: SelfChangeSandboxLoadRequest[] = []): SelfChangeSandboxLoader {
+      return async request => {
+        seen.push(request);
+        return result;
+      };
+    }
+
+    it('loads the drafted plugin root and requires each capability file to be discovered', async () => {
+      const changes = await store();
+      const draft = await changes.draft({ origin, files: [
+        { path: 'commands/ping/index.ts', content: command },
+        { path: 'commands/ping/format.ts', content: 'export const f = (s: string) => s;\n' },
+        { path: 'commands/old/index.ts', delete: true },
+        { path: 'AGENTS.md', content: '# rules\n' },
+      ] });
+      const seen: SelfChangeSandboxLoadRequest[] = [];
+      const ready = await runSelfChangeTrial(changes, draft.id, {
+        sandboxLoad: loader({ status: 'passed', capabilities: [{ feature: 'zhin.command', localName: 'ping', source: 'commands/ping/index.ts' }] }, seen),
+      });
+      expect(ready.status).toBe('ready');
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({ pluginRoot: '', deletes: ['commands/old/index.ts'] });
+      expect(seen[0]!.writes.map(file => file.path).sort()).toEqual(['AGENTS.md', 'commands/ping/format.ts', 'commands/ping/index.ts']);
+      const trial = ready.trial as SelfChangeTrialResult;
+      expect(trial.pendingStages).toEqual(['plugin_tests']);
+      expect(trial.checks.filter(check => check.check === 'sandbox_load' || check.check === 'capability_discovered')).toEqual([
+        { check: 'sandbox_load', path: '.', status: 'passed' },
+        { check: 'capability_discovered', path: 'commands/ping/index.ts', status: 'passed' },
+      ]);
+    });
+
+    it('fails a capability file the trial runtime did not discover (wrong layout)', async () => {
+      const changes = await store();
+      const draft = await changes.draft({ origin, files: [{ path: 'commands/ping.ts', content: command }] });
+      const failed = await runSelfChangeTrial(changes, draft.id, {
+        sandboxLoad: loader({ status: 'passed', capabilities: [{ feature: 'zhin.command', localName: 'hello', source: 'commands/hello/index.ts' }] }),
+      });
+      expect(failed.status).toBe('trial_failed');
+      expect(failed.error).toContain('commands/ping.ts [capability_discovered]');
+      expect(readdirSync(join(project, '.zhin', 'changes', draft.id))).toEqual(['change.json']);
+    });
+
+    it('fails when loading fails, and when the loader itself throws', async () => {
+      const changes = await store();
+      const first = await changes.draft({ origin, files: [{ path: 'commands/ping/index.ts', content: command }] });
+      const failed = await runSelfChangeTrial(changes, first.id, { sandboxLoad: loader({ status: 'failed', message: 'Error: boom at load' }) });
+      expect(failed).toMatchObject({ status: 'trial_failed', error: '. [sandbox_load]: Error: boom at load' });
+      expect(events.at(-1)!.payload).toMatchObject({ failedChecks: [{ path: '.', check: 'sandbox_load' }] });
+
+      const second = await changes.draft({ origin, files: [{ path: 'commands/pong/index.ts', content: command }] });
+      const crashed = await runSelfChangeTrial(changes, second.id, { sandboxLoad: async () => { throw new Error('spawn EACCES'); } });
+      expect(crashed.status).toBe('trial_failed');
+      expect(crashed.error).toContain('sandbox load could not run: spawn EACCES');
+    });
+
+    it('records a skipped load without failing, and does not load when static checks fail or nothing loadable changed', async () => {
+      const changes = await store();
+      const skippedDraft = await changes.draft({ origin, files: [{ path: 'commands/ping/index.ts', content: command }] });
+      const ready = await runSelfChangeTrial(changes, skippedDraft.id, { sandboxLoad: loader({ status: 'skipped', message: 'too large' }) });
+      expect(ready.status).toBe('ready');
+      expect((ready.trial as SelfChangeTrialResult).checks.at(-1)).toEqual({ check: 'sandbox_load', path: '.', status: 'skipped', message: 'too large' });
+
+      const seen: SelfChangeSandboxLoadRequest[] = [];
+      const broken = await changes.draft({ origin, files: [{ path: 'commands/x/index.ts', content: 'export default defineCommand(' }] });
+      await runSelfChangeTrial(changes, broken.id, { sandboxLoad: loader({ status: 'passed' }, seen) });
+      const docs = await changes.draft({ origin, files: [{ path: 'AGENTS.md', content: '# rules\n' }] });
+      await runSelfChangeTrial(changes, docs.id, { sandboxLoad: loader({ status: 'passed' }, seen) });
+      expect(seen).toEqual([]);
+    });
+
+    it('groups writes by local plugin root', async () => {
+      const changes = new SelfChangeStore({
+        root: join(project, '.zhin', 'changes'),
+        projectRoot: project,
+        protectedPaths: await createHostProtectedPaths({ projectRoot: project }),
+        pluginRoots: ['plugins/weather'],
+        now: () => 1_000,
+      });
+      const draft = await changes.draft({ origin, files: [
+        { path: 'plugins/weather/commands/now/index.ts', content: command },
+        { path: 'commands/ping/index.ts', content: command },
+      ] });
+      const seen: SelfChangeSandboxLoadRequest[] = [];
+      const ready = await runSelfChangeTrial(changes, draft.id, {
+        pluginRoots: ['plugins/weather'],
+        sandboxLoad: async request => {
+          seen.push(request);
+          const source = request.pluginRoot ? 'commands/now/index.ts' : 'commands/ping/index.ts';
+          return { status: 'passed', capabilities: [{ feature: 'zhin.command', localName: 'x', source }] };
+        },
+      });
+      expect(ready.status).toBe('ready');
+      expect(seen.map(request => [request.pluginRoot, request.writes.map(file => file.path)])).toEqual([
+        ['', ['commands/ping/index.ts']],
+        ['plugins/weather', ['plugins/weather/commands/now/index.ts']],
+      ]);
+    });
   });
 
   it('only trials drafts', async () => {
