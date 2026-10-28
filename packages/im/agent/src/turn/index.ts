@@ -153,6 +153,13 @@ export {
   withMergeMembers,
   type OnBehalfOfResolution,
 } from './merged-principal.js';
+export {
+  answeredMergedSenders,
+  formatMergedTurnBlock,
+  mergedReplyAuditPayload,
+  MERGED_TURN_HEADER,
+  type TurnMergedSender,
+} from './merged-turn-context.js';
 export type {
   TurnAdmission,
   TurnAdmissionFacts,

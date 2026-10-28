@@ -20,12 +20,14 @@ import { noteTurnTrace } from '@zhin.js/agent/trace';
 import {
   intersectCapabilities,
   isCancelIntent,
+  mergedReplyAuditPayload,
   narrowMergedAccess,
   normalizeInboundQueueConfig,
   withMergeMembers,
   TurnAdmissionGate,
   type TurnAccessContext,
   type TurnAdmission,
+  type TurnMergedSender,
 } from '@zhin.js/agent/turn';
 import {
   CapabilityIngress,
@@ -950,6 +952,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               content: matched.content,
             }),
             ...(message.sender?.name ? { senderName: message.sender.name } : {}),
+            ...(message.message?.id ? { messageId: message.message.id } : {}),
             access: turnAccess,
             onWindowJoined: (window) => audit({
               kind: 'inbound_wake',
@@ -1000,6 +1003,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const turnAccessForTurn = members
           ? withMergeMembers(narrowMergedAccess(turnAccess, members), read.members, read.memberTools)
           : turnAccess;
+        // ADR 0038 §3: the model sees who it is answering; outbound audits "merged N, answered M".
+        const mergedSenders = members && admission ? mergedTurnSenders(admission.participants) : undefined;
         const capabilities = restrictWorkroomAgentCapabilities(read.capabilities, workroomAgentTurn != null);
         let routed = routeSpecialistAgent(
           inbound.text,
@@ -1086,6 +1091,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               network: turnPolicy.network,
               sessionKey,
               ...(sceneEvents.length ? { sceneEvents } : {}),
+              ...(mergedSenders ? { mergedSenders } : {}),
               ...(workroomAgentTurn ? {
                 trustedMetadata: Object.freeze({
                   workroom: Object.freeze({
@@ -1155,6 +1161,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                       outputElements: output.length,
                       outputPreview: flattenOutputElements(output).trim() || '(empty)',
                     }));
+                    const mergeAudit = mergedSenders ? mergedReplyAuditPayload(mergedSenders, output) : {};
                     const outcome = await sendOutputMessages(output, {
                       render: messageOutput => flattenOutputElements([...messageOutput]),
                       send: async (messageOutput) => {
@@ -1203,7 +1210,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                           auditOutbound(audit, { status: 'failed', code: error instanceof Error ? error.message : String(error), retryable: false });
                           throw error;
                         }
-                        auditOutbound(audit, sent, { segments: content.length });
+                        auditOutbound(audit, sent, { segments: content.length, ...mergeAudit });
                         if (sent.status === 'sent') {
                           spoke = true;
                           admission?.markDelivered();
@@ -1438,6 +1445,18 @@ export function mergedMemberAccess(
   carrier: TurnAccessContext,
 ): readonly TurnAccessContext[] {
   return participants.map((participant) => participant.access ?? anonymousMemberAccess(carrier, participant.senderId));
+}
+
+/** The structured sender list a merged turn's context carries (ADR 0038 §3). */
+export function mergedTurnSenders(
+  participants: readonly Readonly<{ senderId: string; senderName?: string; texts: readonly string[]; messageIds?: readonly string[] }>[],
+): readonly TurnMergedSender[] {
+  return Object.freeze(participants.map((participant) => Object.freeze({
+    subjectId: participant.senderId,
+    ...(participant.senderName ? { displayName: participant.senderName } : {}),
+    ...(participant.messageIds?.length ? { messageIds: participant.messageIds } : {}),
+    texts: participant.texts,
+  })));
 }
 
 function anonymousMemberAccess(carrier: TurnAccessContext, senderId: string): TurnAccessContext {

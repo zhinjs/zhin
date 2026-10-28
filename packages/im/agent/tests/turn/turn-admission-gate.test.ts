@@ -433,6 +433,20 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     run.release();
   });
 
+  it('lists each sender\'s message ids for the merged turn context (ADR 0038 §3)', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', 'a', { messageId: 'm1' }));
+    await gate.admit(mention('bob', 'b'));
+    await gate.admit(mention('alice', 'a2', { messageId: 'm3' }));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    expect(run.participants).toEqual([
+      { senderId: 'alice', texts: ['a', 'a2'], messageIds: ['m1', 'm3'] },
+      { senderId: 'bob', texts: ['b'] },
+    ]);
+    run.release();
+  });
+
   it('carries each sender\'s own access into participants (ADR 0038 §2)', async () => {
     const { gate, advance } = createMergeGate();
     const access = (subjectId: string) => ({ principal: { subjectId } }) as unknown as TurnAccessContext;

@@ -7,7 +7,7 @@ import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/run
 import type { TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { AgentTurnIngressRoute, mergedMemberAccess, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import { AgentTurnIngressRoute, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
 describe('AgentTurnIngressRoute', () => {
   it.each([
@@ -246,4 +246,14 @@ it('falls back to the anonymous user floor for a merged participant without acce
     principal: { subjectId: 'carol', roles: ['user'] },
     policy: { permissions: ['user'], unattended: false },
   });
+});
+
+it('turns merged participants into the turn context sender list (ADR 0038 §3)', () => {
+  expect(mergedTurnSenders([
+    { senderId: 'alice', senderName: 'Alice', texts: ['a', 'a2'], messageIds: ['m1', 'm3'] },
+    { senderId: 'bob', texts: ['b'] },
+  ])).toEqual([
+    { subjectId: 'alice', displayName: 'Alice', messageIds: ['m1', 'm3'], texts: ['a', 'a2'] },
+    { subjectId: 'bob', texts: ['b'] },
+  ]);
 });

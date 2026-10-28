@@ -97,6 +97,11 @@ export interface TurnInput {
    * Injected as the ephemeral `[Scene events]` block; never stored in agent_messages.
    */
   readonly sceneEvents?: readonly string[];
+  /**
+   * ADR 0038 §3: the senders of a merged turn (two or more), rendered as the
+   * `[Merged turn]` lines of the turn context.
+   */
+  readonly mergedSenders?: readonly import('./merged-turn-context.js').TurnMergedSender[];
 }
 
 export interface TurnSessionAddress {
