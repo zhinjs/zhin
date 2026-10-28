@@ -1,0 +1,114 @@
+scripts/check-agent-config-inventory.mjs
+  s_12b1e02705543f::t_249677e046c10f 14-15
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_12b1e02705543f::t_6aa275464d1991 500-504,506-507,530,548
+  s_12b1e02705543f::t_04cff67202eb80 537-539
+  s_12b1e02705543f::t_a9f6cb685f995f 505,531-532
+  s_12b1e02705543f::t_25d4f11033b9a9 69-114
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  s_12b1e02705543f::t_4ee1eecd2d29b6 59
+packages/im/ai/src/llm/index.ts
+  s_12b1e02705543f::t_584d075fb289b7 85-86
+docs/en/ai/default-behavior.md
+  s_12b1e02705543f::t_249677e046c10f 24,140
+packages/im/runtime/src/host-config-schema.json
+  s_12b1e02705543f::t_4ee1eecd2d29b6 1821,1823
+  s_12b1e02705543f::t_a34be2740407db 1822
+packages/im/ai/src/llm/llm-api-runtime.ts
+  s_12b1e02705543f::t_a37afdd82931ef 40
+  s_12b1e02705543f::t_584d075fb289b7 11-22,41
+packages/im/agent/src/event/turn-event.ts
+  s_12b1e02705543f::t_4ee1eecd2d29b6 150-151
+packages/im/agent/src/core/turn-completion-usage.ts
+  s_12b1e02705543f::t_a37afdd82931ef 8-12
+  s_12b1e02705543f::t_4ee1eecd2d29b6 1-2,6,16,27,30,51-70,72-83,86-87
+  s_12b1e02705543f::t_6ea12fffd77f1d 71
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_12b1e02705543f::t_45d8ed98eb3108 88-89
+  s_12b1e02705543f::t_2546bd584bf8f8 16,49-52,90,99
+packages/im/agent/tests/core/turn-request-trace.test.ts
+  s_12b1e02705543f::t_a37afdd82931ef 2,8,24-43,104-130
+  s_12b1e02705543f::t_8fd634b0ff27cf 1,3-7,9-23,44-103,131-166
+packages/im/agent/src/trace/index.ts
+  s_12b1e02705543f::t_2672226049c4fb 56-57
+packages/im/agent/src/trace/turn-trace.ts
+  s_12b1e02705543f::t_b30c2951b84bac 13-16,38,101-102,124-125,135-136,162-165,185-186,208,211,229-257,285,408-409,460-463,490-491,499,506,512
+  s_12b1e02705543f::t_0a6c2c30249a92 492-498,500-505,507-511,513
+docs/ai/default-behavior.md
+  s_12b1e02705543f::t_249677e046c10f 24,140
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  s_12b1e02705543f::t_a3f7912ab16092 437,603
+  s_12b1e02705543f::t_584d075fb289b7 16
+basic/cli/src/plugin-runtime/start-command.ts
+  s_12b1e02705543f::t_2546bd584bf8f8 509,541
+packages/im/ai/src/index.ts
+  s_12b1e02705543f::t_584d075fb289b7 96-97
+packages/im/agent/src/trace/request-trace.ts
+  s_12b1e02705543f::t_f33060c024bee5 1-99,104
+  s_12b1e02705543f::t_54d21803e13c63 100-103,105-204
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_12b1e02705543f::t_7dd61bebe31d73 349
+  s_12b1e02705543f::t_320c747686ae4b 350
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_12b1e02705543f::t_2546bd584bf8f8 64-65,253
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  s_12b1e02705543f::t_45d8ed98eb3108 38,40,42-43
+  s_12b1e02705543f::t_6ca475b52d6abd 23-37,39,41,44-56
+packages/im/agent/src/core/agent-core-run.ts
+  s_12b1e02705543f::t_4ee1eecd2d29b6 676
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_12b1e02705543f::t_4ee1eecd2d29b6 119-120
+packages/im/ai/src/llm/bridge/request-observation.ts
+  s_12b1e02705543f::t_a3f7912ab16092 1,4-5,7-9,13-20,22-23,33-46
+  s_12b1e02705543f::t_584d075fb289b7 2-3,6,10-12,21,24-32,47
+docs/console/index.md
+  s_12b1e02705543f::t_e6e10a46148104 115-120
+packages/im/ai/tests/llm/request-observation.test.ts
+  s_12b1e02705543f::t_c406522304c797 29
+  s_12b1e02705543f::t_33f70ea1edcbc4 1-5,7-24,28,30-86,100-101
+  s_12b1e02705543f::t_6ea12fffd77f1d 6,25-27,87-99
+packages/im/agent/src/core/turn-event-mapper.ts
+  s_12b1e02705543f::t_4ee1eecd2d29b6 9
+docs/en/console/index.md
+  s_12b1e02705543f::t_e6e10a46148104 115-120
+packages/im/runtime/tests/host-config-schema-coverage.test.ts
+  s_12b1e02705543f::t_a34be2740407db 81-82
+  s_12b1e02705543f::t_33f70ea1edcbc4 72
+  s_12b1e02705543f::t_c406522304c797 80
+.changeset/request-trace-usage.md
+  s_12b1e02705543f::t_249677e046c10f 1-8
+basic/cli/src/plugin-runtime/console/trace-archive-routes.ts
+  s_12b1e02705543f::t_e66dbf898d4ba4 6-7,36,46,80-81,84,90-93,104,106-119,121-164
+basic/cli/tests/plugin-runtime/console/trace-archive-routes.test.ts
+  s_12b1e02705543f::t_497670a9e32b6e 1-94
+docs/configuration/generated.md
+  s_12b1e02705543f::t_c93ad516d95265 273
+docs/en/configuration/generated.md
+  s_12b1e02705543f::t_487fca63c0a4bb 273
+packages/im/agent/src/trace/trace-redaction.ts
+  s_12b1e02705543f::t_c401a55edd02dd 1-12
+packages/im/agent/src/trace/turn-trace-archive.ts
+  s_12b1e02705543f::t_05690ea58955a6 10,14-15,19,46,90-92,109-123,125-140,142-149,172-174,181-182,184-185,187-189,191-197,199,202-216,218-222,226-228,230-237,271-299
+packages/im/agent/src/trace/turn-trace-store.ts
+  s_12b1e02705543f::t_88fa6d56acd009 13
+packages/im/agent/tests/trace/request-trace.test.ts
+  s_12b1e02705543f::t_2b9b00a6e93a25 1-148
+packages/im/agent/tests/trace/turn-trace-archive.test.ts
+  s_12b1e02705543f::t_505fb1452876bd 50,60,70-71,107-193
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3fe2dc1fa7d01254191970b0c260733f2901f486",
+  "prompts": {},
+  "sessions": {
+    "s_12b1e02705543f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18193-fbf7-76b3-b33e-f286cdc167c7",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
