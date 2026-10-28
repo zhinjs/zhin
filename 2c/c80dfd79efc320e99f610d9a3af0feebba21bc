@@ -15,6 +15,7 @@ packages/im/agent/src/index.ts
 packages/im/agent/tests/decision-events.test.ts
   s_ecdb6766b9ebd2::t_96e9732d3ce9b7 57
   s_ecdb6766b9ebd2::t_66cca0e013a01c 132-133,145-152,154
+  s_ecdb6766b9ebd2::t_747c809ecd94ef 142-144,153
 .changeset/0040-slice-a-change-store.md
   s_ecdb6766b9ebd2::t_966c08dcb2cd00 1-6
 packages/im/agent/src/self-change/store.ts
