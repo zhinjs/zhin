@@ -43,6 +43,8 @@ export const DECISION_EVENT_KINDS = [
   'ops_cooldown',
   // ADR 0037 第 1 期（切片 D）：会话日程的创建、修改、取消与到点触发结果
   'schedule',
+  // ADR 0040 切片 A：受控自我进化——变更的每次状态迁移
+  'self_change',
 ] as const;
 export type DecisionEventKind = typeof DECISION_EVENT_KINDS[number];
 
@@ -133,6 +135,27 @@ export const DECISION_REASON_CODES = [
   'merge_on_behalf_denied',
   'danmaku_window_picked',
   'hard_gate_scene_pending_cap',
+  // ADR 0040 §7：受控自我进化 起草 / 试跑 → 审批 → 生效 / 恢复
+  'change_drafted',
+  'change_quota_exceeded',
+  'change_pruned',
+  'change_path_forbidden',
+  'change_config_key_forbidden',
+  'change_trial_passed',
+  'change_trial_failed',
+  'change_submitted',
+  'change_approved',
+  'change_rejected',
+  'change_expired',
+  'change_hash_mismatch',
+  'change_applied_none',
+  'change_applied_reload',
+  'change_restart_requested',
+  'change_verified',
+  'change_rolled_back',
+  'change_failed_emergency_stop',
+  'change_report_sent',
+  'change_report_redirected',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

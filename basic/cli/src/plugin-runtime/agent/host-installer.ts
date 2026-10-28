@@ -18,6 +18,8 @@ import {
   type AssistantConfig,
   type ApprovalPort,
   hostProtectedPathsToken,
+  SelfChangeStore,
+  selfChangeStoreToken,
   type AudioTranscriptionPort,
 } from '@zhin.js/agent';
 import type {
@@ -176,6 +178,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       assistantEnabled,
     } = agentFoundation;
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
+    // ADR 0040 §6a: the self-change staging area is bounded — prune on start, then every 6 hours.
+    const selfChanges = new SelfChangeStore({
+      root: join(options.projectRoot, '.zhin', 'changes'),
+      projectRoot: options.projectRoot,
+      protectedPaths: hostProtectedPaths,
+      audit: () => zhinAgent.decisionEvents,
+      onError: error => logger.warn(formatCompact({
+        op: 'self_change_prune_failed',
+        error: error instanceof Error ? error.message : String(error),
+      })),
+    });
+    resources.provide(selfChangeStoreToken, selfChanges);
+    lifecycle.add(selfChanges.startPruning());
     if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
     // G6 (#1013): IM approval channel for hard-gate cards; idle unless ai.agent.toolHardGate.imApproval.enabled.
     const toolApprovalIm = new ImToolApprovalChannel({
