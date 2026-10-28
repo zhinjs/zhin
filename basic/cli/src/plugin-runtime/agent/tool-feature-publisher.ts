@@ -9,6 +9,8 @@ import {
   createNativeAnnouncementToolFeatures,
   createNativeSessionEventToolFeatures,
   createNativeGroupRuleToolFeatures,
+  createNativeSelfChangeToolFeatures,
+  type NativeSelfChangeToolSources,
   FileTodoStore,
   projectHostMcp,
   projectHostTool,
@@ -60,6 +62,8 @@ export interface PublishAgentToolFeaturesOptions {
   readonly sessionEvents?: () => AiSessionEvents | undefined;
   /** ADR 0039 切片 B：`rule_draft` 写入的群管规则存储；缺省时不发布该工具。 */
   readonly groupRules?: () => AiGroupRules | undefined;
+  /** ADR 0040 切片 B：`change_draft` 写入的自我变更暂存区与影响面判定；缺省时不发布该工具。 */
+  readonly selfChanges?: NativeSelfChangeToolSources;
 }
 
 /** Publish every Host-owned Tool through one candidate-generation boundary. */
@@ -119,6 +123,11 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
   }
   if (options.groupRules) {
     for (const tool of createNativeGroupRuleToolFeatures(options.groupRules)) {
+      options.addFeature(tool.feature, tool.name, tool.definition);
+    }
+  }
+  if (options.selfChanges) {
+    for (const tool of createNativeSelfChangeToolFeatures(options.selfChanges)) {
       options.addFeature(tool.feature, tool.name, tool.definition);
     }
   }

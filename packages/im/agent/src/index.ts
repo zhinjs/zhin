@@ -428,6 +428,21 @@ export {
   type SelfChangeTransitionInput,
 } from './self-change/store.js';
 export {
+  MAX_CHANGE_PREVIEW_BYTES,
+  buildSelfChangePreview,
+  configPatchImpact,
+  describeSelfChangeImpact,
+  lineDelta,
+  type BuildSelfChangePreviewInput,
+  type SelfChangeConfigImpact,
+  type SelfChangeFileDiff,
+  type SelfChangeFilePlan,
+  type SelfChangeImpact,
+  type SelfChangeImpactKind,
+  type SelfChangeImpactPort,
+  type SelfChangePreview,
+} from './self-change/preview.js';
+export {
   AI_SESSION_EVENTS_TABLE,
   AI_SESSION_EVENT_MODEL,
   AiSessionEvents,

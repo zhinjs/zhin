@@ -41,6 +41,7 @@ export * from './native-todo-tools.js';
 export * from './native-announcement-tools.js';
 export * from './native-session-event-tools.js';
 export * from './native-group-rule-tools.js';
+export * from './native-self-change-tools.js';
 export * from './native-interaction-tools.js';
 export * from './native-semantic-memory-tools.js';
 export { FileJournalStore } from '../journal/file-journal-store.js';

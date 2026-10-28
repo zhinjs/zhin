@@ -113,6 +113,27 @@ describe('SelfChangeStore drafts', () => {
   });
 });
 
+describe('SelfChangeStore previews', () => {
+  it('attaches a preview to the matching draft and drops it when the draft changes', async () => {
+    const store = await makeStore();
+    const record = await store.draft({ origin, files: [{ path: 'commands/ping.ts', content: 'a' }] });
+    expect(store.projectRoot).toBe(project);
+    const attached = await store.attachPlan(record.id, record.contentHash, { version: 1 });
+    expect(attached).toMatchObject({ plan: { version: 1 }, revision: record.revision + 1, status: 'draft' });
+    expect((await store.get(record.id))!.plan).toEqual({ version: 1 });
+    const edited = await store.draft({ id: record.id, origin, files: [{ path: 'commands/ping.ts', content: 'b' }] });
+    expect(edited.plan).toBeNull();
+    await expect(store.attachPlan(record.id, record.contentHash, { version: 1 })).rejects.toThrow('changed while its preview was built');
+  });
+
+  it('only previews drafts', async () => {
+    const store = await makeStore();
+    const record = await store.draft({ origin, files: [{ path: 'commands/ping.ts', content: 'a' }] });
+    await store.transition(record.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+    await expect(store.attachPlan(record.id, record.contentHash, {})).rejects.toBeInstanceOf(SelfChangeStateError);
+  });
+});
+
 describe('SelfChangeStore transitions', () => {
   it('walks the happy path, binds the approval to content_hash and slims on applied', async () => {
     const store = await makeStore();

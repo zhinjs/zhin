@@ -69,7 +69,7 @@ export interface SelfChangeRecord {
   readonly configPatch: SelfChangeConfigPatch | null;
   /** 暂存内容总字节（文件 + 配置补丁），配额口径。 */
   readonly bytes: number;
-  /** 影响面计划（切片 B 写入）。 */
+  /** 预览与影响面（切片 B 写入，见 `preview.ts` 的 `SelfChangePreview`）。 */
   readonly plan: unknown;
   /** 试跑结果（切片 C 写入）。 */
   readonly trial: unknown;
@@ -330,6 +330,26 @@ export class SelfChangeStore {
       });
       await this.#save(record);
       this.#emit({ origin, changeId: id, code: 'change_drafted', actor, actorId: origin.userId, turnId: input.turnId, payload: transitionPayload(record, existing?.status ?? null) });
+      return record;
+    });
+  }
+
+  /** 项目根（绝对路径），预览据此读现有文件。 */
+  get projectRoot(): string {
+    return this.#projectRoot;
+  }
+
+  /**
+   * 把宿主生成的预览（§2，切片 B）挂到自己的 `draft` 上。`contentHash` 必须与当前草稿一致——
+   * 草稿在生成预览期间被改过时拒绝，避免旧预览配新内容。改草稿（`draft()`）会清掉旧预览。
+   */
+  attachPlan(id: string, contentHash: string, plan: unknown): Promise<SelfChangeRecord> {
+    return this.#serialize(async () => {
+      const current = await this.#loadOrThrow(id);
+      if (current.status !== 'draft') throw new SelfChangeStateError(current.status, 'take a preview');
+      if (current.contentHash !== contentHash) throw new SelfChangeValidationError(`change ${id} changed while its preview was built`);
+      const record: SelfChangeRecord = Object.freeze({ ...current, plan, revision: current.revision + 1, updatedAt: this.#now() });
+      await this.#save(record);
       return record;
     });
   }

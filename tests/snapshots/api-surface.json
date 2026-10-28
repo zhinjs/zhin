@@ -83,6 +83,7 @@
     "export{FIVE_AGENT_ROLES,isFiveAgentRole,asFiveAgentRole,filterToolNamesForRole,filterToolsForRole,isToolAllowedForRole,}from './orchestration/five-agent/index.js';",
     "export{FileJournalStore}from './journal/index.js';",
     "export{LocalImageAssetStore,localImageAssetsToken}from './media/local-image-assets.js';",
+    "export{MAX_CHANGE_PREVIEW_BYTES,buildSelfChangePreview,configPatchImpact,describeSelfChangeImpact,lineDelta,type BuildSelfChangePreviewInput,type SelfChangeConfigImpact,type SelfChangeFileDiff,type SelfChangeFilePlan,type SelfChangeImpact,type SelfChangeImpactKind,type SelfChangeImpactPort,type SelfChangePreview,}from './self-change/preview.js';",
     "export{MODEL_HARNESS_DEFAULTS,resolveModelHarness,mergeModelHarnessValues}from './config/model-harness-runtime.js';",
     "export{McpClientManager,McpClientConnection,mcpToolToAgentTool}from './mcp-client/index.js';",
     "export{NO_MEDIA_AUTHORITY,preprocessInboundMedia,publishOutboundElements,resolveMultimodalConfig,resolveOutboundCapabilities,}from './media/index.js';",
