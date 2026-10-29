@@ -1,0 +1,79 @@
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9477e63ef5cee5::t_56aacc506e6770 28-30,98,100-103,272-276,353-358,365-366
+  s_9477e63ef5cee5::t_aa58cdf16d2f9f 389-396,399,408,417,426,435,444,453,462,471,480,489,498,508,517,526,538,547-554,563,571-586,588-611,616-617,620-627,631
+  s_9477e63ef5cee5::t_7d49f73698bbbe 388
+packages/im/agent/src/prompt/segments/types.ts
+  s_9477e63ef5cee5::t_bcd45dd7c041f1 69-70
+packages/im/agent/src/trace/turn-trace-format.ts
+  s_9477e63ef5cee5::t_ddd8eb2edcb65d 138
+packages/im/agent/src/prompt/prompt-assembly-registry.ts
+  s_9477e63ef5cee5::t_39b6c0639b7c6e 34-35,120
+  s_9477e63ef5cee5::t_7ca09756f8022c 1,4-26,59-62,114-119,121-122,125-132
+packages/im/agent/tests/trace/turn-trace-cache.test.ts
+  s_9477e63ef5cee5::t_0cb4a59828f8cf 39-41
+packages/im/agent/tests/prompt/explicit-turn-prompt-profile.test.ts
+  s_9477e63ef5cee5::t_3b4cca827ff325 52,101,103-104
+packages/im/agent/tests/prompt/segments/segment-registry.test.ts
+  s_9477e63ef5cee5::t_226880808afb42 1-214
+tests/snapshots/api-surface.json
+  s_9477e63ef5cee5::t_e37287d79a9a41 53-54,98,121,153
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_9477e63ef5cee5::t_0cb4a59828f8cf 231-232
+packages/im/agent/tests/harness-inbound-tool-boundary.test.ts
+  s_9477e63ef5cee5::t_0cb4a59828f8cf 77-78
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_9477e63ef5cee5::t_54c939601bbbc3 36-37,66-67,127,137-141,143-160
+  s_9477e63ef5cee5::t_fc445648c2d3e1 38-39
+  s_9477e63ef5cee5::t_1df793ce29fcc0 142
+  s_9477e63ef5cee5::t_6730c2663a7944 161-162
+.changeset/0041-d-segments.md
+  s_9477e63ef5cee5::t_bdaefedc8a862b 1-5
+packages/im/agent/src/trace/context-budget.ts
+  s_9477e63ef5cee5::t_ddd8eb2edcb65d 49-53,72-79,126-133
+packages/im/agent/src/prompt/third-party-guidance.ts
+  s_9477e63ef5cee5::t_8eaa73201a9cb0 1-5
+packages/im/agent/src/prompt/assembly.ts
+  s_9477e63ef5cee5::t_fa080899677122 18-19,42,46,49,51,53-57,59,61-67,116-117,164,166-169,187,205
+packages/im/agent/tests/prompt/chat-turn-prompt.test.ts
+  s_9477e63ef5cee5::t_0cb4a59828f8cf 25-27,36,42
+packages/im/agent/src/prompt/segments/index.ts
+  s_9477e63ef5cee5::t_6c85df42711ea4 1-9
+packages/im/agent/tests/prompt/segments/segment-merge.test.ts
+  s_9477e63ef5cee5::t_ad69ab443b1c4d 1-14,17-69,71-73,75-115
+  s_9477e63ef5cee5::t_54659de3409fe3 15-16,70,74
+packages/im/agent/src/prompt/tokens.ts
+  s_9477e63ef5cee5::t_1c924787a3cd4f 1-2
+  s_9477e63ef5cee5::t_6c85df42711ea4 12-24
+docs/authoring/agent-tools.md
+  s_9477e63ef5cee5::t_bdaefedc8a862b 240-267
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9477e63ef5cee5::t_fc445648c2d3e1 31,279,459
+  s_9477e63ef5cee5::t_39b6c0639b7c6e 263
+packages/im/agent/src/index.ts
+  s_9477e63ef5cee5::t_8edecf4c8f3266 131-133,136-156,164-165
+packages/im/agent/src/prompt/segments/registry.ts
+  s_9477e63ef5cee5::t_a15a4116e6d936 1-208
+packages/im/agent/src/prompt/index.ts
+  s_9477e63ef5cee5::t_8edecf4c8f3266 17-19,31-33
+packages/im/agent/src/prompt/prompt-budget.ts
+  s_9477e63ef5cee5::t_04957109f9cd7b 17-31,40-49,52,58,60,64-79,94,102
+packages/im/agent/src/prompt/segments/merge.ts
+  s_9477e63ef5cee5::t_1c924787a3cd4f 131,134
+  s_9477e63ef5cee5::t_670c58fa49d04e 1-130,132-133,135-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c9775fba21a9628a37a4645cbfa115456c7bb7af",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
