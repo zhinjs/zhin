@@ -46,23 +46,46 @@ Fin 2026-10-29 拍板：
 
 ### 1. 能力目录（规范，zhin 提供类型）
 
-`AdapterCapabilityProfile`，分六组。每组按会话类型（`private` / `group` / `channel` / `thread`，以及平台声明的其他类型）分别声明，缺省继承 `default`。
+`AdapterCapabilityProfile`，分七组。每组按会话类型（`private` / `group` / `channel` / `thread`，以及平台声明的其他类型）分别声明，缺省继承 `default`。
 
 | 组 | 字段（示例） |
 |---|---|
 | **消息** `messaging` | 支持的消息段与降级（沿用 `segments`）、单条长度上限、`mention`（@ 人 / @ 全体）、`quote`（引用回复）、`reaction`（表情集合）、`recall`（可撤回时限、能否撤回他人）、`edit`、`forward`、单轮最大条数 |
 | **会话场景** `scene` | 能否查群信息、能否查成员资料、平台角色词汇及到 `owner / admin / member` 的映射、禁言语义（时长 / 全员）、成员上限、是否有名片 / 头衔 |
-| **事件** `events` | 会发出的标准事件名集合（`member.joined`、`member.left`、`member.role_changed`、`member.muted`、`member.card_changed`、`message.recalled`、`poke` …）；原始事件 → 标准事件的映射由适配器（或共享映射包，§3）负责 |
+| **动作** `actions` | Bot 能主动执行的操作，每项声明可用的会话类型、所需 Bot 角色、参数范围（见下表） |
+| **事件** `events` | 会发出的标准事件名集合（`member.joined`、`member.left`、`member.role_changed`、`member.muted`、`member.card_changed`、`message.recalled`、`message.reaction`（收到表情回应）、`poke`（被戳 / 别人互戳）…）；原始事件 → 标准事件的映射由适配器（或共享映射包，§3）负责 |
 | **交互反馈** `feedback` | 「正在输入」/ 执行状态的方式（`typing` / `reaction` / `status-message` / `none`）及其参数 |
 | **投递约束** `delivery` | 被动回复窗口（时长 / 条数）、主动发送是否允许、频率限制、媒体大小上限、是否需落盘后发送（spool）、需要的消息序号等 |
 | **prompt 贡献** `prompt` | 自动生成规则的开关与适配器自定义文本（§4） |
+
+**动作清单**（`actions`，每项形如 `{ scopes, requiresRole?, params? }`；未列出 = 不支持）：
+
+| 动作 | 说明 | 典型条件 / 参数 |
+|---|---|---|
+| `reaction` | 对消息做表情回应 | 可用表情集合；能否回应自己 / 他人的消息；是否可取消 |
+| `poke` | 戳一戳 | 私聊 / 群可用性；能否戳 Bot 自己；频率 |
+| `mute` | 禁言成员 | 需 `admin` / `owner`；时长范围（最短 / 最长）；不能禁言更高角色 |
+| `unmute` | 解除禁言 | 同上 |
+| `muteAll` | 全员禁言 / 解除 | 需 `admin` / `owner` |
+| `kick` | 踢出成员 | 需 `admin` / `owner`；能否同时拉黑 |
+| `setCard` / `setTitle` | 改群名片 / 头衔 | 头衔常需 `owner`；长度上限 |
+| `recall` | 撤回消息 | 自己的消息时限；撤回他人需 `admin` |
+| `essence` | 设 / 取消精华 | 需 `admin` |
+| `announce` | 发群公告 | 需 `admin`；长度上限 |
+| `invite` | 邀请入群 | 是否需要好友关系 |
+| `quoteReply` / `forward` | 引用回复、合并转发 | 转发条数上限 |
+
+- 动作与**产品授权**取交集：能力说「平台允许 Bot 这么做」，硬闸 / 审批 / 角色说「谁可以让 Bot 这么做」（ADR 0036、0039 不变）。禁言、踢人等仍是危险动作，照旧过硬闸。
+- `resolveCapabilities` 按当前事实收窄动作：Bot 不是管理员 → `mute` / `kick` / `essence` / `announce` 关闭；目标角色更高 → 该目标不可禁言（在执行前复核）；被禁言 → 仅保留不发消息的动作（如 `reaction` 视平台而定）。
+- 动作对应的执行端口沿用 `endpoint-management` / `operations`，声明了动作而未实现端口 → 装配期报错。
+- 自动生成的平台说明只写对决策有用的动作（「可以戳一戳」「你是管理员，可禁言 1 分钟–30 天」「不能踢人」），不罗列全部。
 
 `liveDanmaku`、评论回复（ADR 0035）等既有能力并入对应分组，保留原字段名作为别名一个版本。
 
 ### 2. 注入方式（适配器按规范实现）
 
 - `defineAdapter({ ..., profile })`：静态画像，模块加载时校验（未知字段、类型错误即拒绝装配，fail closed）。
-- `resolveCapabilities?(context)`：可选的动态解析，入参为当前会话（`ConversationRef`）与可信事实（ADR 0041 §6 的 `TurnContextState`：Bot 角色、禁言、发送者角色等）及投递状态（被动窗口剩余等），返回对静态画像的**收窄**补丁（例：Bot 不是管理员 → `scene.moderate` 关闭；被禁言 → `delivery.send` 关闭；被动窗口外 → `delivery.proactive` 关闭）。运行时校验返回值只收窄，放宽字段被丢弃并记警告。
+- `resolveCapabilities?(context)`：可选的动态解析，入参为当前会话（`ConversationRef`）与可信事实（ADR 0041 §6 的 `TurnContextState`：Bot 角色、禁言、发送者角色等）及投递状态（被动窗口剩余等），返回对静态画像的**收窄**补丁（例：Bot 不是管理员 → `actions.mute` / `actions.kick` 等关闭；被禁言 → `delivery.send` 关闭；被动窗口外 → `delivery.proactive` 关闭）。运行时校验返回值只收窄，放宽字段被丢弃并记警告。
 - 实际操作仍走现有端口：`operations`、`endpoint-management` 方法、`send`。画像声明「能做」，端口负责「去做」；声明了却未实现端口 → 装配期报错。
 - 结果按回合计算一次，作为 `TurnCapabilities` 挂到 Turn 上（与 ADR 0042 W2 的工具分档、ADR 0041 的场景事实同一处），随会话事实缓存（ADR 0041 二级缓存）一起失效。
 
@@ -82,7 +105,7 @@ Fin 2026-10-29 拍板：
 
 ### 5. agent 与插件按能力组合
 
-- **工具可见性**：工具（及 skill）可声明 `requiresCapabilities`（如 `scene.moderate`、`messaging.recall.others`）；回合内能力不满足即不出现在工具列表（与 ADR 0042 W2 分档同一过滤点），不再靠平台名或关键字筛选（替换 `tool-filter.ts` 的 icqq 关键字）。
+- **工具可见性**：工具（及 skill）可声明 `requiresCapabilities`（如 `actions.mute`、`actions.poke`、`actions.recall.others`）；回合内能力不满足即不出现在工具列表（与 ADR 0042 W2 分档同一过滤点），不再靠平台名或关键字筛选（替换 `tool-filter.ts` 的 icqq 关键字）。
 - **出站**：渲染与投递按 `messaging` / `delivery` 决定拆分、降级、落盘与被动窗口处理（替换 `media-publisher.ts` 的 icqq 判断）。
 - **交互反馈**：`feedback` 声明驱动「正在输入」（替换 `typing-indicator` 的平台表）。
 - **场景事实**：`scene` 声明决定是否查询群 / 成员资料（替换 `request.ts` 的 `adapter !== 'icqq'`）。
@@ -115,7 +138,7 @@ icqq 先完整声明（它是当前主力），其余适配器按能力补齐；
 | C2 prompt | §4 自动生成模板 + 自定义文本、`platform` / `scene` 段接线 |
 | C3 消费方迁移 | §5：工具 `requiresCapabilities`、出站、交互反馈、场景事实、沙箱 |
 | C4 事件映射包 | §3：共享包 + 各适配器映射迁出 core |
-| C5 适配器声明 | icqq 完整画像；其余适配器的基础画像 |
+| C5 适配器声明 | icqq 完整画像（含全部动作：回应、戳一戳、禁言、踢人、名片 / 头衔、撤回、精华、公告、邀请）；其余适配器的基础画像 |
 | C6 守卫 | §6 检查脚本 + 白名单 |
 
 C1 先行；C2–C5 依赖 C1 的类型；C6 最后（迁移完成后才能全绿）。
@@ -123,7 +146,7 @@ C1 先行；C2–C5 依赖 C1 的类型；C6 最后（迁移完成后才能全�
 ## 验收标准
 
 1. core / agent / ai / cli 运行时代码中无平台名分支，`check:no-platform-branches` 通过。
-2. icqq 群聊中，Bot 被撤管理员后，踢人 / 禁言工具从工具列表消失，prompt 平台说明同步变化；恢复后重新出现。
+2. icqq 群聊中，Bot 被撤管理员后，踢人 / 禁言 / 精华 / 公告工具从工具列表消失，prompt 平台说明同步变化；恢复后重新出现。戳一戳、表情回应在群聊与私聊按画像各自可用。
 3. 同一 icqq 实例，私聊与群聊的平台说明不同；同类会话跨会话逐字节相同。
 4. 一个只声明了 `messaging` 基础能力的新适配器，不改 zhin 任何代码即可接入，不支持的功能自动降级。
 5. OneBot / NapCat / icqq 的进出群、改名片等事件经共享包得到相同的标准事件。
