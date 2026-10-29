@@ -1,0 +1,113 @@
+packages/im/agent/evals/framework/driver.ts
+  s_9477e63ef5cee5::t_775709c129610a 28
+  s_9477e63ef5cee5::t_ed056cdf6b3419 289,309,315-327
+  s_9477e63ef5cee5::t_9666301c0d0fe8 328-329
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.ts
+  s_9477e63ef5cee5::t_f074996f1d63f8 14
+packages/im/ai/src/memory/context-repository.ts
+  s_9477e63ef5cee5::t_84bb3e896d3d89 24,273,277-278,512,516-517
+evals/chat/src/turn.ts
+  s_9477e63ef5cee5::t_921ee8cb66a70e 123
+packages/im/ai/src/llm/index.ts
+  s_9477e63ef5cee5::t_eca325000e9992 27
+packages/im/agent/tests/tool/message-alias-arguments.test.ts
+  s_9477e63ef5cee5::t_f34c90e1d6430a 1-44,47-52,54,58-67,70-72
+  s_9477e63ef5cee5::t_162ec79d16675c 45-46,53,55-57,68-69
+packages/im/ai/src/memory/participant-header.ts
+  s_9477e63ef5cee5::t_5aed607a47403d 2,4-5,7-9,16,21,65-66,72,76-80,133-144,148-151,160-161,163,174,176,180-183,214,218,222-235,316-318,320,339-343,351-355,373-378
+packages/im/agent/src/session/participant-header-stamp.ts
+  s_9477e63ef5cee5::t_e1b8237f5ee66b 1-6,11-13,15-16,19-30,35-36,40-42,45-62
+.changeset/0043-h4-quotes-aliases.md
+  s_9477e63ef5cee5::t_024f7513dc2810 1-4,6-8
+  s_9477e63ef5cee5::t_9c996761f6382e 5
+packages/im/agent/evals/cases/quoted-message-answered-inline.case.ts
+  s_9477e63ef5cee5::t_35803ad5e65a01 1-23
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/essence/index.ts
+  s_9477e63ef5cee5::t_f074996f1d63f8 7
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_7e5ddddff8aa05 1250-1251,1289-1301
+  s_9477e63ef5cee5::t_75e6e67da8b40d 209-210,818
+  s_9477e63ef5cee5::t_f891a0e0b8734a 67,1161,1285,1311,1313-1316
+  s_9477e63ef5cee5::t_fb75cc5f6fa52f 290
+  s_9477e63ef5cee5::t_715fe1b8375c38 1302-1303
+packages/im/ai/src/index.ts
+  s_9477e63ef5cee5::t_213356f8353796 81,537-538,541-545
+plugins/adapters/icqq/agents/icqq/skills/icqq-messages/tools/quote_reply/index.ts
+  s_9477e63ef5cee5::t_f074996f1d63f8 11
+plugins/adapters/icqq/agents/icqq/skills/icqq-messages/tools/recall_own_message/index.ts
+  s_9477e63ef5cee5::t_f074996f1d63f8 11
+packages/im/ai/tests/memory/message-aliases-and-quotes.test.ts
+  s_9477e63ef5cee5::t_d94584123e1903 1-198
+packages/im/agent/evals/framework/fixture.ts
+  s_9477e63ef5cee5::t_ed056cdf6b3419 29-32
+  s_9477e63ef5cee5::t_78f449af3636bb 28
+packages/im/ai/src/memory/event-rendering.ts
+  s_9477e63ef5cee5::t_213356f8353796 25,129,132-136
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_9477e63ef5cee5::t_921ee8cb66a70e 168
+packages/im/agent/tests/session/turn-ingress-session.test.ts
+  s_9477e63ef5cee5::t_4e532729d9b545 208-209
+evals/chat/tests/eval.test.ts
+  s_9477e63ef5cee5::t_4e532729d9b545 59-60,66
+packages/im/agent/tests/session-io.test.ts
+  s_9477e63ef5cee5::t_4e532729d9b545 28,34,65-66
+packages/im/agent/src/session/turn-quote.ts
+  s_9477e63ef5cee5::t_4531268036f354 1-107
+plugins/adapters/icqq/agents/icqq/skills/icqq-messages/tools/forward_messages/index.ts
+  s_9477e63ef5cee5::t_f074996f1d63f8 11
+packages/im/ai/src/memory/agent-db-models.ts
+  s_9477e63ef5cee5::t_84bb3e896d3d89 119-121
+packages/im/agent/src/session/turn-ingress-session.ts
+  s_9477e63ef5cee5::t_c2ba36e51fec87 6,22,25,51,59-64
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9477e63ef5cee5::t_75e6e67da8b40d 11,70-71,79,92,125-126
+packages/im/agent/src/tool/conversation-reference-tool.ts
+  s_9477e63ef5cee5::t_4bff739da09ef0 16-18,27,36-37
+packages/im/agent/tests/zhin-agent/file-memory-context.test.ts
+  s_9477e63ef5cee5::t_4e532729d9b545 57
+packages/im/agent/tests/core/structured-reply.e2e.test.ts
+  s_9477e63ef5cee5::t_921ee8cb66a70e 56
+packages/im/agent/src/context/turn-user-message.ts
+  s_9477e63ef5cee5::t_c2ba36e51fec87 41
+packages/im/ai/tests/memory/participant-header.test.ts
+  s_9477e63ef5cee5::t_d716bc25463d91 109
+  s_9477e63ef5cee5::t_b30493446fc68d 123
+  s_9477e63ef5cee5::t_2447b4dd566da3 28,30-35,50,53,57-58,64,66-67,75,97,144,149-160,162-163,171,174,176,179-181,185-190,192-193,207-208,213,237
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_9477e63ef5cee5::t_f074996f1d63f8 134
+packages/im/ai/src/memory/message-alias.ts
+  s_9477e63ef5cee5::t_8b359ef63f204a 1-98,120-149
+  s_9477e63ef5cee5::t_cce230876b723b 99-119
+docs/adr/0041-prompt-segments-and-message-headers.md
+  s_9477e63ef5cee5::t_d28ae65f1e61a8 30,45,48-51,55,57,67,129,154,173,185
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9477e63ef5cee5::t_213356f8353796 2
+  s_9477e63ef5cee5::t_75e6e67da8b40d 249,251,308,456,458,501
+  s_9477e63ef5cee5::t_57108f482a7313 341,347,369
+packages/im/agent/tests/session/participant-header-stamp.test.ts
+  s_9477e63ef5cee5::t_bd42a44ca56ccc 2-10,12-13,16-23,28,32,34-35,41-115
+docs/adr/0043-history-token-budget.md
+  s_9477e63ef5cee5::t_33864cff1d3281 123-130
+packages/im/agent/src/session/session-system.ts
+  s_9477e63ef5cee5::t_c2ba36e51fec87 151
+  s_9477e63ef5cee5::t_afd5e64329c604 11
+packages/im/ai/src/llm/types/agent-message.ts
+  s_9477e63ef5cee5::t_dae1d63f1911f3 35-40,43-51,96-98,101-107,112,114-119
+  s_9477e63ef5cee5::t_80f5e9b88b20ad 41-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d728c0d48f1200a5a750ac79511bc49c35d4602",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
