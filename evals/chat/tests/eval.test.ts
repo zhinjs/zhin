@@ -61,7 +61,8 @@ describe('scenarios', () => {
     expect(body).toBe('你好呀');
     const projected = projectPromptContext([current])[0] as UserMessage;
     const rendered = projected.content[bodyIndex]!.text;
-    expect(rendered).toMatch(/^\[user_id:person;name:Alice;role:master;.*time:03:10:00\.000;\]\n你好呀$/u);
+    // The header time is rendered in the host time zone (process TZ), so assert only its shape here.
+    expect(rendered).toMatch(/^\[user_id:person;name:Alice;role:master;.*time:\d{2}:10:00\.000;\]\n你好呀$/u);
     expect(rendered).not.toContain('[User]');
     expect(current.timestamp).toBe(Date.parse('2026-10-22T19:10:00Z'));
     const ambient = buildUserMessages({ ...scenario, addressed: false, time: '2026/10/26 08:05:00 (Asia/Shanghai)' });
