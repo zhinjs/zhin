@@ -1,0 +1,154 @@
+plugins/services/activity-feedback/tests/index.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 70,111,168,205,236,281
+packages/im/agent/src/media/media-capabilities.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 1,7-24
+basic/cli/tests/plugin-runtime/agent/turn/sandbox-policy.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 7,29,41,45,47,52
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 11,344,722-732
+  s_9477e63ef5cee5::t_9d3ca6845f6bd9 733-734
+basic/cli/src/plugin-runtime/agent/turn/sandbox-policy.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 5-6,37
+packages/im/agent/src/media/media-publisher.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 156-157
+packages/im/agent/src/media/media-types.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 62-63
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 341-343,356-361
+  s_9477e63ef5cee5::t_75d3db71e5f5e8 362-363
+packages/im/agent/tests/activity-feedback/config-resolver.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 3,5-17,19-20,24-27,31-33,36-38,42-47,49-60,62-84
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 2067
+packages/im/agent/tests/typing-indicator/adapter-integration.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 2,4-11,13-15,21-23,26-29
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/essence/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 11-12
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_title/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 14-15
+packages/im/tool/src/definition.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 164-170,291,311,358
+plugins/services/activity-feedback/src/executor.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 4-5,71,74,301-304
+  s_9477e63ef5cee5::t_5ac00f96efc513 305
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/announce/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 11-12
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 37-39,199,211,222,243,270,280-283,287,298
+packages/im/skill/src/definition.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 21-22,71
+packages/im/adapter/src/adapter-index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 26,39,51,242-243,520-573,628-632
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 9,13,246,266-273,277,288,323,328,428,895,911-916
+basic/cli/tests/plugin-runtime/agent/turn/scene-fact-cache.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 10-12,19
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 10-12,15-16,111-137
+packages/im/agent/src/outbound/send-proactive.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 23-24
+packages/im/skill/tests/skill.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 176-188
+plugins/services/activity-feedback/src/orchestrator.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 53,113
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 21-22,29-30
+  s_9477e63ef5cee5::t_cdecbb629703b2 31
+basic/cli/src/plugin-runtime/console/page-renderer.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 32-36
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 52,58
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 9-10
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_mute/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 13-14
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 5,58-96,98,103-106,156-157,165,167,184-212
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 12-13
+plugins/services/activity-feedback/src/policy.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 3,32-33,50
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 13-15,25,94
+plugins/adapters/icqq/src/sensitive-commands.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 1-19
+packages/im/agent/src/subagent/im-result-sink.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 48
+packages/im/agent/src/media/deliver-subagent-result.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 14-15,30-31,57
+packages/im/im-contract/src/endpoint.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 13-45
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 2,12-34,55,64-69,83,91,96,101-108
+packages/im/adapter/tests/adapter.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 27,270,275,280-282,1438-1480
+  s_9477e63ef5cee5::t_44c0c6b0556e6b 1481
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 14,511-514,1142,1221,1376
+basic/cli/tests/plugin-runtime/sandbox-owners.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 1-26
+packages/im/adapter/src/capability-profile.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 174-180,189,368,958,960-963
+packages/im/tool/src/tool-index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 36,152
+packages/im/agent/src/activity-feedback/config-resolver.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 1,13,17-22,24,28-36,39-44,50,53-54,56-57,67-68,70-71,73-74,76,80,91,98-99,101
+tests/snapshots/api-surface.json
+  s_9477e63ef5cee5::t_8c31da4c03310e 19,123,156
+packages/im/agent/src/activity-feedback/adapter-integration.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 20,27,86,150-151
+packages/im/agent/src/security/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 17
+basic/cli/src/plugin-runtime/console/host.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 60-61,119-121
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 11,254-257,273,277
+packages/im/agent/src/security/exec-policy.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 15,454,500-502,504,507,517,523,534-535
+plugins/adapters/icqq/plugin.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 4-5,22-26
+basic/cli/tests/plugin-runtime/console/page-shell-sandbox.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 1-18
+.changeset/adapter-capability-consumers.md
+  s_9477e63ef5cee5::t_8c31da4c03310e 1-15
+packages/im/agent/tests/exec-policy.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 14,37-50,402-418
+plugins/adapters/icqq/package.json
+  s_9477e63ef5cee5::t_8c31da4c03310e 48
+packages/im/agent/src/typing-indicator/adapter-integration.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 2-5,11-30,32,36
+packages/im/agent/tests/media/media-publisher.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 6,49,73,77,82,90,95,118-127
+  s_9477e63ef5cee5::t_3c54cf468a285c 128-129
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 309
+packages/im/tool/tests/requires-capabilities.test.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 1-19
+packages/im/plugin-runtime/src/outbound-host.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 66-86,89
+packages/im/agent/src/security/sensitive-exec-commands.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 1-43
+packages/im/agent/src/activity-feedback/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 43
+packages/im/agent/src/index.ts
+  s_9477e63ef5cee5::t_8c31da4c03310e 102-104,871
+  s_9477e63ef5cee5::t_927f4d509285f1 101
+pnpm-lock.yaml
+  s_9477e63ef5cee5::t_7a943174bd9dfe 2440-2442
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ecef02e5b81a8cf2e08ca15283230f9b3ee4a1f4",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
