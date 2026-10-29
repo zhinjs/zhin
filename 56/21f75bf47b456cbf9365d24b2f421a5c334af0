@@ -1,0 +1,54 @@
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_9477e63ef5cee5::t_6b0bf9db63e36d 131-132
+packages/im/ai/src/llm/bridge/prompt-structured-output.ts
+  s_9477e63ef5cee5::t_6c5600d3ce0b8b 20-31,33-34
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9477e63ef5cee5::t_257b3e290aa039 26
+  s_9477e63ef5cee5::t_6ac31b12e2a73f 188-189,196
+packages/im/ai/tests/llm/prompt-structured-output-compact.test.ts
+  s_9477e63ef5cee5::t_3eb38e826d90b7 1-20
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_9477e63ef5cee5::t_6b0bf9db63e36d 144,241,244,249
+packages/im/agent/src/outbound/structured-reply.ts
+  s_9477e63ef5cee5::t_8f0ea6793e717a 9,25,35-42,46-87
+  s_9477e63ef5cee5::t_eb6619e3f30917 88
+packages/im/agent/tests/prompt/fixed-prompt-cost.test.ts
+  s_9477e63ef5cee5::t_38b7ec8563654f 4,36-45
+packages/im/agent/evals/cases/context-deferred-tool-index.case.ts
+  s_9477e63ef5cee5::t_5205fcc2418899 5,24-25
+packages/im/ai/src/index.ts
+  s_9477e63ef5cee5::t_9d6396df79f031 35
+.changeset/0042-w3-catalogs.md
+  s_9477e63ef5cee5::t_d3a5c9d0b0019d 1-6
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_257b3e290aa039 68,636
+packages/im/agent/src/skill/capability-catalog.ts
+  s_9477e63ef5cee5::t_6ac31b12e2a73f 16-22,32-40,61,65,83-89,95,109-113,117-131,135
+  s_9477e63ef5cee5::t_5205fcc2418899 41-48
+  s_9477e63ef5cee5::t_257b3e290aa039 73-82
+packages/im/ai/src/llm/index.ts
+  s_9477e63ef5cee5::t_9d6396df79f031 188
+packages/im/agent/tests/core/structured-reply-compact.test.ts
+  s_9477e63ef5cee5::t_ad06afb3693eb9 1-57
+packages/im/agent/evals/cases/context-skill-catalog-compact.case.ts
+  s_9477e63ef5cee5::t_b0832390dc02c5 22,30-31
+packages/im/agent/tests/skill/capability-catalog.test.ts
+  s_9477e63ef5cee5::t_5205fcc2418899 54
+  s_9477e63ef5cee5::t_3a723f698383f7 7-10,26,31-32,34-35,45-53,55-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5621f75bf47b456cbf9365d24b2f421a5c334af0",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
