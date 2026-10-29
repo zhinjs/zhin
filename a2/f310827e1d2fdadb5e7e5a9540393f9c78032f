@@ -1,0 +1,25 @@
+tests/snapshots/api-surface.json
+  s_9477e63ef5cee5::t_3138f2ef548b0d 35,158
+docs/ai/default-behavior.md
+  s_9477e63ef5cee5::t_2dfe9b7a50818f 115
+docs/en/ai/default-behavior.md
+  s_9477e63ef5cee5::t_2dfe9b7a50818f 115
+scripts/check-agent-config-inventory.mjs
+  s_9477e63ef5cee5::t_f70364af90ca13 15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2f310827e1d2fdadb5e7e5a9540393f9c78032f",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
