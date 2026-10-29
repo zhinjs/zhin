@@ -25,7 +25,9 @@ import {
 } from './rules/index.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
-import { estimatePromptTokens } from './estimate-tokens.js';
+import { PromptSegmentRegistry } from './segments/registry.js';
+import type { PromptSegment, SegmentInput, TextSegmentKind } from './segments/types.js';
+import type { SystemPromptParts } from './segments/registry.js';
 export { enforcePromptBudget } from './prompt-budget.js';
 import type { PromptLayer } from './prompt-builder.js';
 export const FIXED_DISCIPLINE_RULES = [
@@ -93,8 +95,12 @@ export interface RichSystemPromptContext {
   timeZone?: string;
   /** 模型上下文窗口大小 */
   contextWindow?: number;
-  /** 可选的提示词组装注册表；默认段会先注册，再应用该注册表中的覆盖/扩展。 */
+  /** @deprecated 经 `segments` / `promptSegmentToken` 贡献文本段；该适配层只为旧接入保留。 */
   registry?: PromptAssemblyRegistry;
+  /** ADR 0041 segments contributed by plugins (text kinds); registered after the built-ins. */
+  segments?: readonly PromptSegment[];
+  /** ADR 0041 `scene` line (built by the turn context, rendered after the cache breakpoint). */
+  sceneText?: string;
 }
 
 // ── Section builders ──
@@ -263,6 +269,11 @@ export function buildStableRuntimeLines(
   ];
 }
 
+function buildPersonaSection(ctx: RichSystemPromptContext): string {
+  return resolvePersonaLead(ctx.config, ctx.bootstrapContext, ctx.agentNickname);
+}
+
+/** Stable runtime facts only; the current time is carried by message headers (ADR 0041 §5). */
 function buildContextSection(ctx: RichSystemPromptContext): string {
   const envItems = [
     `CWD: ${process.cwd()}`,
@@ -271,8 +282,6 @@ function buildContextSection(ctx: RichSystemPromptContext): string {
   ];
 
   return [
-    resolvePersonaLead(ctx.config, ctx.bootstrapContext, ctx.agentNickname),
-    '',
     '# Runtime',
     ...prependBullets(envItems),
   ].join('\n');
@@ -342,12 +351,20 @@ export interface PromptSectionDebugInfo {
   approxChars: number;
   /** CJK-aware token estimate of the section text. */
   approxTokens: number;
+  /** ADR 0041 segment kind. */
+  kind?: TextSegmentKind;
+  /** ADR 0041 segment weight (higher first within a kind). */
+  weight?: number;
+  /** Shortened or dropped by the prompt budget. */
+  trimmed?: boolean;
 }
 
 interface DefaultPromptSectionDefinition {
   id: string;
   layer: PromptLayer;
   title: string;
+  /** ADR 0041 §3 segment kind; `order` doubles as the segment weight. */
+  kind: TextSegmentKind;
   order: number;
   retention: 'required' | 'preferred';
   /** Position in IM conversation turns when it differs from `order`. */
@@ -370,16 +387,26 @@ function taskOnly(content: string): (ctx: RichSystemPromptContext) => string | n
 
 const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   {
+    id: '§1_persona',
+    kind: 'role_rules',
+    layer: 'role',
+    title: 'Persona',
+    order: 160,
+    retention: 'required',
+    content: buildPersonaSection,
+  },
+  {
     id: '§1_runtime',
+    kind: 'environment',
     layer: 'context',
     title: 'Runtime',
     order: 160,
     retention: 'required',
-    // Git status changes between turns, so it lives in §12 at the end (#730, cache-friendly order).
     content: buildContextSection,
   },
   {
     id: '§1b_critical_rules',
+    kind: 'system',
     layer: 'system',
     title: 'Critical Rules',
     order: 150,
@@ -388,6 +415,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§1c_workflow',
+    kind: 'role_rules',
     layer: 'task',
     title: 'Workflow',
     order: 140,
@@ -396,6 +424,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§1d_model_style',
+    kind: 'role_rules',
     layer: 'role',
     title: 'Style',
     order: 130,
@@ -404,6 +433,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§3_tools',
+    kind: 'platform',
     layer: 'tools',
     title: 'Orchestration',
     order: 120,
@@ -412,6 +442,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§4_security',
+    kind: 'system',
     layer: 'safety',
     title: 'Security',
     order: 110,
@@ -420,6 +451,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§5_error_handling',
+    kind: 'role_rules',
     layer: 'constraints',
     title: 'Error Handling',
     order: 90,
@@ -428,6 +460,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§5b_editing',
+    kind: 'role_rules',
     layer: 'constraints',
     title: 'Editing',
     order: 80,
@@ -436,6 +469,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§5c_task_completion',
+    kind: 'role_rules',
     layer: 'constraints',
     title: 'Task Completion',
     order: 70,
@@ -444,6 +478,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§5d_code_references',
+    kind: 'role_rules',
     layer: 'constraints',
     title: 'Code References',
     order: 60,
@@ -452,6 +487,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§5e_memory_instructions',
+    kind: 'role_rules',
     layer: 'memory',
     title: 'Memory Instructions',
     order: 50,
@@ -460,6 +496,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§5f_context_mode',
+    kind: 'environment',
     layer: 'context',
     title: 'Context Mode',
     order: 40,
@@ -469,6 +506,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§8_skills',
+    kind: 'platform',
     layer: 'tools',
     title: 'Skills',
     order: 30,
@@ -477,6 +515,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§10_global',
+    kind: 'role_rules',
     layer: 'context',
     title: 'Global Context',
     order: 20,
@@ -485,6 +524,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
   {
     id: '§11_bootstrap',
+    kind: 'role_rules',
     layer: 'context',
     title: 'Bootstrap',
     order: BOOTSTRAP_PROMPT_ORDER.task,
@@ -496,6 +536,7 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   {
     // Volatile: kept last so the stable prefix above stays cacheable.
     id: '§12_git_status',
+    kind: 'scene',
     layer: 'context',
     title: 'Git Status',
     order: 5,
@@ -504,6 +545,14 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
   },
 ];
 
+function definitionOrder(definition: DefaultPromptSectionDefinition, ctx: RichSystemPromptContext): number {
+  return isChatTurn(ctx) ? definition.chatOrder ?? definition.order : definition.order;
+}
+
+/**
+ * @deprecated Use {@link createBuiltinPromptSegments}; kept for callers that inspect the legacy
+ * section view (layer / title / order).
+ */
 export function createDefaultPromptAssemblyRegistry(
   ctx: RichSystemPromptContext,
 ): PromptAssemblyRegistry {
@@ -512,7 +561,7 @@ export function createDefaultPromptAssemblyRegistry(
     registry.register(definition.id, {
       layer: definition.layer,
       title: definition.title,
-      order: isChatTurn(ctx) ? definition.chatOrder ?? definition.order : definition.order,
+      order: definitionOrder(definition, ctx),
       retention: definition.retention,
       content: definition.content(ctx) ?? '',
     });
@@ -520,27 +569,67 @@ export function createDefaultPromptAssemblyRegistry(
   return registry;
 }
 
-function resolvePromptAssemblyRegistry(ctx: RichSystemPromptContext): PromptAssemblyRegistry {
-  const registry = createDefaultPromptAssemblyRegistry(ctx);
-  if (ctx.registry) {
-    registry.merge(ctx.registry);
+/**
+ * ADR 0041 §3 built-in mapping: every default section as a text segment. `weight` keeps the
+ * section's former `order`, so relative priority inside a kind and the budget yield order are
+ * unchanged; only the cross-kind order is new.
+ */
+export function createBuiltinPromptSegments(ctx: RichSystemPromptContext): PromptSegment[] {
+  const segments: PromptSegment[] = DEFAULT_PROMPT_SECTION_DEFINITIONS.map((definition) => ({
+    id: definition.id,
+    kind: definition.kind,
+    weight: definitionOrder(definition, ctx),
+    retention: definition.retention,
+    inject: () => definition.content(ctx),
+  }));
+  if (ctx.sceneText?.trim()) {
+    const sceneText = ctx.sceneText;
+    segments.push({ id: '§0_scene', kind: 'scene', weight: 100, retention: 'preferred', inject: () => sceneText });
   }
+  return segments;
+}
+
+/** The built-in segment view of a rich-prompt context (no history: text kinds only). */
+export function segmentInputFromContext(ctx: RichSystemPromptContext): SegmentInput {
+  return {
+    history: [],
+    runtime: {
+      modelId: ctx.modelId,
+      providerAlias: ctx.providerAlias,
+      modelSdk: ctx.modelSdk,
+      contextWindow: ctx.contextWindow,
+      timeZone: ctx.timeZone,
+      legacy: { ctx },
+    },
+    session: { sessionKey: '' },
+  };
+}
+
+/** Built-ins, then the legacy registry adapter, then plugin segments. Duplicate ids throw. */
+export function createPromptSegmentRegistry(ctx: RichSystemPromptContext): PromptSegmentRegistry {
+  const registry = new PromptSegmentRegistry().registerAll(createBuiltinPromptSegments(ctx));
+  if (ctx.registry) registry.registerAll(ctx.registry.toSegments(ctx));
+  if (ctx.segments) registry.registerAll(ctx.segments);
   return registry;
 }
 
 /**
- * 返回当前上下文中**实际注入**的系统提示各段大小（不含 SECTION_SEP）。
- * 用于观测渐进披露与 token 压力，不改变线上 prompt 拼接逻辑。
+ * 返回当前上下文中**实际注入**的系统提示各段大小（不含 SECTION_SEP）：
+ * id / kind / weight / 字符数 / 是否被裁剪。用于观测渐进披露与 token 压力。
  */
 export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
-  return resolvePromptAssemblyRegistry(ctx)
-    .entries(ctx)
-    .map(({ id, content }) => ({ id, approxChars: content.length, approxTokens: estimatePromptTokens(content) }));
+  return createPromptSegmentRegistry(ctx)
+    .describe(segmentInputFromContext(ctx), ctx.config.systemPromptMaxChars);
+}
+
+/** Stable prefix + `scene` suffix, with the cache breakpoint offset (ADR 0041 §5). */
+export function buildRichSystemPromptParts(ctx: RichSystemPromptContext): SystemPromptParts {
+  return createPromptSegmentRegistry(ctx)
+    .buildSystemPromptParts(segmentInputFromContext(ctx), ctx.config.systemPromptMaxChars);
 }
 
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {
-  return resolvePromptAssemblyRegistry(ctx)
-    .build(ctx.config.systemPromptMaxChars, ctx);
+  return buildRichSystemPromptParts(ctx).text;
 }
 
 

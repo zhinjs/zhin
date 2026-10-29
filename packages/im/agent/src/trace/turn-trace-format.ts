@@ -135,7 +135,7 @@ function renderContextBudget(budget: ContextBudgetReport, indent: string): strin
   ];
   if (parts.length > 0) lines.push(`${indent}    ${parts.join(' · ')}`);
   const top = budget.sections.slice(0, TOP_SECTIONS).filter(section => section.tokens > 0);
-  if (top.length > 0) lines.push(`${indent}    最大的提示段: ${top.map(section => `${section.id} ${section.tokens}`).join(', ')}`);
+  if (top.length > 0) lines.push(`${indent}    最大的提示段: ${top.map(section => `${section.id}${section.kind ? `[${section.kind} w${section.weight ?? 0}]` : ''} ${section.tokens}${section.trimmed ? ' (已裁剪)' : ''}`).join(', ')}`);
   return lines;
 }
 

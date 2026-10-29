@@ -22,7 +22,9 @@ const ids = (turn: TurnContextView) => describePromptSectionsForDebug({ ...base,
 describe('chat turn prompt', () => {
   it('leads IM turns with the workspace persona and drops coding-workflow sections', () => {
     const chat = ids(imTurn);
-    expect(chat.slice(0, 2)).toEqual(['§1_runtime', '§11_bootstrap']);
+    // ADR 0041: fixed kind order system → environment → role_rules; the persona leads role_rules.
+    expect(chat.slice(0, 2)).toEqual(['§1b_critical_rules', '§4_security']);
+    expect(chat.slice(chat.indexOf('§1_persona'), chat.indexOf('§1_persona') + 2)).toEqual(['§1_persona', '§11_bootstrap']);
     for (const id of ['§5_error_handling', '§5b_editing', '§5c_task_completion', '§5d_code_references', '§5e_memory_instructions', '§5f_context_mode']) {
       expect(chat).not.toContain(id);
     }
@@ -31,13 +33,13 @@ describe('chat turn prompt', () => {
     expect(prompt).toContain('# Workspace tasks in chat');
     expect(prompt).not.toContain('Keep response under 4 lines');
     expect(prompt).not.toContain('override everything');
-    expect(prompt.indexOf('你是群里的老朋友')).toBeLessThan(prompt.indexOf('<critical_rules>'));
+    expect(prompt.indexOf('你是群里的老朋友')).toBeLessThan(prompt.indexOf('# Chat style'));
   });
 
   it('keeps the task-agent prompt for non-IM turns', () => {
     const task = ids(httpTurn);
     expect(task).toContain('§5b_editing');
-    expect(task.at(-1)).toBe('§11_bootstrap');
+    expect(task.indexOf('§11_bootstrap')).toBeGreaterThan(task.indexOf('§5b_editing'));
     expect(buildRichSystemPrompt({ ...base, turn: httpTurn })).toContain('<workflow>');
   });
 

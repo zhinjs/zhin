@@ -36,6 +36,8 @@ describe('prompt cache observability (#730)', () => {
       gitStatus: 'Git: main (clean)',
     } as RichSystemPromptContext);
     expect(sections.at(-1)!.id).toBe('§12_git_status');
-    expect(sections[0]!.id).toBe('§1_runtime');
+    expect(sections[0]!.id).toBe('§1b_critical_rules');
+    expect(sections.at(-1)!.kind).toBe('scene');
+    expect(sections.slice(0, -1).every(section => section.kind !== 'scene')).toBe(true);
   });
 });

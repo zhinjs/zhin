@@ -14,6 +14,9 @@ export {
   buildRichSystemPrompt,
   buildLiteSystemPrompt,
   createDefaultPromptAssemblyRegistry,
+  createBuiltinPromptSegments,
+  createPromptSegmentRegistry,
+  buildRichSystemPromptParts,
   enforcePromptBudget,
 } from './system-prompt.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './system-prompt.js';
@@ -25,7 +28,9 @@ export type {
   PromptAssemblySection,
   PromptSectionRegistry,
 } from './prompt-assembly-registry.js';
-export { promptAssemblyToken } from './tokens.js';
+export { promptAssemblyToken, promptSegmentToken } from './tokens.js';
+export type { PromptSegmentSource } from './tokens.js';
+export * from './segments/index.js';
 export type { PromptAssemblyToken, PromptAssemblyResource } from './tokens.js';
 export type { AgentPromptProfile } from './turn-prompt-profile.js';
 

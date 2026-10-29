@@ -14,6 +14,21 @@ export interface PromptBudgetSection {
   readonly maxChars?: number;
 }
 
+/** Per-section outcome of {@link enforcePromptBudgetDetailed}, in the input order. */
+export interface PromptBudgetOutcome {
+  readonly id?: string;
+  /** Final text; empty when the section was absent or dropped. */
+  readonly content: string;
+  /** Shortened by `maxChars` or the total budget, or dropped entirely. */
+  readonly trimmed: boolean;
+  readonly dropped: boolean;
+}
+
+export interface PromptBudgetResult {
+  readonly text: string;
+  readonly outcomes: readonly PromptBudgetOutcome[];
+}
+
 /**
  * 系统提示词总量护栏：opportunistic 比 preferred 先让出预算，
  * 同一保留级别内低 budgetOrder（缺省 order）先让出；required 永不静默截断。
@@ -22,22 +37,46 @@ export function enforcePromptBudget(
   sections: readonly PromptBudgetSection[],
   maxChars: number,
 ): string {
-  const present = sections.flatMap((section) => {
+  return enforcePromptBudgetDetailed(sections, maxChars).text;
+}
+
+/** Same budget rules, but also reports what happened to each input section. */
+export function enforcePromptBudgetDetailed(
+  sections: readonly PromptBudgetSection[],
+  maxChars: number,
+): PromptBudgetResult {
+  type Present = PromptBudgetSection & { content: string; index: number; trimmed: boolean };
+  const present: Present[] = sections.flatMap((section, index) => {
     if (!section.content?.trim()) return [];
     let content = section.content;
+    let trimmed = false;
     if (section.maxChars !== undefined && content.length > section.maxChars) {
       if (section.retention === 'required') {
         throw new Error(`required Prompt Section ${section.id ?? '<anonymous>'} exceeds maxChars ${section.maxChars}`);
       }
       content = truncateTo(content, section.maxChars);
+      trimmed = true;
     }
-    return [{ ...section, content }];
+    return [{ ...section, content, index, trimmed }];
   });
   const total = () =>
     present.reduce((n, s, i) => n + s.content.length + (i > 0 ? SECTION_SEP.length : 0), 0);
-  if (maxChars <= 0 || total() <= maxChars) {
-    return present.map(s => s.content).join(SECTION_SEP);
-  }
+  const finish = (): PromptBudgetResult => {
+    const kept = new Map(present.map(item => [item.index, item] as const));
+    return {
+      text: present.map(s => s.content).join(SECTION_SEP),
+      outcomes: sections.map((section, index) => {
+        const item = kept.get(index);
+        return Object.freeze({
+          id: section.id,
+          content: item?.content ?? '',
+          trimmed: item ? item.trimmed : Boolean(section.content?.trim()),
+          dropped: !item && Boolean(section.content?.trim()),
+        });
+      }),
+    };
+  };
+  if (maxChars <= 0 || total() <= maxChars) return finish();
   const candidates = [...present]
     .filter((section) => section.retention !== 'required')
     .sort((left, right) => {
@@ -52,7 +91,7 @@ export function enforcePromptBudget(
     if (index < 0) continue;
     const target = candidate.content.length - (total() - maxChars);
     if (target > TRUNCATED_MARK.length) {
-      present[index] = { ...candidate, content: truncateTo(candidate.content, target) };
+      present[index] = { ...candidate, content: truncateTo(candidate.content, target), trimmed: true };
     } else {
       present.splice(index, 1);
     }
@@ -60,7 +99,7 @@ export function enforcePromptBudget(
   if (total() > maxChars) {
     throw new Error(`required Prompt Sections exceed the ${maxChars} character budget`);
   }
-  return present.map(s => s.content).join(SECTION_SEP);
+  return finish();
 }
 
 function retentionRank(retention: PromptRetention): number {

@@ -228,7 +228,8 @@ describe('FullAgentTurnEngine', () => {
       personaEnhanced: 'persona', runtime,
     });
     const prompt = await buildPrompt(runtime);
-    const stablePrefix = prompt.slice(0, prompt.indexOf('# Security'));
+    const capabilityAt = prompt.indexOf('researcher');
+    const stablePrefix = capabilityAt < 0 ? prompt : prompt.slice(0, capabilityAt);
     expect(stablePrefix).toContain('Stable workspace persona.');
     expect(stablePrefix).toContain('Model: provider/model');
     expect(stablePrefix).toContain('Sdk: google');

@@ -237,6 +237,34 @@ export default defineAgentPromptSection({
 ```
 :::
 
+### 用提示词段（Prompt Segment）精确放置内容
+
+Prompt Section 只能按「层」排序。需要明确"这段属于系统规则、运行环境、平台指引还是会话场景"时，在 `plugin.ts` 里通过 `promptSegmentToken` 提供段（ADR 0041）：
+
+```ts
+// plugin.ts
+import { definePlugin } from 'zhin.js';
+import { promptSegmentToken } from '@zhin.js/agent';
+
+export default definePlugin({
+  name: 'billing-hints',
+  setup(context) {
+    context.resources.provide(promptSegmentToken, {
+      id: 'billing-hints:platform',     // 全局唯一，冲突即报错
+      kind: 'platform',                 // system → environment → role_rules → platform → scene
+      weight: 10,                       // 同类内权重大者在前
+      retention: 'preferred',           // 预算不够时可被裁剪；required 永不裁剪
+      inject: () => '# Billing\nQuote amounts in the user\'s currency.',
+    });
+  },
+});
+```
+
+- 文本段（`system` / `environment` / `role_rules` / `platform` / `scene`）拼成系统提示词，类型之间的次序固定，`inject` 返回 `null` 即跳过。前四类在同一会话里必须字节稳定：不要放当前时间，时间由每条消息头携带；会随轮次变化的内容放 `scene`（它排在最后，缓存断点之前的部分不受影响）。
+- 一个插件可以提供数组；段随该插件所在的 generation 释放，热重载后旧段自动消失。
+- 非 Agent 所有者的插件提供的文本段会被标注为 `external_content`，不能冒充所有者规则或授予权限。
+- 消息类段（`user` / `tool` / `assistant` / `state`）由 `mergeMessageSegments` 按时间稳定归并，规则见 ADR 0041 §3。
+
 ### 用 Skill 封装一套流程
 
 Skill 是 `skills/<name>/SKILL.md`：一份带 frontmatter 的说明书，平时只向模型展示摘要，需要时才加载全文，并解锁它目录下的专用工具。
