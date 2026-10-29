@@ -6,6 +6,9 @@
  * `estimatePromptTokens` (CJK ~1 token/char, other ~4 chars/token), computed
  * from exactly what the harness sent; deterministic, no network.
  */
+import { cp, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { estimatePromptTokens } from '../../src/prompt/estimate-tokens.js';
 import { runEvalCase, type EvalCase } from '../framework/index.js';
@@ -99,18 +102,25 @@ export async function measureScene(scene: BudgetScene): Promise<SceneMeasure> {
   };
 }
 
-/** Pinned bootstrap files (AGENTS.md / SOUL.md / TOOLS.md): the harness reads them from the cwd, so a fixed cwd keeps numbers repo-independent. */
+/**
+ * Pinned bootstrap files (AGENTS.md / SOUL.md / TOOLS.md). The harness reads
+ * them, and `git status`, from the cwd, so measurement runs in a throwaway copy
+ * outside any git checkout: numbers then do not depend on the repo's state.
+ */
 const FIXTURE_WORKSPACE = fileURLToPath(new URL('./workspace', import.meta.url));
 
 export async function measureAll(scenes: readonly BudgetScene[] = BUDGET_SCENES): Promise<SceneMeasure[]> {
   const previous = process.cwd();
-  process.chdir(FIXTURE_WORKSPACE);
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-eval-budget-')));
+  await cp(FIXTURE_WORKSPACE, root, { recursive: true });
+  process.chdir(root);
   try {
     const out: SceneMeasure[] = [];
     for (const scene of scenes) out.push(await measureScene(scene));
     return out;
   } finally {
     process.chdir(previous);
+    await rm(root, { recursive: true, force: true });
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeModelHarnessValues, resolveModelHarness } from '../../src/config/model-harness-runtime.js';
+import { iterationSceneOf, mergeModelHarnessValues, resolveModelHarness, resolveTurnMaxIterations } from '../../src/config/model-harness-runtime.js';
 
 describe('model harness defaults', () => {
   it('应为小型 ollama 模型返回较低迭代上限', () => {
@@ -85,5 +85,35 @@ describe('model harness defaults', () => {
     });
     expect(resolved.emptyReplyRetries).toBeUndefined();
     expect(resolved.requestTimeoutMs).toBeUndefined();
+  });
+});
+
+describe('scene iteration limits (ADR 0042 §7)', () => {
+  const base = { providerName: 'custom', modelName: 'my-model', configured: 15 } as const;
+
+  it('defaults to 6 / 10 / 15 for group / private / master private', () => {
+    expect(resolveTurnMaxIterations({ ...base, scene: 'group' })).toBe(6);
+    expect(resolveTurnMaxIterations({ ...base, scene: 'private' })).toBe(10);
+    expect(resolveTurnMaxIterations({ ...base, scene: 'master-private' })).toBe(15);
+    expect(resolveTurnMaxIterations({ ...base })).toBe(15);
+  });
+
+  it('classifies turns by origin scope and master role', () => {
+    const turn = (scope: string, roles: string[], kind = 'im') => ({ origin: { kind, scope }, principal: { roles } });
+    expect(iterationSceneOf(turn('group', ['master']))).toBe('group');
+    expect(iterationSceneOf(turn('private', ['user']))).toBe('private');
+    expect(iterationSceneOf(turn('private', ['master']))).toBe('master-private');
+    expect(iterationSceneOf(turn('private', ['master'], 'http'))).toBeUndefined();
+  });
+
+  it('modelHarness overrides win, then a customised ai.agent.maxIterations', () => {
+    expect(resolveTurnMaxIterations({ ...base, scene: 'group', modelHarness: { models: { 'my-model': { maxIterations: 12 } } } })).toBe(12);
+    expect(resolveTurnMaxIterations({ ...base, scene: 'group', configured: 20 })).toBe(20);
+  });
+
+  it('never raises a built-in per-model limit', () => {
+    expect(resolveTurnMaxIterations({ providerName: 'openai', modelName: 'gpt-4o', configured: 15, scene: 'group' })).toBe(6);
+    expect(resolveTurnMaxIterations({ providerName: 'openai', modelName: 'gpt-4o', configured: 15, scene: 'master-private' })).toBe(7);
+    expect(resolveTurnMaxIterations({ providerName: 'ollama', modelName: 'qwen2.5:7b', configured: 15, scene: 'private' })).toBe(4);
   });
 });

@@ -125,6 +125,9 @@ export type TurnTraceNote =
   | Readonly<{ kind: 'model_request_end'; request_id: string; status: 'completed' | 'failed' | 'cancelled'; duration_ms: number; stop_reason?: string }>
   | Readonly<{ kind: 'budget_extended'; from: number; to: number }>
   | Readonly<{ kind: 'continuation'; index: number }>
+  /** ADR 0042 §7: the harness told the model it was going in circles / on its last step. */
+  | Readonly<{ kind: 'spin_hint'; family: string; calls: number; reason: string }>
+  | Readonly<{ kind: 'last_iteration_nudge'; iteration: number; limit: number }>
   | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>
   /** How the turn was admitted behind other turns of its session (#725). */
   | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>;
@@ -257,6 +260,10 @@ export class TurnTraceCollector {
     } else if (note.kind === 'budget_extended') {
       this.#extensions.push(Object.freeze({ from: note.from, to: note.to, at_ms: at }));
       this.#addTimeline('budget_extended', `${note.from} → ${note.to} steps`);
+    } else if (note.kind === 'spin_hint') {
+      this.#addTimeline('spin_hint', `${note.family} x${note.calls}: ${note.reason}`);
+    } else if (note.kind === 'last_iteration_nudge') {
+      this.#addTimeline('last_iteration_nudge', `${note.iteration}/${note.limit}`);
     } else if (note.kind === 'context_budget') {
       // Keep the first request's report: it is the fixed cost of the turn.
       if (this.#contextBudget) return;

@@ -299,7 +299,7 @@ function buildOrchestrationSection(modelSdk?: string): string {
     'Use the available tools directly when they match the task.',
       'Use discover(kind) to find deferred tools/skills, then load_skill / load_tool before calling them.',
       'Use spawn_task for complex, long-running, or specialist work that should run in a sub-agent.',
-      'When subtasks are independent, spawn multiple spawn_task calls in one assistant turn (parallel).',
+      'Send independent queries as parallel tool calls in one message (e.g. several spawn_task).',
   ];
   return ['# Orchestration', ...prependBullets(items)].join('\n');
 }

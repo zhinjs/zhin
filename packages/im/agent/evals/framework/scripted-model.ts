@@ -203,7 +203,7 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
       lastUserText: lastUserText(context),
       inputText: contextText(context),
       systemPrompt: context.systemPrompt ?? '',
-      toolSchemaText: JSON.stringify((context.tools ?? []).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters }))),
+      toolSchemaText: toolSchemaTextOf(context),
       model: model.id,
       images: countImages(context),
     });
@@ -316,6 +316,11 @@ function toAssistantMessage(step: ScriptStep, index: number, modelId: string): A
 function scriptedUsage(step: ScriptStep): AssistantMessage['usage'] {
   const tokens = 'tokens' in step && typeof step.tokens === 'number' ? step.tokens : 0;
   return { ...EMPTY_TOKEN_USAGE, input: tokens, totalTokens: tokens };
+}
+
+/** JSON of the tool definitions a request carries (what the provider bills as tool schema). */
+export function toolSchemaTextOf(context: Context): string {
+  return JSON.stringify((context.tools ?? []).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters })));
 }
 
 /** Image media blocks across the request's messages. */
