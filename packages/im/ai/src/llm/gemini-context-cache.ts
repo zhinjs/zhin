@@ -60,14 +60,18 @@ export function createGeminiCachingFetch(
   const entries = new Map<string, Entry>();
   const stats: GeminiContextCacheStats = { created: 0, reused: 0, deleted: 0, failed: 0 };
   const currentKeyByModel = new Map<string, string>();
+  const unsupported = new Set<string>();
+  const logged = new Set<string>();
 
   async function remove(url: string, name: string, headers: HeadersInit | undefined): Promise<void> {
     stats.deleted += 1;
     await baseFetch(`${apiRoot(url)}/${name}`, { method: 'DELETE', headers }).catch(() => undefined);
   }
 
-  async function resolveCache(url: string, model: string, body: Record<string, unknown>, headers: HeadersInit | undefined): Promise<string | undefined> {
+  async function resolveCache(url: string, model: string, body: Record<string, unknown>, headers: HeadersInit | undefined, stableParts: unknown[] | undefined, sceneTail: boolean): Promise<string | undefined> {
     const prefix = Object.fromEntries(PREFIX_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
+    if (sceneTail) prefix.systemInstruction = { ...(body.systemInstruction as object), parts: stableParts };
+    if (unsupported.has(model)) return undefined;
     const serialized = JSON.stringify(prefix);
     if (serialized.length < minPrefixChars) return undefined;
     const key = createHash('sha256').update(model).update('\0').update(serialized).digest('hex');
@@ -92,16 +96,29 @@ export function createGeminiCachingFetch(
     }).catch(() => undefined);
     const created = response?.ok ? await response.json().catch(() => undefined) as { name?: unknown } | undefined : undefined;
     if (typeof created?.name !== 'string') {
-      // Remember the failure for one TTL so every request does not pay for a doomed create.
       stats.failed += 1;
+      const detail = response && !response.ok ? await errorMessage(response) : undefined;
+      // 404 / 400 "not found or not supported for createCachedContent": the model (or the gateway
+      // in front of it) has no cachedContents; retrying cannot help, so stop for this process.
+      const permanent = response?.status === 404 || response?.status === 403
+        || (response?.status === 400 && /not supported|not found|invalid model/i.test(detail ?? ''));
+      if (permanent) unsupported.add(model);
+      // Transient failures back off for one TTL so every request does not pay for a doomed create.
       entries.set(key, { expiresAt: now() + ttlMs });
-      getLogger('ai-context-cache').warn(formatCompact({
-        op: 'gemini_cache_create',
-        model,
-        status: response?.status,
-        reason: !response ? 'network_error' : response.ok ? 'invalid_response' : 'http_error',
-        fallback: 'implicit',
-      }));
+      const reason = !response ? 'network_error' : response.ok ? 'invalid_response' : permanent ? 'unsupported' : 'http_error';
+      const logKey = `${model}\0${reason}`;
+      if (!logged.has(logKey)) {
+        logged.add(logKey);
+        getLogger('ai-context-cache').warn(formatCompact({
+          op: 'gemini_cache_create',
+          model,
+          status: response?.status,
+          reason,
+          detail,
+          fallback: 'implicit',
+          retry: permanent ? 'never' : `${Math.round(ttlMs / 1000)}s`,
+        }));
+      }
       return undefined;
     }
     stats.created += 1;
@@ -121,11 +138,21 @@ export function createGeminiCachingFetch(
     }
     if (body.cachedContent) return baseFetch(input, init);
     const model = decodeURIComponent(match[1]!);
-    const name = await resolveCache(url, model, body, init.headers);
+    // ADR 0042 §1: with two system parts the last one is the volatile scene tail. Only the stable
+    // parts are cached; the tail rides in `contents`, because the API rejects systemInstruction
+    // next to cachedContent.
+    const system = body.systemInstruction as { parts?: Array<{ text?: string }> } | undefined;
+    const sceneTail = Array.isArray(system?.parts) && system.parts.length > 1;
+    const stableParts = sceneTail ? system!.parts!.slice(0, -1) : undefined;
+    const name = await resolveCache(url, model, body, init.headers, stableParts, sceneTail);
     if (!name) return baseFetch(input, init);
 
     const slim: Record<string, unknown> = { ...body, cachedContent: name };
     for (const field of PREFIX_FIELDS) delete slim[field];
+    if (sceneTail) {
+      const scene = system!.parts!.at(-1)!;
+      slim.contents = [{ role: 'user', parts: [scene] }, ...(Array.isArray(body.contents) ? body.contents : [])];
+    }
     const response = await baseFetch(input, { ...init, body: JSON.stringify(slim) });
     if (response.status === 400 || response.status === 403 || response.status === 404) {
       // The cache expired or was deleted server-side: drop it and send the request as it was.
@@ -140,4 +167,14 @@ export function createGeminiCachingFetch(
 
 function apiRoot(url: string): string {
   return url.replace(/\?.*$/, '').replace(/\/models\/[^/]+$/, '');
+}
+
+async function errorMessage(response: Response): Promise<string | undefined> {
+  try {
+    const parsed = JSON.parse(await response.text()) as { error?: { message?: unknown; status?: unknown } };
+    const message = typeof parsed.error?.message === 'string' ? parsed.error.message : undefined;
+    return (message ?? (typeof parsed.error?.status === 'string' ? parsed.error.status : undefined))?.slice(0, 200);
+  } catch {
+    return undefined;
+  }
 }

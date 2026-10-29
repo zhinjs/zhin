@@ -14,9 +14,10 @@ import { OutboundLeakInspector, guardReplyPort } from '../../src/security/outbou
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 
-vi.mock('../../src/prompt/assembly.js', () => ({
-  buildAgentPathSystemPrompt: async () => 'system',
-  buildChatPathSystemPrompt: () => 'system',
+vi.mock('../../src/prompt/assembly.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../src/prompt/assembly.js')>(),
+  buildAgentPathSystemPromptParts: async () => ({ stable: 'system', scene: '' }),
+  buildChatPathSystemPromptParts: () => ({ stable: 'system', scene: '' }),
   describeAgentPathPromptSections: async () => [],
 }));
 const { runAgentLoopTextTurnRun, collectAgentLoopTurnRun } = await import('../../src/core/agent-core-run.js');

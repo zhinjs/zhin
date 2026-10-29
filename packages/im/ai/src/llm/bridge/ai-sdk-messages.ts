@@ -276,12 +276,28 @@ function orderGeminiFunctionCallTurns(messages: ModelMessage[]): ModelMessage[] 
   return out;
 }
 
+export interface SystemPromptSplit {
+  readonly stable: string;
+  readonly scene: string;
+}
+
+/** Splits at the breakpoint; undefined unless both halves have text. */
+export function splitSystemPrompt(systemPrompt: string, breakpoint: number | undefined): SystemPromptSplit | undefined {
+  if (breakpoint === undefined || !Number.isInteger(breakpoint) || breakpoint <= 0 || breakpoint >= systemPrompt.length) return undefined;
+  // The assembler joins sections with a `---` divider line; it belongs to neither half.
+  const stable = systemPrompt.slice(0, breakpoint).replace(/\s*\n-{3,}\s*$/, '').trim();
+  const scene = systemPrompt.slice(breakpoint).trim();
+  return stable && scene ? { stable, scene } : undefined;
+}
+
 export function contextToAiSdkPrompt(
   context: Context,
   mediaCapabilities: readonly ProviderMediaKind[] = DEFAULT_PROVIDER_MEDIA,
   options?: AiSdkMessageBridgeOptions,
 ): {
   system?: string;
+  /** Stable + scene split of `system` when the context carries a cache breakpoint. */
+  systemParts?: SystemPromptSplit;
   messages: ModelMessage[];
 } {
   const messages = agentMessagesToAiSdk(context.messages, mediaCapabilities, {
@@ -291,7 +307,7 @@ export function contextToAiSdkPrompt(
     toolNames: options?.toolNames,
   });
   const system = context.systemPrompt.trim() || undefined;
-  return { system, messages };
+  return { system, systemParts: splitSystemPrompt(context.systemPrompt, context.systemPromptCacheBreakpoint), messages };
 }
 
 /**
