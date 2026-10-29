@@ -8,6 +8,7 @@ import type { SessionStrategy, SessionSystemConfig } from './contracts.js';
 import { type SessionIODeps, beginTurnSession, resolveSessionIsNewBeforeCreate, touchSession, archiveSessionByKey } from './session-io.js';
 import { GroupSessionStrategy } from './strategies.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
+import { resolveTurnQuote } from './turn-quote.js';
 import {
   beginIngressTurnSession,
   resolveIngressUserMessage,
@@ -147,7 +148,7 @@ export class SessionSystem {
     const deps = this.sessionDeps(host);
     const sessionKey = turn.session.key;
     const userId = turn.principal.subjectId;
-    const resolved = resolveIngressUserMessage(turn);
+    const resolved = resolveIngressUserMessage(turn, await resolveTurnQuote(turn));
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
 
     if (options?.deferredAutoContinue) {

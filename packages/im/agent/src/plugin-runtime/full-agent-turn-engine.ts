@@ -1,5 +1,5 @@
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
-import { createUserMessage, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
+import { createUserMessage, MessageAliasTable, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
@@ -246,7 +246,9 @@ async function* runInteractiveTurn(
     promptTexts: [prompt.personaEnhanced, options.bootstrapContext ?? ''],
   });
   const reply = guardedReply(host, context.turn, leakInspector);
+  const messageAliases = new MessageAliasTable();
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
+    messageAliases,
     injectionGuard: host.config.injectionGuard,
     ...hardGateOptions(host),
     provenance,
@@ -303,6 +305,7 @@ async function* runInteractiveTurn(
       allTools: [...plan.allTools],
       resolvedTools: [...plan.resolvedTools],
       toolExecution: new TurnToolExecutionAuthority(toolRuntime),
+      messageAliases,
       toolEventSource: 'authority',
       loopHooks: options.loopHooks,
       promptRuntime,
@@ -335,11 +338,13 @@ async function* runInteractiveTurn(
       try {
         // The perception pre-pass is billed to the same subject as the turn itself.
         host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
+        let deliveredMessageId: string | undefined;
         if (completion.terminal.type === 'turn_end' && reply) {
           const outbound = completion.terminal.output.length > 0
             ? completion.terminal.output
             : buildTextTurnOutbound(completion.result.reply, completion.result);
           const delivery = await reply.send(outbound);
+          if (delivery.status === 'sent') deliveredMessageId = delivery.messageId;
           if (
             delivery.status === 'failed'
             || delivery.status === 'rejected'
@@ -361,7 +366,7 @@ async function* runInteractiveTurn(
             { messageExtras: [prep.turnUser.userMessageExtra] },
           );
         } else {
-          await completion.result.projectConversation?.();
+          await completion.result.projectConversation?.(deliveredMessageId ? { messageId: deliveredMessageId } : undefined);
         }
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
         if (
@@ -448,7 +453,9 @@ async function* runScheduleTurn(
     activeSkillsContext,
     systemBootstrap: options.bootstrapContext,
   });
+  const messageAliases = new MessageAliasTable();
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
+    messageAliases,
     injectionGuard: host.config.injectionGuard,
     ...hardGateOptions(host),
   });
@@ -491,6 +498,7 @@ async function* runScheduleTurn(
       allTools: [...plan.allTools],
       resolvedTools: [...plan.resolvedTools],
       toolExecution: new TurnToolExecutionAuthority(toolRuntime),
+      messageAliases,
       toolEventSource: 'authority',
       loopHooks: options.loopHooks,
       promptRuntime,

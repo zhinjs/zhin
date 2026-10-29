@@ -8,7 +8,7 @@ export default defineAgentTool({
   scopes: ['private', 'group'],
   requiresApproval: 'never',
   inputSchema: z.object({
-    message_id: z.string().min(1).describe('当前会话中真实的原消息 ID'),
+    message_id: z.string().min(1).describe('当前会话中真实的原消息 ID，或消息头里的 m<n> 别名'),
     text: z.string().min(1).describe('本次回复的文字'),
   }),
   async execute({ message_id, text }, context) {

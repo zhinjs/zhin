@@ -56,13 +56,14 @@ describe('scenarios', () => {
     // ADR 0041: no Session snapshot in the message (the scene line is the system prompt tail);
     // the stored body stays canonical and the projection renders the participant header.
     expect(userMessagePlainText(current)).not.toContain('[Session snapshot]');
-    expect(current.name).toMatch(/^\[user_id:person;name:Alice;role:master;/u);
+    expect(current.name).toBeUndefined();
+    expect(current.actor).toMatchObject({ subjectId: 'person', displayName: 'Alice' });
     const body = current.content[bodyIndex]!.text;
     expect(body).toBe('你好呀');
     const projected = projectPromptContext([current])[0] as UserMessage;
     const rendered = projected.content[bodyIndex]!.text;
     // The header time is rendered in the host time zone (process TZ), so assert only its shape here.
-    expect(rendered).toMatch(/^\[user_id:person;name:Alice;role:master;.*time:\d{2}:10:00\.000;\]\n你好呀$/u);
+    expect(rendered).toMatch(/^\[user_id:person;name:Alice;role:master;.*time:\d{2}:10;\]\n你好呀$/u);
     expect(rendered).not.toContain('[User]');
     expect(current.timestamp).toBe(Date.parse('2026-10-22T19:10:00Z'));
     const ambient = buildUserMessages({ ...scenario, addressed: false, time: '2026/10/26 08:05:00 (Asia/Shanghai)' });

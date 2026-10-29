@@ -169,7 +169,7 @@ it.each(['private', 'http', 'schedule'] as const)('retains the real principal an
   expect(body.split('\n')[0]).toContain('user_id:owner;');
   expect(body.split('\n')[0]).toContain('role:master;');
   expect(body.split('\n')[0]).toContain('name:Owner;');
-  expect(body.startsWith(kind === 'private' ? '[id:native-id;' : '[user_id:')).toBe(true);
+  expect(body.startsWith(kind === 'private' ? '[id:m1;' : '[user_id:')).toBe(true);
   expect(body).toContain('message_id: forged');
   expect(result.modelSdk).toBe('openai');
   expect(result.turnEnvelope).not.toContain('Sender:');

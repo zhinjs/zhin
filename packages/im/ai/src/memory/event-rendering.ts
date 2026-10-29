@@ -22,6 +22,7 @@ import type { MidConversationSystem } from '../llm/mid-conversation-system.js';
 import { resolveMidConversationSystem } from '../llm/mid-conversation-system.js';
 import type { Model } from '../llm/types/model.js';
 import { projectPromptContext } from './prompt-context.js';
+import type { MessageAliasTable } from './message-alias.js';
 import { formatHeader, SYSTEM_SENDER_ID } from './message-header.js';
 import { formatEventClock, STATE_CHANGE_PREFIX } from './event-message.js';
 
@@ -125,7 +126,12 @@ export function renderEventsForProvider(messages: AgentMessage[], capability: Mi
 /** The `convertToLlm` of an agent loop: participant/state projection, then event rendering for the model. */
 export function createLlmMessageProjection(
   model: Pick<Model, 'sdk' | 'id' | 'baseUrl' | 'compat'>,
+  aliases?: MessageAliasTable,
 ): (messages: AgentMessage[]) => AgentMessage[] {
   const capability = resolveMidConversationSystem(model);
-  return messages => renderEventsForProvider(projectPromptContext(messages), capability);
+  return messages => {
+    // The aliases the model is about to see must resolve when it calls a tool with one.
+    aliases?.index(messages);
+    return renderEventsForProvider(projectPromptContext(messages), capability);
+  };
 }

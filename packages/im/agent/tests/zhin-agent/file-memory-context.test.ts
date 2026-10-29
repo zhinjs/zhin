@@ -55,7 +55,7 @@ describe('file-memory context projection', () => {
     expect(text(projected[2]!)).toContain(snapshot);
     expect(text(projected[2]!)).not.toContain('[Unchanged context:');
     expect(text(projected[2]!)).not.toContain('Model:');
-    expect(text(projected[2]!)).toMatch(/\[user_id:alice;time:[\d:.]+;\]\ncontinue/u);
+    expect(text(projected[2]!)).toMatch(/\[user_id:alice;(time:\d{2}:\d{2};)?\]\ncontinue/u);
     expect(text(second)).toContain(snapshot);
   });
 

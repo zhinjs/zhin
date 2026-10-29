@@ -3,6 +3,7 @@ import {
   renderUserMessageForLlm,
   type AgentMessageExtra,
   type AgentSessionRepository,
+  type ConversationQuote,
   type CreateAgentSessionInput,
   type UserMessage,
 } from '@zhin.js/ai';
@@ -18,9 +19,10 @@ export interface ResolvedIngressUserMessage {
 
 export function resolveIngressUserMessage(
   turn: TurnIngress,
+  quote?: ConversationQuote,
 ): ResolvedIngressUserMessage {
   const content = stripUserSpoofedSenderPrefix(turn.input.text);
-  const referenceBlock = renderTurnReferences(turn);
+  const referenceBlock = renderTurnReferences(turn, quote);
   const extra: AgentMessageExtra | undefined = referenceBlock
     ? { quote: { block: referenceBlock } }
     : undefined;
@@ -46,7 +48,7 @@ export function resolveIngressUserMessage(
     ...user,
     ...(turn.origin.kind === 'im' && turn.origin.messageId ? { messageId: turn.origin.messageId } : {}),
   };
-  const llmMessage = renderUserMessageForLlm(turn.origin.kind === 'im' ? stampUserHeader(identified) : identified, extra);
+  const llmMessage = renderUserMessageForLlm(turn.origin.kind === 'im' ? stampUserHeader(identified, quote) : identified, extra);
   return Object.freeze({
     content,
     ...(extra ? { extra: Object.freeze(extra) } : {}),
@@ -54,8 +56,12 @@ export function resolveIngressUserMessage(
   });
 }
 
-function renderTurnReferences(turn: TurnIngress): string | undefined {
-  const references = turn.input.references ?? [];
+function renderTurnReferences(turn: TurnIngress, quote?: ConversationQuote): string | undefined {
+  // ADR 0043 §4: a quoted message whose whole text was resolved needs no tool call, so it is not listed here;
+  // the LLM boundary renders it as `reply_to` or an inline `[quote ...]` line.
+  const quoteCoversMessage = quote?.text !== undefined && quote.truncated !== true;
+  const references = (turn.input.references ?? [])
+    .filter(reference => !(quoteCoversMessage && reference.kind === 'message' && reference.sourceId === quote?.id));
   if (references.length === 0) return undefined;
   const lines = references.map((reference) => {
     const preview = reference.preview?.trim();

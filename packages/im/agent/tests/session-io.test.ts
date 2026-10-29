@@ -25,13 +25,13 @@ describe('resolveTurnUserMessage', () => {
   it('私聊也带参与者头（首条全量）', () => {
     const commMessage = mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: 'u1', scope: 'private', sceneId: 'u1' });
     const text = resolveUserText(commMessage, 'hello');
-    expect(text).toMatch(/^\[user_id:u1;[^\n]*;time:\d{2}:\d{2}:\d{2}\.\d{3};\]\nhello$/u);
+    expect(text).toMatch(/^\[user_id:u1;[^\n]*;time:\d{2}:\d{2};\]\nhello$/u);
   });
 
   it('群聊添加结构化 sender 前缀（roles）', () => {
     const commMessage = ({ ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: '12345', scope: 'group', sceneId: 'g1', role: 'admin' }), sender: { id: '12345', name: 'Alice', roles: ['user'] } } as AgentTurnMessage);
     const out = resolveUserText(commMessage, '你好');
-    expect(out).toMatch(/^\[user_id:12345;name:Alice;role:admin;date:[\d-]+;time:[\d:.]+;\]\n你好$/u);
+    expect(out).toMatch(/^\[user_id:12345;name:Alice;role:admin;date:[\d-]+;time:\d{2}:\d{2};\]\n你好$/u);
   });
 
   it('prepareUserContentForSession 返回干净正文与 actor', () => {
@@ -62,7 +62,8 @@ describe('resolveTurnUserMessage', () => {
       subjectId: 'user 7', displayName: 'Ada Lovelace',
     });
     expect(resolveUserText(commMessage, 'hello')).toContain('user_id:user 7;name:Ada Lovelace;');
-    expect(resolved.llmMessage.name).toContain('user_id:user 7;name:Ada Lovelace;');
+    // ADR 0041 amended: only the actor is stored; the header is rendered at the LLM boundary.
+    expect(resolved.llmMessage.name).toBeUndefined();
   });
 
   it('剥离用户自造 roles 前缀', () => {
