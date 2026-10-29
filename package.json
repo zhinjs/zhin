@@ -137,6 +137,7 @@
     "test:docs:e2e:run": "playwright test --config playwright.docs.config.ts",
     "check:deployment-templates": "vitest run tests/docs/deployment-templates.test.ts",
     "docs:api": "typedoc",
+    "eval:budget": "turbo run build --filter=@zhin.js/agent... --output-logs=errors-only && tsx --conditions=development packages/im/agent/evals/budget/run.ts",
     "eval:chat": "tsx --conditions=development evals/chat/run.ts",
     "docs:config": "node scripts/generate-config-reference.mjs",
     "check:config-reference": "node scripts/generate-config-reference.mjs --check",

@@ -1,0 +1,41 @@
+{
+  "note": "ADR 0042 W5 baseline on feat/0041-impl (before W1-W4). Rerun: pnpm eval:budget --compare",
+  "scenes": {
+    "group-first-turn": {
+      "callCount": 1,
+      "firstCallNominal": 6410,
+      "totalNominal": 6410,
+      "stablePrefix": 2199,
+      "cachedShareFirstCall": 0.343,
+      "billedEquivalent": 4431,
+      "perCallNominal": [
+        6410
+      ]
+    },
+    "group-turn-6": {
+      "callCount": 2,
+      "firstCallNominal": 7155,
+      "totalNominal": 14329,
+      "stablePrefix": 2199,
+      "cachedShareFirstCall": 0.307,
+      "billedEquivalent": 5910,
+      "perCallNominal": [
+        7155,
+        7174
+      ]
+    },
+    "master-private-tool-turn": {
+      "callCount": 3,
+      "firstCallNominal": 7087,
+      "totalNominal": 21385,
+      "stablePrefix": 2822,
+      "cachedShareFirstCall": 0.398,
+      "billedEquivalent": 6058,
+      "perCallNominal": [
+        7087,
+        7121,
+        7177
+      ]
+    }
+  }
+}
