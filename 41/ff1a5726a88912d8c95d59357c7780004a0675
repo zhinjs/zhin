@@ -1,0 +1,75 @@
+plugins/adapters/email/adapters/email/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 25-36
+plugins/adapters/lark/adapters/lark/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 22-38
+plugins/adapters/bilibili-live/adapters/bilibili-live/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 15-27
+plugins/adapters/napcat/adapters/napcat/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 36-52
+plugins/adapters/bilibili/adapters/bilibili/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 22-34
+plugins/adapters/wechat-mp/adapters/wechat-mp/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 21-33
+plugins/adapters/wecom/adapters/wecom/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 21-34
+plugins/adapters/discord/adapters/discord/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 32,34-50
+plugins/adapters/onebot11/adapters/onebot11/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 29-44
+.changeset/0044-c5-adapter-profiles.md
+  s_9477e63ef5cee5::t_5c473216834a96 1-24
+plugins/adapters/icqq/src/group-actions.ts
+  s_9477e63ef5cee5::t_5c473216834a96 1-97
+plugins/adapters/onebot12/adapters/onebot12/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 33-48
+plugins/adapters/icqq/src/endpoint.ts
+  s_9477e63ef5cee5::t_5c473216834a96 66,164
+plugins/adapters/line/adapters/line/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 19-28
+plugins/adapters/github/adapters/github/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 32-41
+plugins/adapters/kook/adapters/kook/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 31-47
+docs/authoring/adapters.md
+  s_9477e63ef5cee5::t_1965726fef9abd 181-198
+plugins/adapters/telegram/adapters/telegram/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 20-39
+plugins/adapters/weixin-ilink/adapters/weixin-ilink/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 25-35
+plugins/adapters/icqq/tests/profile.test.ts
+  s_9477e63ef5cee5::t_5c473216834a96 1-214
+plugins/adapters/qq/adapters/qq/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 36-62
+plugins/adapters/dingtalk/adapters/dingtalk/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 20-30
+plugins/adapters/tests/adapter-profiles.test.ts
+  s_9477e63ef5cee5::t_5c473216834a96 1-157
+plugins/adapters/milky/adapters/milky/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 37-52
+plugins/adapters/slack/adapters/slack/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 21-41
+plugins/adapters/satori/adapters/satori/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 25-38
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 23-36,39-101,103-108,110
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  s_9477e63ef5cee5::t_5c473216834a96 20-30
+docs/en/authoring/adapters.md
+  s_9477e63ef5cee5::t_1965726fef9abd 182-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "41ff1a5726a88912d8c95d59357c7780004a0675",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
