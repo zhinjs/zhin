@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.1.22
+
+### Patch Changes
+
+- 05dded3: Release gate: `versionCandidate` no longer treats pure leftover changeset deletions as a generated version tree, so private-package-only entries cannot deadlock publish after a version PR.
+
 ## 1.1.21
 
 ### Patch Changes
