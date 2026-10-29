@@ -38,12 +38,15 @@ export interface AgentsInstructionEntry {
 
 export async function collectAgentsInstructionChain(
   workspaceDir?: string,
+  options?: Readonly<{ excludeRoot?: boolean }>,
 ): Promise<AgentsInstructionEntry[]> {
   const workspaceRoot = path.resolve(workspaceDir || process.cwd());
   const startDir = path.resolve(process.cwd());
 
   const entries: AgentsInstructionEntry[] = [];
   const seen = new Set<string>();
+  // The host already carries the root AGENTS.md in the cacheable system prompt; don't send it twice.
+  if (options?.excludeRoot) seen.add(normalizeAgentsPath(path.join(workspaceRoot, 'AGENTS.md')));
 
   let current = startDir;
   while (true) {
@@ -87,8 +90,9 @@ export async function buildAgentsEnvelopeContext(
   workspaceDir?: string,
   /** ADR 0042 §5: drop sections whose `<!-- scope: ... -->` does not match this scene. */
   scene?: BootstrapScene,
+  options?: Readonly<{ excludeRoot?: boolean }>,
 ): Promise<string | null> {
-  const chain = await collectAgentsInstructionChain(workspaceDir);
+  const chain = await collectAgentsInstructionChain(workspaceDir, options);
   if (chain.length === 0) return null;
 
   const lines: string[] = ['[Agents instructions]'];
