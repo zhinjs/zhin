@@ -1,0 +1,88 @@
+plugins/adapters/kook/tests/side-event-map.test.ts
+  s_9477e63ef5cee5::t_eb8c1260ef6a4f 1-15
+packages/im/adapter-onebot-events/package.json
+  s_9477e63ef5cee5::t_ce67ae0ba4cda0 1-51
+plugins/adapters/slack/src/side-event-dispatch.ts
+  s_9477e63ef5cee5::t_f045c51656a1da 1,5,16-17
+plugins/adapters/icqq/src/endpoint.ts
+  s_9477e63ef5cee5::t_16a30268523dd8 22-23
+plugins/adapters/napcat/src/side-event-dispatch.ts
+  s_9477e63ef5cee5::t_16a30268523dd8 1
+packages/im/adapter-onebot-events/tests/dispatch.test.ts
+  s_9477e63ef5cee5::t_65f39d8d39cf09 1-63,65-117
+  s_9477e63ef5cee5::t_20b46e3311e349 64
+plugins/adapters/onebot11/package.json
+  s_9477e63ef5cee5::t_16a30268523dd8 54
+plugins/adapters/slack/tests/side-event-map.test.ts
+  s_9477e63ef5cee5::t_fd559a1a6c9a4d 1-16
+plugins/adapters/icqq/package.json
+  s_9477e63ef5cee5::t_3031c6318c70e0 46
+packages/im/adapter-onebot-events/src/maps.ts
+  s_9477e63ef5cee5::t_8467e785bab510 1-51
+plugins/adapters/napcat/package.json
+  s_9477e63ef5cee5::t_3031c6318c70e0 55
+plugins/adapters/onebot11/src/side-event-dispatch.ts
+  s_9477e63ef5cee5::t_16a30268523dd8 1
+packages/im/core/tests/side-event-no-platform.test.ts
+  s_9477e63ef5cee5::t_4e3d49ce92b871 5
+  s_9477e63ef5cee5::t_5b9b4f3cd45e1e 1-4,6-15
+plugins/adapters/qq/src/side-event-dispatch.ts
+  s_9477e63ef5cee5::t_16a30268523dd8 1
+plugins/adapters/slack/src/side-event-map.ts
+  s_9477e63ef5cee5::t_f045c51656a1da 1-24
+.changeset/0044-c4-onebot-events.md
+  s_9477e63ef5cee5::t_027f111bdd1887 1-13
+scripts/check-architecture-layers.mjs
+  s_9477e63ef5cee5::t_027f111bdd1887 88-89,116
+tsconfig.typecheck.json
+  s_9477e63ef5cee5::t_027f111bdd1887 17-19
+  s_9477e63ef5cee5::t_dd105e4e732115 297
+plugins/adapters/onebot12/package.json
+  s_9477e63ef5cee5::t_16a30268523dd8 51
+plugins/adapters/qq/package.json
+  s_9477e63ef5cee5::t_16a30268523dd8 45
+plugins/adapters/kook/src/side-event-dispatch.ts
+  s_9477e63ef5cee5::t_f045c51656a1da 1,5,26-27
+packages/im/core/tests/scene-events.test.ts
+  s_9477e63ef5cee5::t_15cf526727922e 3-4,14-15,17,23-45,49-65,67,72-73,79-80,83,87-88,93-94,98-99,102,107,115,120,126-128,136-139
+packages/im/adapter-onebot-events/src/normalize.ts
+  s_9477e63ef5cee5::t_1949841a175d0b 1-138
+docs/en/ai/agent.md
+  s_9477e63ef5cee5::t_027f111bdd1887 402
+packages/im/adapter-onebot-events/src/index.ts
+  s_9477e63ef5cee5::t_a50bc730811095 1-3
+packages/im/adapter-onebot-events/src/dispatch.ts
+  s_9477e63ef5cee5::t_a50bc730811095 1-209
+packages/im/adapter-onebot-events/tsconfig.json
+  s_9477e63ef5cee5::t_f35a22cd4d4675 1-12
+docs/ai/agent.md
+  s_9477e63ef5cee5::t_027f111bdd1887 476
+plugins/adapters/kook/src/side-event-map.ts
+  s_9477e63ef5cee5::t_f045c51656a1da 1-18
+packages/im/adapter-onebot-events/tests/normalize.test.ts
+  s_9477e63ef5cee5::t_8b30c89e998f6a 1-84
+packages/im/core/src/side-event/scene-events.ts
+  s_9477e63ef5cee5::t_a50bc730811095 49
+packages/im/adapter-onebot-events/tests/equivalence.test.ts
+  s_9477e63ef5cee5::t_f89d58354968f5 1-87
+plugins/adapters/onebot12/src/side-event-dispatch.ts
+  s_9477e63ef5cee5::t_16a30268523dd8 1
+pnpm-lock.yaml
+  s_9477e63ef5cee5::t_afa62289f948a6 1279-1294,2437-2439,2715-2717,2779-2781,2846-2848,2898-2900
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b249e5e5701588f20c697cb57a09cebc65794ae0",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
