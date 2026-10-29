@@ -145,9 +145,7 @@ function consoleError(error: unknown): unknown {
     return new PluginConsoleRpcError('not_found', 'Change not found');
   }
   if (isNamedError(error, 'SelfChangeStateError')) {
-    const status = typeof (error as { status?: unknown }).status === 'string'
-      ? (error as { status: string }).status
-      : 'unknown';
+    const status = readStringProp(error, 'status') ?? 'unknown';
     return new PluginConsoleRpcError('conflict', `Change is ${status}`);
   }
   return error;
@@ -155,6 +153,12 @@ function consoleError(error: unknown): unknown {
 
 function isNamedError(error: unknown, name: string): error is Error {
   return error instanceof Error && error.name === name;
+}
+
+function readStringProp(error: unknown, key: string): string | undefined {
+  if (!error || typeof error !== 'object' || !(key in error)) return undefined;
+  const value = (error as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : undefined;
 }
 
 function card(record: SelfChangeRecord, approvalId: string | null): SelfChangeCard {
