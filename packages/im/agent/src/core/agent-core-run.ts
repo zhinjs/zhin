@@ -7,7 +7,7 @@ import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchem
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { createPromptContextBlock, projectPromptContext, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { createPromptContextBlock, createLlmMessageProjection, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -41,7 +41,7 @@ import {
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
-import type { TurnContextView } from '../context/turn-envelope.js';
+import { sceneLineForTurn, type TurnContextView } from '../context/turn-envelope.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
@@ -62,6 +62,7 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
+import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
 import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
@@ -347,7 +348,7 @@ async function* runAgentLoopVisionTurnOnceRun(
       modelId,
       label: 'vision',
     }),
-    convertToLlm: projectPromptContext,
+    convertToLlm: createLlmMessageProjection(llmModel),
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
   };
@@ -627,6 +628,9 @@ export async function* runAgentLoopTextTurnRun(
   if (hasTools && harness.explorationGuidance) {
     systemPrompt = `${systemPrompt}\n\n${EXPLORATION_GUIDANCE}`;
   }
+  // ADR 0041 §5: the scene line goes last so a scene change only invalidates the tail.
+  const sceneText = sceneLineForTurn(input.turnContext);
+  if (sceneText) systemPrompt = `${systemPrompt}\n\n${sceneText}`;
   if (hasTools && !directTools) {
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
       .map((item) => ({ name: item.name, description: item.brief })));
@@ -787,7 +791,7 @@ export async function* runAgentLoopTextTurnRun(
       }),
       ...(outputSchema ? { outputSchema } : {}),
     },
-    convertToLlm: projectPromptContext,
+    convertToLlm: createLlmMessageProjection(llmModel),
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
@@ -1055,7 +1059,10 @@ export async function* runAgentLoopTextTurnRun(
           msg.role === 'user' && i === 0 && continuations === 0 ? userMessageExtra : undefined
         ));
         if (persistentConversation) {
-          conversationBatches.push({ messages: batch, messageExtras });
+          conversationBatches.push({
+            messages: input.turnContext.origin.kind === 'im' ? stampAssistantHeaders(batch, input.turnContext.input?.contextState?.bot) : batch,
+            messageExtras,
+          });
         }
       }
     }

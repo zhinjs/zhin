@@ -74,7 +74,8 @@ describe('Harness inbound → tool/policy boundary', () => {
     const d = describePromptSectionsForDebug(ctx);
     const ids = d.map((x) => x.id);
     expect(d.length).toBeGreaterThan(0);
-    expect(d[0]?.id).toBe('§1_runtime');
+    expect(d[0]?.id).toBe('§1b_critical_rules');
+    expect(d.map((x) => x.kind)).toContain('environment');
     expect(ids).not.toContain('§2_style');
     expect(ids).toContain('§3_tools');
     expect(ids).toContain('§4_security');

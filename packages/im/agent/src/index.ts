@@ -128,8 +128,32 @@ export {
   buildUserMessageWithHistory,
   describePromptSectionsForDebug,
   createDefaultPromptAssemblyRegistry,
+  createBuiltinPromptSegments,
+  createPromptSegmentRegistry,
+  buildRichSystemPromptParts,
   enforcePromptBudget,
 } from './prompt/system-prompt.js';
+export {
+  PromptSegmentRegistry,
+  PromptSegmentMergeError,
+  mergeMessageSegments,
+  TEXT_SEGMENT_KINDS,
+  MESSAGE_SEGMENT_KINDS,
+} from './prompt/segments/index.js';
+export type {
+  PromptSegment,
+  SegmentKind,
+  TextSegmentKind,
+  MessageSegmentKind,
+  SegmentInput,
+  SegmentOutput,
+  SegmentRuntimeView,
+  SegmentSessionView,
+  PromptSegmentDebugInfo,
+  SystemPromptParts,
+  MessageSegmentOutput,
+  MergeMessageSegmentsOptions,
+} from './prompt/segments/index.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './prompt/system-prompt.js';
 export { PromptAssemblyRegistry } from './prompt/prompt-assembly-registry.js';
 export type {
@@ -137,7 +161,8 @@ export type {
   PromptAssemblySection,
   PromptSectionRegistry,
 } from './prompt/prompt-assembly-registry.js';
-export { promptAssemblyToken } from './prompt/tokens.js';
+export { promptAssemblyToken, promptSegmentToken } from './prompt/tokens.js';
+export type { PromptSegmentSource } from './prompt/tokens.js';
 export type { PromptAssemblyToken, PromptAssemblyResource } from './prompt/tokens.js';
 export {
   defineAgentPromptSection,
@@ -197,10 +222,26 @@ export {
   speakBlock,
   sceneRoleOf,
   sceneKeyOf,
+  type SceneGroupChange,
+  type SceneGroupFactsInput,
   type SessionProfileRecord,
   type SessionScope,
   type SpeakBlockReason,
 } from './session-profile.js';
+export {
+  SceneFactStore,
+  AI_SCENE_MEMBERS_TABLE,
+  AI_SCENE_MEMBER_MODEL,
+  SCENE_FACT_PRUNE_INTERVAL_MS,
+  SCENE_FACT_STALE_MS,
+  SCENE_MEMBER_MAX_PER_SCENE,
+  SCENE_MEMBER_RETENTION_MS,
+  type SceneMemberChange,
+  type SceneMemberRole,
+  type SceneMemberFacts,
+  type SceneMemberRecord,
+  type ScenePruneResult,
+} from './scene-facts.js';
 export {
   AI_DECISION_EVENTS_TABLE,
   AI_DECISION_EVENT_MODEL,

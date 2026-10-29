@@ -28,13 +28,17 @@ export function applyTurnContextToUserMessages(
   return messages.map((msg, i) => {
     if (i !== 0 || msg.role !== 'user') return msg;
     const text = userMessagePlainText(msg);
-    return createUserMessage(
-      prependTurnContextEnvelope(text, envelope),
-      msg.media,
-      msg.timestamp,
-      msg.actor,
-      msg.cause,
-    );
+    return {
+      ...createUserMessage(
+        prependTurnContextEnvelope(text, envelope),
+        msg.media,
+        msg.timestamp,
+        msg.actor,
+        msg.cause,
+      ),
+      ...(msg.messageId ? { messageId: msg.messageId } : {}),
+      ...(msg.name ? { name: msg.name } : {}),
+    };
   });
 }
 

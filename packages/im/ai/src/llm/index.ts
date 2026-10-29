@@ -31,12 +31,14 @@ export type {
   AssistantMessage,
   ToolResultMessage,
   CustomAgentMessage,
+  EventMessage,
   AssistantStopReason,
   TokenCost,
 } from './types/agent-message.js';
 export {
   EMPTY_TOKEN_USAGE,
   isLlmAgentMessage,
+  isEventMessage,
   createUserMessage,
   renderContextMessage,
 } from './types/agent-message.js';

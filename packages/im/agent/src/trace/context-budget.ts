@@ -46,6 +46,11 @@ export { estimatePromptTokens };
 export interface ContextBudgetSection {
   readonly id: string;
   readonly tokens: number;
+  /** ADR 0041 segment kind / weight / chars / trimmed (absent in older traces). */
+  readonly kind?: string;
+  readonly weight?: number;
+  readonly chars?: number;
+  readonly trimmed?: boolean;
 }
 
 /** Snake_case: persisted inside the TurnTrace JSON. */
@@ -64,7 +69,14 @@ export interface ContextBudgetInput {
   readonly systemPrompt: string;
   readonly outputSchema?: Record<string, unknown>;
   /** Per-section text sizes from the prompt assembly (ids such as `§8_skills`). */
-  readonly sections?: readonly Readonly<{ id: string; approxChars: number; approxTokens?: number }>[];
+  readonly sections?: readonly Readonly<{
+    id: string;
+    approxChars: number;
+    approxTokens?: number;
+    kind?: string;
+    weight?: number;
+    trimmed?: boolean;
+  }>[];
   /** Legacy bootstrap text; current capability catalogs have their own system section. */
   readonly bootstrapContext?: string;
   /** Loaded skill instructions; the turn envelope carries them inside the user message. */
@@ -111,7 +123,14 @@ function sectionTokens(section: Readonly<{ approxChars: number; approxTokens?: n
 export function buildContextBudgetReport(input: ContextBudgetInput): ContextBudgetReport {
   const systemTokens = estimatePromptTokens(input.systemPrompt);
   const sections = (input.sections ?? [])
-    .map((section) => Object.freeze({ id: section.id, tokens: sectionTokens(section) }))
+    .map((section) => Object.freeze({
+      id: section.id,
+      tokens: sectionTokens(section),
+      ...(section.kind !== undefined ? { kind: section.kind } : {}),
+      ...(section.weight !== undefined ? { weight: section.weight } : {}),
+      chars: section.approxChars,
+      ...(section.trimmed !== undefined ? { trimmed: section.trimmed } : {}),
+    }))
     .sort((left, right) => right.tokens - left.tokens);
 
   const segments: Record<ContextBudgetSegment, number> = Object.fromEntries(

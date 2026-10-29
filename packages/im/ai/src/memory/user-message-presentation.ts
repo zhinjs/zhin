@@ -1,8 +1,9 @@
 import {
   type AgentMessage,
-  type ConversationActor,
   type UserMessage,
 } from '../llm/types/agent-message.js';
+import { renderSenderId } from './message-header.js';
+import { parseParticipantHeader } from './participant-header.js';
 
 /** 与 Core 的引用上下文标记保持一致。 */
 export const QUOTED_MESSAGE_CONTEXT_MARKER =
@@ -44,26 +45,6 @@ export function parseAgentMessageExtra(
   };
 }
 
-function sanitizeLabelAttribute(value: string | undefined): string {
-  const normalized = value?.trim().replace(/[\]\s]+/g, '_').slice(0, 64);
-  return normalized || 'unknown';
-}
-
-const ACTOR_ORIGINS: ReadonlySet<string> = new Set(['self', 'member', 'peer_bot', 'human']);
-
-/** 将共享会话 actor 渲染为模型可见的非权威参与者标签。 */
-export function buildActorPrefix(actor: ConversationActor): string | null {
-  if (actor.scope !== 'group' && actor.scope !== 'channel') return null;
-  const id = sanitizeLabelAttribute(actor.subjectId);
-  const name = sanitizeLabelAttribute(actor.displayName);
-  const roles = actor.roles?.filter((role) => role !== 'user').join(',') || 'user';
-  // origin 只取白名单字面量，不走自由文本清洗。
-  const origin = typeof actor.origin === 'string' && ACTOR_ORIGINS.has(actor.origin)
-    ? ` origin=${actor.origin}`
-    : '';
-  return `[sender:id=${id} name=${name} roles=${roles}${origin}]`;
-}
-
 export function userMessagePlainText(message: UserMessage): string {
   return message.content
     .filter((block) => block.type === 'text')
@@ -76,10 +57,18 @@ function cloneUserMessageWithText(message: UserMessage, text: string): UserMessa
   return { ...message, content: [{ type: 'text', text }] };
 }
 
-function stripKnownActorPrefix(message: UserMessage, text: string): string {
-  const prefix = message.actor ? buildActorPrefix(message.actor) : null;
-  if (!prefix || !text.startsWith(prefix)) return text;
-  return text.slice(prefix.length).trimStart();
+/**
+ * Drops a rendered ADR 0041 header (full or short) from the first line. Only a header naming this
+ * message's own sender is stripped, so a body that merely looks like one is left alone.
+ */
+function stripKnownHeaderLine(message: UserMessage, text: string): string {
+  const own = parseParticipantHeader(message.name)?.userId
+    ?? (message.actor ? renderSenderId(message.actor.subjectId) : undefined);
+  if (!own) return text;
+  const newline = text.indexOf('\n');
+  const first = newline < 0 ? text : text.slice(0, newline);
+  if (parseParticipantHeader(first)?.userId !== own) return text;
+  return newline < 0 ? '' : text.slice(newline + 1);
 }
 
 function stripKnownQuoteContext(text: string, quote?: AgentMessageQuoteExtra): string {
@@ -89,25 +78,8 @@ function stripKnownQuoteContext(text: string, quote?: AgentMessageQuoteExtra): s
   return text.startsWith(prefix) ? text.slice(prefix.length) : text;
 }
 
-function userPrefix(message: UserMessage): string | null {
-  if (!message.content.some(block => block.presentation === 'user-input')) return message.actor ? buildActorPrefix(message.actor) : null;
-  return `[User]\n${JSON.stringify({
-    id: message.actor?.subjectId ?? null,
-    name: message.actor?.displayName ?? null,
-    platformRoles: null,
-    reportedRoles: message.actor?.roles ?? null,
-    authorizationRoles: message.actor?.authorizationRoles ?? null,
-    messageId: message.messageId ?? null,
-    observedAt: message.timestamp,
-    ...(message.actor?.origin && ACTOR_ORIGINS.has(message.actor.origin) ? { origin: message.actor.origin } : {}),
-  }, null, 2)}\n`;
-}
-
 function stripKnownUserPrefix(message: UserMessage, text: string): string {
-  const prefix = userPrefix(message);
-  if (prefix && text.startsWith(prefix)) return text.slice(prefix.length).trimStart();
-  // An existing canonical actor may have been rendered before the body was explicitly marked.
-  return stripKnownActorPrefix(message, text);
+  return stripKnownHeaderLine(message, text);
 }
 
 /** 返回不含模型展示标签的 canonical 用户正文。 */
@@ -121,8 +93,8 @@ export function userMessageBody(
 }
 
 /**
- * 在 LLM 边界渲染引用块和共享会话 actor 标签。
- * `UserMessage.actor` 是参与者身份的唯一权威；extra 只承载引用展示上下文。
+ * 在 LLM 边界渲染引用块。参与者头（ADR 0041）由 `projectParticipantHeaders` 在投影时渲染；
+ * extra 只承载引用展示上下文。
  */
 export function renderUserMessageForLlm(
   message: UserMessage,
@@ -146,22 +118,17 @@ export function renderUserMessageForLlm(
     const head = renderUserMessageForLlm({ ...message, content: [first] }, extra);
     return { ...head, content: [...head.content, ...rest] };
   }
-  const actorPrefix = message.actor ? buildActorPrefix(message.actor) : null;
   const quoteBlock = extra?.quote?.block.trim();
-  if (!quoteBlock && !actorPrefix) return message;
+  if (!quoteBlock) return message;
 
   return cloneUserMessageWithText(message, renderBodyText(message, userMessagePlainText(message), extra));
 }
 
 function renderBodyText(message: UserMessage, body: string, extra?: AgentMessageExtra | null): string {
-  const actorPrefix = userPrefix(message);
   const quoteBlock = extra?.quote?.block.trim();
   let text = stripKnownQuoteContext(stripKnownUserPrefix(message, body), extra?.quote);
   if (quoteBlock) {
     text = `${quoteBlock}\n\n${CURRENT_USER_MESSAGE_MARKER}\n${text}`;
-  }
-  if (actorPrefix) {
-    text = actorPrefix.endsWith('\n') ? `${actorPrefix}\n${text}` : `${actorPrefix} ${text}`;
   }
   return text;
 }

@@ -21,6 +21,7 @@ export {
   stringParamTool,
   ToolCallValidationError,
   isLlmAgentMessage,
+  isEventMessage,
   repairAgentMessagesForLlm,
   EMPTY_TOKEN_USAGE,
   DEFAULT_STEERING_MODE,
@@ -83,6 +84,7 @@ export type {
   AssistantMessage,
   ToolResultMessage,
   CustomAgentMessage,
+  EventMessage,
   ContentBlock,
   TextContentBlock,
   MediaContentBlock,
@@ -360,7 +362,6 @@ export type { MemoryEntryRepository, MemoryEntryLocator, MemoryEntryListInput } 
 export { tokenizeForBm25, rankBm25, rankMemoryEntries, memoryEntryDocument } from './memory/memory-bm25.js';
 export type { Bm25Options, Bm25Hit } from './memory/memory-bm25.js';
 export {
-  buildActorPrefix,
   parseAgentMessageExtra,
   renderUserMessageForLlm,
   normalizeUserMessageForStorage,
@@ -528,3 +529,43 @@ export type {
 } from './decision/index.js';
 
 export { createPromptContextBlock, createPromptStateBlock, projectPromptContext } from './memory/prompt-context.js';
+export {
+  projectParticipantHeaders, parseParticipantHeader, buildStoredHeader, renderParticipantHeader, shortHeaderOf,
+  factsFromActor, factsFromBot, mergeHeaderRoles, muteTimeFromExpiry, formatHeaderInstant,
+  type ParticipantFacts, type BotHeaderFacts, type HeaderFormatOptions,
+} from './memory/participant-header.js';
+
+export {
+  HEADER_VALUE_MAX_CHARS,
+  RESERVED_SENDER_IDS,
+  SYSTEM_SENDER_ID,
+  escapeHeaderValue,
+  quoteEventValue,
+  renderSenderId,
+  formatHeader,
+} from './memory/message-header.js';
+
+export {
+  STATE_CHANGE_PREFIX,
+  MEMBER_PROFILE_FIELDS,
+  formatEventClock,
+  formatMemberChangedLine,
+  formatMemberPresenceLine,
+  createMemberChangedEvent,
+  createMemberPresenceEvent,
+} from './memory/event-message.js';
+export type { MemberProfileField, EventMessageSource } from './memory/event-message.js';
+export {
+  renderEventsForProvider,
+  createLlmMessageProjection,
+  isMidConversationSystemMessage,
+} from './memory/event-rendering.js';
+export type { MidConversationSystemMessage } from './memory/event-rendering.js';
+export { agentMessagesToAiSdk } from './llm/bridge/ai-sdk-messages.js';
+export {
+  MID_CONVERSATION_SYSTEM_VALUES,
+  isMidConversationSystem,
+  isLocalEndpoint,
+  resolveMidConversationSystem,
+} from './llm/mid-conversation-system.js';
+export type { MidConversationSystem } from './llm/mid-conversation-system.js';

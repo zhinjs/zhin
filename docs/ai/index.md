@@ -151,6 +151,7 @@ ai:
   - `appendV1`：`baseUrl` 是否补 `/v1`。不写时：路径里已有版本段（如 `/api/v3`、`/api/paas/v4`、`/v1beta/openai`）或以 `/openai` 结尾就原样使用，否则补 `/v1`（旧配置 `https://host`、`https://host/api` 行为不变）。`true` 总是补（旧行为），`false` 总是原样。
   - `promptCacheKey`：是否发送 OpenAI 的 `prompt_cache_key`，默认 `false`（严格的网关会拒绝未知字段）。
   - `supportsDeveloperRole`（`sdk: openai`）：设为 `false` 时推理模型（o 系列、gpt-5）的系统提示用 `system` 角色发送，给不认 `developer` 的 OpenAI 协议端点用。
+  - `midConversationSystem`：`system` / `developer` / `none`。成员进群、退群、资料变更会以 `[state change]` 行进入对话；`none` 时改为 `user_id:system` 头的 user 消息。默认：OpenAI 与远程 OpenAI 兼容端点 `system`（o 系列、gpt-5 为 `developer`），本地服务（Ollama、vLLM、内网地址）、Anthropic、Gemini 为 `none`。
   - `supportsReasoningContent`、`toolCallsInAssistant` 已废弃，不起作用。
 - `authScheme`：`Authorization` 头方案。不写时用 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）；`''` 发送 `Authorization: <key>`；`Bearer`、`Token` 等发送 `Authorization: <scheme> <key>`。对话请求和模型列表请求用同一规则。
 - `timeout`、`maxRetries`：该 provider 的单次请求超时（毫秒，0 关闭）和每个模型的重试次数，覆盖 `ai.providerResilience` 的 `requestTimeoutMs` / `maxRetries`；按模型配置的 `modelHarness.requestTimeoutMs` 仍然优先。

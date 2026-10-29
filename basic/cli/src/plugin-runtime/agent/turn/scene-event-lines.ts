@@ -4,6 +4,7 @@
  */
 import { isSceneEvent, summarizeSceneEvent } from '@zhin.js/core';
 import type { ActorRef, ConversationEventReader, ConversationRef } from '@zhin.js/im-contract';
+import { sceneEventToStateMessage } from './scene-event-state.js';
 
 /** 只看最近这段时间的场景事件（与会话上下文的时间窗一致）。 */
 export const SCENE_EVENT_MAX_AGE_MS = 30 * 60 * 1000;
@@ -22,6 +23,8 @@ export interface SceneEventLinesInput {
   /** 关系称呼（`ai_user_relations`），不注分数。 */
   readonly nicknames?: (actors: readonly ActorRef[]) => Promise<ReadonlyMap<string, string>>;
   readonly now?: number;
+  /** 进出 / 资料变更已写进会话历史（ADR 0041 §7）时为真：这些事件不再进 [Scene events]。 */
+  readonly omitStateChanges?: boolean;
 }
 
 export async function readSceneEventLines(input: SceneEventLinesInput): Promise<{ lines: string[]; through: number }> {
@@ -31,7 +34,8 @@ export async function readSceneEventLines(input: SceneEventLinesInput): Promise<
   if (after >= through) return { lines: [], through };
   const entries = await input.reader.listBetween(input.conversation, after, through, SCENE_EVENT_LOOKBACK);
   const notBefore = (input.now ?? Date.now()) - SCENE_EVENT_MAX_AGE_MS;
-  const scene = entries.filter((entry) => isSceneEvent(entry.event) && entry.event.timestamp >= notBefore);
+  // ADR 0041 §7：进出 / 资料变更走会话历史的 [state change]，这里只留戳一戳、公告等其余社交事件。
+  const scene = entries.filter((entry) => isSceneEvent(entry.event) && (!input.omitStateChanges || !sceneEventToStateMessage(entry.event)) && entry.event.timestamp >= notBefore);
   if (scene.length === 0) return { lines: [], through };
   const selfIds = new Set(input.selfIds);
   const actors = new Map<string, ActorRef>();

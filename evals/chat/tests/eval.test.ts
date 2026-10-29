@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { userMessagePlainText } from '../../../packages/im/ai/src/index.js';
+import { projectPromptContext, userMessagePlainText, type UserMessage } from '../../../packages/im/ai/src/index.js';
 import { runChecks } from '../src/checks.js';
 import { parseJudgment, rateLimitDelayMs } from '../src/judge.js';
 import { buildReport, renderMarkdown, runPassed, type RunRecord } from '../src/report.js';
@@ -53,16 +53,18 @@ describe('scenarios', () => {
     const current = messages[1]!;
     const bodyIndex = current.content.findIndex(block => block.presentation === 'user-input');
     expect(bodyIndex).toBeGreaterThan(0);
-    expect(current.content[0]?.text).toContain('[Session snapshot]');
+    // ADR 0041: no Session snapshot in the message (the scene line is the system prompt tail);
+    // the stored body stays canonical and the projection renders the participant header.
+    expect(userMessagePlainText(current)).not.toContain('[Session snapshot]');
+    expect(current.name).toMatch(/^\[user_id:person;name:Alice;role:master;/u);
     const body = current.content[bodyIndex]!.text;
-    expect(body).toContain('[User]');
-    expect(body).toContain('"id": "person"');
-    expect(body).toContain('"name": "Alice"');
-    expect(body).toContain('"authorizationRoles": [\n    "master"');
-    expect(body).toContain('"messageId": null');
-    expect(body).toContain('你好呀');
+    expect(body).toBe('你好呀');
+    const projected = projectPromptContext([current])[0] as UserMessage;
+    const rendered = projected.content[bodyIndex]!.text;
+    // The header time is rendered in the host time zone (process TZ), so assert only its shape here.
+    expect(rendered).toMatch(/^\[user_id:person;name:Alice;role:master;.*time:\d{2}:10:00\.000;\]\n你好呀$/u);
+    expect(rendered).not.toContain('[User]');
     expect(current.timestamp).toBe(Date.parse('2026-10-22T19:10:00Z'));
-    expect(body).toContain(`"observedAt": ${current.timestamp}`);
     const ambient = buildUserMessages({ ...scenario, addressed: false, time: '2026/10/26 08:05:00 (Asia/Shanghai)' });
     expect(userMessagePlainText(ambient[1]!)).toContain('Engagement: ambient');
     expect(ambient[1]!.timestamp).toBe(Date.parse('2026-10-26T00:05:00Z'));

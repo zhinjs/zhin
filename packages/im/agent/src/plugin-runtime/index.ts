@@ -15,6 +15,7 @@ export { activateAiDatabaseStorage } from '../init/activate-ai-database-storage.
 export { defineAiDatabaseModels } from '../init/define-ai-database-models.js';
 export { AI_DECISION_EVENTS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS } from '../decision-events.js';
 export { DEFAULT_GROUP_RULE_RETENTION_DAYS } from '../group-rules.js';
+export { AI_SCENE_MEMBERS_TABLE } from '../scene-facts.js';
 export type { AiDatabaseModelDefiner } from '../init/define-ai-database-models.js';
 export {
   ensureMcpConnections,

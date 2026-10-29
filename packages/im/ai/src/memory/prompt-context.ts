@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AgentMessage } from '../llm/types/agent-message.js';
 import type { PromptContextState, TextContentBlock } from '../llm/types/content-block.js';
+import { projectParticipantHeaders, type HeaderFormatOptions } from './participant-header.js';
 
 function digest(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -13,7 +14,7 @@ export function createPromptContextBlock(key: string, text: string): TextContent
 }
 
 function stateText(state: PromptContextState): string {
-  return `[${state.label} snapshot]\n${JSON.stringify(state.fields, null, 2)}`;
+  return state.line ?? `[${state.label} snapshot]\n${JSON.stringify(state.fields, null, 2)}`;
 }
 
 /** Persist the full snapshot; the model view derives updates only from retained structured history. */
@@ -22,11 +23,14 @@ export function createPromptStateBlock(
   label: string,
   fields: PromptContextState['fields'],
   observedAt?: number,
+  /** Rendered text instead of the JSON snapshot; must be a pure function of `fields`. */
+  line?: string,
 ): TextContentBlock {
   const state: PromptContextState = {
     label,
     fields: Object.fromEntries(Object.entries(fields).map(([field, value]) => [field, Array.isArray(value) ? [...value] : value])),
     ...(observedAt !== undefined ? { observedAt } : {}),
+    ...(line !== undefined ? { line } : {}),
   };
   const block = createPromptContextBlock(key, stateText(state));
   return { ...block, contextRef: { ...block.contextRef!, state } };
@@ -47,7 +51,11 @@ function validState(block: TextContentBlock): PromptContextState | undefined {
  * compaction and branches start from the first available full snapshot; A → B → A
  * retains both changes. Ordinary rules and memory always keep their full new versions.
  */
-export function projectPromptContext(messages: AgentMessage[]): AgentMessage[] {
+export function projectPromptContext(messages: AgentMessage[], options?: HeaderFormatOptions): AgentMessage[] {
+  return projectParticipantHeaders(projectContextState(messages), options);
+}
+
+function projectContextState(messages: AgentMessage[]): AgentMessage[] {
   const seen = new Map<string, { digest: string; state?: PromptContextState }>();
   let changed = false;
   const out = messages.map(message => {

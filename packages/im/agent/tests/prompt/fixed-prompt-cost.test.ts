@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import { buildRichSystemPrompt } from '../../src/prompt/system-prompt.js';
 import { structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
 import { estimatePromptTokens } from '../../src/prompt/estimate-tokens.js';
 
 describe('built-in IM prompt cost (#949)', () => {
+  // The runtime section embeds `CWD`; pin it so the budget does not depend on where the checkout lives.
+  beforeEach(() => { vi.spyOn(process, 'cwd').mockReturnValue('/home/runner/work/zhin/zhin'); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
   it.each(['private', 'group'] as const)('keeps %s instructions compact without omitting the security or workspace sections', scope => {
     const prompt = buildRichSystemPrompt({
       config: DEFAULT_CONFIG,
@@ -13,6 +17,7 @@ describe('built-in IM prompt cost (#949)', () => {
       activeSkillsContext: '',
       bootstrapContext: '',
       orchestratorSdk: 'openai-compatible',
+      timeZone: 'UTC',
       turn: {
         origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope, sceneId: 'scene' },
         principal: { subjectId: 'sender', roles: ['user'] }, session: { key: 'test' },

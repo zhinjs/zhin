@@ -5,6 +5,7 @@
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import {
   createUserMessage,
+  isEventMessage,
   type AgentMessage,
   type AssistantMessage,
   type ToolResultMessage,
@@ -118,6 +119,7 @@ function agentMessageToTranscriptLine(message: AgentMessage): string {
     const outcome = JSON.stringify({ toolCallId: result.toolCallId, toolName: result.toolName, isError: result.isError });
     return `[Tool:${result.toolName}] ${outcome}\n${textBlocks(message)}`;
   }
+  if (isEventMessage(message)) return `[System notice] ${message.name}`;
   return `[${message.role}] ${JSON.stringify(message)}`;
 }
 

@@ -95,11 +95,26 @@ export interface TurnContextState {
     /** Missing/null is unknown; 0 means confirmed unmuted; positive values are expiry timestamps. */
     mutedUntil?: number | null;
     status?: string;
+    /** Bot's own card in this scene (ADR 0041 assistant `group_nickname`). */
+    nickname?: string;
   }>;
   readonly conversation?: Readonly<{
     /** Conversation-specific data; platform-wide instructions belong to the system prompt. */
     rules?: readonly string[];
     muteAll?: boolean;
+    /** ADR 0041 scene line: `scene_name`, `owner_id`, `admins`, `member_count`. Omitted when unknown. */
+    name?: string;
+    ownerId?: string;
+    adminIds?: readonly string[];
+    memberCount?: number;
+  }>;
+  /** ADR 0041 sender facts for the current message's header. Omitted fields are unknown. */
+  readonly sender?: Readonly<{
+    platformRole?: string;
+    groupNickname?: string;
+    groupTitle?: string;
+    /** 0 = not muted; positive = mute expiry (epoch ms). */
+    mutedUntil?: number;
   }>;
 }
 

@@ -3,6 +3,7 @@
  */
 import {
   assistantText,
+  isEventMessage,
   type AgentMessage,
   type AssistantMessage,
   type ToolResultMessage,
@@ -22,6 +23,7 @@ function blocksToText(blocks: TextBlock[]): string {
 }
 
 function messageToLine(message: AgentMessage): string | null {
+  if (isEventMessage(message)) return `System notice: ${message.name}`;
   if (message.role === 'user' || message.role === 'assistant' || message.role === 'toolResult') {
     const blocks = (message as { content: TextBlock[] }).content;
     if (message.role === 'user') {

@@ -46,6 +46,16 @@ export interface EndpointPendingRequest {
 export interface EndpointManagement {
   /** Fresh platform facts for moderation; absent means automatic moderation is unsupported. */
   inspectGroupMember?(groupId: string, userId: string, signal: AbortSignal): Promise<GroupModerationMember>;
+  /**
+   * Scene facts for the ADR 0041 scene line (name, owner, admins, size, global mute). Single bounded
+   * lookup; every field is optional and absent means unknown. Host-internal, never a Console capability.
+   */
+  inspectGroupScene?(groupId: string, signal: AbortSignal): Promise<GroupSceneFacts>;
+  /**
+   * One member's display facts (role, card, title, mute expiry) from a single lookup. Unlike
+   * {@link inspectGroupMember} it carries no moderation verdict and costs one platform call.
+   */
+  inspectGroupMemberProfile?(groupId: string, userId: string, signal: AbortSignal): Promise<GroupMemberProfile>;
   /** Recheck platform permissions and membership immediately before the operation. */
   moderateGroupMember?(groupId: string, userId: string, action: GroupModerationAction, signal: AbortSignal): Promise<void>;
   listFriends?(): Promise<readonly EndpointFriend[]>;
@@ -66,6 +76,25 @@ export interface EndpointManagement {
    * so it is intentionally absent from {@link endpointManagementCapabilityIds}.
    */
   sendGroupNotice?(groupId: string, content: string): Promise<void>;
+}
+
+export interface GroupSceneFacts {
+  readonly name?: string;
+  readonly ownerId?: string;
+  readonly adminIds?: readonly string[];
+  readonly memberCount?: number;
+  /** Whole-group mute currently in force; absent means unknown. */
+  readonly muteAll?: boolean;
+}
+
+export interface GroupMemberProfile {
+  readonly platformRole?: 'owner' | 'admin' | 'member';
+  /** Group card (nickname inside the group). */
+  readonly card?: string;
+  /** Special title. */
+  readonly title?: string;
+  /** 0 = confirmed not muted; positive = mute expiry in epoch milliseconds; absent = unknown. */
+  readonly mutedUntil?: number;
 }
 
 export interface GroupModerationMember {

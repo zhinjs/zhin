@@ -90,6 +90,29 @@ describe('TurnIngress session projection', () => {
     expect(result.content).toBe('a ［sender:id=1 origin=human] b');
   });
 
+  it('fills the actor from the resolved sender facts and merges the platform role into roles', () => {
+    const base = turn();
+    const withFacts = createTurnIngress({
+      ...base,
+      principal: { ...base.principal, roles: ['master'] },
+      input: {
+        text: 'hi',
+        contextState: { sender: { platformRole: 'owner', groupNickname: '明明', groupTitle: '老玩家', mutedUntil: 0 } },
+      },
+    });
+    expect(resolveIngressUserMessage(withFacts).llmMessage.actor).toMatchObject({
+      roles: ['master', 'owner'], authorizationRoles: ['master'],
+      groupNickname: '明明', groupTitle: '老玩家', mutedUntil: 0,
+    });
+    const duplicate = createTurnIngress({
+      ...base, input: { text: 'hi', contextState: { sender: { platformRole: 'admin' } } },
+    });
+    const actor = resolveIngressUserMessage(duplicate).llmMessage.actor!;
+    expect(actor.roles).toEqual(['trusted', 'admin']);
+    expect('groupNickname' in actor).toBe(false);
+    expect('mutedUntil' in actor).toBe(false);
+  });
+
   it('projects the origin-neutral Agent session identity', () => {
     expect(buildTurnSessionCreateInput(turn())).toEqual({
       session_key: 'im:qq:bot-1:group:group-9',
@@ -182,7 +205,7 @@ describe('TurnIngress session projection', () => {
     expect(restored.messages[1]).toMatchObject({
       role: 'user', actor: { subjectId: 'bob-id', displayName: 'Bob' },
     });
-    expect(JSON.stringify(restored.messages[0])).toContain('sender:id=alice-id');
-    expect(JSON.stringify(restored.messages[1])).toContain('sender:id=bob-id');
+    expect((restored.messages[0] as { name?: string }).name).toContain('user_id:alice-id;name:Alice;');
+    expect((restored.messages[1] as { name?: string }).name).toContain('user_id:bob-id;name:Bob;');
   });
 });

@@ -24,13 +24,17 @@ import type {
   AiControlPlane,
   DecisionEventLog,
   DeliveryOutcome,
+  SceneFactStore,
   SessionProfileStore,
   TurnOutcome,
   TurnRequest,
 } from '@zhin.js/agent';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY, SCENE_WAKE_METADATA_KEY } from '@zhin.js/agent/context';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { EventMessage } from '@zhin.js/ai';
 import { SceneEventWake, type SceneWakeBatch } from './scene-event-wake.js';
+import { sceneEventToStateMessage } from './scene-event-state.js';
+import { applySceneEventToFacts } from './scene-fact-events.js';
 import { readSceneEventLines } from './scene-event-lines.js';
 import { observeSceneWakeAndCheckSpeak } from './session-gate.js';
 import {
@@ -71,6 +75,16 @@ export interface SceneEventIngressDeps {
    * 事件仍在 `conversation_events`，下一轮 `[Scene events]` 可见。
    */
   readonly ownsWake?: (signal: RuntimeSceneEventSignal) => boolean;
+  /**
+   * ADR 0041 §6：成员进出 / 资料变更写进会话历史（`agent_messages`，追加）。`create` 为真时无活动会话也开一个
+   * （仅在该会话开启了 scene event 唤醒时，随后有回合会读到它）；返回是否写入。缺省不写。
+   */
+  readonly recordState?: (sessionKey: string, event: EventMessage, options: Readonly<{ create: boolean }>) => Promise<boolean>;
+  /**
+   * ADR 0041 §6：成员 / 群的侧事件写穿到场景事实的 L2（`ai_scene_members` / `ai_session_profiles`），
+   * 与 {@link recordState} 在同一处触发。缺省不写。
+   */
+  readonly sceneFacts?: () => SceneFactStore | undefined;
   /** 关系称呼（`ai_user_relations` 的 preferredAddress / displayName）。 */
   readonly nickname?: (platform: string, userId: string) => Promise<string | undefined>;
   readonly readConversationContext?: (
@@ -100,6 +114,8 @@ export class SceneEventIngress {
   readonly #shown = new Map<string, number>();
   /** 正在跑的唤醒回合的 turn_id（失败时让 `inbound_wake/error` 串进同一回合）。 */
   readonly #turnIds = new Map<string, string>();
+  /** 进行中的状态变更落库；唤醒回合开始前等它们写完，回合才读得到。 */
+  readonly #records = new Set<Promise<void>>();
   /** 测试/诊断：最近一次唤醒的结果。 */
   lastResult: SceneWakeResult | undefined;
 
@@ -165,6 +181,7 @@ export class SceneEventIngress {
   handle(signal: RuntimeSceneEventSignal): 'ignored' | 'low' | 'disabled' | 'suppressed' | 'scheduled' | 'coalesced' | 'disposed' {
     const conversation = signal.event.conversation;
     if (conversation.kind !== 'group' && conversation.kind !== 'channel') return 'ignored';
+    this.#recordState(signal);
     const priority = sceneEventPriority(signal.event, new Set(signal.selfIds));
     if (!priority) return 'ignored';
     // 低优先：已在 conversation_events，下一轮 [Scene events] 带上。
@@ -185,6 +202,32 @@ export class SceneEventIngress {
       selfIds: signal.selfIds,
       ...(signal.endpointId ? { endpointId: signal.endpointId } : {}),
     });
+  }
+
+  #writeThroughFacts(signal: RuntimeSceneEventSignal): void {
+    const store = this.deps.sceneFacts?.();
+    if (!store) return;
+    const task: Promise<void> = applySceneEventToFacts(store, signal, this.deps.now).then(() => undefined, (error: unknown) => {
+      logger.warn(formatCompact({ op: 'scene_fact_write_through_failed', type: signal.event.type, error: error instanceof Error ? error.message : String(error) }));
+    }).finally(() => { this.#records.delete(task); });
+    this.#records.add(task);
+  }
+
+  #recordState(signal: RuntimeSceneEventSignal): void {
+    this.#writeThroughFacts(signal);
+    const record = this.deps.recordState;
+    if (!record) return;
+    const message = sceneEventToStateMessage(signal.event);
+    if (!message) return;
+    const conversation = signal.event.conversation;
+    const platform = capabilityLocalName(String(conversation.endpoint.id));
+    const scope = conversation.kind === 'channel' ? 'channel' : 'group';
+    const sessionKey = `${platform}:${signal.endpointId ?? platform}:${scope}:${conversation.id}`;
+    const create = this.enabledFor(platform, conversation.id);
+    const task: Promise<void> = record(sessionKey, message, { create }).then(() => undefined, (error: unknown) => {
+      logger.warn(formatCompact({ op: 'scene_state_record_failed', conv: sessionKey, type: signal.event.type, error: error instanceof Error ? error.message : String(error) }));
+    }).finally(() => { this.#records.delete(task); });
+    this.#records.add(task);
   }
 
   #owned(signal: RuntimeSceneEventSignal): boolean {
@@ -214,6 +257,7 @@ export class SceneEventIngress {
         conversation: input.conversation,
         throughSequence: input.throughSequence,
         afterSequence: this.#shown.get(input.sessionKey),
+        omitStateChanges: this.deps.recordState !== undefined,
         selfIds: input.selfIds,
         ...(nickname ? {
           nicknames: async (actors: readonly ActorRef[]) => {
@@ -276,8 +320,11 @@ export class SceneEventIngress {
       return { kind: 'skipped', reason: `cannot_speak:${blocked}` };
     }
     const sessionKey = `${platform}:${endpoint}:${scope}:${conversation.id}`;
+    await Promise.all([...this.#records]);
     const lines = await this.linesFor({ sessionKey, conversation, platform, throughSequence: batch.throughSequence, selfIds });
-    if (lines.length === 0) {
+    // 进出 / 资料变更已写进会话历史（[state change]），不再出现在 [Scene events]，但仍足以唤醒回合。
+    const stateChanges = this.deps.recordState ? batch.items.filter((item) => sceneEventToStateMessage(item.event)).length : 0;
+    if (lines.length === 0 && stateChanges === 0) {
       logger.info(formatCompact({ op: 'scene_event_wake_skipped', conv: batch.key, reason: 'nothing_new', types }));
       audit({ kind: 'model_skip', outcome: 'skip', reasonCode: 'scene_event_nothing_new', payload: auditPayload });
       return { kind: 'skipped', reason: 'nothing_new' };
@@ -286,7 +333,7 @@ export class SceneEventIngress {
     const readContext = this.deps.readConversationContext;
     const commitContext = this.deps.commitConversationContext;
     let spoke = false;
-    audit({ kind: 'inbound_wake', outcome: 'allow', reasonCode: 'scene_event_high_priority', payload: { ...auditPayload, lines: lines.length } });
+    audit({ kind: 'inbound_wake', outcome: 'allow', reasonCode: 'scene_event_high_priority', payload: { ...auditPayload, lines: lines.length, stateChanges } });
     const startedAt = Date.now();
     this.#turnIds.set(batch.key, turnId);
     const outcome = await withTimeout(async (signal) => {

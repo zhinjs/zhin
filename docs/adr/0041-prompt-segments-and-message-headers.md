@@ -39,7 +39,7 @@ Fin 2026-10-29 拍板：
 **会话场景**（场景段，每个会话一份）：
 
 ```
-[scene_id:1048877509;scene_type:group;scene_name:测试群;owner_id:10001;admins:10002,10003;member_count:42;global_mute:false;assistant_role:admin]
+[scene_id:1048877509;scene_type:group;scene_name:测试群;owner_id:10001;admins:10002,10003;member_count:42;global_mute:false;assistant_role:admin;]
 ```
 
 **用户消息头**（存在 `UserMessage.name`）：
@@ -48,6 +48,8 @@ Fin 2026-10-29 拍板：
   `[id:<message_id>;user_id:10002;name:小明;role:admin;group_nickname:明明;group_title:老玩家;mute_time:0;time:09:00:00.000;]`
 - 之后：`[id:<message_id>;user_id:10002;time:09:00:05.120;]`
 - `role` 合并平台角色（`owner` / `admin` / `member`）与产品授权角色（`master`、`trusted`），逗号分隔，如 `role:master,owner`。
+- 另一个 Bot 发言时全量头带 `origin:peer_bot`（由可信入站判定）；真人不带 `origin` 字段。
+- 所有头（含场景行）统一以 `;]` 结尾。
 - `time` 为实例时区的 `HH:mm:ss.SSS`；跨天的第一条消息额外带 `date:2026-10-29`。
 
 **助手消息头**（存在 `AssistantMessage.name`）：Bot 自己同样首次全量（`user_id` 为 Bot 平台账号、`name`、`role`、`group_nickname`），之后短格式。
@@ -143,7 +145,7 @@ interface SegmentInput {
 - `bot`：`platformRole`（已有）→ `assistant_role`，`name`、`nickname`。
 - 发送者：`platformRole`、`card`（→ `group_nickname`）、`title`（→ `group_title`）、`mutedUntil`（→ `mute_time`，0 为未禁言，否则为剩余秒数）。
 
-成员事实缓存在会话画像（`ai_session_profiles` / `ai_user_relations`，已存在），按现有保留策略清理，不新增落盘状态。进出群事件来自 side event `member_increase` / `member_decrease`（已进 `conversation_events`），转为 `EventMessage` 写入 `agent_messages`（随会话历史的现有压缩与保留策略清理）；资料变更来自 `notice.*`（改名片、头衔、禁言、管理员变动），平台不推送的变化由 §4 的投影兜底。
+成员事实使用两级缓存。L1 是进程内 60 s 缓存；L2 是数据库：群级事实扩展 `ai_session_profiles`（新增 `owner_id`、`member_count`、`facts_updated_at`，复用 `title` / `admins` / `muted_all` / `bot_role` / `mute_until`），成员级事实在新表 `ai_scene_members`（`platform + scene_key + user_id` 为逻辑主键：`platform_role`、`card`、`title`、`muted_until`、`updated_at`）。读取顺序 L1 → L2 → 平台，平台结果同时写 L1 与 L2；平台失败时用 L2 的最近值，L2 也没有才省略字段。L2 行超过 24 h 仍可读，但触发一次后台刷新（按键去重、并发有界、随世代释放）。侧事件（改名片、头衔、禁言、管理员、进出）写穿 L2，离开 / 被踢删除成员行。Bot 自己的角色仍每回合新鲜读取（它决定工具权限），读取结果写穿两级。落盘有界：成员行离开即删，90 天未更新清理，每会话至多 2000 行（淘汰最旧的 `updated_at`），启动时与每 6 小时清理，存储文本去控制字符并截断到 128 字符。进出群事件来自 side event `member_increase` / `member_decrease`（已进 `conversation_events`），转为 `EventMessage` 写入 `agent_messages`（随会话历史的现有压缩与保留策略清理）；资料变更来自 `notice.*`（改名片、头衔、禁言、管理员变动），平台不推送的变化由 §4 的投影兜底。
 
 ### 7. 兼容与迁移
 

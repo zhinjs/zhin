@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { createPromptContextBlock, createPromptStateBlock, type TextContentBlock } from '@zhin.js/ai';
+import { createPromptContextBlock, formatHeader, type TextContentBlock } from '@zhin.js/ai';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
-import type { TurnRequest } from '../turn/turn-ingress.js';
+import type { TurnContextState, TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import { SCENE_WAKE_METADATA_KEY } from '../scene-events.js';
 import { formatMergedTurnBlock } from '../turn/merged-turn-context.js';
@@ -19,7 +19,7 @@ export const AMBIENT_ENGAGEMENT_METADATA_KEY = 'zhinEngagement';
 const AMBIENT_ENGAGEMENT_LINE = 'Engagement: ambient. Nobody called you; you are reading the group chat and chose to look. '
   + 'Reply only if a group member like you would naturally chime in here; otherwise return {"messages":[]} and stay quiet.';
 
-const SCENE_WAKE_ENGAGEMENT_LINE = 'Engagement: scene events. Nobody spoke; you woke up because of the [Scene events] listed for this turn. '
+const SCENE_WAKE_ENGAGEMENT_LINE = 'Engagement: scene events. Nobody spoke; you woke up because of the latest [state change] or [Scene events] lines. '
   + 'React only if a group member like you naturally would (welcome a newcomer, answer a poke); otherwise return {"messages":[]} and stay quiet.';
 
 export interface TurnContextEnvelopeInput {
@@ -61,6 +61,37 @@ export function formatSenderContextLine(turn: TurnContextView): string {
     : `Sender: id=${principal.subjectId} roles=${roles}`;
 }
 
+type SceneFields = Readonly<Record<string, string | number | boolean | null | readonly string[]>>;
+
+/** ADR 0041 §6 scene facts; `null` = unknown (omitted from the rendered line). */
+function sceneFields(origin: Extract<TurnContextView['origin'], { kind: 'im' }>, state: TurnContextState | undefined): SceneFields {
+  const address = origin.conversation;
+  return {
+    scene_id: address?.id ?? origin.sceneId,
+    scene_type: address?.kind ?? origin.scope,
+    scene_name: state?.conversation?.name ?? address?.name ?? null,
+    owner_id: state?.conversation?.ownerId ?? null,
+    admins: state?.conversation?.adminIds?.length ? [...state.conversation.adminIds] : null,
+    member_count: state?.conversation?.memberCount ?? null,
+    global_mute: state?.conversation?.muteAll ?? null,
+    assistant_role: state?.bot?.platformRole ?? null,
+  };
+}
+
+/** `[scene_id:…;scene_type:…;scene_name:…;owner_id:…;admins:…;member_count:…;global_mute:…;assistant_role:…;]` */
+export function formatSceneLine(fields: SceneFields): string {
+  return formatHeader(Object.entries(fields) as Array<[string, string | number | boolean | readonly string[] | null]>);
+}
+
+/**
+ * ADR 0041 §5: the scene line is the last part of the system prompt (after a cache breakpoint),
+ * so a scene change only invalidates the tail. Undefined outside IM turns.
+ */
+export function sceneLineForTurn(turn: TurnContextView | undefined): string | undefined {
+  if (turn?.origin.kind !== 'im') return undefined;
+  return formatSceneLine(sceneFields(turn.origin, turn.input?.contextState));
+}
+
 export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): string | null {
   return buildTurnContextBlocks(input).map(block => block.text).join('\n');
 }
@@ -69,7 +100,6 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
   const blocks: TextContentBlock[] = [];
   const stable: string[] = [];
   const current: string[] = [];
-  const observedAt = input.observedAt ?? Date.now();
   if (input.gitStatus?.trim()) current.push(input.gitStatus.trim());
 
   if (input.turn) {
@@ -83,24 +113,6 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
         address?.parent?.kind, address?.parent?.id, address?.threadId ?? origin.threadId,
       ])).digest('hex');
       const state = display?.contextState;
-      blocks.push(createPromptStateBlock(`session:${scope}`, 'Session', {
-        adapter: address?.endpoint.adapter ?? origin.platform,
-        endpoint: address?.endpoint.id ?? origin.endpoint,
-        id: address?.id ?? origin.sceneId,
-        name: address?.name ?? null,
-        type: address?.kind ?? origin.scope,
-        ...(address?.parent ? { parentType: address.parent.kind, parentId: address.parent.id } : {}),
-        ...((address?.threadId ?? origin.threadId) ? { threadId: address?.threadId ?? origin.threadId! } : {}),
-        muteAll: state?.conversation?.muteAll ?? null,
-      }, observedAt));
-      blocks.push(createPromptStateBlock(`bot:${scope}`, 'Bot', {
-        id: state?.bot?.id ?? null,
-        name: state?.bot?.name ?? null,
-        platformRole: state?.bot?.platformRole ?? null,
-        platformRoleError: state?.bot?.platformRoleError ?? null,
-        mutedUntil: state?.bot?.mutedUntil ?? null,
-        status: state?.bot?.status ?? null,
-      }, observedAt));
       blocks.push(createPromptContextBlock(`session-rules:${scope}`, state?.conversation?.rules
         ? `Session rules (conversation data):\n${JSON.stringify(state.conversation.rules, null, 2)}`
         : 'Session rules: unknown.'));

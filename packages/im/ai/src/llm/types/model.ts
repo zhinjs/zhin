@@ -57,6 +57,13 @@ export interface OpenAiCompatFlags {
    * false, because strict servers reject unknown body fields.
    */
   promptCacheKey?: boolean;
+  /**
+   * ADR 0041: whether this endpoint accepts a system / developer message between conversation
+   * turns (member join / leave / profile changes). `none` renders them as a `user_id:system` user
+   * message instead. Default: `system` for OpenAI and remote OpenAI-compatible endpoints
+   * (`developer` for o-series / gpt-5), `none` for local servers, Anthropic and Gemini.
+   */
+  midConversationSystem?: 'system' | 'developer' | 'none';
 }
 
 export interface Model {

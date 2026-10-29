@@ -5,7 +5,13 @@ import {
 } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
-import { adapterFeatureId, isAdapterIndex, resolveEndpointManagement } from '@zhin.js/adapter';
+import {
+  adapterFeatureId,
+  isAdapterIndex,
+  resolveEndpointManagement,
+  type GroupMemberProfile,
+  type GroupSceneFacts,
+} from '@zhin.js/adapter';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   approvalOutcomeToDecision,
@@ -23,6 +29,8 @@ import {
   type TurnIntent,
   type TurnRequest,
   type TurnRequestPorts,
+  SCENE_FACT_STALE_MS,
+  type SceneFactStore,
 } from '@zhin.js/agent';
 import {
   turnIntentResolverToken,
@@ -31,6 +39,7 @@ import {
 } from '@zhin.js/agent/runtime';
 import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { approvalMessages as approvalText } from './approval-messages.js';
+import type { SceneFactRefresher } from './scene-fact-refresher.js';
 import type { ConversationRef, ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
 
 type EndpointOwnerResolver = (adapterLocalName: string, endpointKey: string) => string | undefined;
@@ -42,13 +51,186 @@ export interface RuntimeSenderRoles {
   readonly isTrusted: boolean;
 }
 
-/** Resolve this turn's account and, for ICQQ groups, its platform role before tool discovery. */
+/** ADR 0041 §6: scene/sender facts are reused for at most this long. */
+export const TURN_FACT_CACHE_TTL_MS = 60_000;
+/** Upper bound of cached lookups per generation (scenes + senders). */
+export const TURN_FACT_CACHE_MAX_ENTRIES = 256;
+const MAX_ADMIN_IDS = 20;
+const KEY_SEP = '\u0000';
+
+interface FactCacheEntry { readonly at: number; readonly value: unknown }
+
+/** Bounded in-memory TTL cache; only successful lookups are stored. */
+class TurnFactCache {
+  readonly #entries = new Map<string, FactCacheEntry>();
+  get<T>(key: string, now: number): T | undefined {
+    const entry = this.#entries.get(key);
+    if (!entry) return undefined;
+    if (now - entry.at >= TURN_FACT_CACHE_TTL_MS) { this.#entries.delete(key); return undefined; }
+    return entry.value as T;
+  }
+  set(key: string, value: unknown, now: number): void {
+    this.#entries.delete(key);
+    if (this.#entries.size >= TURN_FACT_CACHE_MAX_ENTRIES) {
+      for (const [k, entry] of this.#entries) {
+        if (now - entry.at >= TURN_FACT_CACHE_TTL_MS) this.#entries.delete(k);
+      }
+      while (this.#entries.size >= TURN_FACT_CACHE_MAX_ENTRIES) {
+        const oldest = this.#entries.keys().next();
+        if (oldest.done) break;
+        this.#entries.delete(oldest.value);
+      }
+    }
+    this.#entries.set(key, { at: now, value });
+  }
+  get size(): number { return this.#entries.size; }
+}
+
+/** Keyed by the generation's adapter index, so a disposed generation's cache is unreachable and collected. */
+const factCaches = new WeakMap<object, TurnFactCache>();
+
+function factCacheFor(owner: object): TurnFactCache {
+  let cache = factCaches.get(owner);
+  if (!cache) factCaches.set(owner, cache = new TurnFactCache());
+  return cache;
+}
+
+/** Number of cached lookups for a generation's adapter index (tests / diagnostics). */
+export function turnFactCacheSize(owner: object): number {
+  return factCaches.get(owner)?.size ?? 0;
+}
+
+async function raceSignal<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let onAbort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try { return await Promise.race([task, aborted]); } finally { signal.removeEventListener('abort', onAbort); }
+}
+
+/** ADR 0041 §6 level 2: the persistent copy of one cached lookup. */
+interface FactLevel2<T> {
+  read(): Promise<Readonly<{ value: T; updatedAt: number }> | undefined>;
+  write(value: T): Promise<void>;
+}
+
+/**
+ * Optional persistent level behind {@link resolveRuntimeTurnContextState}. Absent store keeps the
+ * in-memory-only behaviour.
+ */
+export interface SceneFactDeps {
+  readonly store?: SceneFactStore;
+  /** Background refresh of stale level-2 rows; absent means stale rows are served as they are. */
+  readonly refresher?: SceneFactRefresher;
+  readonly now?: () => number;
+}
+
+async function level2Read<T>(level2: FactLevel2<T> | undefined, kind: string): Promise<Readonly<{ value: T; updatedAt: number }> | undefined> {
+  if (!level2) return undefined;
+  try { return await level2.read(); } catch (error) {
+    logFactError('agent_scene_fact_l2_read_failed', kind, error);
+    return undefined;
+  }
+}
+
+function level2Write<T>(level2: FactLevel2<T> | undefined, kind: string, value: T): Promise<void> {
+  if (!level2) return Promise.resolve();
+  return level2.write(value).catch((error: unknown) => logFactError('agent_scene_fact_l2_write_failed', kind, error));
+}
+
+function logFactError(op: string, kind: string | undefined, error: unknown): void {
+  logger.debug(formatCompact({ op, kind, error: error instanceof Error ? error.message : String(error) }));
+}
+
+/**
+ * Read order: level 1 (fresh, 60 s) → level 2 (database) → platform. A platform result is written to both
+ * levels. A level-2 row older than {@link SCENE_FACT_STALE_MS} is still served and refreshed once in the
+ * background (a failed refresh keeps the last known value).
+ */
+async function cachedLookup<T>(
+  cache: TurnFactCache, key: string, signal: AbortSignal, lookup: (signal: AbortSignal) => Promise<T>,
+  options: Readonly<{ level2?: FactLevel2<T>; refresher?: SceneFactRefresher; now: () => number }>,
+): Promise<T | undefined> {
+  const kind = key.split(KEY_SEP)[0]!;
+  const hit = cache.get<T>(key, options.now());
+  if (hit !== undefined) return hit;
+  const stored = await level2Read(options.level2, kind);
+  signal.throwIfAborted();
+  if (stored) {
+    cache.set(key, stored.value, options.now());
+    if (options.now() - stored.updatedAt >= SCENE_FACT_STALE_MS) {
+      options.refresher?.schedule(key, async (refreshSignal) => {
+        const value = await raceSignal(lookup(refreshSignal), refreshSignal);
+        cache.set(key, value, options.now());
+        await level2Write(options.level2, kind, value);
+      });
+    }
+    return stored.value;
+  }
+  try {
+    const value = await raceSignal(lookup(signal), signal);
+    cache.set(key, value, options.now());
+    await level2Write(options.level2, kind, value);
+    return value;
+  } catch (error) {
+    signal.throwIfAborted();
+    logFactError('agent_scene_fact_lookup_failed', kind, error);
+    return undefined;
+  }
+}
+
+function hasFacts(value: object): boolean {
+  return Object.keys(value).length > 0;
+}
+
+function groupLevel2(store: SceneFactStore, platform: string, group: string): FactLevel2<GroupSceneFacts> {
+  return {
+    async read() {
+      const found = await store.getGroup(platform, 'group', group);
+      return found ? { value: found.facts as GroupSceneFacts, updatedAt: found.updatedAt } : undefined;
+    },
+    async write(value) { if (hasFacts(value)) await store.putGroup(platform, 'group', group, value); },
+  };
+}
+
+function memberLevel2(store: SceneFactStore, platform: string, group: string, user: string, now: () => number): FactLevel2<GroupMemberProfile> {
+  return {
+    async read() {
+      const found = await store.getMember(platform, 'group', group, user);
+      if (!found) return undefined;
+      const facts = found.facts;
+      // An expired mute is a confirmed "not muted", not a stale expiry.
+      const mutedUntil = facts.mutedUntil !== undefined && facts.mutedUntil <= now() ? 0 : facts.mutedUntil;
+      return {
+        updatedAt: found.updatedAt,
+        value: {
+          ...(facts.platformRole ? { platformRole: facts.platformRole } : {}),
+          ...(facts.card ? { card: facts.card } : {}),
+          ...(facts.title ? { title: facts.title } : {}),
+          ...(mutedUntil !== undefined ? { mutedUntil } : {}),
+        },
+      };
+    },
+    async write(value) { await store.putMember(platform, 'group', group, user, value); },
+  };
+}
+
+/**
+ * Resolve this turn's account and, for ICQQ groups, the ADR 0041 scene facts (group, Bot role and
+ * card, sender role/card/title/mute) before tool discovery. The Bot role is always read fresh;
+ * group and sender facts reuse a short per-generation cache. Failed lookups omit their fields.
+ */
 export async function resolveRuntimeTurnContextState(
   snapshot: Pick<RuntimeSnapshot, 'projections'>,
   conversation: ConversationRef,
   signal: AbortSignal,
+  senderId?: string,
+  deps: SceneFactDeps = {},
 ): Promise<TurnContextState | undefined> {
   signal.throwIfAborted();
+  const now = deps.now ?? Date.now;
   const adapters = snapshot.projections?.get(adapterFeatureId);
   if (!isAdapterIndex(adapters)) return undefined;
   const endpointId = conversation.endpoint.id;
@@ -60,25 +242,75 @@ export async function resolveRuntimeTurnContextState(
     return Object.freeze({ bot: Object.freeze(bot) });
   }
   const management = resolveEndpointManagement(endpoint);
-  if (!management?.inspectGroupMember) {
+  if (!management?.inspectGroupMember && !management?.inspectGroupMemberProfile) {
     return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'unsupported' }) });
   }
-  try {
-    const member = await management.inspectGroupMember(conversation.id, id, signal);
-    signal.throwIfAborted();
-    return Object.freeze({ bot: Object.freeze({
-      ...bot,
-      ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }),
-    }) });
-  } catch (error) {
-    signal.throwIfAborted();
-    logger.warn(formatCompact({
-      op: 'agent_bot_role_lookup_failed', endpoint: endpointId, group: conversation.id,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'lookup_failed' }) });
-  }
+  const cache = factCacheFor(adapters);
+  const group = conversation.id;
+  const store = deps.store;
+  const platform = capabilityLocalName(String(endpointId));
+  const scopeKey = `${endpointId}${KEY_SEP}${group}`;
+  const sender = senderId && senderId !== id ? senderId : undefined;
+
+  const botTask = (async (): Promise<NonNullable<TurnContextState['bot']>> => {
+    try {
+      if (management.inspectGroupMemberProfile) {
+        const member = await raceSignal(management.inspectGroupMemberProfile(group, id, signal), signal);
+        // The bot's own role gates tool access, so it is read fresh every turn and only written through.
+        if (store) await store.putBot(platform, 'group', group, id, member).catch((error: unknown) => logFactError('agent_scene_fact_l2_write_failed', 'bot', error));
+        return {
+          ...bot,
+          ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }),
+          ...(member.card ? { nickname: member.card } : {}),
+          ...(member.mutedUntil !== undefined ? { mutedUntil: member.mutedUntil } : {}),
+        };
+      }
+      const member = await raceSignal(management.inspectGroupMember!(group, id, signal), signal);
+      return { ...bot, ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }) };
+    } catch (error) {
+      signal.throwIfAborted();
+      logger.warn(formatCompact({
+        op: 'agent_bot_role_lookup_failed', endpoint: endpointId, group,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      return { ...bot, platformRoleError: 'lookup_failed' };
+    }
+  })();
+  const sceneTask = management.inspectGroupScene
+    ? cachedLookup(cache, `scene${KEY_SEP}${scopeKey}`, signal, (lookupSignal) => management.inspectGroupScene!(group, lookupSignal), {
+        now, ...(store ? { level2: groupLevel2(store, platform, group) } : {}), ...(deps.refresher ? { refresher: deps.refresher } : {}),
+      })
+    : Promise.resolve(undefined);
+  const senderTask = sender && management.inspectGroupMemberProfile
+    ? cachedLookup(cache, `member${KEY_SEP}${scopeKey}${KEY_SEP}${sender}`, signal,
+        (lookupSignal) => management.inspectGroupMemberProfile!(group, sender, lookupSignal), {
+          now, ...(store ? { level2: memberLevel2(store, platform, group, sender, now) } : {}),
+          ...(deps.refresher ? { refresher: deps.refresher } : {}),
+        })
+    : Promise.resolve(undefined);
+  const [resolvedBot, scene, member] = await Promise.all([botTask, sceneTask, senderTask]);
+  signal.throwIfAborted();
+
+  const conversationFacts: Record<string, unknown> = {};
+  if (scene?.name) conversationFacts.name = scene.name;
+  if (scene?.ownerId) conversationFacts.ownerId = scene.ownerId;
+  if (scene?.adminIds) conversationFacts.adminIds = Object.freeze(scene.adminIds.slice(0, MAX_ADMIN_IDS));
+  if (scene?.memberCount !== undefined) conversationFacts.memberCount = scene.memberCount;
+  if (scene?.muteAll !== undefined) conversationFacts.muteAll = scene.muteAll;
+  const senderFacts: Record<string, unknown> = {};
+  if (member?.platformRole) senderFacts.platformRole = member.platformRole;
+  if (member?.card) senderFacts.groupNickname = member.card;
+  if (member?.title) senderFacts.groupTitle = member.title;
+  if (member?.mutedUntil !== undefined) senderFacts.mutedUntil = member.mutedUntil;
+  return Object.freeze({
+    bot: Object.freeze(resolvedBot),
+    ...(Object.keys(conversationFacts).length
+      ? { conversation: Object.freeze(conversationFacts) as NonNullable<TurnContextState['conversation']> } : {}),
+    ...(Object.keys(senderFacts).length
+      ? { sender: Object.freeze(senderFacts) as NonNullable<TurnContextState['sender']> } : {}),
+  });
 }
+
 
 /**
  * Sender roles derive only from the authenticated Message sender reference.

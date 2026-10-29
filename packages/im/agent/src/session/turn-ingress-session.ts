@@ -7,6 +7,7 @@ import {
   type UserMessage,
 } from '@zhin.js/ai';
 import { stripUserSpoofedSenderPrefix } from '@zhin.js/core';
+import { stampUserHeader } from './participant-header-stamp.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 
 export interface ResolvedIngressUserMessage {
@@ -23,10 +24,16 @@ export function resolveIngressUserMessage(
   const extra: AgentMessageExtra | undefined = referenceBlock
     ? { quote: { block: referenceBlock } }
     : undefined;
+  const sender = turn.input.contextState?.sender;
+  // ADR 0041: the platform role joins the product roles (`master,owner`); duplicates collapse.
+  const roles = [...new Set([...turn.principal.roles, ...(sender?.platformRole ? [sender.platformRole] : [])])];
   const user = createUserMessage(content, undefined, Date.now(), {
     subjectId: turn.principal.subjectId,
     ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
-    roles: [...turn.principal.roles],
+    roles,
+    ...(sender?.groupNickname ? { groupNickname: sender.groupNickname } : {}),
+    ...(sender?.groupTitle ? { groupTitle: sender.groupTitle } : {}),
+    ...(sender?.mutedUntil !== undefined ? { mutedUntil: sender.mutedUntil } : {}),
     authorizationRoles: [...turn.principal.roles],
     ...(turn.principal.origin ? { origin: turn.principal.origin } : {}),
     ...(turn.origin.kind === 'im' ? { scope: turn.origin.scope } : {}),
@@ -35,10 +42,11 @@ export function resolveIngressUserMessage(
     intent: turn.intent.kind,
     ...(turn.intent.targetTurnId ? { targetTurnId: turn.intent.targetTurnId } : {}),
   });
-  const llmMessage = renderUserMessageForLlm({
+  const identified: UserMessage = {
     ...user,
     ...(turn.origin.kind === 'im' && turn.origin.messageId ? { messageId: turn.origin.messageId } : {}),
-  }, extra);
+  };
+  const llmMessage = renderUserMessageForLlm(turn.origin.kind === 'im' ? stampUserHeader(identified) : identified, extra);
   return Object.freeze({
     content,
     ...(extra ? { extra: Object.freeze(extra) } : {}),
