@@ -1,5 +1,6 @@
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import {
   createAutoApprovalPort,
@@ -260,6 +261,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     );
     options.assistantStatus?.bindSessionEvents(() => options.agent.agent.getSessionEvents?.());
     options.assistantStatus?.bindGroupRules(() => options.agent.agent.getGroupRules?.());
+    options.assistantStatus?.bindUsageTraces(() => join(options.projectRoot, 'data', 'agent-traces'));
   }
 
   #createGroupRuleChannel(): GroupRuleImChannel {
@@ -572,6 +574,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   }
 
   dispose(): void {
+    this.options.assistantStatus?.bindUsageTraces(() => undefined);
     this.#coldField.dispose();
     this.#memberLifecycle.dispose();
     this.#stopAnnouncementSweep();

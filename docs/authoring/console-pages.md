@@ -276,6 +276,14 @@ interface SkillsStatus {
 
 默认保留 14 天，用 `ai.audit.retentionDays` 修改；启动时和之后每小时清理一次过期行。开关控制见下面的控制面。
 
+### 内置查询：用量统计
+
+`plugin.root.usage-stats`（`pluginRpc('root', 'usage-stats', { ... })`，权限 `control:read`）只读，给用量图表用。数据来自 `data/agent-traces/*.jsonl`，和 `zhin usage report` 用同一套聚合。
+
+- 参数（都可选）：`since`、`until`（毫秒时间戳，默认 `until` = 现在、`since` = `until` 往前 7 天）、`bucket`（`'hour'` 或 `'day'`，范围超过 2 天默认 `day`，否则 `hour`）、`session`（会话键子串，或带 `*` 的通配）。范围最多 31 天，超过返回 `invalid_input`。
+- 返回：`range`（含主机时区 `timeZone`）、`totals`、`byModel`（按输入 token 降序）、`bySession`（前 50）、`series`（范围内每个时间桶一项，缺的补 0，按时间升序）、`segments`（历史 / 固定 / 用户的上下文估算之和）、`filesRead`、`malformedLines`。`totals`、`byModel`、`bySession`、`series` 里都带 `cacheReadTokens`、`cacheWriteTokens` 和 `cacheShare`（0 到 1）；`totals.cacheShareByCall` 是单次调用缓存命中率的 p50 / p90。
+- 只返回计数、会话键和 provider / model 名，不返回消息文本。结果在内存里缓存 60 秒（最多 32 条），换代时清空。
+
 ### 内置操作：控制面
 
 「机器人状态」页的控制面（ADR 0036 切片 D）也由 Host 提供，是让机器人立刻安静的统一止损开关。
