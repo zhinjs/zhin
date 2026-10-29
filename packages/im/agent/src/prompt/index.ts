@@ -54,6 +54,10 @@ export {
   describeAgentPathPromptSections,
   buildAgentPathSystemPrompt,
   buildChatPathSystemPrompt,
+  buildAgentPathSystemPromptParts,
+  buildChatPathSystemPromptParts,
+  joinSystemPrompt,
+  type SystemPromptSplit,
   buildMultimodalVisionSystemPrompt,
   buildAgentUserMessage,
 } from './assembly.js';

@@ -12,7 +12,7 @@ import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { resolveModelHarness } from '../config/model-harness-runtime.js';
-import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt, describeAgentPathPromptSections } from '../prompt/assembly.js';
+import { appendScene, appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
@@ -542,8 +542,8 @@ export async function* runAgentLoopTextTurnRun(
         ...(turnShellPolicy.approvalMode ? { execApprovalMode: turnShellPolicy.approvalMode } : {}),
       }
     : host.config;
-  let systemPrompt = hasTools
-    ? await buildAgentPathSystemPrompt(host, {
+  let promptParts = hasTools
+    ? await buildAgentPathSystemPromptParts(host, {
         profile: input.promptProfile,
         turn: input.turnContext,
         content: input.rawContent,
@@ -554,11 +554,12 @@ export async function* runAgentLoopTextTurnRun(
       modelSdk: llmModel.sdk,
       runtime: input.promptRuntime,
       })
-    : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile, input.promptRuntime);
-  const proseSystemPrompt = systemPrompt;
-  if (imReply) {
-    systemPrompt = `${systemPrompt}\n\n${structuredReplyInstruction(input.replySegments)}`;
-  }
+    : buildChatPathSystemPromptParts(host, personaEnhanced, input.promptProfile, input.promptRuntime);
+  const proseSystemPrompt = joinSystemPrompt(promptParts).text;
+  // ADR 0042 §1: stable = instance/model/platform text, byte-identical across sessions and scenes;
+  // the tail (scene line, per-turn notes, pre-fetched data) follows the cache breakpoint.
+  if (imReply) promptParts = appendStable(promptParts, structuredReplyInstruction(input.replySegments));
+  let systemPrompt = joinSystemPrompt(promptParts).text;
 
   const agentTools = hasTools
     ? turnShellPolicy
@@ -625,12 +626,10 @@ export async function* runAgentLoopTextTurnRun(
   const explorationBudget = hasTools
     ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)
     : undefined;
-  if (hasTools && harness.explorationGuidance) {
-    systemPrompt = `${systemPrompt}\n\n${EXPLORATION_GUIDANCE}`;
-  }
+  if (hasTools && harness.explorationGuidance) promptParts = appendStable(promptParts, EXPLORATION_GUIDANCE);
   // ADR 0041 §5: the scene line goes last so a scene change only invalidates the tail.
   const sceneText = sceneLineForTurn(input.turnContext);
-  if (sceneText) systemPrompt = `${systemPrompt}\n\n${sceneText}`;
+  if (sceneText) promptParts = appendScene(promptParts, sceneText);
   if (hasTools && !directTools) {
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
       .map((item) => ({ name: item.name, description: item.brief })));
@@ -647,7 +646,10 @@ export async function* runAgentLoopTextTurnRun(
         });
     }
   }
-  if (networkWithheld) systemPrompt = `${systemPrompt}\n\n${NETWORK_DISABLED_PROMPT_NOTE}`;
+  if (networkWithheld) promptParts = appendScene(promptParts, NETWORK_DISABLED_PROMPT_NOTE);
+  const composedPrompt = joinSystemPrompt(promptParts);
+  systemPrompt = composedPrompt.text;
+  const systemPromptCacheBreakpoint = composedPrompt.cacheBreakpoint;
 
   const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
@@ -702,6 +704,7 @@ export async function* runAgentLoopTextTurnRun(
 
   const loopContext = agentContextFrom({
     systemPrompt,
+    systemPromptCacheBreakpoint,
     messages: loaded.messages,
     tools: llmTools,
   });
@@ -1097,6 +1100,7 @@ export async function* runAgentLoopTextTurnRun(
     segmentPrompt = [createUserMessage(buildContinuationInstruction(continuations, toolBudget.maxContinuations, reporter?.reported))];
     segmentContext = agentContextFrom({
       systemPrompt,
+      systemPromptCacheBreakpoint,
       messages: [...loaded.messages, ...turnTranscript],
       tools: llmTools,
     });

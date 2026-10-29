@@ -49,13 +49,30 @@ function normalizeInput(input: PromptCacheApplyInput | boolean): PromptCacheAppl
   return typeof input === 'boolean' ? { enabled: input } : input;
 }
 
+/**
+ * ADR 0042 §1: with `parts` (stable + scene) Anthropic gets two system blocks and a cache
+ * breakpoint on the stable one only, so a scene change never invalidates it. Every other
+ * provider gets the single `system` string (stable first, so implicit prefix caching still works).
+ */
 export function wrapSystemForPromptCache(
   system: string | undefined,
   input: PromptCacheApplyInput | boolean,
-): string | SystemModelMessage | undefined {
+  parts?: { readonly stable: string; readonly scene: string },
+): string | SystemModelMessage | SystemModelMessage[] | undefined {
   const ctx = normalizeInput(input);
   if (!system?.trim()) return undefined;
+  const split = parts && parts.stable.trim() && parts.scene.trim() ? parts : undefined;
+  // Gemini: two plain system parts; the explicit-cache fetch caches the stable part only.
+  if (ctx.sdk === 'google' && split) {
+    return [{ role: 'system', content: split.stable }, { role: 'system', content: split.scene }];
+  }
   if (!ctx.enabled || ctx.sdk !== 'anthropic') return system;
+  if (split) {
+    return [
+      { role: 'system', content: split.stable, providerOptions: ANTHROPIC_EPHEMERAL_CACHE },
+      { role: 'system', content: split.scene },
+    ];
+  }
   return {
     role: 'system',
     content: system,
