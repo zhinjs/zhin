@@ -163,8 +163,9 @@ describe('DeferredCapabilityPlan', () => {
       persistSnapshot: async (snapshot) => { saved.push(snapshot); },
     });
 
+    // Resident tools are sorted by name so the provider tool list is stable (prompt cache).
     expect(plan.resolvedTools.map((entry) => entry.name)).toEqual([
-      'discover', 'load_tool', 'load_skill',
+      'discover', 'load_skill', 'load_tool',
     ]);
     await execute(plan.capabilities, 'load_tool', { name: 'weather' });
     expect(plan.controller.loadedToolNames()).toEqual(['weather']);
@@ -223,7 +224,7 @@ describe('DeferredCapabilityPlan', () => {
     });
 
     expect(plan.resolvedTools.map((entry) => entry.name)).toEqual([
-      'discover', 'load_tool', 'load_skill', 'icqq__send_user_like',
+      'discover', 'icqq__send_user_like', 'load_skill', 'load_tool',
     ]);
   });
 
@@ -244,7 +245,7 @@ describe('DeferredCapabilityPlan', () => {
     it('keeps plugin tools deferred by default', () => {
       const owner = rootPluginId();
       const plan = planFor([tool(owner, 'weather', 'Weather'), Object.freeze({ ...tool(owner, 'news', 'News'), alwaysLoaded: false })]);
-      expect(plan.resolvedTools.map(entry => entry.name)).toEqual(META);
+      expect(plan.resolvedTools.map(entry => entry.name)).toEqual([...META].sort());
       expect(plan.catalog.find(item => item.name === 'weather')?.deferDefault).toBe(true);
       expect(plan.catalog.find(item => item.name === 'news')?.deferDefault).toBe(true);
     });
@@ -252,7 +253,7 @@ describe('DeferredCapabilityPlan', () => {
     it('makes opted-in tools resident without counting them against the session budget', async () => {
       const owner = rootPluginId();
       const plan = planFor([tool(owner, 'weather', 'Weather'), residentTool(owner, 'translate')]);
-      expect(plan.resolvedTools.map(entry => entry.name)).toEqual([...META, 'translate']);
+      expect(plan.resolvedTools.map(entry => entry.name)).toEqual([...META, 'translate'].sort());
       expect(plan.catalog.find(item => item.name === 'translate')?.deferDefault).toBe(false);
       await execute(plan.capabilities, 'load_tool', { name: 'translate' });
       expect(plan.controller.loadedToolNames()).toEqual([]);
@@ -261,7 +262,7 @@ describe('DeferredCapabilityPlan', () => {
     it('lets the operator replace mode override author declarations', () => {
       const owner = rootPluginId();
       const plan = planFor([residentTool(owner, 'translate')], { alwaysLoadedTools: META, alwaysLoadedMode: 'replace' });
-      expect(plan.resolvedTools.map(entry => entry.name)).toEqual(META);
+      expect(plan.resolvedTools.map(entry => entry.name)).toEqual([...META].sort());
     });
 
     it('never makes a hidden tool resident', () => {
@@ -276,7 +277,7 @@ describe('DeferredCapabilityPlan', () => {
       const names = Array.from({ length: MAX_DECLARED_RESIDENT_TOOLS + 2 }, (_, index) => `tool_${index}`);
       const plan = planFor(names.map(name => residentTool(owner, name)));
       const resolved = plan.resolvedTools.map(entry => entry.name);
-      expect(resolved).toEqual([...META, ...names.slice(0, MAX_DECLARED_RESIDENT_TOOLS)]);
+      expect(resolved).toEqual([...META, ...names.slice(0, MAX_DECLARED_RESIDENT_TOOLS)].sort());
       expect(plan.catalog.map(entry => entry.name)).toEqual(expect.arrayContaining(names));
       expect(declaredResidentToolNames(names.map(name => ({ name, alwaysLoaded: true })), {}))
         .toHaveLength(MAX_DECLARED_RESIDENT_TOOLS);

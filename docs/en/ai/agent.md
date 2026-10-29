@@ -121,12 +121,21 @@ A completed text or IM Agent turn accumulates the provider-reported usage of all
 
 With many tools, putting every tool's parameter schema in the prompt would fill the context. Zhin **loads tools lazily**: a turn keeps only a few meta tools resident, and the model searches and loads others by name when needed.
 
-The resident core set (`alwaysLoadedTools`) has two groups:
+The resident tools are **tiered by scene** (ADR 0042). The host picks the tier from the turn's origin and role; no configuration is needed:
 
-- Interaction and orchestration: `ask_user`, `spawn_task`, and the meta tools `discover`, `load_tool`, `load_skill`.
-- Workspace files: `read_file`, `list_dir`, `glob`, `grep`, `edit_file`, `write_file`. The model calls these directly most often, so keeping them resident saves an "unknown tool" round trip. They are still subject to the turn's tool filters and exec policy; for example, a turn started by a group member gets no file-writing tools.
+| Scene | Resident tools |
+|---|---|
+| Group, channel, ordinary private chat (including trusted members' private chats) | Chat essentials: `pick_sticker`, `memory_search`, `conversation_info`, plus the meta tools `discover`, `load_tool`, `load_skill` |
+| Master private chat | The above plus development and orchestration tools: `read_file`, `list_dir`, `glob`, `grep`, `edit_file`, `write_file`, `bash`, `ask_user`, `spawn_task` |
+| Scheduled, background and sub-agent turns (non-IM) | The previous default set: `ask_user`, `spawn_task`, the meta tools and the workspace file tools |
 
-`bash` is not resident because whether it can run depends on the turn's shell isolation policy. Setting `alwaysLoadedTools` **adds to** this default list; set `alwaysLoadedMode: replace` to replace it entirely.
+Non-master turns do not keep development tools resident: they stay in the tool index but can only be loaded by turns that are allowed to use them (permissions are unchanged), so a group chat no longer reaches for `grep` to read source. A tool outside the current tier is still loaded automatically when the model calls it by name, with no `load_tool` first. Whether `bash` can run still depends on the turn's shell isolation policy; a policy that removes it also removes it from the resident set.
+
+Setting `alwaysLoadedTools` **adds to** the current tier; `alwaysLoadedMode: replace` makes `alwaysLoadedTools` the whole resident set.
+
+**Calling is loading.** When the model calls, by exact name, a tool that is in the turn's authorized catalog but not loaded, the runtime loads and runs it, and keeps it loaded for the session (bounded by `maxLoadedPerSession`; the least recently used tool is evicted). A name outside the authorized catalog still returns "unknown tool" and does not reveal whether it exists; approval, hard-gate and permission checks apply to the auto-loaded call as usual. `discover` results attach the full schemas of the best (up to 3) matching tools and load them, so the model can call them right away.
+
+**A stable tool list.** The tool list sent to the provider has a fixed order: resident tools sorted by name, then loaded tools in first-load order. A newly loaded tool only appends and loaded tools do not move within a session, so the prompt-cache prefix survives loading (evicting an old tool past `maxLoadedPerSession` costs one cache miss).
 
 Plugin tools are deferred by default. A plugin author can set `alwaysLoaded: true` in `defineAgentTool` to keep a few frequent tools resident (at most 8 per turn, ignored under `alwaysLoadedMode: replace`); see [Keep a tool resident](../authoring/agent-tools.md#keep-a-tool-resident). Resident schemas are sent on every turn, so the smaller the set, the less context and tokens it costs.
 
@@ -152,7 +161,7 @@ ai:
     deferredTools:
       maxLoadedPerSession: 12   # max tools loaded per session (default 12)
       discoverTopK: 5           # results returned by discover (default 5)
-      alwaysLoadedTools: [ask_user, spawn_task, discover, load_tool, load_skill]
+      alwaysLoadedTools: [weather]   # added on top of the current scene tier
       mcpServers:
         icqq: { alwaysLoaded: [send_msg] }   # resident tools for a specific MCP server
 ```
@@ -464,6 +473,26 @@ serve several bots with different nicknames:
 
 I'm {{nickname}}, a long-time member of these groups.
 ```
+
+### Per-scene sections (scope annotations)
+
+A section of a bootstrap file can name the scenes it applies to with a one-line HTML comment directly under its heading (the first non-blank line after it). The host injects only the sections matching the **current turn**; the rest cost no tokens. Sections without an annotation apply everywhere, as before.
+
+```md
+## Deploy and ops
+<!-- scope: master-private -->
+Content only useful in the master's private chat...
+
+## Group etiquette
+<!-- scope: group -->
+```
+
+- Extent: from that heading up to the next heading of the **same or a higher level** (nested headings included); `#` lines inside code fences are not headings.
+- Values: `group`, `private`, `channel` (conversation type), `master` (sender is the master); `master-private` means "master AND private" (`-` joins conditions); a comma list means "any of", e.g. `group, master-private`.
+- Unknown values are ignored; if no valid value remains the whole annotation is treated as absent and the section applies everywhere (over-injecting is the safe failure). Non-IM turns (HTTP, scheduled jobs, ...) only match `master`.
+- Output is byte-identical for every turn of the same kind (conversation type + master or not), independent of session or sender, so prompt caching is unaffected; group chats and master private chats each get one cache variant.
+- `zhin trace` lists the skipped section titles (titles only) in its context estimate.
+- The `AGENTS.md` turn-envelope injection honours the annotations too. The framework never edits your files; you decide where to annotate (ADR 0042 section 5).
 
 `assistant.profile.yml` declares the persona and routines, synced into scheduled jobs at startup:
 

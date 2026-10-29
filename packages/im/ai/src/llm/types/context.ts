@@ -4,6 +4,12 @@ import type { LlmTool } from './tool.js';
 /** Serializable LLM context (ADR 0009 D2). */
 export interface Context {
   systemPrompt: string;
+  /**
+   * Character offset in `systemPrompt` where the volatile scene tail begins (ADR 0042 §1).
+   * Providers with explicit cache breakpoints (Anthropic) cache `systemPrompt.slice(0, offset)`
+   * and leave the tail uncached; others ignore it and send one string, stable part first.
+   */
+  systemPromptCacheBreakpoint?: number;
   messages: AgentMessage[];
   tools?: LlmTool[];
   /**

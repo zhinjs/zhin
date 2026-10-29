@@ -128,8 +128,8 @@ it('places the deferred catalog before the actual question on the full engine mo
     script: [{ segments: [{ type: 'text', data: { text: 'ok' } }] }], expect: {},
   });
   const input = result.modelRequests[0]?.lastUserText ?? '';
-  expect(input).toContain('CATALOG_SENTINEL');
-  expect(input.indexOf('CATALOG_SENTINEL')).toBeLessThan(input.indexOf('CURRENT_BODY_SENTINEL'));
+  expect(input).toContain('deferred_lookup (1)');
+  expect(input.indexOf('deferred_lookup (1)')).toBeLessThan(input.indexOf('CURRENT_BODY_SENTINEL'));
   expect(input.indexOf('"observedAt"')).toBeLessThan(input.indexOf('CURRENT_BODY_SENTINEL'));
   expect(input).not.toContain('Time:');
   expect(input).not.toContain('presentation');

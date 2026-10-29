@@ -32,6 +32,7 @@
     "export type{AudioTranscriptionPort,MediaBinaryPayload,MultimodalConfig,OutboundMediaAuthority,OutboundMediaCapabilities}from './media/index.js';",
     "export type{AuthoringSkillDefinition,AuthoringHookDefinition,AuthoringEvalDefinition,AuthoringEvalContext,DiscoveredPluginAgentSurface,}from './authoring/index.js';",
     "export type{BootstrapFile,ContextFile}from './bootstrap.js';",
+    "export type{BootstrapScene,BootstrapSceneKind,ScopedBootstrapText}from './bootstrap-scope.js';",
     "export type{ChatFailureKind,ChatFailureOptions}from './outbound/chat-failure.js';",
     "export type{DeliverScheduleToAdapterInput}from './assistant/deliver-schedule-to-adapter.js';",
     "export type{FiveAgentRole}from './orchestration/five-agent/index.js';",
@@ -154,6 +155,7 @@
     "export{promptAssemblyToken,promptSegmentToken}from './prompt/tokens.js';",
     "export{renderAgentOutput,splitOutputMessages}from './outbound/agent-output.js';",
     "export{resolveWorkspacePrompt,}from './prompt/workspace-prompt.js';",
+    "export{scopeBootstrapText,bootstrapSceneFromTurn,bootstrapSceneKey,parseScopeList,sceneMatches,}from './bootstrap-scope.js';",
     "export{stampToolGeneration,}from './tool/tool-system.js';"
   ],
   "@zhin.js/core": [

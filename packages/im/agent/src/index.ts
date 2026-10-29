@@ -710,6 +710,10 @@ export {
   loadSoulPersona, loadToolsGuide, loadAgentsMemory,
   STABLE_BOOTSTRAP_FILENAMES,
 } from './bootstrap.js';
+export {
+  scopeBootstrapText, bootstrapSceneFromTurn, bootstrapSceneKey, parseScopeList, sceneMatches,
+} from './bootstrap-scope.js';
+export type { BootstrapScene, BootstrapSceneKind, ScopedBootstrapText } from './bootstrap-scope.js';
 export { getFileMemoryContext, getMemoryDir } from './memory-layers.js';
 export type { BootstrapFile, ContextFile } from './bootstrap.js';
 

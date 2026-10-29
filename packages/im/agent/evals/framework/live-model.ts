@@ -17,7 +17,7 @@ import {
   type StreamOptions,
 } from '@zhin.js/ai';
 import type { ScriptedModel, ScriptedModelRequest } from './scripted-model.js';
-import { contextText, countImages, lastUserText } from './scripted-model.js';
+import { contextText, countImages, lastUserText, toolSchemaTextOf } from './scripted-model.js';
 
 export interface LiveModelOptions {
   /** Real completion port; budgets and timeouts are its responsibility. */
@@ -59,6 +59,7 @@ export function createLiveModel(options: LiveModelOptions): ScriptedModel {
         lastUserText: lastUserText(context),
         inputText: contextText(context),
         systemPrompt: context.systemPrompt ?? '',
+        toolSchemaText: toolSchemaTextOf(context),
         model: modelId,
         images: countImages(context),
       });

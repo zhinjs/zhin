@@ -132,7 +132,9 @@ export function resolveDeferredApiTools(
   const out: AgentTool[] = [];
   const seen = new Set<string>();
 
-  for (const name of alwaysLoaded) {
+  // Resident tools sort by name and loaded tools follow in first-load order, so the
+  // provider tool list is identical on every call and a new tool only appends (cache prefix).
+  for (const name of [...alwaysLoaded].sort()) {
     if (seen.has(name)) continue;
     const item = byName.get(name);
     if (item) {

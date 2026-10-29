@@ -185,6 +185,7 @@ export {
 
 export { createAiSdkStreamFn, generateTextViaAiSdk } from './bridge/ai-sdk-stream.js';
 export { parseLenientJsonObject } from './bridge/lenient-json.js';
+export { registerStructuredOutputPromptText } from './bridge/prompt-structured-output.js';
 export {
   buildPromptCacheKey,
   supportsPromptCacheSdk,

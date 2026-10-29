@@ -7,6 +7,7 @@ import {
   prependTurnContextBlocks,
 } from './turn-user-message.js';
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
+import { bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import {
   buildTurnContextBlocks,
   type TurnContextView,
@@ -111,7 +112,9 @@ export class ContextSystem {
     const modelId = modelCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
     const providerAlias = host.getTurnProvider().name;
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
-    const agentsContext = await buildAgentsEnvelopeContext();
+    // The host bootstrap section (system prompt) already includes the root AGENTS.md: keep only nearer ones here.
+    const rootInSystemPrompt = /(?:^|\n)## AGENTS\.md\n/u.test(input.systemBootstrap ?? '');
+    const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootInSystemPrompt });
 
     // Schedule ingress provides one current task; never infer its author from a history tail.
     const scheduleInput = isScheduleTurn && turnUser.promptMessages.length === 1 ? turnUser.promptMessages[0] : undefined;
@@ -170,6 +173,8 @@ export interface TextTurnContextInput {
     promptMessages: import('@zhin.js/ai').UserMessage[];
   };
   deferredStats?: string;
+  /** The bootstrap text the system prompt of this turn actually carries (host `## <file>` sections). */
+  systemBootstrap?: string;
   quoteSystemHint?: string;
   prebuiltMessages?: AgentMessage[];
   mode?: 'chat' | 'vision';

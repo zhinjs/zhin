@@ -10,7 +10,7 @@ export default defineEvalCase({
   workspace: { 'README.md': '# demo\n', 'src/index.ts': 'export {};\n' },
   nativeTools: ['bash', 'list_dir'],
   script: [
-    { toolCalls: [{ name: 'spawn_task', args: { task: 'List the repository layout.' } }] },
+    { toolCalls: [{ name: 'spawn_task', args: { task: 'List the repository layout.' }, notOffered: true }] },
     // Child: bash is withheld, so it falls back to list_dir.
     { toolCalls: [{ name: 'bash', args: { command: 'ls -R' }, notOffered: true }] },
     { toolCalls: [{ name: 'list_dir', args: { path: '.' } }] },

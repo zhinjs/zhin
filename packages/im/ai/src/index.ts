@@ -32,6 +32,7 @@ export {
   assistantText,
   assistantAnswerText,
   parseLenientJsonObject,
+  registerStructuredOutputPromptText,
   CompletionFailureError,
   createLlmApiRuntime,
   isSdkId,
@@ -395,6 +396,7 @@ export type { DeferredToolSessionSnapshot } from './memory/deferred-tool-session
 export {
   EMPTY_DEFERRED_TOOL_SNAPSHOT,
   getLoadedToolNamesFromSnapshot,
+  getLoadedToolNamesInLoadOrder,
   touchToolInSnapshot,
   touchToolsInSnapshot,
   addSkillToSnapshot,

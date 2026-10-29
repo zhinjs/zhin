@@ -196,6 +196,11 @@ export interface EvalCase {
   readonly nativeTools?: readonly EvalNativeTool[];
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
   readonly workspace?: Readonly<Record<string, string>>;
+  /**
+   * Load SOUL.md / AGENTS.md / TOOLS.md from the cwd into the system-prompt bootstrap section the way the
+   * CLI host does (`## <name>` blocks), so prompt measurements match production.
+   */
+  readonly hostBootstrap?: boolean;
   /** Semantic-memory entries present before the first turn; they are also recalled per turn (#734). */
   readonly memory?: readonly EvalMemoryEntry[];
   /** Canned stdout for native `bash` (it never runs a real shell in evals). */

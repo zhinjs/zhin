@@ -62,6 +62,8 @@ export interface ContextBudgetReport {
   /** System prompt sections, largest first. */
   readonly sections: readonly ContextBudgetSection[];
   readonly tools: Readonly<{ loaded: number; deferred: number }>;
+  /** ADR 0042 §5: titles of bootstrap sections skipped by scope for this turn. */
+  readonly bootstrap_skipped?: readonly string[];
 }
 
 export interface ContextBudgetInput {
@@ -77,6 +79,8 @@ export interface ContextBudgetInput {
     weight?: number;
     trimmed?: boolean;
   }>[];
+  /** Titles of bootstrap sections left out by scope annotations (titles only). */
+  readonly bootstrapSkipped?: readonly string[];
   /** Legacy bootstrap text; current capability catalogs have their own system section. */
   readonly bootstrapContext?: string;
   /** Loaded skill instructions; the turn envelope carries them inside the user message. */
@@ -193,5 +197,6 @@ export function buildContextBudgetReport(input: ContextBudgetInput): ContextBudg
     segments: Object.freeze(segments),
     sections: Object.freeze(sections),
     tools: Object.freeze({ loaded: input.loadedTools.length, deferred: input.deferredToolCount }),
+    ...(input.bootstrapSkipped?.length ? { bootstrap_skipped: Object.freeze([...input.bootstrapSkipped]) } : {}),
   });
 }

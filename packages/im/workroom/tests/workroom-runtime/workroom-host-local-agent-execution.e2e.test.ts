@@ -87,7 +87,7 @@ describe('Host to local Workroom Agent execution', () => {
       'read_repo', 'discover', 'load_tool', 'load_skill',
     ]);
     expect(coreInput!.resolvedTools.map(tool => tool.name)).toEqual([
-      'discover', 'load_tool', 'load_skill', 'read_repo',
+      'discover', 'load_skill', 'load_tool', 'read_repo',
     ]);
     expect(coreInput!.turnContext.capabilities.tools).toEqual([
       'read_repo', 'discover', 'load_tool', 'load_skill',

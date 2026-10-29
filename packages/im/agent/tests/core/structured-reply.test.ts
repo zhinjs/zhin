@@ -14,9 +14,10 @@ import { OutboundLeakInspector, guardReplyPort } from '../../src/security/outbou
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 
-vi.mock('../../src/prompt/assembly.js', () => ({
-  buildAgentPathSystemPrompt: async () => 'system',
-  buildChatPathSystemPrompt: () => 'system',
+vi.mock('../../src/prompt/assembly.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../src/prompt/assembly.js')>(),
+  buildAgentPathSystemPromptParts: async () => ({ stable: 'system', scene: '' }),
+  buildChatPathSystemPromptParts: () => ({ stable: 'system', scene: '' }),
   describeAgentPathPromptSections: async () => [],
 }));
 const { runAgentLoopTextTurnRun, collectAgentLoopTurnRun } = await import('../../src/core/agent-core-run.js');
@@ -448,4 +449,15 @@ it('uses captured turn locale for a model format failure through the engine', as
   const rendered = renderAgentOutput(result.output);
   expect(rendered).toContain('(Invalid reply format)');
   expect(rendered).not.toMatch(/[\u3400-\u9fff]/u);
+});
+
+describe('reaction instruction pacing', () => {
+  it('makes no reaction the default and reactions occasional', () => {
+    const text = structuredReplyInstruction({
+      types: ['text'],
+      reaction: { values: [{ value: '76', label: 'like' }] },
+    } as never);
+    expect(text).toContain('Most replies have none');
+    expect(text).toContain('only occasionally');
+  });
 });

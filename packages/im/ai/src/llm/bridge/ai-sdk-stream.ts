@@ -2,7 +2,7 @@
  * AI SDK streamText ↔ pi AssistantMessageEventStream bridge (ADR 0018).
  */
 
-import { generateText, NoObjectGeneratedError, Output, jsonSchema, streamText, type SystemModelMessage, type LanguageModel, type JSONValue } from 'ai';
+import { generateText, NoObjectGeneratedError, Output, jsonSchema, streamText, type LanguageModel, type JSONValue } from 'ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
@@ -396,7 +396,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         model.compat,
       );
       const toolNames = createToolNameCodec((context.tools ?? []).map((t) => t.name), model.sdk);
-      const { system: systemText, messages } = contextToAiSdkPrompt(
+      const { system: systemText, systemParts, messages } = contextToAiSdkPrompt(
         context,
         model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
         {
@@ -405,7 +405,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         toolNames,
         },
       );
-      const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
+      const system = wrapSystemForPromptCache(systemText, cacheCtx, systemParts);
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk, toolNames }), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
       const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
@@ -580,7 +580,7 @@ export async function generateTextViaAiSdk(
     model.compat,
   );
   const toolNames = createToolNameCodec((context.tools ?? []).map((t) => t.name), model.sdk);
-  const { system: systemText, messages } = contextToAiSdkPrompt(
+  const { system: systemText, systemParts, messages } = contextToAiSdkPrompt(
     context,
     model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
     {
@@ -589,7 +589,7 @@ export async function generateTextViaAiSdk(
     toolNames,
     },
   );
-  const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
+  const system = wrapSystemForPromptCache(systemText, cacheCtx, systemParts);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk, toolNames }), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
   const providerOptions = buildProviderOptions(model, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);

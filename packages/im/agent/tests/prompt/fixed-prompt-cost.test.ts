@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import { buildRichSystemPrompt } from '../../src/prompt/system-prompt.js';
-import { structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
+import { compactStructuredReplyPrompt, structuredReplyInstruction, structuredReplySchema } from '../../src/outbound/structured-reply.js';
 import { estimatePromptTokens } from '../../src/prompt/estimate-tokens.js';
 
 describe('built-in IM prompt cost (#949)', () => {
@@ -34,7 +34,15 @@ describe('built-in IM prompt cost (#949)', () => {
   });
 
   it('keeps the default final-reply guidance compact alongside its unchanged schema', () => {
-    // Baseline: 579 estimated tokens of guidance, in addition to the JSON Schema.
-    expect(estimatePromptTokens(structuredReplyInstruction())).toBeLessThanOrEqual(410);
+    // Measured 335 estimated tokens of guidance (was budgeted at 410), in addition to the schema.
+    expect(estimatePromptTokens(structuredReplyInstruction())).toBeLessThanOrEqual(345);
+  });
+
+  it('shows prompt-mode providers a compact reply shape, not the JSON Schema (ADR 0042 §6)', () => {
+    // Measured 114 estimated tokens for the default segment set, down from 645 with the schema text.
+    const schema = structuredReplySchema();
+    const compact = compactStructuredReplyPrompt(schema);
+    expect(estimatePromptTokens(compact)).toBeLessThanOrEqual(125);
+    expect(estimatePromptTokens(JSON.stringify(schema))).toBeGreaterThan(estimatePromptTokens(compact) * 4);
   });
 });

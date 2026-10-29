@@ -59,7 +59,12 @@ export const DEFAULT_CONFIG = {
   recordRequestBodies: true,
   promptCacheRetention: 'in_memory',
   promptCacheKeyPrefix: 'zhin',
-  deferredTools: { ...DEFAULT_DEFERRED_TOOLS_CONFIG },
+  // `alwaysLoadedTools` is left unset on purpose: the resident base set depends on the
+  // turn's scene tier (ADR 0042 §2) and is resolved per turn; this field is only the operator's additions.
+  deferredTools: {
+    maxLoadedPerSession: DEFAULT_DEFERRED_TOOLS_CONFIG.maxLoadedPerSession,
+    discoverTopK: DEFAULT_DEFERRED_TOOLS_CONFIG.discoverTopK,
+  },
   workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   steeringMode: DEFAULT_STEERING_MODE,
   followUpMode: DEFAULT_FOLLOW_UP_MODE,

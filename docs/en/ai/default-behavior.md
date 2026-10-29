@@ -112,6 +112,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `disabledTools` | keep | Common switch, kept |
 | `allowedTools` | keep | Common switch, kept |
 | `inboundQueue` | keep | Common switch, kept |
+| `reactions` | keep | Reaction pacing: per-session `cooldownMs 600000`, `probability 0.35`; `probability: 0` disables reactions |
 | `toolBudget` | keep | Common switch, kept |
 | `injectionGuard` | keep | Common switch, kept |
 | `toolHardGate` | keep | Dangerous-tool hard gate (ADR 0036); always on, can only be made stricter, see below |

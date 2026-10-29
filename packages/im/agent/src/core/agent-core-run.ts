@@ -11,8 +11,8 @@ import { createPromptContextBlock, createLlmMessageProjection, estimateContextFi
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
-import { resolveModelHarness } from '../config/model-harness-runtime.js';
-import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt, describeAgentPathPromptSections } from '../prompt/assembly.js';
+import { iterationSceneOf, resolveModelHarness, resolveTurnMaxIterations } from '../config/model-harness-runtime.js';
+import { appendScene, appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
@@ -32,7 +32,7 @@ import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
-import { resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
+import { DEFERRED_META_TOOL_NAMES } from '../tool-catalog/types.js';
 import { resolveDeferredApiTools, residentToolNames } from '../tool-catalog/tool-catalog.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
@@ -53,6 +53,8 @@ import {
   DEFAULT_EXPLORATION_BUDGET,
   EXPLORATION_GUIDANCE,
   ExplorationBudget,
+  LAST_ITERATION_NUDGE,
+  SpinDetector,
 } from './exploration-budget.js';
 import {
   TurnProgressTracker,
@@ -64,8 +66,9 @@ import {
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
 import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
+import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
-import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
+import { renderDeferredToolIndex, toolIndexGroup } from '../skill/capability-catalog.js';
 import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
@@ -542,8 +545,8 @@ export async function* runAgentLoopTextTurnRun(
         ...(turnShellPolicy.approvalMode ? { execApprovalMode: turnShellPolicy.approvalMode } : {}),
       }
     : host.config;
-  let systemPrompt = hasTools
-    ? await buildAgentPathSystemPrompt(host, {
+  let promptParts = hasTools
+    ? await buildAgentPathSystemPromptParts(host, {
         profile: input.promptProfile,
         turn: input.turnContext,
         content: input.rawContent,
@@ -554,11 +557,12 @@ export async function* runAgentLoopTextTurnRun(
       modelSdk: llmModel.sdk,
       runtime: input.promptRuntime,
       })
-    : buildChatPathSystemPrompt(host, personaEnhanced, input.promptProfile, input.promptRuntime);
-  const proseSystemPrompt = systemPrompt;
-  if (imReply) {
-    systemPrompt = `${systemPrompt}\n\n${structuredReplyInstruction(input.replySegments)}`;
-  }
+    : buildChatPathSystemPromptParts(host, personaEnhanced, input.promptProfile, input.promptRuntime);
+  const proseSystemPrompt = joinSystemPrompt(promptParts).text;
+  // ADR 0042 §1: stable = instance/model/platform text, byte-identical across sessions and scenes;
+  // the tail (scene line, per-turn notes, pre-fetched data) follows the cache breakpoint.
+  if (imReply) promptParts = appendStable(promptParts, structuredReplyInstruction(input.replySegments));
+  let systemPrompt = joinSystemPrompt(promptParts).text;
 
   const agentTools = hasTools
     ? turnShellPolicy
@@ -574,8 +578,9 @@ export async function* runAgentLoopTextTurnRun(
     throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
   }
 
-  // Config names plus tools the capability plan pinned (platform tools, `alwaysLoaded` plugin tools).
-  const turnResidentTools = () => residentToolNames(catalog, resolveAlwaysLoadedSet(host.config));
+  // The meta tools plus every catalog item the capability plan pinned (scene tier, config names,
+  // platform tools, `alwaysLoaded` plugin tools). Config names alone would re-add tier-excluded tools.
+  const turnResidentTools = () => residentToolNames(catalog, DEFERRED_META_TOOL_NAMES);
   const refreshResolvedTools = () => {
     if (directTools) return resolvedTools;
     const alwaysLoaded = turnResidentTools();
@@ -620,20 +625,26 @@ export async function* runAgentLoopTextTurnRun(
 
   const harness = resolveModelHarness(host.getTurnProvider().name, modelId, host.config.modelHarness);
   const maxIterations = hasTools
-    ? (input.maxIterations ?? harness.maxIterations ?? host.config.maxIterations)
+    ? (input.maxIterations ?? resolveTurnMaxIterations({
+      providerName: host.getTurnProvider().name,
+      modelName: modelId,
+      modelHarness: host.config.modelHarness,
+      scene: iterationSceneOf(input.turnContext),
+      configured: host.config.maxIterations,
+    }))
     : 1;
   const explorationBudget = hasTools
     ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)
     : undefined;
-  if (hasTools && harness.explorationGuidance) {
-    systemPrompt = `${systemPrompt}\n\n${EXPLORATION_GUIDANCE}`;
-  }
+  const spinDetector = hasTools && harness.explorationBudget !== 0 ? new SpinDetector() : undefined;
+  let nudgedIteration = 0;
+  if (hasTools && harness.explorationGuidance) promptParts = appendStable(promptParts, EXPLORATION_GUIDANCE);
   // ADR 0041 §5: the scene line goes last so a scene change only invalidates the tail.
   const sceneText = sceneLineForTurn(input.turnContext);
-  if (sceneText) systemPrompt = `${systemPrompt}\n\n${sceneText}`;
+  if (sceneText) promptParts = appendScene(promptParts, sceneText);
   if (hasTools && !directTools) {
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
-      .map((item) => ({ name: item.name, description: item.brief })));
+      .map((item) => ({ name: item.name, description: item.brief, group: toolIndexGroup(item) })));
     if (toolIndex) {
       const block = createPromptContextBlock('deferred-tools', toolIndex);
       const userIndex = promptMessages.map(message => message.role === 'user' && Array.isArray(message.content)).lastIndexOf(true);
@@ -647,7 +658,10 @@ export async function* runAgentLoopTextTurnRun(
         });
     }
   }
-  if (networkWithheld) systemPrompt = `${systemPrompt}\n\n${NETWORK_DISABLED_PROMPT_NOTE}`;
+  if (networkWithheld) promptParts = appendScene(promptParts, NETWORK_DISABLED_PROMPT_NOTE);
+  const composedPrompt = joinSystemPrompt(promptParts);
+  systemPrompt = composedPrompt.text;
+  const systemPromptCacheBreakpoint = composedPrompt.cacheBreakpoint;
 
   const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
@@ -667,6 +681,10 @@ export async function* runAgentLoopTextTurnRun(
         outputSchema,
         sections: promptSections,
         bootstrapContext: input.promptRuntime?.bootstrapContext,
+        bootstrapSkipped: scopeBootstrapText(
+          input.promptRuntime?.bootstrapContext ?? '',
+          bootstrapSceneFromTurn(input.turnContext),
+        ).skipped,
         activeSkillsContext: input.promptRuntime?.activeSkillsContext,
         loadedTools: agentTools,
         deferredToolCount: deferredCatalogTools(catalog, agentTools).length,
@@ -702,6 +720,7 @@ export async function* runAgentLoopTextTurnRun(
 
   const loopContext = agentContextFrom({
     systemPrompt,
+    systemPromptCacheBreakpoint,
     messages: loaded.messages,
     tools: llmTools,
   });
@@ -762,13 +781,16 @@ export async function* runAgentLoopTextTurnRun(
   const hardLimitReached = () =>
     (toolBudget.maxWallClockMs > 0 && Date.now() - turnStartedAt >= toolBudget.maxWallClockMs)
     || (toolBudget.maxTotalTokens > 0 && completionUsage.usage.totalTokens >= toolBudget.maxTotalTokens);
+  let currentLimit = maxIterations;
   const nextIterationLimit = (iteration: number, limit: number): number => {
+    currentLimit = limit;
     if (iteration > 0 && hardLimitReached()) return iteration;
     if (iteration < limit) return limit;
     if (toolBudget.extendBy === 0 || limit >= segmentHardCap || progress.stalled) return limit;
     const windowStart = segmentStartIteration + iteration - toolBudget.progressWindow + 1;
     if (!progress.progressedSince(windowStart)) return limit;
     const next = Math.min(segmentHardCap, limit + toolBudget.extendBy);
+    currentLimit = next;
     extensionPending = true;
     noteTurnTrace(traceTurnId(input.turnContext), { kind: 'budget_extended', from: limit, to: next });
     logPhase(host.phaseConfig, 'agent_loop.budget.extend', sessionId, { from: limit, to: next });
@@ -901,7 +923,16 @@ export async function* runAgentLoopTextTurnRun(
 
         const progressKind = recordProgress(resolvedName, effectiveArgs, true, resultText);
         const budgetNote = explorationBudget?.record(resolvedName, isProgress(progressKind));
-        const finalText = budgetNote ? `${resultText}\n\n${budgetNote}` : resultText;
+        const spin = spinDetector?.record(resolvedName, effectiveArgs, resultText);
+        if (spin) noteTurnTrace(traceTurnId(input.turnContext), { kind: 'spin_hint', family: spin.family, calls: spin.calls, reason: spin.reason });
+        const localIteration = iterations - segmentStartIteration;
+        const lastStep = hasTools && currentLimit > 2 && localIteration === currentLimit - 1 && nudgedIteration !== iterations;
+        if (lastStep) {
+          nudgedIteration = iterations;
+          noteTurnTrace(traceTurnId(input.turnContext), { kind: 'last_iteration_nudge', iteration: localIteration, limit: currentLimit });
+        }
+        const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
+        const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
         const result = toolResultToAgentMessage(toolCall, finalText, false);
         const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);
@@ -1097,6 +1128,7 @@ export async function* runAgentLoopTextTurnRun(
     segmentPrompt = [createUserMessage(buildContinuationInstruction(continuations, toolBudget.maxContinuations, reporter?.reported))];
     segmentContext = agentContextFrom({
       systemPrompt,
+      systemPromptCacheBreakpoint,
       messages: [...loaded.messages, ...turnTranscript],
       tools: llmTools,
     });

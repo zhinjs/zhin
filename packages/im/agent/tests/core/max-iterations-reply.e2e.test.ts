@@ -15,7 +15,8 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import { EXHAUSTED_TURN_FALLBACK_REPLY } from '../../src/core/exhausted-turn-reply.js';
 import { DEFAULT_ALWAYS_LOADED_TOOLS } from '../../src/tool-catalog/types.js';
 
-const MAX_ITERATIONS = 15;
+/** Ordinary private chat scene default (ADR 0042 §7); the agent config leaves maxIterations at its stock value. */
+const MAX_ITERATIONS = 10;
 const RAW_TOOL_OUTPUT = 'File: commands/赞/[[who]]/helper.ts\n1 | export interface ZanClient {';
 const SUMMARY = '我看了 dice 和赞命令的实现，还没改输出格式。要我继续吗？';
 
@@ -36,7 +37,6 @@ function createAgent(llm: MockLlmApi): ZhinAgent {
     provider,
     {
       persona: '测试助手',
-      maxIterations: MAX_ITERATIONS,
       deferredTools: { alwaysLoadedTools: [...DEFAULT_ALWAYS_LOADED_TOOLS, 'probe_source'] },
     },
     undefined,

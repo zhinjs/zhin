@@ -112,6 +112,7 @@ ai:
 | `disabledTools` | keep | 常用开关，保留 |
 | `allowedTools` | keep | 常用开关，保留 |
 | `inboundQueue` | keep | 常用开关，保留 |
+| `reactions` | keep | 表情回应限频：会话内 `cooldownMs 600000`、放行概率 `probability 0.35`；`probability: 0` 关闭表情回应 |
 | `toolBudget` | keep | 常用开关，保留 |
 | `injectionGuard` | keep | 常用开关，保留 |
 | `toolHardGate` | keep | 危险工具硬闸（ADR 0036）；始终开启，只能调严，见下文 |

@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createUserMessage, type AgentMessage, type AgentTool, type Context } from '@zhin.js/ai';
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 
-vi.mock('../../src/prompt/assembly.js', () => ({
-  buildAgentPathSystemPrompt: async () => 'system',
-  buildChatPathSystemPrompt: () => 'system',
+vi.mock('../../src/prompt/assembly.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../src/prompt/assembly.js')>(),
+  buildAgentPathSystemPromptParts: async () => ({ stable: 'system', scene: '' }),
+  buildChatPathSystemPromptParts: () => ({ stable: 'system', scene: '' }),
   describeAgentPathPromptSections: async () => [],
 }));
 

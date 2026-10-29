@@ -61,6 +61,7 @@ export function getActivityFeedbackEligible(): boolean {
 export function cloneDeferredSnapshot(snapshot: DeferredToolSessionSnapshot): DeferredToolSessionSnapshot {
   return {
     loadedTools: { ...snapshot.loadedTools },
+    ...(snapshot.loadedOrder ? { loadedOrder: [...snapshot.loadedOrder] } : {}),
     loadedSkills: [...snapshot.loadedSkills],
   };
 }

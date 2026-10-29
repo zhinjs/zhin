@@ -1256,6 +1256,28 @@
                 }
               }
             },
+            "reactions": {
+              "type": "object",
+              "description": "Emoji-reaction pacing per session. The model may propose a reaction on any turn; the host applies one only if at least cooldownMs passed since the last applied reaction in that session and a random roll passes probability. Counters are kept in memory.",
+              "x-descriptionZh": "按会话限制表情回应的频率。模型每轮都可能提出回应，宿主只在距该会话上次已发出的回应满 cooldownMs 且随机掷骰通过 probability 时才发出；计数保存在内存中。",
+              "properties": {
+                "cooldownMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 600000,
+                  "description": "Minimum gap between two applied reactions in one session (ms).",
+                  "x-descriptionZh": "同一会话两次已发出回应之间的最小间隔（毫秒）。"
+                },
+                "probability": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "default": 0.35,
+                  "description": "Chance that an allowed reaction is applied; 0 disables reactions.",
+                  "x-descriptionZh": "允许发出的回应实际发出的概率；0 表示关闭表情回应。"
+                }
+              }
+            },
             "usageQuota": {
               "type": "object",
               "description": "Per-user and per-group token quotas and a per-group rate limit. All limits are off (0) by default; the owner is exempt by default. Counters are kept in memory.",
@@ -1672,7 +1694,7 @@
                   "items": {
                     "type": "string"
                   },
-                  "description": "额外常驻工具；默认在内置常驻集合基础上追加"
+                  "description": "额外常驻工具；在当前场景档（群聊、私聊、主人私聊）的常驻集合基础上追加"
                 },
                 "alwaysLoadedMode": {
                   "type": "string",

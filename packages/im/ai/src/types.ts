@@ -648,6 +648,11 @@ export interface AIConfig {
         approverGroupId?: string;
       };
     };
+    /** 按会话限制表情回应：两次已发出回应的最小间隔与发出概率（0 = 关闭）；默认 10 分钟 / 0.35 */
+    reactions?: {
+      cooldownMs?: number;
+      probability?: number;
+    };
     /** 按用户 / 按群的 token 配额与群速率限制；默认全部关闭，主人默认不受限 */
     usageQuota?: {
       windowMs?: number;
@@ -663,7 +668,7 @@ export interface AIConfig {
     deferredTools?: {
       maxLoadedPerSession?: number;
       discoverTopK?: number;
-      /** 额外常驻工具；默认在内置常驻集合基础上追加 */
+      /** 额外常驻工具；在当前场景档（群聊、私聊、主人私聊）的常驻集合基础上追加 */
       alwaysLoadedTools?: string[];
       /** `extend`（默认）追加到内置常驻集合；`replace` 完全替换 */
       alwaysLoadedMode?: 'extend' | 'replace';

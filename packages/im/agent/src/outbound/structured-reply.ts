@@ -6,6 +6,7 @@ import {
   type AiOutboundSegmentProfile,
   type AiOutboundSegmentType,
 } from '@zhin.js/core';
+import { registerStructuredOutputPromptText } from '@zhin.js/ai';
 import type { Segment } from '@zhin.js/im-contract';
 import type { AgentOutputElement } from './agent-output.js';
 
@@ -21,7 +22,7 @@ interface StructuredReply {
 /** Segment of the internal message that carries a reaction; the reply port applies it, never sends it. */
 export const REACTION_SEGMENT_TYPE = 'reaction';
 const DEFAULT_PROFILE: AiOutboundSegmentProfile = { types: DEFAULT_AI_OUTBOUND_SEGMENT_TYPES };
-const schemas = new Map<string, Record<string, unknown>>([[key(DEFAULT_PROFILE), aiOutboundJsonSchema]]);
+const schemas = new Map<string, Record<string, unknown>>();
 
 function key(profile: AiOutboundSegmentProfile): string {
   return JSON.stringify([[...profile.types].sort(), profile.extensions ?? {}, profile.reaction?.values.map(item => item.value) ?? []]);
@@ -31,8 +32,58 @@ function key(profile: AiOutboundSegmentProfile): string {
 export function structuredReplySchema(profile: AiOutboundSegmentProfile = DEFAULT_PROFILE): Record<string, unknown> {
   const id = key(profile);
   let schema = schemas.get(id);
-  if (!schema) schemas.set(id, schema = buildAiOutboundJsonSchema(profile.types, profile.extensions, profile.reaction));
+  if (!schema) {
+    schema = id === key(DEFAULT_PROFILE)
+      ? aiOutboundJsonSchema
+      : buildAiOutboundJsonSchema(profile.types, profile.extensions, profile.reaction);
+    schemas.set(id, schema);
+    // Prompt-mode providers show this instead of the JSON text (ADR 0042 §6); native providers get the schema.
+    registerStructuredOutputPromptText(schema, compactStructuredReplyPrompt(schema, profile));
+  }
   return schema;
+}
+
+type SchemaNode = Record<string, unknown>;
+
+/** Schema node -> terse shape text: `{text:str}`, `"url"|"path"`, `[{label:str}]`. */
+function shape(node: SchemaNode): string {
+  if ('const' in node) return JSON.stringify(node.const);
+  if (Array.isArray(node.enum)) return node.enum.map(value => JSON.stringify(value)).join('|');
+  if (Array.isArray(node.anyOf)) return (node.anyOf as SchemaNode[]).map(shape).join('|');
+  switch (node.type) {
+    case 'string': return 'str';
+    case 'number': case 'integer': return 'num';
+    case 'boolean': return 'bool';
+    case 'array': return `[${shape((node.items ?? {}) as SchemaNode)}]`;
+    case 'object': {
+      const properties = (node.properties ?? {}) as Record<string, SchemaNode>;
+      return `{${Object.entries(properties).map(([name, child]) => `${name}:${shape(child)}`).join(',')}}`;
+    }
+    default: return 'any';
+  }
+}
+
+/**
+ * Prompt-mode form of the reply schema: one example plus one shape line per segment type, derived
+ * from the schema itself so it cannot drift. `decodeStructuredReply` still validates with the schema.
+ */
+export function compactStructuredReplyPrompt(schema: SchemaNode, profile: AiOutboundSegmentProfile = DEFAULT_PROFILE): string {
+  const root = (schema.properties as Record<string, SchemaNode>);
+  const branches = ((((root.messages!.items as SchemaNode).properties as Record<string, SchemaNode>).segments!.items as SchemaNode).anyOf ?? []) as SchemaNode[];
+  const lines = branches.map(branch => {
+    const properties = branch.properties as Record<string, SchemaNode>;
+    const types = 'const' in properties.type! ? [properties.type!.const] : (properties.type!.enum as string[]);
+    return `- ${types.join('|')}: data=${shape(properties.data!)}`;
+  });
+  const hasExtraFields = Object.values(profile.extensions ?? {}).some(extension => extension?.fields?.length);
+  return [
+    'Respond with only a JSON object, no prose and no Markdown fence. Example:',
+    `{"messages":[{"segments":[{"type":"text","data":{"text":"好的"}}]}]${root.reaction ? ',"reaction":""' : ''}}`,
+    'Each segment is {"type":T,"data":D}; D per type (every listed key required, no others):',
+    ...lines,
+    ...(hasExtraFields ? ['Extra string fields: write "" when unknown.'] : []),
+    ...(root.reaction ? [`"reaction": ${shape(root.reaction)}`] : []),
+  ].join('\n');
 }
 
 const SEGMENT_GUIDE: readonly (readonly [readonly AiOutboundSegmentType[], string])[] = [
@@ -68,8 +119,8 @@ export function structuredReplyInstruction(profile: AiOutboundSegmentProfile = D
 
 function reactionInstruction(values: readonly { readonly value: string; readonly label: string }[]): string[] {
   return [
-    `"reaction" reacts to the message being answered: ${values.map(item => `${item.value} ${item.label}`).join(', ')}; "" for none.`,
-    'For thanks, agreement, jokes or news needing no words, {"messages":[],"reaction":"<value>"} may suffice. A short message may accompany it; avoid repeating its meaning.',
+    `"reaction" reacts to the message being answered: ${values.map(item => `${item.value} ${item.label}`).join(', ')}. Most replies have none ("", the default); react only occasionally, when a gesture fits better than words.`,
+    'Then {"messages":[],"reaction":"<value>"} may suffice. A short message may accompany it; avoid repeating its meaning.',
   ];
 }
 

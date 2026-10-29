@@ -83,6 +83,8 @@ export interface AgentLoopConfig {
 
 export interface AgentContext {
   systemPrompt: string;
+  /** See {@link Context.systemPromptCacheBreakpoint}. */
+  systemPromptCacheBreakpoint?: number;
   messages: AgentMessage[];
   tools: LlmTool[];
 }
@@ -278,6 +280,7 @@ export async function* agentLoop(
       const llmMessages = await convertToLlm(repairer.repair(messages));
       return {
         systemPrompt: initialContext.systemPrompt,
+        systemPromptCacheBreakpoint: initialContext.systemPromptCacheBreakpoint,
         messages: llmMessages,
         tools: tools.length > 0 ? tools : undefined,
         preRepaired: true,
@@ -450,6 +453,7 @@ export async function* agentLoop(
       if (batch.length === 0) break;
       for await (const event of agentLoop(batch, {
         systemPrompt: initialContext.systemPrompt,
+        systemPromptCacheBreakpoint: initialContext.systemPromptCacheBreakpoint,
         messages,
         tools,
       }, config, signal)) {
@@ -468,6 +472,7 @@ export async function* agentLoop(
 export function agentContextFrom(context: Context): AgentContext {
   return {
     systemPrompt: context.systemPrompt,
+    systemPromptCacheBreakpoint: context.systemPromptCacheBreakpoint,
     messages: [...context.messages],
     tools: context.tools ? [...context.tools] : [],
   };

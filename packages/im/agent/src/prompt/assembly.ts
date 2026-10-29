@@ -1,5 +1,5 @@
 import {
-  buildRichSystemPrompt,
+  buildRichSystemPromptParts,
   buildLiteSystemPrompt,
   buildUserMessageWithHistory,
   FIXED_DISCIPLINE_RULES,
@@ -15,16 +15,47 @@ import { type AgentMessage } from '@zhin.js/ai';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
 import type { AgentPromptProfile } from './turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
-import { PromptSegmentRegistry } from './segments/registry.js';
+import { PromptSegmentRegistry, type SystemPromptParts } from './segments/registry.js';
+import { SECTION_SEP } from '../config/zhin-agent-constants.js';
 import type { PromptSegment } from './segments/types.js';
 import { DEFAULT_CONFIG } from '../config/index.js';
+
+/**
+ * System prompt split at the provider cache breakpoint (ADR 0042 §1): `stable` is byte-identical
+ * across sessions and scenes for one instance and model; `scene` holds everything turn-specific.
+ */
+export interface SystemPromptSplit {
+  readonly stable: string;
+  readonly scene: string;
+}
+
+/** Appends to the stable prefix (instance/provider-level text only). */
+export function appendStable(parts: SystemPromptSplit, text: string): SystemPromptSplit {
+  const stable = parts.stable ? `${parts.stable}${SECTION_SEP}${text}` : text;
+  return { stable, scene: parts.scene };
+}
+
+/** Appends to the scene tail (anything that varies by turn, session, scene or sender). */
+export function appendScene(parts: SystemPromptSplit, text: string): SystemPromptSplit {
+  return { stable: parts.stable, scene: parts.scene ? `${parts.scene}${SECTION_SEP}${text}` : text };
+}
+
+/** Full prompt text plus the offset where the scene tail starts (`undefined` when no split). */
+export function joinSystemPrompt(parts: SystemPromptSplit): { text: string; cacheBreakpoint?: number } {
+  if (!parts.stable || !parts.scene) return { text: parts.stable || parts.scene };
+  return { text: `${parts.stable}${SECTION_SEP}${parts.scene}`, cacheBreakpoint: parts.stable.length + SECTION_SEP.length };
+}
+
+function toSplit(parts: SystemPromptParts): SystemPromptSplit {
+  return { stable: parts.stable, scene: parts.scene };
+}
 
 function scheduleSystemPrompt(
   agent: ZhinAgentPrivate,
   profile: Extract<AgentPromptProfile, { kind: 'schedule' }>,
   platformContext?: string,
   runtime?: PromptRuntimeOverrides,
-): string {
+): SystemPromptSplit {
   const base = assembleSchedulePrompt({
     jobId: profile.jobId,
     prompt: profile.prompt,
@@ -49,7 +80,7 @@ function mergeRequiredBasePrompt(
   _title: string,
   maxChars: number,
   runtime?: PromptRuntimeOverrides,
-): string {
+): SystemPromptSplit {
   const assembly = new PromptSegmentRegistry();
   assembly.register({
     id: '§runtime_base',
@@ -64,7 +95,7 @@ function mergeRequiredBasePrompt(
     const sceneText = runtime.sceneText;
     assembly.register({ id: '§0_scene', kind: 'scene', weight: 100, retention: 'preferred', inject: () => sceneText });
   }
-  return assembly.buildSystemPrompt({ history: [], runtime: {}, session: { sessionKey: '' } }, maxChars);
+  return toSplit(assembly.buildSystemPromptParts({ history: [], runtime: {}, session: { sessionKey: '' } }, maxChars));
 }
 
 export function buildDisciplinedPrompt(_host: AgentContextHost, basePrompt: string): string {
@@ -131,27 +162,35 @@ function agentPathPromptContext(
 
 export async function buildAgentPathSystemPrompt(
   agent: ZhinAgentPrivate,
-  options: {
-    profile: AgentPromptProfile;
-    turn: TurnContextView;
-    content: string;
-    sessionId: string;
-    personaEnhanced: string;
-    preData?: string;
-    deferredStats?: string;
-    modelSdk?: string;
-    runtime?: PromptRuntimeOverrides;
-  },
+  options: AgentPathPromptOptions,
 ): Promise<string> {
+  return joinSystemPrompt(await buildAgentPathSystemPromptParts(agent, options)).text;
+}
+
+export interface AgentPathPromptOptions {
+  profile: AgentPromptProfile;
+  turn: TurnContextView;
+  content: string;
+  sessionId: string;
+  personaEnhanced: string;
+  preData?: string;
+  deferredStats?: string;
+  modelSdk?: string;
+  runtime?: PromptRuntimeOverrides;
+}
+
+export async function buildAgentPathSystemPromptParts(
+  agent: ZhinAgentPrivate,
+  options: AgentPathPromptOptions,
+): Promise<SystemPromptSplit> {
   const { preData } = options;
 
   if (options.profile.kind === 'schedule') {
     return scheduleSystemPrompt(agent, options.profile, undefined, options.runtime);
   }
 
-  const richPrompt = buildRichSystemPrompt(agentPathPromptContext(agent, options));
-
-  return `${richPrompt}${preData ? `\n\nPre-fetched data:\n${preData}` : ''}`;
+  const rich = toSplit(buildRichSystemPromptParts(agentPathPromptContext(agent, options)));
+  return preData ? appendScene(rich, `Pre-fetched data:\n${preData}`) : rich;
 }
 
 export interface PromptRuntimeOverrides {
@@ -179,6 +218,15 @@ export function buildChatPathSystemPrompt(
   profile: AgentPromptProfile,
   runtime?: PromptRuntimeOverrides,
 ): string {
+  return joinSystemPrompt(buildChatPathSystemPromptParts(agent, personaEnhanced, profile, runtime)).text;
+}
+
+export function buildChatPathSystemPromptParts(
+  agent: ZhinAgentPrivate,
+  personaEnhanced: string,
+  profile: AgentPromptProfile,
+  runtime?: PromptRuntimeOverrides,
+): SystemPromptSplit {
   if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile, undefined, runtime);
   return mergeRequiredBasePrompt(
     buildDisciplinedPrompt(agent, withStableRuntime(personaEnhanced, runtime)),
@@ -198,12 +246,12 @@ export async function buildMultimodalVisionSystemPrompt(
     runtime?: PromptRuntimeOverrides;
   },
 ): Promise<string> {
-  return mergeRequiredBasePrompt(
+  return joinSystemPrompt(mergeRequiredBasePrompt(
     buildLiteSystemPrompt(withStableRuntime(options.personaEnhanced, options.runtime)),
     'Vision Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
     options.runtime,
-  );
+  )).text;
 }
 
 export function buildAgentUserMessage(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ExplorationBudget, EXPLORATION_GUIDANCE } from '../../src/core/exploration-budget.js';
+import { ExplorationBudget, EXPLORATION_GUIDANCE, SpinDetector } from '../../src/core/exploration-budget.js';
 import { resolveModelHarness } from '../../src/config/model-harness-runtime.js';
 
 describe('ExplorationBudget', () => {
@@ -47,5 +47,45 @@ describe('minimax model harness preset', () => {
     expect(resolveModelHarness('minimax', 'minimax-m3', {
       models: { 'minimax:minimax-m3': { explorationBudget: 0, explorationGuidance: false, maxIterations: 20 } },
     })).toEqual({ maxIterations: 20, explorationBudget: 0, explorationGuidance: false, emptyReplyRetries: 1 });
+  });
+});
+
+describe('SpinDetector (ADR 0042 §7)', () => {
+  it('hints once after 3 same-family calls with identical results', () => {
+    const spin = new SpinDetector();
+    expect(spin.record('grep', { pattern: 'a' }, 'src/a.ts:1:x')).toBeUndefined();
+    expect(spin.record('grep', { pattern: 'b' }, 'src/a.ts:1:x')).toBeUndefined();
+    const hint = spin.record('glob', { pattern: 'c' }, 'src/a.ts:1:x');
+    expect(hint).toMatchObject({ family: 'search', calls: 3, reason: 'identical_results' });
+    expect(hint?.note).toMatch(/^\[Harness note\] 3 search calls in a row returned nothing new/);
+    // only once per turn
+    for (let index = 0; index < 5; index += 1) expect(spin.record('grep', { pattern: 'd' }, 'src/a.ts:1:x')).toBeUndefined();
+  });
+
+  it('flags searches that match nothing', () => {
+    const spin = new SpinDetector();
+    spin.record('grep', { pattern: 'kick' }, "No matches for 'kick'");
+    spin.record('grep', { pattern: 'ban' }, "No matches for 'ban'");
+    expect(spin.record('grep', { pattern: 'mute' }, "No matches for 'mute'")?.reason).toBe('no_matches');
+  });
+
+  it('flags re-reading the same file even if the digest differs', () => {
+    const spin = new SpinDetector();
+    spin.record('read_file', { file_path: 'a.ts', offset: 0 }, 'v1');
+    spin.record('read_file', { offset: 0, file_path: 'a.ts' }, 'v2');
+    expect(spin.record('read_file', { file_path: 'a.ts', offset: 0 }, 'v3')?.reason).toBe('repeated_read');
+  });
+
+  it('does not fire on varied results, other families or interleaved tools', () => {
+    const spin = new SpinDetector();
+    expect(spin.record('grep', { pattern: 'a' }, 'one')).toBeUndefined();
+    expect(spin.record('grep', { pattern: 'b' }, 'two')).toBeUndefined();
+    expect(spin.record('grep', { pattern: 'c' }, 'three')).toBeUndefined();
+    expect(spin.record('read_file', { file_path: 'a.ts' }, 'same')).toBeUndefined();
+    expect(spin.record('grep', { pattern: 'd' }, 'same')).toBeUndefined();
+    expect(spin.record('grep', { pattern: 'e' }, 'same')).toBeUndefined();
+    expect(spin.record('read_file', { file_path: 'b.ts' }, 'same')).toBeUndefined();
+    expect(spin.record('read_file', { file_path: 'c.ts' }, 'same2')).toBeUndefined();
+    expect(spin.record('read_file', { file_path: 'd.ts' }, 'same3')).toBeUndefined();
   });
 });

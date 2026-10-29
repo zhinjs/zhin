@@ -33,6 +33,25 @@ preserved. An empty `messages` array means no reply is needed. Markdown uses
 `data.content`; attachments use canonical `data.media` references. Keep attachments
 and mentions as segments instead of embedding image syntax or literal `@name` in Markdown.
 
+## Reaction pacing
+
+Where an endpoint offers emoji reactions, the reply may carry a `reaction`, but most
+replies have none (`""` is the default). Even if a model fills one in, the host paces
+reactions per session: a reaction is applied only when at least `cooldownMs` have passed
+since the last *applied* reaction in that session and a random roll passes `probability`.
+A paced-out reaction is not sent; if it was the only output, the turn stays silent (it still
+counts as handled, with no retry or correction) and the `outbound` audit records
+`{ reaction: true, applied: false, paced: true }`. State is in memory only, at most 1024
+sessions per route generation.
+
+```yaml
+ai:
+  agent:
+    reactions:
+      cooldownMs: 600000   # minimum gap between reactions in one session (default 10 min)
+      probability: 0.35    # chance an allowed reaction is applied (default 0.35; 0 disables)
+```
+
 ## Supported content and identity
 
 The segment types offered to the model depend on the **endpoint the reply goes to**;
