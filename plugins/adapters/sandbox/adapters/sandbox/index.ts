@@ -17,10 +17,17 @@ export default defineAdapter<SandboxEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // Console UI 直连 URL 媒体、直接渲染 base64 内联媒体；path 由端点读盘
   // 物化为 base64 内联（sandbox 无平台上传通道）。交互段由 Console 原生承载。
-  segments: {
-    html: 'direct',
-    outboundMedia: ['url', 'base64', 'path'],
-    interactive: 'native',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          html: 'direct',
+          outboundMedia: ['url', 'base64', 'path'],
+          interactive: 'native',
+        },
+      },
+      delivery: { send: true, proactive: true },
+    },
   },
   create(context) {
     return new SandboxWsEndpoint({

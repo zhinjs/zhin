@@ -179,6 +179,24 @@ Rules:
 - **No profile still works.** An adapter without `profile` gets a conservative one derived from `capabilities`, `operations` and `segments` (it can send, plus declared recall/edit/reaction/typing and the existing segment policy); everything else is unsupported.
 - Read it in a turn: `turn.input.platformCapabilities?.has('actions.mute')`, `.get('actions.mute.durationSeconds')` (an action's `params` can be omitted from the path). Capabilities say what the platform allows; who may make the Bot do it is still decided by roles, hard gates and approvals.
 
+## Official adapter capability matrix
+
+A check mark means the profile declares it and the port is implemented; a blank cell means undeclared, i.e. unsupported. Only icqq implements the management actions in full; napcat only has group announcements.
+
+| Adapter | Recall | Quote reply | Edit | Reaction | Poke / mute / kick / card / title / essence / invite | Announce | Feedback | Other |
+|---|---|---|---|---|---|---|---|---|
+| icqq | ✓ (2 min) | ✓ | | ✓ (group) | ✓ (management needs the Bot to be admin/owner, title needs owner) | ✓ | group: reaction; private: status message | forward, events, scene facts |
+| qq (official) | ✓ | ✓ | | | | | | passive reply window: group 5 min x 5, C2C 60 min x 4, channel 5 min x 5 |
+| napcat | ✓ | ✓ | | | | ✓ (admin) | | |
+| onebot11 / onebot12 / milky | ✓ | ✓ | | | | | | |
+| kook / telegram / lark / discord | ✓ | ✓ | | | | | | discord reactions stay in `operations` (the interactions transport cannot react); telegram recall within 48 h |
+| slack | ✓ | | ✓ | ✓ (cancellable) | | | | |
+| satori / wecom | ✓ | | | | | | | |
+| weixin-ilink | | | | | | | typing | |
+| wechat-mp | | | | | | | | customer-service window 48 h |
+| bilibili / bilibili-live | | | | | | | | 1000-char comments / 20-char danmaku; bilibili-live declares liveDanmaku |
+| dingtalk / line / email / github / sandbox | | | | | | | | send only |
+
 ## Reference implementations
 
 - [`examples/minimal-bot/adapters/terminal/index.ts`](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts): treats the terminal as a chat platform — good to study.

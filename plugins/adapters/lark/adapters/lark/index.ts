@@ -15,15 +15,27 @@ export type { LarkEndpointOptions, LarkFetch } from '../../src/endpoint.js';
 
 export default defineAdapter<LarkEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall'],
   // image 段 canonical MediaRef 经 /im/v1/images 物化为 image_key
   // （base64 解码 / path 读盘 / url 下载后上传，kind=file 平台引用直通）；
   // canonical Markdown 由 endpoint codec 转为 lark_md 消息卡片；
   // 卡片交互未接入出站通道，交互段降级纯文本。
-  segments: {
-    outboundMedia: ['url', 'upload'],
-    interactive: 'native',
-    markdown: 'native',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'upload'],
+          interactive: 'native',
+          markdown: 'native',
+        },
+        quote: true,
+        recall: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group', 'channel'] },
+        quoteReply: { scopes: ['private', 'group', 'channel'] },
+      },
+      delivery: { send: true, proactive: true },
+    },
   },
   create(context) {
     const config = resolveLarkConfig(context.config);

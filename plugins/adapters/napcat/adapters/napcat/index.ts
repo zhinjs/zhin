@@ -31,12 +31,25 @@ declare module '@zhin.js/core' {
 
 export default defineAdapter<NapCatEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall'],
   // OneBot file 参数原生消费 url / base64:// 媒体，file:// 本地路径由 NapCat 侧读盘；
   // 无卡片交互面，交互段降级纯文本。
-  segments: {
-    outboundMedia: ['url', 'base64', 'path'],
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'base64', 'path'],
+          interactive: 'text',
+        },
+        quote: true,
+        recall: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group'] },
+        quoteReply: { scopes: ['private', 'group'] },
+        announce: { scopes: ['group'], requiresRole: 'admin' },
+      },
+      delivery: { send: true, proactive: true },
+    },
   },
   create(context) {
     const config = resolveNapCatConfig(context.config);

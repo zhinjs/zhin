@@ -178,6 +178,24 @@ export default defineAdapter({
 - **不写画像也能用**。没有 `profile` 的适配器按 `capabilities`、`operations`、`segments` 得到一个保守画像（能发送、已声明的撤回/编辑/回应/输入中、已有的段策略），其余一律不支持。
 - 回合内读取：`turn.input.platformCapabilities?.has('actions.mute')`、`.get('actions.mute.durationSeconds')`（动作的 `params` 在路径里可省略）。能力描述平台允许什么；谁能让 Bot 这么做，仍由角色、硬闸和审批决定。
 
+## 官方适配器能力矩阵
+
+「✓」表示画像已声明且端口已实现；空白表示未声明，即不支持。管理类动作仅 icqq 有完整实现，napcat 只有群公告。
+
+| 适配器 | 撤回 | 引用回复 | 编辑 | 回应 | 戳一戳 / 禁言 / 踢人 / 名片 / 头衔 / 精华 / 邀请 | 群公告 | 输入反馈 | 其他 |
+|---|---|---|---|---|---|---|---|---|
+| icqq | ✓（2 分钟） | ✓ | | ✓（群） | ✓（管理类需 Bot 为管理员/群主，头衔需群主） | ✓ | 群：回应；私聊：状态消息 | 转发、事件、场景信息 |
+| qq（官方） | ✓ | ✓ | | | | | | 被动回复窗口：群 5 分钟 × 5、C2C 60 分钟 × 4、频道 5 分钟 × 5 |
+| napcat | ✓ | ✓ | | | | ✓（管理员） | | |
+| onebot11 / onebot12 / milky | ✓ | ✓ | | | | | | |
+| kook / telegram / lark / discord | ✓ | ✓ | | | | | | discord 的回应仍由 `operations` 声明（interactions 传输不能回应）；telegram 撤回 48 小时 |
+| slack | ✓ | | ✓ | ✓（可取消） | | | | |
+| satori / wecom | ✓ | | | | | | | |
+| weixin-ilink | | | | | | | 输入中 | |
+| wechat-mp | | | | | | | | 客服消息窗口 48 小时 |
+| bilibili / bilibili-live | | | | | | | | 评论 1000 字 / 弹幕 20 字；bilibili-live 声明 liveDanmaku |
+| dingtalk / line / email / github / sandbox | | | | | | | | 仅发送 |
+
 ## 参考实现
 
 - [`examples/minimal-bot/adapters/terminal/index.ts`](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts)：把终端当作一个聊天平台，适合对照学习。

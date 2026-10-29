@@ -12,11 +12,19 @@ export type { BilibiliLiveEndpointOptions } from '../../src/endpoint.js';
 export default defineAdapter<BilibiliLiveEndpointConfig>({
   capabilities: ['inbound', 'outbound', 'liveDanmaku'],
   // 弹幕只支持纯文本；mention 转成平台的「回复」字段。
-  segments: {
-    supported: ['text', 'mention'],
-    html: 'text',
-    markdown: 'text',
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          supported: ['text', 'mention'],
+          html: 'text',
+          markdown: 'text',
+          interactive: 'text',
+        },
+        maxLength: 20,
+      },
+      delivery: { send: true },
+    },
   },
   create(context) {
     return new BilibiliLiveEndpoint({

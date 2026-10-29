@@ -63,6 +63,7 @@ import {
 } from './protocol.js';
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
 import { ManagedIcqqClient, type IcqqBackgroundOperation } from './managed-client.js';
+import { createIcqqActionPorts } from './group-actions.js';
 import { inspectGroupMember, moderateGroupMember } from './group-moderation.js';
 import { inspectGroupMemberProfile, inspectGroupScene } from './group-scene.js';
 
@@ -160,6 +161,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
         throw new Error('QQ did not confirm the group notice');
       }
     },
+    ...createIcqqActionPorts(() => this.client),
   });
 
   readonly control: EndpointControl = Object.freeze({

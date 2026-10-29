@@ -16,9 +16,16 @@ export type { LineEndpointOptions, LineFetch } from '../../src/endpoint.js';
 export default defineAdapter<LineEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // LINE Messaging API 媒体消息仅消费远程 URL；无按钮交互面，交互段降级纯文本。
-  segments: {
-    outboundMedia: ['url'],
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url'],
+          interactive: 'text',
+        },
+      },
+      delivery: { send: true },
+    },
   },
   create(context) {
     const config = resolveLineConfig(context.config);

@@ -29,11 +29,25 @@ export default defineAdapter<DiscordEndpointConfig>({
   operations: (context) => context.config.connection === 'interactions'
     ? ['recall']
     : ['recall', 'reaction'],
+  // 反应（reaction）留在上面的 operations：profile 对 Adapter 静态，而 interactions 传输不能加反应。
   // 媒体 url 直发或由 AttachmentBuilder 物化本地文件上传；message components 原生按钮承载交互段。
-  segments: {
-    outboundMedia: ['url', 'upload'],
-    interactive: 'native',
-    markdown: 'native',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'upload'],
+          interactive: 'native',
+          markdown: 'native',
+        },
+        quote: true,
+        recall: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group', 'channel'] },
+        quoteReply: { scopes: ['private', 'group', 'channel'] },
+      },
+      delivery: { send: true, proactive: true },
+    },
   },
   create(context) {
     const config = resolveDiscordConfig(context.config);

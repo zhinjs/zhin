@@ -33,11 +33,23 @@ export type {
 
 export default defineAdapter<MilkyEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall'],
   // Milky 协议资源 uri 消费 http(s):// 与 base64:// 形式；无卡片交互面，交互段降级纯文本。
-  segments: {
-    outboundMedia: ['url', 'base64'],
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'base64'],
+          interactive: 'text',
+        },
+        quote: true,
+        recall: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group'] },
+        quoteReply: { scopes: ['private', 'group'] },
+      },
+      delivery: { send: true, proactive: true },
+    },
   },
   create(context) {
     const config = resolveMilkyConfig(context.config);

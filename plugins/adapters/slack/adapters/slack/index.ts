@@ -15,14 +15,30 @@ export type { SlackEndpointOptions, SlackSocketLike, SlackWebClientLike } from '
 
 export default defineAdapter<SlackEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall', 'edit', 'reaction'],
   // 媒体段（canonical MediaRef）：kind=url 直发（image 走 attachment image_url，
   // 其余拉取后上传）；kind=base64 解码后经 files.uploadV2 上传；kind=path 读盘上传；
   // kind=file 无 Slack 对应物，丢弃留痕。Block Kit 原生按钮承载交互段。
-  segments: {
-    outboundMedia: ['url', 'upload', 'path'],
-    interactive: 'native',
-    markdown: 'native',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'upload', 'path'],
+          interactive: 'native',
+          markdown: 'native',
+        },
+        recall: {},
+        edit: true,
+        reaction: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group', 'channel'] },
+        reaction: {
+          scopes: ['private', 'group', 'channel'],
+          params: { cancellable: true },
+        },
+      },
+      delivery: { send: true, proactive: true },
+    },
   },
   create(context) {
     const config = resolveSlackConfig(context.config);

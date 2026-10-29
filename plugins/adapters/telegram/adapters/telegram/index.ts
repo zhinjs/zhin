@@ -15,13 +15,28 @@ export type { TelegramEndpointOptions, TelegramFetch } from '../../src/endpoint.
 
 export default defineAdapter<TelegramEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall'],
   // 媒体 url / file_id 直发，base64 / 本地路径经 multipart attach:// 上传物化；
   // inline keyboard 原生按钮承载交互段。
-  segments: {
-    outboundMedia: ['url', 'upload'],
-    interactive: 'native',
-    markdown: 'native',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'upload'],
+          interactive: 'native',
+          markdown: 'native',
+        },
+        quote: true,
+        recall: { timeLimitSeconds: 172800 },
+      },
+      actions: {
+        recall: {
+          scopes: ['private', 'group', 'channel'],
+          params: { timeLimitSeconds: 172800 },
+        },
+        quoteReply: { scopes: ['private', 'group', 'channel'] },
+      },
+      delivery: { send: true, proactive: true },
+    },
   },
   create(context) {
     const config = resolveTelegramConfig(context.config);
