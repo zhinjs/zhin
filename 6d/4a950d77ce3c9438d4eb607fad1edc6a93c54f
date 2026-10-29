@@ -1,0 +1,136 @@
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 20-22,24-30
+  s_9477e63ef5cee5::t_e16f02e51399d8 23
+plugins/adapters/milky/adapters/milky/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 37-39,41-52
+  s_9477e63ef5cee5::t_e16f02e51399d8 40
+packages/im/adapter/tests/adapter.test.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 1381-1454
+.changeset/adapter-capability-profile-spec.md
+  s_9477e63ef5cee5::t_c353f320be8cbb 1-7
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_9477e63ef5cee5::t_de43e41c472efb 55,63,70,104
+  s_9477e63ef5cee5::t_b3bc3a02ba9357 23-36,39-54,56-62,64-69,71-101,103,105-108,110
+packages/im/adapter/tests/capability-profile.test.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 1-231
+packages/im/adapter/src/endpoint-management.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 79-97
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 6,17,231-259
+  s_9477e63ef5cee5::t_58c5ae64d0ab25 260-261
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 105,1135-1136,1260
+plugins/adapters/onebot11/adapters/onebot11/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 32
+  s_9477e63ef5cee5::t_16d064fa47efc1 29-31,33-44
+plugins/adapters/onebot12/adapters/onebot12/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 36
+  s_9477e63ef5cee5::t_16d064fa47efc1 33-35,37-48
+plugins/adapters/wechat-mp/adapters/wechat-mp/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 24
+  s_9477e63ef5cee5::t_16d064fa47efc1 21-23,25-33
+docs/en/authoring/adapters.md
+  s_9477e63ef5cee5::t_7590c545a98864 182-199
+  s_9477e63ef5cee5::t_c353f320be8cbb 114-181
+docs/authoring/adapters.md
+  s_9477e63ef5cee5::t_7590c545a98864 181-198
+  s_9477e63ef5cee5::t_c353f320be8cbb 114-180
+plugins/adapters/github/adapters/github/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 32-34,36-41
+  s_9477e63ef5cee5::t_e16f02e51399d8 35
+plugins/adapters/line/adapters/line/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 22
+  s_9477e63ef5cee5::t_16d064fa47efc1 19-21,23-28
+plugins/adapters/bilibili/adapters/bilibili/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 22-24,26-34
+  s_9477e63ef5cee5::t_e16f02e51399d8 25
+plugins/adapters/icqq/src/endpoint.ts
+  s_9477e63ef5cee5::t_1bba3f0465cf95 65
+  s_9477e63ef5cee5::t_3c91b3008dfbdd 163
+packages/im/adapter/src/capability-profile.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 1-1010
+plugins/adapters/bilibili-live/adapters/bilibili-live/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 15-17,19-27
+  s_9477e63ef5cee5::t_e16f02e51399d8 18
+plugins/adapters/napcat/adapters/napcat/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 39
+  s_9477e63ef5cee5::t_16d064fa47efc1 36-38,40-52
+plugins/adapters/slack/adapters/slack/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 21-23,25-41
+  s_9477e63ef5cee5::t_e16f02e51399d8 24
+packages/im/ai/tests/memory/message-aliases-and-quotes.test.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 1
+plugins/adapters/tests/adapter-profiles.test.ts
+  s_9477e63ef5cee5::t_62e6b5ba46532f 1-157
+plugins/adapters/satori/adapters/satori/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 25-27,29-38
+  s_9477e63ef5cee5::t_e16f02e51399d8 28
+.changeset/0044-c5-adapter-profiles.md
+  s_9477e63ef5cee5::t_0c4b1acaae2ee7 1-24
+packages/im/adapter/src/definition.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 13-17,153-161,215-241,251,415-420
+packages/im/adapter/src/adapter-index.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 35-43,77-79,125-128,148,258-279,522-526,534-544,562-570
+  s_9477e63ef5cee5::t_b6e0ea0fbee8e6 34
+plugins/adapters/icqq/src/group-actions.ts
+  s_9477e63ef5cee5::t_3c91b3008dfbdd 44,47,57,63,69,76,84,90
+  s_9477e63ef5cee5::t_76a4d7fd541a26 1-43,45-46,48-56,58-62,64-68,70-75,77-83,85-89,91-97
+plugins/adapters/discord/adapters/discord/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 37
+  s_9477e63ef5cee5::t_f63904bdbf4c15 32
+  s_9477e63ef5cee5::t_16d064fa47efc1 34-36,38-50
+basic/cli/src/commands/usage.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 7-8,10,14-16,77-87,102-108,110-119,121-145,147-180,182,206
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 14-15,42,222-242,408-409,529
+plugins/adapters/lark/adapters/lark/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 22-24,26-38
+  s_9477e63ef5cee5::t_e16f02e51399d8 25
+plugins/adapters/weixin-ilink/adapters/weixin-ilink/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 25-27,29-35
+  s_9477e63ef5cee5::t_e16f02e51399d8 28
+plugins/adapters/email/adapters/email/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 25-27,29-36
+  s_9477e63ef5cee5::t_e16f02e51399d8 28
+plugins/adapters/icqq/tests/profile.test.ts
+  s_9477e63ef5cee5::t_952f50eb34aec9 1-35,37-214
+  s_9477e63ef5cee5::t_84f5a6accc54a2 36
+plugins/adapters/dingtalk/adapters/dingtalk/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 20-22,24-30
+  s_9477e63ef5cee5::t_e16f02e51399d8 23
+packages/im/agent/src/context/history-window.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 30-31
+plugins/adapters/kook/adapters/kook/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 34
+  s_9477e63ef5cee5::t_16d064fa47efc1 31-33,35-47
+plugins/adapters/qq/adapters/qq/index.ts
+  s_9477e63ef5cee5::t_16d064fa47efc1 36-38,40-54,56-57,59-60,62
+  s_9477e63ef5cee5::t_e16f02e51399d8 39,55,58,61
+plugins/adapters/telegram/adapters/telegram/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 23
+  s_9477e63ef5cee5::t_16d064fa47efc1 20-22,24-39
+plugins/adapters/wecom/adapters/wecom/index.ts
+  s_9477e63ef5cee5::t_e16f02e51399d8 24
+  s_9477e63ef5cee5::t_16d064fa47efc1 21-23,25-34
+packages/im/adapter/src/index.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 10-11
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9477e63ef5cee5::t_c353f320be8cbb 132-137
+  s_9477e63ef5cee5::t_2912552e365bc1 131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6d4a950d77ce3c9438d4eb607fad1edc6a93c54f",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
