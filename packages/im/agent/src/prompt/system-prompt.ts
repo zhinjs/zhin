@@ -23,6 +23,7 @@ import {
   CHAT_STYLE_RULES,
   CHAT_WORKSPACE_TASK_RULES,
 } from './rules/index.js';
+import { triggerSentence } from '../skill/capability-catalog.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
 import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
@@ -106,7 +107,6 @@ export interface RichSystemPromptContext {
 
 // ── Section builders ──
 
-const ORCHESTRATOR_SKILL_DESC_MAX = 96;
 
 function prependBullets(items: (string | string[] | null)[]): string[] {
   return items.filter(Boolean).flatMap(item =>
@@ -123,12 +123,6 @@ function decodeXmlEntities(text: string): string {
     if (entity === 'gt') return '>';
     return '"';
   });
-}
-
-function truncateSkillDesc(desc: string, max = ORCHESTRATOR_SKILL_DESC_MAX): string {
-  const oneLine = desc.replace(/\s+/g, ' ').trim();
-  if (oneLine.length <= max) return oneLine;
-  return `${oneLine.slice(0, max - 1)}…`;
 }
 
 function parseSkillsSummaryXML(xml: string): Array<{ name: string; available: boolean; requires?: string; desc: string }> {
@@ -192,13 +186,15 @@ function buildResourceHubSkillsCatalog(
   if (entries.length === 0) return null;
 
   const lines: string[] = [];
+  // Sorted: the catalog is part of the cached prefix and must not depend on registration order.
+  entries = [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   for (const e of entries) {
     if (!e.available) {
       const req = e.requires ? `; needs ${e.requires}` : '';
       lines.push(` - ${e.name} (unavailable${req})`);
       continue;
     }
-    lines.push(` - ${e.name}: ${truncateSkillDesc(e.desc)}`);
+    lines.push(` - ${e.name}: ${triggerSentence(e.desc)}`);
   }
   return lines.join('\n');
 }

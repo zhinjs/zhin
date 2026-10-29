@@ -66,7 +66,7 @@ import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
-import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
+import { renderDeferredToolIndex, toolIndexGroup } from '../skill/capability-catalog.js';
 import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
@@ -634,7 +634,7 @@ export async function* runAgentLoopTextTurnRun(
   if (sceneText) systemPrompt = `${systemPrompt}\n\n${sceneText}`;
   if (hasTools && !directTools) {
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
-      .map((item) => ({ name: item.name, description: item.brief })));
+      .map((item) => ({ name: item.name, description: item.brief, group: toolIndexGroup(item) })));
     if (toolIndex) {
       const block = createPromptContextBlock('deferred-tools', toolIndex);
       const userIndex = promptMessages.map(message => message.role === 'user' && Array.isArray(message.content)).lastIndexOf(true);

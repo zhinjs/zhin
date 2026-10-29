@@ -19,7 +19,7 @@ export default defineEvalCase({
     },
     {
       name: 'release-notes',
-      description: 'Draft release notes from changesets.',
+      description: 'Draft release notes from changesets',
       instructions: 'RELEASE-NOTES-INSTRUCTIONS: read .changeset first.',
     },
   ],
@@ -27,8 +27,8 @@ export default defineEvalCase({
   expect: {
     systemPromptContains: [
       '## Available skills',
-      '- weekly-report: Write the weekly engineering report from merged PRs and closed issues.',
-      '- release-notes: Draft release notes from changesets.',
+      '- weekly-report: Write the weekly engineering report…',
+      '- release-notes: Draft release notes from changesets',
       'load_skill(name)',
     ],
     systemPromptNotContains: ['WEEKLY-REPORT-INSTRUCTIONS', 'RELEASE-NOTES-INSTRUCTIONS', 'internal routing notes'],

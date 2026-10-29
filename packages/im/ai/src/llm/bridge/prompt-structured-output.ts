@@ -17,8 +17,21 @@ export function structuredOutputMode(model: Pick<Model, 'sdk' | 'compat'>): Stru
   return model.compat?.structuredOutput ?? (model.sdk === 'deepseek' ? 'prompt' : 'native');
 }
 
+// Schema object -> compact prompt text. Keyed by identity (callers cache their schemas), so native
+// providers keep receiving the schema itself while prompt mode shows the model the short form.
+const compactPromptText = new WeakMap<object, string>();
+
+/**
+ * Registers the text prompt-mode providers show instead of `JSON.stringify(schema)` (ADR 0042 §6).
+ * The schema stays the validator and the native-mode API parameter; only the prompt rendering changes.
+ */
+export function registerStructuredOutputPromptText(schema: Record<string, unknown>, text: string): void {
+  compactPromptText.set(schema, text);
+}
+
 export function withStructuredOutputInstruction(context: Context, schema: Record<string, unknown>): Context {
-  const instruction = [
+  const compact = compactPromptText.get(schema);
+  const instruction = compact ?? [
     'Respond with only a JSON object that matches this JSON Schema: no prose before or after it and no Markdown fence.',
     JSON.stringify(schema),
   ].join('\n');
