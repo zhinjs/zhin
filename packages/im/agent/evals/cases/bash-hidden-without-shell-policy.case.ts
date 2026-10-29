@@ -11,7 +11,7 @@ export default defineEvalCase({
   bashOutput: 'README.md',
   script: [
     { toolCalls: [{ name: 'bash', args: { command: 'ls' }, notOffered: true }] },
-    { toolCalls: [{ name: 'list_dir', args: { path: '.' } }] },
+    { toolCalls: [{ name: 'list_dir', args: { path: '.' }, notOffered: true }] },
     { text: '目录里有 README.md。' },
   ],
   expect: {

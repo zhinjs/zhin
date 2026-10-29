@@ -11,7 +11,7 @@ export default defineEvalCase({
   bashOutput: 'README.md\npackage.json',
   script: [
     // bash stays deferred (not in the always-loaded set); a direct call auto-loads it under the turn policy.
-    { toolCalls: [{ name: 'bash', args: { command: 'ls' }, notOffered: true }] },
+    { toolCalls: [{ name: 'bash', args: { command: 'ls' } }] },
     { text: '有 README.md 和 package.json 两个文件。' },
   ],
   expect: {

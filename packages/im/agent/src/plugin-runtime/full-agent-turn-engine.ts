@@ -27,6 +27,7 @@ import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
+import { resolveToolTier } from './tool-tier.js';
 import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import { labelThirdPartyGuidance } from '../prompt/third-party-guidance.js';
 import { BOOTSTRAP_PROMPT_ORDER, fillPromptSlots } from '../prompt/system-prompt.js';
@@ -172,6 +173,7 @@ async function* runInteractiveTurn(
     sessionSnapshot: primed.snapshot,
     config: host.config,
     platform: context.turn.origin.kind === 'im' ? context.turn.origin.platform : undefined,
+    toolTier: resolveToolTier(context.turn),
     persistSnapshot: (next) => host.contextRepository.setDeferredToolSnapshot(prep.sessionId, next),
     decision: context.decision,
   });

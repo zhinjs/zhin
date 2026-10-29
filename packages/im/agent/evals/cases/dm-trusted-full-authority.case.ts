@@ -11,7 +11,7 @@ export default defineEvalCase({
   bashOutput: 'ok',
   tools: [{ name: 'send_group_message', result: 'sent' }],
   script: [
-    { toolCalls: [{ name: 'write_file', args: { file_path: 'config.ts', content: 'export const port = 4000;\n' } }] },
+    { toolCalls: [{ name: 'write_file', args: { file_path: 'config.ts', content: 'export const port = 4000;\n' }, notOffered: true }] },
     { toolCalls: [{ name: 'bash', args: { command: 'echo ok' }, notOffered: true }] },
     { toolCalls: [{ name: 'send_group_message', args: { group: 'g1', text: '端口已改为 4000' } }] },
     { text: '已改端口、检查通过并通知群里。' },

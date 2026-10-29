@@ -246,7 +246,7 @@ outline: [2, 3]
 | `ai.agent.deferredTools` | object | 否 | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | 否 | — | — |
 | `ai.agent.deferredTools.discoverTopK` | number \| string | 否 | — | — |
-| `ai.agent.deferredTools.alwaysLoadedTools` | array&lt;string&gt; | 否 | — | 额外常驻工具；默认在内置常驻集合基础上追加 |
+| `ai.agent.deferredTools.alwaysLoadedTools` | array&lt;string&gt; | 否 | — | 额外常驻工具；在当前场景档（群聊、私聊、主人私聊）的常驻集合基础上追加 |
 | `ai.agent.deferredTools.alwaysLoadedMode` | string | 否 | — | `extend`（默认）追加到内置常驻集合；`replace` 完全替换 |
 | `ai.agent.deferredTools.mcpServers` | object | 否 | — | — |
 | `ai.agent.deferredTools.mcpServers.<key>.alwaysLoaded` | array&lt;string&gt; | 否 | — | — |

@@ -1,6 +1,6 @@
 import {
   addSkillToSnapshot,
-  getLoadedToolNamesFromSnapshot,
+  getLoadedToolNamesInLoadOrder,
   touchToolInSnapshot,
   touchToolsInSnapshot,
   type AgentTool,
@@ -18,7 +18,7 @@ import { rankDecisionCandidates } from '../decision/rank.js';
 import type { AgentDecisionRuntime } from '../decision/types.js';
 import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
-import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
+import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem, type ToolTier } from '../tool-catalog/types.js';
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
 import { resolveSkillTools } from './skill-tool-resolution.js';
 
@@ -82,6 +82,12 @@ export interface DeferredCapabilityPlanOptions {
   readonly sessionSnapshot: DeferredToolSessionSnapshot;
   readonly config: Parameters<typeof resolveDeferredToolsConfig>[0];
   readonly platform?: string;
+  /**
+   * Scene tier of the resident tool set (ADR 0042 §2). Omitted means `full`
+   * (scheduled / detached / sub-agent turns keep the whole default set). The tier
+   * only chooses which authorized tools start loaded; it never grants access.
+   */
+  readonly toolTier?: ToolTier;
   readonly persistSnapshot: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
   readonly decision?: AgentDecisionRuntime;
 }
@@ -161,7 +167,7 @@ export function createDeferredCapabilityPlan(
   if (options !== null && typeof options === 'object' && 'authority' in options) {
     throw new Error('createDeferredCapabilityPlan no longer accepts "authority"; use createWorkroomDeferredCapabilityPlan or pass an injected "ceiling"');
   }
-  const config = resolveDeferredToolsConfig(options.config);
+  const config = resolveDeferredToolsConfig(options.config, options.toolTier);
   const alwaysLoaded = new Set(config.alwaysLoadedTools);
   const projected = projectCapabilities(options.capabilities, options.ceiling);
   const executableCapabilities = projected.tools.filter(
@@ -208,7 +214,7 @@ export function createDeferredCapabilityPlan(
   const catalog = buildToolCatalog({ tools: allTools, alwaysLoaded });
   const publicToolNames = new Set(publicCatalog.map(item => item.name));
   const controller: DeferredCapabilityController = Object.freeze({
-    loadedToolNames: () => getLoadedToolNamesFromSnapshot(snapshot),
+    loadedToolNames: () => getLoadedToolNamesInLoadOrder(snapshot),
     loadedSkillInstructions: () => loadedSkillInstructions(projected.skills, snapshot),
     loadedSkillBlocks: () => loadedSkills(projected.skills, snapshot).map(skillContextBlock),
     modelOutputBlocks: (name: string, args: unknown, text: string): TextContentBlock[] | undefined => {
@@ -329,9 +335,12 @@ function projectSessionSnapshot(
     if (!loadedSkillNames.has(skill.qualifiedName) && !loadedSkillNames.has(skill.name)) continue;
     for (const tool of resolveSkillTools(skill, capabilities.tools)) allowedTools.add(tool);
   }
+  const loadedTools = Object.fromEntries(Object.entries(snapshot.loadedTools)
+    .filter(([name]) => allowedTools.has(name)));
+  const loadedOrder = getLoadedToolNamesInLoadOrder(snapshot).filter(name => name in loadedTools);
   return {
-    loadedTools: Object.fromEntries(Object.entries(snapshot.loadedTools)
-      .filter(([name]) => allowedTools.has(name))),
+    loadedTools,
+    ...(loadedOrder.length > 0 ? { loadedOrder } : {}),
     loadedSkills,
   };
 }
@@ -370,6 +379,9 @@ interface MetaCapabilityOptions {
   readonly persist: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
   readonly decision?: AgentDecisionRuntime;
 }
+
+/** Best discover matches whose schema is attached (and loaded) in the same result. */
+export const DISCOVER_SCHEMA_LIMIT = 3;
 
 function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCapability[] {
   const byName = new Map(options.catalog.map((item) => [item.name, item]));
@@ -411,9 +423,29 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
           return skill ? [{ kind: 'skill' as const, name, brief: skill.description }] : [];
         }) : fallbackSkills;
       const rows = [...tools, ...skills];
-      return rows.length > 0
-        ? rows.map((item) => `- [${item.kind}] ${item.name}: ${item.brief}`).join('\n')
-        : 'No matches.';
+      if (rows.length === 0) return 'No matches.';
+      const listing = rows.map((item) => `- [${item.kind}] ${item.name}: ${item.brief}`).join('\n');
+      // ADR 0042 §3: the best matches are loaded and their schemas attached, so the
+      // model can call them right away instead of spending a load_tool round.
+      const loadedNow = new Set(getLoadedToolNamesInLoadOrder(options.getSnapshot()));
+      const attach = tools
+        .slice(0, DISCOVER_SCHEMA_LIMIT)
+        .flatMap(item => {
+          const entry = byName.get(item.name);
+          return entry && !options.pinned.has(item.name) && !loadedNow.has(item.name) ? [entry] : [];
+        });
+      if (attach.length === 0) return listing;
+      await options.persist(touchToolsInSnapshot(
+        options.getSnapshot(),
+        attach.map(entry => entry.name),
+        options.maxLoaded,
+      ));
+      const schemas = attach.map(entry => JSON.stringify({
+        name: entry.name,
+        description: entry.fullTool.description,
+        parameters: entry.fullTool.parameters,
+      })).join('\n');
+      return `${listing}\n\nLoaded (callable now; schemas):\n${schemas}\n__zhin_tools_mutated__`;
     }),
     metaCapability(options.owner, 'load_tool', 'Load a deferred tool schema into this session.', {
       type: 'object',
@@ -516,7 +548,7 @@ function activateSkill(
 }
 
 function disclosedToolCatalog(options: MetaCapabilityOptions): ToolCatalogItem[] {
-  const loaded = new Set(getLoadedToolNamesFromSnapshot(options.getSnapshot()));
+  const loaded = new Set(getLoadedToolNamesInLoadOrder(options.getSnapshot()));
   const privateTools = options.tools.filter(tool => tool.hidden && loaded.has(tool.name));
   return [...options.catalog,
     ...buildToolCatalog({ tools: privateTools.map(capabilityAsAgentTool), alwaysLoaded: new Set<string>() })];

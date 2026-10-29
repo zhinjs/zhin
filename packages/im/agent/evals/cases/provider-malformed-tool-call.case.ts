@@ -9,7 +9,7 @@ export default defineEvalCase({
   workspace: { 'notes.md': '周五发布 1.2 版本' },
   nativeTools: ['read_file'],
   script: [
-    { toolCalls: [{ name: 'read_file', args: { file_path: 42, bogus: true } }] },
+    { toolCalls: [{ name: 'read_file', args: { file_path: 42, bogus: true }, notOffered: true }] },
     { toolCalls: [{ name: 'read_file', args: { path: 'notes.md' } }] },
     { text: 'notes.md 里写着：周五发布 1.2 版本。' },
   ],
