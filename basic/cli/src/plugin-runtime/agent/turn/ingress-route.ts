@@ -1115,7 +1115,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             ...(admission ? [admission.signal] : []),
             ...(lease.retirementSignal ? [lease.retirementSignal] : []),
           ]);
-          const contextState = await resolveRuntimeTurnContextState(snapshot, message.conversation, signal);
+          const contextState = await resolveRuntimeTurnContextState(snapshot, message.conversation, signal, message.sender?.id);
           signal.throwIfAborted();
           // Capabilities are read with the resolved conversation facts (bot role, mute) on the access.
           const contextAccess = createRuntimeTurnAccess(message, senderRoles, contextState);

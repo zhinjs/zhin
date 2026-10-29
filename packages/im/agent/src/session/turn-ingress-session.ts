@@ -23,10 +23,16 @@ export function resolveIngressUserMessage(
   const extra: AgentMessageExtra | undefined = referenceBlock
     ? { quote: { block: referenceBlock } }
     : undefined;
+  const sender = turn.input.contextState?.sender;
+  // ADR 0041: the platform role joins the product roles (`master,owner`); duplicates collapse.
+  const roles = [...new Set([...turn.principal.roles, ...(sender?.platformRole ? [sender.platformRole] : [])])];
   const user = createUserMessage(content, undefined, Date.now(), {
     subjectId: turn.principal.subjectId,
     ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
-    roles: [...turn.principal.roles],
+    roles,
+    ...(sender?.groupNickname ? { groupNickname: sender.groupNickname } : {}),
+    ...(sender?.groupTitle ? { groupTitle: sender.groupTitle } : {}),
+    ...(sender?.mutedUntil !== undefined ? { mutedUntil: sender.mutedUntil } : {}),
     authorizationRoles: [...turn.principal.roles],
     ...(turn.principal.origin ? { origin: turn.principal.origin } : {}),
     ...(turn.origin.kind === 'im' ? { scope: turn.origin.scope } : {}),

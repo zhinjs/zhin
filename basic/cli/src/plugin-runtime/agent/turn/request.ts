@@ -42,11 +42,94 @@ export interface RuntimeSenderRoles {
   readonly isTrusted: boolean;
 }
 
-/** Resolve this turn's account and, for ICQQ groups, its platform role before tool discovery. */
+/** ADR 0041 §6: scene/sender facts are reused for at most this long. */
+export const TURN_FACT_CACHE_TTL_MS = 60_000;
+/** Upper bound of cached lookups per generation (scenes + senders). */
+export const TURN_FACT_CACHE_MAX_ENTRIES = 256;
+const MAX_ADMIN_IDS = 20;
+const KEY_SEP = '\u0000';
+
+interface FactCacheEntry { readonly at: number; readonly value: unknown }
+
+/** Bounded in-memory TTL cache; only successful lookups are stored. */
+class TurnFactCache {
+  readonly #entries = new Map<string, FactCacheEntry>();
+  get<T>(key: string, now: number): T | undefined {
+    const entry = this.#entries.get(key);
+    if (!entry) return undefined;
+    if (now - entry.at >= TURN_FACT_CACHE_TTL_MS) { this.#entries.delete(key); return undefined; }
+    return entry.value as T;
+  }
+  set(key: string, value: unknown, now: number): void {
+    this.#entries.delete(key);
+    if (this.#entries.size >= TURN_FACT_CACHE_MAX_ENTRIES) {
+      for (const [k, entry] of this.#entries) {
+        if (now - entry.at >= TURN_FACT_CACHE_TTL_MS) this.#entries.delete(k);
+      }
+      while (this.#entries.size >= TURN_FACT_CACHE_MAX_ENTRIES) {
+        const oldest = this.#entries.keys().next();
+        if (oldest.done) break;
+        this.#entries.delete(oldest.value);
+      }
+    }
+    this.#entries.set(key, { at: now, value });
+  }
+  get size(): number { return this.#entries.size; }
+}
+
+/** Keyed by the generation's adapter index, so a disposed generation's cache is unreachable and collected. */
+const factCaches = new WeakMap<object, TurnFactCache>();
+
+function factCacheFor(owner: object): TurnFactCache {
+  let cache = factCaches.get(owner);
+  if (!cache) factCaches.set(owner, cache = new TurnFactCache());
+  return cache;
+}
+
+/** Number of cached lookups for a generation's adapter index (tests / diagnostics). */
+export function turnFactCacheSize(owner: object): number {
+  return factCaches.get(owner)?.size ?? 0;
+}
+
+async function raceSignal<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  let onAbort!: () => void;
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  try { return await Promise.race([task, aborted]); } finally { signal.removeEventListener('abort', onAbort); }
+}
+
+async function cachedLookup<T>(
+  cache: TurnFactCache, key: string, signal: AbortSignal, lookup: () => Promise<T>,
+): Promise<T | undefined> {
+  const hit = cache.get<T>(key, Date.now());
+  if (hit !== undefined) return hit;
+  try {
+    const value = await raceSignal(lookup(), signal);
+    cache.set(key, value, Date.now());
+    return value;
+  } catch (error) {
+    signal.throwIfAborted();
+    logger.debug(formatCompact({
+      op: 'agent_scene_fact_lookup_failed', kind: key.split(KEY_SEP)[0],
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return undefined;
+  }
+}
+
+/**
+ * Resolve this turn's account and, for ICQQ groups, the ADR 0041 scene facts (group, Bot role and
+ * card, sender role/card/title/mute) before tool discovery. The Bot role is always read fresh;
+ * group and sender facts reuse a short per-generation cache. Failed lookups omit their fields.
+ */
 export async function resolveRuntimeTurnContextState(
   snapshot: Pick<RuntimeSnapshot, 'projections'>,
   conversation: ConversationRef,
   signal: AbortSignal,
+  senderId?: string,
 ): Promise<TurnContextState | undefined> {
   signal.throwIfAborted();
   const adapters = snapshot.projections?.get(adapterFeatureId);
@@ -60,25 +143,66 @@ export async function resolveRuntimeTurnContextState(
     return Object.freeze({ bot: Object.freeze(bot) });
   }
   const management = resolveEndpointManagement(endpoint);
-  if (!management?.inspectGroupMember) {
+  if (!management?.inspectGroupMember && !management?.inspectGroupMemberProfile) {
     return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'unsupported' }) });
   }
-  try {
-    const member = await management.inspectGroupMember(conversation.id, id, signal);
-    signal.throwIfAborted();
-    return Object.freeze({ bot: Object.freeze({
-      ...bot,
-      ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }),
-    }) });
-  } catch (error) {
-    signal.throwIfAborted();
-    logger.warn(formatCompact({
-      op: 'agent_bot_role_lookup_failed', endpoint: endpointId, group: conversation.id,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'lookup_failed' }) });
-  }
+  const cache = factCacheFor(adapters);
+  const group = conversation.id;
+  const scopeKey = `${endpointId}${KEY_SEP}${group}`;
+  const sender = senderId && senderId !== id ? senderId : undefined;
+
+  const botTask = (async (): Promise<NonNullable<TurnContextState['bot']>> => {
+    try {
+      if (management.inspectGroupMemberProfile) {
+        const member = await raceSignal(management.inspectGroupMemberProfile(group, id, signal), signal);
+        return {
+          ...bot,
+          ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }),
+          ...(member.card ? { nickname: member.card } : {}),
+          ...(member.mutedUntil !== undefined ? { mutedUntil: member.mutedUntil } : {}),
+        };
+      }
+      const member = await raceSignal(management.inspectGroupMember!(group, id, signal), signal);
+      return { ...bot, ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }) };
+    } catch (error) {
+      signal.throwIfAborted();
+      logger.warn(formatCompact({
+        op: 'agent_bot_role_lookup_failed', endpoint: endpointId, group,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      return { ...bot, platformRoleError: 'lookup_failed' };
+    }
+  })();
+  const sceneTask = management.inspectGroupScene
+    ? cachedLookup(cache, `scene${KEY_SEP}${scopeKey}`, signal, () => management.inspectGroupScene!(group, signal))
+    : Promise.resolve(undefined);
+  const senderTask = sender && management.inspectGroupMemberProfile
+    ? cachedLookup(cache, `member${KEY_SEP}${scopeKey}${KEY_SEP}${sender}`, signal,
+        () => management.inspectGroupMemberProfile!(group, sender, signal))
+    : Promise.resolve(undefined);
+  const [resolvedBot, scene, member] = await Promise.all([botTask, sceneTask, senderTask]);
+  signal.throwIfAborted();
+
+  const conversationFacts: Record<string, unknown> = {};
+  if (scene?.name) conversationFacts.name = scene.name;
+  if (scene?.ownerId) conversationFacts.ownerId = scene.ownerId;
+  if (scene?.adminIds) conversationFacts.adminIds = Object.freeze(scene.adminIds.slice(0, MAX_ADMIN_IDS));
+  if (scene?.memberCount !== undefined) conversationFacts.memberCount = scene.memberCount;
+  if (scene?.muteAll !== undefined) conversationFacts.muteAll = scene.muteAll;
+  const senderFacts: Record<string, unknown> = {};
+  if (member?.platformRole) senderFacts.platformRole = member.platformRole;
+  if (member?.card) senderFacts.groupNickname = member.card;
+  if (member?.title) senderFacts.groupTitle = member.title;
+  if (member?.mutedUntil !== undefined) senderFacts.mutedUntil = member.mutedUntil;
+  return Object.freeze({
+    bot: Object.freeze(resolvedBot),
+    ...(Object.keys(conversationFacts).length
+      ? { conversation: Object.freeze(conversationFacts) as NonNullable<TurnContextState['conversation']> } : {}),
+    ...(Object.keys(senderFacts).length
+      ? { sender: Object.freeze(senderFacts) as NonNullable<TurnContextState['sender']> } : {}),
+  });
 }
+
 
 /**
  * Sender roles derive only from the authenticated Message sender reference.

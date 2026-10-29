@@ -63,6 +63,7 @@ import {
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
 import { ManagedIcqqClient, type IcqqBackgroundOperation } from './managed-client.js';
 import { inspectGroupMember, moderateGroupMember } from './group-moderation.js';
+import { inspectGroupMemberProfile, inspectGroupScene } from './group-scene.js';
 
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
@@ -116,6 +117,8 @@ export class IcqqEndpoint extends Endpoint<Client> {
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     inspectGroupMember: (group, user, signal) => inspectGroupMember(this.client, group, user, signal),
+    inspectGroupScene: (group, signal) => inspectGroupScene(this.client, group, signal),
+    inspectGroupMemberProfile: (group, user, signal) => inspectGroupMemberProfile(this.client, group, user, signal),
     moderateGroupMember: (group, user, action, signal) => moderateGroupMember(
       this.client, group, user, action, signal, () => this.#open && !this.#retiring && !this.#stopped,
     ),

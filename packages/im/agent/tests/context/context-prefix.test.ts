@@ -102,10 +102,10 @@ it('orders state and guidance before the owned body while retaining unknown stat
   expect(result.content.slice(0, body).every(block => block.contextRef)).toBe(true);
   expect(result.content[body]?.text).toContain('"id": "alice"');
   expect(result.content[body]?.text).toContain('actual question');
-  expect(result.content[0]?.text).toContain('[Session snapshot]');
-  expect(result.content[0]?.text).toContain('"muteAll": null');
-  expect(result.content[1]?.text).toContain('"id": "real-bot-id"');
-  expect(result.content[1]?.text).toContain('"platformRole": null');
+  expect(result.content[0]?.text).toContain('[scene_id:');
+  expect(result.content[0]?.text).toContain('scene_name:Before');
+  expect(result.content[0]?.text).not.toContain('assistant_role');
+  expect(result.content[0]?.text).not.toContain('null');
   expect(result.content.at(-1)).toMatchObject({ text: 'ephemeral relationships', ephemeral: true });
   expect(userMessagePlainText(result)).not.toMatch(/Sender: id=|DisplayName:|Model:|Sdk:/);
   const nextTurn = { ...turn, origin: { ...turn.origin, conversation: { ...turn.origin.conversation, name: 'After' } } };
@@ -116,7 +116,7 @@ it('orders state and guidance before the owned body while retaining unknown stat
   expect(latest.content[0]?.text).toContain('"to": "After"');
   expect(latest.content[0]?.text).toContain('"observedAt": 2');
   expect(userMessagePlainText(latest)).not.toContain('stable rules');
-  expect(userMessagePlainText(latest)).not.toContain('[Bot snapshot]');
+  expect(userMessagePlainText(latest)).not.toContain('[scene_id:');
 });
 
 it('places the deferred catalog before the actual question on the full engine model path', async () => {

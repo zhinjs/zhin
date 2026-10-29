@@ -5,6 +5,8 @@ export interface PromptContextState {
   readonly label: string;
   readonly fields: Readonly<Record<string, string | number | boolean | null | readonly string[]>>;
   readonly observedAt?: number;
+  /** Pre-rendered one-line form shown instead of the JSON snapshot (ADR 0041 scene line). */
+  readonly line?: string;
 }
 
 /**
