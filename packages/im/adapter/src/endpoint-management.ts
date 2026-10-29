@@ -76,6 +76,25 @@ export interface EndpointManagement {
    * so it is intentionally absent from {@link endpointManagementCapabilityIds}.
    */
   sendGroupNotice?(groupId: string, content: string): Promise<void>;
+  /**
+   * ADR 0044 action ports (host-internal, absent from {@link endpointManagementCapabilityIds}). An
+   * Adapter profile that declares the matching `actions.*` entry must implement the method; see
+   * `ADAPTER_ACTION_PORTS`.
+   */
+  /** `actions.poke`: poke a user (in `groupId` when given, else privately). */
+  pokeUser?(userId: string, groupId?: string): Promise<void>;
+  /** `actions.unmute` */
+  unmuteGroupMember?(groupId: string, userId: string): Promise<void>;
+  /** `actions.muteAll`: turn the whole-group mute on or off. */
+  muteAllGroupMembers?(groupId: string, enabled: boolean): Promise<void>;
+  /** `actions.setCard` */
+  setGroupCard?(groupId: string, userId: string, card: string): Promise<void>;
+  /** `actions.setTitle` (`durationSeconds` omitted = permanent where the platform supports it). */
+  setGroupTitle?(groupId: string, userId: string, title: string, durationSeconds?: number): Promise<void>;
+  /** `actions.essence`: set or clear an essence message. */
+  setGroupEssence?(groupId: string, messageId: string, enabled: boolean): Promise<void>;
+  /** `actions.invite` */
+  inviteGroupMember?(groupId: string, userId: string): Promise<void>;
 }
 
 export interface GroupSceneFacts {

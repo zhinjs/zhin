@@ -3,7 +3,7 @@ import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
 import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
-import { adapterFeatureId } from '@zhin.js/adapter';
+import { adapterFeatureId, resolveTurnCapabilities, type AdapterCapabilityProfile } from '@zhin.js/adapter';
 import {
   createDeterministicApprovalPort,
   createRuntimeApprovalPort,
@@ -14,6 +14,7 @@ import {
   isPlainTextRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
+  resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
   resolveRuntimeTurnIntent,
   resolveSnapshotTurnIntentResolver,
@@ -225,6 +226,37 @@ describe('canonical IM TurnRequest ingress', () => {
       workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
     });
     expect(request.input.contextState).toBeUndefined();
+  });
+
+  it('computes ADR 0044 platform capabilities once from the resolved facts and attaches them to the turn input', async () => {
+    const message = makeMessage({ content: 'hello', metadata: { endpoint: '10001' } });
+    const profile: AdapterCapabilityProfile = {
+      default: { delivery: { send: true }, actions: { poke: { scopes: ['group'] } } },
+      group: { actions: { mute: { scopes: ['group'], requiresRole: 'admin' } } },
+    };
+    const turnCapabilities = vi.fn((_id: string, input: Parameters<typeof resolveTurnCapabilities>[0] extends infer T
+      ? Omit<T & object, 'profile' | 'narrow'> : never) => resolveTurnCapabilities({ ...input, profile }));
+    const snapshot = { projections: new Map([[adapterFeatureId, {
+      $projection: 'zhin.adapter-index/1', turnCapabilities,
+    }]]) } as never;
+    const asAdmin = resolveRuntimeTurnCapabilities(snapshot, message.conversation, { bot: { id: 'b', platformRole: 'admin' } });
+    const asMember = resolveRuntimeTurnCapabilities(snapshot, message.conversation, { bot: { id: 'b', platformRole: 'member' } });
+    expect(asAdmin?.has('actions.mute')).toBe(true);
+    expect(asMember?.has('actions.mute')).toBe(false);
+    expect(asMember?.has('actions.poke')).toBe(true);
+    expect(turnCapabilities.mock.calls[0]?.[0]).toBe(message.conversation.endpoint.id);
+    expect(resolveRuntimeTurnCapabilities({ projections: new Map() }, message.conversation, undefined)).toBeUndefined();
+
+    const request = createRuntimeTurnRequest(message, 'hello', { isMaster: false, isTrusted: false }, {
+      traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
+      workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, platformCapabilities: asAdmin,
+    });
+    expect(request.input.platformCapabilities).toBe(asAdmin);
+    expect(request.input.platformCapabilities?.has('actions.mute')).toBe(true);
+    expect(createRuntimeTurnRequest(message, 'hello', { isMaster: false, isTrusted: false }, {
+      traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
+      workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
+    }).input.platformCapabilities).toBeUndefined();
   });
 
   it.each(['owner', 'admin', 'member'] as const)('propagates the queried Bot %s role through capability access', async platformRole => {

@@ -10,6 +10,11 @@ import type {
 } from '@zhin.js/im-contract';
 import type { Endpoint } from './endpoint.js';
 import type { EndpointImplementation } from './endpoint-contract.js';
+import {
+  normalizeCapabilityProfile,
+  type AdapterCapabilityProfile,
+  type AdapterCapabilityResolver,
+} from './capability-profile.js';
 
 export { Endpoint } from './endpoint.js';
 export type {
@@ -145,6 +150,15 @@ export interface AdapterDefinition<TConfig = unknown, TClient = unknown> {
   readonly operations?: AdapterOperationDeclaration<TConfig>;
   /** 可选：端点消息段能力声明（出站协商降级挂载点）。 */
   readonly segments?: AdapterSegmentPolicy;
+  /**
+   * ADR 0044: static capability profile per conversation kind (seven groups). `segments` is an alias of
+   * `profile.default.messaging.segments` (declare it in one place), and `capabilities: ['liveDanmaku']`
+   * is an alias of `profile.default.events.liveDanmaku`. Adapters without a profile get a conservative
+   * one derived from `capabilities`, `operations` and `segments`.
+   */
+  readonly profile?: AdapterCapabilityProfile;
+  /** ADR 0044: per-turn narrow-only refinement of the profile from trusted facts. */
+  readonly resolveCapabilities?: AdapterCapabilityResolver;
   create(
     context: AdapterContext<TConfig>,
   ): Endpoint<TClient> | EndpointImplementation<TClient>
@@ -198,7 +212,33 @@ export function defineAdapter<TConfig = unknown, TClient = unknown>(
   if (capabilities.includes('liveDanmaku') && !capabilities.includes('inbound')) {
     throw new TypeError('Adapter capability liveDanmaku requires inbound');
   }
-  const segments = normalizeSegmentPolicy(definition.segments);
+  let segments = normalizeSegmentPolicy(definition.segments);
+  if (definition.resolveCapabilities !== undefined && typeof definition.resolveCapabilities !== 'function') {
+    throw new TypeError('Adapter resolveCapabilities must be a function');
+  }
+  let profile: AdapterCapabilityProfile | undefined;
+  if (definition.profile !== undefined) {
+    profile = normalizeCapabilityProfile(definition.profile, normalizeSegmentPolicy);
+    const profileSegments = profile.default?.messaging?.segments;
+    if (segments && profileSegments) {
+      throw new TypeError(
+        'Adapter declares segments twice: use segments or profile.default.messaging.segments, not both',
+      );
+    }
+    // Existing consumers read `segments`; keep the alias populated from the profile.
+    if (profileSegments) segments = profileSegments;
+    const danmaku = profile.default?.events?.liveDanmaku === true;
+    if (danmaku && !capabilities.includes('liveDanmaku')) capabilities.push('liveDanmaku');
+    if (capabilities.includes('liveDanmaku') && !danmaku) {
+      profile = normalizeCapabilityProfile({
+        ...profile,
+        default: { ...profile.default, events: { ...profile.default?.events, liveDanmaku: true } },
+      }, normalizeSegmentPolicy);
+    }
+    if (capabilities.includes('liveDanmaku') && !capabilities.includes('inbound')) {
+      throw new TypeError('Adapter capability liveDanmaku requires inbound');
+    }
+  }
   const operations = typeof definition.operations === 'function'
     ? definition.operations
     : normalizeOperations(definition.operations);
@@ -208,6 +248,7 @@ export function defineAdapter<TConfig = unknown, TClient = unknown>(
     capabilities: Object.freeze(capabilities),
     ...(operations ? { operations } : {}),
     ...(segments ? { segments } : {}),
+    ...(profile ? { profile } : {}),
   });
 }
 
@@ -371,6 +412,12 @@ export function parseAdapterDefinition(value: unknown): AdapterDefinition {
   ) throw invalidAdapter();
   // defineAdapter 已校验过形状；外部手工构造的 definition 也在此兜底
   normalizeSegmentPolicy(definition.segments);
+  if (definition.profile !== undefined) {
+    normalizeCapabilityProfile(definition.profile, normalizeSegmentPolicy);
+  }
+  if (definition.resolveCapabilities !== undefined && typeof definition.resolveCapabilities !== 'function') {
+    throw invalidAdapter();
+  }
   if (typeof definition.operations !== 'function') {
     normalizeOperations(definition.operations);
   }

@@ -111,6 +111,73 @@ example:
 
 上面的 `defineAdapter` 写法覆盖绝大多数平台。只有当协议需要**自定义的多阶段连接流程**时，才继承 `Endpoint` 类自己实现 `start` / `open` / `close` / `stop`，生命周期钩子说明见 [端点生命周期](./endpoint-lifecycle.md#endpoint-的生命周期钩子)。
 
+## 能力画像（profile）
+
+核心只认能力，不认平台名：适配器用 `defineAdapter({ profile })` 声明平台能做什么，zhin 在每个回合按当前会话把它合并、收窄成 `TurnCapabilities`，agent 和插件读它，不写平台名分支（ADR 0044）。
+
+画像分 `default`、`private`、`group`、`channel`、`thread` 几个会话类型段（另有 `kinds` 声明自定义类型），未写的字段继承 `default`；类型段里写 `false` 可关掉继承来的能力。每段有七组：
+
+| 组 | 内容 |
+|---|---|
+| `messaging` | `segments`（即原 `AdapterDefinition.segments`，二者是同一份声明，写一处即可）、`maxLength`、`mention`、`quote`、`reaction`、`recall`、`edit`、`forward`、`maxMessagesPerTurn` |
+| `scene` | `groupInfo`、`memberProfile`、`roles`（平台角色词到 `owner / admin / member`）、`mute`、`maxMembers`、`card`、`title` |
+| `actions` | Bot 能主动做的事：`reaction`、`poke`、`mute`、`unmute`、`muteAll`、`kick`、`setCard`、`setTitle`、`recall`、`essence`、`announce`、`invite`、`quoteReply`、`forward`；每项 `{ scopes, requiresRole?, params? }`，未列出即不支持 |
+| `events` | `emit`（会发出的标准事件名）、`liveDanmaku`（即原 `capabilities: ['liveDanmaku']`） |
+| `feedback` | 「正在输入」方式：`typing` / `reaction` / `status-message` / `none` |
+| `delivery` | `send`、`proactive`、`passiveWindow`、`rateLimitPerMinute`、`mediaMaxBytes`、`spool`、`requiresMessageSeq` |
+| `prompt` | `auto`（自动生成平台说明）、`text`（适配器自定义文本） |
+
+下面是一个 icqq 风格的例子：
+
+```ts
+import { defineAdapter } from 'zhin.js/adapter';
+
+export default defineAdapter({
+  capabilities: ['inbound', 'outbound'],
+  profile: {
+    default: {
+      messaging: { maxLength: 4500, quote: true, segments: { supported: ['text', 'image', 'mention', 'face'] } },
+      scene: { roles: { owner: 'owner', admin: 'admin', member: 'member' } },
+      actions: {
+        reaction: { scopes: ['group'], params: { emojis: ['76', '66', '63'] } },
+        poke: { scopes: ['private', 'group'], params: { minIntervalSeconds: 5 } },
+        recall: { scopes: ['private', 'group'], params: { timeLimitSeconds: 120 } },
+      },
+      feedback: { mode: 'reaction', emoji: '424' },
+      delivery: { send: true, proactive: true, spool: true },
+    },
+    group: {
+      scene: { groupInfo: true, memberProfile: true, card: true, title: true, mute: { all: true } },
+      actions: {
+        mute: { scopes: ['group'], requiresRole: 'admin', params: { durationSeconds: { min: 60, max: 2592000 } } },
+        kick: { scopes: ['group'], requiresRole: 'admin' },
+        essence: { scopes: ['group'], requiresRole: 'admin' },
+        announce: { scopes: ['group'], requiresRole: 'admin', params: { maxLength: 1000 } },
+        setTitle: { scopes: ['group'], requiresRole: 'owner' },
+      },
+      prompt: { text: '群里提到你时再回应；不要主动刷屏。' },
+    },
+    private: {
+      actions: { poke: { scopes: ['private'] } },
+      scene: { groupInfo: false },
+    },
+  },
+  // 可选：按可信事实收窄。只能关掉能力、缩小范围，放宽的字段会被丢弃并记警告。
+  resolveCapabilities({ facts }) {
+    return facts.conversation?.muteAll ? { actions: { poke: false } } : undefined;
+  },
+  create: () => myEndpoint(),
+});
+```
+
+规则：
+
+- **没声明 = 不支持**。画像在 `defineAdapter` 时校验，未知字段、类型错误直接抛错。
+- **声明了动作就要实现端口**。每个动作对应一个现有端口方法（`reaction` → `control.addReaction`，`recall` → `control.recall`，`mute` → `management.muteGroupMember`，`kick` → `management.kickGroupMember`，`announce` → `management.sendGroupNotice`，`poke` → `management.pokeUser`，`unmute` → `management.unmuteGroupMember`，`muteAll` → `management.muteAllGroupMembers`，`setCard` → `management.setGroupCard`，`setTitle` → `management.setGroupTitle`，`essence` → `management.setGroupEssence`，`invite` → `management.inviteGroupMember`，`quoteReply` / `forward` → `send()`）。缺端口时装配期报错并指出缺的方法。声明了画像的适配器，`recall / edit / reaction / typing` 等 `operations` 由画像推出，不必再写一遍。
+- **只收窄，不放宽**。回合内先合并 `default` 和当前会话类型段，再做通用收窄（Bot 的平台角色不满足 `requiresRole` 时动作关闭，角色未知也关闭；Bot 被禁言时发送与发消息类动作关闭；被动回复窗口用尽时关闭发送），最后应用 `resolveCapabilities` 的补丁。
+- **不写画像也能用**。没有 `profile` 的适配器按 `capabilities`、`operations`、`segments` 得到一个保守画像（能发送、已声明的撤回/编辑/回应/输入中、已有的段策略），其余一律不支持。
+- 回合内读取：`turn.input.platformCapabilities?.has('actions.mute')`、`.get('actions.mute.durationSeconds')`（动作的 `params` 在路径里可省略）。能力描述平台允许什么；谁能让 Bot 这么做，仍由角色、硬闸和审批决定。
+
 ## 参考实现
 
 - [`examples/minimal-bot/adapters/terminal/index.ts`](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts)：把终端当作一个聊天平台，适合对照学习。

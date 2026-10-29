@@ -111,6 +111,74 @@ Convert platform-specific structures such as `share`, audio or cards at the `sen
 
 `defineAdapter` as above covers most platforms. Only when a protocol needs a **custom multi-stage connection flow** should you extend the `Endpoint` class and implement `start` / `open` / `close` / `stop` yourself; see [Endpoint lifecycle hooks](./endpoint-lifecycle.md#endpoint-lifecycle-hooks).
 
+## Capability profile
+
+Core recognizes capabilities, not platform names: an adapter declares what its platform can do with `defineAdapter({ profile })`, zhin merges and narrows it into `TurnCapabilities` for every turn, and agents and plugins read that instead of branching on a platform name (ADR 0044).
+
+A profile has sections per conversation kind: `default`, `private`, `group`, `channel`, `thread` (and `kinds` for adapter-declared kinds). Fields you leave out inherit from `default`; writing `false` in a kind section switches an inherited capability off. Each section has seven groups:
+
+| Group | Content |
+|---|---|
+| `messaging` | `segments` (the former `AdapterDefinition.segments`; both name the same declaration, write it once), `maxLength`, `mention`, `quote`, `reaction`, `recall`, `edit`, `forward`, `maxMessagesPerTurn` |
+| `scene` | `groupInfo`, `memberProfile`, `roles` (platform role words to `owner / admin / member`), `mute`, `maxMembers`, `card`, `title` |
+| `actions` | What the Bot can do: `reaction`, `poke`, `mute`, `unmute`, `muteAll`, `kick`, `setCard`, `setTitle`, `recall`, `essence`, `announce`, `invite`, `quoteReply`, `forward`; each `{ scopes, requiresRole?, params? }`, absent means unsupported |
+| `events` | `emit` (standard event names), `liveDanmaku` (the former `capabilities: ['liveDanmaku']`) |
+| `feedback` | How "typing" is shown: `typing` / `reaction` / `status-message` / `none` |
+| `delivery` | `send`, `proactive`, `passiveWindow`, `rateLimitPerMinute`, `mediaMaxBytes`, `spool`, `requiresMessageSeq` |
+| `prompt` | `auto` (generate the platform description), `text` (adapter-authored text) |
+
+An icqq-like example:
+
+```ts
+import { defineAdapter } from 'zhin.js/adapter';
+
+export default defineAdapter({
+  capabilities: ['inbound', 'outbound'],
+  profile: {
+    default: {
+      messaging: { maxLength: 4500, quote: true, segments: { supported: ['text', 'image', 'mention', 'face'] } },
+      scene: { roles: { owner: 'owner', admin: 'admin', member: 'member' } },
+      actions: {
+        reaction: { scopes: ['group'], params: { emojis: ['76', '66', '63'] } },
+        poke: { scopes: ['private', 'group'], params: { minIntervalSeconds: 5 } },
+        recall: { scopes: ['private', 'group'], params: { timeLimitSeconds: 120 } },
+      },
+      feedback: { mode: 'reaction', emoji: '424' },
+      delivery: { send: true, proactive: true, spool: true },
+    },
+    group: {
+      scene: { groupInfo: true, memberProfile: true, card: true, title: true, mute: { all: true } },
+      actions: {
+        mute: { scopes: ['group'], requiresRole: 'admin', params: { durationSeconds: { min: 60, max: 2592000 } } },
+        kick: { scopes: ['group'], requiresRole: 'admin' },
+        essence: { scopes: ['group'], requiresRole: 'admin' },
+        announce: { scopes: ['group'], requiresRole: 'admin', params: { maxLength: 1000 } },
+        setTitle: { scopes: ['group'], requiresRole: 'owner' },
+      },
+      prompt: { text: 'Reply in groups only when addressed; do not flood the chat.' },
+    },
+    private: {
+      actions: { poke: { scopes: ['private'] } },
+      scene: { groupInfo: false },
+    },
+  },
+  // Optional: narrow by trusted facts. It may only switch capabilities off or shrink ranges;
+  // widening fields are dropped with a logged warning.
+  resolveCapabilities({ facts }) {
+    return facts.conversation?.muteAll ? { actions: { poke: false } } : undefined;
+  },
+  create: () => myEndpoint(),
+});
+```
+
+Rules:
+
+- **Not declared means unsupported.** The profile is validated in `defineAdapter`; unknown fields and wrong types throw.
+- **A declared action needs its port.** Every action maps to an existing port method (`reaction` -> `control.addReaction`, `recall` -> `control.recall`, `mute` -> `management.muteGroupMember`, `kick` -> `management.kickGroupMember`, `announce` -> `management.sendGroupNotice`, `poke` -> `management.pokeUser`, `unmute` -> `management.unmuteGroupMember`, `muteAll` -> `management.muteAllGroupMembers`, `setCard` -> `management.setGroupCard`, `setTitle` -> `management.setGroupTitle`, `essence` -> `management.setGroupEssence`, `invite` -> `management.inviteGroupMember`, `quoteReply` / `forward` -> `send()`). A missing port fails at assembly and names the method. With a profile, the `recall / edit / reaction / typing` entries of `operations` are implied by the profile, so you need not repeat them.
+- **Narrow only.** Per turn zhin merges `default` with the conversation's kind section, applies generic narrowing (actions off when the Bot's platform role does not satisfy `requiresRole`, or is unknown; sending and message-sending actions off while the Bot is muted; sending off once the passive reply window is used up), then applies the `resolveCapabilities` patch.
+- **No profile still works.** An adapter without `profile` gets a conservative one derived from `capabilities`, `operations` and `segments` (it can send, plus declared recall/edit/reaction/typing and the existing segment policy); everything else is unsupported.
+- Read it in a turn: `turn.input.platformCapabilities?.has('actions.mute')`, `.get('actions.mute.durationSeconds')` (an action's `params` can be omitted from the path). Capabilities say what the platform allows; who may make the Bot do it is still decided by roles, hard gates and approvals.
+
 ## Reference implementations
 
 - [`examples/minimal-bot/adapters/terminal/index.ts`](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts): treats the terminal as a chat platform — good to study.

@@ -1378,6 +1378,80 @@ describe('defineAdapter segments policy', () => {
   });
 });
 
+describe('Adapter capability profile assembly (ADR 0044)', () => {
+  const group = { endpoint: { id: 'icqq-like', adapter: 'icqq-like' }, kind: 'group' as const, id: 'g1' };
+  const profile = {
+    default: { delivery: { send: true } },
+    group: { actions: { mute: { scopes: ['group'], requiresRole: 'admin', params: { durationSeconds: { min: 60, max: 3600 } } } } },
+  } as const;
+
+  it('rejects a declared action whose port is missing and names the port', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
+      definition: defineAdapter({ capabilities: ['outbound'], profile, create: () => ({ send: async () => 'id' }) }),
+    });
+    await expect(createAdapterIndex([slot], snapshot([slot])))
+      .rejects.toThrow('declares actions.mute but management.muteGroupMember is missing');
+  });
+
+  it('resolves per-turn capabilities from the effective profile and the adapter patch', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        profile,
+        resolveCapabilities: ({ facts }) => facts.bot?.platformRole === 'member'
+          ? { actions: { mute: false } } : undefined,
+        create: () => ({ send: async () => 'id', management: { muteGroupMember: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    expect(index.turnCapabilities(slot.id, { conversation: group, facts: { bot: { platformRole: 'admin' } } })
+      ?.has('actions.mute')).toBe(true);
+    expect(index.turnCapabilities(slot.id, { conversation: group, facts: { bot: { platformRole: 'member' } } })
+      ?.has('actions.mute')).toBe(false);
+    expect(index.turnCapabilities('missing' as typeof slot.id, { conversation: group })).toBeUndefined();
+    await index.stop();
+  });
+
+  it('derives a conservative profile from legacy declarations when none is declared', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'legacy', source: '/adapters/legacy/index.ts',
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        operations: ['recall'],
+        create: () => ({ send: async () => 'id', control: { recall: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const caps = index.turnCapabilities(slot.id, { conversation: { ...group, endpoint: { id: 'legacy', adapter: 'legacy' } } });
+    expect(caps?.has('delivery.send')).toBe(true);
+    expect(caps?.has('actions.recall')).toBe(true);
+    expect(caps?.has('actions.mute')).toBe(false);
+    await index.stop();
+  });
+
+  it('a declared profile implies its operations and keeps segments as an alias', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'implied', source: '/adapters/implied/index.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        profile: {
+          default: {
+            messaging: { segments: { supported: ['text'] } },
+            actions: { recall: { scopes: ['group'] } },
+          },
+        },
+        create: () => ({ send: async () => 'id', control: { recall: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    expect(index.segmentPolicy(slot.id)).toEqual({ supported: ['text'] });
+    expect(index.list()[0]?.operations).toEqual(['recall']);
+    await index.stop();
+  });
+});
+
 function createAdapterIndex(
   slots: Parameters<typeof AdapterIndex.create>[0],
   value: Parameters<typeof AdapterIndex.create>[1],

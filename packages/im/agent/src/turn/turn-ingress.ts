@@ -129,6 +129,13 @@ export interface TurnInput {
   readonly metadata?: Readonly<Record<string, unknown>>;
   readonly contextState?: TurnContextState;
   /**
+   * ADR 0044: what the platform allows in this conversation right now (static profile narrowed by the
+   * Bot's role, mute state and the adapter's resolver), computed once per turn by the trusted ingress.
+   * Absent for non-IM turns. Read with `has('actions.mute')` / `get('actions.mute')`; this is distinct
+   * from {@link TurnIngress.capabilities}, which is the frozen tool/skill catalog.
+   */
+  readonly platformCapabilities?: import('@zhin.js/adapter').TurnCapabilities;
+  /**
    * #996 product-resolved scene event summaries (newest first, already short and truncated).
    * Injected as the ephemeral `[Scene events]` block; never stored in agent_messages.
    */

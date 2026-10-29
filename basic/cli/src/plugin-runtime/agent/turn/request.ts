@@ -11,6 +11,8 @@ import {
   resolveEndpointManagement,
   type GroupMemberProfile,
   type GroupSceneFacts,
+  type TurnCapabilities,
+  type CapabilityDeliveryState,
 } from '@zhin.js/adapter';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -37,7 +39,7 @@ import {
   type ToolCapability,
   type TurnIntentResolver,
 } from '@zhin.js/agent/runtime';
-import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { resolveLocale, type CapabilityId, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { approvalMessages as approvalText } from './approval-messages.js';
 import type { SceneFactRefresher } from './scene-fact-refresher.js';
 import type { ConversationRef, ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
@@ -218,6 +220,27 @@ function memberLevel2(store: SceneFactStore, platform: string, group: string, us
 }
 
 /**
+ * ADR 0044: resolve what the platform allows in this conversation, once per turn, from the Endpoint's
+ * effective capability profile plus the trusted facts already read into `contextState`. The Adapter's
+ * `resolveCapabilities` can only narrow. Returns `undefined` when the Endpoint is unknown.
+ */
+export function resolveRuntimeTurnCapabilities(
+  snapshot: Pick<RuntimeSnapshot, 'projections'>,
+  conversation: ConversationRef,
+  contextState: TurnContextState | undefined,
+  options: Readonly<{ delivery?: CapabilityDeliveryState; now?: number }> = {},
+): TurnCapabilities | undefined {
+  const adapters = snapshot.projections?.get(adapterFeatureId);
+  if (!isAdapterIndex(adapters) || typeof adapters.turnCapabilities !== 'function') return undefined;
+  return adapters.turnCapabilities(conversation.endpoint.id as CapabilityId, {
+    conversation,
+    ...(contextState ? { facts: contextState } : {}),
+    ...(options.delivery ? { delivery: options.delivery } : {}),
+    ...(options.now !== undefined ? { now: options.now } : {}),
+  });
+}
+
+/**
  * Resolve this turn's account and, for ICQQ groups, the ADR 0041 scene facts (group, Bot role and
  * card, sender role/card/title/mute) before tool discovery. Bot, group and sender facts all use the
  * two-level cache (memory 60 s → database → platform). Failed lookups omit their fields.
@@ -382,6 +405,8 @@ export function createRuntimeTurnRequest(
     trustedMetadata?: Readonly<Record<string, unknown>>;
     /** Facts read from the operation's Endpoint, independently of message metadata. */
     contextState?: TurnContextState;
+    /** ADR 0044: capabilities resolved once for this turn (see {@link resolveRuntimeTurnCapabilities}). */
+    platformCapabilities?: TurnCapabilities;
     /** #996: short scene event summaries for the ephemeral `[Scene events]` block (newest first). */
     sceneEvents?: readonly string[];
     /** ADR 0038 §3: senders of a merged turn (two or more). */
@@ -501,6 +526,7 @@ export function createRuntimeTurnRequest(
       ...(turnReferences.length > 0 ? { references: Object.freeze(turnReferences) } : {}),
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
       ...(input.contextState ? { contextState: input.contextState } : {}),
+      ...(input.platformCapabilities ? { platformCapabilities: input.platformCapabilities } : {}),
       ...(input.sceneEvents?.length ? { sceneEvents: Object.freeze([...input.sceneEvents]) } : {}),
       ...(input.mergedSenders && input.mergedSenders.length > 1 ? { mergedSenders: Object.freeze([...input.mergedSenders]) } : {}),
       ...(input.liveDanmaku ? { liveDanmaku: input.liveDanmaku } : {}),

@@ -32,6 +32,16 @@ import {
 } from './endpoint-control.js';
 import { endpointContentOf, type EndpointContentResolveContext } from './endpoint-content.js';
 import {
+  assertDeclaredProfileActions,
+  deriveLegacyProfile,
+  operationsImpliedByProfile,
+  resolveTurnCapabilities,
+  type AdapterCapabilityProfile,
+  type AdapterCapabilityResolver,
+  type ResolveTurnCapabilitiesInput,
+  type TurnCapabilities,
+} from './capability-profile.js';
+import {
   EndpointDeliveryError,
   type ConversationReference,
   type ConversationResolution,
@@ -64,6 +74,9 @@ export type AdapterEndpointPhase =
 interface AdapterRecord extends AdapterDescriptor {
   readonly endpoint: Endpoint;
   readonly segments?: AdapterSegmentPolicy;
+  /** Declared profile, or the conservative one derived from legacy declarations. */
+  readonly profile: AdapterCapabilityProfile;
+  readonly capabilityResolver?: AdapterCapabilityResolver;
   started: boolean;
   open: boolean;
   stopped: boolean;
@@ -109,6 +122,10 @@ export class AdapterIndex {
             operations: created.operations,
             endpoint: created.endpoint,
             ...(slot.definition.segments ? { segments: slot.definition.segments } : {}),
+            profile: created.profile,
+            ...(slot.definition.resolveCapabilities
+              ? { capabilityResolver: slot.definition.resolveCapabilities }
+              : {}),
             started: false,
             open: false,
             startAttempted: false,
@@ -128,6 +145,7 @@ export class AdapterIndex {
     return this.#order.map(({ endpoint: _endpoint,
       started: _started, open: _open, stopped: _stopped, stopping: _stopping,
       startAttempted: _startAttempted, segments: _segments,
+      profile: _profile, capabilityResolver: _resolver,
       ...descriptor }) => Object.freeze(descriptor));
   }
 
@@ -235,6 +253,28 @@ export class AdapterIndex {
    */
   segmentPolicy(id: CapabilityId): AdapterSegmentPolicy | undefined {
     return this.#records.get(id)?.segments;
+  }
+
+  /** Effective capability profile of an Endpoint: declared, or derived from its legacy declarations. */
+  capabilityProfile(id: CapabilityId): AdapterCapabilityProfile | undefined {
+    return this.#records.get(id)?.profile;
+  }
+
+  /**
+   * Resolve the capabilities of one turn for an Endpoint (ADR 0044 §2): static profile + generic
+   * narrowing + the Adapter's narrow-only `resolveCapabilities`. Unknown ids resolve to `undefined`.
+   */
+  turnCapabilities(
+    id: CapabilityId,
+    input: Omit<ResolveTurnCapabilitiesInput, 'profile' | 'narrow'>,
+  ): TurnCapabilities | undefined {
+    const record = this.#records.get(id);
+    if (!record) return undefined;
+    return resolveTurnCapabilities({
+      ...input,
+      profile: record.profile,
+      ...(record.capabilityResolver ? { narrow: record.capabilityResolver } : {}),
+    });
   }
 
   async start(signal: AbortSignal = new AbortController().signal): Promise<void> {
@@ -479,7 +519,11 @@ async function createEndpoint(
   admission: GenerationAdmissionGate,
   signal: AbortSignal,
   expansion?: EndpointExpansion,
-): Promise<Readonly<{ endpoint: Endpoint; operations: readonly AdapterOperation[] }>> {
+): Promise<Readonly<{
+  endpoint: Endpoint;
+  operations: readonly AdapterOperation[];
+  profile: AdapterCapabilityProfile;
+}>> {
   const context = Object.freeze({
     ...createConstructionContext(snapshot, slot.owner, admission, signal),
     ...(expansion?.config ? { config: expansion.config } : {}),
@@ -487,7 +531,17 @@ async function createEndpoint(
     endpointId: expansion?.endpointId ?? slot.localName,
     name: slot.localName,
   });
-  const operations = resolveAdapterOperations(slot.definition, context);
+  const declaredProfile = slot.definition.profile;
+  // A declared profile implies its operations, so they are not declared a second time.
+  const operations = Object.freeze([...new Set([
+    ...resolveAdapterOperations(slot.definition, context),
+    ...(declaredProfile ? operationsImpliedByProfile(declaredProfile) : []),
+  ])]);
+  const profile = declaredProfile ?? deriveLegacyProfile({
+    capabilities: slot.definition.capabilities,
+    operations,
+    ...(slot.definition.segments ? { segments: slot.definition.segments } : {}),
+  });
   const implementation = await slot.definition.create(context);
   const endpoint = materializeEndpoint(implementation, context);
   try {
@@ -505,7 +559,15 @@ async function createEndpoint(
       operations,
       String(expansion?.id ?? slot.id),
     );
-    return Object.freeze({ endpoint, operations });
+    if (declaredProfile) {
+      assertDeclaredProfileActions(
+        endpoint,
+        declaredProfile,
+        String(expansion?.id ?? slot.id),
+        slot.definition.capabilities.includes('outbound'),
+      );
+    }
+    return Object.freeze({ endpoint, operations, profile });
   } catch (error) {
     try {
       retireEndpoint(endpoint);

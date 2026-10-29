@@ -102,6 +102,7 @@ import {
   resolveOwnerForRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
+  resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
   resolveSnapshotTurnIntentResolver,
   resolveTrustedForRuntimeMessage,
@@ -1131,6 +1132,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
             { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
           );
           signal.throwIfAborted();
+          // ADR 0044: platform capabilities, resolved once from the facts just read.
+          const platformCapabilities = resolveRuntimeTurnCapabilities(snapshot, message.conversation, contextState);
           // Capabilities are read with the resolved conversation facts (bot role, mute) on the access.
           const contextAccess = createRuntimeTurnAccess(message, senderRoles, contextState);
           // ADR 0038 §5: a danmaku turn answers its window as an anonymous viewer, read-only.
@@ -1254,6 +1257,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               network: turnPolicy.network,
               sessionKey,
               contextState,
+              ...(platformCapabilities ? { platformCapabilities } : {}),
               ...(sceneEvents.length ? { sceneEvents } : {}),
               ...(mergedSenders ? { mergedSenders } : {}),
               ...(liveDanmaku ? { liveDanmaku } : {}),
