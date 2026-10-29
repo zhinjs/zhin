@@ -1,0 +1,175 @@
+packages/im/agent/src/media/deliver-subagent-result.ts
+  s_9477e63ef5cee5::t_26859e8b69c728 14-15,30-31,57
+packages/im/agent/src/security/sensitive-exec-commands.ts
+  s_9477e63ef5cee5::t_7ec9457b294179 1-43
+plugins/adapters/icqq/package.json
+  s_9477e63ef5cee5::t_11b56a388fce2d 47
+packages/im/agent/tests/media/media-publisher.test.ts
+  s_9477e63ef5cee5::t_bf1e42d1452cc2 49,73,77,82,90,95
+  s_9477e63ef5cee5::t_c6be70e4dd0bd6 118-129
+  s_9477e63ef5cee5::t_5f3275c51100b4 6
+packages/im/agent/src/activity-feedback/adapter-integration.ts
+  s_9477e63ef5cee5::t_1c0a3e18fc6d5f 20,27,86,150-151
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.ts
+  s_9477e63ef5cee5::t_ca718d036d5139 9-10
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/announce/index.ts
+  s_9477e63ef5cee5::t_ca718d036d5139 11-12
+packages/im/agent/src/media/media-types.ts
+  s_9477e63ef5cee5::t_7f0935ef24ae39 62-63
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts
+  s_9477e63ef5cee5::t_ca718d036d5139 12-13
+packages/im/plugin-runtime/src/outbound-host.ts
+  s_9477e63ef5cee5::t_f58ddb035468a3 66-86,89
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts.test.ts
+  s_9477e63ef5cee5::t_fb306a86fa33ae 10-12
+  s_9477e63ef5cee5::t_5a655987768444 15-16,111-137
+plugins/adapters/icqq/plugin.ts
+  s_9477e63ef5cee5::t_11b56a388fce2d 4-5,22-26
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  s_9477e63ef5cee5::t_f58ddb035468a3 52,58
+tests/snapshots/api-surface.json
+  s_9477e63ef5cee5::t_07fe746a727dd1 19,123,156
+basic/cli/tests/plugin-runtime/console/page-shell-sandbox.test.ts
+  s_9477e63ef5cee5::t_5e6ef04fe05ae1 1-18
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_title/index.ts
+  s_9477e63ef5cee5::t_ca718d036d5139 14-15
+plugins/adapters/icqq/src/sensitive-commands.ts
+  s_9477e63ef5cee5::t_1b63cb1b93fd28 1-19
+packages/im/tool/src/definition.ts
+  s_9477e63ef5cee5::t_7f3370b3f7039f 358
+  s_9477e63ef5cee5::t_17745707851fc4 164-170,291,311
+packages/im/adapter/tests/adapter.test.ts
+  s_9477e63ef5cee5::t_26eb4e78336307 1471
+  s_9477e63ef5cee5::t_34254d6461d0d6 27
+  s_9477e63ef5cee5::t_f7b92a300cf279 270,275,280,282
+  s_9477e63ef5cee5::t_a19ffffa7836d5 281
+  s_9477e63ef5cee5::t_77d171d0287289 1438-1470,1472-1481
+plugins/services/activity-feedback/src/orchestrator.ts
+  s_9477e63ef5cee5::t_c072059eda577c 53,113
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_9477e63ef5cee5::t_fb306a86fa33ae 13-15,25
+  s_9477e63ef5cee5::t_c090c6fad04088 94
+packages/im/adapter/src/capability-profile.ts
+  s_9477e63ef5cee5::t_96996693722d29 958,960-963
+  s_9477e63ef5cee5::t_4cd686ebbb7d7b 174-180,189,368
+packages/im/tool/tests/requires-capabilities.test.ts
+  s_9477e63ef5cee5::t_6b1cdf33c7715e 1-19
+packages/im/agent/src/security/index.ts
+  s_9477e63ef5cee5::t_821bdbf076eae4 17
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  s_9477e63ef5cee5::t_3972bc195fe8f5 12-34,55,64-69,83,91,96
+  s_9477e63ef5cee5::t_07499c6128b993 2,101-108
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  s_9477e63ef5cee5::t_9fd48ed53615cf 18-32
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9477e63ef5cee5::t_26ae60bb5c573f 11,722-732
+  s_9477e63ef5cee5::t_65b55cc28ce0ab 344
+  s_9477e63ef5cee5::t_7b6a0f9339a68d 733-734
+packages/im/agent/src/activity-feedback/index.ts
+  s_9477e63ef5cee5::t_1c0a3e18fc6d5f 43
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_9477e63ef5cee5::t_26859e8b69c728 11
+  s_9477e63ef5cee5::t_db05f20cffd12f 254-257,273,277
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_mute/index.ts
+  s_9477e63ef5cee5::t_ca718d036d5139 13-14
+packages/im/agent/src/security/exec-policy.ts
+  s_9477e63ef5cee5::t_0855d5c9f5f65d 15,454,500-502,504,507,517,523,534-535
+packages/im/agent/src/activity-feedback/config-resolver.ts
+  s_9477e63ef5cee5::t_0cecefba2f2b1d 1,13,17-22,24,28-36,39-44,50,53-54,56-57,67-68,70-71,73-74,76,80,91,98-99,101
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_26859e8b69c728 14,511-514,1376
+  s_9477e63ef5cee5::t_139db81eeac49e 1142
+  s_9477e63ef5cee5::t_f6bc3afa133542 1221
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9477e63ef5cee5::t_275722710bfa9f 9,13,246
+  s_9477e63ef5cee5::t_e3f16a89142d52 266,268-273,277,288,323,328
+  s_9477e63ef5cee5::t_899a7a696b1be6 428
+  s_9477e63ef5cee5::t_139db81eeac49e 895,911-916
+  s_9477e63ef5cee5::t_f6bc3afa133542 267
+packages/im/agent/src/media/media-publisher.ts
+  s_9477e63ef5cee5::t_7f0935ef24ae39 156-157
+packages/im/tool/src/tool-index.ts
+  s_9477e63ef5cee5::t_17745707851fc4 36,152
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9477e63ef5cee5::t_baba9ca3a93019 199,211,222,280-283,287
+  s_9477e63ef5cee5::t_fb306a86fa33ae 37-39,243,270,298
+packages/im/im-contract/src/endpoint.ts
+  s_9477e63ef5cee5::t_3fe2a12b01ef22 13-45
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/essence/index.ts
+  s_9477e63ef5cee5::t_ca718d036d5139 11-12
+basic/cli/src/plugin-runtime/console/host.ts
+  s_9477e63ef5cee5::t_65b55cc28ce0ab 60-61,119-121
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_9477e63ef5cee5::t_f7b92a300cf279 2067
+packages/im/agent/src/subagent/im-result-sink.ts
+  s_9477e63ef5cee5::t_26859e8b69c728 48
+packages/im/agent/tests/typing-indicator/adapter-integration.test.ts
+  s_9477e63ef5cee5::t_a06ecf3d57e69c 2,4-11,13-15,21-23,26-29
+packages/im/agent/src/outbound/send-proactive.ts
+  s_9477e63ef5cee5::t_26859e8b69c728 23-24
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_9477e63ef5cee5::t_0aa7f937c61be1 5,58-96,98,103-106,156-157,165,167,184-212
+basic/cli/src/plugin-runtime/agent/turn/sandbox-policy.ts
+  s_9477e63ef5cee5::t_9fd48ed53615cf 5-6,37
+basic/cli/src/plugin-runtime/console/page-renderer.ts
+  s_9477e63ef5cee5::t_65b55cc28ce0ab 32-36
+plugins/services/activity-feedback/tests/index.test.ts
+  s_9477e63ef5cee5::t_4f9f4968478d2b 70,111,168,236,281
+  s_9477e63ef5cee5::t_d21abf4397c966 205
+basic/cli/tests/plugin-runtime/agent/turn/sandbox-policy.test.ts
+  s_9477e63ef5cee5::t_0e9c26609598bd 7,29,41,45,47,52
+packages/im/agent/src/index.ts
+  s_9477e63ef5cee5::t_821bdbf076eae4 102-104
+  s_9477e63ef5cee5::t_1c0a3e18fc6d5f 871
+  s_9477e63ef5cee5::t_79fe9ac959aa15 101
+packages/im/skill/tests/skill.test.ts
+  s_9477e63ef5cee5::t_6732eaa56f1d00 176-188
+.changeset/adapter-capability-consumers.md
+  s_9477e63ef5cee5::t_2a34284e071dbb 1-15
+packages/im/agent/src/media/media-capabilities.ts
+  s_9477e63ef5cee5::t_7f0935ef24ae39 1,7-24
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_9477e63ef5cee5::t_17745707851fc4 326-328,341-346
+  s_9477e63ef5cee5::t_aef856fe04b21e 347-348
+packages/im/adapter/src/adapter-index.ts
+  s_9477e63ef5cee5::t_e4ab458504bcda 26,51
+  s_9477e63ef5cee5::t_fbf6872357772f 39,242-243,520-573,628-632
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9477e63ef5cee5::t_e22da704e14cbb 309
+plugins/services/activity-feedback/src/executor.ts
+  s_9477e63ef5cee5::t_8b34f3e5ff0f02 71,74,301-304
+  s_9477e63ef5cee5::t_1c0a3e18fc6d5f 4-5
+  s_9477e63ef5cee5::t_ab50c885c26d7e 305
+packages/im/skill/src/definition.ts
+  s_9477e63ef5cee5::t_17745707851fc4 21-22,71
+packages/im/agent/tests/exec-policy.test.ts
+  s_9477e63ef5cee5::t_bf1e42d1452cc2 14,37-50,402-418
+basic/cli/tests/plugin-runtime/agent/turn/scene-fact-cache.test.ts
+  s_9477e63ef5cee5::t_fb306a86fa33ae 10-12,19
+basic/cli/tests/plugin-runtime/sandbox-owners.test.ts
+  s_9477e63ef5cee5::t_824c630a44f6e9 1-26
+plugins/services/activity-feedback/src/policy.ts
+  s_9477e63ef5cee5::t_c072059eda577c 3,32-33,50
+packages/im/agent/tests/activity-feedback/config-resolver.test.ts
+  s_9477e63ef5cee5::t_5858181da1f7ba 3,5-17,19-20,24-27,31-33,36-38,42-47,49-60,62-84
+packages/im/agent/src/typing-indicator/adapter-integration.ts
+  s_9477e63ef5cee5::t_1c0a3e18fc6d5f 2-5,11-30,32,36
+pnpm-lock.yaml
+  s_9477e63ef5cee5::t_7dd9513b713400 2421-2423
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "299863ada6abe2f625a5e1b43ef750d3d417e10c",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
