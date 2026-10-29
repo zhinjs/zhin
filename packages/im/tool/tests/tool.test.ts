@@ -226,6 +226,31 @@ describe('Tool Feature', () => {
     expect('alwaysLoaded' in byName.get('opt_out')!).toBe(false);
   });
 
+  it('copies readOnly onto the descriptor only when explicitly true (ADR 0038 §5)', () => {
+    const root = rootPluginId();
+    const slotFor = (localName: string, definition: ReturnType<typeof defineAgentTool>) => createCapabilitySlot({
+      owner: root,
+      feature: toolFeatureId,
+      localName,
+      source: `/tools/${localName}/index.ts`,
+      definition,
+    });
+    const plain = slotFor('plain', defineAgentTool({ description: 'Plain', execute: () => 'ok' }));
+    const reader = slotFor('reader', defineAgentTool({ description: 'Reader', readOnly: true, execute: () => 'ok' }));
+    const writer = slotFor('writer', defineAgentTool({ description: 'Writer', readOnly: false, execute: () => 'ok' }));
+    const snapshot = createSnapshot([plain, reader, writer], createToken('unused').id);
+    const byName = new Map(new ToolIndex([plain, reader, writer], snapshot).visible(root)
+      .map((descriptor) => [descriptor.name, descriptor]));
+
+    expect('readOnly' in byName.get('plain')!).toBe(false);
+    expect(byName.get('reader')?.readOnly).toBe(true);
+    expect('readOnly' in byName.get('writer')!).toBe(false);
+    expect(() => defineAgentTool({ description: 'Bad', readOnly: 'yes' as unknown as boolean, execute: () => 'ok' }))
+      .toThrow('Agent Tool readOnly must be a boolean');
+    expect(() => parseAgentToolDefinition({ ...defineAgentTool({ description: 'Valid', execute: () => 'ok' }), readOnly: 1 }))
+      .toThrow('Tool module must default-export defineAgentTool(...)');
+  });
+
   it('rejects a non-boolean alwaysLoaded flag', () => {
     expect(() => defineAgentTool({
       description: 'Bad flag',

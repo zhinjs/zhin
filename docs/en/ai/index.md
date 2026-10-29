@@ -428,11 +428,15 @@ ai:
       groupMode: supersede        # default: a sender's new message replaces their own unanswered turn; fifo queues everything
       maxQueuedTurns: 5           # queued turns allowed per conversation
       ttlMs: 180000               # queue timeout
-      merge:                      # group merge window (ADR 0038), off by default
-        enabled: false
+      merge:                      # group merge window (ADR 0038), group chats only
+        enabled: true
         quietMs: 1500             # flush after this much quiet
         maxWaitMs: 6000           # longest a window waits
         maxSenders: 5             # senders per merged reply
+      live:                       # danmaku mode (ADR 0038), liveDanmaku adapters only
+        mode: pick-one            # pick-one answers one danmaku / summary answers the window once
+        windowMs: 10000           # danmaku window
+        minIntervalMs: 15000      # minimum gap between two danmaku replies
 ```
 
 **Command allowlists**: `execPreset` widens step by step — `readonly` (ls, cat, grep, find…) → `network` (adds curl, wget, ping…) → `development` (adds npm, node, git, python…). In every mode, dangerous commands such as `sudo`, `eval`, `dd` and `export` are refused, and operations like `rm -rf node_modules` are hard-blocked.

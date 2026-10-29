@@ -78,6 +78,7 @@ export {
 export type { InboundQueueActivityEmitter } from './inbound-turn-queue.js';
 
 export {
+  DEFAULT_INBOUND_LIVE_CONFIG,
   DEFAULT_INBOUND_MERGE_CONFIG,
   DEFAULT_INBOUND_QUEUE_CONFIG,
   normalizeInboundQueueConfig,
@@ -85,7 +86,7 @@ export {
   isGroupOrChannelMessage,
   shouldUseGroupFifoQueue,
 } from './inbound-queue-config.js';
-export type { ResolvedInboundMergeConfig, ResolvedInboundQueueConfig } from './inbound-queue-config.js';
+export type { ResolvedInboundLiveConfig, ResolvedInboundMergeConfig, ResolvedInboundQueueConfig } from './inbound-queue-config.js';
 
 export { createInboundTurnQueue, runWithInboundQueue } from './inbound-queue-runtime.js';
 
@@ -144,16 +145,44 @@ export type {
 } from './task-continuation.js';
 export {
   DEFAULT_MAX_QUEUED_TURNS,
+  LIVE_WINDOW_MAX_MESSAGES,
   TurnAdmissionGate,
 } from './turn-admission-gate.js';
+export {
+  intersectCapabilities,
+  narrowMergedAccess,
+  ON_BEHALF_OF_ARG,
+  resolveOnBehalfOf,
+  withMergeMembers,
+  type OnBehalfOfResolution,
+} from './merged-principal.js';
+export { isActingTurnEvent } from './stale-reply.js';
+export {
+  answeredMergedSenders,
+  formatMergedTurnBlock,
+  mergedReplyAuditPayload,
+  MERGED_TURN_HEADER,
+  type TurnMergedSender,
+} from './merged-turn-context.js';
+export {
+  formatLiveDanmakuBlock,
+  LIVE_DANMAKU_HEADER,
+  liveReplyAuditPayload,
+  readOnlyCapabilities,
+  type TurnLiveDanmaku,
+  type TurnLiveDanmakuMode,
+} from './live-turn-context.js';
 export type {
   TurnAdmission,
   TurnAdmissionFacts,
   TurnAdmissionGateOptions,
   TurnAdmissionRequest,
   TurnMergeWindowOptions,
+  TurnLiveWindowOptions,
+  TurnLiveWindowSnapshot,
   TurnMergeWindowSnapshot,
   TurnParticipant,
+  TurnStaleVerdict,
   TurnStopResult,
 } from './turn-admission-gate.js';
 

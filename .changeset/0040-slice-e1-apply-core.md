@@ -1,0 +1,5 @@
+---
+"@zhin.js/agent": patch
+---
+
+ADR 0040 slice E1: add `SelfChangeApplier`, the apply / verify / rollback core for approved self-changes. It re-checks the approved `content_hash` (re-hashing every staged file) and the config `expectedRevision` before touching anything (mismatch → `failed`, no files written), writes the rollback snapshot and persists `applying` + report target before writing production files, then applies by impact — `none`, hot reload, or a controlled restart after persisting `verifying`. A 60 s health check decides `applied` ("已生效"); otherwise it rolls back once and reports "失败，已回滚", and if still unhealthy goes `failed` with `emergency_stop` and an owner-only report — at most two restarts per change. `recover()` resumes `applying` / `verifying` changes at start-up. `SelfChangeStore` gains `writeSnapshot` / `readSnapshot` / `setApplyState` / `audit`, and `SelfChangeApprovals` an `onApproved` hook. Host wiring (reload, exit 75, health, reporting, start-up recover) follows in slice E2.

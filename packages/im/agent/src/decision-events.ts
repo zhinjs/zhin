@@ -43,6 +43,12 @@ export const DECISION_EVENT_KINDS = [
   'ops_cooldown',
   // ADR 0037 第 1 期（切片 D）：会话日程的创建、修改、取消与到点触发结果
   'schedule',
+  // ADR 0039 切片 A：动态群管规则状态迁移（起草、提交、批准、驳回、过期、停用、被新规则替换）
+  'group_rule',
+  // ADR 0039：一次规则命中的判定与执行结果（执行器见切片 C）
+  'rule_enforcement',
+  // ADR 0040 切片 A：受控自我进化——变更的每次状态迁移
+  'self_change',
 ] as const;
 export type DecisionEventKind = typeof DECISION_EVENT_KINDS[number];
 
@@ -133,6 +139,45 @@ export const DECISION_REASON_CODES = [
   'merge_on_behalf_denied',
   'danmaku_window_picked',
   'hard_gate_scene_pending_cap',
+  // ADR 0039 切片 A：动态群管规则（`ai_group_rules`）状态迁移
+  'rule_drafted',
+  'rule_submitted',
+  'rule_approved',
+  'rule_rejected',
+  'rule_expired',
+  'rule_disabled',
+  'rule_superseded',
+  'rule_hash_mismatch',
+  'rule_draft_forbidden',
+  // ADR 0039：规则命中与执行（执行器见切片 C / D）
+  'rule_hit_remind',
+  'rule_hit_warn',
+  'rule_hit_mute',
+  'rule_hit_kick_suggested',
+  'rule_hit_exempt',
+  'rule_hit_bot_not_admin',
+  'rule_hit_flood',
+  // ADR 0040 §7：受控自我进化 起草 / 试跑 → 审批 → 生效 / 恢复
+  'change_drafted',
+  'change_quota_exceeded',
+  'change_pruned',
+  'change_path_forbidden',
+  'change_config_key_forbidden',
+  'change_trial_passed',
+  'change_trial_failed',
+  'change_submitted',
+  'change_approved',
+  'change_rejected',
+  'change_expired',
+  'change_hash_mismatch',
+  'change_applied_none',
+  'change_applied_reload',
+  'change_restart_requested',
+  'change_verified',
+  'change_rolled_back',
+  'change_failed_emergency_stop',
+  'change_report_sent',
+  'change_report_redirected',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

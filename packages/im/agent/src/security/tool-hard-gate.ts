@@ -123,6 +123,8 @@ export interface ToolHardGateSettings {
   readonly allowFunds: boolean;
   /** 审批等待上限（毫秒），超时即拒绝。 */
   readonly approvalTimeoutMs: number;
+  /** 同一群（场景）同时待审的卡片上限（ADR 0038 §2）；超出 fail closed，不生成新卡。 */
+  readonly maxPendingPerScene: number;
   /** IM 审批通道（G6，#1013）；默认关闭。 */
   readonly imApproval: ToolHardGateImApprovalSettings;
 }
@@ -143,6 +145,7 @@ export const DEFAULT_TOOL_HARD_GATE: ToolHardGateSettings = Object.freeze({
   dangerousTools: Object.freeze([]) as readonly string[],
   allowFunds: false,
   approvalTimeoutMs: DEFAULT_TOOL_APPROVAL_TTL_MS,
+  maxPendingPerScene: 3,
   imApproval: DEFAULT_TOOL_HARD_GATE_IM_APPROVAL,
 });
 
@@ -151,12 +154,16 @@ export function resolveToolHardGate(value?: ToolHardGateConfig | null): ToolHard
     ? value!.dangerousTools.filter((name): name is string => typeof name === 'string' && name.trim() !== '').map((name) => name.trim())
     : [];
   const timeout = value?.approvalTimeoutMs;
+  const pendingCap = value?.maxPendingPerScene;
   return Object.freeze({
     dangerousTools: Object.freeze(dangerousTools),
     allowFunds: value?.allowFunds === true,
     approvalTimeoutMs: typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
       ? Math.trunc(timeout)
       : DEFAULT_TOOL_HARD_GATE.approvalTimeoutMs,
+    maxPendingPerScene: typeof pendingCap === 'number' && Number.isInteger(pendingCap) && pendingCap > 0
+      ? pendingCap
+      : DEFAULT_TOOL_HARD_GATE.maxPendingPerScene,
     imApproval: resolveToolHardGateImApproval(value?.imApproval),
   });
 }
@@ -351,6 +358,16 @@ export interface ToolHardGateContext {
   readonly opsCooldown?: OpsCooldownView;
   /** 本代宿主注入的受保护路径集（Turn 带入）；缺省为 fail-closed 回退（按文件名任意层级匹配）。 */
   readonly protectedPaths?: HostProtectedPaths;
+  /**
+   * 本回合最多生成几张新审批卡（ADR 0038 §2：合并回合为 1）。复用同指纹的待审卡不计数。缺省不限。
+   */
+  readonly maxCardsPerTurn?: number;
+}
+
+/** {@link ToolHardGate.check} 的单次调用选项。 */
+export interface ToolHardGateCheckOptions {
+  /** 本次调用代谁做（ADR 0038 §2 `onBehalfOf` 复核通过的发送者）；写进审批卡与审批提示。缺省用回合发起人。 */
+  readonly requesterId?: string;
 }
 
 type ControlDenial = Readonly<{
@@ -374,14 +391,19 @@ const CONTROL_READ_ONLY_DENIAL: ControlDenial = Object.freeze({
   why: '控制面处于只读',
 });
 
-/** {@link ToolHardGate.checkPreApproved} 的审批记录：来自领域对象自己的人工审批（如公告）。 */
+/**
+ * {@link ToolHardGate.checkPreApproved} 的审批记录：来自领域对象自己的人工审批
+ * （公告 ADR 0037 §1.2；群规 ADR 0039 §4：规则批准即对「命中时禁言」的预先人批）。
+ */
 export interface ToolHardGatePreApproval {
   /** 审批记录来源（审计 `via`）。 */
-  readonly source: 'announcement';
+  readonly source: 'announcement' | 'rule';
   /** 领域对象 id（审计 `approvalId`）。 */
   readonly id: string;
-  /** 审批人（Console 用户）；审计 `actor=operator`。 */
+  /** 审批人（Console 用户或群主 / 管理员）；审计 `actor=operator`。 */
   readonly approvedBy: string | null;
+  /** 审批渠道（审计 `channel`）；缺省 `console`。群规在群内批准时为 `im_group`。 */
+  readonly channel?: 'console' | 'im_group';
   /** 审批时绑定的内容摘要。 */
   readonly approvedHash: string | null;
   /** 发送前对正文现算的摘要。 */
@@ -414,6 +436,7 @@ export class ToolHardGate {
   readonly #context: ToolHardGateContext;
   readonly #deniedTools = new Set<string>();
   readonly #deniedCategories = new Set<DangerousToolCategory>();
+  #cardsIssued = 0;
 
   constructor(settings: ToolHardGateConfig | undefined, context: ToolHardGateContext) {
     this.#settings = resolveToolHardGate(settings);
@@ -432,7 +455,9 @@ export class ToolHardGate {
     tool: ToolRiskView,
     input: Readonly<Record<string, unknown>>,
     toolUseId: string,
+    options: ToolHardGateCheckOptions = {},
   ): Promise<ToolHardGateResult> {
+    const requesterId = options.requesterId ?? this.#context.requesterId;
     const assessment = this.assess(tool, input);
     const name = tool.name;
     if (assessment.risk !== 'dangerous') {
@@ -475,11 +500,19 @@ export class ToolHardGate {
     const cooldownDenial = this.#checkOpsCooldown(name, category, input, payload);
     if (cooldownDenial) return cooldownDenial;
 
+    // ADR 0038 §2：复用同指纹待审卡不算新卡；新卡受「每回合上限」与「每群待审上限」约束。
+    const reused = queue?.findPending(this.#context.sessionKey, name, input);
+    if (!reused) {
+      const capDenial = this.#checkCardCaps(name, category, payload);
+      if (capDenial) return capDenial;
+      this.#cardsIssued += 1;
+    }
+
     const entry = queue?.enqueue({
       toolName: name,
       category,
       sessionKey: this.#context.sessionKey,
-      requesterId: this.#context.requesterId ?? null,
+      requesterId: requesterId ?? null,
       turnId: this.#context.turnId,
       args: input,
       ttlMs: this.#settings.approvalTimeoutMs,
@@ -496,7 +529,7 @@ export class ToolHardGate {
         entry ? pendingCardHint(imDeliverable) : '当前没有可用的人工审批渠道');
     }
 
-    const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry, tool.description);
+    const settled = await this.#awaitApproval(port, name, category, input, toolUseId, entry, tool.description, requesterId);
     if (settled.kind === 'cancelled') return CANCELLED;
     const withId = {
       ...payload,
@@ -526,9 +559,10 @@ export class ToolHardGate {
    * 以一条**已存在的人工审批记录**作为硬闸批准（ADR 0037 §1.2：公告「草稿 → 审批 → 发送」）。
    *
    * - 不入审批队列、不问审批端口——**不弹第二张卡**；运营者在 Console 批准公告这一步就是本次发送的人工批准。
-   * - 仍做硬闸的其他判定：控制面 `emergency_stop` / `read_only`、本回合 latch、资金禁用。
+   * - 仍做硬闸的其他判定：控制面 `emergency_stop` / `read_only`、本回合 latch、资金禁用；
+   *   上下文接了 {@link ToolHardGateContext.opsCooldown} 时同样过群管冷却（群规自动禁言，ADR 0039 §4）。
    * - 审批绑定内容摘要：`approvedHash` 缺失或与 `contentHash`（发送前对正文现算的摘要）不符时直接拒绝，
-   *   `reason_code=announcement_hash_mismatch`，不执行。
+   *   `reason_code=announcement_hash_mismatch`（群规为 `rule_hash_mismatch`），不执行。
    * - 只对这一次调用生效（不写入队列，也不留「记住」授权）。
    */
   checkPreApproved(
@@ -552,7 +586,7 @@ export class ToolHardGate {
       toolUseId,
       approvalId: approval.id,
       via: approval.source,
-      channel: 'console' as const,
+      channel: approval.channel ?? 'console',
       argKeys: Object.keys(input).sort(),
     };
     const controlDenial = this.#checkControlPlane();
@@ -569,10 +603,12 @@ export class ToolHardGate {
         '资金类工具默认禁用');
     }
     if (!approval.approvedHash || !approval.contentHash || approval.approvedHash !== approval.contentHash) {
-      return this.#deny(name, category, 'announcement_hash_mismatch',
+      return this.#deny(name, category, approval.source === 'rule' ? 'rule_hash_mismatch' : 'announcement_hash_mismatch',
         { ...payload, approvedHash: approval.approvedHash ?? null, contentHash: approval.contentHash },
         'content changed after approval', '内容与审批时不一致，需要重新审批');
     }
+    const cooldownDenial = this.#checkOpsCooldown(name, category, input, payload);
+    if (cooldownDenial) return cooldownDenial;
     const approved = { ...payload, contentHash: approval.contentHash };
     this.#audit('tool_approval', 'allow', 'tool_approval_approved', approved, approval.approvedBy);
     this.#audit('tool_hard_gate', 'allow', 'tool_approval_approved', approved);
@@ -646,7 +682,8 @@ export class ToolHardGate {
     input: Readonly<Record<string, unknown>>,
     toolUseId: string,
     entry: ToolApprovalEntry | undefined,
-    description?: string,
+    description: string | undefined,
+    requesterId: string | undefined,
   ): Promise<
     | { kind: 'approved'; via: string; channel: ToolApprovalAuditChannel; decidedBy: string | null }
     | { kind: 'denied'; via: string; channel: ToolApprovalAuditChannel; decidedBy: string | null }
@@ -668,7 +705,7 @@ export class ToolHardGate {
         requestId: entry?.id ?? `${this.#context.turnId}:${toolUseId}`,
         sessionKey: this.#context.sessionKey,
         ...(this.#context.conversationScope ? { conversationScope: this.#context.conversationScope } : {}),
-        ...(this.#context.requesterId ? { requesterId: this.#context.requesterId } : {}),
+        ...(requesterId ? { requesterId } : {}),
         toolName,
         // Never matches a remembered grant: every dangerous call is confirmed on its own.
         scopeKey: `${TOOL_HARD_GATE_POLICY}:${this.#context.turnId}:${toolUseId}`,
@@ -727,6 +764,43 @@ export class ToolHardGate {
       signal.removeEventListener('abort', abort);
       controller.abort();
     }
+  }
+
+  /**
+   * ADR 0038 §2：合并回合里一次有副作用的调用没通过 `onBehalfOf` 复核。只写审计（`tool_call` /
+   * `merge_on_behalf_denied`），不 latch：模型换成有权限的发送者重试仍可执行。
+   */
+  recordOnBehalfDenied(toolName: string, toolUseId: string, payload: Readonly<Record<string, unknown>>, detail: string): void {
+    this.#audit('tool_call', 'deny', 'merge_on_behalf_denied', { tool: toolName, toolUseId, ...payload }, null, detail);
+  }
+
+  /**
+   * ADR 0038 §2：合并回合每回合最多 {@link ToolHardGateContext.maxCardsPerTurn} 张新卡；
+   * 同一群（`origin` 的 platform + sceneId，无 origin 时按会话）同时待审最多 `maxPendingPerScene` 张。
+   * 超出即 fail closed、不入队、不弹审批。
+   */
+  #checkCardCaps(
+    name: string,
+    category: DangerousToolCategory | null,
+    payload: Record<string, unknown>,
+  ): ToolHardGateResult | null {
+    const perTurn = this.#context.maxCardsPerTurn;
+    if (perTurn !== undefined && this.#cardsIssued >= perTurn) {
+      return this.#deny(name, category, 'tool_hard_gate_latched', { ...payload, cap: 'turn', maxCardsPerTurn: perTurn },
+        `turn approval-card cap reached (${perTurn})`,
+        '本回合已经发出过审批请求，同一回合不再追加');
+    }
+    const queue = this.#context.queue;
+    if (!queue) return null;
+    const max = this.#settings.maxPendingPerScene;
+    const origin = this.#context.origin;
+    const pending = queue.list({ status: 'pending' }).filter((entry) => origin
+      ? entry.origin?.platform === origin.platform && entry.origin.sceneId === origin.sceneId
+      : entry.sessionKey === this.#context.sessionKey).length;
+    if (pending < max) return null;
+    return this.#deny(name, category, 'hard_gate_scene_pending_cap', { ...payload, pending, maxPendingPerScene: max },
+      `scene pending approval cap reached (${pending}/${max})`,
+      `本群已有 ${pending} 张待审批的请求，请先处理后再试`);
   }
 
   /**

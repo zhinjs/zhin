@@ -4,6 +4,8 @@ import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js
 import type { TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import { SCENE_WAKE_METADATA_KEY } from '../scene-events.js';
+import { formatMergedTurnBlock } from '../turn/merged-turn-context.js';
+import { formatLiveDanmakuBlock } from '../turn/live-turn-context.js';
 
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
@@ -110,6 +112,10 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
       stable.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
       if (display.commandMenu) stable.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);
     }
+    const merged = formatMergedTurnBlock(display?.mergedSenders);
+    if (merged) current.push(merged);
+    const danmaku = formatLiveDanmakuBlock(display?.liveDanmaku);
+    if (danmaku) current.push(danmaku);
     if (display?.metadata?.[SCENE_WAKE_METADATA_KEY] === true) current.push(SCENE_WAKE_ENGAGEMENT_LINE);
     else if (display?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') current.push(AMBIENT_ENGAGEMENT_LINE);
     if (input.turn.policy?.filesystem) {

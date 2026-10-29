@@ -911,9 +911,9 @@
                   "properties": {
                     "enabled": {
                       "type": "boolean",
-                      "default": false,
-                      "description": "Turn the group merge window on. Off by default until merged turns narrow permissions per sender.",
-                      "x-descriptionZh": "开启群聊合流。合并回合按发送者收窄权限之前默认关闭。"
+                      "default": true,
+                      "description": "Turn the group merge window on (group chats only). Set false to answer every member one by one as before.",
+                      "x-descriptionZh": "开启群聊合流（仅群聊）。设为 false 则恢复逐人逐条回复。"
                     },
                     "quietMs": {
                       "type": "integer",
@@ -935,6 +935,35 @@
                       "default": 5,
                       "description": "Senders one merged reply covers; further senders wait for the next window.",
                       "x-descriptionZh": "一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。"
+                    }
+                  }
+                },
+                "live": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Danmaku mode (ADR 0038): live-stream adapters that declare liveDanmaku collect danmaku in a window and reply once, with read-only tools and no approval cards.",
+                  "x-descriptionZh": "弹幕模式（ADR 0038）：声明了 liveDanmaku 的直播适配器把一段时间内的弹幕收进窗口后只回一次；只开放只读工具，不出审批卡。",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": ["pick-one", "summary"],
+                      "default": "pick-one",
+                      "description": "pick-one answers one danmaku of the window; summary answers the window as a whole once.",
+                      "x-descriptionZh": "pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。"
+                    },
+                    "windowMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 10000,
+                      "description": "How long a danmaku window collects messages from its first danmaku.",
+                      "x-descriptionZh": "弹幕窗口从第一条弹幕起收集多久。"
+                    },
+                    "minIntervalMs": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "default": 15000,
+                      "description": "Minimum time between two danmaku replies in one live room.",
+                      "x-descriptionZh": "同一直播间两次弹幕回复的最小间隔。"
                     }
                   }
                 },
@@ -1167,6 +1196,13 @@
                   "default": 300000,
                   "description": "How long a dangerous call waits for approval before it is denied (ms).",
                   "x-descriptionZh": "危险调用等待审批的上限（毫秒），超时即拒绝。"
+                },
+                "maxPendingPerScene": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 3,
+                  "description": "Approval cards one group (scene) may have pending at once (ADR 0038). Beyond it a dangerous call is denied without a new card; asking again for an already pending card does not count.",
+                  "x-descriptionZh": "同一群（场景）同时待审批的卡片上限（ADR 0038）。超出后危险调用直接拒绝、不生成新卡；对已有待审卡的重复请求不计数。"
                 },
                 "imApproval": {
                   "type": "object",

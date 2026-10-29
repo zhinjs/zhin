@@ -14,15 +14,25 @@ import {
   REACTION_SEGMENT_TYPE,
   type AgentOutputElement,
   type ApprovalPort,
-  type TurnAccessContext,
 } from '@zhin.js/agent';
 import { DecisionApprovalJudgment } from '@zhin.js/agent/session';
 import { noteTurnTrace } from '@zhin.js/agent/trace';
 import {
+  intersectCapabilities,
+  isActingTurnEvent,
   isCancelIntent,
+  liveReplyAuditPayload,
+  mergedReplyAuditPayload,
+  narrowMergedAccess,
   normalizeInboundQueueConfig,
+  readOnlyCapabilities,
+  withMergeMembers,
   TurnAdmissionGate,
+  type TurnAccessContext,
   type TurnAdmission,
+  type TurnLiveDanmaku,
+  type TurnMergedSender,
+  type TurnStaleVerdict,
 } from '@zhin.js/agent/turn';
 import {
   CapabilityIngress,
@@ -37,7 +47,12 @@ import {
 } from '@zhin.js/agent/runtime';
 import type { DecisionProvider, DecisionTaskConfig } from '@zhin.js/ai';
 import {
+  adapterDeclaresLiveDanmaku,
   resolveAiOutboundSegments,
+  type GroupRuleDefaultOutcome,
+  type GroupRuleViolationOutcome,
+  type GroupRuleViolationReport,
+  type GroupRuleViolationTrigger,
   type ImRuntime,
   type IngressRoute,
   type Message,
@@ -115,6 +130,11 @@ import {
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { MemberLifecycle } from './member-lifecycle.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
+import { GroupRuleImChannel } from './group-rule-im.js';
+import { GroupRuleEnforcer, type GroupRuleEnforcementResult, type GroupRuleViolation } from './group-rule-enforcer.js';
+import { GroupFloodDetector } from './group-flood-detector.js';
+import { GroupRuleDefaults } from './group-rule-defaults.js';
+import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ColdFieldMonitor } from './cold-field.js';
 import { SessionEventDispatcher } from './session-event-dispatch.js';
 import {
@@ -191,6 +211,14 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /** ADR 0037 切片 D：会话日程到点唤醒（控制面 → session-gate → 模板直发，宽限 / 合并）。 */
   readonly #sessionEvents: SessionEventDispatcher;
   readonly #stopSessionEvents: () => void;
+  /** ADR 0039 切片 B：群规预览卡与群内审批命令。 */
+  readonly #groupRules: GroupRuleImChannel;
+  readonly #stopGroupRules: () => void;
+  /** ADR 0039 切片 C：群规执行器（命中 → 阶梯档：提醒 / 警告 / 自动禁言 / 建议踢人出卡）。 */
+  readonly #groupRuleEnforcer: GroupRuleEnforcer;
+  /** ADR 0039 切片 D：复读刷屏检测（进程内、有界，不落盘）。 */
+  readonly #floodDetector = new GroupFloodDetector();
+  readonly #groupRuleDefaults: GroupRuleDefaults;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
     this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
@@ -211,6 +239,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#sceneEvents = this.#createSceneEventIngress();
     this.#sessionEvents = this.#createSessionEventDispatcher();
     this.#stopSessionEvents = this.#sessionEvents.start();
+    this.#groupRules = this.#createGroupRuleChannel();
+    this.#stopGroupRules = this.#groupRules.start();
+    this.#groupRuleEnforcer = this.#createGroupRuleEnforcer();
+    this.#groupRuleDefaults = new GroupRuleDefaults(() => options.agent?.agent?.getGroupRules?.());
     options.assistantStatus?.bindSessionOps(
       () => options.agent.agent.getSessionOps?.(),
       () => this.#memberLifecycle,
@@ -221,6 +253,168 @@ export class AgentTurnIngressRoute implements IngressRoute {
       () => this.#announcements,
     );
     options.assistantStatus?.bindSessionEvents(() => options.agent.agent.getSessionEvents?.());
+    options.assistantStatus?.bindGroupRules(() => options.agent.agent.getGroupRules?.());
+  }
+
+  #createGroupRuleChannel(): GroupRuleImChannel {
+    const options = this.options;
+    return new GroupRuleImChannel({
+      // 构造时就订阅；测试桩可能不带 agent。
+      rules: () => options.agent?.agent?.getGroupRules?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      imApproval: () => resolveToolHardGateImApproval(options.agent.agent.config?.toolHardGate?.imApproval),
+      send: async (target, text) => {
+        const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
+        if (!endpointKey) throw new Error('endpoint_unresolved');
+        await options.im.endpoints.send({
+          adapter: target.platform,
+          endpointKey,
+          conversation: { kind: 'group', id: target.groupId },
+          content: text,
+        });
+      },
+    });
+  }
+
+  #createGroupRuleEnforcer(): GroupRuleEnforcer {
+    const options = this.options;
+    const endpointOf = (target: { platform: string; endpoint: string | null }) => {
+      const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
+      if (!endpointKey) throw new Error('endpoint_unresolved');
+      return endpointKey;
+    };
+    return new GroupRuleEnforcer({
+      rules: () => options.agent?.agent?.getGroupRules?.(),
+      controlPlane: () => options.agent.agent.getControlPlane?.(),
+      sessions: () => options.agent.agent.getUserProfiles?.()?.sessions,
+      decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
+      hardGate: () => options.agent.agent.config?.toolHardGate,
+      approvals: () => options.agent.agent.toolApprovals,
+      opsCooldown: () => options.agent.agent.opsCooldown,
+      onSpoke: (key) => this.#noteSpoke(key),
+      send: async (target, parts) => {
+        const content = parts.map((part) => (part.type === 'text'
+          ? { type: 'text', data: { text: part.text } }
+          : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }));
+        const result = await options.im.endpoints.send({
+          adapter: target.platform,
+          endpointKey: endpointOf(target),
+          conversation: { kind: 'group', id: target.groupId },
+          content,
+        });
+        return { status: 'sent' as const, ...(result.messageId ? { messageId: result.messageId } : {}) };
+      },
+      inspect: async (target, memberId, signal) => {
+        const result = await options.im.endpoints.withManagement(target.platform, endpointOf(target), (management) =>
+          management.inspectGroupMember ? management.inspectGroupMember(target.groupId, memberId, signal) : undefined);
+        return result ?? undefined;
+      },
+      mute: async (target, memberId, durationSec, signal) => {
+        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
+          // 优先走「执行前复核权限」的接口。
+          if (management.moderateGroupMember) {
+            await management.moderateGroupMember(target.groupId, memberId, { type: 'mute', durationSeconds: durationSec }, signal);
+          } else if (management.muteGroupMember) {
+            await management.muteGroupMember(target.groupId, memberId, durationSec);
+          } else {
+            throw new Error('mute_unsupported');
+          }
+          return true;
+        });
+        if (!done) throw new Error('endpoint_unavailable');
+      },
+      kick: async (target, memberId) => {
+        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
+          if (!management.kickGroupMember) throw new Error('kick_unsupported');
+          await management.kickGroupMember(target.groupId, memberId);
+          return true;
+        });
+        if (!done) throw new Error('endpoint_unavailable');
+      },
+    });
+  }
+
+  /**
+   * 群规执行入口（ADR 0039 §4）：违规判定方（`flood` 检测、content-moderation）报告一次命中，
+   * 这里按该群生效规则的阶梯档执行。没有生效规则时什么都不做。
+   */
+  enforceGroupRule(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
+    return this.#groupRuleEnforcer.enforce(violation);
+  }
+
+  /**
+   * 插件违规上报（ADR 0039 §5，经 `groupRuleViolationToken`）：content-moderation 判定后交给规则执行器。
+   * 执行器找到规则（含被控制面 / 豁免 / 冷却跳过）→ `handled`，插件不得再自行提醒或处罚；没有可用规则 → `no_rule`。
+   */
+  async reportGroupRuleViolation(report: GroupRuleViolationReport): Promise<GroupRuleViolationOutcome> {
+    const { conversation } = report;
+    if (conversation.kind !== 'group' || !report.memberId) return 'no_rule';
+    const result = await this.#groupRuleEnforcer.enforce({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      groupId: conversation.id,
+      memberId: report.memberId,
+      ...(report.memberName ? { memberName: report.memberName } : {}),
+      ...(report.memberRoles ? { memberRoles: report.memberRoles } : {}),
+      trigger: report.trigger,
+      sentAt: report.sentAt,
+      ...(report.messageId ? { messageId: report.messageId } : {}),
+      ...(report.evidence?.length ? { evidence: report.evidence } : {}),
+      ...(report.newcomer ? { newcomer: true } : {}),
+      ...(report.recall ? { recall: report.recall } : {}),
+    });
+    if (result.kind !== 'no_rule') {
+      logger.info(formatCompact({ op: 'group_rule_moderation', conv: `${conversation.endpoint.adapter}:${conversation.id}`, trigger: report.trigger, result: result.kind }));
+    }
+    return result.kind === 'no_rule' ? 'no_rule' : 'handled';
+  }
+
+  /** content-moderation 迁移：原 `groupModeration` 群按默认模板生成一条待确认规则（ADR 0039 §5）。 */
+  ensureDefaultGroupRule(input: Readonly<{ conversation: ConversationRef; trigger: GroupRuleViolationTrigger }>): Promise<GroupRuleDefaultOutcome> {
+    const { conversation } = input;
+    if (conversation.kind !== 'group') return Promise.resolve('unavailable');
+    return this.#groupRuleDefaults.ensure({
+      platform: conversation.endpoint.adapter,
+      endpoint: conversation.endpoint.id,
+      groupId: conversation.id,
+      trigger: input.trigger,
+    });
+  }
+
+  /**
+   * 复读刷屏（ADR 0039 §2 `flood`）：群里每条真人消息先记指纹；同一成员窗口内重复达阈值时交给规则执行器
+   * （该群没有生效的 `flood` 规则时执行器什么都不做）。不阻塞本条消息的后续处理，失败只记日志。
+   */
+  #observeFlood(message: Message, platform: string, endpoint: string | undefined): void {
+    if (message.conversation.kind !== 'group') return;
+    if (message.origin !== undefined && message.origin !== 'human') return;
+    const memberId = message.sender?.id;
+    if (!platform || !memberId) return;
+    const at = Date.now();
+    const verdict = this.#floodDetector.observe({
+      platform,
+      groupId: message.conversation.id,
+      memberId,
+      content: message.content,
+      ...(message.segments ? { segments: message.segments } : {}),
+      at,
+    });
+    if (!verdict.hit) return;
+    void this.#groupRuleEnforcer.enforce({
+      platform,
+      ...(endpoint ? { endpoint } : {}),
+      groupId: message.conversation.id,
+      memberId,
+      ...(message.sender?.name ? { memberName: message.sender.name } : {}),
+      ...(message.sender?.roles ? { memberRoles: message.sender.roles } : {}),
+      trigger: 'flood',
+      sentAt: at,
+      ...(message.message?.id ? { messageId: message.message.id } : {}),
+      evidence: verdict.samples,
+      detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
+    }).then((result) => {
+      if (result.kind !== 'no_rule') logger.info(formatCompact({ op: 'group_rule_flood', conv: `${platform}:${message.conversation.id}`, result: result.kind }));
+    });
   }
 
   #createSessionEventDispatcher(): SessionEventDispatcher {
@@ -373,6 +567,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#memberLifecycle.dispose();
     this.#stopAnnouncementSweep();
     this.#stopSessionEvents();
+    this.#stopGroupRules();
+    this.#groupRuleEnforcer.dispose();
+    this.#floodDetector.clear();
     this.#sceneEvents.dispose();
   }
 
@@ -389,6 +586,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         supersedeSameSender: queue.groupMode === 'supersede',
         // ADR 0038 §1: group merge window (opt-in in slice A).
         ...(queue.merge.enabled ? { merge: queue.merge } : {}),
+        // ADR 0038 §5: only conversations of a `liveDanmaku` adapter ask for it.
+        live: { windowMs: queue.live.windowMs, minIntervalMs: queue.live.minIntervalMs },
       });
     }
     return this.#admissionGate;
@@ -596,6 +795,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return receipt;
       };
 
+      if (!workroomAgentTurn && turnAccess.origin.kind === 'im') {
+        this.#observeFlood(message, turnAccess.origin.platform, effectiveEndpoint);
+      }
+
       // Agent 管理命令（/models /tree /reset…）— 在 AI trigger 前拦截
       const managementReply = workroomAgentTurn
         ? null
@@ -613,6 +816,24 @@ export class AgentTurnIngressRoute implements IngressRoute {
       if (managementReply != null) {
         await reply(managementReply);
         logger.info(formatCompact({ op: 'agent_host_management', handled: true }));
+        return true;
+      }
+
+      // ADR 0039 slice B: `rule approve|reject|disable <code>` / `rules` in the rule's own group.
+      const groupRuleReply = !workroomAgentTurn && turnAccess.origin.kind === 'im'
+        ? await this.#groupRules.handleCommand({
+            platform: turnAccess.origin.platform,
+            scope: turnAccess.origin.scope,
+            sceneId: turnAccess.origin.sceneId,
+            senderId: turnAccess.principal.subjectId,
+            senderRoles: message.sender?.roles,
+            endpoint: effectiveEndpoint,
+            commandText: managementCommandText(message.content, message.commandPrefix),
+          })
+        : null;
+      if (groupRuleReply != null) {
+        await reply(groupRuleReply);
+        logger.info(formatCompact({ op: 'agent_host_group_rule', handled: true }));
         return true;
       }
 
@@ -724,6 +945,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
           return matched != null;
         }
       }
+      // ADR 0038 §5: in a live room every danmaku is a candidate; viewers do not @ the Bot.
+      const liveRoom = !workroomAgentTurn
+        && turnAccess.origin.kind === 'im'
+        && turnAccess.origin.scope !== 'private'
+        && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
+      if (!matched && liveRoom) {
+        const text = message.content.trim();
+        if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
+      }
       if (!matched) {
         matched = workroomAgentTurn ? null : await this.#considerAmbient(
           snapshot,
@@ -808,6 +1038,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
         ...(modelStartedAt !== undefined ? { durationMs: Date.now() - modelStartedAt } : {}),
       });
       let admission: Extract<TurnAdmission, { kind: 'run' }> | undefined;
+      /** ADR 0038 §4: the stale verdict is audited once per turn. */
+      let staleAudited = false;
+      const staleReplyBlocked = (): boolean => {
+        const verdict = admission?.staleCheck();
+        if (!verdict || verdict.kind === 'fresh') return false;
+        if (!staleAudited) {
+          staleAudited = true;
+          auditStaleReply(audit, verdict);
+        }
+        return verdict.kind === 'discard';
+      };
       try {
         const preprocessed = await preprocessInboundTurn(
           message,
@@ -822,7 +1063,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
             senderId,
             text: preprocessed.text,
             plainText,
-            mergeable: isMergeableGroupTurn({
+            // Masters keep their own turn (ADR 0038 §0.3), in a live room too.
+            live: liveRoom && !senderRoles.isMaster,
+            mergeable: !liveRoom && isMergeableGroupTurn({
               message,
               trigger,
               plainText,
@@ -830,6 +1073,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
               content: matched.content,
             }),
             ...(message.sender?.name ? { senderName: message.sender.name } : {}),
+            ...(message.message?.id ? { messageId: message.message.id } : {}),
+            access: turnAccess,
             onWindowJoined: (window) => audit({
               kind: 'inbound_wake',
               outcome: 'defer',
@@ -872,14 +1117,45 @@ export class AgentTurnIngressRoute implements IngressRoute {
           ]);
           const contextState = await resolveRuntimeTurnContextState(snapshot, message.conversation, signal);
           signal.throwIfAborted();
-          const capabilities = restrictWorkroomAgentCapabilities(await readCapabilities(
+          // Capabilities are read with the resolved conversation facts (bot role, mute) on the access.
+          const contextAccess = createRuntimeTurnAccess(message, senderRoles, contextState);
+          // ADR 0038 §5: a danmaku turn answers its window as an anonymous viewer, read-only.
+          const liveWindow = admission?.facts.liveWindow;
+          const liveDanmaku: TurnLiveDanmaku | undefined = liveWindow && admission
+            ? Object.freeze({
+                mode: normalizeInboundQueueConfig(service.getAgentConfig()?.inboundQueue).live.mode,
+                candidates: liveWindow.candidates,
+                senders: mergedTurnSenders(admission.participants),
+              })
+            : undefined;
+          const liveAccess = liveDanmaku ? anonymousMemberAccess(contextAccess, senderId) : undefined;
+          if (liveWindow) {
+            logger.debug(formatCompact({ op: 'agent_host_danmaku_window', sessionKey, candidates: liveWindow.candidates, kept: liveWindow.kept }));
+          }
+          // ADR 0038 §2: a merged turn may only do what every member may do.
+          const members = !liveDanmaku && admission && admission.participants.length > 1
+            ? mergedMemberAccess(admission.participants, contextAccess)
+            : undefined;
+          const read = await readTurnCapabilities(
             ingress,
             snapshot,
             requester,
-            createRuntimeTurnAccess(message, senderRoles, contextState),
+            liveAccess ?? contextAccess,
+            members,
             () => capabilityActive,
-          ), workroomAgentTurn != null);
+          );
           signal.throwIfAborted();
+          const turnAccessForTurn = members
+            ? withMergeMembers(narrowMergedAccess(contextAccess, members), read.members, read.memberTools)
+            : liveAccess ?? contextAccess;
+          // ADR 0038 §3: the model sees who it is answering; outbound audits "merged N, answered M".
+          const mergedSenders = members && admission ? mergedTurnSenders(admission.participants) : undefined;
+          const capabilities = restrictWorkroomAgentCapabilities(
+            liveDanmaku ? readOnlyCapabilities(read.capabilities) : read.capabilities,
+            workroomAgentTurn != null,
+          );
+          /** `danmaku_window_picked` is written once, for the first delivered reply. */
+          let danmakuAudited = false;
           let routed = routeSpecialistAgent(
             inbound.text,
             capabilities,
@@ -890,7 +1166,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
           // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；
           // 失败仅记日志（正式回复仍走 replyAndRecord 的完整确认）。
-          if (trigger.thinkingMessage && !ambient && !outboundBlocked('thinking')) {
+          if (trigger.thinkingMessage && !ambient && !liveDanmaku && !outboundBlocked('thinking')) {
             message.$reply(trigger.thinkingMessage).catch((error: unknown) => {
               logger.debug(formatCompact({
                 op: 'agent_host_thinking_reply_failed',
@@ -917,7 +1193,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                   baseline: options.agent.approvalJudgment,
                   observe: decisionRuntime.observe,
                   intent: routed.userText,
-                  principal: turnAccess.principal,
+                  principal: turnAccessForTurn.principal,
                 })
               : undefined;
             const turnPolicy = resolveSandboxTurnPolicy({
@@ -953,17 +1229,20 @@ export class AgentTurnIngressRoute implements IngressRoute {
               replyConversation.kind,
             );
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
+              ...(members || liveAccess ? { access: turnAccessForTurn } : {}),
               traceId,
               turnId,
               signal,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
-              filesystemAccess: turnPolicy.filesystem.access,
-              shell: turnPolicy.shell,
+              filesystemAccess: liveDanmaku ? 'read-only' : turnPolicy.filesystem.access,
+              shell: liveDanmaku ? undefined : turnPolicy.shell,
               network: turnPolicy.network,
               sessionKey,
               contextState,
               ...(sceneEvents.length ? { sceneEvents } : {}),
+              ...(mergedSenders ? { mergedSenders } : {}),
+              ...(liveDanmaku ? { liveDanmaku } : {}),
               ...(workroomAgentTurn ? {
                 trustedMetadata: Object.freeze({
                   workroom: Object.freeze({
@@ -1010,7 +1289,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 },
               }),
               ports: {
-                approval: options.approvalPort ?? resolveApprovalPort({
+                // ADR 0038 §5: a danmaku turn never puts an approval card in front of anyone.
+                approval: liveDanmaku ? NO_APPROVAL_PORT : options.approvalPort ?? resolveApprovalPort({
                   mode: turnPolicy.shell?.approvalMode
                     ?? service.getAgentConfig()?.execApprovalMode
                     ?? 'auto',
@@ -1033,9 +1313,14 @@ export class AgentTurnIngressRoute implements IngressRoute {
                       outputElements: output.length,
                       outputPreview: flattenOutputElements(output).trim() || '(empty)',
                     }));
+                    const mergeAudit = mergedSenders ? mergedReplyAuditPayload(mergedSenders, output) : {};
                     const outcome = await sendOutputMessages(output, {
                       render: messageOutput => flattenOutputElements([...messageOutput]),
                       send: async (messageOutput) => {
+                        if (staleReplyBlocked()) {
+                          logger.debug(formatCompact({ op: 'agent_host_reply_stale_discarded', sessionKey }));
+                          return { status: 'suppressed' as const };
+                        }
                         if (outboundBlocked('reply')) {
                           auditOutbound(audit, { status: 'suppressed' }, { control: true });
                           return { status: 'suppressed' as const };
@@ -1081,7 +1366,16 @@ export class AgentTurnIngressRoute implements IngressRoute {
                           auditOutbound(audit, { status: 'failed', code: error instanceof Error ? error.message : String(error), retryable: false });
                           throw error;
                         }
-                        auditOutbound(audit, sent, { segments: content.length });
+                        auditOutbound(audit, sent, { segments: content.length, ...mergeAudit });
+                        if (liveDanmaku && sent.status === 'sent' && !danmakuAudited) {
+                          danmakuAudited = true;
+                          audit({
+                            kind: 'outbound',
+                            outcome: 'allow',
+                            reasonCode: 'danmaku_window_picked',
+                            payload: liveReplyAuditPayload(liveDanmaku, output),
+                          });
+                        }
                         if (sent.status === 'sent') {
                           spoke = true;
                           admission?.markDelivered();
@@ -1106,7 +1400,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               request,
               {
                 binding,
-                mcpServers: binding.mcpServers,
+                mcpServers: liveDanmaku ? [] : binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
               observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
@@ -1222,16 +1516,30 @@ function admissionRejectionNotice(reason: 'queue_full' | 'expired' | 'stopped', 
   return undefined;
 }
 
-/** Records how the turn was admitted on its TurnTrace once the trace exists. */
+/** ADR 0038 §4 / §6: a stale reply that was dropped, or sent anyway because the turn acted or the sender was dropped once. */
+export function auditStaleReply(audit: DecisionAudit, verdict: Exclude<TurnStaleVerdict, { kind: 'fresh' }>): void {
+  if (verdict.kind === 'discard') {
+    audit({ kind: 'outbound', outcome: 'skip', reasonCode: 'merge_reply_stale_discarded', payload: { senders: verdict.senders } });
+  } else {
+    audit({ kind: 'outbound', outcome: 'allow', reasonCode: 'merge_reply_stale_sent', payload: { senders: verdict.senders, reason: verdict.reason } });
+  }
+}
+
+/**
+ * Records how the turn was admitted on its TurnTrace once the trace exists,
+ * and tells the gate when the turn acts (ADR 0038 §4: such replies are never dropped).
+ */
 function observeWithAdmission(
   observe: ReturnType<typeof observeAgentTurnTrace>,
   turnId: string,
   admission: Extract<TurnAdmission, { kind: 'run' }> | undefined,
 ): ReturnType<typeof observeAgentTurnTrace> {
-  const facts = admission?.facts;
-  if (!facts || (facts.queuedMs === 0 && facts.mergedMessages <= 1 && !facts.supersededPrevious)) return observe;
-  let noted = false;
+  if (!admission) return observe;
+  const facts = admission.facts;
+  const noteFacts = facts.queuedMs > 0 || facts.mergedMessages > 1 || facts.supersededPrevious;
+  let noted = !noteFacts;
   return (event) => {
+    if (isActingTurnEvent(event)) admission.markActed();
     if (!noted) {
       noted = true;
       noteTurnTrace(turnId, {
@@ -1282,14 +1590,66 @@ function resolveApprovalPort(input: Readonly<{
   return input.ask;
 }
 
-async function readCapabilities(
+async function readTurnCapabilities(
   ingress: CapabilityIngress,
   snapshot: RuntimeSnapshot,
   requester: PluginId,
-  access: TurnAccessContext,
+  carrier: TurnAccessContext,
+  members: readonly TurnAccessContext[] | undefined,
   isActive: () => boolean,
-): Promise<AgentCapabilities> {
-  return ingress.read(snapshot, requester, isActive, access);
+): Promise<Readonly<{
+  capabilities: AgentCapabilities;
+  /** Merged turn only: every member (carrier first) and the Tool names each sees alone. */
+  members: readonly TurnAccessContext[];
+  memberTools: readonly (readonly string[])[];
+}>> {
+  const own = await ingress.read(snapshot, requester, isActive, carrier);
+  if (!members) return { capabilities: own, members: [], memberTools: [] };
+  const others = members.filter((member) => member !== carrier);
+  const reads = await Promise.all(others.map((member) => ingress.read(snapshot, requester, isActive, member)));
+  return {
+    capabilities: intersectCapabilities(own, reads),
+    members: [carrier, ...others],
+    memberTools: [own, ...reads].map((read) => read.tools.map((tool) => tool.name)),
+  };
+}
+
+/**
+ * Every member's own access (ADR 0038 §2). A participant admitted without one
+ * cannot be checked, so the turn falls back to the anonymous `user` floor:
+ * nothing beyond what an unknown group member could use.
+ */
+export function mergedMemberAccess(
+  participants: readonly Readonly<{ senderId: string; access?: TurnAccessContext }>[],
+  carrier: TurnAccessContext,
+): readonly TurnAccessContext[] {
+  return participants.map((participant) => participant.access ?? anonymousMemberAccess(carrier, participant.senderId));
+}
+
+/** The structured sender list a merged turn's context carries (ADR 0038 §3). */
+export function mergedTurnSenders(
+  participants: readonly Readonly<{ senderId: string; senderName?: string; texts: readonly string[]; messageIds?: readonly string[] }>[],
+): readonly TurnMergedSender[] {
+  return Object.freeze(participants.map((participant) => Object.freeze({
+    subjectId: participant.senderId,
+    ...(participant.senderName ? { displayName: participant.senderName } : {}),
+    ...(participant.messageIds?.length ? { messageIds: participant.messageIds } : {}),
+    texts: participant.texts,
+  })));
+}
+
+/** A danmaku turn cannot ask anyone: every approval request is unavailable. */
+const NO_APPROVAL_PORT: ApprovalPort = Object.freeze({
+  available: false,
+  requestApproval: async () => false,
+});
+
+function anonymousMemberAccess(carrier: TurnAccessContext, senderId: string): TurnAccessContext {
+  return Object.freeze({
+    ...carrier,
+    principal: Object.freeze({ subjectId: senderId, roles: Object.freeze(['user']) }),
+    policy: Object.freeze({ ...carrier.policy, permissions: Object.freeze(['user']) }),
+  });
 }
 
 export function resolveSnapshotDetachedTaskRunner(

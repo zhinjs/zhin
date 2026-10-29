@@ -149,10 +149,14 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.inboundQueue.ttlMs` | integer | no | `180000` | A queued turn that waited longer than this is dropped with a short notice. 0 disables expiry. |
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | no | `5` | Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply. |
 | `ai.agent.inboundQueue.merge` | object | no | — | Group merge window (ADR 0038): mentions from several members within a short window get one combined reply. Private chats, the master, commands, stop words and messages with media, quotes or forwards never merge. |
-| `ai.agent.inboundQueue.merge.enabled` | boolean | no | `false` | Turn the group merge window on. Off by default until merged turns narrow permissions per sender. |
+| `ai.agent.inboundQueue.merge.enabled` | boolean | no | `true` | Turn the group merge window on (group chats only). Set false to answer every member one by one as before. |
 | `ai.agent.inboundQueue.merge.quietMs` | integer | no | `1500` | The window is answered once no new message joined it for this long. |
 | `ai.agent.inboundQueue.merge.maxWaitMs` | integer | no | `6000` | The window is answered at the latest this long after its first message. |
 | `ai.agent.inboundQueue.merge.maxSenders` | integer | no | `5` | Senders one merged reply covers; further senders wait for the next window. |
+| `ai.agent.inboundQueue.live` | object | no | — | Danmaku mode (ADR 0038): live-stream adapters that declare liveDanmaku collect danmaku in a window and reply once, with read-only tools and no approval cards. |
+| `ai.agent.inboundQueue.live.mode` | string: `"pick-one"`, `"summary"` | no | `"pick-one"` | pick-one answers one danmaku of the window; summary answers the window as a whole once. |
+| `ai.agent.inboundQueue.live.windowMs` | integer | no | `10000` | How long a danmaku window collects messages from its first danmaku. |
+| `ai.agent.inboundQueue.live.minIntervalMs` | integer | no | `15000` | Minimum time between two danmaku replies in one live room. |
 | `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | no | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | no | — | Shell command security boundary. |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | no | — | Command allowlist preset used outside full mode. |
@@ -182,6 +186,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | no | `[]` | Extra tools to treat as dangerous (local or qualified names). Cannot mark a core dangerous tool safe. |
 | `ai.agent.toolHardGate.allowFunds` | boolean | no | `false` | Allow funds tools (red packets, transfers, payments). Off by default; when on they still need approval. |
 | `ai.agent.toolHardGate.approvalTimeoutMs` | integer | no | `300000` | How long a dangerous call waits for approval before it is denied (ms). |
+| `ai.agent.toolHardGate.maxPendingPerScene` | integer | no | `3` | Approval cards one group (scene) may have pending at once (ADR 0038). Beyond it a dangerous call is denied without a new card; asking again for an already pending card does not count. |
 | `ai.agent.toolHardGate.imApproval` | object | no | — | IM approval channel for the hard gate (#1013). Off by default. When on, each new approval card is also sent to allowlisted approvers, who settle it with `approve &lt;id&gt;` / `deny &lt;id&gt;` in a private chat (or the dedicated approver group). It shares the Console approval queue: whichever answers first wins. Messages in business groups never settle a card; there is no session-wide or permanent approval. |
 | `ai.agent.toolHardGate.imApproval.enabled` | boolean | no | `false` | Turn the IM approval channel on. |
 | `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | no | `[]` | Approver platform user ids: a flat list applies to every platform; an object maps a platform (adapter name) to its user ids. Anyone not listed cannot settle a card over IM. |
@@ -611,6 +616,38 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Bilibili uid). |
 | `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `bilibili.endpoints[].commandPrefix` | string | no | — | — |
+
+### bilibili-live
+
+[`plugins/adapters/bilibili-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/bilibili-live/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `bilibili-live.roomId` | string \| number | no | — | Live room id (short or full); use your own room only. |
+| `bilibili-live.sendMode` | string: `"direct"`, `"off"` | no | `"direct"` | Outbound mode: direct (default, needs login) posts the reply as danmaku; off only listens. |
+| `bilibili-live.maxLength` | number | no | `20` | Maximum characters per danmaku (default 20; higher live levels allow more). |
+| `bilibili-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2); the rest is truncated. |
+| `bilibili-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
+| `bilibili-live.apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
+| `bilibili-live.liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
+| `bilibili-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `bilibili-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `bilibili-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Bilibili account ID. |
+| `bilibili-live.endpoints[].sessdata` | string | no | — | SESSDATA cookie, acting as your account. Reference ${BILIBILI_SESSDATA}; never commit it. Omit to listen anonymously. |
+| `bilibili-live.endpoints[].biliJct` | string | no | — | bili_jct cookie (csrf token) needed to send danmaku. Reference ${BILIBILI_BILI_JCT}. |
+| `bilibili-live.endpoints[].buvid3` | string | no | — | Optional buvid3 cookie; requested from the platform at startup when omitted. |
+| `bilibili-live.endpoints[].roomId` | string \| number | no | — | Live room id (short or full); use your own room only. |
+| `bilibili-live.endpoints[].sendMode` | string: `"direct"`, `"off"` | no | `"direct"` | Outbound mode: direct (default, needs login) posts the reply as danmaku; off only listens. |
+| `bilibili-live.endpoints[].maxLength` | number | no | `20` | Maximum characters per danmaku (default 20; higher live levels allow more). |
+| `bilibili-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2); the rest is truncated. |
+| `bilibili-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2; a reply sent sooner is rejected, not queued. |
+| `bilibili-live.endpoints[].apiBaseUrl` | string | no | `"https://api.bilibili.com"` | — |
+| `bilibili-live.endpoints[].liveApiBaseUrl` | string | no | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.endpoints[].master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
+| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
+| `bilibili-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### dingtalk
 

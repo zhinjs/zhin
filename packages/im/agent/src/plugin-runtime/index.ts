@@ -14,6 +14,7 @@ export type { ComposedZhinAgentRuntime } from '../init/compose-zhin-agent-runtim
 export { activateAiDatabaseStorage } from '../init/activate-ai-database-storage.js';
 export { defineAiDatabaseModels } from '../init/define-ai-database-models.js';
 export { AI_DECISION_EVENTS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS } from '../decision-events.js';
+export { DEFAULT_GROUP_RULE_RETENTION_DAYS } from '../group-rules.js';
 export type { AiDatabaseModelDefiner } from '../init/define-ai-database-models.js';
 export {
   ensureMcpConnections,
@@ -39,6 +40,8 @@ export * from './native-tool-suite.js';
 export * from './native-todo-tools.js';
 export * from './native-announcement-tools.js';
 export * from './native-session-event-tools.js';
+export * from './native-group-rule-tools.js';
+export * from './native-self-change-tools.js';
 export * from './native-interaction-tools.js';
 export * from './native-semantic-memory-tools.js';
 export { FileJournalStore } from '../journal/file-journal-store.js';

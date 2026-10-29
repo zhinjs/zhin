@@ -33,7 +33,12 @@ export type {
 
 const adapterBrand = 'zhin.adapter/1' as const;
 
-export type AdapterCapability = 'inbound' | 'outbound';
+/**
+ * `liveDanmaku` (ADR 0038 §5): inbound messages are live-stream danmaku. The
+ * Agent collects them in a window and answers one per window with read-only
+ * tools only. Requires `inbound`.
+ */
+export type AdapterCapability = 'inbound' | 'outbound' | 'liveDanmaku';
 
 /** Operations beyond sending, declared by an Adapter definition. */
 export type AdapterOperation = Exclude<EndpointOperation, 'send'>;
@@ -185,9 +190,13 @@ export function defineAdapter<TConfig = unknown, TClient = unknown>(
   const capabilities = [...new Set(definition.capabilities)];
   if (
     capabilities.length === 0
-    || capabilities.some((value) => value !== 'inbound' && value !== 'outbound')
+    || capabilities.some((value) => value !== 'inbound' && value !== 'outbound' && value !== 'liveDanmaku')
+    || !capabilities.some((value) => value === 'inbound' || value === 'outbound')
   ) {
     throw new TypeError('Adapter capabilities must contain inbound and/or outbound');
+  }
+  if (capabilities.includes('liveDanmaku') && !capabilities.includes('inbound')) {
+    throw new TypeError('Adapter capability liveDanmaku requires inbound');
   }
   const segments = normalizeSegmentPolicy(definition.segments);
   const operations = typeof definition.operations === 'function'
@@ -356,8 +365,9 @@ export function parseAdapterDefinition(value: unknown): AdapterDefinition {
     || !Array.isArray(definition.capabilities)
     || definition.capabilities.length === 0
     || definition.capabilities.some(
-      (capability) => capability !== 'inbound' && capability !== 'outbound',
+      (capability) => capability !== 'inbound' && capability !== 'outbound' && capability !== 'liveDanmaku',
     )
+    || (definition.capabilities.includes('liveDanmaku') && !definition.capabilities.includes('inbound'))
   ) throw invalidAdapter();
   // defineAdapter 已校验过形状；外部手工构造的 definition 也在此兜底
   normalizeSegmentPolicy(definition.segments);

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LIVE_WINDOW_MAX_MESSAGES,
   TurnAdmissionGate,
   type TurnAdmission,
   type TurnAdmissionRequest,
 } from '../../src/turn/turn-admission-gate.js';
 import { TriggerCancelledError } from '../../src/turn/trigger-cancelled-error.js';
 import { TurnSupersededError } from '../../src/turn/prompt-controller.js';
+import type { TurnAccessContext } from '../../src/turn/turn-ingress.js';
 
 type RunAdmission = Extract<TurnAdmission, { kind: 'run' }>;
 
@@ -432,6 +434,36 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     run.release();
   });
 
+  it('lists each sender\'s message ids for the merged turn context (ADR 0038 §3)', async () => {
+    const { gate, advance } = createMergeGate();
+    const carrier = gate.admit(mention('alice', 'a', { messageId: 'm1' }));
+    await gate.admit(mention('bob', 'b'));
+    await gate.admit(mention('alice', 'a2', { messageId: 'm3' }));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    expect(run.participants).toEqual([
+      { senderId: 'alice', texts: ['a', 'a2'], messageIds: ['m1', 'm3'] },
+      { senderId: 'bob', texts: ['b'] },
+    ]);
+    run.release();
+  });
+
+  it('carries each sender\'s own access into participants (ADR 0038 §2)', async () => {
+    const { gate, advance } = createMergeGate();
+    const access = (subjectId: string) => ({ principal: { subjectId } }) as unknown as TurnAccessContext;
+    const alice = access('alice');
+    const bob = access('bob');
+    const carrier = gate.admit(mention('alice', 'a', { access: alice }));
+    await expect(gate.admit(mention('bob', 'b', { access: bob }))).resolves.toEqual({ kind: 'merged' });
+    // A burst keeps the access of the sender's first message.
+    await expect(gate.admit(mention('bob', 'b2', { access: access('bob') }))).resolves.toEqual({ kind: 'merged' });
+    advance(1_500);
+    const run = await expectRun(carrier);
+    expect(run.participants.map((p) => p.access)).toEqual([alice, bob]);
+    expect(run.participants[1]!.access).toBe(bob);
+    run.release();
+  });
+
   it('cancels window timers on dispose', async () => {
     const { gate, advance } = createMergeGate();
     const carrier = gate.admit(mention('alice', 'a'));
@@ -439,5 +471,284 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     await expect(carrier).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
     advance(10_000);
     expect(gate.queuedTurns(SESSION)).toBe(0);
+  });
+});
+
+describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
+  function createStaleGate() {
+    let clock = 0;
+    let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
+    const gate = new TurnAdmissionGate({
+      maxQueuedTurns: 5,
+      queueTtlMs: 180_000,
+      supersedeSameSender: true,
+      merge: { quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 3 },
+      now: () => clock,
+      setTimer: (run, delayMs) => {
+        const timer = { at: clock + delayMs, run, cancelled: false };
+        timers.push(timer);
+        return () => { timer.cancelled = true; };
+      },
+    });
+    const advance = (ms: number) => {
+      const until = clock + ms;
+      for (;;) {
+        const due = timers.filter((t) => !t.cancelled && t.at <= until).sort((a, b) => a.at - b.at)[0];
+        if (!due) break;
+        clock = due.at;
+        due.cancelled = true;
+        due.run();
+      }
+      clock = until;
+      timers = timers.filter((t) => !t.cancelled);
+    };
+    return { gate, advance };
+  }
+
+  function mention(senderId: string, text: string, extra: Partial<TurnAdmissionRequest> = {}): TurnAdmissionRequest {
+    return { sessionKey: SESSION, senderId, text, plainText: true, mergeable: true, ...extra };
+  }
+
+  async function startMerged(gate: TurnAdmissionGate, advance: (ms: number) => void): Promise<RunAdmission> {
+    const carrier = gate.admit(mention('alice', 'a1', { messageId: 'm1' }));
+    await gate.admit(mention('bob', 'b1', { messageId: 'm2' }));
+    advance(1_500);
+    return expectRun(carrier);
+  }
+
+  it('stays fresh when nobody it answers follows up', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    // A new sender queues behind, but does not make this reply stale.
+    void gate.admit(mention('carol', 'c1'));
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('drops the reply when an answered sender follows up, and answers old and new messages together', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    const followUp = gate.admit(mention('alice', 'a2', { messageId: 'm3' }));
+    expect(run.staleCheck()).toEqual({ kind: 'discard', senders: ['alice'] });
+    // Later sends of the same turn are dropped as well.
+    expect(run.staleCheck()).toEqual({ kind: 'discard', senders: ['alice'] });
+    run.release();
+    advance(1_500);
+    const next = await expectRun(followUp);
+    expect(next.participants).toEqual([
+      { senderId: 'alice', texts: ['a1', 'a2'], messageIds: ['m1', 'm3'] },
+      { senderId: 'bob', texts: ['b1'], messageIds: ['m2'] },
+    ]);
+    next.release();
+  });
+
+  it('drops a reply at most once per sender chain (starvation guard)', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    const followUp = gate.admit(mention('alice', 'a2'));
+    expect(run.staleCheck().kind).toBe('discard');
+    run.release();
+    advance(1_500);
+    const second = await expectRun(followUp);
+    const again = gate.admit(mention('bob', 'b2'));
+    expect(second.staleCheck()).toEqual({ kind: 'send', senders: ['bob'], reason: 'starvation' });
+    second.release();
+    advance(1_500);
+    const third = await expectRun(again);
+    // The guard is spent once the senders were answered: a new chain may be dropped again.
+    void gate.admit(mention('bob', 'b3'));
+    expect(third.staleCheck().kind).toBe('discard');
+    third.release();
+  });
+
+  it('sends a stale reply when the turn already acted (tool call / hard gate)', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    run.markActed();
+    void gate.admit(mention('bob', 'b2'));
+    expect(run.staleCheck()).toEqual({ kind: 'send', senders: ['bob'], reason: 'acted' });
+    run.release();
+  });
+
+  it('does not cut a reply in half once part of it was delivered', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    run.markDelivered();
+    void gate.admit(mention('alice', 'a2'));
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('keeps the reply when the follow-up left the queue', async () => {
+    const { gate, advance } = createStaleGate();
+    const run = await startMerged(gate, advance);
+    const followUp = gate.admit(mention('alice', 'a2'));
+    expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+    await expect(followUp).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('applies to an ordinary turn whose sender follows up into a window', async () => {
+    const { gate, advance } = createStaleGate();
+    const carrier = gate.admit(mention('alice', 'a1'));
+    advance(1_500);
+    const run = await expectRun(carrier);
+    const followUp = gate.admit(mention('alice', 'a2'));
+    expect(run.staleCheck().kind).toBe('discard');
+    run.release();
+    advance(1_500);
+    const next = await expectRun(followUp);
+    expect(next.text).toBe('a1\na2');
+    next.release();
+  });
+
+  it('never marks a turn stale while no merge window is configured', async () => {
+    const { gate } = createGate();
+    const run = await expectRun(gate.admit(message('alice', 'a1')));
+    void gate.admit(message('bob', 'b1'));
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+});
+
+describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
+  const ROOM = 'bilibili:live:room:1';
+
+  function createLiveGate(overrides: Partial<ConstructorParameters<typeof TurnAdmissionGate>[0]> = {}) {
+    let clock = 0;
+    let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
+    const gate = new TurnAdmissionGate({
+      maxQueuedTurns: 5,
+      queueTtlMs: 180_000,
+      supersedeSameSender: true,
+      merge: { quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 5 },
+      live: { windowMs: 10_000, minIntervalMs: 15_000 },
+      now: () => clock,
+      setTimer: (run, delayMs) => {
+        const timer = { at: clock + delayMs, run, cancelled: false };
+        timers.push(timer);
+        return () => { timer.cancelled = true; };
+      },
+      ...overrides,
+    });
+    const advance = (ms: number) => {
+      const until = clock + ms;
+      for (;;) {
+        const due = timers.filter((t) => !t.cancelled && t.at <= until).sort((a, b) => a.at - b.at)[0];
+        if (!due) break;
+        clock = due.at;
+        due.cancelled = true;
+        due.run();
+      }
+      clock = until;
+      timers = timers.filter((t) => !t.cancelled);
+    };
+    return { gate, advance };
+  }
+
+  function danmaku(senderId: string, text: string, extra: Partial<TurnAdmissionRequest> = {}): TurnAdmissionRequest {
+    return { sessionKey: ROOM, senderId, text, plainText: true, live: true, ...extra };
+  }
+
+  it('answers 50 danmaku in 10 seconds with one turn and counts every candidate', async () => {
+    const { gate, advance } = createLiveGate();
+    const carrier = gate.admit(danmaku('v0', '主播好'));
+    const others: Promise<TurnAdmission>[] = [];
+    for (let index = 1; index < 50; index += 1) {
+      advance(200);
+      others.push(gate.admit(danmaku(`v${index % 20}`, `弹幕${index}`)));
+    }
+    for (const other of others) expect((await other).kind).toBe('merged');
+    expect(await isSettled(carrier)).toBe(false);
+    advance(10_000 - 49 * 200);
+    const run = await expectRun(carrier);
+    expect(run.facts.liveWindow).toEqual({ candidates: 50, kept: 50, senders: 20, waitedMs: 10_000 });
+    expect(run.facts.mergeWindow).toBeUndefined();
+    expect(run.participants).toHaveLength(20);
+    run.release();
+  });
+
+  it('has no sender limit and ignores the merge window quiet time', async () => {
+    const { gate, advance } = createLiveGate();
+    const carrier = gate.admit(danmaku('v0', 'a'));
+    for (let index = 1; index <= 8; index += 1) await gate.admit(danmaku(`v${index}`, 'x'));
+    advance(1_500);
+    expect(await isSettled(carrier)).toBe(false);
+    advance(8_500);
+    const run = await expectRun(carrier);
+    expect(run.participants).toHaveLength(9);
+    run.release();
+  });
+
+  it('keeps at most LIVE_WINDOW_MAX_MESSAGES danmaku, dropping the oldest', async () => {
+    const { gate, advance } = createLiveGate();
+    const carrier = gate.admit(danmaku('v0', 'first', { messageId: 'd0' }));
+    for (let index = 1; index < LIVE_WINDOW_MAX_MESSAGES + 20; index += 1) {
+      await gate.admit(danmaku(`v${index}`, `d${index}`, { messageId: `d${index}` }));
+    }
+    advance(10_000);
+    const run = await expectRun(carrier);
+    expect(run.facts.liveWindow).toMatchObject({ candidates: LIVE_WINDOW_MAX_MESSAGES + 20, kept: LIVE_WINDOW_MAX_MESSAGES });
+    expect(run.participants.some((p) => p.senderId === 'v0')).toBe(false);
+    expect(run.participants.at(-1)).toMatchObject({ senderId: `v${LIVE_WINDOW_MAX_MESSAGES + 19}`, messageIds: [`d${LIVE_WINDOW_MAX_MESSAGES + 19}`] });
+    run.release();
+  });
+
+  it('collects danmaku while a turn runs and waits minIntervalMs after it ended', async () => {
+    const { gate, advance } = createLiveGate();
+    const first = gate.admit(danmaku('v1', 'q1'));
+    advance(10_000);
+    const run = await expectRun(first);
+
+    const next = gate.admit(danmaku('v2', 'q2'));
+    advance(12_000);
+    run.release();
+    // Window age is already past windowMs, but the previous reply ended just now.
+    advance(14_999);
+    expect(await isSettled(next)).toBe(false);
+    advance(1);
+    const second = await expectRun(next);
+    expect(second.facts.liveWindow?.candidates).toBe(1);
+    second.release();
+  });
+
+  it('never marks a danmaku turn stale or supersedes it', async () => {
+    const { gate, advance } = createLiveGate();
+    const first = gate.admit(danmaku('v1', 'q1'));
+    advance(10_000);
+    const run = await expectRun(first);
+    void gate.admit(danmaku('v2', 'opens the next window'));
+    expect((await gate.admit(danmaku('v1', 'q2'))).kind).toBe('merged');
+    expect(run.signal.aborted).toBe(false);
+    expect(run.staleCheck()).toEqual({ kind: 'fresh' });
+    run.release();
+  });
+
+  it('leaves non-live messages to the ordinary and merge paths', async () => {
+    const { gate } = createLiveGate();
+    const run = await expectRun(gate.admit({ sessionKey: ROOM, senderId: 'streamer', text: '我来了', plainText: true }));
+    expect(run.facts.liveWindow).toBeUndefined();
+    run.release();
+  });
+
+  it('ignores `live` when no danmaku window is configured', async () => {
+    const { gate } = createLiveGate({ live: undefined });
+    const run = await expectRun(gate.admit(danmaku('v1', 'q1')));
+    expect(run.facts.liveWindow).toBeUndefined();
+    run.release();
+  });
+
+  it('forgets a room\'s last reply once minIntervalMs passed', async () => {
+    const { gate, advance } = createLiveGate();
+    const first = gate.admit(danmaku('v1', 'q1'));
+    advance(10_000);
+    (await expectRun(first)).release();
+    advance(15_000);
+    const next = gate.admit(danmaku('v2', 'q2'));
+    advance(10_000);
+    const run = await expectRun(next);
+    expect(run.facts.liveWindow?.waitedMs).toBe(10_000);
+    run.release();
   });
 });

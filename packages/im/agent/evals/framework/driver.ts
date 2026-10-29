@@ -282,6 +282,8 @@ function buildTurn(
       ...(message.images?.length
         ? { media: message.images.map((image) => ({ kind: 'image' as const, source: { kind: 'base64' as const, value: image.base64 }, mimeType: image.mimeType, ...(image.name ? { name: image.name } : {}) })) }
         : {}),
+      ...(message.mergedSenders?.length ? { mergedSenders: message.mergedSenders } : {}),
+      ...(message.liveDanmaku ? { liveDanmaku: message.liveDanmaku } : {}),
     },
     session: { key: sessionKey },
     policy,

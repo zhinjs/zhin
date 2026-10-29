@@ -378,6 +378,33 @@ interface SkillsStatus {
 - 重启补偿：错过超过 10 分钟的提醒不再发送，写 `schedule_wake_missed`；10 分钟内的照常发送。
 - 全部写操作带 `expectedRevision`，不一致返回 `conflict`，不覆盖。审计写 `kind=schedule`：`schedule_event_created` / `_updated` / `_cancelled`、`schedule_wake_fired`（单条发出）/ `schedule_wake_merged`（合并发出）/ `schedule_wake_missed`，被控制面或会话画像拦下时沿用 `control_*` / `cannot_speak_*`。数据存在 `ai_session_events` 表里（不写 `schedule-jobs.json`）。
 
+### 内置操作：群管规则（起草 → 群内审批 → 生效）
+
+群管规则（ADR 0039 切片 B）是「批准一次的违规阶梯」：例如「发广告先提醒，再犯禁言 10 分钟」。读用 `control:read`，起草 / 停用用 `control:write`，批准 / 驳回用 `ops:approve`。
+
+| 方法 | 调用 | 需要的权限 |
+| --- | --- | --- |
+| `plugin.root.group-rules` | `pluginRpc('root', 'group-rules', { platform, sceneId, status? })` | `control:read` |
+| `plugin.root.group-rule` | `pluginRpc('root', 'group-rule', { id })` | `control:read` |
+| `plugin.root.group-rule-create` | `pluginRpc('root', 'group-rule-create', { platform, sceneId, trigger, ladder, windowMs?, exempt?, content })` | `control:write`（动作） |
+| `plugin.root.group-rule-disable` | `pluginRpc('root', 'group-rule-disable', { id, expectedRevision, reason? })` | `control:write`（动作） |
+| `plugin.root.group-rule-approve` | `pluginRpc('root', 'group-rule-approve', { id, expectedRevision, contentHash? })` | `ops:approve`（动作） |
+| `plugin.root.group-rule-reject` | `pluginRpc('root', 'group-rule-reject', { id, expectedRevision, reason? })` | `ops:approve`（动作） |
+
+- `sceneId` 只能是 `group:<群号>`；`trigger` 为 `advertising` / `abuse` / `flood`；`ladder` 每档 `{ action: 'remind' | 'warn' | 'mute' | 'suggest_kick', durationSec? }`，`mute` 时长 60 秒–24 小时；`windowMs` 冷静期默认 30 分钟。
+- `group-rule-create` 起草后**立即送审**（`pending`），并把预览卡发回该群。模型只有 `rule_draft` 工具（`risk: safe`，只在群里可用）：发起人必须是本群群主 / 管理员（按消息携带的平台实时角色判定），否则拒绝并写 `rule_draft_forbidden`。
+- 群里的审批命令（只在规则所在的群生效）：`/rule approve <短码>`、`/rule reject <短码>`、`/rule disable <短码|trigger>`、`/rules`（列出本群规则，任何人可看）。短码是卡片上的 `content_hash` 前 8 位，规则改过一个字短码就变，旧卡片批不了新内容。审批人 = 本群群主 / 管理员 ∪ `ai.agent.toolHardGate.imApproval.approverIds`；Console 侧是 `ops:approve`。
+- 状态只前进：`draft` → `pending` → `active`，旁路 `rejected` / `expired`（24 小时未批）/ `disabled`。同群同 `trigger` 只有一条 `active`，批准新规则会把旧规则停用（`rule_superseded`）。停用不需要审批；放宽 = 停用后另起新规则。
+- 审计写 `kind=group_rule`（`rule_drafted` / `_submitted` / `_approved` / `_rejected` / `_expired` / `_disabled` / `_superseded` / `_hash_mismatch`、`rule_draft_forbidden`）。数据存在 `ai_group_rules` 表；终态规则 30 天后或每群超过 50 条时删除（启动时与每小时清理）。
+- 执行（切片 C）：违规判定方报告一次命中后，按该群生效规则的当前档执行，审计写 `kind=rule_enforcement`：
+  - `remind` / `warn`：模板提醒 @ 当事人（不调模型），过控制面（`emergency_stop` / `muted` / `read_only` 拦）与会话画像；`rule_hit_remind` / `rule_hit_warn`。
+  - `mute`：**自动执行、不弹卡**——规则的审批记录就是这次禁言的硬闸批准（`tool_approval` 行 `via: rule`、`approvalId` = 规则 id、`actor` = 批准人），仍过控制面 `emergency_stop` / `read_only` 与 `ops_cooldown`；`rule_hit_mute`。
+  - `suggest_kick`：**不自动踢**，出一张 `member` 类审批卡（附证据与规则短码），批准才踢；冷却期内重复命中不再出卡；`rule_hit_kick_suggested`。
+  - 当事人是群主 / 管理员或在豁免名单：`rule_hit_exempt`；Bot 不是管理员：`rule_hit_bot_not_admin`，每群每天提示一次。
+  - 阶梯：冷静期内再犯升一档，走完后重复最后一档；提醒送达前发出的消息不算再犯；没落地的动作（被拦、冷却、平台失败）不升档。阶梯进度只在进程内（有上限、过期清理），重启后归零。
+  - `flood`（复读刷屏）：本地判定、不调模型。**同一成员** 60 秒内发送规范化后相同或高度相似的消息达 3 条即命中（多人各发一次同一句不算）；文本去空白 / 标点 / 大小写后比较，6 字以上的文本按字符二元组相似度 ≥ 0.8 也算；纯表情 / 图片按内容摘要比较，引用段不计。命中交给本群生效的 `flood` 规则执行，另写一行 `rule_hit_flood`（与执行行同 `turn_id`）；没有生效规则时什么都不做。检测只在进程内（每成员至多 20 条、至多跟踪 5000 个成员、过窗清理），不落盘。
+  - `advertising` / `abuse`：由 content-moderation 插件判定（LLM 审核），经 `groupRuleViolationToken`（`@zhin.js/core/runtime`）上报给执行器；插件自己不再禁言或踢人。**迁移（行为收紧）**：插件 `groupModeration` 名单里的群首次有消息时，按默认模板「提醒 → 警告 → 禁言 600 秒，冷静期 30 分钟」为广告、辱骂各生成一条 `pending` 规则（起草人 `content-moderation`）并出预览卡，群主 / 管理员确认一次才自动禁言；确认前插件只提醒 / 警告。该群该类型已有任意状态的规则（含驳回 / 停用）就不再生成。入群 10 分钟内发广告改为出一张踢人审批卡（引用生效或待确认的广告规则，不推进阶梯，审计带 `newcomer: true`），不再无人审批直接踢。
+
 ### 内置操作：危险工具审批卡
 
 硬闸（ADR 0036 §3）拦下的危险调用在这里留审批卡。审批人权限是 `ops:approve`（ADR 0037 §3，切片 E），与 `control:write` 分开；为了兼容已有令牌，旧权限仍然有效，持有任意一个即可。

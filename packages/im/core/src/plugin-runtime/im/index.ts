@@ -20,6 +20,7 @@ export type {
 } from './inbound-origin.js';
 export * from './im-runtime.js';
 export * from './login-assist-host.js';
+export * from './group-rule-violation.js';
 export * from './member-welcome.js';
 export * from './message-bus.js';
 export * from './message-dispatcher.js';

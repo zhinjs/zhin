@@ -145,6 +145,7 @@ export function createNativeSemanticMemoryToolFeatures(
         required: Object.freeze(['query']),
       }),
       requiresApproval: 'never',
+      readOnly: true,
       execute: (input, context) => searchMemory(runtime, input, context, resolveDecision),
     })),
     feature('memory_upsert', defineAgentTool({

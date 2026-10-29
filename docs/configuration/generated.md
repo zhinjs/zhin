@@ -149,10 +149,14 @@ outline: [2, 3]
 | `ai.agent.inboundQueue.ttlMs` | integer | 否 | `180000` | 排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。 |
 | `ai.agent.inboundQueue.maxQueuedTurns` | integer | 否 | `5` | 同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。 |
 | `ai.agent.inboundQueue.merge` | object | 否 | — | 群聊合流窗口（ADR 0038）：短时间内多人点名 Bot 时合并为一次回复。私聊、主人、指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。 |
-| `ai.agent.inboundQueue.merge.enabled` | boolean | 否 | `false` | 开启群聊合流。合并回合按发送者收窄权限之前默认关闭。 |
+| `ai.agent.inboundQueue.merge.enabled` | boolean | 否 | `true` | 开启群聊合流（仅群聊）。设为 false 则恢复逐人逐条回复。 |
 | `ai.agent.inboundQueue.merge.quietMs` | integer | 否 | `1500` | 窗口内最后一条消息后安静多久就发车。 |
 | `ai.agent.inboundQueue.merge.maxWaitMs` | integer | 否 | `6000` | 窗口从第一条消息起最多等多久。 |
 | `ai.agent.inboundQueue.merge.maxSenders` | integer | 否 | `5` | 一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。 |
+| `ai.agent.inboundQueue.live` | object | 否 | — | 弹幕模式（ADR 0038）：声明了 liveDanmaku 的直播适配器把一段时间内的弹幕收进窗口后只回一次；只开放只读工具，不出审批卡。 |
+| `ai.agent.inboundQueue.live.mode` | string: `"pick-one"`, `"summary"` | 否 | `"pick-one"` | pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。 |
+| `ai.agent.inboundQueue.live.windowMs` | integer | 否 | `10000` | 弹幕窗口从第一条弹幕起收集多久。 |
+| `ai.agent.inboundQueue.live.minIntervalMs` | integer | 否 | `15000` | 同一直播间两次弹幕回复的最小间隔。 |
 | `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | 否 | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
@@ -182,6 +186,7 @@ outline: [2, 3]
 | `ai.agent.toolHardGate.dangerousTools` | array&lt;string&gt; | 否 | `[]` | 额外按危险工具处理的工具（本地名或限定名）；不能把核心危险工具调成安全。 |
 | `ai.agent.toolHardGate.allowFunds` | boolean | 否 | `false` | 允许资金类工具（红包、转账、付款）。默认关闭；开启后仍需审批。 |
 | `ai.agent.toolHardGate.approvalTimeoutMs` | integer | 否 | `300000` | 危险调用等待审批的上限（毫秒），超时即拒绝。 |
+| `ai.agent.toolHardGate.maxPendingPerScene` | integer | 否 | `3` | 同一群（场景）同时待审批的卡片上限（ADR 0038）。超出后危险调用直接拒绝、不生成新卡；对已有待审卡的重复请求不计数。 |
 | `ai.agent.toolHardGate.imApproval` | object | 否 | — | 硬闸 IM 审批通道（#1013），默认关闭。开启后每张新审批卡片同时投递给 allowlist 审批人，审批人在私聊（或专用审批群）发送 `approve &lt;id&gt;` / `deny &lt;id&gt;` 结算；与 Console 共用审批队列，先到先得。业务群内的消息不能结算卡片，也没有本会话 / 永久授权。 |
 | `ai.agent.toolHardGate.imApproval.enabled` | boolean | 否 | `false` | 开启 IM 审批通道。 |
 | `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | 否 | `[]` | 审批人的平台用户 id：扁平列表对所有平台生效；对象形式为 平台（adapter 名）→ 用户 id 列表。不在名单里的人不能通过 IM 结算卡片。 |
@@ -611,6 +616,38 @@ outline: [2, 3]
 | `bilibili.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（B 站 uid） |
 | `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `bilibili.endpoints[].commandPrefix` | string | 否 | — | — |
+
+### bilibili-live
+
+[`plugins/adapters/bilibili-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/bilibili-live/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `bilibili-live.roomId` | string \| number | 否 | — | 直播间号（短号或长号都可以）；只填你自己的直播间 |
+| `bilibili-live.sendMode` | string: `"direct"`, `"off"` | 否 | `"direct"` | 出站模式：direct=回合结束直接发弹幕（默认，需登录）；off=只听不说 |
+| `bilibili-live.maxLength` | number | 否 | `20` | 单条弹幕最多字符数（默认 20，直播等级高的账号可调大） |
+| `bilibili-live.maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2），放不下的截断 |
+| `bilibili-live.minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
+| `bilibili-live.apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
+| `bilibili-live.liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
+| `bilibili-live.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili-live.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `bilibili-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `bilibili-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是 B 站账号） |
+| `bilibili-live.endpoints[].sessdata` | string | 否 | — | Cookie SESSDATA（以你的账号身份发弹幕；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库）。不填则匿名只读 |
+| `bilibili-live.endpoints[].biliJct` | string | 否 | — | Cookie bili_jct（csrf token，发弹幕需要；请用 ${BILIBILI_BILI_JCT} 注入） |
+| `bilibili-live.endpoints[].buvid3` | string | 否 | — | Cookie buvid3（可选；不填时启动时向平台申请） |
+| `bilibili-live.endpoints[].roomId` | string \| number | 否 | — | 直播间号（短号或长号都可以）；只填你自己的直播间 |
+| `bilibili-live.endpoints[].sendMode` | string: `"direct"`, `"off"` | 否 | `"direct"` | 出站模式：direct=回合结束直接发弹幕（默认，需登录）；off=只听不说 |
+| `bilibili-live.endpoints[].maxLength` | number | 否 | `20` | 单条弹幕最多字符数（默认 20，直播等级高的账号可调大） |
+| `bilibili-live.endpoints[].maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2），放不下的截断 |
+| `bilibili-live.endpoints[].minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2；不足时拒绝发送，不排队 |
+| `bilibili-live.endpoints[].apiBaseUrl` | string | 否 | `"https://api.bilibili.com"` | — |
+| `bilibili-live.endpoints[].liveApiBaseUrl` | string | 否 | `"https://api.live.bilibili.com"` | — |
+| `bilibili-live.endpoints[].master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
+| `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
+| `bilibili-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### dingtalk
 
@@ -1859,7 +1896,7 @@ _该 Schema 没有声明字段。_
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `content-moderation.groupModeration` | array&lt;object&gt; | 否 | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。 |
+| `content-moderation.groupModeration` | array&lt;object&gt; | 否 | `[]` | 自动广告/辱骂审核的精确范围；未配置时关闭。需要 AI、原子持久状态和适配器群管支持。禁言 / 踢人交给 Agent 群规（ADR 0039），名单内的群会生成待确认的默认规则，确认前只提醒 / 警告。 |
 | `content-moderation.groupModeration[].adapter` | string | 是 | — | — |
 | `content-moderation.groupModeration[].endpoint` | string | 是 | — | — |
 | `content-moderation.groupModeration[].account` | string | 是 | — | — |

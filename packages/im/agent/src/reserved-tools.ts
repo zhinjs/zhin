@@ -16,6 +16,8 @@ export const RESERVED_TOOL_NAMES = [
   'todo_write',
   'announcement_draft',
   'session_event_create',
+  'rule_draft',
+  'change_draft',
   'discover',
   'load_tool',
   'load_skill',

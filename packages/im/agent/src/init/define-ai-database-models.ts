@@ -16,6 +16,7 @@ import { AI_CONTROL_STATE_TABLE, AI_CONTROL_STATE_MODEL } from '../control-plane
 import { AI_SESSION_OPS_TABLE, AI_SESSION_OPS_MODEL } from '../session-ops.js';
 import { AI_ANNOUNCEMENTS_TABLE, AI_ANNOUNCEMENT_MODEL } from '../announcements.js';
 import { AI_SESSION_EVENTS_TABLE, AI_SESSION_EVENT_MODEL } from '../session-events.js';
+import { AI_GROUP_RULES_TABLE, AI_GROUP_RULE_MODEL } from '../group-rules.js';
 
 export type AiDatabaseModelDefiner = (
   name: string,
@@ -34,6 +35,7 @@ const AI_DATABASE_MODELS: ReadonlyArray<readonly [string, Record<string, unknown
   [AI_SESSION_OPS_TABLE, AI_SESSION_OPS_MODEL],
   [AI_ANNOUNCEMENTS_TABLE, AI_ANNOUNCEMENT_MODEL],
   [AI_SESSION_EVENTS_TABLE, AI_SESSION_EVENT_MODEL],
+  [AI_GROUP_RULES_TABLE, AI_GROUP_RULE_MODEL],
   ['memory_entries', MEMORY_ENTRY_MODEL],
 ];
 

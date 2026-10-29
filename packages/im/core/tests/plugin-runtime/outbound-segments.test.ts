@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { HtmlRendererHost, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
+  adapterDeclaresLiveDanmaku,
   applyOutboundInteractivePolicy,
   applyOutboundMarkdownPolicy,
   normalizeOutboundPayload,
@@ -43,6 +44,16 @@ function mockSnapshot(input: {
     tree: new Map([['plugin:adapter', { packageName: input.packageName }]]),
   } as unknown as RuntimeSnapshot;
 }
+
+describe('adapterDeclaresLiveDanmaku (ADR 0038 §5)', () => {
+  it('is true only when the adapter definition lists liveDanmaku', () => {
+    const id = 'adapter:test' as Parameters<typeof adapterDeclaresLiveDanmaku>[0];
+    expect(adapterDeclaresLiveDanmaku(id, mockSnapshot({ definition: { capabilities: ['inbound', 'liveDanmaku'] } }))).toBe(true);
+    expect(adapterDeclaresLiveDanmaku(id, mockSnapshot({ definition: { capabilities: ['inbound', 'outbound'] } }))).toBe(false);
+    expect(adapterDeclaresLiveDanmaku(id, mockSnapshot({ definition: {} }))).toBe(false);
+    expect(adapterDeclaresLiveDanmaku('adapter:other' as typeof id, mockSnapshot({ definition: { capabilities: ['liveDanmaku'] } }))).toBe(false);
+  });
+});
 
 describe('normalizeOutboundPayload', () => {
   it('wraps a single segment object into a one-element array', async () => {

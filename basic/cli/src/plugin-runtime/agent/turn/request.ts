@@ -19,6 +19,7 @@ import {
   type DeliveryOutcome,
   type TurnAccessContext,
   type TurnContextState,
+  type TurnInput,
   type TurnIntent,
   type TurnRequest,
   type TurnRequestPorts,
@@ -108,6 +109,11 @@ export function createRuntimeTurnRequest(
   text: string,
   roles: RuntimeSenderRoles,
   input: Readonly<{
+    /**
+     * Pre-narrowed access (ADR 0038 §2 merged turn); must originate from this
+     * message's conversation. Default: the message sender's own access.
+     */
+    access?: TurnAccessContext;
     traceId: string;
     turnId: string;
     signal: AbortSignal;
@@ -135,9 +141,13 @@ export function createRuntimeTurnRequest(
     contextState?: TurnContextState;
     /** #996: short scene event summaries for the ephemeral `[Scene events]` block (newest first). */
     sceneEvents?: readonly string[];
+    /** ADR 0038 §3: senders of a merged turn (two or more). */
+    mergedSenders?: TurnInput['mergedSenders'];
+    /** ADR 0038 §5: the danmaku window of a live-stream turn. */
+    liveDanmaku?: TurnInput['liveDanmaku'];
   }>,
 ): TurnRequest {
-  const access = createRuntimeTurnAccess(message, roles, input.contextState);
+  const access = input.access ?? createRuntimeTurnAccess(message, roles, input.contextState);
   const origin = access.origin;
   if (origin.kind !== 'im') throw new Error('Runtime IM ingress must produce an IM origin');
   const clientAdapter = message.clientAdapter;
@@ -249,6 +259,8 @@ export function createRuntimeTurnRequest(
       metadata: Object.freeze({ ...message.metadata, ...input.trustedMetadata }),
       ...(input.contextState ? { contextState: input.contextState } : {}),
       ...(input.sceneEvents?.length ? { sceneEvents: Object.freeze([...input.sceneEvents]) } : {}),
+      ...(input.mergedSenders && input.mergedSenders.length > 1 ? { mergedSenders: Object.freeze([...input.mergedSenders]) } : {}),
+      ...(input.liveDanmaku ? { liveDanmaku: input.liveDanmaku } : {}),
     }),
     session: Object.freeze({
       key: sessionKey,

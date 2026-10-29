@@ -18,6 +18,7 @@ import {
   type AnnouncementsSource,
 } from './announcements-rpc.js';
 import { sessionEventActions, sessionEventQueries, type SessionEventsSource } from './session-events-rpc.js';
+import { groupRuleActions, groupRuleQueries, type GroupRulesSource } from './group-rules-rpc.js';
 
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
@@ -34,7 +35,8 @@ import { sessionEventActions, sessionEventQueries, type SessionEventsSource } fr
  * as `plugin.root.announcements` / `announcement` (read) and `announcement-*` (actions), bound through
  * {@link AssistantStatus.bindAnnouncements}. ADR 0037 slice D adds session events (schedule reminders) as
  * `plugin.root.session-events` / `session-event` (read) and `session-event-*` (actions), bound through
- * {@link AssistantStatus.bindSessionEvents}.
+ * {@link AssistantStatus.bindSessionEvents}. ADR 0039 slice B adds group moderation rules as `plugin.root.group-rules` /
+ * `group-rule` (read) and `group-rule-*` (actions), bound through {@link AssistantStatus.bindGroupRules}.
  */
 
 export const AMBIENT_STATUS_PERMISSION = 'ambient:read';
@@ -134,6 +136,7 @@ export class AssistantStatus {
   #readAnnouncements: AnnouncementsSource = () => undefined;
   #readAnnouncementDispatcher: AnnouncementDispatcherSource = () => undefined;
   #readSessionEvents: SessionEventsSource = () => undefined;
+  #readGroupRules: GroupRulesSource = () => undefined;
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -149,6 +152,7 @@ export class AssistantStatus {
         ...sessionOpsQueries(() => this.#readSessionOps(), () => this.#readMemberLifecycle()),
         ...announcementQueries(() => this.#readAnnouncements()),
         ...sessionEventQueries(() => this.#readSessionEvents()),
+        ...groupRuleQueries(() => this.#readGroupRules()),
       },
       actions: {
         // ADR 0036 slice D: the only writer of the control switches (the model has no tool for them).
@@ -162,6 +166,8 @@ export class AssistantStatus {
         ...announcementActions(() => this.#readAnnouncements(), () => this.#readAnnouncementDispatcher()),
         // ADR 0037 slice D: session events are updated / cancelled only here (the model can only create for its session).
         ...sessionEventActions(() => this.#readSessionEvents()),
+        // ADR 0039 slice B: group rules are approved / rejected / disabled here or by the group's owner/admins in the group.
+        ...groupRuleActions(() => this.#readGroupRules()),
       },
     });
   }
@@ -193,6 +199,11 @@ export class AssistantStatus {
   /** The current generation's session event store (ADR 0037 slice D); the latest route wins. */
   bindSessionEvents(read: SessionEventsSource): void {
     this.#readSessionEvents = read;
+  }
+
+  /** The current generation's group rule store (ADR 0039 slice B); the latest route wins. */
+  bindGroupRules(read: GroupRulesSource): void {
+    this.#readGroupRules = read;
   }
 
   /** The current generation's decision audit log (`ai_decision_events`); the latest Agent ingress route wins. */

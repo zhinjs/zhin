@@ -327,6 +327,7 @@ my-plugin/
 | `permissions` | 否 | 发起人的权限规则列表，全部满足才提供 |
 | `hidden` | 否 | 注册但不提供给模型，仍可按名字调用 |
 | `alwaysLoaded` | 否 | 设为 `true` 时参数定义每轮常驻给模型；默认 `false`（延迟加载），见[让工具常驻](#让工具常驻) |
+| `readOnly` | 否 | 设为 `true` 表示工具只读（不改平台、存储，也不影响别人）；受限回合（如直播弹幕回合，ADR 0038 §5）只开放声明了 `readOnly: true` 的工具。不声明视为会写 |
 | `execute(input, context)` | 是 | 执行函数，`context` 见上文 |
 
 ### 权限规则

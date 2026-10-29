@@ -321,6 +321,7 @@ my-plugin/
 | `permissions` | No | Permission rules; all must pass |
 | `hidden` | No | Registered but not offered to the model; still callable by name |
 | `alwaysLoaded` | No | `true` sends the schema to the model on every turn; default `false` (deferred). See [Keep a tool resident](#keep-a-tool-resident) |
+| `readOnly` | No | `true` declares the tool only reads (changes nothing on the platform, in storage or for other people); restricted turns such as live danmaku turns (ADR 0038 §5) only expose tools with `readOnly: true`. Undeclared counts as writing |
 | `execute(input, context)` | Yes | The function; `context` described above |
 
 ### Permission rules

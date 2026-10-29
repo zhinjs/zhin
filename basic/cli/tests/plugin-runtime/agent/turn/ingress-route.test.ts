@@ -8,7 +8,7 @@ import type { TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
-import { AgentTurnIngressRoute, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
+import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
 describe('AgentTurnIngressRoute', () => {
   function roleIngress() {
@@ -291,4 +291,45 @@ it('localizes the ingress error fallback and preserves a configured template', a
     execute: async () => { throw new Error('upstream'); } });
   await custom.run();
   expect(custom.reply).toHaveBeenCalledWith('原配置: upstream');
+});
+
+it('falls back to the anonymous user floor for a merged participant without access (ADR 0038 §2)', () => {
+  const carrier = {
+    origin: { kind: 'im', platform: 'qq', endpoint: 'bot', scope: 'group', sceneId: 'g1' },
+    principal: { subjectId: 'alice', roles: ['admin', 'user'] },
+    policy: { permissions: ['admin', 'user'], unattended: false },
+  } as any;
+  const bob = { ...carrier, principal: { subjectId: 'bob', roles: ['user'] } };
+  const members = mergedMemberAccess([
+    { senderId: 'alice', access: carrier },
+    { senderId: 'bob', access: bob },
+    { senderId: 'carol' },
+  ], carrier);
+  expect(members[0]).toBe(carrier);
+  expect(members[1]).toBe(bob);
+  expect(members[2]).toMatchObject({
+    origin: carrier.origin,
+    principal: { subjectId: 'carol', roles: ['user'] },
+    policy: { permissions: ['user'], unattended: false },
+  });
+});
+
+it('turns merged participants into the turn context sender list (ADR 0038 §3)', () => {
+  expect(mergedTurnSenders([
+    { senderId: 'alice', senderName: 'Alice', texts: ['a', 'a2'], messageIds: ['m1', 'm3'] },
+    { senderId: 'bob', texts: ['b'] },
+  ])).toEqual([
+    { subjectId: 'alice', displayName: 'Alice', messageIds: ['m1', 'm3'], texts: ['a', 'a2'] },
+    { subjectId: 'bob', texts: ['b'] },
+  ]);
+});
+
+it('audits a dropped stale reply and one sent anyway (ADR 0038 §4)', () => {
+  const audit = vi.fn();
+  auditStaleReply(audit, { kind: 'discard', senders: ['alice'] });
+  auditStaleReply(audit, { kind: 'send', senders: ['bob'], reason: 'starvation' });
+  expect(audit.mock.calls.map(([event]) => event)).toEqual([
+    { kind: 'outbound', outcome: 'skip', reasonCode: 'merge_reply_stale_discarded', payload: { senders: ['alice'] } },
+    { kind: 'outbound', outcome: 'allow', reasonCode: 'merge_reply_stale_sent', payload: { senders: ['bob'], reason: 'starvation' } },
+  ]);
 });

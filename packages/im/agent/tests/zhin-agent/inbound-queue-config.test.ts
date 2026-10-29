@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  DEFAULT_INBOUND_LIVE_CONFIG,
   DEFAULT_INBOUND_MERGE_CONFIG,
   DEFAULT_INBOUND_QUEUE_CONFIG,
   normalizeInboundQueueConfig,
@@ -24,11 +25,29 @@ describe('inbound-queue-config', () => {
       coalesceWindowMs: 10_000,
       maxQueuedTurns: 5,
       merge: DEFAULT_INBOUND_MERGE_CONFIG,
+      live: DEFAULT_INBOUND_LIVE_CONFIG,
     });
   });
 
+  it('defaults the ADR 0038 danmaku window to pick-one / 10s / 15s and normalizes it', () => {
+    expect(normalizeInboundQueueConfig().live).toEqual({ mode: 'pick-one', windowMs: 10_000, minIntervalMs: 15_000 });
+    expect(normalizeInboundQueueConfig({ live: { mode: 'summary', windowMs: 5_000, minIntervalMs: -1 } }).live)
+      .toEqual({ mode: 'summary', windowMs: 5_000, minIntervalMs: 15_000 });
+    expect(normalizeInboundQueueConfig({ live: { mode: 'all' as 'summary' } }).live.mode).toBe('pick-one');
+  });
+
+  it('validates danmaku window fields', () => {
+    expect(validateInboundQueueConfig({
+      live: { mode: 'all' as 'summary', windowMs: -1, minIntervalMs: Number.POSITIVE_INFINITY },
+    })).toEqual([
+      'ai.agent.inboundQueue.live.mode must be pick-one or summary',
+      'ai.agent.inboundQueue.live.windowMs must be a non-negative number',
+      'ai.agent.inboundQueue.live.minIntervalMs must be a non-negative number',
+    ]);
+  });
+
   it('keeps the ADR 0038 merge window off by default and normalizes its timings', () => {
-    expect(normalizeInboundQueueConfig().merge).toEqual({ enabled: false, quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 5 });
+    expect(normalizeInboundQueueConfig().merge).toEqual({ enabled: true, quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 5 });
     expect(normalizeInboundQueueConfig({ merge: { enabled: true, quietMs: 3_000, maxWaitMs: 1_000, maxSenders: 0 } }).merge)
       .toEqual({ enabled: true, quietMs: 3_000, maxWaitMs: 3_000, maxSenders: 5 });
   });

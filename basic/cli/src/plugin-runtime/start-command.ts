@@ -48,6 +48,7 @@ import {
   resolveSystemLogConfig,
   AssistantStatus,
   HostToolApprovals,
+  HostSelfChanges,
   composeHostConsoleRpc,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
@@ -61,6 +62,7 @@ import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './spe
 import { installProtocolHosts } from './protocol-host-installer.js';
 import { ProjectEndpointConfigurationStore } from './endpoint-configuration-store.js';
 import { RootHost } from './root-host.js';
+import { HostSelfChangeApply } from './self-change-apply.js';
 import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
 import {
   createPluginLifecycleStore,
@@ -179,6 +181,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const assistantStatus = new AssistantStatus();
   // 危险工具硬闸审批卡片（ADR 0036）：进程持有，绑定当前 generation 的 Agent 队列。
   const toolApprovals = new HostToolApprovals();
+  // 受控自我进化审批（ADR 0040 §4）：进程持有，绑定当前 generation 的变更暂存区与审批。
+  const selfChanges = new HostSelfChanges();
   const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
     projectRoot: options.root,
     configFile,
@@ -199,6 +203,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       await host.runtime.whenConfigurationReady();
       return host.runtime.configurationSchemas;
     },
+  });
+  // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / exit 75 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
+  const selfChangeApply = new HostSelfChangeApply({
+    projectRoot: options.root,
+    reload: sources => host.reloadSources(sources),
+    restart: () => requestProcessRestart(),
+    snapshot: () => host.runtime.snapshot,
+    ownership: () => host.runtime.sourceOwnership,
+    configuration: consoleConfigurationStore,
+    configFile,
   });
   const host = new RootHost({
     projectRoot: options.root,
@@ -248,6 +262,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           im,
           assistantStatus,
           toolApprovals,
+          selfChanges,
+          selfChangeApply,
           projectRoot: options.root,
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
@@ -287,6 +303,12 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         getLogger('runtime').info('插件管理操作进行中，依赖变更等待操作完成后显式应用');
         return;
       }
+      // 自我变更生效中：先让生效器落盘 verifying 再重启（否则重启后只能按中途被杀回滚），生效流程结束后补发。
+      if (selfChangeApply.active) {
+        getLogger('runtime').info('自我变更生效中，重启推迟到变更流程记录进度之后');
+        selfChangeApply.deferRestart(() => requestProcessRestart());
+        return;
+      }
       process.exitCode = processRestartExitCode;
       // 仅设置 exitCode，让事件循环自然结束，保证 stderr/管道日志完整写出。
       await control.stop();
@@ -305,13 +327,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }));
     },
     onError(error) {
+      selfChangeApply.noteError();
       options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     },
   });
   // Attach before start so the generation-owned Endpoint event boundary is
   // available while the first generation is still being prepared.
   im.attach(host.runtime.snapshots);
-  agentHost?.attach(host.runtime.snapshots);
+  agentHost?.attach(host.runtime.snapshots, () => host.runtime.sourceOwnership);
   consoleHost.console.attach(host.runtime.snapshots);
   registerConsoleHttp({
     http: httpHost,
@@ -328,24 +351,25 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     databaseHost,
     scheduleHost,
     eventHub: consoleEventHub,
-    hostConsoleRpc: composeHostConsoleRpc(assistantStatus.consoleRpc, toolApprovals.consoleRpc),
+    hostConsoleRpc: composeHostConsoleRpc(assistantStatus.consoleRpc, toolApprovals.consoleRpc, selfChanges.consoleRpc),
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
     pluginManagementActivity,
     snapshot: () => host.runtime.snapshot,
     snapshots: host.runtime.snapshots,
-    onRestart: () => {
-      // The native TypeScript supervisor treats this code as an intentional
-      // process-generation restart in both foreground Desktop and daemon mode.
-      // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）。
-      process.exitCode = processRestartExitCode;
-      void control.stop().catch((error: unknown) => {
-        options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-        process.exitCode = 1;
-      });
-    },
+    onRestart: () => requestProcessRestart(),
   });
+  function requestProcessRestart(): void {
+    // The native TypeScript supervisor treats this code as an intentional
+    // process-generation restart in both foreground Desktop and daemon mode.
+    // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）。
+    process.exitCode = processRestartExitCode;
+    void control.stop().catch((error: unknown) => {
+      options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+      process.exitCode = 1;
+    });
+  }
   const disposeReadiness = registerReadinessRoutes(httpHost, {
     snapshots: host.runtime.snapshots,
     agentBindings: agentHost?.bindings,
@@ -448,6 +472,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     await control.stop();
     return;
   }
+  // ADR 0040 §6：启动完成后接续生效中 / 待校验的自我变更（健康检查、回滚、回报）。
+  void selfChangeApply.started().catch(reportSelfChangeRecoverError);
 
   // Orphan watchdog: if the supervising CLI wrapper died (kill -9, terminal
   // closed, wrapper crashed) this bot must not outlive it — a zombie keeps
@@ -477,9 +503,19 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   }
 }
 
+function reportSelfChangeRecoverError(error: unknown): void {
+  getLogger('runtime').warn(formatCompact({
+    op: 'self_change_recover_failed',
+    error: error instanceof Error ? error.message : String(error),
+  }));
+}
+
 interface ConfiguredAgentHost {
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
-  attach(snapshots: import('@zhin.js/plugin-runtime').SnapshotReader): void;
+  attach(
+    snapshots: import('@zhin.js/plugin-runtime').SnapshotReader,
+    sourceOwnership?: () => import('@zhin.js/runtime').SourceOwnershipIndex,
+  ): void;
   install(options: {
     readonly im: ImRuntime;
     readonly projectRoot: string;
@@ -491,6 +527,8 @@ interface ConfiguredAgentHost {
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
     readonly assistantStatus?: AssistantStatus;
     readonly toolApprovals?: HostToolApprovals;
+    readonly selfChanges?: HostSelfChanges;
+    readonly selfChangeApply?: HostSelfChangeApply;
   }): RootResourceInstaller;
 }
 
@@ -518,6 +556,7 @@ async function loadConfiguredAgentHost(
     turnTraceStore,
   });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
+  let sourceOwnership: (() => import('@zhin.js/runtime').SourceOwnershipIndex) | undefined;
   let localWorkroomDataGovernance: ReturnType<
     NonNullable<typeof workroom>['createLocalWorkroomDataGovernanceAuthority']
   > | undefined;
@@ -527,8 +566,9 @@ async function loadConfiguredAgentHost(
         import('@zhin.js/agent/runtime').AgentHostPort | undefined;
       return port?.protocol.listBindings() ?? [];
     },
-    attach: (snapshots) => {
+    attach: (snapshots, ownership) => {
       snapshotReader = snapshots;
+      sourceOwnership = ownership;
       runtime.attach(snapshots);
     },
     install: (options) => {
@@ -545,6 +585,7 @@ async function loadConfiguredAgentHost(
         workroomStorageMode,
         workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,
+        selfChangeImpact: agentHost.createSelfChangeImpactPort(sourceOwnership),
         extraTools: options.extraTools as Parameters<typeof agentHost.installAgentHost>[0]['extraTools'],
       });
     },

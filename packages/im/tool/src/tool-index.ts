@@ -41,6 +41,8 @@ export interface ToolDescriptor {
   readonly hidden?: boolean;
   /** Author opt-in to stay in the model's tool list every turn; absent means deferred. */
   readonly alwaysLoaded?: boolean;
+  /** Author declared the tool read-only; absent means not declared (treated as writing). */
+  readonly readOnly?: boolean;
   readonly placement?: AgentToolDefinition['placement'];
   readonly source: string;
 }
@@ -154,6 +156,7 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     hidden: definition.hidden,
     // Only an explicit `true` opts in, so existing descriptors stay unchanged.
     ...(definition.alwaysLoaded === true ? { alwaysLoaded: true } : {}),
+    ...(definition.readOnly === true ? { readOnly: true } : {}),
     placement: definition.placement,
     source: entry.source,
   });
