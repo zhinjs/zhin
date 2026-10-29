@@ -1,0 +1,79 @@
+packages/im/ai/src/llm/mid-conversation-system.ts
+  s_9477e63ef5cee5::t_6e1e148bb67f35 1-55
+packages/im/agent/evals/state-change-injection.test.ts
+  s_9477e63ef5cee5::t_a1655fe29ec2b6 1-73,75-93
+  s_9477e63ef5cee5::t_de69b9b105767e 74
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  s_9477e63ef5cee5::t_bddad98653ee28 215-222
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9477e63ef5cee5::t_6acc845c5b363c 305
+basic/cli/tests/plugin-runtime/agent/turn/scene-event-state.test.ts
+  s_9477e63ef5cee5::t_e80ea98e51579f 1-142
+.changeset/0041-slice-c-state-change-events.md
+  s_9477e63ef5cee5::t_210c209a82fd16 1-7
+packages/im/ai/src/llm/types/model.ts
+  s_9477e63ef5cee5::t_4974fcbd28efef 60-66
+packages/im/ai/src/memory/event-rendering.ts
+  s_9477e63ef5cee5::t_fd19089384cc19 1-131
+packages/im/ai/src/index.ts
+  s_9477e63ef5cee5::t_1a974f06b6f246 560
+  s_9477e63ef5cee5::t_10195b2e2f7660 543-559,561-567
+basic/cli/src/plugin-runtime/agent/turn/scene-event-state.ts
+  s_9477e63ef5cee5::t_7db29e75f1c481 26-27
+  s_9477e63ef5cee5::t_7588e64d3b810d 1-25,28-67
+packages/im/ai/tests/memory/event-message.test.ts
+  s_9477e63ef5cee5::t_5564e4f426d132 1-62
+packages/im/agent/src/subagent-parent-context.ts
+  s_9477e63ef5cee5::t_b012b4ceac2485 6
+  s_9477e63ef5cee5::t_c86d0681005da0 26
+packages/im/ai/tests/llm/mid-conversation-system.test.ts
+  s_9477e63ef5cee5::t_25577bef2e48de 1-31
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  s_9477e63ef5cee5::t_c86d0681005da0 8
+  s_9477e63ef5cee5::t_0d4be6dad4abd9 122
+packages/im/ai/src/memory/event-message.ts
+  s_9477e63ef5cee5::t_fe53ba42f726ab 1-84
+packages/im/ai/tests/memory/event-rendering.test.ts
+  s_9477e63ef5cee5::t_3bdfdf2d95bb47 1-211
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_1f7dec19194ea2 10,350,790
+basic/cli/src/plugin-runtime/agent/turn/scene-event-ingress.ts
+  s_9477e63ef5cee5::t_fdcf9edb5d57d1 33,35,76-80,110-111,177,200-213,306,308-310,319
+  s_9477e63ef5cee5::t_a3c484c6848d72 243
+  s_9477e63ef5cee5::t_0e2df8c37c71c3 214-215
+packages/im/agent/evals/cases/state-change-values-are-data.case.ts
+  s_9477e63ef5cee5::t_54d1f553ac4650 1-20
+docs/en/ai/index.md
+  s_9477e63ef5cee5::t_6e9fbd50690bd8 154
+packages/im/ai/tests/memory/event-persistence.test.ts
+  s_9477e63ef5cee5::t_c3ca402e40de58 1-26,28-34
+  s_9477e63ef5cee5::t_8455908f40d53e 27
+docs/ai/index.md
+  s_9477e63ef5cee5::t_6e9fbd50690bd8 154
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_899f663bab550f 486-487
+packages/im/agent/src/zhin-agent/index.ts
+  s_9477e63ef5cee5::t_338cd17e08e682 397-415
+basic/cli/src/plugin-runtime/agent/turn/scene-event-lines.ts
+  s_9477e63ef5cee5::t_a3c484c6848d72 26-27,38
+  s_9477e63ef5cee5::t_1fb781cbb7f306 7
+  s_9477e63ef5cee5::t_fdcf9edb5d57d1 37
+packages/im/ai/src/llm/repair-agent-messages.ts
+  s_9477e63ef5cee5::t_bddad98653ee28 1-2,45-46,75,80-84,99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3c4178d18953cca3e88d744c4e71acad1dda3d41",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
