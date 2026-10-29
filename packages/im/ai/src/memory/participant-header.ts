@@ -28,6 +28,8 @@ export interface ParticipantFacts {
   readonly groupTitle?: string;
   /** Remaining mute seconds relative to the message timestamp; 0 = not muted; undefined = unknown. */
   readonly muteTime?: number;
+  /** Only another bot is marked (trusted ingress `origin=peer_bot`); humans carry no origin field. */
+  readonly origin?: 'peer_bot';
 }
 
 export interface HeaderFormatOptions {
@@ -96,6 +98,7 @@ export function factsFromActor(actor: ConversationActor, messageId: string | und
     ...(actor.groupNickname ? { groupNickname: actor.groupNickname } : {}),
     ...(actor.groupTitle ? { groupTitle: actor.groupTitle } : {}),
     ...(muteTime !== undefined ? { muteTime } : {}),
+    ...(actor.origin === 'peer_bot' ? { origin: 'peer_bot' as const } : {}),
   };
 }
 
@@ -136,6 +139,7 @@ export function renderParticipantHeader(facts: ParticipantFacts, timestamp: numb
     ['user_id', facts.userId],
     ['name', facts.name],
     ['role', facts.role],
+    ['origin', facts.origin],
     ['group_nickname', facts.groupNickname],
     ['group_title', facts.groupTitle],
     ['mute_time', options.bot ? undefined : facts.muteTime],
@@ -168,6 +172,7 @@ export function parseParticipantHeader(line: string | undefined): ParticipantFac
     ...(raw.group_nickname !== undefined ? { groupNickname: raw.group_nickname } : {}),
     ...(raw.group_title !== undefined ? { groupTitle: raw.group_title } : {}),
     ...(raw.mute_time !== undefined && /^\d+$/u.test(raw.mute_time) ? { muteTime: Number(raw.mute_time) } : {}),
+    ...(raw.origin === 'peer_bot' ? { origin: 'peer_bot' as const } : {}),
   };
 }
 

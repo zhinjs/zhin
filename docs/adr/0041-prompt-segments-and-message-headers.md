@@ -39,7 +39,7 @@ Fin 2026-10-29 拍板：
 **会话场景**（场景段，每个会话一份）：
 
 ```
-[scene_id:1048877509;scene_type:group;scene_name:测试群;owner_id:10001;admins:10002,10003;member_count:42;global_mute:false;assistant_role:admin]
+[scene_id:1048877509;scene_type:group;scene_name:测试群;owner_id:10001;admins:10002,10003;member_count:42;global_mute:false;assistant_role:admin;]
 ```
 
 **用户消息头**（存在 `UserMessage.name`）：
@@ -48,6 +48,8 @@ Fin 2026-10-29 拍板：
   `[id:<message_id>;user_id:10002;name:小明;role:admin;group_nickname:明明;group_title:老玩家;mute_time:0;time:09:00:00.000;]`
 - 之后：`[id:<message_id>;user_id:10002;time:09:00:05.120;]`
 - `role` 合并平台角色（`owner` / `admin` / `member`）与产品授权角色（`master`、`trusted`），逗号分隔，如 `role:master,owner`。
+- 另一个 Bot 发言时全量头带 `origin:peer_bot`（由可信入站判定）；真人不带 `origin` 字段。
+- 所有头（含场景行）统一以 `;]` 结尾。
 - `time` 为实例时区的 `HH:mm:ss.SSS`；跨天的第一条消息额外带 `date:2026-10-29`。
 
 **助手消息头**（存在 `AssistantMessage.name`）：Bot 自己同样首次全量（`user_id` 为 Bot 平台账号、`name`、`role`、`group_nickname`），之后短格式。

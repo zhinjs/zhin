@@ -70,6 +70,14 @@ describe('participant headers (ADR 0041)', () => {
     expect(firstLine(projectParticipantHeaders([stored('hi', T0, actor({ mutedUntil: 0 }), 'm2')], UTC)[0]!)).toContain('mute_time:0;');
   });
 
+  it('marks another bot with origin:peer_bot and leaves humans unmarked', () => {
+    const peer = projectParticipantHeaders([stored('ping', T0, actor({ subjectId: '20002', origin: 'peer_bot' }), 'p1')], UTC);
+    expect(firstLine(peer[0]!)).toContain('role:admin;origin:peer_bot;');
+    expect(parseParticipantHeader(firstLine(peer[0]!))?.origin).toBe('peer_bot');
+    const human = projectParticipantHeaders([stored('hi', T0, actor({ origin: 'human' }), 'h1')], UTC);
+    expect(firstLine(human[0]!)).not.toContain('origin');
+  });
+
   it('synthesizes a member_changed event before the message after a role change and keeps the message short', () => {
     const history = [
       stored('a', T0, actor({ roles: ['member'] }), 'm1'),
