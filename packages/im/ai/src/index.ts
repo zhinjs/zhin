@@ -21,6 +21,7 @@ export {
   stringParamTool,
   ToolCallValidationError,
   isLlmAgentMessage,
+  isEventMessage,
   repairAgentMessagesForLlm,
   EMPTY_TOKEN_USAGE,
   DEFAULT_STEERING_MODE,
@@ -83,6 +84,7 @@ export type {
   AssistantMessage,
   ToolResultMessage,
   CustomAgentMessage,
+  EventMessage,
   ContentBlock,
   TextContentBlock,
   MediaContentBlock,
@@ -528,3 +530,13 @@ export type {
 } from './decision/index.js';
 
 export { createPromptContextBlock, createPromptStateBlock, projectPromptContext } from './memory/prompt-context.js';
+
+export {
+  HEADER_VALUE_MAX_CHARS,
+  RESERVED_SENDER_IDS,
+  SYSTEM_SENDER_ID,
+  escapeHeaderValue,
+  quoteEventValue,
+  renderSenderId,
+  formatHeader,
+} from './memory/message-header.js';
