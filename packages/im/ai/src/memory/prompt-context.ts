@@ -52,7 +52,74 @@ function validState(block: TextContentBlock): PromptContextState | undefined {
  * retains both changes. Ordinary rules and memory always keep their full new versions.
  */
 export function projectPromptContext(messages: AgentMessage[], options?: HeaderFormatOptions): AgentMessage[] {
-  return projectParticipantHeaders(projectContextState(messages), options);
+  return projectParticipantHeaders(projectContextState(stripHistoricalTurnContext(messages)), options);
+}
+
+/** contextRef keys (or key prefixes ending in `:`) that only ever described one turn (ADR 0043 §1). */
+const PER_TURN_CONTEXT_KEYS = [
+  'deferred-tools', 'deferred-catalog-summary', 'workspace-rules', 'active-skills', 'quote-guidance',
+  'session-guidance', 'session-identity', 'skill:', 'file-memory:', 'session-rules:',
+];
+/** Legacy unmarked text blocks: the per-turn envelope and its parts. */
+const TURN_CONTEXT_BEGIN = '[Turn context]';
+const TURN_CONTEXT_END = '[/Turn context]';
+/** Tone hint, relevant memory, merged-turn and danmaku lines all live inside the `[Turn context]` block. */
+const PER_TURN_TEXT_PREFIXES = [TURN_CONTEXT_BEGIN, '[Already told the user]'];
+
+function isPerTurnContextKey(key: string): boolean {
+  return PER_TURN_CONTEXT_KEYS.some(prefix => (prefix.endsWith(':') ? key.startsWith(prefix) : key === prefix));
+}
+
+function isPerTurnBlock(block: { type: string; text?: string; presentation?: string; perTurn?: unknown; ephemeral?: unknown; contextRef?: { key?: unknown } }): boolean {
+  if (block.type !== 'text' || block.presentation === 'user-input') return false;
+  if (block.perTurn === true || block.ephemeral === true) return true;
+  const key = block.contextRef?.key;
+  if (typeof key === 'string') return isPerTurnContextKey(key);
+  const text = typeof block.text === 'string' ? block.text.trimStart() : '';
+  return PER_TURN_TEXT_PREFIXES.some(prefix => text.startsWith(prefix));
+}
+
+/** Oldest legacy shape: the envelope was glued in front of the user text inside one block. */
+function stripLeadingEnvelope(text: string): string | undefined {
+  if (!text.startsWith(TURN_CONTEXT_BEGIN)) return undefined;
+  const end = text.indexOf(TURN_CONTEXT_END);
+  if (end < 0) return undefined;
+  return text.slice(end + TURN_CONTEXT_END.length).replace(/^\s*\n/u, '');
+}
+
+/**
+ * ADR 0043 §1: per-turn context belongs to the current message only. Every user message before the
+ * current one (the last user message that still carries per-turn blocks) loses them — new history is
+ * stored without them, so this mainly cleans rows stored before ADR 0043. Pure function of position;
+ * stored history is never rewritten. Tool results are left alone (they are conversation).
+ */
+function stripHistoricalTurnContext(messages: AgentMessage[]): AgentMessage[] {
+  const carries = (message: AgentMessage): boolean => message.role === 'user' && Array.isArray(message.content)
+    && message.content.some(block => isPerTurnBlock(block as never)
+      || (block.type === 'text' && typeof block.text === 'string' && stripLeadingEnvelope(block.text) !== undefined));
+  let current = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (carries(messages[i]!)) { current = i; break; }
+  }
+  if (current <= 0) return messages;
+  let changed = false;
+  const out: AgentMessage[] = [];
+  messages.forEach((message, index) => {
+    if (index >= current || !carries(message)) { out.push(message); return; }
+    const content = (message.content as Array<Record<string, unknown>>).flatMap(block => {
+      if (block.type === 'text' && typeof block.text === 'string' && block.presentation !== 'user-input'
+        && block.perTurn !== true && block.ephemeral !== true && !block.contextRef) {
+        // Oldest shape: envelope and user text share one block; keep what follows the envelope.
+        const rest = stripLeadingEnvelope(block.text);
+        if (rest?.trim()) return [{ ...block, text: rest }];
+      }
+      return isPerTurnBlock(block as never) ? [] : [block];
+    });
+    changed = true;
+    // Keep a now-empty user boundary (like repeated-block omission does): message indexes stay stable.
+    out.push({ ...message, content } as AgentMessage);
+  });
+  return changed ? out : messages;
 }
 
 function projectContextState(messages: AgentMessage[]): AgentMessage[] {

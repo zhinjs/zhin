@@ -175,6 +175,8 @@ export function normalizeUserMessageForStorage(
   };
 }
 
+/** Per-turn block (ADR 0043 §1): `ephemeral` data or an explicitly `perTurn` runtime context block. */
 function isEphemeralBlock(block: UserMessage['content'][number]): boolean {
-  return block.type === 'text' && (block as { ephemeral?: unknown }).ephemeral === true;
+  return block.type === 'text'
+    && ((block as { ephemeral?: unknown }).ephemeral === true || (block as { perTurn?: unknown }).perTurn === true);
 }

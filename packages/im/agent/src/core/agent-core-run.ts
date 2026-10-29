@@ -646,7 +646,7 @@ export async function* runAgentLoopTextTurnRun(
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
       .map((item) => ({ name: item.name, description: item.brief, group: toolIndexGroup(item) })));
     if (toolIndex) {
-      const block = createPromptContextBlock('deferred-tools', toolIndex);
+      const block = { ...createPromptContextBlock('deferred-tools', toolIndex), perTurn: true as const };
       const userIndex = promptMessages.map(message => message.role === 'user' && Array.isArray(message.content)).lastIndexOf(true);
       promptMessages = userIndex < 0
         ? [...promptMessages, { ...createUserMessage(''), content: [block] }]

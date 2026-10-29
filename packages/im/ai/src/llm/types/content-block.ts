@@ -38,6 +38,13 @@ export interface TextContentBlock {
    */
   ephemeral?: true;
   /**
+   * ADR 0043 §1: per-turn runtime context (turn context, rules, skills, tool index, memory
+   * snapshot…). Sent with the current message only; dropped before the message is stored and
+   * stripped from every earlier user message at the LLM boundary. Unlike `ephemeral` it may also
+   * carry a `contextRef`. Provider bridges must not serialize this metadata.
+   */
+  perTurn?: true;
+  /**
    * Gemini 3 may sign a text part (`google.thoughtSignature`); it is sent back with
    * the text on the next request. Only set on assistant text.
    */

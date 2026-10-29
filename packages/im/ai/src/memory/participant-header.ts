@@ -226,9 +226,9 @@ function fieldChanged(field: Field, before: Remembered, after: Remembered): bool
 const EVENT_LINE = /^\S+ changed (\S+) (role|name|mute_time|group_title|group_nickname) to /u;
 
 function prefixFirstText(message: TextMessage, header: string): TextMessage {
-  const content = message.content as Array<{ type: string; text?: string; contextRef?: unknown; ephemeral?: boolean; presentation?: string }>;
+  const content = message.content as Array<{ type: string; text?: string; contextRef?: unknown; ephemeral?: boolean; perTurn?: boolean; presentation?: string }>;
   let index = content.findIndex(block => block.type === 'text' && block.presentation === 'user-input');
-  if (index < 0) index = content.findIndex(block => block.type === 'text' && typeof block.text === 'string' && !block.contextRef && !block.ephemeral);
+  if (index < 0) index = content.findIndex(block => block.type === 'text' && typeof block.text === 'string' && !block.contextRef && !block.ephemeral && !block.perTurn);
   if (index < 0) {
     return { ...message, content: [{ type: 'text', text: header }, ...message.content] } as TextMessage;
   }
