@@ -20,6 +20,7 @@
 import { getLogger } from '@zhin.js/logger';
 import { UserRelationStore, sanitizeProfileText } from './user-relation.js';
 import { SessionProfileStore } from './session-profile.js';
+import { SceneFactStore } from './scene-facts.js';
 
 const logger = getLogger('UserProfile');
 
@@ -181,6 +182,8 @@ export class UserProfileStore {
   readonly relations: UserRelationStore;
   /** 会话上下文（话题、管理员、成员概况、Bot 发言限制；`ai_session_profiles`）。 */
   readonly sessions: SessionProfileStore;
+  /** ADR 0041 §6 场景事实的 L2 缓存（群级事实借 `ai_session_profiles`，成员级事实在 `ai_scene_members`）。 */
+  readonly scenes: SceneFactStore;
 
   constructor(
     relations: UserRelationStore = new UserRelationStore(),
@@ -189,18 +192,21 @@ export class UserProfileStore {
     this.store = new MemoryProfileStore();
     this.relations = relations;
     this.sessions = sessions;
+    this.scenes = new SceneFactStore(sessions);
   }
 
   upgradeToDatabase(
     model: DbModel,
     relationModel?: Parameters<UserRelationStore['upgradeToDatabase']>[0],
     sessionModel?: Parameters<SessionProfileStore['upgradeToDatabase']>[0],
+    sceneMemberModel?: Parameters<SceneFactStore['upgradeToDatabase']>[0],
   ): void {
     const old = this.store;
     this.store = new DatabaseProfileStore(model);
     old.dispose();
     if (relationModel) this.relations.upgradeToDatabase(relationModel);
     if (sessionModel) this.sessions.upgradeToDatabase(sessionModel);
+    if (sceneMemberModel) this.scenes.upgradeToDatabase(sceneMemberModel);
     logger.debug('UserProfileStore: upgraded to database storage');
   }
 
@@ -253,6 +259,7 @@ export class UserProfileStore {
   dispose(): void {
     this.store.dispose();
     this.relations.dispose();
+    this.scenes.dispose();
     this.sessions.dispose();
   }
 }

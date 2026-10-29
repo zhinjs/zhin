@@ -222,10 +222,26 @@ export {
   speakBlock,
   sceneRoleOf,
   sceneKeyOf,
+  type SceneGroupChange,
+  type SceneGroupFactsInput,
   type SessionProfileRecord,
   type SessionScope,
   type SpeakBlockReason,
 } from './session-profile.js';
+export {
+  SceneFactStore,
+  AI_SCENE_MEMBERS_TABLE,
+  AI_SCENE_MEMBER_MODEL,
+  SCENE_FACT_PRUNE_INTERVAL_MS,
+  SCENE_FACT_STALE_MS,
+  SCENE_MEMBER_MAX_PER_SCENE,
+  SCENE_MEMBER_RETENTION_MS,
+  type SceneMemberChange,
+  type SceneMemberRole,
+  type SceneMemberFacts,
+  type SceneMemberRecord,
+  type ScenePruneResult,
+} from './scene-facts.js';
 export {
   AI_DECISION_EVENTS_TABLE,
   AI_DECISION_EVENT_MODEL,

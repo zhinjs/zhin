@@ -5,7 +5,13 @@ import {
 } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
-import { adapterFeatureId, isAdapterIndex, resolveEndpointManagement } from '@zhin.js/adapter';
+import {
+  adapterFeatureId,
+  isAdapterIndex,
+  resolveEndpointManagement,
+  type GroupMemberProfile,
+  type GroupSceneFacts,
+} from '@zhin.js/adapter';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   approvalOutcomeToDecision,
@@ -23,6 +29,8 @@ import {
   type TurnIntent,
   type TurnRequest,
   type TurnRequestPorts,
+  SCENE_FACT_STALE_MS,
+  type SceneFactStore,
 } from '@zhin.js/agent';
 import {
   turnIntentResolverToken,
@@ -31,6 +39,7 @@ import {
 } from '@zhin.js/agent/runtime';
 import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { approvalMessages as approvalText } from './approval-messages.js';
+import type { SceneFactRefresher } from './scene-fact-refresher.js';
 import type { ConversationRef, ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
 
 type EndpointOwnerResolver = (adapterLocalName: string, endpointKey: string) => string | undefined;
@@ -101,23 +110,111 @@ async function raceSignal<T>(task: Promise<T>, signal: AbortSignal): Promise<T> 
   try { return await Promise.race([task, aborted]); } finally { signal.removeEventListener('abort', onAbort); }
 }
 
+/** ADR 0041 §6 level 2: the persistent copy of one cached lookup. */
+interface FactLevel2<T> {
+  read(): Promise<Readonly<{ value: T; updatedAt: number }> | undefined>;
+  write(value: T): Promise<void>;
+}
+
+/**
+ * Optional persistent level behind {@link resolveRuntimeTurnContextState}. Absent store keeps the
+ * in-memory-only behaviour.
+ */
+export interface SceneFactDeps {
+  readonly store?: SceneFactStore;
+  /** Background refresh of stale level-2 rows; absent means stale rows are served as they are. */
+  readonly refresher?: SceneFactRefresher;
+  readonly now?: () => number;
+}
+
+async function level2Read<T>(level2: FactLevel2<T> | undefined, kind: string): Promise<Readonly<{ value: T; updatedAt: number }> | undefined> {
+  if (!level2) return undefined;
+  try { return await level2.read(); } catch (error) {
+    logFactError('agent_scene_fact_l2_read_failed', kind, error);
+    return undefined;
+  }
+}
+
+function level2Write<T>(level2: FactLevel2<T> | undefined, kind: string, value: T): Promise<void> {
+  if (!level2) return Promise.resolve();
+  return level2.write(value).catch((error: unknown) => logFactError('agent_scene_fact_l2_write_failed', kind, error));
+}
+
+function logFactError(op: string, kind: string | undefined, error: unknown): void {
+  logger.debug(formatCompact({ op, kind, error: error instanceof Error ? error.message : String(error) }));
+}
+
+/**
+ * Read order: level 1 (fresh, 60 s) → level 2 (database) → platform. A platform result is written to both
+ * levels. A level-2 row older than {@link SCENE_FACT_STALE_MS} is still served and refreshed once in the
+ * background (a failed refresh keeps the last known value).
+ */
 async function cachedLookup<T>(
-  cache: TurnFactCache, key: string, signal: AbortSignal, lookup: () => Promise<T>,
+  cache: TurnFactCache, key: string, signal: AbortSignal, lookup: (signal: AbortSignal) => Promise<T>,
+  options: Readonly<{ level2?: FactLevel2<T>; refresher?: SceneFactRefresher; now: () => number }>,
 ): Promise<T | undefined> {
-  const hit = cache.get<T>(key, Date.now());
+  const kind = key.split(KEY_SEP)[0]!;
+  const hit = cache.get<T>(key, options.now());
   if (hit !== undefined) return hit;
+  const stored = await level2Read(options.level2, kind);
+  signal.throwIfAborted();
+  if (stored) {
+    cache.set(key, stored.value, options.now());
+    if (options.now() - stored.updatedAt >= SCENE_FACT_STALE_MS) {
+      options.refresher?.schedule(key, async (refreshSignal) => {
+        const value = await raceSignal(lookup(refreshSignal), refreshSignal);
+        cache.set(key, value, options.now());
+        await level2Write(options.level2, kind, value);
+      });
+    }
+    return stored.value;
+  }
   try {
-    const value = await raceSignal(lookup(), signal);
-    cache.set(key, value, Date.now());
+    const value = await raceSignal(lookup(signal), signal);
+    cache.set(key, value, options.now());
+    await level2Write(options.level2, kind, value);
     return value;
   } catch (error) {
     signal.throwIfAborted();
-    logger.debug(formatCompact({
-      op: 'agent_scene_fact_lookup_failed', kind: key.split(KEY_SEP)[0],
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    logFactError('agent_scene_fact_lookup_failed', kind, error);
     return undefined;
   }
+}
+
+function hasFacts(value: object): boolean {
+  return Object.keys(value).length > 0;
+}
+
+function groupLevel2(store: SceneFactStore, platform: string, group: string): FactLevel2<GroupSceneFacts> {
+  return {
+    async read() {
+      const found = await store.getGroup(platform, 'group', group);
+      return found ? { value: found.facts as GroupSceneFacts, updatedAt: found.updatedAt } : undefined;
+    },
+    async write(value) { if (hasFacts(value)) await store.putGroup(platform, 'group', group, value); },
+  };
+}
+
+function memberLevel2(store: SceneFactStore, platform: string, group: string, user: string, now: () => number): FactLevel2<GroupMemberProfile> {
+  return {
+    async read() {
+      const found = await store.getMember(platform, 'group', group, user);
+      if (!found) return undefined;
+      const facts = found.facts;
+      // An expired mute is a confirmed "not muted", not a stale expiry.
+      const mutedUntil = facts.mutedUntil !== undefined && facts.mutedUntil <= now() ? 0 : facts.mutedUntil;
+      return {
+        updatedAt: found.updatedAt,
+        value: {
+          ...(facts.platformRole ? { platformRole: facts.platformRole } : {}),
+          ...(facts.card ? { card: facts.card } : {}),
+          ...(facts.title ? { title: facts.title } : {}),
+          ...(mutedUntil !== undefined ? { mutedUntil } : {}),
+        },
+      };
+    },
+    async write(value) { await store.putMember(platform, 'group', group, user, value); },
+  };
 }
 
 /**
@@ -130,8 +227,10 @@ export async function resolveRuntimeTurnContextState(
   conversation: ConversationRef,
   signal: AbortSignal,
   senderId?: string,
+  deps: SceneFactDeps = {},
 ): Promise<TurnContextState | undefined> {
   signal.throwIfAborted();
+  const now = deps.now ?? Date.now;
   const adapters = snapshot.projections?.get(adapterFeatureId);
   if (!isAdapterIndex(adapters)) return undefined;
   const endpointId = conversation.endpoint.id;
@@ -148,6 +247,8 @@ export async function resolveRuntimeTurnContextState(
   }
   const cache = factCacheFor(adapters);
   const group = conversation.id;
+  const store = deps.store;
+  const platform = capabilityLocalName(String(endpointId));
   const scopeKey = `${endpointId}${KEY_SEP}${group}`;
   const sender = senderId && senderId !== id ? senderId : undefined;
 
@@ -155,6 +256,8 @@ export async function resolveRuntimeTurnContextState(
     try {
       if (management.inspectGroupMemberProfile) {
         const member = await raceSignal(management.inspectGroupMemberProfile(group, id, signal), signal);
+        // The bot's own role gates tool access, so it is read fresh every turn and only written through.
+        if (store) await store.putBot(platform, 'group', group, id, member).catch((error: unknown) => logFactError('agent_scene_fact_l2_write_failed', 'bot', error));
         return {
           ...bot,
           ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }),
@@ -174,11 +277,16 @@ export async function resolveRuntimeTurnContextState(
     }
   })();
   const sceneTask = management.inspectGroupScene
-    ? cachedLookup(cache, `scene${KEY_SEP}${scopeKey}`, signal, () => management.inspectGroupScene!(group, signal))
+    ? cachedLookup(cache, `scene${KEY_SEP}${scopeKey}`, signal, (lookupSignal) => management.inspectGroupScene!(group, lookupSignal), {
+        now, ...(store ? { level2: groupLevel2(store, platform, group) } : {}), ...(deps.refresher ? { refresher: deps.refresher } : {}),
+      })
     : Promise.resolve(undefined);
   const senderTask = sender && management.inspectGroupMemberProfile
     ? cachedLookup(cache, `member${KEY_SEP}${scopeKey}${KEY_SEP}${sender}`, signal,
-        () => management.inspectGroupMemberProfile!(group, sender, signal))
+        (lookupSignal) => management.inspectGroupMemberProfile!(group, sender, lookupSignal), {
+          now, ...(store ? { level2: memberLevel2(store, platform, group, sender, now) } : {}),
+          ...(deps.refresher ? { refresher: deps.refresher } : {}),
+        })
     : Promise.resolve(undefined);
   const [resolvedBot, scene, member] = await Promise.all([botTask, sceneTask, senderTask]);
   signal.throwIfAborted();
