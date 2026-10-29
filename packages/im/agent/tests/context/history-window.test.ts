@@ -40,6 +40,12 @@ describe('history token budget config (ADR 0043 §2)', () => {
   });
   it('parses strings and falls back on garbage; 0 disables the bound', () => {
     expect(parseHistoryTokenCount('8k')).toBe(8000);
+    expect(parseHistoryTokenCount(' 8 k ')).toBe(8000);
+    // CodeQL js/polynomial-redos: a long whitespace run must not backtrack, and over-long input is rejected.
+    const started = performance.now();
+    expect(parseHistoryTokenCount(`0${'\t'.repeat(30)}x`)).toBeUndefined();
+    expect(parseHistoryTokenCount(`0${'\t'.repeat(100_000)}`)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(50);
     expect(parseHistoryTokenCount('1500')).toBe(1500);
     expect(parseHistoryTokenCount('lots')).toBeUndefined();
     expect(parseHistoryTokenCount(-5)).toBeUndefined();
