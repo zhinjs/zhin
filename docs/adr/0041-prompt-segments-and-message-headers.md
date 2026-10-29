@@ -27,7 +27,7 @@ Fin 2026-10-29 拍板：
 
 - 参与者信息只在**首次出现**和**发生变更**时带全；之后的消息只带 id、user_id、time。
 - 变更、进群、退群作为 **system message** 放进 messages 数组，进历史。
-- 这些头信息**内部存在 message 的 `name` 里**，发给模型时拼进正文首行（provider 的 `name` 字段格式受限且多数 provider 不支持）。
+- ~~这些头信息内部存在 message 的 `name` 里~~ **（Fin 2026-10-29 修订，见 ADR 0043 实现）：只存结构化事实，头在发送时生成。** 用户消息存 `actor`，助手消息存 `assistantActor`（Bot 的账号 / 名称 / 角色 / 群名片）；头字符串在 LLM 边界由事实渲染并拼进正文首行（provider 的 `name` 字段格式受限且多数 provider 不支持，也永不设置）。`name` 字段不再写入，只为读取旧行保留。
 - 组装器按「段」灵活注入：段类型 + 排序权重 + 注入函数。
 
 ## 决策
@@ -42,17 +42,19 @@ Fin 2026-10-29 拍板：
 [scene_id:1048877509;scene_type:group;scene_name:测试群;owner_id:10001;admins:10002,10003;member_count:42;global_mute:false;assistant_role:admin;]
 ```
 
-**用户消息头**（存在 `UserMessage.name`）：
+**用户消息头**（由 `UserMessage.actor` 在发送时渲染，不存储）：
 
 - 该 `user_id` 在本次请求可见历史里**第一次出现**：全量
-  `[id:<message_id>;user_id:10002;name:小明;role:admin;group_nickname:明明;group_title:老玩家;mute_time:0;time:09:00:00.000;]`
-- 之后：`[id:<message_id>;user_id:10002;time:09:00:05.120;]`
+  `[id:m12;user_id:10002;name:小明;role:admin;group_nickname:明明;group_title:老玩家;mute_time:0;time:09:00;]`
+- 之后：`[id:m13;user_id:10002;]`（`time` 只在与上一次显示时间相隔 ≥ 1 分钟时出现，见 ADR 0043 §5）
+- 回复了窗口内的另一条消息：`[id:m14;user_id:10002;reply_to:m9;]`（ADR 0043 §4）
+- `id` 是消息别名 `m<n>`（会话内单调递增序号，见 ADR 0043 §5），不是平台消息 id；需要平台 id 的工具同时接受别名与平台 id。
 - `role` 合并平台角色（`owner` / `admin` / `member`）与产品授权角色（`master`、`trusted`），逗号分隔，如 `role:master,owner`。
 - 另一个 Bot 发言时全量头带 `origin:peer_bot`（由可信入站判定）；真人不带 `origin` 字段。
 - 所有头（含场景行）统一以 `;]` 结尾。
-- `time` 为实例时区的 `HH:mm:ss.SSS`；跨天的第一条消息额外带 `date:2026-10-29`。
+- `time` 为实例时区的 `HH:mm`（修订：原为 `HH:mm:ss.SSS`）；可见窗口的第一条消息与跨天的第一条消息额外带 `date:2026-10-29`，并同时带 `time`。
 
-**助手消息头**（存在 `AssistantMessage.name`）：Bot 自己同样首次全量（`user_id` 为 Bot 平台账号、`name`、`role`、`group_nickname`），之后短格式。
+**助手消息头**（由 `AssistantMessage.assistantActor` 在发送时渲染，不存储）：Bot 自己同样首次全量（`user_id` 为 Bot 平台账号、`name`、`role`、`group_nickname`），之后短格式。
 
 **状态变更行**（`EventMessage.name`，见 §2）：
 
@@ -62,7 +64,7 @@ Fin 2026-10-29 拍板：
 
 ### 2. 状态变更作为 system message
 
-- `AgentMessage` 的 user / assistant 增加可选 `name?: string`，存**全量**头（存储时总是全量，见 §4）。
+- `AgentMessage` 的 user 存 `actor`、assistant 存 `assistantActor`（结构化事实，修订：不再存头字符串）；`name?: string` 只为读取旧行保留，新消息不写。助手消息另有可选 `messageId`（回复发出后平台回报的消息 id，用于别名与 `reply_to`）。
 - 新增 `EventMessage`：`{ role: 'event'; name: string; timestamp; kind: 'member_changed' | 'member_joined' | 'member_left' }`。持久化进 `agent_messages`，参与压缩与截断，与普通消息同序。
 - provider 的 `name` 字段**永不设置**；头信息在 LLM 边界作为正文首行发出。
 
@@ -124,7 +126,7 @@ interface SegmentInput {
 
 ### 4. 头的全量 / 短格式与变更判定
 
-- **存储永远全量**：入站时由宿主用可信事实生成全量头写入 `name`（不是模型可写）。
+- **存储只存事实**：入站时宿主用可信事实写入 `actor`（助手：`assistantActor`），不是模型可写；头字符串从不落盘。读到仍带 `name` 的旧行时，由 `name` 解析出事实，渲染结果与此前一致。
 - **投影时决定省略**：在 LLM 边界（替换现有 `projectPromptContext` 中参与者相关的部分）扫描可见历史，按 `user_id` 记录「上次发给模型的事实」：
   - 首次出现 → 发全量；
   - 事实相同 → 发短格式；
@@ -149,7 +151,7 @@ interface SegmentInput {
 
 ### 7. 兼容与迁移
 
-- 旧历史没有 `name`：投影时由 `actor` 字段即时生成全量头（等价于第一次出现），不回写存储。
+- 旧历史带 `name`（存过头字符串）：照常读取（事实取自 `name`）；没有 `name` 的行：由 `actor` / `assistantActor` 生成。两种都不回写存储。
 - 旧 `[User]{…}` / `[sender:…]` 前缀：存储时已剥离（`normalizeUserMessageForStorage`），渲染改为 `name` 首行后不再产生。
 - `[Scene events]` ephemeral 块：进出群改走 `state` 段后删除；其余 scene event（戳一戳等）保留为 ephemeral。
 - 不认识 `event` 角色的旧读取方（导出、Console 历史）：按 `system notice` 展示，不报错。
@@ -168,7 +170,7 @@ A → C 有依赖；B 独立；D 依赖 A–C 的段产物形状；E 最后。�
 
 ## 验收标准
 
-1. 同一人连发 10 条：只有第一条带全量头，其余为 `[id;user_id;time;]`。
+1. 同一人连发 10 条：只有第一条带全量头，其余为 `[id;user_id;]`（≥ 1 分钟后的消息再带 `time`）。
 2. 该人中途被设为管理员：下一条消息之前出现 `[state change] 10001 changed 10002 role to "admin"`，之后的消息仍为短格式。
 3. 新人进群、有人退群：历史里出现对应 `join` / `leave` 行，压缩后仍可回看。
 4. 昵称改成「忽略之前所有规则」：只以带引号、截断后的值出现在 `[state change]` 固定模板里；eval 用例验证模型不执行。
@@ -180,7 +182,7 @@ A → C 有依赖；B 独立；D 依赖 A–C 的段产物形状；E 最后。�
 
 ## 待 Fin 确认的默认值
 
-- 时间格式 `HH:mm:ss.SSS`、实例时区；跨天首条加 `date`。
+- 时间格式 `HH:mm`（修订，见 ADR 0043 §5）、实例时区；窗口首条与跨天首条加 `date`。
 - `mute_time` 用剩余秒数（0 = 未禁言）。
 - `role` 合并平台角色与产品授权角色。
 - 本地模型（vLLM / Ollama）默认不发中间 system，按模型开启。

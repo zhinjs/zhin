@@ -11,7 +11,7 @@ export default defineAgentTool({
   permissions: ['role(master,admin,trusted,owner)'],
   requiresApproval: 'never',
   inputSchema: z.object({
-    message_id: z.string().min(1).describe('当前群中要撤回的真实消息 ID'),
+    message_id: z.string().min(1).describe('当前群中要撤回的真实消息 ID，或消息头里的 m<n> 别名'),
     reason: z.string().min(1).describe('撤回的具体原因，自动处理必须依据已确认的群规'),
   }),
   async execute({ message_id }, context) {

@@ -78,6 +78,7 @@ export type {
   ProviderInstanceConfig,
   AgentMessage,
   ConversationActor,
+  ConversationQuote,
   ConversationTurnCause,
   ContextBlock,
   ContextMessage,
@@ -533,9 +534,15 @@ export type {
 export { createPromptContextBlock, createPromptStateBlock, projectPromptContext } from './memory/prompt-context.js';
 export {
   projectParticipantHeaders, parseParticipantHeader, buildStoredHeader, renderParticipantHeader, shortHeaderOf,
-  factsFromActor, factsFromBot, mergeHeaderRoles, muteTimeFromExpiry, formatHeaderInstant,
+  factsFromActor, factsFromBot, factsFromAssistantActor, mergeHeaderRoles, muteTimeFromExpiry, formatHeaderInstant,
+  renderQuoteLine, HEADER_TIME_INTERVAL_MS, QUOTE_INLINE_MAX_CHARS,
   type ParticipantFacts, type BotHeaderFacts, type HeaderFormatOptions,
 } from './memory/participant-header.js';
+export {
+  MessageAliasTable, indexMessageAliases, isMessageAlias, messageAliasOf, resolveMessageAliasArguments,
+  assignRowAliasSeqs, payloadMessageId,
+  type MessageAliasIndex, type MessageAliasAssignment,
+} from './memory/message-alias.js';
 
 export {
   HEADER_VALUE_MAX_CHARS,

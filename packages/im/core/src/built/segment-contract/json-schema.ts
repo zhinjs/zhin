@@ -131,7 +131,7 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
       name: { type: 'string' },
     }, ['media'])),
     strictBranch('reply', dataObject({
-      message_id: { type: 'string', description: '被引用消息的平台消息 id' },
+      message_id: { type: 'string', description: '被引用消息的平台消息 id，或消息头里的 m<n> 别名' },
     }, ['message_id'])),
     strictBranch('forward', dataObject({
       forward_id: { type: 'string' },

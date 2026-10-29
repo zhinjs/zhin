@@ -64,7 +64,7 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
-import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
+import { stampAssistantHeaders, stampDeliveredMessageId } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
@@ -206,6 +206,8 @@ function toolResultToAgentMessage(
 }
 
 export interface AgentLoopTurnInput {
+  /** Filled with the aliases of every projection this turn sends, for tool-argument resolution (ADR 0043 §5). */
+  messageAliases?: import('@zhin.js/ai').MessageAliasTable;
   /** Shared image allowance, including media already processed at ingress. */
   imageInspectionBudget?: ImageInspectionBudget;
   host: ZhinAgentPrivate;
@@ -285,7 +287,7 @@ export interface AgentLoopTurnResult {
   toolCalls: ToolCallRecord[];
   thinking?: string;
   /** Conversation projection applied only after the durable terminal commits. */
-  projectConversation?: () => Promise<void>;
+  projectConversation?: (delivered?: { readonly messageId?: string }) => Promise<void>;
 }
 
 /** @deprecated No production caller: image turns run through `runText` with media
@@ -813,7 +815,7 @@ export async function* runAgentLoopTextTurnRun(
       }),
       ...(outputSchema ? { outputSchema } : {}),
     },
-    convertToLlm: createLlmMessageProjection(llmModel),
+    convertToLlm: createLlmMessageProjection(llmModel, input.messageAliases),
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
@@ -1156,7 +1158,7 @@ export async function* runAgentLoopTextTurnRun(
       model: modelId,
       toolCalls,
       thinking,
-      projectConversation: () => appendConversationBatches(repo, sessionId, conversationBatches),
+      projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, delivered?.messageId),
     };
   }
 
@@ -1245,6 +1247,8 @@ export async function* runAgentLoopTextTurnRun(
   if (!delegatedOnly) {
     output = mergeToolOutboundElements(output, toolCalls);
   }
+  // ADR 0043 §5: a `reply` segment may name its target by alias (`m12`); delivery needs the platform id.
+  if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
   const finalReply = imReply ? renderAgentOutput(output) : textReply;
   if (!imReply && needsReplyRecovery) onChunk?.(finalReply, finalReply);
   if (imReply && finalReply) {
@@ -1278,8 +1282,23 @@ export async function* runAgentLoopTextTurnRun(
     model: modelId,
     toolCalls,
     thinking,
-    projectConversation: () => appendConversationBatches(repo, sessionId, conversationBatches),
+    projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, delivered?.messageId),
   };
+}
+
+function resolveReplyAliases(output: AgentOutputElement[], aliases: import('@zhin.js/ai').MessageAliasTable): AgentOutputElement[] {
+  return output.map((element) => {
+    if (element.type !== 'message') return element;
+    return {
+      ...element,
+      segments: element.segments.map((segment) => {
+        const id = (segment.data as { message_id?: unknown } | undefined)?.message_id;
+        return segment.type === 'reply' && typeof id === 'string' && aliases.idOf(id.trim())
+          ? { ...segment, data: { ...segment.data, message_id: aliases.resolve(id) } }
+          : segment;
+      }),
+    };
+  });
 }
 
 async function appendConversationBatches(
@@ -1289,9 +1308,12 @@ async function appendConversationBatches(
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
   }[],
+  deliveredMessageId?: string,
 ): Promise<void> {
-  for (const batch of batches) {
-    await repo.appendMessages(sessionId, batch.messages, { messageExtras: batch.messageExtras });
+  const lastIndex = batches.length - 1;
+  for (const [index, batch] of batches.entries()) {
+    const messages = index === lastIndex ? stampDeliveredMessageId(batch.messages, deliveredMessageId) : batch.messages;
+    await repo.appendMessages(sessionId, messages, { messageExtras: batch.messageExtras });
   }
 }
 

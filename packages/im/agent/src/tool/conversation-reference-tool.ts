@@ -13,6 +13,9 @@ export function createConversationReferenceCapability(
   const port = request.ports.references;
   if (references.length === 0 || !port) return undefined;
   const allowed = new Set(references.map((reference) => reference.key));
+  // ADR 0043 §5: the quoted message may also be named by its platform id (the runtime has already
+  // rewritten an `m<n>` alias to it), so the model can pass what it sees in `reply_to` / `[quote id:…]`.
+  const keyBySourceId = new Map(references.map((reference) => [reference.sourceId, reference.key] as const));
   return Object.freeze({
     owner,
     name: TOOL_NAME,
@@ -21,7 +24,7 @@ export function createConversationReferenceCapability(
     inputSchema: {
       type: 'object',
       properties: {
-        reference: { type: 'string', description: 'Scoped reference key shown in the current message context' },
+        reference: { type: 'string', description: 'Scoped reference key shown in the current message context, or the quoted message id / alias (m<n>)' },
         depth: { type: 'number', description: 'Nested forward depth, maximum 2' },
       },
       required: ['reference'],
@@ -30,7 +33,8 @@ export function createConversationReferenceCapability(
     source: 'builtin:conversation-context',
     async execute<TInput = unknown, TResult = unknown>(input: TInput): Promise<TResult> {
       const args = input && typeof input === 'object' ? input as Record<string, unknown> : {};
-      const key = typeof args.reference === 'string' ? args.reference : '';
+      const given = typeof args.reference === 'string' ? args.reference : '';
+      const key = allowed.has(given) ? given : keyBySourceId.get(given) ?? given;
       if (!allowed.has(key)) {
         return Object.freeze({ status: 'forbidden', code: 'reference_not_in_turn' }) as TResult;
       }

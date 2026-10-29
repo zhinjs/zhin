@@ -21,6 +21,7 @@ import {
   sortRowsChronologically,
   type SessionBranchPoint,
 } from './session-tree.js';
+import { assignRowAliasSeqs } from './message-alias.js';
 import { SessionWriteLock } from './session-write-lock.js';
 import { EMPTY_DEFERRED_TOOL_SNAPSHOT, type DeferredToolSessionSnapshot } from './deferred-tool-session.js';
 import { persistenceFailure } from './persistence-error.js';
@@ -269,10 +270,12 @@ export class DatabaseContextRepository implements ContextRepository {
       messages.push(summaryAsUserMessage(summary.summary, summary.created_at));
       anchors.push(summary.anchor_message_id ?? undefined);
     }
+    const aliasSeqs = assignRowAliasSeqs(pathRows);
     for (const row of tail) {
       const parsed = agentMessageRowToLlm(row);
       if (parsed) {
-        messages.push(parsed);
+        const seq = aliasSeqs.get(row);
+        messages.push(seq !== undefined && (parsed.role === 'user' || parsed.role === 'assistant') ? { ...parsed, aliasSeq: seq } : parsed);
         anchors.push(row.id);
       }
       if (row.id != null) {
@@ -506,10 +509,12 @@ export class MemoryContextRepository implements ContextRepository {
       messages.push(summaryAsUserMessage(latest.summary, latest.created_at));
       anchors.push(latest.anchor_message_id ?? undefined);
     }
+    const aliasSeqs = assignRowAliasSeqs(pathRows);
     for (const row of tail) {
       const parsed = agentMessageRowToLlm(row);
       if (parsed) {
-        messages.push(parsed);
+        const seq = aliasSeqs.get(row);
+        messages.push(seq !== undefined && (parsed.role === 'user' || parsed.role === 'assistant') ? { ...parsed, aliasSeq: seq } : parsed);
         anchors.push(row.id);
       }
       if (row.id != null) {

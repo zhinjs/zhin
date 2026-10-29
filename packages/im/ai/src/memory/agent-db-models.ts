@@ -116,7 +116,9 @@ export function serializeAgentMessage(
   message: AgentMessage,
   extra?: AgentMessageExtra,
 ): AgentMessageRow {
-  const stored = normalizeUserMessageForStorage(message, extra);
+  // `aliasSeq` is derived from stored order on every load (ADR 0043 §5); it is never persisted.
+  const { aliasSeq: _derived, ...persistable } = message as AgentMessage & { aliasSeq?: number };
+  const stored = normalizeUserMessageForStorage(persistable as AgentMessage, extra);
   return {
     session_id: '',
     role: stored.message.role,

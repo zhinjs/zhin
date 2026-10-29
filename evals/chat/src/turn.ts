@@ -120,7 +120,7 @@ export function buildUserMessages(scenario: Scenario): UserMessage[] {
     subjectId: scenario.sender.id, displayName: scenario.sender.name, scope: scenario.scope,
     roles: turn.principal.roles, authorizationRoles: turn.principal.roles,
   });
-  // The trusted host stores the full participant header in `name`; projection renders it (ADR 0041 §4).
+  // The host stores only the actor; the projection renders the participant header (ADR 0041 §4, amended).
   const current = prependTurnContextBlocks([stampUserHeader(input)], blocks) as UserMessage[];
   return context ? [createUserMessage(context), ...current] : current;
 }

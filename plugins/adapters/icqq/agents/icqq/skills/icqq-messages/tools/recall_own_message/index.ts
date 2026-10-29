@@ -8,7 +8,7 @@ export default defineAgentTool({
   adapter: 'icqq',
   scopes: ['private', 'group'],
   requiresApproval: 'never',
-  inputSchema: z.object({ message_id: z.string().min(1).describe('机器人在当前会话中发送的真实消息 ID') }),
+  inputSchema: z.object({ message_id: z.string().min(1).describe('机器人在当前会话中发送的真实消息 ID，或消息头里的 m<n> 别名') }),
   async execute({ message_id }, context) {
     const message = await resolveMessage(context, message_id);
     if (message.sender.user_id !== context.$client.uin) return { success: false, message: t(context.locale, 'ownMessageRequired') };

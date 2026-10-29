@@ -8,7 +8,7 @@ import {
   isApprovalPortAvailable,
   requestApprovalOutcome,
 } from '../session/approval-port.js';
-import type { AgentTool, ToolExecutionCause } from '@zhin.js/ai';
+import { resolveMessageAliasArguments, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
@@ -67,6 +67,8 @@ export interface TurnToolRuntimeOptions {
   readonly controlPlane?: ToolHardGateControlSource;
   /** Group-ops cooldown (ADR 0037 §3, slice E): checked before a new approval card is created. */
   readonly opsCooldown?: OpsCooldownView;
+  /** ADR 0043 §5: alias (`m12`) to platform id map the model's tool arguments are resolved through. */
+  readonly messageAliases?: Pick<MessageAliasTable, 'resolve'>;
 }
 
 /** Sole execution authority for Tool capabilities within one fixed Turn lease. */
@@ -74,6 +76,7 @@ export class TurnToolRuntime {
   readonly #tools: ReadonlyMap<string, ToolCapability>;
   readonly #guard: InjectionGuardSettings;
   readonly #leakInspector?: OutboundLeakInspector;
+  readonly #messageAliases?: Pick<MessageAliasTable, 'resolve'>;
   readonly #hardGate: ToolHardGate;
   /** Lower-trust sources that reached the model during this turn (#727). */
   readonly provenance: TurnProvenance;
@@ -86,6 +89,7 @@ export class TurnToolRuntime {
     this.#tools = new Map(tools.map((tool) => [tool.name, tool]));
     this.#guard = resolveInjectionGuard(options.injectionGuard);
     this.provenance = options.provenance ?? new TurnProvenance();
+    this.#messageAliases = options.messageAliases;
     this.#leakInspector = this.#guard.outboundCheck === 'redact' ? options.leakInspector : undefined;
     this.#hardGate = new ToolHardGate(options.hardGate, {
       turnId: turn.identity.turnId,
@@ -118,6 +122,8 @@ export class TurnToolRuntime {
     if (!tool) return this.#deny(name, toolUseId, 'capability', `Unknown Tool capability: ${name}`, causedBy);
     await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId }, causedBy);
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
+    // The journal keeps what the model wrote; policies and the tool see platform ids.
+    if (this.#messageAliases) input = resolveMessageAliasArguments(input, this.#messageAliases);
     let actingFor: string | undefined;
     const merge = this.turn.policy.merge;
     if (merge) {
