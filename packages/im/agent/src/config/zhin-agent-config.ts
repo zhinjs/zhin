@@ -137,6 +137,8 @@ export interface ZhinAgentConfig {
   injectionGuard?: Partial<InjectionGuardSettings>;
   /** Dangerous-tool hard gate (ADR 0036): extra dangerous tools, funds switch, approval timeout. Always on. */
   toolHardGate?: ToolHardGateConfig;
+  /** Emoji-reaction pacing per session: `cooldownMs` between applied reactions (default 600000), `probability` 0..1 (default 0.35; 0 disables). */
+  reactions?: { cooldownMs?: number; probability?: number };
   /** Per-user / per-group token quotas and group rate limit (#727); all limits off by default. */
   usageQuota?: Partial<UsageQuotaSettings>;
   /** Test seam: timers for the provider request timeout (evals inject a virtual clock). Not a YAML option. */

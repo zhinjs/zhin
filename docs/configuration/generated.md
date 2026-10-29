@@ -192,6 +192,9 @@ outline: [2, 3]
 | `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | 否 | `[]` | 审批人的平台用户 id：扁平列表对所有平台生效；对象形式为 平台（adapter 名）→ 用户 id 列表。不在名单里的人不能通过 IM 结算卡片。 |
 | `ai.agent.toolHardGate.imApproval.delivery` | string: `"dm"`, `"approver_group"` | 否 | `"dm"` | dm：私聊发给每位审批人；approver_group：发到 approverGroupId，且不能是触发调用的会话。 |
 | `ai.agent.toolHardGate.imApproval.approverGroupId` | string | 否 | — | 专用审批群 id，delivery 为 approver_group 时必填；未配置时 IM 通道不可用，只能在 Console 审批。 |
+| `ai.agent.reactions` | object | 否 | — | 按会话限制表情回应的频率。模型每轮都可能提出回应，宿主只在距该会话上次已发出的回应满 cooldownMs 且随机掷骰通过 probability 时才发出；计数保存在内存中。 |
+| `ai.agent.reactions.cooldownMs` | integer | 否 | `600000` | 同一会话两次已发出回应之间的最小间隔（毫秒）。 |
+| `ai.agent.reactions.probability` | number | 否 | `0.35` | 允许发出的回应实际发出的概率；0 表示关闭表情回应。 |
 | `ai.agent.usageQuota` | object | 否 | — | 按用户 / 按群的 token 配额与群速率限制。默认全部关闭（0），主人默认不受限；计数保存在内存中。 |
 | `ai.agent.usageQuota.windowMs` | integer | 否 | `86400000` | 配额周期（毫秒）。 |
 | `ai.agent.usageQuota.perUserTokens` | integer | 否 | `0` | 每个用户每周期可用的 token；0 不限。 |

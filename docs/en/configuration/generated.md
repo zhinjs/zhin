@@ -192,6 +192,9 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.toolHardGate.imApproval.approverIds` | array&lt;string&gt; \| object | no | `[]` | Approver platform user ids: a flat list applies to every platform; an object maps a platform (adapter name) to its user ids. Anyone not listed cannot settle a card over IM. |
 | `ai.agent.toolHardGate.imApproval.delivery` | string: `"dm"`, `"approver_group"` | no | `"dm"` | dm sends each card to every approver privately; approver_group posts it to approverGroupId, which must not be the conversation that triggered the call. |
 | `ai.agent.toolHardGate.imApproval.approverGroupId` | string | no | — | Dedicated approver group id, required for delivery: approver_group. Without it the IM channel stays unavailable and only the Console can approve. |
+| `ai.agent.reactions` | object | no | — | Emoji-reaction pacing per session. The model may propose a reaction on any turn; the host applies one only if at least cooldownMs passed since the last applied reaction in that session and a random roll passes probability. Counters are kept in memory. |
+| `ai.agent.reactions.cooldownMs` | integer | no | `600000` | Minimum gap between two applied reactions in one session (ms). |
+| `ai.agent.reactions.probability` | number | no | `0.35` | Chance that an allowed reaction is applied; 0 disables reactions. |
 | `ai.agent.usageQuota` | object | no | — | Per-user and per-group token quotas and a per-group rate limit. All limits are off (0) by default; the owner is exempt by default. Counters are kept in memory. |
 | `ai.agent.usageQuota.windowMs` | integer | no | `86400000` | Quota window in ms. |
 | `ai.agent.usageQuota.perUserTokens` | integer | no | `0` | Tokens one user may use per window; 0 = unlimited. |
