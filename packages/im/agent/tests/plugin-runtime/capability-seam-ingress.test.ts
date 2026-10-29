@@ -79,6 +79,41 @@ describe('Capability Seam production ingress', () => {
       .rejects.toThrow('scope has ended');
   });
 
+  it('filters role-dependent Seam tools without hiding mixed or guidance-only Skills', async () => {
+    const seam = new SeamIntegration();
+    const read = toolService('remote_lookup', 'never');
+    const moderate = toolService('remote_moderate', 'always');
+    seam.registerToolService('global', {
+      ...read,
+      schema: () => [...read.schema('global'), ...moderate.schema('global').map(schema => ({
+        ...schema, currentConversationBotRoles: ['admin', 'owner'],
+      }))],
+    });
+    seam.registerSkillService('global', {
+      ...skillService('remote_research'),
+      catalog: async () => [
+        { name: 'moderation', description: 'Moderate', toolNames: ['remote_moderate'] },
+        { name: 'mixed', description: 'Read or moderate', toolNames: ['remote_lookup', 'remote_moderate'] },
+        { name: 'guidance', description: 'Guidance only' },
+      ],
+    });
+    const snapshot = snapshotWith(seam);
+    const ingress = new CapabilityIngress();
+    const turn = {
+      origin: { kind: 'im' as const, platform: 'qq', endpoint: 'bot', scope: 'group' as const, sceneId: 'group' },
+      principal: { subjectId: 'user', roles: ['user'] }, policy: { permissions: [], unattended: false },
+    };
+    const unknown = await ingress.read(snapshot, snapshot.root, () => true, turn);
+    expect(unknown.tools.map(tool => tool.name)).toEqual(['remote_lookup']);
+    expect(unknown.skills.map(skill => skill.name)).toEqual(['mixed', 'guidance']);
+    const admin = await ingress.read(snapshot, snapshot.root, () => true, {
+      ...turn, input: { contextState: { bot: { platformRole: 'admin' } } },
+    });
+    expect(admin.tools.map(tool => tool.name)).toEqual(['remote_lookup', 'remote_moderate']);
+    expect(admin.skills.map(skill => skill.name)).toEqual(['moderation', 'mixed', 'guidance']);
+    expect(admin.tools.find(tool => tool.name === 'remote_moderate')?.requiresApproval).toBe('always');
+  });
+
   it('rejects a Seam Tool that collides with a Feature Tool', async () => {
     const seam = new SeamIntegration();
     seam.registerToolService('global', toolService('lookup', 'never'));

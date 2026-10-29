@@ -7,9 +7,68 @@ import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/run
 import type { TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { adapterFeatureId } from '@zhin.js/adapter';
 import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
 describe('AgentTurnIngressRoute', () => {
+  function roleIngress() {
+    const endpoint = { id: 'root\u0000zhin.adapter\u0000icqq', adapter: 'icqq' };
+    const conversation = { endpoint, kind: 'group' as const, id: '100' };
+    let completeLookup!: (value: { canModerate: boolean; platformRole: 'admin' }) => void;
+    const inspectGroupMember = vi.fn(() => new Promise<{ canModerate: boolean; platformRole: 'admin' }>(resolve => { completeLookup = resolve; }));
+    const snapshot = {
+      root: rootPluginId(), resources: new Map(), tree: new Map(), capabilities: new Map(),
+      projections: new Map([[adapterFeatureId, {
+        $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: '8596238', management: { inspectGroupMember } }),
+      }]]),
+    } as unknown as RuntimeSnapshot;
+    const read = vi.fn().mockResolvedValue({ agents: [], tools: [] });
+    const executeLeased = vi.fn().mockResolvedValue({ status: 'completed', output: [] });
+    const reply = vi.fn().mockResolvedValue({ status: 'sent' });
+    const message = { conversation, content: '#hello', endpointId: 'configured-bot', sender: { id: 'sender' }, $reply: reply } as Message;
+    const retirement = new AbortController();
+    const route = new AgentTurnIngressRoute({
+      projectRoot: process.cwd(), runtime: { executeLeased } as never,
+      im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
+      ingress: { read } as never,
+      agent: { service: {
+        getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+        getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({}),
+      }, agent: {} } as never,
+    });
+    return { read, executeLeased, inspectGroupMember, retirement, reply,
+      run: () => route.route(message, { value: snapshot, active: true, retirementSignal: retirement.signal } as never, rootPluginId(), undefined),
+      resolve: () => completeLookup({ canModerate: false, platformRole: 'admin' }),
+    };
+  }
+
+  it('queries the Bot role before capability disclosure and reuses that turn snapshot', async () => {
+    const f = roleIngress(); const running = f.run();
+    await vi.waitFor(() => expect(f.inspectGroupMember).toHaveBeenCalledOnce());
+    expect(f.read).not.toHaveBeenCalled();
+    expect(f.executeLeased).not.toHaveBeenCalled();
+    f.resolve();
+    await running;
+
+    expect(f.read).toHaveBeenCalledOnce();
+    const access = f.read.mock.calls[0]![3] as TurnRequest;
+    const request = f.executeLeased.mock.calls[0]![2] as TurnRequest;
+    expect(access.input.contextState).toEqual({ bot: { id: '8596238', platformRole: 'admin' } });
+    expect(request.input.contextState).toBe(access.input.contextState);
+    expect(f.inspectGroupMember).toHaveBeenCalledOnce();
+  });
+
+  it('does not disclose capabilities or run a model after the role lookup is cancelled', async () => {
+    const f = roleIngress(); const running = f.run();
+    await vi.waitFor(() => expect(f.inspectGroupMember).toHaveBeenCalledOnce());
+    f.retirement.abort(new Error('generation retired'));
+    f.resolve();
+    await running;
+
+    expect(f.read).not.toHaveBeenCalled();
+    expect(f.executeLeased).not.toHaveBeenCalled();
+  });
+
   it.each([
     { source: 'group', target: undefined, messageId: undefined, share: true, reaction: false },
     { source: 'channel', target: undefined, messageId: undefined, share: true, reaction: false },
@@ -28,6 +87,12 @@ describe('AgentTurnIngressRoute', () => {
     } as Message;
     const snapshot = {
       root: rootPluginId(), resources: new Map(), tree: new Map(),
+      projections: new Map([[adapterFeatureId, {
+        $projection: 'zhin.adapter-index/1',
+        connection: (adapter: string, id: string) => adapter === endpoint.id && id === endpoint.id
+          ? { selfUserId: 'actual-platform-account' }
+          : undefined,
+      }]]),
       capabilities: new Map([[endpoint.id, { definition: { segments: {
         supported: ['text', 'share'],
         model: { share: { scopes: ['group', 'channel'], hint: 'Use the room share card.' } },
@@ -62,6 +127,7 @@ describe('AgentTurnIngressRoute', () => {
     expect(reply).not.toHaveBeenCalled();
     expect(executeLeased).toHaveBeenCalledOnce();
     const request = executeLeased.mock.calls[0]![2] as TurnRequest;
+    expect(request.input.contextState).toEqual({ bot: { id: 'actual-platform-account' } });
     const profile = request.ports.reply!.segments!;
     expect(profile.types.includes('share')).toBe(scenario.share);
     expect(profile.extensions?.share?.hint).toBe(scenario.share ? 'Use the room share card.' : undefined);

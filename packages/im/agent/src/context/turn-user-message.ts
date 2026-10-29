@@ -67,15 +67,24 @@ export function prependEnvelopeToFirstUserText(
   return [{ ...first, content: nextContent }, ...messages.slice(1)];
 }
 
-/** Keep provenance-bearing guidance separate from the actual participant text. */
-export function prependTurnContextBlocks(messages: AgentMessage[], blocks: readonly TextContentBlock[], extra?: AgentMessageExtra): AgentMessage[] {
+/** State and applicable guidance precede the owned participant body; ephemeral data stays last. */
+export function prependTurnContextBlocks(
+  messages: AgentMessage[],
+  blocks: readonly TextContentBlock[],
+  extra?: AgentMessageExtra,
+): AgentMessage[] {
   const first = messages[0];
   if (first?.role !== 'user' || !Array.isArray(first.content) || !blocks.length) return messages;
   const user = first as UserMessage;
-  // Only the first text block carries the ingress presentation. Preserve the
-  // other blocks (including provenance) and current media without flattening.
-  const content = user.content.map((block, index) => index === 0 && !block.contextRef
-    ? { ...block, text: userMessageBody({ ...user, content: [block] }, extra) }
-    : block);
-  return [renderUserMessageForLlm({ ...user, content: [...blocks, ...content] }, extra), ...messages.slice(1)];
+  const stable = [...blocks.filter(block => block.contextRef && !block.ephemeral), ...user.content.filter(block => block.contextRef && !block.ephemeral)];
+  const hasOwnedBody = user.content.some(block => block.presentation === 'user-input');
+  const body = user.content.filter(block => hasOwnedBody ? block.presentation === 'user-input' : !block.contextRef && !block.ephemeral).map((block, index) => ({
+    ...block, presentation: 'user-input' as const,
+    text: index === 0 ? userMessageBody({ ...user, content: [block] }, extra) : block.text,
+  }));
+  if (!body.length) body.push({ type: 'text', text: '', presentation: 'user-input' });
+  const current = [...(hasOwnedBody ? user.content.filter(block => !block.contextRef && !block.ephemeral && !block.presentation) : []),
+    ...blocks.filter(block => !block.contextRef && !block.ephemeral)];
+  const ephemeral = [...blocks, ...user.content].filter(block => block.ephemeral);
+  return [renderUserMessageForLlm({ ...user, content: [...stable, ...current, ...body, ...ephemeral] }, extra), ...messages.slice(1)];
 }

@@ -38,6 +38,7 @@ import {
   ToolIndex,
   defineAgentTool,
   toolFeatureId,
+  type ToolDescriptor,
 } from '@zhin.js/tool';
 import {
   PromptSectionIndex,
@@ -46,7 +47,7 @@ import {
 } from '@zhin.js/prompt-section';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { compactAgentMessages } from '@zhin.js/ai';
-import { createTurnIngress } from '../../src/turn/turn-ingress.js';
+import { createTurnIngress, type TurnContextState } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
   AgentTurnCoordinator,
@@ -58,6 +59,7 @@ import {
   type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
 import { TurnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
+import { createDeferredCapabilityPlan } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import { getAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
 import { assistantTextReply, assistantToolCallReply, wireMockLlmApi } from '../helpers/mock-llm-api.js';
@@ -928,6 +930,68 @@ permissions: [role(trusted)]
     await fixture.mcp.stop();
   });
 
+  it('combines current Bot roles with sender, platform and scope permissions and rechecks each turn', async () => {
+    const fixture = await createFixture({
+      platforms: ['qq'], scopes: ['group'], permissions: ['role(trusted)'],
+      currentConversationBotRoles: ['owner', 'admin'],
+      hidden: true, placement: { kind: 'skill', skill: 'research' },
+      skillMarkdown: '---\ntools: [lookup]\n---\n# Research',
+    });
+    const ingress = new CapabilityIngress();
+    const first = await ingress.read(fixture.snapshot, fixture.child, () => true,
+      accessTurn('qq', ['trusted'], 'group', { platformRole: 'admin' }));
+    let saved = { loadedTools: {} as Record<string, number>, loadedSkills: [] as string[] };
+    const firstPlan = createDeferredCapabilityPlan({
+      capabilities: first, sessionSnapshot: saved, config: { deferredTools: {} },
+      persistSnapshot: async snapshot => { saved = snapshot; },
+    });
+    await firstPlan.capabilities.find(tool => tool.name === 'load_skill')!.execute({ name: 'child__research' }, invocation());
+    expect(Object.keys(saved.loadedTools)).toEqual(['child__lookup']);
+    expect(saved.loadedSkills).toEqual(['child__research']);
+    for (const [role, sender, platform, scope, allowed] of [
+      [undefined, 'trusted', 'qq', 'group', false],
+      ['admin', 'trusted', 'qq', 'group', true],
+      ['member', 'trusted', 'qq', 'group', false],
+      ['owner', 'user', 'qq', 'group', false],
+      ['owner', 'trusted', 'other', 'group', false],
+      ['owner', 'trusted', 'qq', 'private', false],
+      ['owner', 'trusted', 'qq', 'group', true],
+    ] as const) {
+      const bot = role ? { platformRole: role } : { platformRoleError: 'lookup_failed' };
+      const turn = accessTurn(platform, [sender], scope, bot);
+      const capabilities = await ingress.read(fixture.snapshot, fixture.child, () => true,
+        turn);
+      expect(capabilities.tools.map(tool => tool.name)).toEqual(allowed ? ['child__lookup'] : []);
+      expect(capabilities.skills.map(skill => skill.name)).toEqual(allowed ? ['research'] : []);
+      const plan = createDeferredCapabilityPlan({
+        capabilities, sessionSnapshot: saved, config: { deferredTools: {} }, persistSnapshot: async () => undefined,
+      });
+      expect(plan.controller.loadedToolNames()).toEqual(allowed ? ['child__lookup'] : []);
+      expect(plan.resolvedTools.some(tool => tool.name === 'child__lookup')).toBe(allowed);
+      if (!allowed) {
+        expect(plan.controller.loadedSkillInstructions()).toEqual([]);
+        expect(await plan.controller.load('child__lookup')).toBe(false);
+        const runtime = new TurnToolRuntime(turn, plan.capabilities);
+        expect(await runtime.execute('discover', { query: 'lookup', kind: 'tool' }, 'discover'))
+          .toMatchObject({ status: 'completed', output: 'No matches.' });
+        expect(await runtime.execute('load_tool', { name: 'child__lookup' }, 'load-tool'))
+          .toMatchObject({ status: 'completed', output: expect.stringContaining('not found') });
+        expect(await runtime.execute('load_skill', { name: 'child__research' }, 'load-skill'))
+          .toMatchObject({ status: 'completed', output: expect.stringContaining('not found') });
+        expect(await runtime.execute('child__lookup', { value: 'must not run' }, 'direct-call'))
+          .toMatchObject({ status: 'denied', policy: 'capability' });
+      }
+    }
+    await fixture.mcp.stop();
+
+    const guidance = await createFixture({ currentConversationBotRoles: ['admin'] });
+    const unknown = await ingress.read(guidance.snapshot, guidance.child, () => true,
+      accessTurn('qq', ['trusted'], 'group', { platformRoleError: 'unsupported' }));
+    expect(unknown.tools).toEqual([]);
+    expect(unknown.skills.map(skill => skill.name)).toEqual(['research']);
+    await guidance.mcp.stop();
+  });
+
   it('projects an Agent-private Skill only when that Agent is selected', async () => {
     const fixture = await createFixture({ privateSkillAgent: 'planner' });
     const ingress = new CapabilityIngress();
@@ -989,6 +1053,8 @@ async function createFixture(access: {
   readonly mcpResult?: unknown;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
+  readonly currentConversationBotRoles?: readonly string[];
+  readonly placement?: ToolDescriptor['placement'];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
   readonly requiresApproval?: 'never' | 'on-risk' | 'once' | 'always';
@@ -1102,13 +1168,13 @@ async function createFixture(access: {
   return { snapshot, child, mcp, journal };
 }
 
-function accessTurn(platform: string, roles: readonly string[] = ['trusted'], scope: 'private' | 'group' | 'channel' = 'group') {
+function accessTurn(platform: string, roles: readonly string[] = ['trusted'], scope: 'private' | 'group' | 'channel' = 'group', bot?: TurnContextState['bot']) {
   return createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'im', platform, endpoint: 'bot', scope, sceneId: '100' },
     principal: { subjectId: 'trusted-user', roles },
-    input: { text: 'lookup' },
+    input: { text: 'lookup', ...(bot ? { contextState: { bot } } : {}) },
     session: { key: `im:${platform}:bot:group:100` },
     policy: { permissions: roles, unattended: false },
     capabilities: { tools: [], skills: [] },

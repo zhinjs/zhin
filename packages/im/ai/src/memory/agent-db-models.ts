@@ -157,7 +157,8 @@ export function agentMessageRowToLlm(row: AgentMessageRow): AgentMessage | null 
   if (!parsed) return null;
   if (parsed.role !== 'user') return parsed;
   const extra = parseAgentMessageExtra(row.extra);
-  if (extra?.quote || (parsed as UserMessage).actor) {
+  if (extra?.quote || (parsed as UserMessage).actor
+    || (parsed as UserMessage).content.some(block => block.presentation === 'user-input')) {
     return renderUserMessageForLlm(parsed as UserMessage, extra);
   }
   return parsed;

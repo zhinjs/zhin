@@ -54,11 +54,12 @@ async function loadAdapter(platform: string): Promise<RuntimeSnapshot> {
   ]) };
 }
 
-function turn(platform: string, scope: 'private' | 'group' | 'channel'): TurnAccessContext {
+function turn(platform: string, scope: 'private' | 'group' | 'channel', botPlatformRole?: string): TurnAccessContext {
   return {
     origin: { kind: 'im', platform, endpoint: 'bot', scope, sceneId: 'scene' },
     principal: { subjectId: 'sender', roles: ['master'] },
     policy: { permissions: ['master'], unattended: false },
+    ...(botPlatformRole ? { input: { contextState: { bot: { platformRole: botPlatformRole } } } } : {}),
   };
 }
 
@@ -74,7 +75,10 @@ describe('adapter-owned scene disclosure (#949)', () => {
     }
     expect(index.list().some(skill => skill.scopes?.length)).toBe(true);
     for (const scope of ['private', 'group', 'channel'] as const) {
-      const capabilities = await ingress.read(snapshot, snapshot.root, () => true, turn(platform, scope), platform);
+      // ICQQ admin is eligible for both current-group recall and safe leave;
+      // keep the full scene-disclosure assertion independent of missing role data.
+      const botRole = platform === 'icqq' && scope === 'group' ? 'admin' : undefined;
+      const capabilities = await ingress.read(snapshot, snapshot.root, () => true, turn(platform, scope, botRole), platform);
       const expected = index.list().filter(skill => !skill.scopes || skill.scopes.includes(scope));
       expect(capabilities.skills.map(skill => skill.qualifiedName)).toEqual(expected.map(skill => skill.qualifiedName));
       expect(capabilities.tools.map(tool => tool.name)).toEqual(tools.list()
@@ -98,5 +102,37 @@ describe('adapter-owned scene disclosure (#949)', () => {
       }
     }
     expect((await ingress.read(snapshot, snapshot.root, () => true, turn('unrelated', 'group'), platform)).skills).toEqual([]);
+  });
+
+  it('hides only role-dependent ICQQ group tools when Bot role lookup fails, including prior session loads', async () => {
+    const snapshot = await loadAdapter('icqq');
+    const ingress = new CapabilityIngress();
+    const admin = await ingress.read(snapshot, snapshot.root, () => true, turn('icqq', 'group', 'admin'), 'icqq');
+    const unknown = await ingress.read(snapshot, snapshot.root, () => true, {
+      ...turn('icqq', 'group'), input: { contextState: { bot: { platformRoleError: 'lookup_failed' } } },
+    }, 'icqq');
+    const roleDependent = [
+      'agent__icqq__skill__icqq-group-admin__group_leave',
+      'agent__icqq__skill__icqq-group-admin__recall_member_message',
+    ];
+    expect(admin.tools.filter(tool => tool.currentConversationBotRoles?.length).map(tool => tool.name))
+      .toEqual(roleDependent);
+    expect(unknown.tools.map(tool => tool.name))
+      .toEqual(admin.tools.filter(tool => !roleDependent.includes(tool.name)).map(tool => tool.name));
+    expect(unknown.skills.map(skill => skill.qualifiedName)).toEqual(admin.skills.map(skill => skill.qualifiedName));
+    expect(unknown.tools.some(tool => tool.name.endsWith('__recall_own_message'))).toBe(true);
+    const plan = createDeferredCapabilityPlan({
+      capabilities: unknown, platform: 'icqq', config: { deferredTools: {} },
+      sessionSnapshot: {
+        loadedSkills: admin.skills.map(skill => skill.qualifiedName),
+        loadedTools: Object.fromEntries(admin.tools.map(tool => [tool.name, 1])),
+      },
+      persistSnapshot: async () => undefined,
+    });
+    for (const name of roleDependent) {
+      expect(plan.controller.loadedToolNames()).not.toContain(name);
+      expect(plan.allTools.some(tool => tool.name === name)).toBe(false);
+      expect(await plan.controller.load(name)).toBe(false);
+    }
   });
 });

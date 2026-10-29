@@ -113,8 +113,15 @@ export class ContextSystem {
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
     const agentsContext = await buildAgentsEnvelopeContext();
 
+    // Schedule ingress provides one current task; never infer its author from a history tail.
+    const scheduleInput = isScheduleTurn && turnUser.promptMessages.length === 1 ? turnUser.promptMessages[0] : undefined;
+    const preparedMessages = isScheduleTurn
+      ? [createUserMessage(content, undefined, scheduleInput?.timestamp, scheduleInput?.actor, scheduleInput?.cause)]
+      : prebuiltMessages?.length ? prebuiltMessages : turnUser.promptMessages;
+    const first = preparedMessages[0]?.role === 'user' ? preparedMessages[0] as import('@zhin.js/ai').UserMessage : undefined;
     const turnBlocks = buildTurnContextBlocks({
       turn,
+      observedAt: first?.timestamp,
       profileSummary: envelopeParts.profileSummary,
       sessionSummary: envelopeParts.sessionSummary,
       sceneEvents: envelopeParts.sceneEvents,
@@ -123,8 +130,6 @@ export class ContextSystem {
       activeSkillsContext: (input.activeSkillsContext ?? host.getTurnActiveSkills()) || undefined,
       activeSkillBlocks: input.activeSkillBlocks,
       quoteSystemHint: input.quoteSystemHint,
-      modelLine: `${providerAlias}/${modelId}`,
-      sdk: llmModel.sdk,
       gitStatus: !isScheduleTurn && host.config.gitStatus ? await getGitStatusLine(process.cwd()) : undefined,
       agentsContext: agentsContext ?? undefined,
       toldLedger: input.toldLedger,
@@ -133,7 +138,7 @@ export class ContextSystem {
 
     const turnEnvelope = turnBlocks.map(block => block.text).join('\n');
     let userMessages = prependTurnContextBlocks(
-      isScheduleTurn ? [createUserMessage(content)] : prebuiltMessages?.length ? prebuiltMessages : turnUser.promptMessages,
+      preparedMessages,
       turnBlocks,
       isScheduleTurn ? undefined : turnUser.userMessageExtra,
     );
@@ -148,6 +153,7 @@ export class ContextSystem {
       modelCandidates,
       modelId,
       providerAlias,
+      modelSdk: llmModel.sdk,
       modelInput: Object.freeze(Array.isArray(llmModel.input) ? [...llmModel.input] : ['text']),
       turnEnvelope,
     };
@@ -181,6 +187,7 @@ export interface TextTurnContextOutput {
   modelCandidates: string[];
   modelId: string;
   providerAlias: string;
+  modelSdk?: string;
   modelInput: readonly ModelInputModality[];
   turnEnvelope: string | null;
 }

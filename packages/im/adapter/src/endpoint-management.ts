@@ -70,6 +70,8 @@ export interface EndpointManagement {
 
 export interface GroupModerationMember {
   readonly canModerate: boolean;
+  /** Role reported for the requested member in this exact group; absent means unknown. */
+  readonly platformRole?: 'owner' | 'admin' | 'member';
   /** Actual platform join time in epoch milliseconds, never inferred from first observation. */
   readonly joinedAt?: number;
 }

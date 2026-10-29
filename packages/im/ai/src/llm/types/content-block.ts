@@ -1,5 +1,12 @@
 /** LLM content blocks (ADR 0009 D2). */
 
+/** Runtime-owned, provider-neutral observed state. Null means unknown. */
+export interface PromptContextState {
+  readonly label: string;
+  readonly fields: Readonly<Record<string, string | number | boolean | null | readonly string[]>>;
+  readonly observedAt?: number;
+}
+
 /**
  * 与 IM canonical MediaRef 结构同构（ai 层独立声明，不引入 IM 概念）。
  * kind=file：平台不透明引用（Telegram file_id 等），序列化时按 provider 能力处理。
@@ -15,11 +22,13 @@ export interface MediaBlockRef {
 export interface TextContentBlock {
   type: 'text';
   text: string;
+  /** Runtime-owned participant body inside a mixed context message; never inferred from text or sent to providers. */
+  presentation?: 'user-input';
   /** Runtime-injected guidance, persisted verbatim; never inferred from user text.
    * The digest prevents a later text transform from reusing stale provenance.
    * Provider bridges must not serialize this metadata.
    */
-  contextRef?: { readonly key: string; readonly digest: string };
+  contextRef?: { readonly key: string; readonly digest: string; readonly state?: PromptContextState };
   /**
    * Per-turn runtime context (e.g. who the participants are to the bot): sent to the
    * model for this request only and dropped before the message is stored, so later

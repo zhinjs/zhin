@@ -27,7 +27,7 @@ function turn(): TurnContextView {
 
 function message(context = turn(), extra: Parameters<typeof buildTurnContextBlocks>[0] = {}): AgentMessage {
   return prependTurnContextBlocks([createUserMessage('continue', undefined, 1, {
-    subjectId: context.principal.subjectId, roles: context.principal.roles, scope: 'group',
+    subjectId: context.principal.subjectId, roles: context.principal.roles, authorizationRoles: context.principal.roles, scope: 'group',
   })], buildTurnContextBlocks({ turn: context, ...extra }))[0]!;
 }
 
@@ -41,18 +41,18 @@ describe('file-memory context projection', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('references an unchanged snapshot in actual projected messages while keeping fresh turn facts', () => {
+  it('omits an unchanged snapshot in actual projected messages while keeping fresh turn facts', () => {
     const first = message();
     const updated = { ...turn(), principal: { subjectId: 'alice', roles: ['admin'] } };
-    const second = message(updated, { modelLine: 'provider/new-model' });
+    const second = message(updated);
     const projected = projectPromptContext([first, second]);
 
     expect(text(projected[0]!)).toContain(snapshot);
     expect(text(projected[1]!)).not.toContain('FILE-MEMORY-FACT');
-    expect(text(projected[1]!)).toContain('[Unchanged context: file-memory:');
-    expect(text(projected[1]!)).toContain('Sender: id=alice roles=admin');
-    expect(text(projected[1]!)).toContain('Model: provider/new-model');
-    expect(text(projected[1]!)).toContain('Time:');
+    expect(text(projected[1]!)).not.toContain('[Unchanged context:');
+    expect(text(projected[1]!)).toContain('"authorizationRoles": [\n    "admin"');
+    expect(text(projected[1]!)).toContain('"observedAt": 1');
+    expect(text(projected[1]!)).not.toContain('Model:');
     expect(projected[0]).toBe(first);
     expect(text(second)).toContain(snapshot);
   });
@@ -125,12 +125,12 @@ describe('file-memory context projection', () => {
     expect(memoryLayers.getFileMemoryContext).not.toHaveBeenCalled();
   });
 
-  it('represents a snapshot not supplied for this turn and references its unchanged version', () => {
+  it('represents a snapshot not supplied for this turn and omits its unchanged version', () => {
     vi.mocked(memoryLayers.getFileMemoryContext).mockReturnValue('');
     const raw = [message(), message()];
     const projected = projectPromptContext(raw);
     expect(text(projected[0]!)).toContain('Memory snapshot: not supplied for this turn.');
-    expect(text(projected[1]!)).toContain('[Unchanged context: file-memory:');
+    expect(text(projected[1]!)).not.toContain('[Unchanged context:');
     expect(text(projected[1]!)).not.toContain('Memory snapshot: not supplied for this turn.');
     expect(text(raw[1]!)).toContain('Memory snapshot: not supplied for this turn.');
   });

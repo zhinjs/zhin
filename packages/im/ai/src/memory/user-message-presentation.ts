@@ -2,7 +2,6 @@ import {
   type AgentMessage,
   type ConversationActor,
   type UserMessage,
-  createUserMessage,
 } from '../llm/types/agent-message.js';
 
 /** 与 Core 的引用上下文标记保持一致。 */
@@ -74,13 +73,7 @@ export function userMessagePlainText(message: UserMessage): string {
 }
 
 function cloneUserMessageWithText(message: UserMessage, text: string): UserMessage {
-  return createUserMessage(
-    text,
-    message.media,
-    message.timestamp,
-    message.actor,
-    message.cause,
-  );
+  return { ...message, content: [{ type: 'text', text }] };
 }
 
 function stripKnownActorPrefix(message: UserMessage, text: string): string {
@@ -96,12 +89,34 @@ function stripKnownQuoteContext(text: string, quote?: AgentMessageQuoteExtra): s
   return text.startsWith(prefix) ? text.slice(prefix.length) : text;
 }
 
+function userPrefix(message: UserMessage): string | null {
+  if (!message.content.some(block => block.presentation === 'user-input')) return message.actor ? buildActorPrefix(message.actor) : null;
+  return `[User]\n${JSON.stringify({
+    id: message.actor?.subjectId ?? null,
+    name: message.actor?.displayName ?? null,
+    platformRoles: null,
+    reportedRoles: message.actor?.roles ?? null,
+    authorizationRoles: message.actor?.authorizationRoles ?? null,
+    messageId: message.messageId ?? null,
+    observedAt: message.timestamp,
+    ...(message.actor?.origin && ACTOR_ORIGINS.has(message.actor.origin) ? { origin: message.actor.origin } : {}),
+  }, null, 2)}\n`;
+}
+
+function stripKnownUserPrefix(message: UserMessage, text: string): string {
+  const prefix = userPrefix(message);
+  if (prefix && text.startsWith(prefix)) return text.slice(prefix.length).trimStart();
+  // An existing canonical actor may have been rendered before the body was explicitly marked.
+  return stripKnownActorPrefix(message, text);
+}
+
 /** 返回不含模型展示标签的 canonical 用户正文。 */
 export function userMessageBody(
   message: UserMessage,
   extra?: AgentMessageExtra | null,
 ): string {
-  const withoutActor = stripKnownActorPrefix(message, userMessagePlainText(message));
+  const body = message.content.filter(block => block.presentation === 'user-input');
+  const withoutActor = stripKnownUserPrefix(message, userMessagePlainText(body.length ? { ...message, content: body } : message));
   return stripKnownQuoteContext(withoutActor, extra?.quote);
 }
 
@@ -113,11 +128,17 @@ export function renderUserMessageForLlm(
   message: UserMessage,
   extra?: AgentMessageExtra | null,
 ): UserMessage {
+  const bodyIndex = message.content.findIndex(block => block.presentation === 'user-input');
+  if (bodyIndex >= 0) {
+    const block = message.content[bodyIndex]!;
+    const text = renderBodyText(message, block.text, extra);
+    return text === block.text ? message : { ...message, content: message.content.map((part, index) => index === bodyIndex ? { ...part, text } : part) };
+  }
   if (message.content.some(isEphemeralBlock)) {
     // Ephemeral blocks stay separate (and keep their flag) so storage can drop them.
     const ephemeral = message.content.filter(isEphemeralBlock);
     const rendered = renderUserMessageForLlm({ ...message, content: message.content.filter(block => !isEphemeralBlock(block)) }, extra);
-    return { ...rendered, content: [...ephemeral, ...rendered.content] };
+    return { ...rendered, content: [...rendered.content, ...ephemeral] };
   }
   if (message.content.some(block => block.contextRef)) {
     const [first, ...rest] = message.content;
@@ -129,14 +150,20 @@ export function renderUserMessageForLlm(
   const quoteBlock = extra?.quote?.block.trim();
   if (!quoteBlock && !actorPrefix) return message;
 
-  let text = userMessageBody(message, extra);
+  return cloneUserMessageWithText(message, renderBodyText(message, userMessagePlainText(message), extra));
+}
+
+function renderBodyText(message: UserMessage, body: string, extra?: AgentMessageExtra | null): string {
+  const actorPrefix = userPrefix(message);
+  const quoteBlock = extra?.quote?.block.trim();
+  let text = stripKnownQuoteContext(stripKnownUserPrefix(message, body), extra?.quote);
   if (quoteBlock) {
     text = `${quoteBlock}\n\n${CURRENT_USER_MESSAGE_MARKER}\n${text}`;
   }
   if (actorPrefix) {
-    text = `${actorPrefix} ${text}`;
+    text = actorPrefix.endsWith('\n') ? `${actorPrefix}\n${text}` : `${actorPrefix} ${text}`;
   }
-  return cloneUserMessageWithText(message, text);
+  return text;
 }
 
 /** 写入 DB：payload 保存 canonical 用户正文和 actor，媒体不进入历史。 */
@@ -146,6 +173,16 @@ export function normalizeUserMessageForStorage(
 ): { message: AgentMessage; extra?: AgentMessageExtra } {
   if (message.role !== 'user') return { message };
   const user = message as UserMessage;
+  if (user.content.some(block => block.presentation === 'user-input')) {
+    const content = user.content.filter(block => !isEphemeralBlock(block));
+    const bodyIndex = content.findIndex(block => block.presentation === 'user-input');
+    const { media: _dropped, ...stored } = user;
+    return {
+      message: { ...stored, content: content.map((block, index) => index === bodyIndex
+        ? { ...block, text: stripKnownQuoteContext(stripKnownUserPrefix(user, block.text), extra?.quote) } : block) },
+      ...(extra?.quote ? { extra: { quote: extra.quote } } : {}),
+    };
+  }
   if (user.content.some(isEphemeralBlock)) {
     return normalizeUserMessageForStorage({ ...user, content: user.content.filter(block => !isEphemeralBlock(block)) }, extra);
   }

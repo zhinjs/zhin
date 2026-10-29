@@ -11,6 +11,10 @@ export interface PromptAssemblySection {
   readonly title: string;
   content: PromptSectionContent;
   readonly order: number;
+  /** Platform guidance follows the current capability catalog. */
+  readonly placement?: 'tail';
+  /** Retention priority when placement differs from the original section. */
+  readonly budgetOrder?: number;
   readonly retention: PromptRetention;
   readonly maxChars?: number;
   readonly metadata?: Record<string, unknown>;
@@ -65,7 +69,8 @@ export class PromptAssemblyRegistry implements PromptSectionRegistry {
 
   entries(ctx?: RichSystemPromptContext): PromptAssemblyEntry[] {
     return this.snapshot()
-      .sort((left, right) => right[1].order - left[1].order || left[0].localeCompare(right[0]))
+      .sort((left, right) => Number(left[1].placement === 'tail') - Number(right[1].placement === 'tail')
+        || right[1].order - left[1].order || left[0].localeCompare(right[0]))
       .flatMap(([id, section]) => {
         const content = this.resolveContent(section.content, ctx);
         if (!content?.trim()) return [];
@@ -84,6 +89,7 @@ export class PromptAssemblyRegistry implements PromptSectionRegistry {
         content: section.content,
         retention: section.retention,
         order: section.order,
+        budgetOrder: section.budgetOrder,
         maxChars: section.maxChars,
       })),
       maxChars,

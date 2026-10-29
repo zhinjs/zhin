@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createPromptContextBlock, type TextContentBlock } from '@zhin.js/ai';
+import { createPromptContextBlock, createPromptStateBlock, type TextContentBlock } from '@zhin.js/ai';
 import { getFileMemoryContext, formatMemoryPathsHint } from '../memory-layers.js';
 import type { TurnRequest } from '../turn/turn-ingress.js';
 import { isLocale } from '@zhin.js/plugin-runtime';
@@ -24,6 +24,7 @@ const SCENE_WAKE_ENGAGEMENT_LINE = 'Engagement: scene events. Nobody spoke; you 
 
 export interface TurnContextEnvelopeInput {
   turn?: TurnContextView;
+  observedAt?: number;
   profileSummary?: string;
   sessionSummary?: string;
   /** 状态感知 `[Scene events]` 段（#996），与会话画像同块、ephemeral。 */
@@ -33,8 +34,6 @@ export interface TurnContextEnvelopeInput {
   activeSkillsContext?: string;
   activeSkillBlocks?: readonly TextContentBlock[];
   quoteSystemHint?: string;
-  modelLine?: string;
-  sdk?: string;
   gitStatus?: string | null;
   agentsContext?: string;
   /** Rendered "already told the user" ledger (#730). */
@@ -68,85 +67,95 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
 
 export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextContentBlock[] {
   const blocks: TextContentBlock[] = [];
-  const lines: string[] = [TURN_CONTEXT_BEGIN];
-  const flush = () => {
-    if (lines.length) blocks.push({ type: 'text', text: lines.splice(0).join('\n') });
-  };
-  const now = new Date();
-  const locale = isLocale(input.turn?.input?.locale) ? input.turn.input.locale : 'zh-CN';
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const timeStr = now.toLocaleString(locale, { timeZone: tz });
-  lines.push(`Time: ${timeStr} (${tz})`);
-
-  if (input.modelLine?.trim()) lines.push(`Model: ${input.modelLine.trim()}`);
-  if (input.sdk?.trim()) lines.push(`Sdk: ${input.sdk.trim()}`);
-  if (input.gitStatus?.trim()) lines.push(input.gitStatus.trim());
+  const stable: string[] = [];
+  const current: string[] = [];
+  const observedAt = input.observedAt ?? Date.now();
+  if (input.gitStatus?.trim()) current.push(input.gitStatus.trim());
 
   if (input.turn) {
+    const { origin } = input.turn;
     const display = input.turn.input;
-    if (isLocale(display?.locale)) lines.push(`Reply language fallback: ${display.locale}.`);
+    if (origin.kind === 'im') {
+      const address = origin.conversation;
+      const scope = createHash('sha256').update(JSON.stringify([
+        origin.platform, origin.endpoint, origin.scope, origin.sceneId,
+        address?.endpoint.adapter, address?.endpoint.id, address?.kind, address?.id,
+        address?.parent?.kind, address?.parent?.id, address?.threadId ?? origin.threadId,
+      ])).digest('hex');
+      const state = display?.contextState;
+      blocks.push(createPromptStateBlock(`session:${scope}`, 'Session', {
+        adapter: address?.endpoint.adapter ?? origin.platform,
+        endpoint: address?.endpoint.id ?? origin.endpoint,
+        id: address?.id ?? origin.sceneId,
+        name: address?.name ?? null,
+        type: address?.kind ?? origin.scope,
+        ...(address?.parent ? { parentType: address.parent.kind, parentId: address.parent.id } : {}),
+        ...((address?.threadId ?? origin.threadId) ? { threadId: address?.threadId ?? origin.threadId! } : {}),
+        muteAll: state?.conversation?.muteAll ?? null,
+      }, observedAt));
+      blocks.push(createPromptStateBlock(`bot:${scope}`, 'Bot', {
+        id: state?.bot?.id ?? null,
+        name: state?.bot?.name ?? null,
+        platformRole: state?.bot?.platformRole ?? null,
+        platformRoleError: state?.bot?.platformRoleError ?? null,
+        mutedUntil: state?.bot?.mutedUntil ?? null,
+        status: state?.bot?.status ?? null,
+      }, observedAt));
+      blocks.push(createPromptContextBlock(`session-rules:${scope}`, state?.conversation?.rules
+        ? `Session rules (conversation data):\n${JSON.stringify(state.conversation.rules, null, 2)}`
+        : 'Session rules: unknown.'));
+    } else {
+      blocks.push(createPromptContextBlock('session-identity', formatSessionContextLine(input.turn)));
+    }
+    if (isLocale(display?.locale)) current.push(`Reply language fallback: ${display.locale}.`);
     if (typeof display?.commandPrefix === 'string') {
-      lines.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
-      if (display.commandMenu) lines.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);
+      stable.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
+      if (display.commandMenu) stable.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);
     }
-    lines.push(formatSessionContextLine(input.turn));
-    lines.push(formatSenderContextLine(input.turn));
-    if (input.turn.origin.kind === 'im' && input.turn.origin.messageId) {
-      lines.push(`Current message id: ${JSON.stringify(input.turn.origin.messageId)}`);
-    }
-    const merged = formatMergedTurnBlock(input.turn.input?.mergedSenders);
-    if (merged) lines.push(merged);
-    const danmaku = formatLiveDanmakuBlock(input.turn.input?.liveDanmaku);
-    if (danmaku) lines.push(danmaku);
-    if (input.turn.input?.metadata?.[SCENE_WAKE_METADATA_KEY] === true) lines.push(SCENE_WAKE_ENGAGEMENT_LINE);
-    else if (input.turn.input?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') lines.push(AMBIENT_ENGAGEMENT_LINE);
+    const merged = formatMergedTurnBlock(display?.mergedSenders);
+    if (merged) current.push(merged);
+    const danmaku = formatLiveDanmakuBlock(display?.liveDanmaku);
+    if (danmaku) current.push(danmaku);
+    if (display?.metadata?.[SCENE_WAKE_METADATA_KEY] === true) current.push(SCENE_WAKE_ENGAGEMENT_LINE);
+    else if (display?.metadata?.[AMBIENT_ENGAGEMENT_METADATA_KEY] === 'ambient') current.push(AMBIENT_ENGAGEMENT_LINE);
     if (input.turn.policy?.filesystem) {
       const filesystem = input.turn.policy.filesystem;
-      lines.push(`Workspace: ${filesystem.workingDirectory ?? filesystem.workspaceRoot} | access:${filesystem.access ?? 'workspace-write'}`);
+      stable.push(`Workspace: ${filesystem.workingDirectory ?? filesystem.workspaceRoot}`);
+      current.push(`Workspace access: ${filesystem.access ?? 'workspace-write'}`);
     }
-    if (input.turn.origin.kind === 'im') {
-      const platform = input.turn.origin.platform;
-      const sessionKey = input.turn.session.key;
-      const memoryPaths = formatMemoryPathsHint(platform, sessionKey);
-      if (memoryPaths) lines.push(`Memory paths: ${memoryPaths}`);
-      const fileMemory = getFileMemoryContext(undefined, platform, sessionKey).trim();
-      const origin = input.turn.origin;
-      const memoryScope = JSON.stringify([
-        process.cwd(), sessionKey, input.turn.principal.subjectId,
-        platform, origin.endpoint, origin.scope, origin.sceneId,
-        origin.conversation?.endpoint.adapter, origin.conversation?.endpoint.id,
-        origin.conversation?.kind, origin.conversation?.id,
-        origin.conversation?.parent?.kind, origin.conversation?.parent?.id,
-        origin.conversation?.threadId ?? origin.threadId,
-      ]);
-      const memoryKey = `file-memory:${createHash('sha256').update(memoryScope).digest('hex')}`;
-      flush();
-      // No snapshot may mean absence or a read failure; version it without claiming either.
-      blocks.push(createPromptContextBlock(memoryKey, fileMemory
-        ? `Memory snapshot:\n${fileMemory}` : 'Memory snapshot: not supplied for this turn.'));
+    if (origin.kind === 'im') {
+      const memoryPaths = formatMemoryPathsHint(origin.platform, input.turn.session.key);
+      if (memoryPaths) stable.push(`Memory paths: ${memoryPaths}`);
     }
   }
+  if (stable.length) blocks.push(createPromptContextBlock('session-guidance', stable.join('\n')));
+  if (input.agentsContext?.trim()) blocks.push(createPromptContextBlock('workspace-rules', input.agentsContext.trim()));
 
-  if (input.deferredStats?.trim()) lines.push(`Deferred catalog: ${input.deferredStats.trim()}`);
-  if (input.toneHint?.trim()) lines.push(`[Tone hint] ${input.toneHint.trim()}`);
-  if (input.activeSkillBlocks?.length) {
-    flush();
-    blocks.push(...input.activeSkillBlocks);
-  } else if (input.activeSkillsContext?.trim()) lines.push(input.activeSkillsContext.trim());
-  if (input.quoteSystemHint?.trim()) lines.push(input.quoteSystemHint.trim());
-  if (input.agentsContext?.trim()) {
-    flush();
-    blocks.push(createPromptContextBlock('workspace-rules', input.agentsContext.trim()));
+  if (input.turn?.origin.kind === 'im') {
+    const { origin, principal, session } = input.turn;
+    const fileMemory = getFileMemoryContext(undefined, origin.platform, session.key).trim();
+    const memoryScope = JSON.stringify([
+      process.cwd(), session.key, principal.subjectId,
+      origin.platform, origin.endpoint, origin.scope, origin.sceneId,
+      origin.conversation?.endpoint.adapter, origin.conversation?.endpoint.id,
+      origin.conversation?.kind, origin.conversation?.id,
+      origin.conversation?.parent?.kind, origin.conversation?.parent?.id,
+      origin.conversation?.threadId ?? origin.threadId,
+    ]);
+    const memoryKey = `file-memory:${createHash('sha256').update(memoryScope).digest('hex')}`;
+    blocks.push(createPromptContextBlock(memoryKey, fileMemory
+      ? `Memory snapshot:\n${fileMemory}` : 'Memory snapshot: not supplied for this turn.'));
   }
-  if (input.toldLedger?.trim()) lines.push(input.toldLedger.trim());
-  if (input.relevantMemory?.trim()) lines.push(input.relevantMemory.trim());
-
-  lines.push(TURN_CONTEXT_END);
-  flush();
-  // 会话画像（人物关系 + 会话上下文）与状态感知（#996 [Scene events]）只对本轮有效：独立成块并标记 ephemeral，
-  // 存储前丢弃，之后的回合和新会话不会重放旧的 [Relationship] / [Session] / [Scene events]。
+  if (input.activeSkillBlocks?.length) blocks.push(...input.activeSkillBlocks);
+  else if (input.activeSkillsContext?.trim()) blocks.push(createPromptContextBlock('active-skills', input.activeSkillsContext.trim()));
+  if (input.deferredStats?.trim()) blocks.push(createPromptContextBlock('deferred-catalog-summary', `Deferred catalog: ${input.deferredStats.trim()}`));
+  if (input.quoteSystemHint?.trim()) blocks.push(createPromptContextBlock('quote-guidance', input.quoteSystemHint.trim()));
+  if (input.toneHint?.trim()) current.push(`[Tone hint] ${input.toneHint.trim()}`);
+  if (input.toldLedger?.trim()) current.push(input.toldLedger.trim());
+  if (input.relevantMemory?.trim()) current.push(input.relevantMemory.trim());
+  if (current.length) blocks.push({ type: 'text', text: [TURN_CONTEXT_BEGIN, ...current, TURN_CONTEXT_END].join('\n') });
   const people = [input.profileSummary?.trim(), input.sessionSummary?.trim(), input.sceneEvents?.trim()].filter(Boolean);
-  if (people.length) blocks.splice(1, 0, { type: 'text', text: people.join('\n'), ephemeral: true });
+  if (people.length) blocks.push({ type: 'text', text: people.join('\n'), ephemeral: true });
   return blocks;
 }
 

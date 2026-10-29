@@ -23,20 +23,22 @@ export function resolveIngressUserMessage(
   const extra: AgentMessageExtra | undefined = referenceBlock
     ? { quote: { block: referenceBlock } }
     : undefined;
-  const llmMessage = renderUserMessageForLlm(
-    createUserMessage(content, undefined, Date.now(), {
-      subjectId: turn.principal.subjectId,
-      ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
-      roles: [...turn.principal.roles],
-      ...(turn.principal.origin ? { origin: turn.principal.origin } : {}),
-      ...(turn.origin.kind === 'im' ? { scope: turn.origin.scope } : {}),
-    }, {
-      turnId: turn.identity.turnId,
-      intent: turn.intent.kind,
-      ...(turn.intent.targetTurnId ? { targetTurnId: turn.intent.targetTurnId } : {}),
-    }),
-    extra,
-  );
+  const user = createUserMessage(content, undefined, Date.now(), {
+    subjectId: turn.principal.subjectId,
+    ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
+    roles: [...turn.principal.roles],
+    authorizationRoles: [...turn.principal.roles],
+    ...(turn.principal.origin ? { origin: turn.principal.origin } : {}),
+    ...(turn.origin.kind === 'im' ? { scope: turn.origin.scope } : {}),
+  }, {
+    turnId: turn.identity.turnId,
+    intent: turn.intent.kind,
+    ...(turn.intent.targetTurnId ? { targetTurnId: turn.intent.targetTurnId } : {}),
+  });
+  const llmMessage = renderUserMessageForLlm({
+    ...user,
+    ...(turn.origin.kind === 'im' && turn.origin.messageId ? { messageId: turn.origin.messageId } : {}),
+  }, extra);
   return Object.freeze({
     content,
     ...(extra ? { extra: Object.freeze(extra) } : {}),

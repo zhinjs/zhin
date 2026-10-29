@@ -17,7 +17,7 @@
     "export type{AIServiceConfig}from './service.js';",
     "export type{AISessionNewPayload,AISessionCompactPayload,}from './ai-event-bus.js';",
     "export type{ActivityFeedbackType,ActivityFeedbackPhase,ActivitySceneType,ActivityFeedbackPhaseConfig,ActivityFeedbackScenePhases,ActivityFeedbackConfig,ResolvedActivityFeedbackPhaseConfig,EndpointWithActivityFeedback,ActivityFeedbackSendPort,PlatformActivityFeedbackManager,PlatformActivityFeedbackStartOptions,BotActivityFeedbackManager,ActivityFeedbackEventContext,ActivityFeedbackGatePhase,}from './activity-feedback/index.js';",
-    "export type{ActivityPort,DeliveryIntent,DeliveryOutcome,DeliveryPort,FrozenCapabilityCatalog,ReplyPort,TurnIdentity,TurnAccessContext,TurnIngress,TurnIngressInput,TurnIntent,TurnIntentKind,TurnJournalPort,TurnInput,TurnMedia,TurnOrigin,TurnOutcome,TurnPolicyContext,TurnExecutionProfile,TurnPorts,TurnPrincipal,TurnRequest,TurnRequestPorts,TurnScope,TurnSessionAddress,}from './turn/turn-ingress.js';",
+    "export type{ActivityPort,DeliveryIntent,DeliveryOutcome,DeliveryPort,FrozenCapabilityCatalog,ReplyPort,TurnIdentity,TurnAccessContext,TurnContextState,TurnIngress,TurnIngressInput,TurnIntent,TurnIntentKind,TurnJournalPort,TurnInput,TurnMedia,TurnOrigin,TurnOutcome,TurnPolicyContext,TurnExecutionProfile,TurnPorts,TurnPrincipal,TurnRequest,TurnRequestPorts,TurnScope,TurnSessionAddress,}from './turn/turn-ingress.js';",
     "export type{AgentOutputElement}from './outbound/agent-output.js';",
     "export type{AgentPromptSectionDefinition,AgentPromptSectionInput,PromptProfile,PromptSectionDescriptor,PromptSectionLayer,PromptSectionRetention,}from '@zhin.js/prompt-section';",
     "export type{AgentRole,AgentRoleConfig,}from './resource-hub/role-configs.js';",

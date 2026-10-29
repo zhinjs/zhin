@@ -83,6 +83,26 @@ export interface ConversationContextPort {
   commit(cursor: number): Promise<void>;
 }
 
+/** Current-conversation facts resolved by the trusted ingress, never adapter metadata. */
+export interface TurnContextState {
+  readonly bot?: Readonly<{
+    /** Platform account id, not the configured Endpoint name. */
+    id?: string;
+    name?: string;
+    platformRole?: string;
+    /** Stable lookup outcome code; role remains unknown when the platform read fails. */
+    platformRoleError?: string;
+    /** Missing/null is unknown; 0 means confirmed unmuted; positive values are expiry timestamps. */
+    mutedUntil?: number | null;
+    status?: string;
+  }>;
+  readonly conversation?: Readonly<{
+    /** Conversation-specific data; platform-wide instructions belong to the system prompt. */
+    rules?: readonly string[];
+    muteAll?: boolean;
+  }>;
+}
+
 export interface TurnInput {
   /** Product-resolved display context, independent of untrusted adapter metadata. */
   readonly locale?: import('@zhin.js/plugin-runtime').Locale;
@@ -92,6 +112,7 @@ export interface TurnInput {
   readonly media?: readonly TurnMedia[];
   readonly references?: readonly TurnReference[];
   readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly contextState?: TurnContextState;
   /**
    * #996 product-resolved scene event summaries (newest first, already short and truncated).
    * Injected as the ephemeral `[Scene events]` block; never stored in agent_messages.
@@ -262,7 +283,9 @@ export interface TurnRequest {
   readonly ports: Readonly<TurnRequestPorts>;
 }
 
-export type TurnAccessContext = Pick<TurnRequest, 'origin' | 'principal' | 'policy'>;
+export type TurnAccessContext = Pick<TurnRequest, 'origin' | 'principal' | 'policy'> & Readonly<{
+  input?: Pick<TurnInput, 'contextState'>;
+}>;
 
 export type TurnOutcome =
   | Readonly<{ status: 'completed'; output: readonly AgentOutputElement[]; usage: Usage }>

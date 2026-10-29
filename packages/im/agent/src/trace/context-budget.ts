@@ -10,6 +10,7 @@
 import { projectPromptContext, estimateAgentMessagesTokens, type AgentMessage, type AgentTool } from '@zhin.js/ai';
 import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 import { AGENT_CATALOG_HEADING, DEFERRED_TOOL_INDEX_HEADING, SKILL_CATALOG_HEADING } from '../skill/capability-catalog.js';
+import { SECTION_SEP } from '../config/zhin-agent-constants.js';
 
 /** Prompt segments, in the order the report lists them. */
 export const CONTEXT_BUDGET_SEGMENTS = [
@@ -64,7 +65,7 @@ export interface ContextBudgetInput {
   readonly outputSchema?: Record<string, unknown>;
   /** Per-section text sizes from the prompt assembly (ids such as `§8_skills`). */
   readonly sections?: readonly Readonly<{ id: string; approxChars: number; approxTokens?: number }>[];
-  /** Bootstrap text that went into the system prompt; capability catalogs are attributed out of it. */
+  /** Legacy bootstrap text; current capability catalogs have their own system section. */
   readonly bootstrapContext?: string;
   /** Loaded skill instructions; the turn envelope carries them inside the user message. */
   readonly activeSkillsContext?: string;
@@ -80,6 +81,8 @@ const SECTION_SEGMENT: Readonly<Record<string, ContextBudgetSegment>> = {
   '§8_skills': 'skill_catalog',
   '§5e_memory_instructions': 'memory',
   '§11_bootstrap': 'bootstrap',
+  // Keep specialist instructions in their previous category; catalog sizes are split out below.
+  '§11_capabilities': 'bootstrap',
 };
 
 function toolSchemaTokens(tools: readonly AgentTool[]): number {
@@ -90,12 +93,15 @@ function toolSchemaTokens(tools: readonly AgentTool[]): number {
   })), 0);
 }
 
-/** Text of the block that starts at `heading` and runs to the next `## ` heading. */
+/** Stop at the next heading or assembled section, excluding later reply instructions. */
 function headedBlock(text: string, heading: string): string {
   const start = text.indexOf(heading);
   if (start < 0) return '';
-  const next = text.indexOf('\n## ', start + heading.length);
-  return text.slice(start, next < 0 ? text.length : next);
+  const after = start + heading.length;
+  const boundaries = ['\n# ', '\n## ', SECTION_SEP]
+    .map(separator => text.indexOf(separator, after))
+    .filter(index => index >= 0);
+  return text.slice(start, Math.min(text.length, ...boundaries)).trimEnd();
 }
 
 function sectionTokens(section: Readonly<{ approxChars: number; approxTokens?: number }>): number {
@@ -117,11 +123,14 @@ export function buildContextBudgetReport(input: ContextBudgetInput): ContextBudg
     if (segment) segments[segment] += section.tokens;
   }
 
-  // The plugin runtime renders skill/agent catalogs into the bootstrap block.
-  const bootstrap = input.bootstrapContext ?? '';
-  if (bootstrap && segments.bootstrap > 0) {
-    const skillCatalog = estimatePromptTokens(headedBlock(bootstrap, SKILL_CATALOG_HEADING));
-    const agentCatalog = estimatePromptTokens(headedBlock(bootstrap, AGENT_CATALOG_HEADING));
+  // Current turns keep capability catalogs after stable system instructions.
+  // Read their rendered text; older callers may still bundle them with bootstrap.
+  const catalogSource = sections.some(section => section.id === '§11_capabilities')
+    ? input.systemPrompt
+    : input.bootstrapContext ?? '';
+  if (catalogSource && segments.bootstrap > 0) {
+    const skillCatalog = estimatePromptTokens(headedBlock(catalogSource, SKILL_CATALOG_HEADING));
+    const agentCatalog = estimatePromptTokens(headedBlock(catalogSource, AGENT_CATALOG_HEADING));
     const attributed = Math.min(segments.bootstrap, skillCatalog + agentCatalog);
     segments.skill_catalog += Math.min(skillCatalog, attributed);
     segments.agent_catalog += attributed - Math.min(skillCatalog, attributed);
@@ -138,14 +147,12 @@ export function buildContextBudgetReport(input: ContextBudgetInput): ContextBudg
   const projected = projectPromptContext([...input.historyMessages, ...input.userMessages]);
   segments.history = estimateAgentMessagesTokens(projected.slice(0, input.historyMessages.length));
   const current = projected.slice(input.historyMessages.length);
-  const contextTokens = (key: (key: string) => boolean) => input.userMessages.reduce((total, message, index) => {
-    const renderedContent = current[index]?.content;
-    if (!Array.isArray(message.content) || !Array.isArray(renderedContent)) return total;
-    return total + message.content.reduce((sum: number, block: { contextRef?: { key: string } }, blockIndex: number) => {
-      const rendered = renderedContent[blockIndex];
-      return sum + (typeof block.contextRef?.key === 'string' && key(block.contextRef.key) && rendered?.type === 'text'
-        ? estimatePromptTokens(rendered.text) : 0);
-    }, 0);
+  const contextTokens = (key: (key: string) => boolean) => current.reduce((total, message) => {
+    if (!Array.isArray(message.content)) return total;
+    return total + message.content.reduce((sum, block) => sum + (
+      block.type === 'text' && typeof block.contextRef?.key === 'string' && key(block.contextRef.key)
+        ? estimatePromptTokens(block.text) : 0
+    ), 0);
   }, 0);
   const dynamicIndexTokens = contextTokens(key => key === 'deferred-tools');
   segments.tool_index += dynamicIndexTokens;

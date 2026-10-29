@@ -16,10 +16,10 @@ import { DEFAULT_CONFIG } from '../../../packages/im/agent/src/config/index.js';
 import { buildRichSystemPrompt } from '../../../packages/im/agent/src/prompt/system-prompt.js';
 import {
   AMBIENT_ENGAGEMENT_METADATA_KEY,
-  buildTurnContextEnvelope,
+  buildTurnContextBlocks,
   type TurnContextView,
 } from '../../../packages/im/agent/src/context/turn-envelope.js';
-import { applyTurnContextToUserMessages } from '../../../packages/im/agent/src/context/turn-user-message.js';
+import { prependTurnContextBlocks } from '../../../packages/im/agent/src/context/turn-user-message.js';
 import {
   decodeStructuredReply,
   structuredReplyInstruction,
@@ -28,6 +28,7 @@ import {
 import { decodeLenientStructuredReply } from '../../../packages/im/agent/src/core/structured-reply-recovery.js';
 import type { AgentOutputElement } from '../../../packages/im/agent/src/outbound/agent-output.js';
 import type { Scenario } from './scenario.js';
+import { zonedTimeToUtc, getDatePartsInTimezone } from '../../../basic/schedule/src/utils/timezone.js';
 
 export interface TurnResult {
   /** Text of each chat message the bot would send, in order. Empty when it chose to stay quiet. */
@@ -41,7 +42,7 @@ export interface TurnResult {
   readonly tokens: number;
 }
 
-export async function buildSystemPrompt(workspaceDir: string, nickname: string | undefined, turn: TurnContextView): Promise<string> {
+export async function buildSystemPrompt(workspaceDir: string, nickname: string | undefined, turn: TurnContextView, time?: string): Promise<string> {
   const bootstrapContext = buildStableBootstrapSection(await loadBootstrapFiles(workspaceDir));
   const prompt = buildRichSystemPrompt({
     config: DEFAULT_CONFIG,
@@ -50,6 +51,7 @@ export async function buildSystemPrompt(workspaceDir: string, nickname: string |
     activeSkillsContext: '',
     bootstrapContext,
     turn,
+    timeZone: scenarioTime(time).timeZone,
     ...(nickname ? { agentNickname: nickname } : {}),
   });
   return `${prompt}\n\n${structuredReplyInstruction()}`;
@@ -74,14 +76,33 @@ export function scenarioTurn(scenario: Scenario): TurnContextView {
   } as TurnContextView;
 }
 
-/** The envelope always stamps the current time; scenarios that depend on the hour pin it. */
-function withScenarioTime(envelope: string | null, time: string | undefined): string | null {
-  if (!envelope || !time) return envelope;
-  return envelope.replace(/^Time: .*$/m, `Time: ${time}`);
+/** Preserve the scenario wall clock as the production user's observedAt epoch. */
+function scenarioTime(time: string | undefined): { observedAt: number; timeZone?: string } {
+  if (!time) return { observedAt: Date.now() };
+  const match = /^(\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2}) \(([^()]+)\)$/.exec(time);
+  if (!match?.[7]) throw new Error(`Invalid scenario.time: ${time}`);
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number) as [number, number, number, number, number, number];
+  const timezone = match[7];
+  try {
+    const date = zonedTimeToUtc(year, month, day, hour, minute, second, timezone);
+    const parts = getDatePartsInTimezone(date, timezone);
+    if (parts.year === year && parts.month === month && parts.day === day
+      && parts.hour === hour && parts.minute === minute && parts.second === second) return { observedAt: date.getTime(), timeZone: timezone };
+  } catch {
+    // Invalid IANA zones and non-existent wall-clock dates are invalid fixtures.
+  }
+  throw new Error(`Invalid scenario.time: ${time}`);
+}
+
+/** Runtime timezone is stable per scenario; wall-clock changes do not invalidate system text. */
+export function scenarioPromptKey(scenario: Scenario): string {
+  return `${scenario.scope}:${scenario.addressed}:${scenarioTime(scenario.time).timeZone ?? 'host'}`;
 }
 
 export function buildUserMessages(scenario: Scenario): UserMessage[] {
-  const envelope = withScenarioTime(buildTurnContextEnvelope({ turn: scenarioTurn(scenario) }), scenario.time);
+  const turn = scenarioTurn(scenario);
+  const { observedAt } = scenarioTime(scenario.time);
+  const blocks = buildTurnContextBlocks({ turn, observedAt });
   const context = scenario.context.length > 0
     ? renderContextMessage({
         role: 'user-context',
@@ -90,7 +111,11 @@ export function buildUserMessages(scenario: Scenario): UserMessage[] {
         })),
       })
     : '';
-  const current = applyTurnContextToUserMessages([createUserMessage(scenario.message)], envelope);
+  const input = createUserMessage(scenario.message, undefined, observedAt, {
+    subjectId: scenario.sender.id, displayName: scenario.sender.name, scope: scenario.scope,
+    roles: turn.principal.roles, authorizationRoles: turn.principal.roles,
+  });
+  const current = prependTurnContextBlocks([input], blocks) as UserMessage[];
   return context ? [createUserMessage(context), ...current] : current;
 }
 

@@ -20,6 +20,7 @@ import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferre
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
+import { resolveSkillTools } from './skill-tool-resolution.js';
 
 import { skillContextBlock } from '../context/skill-context.js';
 
@@ -519,26 +520,6 @@ function disclosedToolCatalog(options: MetaCapabilityOptions): ToolCatalogItem[]
   const privateTools = options.tools.filter(tool => tool.hidden && loaded.has(tool.name));
   return [...options.catalog,
     ...buildToolCatalog({ tools: privateTools.map(capabilityAsAgentTool), alwaysLoaded: new Set<string>() })];
-}
-
-function resolveSkillTools(
-  skill: SkillDescriptor,
-  tools: readonly ToolCapability[],
-): string[] {
-  const requested = new Set(skill.toolNames ?? []);
-  if (requested.size === 0) return [];
-  return tools.filter((tool) => tool.owner === skill.owner
-    && belongsToSkill(tool, skill) && [...requested].some(
-    name => tool.name === name || tool.name.endsWith(`__${name}`),
-  )).map((tool) => tool.name);
-}
-
-function belongsToSkill(tool: ToolCapability, skill: SkillDescriptor): boolean {
-  const placement = tool.placement;
-  if (!placement) return !tool.hidden;
-  if (placement.kind === 'agent') return placement.agent === skill.agentName;
-  if (placement.kind === 'skill') return !skill.agentName && placement.skill === skill.name;
-  return placement.agent === skill.agentName && placement.skill === skill.name;
 }
 
 function uniqueBestAgentSkill(

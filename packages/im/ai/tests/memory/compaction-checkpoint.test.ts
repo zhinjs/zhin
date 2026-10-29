@@ -3,6 +3,7 @@ import { AGENT_MESSAGE_MODEL, AGENT_SESSION_MODEL, AGENT_SUMMARY_MODEL } from '.
 import { AgentSessionStore, MemoryAgentSessionStore } from '../../src/memory/agent-session-store.js';
 import { DatabaseContextRepository, MemoryContextRepository } from '../../src/memory/context-repository.js';
 import { createUserMessage, type AgentMessage } from '../../src/llm/types/agent-message.js';
+import { createPromptStateBlock, projectPromptContext } from '../../src/memory/prompt-context.js';
 
 const content = (messages: AgentMessage[]) => messages.map(message => message.content);
 type DbSchema = { agent_sessions: Record<string, unknown>; agent_messages: Record<string, unknown>; agent_summaries: Record<string, unknown> };
@@ -44,6 +45,27 @@ describe.each(['memory', 'sqlite'] as const)('%s compaction checkpoint provenanc
     expect(final[0]).toMatchObject({ content: [{ text: '[Previous conversation summary]\nsecond' }] });
     expect(content(final.slice(1))).toEqual(content(second.slice(2)));
     expect(await repo.loadMessageRows(sessionId)).toHaveLength(5);
+  });
+
+  it('restores a full current state after a real compaction checkpoint removes its baseline', async () => {
+    const state = (name: string, timestamp: number) => ({ ...createUserMessage('', undefined, timestamp), content: [
+      createPromptStateBlock('session:one', 'Session', { name, muteAll: null }, timestamp),
+      { type: 'text' as const, text: 'current question', presentation: 'user-input' as const },
+    ] });
+    await repo.appendMessages(sessionId, [state('Before', 2), state('Before', 3), state('After', 4)]);
+    const loaded = (await repo.loadContext(sessionId)).messages;
+    expect(loaded).toHaveLength(3);
+    expect(projectPromptContext(loaded)[2]!.content[0]!.text).toContain('[Updates');
+    expect(await repo.saveCompactionSummary(sessionId, 'Earlier observed state was Before', loaded.slice(0, 2))).toBe(true);
+    const afterCheckpoint = (await repo.loadContext(sessionId)).messages;
+    expect(afterCheckpoint[0]!.content[0]!.text).toContain('[Previous conversation summary]');
+    const current = projectPromptContext(afterCheckpoint)[1]!;
+    expect(current.content[0]!.text).toContain('[Session snapshot]');
+    expect(current.content[0]!.text).toContain('"name": "After"');
+    expect(current.content[0]!.text).not.toContain('[Updates');
+    const rows = await repo.loadMessageRows(sessionId);
+    expect(rows).toHaveLength(8);
+    expect(JSON.stringify(rows.at(-1)!.payload)).toContain('[Session snapshot]');
   });
 
   it('does not cut off a retained branch summary from its raw anchor', async () => {

@@ -99,7 +99,8 @@ describe('ContextSystem', () => {
       content: 'publish report',
       turnUser: {
         rawContent: 'publish report',
-        promptMessages: [createUserMessage('old conversation'), createUserMessage('publish report')],
+        promptMessages: [createUserMessage('old conversation'),
+          { ...createUserMessage('publish report', undefined, 1, { subjectId: 'old-human', authorizationRoles: ['master'] }), messageId: 'old-native' }],
       },
     });
 
@@ -109,6 +110,37 @@ describe('ContextSystem', () => {
     expect(text?.type === 'text' ? text.text : '').not.toContain('old conversation');
     expect(text?.type === 'text' ? text.text : '').not.toContain('interactive profile');
     expect(result.turnEnvelope).toContain('Session: origin:schedule | job_id:sched-1');
+    expect(result.userMessages[0]).not.toHaveProperty('actor');
+    expect(result.userMessages[0]).not.toHaveProperty('cause');
+    expect(result.userMessages[0]).not.toHaveProperty('messageId');
+    expect(text.text).not.toContain('old-human');
+    expect(text.text).not.toContain('old-native');
+  });
+
+  it('keeps explicit current schedule metadata while discarding prebuilt history, media and native message ids', async () => {
+    const host = {
+      config: { persona: 'task', toneAwareness: false },
+      getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+      buildDisciplinedPrompt: (prompt: string) => prompt, getTurnActiveSkills: () => '',
+      llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+    } as any;
+    const actor = { subjectId: 'schedule-owner', authorizationRoles: ['trusted'] };
+    const cause = { turnId: 'schedule-exec', intent: 'new' as const };
+    const current = { ...createUserMessage('previously rendered task', [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.test/old.png' } } }], 123, actor, cause), messageId: 'not-a-native-input' };
+    const result = await new ContextSystem().buildTextTurnContext({ host,
+      turn: { origin: { kind: 'schedule', jobId: 'job' }, principal: { subjectId: 'executor', roles: ['master'] }, session: { key: 'job' } },
+      content: 'current task', turnUser: { rawContent: 'current task', promptMessages: [current] },
+      prebuiltMessages: [createUserMessage('prebuilt conversation history')],
+    });
+    expect(result.userMessages).toHaveLength(1);
+    expect(result.userMessages[0]).toMatchObject({ actor, cause, timestamp: 123 });
+    expect(result.userMessages[0]).not.toHaveProperty('messageId');
+    expect(result.userMessages[0]).not.toHaveProperty('media');
+    const text = result.userMessages[0]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n');
+    expect(text).toContain('current task');
+    expect(text).not.toContain('previously rendered task');
+    expect(text).not.toContain('prebuilt conversation history');
+    expect(text).not.toContain('executor');
   });
 
   it('ToneInjector respects toneAwareness config via inject pipeline', () => {

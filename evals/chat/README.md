@@ -26,8 +26,10 @@ pnpm eval:chat --workspace ~/zhin-workspace --judge groq/openai/gpt-oss-120b
 这一轮对话按生产环境 IM 聊天轮次的方式组装：
 - 工作区引导文件（SOUL.md 等）经 `buildRichSystemPrompt` 生成聊天轮次的系统提示词；
 - 结构化回复格式说明；
-- Turn context（时间、会话、发送者；旁听轮次多一行 `Engagement: ambient`）；
-- 场景里的群聊记录，以后台事件的形式放在当前消息之前。
+- 场景里的群聊记录，以后台事件的形式放在当前消息之前；
+- 使用生产环境的 context blocks 与正文组装入口：会话／机器人状态和上下文在前，带发送者、授权角色及观察时间的 `[User]` 正文在后；旁听轮次保留 `Engagement: ambient`。
+
+`time` 保留 `YYYY/MM/DD HH:mm:ss (IANA时区)` 格式，按给定时区转换为正文的 `observedAt` 毫秒时间戳，表示场景观察时刻，不冒充平台发言时间。系统 Runtime 使用同一场景时区；系统提示词缓存也区分时区。省略时使用运行时的当前时间与 Host 时区。格式、时区或日期无效会报错，不悄悄改用当前时间。
 
 回复按生产环境的方式解码：先严格校验，不通过再宽松解析。
 
@@ -69,7 +71,7 @@ pnpm eval:chat --workspace ~/zhin-workspace --judge groq/openai/gpt-oss-120b
   scope: group           # group | private
   addressed: true        # false = 没人叫它（旁听）
   sender: { id: '2100001', name: 小林, master: false }
-  time: 2026/10/23 03:10:00 (Asia/Shanghai)   # 可选，固定 Time 行
+  time: 2026/10/23 03:10:00 (Asia/Shanghai)   # 可选，固定观察时刻及系统时区
   context:               # 之前的群聊，必须加引号：`名字 (id): 内容`
     - '阿明 (1001): 早'
     - 'You (this bot): 早啊'

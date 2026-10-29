@@ -527,4 +527,4 @@ export type {
   DecisionAnswer, DecisionRequest, DecisionResult, DecisionOptions, DecisionProvider,
 } from './decision/index.js';
 
-export { createPromptContextBlock, projectPromptContext } from './memory/prompt-context.js';
+export { createPromptContextBlock, createPromptStateBlock, projectPromptContext } from './memory/prompt-context.js';
