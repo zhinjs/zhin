@@ -76,7 +76,7 @@ describe('ADR 0041 scene fact resolution', () => {
     const { snapshot, index } = generation(management);
     const state = await resolveRuntimeTurnContextState(snapshot, conversation, new AbortController().signal, '10002');
     expect(state).toEqual({ bot: { id: '8596238', platformRole: 'admin' } });
-    expect(turnFactCacheSize(index)).toBe(0); // failures are never cached
+    expect(turnFactCacheSize(index)).toBe(1); // only the successful bot lookup is cached; failures never are
   });
 
   it('still reports a failed bot lookup distinctly from the other facts', async () => {
@@ -102,7 +102,7 @@ describe('ADR 0041 scene fact resolution', () => {
     const signal = new AbortController().signal;
     await resolveRuntimeTurnContextState(snapshot, conversation, signal, '8596238');
     await resolveRuntimeTurnContextState(snapshot, conversation, signal);
-    expect(management.inspectGroupMemberProfile).toHaveBeenCalledTimes(2); // bot only, once per call
+    expect(management.inspectGroupMemberProfile).toHaveBeenCalledTimes(1); // bot only, then served from the cache
   });
 
   it('does not query anything outside ICQQ groups', async () => {
@@ -123,7 +123,7 @@ describe('ADR 0041 scene fact resolution', () => {
   });
 
   describe('short in-memory cache', () => {
-    it('reuses scene and sender facts within the TTL but always re-reads the bot', async () => {
+    it('reuses scene, sender and bot facts within the TTL', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       const management = port();
       const { snapshot, index } = generation(management);
@@ -134,9 +134,9 @@ describe('ADR 0041 scene fact resolution', () => {
       expect(again?.conversation?.name).toBe('测试群');
       expect(again?.sender?.groupNickname).toBe('明明');
       expect(management.inspectGroupScene).toHaveBeenCalledTimes(1);
-      // bot x2 + sender x1
-      expect(management.inspectGroupMemberProfile).toHaveBeenCalledTimes(3);
-      expect(turnFactCacheSize(index)).toBe(2);
+      // bot x1 + sender x1: the bot follows the same cadence as members
+      expect(management.inspectGroupMemberProfile).toHaveBeenCalledTimes(2);
+      expect(turnFactCacheSize(index)).toBe(3);
     });
 
     it('expires entries after the TTL', async () => {
@@ -158,8 +158,8 @@ describe('ADR 0041 scene fact resolution', () => {
       await resolveRuntimeTurnContextState(first.snapshot, conversation, signal, '10002');
       await resolveRuntimeTurnContextState(second.snapshot, conversation, signal, '10002');
       expect(management.inspectGroupScene).toHaveBeenCalledTimes(2);
-      expect(turnFactCacheSize(first.index)).toBe(2);
-      expect(turnFactCacheSize(second.index)).toBe(2);
+      expect(turnFactCacheSize(first.index)).toBe(3);
+      expect(turnFactCacheSize(second.index)).toBe(3);
     });
 
     it('stays within its entry bound under many distinct senders', async () => {

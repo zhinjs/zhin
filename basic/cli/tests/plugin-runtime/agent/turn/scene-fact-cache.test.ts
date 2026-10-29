@@ -73,8 +73,8 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
     const state = await resolve(next);
     expect(state).toEqual(expectedFacts);
     expect(next.inspectGroupScene).not.toHaveBeenCalled();
-    // the bot is the only live read: one profile call, none for the sender
-    expect(next.inspectGroupMemberProfile).toHaveBeenCalledExactlyOnceWith('100', BOT, expect.anything());
+    // the bot follows the same cadence as members: level 2 serves it too, no platform call
+    expect(next.inspectGroupMemberProfile).not.toHaveBeenCalled();
     expect(store).toBeDefined();
   });
 
@@ -87,7 +87,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
     expect(state?.sender).toEqual({ platformRole: 'member', mutedUntil: 0 });
   });
 
-  it('reads the bot fresh every turn and writes it through to both stores', async () => {
+  it('caches the bot like any member and writes it through to both stores', async () => {
     const { store, sessions, resolve } = environment();
     const management = port();
     const index = generation(management);
@@ -95,7 +95,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
     await run();
     await run();
     const botCalls = management.inspectGroupMemberProfile.mock.calls.filter(([, user]) => user === BOT);
-    expect(botCalls).toHaveLength(2);
+    expect(botCalls).toHaveLength(1);
     expect((await store.getMember('endpoint', 'group', '100', BOT))?.facts).toEqual({ platformRole: 'admin', card: '小智', mutedUntil: 0 });
     expect(await sessions.get('endpoint', 'group', '100')).toMatchObject({ botRole: 'admin', muteUntil: 0 });
     void resolve;
