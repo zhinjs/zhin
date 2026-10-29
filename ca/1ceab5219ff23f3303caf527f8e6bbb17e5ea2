@@ -1,0 +1,357 @@
+.changeset/0039-slice-a-group-rules.md
+  s_9477e63ef5cee5::t_ca5f839b8da888 1-6
+.changeset/0039-slice-b-rule-draft.md
+  s_9477e63ef5cee5::t_9a16ba77f2058e 1-6
+.changeset/0039-slice-c-rule-enforcer.md
+  s_9477e63ef5cee5::t_67cb6de32b4c90 1-6
+.changeset/0039-slice-d-flood.md
+  s_9477e63ef5cee5::t_70e305df190d0d 1-5
+.changeset/0039-slice-e-content-moderation-migrate.md
+  s_9477e63ef5cee5::t_9c638aa2188351 1-12
+.changeset/0040-slice-a-change-store.md
+  s_9477e63ef5cee5::t_20e0e65a69bc10 1-6
+.changeset/0040-slice-b-change-draft.md
+  s_9477e63ef5cee5::t_f31d74047b0bbe 1-6
+.changeset/0040-slice-c1-trial-static.md
+  s_9477e63ef5cee5::t_879e99f56956af 1-6
+.changeset/0040-slice-c2-trial-sandbox.md
+  s_9477e63ef5cee5::t_716366f14c9e04 1-6
+.changeset/0040-slice-c3-plugin-tests.md
+  s_9477e63ef5cee5::t_c1a70f5b49813e 1-6
+.changeset/0040-slice-d-approval.md
+  s_9477e63ef5cee5::t_a8978a276cb8de 1-6
+.changeset/0040-slice-e1-apply-core.md
+  s_9477e63ef5cee5::t_925a29b3d622dd 1-5
+.changeset/0040-slice-e2-host-wiring.md
+  s_9477e63ef5cee5::t_b17b1748f5d544 1-5
+.changeset/adr-0038-slice-b1-merged-principal.md
+  s_9477e63ef5cee5::t_c927ad8fd9d1d8 1-6
+.changeset/adr-0038-slice-b2-on-behalf-hard-gate.md
+  s_9477e63ef5cee5::t_04317ed0e4d82d 1-8
+.changeset/adr-0038-slice-c-merged-context.md
+  s_9477e63ef5cee5::t_d94f464bf0348b 1-6
+.changeset/adr-0038-slice-d-stale-reply.md
+  s_9477e63ef5cee5::t_0a100876816789 1-6
+.changeset/adr-0038-slice-e1-danmaku-mode.md
+  s_9477e63ef5cee5::t_c9324bb2da2a19 1-11
+.changeset/adr-0038-slice-e2-bilibili-live.md
+  s_9477e63ef5cee5::t_a294043f73311b 1-5
+.changeset/bilibili-live-trim-slashes.md
+  s_9477e63ef5cee5::t_b38fd785715e93 1-5
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9477e63ef5cee5::t_0d833bafa5b70f 3-4,9,12,25-29,81-84,134-135,194-207,209-247,252,271-275,302-303,359-364
+basic/cli/src/plugin-runtime/agent/module.ts
+  s_9477e63ef5cee5::t_40cb138be5eda3 17
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_9477e63ef5cee5::t_7e7a80d5893da9 8,32-39,83,99,109
+basic/cli/src/plugin-runtime/agent/self-change-impact.ts
+  s_9477e63ef5cee5::t_5401e4c0b6b46b 1-17
+basic/cli/src/plugin-runtime/agent/self-change-plugin-tests.ts
+  s_9477e63ef5cee5::t_5a7b65e5d3771e 1-228
+basic/cli/src/plugin-runtime/agent/self-change-report.ts
+  s_9477e63ef5cee5::t_c9c12d92ac7f1f 1-94
+basic/cli/src/plugin-runtime/agent/self-change-sandbox-runner.ts
+  s_9477e63ef5cee5::t_ebc098280f97e6 1-53
+basic/cli/src/plugin-runtime/agent/self-change-sandbox.ts
+  s_9477e63ef5cee5::t_fd0b3202680054 1-264
+basic/cli/src/plugin-runtime/agent/self-change-trial.ts
+  s_9477e63ef5cee5::t_1f25a06eec3669 1-43
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9477e63ef5cee5::t_4cca6f81cae834 1,25-28,67-68,104-110,112,136-146,148,152,167-170,175-186,195,214-248
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_9477e63ef5cee5::t_1afee345279a35 2,11-13,63-66,124-133
+basic/cli/src/plugin-runtime/agent/turn/group-flood-detector.ts
+  s_9477e63ef5cee5::t_7c033b7ac266bf 1-230
+basic/cli/src/plugin-runtime/agent/turn/group-rule-defaults.ts
+  s_9477e63ef5cee5::t_2578404931d95c 1-88
+basic/cli/src/plugin-runtime/agent/turn/group-rule-enforcer.ts
+  s_9477e63ef5cee5::t_c1940f1d8c6fd1 1-651
+basic/cli/src/plugin-runtime/agent/turn/group-rule-im.ts
+  s_9477e63ef5cee5::t_0efa4141aa6a12 1-233
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_cb23f3c5e29bff 21-22,24-26,28-29,31,33-35,50,52-55,133-137,214-221,242-245,256-417,570-572,589-590,798-801,822-839,948-956,1041-1051,1066-1068,1076-1077,1120-1139,1143-1144,1146,1148-1158,1169,1196,1232,1238-1239,1244-1245,1292-1293,1316,1320-1323,1369-1378,1403,1519-1531,1537-1540,1542,1593,1597-1598,1600-1652
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9477e63ef5cee5::t_f22f6bdafb24dc 22,112-116,144-147,150,262-263
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  s_9477e63ef5cee5::t_3c165f60ab94b7 21,38-39,139,155,169-170,204-208
+basic/cli/src/plugin-runtime/console/decision-replay.ts
+  s_9477e63ef5cee5::t_6be356789a7a9f 42
+basic/cli/src/plugin-runtime/console/group-rules-rpc.ts
+  s_9477e63ef5cee5::t_1c275198b75ec8 1-222
+basic/cli/src/plugin-runtime/console/module.ts
+  s_9477e63ef5cee5::t_b4d983f115bc84 28
+basic/cli/src/plugin-runtime/console/self-changes.ts
+  s_9477e63ef5cee5::t_2116d94702ce25 1-170
+basic/cli/src/plugin-runtime/root-host.ts
+  s_9477e63ef5cee5::t_a16335f4c01deb 4,63-65,107,115-150,156
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_9477e63ef5cee5::t_1a12c2f3492bab 1-241
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9477e63ef5cee5::t_ca88ba6d3a510a 51,65,184-185,207-216,265-266,306-311,330,337,354,361,363-372,475-476,506-512,515-518,530-531,559,569,571,588
+basic/cli/tests/plugin-runtime/agent/self-change-apply.test.ts
+  s_9477e63ef5cee5::t_c28b6ebd325df5 1-295
+basic/cli/tests/plugin-runtime/agent/self-change-impact.test.ts
+  s_9477e63ef5cee5::t_1243eabc6307b0 1-29
+basic/cli/tests/plugin-runtime/agent/self-change-plugin-tests.test.ts
+  s_9477e63ef5cee5::t_62058900425c1f 1-189
+basic/cli/tests/plugin-runtime/agent/self-change-sandbox.test.ts
+  s_9477e63ef5cee5::t_1b170abff91589 1-186
+basic/cli/tests/plugin-runtime/agent/self-change-trial.test.ts
+  s_9477e63ef5cee5::t_9482a951c65d60 1-12
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_9477e63ef5cee5::t_d4a4dc85370e10 313-395
+basic/cli/tests/plugin-runtime/agent/turn/group-flood-detector.test.ts
+  s_9477e63ef5cee5::t_78d744b997109a 1-136
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-defaults.test.ts
+  s_9477e63ef5cee5::t_4d13ce34b1e5ef 1-60
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-enforcer.test.ts
+  s_9477e63ef5cee5::t_ae925b72c8481a 1-331
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-im.test.ts
+  s_9477e63ef5cee5::t_b4bf5722078aa6 1-145
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_9477e63ef5cee5::t_99166b048feef5 11,295-335
+basic/cli/tests/plugin-runtime/console/group-rules-rpc.test.ts
+  s_9477e63ef5cee5::t_d9a058bb45901a 1-71
+basic/cli/tests/plugin-runtime/console/self-changes.test.ts
+  s_9477e63ef5cee5::t_724c06ea7e171e 1-86
+basic/cli/tests/plugin-runtime/root-host.test.ts
+  s_9477e63ef5cee5::t_fbc72356429c0f 59-117
+docs/.vitepress/config.ts
+  s_9477e63ef5cee5::t_b912a9e72ebd49 87,249
+docs/adapters/bilibili-live.md
+  s_9477e63ef5cee5::t_28f4af261bdd0c 1-115
+docs/adapters/index.md
+  s_9477e63ef5cee5::t_921babbf93ff1e 71
+docs/ai/agent.md
+  s_9477e63ef5cee5::t_62f0ab8a19b562 83-84
+docs/ai/default-behavior.md
+  s_9477e63ef5cee5::t_a030dc0cafd215 22-24,45-60,68,71
+docs/ai/index.md
+  s_9477e63ef5cee5::t_99d3b1ed15bdc8 465-466,470-473
+docs/authoring/adapters.md
+  s_9477e63ef5cee5::t_b30fb8e0da6831 64
+docs/authoring/agent-tools.md
+  s_9477e63ef5cee5::t_9d589b0c1c0047 330
+docs/authoring/console-pages.md
+  s_9477e63ef5cee5::t_fb6248ac74d854 381-407
+docs/configuration/generated.md
+  s_9477e63ef5cee5::t_549ceae82528e1 152,156-159,189,620-651,1899
+docs/en/adapters/bilibili-live.md
+  s_9477e63ef5cee5::t_61e9140c56b3a6 1-97
+docs/en/adapters/index.md
+  s_9477e63ef5cee5::t_cbaa8ce40bd806 72
+docs/en/ai/agent.md
+  s_9477e63ef5cee5::t_638d7a844ab3e9 83-84
+docs/en/ai/default-behavior.md
+  s_9477e63ef5cee5::t_d9906f3cb9beae 22-24,45-60,68,71
+docs/en/ai/index.md
+  s_9477e63ef5cee5::t_222129e2970b41 431-432,436-439
+docs/en/authoring/adapters.md
+  s_9477e63ef5cee5::t_fb539557c278d8 64
+docs/en/authoring/agent-tools.md
+  s_9477e63ef5cee5::t_34aeb8965a1f4a 324
+docs/en/authoring/console-pages.md
+  s_9477e63ef5cee5::t_34a455cfab319f 381-407
+docs/en/configuration/generated.md
+  s_9477e63ef5cee5::t_fb6dfd67407b91 152,156-159,189,620-651
+docs/snippets/platform-tiers.md
+  s_9477e63ef5cee5::t_e207b6178d867b 21
+packages/im/adapter/src/definition.ts
+  s_9477e63ef5cee5::t_818b5eb38816e8 36-41,193-194,198-200,368,370
+packages/im/adapter/tests/adapter.test.ts
+  s_9477e63ef5cee5::t_e69bef4ef6785e 394-401
+packages/im/agent/evals/README.md
+  s_9477e63ef5cee5::t_bad2da5aff2510 161-162
+packages/im/agent/evals/cases/danmaku-window-picks-one.case.ts
+  s_9477e63ef5cee5::t_f0b5e17b800370 1-40
+packages/im/agent/evals/cases/merged-turn-mentions-each-sender.case.ts
+  s_9477e63ef5cee5::t_8ea8d6996cfa96 1-46
+packages/im/agent/evals/cases/merged-turn-skipped-sender-not-mentioned.case.ts
+  s_9477e63ef5cee5::t_b2f63706c5641f 1-33
+packages/im/agent/evals/framework/driver.ts
+  s_9477e63ef5cee5::t_4d2a2ccbe8a38a 285-286
+packages/im/agent/evals/framework/fixture.ts
+  s_9477e63ef5cee5::t_6de8092b8ec71c 9-10,37-46
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_9477e63ef5cee5::t_ef0c9e1e32746a 30-31,34-45,48
+packages/im/agent/src/context/turn-envelope.ts
+  s_9477e63ef5cee5::t_148fca31374e74 7-8,115-118
+packages/im/agent/src/decision-events.ts
+  s_9477e63ef5cee5::t_8c98e23bb2dd09 46-51,142-180
+packages/im/agent/src/group-rules.ts
+  s_9477e63ef5cee5::t_09179b3f7232af 1-903
+packages/im/agent/src/index.ts
+  s_9477e63ef5cee5::t_be0efdf246fd1b 342-488
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  s_9477e63ef5cee5::t_589fd42d194d34 18,91-93
+packages/im/agent/src/init/define-ai-database-models.ts
+  s_9477e63ef5cee5::t_7d7a11b93be795 19,38
+packages/im/agent/src/plugin-runtime/index.ts
+  s_9477e63ef5cee5::t_ccbcf9dfbd8fba 17,43-44
+packages/im/agent/src/plugin-runtime/native-file-tools.ts
+  s_9477e63ef5cee5::t_b2adc5d46e4dda 43,69,80,95
+packages/im/agent/src/plugin-runtime/native-group-rule-tools.ts
+  s_9477e63ef5cee5::t_cd8f7fcf9e6262 1-156
+packages/im/agent/src/plugin-runtime/native-knowledge-tool.ts
+  s_9477e63ef5cee5::t_0ff2a87f4697d4 130
+packages/im/agent/src/plugin-runtime/native-self-change-tools.ts
+  s_9477e63ef5cee5::t_d8971761493561 1-248
+packages/im/agent/src/plugin-runtime/native-semantic-memory-tools.ts
+  s_9477e63ef5cee5::t_34c55b4a8793bf 148
+packages/im/agent/src/plugin-runtime/native-web-tools.ts
+  s_9477e63ef5cee5::t_d780885a471d0c 42,55
+packages/im/agent/src/reserved-tools.ts
+  s_9477e63ef5cee5::t_87056c0e77205c 19-20
+packages/im/agent/src/security/tool-approval-queue.ts
+  s_9477e63ef5cee5::t_55b9c4464aaf2d 227-236
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_9477e63ef5cee5::t_dbd82de66a6cc9 126-127,148,157,164-166,361-370,394-397,400,403,405-406,439,458,460,503-510,515,532,562-563,565,589,606,610-611,685-686,708,769-805
+packages/im/agent/src/self-change/apply.ts
+  s_9477e63ef5cee5::t_8793f8c7d10b8c 1-477
+packages/im/agent/src/self-change/approval.ts
+  s_9477e63ef5cee5::t_1c39238858a506 1-294
+packages/im/agent/src/self-change/policy.ts
+  s_9477e63ef5cee5::t_6d767a184009fb 1-303
+packages/im/agent/src/self-change/preview.ts
+  s_9477e63ef5cee5::t_ebe2b49a3b671f 1-288
+packages/im/agent/src/self-change/store.ts
+  s_9477e63ef5cee5::t_beb67e60359687 1-786
+packages/im/agent/src/self-change/trial.ts
+  s_9477e63ef5cee5::t_752aa3314804b7 1-471
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9477e63ef5cee5::t_4d9e8120c2b6b3 38-41,105-106,121-141,169,193,216
+packages/im/agent/src/turn/inbound-queue-config.ts
+  s_9477e63ef5cee5::t_9e1b3061f3b50c 3-9,11-17,26-31,38,42,48-53,60,76-93,150-161
+packages/im/agent/src/turn/index.ts
+  s_9477e63ef5cee5::t_d03c499971df22 81,89,148,151-174,181-182,185
+packages/im/agent/src/turn/live-turn-context.ts
+  s_9477e63ef5cee5::t_45a01a5528f649 1-85
+packages/im/agent/src/turn/merged-principal.ts
+  s_9477e63ef5cee5::t_74ab70ed015425 1-148
+packages/im/agent/src/turn/merged-turn-context.ts
+  s_9477e63ef5cee5::t_db4ae0518a374d 1-78
+packages/im/agent/src/turn/stale-reply.ts
+  s_9477e63ef5cee5::t_eda28734f4f753 1-24
+packages/im/agent/src/turn/turn-admission-gate.ts
+  s_9477e63ef5cee5::t_b65f8a0d262cda 24-34,43,54-55,70-76,78-79,96-100,103-109,119-122,141-151,154-163,179-185,197,208-214,217-218,223,230-236,242-246,249-252,256-257,274-279,296-298,307,335,348,367,370-372,375,378,382,390,396,402,404-436,440-459,461,467,519,525,549,562-563,569,572-575,578,584-587,598-605,612-613,617,624-639,651-652,654,663,676-736
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9477e63ef5cee5::t_493a51c6dfe205 121-130,163-178
+packages/im/agent/src/zhin-agent/index.ts
+  s_9477e63ef5cee5::t_01d81434c4f36c 52,176-177,425-428
+packages/im/agent/tests/decision-events.test.ts
+  s_9477e63ef5cee5::t_58b2c4e4cfa50a 57,142-166
+packages/im/agent/tests/define-ai-database-models.test.ts
+  s_9477e63ef5cee5::t_4237d992de07f5 17,30
+packages/im/agent/tests/group-rules.test.ts
+  s_9477e63ef5cee5::t_024d0d3fa326f7 1-339
+packages/im/agent/tests/plugin-runtime/native-group-rule-tools.test.ts
+  s_9477e63ef5cee5::t_c37e5625d36fc4 1-88
+packages/im/agent/tests/plugin-runtime/native-self-change-tools.test.ts
+  s_9477e63ef5cee5::t_1a33b66224ae7f 1-163
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  s_9477e63ef5cee5::t_c0ee70e9f5e9fb 7,97,101-103,298-415,742-786,847-854,859,862-867
+packages/im/agent/tests/self-change/apply.test.ts
+  s_9477e63ef5cee5::t_11cb36f17f6095 1-382
+packages/im/agent/tests/self-change/approval.test.ts
+  s_9477e63ef5cee5::t_ef6ba272eb3711 1-195
+packages/im/agent/tests/self-change/policy.test.ts
+  s_9477e63ef5cee5::t_430e130674e9ca 1-148
+packages/im/agent/tests/self-change/preview.test.ts
+  s_9477e63ef5cee5::t_e9ab8068a58357 1-147
+packages/im/agent/tests/self-change/store.test.ts
+  s_9477e63ef5cee5::t_1beb4cb8359c5a 1-288
+packages/im/agent/tests/self-change/trial.test.ts
+  s_9477e63ef5cee5::t_28835d77f4e96d 1-392
+packages/im/agent/tests/turn/live-turn-context.test.ts
+  s_9477e63ef5cee5::t_5411692cbc8a0e 1-101
+packages/im/agent/tests/turn/merged-principal.test.ts
+  s_9477e63ef5cee5::t_72b92167ed0705 1-148
+packages/im/agent/tests/turn/merged-turn-context.test.ts
+  s_9477e63ef5cee5::t_444bf9924f2218 1-100
+packages/im/agent/tests/turn/stale-reply.test.ts
+  s_9477e63ef5cee5::t_435534b05912f1 1-22
+packages/im/agent/tests/turn/turn-admission-gate.test.ts
+  s_9477e63ef5cee5::t_08f03078673f80 3,10,437-466,476-754
+packages/im/agent/tests/zhin-agent/inbound-queue-config.test.ts
+  s_9477e63ef5cee5::t_c56fad40087ef4 3,28,32-48,50
+packages/im/ai/src/types.ts
+  s_9477e63ef5cee5::t_e12ea6edebe8cd 555-560,634-635
+packages/im/core/src/plugin-runtime/im/group-rule-violation.ts
+  s_9477e63ef5cee5::t_8fca91430f5cd8 1-58
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_9477e63ef5cee5::t_d60f1c47bb8127 23
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_9477e63ef5cee5::t_be24a0ad42f126 166-175
+packages/im/core/tests/plugin-runtime/outbound-segments.test.ts
+  s_9477e63ef5cee5::t_425c99a70b8506 4,48-57
+packages/im/runtime/src/host-config-schema.json
+  s_9477e63ef5cee5::t_1140bdc974cd91 914-916,941-969,1200-1206
+packages/im/tool/src/definition.ts
+  s_9477e63ef5cee5::t_d9a2d9611e577d 181-186,294-296,357
+packages/im/tool/src/tool-index.ts
+  s_9477e63ef5cee5::t_626ace726ebcc1 44-45,159
+packages/im/tool/tests/tool.test.ts
+  s_9477e63ef5cee5::t_0234e25c69b537 229-253
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  s_9477e63ef5cee5::t_8d029b29f637a8 36-37
+plugins/adapters/bilibili-live/README.md
+  s_9477e63ef5cee5::t_ba72cc838b0686 1-103
+plugins/adapters/bilibili-live/adapters/bilibili-live/index.ts
+  s_9477e63ef5cee5::t_304201c416f73b 1-27
+plugins/adapters/bilibili-live/package.json
+  s_9477e63ef5cee5::t_ceff43c4adfd2b 1-103
+plugins/adapters/bilibili-live/plugin.ts
+  s_9477e63ef5cee5::t_05f3a9ad77a397 1-13
+plugins/adapters/bilibili-live/schema.json
+  s_9477e63ef5cee5::t_7e130c5e274d0a 1-289
+plugins/adapters/bilibili-live/src/client.ts
+  s_9477e63ef5cee5::t_0bab7697e4c2b4 1-240
+plugins/adapters/bilibili-live/src/endpoint.ts
+  s_9477e63ef5cee5::t_aedd6433d53e07 1-286
+plugins/adapters/bilibili-live/src/index.ts
+  s_9477e63ef5cee5::t_e5e389c4bd0f13 1-17
+plugins/adapters/bilibili-live/src/protocol.ts
+  s_9477e63ef5cee5::t_b0dfbba40363b7 1-260
+plugins/adapters/bilibili-live/tests/bilibili-live-endpoint.test.ts
+  s_9477e63ef5cee5::t_72b74e792281f9 1-202
+plugins/adapters/bilibili-live/tests/bilibili-live-protocol.test.ts
+  s_9477e63ef5cee5::t_f66e54faf3764e 1-119
+plugins/adapters/bilibili-live/tsconfig.json
+  s_9477e63ef5cee5::t_d33687c8ae702b 1-12
+plugins/utils/content-moderation/README.md
+  s_9477e63ef5cee5::t_559ba47c23bb1c 79,83-86,99
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  s_9477e63ef5cee5::t_63b978c5b72da6 6,140-152,181-191
+plugins/utils/content-moderation/schema.json
+  s_9477e63ef5cee5::t_0ff576482d0aa2 9
+plugins/utils/content-moderation/src/group-moderation.ts
+  s_9477e63ef5cee5::t_2596894fc71e52 77-90,96-97,100-109,136,220-235,239,242,244,254
+plugins/utils/content-moderation/tests/group-moderation.test.ts
+  s_9477e63ef5cee5::t_33d19a1d010d5e 50,59,62,66-68,100,103,141,143,145-148,152,154,156-169,173-197,244,248-249,269
+pnpm-lock.yaml
+  s_9477e63ef5cee5::t_c7d78161db9c95 2156-2186
+scripts/adapter-meta.mjs
+  s_9477e63ef5cee5::t_3780d595815647 52
+scripts/check-api-docs-surface.mjs
+  s_9477e63ef5cee5::t_486f54a3ef2bd3 24
+tests/snapshots/api-surface.json
+  s_9477e63ef5cee5::t_9d2ef6b3aea422 72,80-81,87,99,103,122
+tests/snapshots/plugin-runtime-api.json
+  s_9477e63ef5cee5::t_18536c7400cafa 43,47,59,117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ca1ceab5219ff23f3303caf527f8e6bbb17e5ea2",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
