@@ -8,7 +8,7 @@
  * remaining, current mute) and goes in the `scene` segment. Output is deterministic and ordered.
  */
 import { getLogger } from '@zhin.js/logger';
-import type { TurnCapabilities } from '@zhin.js/adapter';
+import type { TurnCapabilities } from '@zhin.js/core';
 import { labelThirdPartyGuidance } from './third-party-guidance.js';
 
 const logger = getLogger('agent.platform-guidance');

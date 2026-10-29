@@ -196,9 +196,11 @@
     "export type{MessageChannel,MessageType}from './message.js'",
     "export type{Schedule,JobPayload,JobState,ScheduledJob,JobStore,JobCallback,AddJobOptions,IScheduler,SchedulerOptions,ScheduleFireCallback,MemoryScheduleRegistration,ScheduleEngineOptions,JobContext,ResolvedJob,ScheduleKind,}from '@zhin.js/kernel'",
     "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
+    "export type{TurnCapabilities,AdapterCapabilityProfile,CapabilityFacts}from '@zhin.js/adapter';",
     "export{Message,type MessageBase}from './plugin-runtime/im/contracts.js'",
     "export{ScheduleEngine,Scheduler,}from '@zhin.js/kernel'",
     "export{Schema}from '@zhin.js/schema'",
+    "export{adapterFeatureId,isAdapterIndex}from '@zhin.js/adapter';",
     "export{component,type ComponentCall,raw,type RawContent}from './plugin-runtime/im/contracts.js'",
     "export{defineComponent,type ComponentDefinition,type ComponentContext}from '@zhin.js/component'",
     "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'"

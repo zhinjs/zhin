@@ -1,4 +1,4 @@
-import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/core';
 import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';

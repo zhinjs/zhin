@@ -134,7 +134,7 @@ export interface TurnInput {
    * Absent for non-IM turns. Read with `has('actions.mute')` / `get('actions.mute')`; this is distinct
    * from {@link TurnIngress.capabilities}, which is the frozen tool/skill catalog.
    */
-  readonly platformCapabilities?: import('@zhin.js/adapter').TurnCapabilities;
+  readonly platformCapabilities?: import('@zhin.js/core').TurnCapabilities;
   /**
    * #996 product-resolved scene event summaries (newest first, already short and truncated).
    * Injected as the ephemeral `[Scene events]` block; never stored in agent_messages.
