@@ -48,12 +48,13 @@ describe('file-memory context projection', () => {
     const projected = projectPromptContext([first, second]);
 
     expect(text(projected[0]!)).toContain(snapshot);
-    expect(text(projected[1]!)).not.toContain('FILE-MEMORY-FACT');
-    expect(text(projected[1]!)).not.toContain('[Unchanged context:');
-    expect(text(projected[1]!)).toContain('"authorizationRoles": [\n    "admin"');
-    expect(text(projected[1]!)).toContain('"observedAt": 1');
-    expect(text(projected[1]!)).not.toContain('Model:');
-    expect(projected[0]).toBe(first);
+    // The role change is surfaced as a synthesized state change right before the second message.
+    expect(projected).toHaveLength(3);
+    expect(projected[1]).toMatchObject({ role: 'event', kind: 'member_changed', name: 'system changed alice role to "admin"' });
+    expect(text(projected[2]!)).not.toContain('FILE-MEMORY-FACT');
+    expect(text(projected[2]!)).not.toContain('[Unchanged context:');
+    expect(text(projected[2]!)).not.toContain('Model:');
+    expect(text(projected[2]!)).toMatch(/\[user_id:alice;time:[\d:.]+;\]\ncontinue/u);
     expect(text(second)).toContain(snapshot);
   });
 

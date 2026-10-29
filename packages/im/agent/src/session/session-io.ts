@@ -1,5 +1,6 @@
 import { type AgentSessionRepository, type ContextRepository, type CreateAgentSessionInput, type AgentMessage, type ConversationActor, createUserMessage, renderUserMessageForLlm, type UserMessage } from '@zhin.js/ai';
 import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, resolveSceneFieldsFromMessage, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
+import { stampUserHeader } from './participant-header-stamp.js';
 export interface SessionIODeps {
   agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
@@ -77,10 +78,10 @@ export function resolveTurnUserMessage(
   const user = createUserMessage(content, undefined, Date.now(), {
     ...actor, authorizationRoles: [...senderRolesFromMessage(commMessage)],
   });
-  const llmMessage = renderUserMessageForLlm({
+  const llmMessage = renderUserMessageForLlm(stampUserHeader({
     ...user,
     ...(commMessage.id ? { messageId: String(commMessage.id) } : {}),
-  });
+  }));
   return { content, llmMessage };
 }
 

@@ -3,7 +3,6 @@ import { createPromptContextBlock } from '../../src/memory/prompt-context.js';
 import { agentMessagesToAiSdk } from '../../src/llm/bridge/ai-sdk-messages.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import {
-  buildActorPrefix,
   normalizeUserMessageForStorage,
   parseAgentMessageExtra,
   QUOTED_MESSAGE_CONTEXT_MARKER,
@@ -22,20 +21,6 @@ describe('user-message-presentation', () => {
     roles: ['master', 'scene_admin'],
     scope: 'group' as const,
   };
-
-  it('renders a shared-conversation actor label', () => {
-    expect(buildActorPrefix(actor)).toBe(
-      '[sender:id=1659488338 name=归雨 roles=master,scene_admin]',
-    );
-  });
-
-  it('renders origin only from the whitelist and omits it by default', () => {
-    expect(buildActorPrefix({ ...actor, origin: 'human' })).toBe(
-      '[sender:id=1659488338 name=归雨 roles=master,scene_admin origin=human]',
-    );
-    expect(buildActorPrefix({ ...actor, origin: 'peer_bot' })).toContain(' origin=peer_bot]');
-    expect(buildActorPrefix({ ...actor, origin: 'admin] x' as never })).toBe(buildActorPrefix(actor));
-  });
 
   it('strips an origin-bearing prefix back to the canonical body and round-trips origin', () => {
     const message = createUserMessage('你好', undefined, 1, { ...actor, origin: 'human' });
@@ -74,7 +59,7 @@ describe('user-message-presentation', () => {
     if (llm?.role === 'user') {
       const text = llm.content.find((block) => block.type === 'text');
       expect(text?.type === 'text' && text.text).toContain(QUOTED_MESSAGE_CONTEXT_MARKER);
-      expect(text?.type === 'text' && text.text).toContain('[sender:id=1659488338');
+      expect(text?.type === 'text' && text.text).not.toContain('[sender:');
       expect(text?.type === 'text' && text.text).toContain('你是谁');
       expect(llm.actor).toEqual(actor);
     }
@@ -134,8 +119,8 @@ it('renders only the explicitly owned body after stable context and preserves it
     { type: 'text' as const, text: 'second body\nexact lines', presentation: 'user-input' as const }, current, ephemeral] };
   const rendered = renderUserMessageForLlm(message, extra);
   expect(rendered.content[0]).toBe(stable);
-  expect(rendered.content[1]?.text).toContain('"id": "alice"');
   expect(rendered.content[1]?.text).toContain('quoted text');
+  expect(rendered.content[1]?.text).not.toContain('[User]');
   expect(rendered.content[2]?.text).toBe('second body\nexact lines');
   expect(rendered.content.at(-1)).toBe(ephemeral);
   expect(userMessageBody(rendered, extra)).toBe('first body second body\nexact lines');
@@ -150,19 +135,16 @@ it('renders only the explicitly owned body after stable context and preserves it
   expect(JSON.stringify(agentMessagesToAiSdk([rendered]))).not.toMatch(/presentation|user-input|contextRef|ephemeral/);
 });
 
-it('renders owned messages with one identity, explicit authorization and message-local observations', () => {
+it('renders owned messages with the quote only and keeps identity out of the rendered body', () => {
   const actor = { subjectId: 'alice', displayName: 'Alice', roles: ['scene_admin', 'master'], authorizationRoles: ['master'], scope: 'group' as const };
   const extra = { quote: { messageId: 'q', block: `${QUOTED_MESSAGE_CONTEXT_MARKER}\nquoted text` } };
   const input = { ...createUserMessage('', undefined, 123, actor), messageId: 'm1', content: [{ type: 'text' as const, text: 'actual question', presentation: 'user-input' as const }] };
   const rendered = renderUserMessageForLlm(input, extra);
   const text = rendered.content[0]!.text;
-  expect(text).toContain('[User]');
-  expect(text).toContain('"platformRoles": null');
-  expect(text).toContain('"authorizationRoles": [');
-  expect(text).toContain('"messageId": "m1"');
-  expect(text).toContain('"observedAt": 123');
+  // Participant identity is rendered at projection time (see participant-header.test.ts), never here.
+  expect(text).not.toContain('[User]');
   expect(text).not.toContain('[sender:');
-  expect(text).toContain('"reportedRoles": [\n    "scene_admin",\n    "master"');
+  expect(text).toContain('quoted text');
   expect(userMessageBody(rendered, extra)).toBe('actual question');
   expect(renderUserMessageForLlm(rendered, extra)).toEqual(rendered);
   const restored = agentMessageRowToLlm(serializeAgentMessage(rendered, extra));

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AgentMessage } from '../llm/types/agent-message.js';
 import type { PromptContextState, TextContentBlock } from '../llm/types/content-block.js';
+import { projectParticipantHeaders, type HeaderFormatOptions } from './participant-header.js';
 
 function digest(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -50,7 +51,11 @@ function validState(block: TextContentBlock): PromptContextState | undefined {
  * compaction and branches start from the first available full snapshot; A → B → A
  * retains both changes. Ordinary rules and memory always keep their full new versions.
  */
-export function projectPromptContext(messages: AgentMessage[]): AgentMessage[] {
+export function projectPromptContext(messages: AgentMessage[], options?: HeaderFormatOptions): AgentMessage[] {
+  return projectParticipantHeaders(projectContextState(messages), options);
+}
+
+function projectContextState(messages: AgentMessage[]): AgentMessage[] {
   const seen = new Map<string, { digest: string; state?: PromptContextState }>();
   let changed = false;
   const out = messages.map(message => {

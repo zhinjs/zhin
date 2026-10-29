@@ -7,6 +7,7 @@ import {
   type UserMessage,
 } from '@zhin.js/ai';
 import { stripUserSpoofedSenderPrefix } from '@zhin.js/core';
+import { stampUserHeader } from './participant-header-stamp.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 
 export interface ResolvedIngressUserMessage {
@@ -41,10 +42,11 @@ export function resolveIngressUserMessage(
     intent: turn.intent.kind,
     ...(turn.intent.targetTurnId ? { targetTurnId: turn.intent.targetTurnId } : {}),
   });
-  const llmMessage = renderUserMessageForLlm({
+  const identified: UserMessage = {
     ...user,
     ...(turn.origin.kind === 'im' && turn.origin.messageId ? { messageId: turn.origin.messageId } : {}),
-  }, extra);
+  };
+  const llmMessage = renderUserMessageForLlm(turn.origin.kind === 'im' ? stampUserHeader(identified) : identified, extra);
   return Object.freeze({
     content,
     ...(extra ? { extra: Object.freeze(extra) } : {}),

@@ -56,7 +56,7 @@ describe('ContextRepository', () => {
     expect(ctx.messages[1]?.role).toBe('assistant');
   });
 
-  it('loadContext renders the persisted actor while rows store clean payload', async () => {
+  it('loadContext keeps the persisted actor while rows store clean payload', async () => {
     const actor = {
       subjectId: '1', displayName: '归雨', roles: ['master'], scope: 'group' as const,
     };
@@ -71,10 +71,8 @@ describe('ContextRepository', () => {
     const first = ctx.messages[0];
     expect(first?.role).toBe('user');
     if (first?.role === 'user') {
-      expect(first.content[0]).toMatchObject({
-        type: 'text',
-        text: '[sender:id=1 name=归雨 roles=master] 你是谁',
-      });
+      // The participant header is rendered by projectPromptContext (ADR 0041), not at load time.
+      expect(first.content[0]).toMatchObject({ type: 'text', text: '你是谁' });
     }
     const stored = parseAgentMessageRow(row);
     if (stored?.role === 'user') {
