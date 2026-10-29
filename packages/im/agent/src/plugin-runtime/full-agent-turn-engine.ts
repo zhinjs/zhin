@@ -193,6 +193,7 @@ async function* runInteractiveTurn(
     activeSkillBlocks: plan.controller.loadedSkillBlocks(),
     toldLedger: host.toldLedger?.render(prep.sessionId),
     relevantMemory,
+    systemBootstrap: options.bootstrapContext,
   });
   const providerInput = context.turn.input.media?.length
     ? prompt.modelInput
@@ -445,6 +446,7 @@ async function* runScheduleTurn(
       promptMessages: [resolveIngressUserMessage({ ...context.turn, input: { ...context.turn.input, text: rawContent } }).llmMessage],
     },
     activeSkillsContext,
+    systemBootstrap: options.bootstrapContext,
   });
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
     injectionGuard: host.config.injectionGuard,

@@ -17,7 +17,7 @@ export interface BudgetScene {
   readonly id: string;
   readonly title: string;
   readonly turns: readonly BudgetTurn[];
-  readonly base: Pick<EvalCase, 'tools' | 'skills' | 'nativeTools' | 'workspace'>;
+  readonly base: Pick<EvalCase, 'tools' | 'skills' | 'nativeTools' | 'workspace' | 'hostBootstrap'>;
 }
 
 const ARG = { type: 'string', description: 'Free-form argument describing what to look up or change.' } as const;
@@ -45,7 +45,8 @@ const SKILLS = ['group-admin', 'scheduling', 'weather', 'music', 'image-creation
   instructions: `# ${name}\nFollow the ${name} workflow step by step.`,
 }));
 
-const BASE = { tools: [...RESIDENT, ...DEFERRED], skills: SKILLS } as const;
+// hostBootstrap: measure with the production bootstrap path (system prompt), not the envelope fallback.
+const BASE = { tools: [...RESIDENT, ...DEFERRED], skills: SKILLS, hostBootstrap: true } as const;
 
 const GROUP = { scope: 'group', sender: { id: 'alice', name: 'Alice', roles: ['user'] } } as const;
 const MASTER = { scope: 'private', sender: { id: 'master', name: 'Fin', roles: ['master'] } } as const;

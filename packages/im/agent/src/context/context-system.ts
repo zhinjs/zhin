@@ -113,7 +113,7 @@ export class ContextSystem {
     const providerAlias = host.getTurnProvider().name;
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
     // The host bootstrap section (system prompt) already includes the root AGENTS.md: keep only nearer ones here.
-    const rootInSystemPrompt = /(?:^|\n)## AGENTS\.md\n/u.test(host.bootstrapContext ?? '');
+    const rootInSystemPrompt = /(?:^|\n)## AGENTS\.md\n/u.test(input.systemBootstrap ?? '');
     const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootInSystemPrompt });
 
     // Schedule ingress provides one current task; never infer its author from a history tail.
@@ -173,6 +173,8 @@ export interface TextTurnContextInput {
     promptMessages: import('@zhin.js/ai').UserMessage[];
   };
   deferredStats?: string;
+  /** The bootstrap text the system prompt of this turn actually carries (host `## <file>` sections). */
+  systemBootstrap?: string;
   quoteSystemHint?: string;
   prebuiltMessages?: AgentMessage[];
   mode?: 'chat' | 'vision';

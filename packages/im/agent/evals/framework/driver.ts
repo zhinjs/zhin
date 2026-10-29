@@ -4,7 +4,7 @@ import { renderAgentOutput } from '../../src/outbound/agent-output.js';
  * session/context systems) around the scripted model, builds a canonical
  * TurnIngress per inbound message and runs it through FullAgentTurnEngine.
  */
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
@@ -140,6 +140,8 @@ async function runInWorkspace(
   }, undefined, model.runtime);
   agent.activeBinding = { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] };
   agent.markMemoryPersistenceReady();
+  // The CLI host hands bootstrap to the turn engine (not the agent setter); mirror that.
+  const bootstrapContext = definition.hostBootstrap ? await hostBootstrapText(process.cwd()) : undefined;
   if (definition.sessionOps) {
     await agent.sessionOps.set({ expectedRevision: 0, actorId: 'eval-operator', ...definition.sessionOps });
   }
@@ -175,6 +177,7 @@ async function runInWorkspace(
     core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
     sessionSystem,
     contextSystem,
+    ...(bootstrapContext ? { bootstrapContext } : {}),
   });
 
   const executedTools: EvalToolInvocation[] = [];
@@ -505,4 +508,14 @@ function nativeSnapshot(slots: readonly ReturnType<typeof createCapabilitySlot>[
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
   };
+}
+
+/** Same shape as the CLI host's bootstrap loader (`## <file>` sections, missing files skipped). */
+async function hostBootstrapText(root: string): Promise<string> {
+  const parts: string[] = [];
+  for (const name of ['SOUL.md', 'AGENTS.md', 'TOOLS.md']) {
+    const body = (await readFile(join(root, name), 'utf8').catch(() => '')).trim();
+    if (body) parts.push(`## ${name}\n${body}`);
+  }
+  return parts.join('\n\n');
 }
