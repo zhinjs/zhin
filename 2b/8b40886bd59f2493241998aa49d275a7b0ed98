@@ -1,0 +1,49 @@
+packages/im/agent/tests/zhin-agent/file-memory-context.test.ts
+  s_9477e63ef5cee5::t_0eba80eea35420 44,50-51,55,62,72,74-75,107,111-112,129,133-135
+packages/im/ai/tests/memory/per-turn-context.test.ts
+  s_9477e63ef5cee5::t_9a6fa5471ee436 1-93,95-149
+  s_9477e63ef5cee5::t_aa12b12531bb30 94
+packages/im/ai/src/memory/user-message-presentation.ts
+  s_9477e63ef5cee5::t_7bda25325ba3fc 178,180-181
+.changeset/0043-h1-conversation-only.md
+  s_9477e63ef5cee5::t_a7b37bd0d0bab2 1-6
+packages/im/ai/src/llm/types/content-block.ts
+  s_9477e63ef5cee5::t_7bda25325ba3fc 41-46
+  s_9477e63ef5cee5::t_df3049fc303899 40
+packages/im/agent/tests/trace/context-budget.test.ts
+  s_9477e63ef5cee5::t_507d9d26093ec0 136-137
+packages/im/ai/tests/memory/prompt-context.test.ts
+  s_9477e63ef5cee5::t_d5845ae5ac2f13 16
+packages/im/ai/src/memory/prompt-context.ts
+  s_9477e63ef5cee5::t_538ed786368826 55-65,68-72,75-109,113,115,117-118,120-122
+  s_9477e63ef5cee5::t_aa12b12531bb30 110-112,114,116
+  s_9477e63ef5cee5::t_ce301240d88138 119
+  s_9477e63ef5cee5::t_997215ae775cba 66-67,73-74
+packages/im/agent/src/context/turn-envelope.ts
+  s_9477e63ef5cee5::t_7bda25325ba3fc 171-172
+packages/im/ai/src/memory/participant-header.ts
+  s_9477e63ef5cee5::t_7bda25325ba3fc 229,231
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_7bda25325ba3fc 649
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_9477e63ef5cee5::t_97aaf5cc87b29d 39-41
+  s_9477e63ef5cee5::t_507d9d26093ec0 225
+  s_9477e63ef5cee5::t_b4b555581308f5 71
+  s_9477e63ef5cee5::t_c8768478c596df 121-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2b8b40886bd59f2493241998aa49d275a7b0ed98",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
