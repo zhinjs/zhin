@@ -2064,7 +2064,7 @@ describe('IM Runtime', () => {
     const message = { conversation, id: 'message-1' };
 
     expect(fixture.im.endpoints.capabilities({ adapter: 'memory', endpointKey: 'memory' }))
-      .toEqual({
+      .toMatchObject({
         inbound: true,
         outbound: true,
         operations: { recall: true, edit: true, reaction: true, typing: true },

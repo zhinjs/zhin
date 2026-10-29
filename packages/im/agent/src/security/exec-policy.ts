@@ -12,11 +12,11 @@
 
 import type { AgentTool } from '@zhin.js/ai';
 import type { ZhinAgentConfig, ExecApprovalMode } from '../config/index.js';
+import { hasSensitiveExecCommand, isSensitiveExecSubcommand } from './sensitive-exec-commands.js';
 import { classifyBashCommand } from './file-policy.js';
 import { validateNetworkCommandUrl } from './network-policy.js';
 import { getCurrentCommMessage, getCurrentOwnerApprovalRuntime } from './comm-message-context.js';
 import {
-  isIcqqSensitiveSubcommand,
   ownerApprovalAddressFromMessage,
   resolveToolRequesterRole,
   type ToolRequesterRole,
@@ -451,7 +451,7 @@ export function resolveExecAllowlist(config: Required<ZhinAgentConfig>): string[
   return merged;
 }
 
-function tryExecBypassForSensitiveIcqq(normalizedSubCommand: string): boolean {
+function tryExecBypassForSensitiveCommand(normalizedSubCommand: string): boolean {
   const commMessage = getCurrentCommMessage();
   if (!commMessage?.clientAdapter || !commMessage?.endpointId) return false;
   try {
@@ -497,13 +497,14 @@ function checkSingleCommand(
     return { allowed: true };
   }
 
-  // 3.5 icqq CLI（allowlist 模式）：非敏感子命令直接放行；敏感子命令可走 Owner 正则/永久放行
-  if (security === 'allowlist' && cmdName === 'icqq') {
+  // 3.5 平台 CLI（allowlist 模式）：非敏感子命令直接放行；敏感子命令可走 Owner 正则/永久放行。
+  // 命令名与敏感子命令由所属适配器通过 registerSensitiveExecCommand 声明（ADR 0044）。
+  if (security === 'allowlist' && hasSensitiveExecCommand(cmdName)) {
     const norm = stripSafeWrappers(stripEnvVarPrefix(fullSubCommand.trim()));
-    if (!isIcqqSensitiveSubcommand(norm)) {
+    if (!isSensitiveExecSubcommand(cmdName, norm)) {
       return { allowed: true };
     }
-    if (tryExecBypassForSensitiveIcqq(norm)) {
+    if (tryExecBypassForSensitiveCommand(norm)) {
       return { allowed: true };
     }
     if (requesterRole === 'master') {
@@ -513,13 +514,13 @@ function checkSingleCommand(
       return {
         allowed: false,
         needsApproval: true,
-        reason: `icqq 敏感操作不在 execAllowlist，需 Owner 确认：${norm.slice(0, 280)}`,
+        reason: `${cmdName} 敏感操作不在 execAllowlist，需 Owner 确认：${norm.slice(0, 280)}`,
       };
     }
     if (requesterRole === 'other') {
       return {
         allowed: false,
-        reason: `icqq 敏感操作仅允许 owner 直接执行；admin 需 Owner 审批：${norm.slice(0, 280)}`,
+        reason: `${cmdName} 敏感操作仅允许 owner 直接执行；admin 需 Owner 审批：${norm.slice(0, 280)}`,
       };
     }
     if (approvalMode === 'bypass') {
@@ -530,8 +531,8 @@ function checkSingleCommand(
         allowed: false,
         needsApproval: true,
         reason: approvalMode === 'auto'
-          ? `icqq 敏感操作需审核 Agent 确认：${norm.slice(0, 280)}`
-          : `icqq 敏感操作需 Endpoint Owner 确认：${norm.slice(0, 280)}`,
+          ? `${cmdName} 敏感操作需审核 Agent 确认：${norm.slice(0, 280)}`
+          : `${cmdName} 敏感操作需 Endpoint Owner 确认：${norm.slice(0, 280)}`,
       };
     }
   }

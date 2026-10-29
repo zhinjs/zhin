@@ -161,6 +161,13 @@ export interface AgentToolDefinition<
   /** Restrict this tool to one adapter and infer `context.$client`. */
   readonly adapter?: TAdapter;
   readonly platforms?: readonly string[];
+  /**
+   * ADR 0044: capability paths the turn's platform must offer (`actions.mute`, `actions.recall.others`,
+   * `scene.memberProfile`, ...). Evaluated against the per-turn `TurnCapabilities`, so a tool that kicks
+   * members disappears when the Bot is not an administrator. Absent or empty means no requirement;
+   * a turn without platform capabilities (non-IM) does not satisfy a declared requirement.
+   */
+  readonly requiresCapabilities?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   /** Required Bot platform roles in the current conversation, not a parameter-selected target. */
   readonly currentConversationBotRoles?: readonly string[];
@@ -281,6 +288,7 @@ export function defineAgentTool<
     throw new TypeError(`Invalid Agent Tool riskCategory: ${String(definition.riskCategory)}`);
   }
   validateStringList('platforms', definition.platforms);
+  validateStringList('requiresCapabilities', definition.requiresCapabilities);
   validateStringList('currentConversationBotRoles', definition.currentConversationBotRoles);
   validateStringList('permissions', definition.permissions);
   validateStringList('tags', definition.tags);
@@ -300,6 +308,7 @@ export function defineAgentTool<
   return Object.freeze({
     ...definition,
     platforms: freezeList(typeof adapter === 'string' ? [adapter] : definition.platforms),
+    requiresCapabilities: freezeList(definition.requiresCapabilities),
     scopes: freezeList(definition.scopes),
     currentConversationBotRoles: freezeList(definition.currentConversationBotRoles),
     permissions: freezeList(definition.permissions),
@@ -346,6 +355,7 @@ export function parseAgentToolDefinition(
       && definition.requiresApproval !== 'once'
       && definition.requiresApproval !== 'always' && definition.requiresApproval !== 'human')
     || !validStringList(definition.platforms)
+    || !validStringList((definition as { requiresCapabilities?: readonly string[] }).requiresCapabilities)
     || !validStringList(definition.currentConversationBotRoles)
     || !validStringList(definition.permissions)
     || !validStringList(definition.tags)

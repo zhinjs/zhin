@@ -10,6 +10,8 @@ export default defineAgentTool<{ group_id: number; user_id: number; duration?: n
     duration: z.number().describe('禁言时间(秒)，0=解除禁言').default(0),
   }),
   adapter: 'icqq',
+  // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
+  requiresCapabilities: ['actions.mute'],
   scopes:['group'],
   requiresApproval: 'always',
   async execute({ group_id, user_id, duration }, context) {

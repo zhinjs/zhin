@@ -29,8 +29,11 @@ export function renderPageShell(page: {
   readonly route: string;
   readonly module: string;
   readonly localName: string;
-}): string {
-  const isSandbox = page.localName === 'sandbox';
+}, options: {
+  /** The page belongs to a plugin whose Endpoint declares `runtime.sandbox` (ADR 0044). */
+  readonly runtimeSandbox?: boolean;
+} = {}): string {
+  const isSandbox = options.runtimeSandbox === true;
   return `<!doctype html>
 <html lang="zh-CN">
 <head>

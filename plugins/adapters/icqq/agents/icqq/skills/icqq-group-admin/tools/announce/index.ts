@@ -8,6 +8,8 @@ export default defineAgentTool<{ group_id: number; content: string }>({
     content: z.string().describe('公告内容'),
   }),
   adapter: 'icqq',
+  // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
+  requiresCapabilities: ['actions.announce'],
   requiresApproval: 'once',
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],

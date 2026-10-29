@@ -9,6 +9,8 @@ export default defineAgentTool<{ group_id: number; user_id: number; reason: stri
     reason: z.string().min(1).describe('本次踢人的具体原因，随目标群和成员一起供人工确认'),
   }),
   adapter: 'icqq',
+  // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
+  requiresCapabilities: ['actions.kick'],
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],
   requiresApproval: 'human',

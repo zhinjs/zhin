@@ -67,6 +67,7 @@ describe('activityFeedback config', () => {
 describe('ActivityFeedbackOrchestrator', () => {
   it('策略为 none 时不应调用 executor', async () => {
     const executor = {
+      kindCapabilities: vi.fn(() => undefined),
       start: vi.fn(),
       stop: vi.fn(),
       updateText: vi.fn(),
@@ -107,6 +108,7 @@ describe('ActivityFeedbackOrchestrator', () => {
 
   it('子 agent 的 message phase 应带 [agentId] 前缀', async () => {
     const executor = {
+      kindCapabilities: vi.fn(() => undefined),
       start: vi.fn(),
       stop: vi.fn(),
       updateText: vi.fn(),
@@ -163,6 +165,7 @@ describe('ActivityFeedbackOrchestrator', () => {
 
   it('dispose 清理所有仍活跃的主/子 Agent phase', async () => {
     const executor = {
+      kindCapabilities: vi.fn(() => undefined),
       start: vi.fn(),
       stop: vi.fn(),
       updateText: vi.fn(),
@@ -199,6 +202,7 @@ describe('ActivityFeedbackOrchestrator', () => {
 
   it('dispose 清理同一会话中每条尚未处理消息的 phase', async () => {
     const executor = {
+      kindCapabilities: vi.fn(() => ({ reaction: true, edit: false, recall: true, needsReply: false, feedback: { mode: 'reaction' as const } })),
       start: vi.fn(),
       stop: vi.fn(),
       updateText: vi.fn(),
@@ -229,6 +233,7 @@ describe('ActivityFeedbackOrchestrator', () => {
 
   it('tracks delimiter-containing endpoint tuples without phase-key collisions', async () => {
     const executor = {
+      kindCapabilities: vi.fn(() => undefined),
       start: vi.fn(),
       stop: vi.fn(),
       updateText: vi.fn(),
@@ -273,6 +278,7 @@ describe('ActivityFeedbackOrchestrator', () => {
     let releaseStop!: () => void;
     const stopPending = new Promise<void>((resolve) => { releaseStop = resolve; });
     const executor = {
+      kindCapabilities: vi.fn(() => undefined),
       start: vi.fn().mockResolvedValue(undefined),
       stop: vi.fn(() => stopPending),
       updateText: vi.fn(),

@@ -82,12 +82,6 @@ export function filterTools(
   const scored: { tool: AgentTool; score: number }[] = [];
 
   const queryTrimmed = message.trim().toLowerCase();
-  const icqqIntent =
-    queryTrimmed.includes('icqq') ||
-    (queryTrimmed.includes('friend') && queryTrimmed.includes('like')) ||
-    (queryTrimmed.includes('点赞') && queryTrimmed.includes('qq')) ||
-    (queryTrimmed.includes('qq') && queryTrimmed.includes('点赞'));
-
   for (const tool of tools) {
     let score = 0;
     const nameLower = tool.name.toLowerCase();
@@ -103,13 +97,6 @@ export function filterTools(
     for (const mw of msgTokens) {
       if (mw === nameLower) score += 8.0;
       else if (nameLower === mw || nameLower.includes(mw)) score += 3.0;
-    }
-
-    if (icqqIntent) {
-      if (nameLower.startsWith('mcp_icqq_')) score += 7.0;
-      else if (nameLower.startsWith('icqq_')) score += 6.0;
-      else if (nameLower === 'bash') score += 2.0;
-      else if (nameLower.startsWith('mcp_')) score *= 0.12;
     }
 
     // 1. keywords（最高基础权重）—— 双向匹配：查询包含关键词 或 关键词包含查询 token

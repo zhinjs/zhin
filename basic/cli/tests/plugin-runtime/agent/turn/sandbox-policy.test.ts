@@ -4,7 +4,7 @@ import { resolveSandboxTurnPolicy } from '../../../../src/plugin-runtime/agent/t
 describe('sandbox per-session Turn policy', () => {
   it('maps workspace-write into a bounded workspace and interactive shell policy', () => {
     expect(resolveSandboxTurnPolicy({
-      platform: 'sandbox',
+      runtimeSandbox: true,
       isMaster: true,
       projectRoot: '/projects/zhin',
       metadata: { sandboxAgentRun: {
@@ -26,7 +26,7 @@ describe('sandbox per-session Turn policy', () => {
 
   it('uses the filesystem root only for explicit danger-full-access', () => {
     expect(resolveSandboxTurnPolicy({
-      platform: 'sandbox', isMaster: true, projectRoot: '/projects/zhin',
+      runtimeSandbox: true, isMaster: true, projectRoot: '/projects/zhin',
       metadata: { sandboxAgentRun: {
         workingDirectory: '/tmp/work', safetyMode: 'danger-full-access',
         approvalMode: 'bypass', networkAccess: false,
@@ -38,18 +38,18 @@ describe('sandbox per-session Turn policy', () => {
     });
   });
 
-  it('ignores execution metadata from non-sandbox or non-owner ingress', () => {
+  it('ignores execution metadata from a non-sandbox (capability absent) or non-owner ingress', () => {
     const metadata = { sandboxAgentRun: {
       workingDirectory: '/', safetyMode: 'danger-full-access', approvalMode: 'bypass', networkAccess: true,
     } };
-    expect(resolveSandboxTurnPolicy({ platform: 'sandbox', isMaster: false, projectRoot: '/safe', metadata }))
+    expect(resolveSandboxTurnPolicy({ runtimeSandbox: true, isMaster: false, projectRoot: '/safe', metadata }))
       .toEqual({ filesystem: { workspaceRoot: '/safe', workingDirectory: '/safe', access: 'workspace-write' } });
-    expect(resolveSandboxTurnPolicy({ platform: 'icqq', isMaster: true, projectRoot: '/safe', metadata }))
+    expect(resolveSandboxTurnPolicy({ runtimeSandbox: false, isMaster: true, projectRoot: '/safe', metadata }))
       .toEqual({ filesystem: { workspaceRoot: '/safe', workingDirectory: '/safe', access: 'workspace-write' } });
   });
 
   describe('IM master shell opt-in (ai.agent.masterShell)', () => {
-    const base = { platform: 'icqq', projectRoot: '/projects/bot', metadata: {} } as const;
+    const base = { runtimeSandbox: false, projectRoot: '/projects/bot', metadata: {} } as const;
 
     it('keeps bash disabled by default', () => {
       expect(resolveSandboxTurnPolicy({ ...base, isMaster: true, scope: 'private' }).shell).toBeUndefined();

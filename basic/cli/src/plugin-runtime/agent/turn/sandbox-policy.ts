@@ -2,7 +2,8 @@ import * as path from 'node:path';
 import type { TurnRequest } from '@zhin.js/agent';
 
 export interface SandboxTurnPolicyInput {
-  readonly platform: string;
+  /** The turn's Endpoint declares `runtime.sandbox` (ADR 0044): the authenticated local sandbox ingress. */
+  readonly runtimeSandbox: boolean;
   readonly isMaster: boolean;
   /** Conversation scope of the IM turn; IM shell access is only ever granted in private chats. */
   readonly scope?: 'private' | 'group' | 'channel';
@@ -33,7 +34,7 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
     }),
     ...(input.defaultNetwork ? { network: input.defaultNetwork } : {}),
   });
-  if (input.platform !== 'sandbox') {
+  if (!input.runtimeSandbox) {
     return allowsMasterImShell(input)
       ? Object.freeze({ ...fallback, shell: MASTER_IM_ISOLATED_SHELL })
       : fallback;

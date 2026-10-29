@@ -16,16 +16,15 @@ import {
   type TypingIndicatorOptions,
 } from '../typing-indicator/index.js';
 import {
-  PLATFORM_FEATURES,
   buildTypingSendContent,
-  type PlatformFeatures,
+  type ActivityFeedbackKindCapabilities,
 } from '../typing-indicator/adapter-integration.js';
 import { ActivityFeedbackManager } from './manager.js';
 import type { ActivityFeedbackPhase, ResolvedActivityFeedbackPhaseConfig } from './types.js';
 
 const logger = getLogger('ActivityFeedback');
 
-export { PLATFORM_FEATURES, buildTypingSendContent, type PlatformFeatures };
+export { buildTypingSendContent, type ActivityFeedbackKindCapabilities };
 
 /**
  * Narrow outbound seam used by activity feedback.
@@ -84,7 +83,7 @@ function createOutboundSendMessage(
 ): (options: TypingIndicatorOptions, content: string) => Promise<string | null> {
   return async (options, content) => {
     try {
-      const segments = buildTypingSendContent(platform, options, content);
+      const segments = buildTypingSendContent(endpoint.kinds?.[options.sceneType], options, content);
       if (!segments) return null;
       const { type, id } = resolveSendTarget(options);
       if (outbound) {
@@ -148,6 +147,8 @@ export interface EndpointWithActivityFeedback {
   readonly $id: string;
   /** Runtime IO/control belongs to the concrete Endpoint, never the Adapter definition. */
   readonly control?: EndpointControl;
+  /** What the Endpoint's capability profile declares per conversation kind (ADR 0044). */
+  readonly kinds?: Readonly<Partial<Record<'private' | 'group' | 'channel', ActivityFeedbackKindCapabilities>>>;
   $activityFeedback?: BotActivityFeedbackManager;
 }
 

@@ -10,6 +10,9 @@ import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
+/** A declared profile (not a legacy-derived one): group scene lookups are usable, private ones are not. */
+const sceneProfile = { group: { scene: { groupInfo: true, memberProfile: true } } };
+
 describe('AgentTurnIngressRoute', () => {
   function roleIngress() {
     const endpoint = { id: 'root\u0000zhin.adapter\u0000icqq', adapter: 'icqq' };
@@ -19,7 +22,7 @@ describe('AgentTurnIngressRoute', () => {
     const snapshot = {
       root: rootPluginId(), resources: new Map(), tree: new Map(), capabilities: new Map(),
       projections: new Map([[adapterFeatureId, {
-        $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: '8596238', management: { inspectGroupMember } }),
+        $projection: 'zhin.adapter-index/1', capabilityProfile: () => sceneProfile, connection: () => ({ selfUserId: '8596238', management: { inspectGroupMember } }),
       }]]),
     } as unknown as RuntimeSnapshot;
     const read = vi.fn().mockResolvedValue({ agents: [], tools: [] });
@@ -88,7 +91,7 @@ describe('AgentTurnIngressRoute', () => {
     const snapshot = {
       root: rootPluginId(), resources: new Map(), tree: new Map(),
       projections: new Map([[adapterFeatureId, {
-        $projection: 'zhin.adapter-index/1',
+        $projection: 'zhin.adapter-index/1', capabilityProfile: () => ({}),
         connection: (adapter: string, id: string) => adapter === endpoint.id && id === endpoint.id
           ? { selfUserId: 'actual-platform-account' }
           : undefined,

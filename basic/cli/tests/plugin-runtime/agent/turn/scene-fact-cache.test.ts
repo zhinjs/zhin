@@ -7,13 +7,16 @@ import { SceneFactRefresher } from '../../../../src/plugin-runtime/agent/turn/sc
 import { SceneEventIngress } from '../../../../src/plugin-runtime/agent/turn/scene-event-ingress.js';
 import { applySceneEventToFacts } from '../../../../src/plugin-runtime/agent/turn/scene-fact-events.js';
 
+/** A declared profile (not a legacy-derived one): group scene lookups are usable, private ones are not. */
+const sceneProfile = { group: { scene: { groupInfo: true, memberProfile: true } } };
+
 const T0 = Date.parse('2026-10-29T02:00:00Z');
 const endpoint = { id: 'endpoint', adapter: 'icqq' };
 const conversation = { endpoint, kind: 'group' as const, id: '100' };
 const BOT = '8596238';
 
 function generation(management: object) {
-  const index = { $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: BOT, management }) };
+  const index = { $projection: 'zhin.adapter-index/1', capabilityProfile: () => sceneProfile, connection: () => ({ selfUserId: BOT, management }) };
   return { index, snapshot: { projections: new Map([[adapterFeatureId, index]]) } as never };
 }
 

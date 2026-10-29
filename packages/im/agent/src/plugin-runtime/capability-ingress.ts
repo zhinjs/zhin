@@ -323,7 +323,9 @@ function isSelectedAgentTool(
 }
 
 async function canAccessDescriptor(
-  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions' | 'currentConversationBotRoles'>,
+  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions' | 'currentConversationBotRoles'> & {
+    readonly requiresCapabilities?: readonly string[];
+  },
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
 ): Promise<boolean> {
@@ -334,6 +336,14 @@ async function canAccessDescriptor(
   }
   if (descriptor.scopes?.length) {
     if (turn?.origin.kind !== 'im' || !descriptor.scopes.includes(turn.origin.scope)) {
+      return false;
+    }
+  }
+  // ADR 0044: the per-turn platform capabilities (static profile narrowed by Bot role, mute, adapter
+  // resolver) decide visibility. Missing capabilities fail closed, so no platform name or keyword is read.
+  if (descriptor.requiresCapabilities?.length) {
+    const platformCapabilities = turn?.input?.platformCapabilities;
+    if (!platformCapabilities || !descriptor.requiresCapabilities.every((path) => platformCapabilities.has(path))) {
       return false;
     }
   }

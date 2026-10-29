@@ -8,6 +8,7 @@ import {
   createLlmMediaPerceptionPort,
   discoverWorkspaceAgents,
   publishOutboundElements,
+  resolveOutboundCapabilities,
   NO_MEDIA_AUTHORITY,
   type AiControlPlane,
   type ApprovalPort,
@@ -250,6 +251,10 @@ export function createRuntimeProactiveOutbound(
     auditOutbound(audit, { status: 'suppressed' }, { source: `proactive:${ctx.source}`, control: true });
     throw new ControlBlockedOutboundError(verdict.reasonCode);
   };
+  const mediaCapabilities = (scene: ProactiveSendContext['scene']) => resolveOutboundCapabilities(scene.platform, {
+    capabilities: im.endpoints.capabilities({ adapter: scene.platform, endpointKey: scene.endpointKey }),
+    kind: scene.kind as 'private' | 'group' | 'channel',
+  });
   return {
     async send(ctx, content) {
       guard(ctx);
@@ -265,10 +270,11 @@ export function createRuntimeProactiveOutbound(
       });
       return result.messageId || 'ok';
     },
+    mediaCapabilities,
     async sendElements(ctx, elements) {
       guard(ctx);
       // Proactive sends carry no Turn policy: only inline media, no model-referenced paths or URLs.
-      const content = await publishOutboundElements(elements, ctx.scene.platform, undefined, { ...NO_MEDIA_AUTHORITY, imageAssets });
+      const content = await publishOutboundElements(elements, ctx.scene.platform, mediaCapabilities(ctx.scene), { ...NO_MEDIA_AUTHORITY, imageAssets });
       if (content.length === 0) return [];
       const id = await this.send(ctx, content);
       return [id];

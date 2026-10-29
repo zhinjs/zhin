@@ -2418,6 +2418,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../../packages/im/agent-feature
