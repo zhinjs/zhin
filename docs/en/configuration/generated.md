@@ -246,7 +246,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.deferredTools` | object | no | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | no | — | — |
 | `ai.agent.deferredTools.discoverTopK` | number \| string | no | — | — |
-| `ai.agent.deferredTools.alwaysLoadedTools` | array&lt;string&gt; | no | — | 额外常驻工具；默认在内置常驻集合基础上追加 |
+| `ai.agent.deferredTools.alwaysLoadedTools` | array&lt;string&gt; | no | — | 额外常驻工具；在当前场景档（群聊、私聊、主人私聊）的常驻集合基础上追加 |
 | `ai.agent.deferredTools.alwaysLoadedMode` | string | no | — | `extend`（默认）追加到内置常驻集合；`replace` 完全替换 |
 | `ai.agent.deferredTools.mcpServers` | object | no | — | — |
 | `ai.agent.deferredTools.mcpServers.<key>.alwaysLoaded` | array&lt;string&gt; | no | — | — |

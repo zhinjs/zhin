@@ -117,12 +117,21 @@ ai:
 
 工具很多时，把所有工具的参数定义都塞进提示词会占满上下文。Zhin 的做法是**延迟加载**：回合只常驻少量元工具，模型需要时再检索、按名加载。
 
-默认常驻的核心工具集（`alwaysLoadedTools`）分两组：
+常驻工具按**场景分档**（ADR 0042），由宿主按回合的来源和角色决定，不需要配置：
 
-- 交互与编排：`ask_user`、`spawn_task`，以及元工具 `discover`、`load_tool`、`load_skill`。
-- 工作区文件：`read_file`、`list_dir`、`glob`、`grep`、`edit_file`、`write_file`。模型最常直接调用它们，常驻可以省掉一次"未知工具"的往返。它们仍然受本回合的工具过滤和执行策略约束，例如群成员发起的回合拿不到写文件工具。
+| 场景 | 常驻工具 |
+|---|---|
+| 群聊、频道、普通私聊（含信任名单成员的私聊） | 聊天必需：`pick_sticker`、`memory_search`、`conversation_info`，以及元工具 `discover`、`load_tool`、`load_skill` |
+| 主人私聊 | 上述 + 开发与编排工具：`read_file`、`list_dir`、`glob`、`grep`、`edit_file`、`write_file`、`bash`、`ask_user`、`spawn_task` |
+| 定时、后台、子 agent 等非 IM 回合 | 沿用原默认集合：`ask_user`、`spawn_task`、元工具和工作区文件工具 |
 
-`bash` 不常驻，因为它能不能用取决于本回合的 shell 隔离策略。配置 `alwaysLoadedTools` 会在默认列表上**追加**；如需完全替换默认列表，设置 `alwaysLoadedMode: replace`。
+非主人回合不常驻开发工具：它们仍在工具索引里，但只对有权限的回合可加载（权限不变），群聊里模型不会再拿 `grep` 去翻源码。工具名不在当前场景档里时，模型直接按名字调用也会自动加载，不必先 `load_tool`。`bash` 能不能用仍取决于本回合的 shell 隔离策略，被策略拿掉就不会常驻。
+
+配置 `alwaysLoadedTools` 会在当前档的基础上**追加**；设置 `alwaysLoadedMode: replace` 则完全由 `alwaysLoadedTools` 决定。
+
+**直接调用即加载。** 模型按**确切名字**调用一个在本回合已授权目录里、但还没加载的工具时，运行时自动加载并执行，之后在本会话保持已加载（受 `maxLoadedPerSession` 限制，超出时淘汰最久未用的）。不在授权目录里的名字照旧返回"未知工具"，不泄露其是否存在；审批、硬闸和权限检查对自动加载的调用照常生效。`discover` 的结果会附带最匹配的至多 3 个工具的完整参数定义并同时加载它们，模型可以立刻调用。
+
+**工具列表保持稳定。** 发给模型服务的工具列表顺序固定：常驻工具按名称排序，已加载工具按首次加载顺序排在后面；新加载的工具只会追加到末尾，已加载的工具在会话内保持不动。这样提示词缓存前缀不会因为加载新工具而失效（超出 `maxLoadedPerSession` 淘汰旧工具时会产生一次缓存未命中）。
 
 插件工具默认延迟加载。插件作者可以在 `defineAgentTool` 里写 `alwaysLoaded: true` 让个别高频工具常驻（每轮最多 8 个，`alwaysLoadedMode: replace` 时忽略），详见[让工具常驻](../authoring/agent-tools.md#让工具常驻)。常驻工具的参数定义每轮都会发送，集合越小越省上下文和 token。
 
@@ -148,7 +157,7 @@ ai:
     deferredTools:
       maxLoadedPerSession: 12   # 单会话最多载入工具数（默认 12）
       discoverTopK: 5           # discover 返回条数（默认 5）
-      alwaysLoadedTools: [ask_user, spawn_task, discover, load_tool, load_skill]
+      alwaysLoadedTools: [weather]   # 在当前场景档基础上追加的常驻工具
       mcpServers:
         icqq: { alwaysLoaded: [send_msg] }   # 指定 MCP server 的常驻工具
 ```

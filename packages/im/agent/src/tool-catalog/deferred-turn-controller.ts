@@ -1,6 +1,6 @@
 import {
   addSkillToSnapshot,
-  getLoadedToolNamesFromSnapshot,
+  getLoadedToolNamesInLoadOrder,
   touchToolInSnapshot,
   touchToolsInSnapshot,
   type AgentTool,
@@ -172,7 +172,7 @@ export function createDeferredTurnController(
   return Object.freeze({
     tools: Object.freeze(tools),
     snapshot: () => currentSnapshot,
-    loadedToolNames: () => getLoadedToolNamesFromSnapshot(currentSnapshot),
+    loadedToolNames: () => getLoadedToolNamesInLoadOrder(currentSnapshot),
     tool: (name: string) => byName.get(name)?.fullTool,
     load: async (name: string) => (await loadTool(name)) !== undefined,
     fork: () => createDeferredTurnController({

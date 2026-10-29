@@ -84,7 +84,7 @@ describe('Workroom DeferredCapabilityPlan realization', () => {
       'read_repo', 'discover', 'load_tool', 'load_skill',
     ]);
     expect(plan.resolvedTools.map((entry) => entry.name)).toEqual([
-      'discover', 'load_tool', 'load_skill', 'read_repo',
+      'discover', 'load_skill', 'load_tool', 'read_repo',
     ]);
     expect(plan.controller.loadedToolNames()).toEqual(['read_repo']);
     expect(plan.controller.loadedSkillInstructions()).toEqual(['Use primary sources.']);

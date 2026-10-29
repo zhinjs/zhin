@@ -26,7 +26,6 @@ import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/app
 import { applyTurnTrust, resolveTurnTrustLevel } from '../../src/security/trust-level.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type ConversationContextPort, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
-import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
@@ -124,9 +123,9 @@ async function runInWorkspace(
     ...(definition.nativeTools ?? []).filter((name) => name.startsWith('memory_') || name.startsWith('web_')),
   ];
   // Mocked tools are always loaded so scripts can call them without a
-  // discover/load_tool round trip; the default always-loaded set is kept.
+  // discover/load_tool round trip; the scene-tier defaults still apply on top (ADR 0042 §2).
   const alwaysLoadedTools = [
-    ...(definition.agentConfig?.deferredTools?.alwaysLoadedTools ?? DEFAULT_DEFERRED_TOOLS_CONFIG.alwaysLoadedTools),
+    ...(definition.agentConfig?.deferredTools?.alwaysLoadedTools ?? []),
     ...toolNames,
   ];
   const agent = new ZhinAgent(model.provider, {

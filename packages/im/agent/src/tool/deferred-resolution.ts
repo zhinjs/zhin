@@ -1,4 +1,4 @@
-import { type AgentTool, type LlmTool, getLoadedToolNamesFromSnapshot, addSkillToSnapshot, touchToolsInSnapshot, type DeferredToolSessionSnapshot } from '@zhin.js/ai';
+import { type AgentTool, type LlmTool, getLoadedToolNamesInLoadOrder, addSkillToSnapshot, touchToolsInSnapshot, type DeferredToolSessionSnapshot } from '@zhin.js/ai';
 import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
 import { agentToolToLlmTool } from '../tool-bridge.js';
 import {
@@ -87,7 +87,7 @@ export async function resolveAgentToolsForTurn(
     mcpServerByTool,
     alwaysLoaded,
   });
-  const sessionLoaded = getLoadedToolNamesFromSnapshot(sessionSnapshot);
+  const sessionLoaded = getLoadedToolNamesInLoadOrder(sessionSnapshot);
   const apiTools = resolveDeferredApiTools(catalog, alwaysLoaded, sessionLoaded);
   const deferredStats = buildDeferredStats(catalog, apiTools);
 

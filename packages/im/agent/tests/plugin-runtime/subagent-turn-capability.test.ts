@@ -77,7 +77,7 @@ async function runQqTurn(options: {
         if (isChild) {
           reply = await (options.child ?? (async () => 'child report'))(input);
         } else {
-          const spawn = (input.resolvedTools as AgentTool[]).find(tool => tool.name === 'spawn_task');
+          const spawn = (input.allTools as AgentTool[]).find(tool => tool.name === 'spawn_task');
           if (spawn) {
             spawnResult = await input.toolExecution.execute(spawn, options.spawnArgs ?? { task: 'inspect src' }, 'tu-spawn');
           }

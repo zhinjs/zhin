@@ -32,7 +32,7 @@ import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
-import { resolveAlwaysLoadedSet } from '../tool-catalog/resolve-config.js';
+import { DEFERRED_META_TOOL_NAMES } from '../tool-catalog/types.js';
 import { resolveDeferredApiTools, residentToolNames } from '../tool-catalog/tool-catalog.js';
 import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
@@ -574,8 +574,9 @@ export async function* runAgentLoopTextTurnRun(
     throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
   }
 
-  // Config names plus tools the capability plan pinned (platform tools, `alwaysLoaded` plugin tools).
-  const turnResidentTools = () => residentToolNames(catalog, resolveAlwaysLoadedSet(host.config));
+  // The meta tools plus every catalog item the capability plan pinned (scene tier, config names,
+  // platform tools, `alwaysLoaded` plugin tools). Config names alone would re-add tier-excluded tools.
+  const turnResidentTools = () => residentToolNames(catalog, DEFERRED_META_TOOL_NAMES);
   const refreshResolvedTools = () => {
     if (directTools) return resolvedTools;
     const alwaysLoaded = turnResidentTools();
