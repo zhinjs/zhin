@@ -1,0 +1,16 @@
+scripts/ci/validation-plan.mjs
+  h_b680f75345178a 14-17,20
+scripts/ci/validation-plan.test.ts
+  h_b680f75345178a 75-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ea32586406419b2c52c0963360e7c06d277aa98f",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
