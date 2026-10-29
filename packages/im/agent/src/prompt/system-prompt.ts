@@ -27,6 +27,7 @@ import { triggerSentence } from '../skill/capability-catalog.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
 import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
+import { buildSceneDeliveryGuidance, buildStablePlatformGuidance } from './platform-guidance.js';
 import { PromptSegmentRegistry } from './segments/registry.js';
 import type { PromptSegment, SegmentInput, TextSegmentKind } from './segments/types.js';
 import type { SystemPromptParts } from './segments/registry.js';
@@ -103,6 +104,8 @@ export interface RichSystemPromptContext {
   segments?: readonly PromptSegment[];
   /** ADR 0041 `scene` line (built by the turn context, rendered after the cache breakpoint). */
   sceneText?: string;
+  /** ADR 0044 §4: the turn's adapter is not owned by the agent owner; its custom text is `external_content`. */
+  platformGuidanceExternal?: boolean;
 }
 
 // ── Section builders ──
@@ -570,6 +573,27 @@ export function createDefaultPromptAssemblyRegistry(
   return registry;
 }
 
+/** ADR 0044 §4: stable `platform` text plus the time-varying delivery state in `scene`. */
+function createPlatformGuidanceSegments(ctx: RichSystemPromptContext): PromptSegment[] {
+  const origin = ctx.turn?.origin;
+  const caps = ctx.turn?.input?.platformCapabilities;
+  if (origin?.kind !== 'im' || !caps) return [];
+  const locale = ctx.turn?.input?.locale;
+  const stable = buildStablePlatformGuidance(caps, {
+    locale,
+    external: ctx.platformGuidanceExternal,
+    source: `adapter:${origin.platform}`,
+  });
+  const scene = buildSceneDeliveryGuidance(caps, {
+    locale,
+    mutedUntil: ctx.turn?.input?.contextState?.bot?.mutedUntil ?? undefined,
+  });
+  const out: PromptSegment[] = [];
+  if (stable) out.push({ id: '§2_platform', kind: 'platform', weight: 125, retention: 'preferred', inject: () => stable });
+  if (scene) out.push({ id: '§2_platform_state', kind: 'scene', weight: 90, retention: 'preferred', inject: () => scene });
+  return out;
+}
+
 /**
  * ADR 0041 §3 built-in mapping: every default section as a text segment. `weight` keeps the
  * section's former `order`, so relative priority inside a kind and the budget yield order are
@@ -583,6 +607,7 @@ export function createBuiltinPromptSegments(ctx: RichSystemPromptContext): Promp
     retention: definition.retention,
     inject: () => definition.content(ctx),
   }));
+  segments.push(...createPlatformGuidanceSegments(ctx));
   if (ctx.sceneText?.trim()) {
     const sceneText = ctx.sceneText;
     segments.push({ id: '§0_scene', kind: 'scene', weight: 100, retention: 'preferred', inject: () => sceneText });

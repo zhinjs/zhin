@@ -1,4 +1,5 @@
-import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
@@ -65,6 +66,8 @@ export interface AgentCapabilities {
   readonly promptSections: readonly PromptSectionDescriptor[];
   /** ADR 0041 segments provided on plugin Scopes via `promptSegmentToken`, of this generation. */
   readonly promptSegments?: readonly PromptSegment[];
+  /** ADR 0044 §4: the turn's adapter plugin is not the agent owner, so its prompt text is external content. */
+  readonly platformGuidanceExternal?: boolean;
 }
 
 export class CapabilityIngress {
@@ -125,12 +128,24 @@ export class CapabilityIngress {
       agents: featureAgents,
       mcp: bindMcp(mcp, owner, isActive, snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined),
       promptSegments: collectPromptSegments(snapshot, owner),
+      platformGuidanceExternal: adapterIsExternal(snapshot, owner, turn),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
         .filter((section) => !section.platforms
           || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))
         .filter((section) => !section.scopes
           || (turn?.origin.kind === 'im' && section.scopes.includes(turn.origin.scope)))),
     });
+  }
+}
+
+function adapterIsExternal(snapshot: RuntimeSnapshot, owner: PluginId, turn?: TurnAccessContext): boolean {
+  const endpoint = turn?.origin.kind === 'im' ? turn.origin.conversation?.endpoint.id : undefined;
+  const adapters = snapshot.projections.get(adapterFeatureId);
+  if (!endpoint || !isAdapterIndex(adapters)) return false;
+  try {
+    return adapters.owner(endpoint as CapabilityId) !== owner;
+  } catch {
+    return false;
   }
 }
 

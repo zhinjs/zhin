@@ -282,6 +282,7 @@ async function* runInteractiveTurn(
     modelSdk: prompt.modelSdk,
     registry: promptRegistry,
     segments: context.capabilities.promptSegments,
+    platformGuidanceExternal: context.capabilities.platformGuidanceExternal,
   });
 
   const stream = host.promptController.scheduleStream({

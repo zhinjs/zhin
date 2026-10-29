@@ -146,6 +146,7 @@ function agentPathPromptContext(
     registry: options.runtime?.registry,
     segments: options.runtime?.segments,
     sceneText: options.runtime?.sceneText,
+    platformGuidanceExternal: options.runtime?.platformGuidanceExternal,
     activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
     bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
@@ -206,6 +207,8 @@ export interface PromptRuntimeOverrides {
   readonly segments?: readonly PromptSegment[];
   /** ADR 0041 `scene` line; rendered after the cache breakpoint. */
   readonly sceneText?: string;
+  /** ADR 0044 §4: the adapter is third-party relative to the agent owner. */
+  readonly platformGuidanceExternal?: boolean;
 }
 
 function withStableRuntime(base: string, runtime?: PromptRuntimeOverrides): string {
