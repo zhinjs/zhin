@@ -1,0 +1,31 @@
+.changeset/0043-h5-usage-report.md
+  s_9477e63ef5cee5::t_40e84985392875 1-5
+basic/cli/tests/usage-command.test.ts
+  s_9477e63ef5cee5::t_3aad27c8937f48 47
+  s_9477e63ef5cee5::t_3c141d8effaf01 1-46,48-95
+docs/en/cli/index.md
+  s_9477e63ef5cee5::t_42b6b81381a915 385-405
+basic/cli/src/cli.ts
+  s_9477e63ef5cee5::t_62147918ee2319 24
+  s_9477e63ef5cee5::t_fdaf5e1aa61d17 68
+basic/cli/src/commands/usage.ts
+  s_9477e63ef5cee5::t_2f76bad45dd2e8 1-292
+docs/cli/index.md
+  s_9477e63ef5cee5::t_42b6b81381a915 417-437
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d093b9dda0cb7cac0cfd986b2eb10011292e92df",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
