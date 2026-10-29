@@ -544,3 +544,28 @@ export {
   renderSenderId,
   formatHeader,
 } from './memory/message-header.js';
+
+export {
+  STATE_CHANGE_PREFIX,
+  MEMBER_PROFILE_FIELDS,
+  formatEventClock,
+  formatMemberChangedLine,
+  formatMemberPresenceLine,
+  createMemberChangedEvent,
+  createMemberPresenceEvent,
+} from './memory/event-message.js';
+export type { MemberProfileField, EventMessageSource } from './memory/event-message.js';
+export {
+  renderEventsForProvider,
+  createLlmMessageProjection,
+  isMidConversationSystemMessage,
+} from './memory/event-rendering.js';
+export type { MidConversationSystemMessage } from './memory/event-rendering.js';
+export { agentMessagesToAiSdk } from './llm/bridge/ai-sdk-messages.js';
+export {
+  MID_CONVERSATION_SYSTEM_VALUES,
+  isMidConversationSystem,
+  isLocalEndpoint,
+  resolveMidConversationSystem,
+} from './llm/mid-conversation-system.js';
+export type { MidConversationSystem } from './llm/mid-conversation-system.js';

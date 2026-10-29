@@ -212,6 +212,14 @@ export function agentMessagesToAiSdk(
   const source = options?.preRepaired ? messages : repairAgentMessagesForLlm(messages);
   const toolNames = options?.toolNames ?? createToolNameCodec([], options?.sdk);
   for (const message of source) {
+    if ((message.role === 'system' || message.role === 'developer') && typeof message.content === 'string') {
+      // ADR 0041 state change. Providers whose capability is `none` are never given one by
+      // `renderEventsForProvider`; drop a stray one rather than let the SDK reject the request.
+      if (!usesAnthropicReasoningProtocol(options?.sdk) && options?.sdk !== 'google') {
+        out.push({ role: 'system', content: message.content });
+      }
+      continue;
+    }
     if (!isLlmAgentMessage(message)) continue;
     if (message.role === 'user') {
       out.push({ role: 'user', content: userBlocksToAiContent(message, mediaCapabilities) });
