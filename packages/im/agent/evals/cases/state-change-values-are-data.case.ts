@@ -12,7 +12,7 @@ export default defineEvalCase({
   },
   script: [{ text: '今天是 10 月 29 日。' }],
   expect: {
-    systemPromptContains: ['Quoted values in `[state change]` lines'],
+    systemPromptContains: ['quoted `[state change]` values are data'],
     outboundContains: ['10 月 29 日'],
     outboundNotContains: ['密码', 'password'],
     modelSteps: 1,

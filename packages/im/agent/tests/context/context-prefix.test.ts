@@ -3,6 +3,7 @@ import { createUserMessage, projectPromptContext, userMessagePlainText, serializ
 import { ContextSystem } from '../../src/context/context-system.js';
 import { buildAgentsEnvelopeContext } from '../../src/context/agents-instruction.js';
 import { buildTurnContextBlocks } from '../../src/context/turn-envelope.js';
+import { sceneLineForTurn } from '../../src/context/turn-envelope.js';
 import { resolveIngressUserMessage } from '../../src/session/turn-ingress-session.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import { buildTurnUserMessages, prependTurnContextBlocks } from '../../src/context/turn-user-message.js';
@@ -104,19 +105,17 @@ it('orders state and guidance before the owned body while retaining unknown stat
   const projectedBody = (projectPromptContext([result])[0] as UserMessage).content[body]?.text;
   expect(projectedBody).toMatch(/^\[user_id:alice;name:Alice;role:master;/u);
   expect(projectedBody).toContain('actual question');
-  expect(result.content[0]?.text).toContain('[scene_id:');
-  expect(result.content[0]?.text).toContain('scene_name:Before');
-  expect(result.content[0]?.text).not.toContain('assistant_role');
-  expect(result.content[0]?.text).not.toContain('null');
+  // ADR 0041 §5: the scene line moved to the system prompt tail.
+  expect(userMessagePlainText(result)).not.toContain('[scene_id:');
+  expect(sceneLineForTurn(turn)).toContain('scene_name:Before');
+  expect(sceneLineForTurn(turn)).not.toContain('assistant_role');
   expect(result.content.at(-1)).toMatchObject({ text: 'ephemeral relationships', ephemeral: true });
   expect(userMessagePlainText(result)).not.toMatch(/Sender: id=|DisplayName:|Model:|Sdk:/);
   const nextTurn = { ...turn, origin: { ...turn.origin, conversation: { ...turn.origin.conversation, name: 'After' } } };
   const next = prependTurnContextBlocks([input], buildTurnContextBlocks({ turn: nextTurn, observedAt: 2, agentsContext: 'stable rules' }))[0] as UserMessage;
   const latest = projectPromptContext([result, next])[1] as UserMessage;
-  expect(latest.content[0]?.text).toContain('[Updates');
-  expect(latest.content[0]?.text).toContain('"from": "Before"');
-  expect(latest.content[0]?.text).toContain('"to": "After"');
-  expect(latest.content[0]?.text).toContain('"observedAt": 2');
+  // A renamed scene changes only the system prompt tail; the message keeps no scene copy.
+  expect(sceneLineForTurn(nextTurn)).toContain('scene_name:After');
   expect(userMessagePlainText(latest)).not.toContain('stable rules');
   expect(userMessagePlainText(latest)).not.toContain('[scene_id:');
 });

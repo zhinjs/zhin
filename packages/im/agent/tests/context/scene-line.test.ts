@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createUserMessage, projectPromptContext, userMessagePlainText, type UserMessage } from '@zhin.js/ai';
-import { buildTurnContextBlocks, formatSceneLine } from '../../src/context/turn-envelope.js';
-import { prependTurnContextBlocks } from '../../src/context/turn-user-message.js';
+import { buildTurnContextBlocks, formatSceneLine, sceneLineForTurn } from '../../src/context/turn-envelope.js';
 import type { TurnContextState, TurnRequest } from '../../src/turn/turn-ingress.js';
 
 function groupTurn(contextState?: TurnContextState, name?: string): TurnRequest {
@@ -20,10 +18,11 @@ function groupTurn(contextState?: TurnContextState, name?: string): TurnRequest 
   } as unknown as TurnRequest;
 }
 
-function sceneBlock(turn: TurnRequest, observedAt = 1) {
-  const block = buildTurnContextBlocks({ turn, observedAt }).find(b => b.contextRef?.key.startsWith('scene:'));
-  if (!block) throw new Error('scene block missing');
-  return block;
+/** ADR 0041 §5: the scene line is the system prompt's tail, not a user-message block. */
+function sceneBlock(turn: TurnRequest) {
+  const text = sceneLineForTurn(turn);
+  if (!text) throw new Error('scene line missing');
+  return { text };
 }
 
 const FULL: TurnContextState = {
@@ -57,7 +56,7 @@ describe('ADR 0041 scene line', () => {
     const text = sceneBlock(turn).text;
     expect(text.match(/\[scene_id:[^\]]*\]/)![0]).not.toContain('\n');
     expect(text.match(/owner_id/g)).toHaveLength(1);
-    expect(text.match(/\]/g)).toHaveLength(2); // context-source header + the one line terminator
+    expect(text.match(/\]/g)).toHaveLength(1); // the one line terminator
   });
 
   it('clips very long names to 64 characters', () => {
@@ -67,20 +66,13 @@ describe('ADR 0041 scene line', () => {
     expect(name.endsWith('…')).toBe(true);
   });
 
-  it('omits identical repeats and projects a changed fact before the affected message', () => {
-    const user = (turn: TurnRequest, at: number) => prependTurnContextBlocks(
-      [createUserMessage('hello', undefined, at)], buildTurnContextBlocks({ turn, observedAt: at }),
-    )[0] as UserMessage;
-    const first = user(groupTurn(FULL), 1);
-    const same = user(groupTurn(FULL), 2);
-    const changed = user(groupTurn({ ...FULL, conversation: { ...FULL.conversation, adminIds: ['10003'], memberCount: 43 } }), 3);
-    const projected = projectPromptContext([first, same, changed]) as UserMessage[];
-    expect(userMessagePlainText(projected[0]!)).toContain('[scene_id:1048877509;');
-    expect(userMessagePlainText(projected[1]!)).not.toContain('scene_id');
-    const update = userMessagePlainText(projected[2]!);
-    expect(update).toContain('[Updates');
-    expect(update).toContain('"field": "member_count"');
-    expect(update).toContain('"field": "admins"');
-    expect(update).not.toContain('[scene_id:');
+  it('is no longer injected into the user message', () => {
+    const all = buildTurnContextBlocks({ turn: groupTurn(FULL) }).map(b => b.text).join('\n');
+    expect(all).not.toContain('[scene_id:');
+  });
+
+  it('is undefined outside IM turns', () => {
+    const turn = { ...groupTurn(FULL), origin: { kind: 'http', sessionId: 's' } } as unknown as TurnRequest;
+    expect(sceneLineForTurn(turn)).toBeUndefined();
   });
 });

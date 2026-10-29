@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { sceneLineForTurn } from '../../src/context/turn-envelope.js';
 import {
   buildTurnContextEnvelope,
   prependTurnContextEnvelope,
@@ -20,7 +21,8 @@ describe('buildTurnContextEnvelope', () => {
     const envelope = buildTurnContextEnvelope({ turn });
     expect(envelope).not.toContain('native-id');
     expect(envelope).not.toContain('made-up');
-    expect(envelope).toContain('[scene_id:100;scene_type:group;]');
+    expect(envelope).not.toContain('[scene_id:');
+    expect(sceneLineForTurn(turn)).toBe('[scene_id:100;scene_type:group;]');
   });
   it('uses only trusted turn language and prefix metadata, including an intentionally empty prefix', () => {
     const context = buildTurnContextEnvelope({ turn: turnContext({ input: { text: 'help', locale: 'en', commandPrefix: '##', commandMenu: '##menu' } }),
@@ -65,7 +67,7 @@ describe('buildTurnContextEnvelope', () => {
     expect(envelope).toContain(TURN_CONTEXT_BEGIN);
     expect(envelope).toContain(TURN_CONTEXT_END);
     expect(envelope).not.toContain('Time:');
-    expect(envelope).toContain('[scene_id:201193925;scene_type:group;]');
+    expect(envelope).not.toContain('[scene_id:');
     expect(envelope).toContain('Deferred catalog: weather(1)');
     expect(envelope).toContain('User prefers concise answers.');
     expect(envelope).toContain('[Tone hint] casual');
@@ -79,7 +81,7 @@ describe('buildTurnContextEnvelope', () => {
       }),
     });
     expect(envelope).not.toContain('477561AD3A89AFCDABB6AFCB71FF54DF');
-    expect(envelope).toContain('[scene_id:user;scene_type:private;]');
+    expect(envelope).not.toContain('[scene_id:');
     expect(envelope).not.toContain('assistant_role');
   });
 

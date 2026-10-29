@@ -41,7 +41,7 @@ import {
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
-import type { TurnContextView } from '../context/turn-envelope.js';
+import { sceneLineForTurn, type TurnContextView } from '../context/turn-envelope.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
@@ -628,6 +628,9 @@ export async function* runAgentLoopTextTurnRun(
   if (hasTools && harness.explorationGuidance) {
     systemPrompt = `${systemPrompt}\n\n${EXPLORATION_GUIDANCE}`;
   }
+  // ADR 0041 §5: the scene line goes last so a scene change only invalidates the tail.
+  const sceneText = sceneLineForTurn(input.turnContext);
+  if (sceneText) systemPrompt = `${systemPrompt}\n\n${sceneText}`;
   if (hasTools && !directTools) {
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
       .map((item) => ({ name: item.name, description: item.brief })));
