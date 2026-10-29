@@ -21,6 +21,7 @@ import { watchCommand } from './commands/watch.js';
 import { packagesCommand } from './commands/packages.js';
 import { runtimeCommand } from './commands/runtime.js';
 import { traceCommand } from './commands/trace.js';
+import { usageCommand } from './commands/usage.js';
 import { devCommand } from './commands/dev.js';
 import { useCasesCommand } from './commands/use-cases.js';
 import { pluginCommand } from './commands/plugin.js';
@@ -64,6 +65,7 @@ program.addCommand(needsAgentCommand
   : new Command('agent').description('Agent diagnostics and Workroom operations'));
 program.addCommand(runtimeCommand);
 program.addCommand(traceCommand);
+program.addCommand(usageCommand);
 program.addCommand(devCommand);
 program.addCommand(useCasesCommand);
 
