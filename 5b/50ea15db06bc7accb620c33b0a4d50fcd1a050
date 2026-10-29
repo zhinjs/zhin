@@ -1,0 +1,22 @@
+evals/chat/src/turn.ts
+  s_9477e63ef5cee5::t_251706546f9c14 8,21,25,60-62,123-124,155-156
+evals/chat/tests/eval.test.ts
+  s_9477e63ef5cee5::t_49d1bc133113ea 6
+  s_9477e63ef5cee5::t_9bc09714f9cdb9 56-59,61-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5b50ea15db06bc7accb620c33b0a4d50fcd1a050",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
