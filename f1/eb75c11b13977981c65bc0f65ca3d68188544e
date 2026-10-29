@@ -1,0 +1,103 @@
+packages/im/agent/tests/plugin-runtime/subagent-turn-capability.test.ts
+  s_9477e63ef5cee5::t_ff3799a1c669da 80
+packages/im/agent/src/tool-catalog/resolve-config.ts
+  s_9477e63ef5cee5::t_30bd4961fee9e0 4,6,11,20
+packages/im/agent/evals/cases/provider-malformed-tool-call.case.ts
+  s_9477e63ef5cee5::t_283a5a15b1ae04 12
+docs/en/ai/agent.md
+  s_9477e63ef5cee5::t_8dfbd2eb0000be 124,126-129,132-138
+  s_9477e63ef5cee5::t_e5adcda82b5c95 130,164
+packages/im/agent/evals/cases/deferred-kick-autoload-hard-gate.case.ts
+  s_9477e63ef5cee5::t_b6c94834b4d21e 1-22
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_9477e63ef5cee5::t_b947da9a51965e 340,343
+  s_9477e63ef5cee5::t_8c5030798d9792 383-385,426-429,431-448
+  s_9477e63ef5cee5::t_a875901ccb796d 3,217,338-339,342,430,551
+  s_9477e63ef5cee5::t_fd863eef712e0e 21,85-90,170
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  s_9477e63ef5cee5::t_30bd4961fee9e0 62-67
+packages/im/agent/evals/cases/dm-trusted-full-authority.case.ts
+  s_9477e63ef5cee5::t_283a5a15b1ae04 14
+packages/im/agent/tests/plugin-runtime/tool-tiers.test.ts
+  s_9477e63ef5cee5::t_fbe1c1f4b990bb 279-332
+  s_9477e63ef5cee5::t_7aa1e8c271692f 1-278
+packages/im/agent/evals/cases/bash-master-isolated-runs.case.ts
+  s_9477e63ef5cee5::t_283a5a15b1ae04 14
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_383346f3496bd7 35,577-579
+packages/im/agent/src/tool/deferred-resolution.ts
+  s_9477e63ef5cee5::t_a875901ccb796d 1,90
+docs/en/configuration/generated.md
+  s_9477e63ef5cee5::t_b19293c843d9f5 249
+packages/im/agent/evals/cases/subagent-no-bash-when-parent-cannot.case.ts
+  s_9477e63ef5cee5::t_5b729f59885920 13
+packages/im/agent/evals/cases/deferred-announcement-discover-schema.case.ts
+  s_9477e63ef5cee5::t_54b700f3166ad9 1-31
+packages/im/agent/tests/plugin-runtime/deferred-capability-plan.test.ts
+  s_9477e63ef5cee5::t_979219982641a2 166,168,227,248,256,265,280
+packages/im/ai/src/types.ts
+  s_9477e63ef5cee5::t_42ee1022fe539b 666
+packages/im/agent/evals/cases/injection-memory-persisted-shell-gated.case.ts
+  s_9477e63ef5cee5::t_283a5a15b1ae04 18
+packages/im/runtime/src/host-config-schema.json
+  s_9477e63ef5cee5::t_8dfbd2eb0000be 1675
+packages/im/ai/src/memory/deferred-tool-session.ts
+  s_9477e63ef5cee5::t_a875901ccb796d 2,4-9,24-38,45,54-57
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_9477e63ef5cee5::t_979219982641a2 217
+packages/im/agent/src/plugin-runtime/tool-tier.ts
+  s_9477e63ef5cee5::t_383346f3496bd7 1-18
+packages/im/workroom/tests/workroom-runtime/workroom-deferred-capability-plan.test.ts
+  s_9477e63ef5cee5::t_ab99d53c6f18de 87
+docs/authoring/agent-tools.md
+  s_9477e63ef5cee5::t_8dfbd2eb0000be 387
+.changeset/0042-w2-tool-tiers.md
+  s_9477e63ef5cee5::t_2a6b13779b00c7 1-7
+packages/im/agent/evals/framework/driver.ts
+  s_9477e63ef5cee5::t_e22e5b598f88f9 126,128
+packages/im/agent/evals/cases/bash-hidden-without-shell-policy.case.ts
+  s_9477e63ef5cee5::t_283a5a15b1ae04 14
+packages/im/agent/evals/cases/deferred-reminder-autoload.case.ts
+  s_9477e63ef5cee5::t_0028dfa705a3e6 1-15
+packages/im/agent/src/tool-catalog/tool-catalog.ts
+  s_9477e63ef5cee5::t_a875901ccb796d 135-137
+packages/im/ai/src/index.ts
+  s_9477e63ef5cee5::t_a875901ccb796d 398
+packages/im/workroom/tests/workroom-runtime/workroom-host-local-agent-execution.e2e.test.ts
+  s_9477e63ef5cee5::t_ab99d53c6f18de 90
+docs/configuration/generated.md
+  s_9477e63ef5cee5::t_b19293c843d9f5 249
+packages/im/agent/src/tool-catalog/types.ts
+  s_9477e63ef5cee5::t_283a5a15b1ae04 78-82
+  s_9477e63ef5cee5::t_30bd4961fee9e0 60-77,83-94
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9477e63ef5cee5::t_fd863eef712e0e 176
+  s_9477e63ef5cee5::t_383346f3496bd7 30
+packages/im/agent/evals/cases/injection-web-hidden-shell-gated.case.ts
+  s_9477e63ef5cee5::t_283a5a15b1ae04 21
+docs/ai/agent.md
+  s_9477e63ef5cee5::t_e5adcda82b5c95 126,160
+  s_9477e63ef5cee5::t_8dfbd2eb0000be 120,122-125,128-134
+packages/im/agent/src/tool-catalog/deferred-turn-controller.ts
+  s_9477e63ef5cee5::t_a875901ccb796d 3,175
+docs/en/authoring/agent-tools.md
+  s_9477e63ef5cee5::t_8dfbd2eb0000be 353
+packages/im/agent/src/internal/turn-context.ts
+  s_9477e63ef5cee5::t_a875901ccb796d 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1eb75c11b13977981c65bc0f65ca3d68188544e",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
