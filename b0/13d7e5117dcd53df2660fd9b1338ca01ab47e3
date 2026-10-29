@@ -1,0 +1,73 @@
+packages/im/agent/tests/core/max-iterations-reply.e2e.test.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 18-19
+packages/im/agent/evals/budget/baseline.json
+  s_9477e63ef5cee5::t_47a96038e7d207 1-41
+package.json
+  s_9477e63ef5cee5::t_47a96038e7d207 140
+packages/im/agent/evals/framework/live-model.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 20,62
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 14,56-57,628-634,639-640,784,786,793,926-934
+  s_9477e63ef5cee5::t_4af5e9bbc8bc32 935
+packages/im/agent/evals/budget/scenes.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-92
+packages/im/agent/evals/cases/scene-limit-private-10.case.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-30
+packages/im/agent/evals/cases/scene-limit-override-wins.case.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-28
+packages/im/agent/evals/cases/spin-detected-hint.case.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-23
+packages/im/agent/evals/cases/spin-varied-results-no-hint.case.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-22
+packages/im/agent/evals/framework/scripted-model.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 87-88,206,321-323
+  s_9477e63ef5cee5::t_687a1badcbde19 324-325
+packages/im/agent/evals/budget/budget.test.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-61
+packages/im/agent/src/trace/turn-trace.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 128-130,263-266
+packages/im/agent/tests/core/exploration-budget.test.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 2,52-90
+  s_9477e63ef5cee5::t_ac69b977f75fb7 91
+packages/im/agent/tests/ai/model-harness.test.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 2,90-118
+  s_9477e63ef5cee5::t_da64266827b84d 119
+packages/im/agent/evals/budget/workspace/AGENTS.md
+  s_9477e63ef5cee5::t_47a96038e7d207 1-164
+packages/im/agent/src/config/model-harness-runtime.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 104,107,133-178
+packages/im/agent/evals/budget/run.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-22
+.changeset/0042-w5-rounds.md
+  s_9477e63ef5cee5::t_47a96038e7d207 1-5
+packages/im/agent/evals/budget/workspace/SOUL.md
+  s_9477e63ef5cee5::t_47a96038e7d207 1-51
+packages/im/agent/src/core/exploration-budget.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1,44-130
+packages/im/agent/evals/budget/measure.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-157
+packages/im/agent/evals/cases/scene-limit-group-6.case.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-27
+packages/im/agent/evals/cases/scene-limit-master-private-15.case.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 1-28
+packages/im/agent/evals/budget/workspace/TOOLS.md
+  s_9477e63ef5cee5::t_47a96038e7d207 1-4
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9477e63ef5cee5::t_47a96038e7d207 299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b013d7e5117dcd53df2660fd9b1338ca01ab47e3",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
