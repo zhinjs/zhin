@@ -1,0 +1,36 @@
+package.json
+  s_9477e63ef5cee5::t_361769fcd7bb16 140
+packages/im/agent/evals/budget/measure.ts
+  s_9477e63ef5cee5::t_ba7a1e9886f672 1-8,10-101,105,115-147
+  s_9477e63ef5cee5::t_5e5422c913ce4a 9,102-104,106-114
+packages/im/agent/evals/budget/baseline.json
+  s_9477e63ef5cee5::t_d3e35ddf65ec2d 1-41
+packages/im/agent/evals/framework/scripted-model.ts
+  s_9477e63ef5cee5::t_f5b04912993990 87-88,206
+packages/im/agent/evals/budget/scenes.ts
+  s_9477e63ef5cee5::t_cb330ed01d934b 1-92
+packages/im/agent/evals/budget/run.ts
+  s_9477e63ef5cee5::t_b336cca0daaca6 1-22
+packages/im/agent/evals/budget/workspace/AGENTS.md
+  s_9477e63ef5cee5::t_7b6da1aa9f9f67 1-164
+packages/im/agent/evals/budget/workspace/SOUL.md
+  s_9477e63ef5cee5::t_a42357e19dd297 1-51
+packages/im/agent/evals/budget/workspace/TOOLS.md
+  s_9477e63ef5cee5::t_c48dc193de42df 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f99cb94c8a8371cdafaaabdcac80ac01313c6478",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
