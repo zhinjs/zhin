@@ -1,0 +1,36 @@
+packages/im/agent/src/context/turn-envelope.ts
+  s_9477e63ef5cee5::t_e72aa64e994c8b 2,22
+  s_9477e63ef5cee5::t_d8665c0f089c72 86-94
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9477e63ef5cee5::t_120f12587463eb 313
+packages/im/agent/tests/context/scene-line.test.ts
+  s_9477e63ef5cee5::t_ca29713f16eb10 2,21-25,59,69-76
+packages/im/agent/src/core/agent-core-run.ts
+  s_9477e63ef5cee5::t_e72aa64e994c8b 44
+  s_9477e63ef5cee5::t_d8665c0f089c72 631-633
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_9477e63ef5cee5::t_e6ce735c3c7f53 6,108-111
+  s_9477e63ef5cee5::t_aa78fc066c6fec 117-118
+packages/im/agent/evals/cases/state-change-values-are-data.case.ts
+  s_9477e63ef5cee5::t_50c4760f6e7573 15
+packages/im/agent/tests/prompt/fixed-prompt-cost.test.ts
+  s_9477e63ef5cee5::t_2fc3c2f0740364 1,8-11
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  s_9477e63ef5cee5::t_e6ce735c3c7f53 2,24-25,70,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0931affc23fca248c826116edb61890691602844",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
