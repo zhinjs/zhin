@@ -1,5 +1,61 @@
 # @zhin.js/workroom
 
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [e0f991c]
+- Updated dependencies [8846d5d]
+- Updated dependencies [8c85a2b]
+- Updated dependencies [f67883e]
+- Updated dependencies [2cc80df]
+- Updated dependencies [97bf337]
+- Updated dependencies [43560d0]
+- Updated dependencies [1bf0253]
+- Updated dependencies [ee9d38a]
+- Updated dependencies [eb306e1]
+- Updated dependencies [b76317d]
+- Updated dependencies [c9775fb]
+- Updated dependencies [5efb4e9]
+- Updated dependencies [b5071e7]
+- Updated dependencies [e23cabc]
+- Updated dependencies [3c4178d]
+- Updated dependencies [3fd758c]
+- Updated dependencies [16896fe]
+- Updated dependencies [825e4dc]
+- Updated dependencies [f1eb75c]
+- Updated dependencies [5621f75]
+- Updated dependencies [88c82d0]
+- Updated dependencies [e37f30f]
+- Updated dependencies [2b8b408]
+- Updated dependencies [4d728c0]
+- Updated dependencies [eb8feeb]
+- Updated dependencies [f0e1df7]
+- Updated dependencies [7f34293]
+- Updated dependencies [d9672ec]
+- Updated dependencies [42e630d]
+- Updated dependencies [1096173]
+- Updated dependencies [24a2b71]
+- Updated dependencies [119e9e6]
+- Updated dependencies [8ce6cd2]
+- Updated dependencies [f2bbab5]
+- Updated dependencies [44eb3f8]
+- Updated dependencies [ab2263a]
+- Updated dependencies [dfa14b5]
+- Updated dependencies [1bdbc08]
+- Updated dependencies [df6442c]
+- Updated dependencies [b223a51]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [1ca669a]
+- Updated dependencies [3771f7a]
+- Updated dependencies [945303c]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/agent@1.1.43
+  - @zhin.js/core@1.1.52
+  - @zhin.js/ai@1.1.47
+  - @zhin.js/tool@1.1.11
+  - @zhin.js/im-contract@1.1.8
+
 ## 0.0.11
 
 ### Patch Changes
