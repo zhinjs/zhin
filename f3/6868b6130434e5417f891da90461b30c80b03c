@@ -1,0 +1,19 @@
+basic/cli/src/plugin-runtime/console/self-changes.ts
+  s_a085460053220c::t_627035ae1b9c44 148,158-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f36868b6130434e5417f891da90461b30c80b03c",
+  "prompts": {},
+  "sessions": {
+    "s_a085460053220c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a5dcffe277e98eefd",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
