@@ -24,6 +24,7 @@ import type {
   AiControlPlane,
   DecisionEventLog,
   DeliveryOutcome,
+  SceneFactStore,
   SessionProfileStore,
   TurnOutcome,
   TurnRequest,
@@ -33,6 +34,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { EventMessage } from '@zhin.js/ai';
 import { SceneEventWake, type SceneWakeBatch } from './scene-event-wake.js';
 import { sceneEventToStateMessage } from './scene-event-state.js';
+import { applySceneEventToFacts } from './scene-fact-events.js';
 import { readSceneEventLines } from './scene-event-lines.js';
 import { observeSceneWakeAndCheckSpeak } from './session-gate.js';
 import {
@@ -78,6 +80,11 @@ export interface SceneEventIngressDeps {
    * （仅在该会话开启了 scene event 唤醒时，随后有回合会读到它）；返回是否写入。缺省不写。
    */
   readonly recordState?: (sessionKey: string, event: EventMessage, options: Readonly<{ create: boolean }>) => Promise<boolean>;
+  /**
+   * ADR 0041 §6：成员 / 群的侧事件写穿到场景事实的 L2（`ai_scene_members` / `ai_session_profiles`），
+   * 与 {@link recordState} 在同一处触发。缺省不写。
+   */
+  readonly sceneFacts?: () => SceneFactStore | undefined;
   /** 关系称呼（`ai_user_relations` 的 preferredAddress / displayName）。 */
   readonly nickname?: (platform: string, userId: string) => Promise<string | undefined>;
   readonly readConversationContext?: (
@@ -197,7 +204,17 @@ export class SceneEventIngress {
     });
   }
 
+  #writeThroughFacts(signal: RuntimeSceneEventSignal): void {
+    const store = this.deps.sceneFacts?.();
+    if (!store) return;
+    const task: Promise<void> = applySceneEventToFacts(store, signal, this.deps.now).then(() => undefined, (error: unknown) => {
+      logger.warn(formatCompact({ op: 'scene_fact_write_through_failed', type: signal.event.type, error: error instanceof Error ? error.message : String(error) }));
+    }).finally(() => { this.#records.delete(task); });
+    this.#records.add(task);
+  }
+
   #recordState(signal: RuntimeSceneEventSignal): void {
+    this.#writeThroughFacts(signal);
     const record = this.deps.recordState;
     if (!record) return;
     const message = sceneEventToStateMessage(signal.event);

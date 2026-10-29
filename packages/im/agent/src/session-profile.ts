@@ -20,7 +20,7 @@ const logger = getLogger('SessionProfile');
 
 export const MAX_TOPICS = 5;
 export const MAX_TOPIC_CHARS = 24;
-export const MAX_ADMINS = 8;
+export const MAX_ADMINS = 20;
 export const MAX_RECENT_SPEAKERS = 30;
 /** 成员概况里「最近活跃」的窗口。 */
 export const RECENT_SPEAKER_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -53,6 +53,10 @@ export const AI_SESSION_PROFILE_MODEL = {
   restriction: { type: 'text' as const, default: '' },
   restriction_until: { type: 'bigint' as const, default: 0 },
   event_cursor: { type: 'bigint' as const, default: 0 },
+  /** ADR 0041 §6 场景事实（L2 缓存）：群主、人数、事实最近一次由平台确认的时间。 */
+  owner_id: { type: 'text' as const, default: '' },
+  member_count: { type: 'integer' as const, nullable: true },
+  facts_updated_at: { type: 'bigint' as const, default: 0 },
   created_at: { type: 'bigint' as const, default: 0 },
   updated_at: { type: 'bigint' as const, default: 0 },
 };
@@ -88,6 +92,12 @@ export interface SessionProfileRecord {
   /** 手动限制到何时；0 表示直到清除。 */
   restrictionUntil: number;
   eventCursor: number;
+  /** ADR 0041 §6：群主账号；空表示未知。 */
+  ownerId: string;
+  /** ADR 0041 §6：群人数；null 表示未知。 */
+  memberCount: number | null;
+  /** 场景事实最近一次由平台确认的时间（毫秒）；0 表示从未取过。 */
+  factsUpdatedAt: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -103,7 +113,7 @@ export function emptySessionProfile(platform: string, scope: SessionScope, scene
     platform, sceneKey: sceneKeyOf(scope, sceneId), scope, title: '',
     topics: [], admins: [], recentSpeakers: [], joinedCount: 0, leftCount: 0,
     botRole: 'unknown', muteUntil: 0, mutedAll: false, restriction: '', restrictionUntil: 0,
-    eventCursor: 0, createdAt: now, updatedAt: now,
+    eventCursor: 0, ownerId: '', memberCount: null, factsUpdatedAt: 0, createdAt: now, updatedAt: now,
   };
 }
 
@@ -230,6 +240,114 @@ export function foldInboundSender(record: SessionProfileRecord, sender: InboundS
 }
 
 // ============================================================================
+// ADR 0041 §6 场景事实（群级）
+// ============================================================================
+
+/** 存库的名称 / 昵称类文本上限。 */
+export const SCENE_FACT_TEXT_MAX_CHARS = 128;
+/** 群管理员 id 的写入上限（与适配器读取上限一致）。 */
+export const MAX_SCENE_ADMIN_IDS = 20;
+
+/** 去控制字符、折叠空白并截断；空串表示没有。 */
+export function cleanSceneFactText(value: unknown, maxChars: number = SCENE_FACT_TEXT_MAX_CHARS): string {
+  if (typeof value !== 'string') return '';
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, maxChars);
+}
+
+/** 平台一次读取的群事实（字段缺省 = 未知）。 */
+export interface SceneGroupFactsInput {
+  readonly name?: string;
+  readonly ownerId?: string;
+  readonly adminIds?: readonly string[];
+  readonly memberCount?: number;
+  readonly muteAll?: boolean;
+}
+
+/** 侧事件带来的群级增量。 */
+export interface SceneGroupChange {
+  /** 人数增减。 */
+  readonly memberDelta?: number;
+  readonly admin?: Readonly<{ id: string; enabled: boolean }>;
+  readonly ownerId?: string;
+  readonly muteAll?: boolean;
+  readonly botRole?: BotSceneRole;
+  readonly botMuteUntil?: number;
+}
+
+function validId(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? cleanSceneFactText(String(value), 64) : '';
+}
+
+function applySceneGroupFacts(record: SessionProfileRecord, facts: SceneGroupFactsInput, now: number): SessionProfileRecord | null {
+  const next: SessionProfileRecord = { ...record };
+  let known = false;
+  const name = cleanSceneFactText(facts.name);
+  if (name) { next.title = name; known = true; }
+  const ownerId = validId(facts.ownerId);
+  if (ownerId) {
+    next.ownerId = ownerId;
+    next.admins = record.admins.filter((item) => !(item.role === 'owner' && item.id !== ownerId));
+    known = true;
+  }
+  if (facts.adminIds) {
+    const owners = next.admins.filter((item) => item.role === 'owner');
+    const names = new Map(record.admins.map((item) => [item.id, item.name]));
+    const ids = [...new Set(facts.adminIds.map(validId).filter((id) => id && id !== next.ownerId))].slice(0, MAX_SCENE_ADMIN_IDS);
+    next.admins = [...owners, ...ids.map((id) => ({ id, name: names.get(id) ?? '', role: 'admin' as const }))];
+    known = true;
+  }
+  if (typeof facts.memberCount === 'number' && Number.isSafeInteger(facts.memberCount) && facts.memberCount >= 0) {
+    next.memberCount = facts.memberCount;
+    known = true;
+  }
+  if (typeof facts.muteAll === 'boolean') { next.mutedAll = facts.muteAll; known = true; }
+  if (!known) return null;
+  next.factsUpdatedAt = now;
+  return next;
+}
+
+function applySceneGroupChange(record: SessionProfileRecord, change: SceneGroupChange): SessionProfileRecord {
+  const next: SessionProfileRecord = { ...record };
+  if (change.memberDelta && next.memberCount !== null) next.memberCount = Math.max(0, next.memberCount + change.memberDelta);
+  if (change.admin) {
+    const id = validId(change.admin.id);
+    if (id) {
+      next.admins = change.admin.enabled && id !== next.ownerId
+        ? upsertAdmin(next.admins, { id, name: next.admins.find((item) => item.id === id)?.name ?? '', role: 'admin' })
+        : next.admins.filter((item) => item.id !== id);
+    }
+  }
+  if (change.ownerId) {
+    const ownerId = validId(change.ownerId);
+    if (ownerId) {
+      next.ownerId = ownerId;
+      next.admins = next.admins.filter((item) => item.id !== ownerId && item.role !== 'owner');
+    }
+  }
+  if (change.muteAll !== undefined) next.mutedAll = change.muteAll;
+  if (change.botRole && change.botRole !== 'unknown') next.botRole = change.botRole;
+  if (change.botMuteUntil !== undefined && Number.isFinite(change.botMuteUntil)) next.muteUntil = Math.max(0, Math.floor(change.botMuteUntil));
+  return next;
+}
+
+/** 会话画像里已确认的群事实；从未由平台确认过则返回 undefined。 */
+export function sceneGroupFactsOf(record: SessionProfileRecord | null): Readonly<{ facts: SceneGroupFactsInput; updatedAt: number }> | undefined {
+  if (!record || record.factsUpdatedAt <= 0) return undefined;
+  const adminIds = record.admins.filter((item) => item.role === 'admin').map((item) => item.id);
+  return {
+    updatedAt: record.factsUpdatedAt,
+    facts: {
+      ...(record.title ? { name: record.title } : {}),
+      ...(record.ownerId ? { ownerId: record.ownerId } : {}),
+      ...(adminIds.length ? { adminIds } : {}),
+      ...(record.memberCount !== null ? { memberCount: record.memberCount } : {}),
+      muteAll: record.mutedAll,
+    },
+  };
+}
+
+// ============================================================================
 // 持久化
 // ============================================================================
 
@@ -280,6 +398,9 @@ export function sessionProfileFromRow(row: Record<string, any>): SessionProfileR
     restriction: String(row.restriction ?? ''),
     restrictionUntil: Number(row.restriction_until ?? 0) || 0,
     eventCursor: Number(row.event_cursor ?? 0) || 0,
+    ownerId: String(row.owner_id ?? ''),
+    memberCount: row.member_count === null || row.member_count === undefined ? null : Number(row.member_count),
+    factsUpdatedAt: Number(row.facts_updated_at ?? 0) || 0,
     createdAt: Number(row.created_at ?? 0) || 0,
     updatedAt: Number(row.updated_at ?? 0) || 0,
   };
@@ -302,6 +423,9 @@ export function sessionProfileToRow(record: SessionProfileRecord): Record<string
     restriction: record.restriction,
     restriction_until: record.restrictionUntil,
     event_cursor: record.eventCursor,
+    owner_id: record.ownerId,
+    member_count: record.memberCount,
+    facts_updated_at: record.factsUpdatedAt,
     created_at: record.createdAt,
     updated_at: record.updatedAt,
   };
@@ -462,6 +586,51 @@ export class SessionProfileStore {
   async setBotRole(platform: string, scope: SessionScope, sceneId: string, role: BotSceneRole): Promise<void> {
     if (!isBotRole(role)) throw new TypeError(`Unknown bot role: ${String(role)}`);
     await this.mutate(platform, scope, sceneId, (record) => ({ ...record, botRole: role }));
+  }
+
+  /**
+   * ADR 0041 §6 L2：平台刚确认的群事实（名称、群主、管理员、人数、全员禁言）。缺省字段保持原值
+   * （例如名册读取失败时管理员不被清空）；至少写入一个字段才会刷新 `factsUpdatedAt`。
+   * 返回是否写入。
+   */
+  async setSceneFacts(platform: string, scope: SessionScope, sceneId: string, facts: SceneGroupFactsInput): Promise<boolean> {
+    if (scope === 'private') return false;
+    let wrote = false;
+    await this.mutate(platform, scope, sceneId, (record, now) => {
+      const next = applySceneGroupFacts(record, facts, now);
+      if (!next) return null;
+      wrote = true;
+      return next;
+    });
+    return wrote;
+  }
+
+  /**
+   * ADR 0041 §6 L2 写穿：侧事件带来的增量变化。只改已有平台事实的会话（没有基线就不凭增量造事实）；
+   * 不刷新 `factsUpdatedAt`，陈旧判定仍以平台上次确认为准。
+   */
+  async patchSceneFacts(platform: string, scope: SessionScope, sceneId: string, change: SceneGroupChange): Promise<boolean> {
+    if (scope === 'private') return false;
+    let wrote = false;
+    await this.mutate(platform, scope, sceneId, (record) => {
+      if (record.factsUpdatedAt <= 0) return null;
+      const next = applySceneGroupChange(record, change);
+      if (sameProfile(record, next)) return null;
+      wrote = true;
+      return next;
+    });
+    return wrote;
+  }
+
+  /** Bot 自己的角色 / 禁言到期（每回合新鲜读取后写穿）；与基线无关，未变化不写库。 */
+  async setBotFacts(platform: string, scope: SessionScope, sceneId: string, facts: Readonly<{ role?: BotSceneRole; muteUntil?: number }>): Promise<void> {
+    if (scope === 'private') return;
+    await this.mutate(platform, scope, sceneId, (record) => {
+      const next: SessionProfileRecord = { ...record };
+      if (facts.role && facts.role !== 'unknown') next.botRole = facts.role;
+      if (facts.muteUntil !== undefined && Number.isFinite(facts.muteUntil)) next.muteUntil = Math.max(0, Math.floor(facts.muteUntil));
+      return sameProfile(record, next) ? null : next;
+    });
   }
 
   /**

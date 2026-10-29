@@ -5,7 +5,7 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { AGENT_MESSAGE_QUERY_MODEL, AGENT_SESSION_SOURCE_MODEL, agentMessageQueryFields, parseAgentMessageRow } from '@zhin.js/ai';
 import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL,
   DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
-  AI_DECISION_EVENTS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS, DEFAULT_GROUP_RULE_RETENTION_DAYS } from '@zhin.js/agent/runtime';
+  AI_DECISION_EVENTS_TABLE, AI_SCENE_MEMBERS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS, DEFAULT_GROUP_RULE_RETENTION_DAYS } from '@zhin.js/agent/runtime';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
 import type { AgentHostAIConfig } from './config.js';
 
@@ -19,7 +19,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   const sessionsInDatabase = config.sessions?.useDatabase !== false;
   if (sessionsInDatabase && !database) throw new Error('ai.sessions.useDatabase requires the Database Root Host');
   if (!sessionsInDatabase && foundation.semanticMemory) throw new Error('ai.memory.semantic.enabled requires the Database Root Host');
-  if (sessionsInDatabase) defineAiDatabaseModels((name, definition) => database!.define(name, definition));
+  if (sessionsInDatabase) defineAiDatabaseModels((name, definition, options) => database!.define(name, definition, options));
   const sql = database && ['sqlite', 'mysql', 'pg'].includes(database.dialect);
   let usage: DatabaseAgentUsageStore | undefined;
   // ADR 0036 slice C: `ai.audit.retentionDays` (default 14) for `ai_decision_events`.
@@ -37,6 +37,10 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       getLogger('agent').warn('op=group_rule_prune status=failed; 群管规则保留期清理失败');
     });
   };
+  // ADR 0041 §6: 场景成员事实按保留期 / 每会话上限清理（启动 + 每 6 小时）；失败只记日志。
+  const sceneFacts = () => foundation.agent.getUserProfiles?.()?.scenes;
+  const pruneSceneFacts = async () => { await sceneFacts()?.prune(); };
+  let stopSceneFactPruning = () => {};
   if (sql) {
     database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL, { addColumns: ['locale'] });
     database.define('agent_schedule_migration', SCHEDULE_JOB_MIGRATION_MODEL);
@@ -61,6 +65,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   lifecycle.add(async () => {
     stopped = true;
     off();
+    stopSceneFactPruning();
     if (timer) clearInterval(timer);
     await pendingStart;
     await pendingPrune;
@@ -81,6 +86,12 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     }
     await decisions()?.prune(auditRetentionDays);
     await pruneGroupRules();
+    await pruneSceneFacts();
+    if (sql && raw && sessionsInDatabase) {
+      await ensureDatabaseIndex(raw, AI_SCENE_MEMBERS_TABLE, 'ai_scene_members_key',
+        [{ name: 'platform', text: true }, { name: 'scene_key', text: true }, { name: 'user_id', text: true }]);
+      await ensureDatabaseIndex(raw, AI_SCENE_MEMBERS_TABLE, 'ai_scene_members_updated', [{ name: 'updated_at' }]);
+    }
     if (usage && raw) {
       await usage.prune();
       await ensureDatabaseIndex(raw, 'agent_usage_turns', 'agent_usage_turns_ended', [{ name: 'ended_at' }]);
@@ -90,6 +101,8 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     signal.throwIfAborted();
     off = admission.onActivate(() => {
       if (stopped) return;
+      const scenes = sceneFacts();
+      if (scenes) stopSceneFactPruning = scenes.startPruning();
       // Timers only become live after the fully migrated generation is published.
       pendingStart = foundation.schedule.start().catch(() => {
         getLogger('agent').warn('op=schedule_start status=failed; 定时任务启动失败');

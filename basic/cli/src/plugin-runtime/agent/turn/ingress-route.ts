@@ -129,6 +129,7 @@ import {
 } from './control-gate.js';
 import { SceneEventIngress } from './scene-event-ingress.js';
 import { MemberLifecycle } from './member-lifecycle.js';
+import { SceneFactRefresher } from './scene-fact-refresher.js';
 import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { GroupRuleImChannel } from './group-rule-im.js';
 import { GroupRuleEnforcer, type GroupRuleEnforcementResult, type GroupRuleViolation } from './group-rule-enforcer.js';
@@ -201,6 +202,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
   private readonly workroomPort: AgentWorkroomPort;
   /** 状态感知（#996）：高优先社交事件独立唤醒；所有回合的 `[Scene events]` 摘要。 */
   readonly #sceneEvents: SceneEventIngress;
+  /** ADR 0041 §6: background refresh of stale scene facts; cancelled with this generation. */
+  readonly #sceneFactRefresher = new SceneFactRefresher();
   /** ADR 0037 切片 A：入群欢迎 / 退群记录（模板直发，过控制面与 session-gate）。 */
   readonly #memberLifecycle: MemberLifecycle;
   /** ADR 0037 切片 B：批准后的公告发送（过控制面、session-gate，以审批记录作硬闸批准）。 */
@@ -483,6 +486,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
       controlPlane: () => options.agent.agent.getControlPlane?.(),
       ownsWake: (signal) => this.#memberLifecycle.ownsWake(signal),
+      sceneFacts: () => options.agent.agent.getUserProfiles?.()?.scenes,
       recordState: (sessionKey, event, recordOptions) =>
         options.agent.agent.appendSessionEvents(sessionKey, [event], { create: recordOptions.create }),
       nickname: async (platform, userId) => {
@@ -573,6 +577,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#groupRuleEnforcer.dispose();
     this.#floodDetector.clear();
     this.#sceneEvents.dispose();
+    this.#sceneFactRefresher.dispose();
   }
 
   /**
@@ -1117,7 +1122,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
             ...(admission ? [admission.signal] : []),
             ...(lease.retirementSignal ? [lease.retirementSignal] : []),
           ]);
-          const contextState = await resolveRuntimeTurnContextState(snapshot, message.conversation, signal, message.sender?.id);
+          const contextState = await resolveRuntimeTurnContextState(
+            snapshot, message.conversation, signal, message.sender?.id,
+            { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
+          );
           signal.throwIfAborted();
           // Capabilities are read with the resolved conversation facts (bot role, mute) on the access.
           const contextAccess = createRuntimeTurnAccess(message, senderRoles, contextState);

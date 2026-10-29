@@ -56,6 +56,7 @@
     "export type{AssistantRuntimeHandle}from '../assistant/runtime-contract.js';",
     "export type{ComposedZhinAgentRuntime}from '../init/compose-zhin-agent-runtime.js';",
     "export{AI_DECISION_EVENTS_TABLE,DEFAULT_DECISION_AUDIT_RETENTION_DAYS}from '../decision-events.js';",
+    "export{AI_SCENE_MEMBERS_TABLE}from '../scene-facts.js';",
     "export{DEFAULT_GROUP_RULE_RETENTION_DAYS}from '../group-rules.js';",
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
     "export{ZhinAgent}from '../zhin-agent/index.js';",
