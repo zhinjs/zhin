@@ -32,6 +32,7 @@ export {
   assistantText,
   assistantAnswerText,
   parseLenientJsonObject,
+  registerStructuredOutputPromptText,
   CompletionFailureError,
   createLlmApiRuntime,
   isSdkId,
