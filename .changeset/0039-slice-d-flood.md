@@ -1,5 +1,0 @@
----
-"@zhin.js/cli": patch
----
-
-ADR 0039 slice D: `flood` (repeat spam) detection. Every human group message is fingerprinted by a new in-process `GroupFloodDetector`: when the **same member** sends the same or a highly similar message 3 times within 60 seconds, the hit is handed to the group-rule enforcer, which applies the group's active `flood` rule (no active rule → nothing happens). Several members each repeating a line once (joining in on a meme) never counts. Text is compared after NFKC / lower-casing / stripping whitespace and punctuation; lines of 6+ characters also match when their character-bigram similarity is ≥ 0.8; pure images / faces are compared by a content digest; reply quotes are ignored. A detector hit writes a `rule_enforcement` / `rule_hit_flood` audit row on the same `turn_id` as the action row. Detection is local (no model call), does not delay the message, and stores nothing on disk: at most 20 recent fingerprints per member and 5 000 tracked members, least-recent evicted, expired windows pruned.

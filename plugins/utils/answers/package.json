@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-answers",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Zhin.js 答案之书、趣味选择题与交规小测（原创内容，Plugin Runtime）",
   "type": "module",
   "main": "./lib/index.js",

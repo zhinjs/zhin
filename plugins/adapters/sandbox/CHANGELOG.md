@@ -1,5 +1,23 @@
 # @zhin.js/adapter-process
 
+## 1.1.19
+
+### Patch Changes
+
+- Updated dependencies [f67883e]
+- Updated dependencies [e23cabc]
+- Updated dependencies [4d728c0]
+- Updated dependencies [24a2b71]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [1ca669a]
+- Updated dependencies [3771f7a]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/core@1.1.52
+  - @zhin.js/adapter@1.1.24
+  - @zhin.js/host-http@1.1.11
+  - @zhin.js/im-contract@1.1.8
+  - @zhin.js/client@1.1.20
+
 ## 1.1.18
 
 ### Patch Changes

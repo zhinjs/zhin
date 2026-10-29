@@ -1,5 +1,17 @@
 # @zhin.js/plugin-dice-duel
 
+## 1.1.17
+
+### Patch Changes
+
+- Updated dependencies [f67883e]
+- Updated dependencies [4d728c0]
+- Updated dependencies [24a2b71]
+- Updated dependencies [3771f7a]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/core@1.1.52
+  - @zhin.js/game-kit@1.1.17
+
 ## 1.1.16
 
 ### Patch Changes

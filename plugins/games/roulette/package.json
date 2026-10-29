@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-roulette",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Zhin.js 俄罗斯轮盘 — 多人轮流开枪，可按群开启禁言惩罚 (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

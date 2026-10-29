@@ -1,5 +1,12 @@
 # @zhin.js/jsx
 
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [4f96ad5]
+  - @zhin.js/im-contract@1.1.8
+
 ## 1.1.6
 
 ### Patch Changes
