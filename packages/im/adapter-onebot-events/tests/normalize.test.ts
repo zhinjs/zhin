@@ -1,5 +1,5 @@
-import { mapNoticeParts, mapRequestParts, resolveSideEventDedupeKey } from '../src/side-event/normalize.js';
-import { composeSideEventName, formatSideEventName } from '../src/side-event/base.js';
+import { composeSideEventName, formatSideEventName } from '@zhin.js/core';
+import { mapNoticeParts, mapRequestParts, resolveSideEventDedupeKey } from '../src/normalize.js';
 
 describe('side-event normalize', () => {
   describe('mapNoticeParts', () => {
@@ -25,13 +25,6 @@ describe('side-event normalize', () => {
     it('notify poke 私聊 → friend + poke', () => {
       expect(mapNoticeParts('onebot', 'notify', { sub_type: 'poke', is_group: false }))
         .toEqual({ scene_type: 'friend', sub_type: 'poke' });
-    });
-
-    it('KOOK joined_guild → group + member_increase', () => {
-      expect(mapNoticeParts('kook', 'joined_guild')).toEqual({
-        scene_type: 'group',
-        sub_type: 'member_increase',
-      });
     });
 
     it('essence add → group + essence_add', () => {

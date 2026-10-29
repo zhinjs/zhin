@@ -14,6 +14,9 @@
       "@zhin.js/a2a/runtime": [
         "./packages/host/a2a/src/runtime.ts"
       ],
+      "@zhin.js/adapter-onebot-events": [
+        "./packages/im/adapter-onebot-events/src/index.ts"
+      ],
       "@zhin.js/adapter": [
         "./packages/im/adapter/src/index.ts"
       ],
@@ -291,6 +294,7 @@
     "packages/im/ai/src/**/*",
     "packages/im/kernel/src/**/*",
     "packages/im/core/src/**/*",
+    "packages/im/adapter-onebot-events/src/**/*",
     "packages/im/core/tests/public-events.test-d.ts",
     "packages/im/agent/src/**/*",
     "packages/im/agent/evals/**/*.ts",

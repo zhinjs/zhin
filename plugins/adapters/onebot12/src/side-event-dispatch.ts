@@ -1,4 +1,4 @@
-import { receiveOneBotLikeSideEvent } from '@zhin.js/core';
+import { receiveOneBotLikeSideEvent } from '@zhin.js/adapter-onebot-events';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { OneBot12Event } from './protocol.js';

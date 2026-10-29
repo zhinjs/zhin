@@ -19,7 +19,8 @@ import {
   type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
-import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
+import { buildSystem, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
+import { receiveOneBotLikeSideEvent } from '@zhin.js/adapter-onebot-events';
 import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
