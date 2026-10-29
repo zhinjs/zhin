@@ -134,6 +134,7 @@ import { AnnouncementDispatcher } from './announcement-dispatch.js';
 import { GroupRuleImChannel } from './group-rule-im.js';
 import { GroupRuleEnforcer, type GroupRuleEnforcementResult, type GroupRuleViolation } from './group-rule-enforcer.js';
 import { GroupFloodDetector } from './group-flood-detector.js';
+import { deliverReaction, ReactionPacer } from './reaction-pacer.js';
 import { GroupRuleDefaults } from './group-rule-defaults.js';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ColdFieldMonitor } from './cold-field.js';
@@ -221,6 +222,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #groupRuleEnforcer: GroupRuleEnforcer;
   /** ADR 0039 切片 D：复读刷屏检测（进程内、有界，不落盘）。 */
   readonly #floodDetector = new GroupFloodDetector();
+  /** Per-session reaction pacing (memory only, bounded); lives and dies with this route generation. */
+  readonly #reactionPacer = new ReactionPacer({ config: () => this.options.agent.service.getAgentConfig()?.reactions });
   readonly #groupRuleDefaults: GroupRuleDefaults;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
@@ -576,6 +579,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#stopGroupRules();
     this.#groupRuleEnforcer.dispose();
     this.#floodDetector.clear();
+    this.#reactionPacer.clear();
     this.#sceneEvents.dispose();
     this.#sceneFactRefresher.dispose();
   }
@@ -1337,22 +1341,27 @@ export class AgentTurnIngressRoute implements IngressRoute {
                         }
                         const reaction = reactionOf(messageOutput);
                         if (reaction !== undefined) {
-                          // A gesture, not a message: best effort, and it counts as having answered.
-                          const applied = message.message
-                            ? await options.im.endpoints.addReaction({
-                                adapter: effectiveAdapter,
-                                endpointKey: effectiveEndpoint,
-                                message: message.message,
-                                emoji: reaction,
-                              }).catch((error: unknown) => {
-                                logger.debug(formatCompact({ op: 'agent_reaction_failed', error: error instanceof Error ? error.message : String(error) }));
-                                return null;
-                              })
-                            : null;
-                          logger.debug(formatCompact({ op: 'agent_reaction', emoji: reaction, applied: applied !== null }));
+                          // A gesture, not a message: best effort, paced per session, and it counts as having answered.
+                          const delivery = await deliverReaction({
+                            pacer: this.#reactionPacer,
+                            sessionKey,
+                            add: message.message
+                              ? () => options.im.endpoints.addReaction({
+                                  adapter: effectiveAdapter,
+                                  endpointKey: effectiveEndpoint,
+                                  message: message.message!,
+                                  emoji: reaction,
+                                }).catch((error: unknown) => {
+                                  logger.debug(formatCompact({ op: 'agent_reaction_failed', error: error instanceof Error ? error.message : String(error) }));
+                                  return null;
+                                })
+                              : undefined,
+                          });
+                          const applied = delivery.applied ? {} : null;
+                          logger.debug(formatCompact({ op: 'agent_reaction', emoji: reaction, applied: applied !== null, ...(delivery.paced ? { paced: true } : {}) }));
                           admission?.markDelivered();
                           spoke = true;
-                          auditOutbound(audit, { status: 'sent' }, { reaction: true, applied: applied !== null });
+                          auditOutbound(audit, { status: 'sent' }, { reaction: true, applied: delivery.applied, ...(delivery.paced ? { paced: true } : {}) });
                           return { status: 'sent' as const };
                         }
                         // Model output may name local files or URLs: hold them to this Turn's own authority.

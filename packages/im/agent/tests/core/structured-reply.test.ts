@@ -450,3 +450,14 @@ it('uses captured turn locale for a model format failure through the engine', as
   expect(rendered).toContain('(Invalid reply format)');
   expect(rendered).not.toMatch(/[\u3400-\u9fff]/u);
 });
+
+describe('reaction instruction pacing', () => {
+  it('makes no reaction the default and reactions occasional', () => {
+    const text = structuredReplyInstruction({
+      types: ['text'],
+      reaction: { values: [{ value: '76', label: 'like' }] },
+    } as never);
+    expect(text).toContain('Most replies have none');
+    expect(text).toContain('only occasionally');
+  });
+});

@@ -119,8 +119,8 @@ export function structuredReplyInstruction(profile: AiOutboundSegmentProfile = D
 
 function reactionInstruction(values: readonly { readonly value: string; readonly label: string }[]): string[] {
   return [
-    `"reaction" reacts to the message being answered: ${values.map(item => `${item.value} ${item.label}`).join(', ')}; "" for none.`,
-    'For thanks, agreement, jokes or news needing no words, {"messages":[],"reaction":"<value>"} may suffice. A short message may accompany it; avoid repeating its meaning.',
+    `"reaction" reacts to the message being answered: ${values.map(item => `${item.value} ${item.label}`).join(', ')}. Most replies have none ("", the default); react only occasionally, when a gesture fits better than words.`,
+    'Then {"messages":[],"reaction":"<value>"} may suffice. A short message may accompany it; avoid repeating its meaning.',
   ];
 }
 

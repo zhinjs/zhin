@@ -648,6 +648,11 @@ export interface AIConfig {
         approverGroupId?: string;
       };
     };
+    /** 按会话限制表情回应：两次已发出回应的最小间隔与发出概率（0 = 关闭）；默认 10 分钟 / 0.35 */
+    reactions?: {
+      cooldownMs?: number;
+      probability?: number;
+    };
     /** 按用户 / 按群的 token 配额与群速率限制；默认全部关闭，主人默认不受限 */
     usageQuota?: {
       windowMs?: number;
