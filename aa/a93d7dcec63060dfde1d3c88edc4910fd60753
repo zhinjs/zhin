@@ -1,0 +1,55 @@
+packages/im/adapter/src/adapter-index.ts
+  s_9477e63ef5cee5::t_b1bd0997f7efe8 35-43,77-79,125-128,148,258-279,522-526,534-544,562-570
+  s_9477e63ef5cee5::t_544c3b1c15e561 34
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_cac4126ee09c32 105,1135-1136,1260
+docs/en/authoring/adapters.md
+  s_9477e63ef5cee5::t_532e40a5eec6eb 114-115,117-181
+  s_9477e63ef5cee5::t_abfc5614333102 116
+packages/im/adapter/tests/capability-profile.test.ts
+  s_9477e63ef5cee5::t_76ebdab0cd38ba 1-231
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9477e63ef5cee5::t_cac4126ee09c32 132-137
+  s_9477e63ef5cee5::t_ffee78aabc477f 131
+.changeset/adapter-capability-profile-spec.md
+  s_9477e63ef5cee5::t_8d33a0f6b697f4 1-7
+packages/im/adapter/src/capability-profile.ts
+  s_9477e63ef5cee5::t_b944b77b857b37 1-276,278-293,295-310,312-375,377-499,501-526,528-538,543-572,574-678,680,682-695,697-1010
+  s_9477e63ef5cee5::t_a313cfca3d0ac6 277,294,311,376,527,539-542,573,679,681,696
+  s_9477e63ef5cee5::t_8dab6339fb77e5 500
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9477e63ef5cee5::t_cac4126ee09c32 14-15,42,222-233,235-242,408-409,529
+  s_9477e63ef5cee5::t_40237035d89829 234
+packages/im/adapter/src/endpoint-management.ts
+  s_9477e63ef5cee5::t_b1bd0997f7efe8 79-97
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9477e63ef5cee5::t_c49a3dc7b2a7c9 232
+  s_9477e63ef5cee5::t_78f266bae997ab 6,17,231,233-259
+  s_9477e63ef5cee5::t_b2ad6d31bd04a8 260-261
+packages/im/adapter/src/index.ts
+  s_9477e63ef5cee5::t_88d5b1b33e22a3 10-11
+packages/im/adapter/src/definition.ts
+  s_9477e63ef5cee5::t_1f4a96bb6c032a 13-17,153-161,215-220,222-235,237-241,251,415,417-420
+  s_9477e63ef5cee5::t_88d5b1b33e22a3 221,236,416
+packages/im/adapter/tests/adapter.test.ts
+  s_9477e63ef5cee5::t_752f23cad5490d 1381-1454
+docs/authoring/adapters.md
+  s_9477e63ef5cee5::t_532e40a5eec6eb 114-115,117-180
+  s_9477e63ef5cee5::t_abfc5614333102 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aaa93d7dcec63060dfde1d3c88edc4910fd60753",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
