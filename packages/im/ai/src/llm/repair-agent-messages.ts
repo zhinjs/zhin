@@ -19,14 +19,15 @@ function extractAssistantToolCalls(
     .map((block) => ({ id: block.id, name: block.name }));
 }
 
-function syntheticToolResult(toolCallId: string, toolName: string): AgentMessage {
+/** Takes the call's own timestamp so repairing the same history twice yields the same messages. */
+function syntheticToolResult(toolCallId: string, toolName: string, timestamp: number): AgentMessage {
   return {
     role: 'toolResult',
     toolCallId,
     toolName,
     content: [{ type: 'text', text: MISSING_TOOL_RESULT_TEXT }],
     isError: true,
-    timestamp: Date.now(),
+    timestamp,
   };
 }
 
@@ -93,7 +94,7 @@ export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessag
       if (existing) {
         out.push(existing);
       } else {
-        out.push(syntheticToolResult(call.id, call.name));
+        out.push(syntheticToolResult(call.id, call.name, message.timestamp));
       }
     }
     out.push(...heldEvents);

@@ -17,6 +17,7 @@ describe('built-in IM prompt cost (#949)', () => {
       activeSkillsContext: '',
       bootstrapContext: '',
       orchestratorSdk: 'openai-compatible',
+      timeZone: 'UTC',
       turn: {
         origin: { kind: 'im', platform: 'sandbox', endpoint: 'bot', scope, sceneId: 'scene' },
         principal: { subjectId: 'sender', roles: ['user'] }, session: { key: 'test' },
