@@ -12,7 +12,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const read = (rel) => readFileSync(path.join(repoRoot, rel), 'utf8');
 
 /** Includes recordRequestBodies: an explicit opt-out of the approved default-on local request recording. */
-const BASELINE = 62;
+// 63: ai.agent.reactions（表情回应限频，避免每轮都表情回应；Fin 2026-10-29）
+const BASELINE = 63;
 
 function schemaAgentKeys() {
   const schema = JSON.parse(read('packages/im/runtime/src/host-config-schema.json'));
