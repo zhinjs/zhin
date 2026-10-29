@@ -68,6 +68,7 @@ import { stampAssistantHeaders, stampDeliveredMessageId } from '../session/parti
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
+import { historyWindowTrackerFor, historySceneFromTurn, resolveHistoryTokens, resolveHistoryMaxMessages } from '../context/history-window.js';
 import { renderDeferredToolIndex, toolIndexGroup } from '../skill/capability-catalog.js';
 import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
@@ -519,6 +520,18 @@ export async function* runAgentLoopTextTurnRun(
     ? input.initialMessages
     : [createUserMessage(input.rawContent)];
 
+  // ADR 0043 §2: the model sees a token-bounded window of the stored history; storage and
+  // compaction keep working on the full list.
+  const historyWindow = {
+    budget: resolveHistoryTokens(host.config.contextHistory?.tokens, historySceneFromTurn(input.turnContext)),
+    maxMessages: resolveHistoryMaxMessages(host.config.contextHistory?.maxMessages),
+  };
+  const historyTracker = historyWindowTrackerFor(host);
+  const windowed = persistentConversation
+    ? historyTracker.select(sessionId, [...loaded.messages, ...promptMessages], historyWindow)
+    : undefined;
+  const historyView = windowed ? windowed.messages.slice(0, windowed.messages.length - promptMessages.length) : loaded.messages;
+
   const directTools = input.toolLoading === 'direct';
   const hasTools = directTools ? resolvedTools.length > 0 : allTools.length > 0;
   const toolRun = hasTools && !directTools
@@ -609,7 +622,7 @@ export async function* runAgentLoopTextTurnRun(
       label: 'orchestrator',
       systemPrompt,
       sections,
-      historyMessages: loaded.messages,
+      historyMessages: historyView,
       tools: agentTools,
       userPreview: input.rawContent,
     });
@@ -619,7 +632,7 @@ export async function* runAgentLoopTextTurnRun(
       sessionId,
       label: 'chat',
       systemPrompt,
-      historyMessages: loaded.messages,
+      historyMessages: historyView,
       tools: [],
       userPreview: input.rawContent,
     });
@@ -690,7 +703,7 @@ export async function* runAgentLoopTextTurnRun(
         activeSkillsContext: input.promptRuntime?.activeSkillsContext,
         loadedTools: agentTools,
         deferredToolCount: deferredCatalogTools(catalog, agentTools).length,
-        historyMessages: loaded.messages,
+        historyMessages: historyView,
         userMessages: promptMessages,
       }),
     });
@@ -815,7 +828,9 @@ export async function* runAgentLoopTextTurnRun(
       }),
       ...(outputSchema ? { outputSchema } : {}),
     },
-    convertToLlm: createLlmMessageProjection(llmModel, input.messageAliases),
+    convertToLlm: persistentConversation
+      ? ((base) => (messages: AgentMessage[]) => base(historyTracker.select(sessionId, messages, historyWindow).messages))(createLlmMessageProjection(llmModel, input.messageAliases))
+      : createLlmMessageProjection(llmModel, input.messageAliases),
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,

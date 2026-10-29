@@ -2488,7 +2488,39 @@
                 "number",
                 "string"
               ],
-              "description": "读取的最近消息数量（默认 100）"
+              "description": "历史消息条数上限（默认 100）；与 historyTokens 取先到者"
+            },
+            "historyTokens": {
+              "type": [
+                "number",
+                "string",
+                "object"
+              ],
+              "description": "每轮发给模型的历史 token 预算：数字对所有场景生效，也可写 { group, private, masterPrivate }；默认群聊 8000、普通私聊 12000、主人私聊 24000；0 = 不按 token 限制",
+              "additionalProperties": true,
+              "properties": {
+                "group": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "群聊 / 频道（默认 8000）"
+                },
+                "private": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "普通私聊（默认 12000）"
+                },
+                "masterPrivate": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "主人私聊（默认 24000）"
+                }
+              }
             },
             "summaryThreshold": {
               "type": [

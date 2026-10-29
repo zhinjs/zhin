@@ -345,7 +345,11 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.sessions.sessionIdleArchiveMs` | number \| string | no | — | 空闲后自动归档 active 会话（毫秒，默认 7 天；0=关闭） |
 | `ai.context` | object \| null | no | — | — |
 | `ai.context.enabled` | boolean \| string | no | — | 是否启用消息记录（默认 true） |
-| `ai.context.maxRecentMessages` | number \| string | no | — | 读取的最近消息数量（默认 100） |
+| `ai.context.maxRecentMessages` | number \| string | no | — | 历史消息条数上限（默认 100）；与 historyTokens 取先到者 |
+| `ai.context.historyTokens` | number \| string \| object | no | — | 每轮发给模型的历史 token 预算：数字对所有场景生效，也可写 { group, private, masterPrivate }；默认群聊 8000、普通私聊 12000、主人私聊 24000；0 = 不按 token 限制 |
+| `ai.context.historyTokens.group` | number \| string | no | — | 群聊 / 频道（默认 8000） |
+| `ai.context.historyTokens.private` | number \| string | no | — | 普通私聊（默认 12000） |
+| `ai.context.historyTokens.masterPrivate` | number \| string | no | — | 主人私聊（默认 24000） |
 | `ai.context.summaryThreshold` | number \| string | no | — | 触发总结的消息数量阈值（默认 50） |
 | `ai.context.keepAfterSummary` | number \| string | no | — | 总结后保留的消息数量（默认 10） |
 | `ai.context.maxContextTokens` | number \| string | no | — | 上下文最大 token 估算（默认 4000） |

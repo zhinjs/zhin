@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { AgentMessage } from '../llm/types/agent-message.js';
 import type { PromptContextState, TextContentBlock } from '../llm/types/content-block.js';
 import { projectParticipantHeaders, type HeaderFormatOptions } from './participant-header.js';
+import { trimFinishedToolResults } from './tool-result-trim.js';
 
 function digest(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -52,7 +53,7 @@ function validState(block: TextContentBlock): PromptContextState | undefined {
  * retains both changes. Ordinary rules and memory always keep their full new versions.
  */
 export function projectPromptContext(messages: AgentMessage[], options?: HeaderFormatOptions): AgentMessage[] {
-  return projectParticipantHeaders(projectContextState(stripHistoricalTurnContext(messages)), options);
+  return projectParticipantHeaders(trimFinishedToolResults(projectContextState(stripHistoricalTurnContext(messages))), options);
 }
 
 /** contextRef keys (or key prefixes ending in `:`) that only ever described one turn (ADR 0043 §1). */

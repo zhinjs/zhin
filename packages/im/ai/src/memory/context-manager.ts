@@ -94,6 +94,8 @@ export interface ContextConfig {
   enabled?: boolean;
   /** 读取的最近消息数量（默认 100） */
   maxRecentMessages?: number;
+  /** 每轮历史 token 预算（ADR 0043）；由 Agent 运行时读取 */
+  historyTokens?: number | string | { group?: number | string; private?: number | string; masterPrivate?: number | string };
   /** 触发总结的消息数量阈值（默认 50） */
   summaryThreshold?: number;
   /** 总结后保留的消息数量（默认 10） */
@@ -131,7 +133,7 @@ export interface SceneContext {
 export class ContextManager {
   private messageModel: any;
   private summaryModel: any;
-  private config: Required<ContextConfig>;
+  private config: Required<Omit<ContextConfig, 'historyTokens'>>;
   private aiProvider?: AIProvider;
 
   constructor(

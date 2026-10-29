@@ -436,8 +436,13 @@ export interface AIConfig {
   context?: {
     /** 是否启用消息记录（默认 true） */
     enabled?: boolean;
-    /** 读取的最近消息数量（默认 100） */
+    /** 历史消息条数上限（默认 100）；与 historyTokens 取先到者 */
     maxRecentMessages?: number;
+    /**
+     * 每轮发给模型的历史 token 预算（ADR 0043）。数字对所有场景生效；也可按场景覆盖。
+     * 默认群聊 8000、普通私聊 12000、主人私聊 24000；0 = 不按 token 限制。
+     */
+    historyTokens?: number | string | { group?: number | string; private?: number | string; masterPrivate?: number | string };
     /** 触发总结的消息数量阈值（默认 50） */
     summaryThreshold?: number;
     /** 总结后保留的消息数量（默认 10） */
