@@ -1,0 +1,41 @@
+basic/cli/src/plugin-runtime/console/assistant-status.ts
+  s_9477e63ef5cee5::t_f0779b2d39e78a 23-24,142-143,160-161,215-218
+  s_9477e63ef5cee5::t_9b949e3c42b5fd 219-220
+basic/cli/src/usage/aggregate.ts
+  s_9477e63ef5cee5::t_659a1f139f1320 1-115,119-122,124-162,165,182-185,187-207,210-213,215-216,218-221,223-237,239-242,245-246,248-249,251-254,256-260
+  s_9477e63ef5cee5::t_7d12633bac9e30 116-118,123,163-164,166-181,186,208-209,214,217,222,238,243-244,247,250,255
+basic/cli/src/commands/usage.ts
+  s_9477e63ef5cee5::t_e514a4ccaec82d 9,87-88,129,153
+  s_9477e63ef5cee5::t_b461bc0318703a 89-93,95-118,121-128
+docs/en/authoring/console-pages.md
+  s_9477e63ef5cee5::t_8028a4053fe779 279-286
+basic/cli/tests/plugin-runtime/console/usage-stats-rpc.test.ts
+  s_9477e63ef5cee5::t_050729302ad47e 1-51,55-64,66-139
+  s_9477e63ef5cee5::t_2f0f63f83732a9 65
+  s_9477e63ef5cee5::t_dde732906065ab 52-54
+docs/authoring/console-pages.md
+  s_9477e63ef5cee5::t_8028a4053fe779 279-286
+basic/cli/src/plugin-runtime/console/usage-stats-rpc.ts
+  s_9477e63ef5cee5::t_ae7d33add11346 1-110
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_7d12633bac9e30 3
+  s_9477e63ef5cee5::t_f0779b2d39e78a 264,577
+.changeset/console-usage-stats.md
+  s_9477e63ef5cee5::t_f35283b1fe519c 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0937eeb2066e61969f3e60a9d9725a556e0c3fe5",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
