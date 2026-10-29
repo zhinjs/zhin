@@ -66,5 +66,7 @@ export interface PromptSegment<K extends SegmentKind = SegmentKind> {
   /** Text kinds only: budget retention (`required` is never trimmed). */
   readonly retention?: PromptRetention;
   readonly maxChars?: number;
+  /** Text kinds only: budget yield order (lower yields first); defaults to `weight`. */
+  readonly budgetOrder?: number;
   inject(input: SegmentInput): SegmentOutput<K> | null | undefined;
 }

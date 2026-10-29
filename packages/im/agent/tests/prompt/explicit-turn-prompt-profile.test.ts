@@ -49,7 +49,7 @@ describe('explicit Turn prompt profile', () => {
     const capabilities = '## Active specialist: researcher\nVerify primary sources.';
     const platformRules = '# Platform rules\nUse the current endpoint; never guess a recipient.';
     registry.register('§11_capabilities', {
-      layer: 'system', title: 'Turn capabilities', content: capabilities,
+      layer: 'system', kind: 'platform', title: 'Turn capabilities', content: capabilities,
       order: 9, budgetOrder: 155, retention: 'preferred',
     });
     registry.register('adapter:platform', {
@@ -98,9 +98,10 @@ describe('explicit Turn prompt profile', () => {
     const sections = await describeAgentPathPromptSections(host, {
       turn, content: 'research', sessionId: 'session', runtime,
     });
-    const runtimeText = rich.split(SECTION_SEP)[0]!;
+    const runtimeText = rich.split(SECTION_SEP).find(text => text.startsWith('# Runtime'))!;
     expect(sections.find(section => section.id === '§1_runtime')).toEqual({
-      id: '§1_runtime', approxChars: runtimeText.length, approxTokens: estimatePromptTokens(runtimeText),
+      id: '§1_runtime', kind: 'environment', weight: 160, chars: runtimeText.length, trimmed: false,
+      approxChars: runtimeText.length, approxTokens: estimatePromptTokens(runtimeText),
     });
   });
 });

@@ -33,6 +33,10 @@ import {
   type PromptSectionDescriptor,
   type PromptProfile,
 } from '@zhin.js/prompt-section';
+import { promptSegmentToken, promptSegmentsOf } from '../prompt/tokens.js';
+import type { PromptSegment } from '../prompt/segments/types.js';
+import { isTextSegmentKind } from '../prompt/segments/registry.js';
+import { labelThirdPartyGuidance } from '../prompt/third-party-guidance.js';
 import { capabilitySeamToken } from '../seam/tokens.js';
 import type { SeamIntegration } from '../seam/seam-integration.js';
 import { localImageAssetsToken, type LocalImageAssetStore } from '../media/local-image-assets.js';
@@ -59,6 +63,8 @@ export interface AgentCapabilities {
   readonly agents: readonly AgentDescriptor[];
   readonly mcp: readonly McpCapability[];
   readonly promptSections: readonly PromptSectionDescriptor[];
+  /** ADR 0041 segments provided on plugin Scopes via `promptSegmentToken`, of this generation. */
+  readonly promptSegments?: readonly PromptSegment[];
 }
 
 export class CapabilityIngress {
@@ -118,6 +124,7 @@ export class CapabilityIngress {
       skills: availableSkills,
       agents: featureAgents,
       mcp: bindMcp(mcp, owner, isActive, snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined),
+      promptSegments: collectPromptSegments(snapshot, owner),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
         .filter((section) => !section.platforms
           || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))
@@ -125,6 +132,32 @@ export class CapabilityIngress {
           || (turn?.origin.kind === 'im' && section.scopes.includes(turn.origin.scope)))),
     });
   }
+}
+
+/**
+ * Segments come from the sealed generation's Scopes, so a replaced generation drops them. Text
+ * segments from a plugin other than the agent owner are third-party content: their text is
+ * labelled so it cannot claim owner authority (same rule as plugin prompt sections, #726).
+ */
+export function collectPromptSegments(snapshot: RuntimeSnapshot, owner: PluginId): readonly PromptSegment[] {
+  const out: PromptSegment[] = [];
+  for (const [plugin, resources] of snapshot.resources) {
+    for (const segment of promptSegmentsOf(resources.get(promptSegmentToken.id))) {
+      const thirdParty = plugin !== owner && isTextSegmentKind(segment.kind);
+      out.push(thirdParty
+        ? {
+            ...segment,
+            inject: (input) => {
+              const text = segment.inject(input);
+              return typeof text === 'string' && text.trim()
+                ? labelThirdPartyGuidance(`plugin:${String(plugin)}`, text)
+                : text;
+            },
+          } as PromptSegment
+        : segment);
+    }
+  }
+  return Object.freeze(out);
 }
 
 async function bindAgents(

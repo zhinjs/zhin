@@ -128,8 +128,32 @@ export {
   buildUserMessageWithHistory,
   describePromptSectionsForDebug,
   createDefaultPromptAssemblyRegistry,
+  createBuiltinPromptSegments,
+  createPromptSegmentRegistry,
+  buildRichSystemPromptParts,
   enforcePromptBudget,
 } from './prompt/system-prompt.js';
+export {
+  PromptSegmentRegistry,
+  PromptSegmentMergeError,
+  mergeMessageSegments,
+  TEXT_SEGMENT_KINDS,
+  MESSAGE_SEGMENT_KINDS,
+} from './prompt/segments/index.js';
+export type {
+  PromptSegment,
+  SegmentKind,
+  TextSegmentKind,
+  MessageSegmentKind,
+  SegmentInput,
+  SegmentOutput,
+  SegmentRuntimeView,
+  SegmentSessionView,
+  PromptSegmentDebugInfo,
+  SystemPromptParts,
+  MessageSegmentOutput,
+  MergeMessageSegmentsOptions,
+} from './prompt/segments/index.js';
 export type { RichSystemPromptContext, PromptSectionDebugInfo } from './prompt/system-prompt.js';
 export { PromptAssemblyRegistry } from './prompt/prompt-assembly-registry.js';
 export type {
@@ -137,7 +161,8 @@ export type {
   PromptAssemblySection,
   PromptSectionRegistry,
 } from './prompt/prompt-assembly-registry.js';
-export { promptAssemblyToken } from './prompt/tokens.js';
+export { promptAssemblyToken, promptSegmentToken } from './prompt/tokens.js';
+export type { PromptSegmentSource } from './prompt/tokens.js';
 export type { PromptAssemblyToken, PromptAssemblyResource } from './prompt/tokens.js';
 export {
   defineAgentPromptSection,

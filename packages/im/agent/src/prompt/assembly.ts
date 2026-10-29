@@ -15,7 +15,8 @@ import { type AgentMessage } from '@zhin.js/ai';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
 import type { AgentPromptProfile } from './turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
-import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
+import { PromptSegmentRegistry } from './segments/registry.js';
+import type { PromptSegment } from './segments/types.js';
 import { DEFAULT_CONFIG } from '../config/index.js';
 
 function scheduleSystemPrompt(
@@ -38,26 +39,32 @@ function scheduleSystemPrompt(
     base,
     'Schedule Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
-    runtime?.registry,
+    runtime,
   );
 }
 
+/** The rendered base is one required `system` segment; plugin segments and the scene line follow. */
 function mergeRequiredBasePrompt(
   base: string,
-  title: string,
+  _title: string,
   maxChars: number,
-  registry?: PromptAssemblyRegistry,
+  runtime?: PromptRuntimeOverrides,
 ): string {
-  const assembly = new PromptAssemblyRegistry();
-  assembly.register('§runtime_base', {
-    layer: 'system',
-    title,
-    content: base,
-    order: Number.MAX_SAFE_INTEGER,
+  const assembly = new PromptSegmentRegistry();
+  assembly.register({
+    id: '§runtime_base',
+    kind: 'system',
+    weight: Number.MAX_SAFE_INTEGER,
     retention: 'required',
+    inject: () => base,
   });
-  if (registry) assembly.merge(registry);
-  return assembly.build(maxChars);
+  if (runtime?.registry) assembly.registerAll(runtime.registry.toSegments());
+  if (runtime?.segments) assembly.registerAll(runtime.segments);
+  if (runtime?.sceneText?.trim()) {
+    const sceneText = runtime.sceneText;
+    assembly.register({ id: '§0_scene', kind: 'scene', weight: 100, retention: 'preferred', inject: () => sceneText });
+  }
+  return assembly.buildSystemPrompt({ history: [], runtime: {}, session: { sessionKey: '' } }, maxChars);
 }
 
 export function buildDisciplinedPrompt(_host: AgentContextHost, basePrompt: string): string {
@@ -106,6 +113,8 @@ function agentPathPromptContext(
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
     registry: options.runtime?.registry,
+    segments: options.runtime?.segments,
+    sceneText: options.runtime?.sceneText,
     activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
     bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
     globalContext: agent.globalContext,
@@ -152,7 +161,12 @@ export interface PromptRuntimeOverrides {
   readonly modelId?: string;
   readonly providerAlias?: string;
   readonly modelSdk?: string;
+  /** @deprecated Use `segments`. */
   readonly registry?: import('./prompt-assembly-registry.js').PromptAssemblyRegistry;
+  /** ADR 0041 plugin segments (text kinds). */
+  readonly segments?: readonly PromptSegment[];
+  /** ADR 0041 `scene` line; rendered after the cache breakpoint. */
+  readonly sceneText?: string;
 }
 
 function withStableRuntime(base: string, runtime?: PromptRuntimeOverrides): string {
@@ -170,7 +184,7 @@ export function buildChatPathSystemPrompt(
     buildDisciplinedPrompt(agent, withStableRuntime(personaEnhanced, runtime)),
     'Agent Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
-    runtime?.registry,
+    runtime,
   );
 }
 
@@ -188,7 +202,7 @@ export async function buildMultimodalVisionSystemPrompt(
     buildLiteSystemPrompt(withStableRuntime(options.personaEnhanced, options.runtime)),
     'Vision Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
-    options.runtime?.registry,
+    options.runtime,
   );
 }
 
