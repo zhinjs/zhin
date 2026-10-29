@@ -362,7 +362,6 @@ export type { MemoryEntryRepository, MemoryEntryLocator, MemoryEntryListInput } 
 export { tokenizeForBm25, rankBm25, rankMemoryEntries, memoryEntryDocument } from './memory/memory-bm25.js';
 export type { Bm25Options, Bm25Hit } from './memory/memory-bm25.js';
 export {
-  buildActorPrefix,
   parseAgentMessageExtra,
   renderUserMessageForLlm,
   normalizeUserMessageForStorage,
@@ -530,6 +529,11 @@ export type {
 } from './decision/index.js';
 
 export { createPromptContextBlock, createPromptStateBlock, projectPromptContext } from './memory/prompt-context.js';
+export {
+  projectParticipantHeaders, parseParticipantHeader, buildStoredHeader, renderParticipantHeader, shortHeaderOf,
+  factsFromActor, factsFromBot, mergeHeaderRoles, muteTimeFromExpiry, formatHeaderInstant,
+  type ParticipantFacts, type BotHeaderFacts, type HeaderFormatOptions,
+} from './memory/participant-header.js';
 
 export {
   HEADER_VALUE_MAX_CHARS,

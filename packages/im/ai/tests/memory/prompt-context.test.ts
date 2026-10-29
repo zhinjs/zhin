@@ -12,12 +12,12 @@ import { estimateAgentMessagesTokens } from '../../src/compaction/agent-message-
 
 const rule = 'WORKSPACE-CONTENT ' + 'check the result. '.repeat(100);
 const message = (text = rule, key = 'workspace'): UserMessage => ({
-  ...createUserMessage('current', undefined, 1, { subjectId: 'alice', roles: ['user'], scope: 'group' }),
+  ...createUserMessage('current', undefined, 1),
   content: [{ type: 'text', text: '[Turn context]' }, createPromptContextBlock(key, text), { type: 'text', text: '[/Turn context]\ncurrent' }],
 });
 
 describe('runtime context projection', () => {
-  it('keeps raw storage, actor, media and a byte-identical previously sent prefix on replay', () => {
+  it('keeps raw storage, media and a byte-identical previously sent prefix on replay', () => {
     const first = renderUserMessageForLlm(message());
     const next = renderUserMessageForLlm(message());
     const rows = [first, next].map(m => serializeAgentMessage(m));
@@ -28,7 +28,7 @@ describe('runtime context projection', () => {
     const after = projectPromptContext(restored);
     expect(after[0]).toEqual(before[0]);
     expect(JSON.stringify(after).split('WORKSPACE-CONTENT').length - 1).toBe(1);
-    expect(after[1]).toMatchObject({ actor: { subjectId: 'alice' } });
+    expect(after[1]).toMatchObject({ role: 'user' });
     expect(restored[1]).toEqual(next);
   });
 

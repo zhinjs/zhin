@@ -62,6 +62,7 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
+import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
 import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
@@ -1055,7 +1056,10 @@ export async function* runAgentLoopTextTurnRun(
           msg.role === 'user' && i === 0 && continuations === 0 ? userMessageExtra : undefined
         ));
         if (persistentConversation) {
-          conversationBatches.push({ messages: batch, messageExtras });
+          conversationBatches.push({
+            messages: input.turnContext.origin.kind === 'im' ? stampAssistantHeaders(batch, input.turnContext.input?.contextState?.bot) : batch,
+            messageExtras,
+          });
         }
       }
     }

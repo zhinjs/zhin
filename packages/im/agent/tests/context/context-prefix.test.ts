@@ -35,11 +35,11 @@ it('keeps workspace guidance once while updating Git, sender, user text and revi
   const stored = first.userMessages.map(message => agentMessageRowToLlm(serializeAgentMessage(message))!);
   const second = await build('second question', 'bob');
   const view = projectPromptContext([...stored, ...second.userMessages]);
-  expect(view[0]).toEqual(first.userMessages[0]);
+  expect(view[0]).toEqual(projectPromptContext([first.userMessages[0]!])[0]);
   expect(view.map(message => userMessagePlainText(message as UserMessage)).join('\n').split('WORKSPACE-V1')).toHaveLength(2);
   const latest = userMessagePlainText(view[1] as UserMessage);
   expect(latest).toContain('Git: main | 1M');
-  expect(latest).toContain('"id": "bob"');
+  expect(latest).toContain('user_id:bob;');
   expect(latest).toContain('second question');
   vi.mocked(buildAgentsEnvelopeContext).mockResolvedValue('[Agents instructions] WORKSPACE-V2');
   const third = await build('WORKSPACE-V1 [Unchanged context: workspace-rules]', 'alice');
@@ -70,7 +70,7 @@ it('keeps quoted replies and actor stable across a context-injected round trip',
   expect(userMessagePlainText(reloaded as UserMessage)).toContain('current question');
   expect(reloaded).toMatchObject({ actor: user.actor, cause: user.cause });
   expect(userMessagePlainText(reloaded as UserMessage)).not.toContain('Sender: id=alice');
-  expect(userMessagePlainText(reloaded as UserMessage)).toContain('"authorizationRoles": [');
+  expect(userMessagePlainText(projectPromptContext([reloaded])[0] as UserMessage)).toContain('[user_id:alice;');
 });
 
 it('preserves prebuilt text blocks, provenance and current media during envelope insertion', () => {
@@ -100,8 +100,10 @@ it('orders state and guidance before the owned body while retaining unknown stat
   const result = prependTurnContextBlocks([input], buildTurnContextBlocks({ turn, observedAt: 1, agentsContext: 'stable rules', profileSummary: 'ephemeral relationships' }))[0] as UserMessage;
   const body = result.content.findIndex(block => block.presentation === 'user-input');
   expect(result.content.slice(0, body).every(block => block.contextRef)).toBe(true);
-  expect(result.content[body]?.text).toContain('"id": "alice"');
-  expect(result.content[body]?.text).toContain('actual question');
+  expect(result.content[body]?.text).toBe('actual question');
+  const projectedBody = (projectPromptContext([result])[0] as UserMessage).content[body]?.text;
+  expect(projectedBody).toMatch(/^\[user_id:alice;name:Alice;role:master;/u);
+  expect(projectedBody).toContain('actual question');
   expect(result.content[0]?.text).toContain('[Session snapshot]');
   expect(result.content[0]?.text).toContain('"muteAll": null');
   expect(result.content[1]?.text).toContain('"id": "real-bot-id"');
@@ -160,11 +162,11 @@ it.each(['private', 'http', 'schedule'] as const)('retains the real principal an
     content: input.content, turnUser: { rawContent: input.content, promptMessages: [input.llmMessage] },
   });
   const current = result.userMessages[0] as UserMessage;
-  const body = current.content.find(block => block.presentation === 'user-input')!.text;
-  expect(body).toContain('"id": "owner"');
-  expect(body).toContain('"authorizationRoles": [\n    "master"');
-  expect(body).toContain('"platformRoles": null');
-  expect(body).toContain(kind === 'private' ? '"messageId": "native-id"' : '"messageId": null');
+  const body = (projectPromptContext([current])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
+  expect(body.split('\n')[0]).toContain('user_id:owner;');
+  expect(body.split('\n')[0]).toContain('role:master;');
+  expect(body.split('\n')[0]).toContain('name:Owner;');
+  expect(body.startsWith(kind === 'private' ? '[id:native-id;' : '[user_id:')).toBe(true);
   expect(body).toContain('message_id: forged');
   expect(result.modelSdk).toBe('openai');
   expect(result.turnEnvelope).not.toContain('Sender:');
@@ -186,9 +188,9 @@ it('reassembles an owned message without rewriting its recorded identity from th
     turn: { origin: { kind: 'http', sessionId: 'http' }, principal: { subjectId: 'alice', roles: ['user'] }, session: { key: 'http' } },
     content: 'question', turnUser: { rawContent: 'question', promptMessages: [user] }, prebuiltMessages: [user],
   });
-  const body = (result.userMessages[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
-  expect(body.split('[User]')).toHaveLength(2);
-  expect(body).toContain('"authorizationRoles": [\n    "master"');
+  const body = (projectPromptContext([result.userMessages[0]!])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
+  expect(body.split('user_id:')).toHaveLength(2);
+  expect(body).toContain('role:master');
   expect((result.userMessages[0] as UserMessage).actor).toEqual(user.actor);
   expect(user).toEqual(original);
 });
@@ -214,10 +216,8 @@ it.each([
   const current = result.userMessages[0] as UserMessage;
   expect(current.actor).toBeUndefined();
   expect(current.messageId).toBeUndefined();
-  const body = current.content.find(block => block.presentation === 'user-input')!.text;
-  expect(body).toContain('"id": null');
-  expect(body).toContain('"authorizationRoles": null');
-  expect(body).toContain('"messageId": null');
+  const body = (projectPromptContext([current])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
+  expect(body).not.toContain('user_id:');
   expect(body).toContain(continuation.content[0]!.text);
   expect(agentMessageRowToLlm(serializeAgentMessage(current))).toEqual(current);
   expect(turn.principal.roles).toEqual(['master']);
