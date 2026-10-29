@@ -64,10 +64,11 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
-import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
+import { stampAssistantHeaders, stampDeliveredMessageId } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
+import { historyWindowTrackerFor, historySceneFromTurn, resolveHistoryTokens, resolveHistoryMaxMessages } from '../context/history-window.js';
 import { renderDeferredToolIndex, toolIndexGroup } from '../skill/capability-catalog.js';
 import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
@@ -206,6 +207,8 @@ function toolResultToAgentMessage(
 }
 
 export interface AgentLoopTurnInput {
+  /** Filled with the aliases of every projection this turn sends, for tool-argument resolution (ADR 0043 §5). */
+  messageAliases?: import('@zhin.js/ai').MessageAliasTable;
   /** Shared image allowance, including media already processed at ingress. */
   imageInspectionBudget?: ImageInspectionBudget;
   host: ZhinAgentPrivate;
@@ -285,7 +288,7 @@ export interface AgentLoopTurnResult {
   toolCalls: ToolCallRecord[];
   thinking?: string;
   /** Conversation projection applied only after the durable terminal commits. */
-  projectConversation?: () => Promise<void>;
+  projectConversation?: (delivered?: { readonly messageId?: string }) => Promise<void>;
 }
 
 /** @deprecated No production caller: image turns run through `runText` with media
@@ -517,6 +520,18 @@ export async function* runAgentLoopTextTurnRun(
     ? input.initialMessages
     : [createUserMessage(input.rawContent)];
 
+  // ADR 0043 §2: the model sees a token-bounded window of the stored history; storage and
+  // compaction keep working on the full list.
+  const historyWindow = {
+    budget: resolveHistoryTokens(host.config.contextHistory?.tokens, historySceneFromTurn(input.turnContext)),
+    maxMessages: resolveHistoryMaxMessages(host.config.contextHistory?.maxMessages),
+  };
+  const historyTracker = historyWindowTrackerFor(host);
+  const windowed = persistentConversation
+    ? historyTracker.select(sessionId, [...loaded.messages, ...promptMessages], historyWindow)
+    : undefined;
+  const historyView = windowed ? windowed.messages.slice(0, windowed.messages.length - promptMessages.length) : loaded.messages;
+
   const directTools = input.toolLoading === 'direct';
   const hasTools = directTools ? resolvedTools.length > 0 : allTools.length > 0;
   const toolRun = hasTools && !directTools
@@ -607,7 +622,7 @@ export async function* runAgentLoopTextTurnRun(
       label: 'orchestrator',
       systemPrompt,
       sections,
-      historyMessages: loaded.messages,
+      historyMessages: historyView,
       tools: agentTools,
       userPreview: input.rawContent,
     });
@@ -617,7 +632,7 @@ export async function* runAgentLoopTextTurnRun(
       sessionId,
       label: 'chat',
       systemPrompt,
-      historyMessages: loaded.messages,
+      historyMessages: historyView,
       tools: [],
       userPreview: input.rawContent,
     });
@@ -646,7 +661,7 @@ export async function* runAgentLoopTextTurnRun(
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
       .map((item) => ({ name: item.name, description: item.brief, group: toolIndexGroup(item) })));
     if (toolIndex) {
-      const block = createPromptContextBlock('deferred-tools', toolIndex);
+      const block = { ...createPromptContextBlock('deferred-tools', toolIndex), perTurn: true as const };
       const userIndex = promptMessages.map(message => message.role === 'user' && Array.isArray(message.content)).lastIndexOf(true);
       promptMessages = userIndex < 0
         ? [...promptMessages, { ...createUserMessage(''), content: [block] }]
@@ -688,7 +703,7 @@ export async function* runAgentLoopTextTurnRun(
         activeSkillsContext: input.promptRuntime?.activeSkillsContext,
         loadedTools: agentTools,
         deferredToolCount: deferredCatalogTools(catalog, agentTools).length,
-        historyMessages: loaded.messages,
+        historyMessages: historyView,
         userMessages: promptMessages,
       }),
     });
@@ -813,7 +828,9 @@ export async function* runAgentLoopTextTurnRun(
       }),
       ...(outputSchema ? { outputSchema } : {}),
     },
-    convertToLlm: createLlmMessageProjection(llmModel),
+    convertToLlm: persistentConversation
+      ? ((base) => (messages: AgentMessage[]) => base(historyTracker.select(sessionId, messages, historyWindow).messages))(createLlmMessageProjection(llmModel, input.messageAliases))
+      : createLlmMessageProjection(llmModel, input.messageAliases),
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
@@ -1156,7 +1173,7 @@ export async function* runAgentLoopTextTurnRun(
       model: modelId,
       toolCalls,
       thinking,
-      projectConversation: () => appendConversationBatches(repo, sessionId, conversationBatches),
+      projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, delivered?.messageId),
     };
   }
 
@@ -1245,6 +1262,8 @@ export async function* runAgentLoopTextTurnRun(
   if (!delegatedOnly) {
     output = mergeToolOutboundElements(output, toolCalls);
   }
+  // ADR 0043 §5: a `reply` segment may name its target by alias (`m12`); delivery needs the platform id.
+  if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
   const finalReply = imReply ? renderAgentOutput(output) : textReply;
   if (!imReply && needsReplyRecovery) onChunk?.(finalReply, finalReply);
   if (imReply && finalReply) {
@@ -1278,8 +1297,23 @@ export async function* runAgentLoopTextTurnRun(
     model: modelId,
     toolCalls,
     thinking,
-    projectConversation: () => appendConversationBatches(repo, sessionId, conversationBatches),
+    projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, delivered?.messageId),
   };
+}
+
+function resolveReplyAliases(output: AgentOutputElement[], aliases: import('@zhin.js/ai').MessageAliasTable): AgentOutputElement[] {
+  return output.map((element) => {
+    if (element.type !== 'message') return element;
+    return {
+      ...element,
+      segments: element.segments.map((segment) => {
+        const id = (segment.data as { message_id?: unknown } | undefined)?.message_id;
+        return segment.type === 'reply' && typeof id === 'string' && aliases.idOf(id.trim())
+          ? { ...segment, data: { ...segment.data, message_id: aliases.resolve(id) } }
+          : segment;
+      }),
+    };
+  });
 }
 
 async function appendConversationBatches(
@@ -1289,9 +1323,12 @@ async function appendConversationBatches(
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
   }[],
+  deliveredMessageId?: string,
 ): Promise<void> {
-  for (const batch of batches) {
-    await repo.appendMessages(sessionId, batch.messages, { messageExtras: batch.messageExtras });
+  const lastIndex = batches.length - 1;
+  for (const [index, batch] of batches.entries()) {
+    const messages = index === lastIndex ? stampDeliveredMessageId(batch.messages, deliveredMessageId) : batch.messages;
+    await repo.appendMessages(sessionId, messages, { messageExtras: batch.messageExtras });
   }
 }
 

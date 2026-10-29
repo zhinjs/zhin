@@ -53,7 +53,7 @@ it('carries a mixed default-schema reply through the full engine, terminal, publ
   const preview = '**结果**\n@owner，请查收[image]';
   expect(result.outbound, JSON.stringify(result.traces)).toEqual([preview]);
   expect(result.modelRequests).toHaveLength(1);
-  expect(result.modelRequests[0].inputText).toContain('[id:structured-mixed:turn-1:message;user_id:owner;');
+  expect(result.modelRequests[0].inputText).toContain('[id:m1;user_id:owner;');
   const terminal = result.terminals.find(event => event.type === 'turn_end');
   expect(terminal?.type).toBe('turn_end');
   if (terminal?.type !== 'turn_end') throw new Error('Missing successful terminal');

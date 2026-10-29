@@ -219,8 +219,8 @@ function memberLevel2(store: SceneFactStore, platform: string, group: string, us
 
 /**
  * Resolve this turn's account and, for ICQQ groups, the ADR 0041 scene facts (group, Bot role and
- * card, sender role/card/title/mute) before tool discovery. The Bot role is always read fresh;
- * group and sender facts reuse a short per-generation cache. Failed lookups omit their fields.
+ * card, sender role/card/title/mute) before tool discovery. Bot, group and sender facts all use the
+ * two-level cache (memory 60 s → database → platform). Failed lookups omit their fields.
  */
 export async function resolveRuntimeTurnContextState(
   snapshot: Pick<RuntimeSnapshot, 'projections'>,
@@ -255,9 +255,20 @@ export async function resolveRuntimeTurnContextState(
   const botTask = (async (): Promise<NonNullable<TurnContextState['bot']>> => {
     try {
       if (management.inspectGroupMemberProfile) {
-        const member = await raceSignal(management.inspectGroupMemberProfile(group, id, signal), signal);
-        // The bot's own role gates tool access, so it is read fresh every turn and only written through.
-        if (store) await store.putBot(platform, 'group', group, id, member).catch((error: unknown) => logFactError('agent_scene_fact_l2_write_failed', 'bot', error));
+        // Same cadence as any member (Fin 2026-10-29): L1 60 s → L2 → platform. Role-change events
+        // write through, and a stale role at worst offers a tool the platform then refuses.
+        const level2 = store ? memberLevel2(store, platform, group, id, now) : undefined;
+        const member = await cachedLookup(cache, `member${KEY_SEP}${scopeKey}${KEY_SEP}${id}`, signal,
+          (lookupSignal) => management.inspectGroupMemberProfile!(group, id, lookupSignal), {
+            now,
+            ...(level2 && store ? { level2: {
+              read: level2.read,
+              // A platform result also refreshes the session profile's bot role / mute.
+              write: (value: GroupMemberProfile) => store.putBot(platform, 'group', group, id, value),
+            } } : {}),
+            ...(deps.refresher ? { refresher: deps.refresher } : {}),
+          });
+        if (!member) throw new Error('bot member lookup returned nothing');
         return {
           ...bot,
           ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }),

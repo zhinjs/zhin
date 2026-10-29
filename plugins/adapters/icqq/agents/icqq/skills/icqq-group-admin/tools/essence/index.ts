@@ -4,7 +4,7 @@ import { z } from 'zod';
 export default defineAgentTool<{ message_id: string; action: 'add' | 'remove' }>({
   description: '设置或移除 QQ 群精华消息',
   inputSchema: z.object({
-    message_id: z.string().describe('消息 ID'),
+    message_id: z.string().describe('消息 ID，或消息头里的 m<n> 别名'),
     action: z.enum(['add', 'remove']).describe('add=设为精华, remove=移除精华'),
   }),
   adapter: 'icqq',

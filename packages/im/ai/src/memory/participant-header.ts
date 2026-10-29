@@ -1,20 +1,24 @@
 /**
- * ADR 0041 §1/§4 participant headers.
+ * ADR 0041 §1/§4 participant headers (amended: actor-only storage) + ADR 0043 §4/§5.
  *
- * The trusted host stores the FULL header in `UserMessage.name` / `AssistantMessage.name`. At the LLM
- * boundary {@link projectParticipantHeaders} decides full vs short per `user_id`, synthesizes
+ * The trusted host stores only structured facts: `UserMessage.actor` and `AssistantMessage.assistantActor`.
+ * At the LLM boundary {@link projectParticipantHeaders} decides full vs short per `user_id`, synthesizes
  * `member_changed` events for facts that changed without an event, and renders the chosen header as
- * the first line of the message text. Stored history is never mutated and `name` is never sent to a provider.
+ * the first line of the message text (plus `reply_to` / an inline `[quote ...]` line for quoted messages).
+ * Legacy rows that still carry a rendered header in `name` are read as facts. Stored history is never
+ * mutated and `name` is never sent to a provider.
  */
 import type {
   AgentMessage,
   AssistantMessage,
   ConversationActor,
   EventMessage,
+  ConversationQuote,
   UserMessage,
 } from '../llm/types/agent-message.js';
 import { isEventMessage } from '../llm/types/agent-message.js';
 import { formatHeader, quoteEventValue, renderSenderId } from './message-header.js';
+import { indexMessageAliases } from './message-alias.js';
 
 export interface ParticipantFacts {
   /** Native message id (users only; the bot's own sent ids are unknown at store time). */
@@ -58,15 +62,21 @@ function formatterFor(timeZone: string | undefined): Intl.DateTimeFormat {
   return formatter;
 }
 
-/** `{ date: 'YYYY-MM-DD', time: 'HH:mm:ss.SSS' }` in the instance zone. */
-export function formatHeaderInstant(timestamp: number, options?: HeaderFormatOptions): { date: string; time: string } {
+/** `{ date: 'YYYY-MM-DD', time: 'HH:mm:ss.SSS', clock: 'HH:mm' }` in the instance zone. */
+export function formatHeaderInstant(timestamp: number, options?: HeaderFormatOptions): { date: string; time: string; clock: string } {
   const parts: Record<string, string> = {};
   for (const part of formatterFor(options?.timeZone).formatToParts(new Date(timestamp))) parts[part.type] = part.value;
   return {
     date: `${parts.year}-${parts.month}-${parts.day}`,
     time: `${parts.hour}:${parts.minute}:${parts.second}.${parts.fractionalSecond}`,
+    clock: `${parts.hour}:${parts.minute}`,
   };
 }
+
+/** ADR 0043 §5: the clock is shown only when at least this long passed since the last shown one. */
+export const HEADER_TIME_INTERVAL_MS = 60_000;
+/** ADR 0043 §4: the inline quote keeps at most this many characters of the quoted message. */
+export const QUOTE_INLINE_MAX_CHARS = 120;
 
 /** Platform roles first, then authorization roles; `user` (the default) is dropped. */
 export function mergeHeaderRoles(...lists: ReadonlyArray<readonly string[] | undefined>): string[] {
@@ -120,9 +130,25 @@ export function factsFromBot(bot: BotHeaderFacts | undefined): ParticipantFacts 
   };
 }
 
+/** Facts of the bot's own message from the structured `assistantActor` the host stored. */
+export function factsFromAssistantActor(actor: ConversationActor, messageId?: string): ParticipantFacts {
+  const role = mergeHeaderRoles(actor.roles);
+  return {
+    ...(messageId ? { messageId } : {}),
+    userId: renderSenderId(actor.subjectId),
+    ...(actor.displayName?.trim() ? { name: actor.displayName.trim() } : {}),
+    ...(role.length ? { role } : {}),
+    ...(actor.groupNickname ? { groupNickname: actor.groupNickname } : {}),
+  };
+}
+
 interface RenderOptions extends HeaderFormatOptions {
   readonly full: boolean;
   readonly date?: boolean;
+  /** Show `time:HH:mm`; default true. */
+  readonly time?: boolean;
+  /** Alias of the quoted message when it is inside the visible window. */
+  readonly replyTo?: string;
   /** Bots do not advertise mute_time (ADR: id/name/role/group_nickname). */
   readonly bot?: boolean;
 }
@@ -131,8 +157,10 @@ interface RenderOptions extends HeaderFormatOptions {
 export function renderParticipantHeader(facts: ParticipantFacts, timestamp: number, options: RenderOptions): string {
   const instant = formatHeaderInstant(timestamp, options);
   const date: [string, string | undefined] = ['date', options.date ? instant.date : undefined];
+  const time: [string, string | undefined] = ['time', options.time === false ? undefined : instant.clock];
+  const replyTo: [string, string | undefined] = ['reply_to', options.replyTo];
   if (!options.full) {
-    return formatHeader([['id', facts.messageId], ['user_id', facts.userId], date, ['time', instant.time]]);
+    return formatHeader([['id', facts.messageId], ['user_id', facts.userId], replyTo, date, time]);
   }
   return formatHeader([
     ['id', facts.messageId],
@@ -143,12 +171,16 @@ export function renderParticipantHeader(facts: ParticipantFacts, timestamp: numb
     ['group_nickname', facts.groupNickname],
     ['group_title', facts.groupTitle],
     ['mute_time', options.bot ? undefined : facts.muteTime],
+    replyTo,
     date,
-    ['time', instant.time],
+    time,
   ]);
 }
 
-/** The FULL header stored in `name` by the trusted host. */
+/**
+ * A rendered full header. The host no longer stores it (actor-only); kept to read and to fabricate
+ * LEGACY rows whose `name` carried it.
+ */
 export function buildStoredHeader(facts: ParticipantFacts, timestamp: number, options?: HeaderFormatOptions & { bot?: boolean }): string {
   return renderParticipantHeader(facts, timestamp, { ...options, full: true });
 }
@@ -179,10 +211,26 @@ export function parseParticipantHeader(line: string | undefined): ParticipantFac
 type TextMessage = UserMessage | AssistantMessage;
 
 function messageFacts(message: TextMessage): ParticipantFacts | undefined {
+  // Legacy rows: the rendered header in `name` still wins so old histories render exactly as before.
   const parsed = parseParticipantHeader(message.name);
   if (parsed) return parsed;
   if (message.role === 'user' && message.actor) return factsFromActor(message.actor, message.messageId, message.timestamp);
+  if (message.role === 'assistant' && message.assistantActor) return factsFromAssistantActor(message.assistantActor, message.messageId);
   return undefined;
+}
+
+/** `[quote id:<alias or platform id>;user_id:<sender>;time:<HH:mm>;] <first 120 chars>`; undefined without text. */
+export function renderQuoteLine(quote: ConversationQuote, options?: HeaderFormatOptions & { alias?: string }): string | undefined {
+  const body = quote.text?.replace(/\s+/gu, ' ').trim();
+  if (!body) return undefined;
+  const chars = Array.from(body);
+  const clipped = chars.length > QUOTE_INLINE_MAX_CHARS ? `${chars.slice(0, QUOTE_INLINE_MAX_CHARS - 1).join('')}…` : body;
+  const header = formatHeader([
+    ['id', options?.alias ?? quote.id],
+    ['user_id', quote.senderId ? renderSenderId(quote.senderId) : undefined],
+    ['time', quote.timestamp !== undefined ? formatHeaderInstant(quote.timestamp, options).clock : undefined],
+  ]);
+  return `[quote ${header.slice(1)} ${clipped}`;
 }
 
 /** The short form of a stored header (used to strip rendered prefixes from stored text). */
@@ -226,9 +274,9 @@ function fieldChanged(field: Field, before: Remembered, after: Remembered): bool
 const EVENT_LINE = /^\S+ changed (\S+) (role|name|mute_time|group_title|group_nickname) to /u;
 
 function prefixFirstText(message: TextMessage, header: string): TextMessage {
-  const content = message.content as Array<{ type: string; text?: string; contextRef?: unknown; ephemeral?: boolean; presentation?: string }>;
+  const content = message.content as Array<{ type: string; text?: string; contextRef?: unknown; ephemeral?: boolean; perTurn?: boolean; presentation?: string }>;
   let index = content.findIndex(block => block.type === 'text' && block.presentation === 'user-input');
-  if (index < 0) index = content.findIndex(block => block.type === 'text' && typeof block.text === 'string' && !block.contextRef && !block.ephemeral);
+  if (index < 0) index = content.findIndex(block => block.type === 'text' && typeof block.text === 'string' && !block.contextRef && !block.ephemeral && !block.perTurn);
   if (index < 0) {
     return { ...message, content: [{ type: 'text', text: header }, ...message.content] } as TextMessage;
   }
@@ -265,7 +313,11 @@ function mergeFacts(before: ParticipantFacts, after: ParticipantFacts, beforeTs:
 export function projectParticipantHeaders(messages: AgentMessage[], options?: HeaderFormatOptions): AgentMessage[] {
   const remembered = new Map<string, Remembered>();
   const pendingEvents = new Map<string, Set<string>>();
+  const aliasing = indexMessageAliases(messages);
+  /** Platform ids of the messages already rendered in this window (a quote only points backwards). */
+  const seenIds = new Map<string, string>();
   let lastDate: string | undefined;
+  let lastClockAt: number | undefined;
   let changed = false;
   const out: AgentMessage[] = [];
   for (const message of messages) {
@@ -284,8 +336,11 @@ export function projectParticipantHeaders(messages: AgentMessage[], options?: He
     if (!Array.isArray(text.content)) { out.push(message); continue; }
     // A tool-call-only assistant turn has no text to carry a header; it neither introduces the bot nor changes its facts.
     if (text.role === 'assistant' && !text.content.some(block => block.type === 'text')) { out.push(message); continue; }
-    const facts = messageFacts(text);
-    if (!facts) { out.push(message); continue; }
+    const rawFacts = messageFacts(text);
+    if (!rawFacts) { out.push(message); continue; }
+    const alias = aliasing.aliases.get(message);
+    // The model only ever sees the alias; the platform id stays host-side (tools take either).
+    const facts: ParticipantFacts = alias ? { ...rawFacts, messageId: alias } : (({ messageId: _legacy, ...rest }) => rest)(rawFacts);
 
     const current: Remembered = { facts, timestamp: text.timestamp };
     const previous = remembered.get(facts.userId);
@@ -293,6 +348,11 @@ export function projectParticipantHeaders(messages: AgentMessage[], options?: He
     const instant = formatHeaderInstant(text.timestamp, options);
     const withDate = instant.date !== lastDate;
     lastDate = instant.date;
+    const withClock = withDate || lastClockAt === undefined || text.timestamp - lastClockAt >= HEADER_TIME_INTERVAL_MS;
+    if (withClock) lastClockAt = text.timestamp;
+    const quote = text.role === 'user' ? text.quote : undefined;
+    const replyTo = quote ? seenIds.get(quote.id) : undefined;
+    const quoteLine = quote && !replyTo ? renderQuoteLine(quote, options) : undefined;
     if (previous) {
       const pending = pendingEvents.get(facts.userId);
       for (const field of FIELD_ORDER) {
@@ -310,7 +370,12 @@ export function projectParticipantHeaders(messages: AgentMessage[], options?: He
       timestamp: text.timestamp,
       facts: previous ? mergeFacts(previous.facts, facts, previous.timestamp, text.timestamp) : facts,
     });
-    out.push(prefixFirstText(text, renderParticipantHeader(facts, text.timestamp, { ...options, full: !previous, date: withDate, bot })));
+    const header = renderParticipantHeader(facts, text.timestamp, {
+      ...options, full: !previous, date: withDate, time: withClock, bot, ...(replyTo ? { replyTo } : {}),
+    });
+    out.push(prefixFirstText(text, quoteLine ? `${header}\n${quoteLine}` : header));
+    const platformId = (text as { messageId?: string }).messageId;
+    if (platformId && alias) seenIds.set(platformId, alias);
     changed = true;
   }
   return changed ? out : messages;

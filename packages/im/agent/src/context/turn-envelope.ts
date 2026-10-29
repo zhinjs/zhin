@@ -168,7 +168,8 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
   if (current.length) blocks.push({ type: 'text', text: [TURN_CONTEXT_BEGIN, ...current, TURN_CONTEXT_END].join('\n') });
   const people = [input.profileSummary?.trim(), input.sessionSummary?.trim(), input.sceneEvents?.trim()].filter(Boolean);
   if (people.length) blocks.push({ type: 'text', text: people.join('\n'), ephemeral: true });
-  return blocks;
+  // ADR 0043 §1: everything built here is per-turn context; history keeps only the conversation.
+  return blocks.map(block => ({ ...block, perTurn: true as const }));
 }
 
 export function prependTurnContextEnvelope(content: string, envelope: string | null | undefined): string {

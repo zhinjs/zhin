@@ -8,7 +8,7 @@ export default defineAgentTool({
   adapter: 'icqq',
   scopes: ['private', 'group'],
   requiresApproval: 'never',
-  inputSchema: z.object({ message_ids: z.array(z.string().min(1)).min(1).describe('当前会话的真实消息 ID，按转发顺序排列') }),
+  inputSchema: z.object({ message_ids: z.array(z.string().min(1)).min(1).describe('当前会话的真实消息 ID（或消息头里的 m<n> 别名），按转发顺序排列') }),
   async execute({ message_ids }, context) {
     const conversation = currentConversation(context);
     if (conversation.kind === 'channel') throw new Error(t(context.locale, 'channelOperationUnsupported'));

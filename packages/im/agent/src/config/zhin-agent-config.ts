@@ -8,6 +8,7 @@ import type { ToolHardGateConfig } from '../security/tool-hard-gate.js';
 import type { RateLimitConfig, QueueMode, ProviderResilienceConfig, ProviderTimers } from '@zhin.js/ai';
 import type { DeferredToolsConfig } from '../tool-catalog/types.js';
 import type { ModelHarnessConfig } from './model-harness.js';
+import type { ContextHistoryConfig } from '../context/history-window.js';
 
 export type OnChunkCallback = (chunk: string, full: string) => void;
 
@@ -91,6 +92,8 @@ export interface ZhinAgentConfig {
   maxSkills?: number;
   maxTools?: number;
   contextTailMessageLimit?: number;
+  /** Programmatic: the runtime fills it from `ai.context` (`historyTokens`, `maxRecentMessages`); not an `ai.agent` YAML option (ADR 0043). */
+  contextHistory?: ContextHistoryConfig;
   rateLimit?: RateLimitConfig;
   toneAwareness?: boolean;
   chatModel?: string;

@@ -38,6 +38,7 @@ export function applyTurnContextToUserMessages(
       ),
       ...(msg.messageId ? { messageId: msg.messageId } : {}),
       ...(msg.name ? { name: msg.name } : {}),
+      ...(msg.quote ? { quote: msg.quote } : {}),
     };
   });
 }

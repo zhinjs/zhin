@@ -133,7 +133,8 @@ it('counts the output schema and projected instruction references without double
   expect(budget.segments.output_schema).toBe(estimatePromptTokens(JSON.stringify(outputSchema)));
   expect(budget.total_tokens).toBe(estimateAgentMessagesTokens(projectPromptContext([...historyMessages, ...userMessages])) + budget.segments.output_schema);
   expect(budget.fixed_tokens).toBe(budget.segments.output_schema);
-  expect(budget.segments.active_skills).toBeLessThan(estimatePromptTokens('Skill body '.repeat(30)));
+  // ADR 0043 §1: the earlier copy is stripped; the current message carries the skill in full.
+  expect(budget.segments.active_skills).toBe(estimatePromptTokens(createPromptContextBlock('skill:report', 'Skill body '.repeat(30)).text));
 });
 
 it('attributes surviving context blocks by identity after unchanged blocks are omitted', () => {

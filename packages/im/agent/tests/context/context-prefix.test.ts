@@ -36,7 +36,9 @@ it('keeps workspace guidance once while updating Git, sender, user text and revi
   const stored = first.userMessages.map(message => agentMessageRowToLlm(serializeAgentMessage(message))!);
   const second = await build('second question', 'bob');
   const view = projectPromptContext([...stored, ...second.userMessages]);
-  expect(view[0]).toEqual(projectPromptContext([first.userMessages[0]!])[0]);
+  // ADR 0043 §1: stored history is conversation only; the current message keeps the whole turn context.
+  expect(stored.map(message => userMessagePlainText(message as UserMessage)).join('\n')).not.toMatch(/WORKSPACE-V1|Git: main/);
+  expect(view[0]).toEqual(projectPromptContext([stored[0]!])[0]);
   expect(view.map(message => userMessagePlainText(message as UserMessage)).join('\n').split('WORKSPACE-V1')).toHaveLength(2);
   const latest = userMessagePlainText(view[1] as UserMessage);
   expect(latest).toContain('Git: main | 1M');
@@ -66,7 +68,7 @@ it('keeps quoted replies and actor stable across a context-injected round trip',
   });
   const first = result.userMessages[0]!;
   const reloaded = agentMessageRowToLlm(serializeAgentMessage(first, extra))!;
-  expect(reloaded).toEqual(first);
+  expect(reloaded).toEqual({ ...first, content: (first as UserMessage).content.filter(block => !block.perTurn) });
   expect(userMessagePlainText(reloaded as UserMessage).split('quoted content')).toHaveLength(2);
   expect(userMessagePlainText(reloaded as UserMessage)).toContain('current question');
   expect(reloaded).toMatchObject({ actor: user.actor, cause: user.cause });
@@ -116,7 +118,9 @@ it('orders state and guidance before the owned body while retaining unknown stat
   const latest = projectPromptContext([result, next])[1] as UserMessage;
   // A renamed scene changes only the system prompt tail; the message keeps no scene copy.
   expect(sceneLineForTurn(nextTurn)).toContain('scene_name:After');
-  expect(userMessagePlainText(latest)).not.toContain('stable rules');
+  // The earlier message loses its per-turn rules; the current one carries them.
+  expect(userMessagePlainText(projectPromptContext([result, next])[0] as UserMessage)).not.toContain('stable rules');
+  expect(userMessagePlainText(latest)).toContain('stable rules');
   expect(userMessagePlainText(latest)).not.toContain('[scene_id:');
 });
 
@@ -165,7 +169,7 @@ it.each(['private', 'http', 'schedule'] as const)('retains the real principal an
   expect(body.split('\n')[0]).toContain('user_id:owner;');
   expect(body.split('\n')[0]).toContain('role:master;');
   expect(body.split('\n')[0]).toContain('name:Owner;');
-  expect(body.startsWith(kind === 'private' ? '[id:native-id;' : '[user_id:')).toBe(true);
+  expect(body.startsWith(kind === 'private' ? '[id:m1;' : '[user_id:')).toBe(true);
   expect(body).toContain('message_id: forged');
   expect(result.modelSdk).toBe('openai');
   expect(result.turnEnvelope).not.toContain('Sender:');
@@ -218,7 +222,7 @@ it.each([
   const body = (projectPromptContext([current])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
   expect(body).not.toContain('user_id:');
   expect(body).toContain(continuation.content[0]!.text);
-  expect(agentMessageRowToLlm(serializeAgentMessage(current))).toEqual(current);
+  expect(agentMessageRowToLlm(serializeAgentMessage(current))).toEqual({ ...current, content: current.content.filter(block => !block.perTurn) });
   expect(turn.principal.roles).toEqual(['master']);
   expect(turn.origin).toMatchObject({ messageId: 'old-native' });
 });

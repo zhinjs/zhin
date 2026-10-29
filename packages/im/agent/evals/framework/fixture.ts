@@ -26,6 +26,11 @@ export interface EvalInboundMessage {
   /** Background conversation events rendered as untrusted data before the message. */
   readonly backgroundEvents?: readonly string[];
   /**
+   * The message this one replies to, as the IM ingress resolves it (ADR 0043 §4). `text` is the quoted
+   * message's content; `sender` is its author. It becomes a message reference the model could inspect.
+   */
+  readonly quote?: Readonly<{ id: string; text: string; sender?: Readonly<{ id: string; name?: string }>; timestamp?: number }>;
+  /**
    * Grant an isolated shell (the `ai.agent.masterShell: isolated` shape).
    * Only meaningful with a `workspace`; bash still needs `nativeTools`.
    */

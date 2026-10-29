@@ -24,6 +24,7 @@ export type { TokenUsage } from './types/agent-message.js';
 export type {
   AgentMessage,
   ConversationActor,
+  ConversationQuote,
   ConversationTurnCause,
   ContextBlock,
   ContextMessage,

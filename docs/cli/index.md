@@ -414,6 +414,27 @@ export default TraceArchivePage;
 
 **评测联动。** `pnpm eval:agent` 里失败的用例会把它的回合 trace 写进 `ZHIN_EVAL_TRACE_DIR`（默认系统临时目录下的 `zhin-eval-traces`），报告里每个回合一行 `↪ zhin trace <turnId> --dir …`，复制运行即可查看。
 
+### usage report：真实用量账本
+
+只读。读取 `data/agent-traces/*.jsonl`，按天（本地日期）汇总真实模型用量，用来判断上下文优化是否真的省了 token（ADR 0043 §6）。逐行流式读取，不写任何文件；损坏的行会计数并在末尾报告。
+
+```bash
+zhin usage report                                  # 今天
+zhin usage report --days 7                         # 最近 7 天（含今天）
+zhin usage report --since 2026-10-28 --until 2026-10-29
+zhin usage report --session 'icqq:*:group:*' --json
+```
+
+| 选项 | 作用 |
+| --- | --- |
+| `--days <n>` | 最近 n 天，默认 1 |
+| `--since <time>` / `--until <time>` | 时间范围（`--until` 不含）：`2h`、`7d`、`YYYY-MM-DD`（本地零点）、ISO 时间或毫秒时间戳；给了 `--since` 就忽略 `--days` |
+| `-s, --session <pattern>` | 会话键子串，或带 `*` 的通配 |
+| `--json` | 输出 JSON |
+| `--cwd <dir>` / `--dir <dir>` | 项目根目录 / 直接指定 trace 目录 |
+
+每天输出：回合数、模型调用数、每回合调用次数与单次调用输入 token 的 p50 / p90 / max、缓存命中占比（`cache_read_tokens` / `prompt_tokens`）、历史 / 固定 / 用户三段占比、撞迭代上限的回合数，以及输入 token 最多的前 5 个会话。段占比来自各回合首次请求的估算（`context_budget`），固定段 = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap。「撞迭代上限」指出现 `last_iteration_nudge` 或以 `budget_exceeded` 结束的回合。
+
 ## 退出码
 
 | 退出码 | 含义 |

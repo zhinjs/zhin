@@ -205,7 +205,7 @@ describe('TurnIngress session projection', () => {
     expect(restored.messages[1]).toMatchObject({
       role: 'user', actor: { subjectId: 'bob-id', displayName: 'Bob' },
     });
-    expect((restored.messages[0] as { name?: string }).name).toContain('user_id:alice-id;name:Alice;');
-    expect((restored.messages[1] as { name?: string }).name).toContain('user_id:bob-id;name:Bob;');
+    expect((restored.messages[0] as { name?: string }).name).toBeUndefined();
+    expect((restored.messages[1] as { name?: string }).name).toBeUndefined();
   });
 });

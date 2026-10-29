@@ -41,24 +41,25 @@ describe('file-memory context projection', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('omits an unchanged snapshot in actual projected messages while keeping fresh turn facts', () => {
+  it('strips the snapshot from earlier messages while the current one keeps it, plus fresh turn facts', () => {
     const first = message();
     const updated = { ...turn(), principal: { subjectId: 'alice', roles: ['admin'] } };
     const second = message(updated);
     const projected = projectPromptContext([first, second]);
 
-    expect(text(projected[0]!)).toContain(snapshot);
+    // ADR 0043 §1: the earlier message is conversation only, the current one carries the snapshot.
+    expect(text(projected[0]!)).not.toContain('FILE-MEMORY-FACT');
     // The role change is surfaced as a synthesized state change right before the second message.
     expect(projected).toHaveLength(3);
     expect(projected[1]).toMatchObject({ role: 'event', kind: 'member_changed', name: 'system changed alice role to "admin"' });
-    expect(text(projected[2]!)).not.toContain('FILE-MEMORY-FACT');
+    expect(text(projected[2]!)).toContain(snapshot);
     expect(text(projected[2]!)).not.toContain('[Unchanged context:');
     expect(text(projected[2]!)).not.toContain('Model:');
-    expect(text(projected[2]!)).toMatch(/\[user_id:alice;time:[\d:.]+;\]\ncontinue/u);
+    expect(text(projected[2]!)).toMatch(/\[user_id:alice;(time:\d{2}:\d{2};)?\]\ncontinue/u);
     expect(text(second)).toContain(snapshot);
   });
 
-  it('emits changed and restored versions, including a missing snapshot between identical versions', () => {
+  it('sends only the current version of the snapshot, whatever earlier turns saw', () => {
     const first = message();
     vi.mocked(memoryLayers.getFileMemoryContext).mockReturnValue('## Session\nUpdated fact');
     const changed = message();
@@ -68,9 +69,10 @@ describe('file-memory context projection', () => {
     const restored = message();
     const projected = projectPromptContext([first, changed, empty, restored]);
 
-    expect(text(projected[1]!)).toContain('Updated fact');
-    expect(text(projected[2]!)).toContain('Memory snapshot: not supplied for this turn.');
+    expect(projected.slice(0, 3).every(item => !text(item).includes('Memory snapshot') && !text(item).includes('Updated fact'))).toBe(true);
     expect(text(projected[3]!)).toContain(snapshot);
+    expect(text(changed)).toContain('Updated fact');
+    expect(text(empty)).toContain('Memory snapshot: not supplied for this turn.');
     expect(projected.every(item => !text(item).includes('[Unchanged context: file-memory:'))).toBe(true);
   });
 
@@ -102,14 +104,12 @@ describe('file-memory context projection', () => {
     },
   );
 
-  it('retains full persisted snapshots and restores their bodies after tail, branch and compaction loads', () => {
+  it('never persists the snapshot: stored rows hold the conversation only, on every load shape', () => {
     const raw = [message(), message(), message()];
     const stored = raw.map(item => normalizeUserMessageForStorage(item).message);
     const restored = stored.map(item => agentMessageRowToLlm(serializeAgentMessage(item))!);
-    expect(restored.every(item => text(item).includes(snapshot))).toBe(true);
-    expect(text(projectPromptContext(restored.slice(1))[0]!)).toContain(snapshot);
-    expect(text(projectPromptContext([restored[2]!])[0]!)).toContain(snapshot);
-    expect(text(projectPromptContext([createUserMessage('earlier summary'), restored[2]!])[1]!)).toContain(snapshot);
+    expect(restored.every(item => !text(item).includes('FILE-MEMORY-FACT') && text(item).includes('continue'))).toBe(true);
+    expect(text(projectPromptContext(restored.slice(1))[0]!)).not.toContain('FILE-MEMORY-FACT');
     expect(projectPromptContext(restored).slice(0, 2)).toEqual(projectPromptContext(restored.slice(0, 2)));
   });
 
@@ -126,13 +126,13 @@ describe('file-memory context projection', () => {
     expect(memoryLayers.getFileMemoryContext).not.toHaveBeenCalled();
   });
 
-  it('represents a snapshot not supplied for this turn and omits its unchanged version', () => {
+  it('represents a snapshot not supplied for this turn on the current message only', () => {
     vi.mocked(memoryLayers.getFileMemoryContext).mockReturnValue('');
     const raw = [message(), message()];
     const projected = projectPromptContext(raw);
-    expect(text(projected[0]!)).toContain('Memory snapshot: not supplied for this turn.');
-    expect(text(projected[1]!)).not.toContain('[Unchanged context:');
-    expect(text(projected[1]!)).not.toContain('Memory snapshot: not supplied for this turn.');
+    expect(text(projected[0]!)).not.toContain('Memory snapshot');
+    expect(text(projected[1]!)).toContain('Memory snapshot: not supplied for this turn.');
+    expect(text(raw[0]!)).toContain('Memory snapshot: not supplied for this turn.');
     expect(text(raw[1]!)).toContain('Memory snapshot: not supplied for this turn.');
   });
 

@@ -25,7 +25,7 @@ import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/approval-port.js';
 import { applyTurnTrust, resolveTurnTrustLevel } from '../../src/security/trust-level.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
-import { createTurnIngress, type ConversationContextPort, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
+import { createTurnIngress, type ConversationContextPort, type ReferencePort, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
@@ -286,6 +286,7 @@ function buildTurn(
         : {}),
       ...(message.mergedSenders?.length ? { mergedSenders: message.mergedSenders } : {}),
       ...(message.liveDanmaku ? { liveDanmaku: message.liveDanmaku } : {}),
+      ...(message.quote ? { references: [{ key: 'ref-1', kind: 'message' as const, sourceId: message.quote.id }] } : {}),
     },
     session: { key: sessionKey },
     policy,
@@ -305,9 +306,25 @@ function buildTurn(
       },
       ...(approval ? { approval } : {}),
       ...(message.backgroundEvents?.length ? { conversationContext: backgroundContext(message.backgroundEvents) } : {}),
+      ...(message.quote ? { references: quoteReferencePort(message.quote) } : {}),
     },
   });
   return { turn, tools: turnTools };
+}
+
+/** The quoted message resolves the way an adapter's content port returns a `ConversationMessage`. */
+function quoteReferencePort(quote: NonNullable<EvalInboundMessage['quote']>): ReferencePort {
+  return {
+    resolve: async () => ({
+      status: 'resolved' as const,
+      content: {
+        ref: { id: quote.id },
+        ...(quote.sender ? { actor: { id: quote.sender.id, ...(quote.sender.name ? { displayName: quote.sender.name } : {}) } } : {}),
+        segments: [{ type: 'text', data: { text: quote.text } }],
+        timestamp: quote.timestamp ?? 0,
+      },
+    }),
+  };
 }
 
 /** Skills owned by the agent's root plugin, as a loaded SKILL.md would be. */

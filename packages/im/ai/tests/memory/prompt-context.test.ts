@@ -13,7 +13,7 @@ import { estimateAgentMessagesTokens } from '../../src/compaction/agent-message-
 const rule = 'WORKSPACE-CONTENT ' + 'check the result. '.repeat(100);
 const message = (text = rule, key = 'workspace'): UserMessage => ({
   ...createUserMessage('current', undefined, 1),
-  content: [{ type: 'text', text: '[Turn context]' }, createPromptContextBlock(key, text), { type: 'text', text: '[/Turn context]\ncurrent' }],
+  content: [{ type: 'text', text: '[Frame]' }, createPromptContextBlock(key, text), { type: 'text', text: '[/Frame]\ncurrent' }],
 });
 
 describe('runtime context projection', () => {
