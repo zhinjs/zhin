@@ -483,6 +483,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
       decisionEvents: () => options.agent.agent.getDecisionEvents?.(),
       controlPlane: () => options.agent.agent.getControlPlane?.(),
       ownsWake: (signal) => this.#memberLifecycle.ownsWake(signal),
+      recordState: (sessionKey, event, recordOptions) =>
+        options.agent.agent.appendSessionEvents(sessionKey, [event], { create: recordOptions.create }),
       nickname: async (platform, userId) => {
         const record = await options.agent.agent.getUserProfiles?.()?.relations?.get(platform, userId);
         return record?.preferredAddress?.trim() || record?.displayName?.trim() || undefined;

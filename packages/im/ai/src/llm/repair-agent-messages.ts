@@ -1,5 +1,5 @@
-import { type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage, isLlmAgentMessage } from './types/agent-message.js';
-type LlmAgentMessage = UserMessage | AssistantMessage | ToolResultMessage;
+import { type AgentMessage, type AssistantMessage, type EventMessage, type ToolResultMessage, type UserMessage, isEventMessage, isLlmAgentMessage } from './types/agent-message.js';
+type LlmAgentMessage = UserMessage | AssistantMessage | ToolResultMessage | EventMessage;
 
 const MISSING_TOOL_RESULT_TEXT =
   '[zhin] tool result unavailable (interrupted turn or incomplete history)';
@@ -42,7 +42,8 @@ function syntheticToolResult(toolCallId: string, toolName: string): AgentMessage
 export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessage[] {
   const normalized: LlmAgentMessage[] = [];
   for (const message of messages) {
-    if (!isLlmAgentMessage(message)) continue;
+    // ADR 0041 state-change events pass through; the renderer places them after the full tool group.
+    if (!isLlmAgentMessage(message) && !isEventMessage(message)) continue;
     if (message.role === 'toolResult') {
       let matched = false;
       for (let i = normalized.length - 1; i >= 0; i -= 1) {
@@ -71,10 +72,16 @@ export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessag
     if (toolCalls.length === 0) continue;
 
     const resultsById = new Map<string, AgentMessage>();
+    const heldEvents: AgentMessage[] = [];
     let j = i + 1;
     while (j < normalized.length) {
       const next = normalized[j]!;
       if (next.role === 'user' || next.role === 'assistant') break;
+      if (isEventMessage(next)) {
+        heldEvents.push(next);
+        j += 1;
+        continue;
+      }
       if (next.role === 'toolResult' && typeof next.toolCallId === 'string') {
         resultsById.set(next.toolCallId, next);
       }
@@ -89,6 +96,7 @@ export function repairAgentMessagesForLlm(messages: AgentMessage[]): AgentMessag
         out.push(syntheticToolResult(call.id, call.name));
       }
     }
+    out.push(...heldEvents);
 
     i = j - 1;
   }

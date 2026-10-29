@@ -394,6 +394,25 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return buildParentContextSnapshot(this.agentSessionStore, this.contextRepository, sessionKey);
   }
 
+  /**
+   * ADR 0041 §6: append state-change events (member join / leave / profile changes) to the session
+   * history in arrival order. They are ordinary `agent_messages` rows, so reload, compaction and
+   * the existing retention apply. Without an active session nothing is written (`create` opens one).
+   */
+  async appendSessionEvents(
+    sessionKey: string,
+    events: readonly AgentMessage[],
+    options: { create?: boolean } = {},
+  ): Promise<boolean> {
+    if (events.length === 0) return false;
+    const active = options.create
+      ? await this.agentSessionStore.getOrCreateActive({ session_key: sessionKey })
+      : await this.agentSessionStore.findActive(sessionKey);
+    if (!active) return false;
+    await this.contextRepository.appendMessages(active.session_id, [...events]);
+    return true;
+  }
+
   getEventEmitter(): ZhinAgentEventEmitter {
     return this.emitter;
   }
