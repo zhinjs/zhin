@@ -276,6 +276,14 @@ A single result is capped at 256 KB, so the list and export are paged by size. R
 
 Rows are kept for 14 days by default; change it with `ai.audit.retentionDays`. Expired rows are removed at startup and then hourly. For the switches, see the control plane below.
 
+### Built-in queries: usage stats
+
+`plugin.root.usage-stats` (`pluginRpc('root', 'usage-stats', { ... })`, permission `control:read`) is read-only and feeds token-usage charts. It reads `data/agent-traces/*.jsonl` with the same aggregation as `zhin usage report`.
+
+- Input (all optional): `since` / `until` (epoch ms; `until` defaults to now, `since` to 7 days before it), `bucket` (`'hour'` or `'day'`; default `day` when the range is over 2 days, else `hour`), `session` (substring of the session key, or a glob with `*`). Ranges over 31 days return `invalid_input`.
+- Output: `range` (with the host `timeZone`), `totals`, `byModel` (by input tokens, descending), `bySession` (top 50), `series` (one entry per bucket in range, zero-filled, ascending), `segments` (summed history / fixed / user context estimates), `filesRead`, `malformedLines`. `totals`, `byModel`, `bySession` and `series` carry `cacheReadTokens`, `cacheWriteTokens` and `cacheShare` (0 to 1); `totals.cacheShareByCall` is the p50 / p90 of per-call cache share.
+- Only counts, session keys and provider / model names are returned, never message text. Results are cached in memory for 60 s (at most 32 entries) and dropped when the generation changes.
+
 ### Built-in actions: control plane
 
 The control plane on the Bot status (机器人状态) page (ADR 0036 slice D) is also provided by the Host. It is the one place to make the bot go quiet right away.
