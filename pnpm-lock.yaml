@@ -1276,6 +1276,22 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/im/adapter-onebot-events:
+    dependencies:
+      '@zhin.js/adapter':
+        specifier: workspace:*
+        version: link:../adapter
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/im/agent:
     dependencies:
       '@zhin.js/adapter':
@@ -2418,6 +2434,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/adapter-onebot-events':
+        specifier: workspace:*
+        version: link:../../../packages/im/adapter-onebot-events
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../../packages/im/agent-feature
@@ -2693,6 +2712,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/adapter-onebot-events':
+        specifier: workspace:*
+        version: link:../../../packages/im/adapter-onebot-events
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../../packages/im/agent-feature
@@ -2754,6 +2776,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/adapter-onebot-events':
+        specifier: workspace:*
+        version: link:../../../packages/im/adapter-onebot-events
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../../packages/im/agent-feature
@@ -2818,6 +2843,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/adapter-onebot-events':
+        specifier: workspace:*
+        version: link:../../../packages/im/adapter-onebot-events
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2867,6 +2895,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/adapter-onebot-events':
+        specifier: workspace:*
+        version: link:../../../packages/im/adapter-onebot-events
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../../packages/im/agent-feature
