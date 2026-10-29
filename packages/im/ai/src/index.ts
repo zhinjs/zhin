@@ -531,6 +531,7 @@ export type {
 } from './decision/index.js';
 
 export { createPromptContextBlock, createPromptStateBlock, projectPromptContext } from './memory/prompt-context.js';
+export { trimFinishedToolResults, lastTurnStart, FINISHED_TOOL_RESULT_KEEP_CHARS } from './memory/tool-result-trim.js';
 export {
   projectParticipantHeaders, parseParticipantHeader, buildStoredHeader, renderParticipantHeader, shortHeaderOf,
   factsFromActor, factsFromBot, mergeHeaderRoles, muteTimeFromExpiry, formatHeaderInstant,

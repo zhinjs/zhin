@@ -169,6 +169,11 @@ export class AIService {
   /** 部署级 harness（execSecurity 等）；工具由编排 + TF-IDF + 角色（子 agent）选用 */
   getAgentConfig(): AIConfig['agent'] { return this.agentConfig; }
 
+  /** `ai.context` history window settings (ADR 0043), for the Agent runtime. */
+  getContextHistoryConfig(): { tokens?: ContextConfig['historyTokens']; maxMessages?: number | string } {
+    return { tokens: this.contextConfig.historyTokens, maxMessages: this.contextConfig.maxRecentMessages };
+  }
+
   /** 文生图默认：ai.imageGeneration + providers.<alias>.imageGeneration */
   getImageGenerationDefaults(providerAlias: string): ImageGenerationDefaults {
     const inst = this.routing.providers[providerAlias]?.imageGeneration;

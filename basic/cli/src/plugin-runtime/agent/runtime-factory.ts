@@ -69,6 +69,7 @@ export function createRuntimeZhinAgent(
   const events = new AgentEventBus();
   const agent = new ZhinAgent(provider, {
     ...(service.getAgentConfig() ?? {}),
+    contextHistory: service.getContextHistoryConfig(),
     chatModel: binding.model,
   }, events, service.getLlmRuntime());
   const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(

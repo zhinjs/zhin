@@ -23,6 +23,7 @@ This is the **single authoritative document** for `ai.agent.*` default behavior 
 - Group merge window: on (`inboundQueue.merge.enabled true`, group chats only; `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`)
 - Danmaku mode: only for live-stream adapters that declare `liveDanmaku` (`inboundQueue.live`: `mode pick-one` / `windowMs 10000` / `minIntervalMs 15000`; read-only tools, no approval cards)
 - Compaction: `thresholdRatio 0.7`
+- History window (ADR 0043): bounded by tokens instead of message count via `ai.context.historyTokens` (not an `ai.agent` switch) — group `8000`, ordinary private `12000`, master private `24000`. Use a number (all scenes) or `{ group, private, masterPrivate }`; `0` turns the token bound off. `ai.context.maxRecentMessages` stays as a message-count upper bound; whichever is hit first wins. The budget is measured on what the model really receives (after projection); the window starts on a turn boundary and only moves, in one block with 25% headroom, when the budget is exceeded (keeps the prompt-cache prefix stable). What drops out stays in storage and in compaction's input. Tool results of finished turns reach the model as their first 200 characters plus `…(已省略 N 字)`; the current turn and storage stay complete.
 - Request traces: `recordRequestBodies true` stores redacted model-input text and tool definitions locally on the Host. Defaults retain at most seven days and 64 MiB in total. Capacity cleanup removes the oldest traces first; an oversized body leaves statistics and an explicit unavailable-body status. Set this to `false` to stop recording new bodies without disabling usage statistics or deleting existing records.
 
 ## Dangerous-tool hard gate
@@ -160,6 +161,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `promptTrace` | debug | Diagnostics only |
 | `promptTraceVerbose` | debug | Diagnostics only |
 | `recordRequestBodies` | keep | Records redacted request bodies locally by default; false disables new body retention while preserving usage statistics |
+| `contextHistory` | internal | Code-only field the runtime fills from `ai.context.historyTokens` / `maxRecentMessages` (ADR 0043); not YAML-configurable |
 | `onPhaseTrace` | internal | Code-only callback, not YAML-configurable |
 | `maxSkills` | deprecated | Unused at runtime; deprecated (#735), removed by --fix |
 | `policyDenialStopAfter` | deprecated | Unused at runtime; deprecated (#735), removed by --fix |
