@@ -1,5 +1,4 @@
 import type { SelfChangeApprovals, SelfChangeRecord, SelfChangeStore } from '@zhin.js/agent';
-import { SelfChangeNotFoundError, SelfChangeStateError } from '@zhin.js/agent';
 import {
   definePluginConsoleRpc,
   PluginConsoleRpcError,
@@ -141,9 +140,25 @@ function requireId(input: PluginConsoleRpcInput): string {
 }
 
 function consoleError(error: unknown): unknown {
-  if (error instanceof SelfChangeNotFoundError) return new PluginConsoleRpcError('not_found', 'Change not found');
-  if (error instanceof SelfChangeStateError) return new PluginConsoleRpcError('conflict', `Change is ${error.status}`);
+  // @zhin.js/agent is an optional peer; never import it at module load. Match by error.name.
+  if (isNamedError(error, 'SelfChangeNotFoundError')) {
+    return new PluginConsoleRpcError('not_found', 'Change not found');
+  }
+  if (isNamedError(error, 'SelfChangeStateError')) {
+    const status = readStringProp(error, 'status') ?? 'unknown';
+    return new PluginConsoleRpcError('conflict', `Change is ${status}`);
+  }
   return error;
+}
+
+function isNamedError(error: unknown, name: string): error is Error {
+  return error instanceof Error && error.name === name;
+}
+
+function readStringProp(error: unknown, key: string): string | undefined {
+  if (!error || typeof error !== 'object' || !(key in error)) return undefined;
+  const value = (error as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : undefined;
 }
 
 function card(record: SelfChangeRecord, approvalId: string | null): SelfChangeCard {
