@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { EXPLORATION_TOOLS } from './tool-calls-user-format.js';
 
 /** Consecutive read-only exploration calls before the harness nudges the model. 0 disables. */
@@ -40,3 +41,90 @@ export class ExplorationBudget {
       + 'Only read a file if you specifically need it.';
   }
 }
+
+/** Consecutive same-family calls without new information before the one-time hint (ADR 0042 §7). */
+export const SPIN_THRESHOLD = 3;
+
+const TOOL_FAMILIES: Readonly<Record<string, string>> = {
+  grep: 'search', glob: 'search', list_dir: 'search',
+  read_file: 'read',
+  web_fetch: 'web', web_search: 'web',
+};
+
+const EMPTY_RESULT = /^\s*$|^no (matches|results)\b|^未找到|^没有(找到|匹配)|^无(匹配|结果)/i;
+
+export interface SpinHint {
+  readonly family: string;
+  readonly calls: number;
+  readonly reason: 'identical_results' | 'no_matches' | 'repeated_read';
+  readonly note: string;
+}
+
+interface SpinObservation {
+  readonly family: string;
+  readonly tool: string;
+  readonly argsKey: string;
+  readonly digest: string;
+  readonly empty: boolean;
+}
+
+/**
+ * Detects a turn going in circles: the same tool family called
+ * {@link SPIN_THRESHOLD} times in a row with nothing new coming back (identical
+ * result digests, searches that match nothing, the same file read again).
+ * Returns one harness note per turn to append to that tool result; tools of a
+ * different family break the streak.
+ */
+export class SpinDetector {
+  #streak: SpinObservation[] = [];
+  #hinted = false;
+
+  record(tool: string, args: unknown, resultText: string): SpinHint | undefined {
+    if (this.#hinted) return undefined;
+    const family = TOOL_FAMILIES[tool] ?? tool;
+    const observation: SpinObservation = {
+      family,
+      tool,
+      argsKey: stableKey(args),
+      digest: createHash('sha1').update(resultText).digest('hex'),
+      empty: EMPTY_RESULT.test(resultText.trim()),
+    };
+    if (this.#streak.length > 0 && this.#streak[0]!.family !== family) this.#streak = [];
+    this.#streak.push(observation);
+    if (this.#streak.length > SPIN_THRESHOLD) this.#streak.shift();
+    if (this.#streak.length < SPIN_THRESHOLD) return undefined;
+    const reason = spinReason(this.#streak);
+    if (!reason) return undefined;
+    this.#hinted = true;
+    return {
+      family,
+      calls: SPIN_THRESHOLD,
+      reason,
+      note: `[Harness note] ${SPIN_THRESHOLD} ${family} calls in a row returned nothing new. `
+        + 'Change your approach (different tool or a narrower query) or answer with what you already have.',
+    };
+  }
+}
+
+function spinReason(streak: readonly SpinObservation[]): SpinHint['reason'] | undefined {
+  if (streak.every((entry) => entry.empty)) return 'no_matches';
+  if (streak.every((entry) => entry.digest === streak[0]!.digest)) return 'identical_results';
+  if (streak[0]!.family === 'read' && streak.every((entry) => entry.tool === streak[0]!.tool && entry.argsKey === streak[0]!.argsKey)) {
+    return 'repeated_read';
+  }
+  return undefined;
+}
+
+function stableKey(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableKey).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableKey(entry)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'undefined';
+}
+
+/** Appended to a tool result when exactly one model call remains in the iteration limit (ADR 0042 §7). */
+export const LAST_ITERATION_NUDGE = '[Harness note] One step left: reply now with what you have found so far.';

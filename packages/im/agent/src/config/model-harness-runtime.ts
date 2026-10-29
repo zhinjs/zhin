@@ -101,9 +101,10 @@ export function resolveModelHarness(
   providerName: string,
   modelName: string,
   config?: ModelHarnessConfig,
+  defaults: readonly ModelHarnessRow[] = MODEL_HARNESS_DEFAULTS,
 ): ResolvedModelHarness {
   const defaultHarness: Record<string, unknown> = (() => {
-    for (const row of MODEL_HARNESS_DEFAULTS) {
+    for (const row of defaults) {
       if (row.provider && row.provider !== providerName) continue;
       if (!row.modelPattern.test(modelName)) continue;
       return rowHarness(row);
@@ -128,4 +129,50 @@ export function resolveModelHarness(
     modelOverride,
   );
   return sanitizeResolvedHarness(merged as Record<string, unknown>);
+}
+
+/** ADR 0042 §7: where a turn runs decides how many model calls it gets by default. */
+export type IterationScene = 'group' | 'private' | 'master-private';
+
+export const SCENE_MAX_ITERATIONS: Readonly<Record<IterationScene, number>> = Object.freeze({
+  group: 6,
+  private: 10,
+  'master-private': 15,
+});
+
+/** `ai.agent.maxIterations` default; a different configured value is an explicit choice and wins over the scene default. */
+const BASELINE_MAX_ITERATIONS = 15;
+
+export interface TurnIterationLimitInput {
+  readonly providerName: string;
+  readonly modelName: string;
+  readonly modelHarness?: ModelHarnessConfig;
+  /** `undefined` for non-IM turns: no scene default applies. */
+  readonly scene?: IterationScene;
+  /** `ai.agent.maxIterations` after defaults. */
+  readonly configured: number;
+}
+
+/**
+ * Default `maxIterations` for a turn. Precedence: user `modelHarness`
+ * (providerPatterns / models) > a customised `ai.agent.maxIterations` >
+ * the scene default, capped by the built-in per-model row (never raised).
+ */
+export function resolveTurnMaxIterations(input: TurnIterationLimitInput): number {
+  const override = resolveModelHarness(input.providerName, input.modelName, input.modelHarness, []).maxIterations;
+  if (override !== undefined) return override;
+  const builtin = resolveModelHarness(input.providerName, input.modelName).maxIterations;
+  if (!input.scene || input.configured !== BASELINE_MAX_ITERATIONS) return builtin ?? input.configured;
+  const scene = SCENE_MAX_ITERATIONS[input.scene];
+  return builtin === undefined ? scene : Math.min(builtin, scene);
+}
+
+/** Scene of an IM turn from its origin scope and the sender's roles; undefined for other origins. */
+export function iterationSceneOf(turn: Readonly<{
+  origin: Readonly<{ kind: string; scope?: string }>;
+  principal: Readonly<{ roles: readonly string[] }>;
+}> | undefined): IterationScene | undefined {
+  if (turn?.origin.kind !== 'im') return undefined;
+  if (turn.origin.scope === 'group') return 'group';
+  return turn.principal.roles.includes('master') ? 'master-private' : 'private';
 }

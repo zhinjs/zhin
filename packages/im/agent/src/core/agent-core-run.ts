@@ -11,7 +11,7 @@ import { createPromptContextBlock, createLlmMessageProjection, estimateContextFi
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
-import { resolveModelHarness } from '../config/model-harness-runtime.js';
+import { iterationSceneOf, resolveModelHarness, resolveTurnMaxIterations } from '../config/model-harness-runtime.js';
 import { appendScene, appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
@@ -53,6 +53,8 @@ import {
   DEFAULT_EXPLORATION_BUDGET,
   EXPLORATION_GUIDANCE,
   ExplorationBudget,
+  LAST_ITERATION_NUDGE,
+  SpinDetector,
 } from './exploration-budget.js';
 import {
   TurnProgressTracker,
@@ -623,11 +625,19 @@ export async function* runAgentLoopTextTurnRun(
 
   const harness = resolveModelHarness(host.getTurnProvider().name, modelId, host.config.modelHarness);
   const maxIterations = hasTools
-    ? (input.maxIterations ?? harness.maxIterations ?? host.config.maxIterations)
+    ? (input.maxIterations ?? resolveTurnMaxIterations({
+      providerName: host.getTurnProvider().name,
+      modelName: modelId,
+      modelHarness: host.config.modelHarness,
+      scene: iterationSceneOf(input.turnContext),
+      configured: host.config.maxIterations,
+    }))
     : 1;
   const explorationBudget = hasTools
     ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)
     : undefined;
+  const spinDetector = hasTools && harness.explorationBudget !== 0 ? new SpinDetector() : undefined;
+  let nudgedIteration = 0;
   if (hasTools && harness.explorationGuidance) promptParts = appendStable(promptParts, EXPLORATION_GUIDANCE);
   // ADR 0041 §5: the scene line goes last so a scene change only invalidates the tail.
   const sceneText = sceneLineForTurn(input.turnContext);
@@ -771,13 +781,16 @@ export async function* runAgentLoopTextTurnRun(
   const hardLimitReached = () =>
     (toolBudget.maxWallClockMs > 0 && Date.now() - turnStartedAt >= toolBudget.maxWallClockMs)
     || (toolBudget.maxTotalTokens > 0 && completionUsage.usage.totalTokens >= toolBudget.maxTotalTokens);
+  let currentLimit = maxIterations;
   const nextIterationLimit = (iteration: number, limit: number): number => {
+    currentLimit = limit;
     if (iteration > 0 && hardLimitReached()) return iteration;
     if (iteration < limit) return limit;
     if (toolBudget.extendBy === 0 || limit >= segmentHardCap || progress.stalled) return limit;
     const windowStart = segmentStartIteration + iteration - toolBudget.progressWindow + 1;
     if (!progress.progressedSince(windowStart)) return limit;
     const next = Math.min(segmentHardCap, limit + toolBudget.extendBy);
+    currentLimit = next;
     extensionPending = true;
     noteTurnTrace(traceTurnId(input.turnContext), { kind: 'budget_extended', from: limit, to: next });
     logPhase(host.phaseConfig, 'agent_loop.budget.extend', sessionId, { from: limit, to: next });
@@ -910,7 +923,16 @@ export async function* runAgentLoopTextTurnRun(
 
         const progressKind = recordProgress(resolvedName, effectiveArgs, true, resultText);
         const budgetNote = explorationBudget?.record(resolvedName, isProgress(progressKind));
-        const finalText = budgetNote ? `${resultText}\n\n${budgetNote}` : resultText;
+        const spin = spinDetector?.record(resolvedName, effectiveArgs, resultText);
+        if (spin) noteTurnTrace(traceTurnId(input.turnContext), { kind: 'spin_hint', family: spin.family, calls: spin.calls, reason: spin.reason });
+        const localIteration = iterations - segmentStartIteration;
+        const lastStep = hasTools && currentLimit > 2 && localIteration === currentLimit - 1 && nudgedIteration !== iterations;
+        if (lastStep) {
+          nudgedIteration = iterations;
+          noteTurnTrace(traceTurnId(input.turnContext), { kind: 'last_iteration_nudge', iteration: localIteration, limit: currentLimit });
+        }
+        const notes = [budgetNote, spin?.note, lastStep ? LAST_ITERATION_NUDGE : undefined].filter(Boolean).join('\n\n');
+        const finalText = notes ? `${resultText}\n\n${notes}` : resultText;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
         const result = toolResultToAgentMessage(toolCall, finalText, false);
         const blocks = deferredController?.modelOutputBlocks?.(resolvedName, effectiveArgs, finalText);
