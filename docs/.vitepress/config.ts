@@ -149,6 +149,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     ]),
   ]),
   sidebarGroup('深入原理', [
+    { text: '从零理解 zhin', link: '/concepts/what-zhin-is' },
     { text: '分层架构', link: '/concepts/architecture' },
     { text: '插件模型', link: '/concepts/plugin-model' },
     { text: '配置即数据', link: '/concepts/config-as-data' },
@@ -307,6 +308,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     ]),
   ]),
   sidebarGroup('Under the Hood', [
+    { text: 'What zhin Is', link: '/en/concepts/what-zhin-is' },
     { text: 'Layered Architecture', link: '/en/concepts/architecture' },
     { text: 'Plugin Model', link: '/en/concepts/plugin-model' },
     { text: 'Config as Data', link: '/en/concepts/config-as-data' },
