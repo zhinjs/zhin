@@ -5,6 +5,7 @@
  */
 import {
   assistantAnswerText,
+  createLlmMessageProjection,
   createUserMessage,
   renderContextMessage,
   type LlmApiRuntime,
@@ -17,9 +18,11 @@ import { buildRichSystemPrompt } from '../../../packages/im/agent/src/prompt/sys
 import {
   AMBIENT_ENGAGEMENT_METADATA_KEY,
   buildTurnContextBlocks,
+  sceneLineForTurn,
   type TurnContextView,
 } from '../../../packages/im/agent/src/context/turn-envelope.js';
 import { prependTurnContextBlocks } from '../../../packages/im/agent/src/context/turn-user-message.js';
+import { stampUserHeader } from '../../../packages/im/agent/src/session/participant-header-stamp.js';
 import {
   decodeStructuredReply,
   structuredReplyInstruction,
@@ -54,7 +57,9 @@ export async function buildSystemPrompt(workspaceDir: string, nickname: string |
     timeZone: scenarioTime(time).timeZone,
     ...(nickname ? { agentNickname: nickname } : {}),
   });
-  return `${prompt}\n\n${structuredReplyInstruction()}`;
+  // Same tail order as production (ADR 0041 §5): structured reply contract, then the scene line.
+  const scene = sceneLineForTurn(turn);
+  return `${prompt}\n\n${structuredReplyInstruction()}${scene ? `\n\n${scene}` : ''}`;
 }
 
 export function scenarioTurn(scenario: Scenario): TurnContextView {
@@ -115,7 +120,8 @@ export function buildUserMessages(scenario: Scenario): UserMessage[] {
     subjectId: scenario.sender.id, displayName: scenario.sender.name, scope: scenario.scope,
     roles: turn.principal.roles, authorizationRoles: turn.principal.roles,
   });
-  const current = prependTurnContextBlocks([input], blocks) as UserMessage[];
+  // The trusted host stores the full participant header in `name`; projection renders it (ADR 0041 §4).
+  const current = prependTurnContextBlocks([stampUserHeader(input)], blocks) as UserMessage[];
   return context ? [createUserMessage(context), ...current] : current;
 }
 
@@ -146,7 +152,8 @@ export async function runScenarioTurn(input: {
   try {
     const assistant = await input.runtime.complete(input.model, {
       systemPrompt: input.systemPrompt,
-      messages: buildUserMessages(input.scenario),
+      // Same LLM-boundary projection as production `convertToLlm` (headers, state changes).
+      messages: createLlmMessageProjection(input.model)(buildUserMessages(input.scenario)),
       tools: undefined,
     }, { outputSchema: structuredReplySchema(), signal: AbortSignal.timeout(120_000) });
     const tokens = assistant.usage?.totalTokens ?? 0;
