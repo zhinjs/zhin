@@ -306,7 +306,7 @@ export interface TurnRequest {
 }
 
 export type TurnAccessContext = Pick<TurnRequest, 'origin' | 'principal' | 'policy'> & Readonly<{
-  input?: Pick<TurnInput, 'contextState'>;
+  input?: Pick<TurnInput, 'contextState' | 'platformCapabilities'>;
 }>;
 
 export type TurnOutcome =

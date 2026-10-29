@@ -153,8 +153,8 @@ async function payloadToCanonicalSegment(
     return { type: 'text', data: { text: `[附件过大 (${(bytes / 1024 / 1024).toFixed(1)} MB)，无法发送]` } };
   }
 
-  /** icqq 常与守护进程异机；落盘路径对端不可读，保留 base64 由适配器编码为 CQ base64:// */
-  const spool = payload.base64.length > OUTBOUND_SPOOL_B64_CHARS && platform !== 'icqq';
+  /** `delivery.spool`: only Endpoints whose peer can read local paths declare it; others keep inline base64. */
+  const spool = payload.base64.length > OUTBOUND_SPOOL_B64_CHARS && caps.spool === true;
   const filePath = spool
     ? await spoolBase64ToTempFile(payload.base64, payload.mimeType, payload.kind)
     : undefined;

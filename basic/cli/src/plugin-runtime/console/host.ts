@@ -57,6 +57,8 @@ export function registerConsoleHttp(options: {
   readonly clientOutDir: string;
   /** Resolve directory for Host React ESM proxies (`react` package resolution). */
   readonly projectRoot: string;
+  /** Whether a page's owner plugin declares the `runtime.sandbox` capability (served with the sandbox chat shell). */
+  readonly isSandboxPage?: (page: { readonly owner: string }) => boolean;
 }): void {
   const http = options.http;
   // Browser ESM 裸导入（react/jsx-runtime 等）由 TypeScriptClientBuilder 改写为 /esm/<enc>.mjs
@@ -114,7 +116,9 @@ export function registerConsoleHttp(options: {
         response.end('Forbidden');
         return;
       }
-      writeHtml(response, renderPageShell(match.page));
+      writeHtml(response, renderPageShell(match.page, {
+        runtimeSandbox: options.isSandboxPage?.(match.page) === true,
+      }));
     } catch {
       response.writeHead(503);
       response.end('ConsoleRuntime is not ready');

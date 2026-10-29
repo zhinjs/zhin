@@ -23,6 +23,7 @@ import { bindEndpoint, retireEndpoint, type Endpoint, type EndpointTransportStat
 import { materializeEndpoint } from './managed-endpoint.js';
 import {
   listEndpointManagementCapabilities,
+  resolveEndpointManagement,
   type EndpointManagementCapability,
 } from './endpoint-management.js';
 import {
@@ -35,6 +36,7 @@ import {
   assertDeclaredProfileActions,
   deriveLegacyProfile,
   operationsImpliedByProfile,
+  resolveStaticCapabilities,
   resolveTurnCapabilities,
   type AdapterCapabilityProfile,
   type AdapterCapabilityResolver,
@@ -46,6 +48,7 @@ import {
   type ConversationReference,
   type ConversationResolution,
   type EndpointCapabilities,
+  type EndpointKindCapabilities,
 } from '@zhin.js/im-contract';
 
 export interface AdapterDescriptor {
@@ -236,7 +239,8 @@ export class AdapterIndex {
   capabilities(id: CapabilityId): EndpointCapabilities {
     const record = this.#records.get(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
-    return endpointCapabilitiesOf(record, record.operations);
+    const base = endpointCapabilitiesOf(record, record.operations);
+    return Object.freeze({ ...base, kinds: endpointKindCapabilities(record.profile) });
   }
 
   /** Returns the control port only when the concrete Endpoint declared the operation and is active. */
@@ -513,6 +517,60 @@ function expandEndpointConfigs(
   })));
 }
 
+const KIND_VIEWS = ['private', 'group', 'channel'] as const;
+
+/** The serializable per-kind consumer view of a capability profile (see `EndpointCapabilities.kinds`). */
+export function endpointKindCapabilities(
+  profile: AdapterCapabilityProfile,
+): NonNullable<EndpointCapabilities['kinds']> {
+  const kinds: Partial<Record<(typeof KIND_VIEWS)[number], EndpointKindCapabilities>> = {};
+  for (const kind of KIND_VIEWS) {
+    const section = resolveStaticCapabilities(profile, [kind]);
+    const feedback = section.feedback;
+    kinds[kind] = Object.freeze({
+      ...(feedback?.mode ? {
+        feedback: Object.freeze({
+          mode: feedback.mode,
+          ...(feedback.emoji ? { emoji: feedback.emoji } : {}),
+          ...(feedback.text ? { text: feedback.text } : {}),
+          ...(feedback.refreshSeconds ? { refreshSeconds: feedback.refreshSeconds } : {}),
+        }),
+      } : {}),
+      reaction: Boolean(section.actions?.reaction),
+      edit: section.messaging?.edit === true,
+      recall: Boolean(section.actions?.recall || section.messaging?.recall),
+      spool: section.delivery?.spool === true,
+      needsReply: section.delivery?.proactive === false,
+      groupInfo: section.scene?.groupInfo === true,
+      memberProfile: section.scene?.memberProfile === true,
+    });
+  }
+  return Object.freeze(kinds);
+}
+
+/**
+ * Adapters without a declared profile get `scene.groupInfo` / `scene.memberProfile` from the lookup
+ * ports their Endpoint actually implements (a port that exists is a capability that is usable).
+ */
+function withPortDerivedScene(profile: AdapterCapabilityProfile, endpoint: unknown): AdapterCapabilityProfile {
+  const management = resolveEndpointManagement(endpoint);
+  const groupInfo = typeof management?.inspectGroupScene === 'function';
+  const memberProfile = typeof management?.inspectGroupMemberProfile === 'function'
+    || typeof management?.inspectGroupMember === 'function';
+  if (!groupInfo && !memberProfile) return profile;
+  return Object.freeze({
+    ...profile,
+    group: Object.freeze({
+      ...profile.group,
+      scene: Object.freeze({
+        ...profile.group?.scene,
+        ...(groupInfo ? { groupInfo: true } : {}),
+        ...(memberProfile ? { memberProfile: true } : {}),
+      }),
+    }),
+  });
+}
+
 async function createEndpoint(
   slot: Readonly<CapabilitySlot<AdapterDefinition>>,
   snapshot: RuntimeSnapshot,
@@ -567,7 +625,11 @@ async function createEndpoint(
         slot.definition.capabilities.includes('outbound'),
       );
     }
-    return Object.freeze({ endpoint, operations, profile });
+    return Object.freeze({
+      endpoint,
+      operations,
+      profile: declaredProfile ? profile : withPortDerivedScene(profile, endpoint),
+    });
   } catch (error) {
     try {
       retireEndpoint(endpoint);

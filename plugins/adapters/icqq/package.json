@@ -45,6 +45,7 @@
   "dependencies": {
     "@zhin.js/adapter-onebot-events": "workspace:*",
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/agent": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",

@@ -6,9 +6,11 @@ import {
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
 import {
+  activeCapabilityKinds,
   adapterFeatureId,
   isAdapterIndex,
   resolveEndpointManagement,
+  resolveStaticCapabilities,
   type GroupMemberProfile,
   type GroupSceneFacts,
   type TurnCapabilities,
@@ -241,7 +243,7 @@ export function resolveRuntimeTurnCapabilities(
 }
 
 /**
- * Resolve this turn's account and, for ICQQ groups, the ADR 0041 scene facts (group, Bot role and
+ * Resolve this turn's account and, where the profile declares `scene.groupInfo` / `scene.memberProfile`, the ADR 0041 scene facts (group, Bot role and
  * card, sender role/card/title/mute) before tool discovery. Bot, group and sender facts all use the
  * two-level cache (memory 60 s → database → platform). Failed lookups omit their fields.
  */
@@ -261,11 +263,18 @@ export async function resolveRuntimeTurnContextState(
   const id = endpoint?.selfUserId;
   if (!id) return undefined;
   const bot: NonNullable<TurnContextState['bot']> = { id };
-  if (conversation.endpoint.adapter !== 'icqq' || conversation.kind !== 'group') {
+  // ADR 0044: the scene lookups run only where the Endpoint's static profile declares them usable.
+  const profile = adapters.capabilityProfile(endpointId as CapabilityId);
+  const sceneCapabilities = profile
+    ? resolveStaticCapabilities(profile, activeCapabilityKinds(conversation)).scene
+    : undefined;
+  const lookupGroupInfo = sceneCapabilities?.groupInfo === true;
+  const lookupMemberProfile = sceneCapabilities?.memberProfile === true;
+  if (conversation.kind === 'private' || (!lookupGroupInfo && !lookupMemberProfile)) {
     return Object.freeze({ bot: Object.freeze(bot) });
   }
   const management = resolveEndpointManagement(endpoint);
-  if (!management?.inspectGroupMember && !management?.inspectGroupMemberProfile) {
+  if (lookupMemberProfile && !management?.inspectGroupMember && !management?.inspectGroupMemberProfile) {
     return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'unsupported' }) });
   }
   const cache = factCacheFor(adapters);
@@ -276,6 +285,7 @@ export async function resolveRuntimeTurnContextState(
   const sender = senderId && senderId !== id ? senderId : undefined;
 
   const botTask = (async (): Promise<NonNullable<TurnContextState['bot']>> => {
+    if (!lookupMemberProfile || !management) return bot;
     try {
       if (management.inspectGroupMemberProfile) {
         // Same cadence as any member (Fin 2026-10-29): L1 60 s → L2 → platform. Role-change events
@@ -310,12 +320,12 @@ export async function resolveRuntimeTurnContextState(
       return { ...bot, platformRoleError: 'lookup_failed' };
     }
   })();
-  const sceneTask = management.inspectGroupScene
+  const sceneTask = lookupGroupInfo && management?.inspectGroupScene
     ? cachedLookup(cache, `scene${KEY_SEP}${scopeKey}`, signal, (lookupSignal) => management.inspectGroupScene!(group, lookupSignal), {
         now, ...(store ? { level2: groupLevel2(store, platform, group) } : {}), ...(deps.refresher ? { refresher: deps.refresher } : {}),
       })
     : Promise.resolve(undefined);
-  const senderTask = sender && management.inspectGroupMemberProfile
+  const senderTask = sender && lookupMemberProfile && management?.inspectGroupMemberProfile
     ? cachedLookup(cache, `member${KEY_SEP}${scopeKey}${KEY_SEP}${sender}`, signal,
         (lookupSignal) => management.inspectGroupMemberProfile!(group, sender, lookupSignal), {
           now, ...(store ? { level2: memberLevel2(store, platform, group, sender, now) } : {}),
@@ -415,7 +425,7 @@ export function createRuntimeTurnRequest(
     liveDanmaku?: TurnInput['liveDanmaku'];
   }>,
 ): TurnRequest {
-  const access = input.access ?? createRuntimeTurnAccess(message, roles, input.contextState);
+  const access = input.access ?? createRuntimeTurnAccess(message, roles, input.contextState, input.platformCapabilities);
   const origin = access.origin;
   if (origin.kind !== 'im') throw new Error('Runtime IM ingress must produce an IM origin');
   const clientAdapter = message.clientAdapter;
@@ -882,6 +892,7 @@ export function createRuntimeTurnAccess(
   message: Message,
   roles: RuntimeSenderRoles,
   contextState?: TurnContextState,
+  platformCapabilities?: TurnCapabilities,
 ): TurnAccessContext {
   const platform = capabilityLocalName(String(message.conversation.endpoint.id));
   const endpoint = message.endpointId?.trim();
@@ -897,7 +908,12 @@ export function createRuntimeTurnAccess(
   const trustRole = roles.isMaster ? 'master' : roles.isTrusted ? 'trusted' : 'user';
   const principalRoles = [...new Set([...(message.sender?.roles ?? []), trustRole])];
   return Object.freeze({
-    ...(contextState ? { input: Object.freeze({ contextState }) } : {}),
+    ...(contextState || platformCapabilities
+      ? { input: Object.freeze({
+          ...(contextState ? { contextState } : {}),
+          ...(platformCapabilities ? { platformCapabilities } : {}),
+        }) }
+      : {}),
     origin: Object.freeze({
       kind: 'im' as const,
       conversation: message.conversation,

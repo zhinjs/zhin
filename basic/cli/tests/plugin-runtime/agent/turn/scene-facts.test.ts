@@ -7,10 +7,13 @@ import {
   TURN_FACT_CACHE_TTL_MS,
 } from '../../../../src/plugin-runtime/agent/turn/request.js';
 
+/** A declared profile (not a legacy-derived one): group scene lookups are usable, private ones are not. */
+const sceneProfile = { group: { scene: { groupInfo: true, memberProfile: true } } };
+
 const conversation = { endpoint: { id: 'endpoint', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
 
-function generation(management: object | undefined, selfUserId = '8596238') {
-  const index = { $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId, management }) };
+function generation(management: object | undefined, selfUserId = '8596238', profile: object = sceneProfile) {
+  const index = { $projection: 'zhin.adapter-index/1', capabilityProfile: () => profile, connection: () => ({ selfUserId, management }) };
   return { index, snapshot: { projections: new Map([[adapterFeatureId, index]]) } as never };
 }
 
@@ -105,7 +108,33 @@ describe('ADR 0041 scene fact resolution', () => {
     expect(management.inspectGroupMemberProfile).toHaveBeenCalledTimes(1); // bot only, then served from the cache
   });
 
-  it('does not query anything outside ICQQ groups', async () => {
+  it('queries nothing when the profile does not declare the scene capabilities (any platform name)', async () => {
+    const management = port();
+    const { snapshot } = generation(management, '8596238', { default: { delivery: { send: true } } });
+    expect(await resolveRuntimeTurnContextState(snapshot, conversation, new AbortController().signal, '10002'))
+      .toEqual({ bot: { id: '8596238' } });
+    expect(management.inspectGroupScene).not.toHaveBeenCalled();
+    expect(management.inspectGroupMemberProfile).not.toHaveBeenCalled();
+  });
+
+  it('queries a non-icqq platform as soon as its profile declares scene.groupInfo and scene.memberProfile', async () => {
+    const management = port();
+    const { snapshot } = generation(management);
+    const state = await resolveRuntimeTurnContextState(
+      snapshot, { ...conversation, endpoint: { id: 'endpoint', adapter: 'telegram' } }, new AbortController().signal, '10002');
+    expect(state?.conversation).toMatchObject({ name: '测试群' });
+    expect(state?.bot?.platformRole).toBe('admin');
+  });
+
+  it('queries only the group info when only scene.groupInfo is declared', async () => {
+    const management = port();
+    const { snapshot } = generation(management, '8596238', { group: { scene: { groupInfo: true } } });
+    const state = await resolveRuntimeTurnContextState(snapshot, conversation, new AbortController().signal, '10002');
+    expect(state).toEqual({ bot: { id: '8596238' }, conversation: expect.objectContaining({ name: '测试群' }) });
+    expect(management.inspectGroupMemberProfile).not.toHaveBeenCalled();
+  });
+
+  it('does not query anything in private conversations', async () => {
     const management = port();
     const { snapshot } = generation(management);
     const signal = new AbortController().signal;

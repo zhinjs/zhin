@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { publishOutboundElements } from '../../src/media/media-publisher.js';
+import { resolveOutboundCapabilities } from '../../src/media/media-capabilities.js';
 import type { OutputElement } from '@zhin.js/ai';
 
 describe('publishOutboundElements', () => {
@@ -45,7 +46,7 @@ describe('publishOutboundElements', () => {
     const elements: OutputElement[] = [
       { type: 'image', url: '', base64: 'aGVsbG8=', alt: 'test' },
     ];
-    const segs = await publishOutboundElements(elements, 'sandbox');
+    const segs = await publishOutboundElements(elements, 'sandbox', resolveOutboundCapabilities('sandbox', { has: (path) => path === 'delivery.spool' }));
     expect(segs).toHaveLength(1);
     expect(segs[0].type).toBe('image');
     expect((segs[0].data as { media?: { value?: string } }).media?.value).toBe('aGVsbG8=');
@@ -69,16 +70,16 @@ describe('publishOutboundElements', () => {
     const elements: OutputElement[] = [
       { type: 'audio', url: '', base64: 'YWFh' },
     ];
-    const segs = await publishOutboundElements(elements, 'sandbox');
+    const segs = await publishOutboundElements(elements, 'sandbox', resolveOutboundCapabilities('sandbox', { has: (path) => path === 'delivery.spool' }));
     expect(segs.some(s => s.type === 'audio')).toBe(true);
   });
 
-  it('sandbox 大体积 base64 应落盘为 file 路径（避免出站模板超 400KB）', async () => {
+  it('delivery.spool 声明的 Endpoint：大体积 base64 应落盘为 file 路径（避免出站模板超 400KB）', async () => {
     const large = Buffer.alloc(48_000, 0xab).toString('base64');
     const elements: OutputElement[] = [
       { type: 'image', url: `data:image/png;base64,${large}`, base64: large },
     ];
-    const segs = await publishOutboundElements(elements, 'sandbox');
+    const segs = await publishOutboundElements(elements, 'sandbox', resolveOutboundCapabilities('sandbox', { has: (path) => path === 'delivery.spool' }));
     expect(segs[0]?.type).toBe('image');
     const data = segs[0]?.data as { media?: { kind?: string; value?: string } };
     expect(data.media?.kind).toBe('path');
@@ -86,12 +87,12 @@ describe('publishOutboundElements', () => {
     expect((data as { base64?: string }).base64).toBeUndefined();
   });
 
-  it('icqq 大体积 base64 应保留在 segment（由适配器 CQ base64:// 发出）', async () => {
+  it('未声明 delivery.spool：大体积 base64 保留在 segment（由适配器自行编码）', async () => {
     const large = Buffer.alloc(48_000, 0xab).toString('base64');
     const elements: OutputElement[] = [
       { type: 'image', url: `data:image/png;base64,${large}`, base64: large },
     ];
-    const segs = await publishOutboundElements(elements, 'icqq');
+    const segs = await publishOutboundElements(elements, 'icqq', resolveOutboundCapabilities('icqq', { has: () => false }));
     const data = segs[0]?.data as { media?: { kind?: string; value?: string } };
     expect(data.media?.kind).toBe('base64');
     expect(data.media?.value).toBe(large);
@@ -112,5 +113,17 @@ describe('publishOutboundElements', () => {
     } finally {
       await fs.rm(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe('resolveOutboundCapabilities (delivery.spool, ADR 0044)', () => {
+  it('reads spool from TurnCapabilities-like sources and from an endpoint kind view', () => {
+    expect(resolveOutboundCapabilities('x', { has: (p) => p === 'delivery.spool' }).spool).toBe(true);
+    expect(resolveOutboundCapabilities('x', { has: () => false }).spool).toBe(false);
+    expect(resolveOutboundCapabilities('x').spool).toBeUndefined();
+    const kinds = { group: { spool: true } } as never;
+    expect(resolveOutboundCapabilities('x', { capabilities: { inbound: true, outbound: true, kinds }, kind: 'group' }).spool).toBe(true);
+    expect(resolveOutboundCapabilities('x', { capabilities: { inbound: true, outbound: true, kinds }, kind: 'private' }).spool).toBe(false);
+    expect(resolveOutboundCapabilities('x', { capabilities: undefined, kind: 'group' }).spool).toBe(false);
   });
 });

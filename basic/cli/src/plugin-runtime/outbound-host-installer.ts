@@ -49,12 +49,13 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
     capabilities(input) {
       const capabilities = im.endpoints.capabilities(input);
       const operations = capabilities?.operations;
-      if (!operations) return { operations: Object.freeze([]) };
+      if (!operations) return { operations: Object.freeze([]), ...(capabilities?.kinds ? { kinds: capabilities.kinds } : {}) };
       return {
         operations: Object.freeze(
           (['recall', 'edit', 'reaction', 'typing'] as const)
             .filter((operation) => operations[operation] === true),
         ),
+        ...(capabilities?.kinds ? { kinds: capabilities.kinds } : {}),
       };
     },
     async send(input: OutboundSendInput): Promise<string | null> {

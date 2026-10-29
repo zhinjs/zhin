@@ -1,6 +1,8 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { definePlugin } from 'zhin.js';
 import { permissionHostToken, createSceneRolePlatformChecker } from '@zhin.js/permission';
+import { registerSensitiveExecCommand } from '@zhin.js/agent';
+import { icqqSensitiveExecRule } from './src/sensitive-commands.js';
 import { icqqRuntimeStateToken } from './src/icqq-runtime-state.js';
 
 export default definePlugin({
@@ -17,6 +19,10 @@ export default definePlugin({
         createSceneRolePlatformChecker(),
       )
       : undefined;
-    return disposePlatform;
+    const disposeExecRule = registerSensitiveExecCommand(icqqSensitiveExecRule);
+    return () => {
+      disposeExecRule();
+      disposePlatform?.();
+    };
   },
 });

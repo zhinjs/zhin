@@ -171,7 +171,13 @@ export interface PromptCapabilities {
   readonly text?: string;
 }
 
-/** What one conversation-kind section declares: the seven groups. */
+/** 运行时 (additive to the seven groups, ADR 0044 C3) */
+export interface RuntimeCapabilities {
+  /** The Endpoint is the authenticated local sandbox ingress (trusted owner may configure the agent run). */
+  readonly sandbox?: boolean;
+}
+
+/** What one conversation-kind section declares: the seven groups plus `runtime`. */
 export interface CapabilitySection {
   readonly messaging?: MessagingCapabilities;
   readonly scene?: SceneCapabilities;
@@ -180,6 +186,7 @@ export interface CapabilitySection {
   readonly feedback?: FeedbackCapabilities;
   readonly delivery?: DeliveryCapabilities;
   readonly prompt?: PromptCapabilities;
+  readonly runtime?: RuntimeCapabilities;
 }
 
 /**
@@ -358,6 +365,7 @@ const SECTION_NODE: Node = obj({
     requiresMessageSeq: FLAG,
   }),
   prompt: obj({ auto: FLAG, text: { t: 'text' } }),
+  runtime: obj({ sandbox: FLAG }),
 });
 
 const PROFILE_KINDS = ['default', 'private', 'group', 'channel', 'thread'] as const;
@@ -947,8 +955,12 @@ export function deriveLegacyProfile(legacy: LegacyAdapterDeclaration): AdapterCa
     };
   }
   if (Object.keys(actions).length > 0) section.actions = actions;
+  // Feedback follows the control ports the Endpoint already has: native typing first, then reactions.
   if (operations.has('typing')) section.feedback = { mode: 'typing' };
-  if (legacy.capabilities.includes('outbound')) section.delivery = { send: true };
+  else if (operations.has('reaction')) section.feedback = { mode: 'reaction' };
+  // Undeclared Adapters keep the historic outbound behaviour: large inline media is spooled to disk
+  // (an Adapter whose peer cannot read local paths declares `delivery.spool: false`).
+  if (legacy.capabilities.includes('outbound')) section.delivery = { send: true, spool: true };
   if (legacy.capabilities.includes('liveDanmaku')) section.events = { liveDanmaku: true };
   return Object.freeze({ default: section as CapabilitySection });
 }

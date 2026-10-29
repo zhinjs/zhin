@@ -20,4 +20,6 @@ export interface ProactiveSendContext {
 export interface ProactiveOutboundService {
   send(ctx: ProactiveSendContext, content: SendContent): Promise<string>;
   sendElements(ctx: ProactiveSendContext, elements: AgentOutputElement[]): Promise<string[]>;
+  /** Media limits the target Endpoint declares for this scene (ADR 0044); absent = nothing assumed. */
+  mediaCapabilities?(scene: IMSceneRef): import('../media/media-types.js').OutboundMediaCapabilities | undefined;
 }

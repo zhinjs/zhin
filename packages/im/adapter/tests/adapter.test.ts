@@ -24,6 +24,7 @@ import adapterFeature, {
   defineAdapter as defineAdapterContract,
   endpointEventGatewayToken,
   endpointCapabilitiesOf,
+  resolveStaticCapabilities,
   isAdapterIndex,
   parseAdapterDefinition,
   endpointControlOf,
@@ -266,16 +267,19 @@ describe('Adapter Feature', () => {
     const hook = index.describe().find((row) => row.name === 'hook');
     expect(socket?.operations).toEqual(['recall', 'reaction']);
     expect(hook?.operations).toEqual(['recall']);
-    expect(index.capabilities(socket!.id)).toEqual({
+    expect(index.capabilities(socket!.id)).toMatchObject({
       inbound: true,
       outbound: true,
       operations: { recall: true, reaction: true },
     });
-    expect(index.capabilities(hook!.id)).toEqual({
+    expect(index.capabilities(hook!.id)).toMatchObject({
       inbound: true,
       outbound: true,
       operations: { recall: true },
     });
+    // ADR 0044: the serializable per-kind view; the socket derives reaction/recall from its operations.
+    expect(index.capabilities(socket!.id).kinds?.group).toMatchObject({ recall: true, spool: true, needsReply: false, groupInfo: false });
+    expect(index.capabilities(hook!.id).kinds?.group).toMatchObject({ reaction: false, recall: true });
     await index.stop();
   });
 
@@ -1428,6 +1432,50 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
     expect(caps?.has('delivery.send')).toBe(true);
     expect(caps?.has('actions.recall')).toBe(true);
     expect(caps?.has('actions.mute')).toBe(false);
+    await index.stop();
+  });
+
+  it('a legacy-derived profile gains scene lookups from the management ports the Endpoint implements', async () => {
+    const make = (name: string, management?: object) => createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: name, source: `/adapters/${name}/index.ts`,
+      definition: defineAdapter({
+        capabilities: ['inbound', 'outbound'],
+        create: () => ({ send: async () => 'id', ...(management ? { management } : {}) }),
+      }),
+    });
+    const withPorts = make('with-ports', {
+      inspectGroupScene: async () => ({}), inspectGroupMemberProfile: async () => ({}),
+    });
+    const without = make('without-ports');
+    const index = await createAdapterIndex([withPorts, without], snapshot([withPorts, without]));
+    const sceneOf = (id: typeof withPorts.id, kind: 'group' | 'private') => resolveStaticCapabilities(
+      index.capabilityProfile(id)!, [kind]).scene;
+    expect(sceneOf(withPorts.id, 'group')).toMatchObject({ groupInfo: true, memberProfile: true });
+    expect(sceneOf(withPorts.id, 'private')?.groupInfo).toBeUndefined();
+    expect(sceneOf(without.id, 'group')?.groupInfo).toBeUndefined();
+    expect(index.capabilities(withPorts.id).kinds?.group).toMatchObject({ groupInfo: true, memberProfile: true });
+    expect(index.capabilities(withPorts.id).kinds?.private).toMatchObject({ groupInfo: false });
+    await index.stop();
+  });
+
+  it('exposes feedback, spool and quote-only delivery of a declared profile as the serializable kinds view', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'declared', source: '/adapters/declared/index.ts',
+      definition: defineAdapter({
+        capabilities: ['outbound'],
+        profile: {
+          default: { delivery: { send: true, spool: false }, feedback: { mode: 'reaction', emoji: '⏳' }, runtime: { sandbox: true } },
+          group: { delivery: { proactive: false } },
+          private: { feedback: { mode: 'typing', refreshSeconds: 5 }, delivery: { spool: true } },
+        },
+        create: () => ({ send: async () => 'id', control: { typing: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const kinds = index.capabilities(slot.id).kinds!;
+    expect(kinds.group).toMatchObject({ needsReply: true, spool: false, feedback: { mode: 'reaction', emoji: '⏳' } });
+    expect(kinds.private).toMatchObject({ needsReply: false, spool: true, feedback: { mode: 'typing', refreshSeconds: 5 } });
+    expect(resolveStaticCapabilities(index.capabilityProfile(slot.id)!, []).runtime?.sandbox).toBe(true);
     await index.stop();
   });
 

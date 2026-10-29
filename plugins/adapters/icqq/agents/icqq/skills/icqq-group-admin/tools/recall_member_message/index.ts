@@ -6,6 +6,8 @@ import { messages as t } from '../../../../messages.js';
 export default defineAgentTool({
   description: '撤回当前 QQ 群内他人的真实消息；需调用方具备群管发起权限及机器人具备实时平台权限，无需逐次审批',
   adapter: 'icqq',
+  // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
+  requiresCapabilities: ['actions.recall.others'],
   scopes: ['group'],
   currentConversationBotRoles: ['owner', 'admin'],
   permissions: ['role(master,admin,trusted,owner)'],

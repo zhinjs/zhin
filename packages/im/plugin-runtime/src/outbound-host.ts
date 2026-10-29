@@ -63,8 +63,30 @@ export interface OutboundEndpointInput {
   readonly endpointKey: string;
 }
 
+/**
+ * Per-conversation-kind view of an Endpoint's capability profile (ADR 0044). Structurally the same as
+ * `EndpointKindCapabilities` in `@zhin.js/im-contract`; a missing kind or field means "not supported".
+ */
+export interface OutboundKindCapabilities {
+  readonly feedback?: Readonly<{
+    mode: 'typing' | 'reaction' | 'status-message' | 'none';
+    emoji?: string;
+    text?: string;
+    refreshSeconds?: number;
+  }>;
+  readonly reaction: boolean;
+  readonly edit: boolean;
+  readonly recall: boolean;
+  readonly spool: boolean;
+  /** Messages here must quote an inbound message. */
+  readonly needsReply: boolean;
+  readonly groupInfo: boolean;
+  readonly memberProfile: boolean;
+}
+
 export interface OutboundEndpointCapabilities {
   readonly operations: readonly OutboundEndpointOperation[];
+  readonly kinds?: Readonly<Partial<Record<'private' | 'group' | 'channel', OutboundKindCapabilities>>>;
 }
 
 export interface OutboundEditInput extends OutboundEndpointInput {

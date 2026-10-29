@@ -59,6 +59,8 @@ export interface OutboundMediaCapabilities {
   video?: boolean;
   file?: boolean;
   maxAttachmentBytes?: number;
+  /** `delivery.spool` (ADR 0044): write large inline media to disk before sending; default off. */
+  spool?: boolean;
 }
 
 export const DEFAULT_OUTBOUND_CAPABILITIES: OutboundMediaCapabilities = {

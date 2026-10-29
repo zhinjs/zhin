@@ -1,6 +1,8 @@
 import { enableActivityFeedbackForBot, isGenericActivityFeedbackManager, type ActivityFeedbackManager, type ActivityFeedbackPhase, type ActivityFeedbackSendPort, type EndpointWithActivityFeedback, type PlatformActivityFeedbackManager, type ResolvedActivityFeedbackPhaseConfig, type ActivityFeedbackEventContext } from '@zhin.js/agent';
 import type { OutboundHost } from 'zhin.js';
 
+type EndpointKindView = NonNullable<EndpointWithActivityFeedback['kinds']>['private'];
+
 /** IM 侧 endpoint 访问 seam（便于测试注入 fake） */
 export interface ActivityFeedbackEndpointAccess {
   resolve(
@@ -66,8 +68,10 @@ export function createOutboundEndpointAccess(
       const addReaction = outbound.addReaction;
       const removeReaction = outbound.removeReaction;
       const typing = outbound.typing;
+      const kinds = outbound.capabilities?.({ adapter: platform, endpointKey })?.kinds;
       const endpoint = {
         $id: endpointKey,
+        ...(kinds ? { kinds } : {}),
         control: {
           ...(recall && supports('recall') ? {
             recall: async (message: Parameters<typeof recall>[0]['message']) => {
@@ -293,6 +297,11 @@ function createPhaseDriver(
 
 export class ActivityFeedbackExecutor {
   constructor(private readonly access: ActivityFeedbackEndpointAccess) {}
+
+  /** The Endpoint's declared capabilities for the scene of this event (ADR 0044); undefined when unknown. */
+  kindCapabilities(ctx: ActivityFeedbackEventContext): EndpointKindView | undefined {
+    return this.access.resolve(ctx.platform, ctx.endpointKey)?.endpoint.kinds?.[ctx.sceneType];
+  }
 
   async start(
     ctx: ActivityFeedbackEventContext,

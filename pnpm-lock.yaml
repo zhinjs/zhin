@@ -2437,6 +2437,9 @@ importers:
       '@zhin.js/adapter-onebot-events':
         specifier: workspace:*
         version: link:../../../packages/im/adapter-onebot-events
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../../packages/im/agent-feature

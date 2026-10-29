@@ -50,7 +50,7 @@ export class ActivityFeedbackOrchestrator {
     }
 
     try {
-      const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType, ctx.locale);
+      const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType, ctx.locale, this.executor.kindCapabilities(ctx));
       if (resolution.kind !== 'active') {
         this.log.debug(
           `[ActivityFeedback] skip ${phase} (${reason}): policy=${resolution.kind}`
@@ -110,7 +110,7 @@ export class ActivityFeedbackOrchestrator {
     await this.startPhase(payload, phase, reason);
     const ctx = toActivityFeedbackEventContext(payload, this.defaultLocale);
     if (!ctx) return;
-    const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType, ctx.locale);
+    const resolution = this.policy.resolvePhase(ctx.platform, ctx.endpointKey, phase, ctx.sceneType, ctx.locale, this.executor.kindCapabilities(ctx));
     if (resolution.kind !== 'active') return;
     const delay = resolution.config.removeDelay ?? 3_000;
     const key = this.phaseKey(ctx, phase);

@@ -173,3 +173,16 @@ class MemoryHost implements DiscoveryHost {
   async loadModule<T>(): Promise<T> { throw new Error('Not implemented'); }
   async readText(source: string): Promise<string> { return this.files.get(source) ?? ''; }
 }
+
+describe('Skill requiresCapabilities (ADR 0044)', () => {
+  it('reads the capability paths a Skill needs from its frontmatter', () => {
+    const owner = rootPluginId();
+    const definition = parseSkillMarkdown({
+      markdown: '---\nname: moderation\ndescription: Moderate\nrequiresCapabilities:\n  - actions.mute\n---\nBody',
+    }, { owner, feature: skillFeatureId, localName: 'moderation', source: '/p/skills/moderation/SKILL.md' });
+    expect(definition.requiresCapabilities).toEqual(['actions.mute']);
+    const plain = parseSkillMarkdown({ markdown: '---\nname: plain\ndescription: Plain\n---\nBody' },
+      { owner, feature: skillFeatureId, localName: 'plain', source: '/p/skills/plain/SKILL.md' });
+    expect(plain.requiresCapabilities).toBeUndefined();
+  });
+});

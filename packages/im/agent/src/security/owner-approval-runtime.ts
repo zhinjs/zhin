@@ -128,20 +128,6 @@ export function resolveToolRequesterRole(message: Message): ToolRequesterRole {
   return address && String(message.sender.id) === address.ownerId ? 'master' : 'other';
 }
 
-export const ICQQ_SENSITIVE_SUBCOMMAND_REGEXES: readonly RegExp[] = [
-  /\bicqq\s+friend\s+(?:delete|block|move)\b/i,
-  /\bicqq\s+group\s+(?:kick|mute|set|admin|announce|transfer|quit|dissolve|invite)\b/i,
-  /\bicqq\s+(?:request|wallet|pay|recall)\b/i,
-  /\bicqq\s+file\s+(?:upload|delete)\b/i,
-  /\bicqq\s+gfs\b.*\b(?:rm|delete|del)\b/i,
-];
-
-export function isIcqqSensitiveSubcommand(fullSubCommand: string): boolean {
-  const line = fullSubCommand.trim();
-  return /^\s*icqq(?:\s|$)/i.test(line)
-    && ICQQ_SENSITIVE_SUBCOMMAND_REGEXES.some((pattern) => pattern.test(line));
-}
-
 function ownerCommandAddress(context: OwnerApprovalCommandContext): OwnerApprovalAddress | undefined {
   if (!context.platform || !context.endpoint || !context.ownerId) return undefined;
   return Object.freeze({

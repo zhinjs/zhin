@@ -35,13 +35,12 @@ export {
 } from './manager.js';
 
 export {
-  PLATFORM_FEATURES,
   buildTypingSendContent,
   enableActivityFeedbackForBot,
   isGenericActivityFeedbackManager,
 } from './adapter-integration.js';
 export type {
-  PlatformFeatures,
+  ActivityFeedbackKindCapabilities,
   EndpointWithActivityFeedback,
   ActivityFeedbackSendPort,
   PlatformActivityFeedbackManager,
