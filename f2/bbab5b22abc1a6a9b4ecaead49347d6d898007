@@ -1,0 +1,45 @@
+docs/configuration/generated.md
+  s_9477e63ef5cee5::t_370bf93ef56202 195-197
+packages/im/ai/src/types.ts
+  s_9477e63ef5cee5::t_f82ecc7d77e003 651-655
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_9477e63ef5cee5::t_55c320629fa8f8 140-141
+basic/cli/tests/plugin-runtime/agent/turn/reaction-pacer.test.ts
+  s_9477e63ef5cee5::t_149a892741c6fc 1-72
+docs/ai/structured-replies.md
+  s_9477e63ef5cee5::t_126264a1aa170f 98,101-109
+docs/en/ai/structured-replies.md
+  s_9477e63ef5cee5::t_126264a1aa170f 36-54
+docs/en/configuration/generated.md
+  s_9477e63ef5cee5::t_370bf93ef56202 195-197
+.changeset/fix-reaction-pacing.md
+  s_9477e63ef5cee5::t_370bf93ef56202 1-2,4-8
+  s_9477e63ef5cee5::t_2636f3c8428ae6 3
+packages/im/agent/src/outbound/structured-reply.ts
+  s_9477e63ef5cee5::t_55c320629fa8f8 71-72
+packages/im/agent/tests/core/structured-reply.test.ts
+  s_9477e63ef5cee5::t_370bf93ef56202 452-462
+basic/cli/src/plugin-runtime/agent/turn/reaction-pacer.ts
+  s_9477e63ef5cee5::t_55c320629fa8f8 95
+  s_9477e63ef5cee5::t_2fd77c8ecae378 1-94,96-98
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_55c320629fa8f8 137,225-226,582,1344-1361,1364
+packages/im/runtime/src/host-config-schema.json
+  s_9477e63ef5cee5::t_55c320629fa8f8 1259-1280
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f2bbab5b22abc1a6a9b4ecaead49347d6d898007",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
