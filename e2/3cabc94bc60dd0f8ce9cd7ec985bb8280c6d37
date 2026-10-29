@@ -1,0 +1,53 @@
+packages/im/agent/tests/session/turn-ingress-session.test.ts
+  s_9477e63ef5cee5::t_3e98346662f1d2 93-115
+plugins/adapters/icqq/src/group-scene.ts
+  s_9477e63ef5cee5::t_0727a4edcb4300 1-76
+packages/im/agent/src/context/turn-envelope.ts
+  s_9477e63ef5cee5::t_b45b1f5243171d 2,64
+  s_9477e63ef5cee5::t_f3a62734e5fdcf 4,65-85,108-109
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_9477e63ef5cee5::t_4ea397bc95aad5 105-108,119
+plugins/adapters/icqq/src/endpoint.ts
+  s_9477e63ef5cee5::t_5263988c7f9337 66,120-121
+packages/im/agent/tests/context/scene-line.test.ts
+  s_9477e63ef5cee5::t_3e39cb7890d004 1-86
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  s_9477e63ef5cee5::t_4ea397bc95aad5 23,68,82-83
+packages/im/ai/src/llm/types/content-block.ts
+  s_9477e63ef5cee5::t_0aa093139a3ad3 8-9
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts.test.ts
+  s_9477e63ef5cee5::t_76368bcd5ade75 1-176
+.changeset/0041-slice-b-scene.md
+  s_9477e63ef5cee5::t_09a275ba0f28cc 1-9
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9477e63ef5cee5::t_b188337e523c55 1118
+plugins/adapters/icqq/tests/group-scene.test.ts
+  s_9477e63ef5cee5::t_28fa942576e172 1-99
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9477e63ef5cee5::t_b188337e523c55 45-127,132,146,149-203
+  s_9477e63ef5cee5::t_bb6bb2fe157abf 206
+packages/im/adapter/src/endpoint-management.ts
+  s_9477e63ef5cee5::t_697715d87b58f1 49-58,81-98
+  s_9477e63ef5cee5::t_bfd249f7dea270 99
+packages/im/agent/src/session/turn-ingress-session.ts
+  s_9477e63ef5cee5::t_360fa244512009 26-28,32-35
+packages/im/ai/src/memory/prompt-context.ts
+  s_9477e63ef5cee5::t_ee7b76079727bb 25-26,32
+  s_9477e63ef5cee5::t_bbe116b0a1988d 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e23cabc94bc60dd0f8ce9cd7ec985bb8280c6d37",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
