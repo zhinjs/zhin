@@ -382,6 +382,27 @@ zhin agent workroom request-replan <runId> --project <projectId> --expected-sequ
 | `workroom runs` / `run` / `readiness` | Connect to the running bot and read Run, Task, Assignment and Blocker state (no content) using the token identity from config |
 | `workroom cancel` / `request-replan` | Require the current Project Sponsor permission and use `expected-sequence` to prevent concurrent conflicts. `request-replan` only records the replan request and pauses scheduling; it never pretends a new plan revision exists |
 
+### usage report: Real Usage Ledger
+
+Read-only. Reads `data/agent-traces/*.jsonl` and summarises real model usage per local day, so you can tell whether context optimisations actually saved tokens (ADR 0043 §6). Files are streamed line by line, nothing is written, and malformed lines are counted and reported at the end.
+
+```bash
+zhin usage report                                  # today
+zhin usage report --days 7                         # last 7 days, including today
+zhin usage report --since 2026-10-28 --until 2026-10-29
+zhin usage report --session 'icqq:*:group:*' --json
+```
+
+| Option | Purpose |
+| --- | --- |
+| `--days <n>` | Last n days, default 1 |
+| `--since <time>` / `--until <time>` | Time range (`--until` exclusive): `2h`, `7d`, `YYYY-MM-DD` (local midnight), ISO time or epoch ms; `--since` overrides `--days` |
+| `-s, --session <pattern>` | Session key substring, or a glob with `*` |
+| `--json` | JSON output |
+| `--cwd <dir>` / `--dir <dir>` | Project root / trace directory |
+
+Per day: turns, model calls, calls per turn and per-call input tokens (p50 / p90 / max), cache-read share (`cache_read_tokens` / `prompt_tokens`), history / fixed / user prompt shares, turns that hit the iteration limit, and the top 5 sessions by input tokens. Segment shares come from each turn's first-request estimate (`context_budget`); fixed = system + tool_schemas + output_schema + tool_index + skill_catalog + agent_catalog + memory + bootstrap. "Hit the iteration limit" means a `last_iteration_nudge` was recorded or the turn ended `budget_exceeded`.
+
 ## Exit Codes
 
 | Code | Meaning |
