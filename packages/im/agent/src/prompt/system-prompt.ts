@@ -24,6 +24,7 @@ import {
   CHAT_WORKSPACE_TASK_RULES,
 } from './rules/index.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
+import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
 import { PromptSegmentRegistry } from './segments/registry.js';
 import type { PromptSegment, SegmentInput, TextSegmentKind } from './segments/types.js';
@@ -530,7 +531,12 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     // In chat the workspace persona (SOUL.md) leads, right after the identity line.
     chatOrder: BOOTSTRAP_PROMPT_ORDER.chat,
     retention: 'preferred',
-    content: (ctx) => ctx.bootstrapContext?.trim() ? fillPromptSlots(ctx.bootstrapContext, ctx.agentNickname) : null,
+    content: (ctx) => {
+      if (!ctx.bootstrapContext?.trim()) return null;
+      // ADR 0042 §5: only the sections whose scope matches this turn's scene.
+      const scoped = scopeBootstrapText(ctx.bootstrapContext, bootstrapSceneFromTurn(ctx.turn)).text;
+      return scoped.trim() ? fillPromptSlots(scoped, ctx.agentNickname) : null;
+    },
   },
   {
     // Volatile: kept last so the stable prefix above stays cacheable.

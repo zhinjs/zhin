@@ -64,6 +64,7 @@ import {
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
 import { stampAssistantHeaders } from '../session/participant-header-stamp.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
+import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
 import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
 import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
@@ -667,6 +668,10 @@ export async function* runAgentLoopTextTurnRun(
         outputSchema,
         sections: promptSections,
         bootstrapContext: input.promptRuntime?.bootstrapContext,
+        bootstrapSkipped: scopeBootstrapText(
+          input.promptRuntime?.bootstrapContext ?? '',
+          bootstrapSceneFromTurn(input.turnContext),
+        ).skipped,
         activeSkillsContext: input.promptRuntime?.activeSkillsContext,
         loadedTools: agentTools,
         deferredToolCount: deferredCatalogTools(catalog, agentTools).length,

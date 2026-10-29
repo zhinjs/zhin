@@ -17,6 +17,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { getLogger } from '@zhin.js/logger';
+import { scopeBootstrapText, type BootstrapScene } from './bootstrap-scope.js';
 
 const logger = getLogger('Bootstrap');
 
@@ -137,6 +138,8 @@ export function buildContextFiles(
   options?: {
     maxChars?: number;
     totalMaxChars?: number;
+    /** ADR 0042 §5: inject only the sections whose `<!-- scope: ... -->` matches this scene. */
+    scene?: BootstrapScene;
   },
 ): ContextFile[] {
   const maxChars = options?.maxChars ?? DEFAULT_MAX_CHARS;
@@ -148,7 +151,9 @@ export function buildContextFiles(
   for (const file of bootstrapFiles) {
     if (file.missing || !file.content) continue;
 
-    let content = file.content.trim();
+    let content = options?.scene
+      ? scopeBootstrapText(file.content, options.scene).text.trim()
+      : file.content.trim();
     if (!content) continue;
 
     // 单文件裁剪
@@ -176,6 +181,7 @@ export function buildStableContextFiles(
   options?: {
     maxChars?: number;
     totalMaxChars?: number;
+    scene?: BootstrapScene;
   },
 ): ContextFile[] {
   const stable = bootstrapFiles.filter(f =>
@@ -268,6 +274,7 @@ export function buildStableBootstrapSection(
   options?: {
     maxChars?: number;
     totalMaxChars?: number;
+    scene?: BootstrapScene;
   },
 ): string {
   return buildBootstrapContextSection(buildStableContextFiles(bootstrapFiles, options));

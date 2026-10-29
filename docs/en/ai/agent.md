@@ -465,6 +465,26 @@ serve several bots with different nicknames:
 I'm {{nickname}}, a long-time member of these groups.
 ```
 
+### Per-scene sections (scope annotations)
+
+A section of a bootstrap file can name the scenes it applies to with a one-line HTML comment directly under its heading (the first non-blank line after it). The host injects only the sections matching the **current turn**; the rest cost no tokens. Sections without an annotation apply everywhere, as before.
+
+```md
+## Deploy and ops
+<!-- scope: master-private -->
+Content only useful in the master's private chat...
+
+## Group etiquette
+<!-- scope: group -->
+```
+
+- Extent: from that heading up to the next heading of the **same or a higher level** (nested headings included); `#` lines inside code fences are not headings.
+- Values: `group`, `private`, `channel` (conversation type), `master` (sender is the master); `master-private` means "master AND private" (`-` joins conditions); a comma list means "any of", e.g. `group, master-private`.
+- Unknown values are ignored; if no valid value remains the whole annotation is treated as absent and the section applies everywhere (over-injecting is the safe failure). Non-IM turns (HTTP, scheduled jobs, ...) only match `master`.
+- Output is byte-identical for every turn of the same kind (conversation type + master or not), independent of session or sender, so prompt caching is unaffected; group chats and master private chats each get one cache variant.
+- `zhin trace` lists the skipped section titles (titles only) in its context estimate.
+- The `AGENTS.md` turn-envelope injection honours the annotations too. The framework never edits your files; you decide where to annotate (ADR 0042 section 5).
+
 `assistant.profile.yml` declares the persona and routines, synced into scheduled jobs at startup:
 
 ```yaml

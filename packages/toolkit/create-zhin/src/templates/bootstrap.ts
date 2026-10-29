@@ -55,6 +55,7 @@ Helpful AI assistant. Be concise, accurate, and action-oriented.
 Use \`cron_add\` for scheduled reminders — do NOT just write to memory files.
 
 ## Heartbeat
+<!-- Optional: add a line like  scope: master-private  (inside an HTML comment) right under a heading to inject that section only in matching chats; remove this comment. See docs: ai/agent. -->
 
 If enabled, \`HEARTBEAT.md\` is checked periodically. Manage task lists via \`edit_file\` / \`write_file\`. Keep the file small to save tokens.
 
