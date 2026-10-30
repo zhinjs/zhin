@@ -30,12 +30,14 @@ export async function sendOutputMessages(
     } catch (error) {
       if (first?.status !== 'sent') throw error;
       // The port may fail before reaching transport; earlier bubbles are still delivered.
-      return { status: 'failed', code: 'partial_delivery', retryable: false, ...(messages.length ? { messages } : {}) };
+      return { status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true, deliveryUnknown: true, ...(messages.length ? { messages } : {}) };
     }
     if ('messages' in outcome) messages.push(...outcome.messages ?? []);
     if (outcome.status === 'suppressed') continue;
     if (outcome.status !== 'sent' && first?.status === 'sent') {
-      return { status: 'failed', code: 'partial_delivery', retryable: false, ...(messages.length ? { messages } : {}) };
+      return { status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true,
+        ...(outcome.status === 'failed' && outcome.deliveryUnknown ? { deliveryUnknown: true as const } : {}),
+        ...(messages.length ? { messages } : {}) };
     }
     if (outcome.status !== 'sent') return outcome;
     first ??= outcome;

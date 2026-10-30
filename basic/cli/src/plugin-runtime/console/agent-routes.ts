@@ -1,4 +1,6 @@
-import { readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { readJsonBody, isProjectPathAllowed, type HttpHost } from '@zhin.js/host-http';
+import { realpath } from 'node:fs/promises';
+import * as path from 'node:path';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { parseBoundedInteger, writeJson } from './http-response.js';
@@ -100,9 +102,10 @@ export function registerAgentConsoleRoutes(
     const afterSequence = parseBoundedInteger(url.searchParams.get('after'), 0, 0, Number.MAX_SAFE_INTEGER);
     const limit = parseBoundedInteger(url.searchParams.get('limit'), 200, 1, 500);
     const handled = await withGenerationAgentConsole(snapshots, async ({ trace }) => {
+      const snapshot = trace.list(sessionKey, { afterSequence, limit });
       writeJson(response, 200, {
         success: true,
-        data: trace.list(sessionKey, { afterSequence, limit }),
+        data: { ...snapshot, events: await projectTraceFiles(snapshot.events, options.projectRoot) },
       });
     });
     if (!handled) {
@@ -150,4 +153,42 @@ export function registerAgentConsoleRoutes(
   registerWorkroomConsoleRoutes({ http, base, snapshots });
   if (options.projectRoot) registerTraceArchiveRoutes({ http, base, projectRoot: options.projectRoot });
 
+}
+
+/** Adds navigation hints only; file reads still enforce the existing project-file RPC policy. */
+async function projectTraceFiles(
+  events: readonly Record<string, unknown>[],
+  projectRoot?: string,
+): Promise<readonly Record<string, unknown>[]> {
+  if (!projectRoot) return events;
+  let root: Promise<string | undefined> | undefined;
+  const references = new Map<string, Promise<{ path: string } | undefined>>();
+  const resolve = async (absolute: string): Promise<{ path: string } | undefined> => {
+    root ??= realpath(projectRoot).catch(() => undefined);
+    const canonicalRoot = await root;
+    if (!canonicalRoot) return undefined;
+    try {
+      const canonicalFile = await realpath(absolute);
+      const relative = path.relative(canonicalRoot, canonicalFile).split(path.sep).join('/');
+      return isProjectPathAllowed(relative) ? { path: relative } : undefined;
+    } catch {
+      // Missing or unreadable paths do not change the original tool result.
+      return undefined;
+    }
+  };
+  return Promise.all(events.map(async event => {
+    const data = event.data;
+    if (event.type !== 'tool_result' || !data || typeof data !== 'object' || Array.isArray(data)
+      || !('toolName' in data) || (data.toolName !== 'write_file' && data.toolName !== 'edit_file')
+      || !('fileChange' in data)) return event;
+    const evidence = data.fileChange;
+    if (!evidence || typeof evidence !== 'object' || !('path' in evidence) || typeof evidence.path !== 'string'
+      || !path.isAbsolute(evidence.path)
+      // Agent Trace uses this exact suffix when its string projection was truncated.
+      || evidence.path.endsWith('… [truncated]')) return event;
+    let reference = references.get(evidence.path);
+    if (!reference) { reference = resolve(evidence.path); references.set(evidence.path, reference); }
+    const projectFile = await reference;
+    return projectFile ? { ...event, data: { ...data, projectFile } } : event;
+  }));
 }

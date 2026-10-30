@@ -28,7 +28,7 @@ describe('sendOutputMessages', () => {
     const partial = port([{ status: 'sent', messageId: 'first', messages: refs.slice(0, 1) },
       { status: 'failed', code: 'partial_delivery', retryable: false, messages: refs.slice(1, 2) }]);
     await expect(sendOutputMessages([message('first'), message('card then failure')], partial))
-      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false, messages: refs.slice(0, 2) });
+      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true, messages: refs.slice(0, 2) });
     expect(partial.send).toHaveBeenCalledTimes(2);
   });
 
@@ -41,7 +41,7 @@ describe('sendOutputMessages', () => {
       .resolves.toEqual({ status: 'sent', messageId: 'm1', messageContexts: contexts });
     const partial = port([{ status: 'sent', messageId: 'm1', messageContexts: [contexts[0]!] }, { status: 'failed', code: 'transport', retryable: true }]);
     await expect(sendOutputMessages([message('first'), message('second')], partial))
-      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false });
+      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true });
   });
 
   it('sends each model message in order with a short pause and reports the first receipt', async () => {
@@ -55,7 +55,7 @@ describe('sendOutputMessages', () => {
   it('reports a failure after a delivered message as partial and never retryable', async () => {
     const p = port([{ status: 'sent', messageId: 'm1' }, { status: 'failed', code: 'endpoint_send_failed', retryable: true }]);
     await expect(sendOutputMessages([message('a'), message('b')], p))
-      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false });
+      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true });
     const first = port([{ status: 'rejected', code: 'outbound_payload_rejected' }]);
     await expect(sendOutputMessages([message('a'), message('b')], first)).resolves.toEqual({ status: 'rejected', code: 'outbound_payload_rejected' });
     expect(first.sent).toEqual(['a']);
@@ -71,7 +71,7 @@ describe('sendOutputMessages', () => {
     const later = port([]);
     later.send.mockResolvedValueOnce({ status: 'sent', messageId: ref.id, messages: [ref] }).mockRejectedValueOnce(failure);
     await expect(sendOutputMessages([message('first'), message('second')], later))
-      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false, messages: [ref] });
+      .resolves.toEqual({ status: 'failed', code: 'partial_delivery', retryable: false, deliveryPartial: true, deliveryUnknown: true, messages: [ref] });
     expect(later.send).toHaveBeenCalledTimes(2);
   });
 

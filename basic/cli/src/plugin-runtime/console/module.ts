@@ -26,3 +26,4 @@ export {
   type ToolApprovalCard,
 } from './tool-approvals.js';
 export { HostSelfChanges, type SelfChangeCard } from './self-changes.js';
+export { defineWorkspaceConversationTable } from './workspace-conversations.js';

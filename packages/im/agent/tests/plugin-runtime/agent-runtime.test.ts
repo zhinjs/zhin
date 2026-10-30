@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LocalImageAssetStore, localImageAssetsToken } from '../../src/media/local-image-assets.js';
+import { FileJournalStore } from '../../src/journal/file-journal-store.js';
 import { expandMcpTools } from '../../src/plugin-runtime/agent-runtime.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createNativeLocalAssetsToolFeature } from '../../src/plugin-runtime/native-local-assets-tool.js';
@@ -1376,6 +1377,41 @@ function stateWithEngine(
   rootResources.set(agentTurnEngineToken.id, Object.freeze({ run }));
   return { ...state, resources: new Map(state.resources).set(state.root, rootResources) };
 }
+
+describe('durable final reply delivery', () => {
+  it.each(['sandbox', 'icqq'])('records only scoped Sandbox terminal output through the actual %s runtime without altering delivery', async adapter => {
+    const fixture = await createFixture(), directory = await mkdtemp(join(tmpdir(), 'zhin-runtime-results-'));
+    const journal = new FileJournalStore(directory), sends = vi.fn(async () => ({ status: 'failed' as const, code: 'offline', retryable: true }));
+    const conversation = { endpoint: { adapter, id: 'canonical' }, kind: 'group' as const, id: 'room' };
+    const mutableOrigin = { kind: 'im' as const, platform: adapter, endpoint: 'bot', scope: 'group' as const, sceneId: 'room', conversation: structuredClone(conversation) };
+    sends.mockImplementation(async () => { mutableOrigin.conversation.endpoint.id = 'caller-mutated'; return { status: 'failed', code: 'offline', retryable: true }; });
+    const state = stateWithEngine(fixture.snapshot, async function* ({ turn }) {
+      await turn.ports.reply!.send([{ type: 'text', content: 'progress only' }]);
+      yield { ...terminalEvent(), output: [{ type: 'text' as const, content: 'final durable result' }] };
+      return { project: async () => { await turn.ports.reply!.send([{ type: 'text', content: 'final durable result' }]); } };
+    });
+    state.resources.get(state.root)!.set(turnJournalStoreToken.id, journal);
+    const snapshots = new SnapshotStore(state), runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(snapshots);
+    const sessionKey = 'sandbox:bot:group:room';
+    try {
+      const outcome = await runtime.execute(fixture.child, { ...externalRequest('offline'),
+        origin: mutableOrigin,
+        session: { key: sessionKey }, policy: { permissions: ['authenticated'], unattended: false }, ports: { reply: { send: sends } },
+      }, selection([]));
+      expect(outcome.status).toBe('completed'); expect(sends).toHaveBeenCalledTimes(2);
+      const recovered = await new FileJournalStore(directory).listResults(sessionKey, 'mcp-client', conversation);
+      if (adapter === 'sandbox') {
+        expect(recovered).toMatchObject([{ message: 'final durable result', deliveries: [{ status: 'not_sent', code: 'offline' }] }]);
+        expect(recovered[0]?.deliveries).toHaveLength(1);
+      } else {
+        expect(recovered).toEqual([]);
+        const runs = await journal.listRuns(sessionKey);
+        const events = await journal.replay(runs[0]!.run);
+        expect(events.find(event => event.type === 'message.completed')?.data).not.toHaveProperty('resources');
+      }
+    } finally { await fixture.mcp.stop(); await snapshots.close(); await rm(directory, { recursive: true, force: true }); }
+  });
+});
 
 describe('automatic usage logs (#957)', () => {
   it.each(['private', 'group', 'channel'] as const)('uses the canonical %s scene in logs', async scope => {

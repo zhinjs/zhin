@@ -2,6 +2,7 @@ import type { SandboxWsSocket } from './protocol.js';
 import { defineEndpointClient } from 'zhin.js/adapter';
 
 export interface SandboxClientConnection {
+  readonly connectionId?: string;
   readonly target: string;
   readonly owner: string;
   readonly socket: SandboxWsSocket;
@@ -24,7 +25,11 @@ export class SandboxClient {
   }
 
   connection(target: string): SandboxClientConnection | undefined {
-    return this.connections().find((connection) => connection.target === target);
+    return [...this.connections()].reverse().find((connection) => connection.target === target);
+  }
+
+  connectionById(connectionId: string): SandboxClientConnection | undefined {
+    return this.connections().find((connection) => connection.connectionId === connectionId);
   }
 
   send(target: string, payload: string): void {

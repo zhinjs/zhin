@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/agent",
-  "version": "1.1.43",
-  "description": "Zhin AI Agent \u2014 session, ZhinAgent, init; composes @zhin.js/core providers and tools",
+  "version": "1.1.44",
+  "description": "Zhin AI Agent — session, ZhinAgent, init; composes @zhin.js/core providers and tools",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",

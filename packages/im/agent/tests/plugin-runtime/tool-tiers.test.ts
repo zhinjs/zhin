@@ -10,6 +10,7 @@ import {
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import { resolveToolTier } from '../../src/plugin-runtime/tool-tier.js';
 import { createMissingToolResolver } from '../../src/core/missing-tool-resolver.js';
+import { buildLlmToolsForProvider } from '../../src/tool/deferred-resolution.js';
 import { residentToolNames, resolveDeferredApiTools } from '../../src/tool-catalog/tool-catalog.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolTier } from '../../src/tool-catalog/types.js';
 
@@ -213,7 +214,7 @@ describe('discover-and-call: auto-load by exact name', () => {
   });
 });
 
-describe('discover attaches schemas', () => {
+describe('discover loads schemas without duplicating them in results', () => {
   const descriptions = {
     group_kick: 'Kick a member out of the group.',
     set_reminder: 'Set a reminder at a time.',
@@ -221,34 +222,42 @@ describe('discover attaches schemas', () => {
     weather: 'Look up the weather.',
   };
 
-  it('returns full schemas for the best matches, loads them and flags the tool list refresh', async () => {
+  it.each(['openai', 'anthropic', 'google'])('loads full schemas in the %s tool list and flags the refresh without echoing them', async (sdk) => {
     const saved: DeferredToolSessionSnapshot[] = [];
     const plan = planFor({ tier: 'chat', descriptions, saved });
     const out = await run(plan, 'discover', { query: 'kick member group', kind: 'tool' });
 
     expect(out).toContain('group_kick');
-    expect(out).toContain('SCHEMA-OF-group_kick');
+    expect(out).toContain('Loaded: group_kick');
+    expect(out).not.toContain('SCHEMA-OF-');
+    expect(out).not.toContain('"parameters"');
     expect(out).toContain('__zhin_tools_mutated__');
     expect(plan.controller.loadedToolNames()).toContain('group_kick');
     // The tool list for the next model call includes them.
     const next = planFor({ tier: 'chat', descriptions, snapshot: saved.at(-1) });
     expect(resolvedNames(next)).toContain('group_kick');
+    const definitions = buildLlmToolsForProvider(sdk, [...next.catalog], next.resolvedTools,
+      residentToolNames(next.catalog, DEFERRED_META_TOOL_NAMES), next.controller.loadedToolNames());
+    const loaded = definitions.filter(entry => entry.name === 'group_kick');
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].inputJsonSchema).toEqual(tool('group_kick').inputSchema);
+    expect(loaded[0].deferLoading).not.toBe(true);
   });
 
-  it('attaches at most the best few schemas', async () => {
+  it('loads the best few matches, preserving ranking and the limit', async () => {
     const plan = planFor({
       tier: 'chat',
       tools: [...CHAT, 'a_tool', 'b_tool', 'c_tool', 'd_tool', 'e_tool'],
       descriptions: Object.fromEntries(['a', 'b', 'c', 'd', 'e'].map(l => [`${l}_tool`, 'handles shared widget requests'])),
     });
     const out = await run(plan, 'discover', { query: 'widget', kind: 'tool' });
-    const attached = (out.match(/SCHEMA-OF-/g) ?? []).length;
-    expect(attached).toBeGreaterThan(0);
-    expect(attached).toBeLessThanOrEqual(DISCOVER_SCHEMA_LIMIT);
-    expect(plan.controller.loadedToolNames()).toHaveLength(attached);
+    expect(out).not.toContain('SCHEMA-OF-');
+    expect(plan.controller.loadedToolNames()).toEqual(['a_tool', 'b_tool', 'c_tool']);
+    expect(plan.controller.loadedToolNames()).toHaveLength(DISCOVER_SCHEMA_LIMIT);
+    expect(out).toContain('Loaded: a_tool, b_tool, c_tool.');
   });
 
-  it('does not re-attach tools that are already resident or loaded', async () => {
+  it('does not reload tools that are already resident or loaded', async () => {
     const plan = planFor({ tier: 'chat', descriptions });
     await run(plan, 'discover', { query: 'kick member group', kind: 'tool' });
     const again = await run(plan, 'discover', { query: 'kick member group', kind: 'tool' });
@@ -265,7 +274,7 @@ describe('discover attaches schemas', () => {
     expect(plan.controller.loadedToolNames()).not.toContain('group_kick');
   });
 
-  it('respects maxLoadedPerSession when attaching', async () => {
+  it('respects maxLoadedPerSession when discovering', async () => {
     const plan = planFor({
       tier: 'chat',
       tools: [...CHAT, 'a_tool', 'b_tool', 'c_tool'],
@@ -321,7 +330,7 @@ describe('stable tool list (prompt-cache prefix)', () => {
     expect(serialized(turn2)).toEqual(afterKick);
   });
 
-  it('discover-attached tools append as well', async () => {
+  it('discover-loaded tools append as well', async () => {
     const plan = planFor({ tier: 'chat', descriptions: { group_kick: 'Kick a member out of the group.' } });
     const base = serialized(plan);
     await run(plan, 'discover', { query: 'kick member group', kind: 'tool' });

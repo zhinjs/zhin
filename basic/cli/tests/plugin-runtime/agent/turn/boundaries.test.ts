@@ -135,6 +135,14 @@ describe('Plugin Runtime Tool policy bridge', () => {
 });
 
 describe('runtime reply delivery outcome bridge', () => {
+  it('preserves transport uncertainty independently of an identical failure code', () => {
+    for (const deliveryUnknown of [undefined, true] as const) {
+      expect(deliveryOutcomeFromReceipt({ status: 'failed', failure: {
+        code: 'sandbox_delivery_unavailable', message: 'unavailable', ...(deliveryUnknown ? { deliveryUnknown } : {}),
+      } })).toEqual({ status: 'failed', code: 'sandbox_delivery_unavailable', retryable: false,
+        ...(deliveryUnknown ? { deliveryUnknown } : {}) });
+    }
+  });
   it('preserves non-sent receipts instead of coercing them to sent', () => {
     expect(deliveryOutcomeFromReceipt({ status: 'suppressed' })).toEqual({ status: 'suppressed' });
     expect(deliveryOutcomeFromReceipt({

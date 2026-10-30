@@ -109,6 +109,8 @@ export interface ToolResultEvent {
   output: unknown;
   durationMs: number;
   toolUseId: string;
+  /** Successful file mutation at the exact path approved for execution, not the model's raw argument. */
+  fileChange?: Readonly<{ path: string }>;
   causedBy?: ToolExecutionCause;
 }
 
