@@ -1,0 +1,16 @@
+evals/chat/src/turn.ts
+  h_b680f75345178a 9,25,61-63,125-127
+evals/chat/tests/eval.test.ts
+  h_b680f75345178a 55-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a6ba503738f4dba058d6d3361ebabf043dfc2023",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
