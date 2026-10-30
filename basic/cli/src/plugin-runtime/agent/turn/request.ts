@@ -844,6 +844,7 @@ export function deliveryOutcomeFromReceipt(
         status: 'failed' as const,
         code: receipt.failure?.code ?? 'endpoint_send_failed',
         retryable: !messages.some(message => message !== null) && receipt.failure?.retryable === true,
+        ...(receipt.failure?.deliveryUnknown ? { deliveryUnknown: true as const } : {}),
         ...(messages.length ? { messages } : {}),
       };
   }

@@ -50,6 +50,7 @@ import {
   HostToolApprovals,
   HostSelfChanges,
   composeHostConsoleRpc,
+  defineWorkspaceConversationTable,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
@@ -167,6 +168,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
   // 必须在 installResources（host.start）之前 define，写入订阅由 Console API 挂载。
   defineInboxTables(databaseHost);
+  defineWorkspaceConversationTable(databaseHost);
   // console logs 页数据源（SystemLog 表 + 根 logger transport）；
   // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。
   const systemLogStore = new SystemLogStore(
