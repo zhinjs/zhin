@@ -1,0 +1,35 @@
+.changeset/sandbox-concurrent-conversations.md
+  s_9622fd28aba994::t_6171046d93f613 2,8-9
+plugins/adapters/sandbox/pages/index/ConversationRecoveryPanel.tsx
+  s_9622fd28aba994::t_bb2745d83e010d 1-128
+plugins/adapters/sandbox/pages/index/conversationRecovery.ts
+  s_9622fd28aba994::t_e48450b8c590d8 1-68
+plugins/adapters/sandbox/pages/index/sandboxTransport.ts
+  s_9622fd28aba994::t_2b8abeace55499 33-42
+plugins/adapters/sandbox/pages/index/useSandboxHistory.ts
+  s_9622fd28aba994::t_accc4b26d47c5a 1-164
+plugins/adapters/sandbox/pages/index/workspaceDirectoryState.ts
+  s_9622fd28aba994::t_28b0c8852790fd 1-124
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  s_9622fd28aba994::t_c9e431a7b9122e 162-163
+plugins/adapters/sandbox/tests/workspace-directory-state.test.ts
+  s_9622fd28aba994::t_c6070146421eb9 1-133
+plugins/adapters/sandbox/tests/workspace-directory.test.ts
+  s_9622fd28aba994::t_8c4aaa2ae91245 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "418851fb30867b57798afaddfe2189d3914ff047",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
