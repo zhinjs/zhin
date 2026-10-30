@@ -1,0 +1,49 @@
+.changeset/console-conversation-directory.md
+  s_9622fd28aba994::t_eaf687d9673270 1-5
+.changeset/live-interaction-projection.md
+  s_9622fd28aba994::t_045ea5b99294a4 1-6
+.changeset/sandbox-offline-results.md
+  s_9622fd28aba994::t_67bf5a08a2bef3 1-6
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9622fd28aba994::t_e754689235d539 847
+basic/cli/src/plugin-runtime/console/bound-sandbox-session.ts
+  s_9622fd28aba994::t_c3158330eef37b 1-18
+basic/cli/src/plugin-runtime/console/conversation-result-routes.ts
+  s_9622fd28aba994::t_508bf58ce27098 1-71
+basic/cli/src/plugin-runtime/console/interaction-routes.ts
+  s_9622fd28aba994::t_0a4d9e17114cd6 1-55
+basic/cli/src/plugin-runtime/console/module.ts
+  s_9622fd28aba994::t_fabbabca955ca8 29
+basic/cli/src/plugin-runtime/console/sandbox-workspace-scope.ts
+  s_9622fd28aba994::t_e057ce06044a21 1-41
+basic/cli/src/plugin-runtime/console/workspace-conversation-routes.ts
+  s_9622fd28aba994::t_7fb35c5ceed426 1-91
+basic/cli/src/plugin-runtime/console/workspace-conversations.ts
+  s_9622fd28aba994::t_b45b0008625b27 1-101
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9622fd28aba994::t_b0440cab21f0ca 53,171
+basic/cli/tests/plugin-runtime/console/workspace-conversation-routes.test.ts
+  s_9622fd28aba994::t_1199068cea4eb9 1-174
+packages/im/agent/src/journal/file-journal-store.ts
+  s_9622fd28aba994::t_dda543e11b17b6 6-8,39,133-225,241-283
+packages/im/agent/src/journal/persistent-turn-journal.ts
+  s_9622fd28aba994::t_5b5d04fe5353e4 10-12,28,61,63-65,68,71-72,105-113
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_9622fd28aba994::t_d37a52ec688112 10,506,510,513,533-539
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f8505b0e737fa6d8458218376aa0e0e8c82f5d4c",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
