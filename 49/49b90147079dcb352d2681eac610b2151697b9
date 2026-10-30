@@ -1,0 +1,21 @@
+packages/im/ai/src/memory/prompt-context.ts
+  s_9622fd28aba994::t_39f3c75e4a897b 77-82,84-86
+packages/im/ai/tests/memory/prompt-context.test.ts
+  s_9622fd28aba994::t_5d654770555e87 12,21-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4949b90147079dcb352d2681eac610b2151697b9",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
