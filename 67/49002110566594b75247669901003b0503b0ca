@@ -1,0 +1,100 @@
+.changeset/continuous-interactive-tasks.md
+  h_b680f75345178a 1-12
+docs/ai/default-behavior.md
+  h_b680f75345178a 9,15-16
+docs/configuration/generated.md
+  h_b680f75345178a 167,178,180
+docs/en/ai/default-behavior.md
+  h_b680f75345178a 9,15-16
+docs/en/configuration/generated.md
+  h_b680f75345178a 167,178,180
+evals/chat/src/turn.ts
+  h_b680f75345178a 19,23,62-64,106-107,127,129
+evals/chat/tests/eval.test.ts
+  h_b680f75345178a 55,57,98-104
+packages/im/agent/evals/budget/budget.test.ts
+  h_b680f75345178a 42,59
+packages/im/agent/evals/cases/auto-continuation-master-dm.case.ts
+  h_b680f75345178a 4-6,20,22
+packages/im/agent/evals/cases/budget-no-extend-on-failures.case.ts
+  h_b680f75345178a 5,18,20
+packages/im/agent/evals/cases/budget-no-extend-on-repeat.case.ts
+  h_b680f75345178a 5,17-18
+packages/im/agent/evals/cases/exhausted-summary-fallback.case.ts
+  h_b680f75345178a 4-6,8,13,16-17
+packages/im/agent/evals/cases/exhausted-turn-summary.case.ts
+  h_b680f75345178a 6-7,16-17,20,22
+packages/im/agent/evals/cases/exploration-budget-hint.case.ts
+  h_b680f75345178a 5,21
+packages/im/agent/evals/cases/scene-limit-group-6.case.ts
+  h_b680f75345178a 4-5,8-9,13-16,19-21
+packages/im/agent/evals/cases/scene-limit-private-10.case.ts
+  h_b680f75345178a 4-5,9,23-29,32-34
+packages/im/agent/src/activity-feedback/turn-event-projector.ts
+  h_b680f75345178a 55
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_b680f75345178a 130
+packages/im/agent/src/context/turn-envelope.ts
+  h_b680f75345178a 72,93-94,101-113
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 15,24-25,27,48,233-234,259-260,602,608,611,613-615,663,666,735-738,741,748-750,754,792,801,805,815,821-822,856,906,931-932,966,973,981,986-988,1001-1005,1014-1029,1031-1068,1070-1085,1088-1122,1124-1126,1170-1173,1178-1179,1278
+packages/im/agent/src/core/interactive-run.ts
+  h_b680f75345178a 1-25
+packages/im/agent/src/core/progress-reporter.ts
+  h_b680f75345178a 87,94-95,106,116,120-121,137,139,148-161
+packages/im/agent/src/core/turn-completion-usage.ts
+  h_b680f75345178a 7,18,33,57-58,102
+packages/im/agent/src/core/turn-event-mapper.ts
+  h_b680f75345178a 31,50
+packages/im/agent/src/core/turn-progress.ts
+  h_b680f75345178a 12,145,151,153,190-196
+packages/im/agent/src/core/turn-reply-messages.ts
+  h_b680f75345178a 4-15
+packages/im/agent/src/event/turn-event.ts
+  h_b680f75345178a 68-69
+packages/im/agent/src/media/local-image-inspection.ts
+  h_b680f75345178a 60,62-65
+packages/im/agent/src/memory/compaction-runtime.ts
+  h_b680f75345178a 26-27,143
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  h_b680f75345178a 15,144-146,158,230,326,343,750-751,753
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  h_b680f75345178a 4,33,88,95-96,122,141,200,203
+packages/im/agent/src/security/usage-quota.ts
+  h_b680f75345178a 100-104,121,138
+packages/im/agent/src/trace/turn-trace.ts
+  h_b680f75345178a 287-288
+packages/im/agent/tests/context/context-prefix.test.ts
+  h_b680f75345178a 142-144
+packages/im/agent/tests/context/runtime-context-cache-prefix.test.ts
+  h_b680f75345178a 75
+packages/im/agent/tests/context/scene-context-split.test.ts
+  h_b680f75345178a 1-45
+packages/im/agent/tests/core/progress-budget.test.ts
+  h_b680f75345178a 2-4,77-81,85,101,136-139,144,451-635
+packages/im/agent/tests/media/local-image-inspection.test.ts
+  h_b680f75345178a 79-127
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  h_b680f75345178a 514,516,605-607
+packages/im/agent/tests/plugin-runtime/subagent-turn-capability.test.ts
+  h_b680f75345178a 65,284,290,294-305
+packages/im/ai/src/llm/types/runtime-context.ts
+  h_b680f75345178a 7,10,16
+packages/im/ai/tests/memory/prompt-context.test.ts
+  h_b680f75345178a 21-32,38,41
+packages/im/runtime/src/host-config-schema.json
+  h_b680f75345178a 1036-1037,1121-1122,1135-1136
+plugins/adapters/sandbox/pages/index/agentTrace.ts
+  h_b680f75345178a 426
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6749002110566594b75247669901003b0503b0ca",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
