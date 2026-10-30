@@ -1,0 +1,466 @@
+basic/cli/src/plugin-runtime/console/interaction-routes.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-55
+plugins/games/text-adventure/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/utils/music/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/blackjack/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+docs/en/adapters/sandbox.md
+  s_9622fd28aba994::t_775d6c36ab2995 99-112,134,158-159,170,185-186,191
+  s_9622fd28aba994::t_364bc959a81047 192
+plugins/utils/group-suite/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-12
+packages/im/agent/evals/cases/deferred-announcement-discover-schema.case.ts
+  s_9622fd28aba994::t_775d6c36ab2995 5-6,8,28
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_9622fd28aba994::t_775d6c36ab2995 397,442-443,457-458
+basic/cli/src/plugin-runtime/console/conversation-history-routes.ts
+  s_9622fd28aba994::t_775d6c36ab2995 4,7-8,18,28-29,32,43-44,85-94,97-100
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_9622fd28aba994::t_775d6c36ab2995 19-21,92-95
+basic/cli/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-21
+basic/cli/src/plugin-runtime/console/bound-sandbox-session.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-18
+packages/im/adapter/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-42
+packages/im/agent/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3-4
+.changeset/sandbox-offline-results.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-6
+plugins/adapters/discord/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  s_9622fd28aba994::t_775d6c36ab2995 11-13,25-26,28,48-49,59-63,66,80,82-83,105-106,115,118,121-124,127-157,162-195,213,220,229-236,240-241,247-260,270-272,275,277,288-292,296-297,302-306,308,310-311,314,316,319,324-329,333-334,336-341,343-348,360-374,379-383,395,397,399,404,410-414,416-417,458-459,469-470,479,482-502,504-506,509,511,518-522,562-563,678-679,700-718,729-735,737-740,742-743,746,748,754-755,757,789-790,793-800,802-803,806,887,889,891-893,896,901,909,914,943,947,958-959,972-974,976,981-985,1001-1005,1011,1020,1060-1090,1104-1105,1107,1112,1114,1117,1132,1246,1258,1320,1361-1365,1378
+plugins/adapters/sandbox/src/protocol.ts
+  s_9622fd28aba994::t_775d6c36ab2995 21,119-124,133-145,147-150,152,154-181,258,370,407-410
+basic/cli/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/host/a2a/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/onebot12/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-28
+plugins/adapters/sandbox/pages/index/workspaceDirectory.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-74
+plugins/adapters/sandbox/pages/index/index.tsx
+  s_9622fd28aba994::t_775d6c36ab2995 2,5-6,17-18
+plugins/adapters/sandbox/pages/index/useSandboxHistory.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-164
+plugins/adapters/sandbox/tests/workspace-directory-state.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-133
+plugins/adapters/wechat-mp/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/wecom/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+basic/cli/src/plugin-runtime/console/conversation-result-routes.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-71
+plugins/adapters/icqq/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-48
+plugins/games/blackjack/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/dice-duel/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/adapters/sandbox/tests/workspace-directory.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-62
+plugins/games/dungeon-expedition/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+packages/im/workroom/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/hub/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-8
+plugins/adapters/bilibili/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/rps/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+docs/adapters/sandbox.md
+  s_9622fd28aba994::t_775d6c36ab2995 11,15,90,94-105,116-129,151,175-176,187,202-203,208-224
+  s_9622fd28aba994::t_2524b3d2f22275 225
+plugins/adapters/email/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-28
+packages/im/agent/src/journal/persistent-turn-journal.ts
+  s_9622fd28aba994::t_775d6c36ab2995 10-12,28,61,63-65,68,71-72,105-113
+plugins/adapters/sandbox/tests/sandbox-multi-connection.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-231
+plugins/games/roulette/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/rps/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+packages/im/ai/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/pages/index/agentTrace.ts
+  s_9622fd28aba994::t_775d6c36ab2995 64-65,104,106,161,253-256,262,375-376,416,446,452,643,647-651
+  s_9622fd28aba994::t_4ff3f7e3f9ea16 652-653
+plugins/utils/code-runner/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/short-url/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/games/word-riddle/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/utils/answers/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9622fd28aba994::t_775d6c36ab2995 234-237
+packages/game-kit/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/adapters/github/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-14
+plugins/adapters/napcat/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+plugins/adapters/slack/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+plugins/services/activity-feedback/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/services/activity-feedback/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/qq/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-45
+plugins/services/typesafe/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/host/mcp/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/adapters/sandbox/pages/index/messages.ts
+  s_9622fd28aba994::t_775d6c36ab2995 5-9,11-12,33-34,44,62-63,76,162-171,222
+packages/game-kit/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+.changeset/sandbox-canonical-interaction-ingress.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-5
+.changeset/sandbox-outbound-message-identity.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-7
+packages/console/client/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/tests/sandbox-page-transport.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-573
+plugins/adapters/sandbox/pages/index/sandboxTransport.ts
+  s_9622fd28aba994::t_775d6c36ab2995 33-42,56-80
+plugins/utils/calendar/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+docs/adr/0042-first-turn-token-budget.md
+  s_9622fd28aba994::t_775d6c36ab2995 56,115
+plugins/utils/content-moderation/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/src/client.ts
+  s_9622fd28aba994::t_775d6c36ab2995 5,28-32
+packages/im/workroom/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-13
+plugins/adapters/email/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/pages/index/ConversationRecoveryPanel.tsx
+  s_9622fd28aba994::t_775d6c36ab2995 1-134
+packages/im/agent/src/journal/file-journal-store.ts
+  s_9622fd28aba994::t_775d6c36ab2995 6-8,39,133-225,241-282
+  s_9622fd28aba994::t_3936be8bc044c9 283
+plugins/utils/bilibili/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/lottery/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/nettools/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/utils/reminder/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/features/process-monitor/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+.changeset/sandbox-concurrent-conversations.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-13
+packages/im/agent/evals/discover-schema-dedup.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-29
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 8,1381-1414
+  s_9622fd28aba994::t_95313fefae8770 1415
+packages/im/ai/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/adapters/wecom/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+plugins/adapters/weixin-ilink/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/pages/index/conversationRecovery.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-68
+plugins/games/roulette/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+packages/im/agent/tests/plugin-runtime/tool-tiers.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 13,217,225,231-233,239-244,247,254-257,260,277,333
+packages/im/core/tests/plugin-runtime/interaction-pending.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-100
+basic/cli/tests/plugin-runtime/console/conversation-result-routes.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-78
+packages/im/tool/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/utils/nettools/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 33-34,55,92-93,98,162-163
+plugins/utils/qrcode/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/games/hub/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/im/im-contract/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/utils/repeater/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+.changeset/console-conversation-directory.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-5
+plugins/adapters/onebot11/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/pages/index/workspaceDirectoryState.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-124
+basic/cli/src/plugin-runtime/console/sandbox-workspace-scope.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-41
+plugins/utils/repeater/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/telegram/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+plugins/utils/link-poster/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/adapters/sandbox/pages/index/playgroundState.ts
+  s_9622fd28aba994::t_775d6c36ab2995 31,33-37,90,169-172,176-213,221-232
+basic/cli/src/plugin-runtime/agent/turn/reply-messages.ts
+  s_9622fd28aba994::t_775d6c36ab2995 33,38-40
+docs/e2e/docs-site.spec.ts
+  s_9622fd28aba994::t_775d6c36ab2995 10-12,37-41,43-53
+plugins/games/tic-tac-toe/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+.changeset/quiet-tools-discover.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-5
+plugins/adapters/bilibili-live/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+basic/cli/tests/plugin-runtime/console/workspace-history.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-70
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9622fd28aba994::t_775d6c36ab2995 862
+plugins/adapters/sandbox/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/code-runner/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+basic/cli/src/plugin-runtime/console/workspace-conversations.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-101
+packages/console/contract/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+basic/cli/tests/plugin-runtime/console/agent-project-file-routes.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-93
+packages/toolkit/components/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/console/pagemanager/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-8
+packages/console/client/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-21
+plugins/adapters/sandbox/tests/localization.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 6-19,56-58,60-61
+.changeset/workspace-file-results.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-6
+plugins/adapters/bilibili-live/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-13
+plugins/utils/group-suite/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/calendar/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+basic/cli/src/plugin-runtime/console/module.ts
+  s_9622fd28aba994::t_775d6c36ab2995 29
+packages/im/zhin/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+docs/ai/agent.md
+  s_9622fd28aba994::t_775d6c36ab2995 132
+plugins/adapters/dingtalk/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/content-moderation/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/adapters/github/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+packages/host/a2a/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+packages/im/core/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-17
+plugins/adapters/kook/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+packages/im/jsx/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+packages/im/agent/src/journal/turn-delivery.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-106
+plugins/adapters/sandbox/tests/sandbox-core-interaction.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-82
+packages/im/tool/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/idiom-chain/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/qrcode/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/qq/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/milky/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-28
+basic/cli/tests/plugin-runtime/agent/turn/reply-messages.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 31,44,58,74
+packages/im/core/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/napcat/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_9622fd28aba994::t_775d6c36ab2995 43,331-335
+plugins/adapters/sandbox/tests/playground-interaction-retirement.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-39
+plugins/adapters/weixin-ilink/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-28
+plugins/adapters/icqq/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/reminder/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9622fd28aba994::t_775d6c36ab2995 55,176
+plugins/adapters/satori/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-28
+plugins/adapters/lark/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/text-adventure/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/im/agent/tests/journal/turn-delivery.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-131
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9622fd28aba994::t_775d6c36ab2995 252-255,263-264
+packages/im/zhin/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/adapters/onebot11/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+plugins/games/dice-duel/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/word-riddle/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/idiom-chain/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+packages/im/agent/src/trace/request-trace.ts
+  s_9622fd28aba994::t_775d6c36ab2995 189
+plugins/utils/60s/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/utils/answers/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/telegram/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/guess-number/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+basic/cli/src/plugin-runtime/console/workspace-conversation-routes.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-91
+plugins/adapters/bilibili/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-13
+plugins/adapters/onebot12/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 191-198,216,224,257-262,534,543,548-557
+basic/cli/src/plugin-runtime/console/agent-routes.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-3,105,108,157-193
+  s_9622fd28aba994::t_6204b5f746dadb 194
+plugins/utils/60s/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/bilibili/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/utils/earthquake/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/adapters/slack/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+basic/cli/tests/plugin-runtime/console/interaction-routes.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-93
+plugins/adapters/sandbox/README.md
+  s_9622fd28aba994::t_775d6c36ab2995 3,78,82-93,104-117,139,163-164,175,190-191,196-212
+  s_9622fd28aba994::t_2445c7b30d05c2 213
+plugins/adapters/line/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+packages/console/pagemanager/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_9622fd28aba994::t_775d6c36ab2995 19,41-51,173-177,219,300-301,310,335,352-361
+packages/im/agent/evals/framework/scripted-model.ts
+  s_9622fd28aba994::t_775d6c36ab2995 323
+packages/im/adapter/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/im/agent/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-19
+plugins/adapters/dingtalk/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+plugins/adapters/sandbox/tests/conversation-recovery.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-282
+basic/cli/tests/plugin-runtime/console/workspace-conversation-routes.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-174
+plugins/adapters/sandbox/tests/sandbox-history.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 1-150
+plugins/adapters/satori/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+docs/en/ai/agent.md
+  s_9622fd28aba994::t_775d6c36ab2995 136
+plugins/adapters/wechat-mp/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-28
+packages/im/im-contract/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/line/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/earthquake/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/lottery/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/utils/rss/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-10
+plugins/games/tic-tac-toe/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/im/agent/src/event/turn-event.ts
+  s_9622fd28aba994::t_775d6c36ab2995 112-113
+plugins/adapters/lark/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 138-145
+packages/im/jsx/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/toolkit/components/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-8
+plugins/adapters/sandbox/src/endpoint.ts
+  s_9622fd28aba994::t_775d6c36ab2995 11,15,20,76,81-83,125-126,163,234-237,239-247,249-260,263-282,284,294-301,314-333,347-353,358,360,382-386,398,402,406-408,434-437
+plugins/features/process-monitor/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/services/typesafe/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-9
+plugins/utils/rss/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/short-url/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/discord/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-29
+plugins/utils/link-poster/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/guess-number/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/utils/music/CHANGELOG.md
+  s_9622fd28aba994::t_775d6c36ab2995 3-11
+packages/console/contract/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/games/dungeon-expedition/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+.changeset/live-interaction-projection.md
+  s_9622fd28aba994::t_775d6c36ab2995 1-6
+plugins/adapters/sandbox/tests/agent-trace.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 2,35-41,87-111,170-190
+  s_9622fd28aba994::t_214c84816e4e61 191
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_9622fd28aba994::t_775d6c36ab2995 10,522,526,529,549-555
+packages/im/agent/tests/tool/turn-tool-runtime.test.ts
+  s_9622fd28aba994::t_775d6c36ab2995 16,711-757
+  s_9622fd28aba994::t_e86f9b6c4c8437 758-759
+plugins/adapters/kook/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+packages/host/mcp/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+plugins/adapters/milky/package.json
+  s_9622fd28aba994::t_775d6c36ab2995 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1dd6924374bcb58f1f128fc7374d0ac37bab769f",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
