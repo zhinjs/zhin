@@ -1,0 +1,101 @@
+plugins/adapters/qq/src/protocol.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 6,26-27,41,52,91,104,124
+plugins/adapters/icqq/commands/icqq/login/retry/index.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-2,4-23
+  s_9622fd28aba994::t_8204bf58e7daf2 3
+docs/configuration/generated.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 839-846,848-855,1082-1089,1094-1101
+plugins/adapters/qq/adapters/qq/index.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 4-5,54-55,60,66
+plugins/adapters/icqq/src/icqq-login-control.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-30
+docs/adapters/icqq.md
+  s_9622fd28aba994::t_2f386f8f01551e 11
+  s_9622fd28aba994::t_30d0d8fcbc71e2 200-227
+  s_9622fd28aba994::t_cbc64f9e7e5264 228
+packages/im/adapter/src/index.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 18
+plugins/adapters/qq/src/endpoint.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 26,71-72,82,136-141,154,160,295-312,356-357,368,439,445,575-591
+  s_9622fd28aba994::t_e7007540e0506f 592
+plugins/adapters/icqq/commands/icqq/login/definition.ts
+  s_9622fd28aba994::t_8204bf58e7daf2 9-11
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-8,12-72
+docs/en/adapters/icqq.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 112-140
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 839-846,848-855,1082-1089,1094-1101
+plugins/adapters/qq/schema.json
+  s_9622fd28aba994::t_30d0d8fcbc71e2 200-286,330-416
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_30d0d8fcbc71e2 5
+plugins/adapters/icqq/commands/icqq/login/qr/index.ts
+  s_9622fd28aba994::t_8204bf58e7daf2 3
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-2,4-55
+plugins/adapters/qq/tests/qq-endpoint-commands.test.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 81-86
+packages/im/adapter/tests/adapter-notify.test.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-68
+plugins/adapters/icqq/README.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 188-216
+plugins/adapters/icqq/tests/icqq-runtime.test.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 46,54,78-86,1144-1196
+  s_9622fd28aba994::t_0bfc59e80f7253 1197
+plugins/adapters/qq/README.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 232-249
+plugins/adapters/icqq/src/endpoint.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 20,23,27,75-76,121-126,223-235,254-388,435,470,757,761,765-766,781-782,793-795,859-860
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 5,7,10,60-61,66,68-71
+packages/im/adapter/src/adapter-notify.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-111
+plugins/adapters/icqq/plugin.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 5,16-17
+plugins/adapters/qq/tests/qq-intents.test.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 82-96
+plugins/adapters/icqq/schema.json
+  s_9622fd28aba994::t_30d0d8fcbc71e2 349-435,457-543
+plugins/adapters/icqq/commands/icqq/login/code/index.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-2,4-30
+  s_9622fd28aba994::t_8204bf58e7daf2 3
+docs/en/adapters/qq.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 137-154
+plugins/adapters/icqq/commands/icqq/login/status/index.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-2,4-34
+  s_9622fd28aba994::t_8204bf58e7daf2 3
+plugins/adapters/qq/tests/qq-runtime.test.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 78,96-98,797-818
+  s_9622fd28aba994::t_b3848c7be4001c 819
+plugins/adapters/icqq/tests/icqq-login-command.test.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-77
+.changeset/adapter-outage-recovery.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-20
+plugins/adapters/icqq/src/protocol.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 3,250-251,270,318,335
+plugins/adapters/icqq/commands/icqq/login/confirm/index.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 1-2,4-21
+  s_9622fd28aba994::t_8204bf58e7daf2 3
+plugins/adapters/qq/commands/qq/endpoint/definition.ts
+  s_9622fd28aba994::t_30d0d8fcbc71e2 44-56
+packages/im/adapter/README.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 222-239
+docs/adapters/qq.md
+  s_9622fd28aba994::t_30d0d8fcbc71e2 11,244-260
+  s_9622fd28aba994::t_a89fe36bb7a9e1 261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6960eeffebcb4d74c29291ddad07cf3302b10313",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
