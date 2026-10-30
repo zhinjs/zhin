@@ -134,6 +134,24 @@ Open the Console **QQ** page (route `/qq`) to:
 - view or remove `plugins.qq.endpoints`;
 - scan-bind a new bot from **Platform actions**.
 
+## Outage notifications
+
+When the QQ official bot is offline or fails to start, configure `notify` to alert the master through another adapter instance:
+
+```yaml
+icqq:
+  # ... a configured ICQQ instance
+qq:
+  master: "${QQ_MASTER_OPENID}"
+  notify:
+    adapter: icqq
+    endpoint: "123456"
+    kind: private
+    id: "123456"   # master QQ number
+```
+
+The notice tells the master to reply `qq endpoint add` to re-bind with a QR code, or to open the Console QQ page. `notify.id` also counts as the master identity for endpoint management commands, so the reply can come from the notified conversation. Without `notify`, only logs and the Console QQ page show connection state.
+
 ## Troubleshooting
 
 | Symptom | Check |

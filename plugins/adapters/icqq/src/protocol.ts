@@ -1,5 +1,6 @@
 import type { MessageElem, Sendable, ShareElem } from '@icqqjs/icqq';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdapterNotifyTarget } from 'zhin.js/adapter';
 import type { MessageSegment, SendContent } from "zhin.js";
 import { resolveIcqqMediaFile } from "./cq-message.js";
 
@@ -246,6 +247,8 @@ export interface IcqqEndpointConfig {
   readonly autoServer?: boolean;
   readonly qqnt?: boolean;
   readonly ntLogin?: boolean;
+  /** Optional out-of-band outage notification target (usually a QQ adapter instance). */
+  readonly notify?: AdapterNotifyTarget;
 }
 
 export interface ResolvedIcqqConfig {
@@ -264,6 +267,7 @@ export interface ResolvedIcqqConfig {
   readonly autoServer?: boolean;
   readonly qqnt?: boolean;
   readonly ntLogin?: boolean;
+  readonly notify?: ResolvedAdapterNotifyTarget;
 }
 
 export interface IcqqWireSegment {
@@ -311,6 +315,7 @@ export function resolveIcqqConfig(config: IcqqEndpointConfig): ResolvedIcqqConfi
   const autoServer = config.autoServer ?? true;
   const qqnt = config.qqnt;
   const ntLogin = config.ntLogin;
+  const notify = resolveAdapterNotifyTarget(config.notify);
   return {
     context: 'icqq',
     id,
@@ -327,6 +332,7 @@ export function resolveIcqqConfig(config: IcqqEndpointConfig): ResolvedIcqqConfi
     ...(autoServer != null ? { autoServer } : {}),
     ...(qqnt != null ? { qqnt } : {}),
     ...(ntLogin != null ? { ntLogin } : {}),
+    ...(notify ? { notify } : {}),
   };
 }
 

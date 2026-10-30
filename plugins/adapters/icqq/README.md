@@ -185,6 +185,35 @@ ICQQ 首次登录的二维码、滑块、设备确认会出现在「登录待办
 
 读取需要 `icqq:read`，写操作需要 `icqq:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
 
+## 掉线通知与重新登录
+
+配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给 master 发通知。例如用 QQ 官方机器人实例通知：
+
+```yaml
+qq:
+  # ... 已配置好的 QQ 官方机器人
+icqq:
+  master: 123456
+  autoReconnect: true   # 默认 true：被踢下线后自动重新登录
+  notify:
+    adapter: qq
+    endpoint: bot-1
+    kind: private
+    id: "${QQ_MASTER_OPENID}"   # master 在 QQ 官方机器人里的 openid
+```
+
+`autoReconnect: true` 时，被踢下线会自动重试登录；二维码/滑块/设备确认就绪后，通知会提示下一步。收到通知后可以直接在 QQ 里完成：
+
+| 命令 | 作用 |
+|------|------|
+| `icqq login qr` | 把 ICQQ 登录二维码发到当前会话（QQ 支持图片时） |
+| `icqq login confirm` | 扫码后确认继续登录 |
+| `icqq login code <内容>` | 提交滑块 ticket、短信验证码或设备确认内容 |
+| `icqq login status` | 查看在线状态与登录待办 |
+| `icqq login retry` | 强制重新触发登录 |
+
+命令只接受 master（顶层或 `endpoints[i].master`）或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
+
 ## 故障排查
 
 | 现象 | 排查 |

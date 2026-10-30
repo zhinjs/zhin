@@ -43,6 +43,7 @@ function createEndpoint(overrides: {
   groups?: Map<number, unknown>;
   config?: ReturnType<typeof resolveIcqqConfig>;
   events?: EndpointEventGateway;
+  notifier?: { readonly configured: boolean; send(text: string): Promise<boolean> };
 } = {}): IcqqEndpoint {
   const receive = overrides.receive ?? vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
   const gateway = overrides.gateway ?? { receive, send: vi.fn(async () => 'sent') };
@@ -50,6 +51,7 @@ function createEndpoint(overrides: {
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config: overrides.config ?? baseConfig,
+    ...(overrides.notifier ? { notifier: overrides.notifier } : {}),
     ...createIcqqTestPorts(),
   });
   const endpoint = overrides.events
@@ -73,6 +75,15 @@ describe('icqq protocol helpers', () => {
     expect(resolved.id).toBe('12345');
     expect(resolved.autoReconnect).toBe(true);
     expect(resolved.context).toBe('icqq');
+    expect(resolveIcqqConfig({
+      id: '12345',
+      notify: { adapter: 'qq', endpoint: 'bot-1', id: 'master-openid' },
+    }).notify).toEqual({
+      adapter: 'qq',
+      endpoint: 'bot-1',
+      kind: 'private',
+      id: 'master-openid',
+    });
   });
 
   it('preserves the expanded endpoint credentials', () => {
@@ -1129,4 +1140,58 @@ it('rejects absent ICQQ receipts without inventing an id or resending', async ()
   const send = vi.spyOn(endpoint.client, 'sendGroupMsg').mockResolvedValue({} as never);
   await expect(endpoint.send({ conversation: { endpoint: { adapter: 'icqq', id: '10001' }, kind: 'group', id: '100' }, payload: 'hello' })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
   expect(send).toHaveBeenCalledOnce(); await endpoint.stop();
+});
+
+describe('icqq outage recovery', () => {
+  it('notifies the configured master and retries login after kickoff', async () => {
+    const notifier = { configured: true, send: vi.fn(async () => true) };
+    const endpoint = createEndpoint({
+      config: resolveIcqqConfig({
+        id: '10001',
+        autoReconnect: true,
+        notify: { adapter: 'qq', endpoint: 'qq-bot', id: 'master-openid' },
+      }),
+      notifier,
+    });
+    await endpoint.start(new AbortController().signal);
+    expect(endpoint.client.login).toHaveBeenCalledTimes(1);
+
+    vi.useFakeTimers();
+    endpoint.client.emit('system.offline.kickoff', { message: 'kicked by another device' });
+    expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('掉线'));
+    expect(endpoint.transportState).toBe('reconnecting');
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(endpoint.client.login).toHaveBeenCalledTimes(2);
+    expect(endpoint.loginControl.state()).toMatchObject({ endpointId: '10001', online: true });
+    expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('已重新上线'));
+    await endpoint.stop();
+  });
+
+  it('does not auto-relogin when autoReconnect is disabled', async () => {
+    const notifier = { configured: true, send: vi.fn(async () => true) };
+    const endpoint = createEndpoint({
+      config: resolveIcqqConfig({ id: '10001', autoReconnect: false }),
+      notifier,
+    });
+    await endpoint.start(new AbortController().signal);
+    vi.useFakeTimers();
+    endpoint.client.emit('system.offline.kickoff', { message: 'kicked' });
+    expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('请手动重新登录'));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(endpoint.client.login).toHaveBeenCalledTimes(1);
+    await endpoint.stop();
+  });
+
+  it('exposes a login control for recovery commands', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    expect(endpoint.loginControl.pending()).toEqual([]);
+    endpoint.client.emit('system.login.qrcode', { image: Buffer.from([1, 2, 3]) });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const [task] = endpoint.loginControl.pending();
+    expect(task).toMatchObject({ type: 'qrcode', endpointKey: '10001' });
+    expect(endpoint.loginControl.submit(task!.id, 'ok')).toBe(true);
+    await endpoint.stop();
+  });
 });

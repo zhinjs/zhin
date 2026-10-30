@@ -836,7 +836,23 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.endpoints[].qqnt` | boolean | no | — | Use the QQNT protocol. |
 | `icqq.endpoints[].ntLogin` | boolean | no | — | Use the NT login method. |
 | `icqq.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `icqq.endpoints[].notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `icqq.endpoints[].notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `icqq.endpoints[].notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `icqq.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `icqq.endpoints[].notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `icqq.endpoints[].notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `icqq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `icqq.endpoints[].notify.parent.id` | string \| number | yes | — | — |
 | `icqq.commandPrefix` | string | no | `""` | Command prefix, empty by default. Each endpoints[i] can override it. |
+| `icqq.notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `icqq.notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `icqq.notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `icqq.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `icqq.notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `icqq.notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `icqq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `icqq.notify.parent.id` | string \| number | yes | — | — |
 
 ### kook
 
@@ -1063,10 +1079,26 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.endpoints[].streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `qq.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `qq.endpoints[].notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `qq.endpoints[].notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `qq.endpoints[].notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `qq.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `qq.endpoints[].notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `qq.endpoints[].notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `qq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `qq.endpoints[].notify.parent.id` | string \| number | yes | — | — |
 | `qq.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `qq.streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.streamProxy.port` | integer | yes | — | — |
 | `qq.streamProxy.serverName` | string | yes | — | — |
+| `qq.notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `qq.notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `qq.notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `qq.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `qq.notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `qq.notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `qq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `qq.notify.parent.id` | string \| number | yes | — | — |
 
 ### sandbox
 

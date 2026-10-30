@@ -78,6 +78,12 @@ describe('isQqEndpointOperator', () => {
     expect(isQqEndpointOperator(config, message('111'))).toBe(false);
   });
 
+  it('notify.id 作为通知目标也可执行 endpoint 管理', () => {
+    const config = { master: '1659488338', notify: { id: 'openid-master' } };
+    expect(isQqEndpointOperator(config, message('openid-master'))).toBe(true);
+    expect(isQqEndpointOperator(config, message('other'))).toBe(false);
+  });
+
   it('sender 缺失时拒绝（已配置 master）', () => {
     expect(isQqEndpointOperator({ master: '1' }, {})).toBe(false);
     expect(isQqEndpointOperator({ master: '1' }, undefined)).toBe(false);

@@ -23,6 +23,7 @@ import {
   type EndpointManagement,
   type EndpointSendRequest,
   type EndpointTransportState,
+  type AdapterOutageNotifier,
 } from 'zhin.js/adapter';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
@@ -67,6 +68,8 @@ export interface QqEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedQqWebsocketConfig;
   readonly createBot?: CreateQqBot;
+  /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
+  readonly notifier?: AdapterOutageNotifier;
 }
 
 export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
@@ -76,6 +79,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   readonly #createBot: CreateQqBot;
   #bot: QqBotTransport | null = null;
   #open = false;
+  #offlineNoticeAt = 0;
   readonly #seenInteractions = new Map<string, number>();
   /** Recent msg_id / event_id per conversation, so replies go out as passive messages. */
   readonly #passiveReplies = new QqPassiveReplyLedger();
@@ -129,7 +133,12 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
       this.#cleanup = cleanup;
       handle.onForceClose(() => { void cleanup(); });
       try {
-        bot.on('transport.close', () => { if (cancelled || this.#bot !== bot) return; void cleanup(); handle.notifyClosed(); });
+        bot.on('transport.close', () => {
+          if (cancelled || this.#bot !== bot) return;
+          this.#notifyOffline('transport_close');
+          void cleanup();
+          handle.notifyClosed();
+        });
         this.#bindBot(bot);
         await awaitQqStartup(bot.start().then(async () => {
           if (cancelled) await stopBot();
@@ -142,11 +151,13 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
           await stopping;
           return;
         }
+        this.#offlineNoticeAt = 0;
         this.#logger.info(`connected (websocket) | appid: ${this.#options.config.appid}`);
       } catch (error) {
         const wasCancelled = cancelled;
         await cleanup();
         if (wasCancelled) return;
+        this.#notifyOffline('start_failed');
         const raw = error instanceof Error ? error.message : String(error);
         throw new Error(
           `QQ WebSocket 连接失败：请检查 appid/secret 是否配对、网关地址（gatewayUrl/accessTokenUrl）是否可达（原始错误：${raw}）`,
@@ -281,6 +292,24 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     return true;
   }
 
+  #notifyOffline(reason: string): void {
+    const notifier = this.#options.notifier;
+    if (!notifier?.configured) return;
+    const now = Date.now();
+    if (now - this.#offlineNoticeAt < 60_000) return;
+    this.#offlineNoticeAt = now;
+    const text = `[Zhin] QQ 机器人 ${this.#options.config.id} 掉线（${reason}）。正在自动重连。\n`
+      + '恢复：在 QQ 回复 `qq endpoint add` 重新扫码绑定，或打开 Console 的 QQ 页面。';
+    void notifier.send(text).then((sent) => {
+      if (sent) return;
+      this.#logger.warn(formatCompact({
+        op: 'qq_notify_failed',
+        endpoint: this.#options.config.id,
+        reason,
+      }));
+    });
+  }
+
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
       if (this.#bot !== bot) return;
@@ -324,6 +353,8 @@ export interface QqHttpEndpointOptions {
   readonly http: HttpHost;
   readonly config: ResolvedQqHttpConfig;
   readonly createBot?: CreateQqHttpBot;
+  /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
+  readonly notifier?: AdapterOutageNotifier;
 }
 
 /** Webhook / middleware inbound via httpHostToken POST (qq-official-bot Middleware receiver). */
@@ -334,6 +365,7 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   readonly #createBot: CreateQqHttpBot;
   #bot: QqHttpBotTransport | null = null;
   #open = false;
+  #offlineNoticeAt = 0;
   readonly #seenInteractions = new Map<string, number>();
   /** Recent msg_id / event_id per conversation, so replies go out as passive messages. */
   readonly #passiveReplies = new QqPassiveReplyLedger();
@@ -404,11 +436,13 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
           await stopping;
           return;
         }
+        this.#offlineNoticeAt = 0;
         this.#logger.info(`connected (${this.#options.config.mode}) | path: ${this.#options.config.webhookPath}`);
       } catch (error) {
         const wasCancelled = cancelled;
         await cleanup();
         if (wasCancelled) return;
+        this.#notifyOffline('start_failed');
         throw error;
       }
     });
@@ -536,6 +570,24 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
         callbackAssociation: action.sourceMessageId ? 'source-message' : 'payload-conversation-actor' }),
     }).catch(() => this.#logger.warn('qq_interaction_receive_failed'));
     return true;
+  }
+
+  #notifyOffline(reason: string): void {
+    const notifier = this.#options.notifier;
+    if (!notifier?.configured) return;
+    const now = Date.now();
+    if (now - this.#offlineNoticeAt < 60_000) return;
+    this.#offlineNoticeAt = now;
+    const text = `[Zhin] QQ 机器人 ${this.#options.config.id} 掉线（${reason}）。正在自动重连。\n`
+      + '恢复：在 QQ 回复 `qq endpoint add` 重新扫码绑定，或打开 Console 的 QQ 页面。';
+    void notifier.send(text).then((sent) => {
+      if (sent) return;
+      this.#logger.warn(formatCompact({
+        op: 'qq_notify_failed',
+        endpoint: this.#options.config.id,
+        reason,
+      }));
+    });
   }
 
   #bindBot(bot: QqBotTransport): void {
