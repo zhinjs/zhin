@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ebd22b8d95be10ae -->
+<!-- sync-adapter-docs:sha256=0f2c3c49e34e8c56 -->
 
 # @zhin.js/adapter-qq
 
@@ -23,6 +23,9 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
 - AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
 - 群事件：机器人进群/退群、群成员加入/退出、入群申请（支持 `$approve()` / `$reject()`）
+- 群管理（官方 v2 群接口）：成员列表 / 详情、移出（可拉黑）、禁言（≤30 天）、入群申请审批、黑名单查询；Endpoint 管理端口与自动群审核（`inspectGroupMember` / `moderateGroupMember`）可直接使用
+- 撤回：自己的消息，以及机器人为群管理员时普通成员 2 分钟内的消息（入站原生消息 ID 也可撤回）
+- 频道子频道消息表情回应（`reaction` 操作，Unicode emoji 或 `type:id`）
 - 完整 SDK 业务 API：通过 `qqClient.get(context, endpoint).api` 使用群管理、禁言、自动审批策略、自定义菜单、指令面板等 `qq-official-bot` 能力
 
 ## 安装
@@ -144,11 +147,31 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 
 ## AI 工具（Skill）
 
-| 类别 | 路径 |
-|------|------|
-| Permit 词汇 | `PERMITS.md` |
-| 平台工具 | `tools/`（频道、角色等） |
-| 技能说明 | `agents/qq/skills/qq/SKILL.md` |
+| 技能 | 工具 | 场景 |
+|------|------|------|
+| `qq-conversation` | `conversation_info` | 当前会话、机器人实时群角色（`bot_state`）、可用操作与官方限制 |
+| `qq-messages` | `quote_reply`、`recall_own_message` | 私聊 / 群 / 频道 |
+| `qq-group-directory` | `group_info`、`group_members`、`group_member_info` | 当前群 |
+| `qq-group-admin` | `group_kick`、`set_mute`、`recall_member_message`、`handle_join_request` | 当前群（撤回也支持频道） |
+| `qq-group-state` | `list_muted`、`list_join_requests`、`group_blacklist` | 当前群 |
+| `qq-directory` | `list_guilds` | 任意 |
+| `qq` | `list_channels`、`channel_info`、`list_roles`、`create_role`、`add_role`、`remove_role`、`member_detail`、`guild_mute_member`、`guild_kick_member` | 频道 |
+
+群工具只作用于当前会话的群（`group_openid`），成员用 `member_openid` 标识；写操作前实时核验机器人角色。
+`group_kick` / `handle_join_request` / `guild_kick_member` 每次人工审批，禁言类每次审批。Permit 词汇见 `PERMITS.md`。
+
+### 与 ICQQ 的对齐情况
+
+| ICQQ 能力 | QQ 官方 | 说明 |
+|-----------|---------|------|
+| `group_member_info`、`conversation_info`、`quote_reply`、`recall_own_message`、`recall_member_message`、`group_kick`、`set_mute`、`list_muted` | ✅ 对齐 | 官方 v2 群接口；成员 / 移出类为白名单能力（11253） |
+| 入群申请审批、Console 成员列表 / 踢人 / 禁言、自动群审核 | ✅ 对齐 | `EndpointManagement` 端口 |
+| 表情回应 | ⚠️ 部分 | 仅频道子频道消息；官方无群 / 单聊表情回应 |
+| `friend_list`、`group_list`、`user_info` | ❌ 官方不支持 | 无机器人好友 / 群列表、任意用户资料接口 |
+| `forward_messages` | ❌ 官方不支持 | 无合并转发发送接口 |
+| `poke`、`send_user_like`、`group_sign` | ❌ 官方不支持 | |
+| `announce`、`essence`、`set_title`、`set_anonymous`、`group_files`、`group_invite`、`group_leave` | ❌ 官方不支持 | 群公告 / 精华 / 头衔 / 匿名 / 群文件 / 邀请 / 退群均无接口 |
+| 设管理员、删好友（Console） | ❌ 官方不支持 | |
 
 ## 平台 Client 与 QQ API
 
