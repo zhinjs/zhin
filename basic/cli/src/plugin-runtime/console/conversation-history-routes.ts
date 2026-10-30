@@ -1,9 +1,11 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import { conversationEventQueryFields, conversationRefKey, type ConversationEvent, type ConversationRef, type ForwardEntry, type MessageRef, type Segment } from '@zhin.js/im-contract';
 import type { HttpHost } from '@zhin.js/host-http';
-import { encodeStorageIdentity, type DatabaseHost } from '@zhin.js/plugin-runtime';
+import { encodeStorageIdentity, type DatabaseHost, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { parseConversationSessionKey } from './conversation-session.js';
 import { writeJson } from './http-response.js';
+import { SandboxWorkspaceBindingError, withSandboxWorkspaceScope } from './sandbox-workspace-scope.js';
+import { parseBoundSandboxSession } from './bound-sandbox-session.js';
 
 const PAGE_SIZE = 50;
 
@@ -13,6 +15,7 @@ export function registerConversationHistoryRoutes(options: Readonly<{
   base: string;
   im?: Pick<ImRuntime, 'endpoints' | 'conversationEventReader' | 'runWithSnapshotView'>;
   databaseHost?: Pick<DatabaseHost, 'started' | 'models'>;
+  snapshots?: SnapshotReader;
 }>): void {
   const { http, base, im, databaseHost } = options;
   http.route('GET', `${base}/conversations/history`, async (_request, response, url, authScope) => {
@@ -22,10 +25,11 @@ export function registerConversationHistoryRoutes(options: Readonly<{
       return;
     }
     const sessionKey = url.searchParams.get('sessionKey');
-    const session = sessionKey ? parseConversationSessionKey(sessionKey) : undefined;
+    const connectionId = url.searchParams.get('connectionId');
+    const session = sessionKey && !connectionId ? parseConversationSessionKey(sessionKey) : undefined;
     const before = url.searchParams.get('beforeSequence');
     const beforeSequence = before === null ? undefined : Number(before);
-    if (!session || !['private', 'group', 'channel'].includes(session.kind)
+    if (!sessionKey || (!connectionId && (!session || !['private', 'group', 'channel'].includes(session.kind)))
       || (before !== null && (!/^\d+$/u.test(before) || !Number.isSafeInteger(beforeSequence) || beforeSequence! <= 0))) {
       writeJson(response, 400, { success: false, code: 'invalid_history_query', error: '请提供有效的会话和历史游标' });
       return;
@@ -36,8 +40,8 @@ export function registerConversationHistoryRoutes(options: Readonly<{
       return;
     }
     try {
-      const result = await im.runWithSnapshotView(async () => {
-        const endpoint = im.endpoints.get(session.adapter, session.endpointKey)?.endpoint;
+      const read = (session: NonNullable<ReturnType<typeof parseConversationSessionKey>>, connectedEndpoint?: ConversationRef['endpoint']) => im.runWithSnapshotView(async () => {
+        const endpoint = connectedEndpoint ?? im.endpoints.get(session.adapter, session.endpointKey)?.endpoint;
         if (!endpoint) return { status: 503, code: 'history_unavailable', error: '当前账号地址无法准确解析，暂时不能读取聊天记录' } as const;
         // Use the same encoded query fields as the canonical writer; opaque Endpoint IDs may contain NUL.
         const scope = { endpoint_adapter: encodeStorageIdentity(endpoint.adapter), endpoint_id: encodeStorageIdentity(endpoint.id),
@@ -78,10 +82,22 @@ export function registerConversationHistoryRoutes(options: Readonly<{
           hasMore,
         } } as const;
       });
+      const result = connectionId
+        ? await withSandboxWorkspaceScope(options.snapshots, connectionId, async scope => {
+            const bound = parseBoundSandboxSession(scope, sessionKey);
+            if (bound.status === 'scope_mismatch') {
+              return { status: 403, code: 'history_scope_mismatch', error: '会话不属于当前 Sandbox 账号' } as const;
+            }
+            if (bound.status === 'invalid') return { status: 400, code: 'invalid_history_query', error: '请提供有效的会话' } as const;
+            return read({ adapter: scope.endpoint.adapter, endpointKey: scope.endpointKey, kind: bound.kind, id: bound.id }, scope.endpoint);
+          })
+        : await read(session!);
       if (result.status === 200) writeJson(response, 200, { success: true, data: result.data });
       else writeJson(response, result.status, { success: false, code: result.code, error: result.error });
-    } catch {
-      writeJson(response, 503, { success: false, code: 'history_unavailable', error: '暂时无法读取聊天记录，请稍后重试' });
+    } catch (error) {
+      writeJson(response, 503, error instanceof SandboxWorkspaceBindingError
+        ? { success: false, code: error.code, error: error.message }
+        : { success: false, code: 'history_unavailable', error: '暂时无法读取聊天记录，请稍后重试' });
     }
   }, { summary: 'Read recorded conversation history', tags: ['conversations'], description: 'Full-scope, read-only canonical history. Fifty events per page; ambiguous parent/thread addresses are unavailable.' });
 }

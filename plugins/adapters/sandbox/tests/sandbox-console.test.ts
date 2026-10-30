@@ -30,8 +30,8 @@ describe('sandbox console page', () => {
   it('exposes static definePage metadata for convention discovery', async () => {
     const source = await readFile(sandboxPageSource, 'utf8');
     expect(extractPageMetadata(source, sandboxPageSource)).toMatchObject({
-      title: '试聊一下',
-      titleI18n: { en: 'Try a conversation' },
+      title: '会话',
+      titleI18n: { en: 'Conversations' },
       order: 10,
     });
   });
@@ -52,7 +52,7 @@ describe('sandbox console page', () => {
     });
     expect(artifact).toMatchObject({
       module: expect.stringMatching(/^\/assets\/client\//u),
-      metadata: expect.objectContaining({ title: '试聊一下' }),
+      metadata: expect.objectContaining({ title: '会话' }),
     });
   });
 
@@ -89,13 +89,13 @@ describe('sandbox console page', () => {
     expect(pages).toEqual(expect.arrayContaining([
       expect.objectContaining({
         localName: 'index',
-        title: '试聊一下',
-        titleI18n: { en: 'Try a conversation' },
+        title: '会话',
+        titleI18n: { en: 'Conversations' },
         route: '/',
       }),
     ]));
     const navigation = await consoleRuntime.runView({permissions: [], roles: []}, catalog => catalog.navigation());
-    expect(navigation).toEqual(expect.arrayContaining([expect.objectContaining({label: '试聊一下', titleI18n: {en: 'Try a conversation'}})]));
+    expect(navigation).toEqual(expect.arrayContaining([expect.objectContaining({label: '会话', titleI18n: {en: 'Conversations'}})]));
     expect(pageIndex(runtime.snapshot).route('/')?.module)
       .toMatch(/^\/assets\/client\//u);
 
@@ -159,6 +159,8 @@ async function createProject(): Promise<string> {
   const pageFiles = [
     'index/index.tsx', 'index/SandboxChat.tsx', 'index/RichTextEditor.tsx', 'index/HtmlMessage.tsx',
     'index/messages.ts', 'index/sandboxTransport.ts', 'index/agentTrace.ts', 'index/playgroundState.ts',
+    'index/workspaceDirectory.ts', 'index/workspaceDirectoryState.ts',
+    'index/ConversationRecoveryPanel.tsx', 'index/conversationRecovery.ts', 'index/useSandboxHistory.ts',
   ];
   for (const name of pageFiles) {
     const dest = join(root, 'pages', name);

@@ -1,9 +1,9 @@
 import { definePage } from '@zhin.js/console-contract';
-import SandboxChat from './SandboxChat';
+import SandboxChat, { type SandboxPageProps } from './SandboxChat';
 
 export const meta = definePage({
-  title: '试聊一下',
-  titleI18n: { en: 'Try a conversation' },
+  title: '会话',
+  titleI18n: { en: 'Conversations' },
   icon: 'Box',
   order: 10,
 });
@@ -14,6 +14,6 @@ export const meta = definePage({
  * Agent workbench for testing scoped conversations, rich messages and execution traces.
  * WebSocket targets Host `/sandbox` via zhin_api_base + token (see sandboxTransport.ts).
  */
-export default function SandboxPage() {
-  return <SandboxChat />;
+export default function SandboxPage(props: SandboxPageProps) {
+  return <SandboxChat {...props} />;
 }

@@ -7,6 +7,7 @@ import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } f
 import { applyTurnTrust } from '../security/trust-level.js';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
 import { PersistentTurnJournal } from '../journal/persistent-turn-journal.js';
+import { recordFinalReply, type TurnDeliveryStore } from '../journal/turn-delivery.js';
 import { TurnTraceCollector } from '../trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../trace/turn-trace-registry.js';
 import { createJournalFeed } from '../turn/journal-feed.js';
@@ -502,13 +503,14 @@ function createIngressTurn(
   trace?: TurnTraceCollector,
   usage?: AgentUsageCollector,
 ) {
+  const store = resolveJournalStore(snapshot);
   const journal = new PersistentTurnJournal({
     sessionId: request.session.key,
     turnId: request.identity.turnId,
-  }, resolveJournalStore(snapshot), request.principal);
+  }, store, request.principal, () => turn.origin);
   const traced = trace ? createTracingJournal(journal, trace) : journal;
   const observed = usage ? { append(event: TurnEvent) { usage.record(event); return traced.append(event); } } : traced;
-  return createTurnIngress({
+  const turn = createTurnIngress({
     ...request,
     hostProtectedPaths: resolveHostProtectedPaths(snapshot),
     identity: {
@@ -528,6 +530,13 @@ function createIngressTurn(
       }),
     },
   });
+  if (!turn.ports.reply || turn.origin.kind !== 'im' || turn.origin.conversation?.endpoint.adapter !== 'sandbox'
+    || typeof (store as Partial<TurnDeliveryStore>).recordDelivery !== 'function') return turn;
+  return Object.freeze({ ...turn, ports: Object.freeze({ ...turn.ports,
+    reply: recordFinalReply(turn.ports.reply, { run: { sessionId: turn.session.key, turnId: turn.identity.turnId },
+      subjectId: turn.principal.subjectId, origin: turn.origin }, () => journal.terminal?.terminal === 'completed',
+    store as TurnDeliveryStore, () => getLogger('AgentRuntime').warn('Final reply delivery fact could not be persisted')),
+  }) });
 }
 
 /** The generation's host-protected paths; absent for embedders, which keeps the fail-closed fallback. */

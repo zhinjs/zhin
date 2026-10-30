@@ -229,6 +229,10 @@ export type DeliveryOutcome =
       status: 'failed';
       code: string;
       retryable: boolean;
+      /** Preserves transport uncertainty; never infer this from an error code. */
+      deliveryUnknown?: true;
+      /** At least one earlier reply message was sent, even if its native id is unavailable. */
+      deliveryPartial?: true;
       /** Confirmed prefix slots survive a later failure; the full reply is not marked delivered. */
       messages?: readonly (MessageRef | null)[];
     }>;

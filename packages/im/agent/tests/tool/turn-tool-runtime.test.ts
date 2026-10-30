@@ -13,6 +13,7 @@ import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 import { OutboundLeakInspector } from '../../src/security/outbound-leak-guard.js';
 import { createHostProtectedPaths, type HostProtectedPaths } from '../../src/security/host-config-paths.js';
 import { createBypassApprovalPort } from '../../src/session/approval-review-agent.js';
+import { createAgentTraceRuntime } from '../../src/plugin-runtime/agent-trace-runtime.js';
 
 describe('TurnToolRuntime', () => {
   it('does not execute a known unconfirmed bubble reference or shift a later confirmed bubble into its slot', async () => {
@@ -704,6 +705,55 @@ describe('TurnToolRuntime', () => {
         }),
       }),
     ]);
+  });
+});
+
+describe('TurnToolRuntime file change evidence', () => {
+  let workspace: string;
+  beforeEach(async () => {
+    workspace = await realpath(await mkdtemp(join(tmpdir(), 'zhin-file-change-')));
+    await mkdir(join(workspace, 'src', 'nested'), { recursive: true });
+  });
+  afterEach(async () => { await rm(workspace, { recursive: true, force: true }); });
+
+  it.each(['write_file', 'edit_file'])('records the policy-approved absolute path for a successful %s without changing model output', async name => {
+    const { turn, events } = fixture({ roles: ['master'], filesystem: {
+      workspaceRoot: workspace, workingDirectory: join(workspace, 'src', 'nested'), access: 'workspace-write',
+    } });
+    const execute = vi.fn<ToolCapability['execute']>(async () => 'unchanged tool output');
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', name)]);
+    const args = { file_path: '../result.txt', content: 'text' };
+    await expect(runtime.execute(name, args, 'write')).resolves.toMatchObject({ status: 'completed', output: 'unchanged tool output' });
+    expect(events[0]).toMatchObject({ type: 'tool_call', args });
+    expect(events[1]).toMatchObject({ type: 'tool_result', output: 'unchanged tool output', fileChange: { path: join(workspace, 'src', 'result.txt') } });
+    const trace = createAgentTraceRuntime();
+    for (const event of events) trace.record(turn.session.key, turn.identity.turnId, event);
+    expect(trace.list(turn.session.key).events[1]?.data.fileChange).toEqual({ path: join(workspace, 'src', 'result.txt') });
+  });
+
+  it('snapshots the approved path before the tool can mutate its execution arguments', async () => {
+    const { turn, events } = fixture({ roles: ['master'], workspaceRoot: workspace,
+      approval: { requestApproval: async () => true } });
+    const execute: ToolCapability['execute'] = async input => {
+      Object.assign(input as object, { file_path: join(workspace, 'src', 'different.txt') });
+      return 'done';
+    };
+    await new TurnToolRuntime(turn, [tool(execute, 'human', 'write_file')])
+      .execute('write_file', { file_path: 'src/original.txt', content: 'text' }, 'snapshot');
+    expect(events.at(-1)).toMatchObject({ type: 'tool_result', fileChange: { path: join(workspace, 'src', 'original.txt') } });
+  });
+
+  it('does not create file evidence for a denied, failed, or unrelated tool', async () => {
+    const writable = fixture({ roles: ['master'], workspaceRoot: workspace });
+    const readonly = fixture({ roles: ['master'], filesystem: { workspaceRoot: workspace, access: 'read-only' } });
+    const fail = vi.fn<ToolCapability['execute']>(async () => { throw Error('write failed'); });
+    await new TurnToolRuntime(writable.turn, [tool(fail, 'never', 'write_file')])
+      .execute('write_file', { file_path: 'src/result.txt', content: 'x' }, 'failed');
+    await new TurnToolRuntime(readonly.turn, [tool(async () => 'unexpected', 'never', 'edit_file')])
+      .execute('edit_file', { file_path: 'src/result.txt' }, 'denied');
+    await new TurnToolRuntime(writable.turn, [tool(async () => 'normal', 'never', 'lookup')])
+      .execute('lookup', { file_path: 'src/result.txt' }, 'other');
+    for (const event of [...writable.events, ...readonly.events]) expect(event).not.toHaveProperty('fileChange');
   });
 });
 

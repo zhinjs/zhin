@@ -18,6 +18,7 @@ export interface MessageElement {
 }
 
 export interface SandboxWsSocket {
+  readonly readyState?: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
   on?(event: 'message' | 'close' | 'error', listener: (...args: unknown[]) => void): void;
@@ -115,7 +116,12 @@ export function bindSandboxWsSocket(
   };
 }
 
-export function parseSandboxWsPayload(raw: string): {
+export interface SandboxConversation {
+  readonly type: 'private' | 'group' | 'channel';
+  readonly id: string;
+}
+
+export interface SandboxParsedMessage {
   type: MessageType;
   id: string;
   messageId?: string;
@@ -124,21 +130,55 @@ export function parseSandboxWsPayload(raw: string): {
   text: string;
   action?: { id: string; payload: string };
   agentRun?: SandboxAgentRunConfig;
-} {
-  let payload: {
-    type?: MessageType;
-    id?: string;
-    content?: MessageElement[] | string;
-    text?: string;
-    timestamp?: number;
-    messageId?: unknown;
-    agentRun?: unknown;
-  };
+}
+
+interface SandboxWirePayload {
+  type?: MessageType;
+  id?: string;
+  content?: MessageElement[] | string;
+  text?: string;
+  timestamp?: number;
+  messageId?: unknown;
+  agentRun?: unknown;
+}
+
+function readSandboxWirePayload(raw: string): SandboxWirePayload & { op?: unknown; conversation?: unknown } {
   try {
-    payload = JSON.parse(raw) as typeof payload;
+    const payload: unknown = JSON.parse(raw);
+    return payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as SandboxWirePayload
+      : { text: raw };
   } catch {
-    payload = { text: raw };
+    return { text: raw };
   }
+}
+
+export type SandboxWsFrame =
+  | { readonly kind: 'subscribe'; readonly conversation: SandboxConversation }
+  | { readonly kind: 'message'; readonly message: SandboxParsedMessage }
+  | { readonly kind: 'invalid' };
+
+/** Control frames never fall through into chat or platform message hooks. */
+export function parseSandboxWsFrame(raw: string): SandboxWsFrame {
+  const payload = readSandboxWirePayload(raw);
+  if ('op' in payload) {
+    const conversation = payload.conversation as Partial<SandboxConversation> | null;
+    if (payload.op !== 'subscribe' || !conversation || typeof conversation !== 'object'
+      || (conversation.type !== 'private' && conversation.type !== 'group' && conversation.type !== 'channel')
+      || typeof conversation.id !== 'string' || !conversation.id.trim()) return { kind: 'invalid' };
+    return { kind: 'subscribe', conversation: { type: conversation.type, id: conversation.id } };
+  }
+  const message = normalizeSandboxWsPayload(payload, raw);
+  if (!['private', 'direct', 'group', 'channel', 'guild'].includes(message.type)
+    || typeof message.id !== 'string') return { kind: 'invalid' };
+  return { kind: 'message', message };
+}
+
+export function parseSandboxWsPayload(raw: string): SandboxParsedMessage {
+  return normalizeSandboxWsPayload(readSandboxWirePayload(raw), raw);
+}
+
+function normalizeSandboxWsPayload(payload: SandboxWirePayload, raw: string): SandboxParsedMessage {
   const type = payload.type ?? 'private';
   const id = payload.id ?? 'sandbox-user';
   const content: MessageElement[] = typeof payload.content === 'string'
@@ -215,6 +255,7 @@ export type SandboxOutboundChannel = {
   readonly bot?: string;
   readonly endpoint?: string;
   readonly messageId?: string;
+  readonly conversation?: { readonly type: string; readonly id: string };
 };
 
 const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
@@ -326,6 +367,7 @@ export function formatSandboxOutbound(
   if (channel.bot) stamp.bot = channel.bot;
   if (channel.endpoint) stamp.endpoint = channel.endpoint;
   if (channel.messageId) stamp.messageId = channel.messageId;
+  if (channel.conversation) stamp.conversation = channel.conversation;
 
   if (typeof payload === 'string') {
     return JSON.stringify({
@@ -362,6 +404,10 @@ export function formatSandboxOutbound(
         : {}),
       type: envelope.type ?? stamp.type,
       id: envelope.id ?? stamp.id,
+      conversation: stamp.conversation ?? envelope.conversation,
+      messageId: typeof envelope.messageId === 'string' && envelope.messageId.trim()
+        ? envelope.messageId
+        : stamp.messageId,
       timestamp: typeof envelope.timestamp === 'number' ? envelope.timestamp : Date.now(),
     });
   }
