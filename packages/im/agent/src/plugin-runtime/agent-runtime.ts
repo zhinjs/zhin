@@ -478,6 +478,7 @@ export async function expandMcpTools(
       occupied.add(name);
       expanded.push(Object.freeze({
         owner: connection.owner,
+        mcpServer: connection.qualifiedName,
         name,
         qualifiedName: name,
         description: tool.description?.trim() || `${connection.name} MCP tool ${tool.name}`,

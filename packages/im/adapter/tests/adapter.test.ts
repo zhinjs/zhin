@@ -365,6 +365,43 @@ describe('Adapter Feature', () => {
       .rejects.toThrow('declares outbound but send() is missing');
   });
 
+  it.each([
+    'legacy-id',
+    { parts: [{ messageId: 'first', sourceIndices: [0] }, { sourceIndices: [1] }, { messageId: 'last', sourceIndices: [2] }] },
+    { parts: [{}] },
+  ])('preserves legacy and ordered multi-part send evidence from compact endpoints: %j', async result => {
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'batch',
+      source: '/adapters/batch/index.ts', definition: defineAdapterContract({ capabilities: ['outbound'],
+        create: () => ({ client: {}, send: () => result }),
+      }) });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.start();
+    try {
+      expect(await index.send(slot.id, {
+        conversation: { endpoint: { id: String(slot.id), adapter: 'batch' }, kind: 'group', id: 'scene' },
+        payload: ['first', 'share', 'last'],
+      })).toEqual(result);
+    } finally { await index.stop(); }
+  });
+
+  it.each([undefined, '', { message_id: 'wrong-shape' }, { parts: [] }, { parts: [null] },
+    { parts: [{ messageId: '' }] }, { parts: [{ sourceIndices: [-1] }] }, { parts: [{ sourceIndices: [0.5] }] },
+  ])('rejects malformed send evidence as unknown without resending: %j', async result => {
+    const send = vi.fn(() => result as never);
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'batch',
+      source: '/adapters/batch/index.ts', definition: defineAdapterContract({ capabilities: ['outbound'],
+        create: () => ({ client: {}, send }),
+      }) });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.start();
+    try {
+      await expect(index.send(slot.id, {
+        conversation: { endpoint: { id: String(slot.id), adapter: 'batch' }, kind: 'group', id: 'scene' }, payload: 'hello',
+      })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
+      expect(send).toHaveBeenCalledOnce();
+    } finally { await index.stop(); }
+  });
+
   it('reports an invalid create result before checking outbound send', async () => {
     const root = rootPluginId();
     const invalid = createCapabilitySlot({

@@ -3,6 +3,7 @@ import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import { type DiscoverKind, type DiscoverResultItem, type ToolCatalogItem, type ToolCatalogSource, DEFERRED_META_TOOL_NAMES } from './types.js';
 export interface BuildToolCatalogOptions {
   tools: AgentTool[];
+  ownerByTool?: ReadonlyMap<string, string>;
   mcpServerByTool?: Map<string, string>;
   alwaysLoaded: Set<string>;
 }
@@ -22,7 +23,7 @@ function inferSource(tool: AgentTool, mcpServer?: string): ToolCatalogSource {
 }
 
 export function buildToolCatalog(options: BuildToolCatalogOptions): ToolCatalogItem[] {
-  const { tools, mcpServerByTool, alwaysLoaded } = options;
+  const { tools, ownerByTool, mcpServerByTool, alwaysLoaded } = options;
   const items: ToolCatalogItem[] = [];
   const seen = new Set<string>();
 
@@ -36,6 +37,7 @@ export function buildToolCatalog(options: BuildToolCatalogOptions): ToolCatalogI
       brief: briefFromTool(tool),
       fullTool: tool,
       source: inferSource(tool, mcpServer),
+      owner: ownerByTool?.get(tool.name),
       mcpServer,
       deferDefault: !isAlways && !DEFERRED_META_TOOL_NAMES.has(tool.name),
     });

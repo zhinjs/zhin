@@ -111,9 +111,13 @@ operations fail candidate generation before commit. The zero-dependency types li
 
 Framework-facing outbound code carries a structured `ConversationRef`.
 `EndpointSendRequest` is `{ conversation, payload }`; platform adapters derive
-their native target from `conversation` at the endpoint boundary and return one
-non-empty platform message id. IM Runtime alone wraps that id as a structured
-`MessageRef` / `DeliveryReceipt`; arbitrary endpoint result shapes are rejected.
+their native target from `conversation` at the endpoint boundary. A single send may return a
+non-empty platform message id; adapters that split a payload return ordered `{ parts }` evidence.
+Each part may contain its confirmed `messageId` and the `sourceIndices` of the original top-level
+payload segments (a non-array payload is one segment). A missing id stays unknown. IM Runtime
+alone wraps confirmed ids as `MessageRef` / `DeliveryReceipt` and maps source content; arbitrary
+endpoint result shapes are rejected. When a later send fails, `EndpointDeliveryError.parts`
+preserves completed parts with `disposition: 'unknown'`; callers must not resend the whole batch.
 
 ## Endpoint Control Port
 

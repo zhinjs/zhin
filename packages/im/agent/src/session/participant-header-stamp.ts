@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   AgentMessage,
   AssistantMessage,
@@ -47,16 +48,28 @@ export function stampAssistantHeaders(
  * ADR 0043 §5: once delivery reports the platform id of the bot's reply, the last text-bearing assistant
  * message of the turn carries it, so later quotes of that reply resolve to an alias.
  */
-export function stampDeliveredMessageId(messages: AgentMessage[], messageId: string | undefined): AgentMessage[] {
-  if (!messageId) return messages;
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i]!;
+export function stampDeliveredMessageId(messages: AgentMessage[], messageId: string | undefined, contextRefs?: readonly string[], messageIds?: readonly (string | null)[]): AgentMessage[] {
+  // Providers do not own delivery provenance, including on intermediate assistant messages.
+  let next = messages.map(message => {
+    if (message.role !== 'assistant' || (!('contextRefs' in message) && !('contextDigest' in message) && !('messageIds' in message))) return message;
+    const { contextRefs: _untrusted, contextDigest: _untrustedDigest, messageIds: _untrustedIds, ...clean } = message as AssistantMessage;
+    return clean;
+  });
+  if (next.every((message, index) => message === messages[index])) next = messages;
+  const confirmed = messageIds?.map(id => typeof id === 'string' && id.trim() ? id : null)
+    ?? (messageId?.trim() ? [messageId] : []);
+  if (!confirmed.length && !contextRefs?.length) return next;
+  for (let i = next.length - 1; i >= 0; i -= 1) {
+    const message = next[i]!;
     if (message.role !== 'assistant') continue;
     const assistant = message as AssistantMessage;
     if (!assistant.content.some(block => block.type === 'text')) continue;
-    const next = messages.slice();
-    next[i] = { ...assistant, messageId };
-    return next;
+    const stamped = next.slice();
+    const firstKnown = confirmed.find((id): id is string => id !== null);
+    stamped[i] = { ...assistant, ...(confirmed.length ? { ...(firstKnown ? { messageId: firstKnown } : {}), messageIds: confirmed } : {}), ...(contextRefs?.length ? {
+      contextRefs: [...contextRefs], contextDigest: createHash('sha256').update(JSON.stringify(assistant.content.filter(block => block.type === 'text').map(block => block.text))).digest('hex'),
+    } : {}) };
+    return stamped;
   }
-  return messages;
+  return next;
 }

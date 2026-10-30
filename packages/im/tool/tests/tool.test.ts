@@ -34,6 +34,34 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
+  it('reads synchronous availability from the same owner definition without invoking the tool', () => {
+    const root = rootPluginId();
+    let executions = 0;
+    const definition = defineAgentTool({ description: 'Sticker',
+      isAvailable: ({ sessionKey }) => sessionKey === 'bot-b:scene',
+      execute: () => { executions++; },
+    });
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'sticker',
+      source: '/tools/sticker/index.ts', definition });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(index.isAvailable(root, 'sticker', { sessionKey: 'bot-a:scene', origin: invocation().origin })).toBe(false);
+    expect(index.isAvailable(root, 'sticker', { sessionKey: 'bot-b:scene', origin: invocation().origin })).toBe(true);
+    expect(executions).toBe(0);
+    expect(() => index.isAvailable(root, 'unknown', { sessionKey: 'bot-a:scene', origin: invocation().origin })).toThrow('Unknown Agent Tool');
+  });
+
+  it('rejects malformed availability declarations and asynchronous predicate results', () => {
+    const valid = defineAgentTool({ description: 'Sticker', execute() {} });
+    expect(() => defineAgentTool({ ...valid, isAvailable: true as never })).toThrow('isAvailable');
+    expect(() => parseAgentToolDefinition({ ...valid, isAvailable: 'yes' })).toThrow();
+    const root = rootPluginId();
+    const invalid = { ...valid, isAvailable: () => Promise.resolve(true) } as never;
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'sticker',
+      source: '/tools/sticker/index.ts', definition: invalid });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(() => index.isAvailable(root, 'sticker', { sessionKey: 'scene', origin: invocation().origin })).toThrow('must return a boolean');
+  });
+
   it('uses the trusted turn language or project language, never a model argument', async () => {
     const root = rootPluginId();
     const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'locale',

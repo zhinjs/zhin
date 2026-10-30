@@ -70,6 +70,19 @@ export class ToolIndex {
     return this.#index.resolve(requester, name) !== undefined;
   }
 
+  /** Read eligibility without executing the tool or exposing its predicate to the model. */
+  isAvailable(requester: PluginId, name: string, context: Pick<ToolInvocationContext, 'sessionKey' | 'origin'>): boolean {
+    const entry = this.#index.resolve(requester, name);
+    if (!entry) throw new Error(`Unknown Agent Tool ${name} for ${requester}`);
+    const predicate = entry.slot.definition.isAvailable;
+    if (!predicate) return true;
+    const available = predicate(Object.freeze({ sessionKey: context.sessionKey, origin: context.origin }));
+    if (typeof available !== 'boolean') {
+      throw new TypeError(`Agent Tool ${entry.qualifiedName} isAvailable must return a boolean`);
+    }
+    return available;
+  }
+
   async execute<TInput = unknown, TResult = unknown>(
     requester: PluginId,
     name: string,

@@ -540,7 +540,7 @@ export {
   type ParticipantFacts, type BotHeaderFacts, type HeaderFormatOptions,
 } from './memory/participant-header.js';
 export {
-  MessageAliasTable, indexMessageAliases, isMessageAlias, messageAliasOf, resolveMessageAliasArguments,
+  MessageAliasTable, UnconfirmedMessageAliasError, indexMessageAliases, isMessageAlias, messageAliasOf, resolveMessageAliasArguments,
   assignRowAliasSeqs, payloadMessageId,
   type MessageAliasIndex, type MessageAliasAssignment,
 } from './memory/message-alias.js';

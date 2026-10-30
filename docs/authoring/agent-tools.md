@@ -56,6 +56,13 @@ export default defineAgentTool({
 
 不满足条件时，模型根本看不到这个工具。`permissions` 与命令的 [`permit`](./commands.md) 使用同一套规则。`hidden: true` 表示注册但不提供给模型，只能按名字调用。
 
+会话冷却等动态状态可以用 `isAvailable({ sessionKey, origin })` 在回合开始时判断。按平台会话
+限流时，使用 `origin.conversation` 的完整身份（含 endpoint、parent、thread），因为子任务的
+存储 sessionKey 可能不同。它在权限筛选后
+同步读取已有状态，返回 `false` 时，本轮也不能通过 `discover` / `load_tool` 加载该工具。
+不要在这里发请求、抽概率或消耗额度；执行时仍要复核可变条件。该函数必须同步返回 boolean，
+异常会作为错误上报。没有会话的静态能力查询不执行这一检查。
+
 ### 执行前让用户确认
 
 ```ts
