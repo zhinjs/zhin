@@ -3,7 +3,8 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
 import {
-  ClientEndpoint,
+  createEndpointSpecification, endpointSpec,
+  type Endpoint, type EndpointSpecification,
   createEndpointLifecycle,
   createRecallEndpointControl,
   type EndpointLifecycle,
@@ -36,13 +37,12 @@ import {
   handleOneBot11WsMessage,
   rejectAllPending,
 } from './ws-transport.js';
-import { OneBot11WsEndpoint } from './ws-endpoint.js';
 import {
   type OneBot11PendingAction,
   type OneBot11WsSocket,
 } from './ws-types.js';
 import { probeOnebot11SelfId, resolveOnebot11SelfId } from './self-id.js';
-import { callOnebot11Client, createOnebot11EndpointClient, forwardOnebot11ClientEvents, type Onebot11Client } from './client.js';
+import { callOnebot11Client, onebot11ClientOptions, forwardOnebot11ClientEvents, Onebot11Client } from './client.js';
 
 export interface OneBot11WssEndpointOptions {
   readonly id: CapabilityId;
@@ -52,14 +52,15 @@ export interface OneBot11WssEndpointOptions {
   readonly config: OneBot11WssConfig;
 }
 
-export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
-  readonly client: Onebot11Client;
+export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  #open = false;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: OneBot11WssEndpointOptions;
-  readonly management: EndpointManagement;
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content;
+  readonly #management: EndpointManagement;
+  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
+  readonly #content;
   #ws?: OneBot11WsSocket;
   #wsRelease?: () => void;
   readonly #connectionLifecycle: EndpointLifecycle;
@@ -70,7 +71,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
   #stopped = false;
 
   constructor(options: OneBot11WssEndpointOptions) {
-    super();
+    super(onebot11ClientOptions(options.config, (action, params) => this.#callApi(action, params)));
     this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
     this.#connectionLifecycle = createEndpointLifecycle({
@@ -78,20 +79,28 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
       reconnect: false,
       heartbeat: { intervalMs: options.config.heartbeat_interval, watchdogMisses: 2 },
     });
-    this.client = createOnebot11EndpointClient(options.config, (action, params) => this.#callApi(action, params));
-    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot11Client(this.client, action, params);
-    this.management = createOneBot11EndpointManagement({ callApi });
-    this.content = createOneBot11ContentPort(callApi);
-    this.bindClientEvents(
-      (receive) => forwardOnebot11ClientEvents(this.client, receive),
-      (name, payload) => {
+    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot11Client(this, action, params);
+    this.#management = createOneBot11EndpointManagement({ callApi });
+    this.#content = createOneBot11ContentPort(callApi);
+    const readTransportState = () => this.#transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => { this.#open = true; },
+      close: () => { this.#open = false; }, stop: () => this.#stop(),
+      send: request => this.#send(request),
+      get transportState() { return readTransportState(); },
+      management: this.#management, control: this.#control, content: this.#content,
+    });
+    forwardOnebot11ClientEvents(this, (name, payload) => {
+      void this[endpointSpec].events.run(() => {
+        if (this.#stopped || (!this.#open && !this.#started)) return;
+        void this[endpointSpec].events.platform(name, payload).catch(error => this.#warnPlatformEvent(error));
         if (name === 'event') this.#admitRaw(payload as OneBot11Event);
-      },
-      (_name, error) => this.#warnPlatformEvent(error),
-    );
+      }).catch(error => this.#warnPlatformEvent(error));
+    });
   }
 
-  get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     if (this.#stopped) return 'stopped';
     if (!this.#started) return 'idle';
     if (this.#connectionLifecycle.state === 'closed') return 'closed';
@@ -99,7 +108,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     return this.#connectionLifecycle.state === 'connecting' ? 'connecting' : 'idle';
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     this.#stopped = false;
     if (!this.#options.config.access_token) {
@@ -132,9 +141,9 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     }));
   }
 
-  async stop(): Promise<void> {
+  async #stop(): Promise<void> {
     this.#stopped = true;
-    this.close();
+    this.#open = false;
     this.#wsRelease?.();
     this.#wsRelease = undefined;
     await this.#connectionTask;
@@ -142,13 +151,13 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     rejectAllPending(this.#pending);
     this.#ws = undefined;
     this.#started = false;
-    this.reportSelfUserId(undefined);
+    this[endpointSpec].reportSelfUserId(undefined);
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await callOnebot11Client<{ message_id?: number | string }>(this.client, action, params);
+    const data = await callOnebot11Client<{ message_id?: number | string }>(this, action, params);
     const rawId = data?.message_id;
     if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
       throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
@@ -156,9 +165,9 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     return String(rawId);
   }
 
-  async recallMessage(messageId: string): Promise<void> {
+  async #recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await callOnebot11Client(this.client, 'delete_msg', { message_id: Number(messageId) });
+    await callOnebot11Client(this, 'delete_msg', { message_id: Number(messageId) });
   }
 
   #callApi(
@@ -170,20 +179,22 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
 
   #admitRaw(ev: OneBot11Event): void {
     const selfId = resolveOnebot11SelfId(ev.self_id);
-    if (!this.#stopped && selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
+    if (!this.#stopped && selfId) this[endpointSpec].reportSelfUserId(selfId);
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
-        (name, payload) => this.emit(name, payload),
+        (name, payload) => this[endpointSpec].events.emit(name, payload),
         this.#options.config.id,
-        { callApi: (action, params) => callOnebot11Client(this.client, action, params) },
+        { callApi: (action, params) => callOnebot11Client(this, action, params) },
         ev,
         this.#logger,
       );
       return;
     }
-    const conversation = onebot11InboundConversation(String(this.#options.id), ev);
+    const conversation = { ...onebot11InboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const inbound = formatInboundMetadata(ev, this.#options.config.id);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event: ev,
+      ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
       conversation,
       message: { conversation, id: String(ev.message_id) },
       content: formatInboundContent(ev),
@@ -207,14 +218,14 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
 
   /** Best-effort 登录账号探测；失败仅 debug，不影响连接。 */
   async #probeSelfUserId(): Promise<void> {
-    const selfId = await probeOnebot11SelfId(this.client, (error) => {
+    const selfId = await probeOnebot11SelfId(this, (error) => {
       this.#logger.debug(formatCompact({
         op: 'onebot11_get_login_info_failed',
         error: error instanceof Error ? error.message : String(error),
       }));
     });
-    if (this.#stopped || this.transportState !== 'open') return;
-    if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
+    if (this.#stopped || this.#transportState !== 'open') return;
+    if (selfId) this[endpointSpec].reportSelfUserId(selfId);
   }
 
   #warnPlatformEvent(error: unknown): void {
@@ -265,7 +276,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
         handleOneBot11WsMessage(data, {
           endpointId: this.#options.config.id,
           pending: this.#pending,
-          ingest: (ev) => this.client.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
+          ingest: (ev) => this.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
         });
       });
       socket.on('error', (error) => {

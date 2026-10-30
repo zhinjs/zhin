@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId, PluginConsoleRpcError } from 'zhin.js';
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createTestEventGateway } from '../../test-utils/endpoint.js';
+import { createBilibiliHarness } from './bilibili-harness.js';
 import { BilibiliDraftQueue } from '../src/drafts.js';
 import { BilibiliEndpoint, type BilibiliNotice } from '../src/endpoint.js';
 import { resolveBilibiliConfig, BILIBILI_DEFAULT_DATA_DIR } from '../src/protocol.js';
@@ -64,20 +65,17 @@ function fake(state: Partial<FakeState> = {}) {
   return { fetch, state: s };
 }
 
-function endpointFor(fetch: BilibiliFetch, config: Record<string, unknown> = {}, notify?: (notice: BilibiliNotice) => void) {
+async function endpointFor(fetch: BilibiliFetch, config: Record<string, unknown> = {}, notify?: (notice: BilibiliNotice) => void) {
   const registry = new Map<string, BilibiliEndpoint>();
-  const endpoint = bindTestEndpoint(new BilibiliEndpoint({
-    id: endpointId, autoPoll: false, fetch, registry, stateDir: dir,
-    config: resolveBilibiliConfig({ id: 'bili', videos: ['BV1xx411c7mD'], passportBaseUrl: 'https://passport.test', ...config }),
-    ...(notify ? { notify } : {}),
-  }), { receive: vi.fn(async () => undefined) });
-  registry.set('bili', endpoint);
+  const endpoint = await createBilibiliHarness({ id: 'bili', videos: ['BV1xx411c7mD'], passportBaseUrl: 'https://passport.test', ...config },
+    { fetch, stateDir: dir, ...(notify ? { notify } : {}) }, createTestEventGateway({ receive: vi.fn(async () => undefined) }));
+  registry.set('bili', endpoint.endpoint);
   return { endpoint, registry };
 }
 
-async function queue(endpoint: BilibiliEndpoint, text = '感谢支持'): Promise<string> {
+async function queue(endpoint: Awaited<ReturnType<typeof createBilibiliHarness>>, text = '感谢支持'): Promise<string> {
   await endpoint.send({ conversation: thread, payload: text }).catch(() => undefined);
-  return endpoint.drafts.list().at(-1)!.id;
+  return endpoint.endpoint.drafts.list().at(-1)!.id;
 }
 
 describe('draft persistence', () => {
@@ -116,16 +114,16 @@ describe('draft persistence', () => {
 
   it('restores endpoint drafts from the data directory', async () => {
     const { fetch } = fake();
-    const first = endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' }).endpoint;
+    const first = (await endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' })).endpoint;
     const id = await queue(first, '重启后还在');
-    first.stop();
+    await first.stop();
     const files = new BilibiliStateFiles(dir, 'bili');
     expect(existsSync(files.draftsFile)).toBe(true);
-    const second = endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' }).endpoint;
-    expect(second.persistent).toBe(true);
-    expect(second.drafts.get(id)?.message).toBe('重启后还在');
-    await second.approveDraft(id);
-    expect(endpointFor(fetch).endpoint.drafts.size).toBe(0);
+    const second = (await endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' })).endpoint;
+    expect(second.endpoint.persistent).toBe(true);
+    expect(second.endpoint.drafts.get(id)?.message).toBe('重启后还在');
+    await second.endpoint.approveDraft(id);
+    expect((await endpointFor(fetch)).endpoint.endpoint.drafts.size).toBe(0);
   });
 
   it('uses data/bilibili by default and safe directory names', () => {
@@ -149,19 +147,19 @@ describe('QR login and cookie persistence', () => {
   it('logs in by QR, persists credentials 0600 and reuses them after restart', async () => {
     const { fetch, state } = fake();
     const notices: BilibiliNotice[] = [];
-    const { endpoint, registry } = endpointFor(fetch, {}, notice => { notices.push(notice); });
+    const { endpoint, registry } = await endpointFor(fetch, {}, notice => { notices.push(notice); });
     await endpoint.start();
-    expect(endpoint.login.state).toBe('none');
+    expect(endpoint.endpoint.login.state).toBe('none');
 
-    const qr = await endpoint.startQrLogin();
+    const qr = await endpoint.endpoint.startQrLogin();
     expect(qr.state).toBe('waiting');
     expect(qr.image).toMatch(/^data:image\/png;base64,/);
-    expect(await endpoint.startQrLogin()).toBe(qr); // reuse a live QR code
+    expect(await endpoint.endpoint.startQrLogin()).toBe(qr); // reuse a live QR code
     expect(state.generated).toBe(1);
-    expect((await endpoint.pollQrLoginOnce()).state).toBe('waiting');
-    expect((await endpoint.pollQrLoginOnce()).state).toBe('scanned');
-    expect((await endpoint.pollQrLoginOnce()).state).toBe('confirmed');
-    expect(endpoint.login).toMatchObject({ state: 'ok', source: 'qr', mid: '4242', uname: 'qr-user' });
+    expect((await endpoint.endpoint.pollQrLoginOnce()).state).toBe('waiting');
+    expect((await endpoint.endpoint.pollQrLoginOnce()).state).toBe('scanned');
+    expect((await endpoint.endpoint.pollQrLoginOnce()).state).toBe('confirmed');
+    expect(endpoint.endpoint.login).toMatchObject({ state: 'ok', source: 'qr', mid: '4242', uname: 'qr-user' });
     await vi.waitFor(() => expect(notices.map(n => n.kind)).toContain('login_ok'));
 
     const files = new BilibiliStateFiles(dir, 'bili');
@@ -170,18 +168,18 @@ describe('QR login and cookie persistence', () => {
     expect(loginStatusText(registry)).toContain('qr-user');
 
     const id = await queue(endpoint);
-    await endpoint.approveDraft(id);
+    await endpoint.endpoint.approveDraft(id);
     expect(state.posts[0]?.csrf).toBe('qr-jct');
-    endpoint.stop();
+    await endpoint.stop();
 
-    const restarted = endpointFor(fetch).endpoint;
+    const restarted = (await endpointFor(fetch)).endpoint;
     await restarted.start();
-    expect(restarted.login).toMatchObject({ state: 'ok', source: 'qr', mid: '4242' });
+    expect(restarted.endpoint.login).toMatchObject({ state: 'ok', source: 'qr', mid: '4242' });
     expect(state.cookies.at(-1)).toContain('SESSDATA=qr,sess');
-    expect(await restarted.logout()).toBe(true);
+    expect(await restarted.endpoint.logout()).toBe(true);
     expect(existsSync(files.credentialsFile)).toBe(false);
-    expect(restarted.login.state).toBe('none');
-    restarted.stop();
+    expect(restarted.endpoint.login.state).toBe('none');
+    await restarted.stop();
   });
 
   it('prefers configured cookies, and falls back to the stored QR login when they expire', async () => {
@@ -190,16 +188,16 @@ describe('QR login and cookie persistence', () => {
     mkdirSync(files.directory, { recursive: true });
     writeFileSync(files.credentialsFile, JSON.stringify({ sessdata: 'qr,sess', biliJct: 'qr-jct' }));
 
-    const configured = endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' }).endpoint;
+    const configured = (await endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' })).endpoint;
     await configured.start();
-    expect(configured.login).toMatchObject({ state: 'ok', source: 'config', uname: 'cfg' });
-    expect(await configured.logout()).toBe(false);
-    configured.stop();
+    expect(configured.endpoint.login).toMatchObject({ state: 'ok', source: 'config', uname: 'cfg' });
+    expect(await configured.endpoint.logout()).toBe(false);
+    await configured.stop();
 
-    const stale = endpointFor(fetch, { sessdata: 'stale', biliJct: 'c' }).endpoint;
+    const stale = (await endpointFor(fetch, { sessdata: 'stale', biliJct: 'c' })).endpoint;
     await stale.start();
-    expect(stale.login).toMatchObject({ state: 'ok', source: 'qr' });
-    stale.stop();
+    expect(stale.endpoint.login).toMatchObject({ state: 'ok', source: 'qr' });
+    await stale.stop();
   });
 
   it('clears an expired stored login and tells the master to scan again', async () => {
@@ -207,45 +205,45 @@ describe('QR login and cookie persistence', () => {
     const files = new BilibiliStateFiles(dir, 'bili');
     mkdirSync(files.directory, { recursive: true });
     writeFileSync(files.credentialsFile, JSON.stringify({ sessdata: 'gone', biliJct: 'x' }));
-    const expiredAtStart = endpointFor(fetch).endpoint;
+    const expiredAtStart = (await endpointFor(fetch)).endpoint;
     await expiredAtStart.start();
-    expect(expiredAtStart.login).toMatchObject({ state: 'expired', source: 'qr' });
+    expect(expiredAtStart.endpoint.login).toMatchObject({ state: 'expired', source: 'qr' });
     expect(existsSync(files.credentialsFile)).toBe(false);
-    expiredAtStart.stop();
+    await expiredAtStart.stop();
 
     // Valid at start, then the platform answers -101 when sending.
     writeFileSync(files.credentialsFile, JSON.stringify({ sessdata: 'qr,sess', biliJct: 'qr-jct' }));
     const notices: BilibiliNotice[] = [];
-    const { endpoint } = endpointFor(fetch, {}, notice => { notices.push(notice); });
+    const { endpoint } = await endpointFor(fetch, {}, notice => { notices.push(notice); });
     await endpoint.start();
     const id = await queue(endpoint);
     state.addCode = -101;
-    await expect(endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'no_cookie' });
-    expect(endpoint.login).toMatchObject({ state: 'expired', source: 'qr' });
-    expect(endpoint.drafts.get(id)?.status).toBe('pending');
+    await expect(endpoint.endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'no_cookie' });
+    expect(endpoint.endpoint.login).toMatchObject({ state: 'expired', source: 'qr' });
+    expect(endpoint.endpoint.drafts.get(id)?.status).toBe('pending');
     expect(existsSync(files.credentialsFile)).toBe(false);
     await vi.waitFor(() => expect(notices.map(n => n.kind)).toEqual(['draft', 'login_expired']));
     expect(formatNotice(notices[1]!)).toContain('扫码重新登录');
-    await expect(endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'no_cookie' });
-    endpoint.stop();
+    await expect(endpoint.endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'no_cookie' });
+    await endpoint.stop();
   });
 
   it('reports expired and failed QR codes', async () => {
     const { fetch } = fake({ pollCodes: [86038] });
-    const { endpoint } = endpointFor(fetch);
-    await endpoint.startQrLogin();
-    expect((await endpoint.pollQrLoginOnce()).state).toBe('expired');
-    endpoint.cancelQrLogin();
-    expect(endpoint.qrLogin.state).toBe('idle');
+    const { endpoint } = await endpointFor(fetch);
+    await endpoint.endpoint.startQrLogin();
+    expect((await endpoint.endpoint.pollQrLoginOnce()).state).toBe('expired');
+    endpoint.endpoint.cancelQrLogin();
+    expect(endpoint.endpoint.qrLogin.state).toBe('idle');
     const broken = fake({ pollCodes: [-412] });
-    const other = endpointFor(broken.fetch).endpoint;
-    await other.startQrLogin();
-    expect(await other.pollQrLoginOnce()).toMatchObject({ state: 'failed' });
+    const other = (await endpointFor(broken.fetch)).endpoint;
+    await other.endpoint.startQrLogin();
+    expect(await other.endpoint.pollQrLoginOnce()).toMatchObject({ state: 'failed' });
   });
 
   it('only sends the login QR code in private chats', async () => {
     const { fetch } = fake();
-    const { registry } = endpointFor(fetch);
+    const { registry } = await endpointFor(fetch);
     expect(await startLoginForChat(registry, { isPrivate: false })).toMatchObject({ kind: 'text' });
     const result = await startLoginForChat(registry, { isPrivate: true, statusCommand: 'bili-login status' });
     expect(result).toMatchObject({ kind: 'qr', hint: expect.stringContaining('bili-login status') });
@@ -256,7 +254,7 @@ describe('new draft notices', () => {
   it('pushes each new draft with the review hint', async () => {
     const { fetch } = fake();
     const notices: BilibiliNotice[] = [];
-    const { endpoint } = endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' }, notice => { notices.push(notice); });
+    const { endpoint } = await endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'c' }, notice => { notices.push(notice); });
     const id = await queue(endpoint, '谢谢喜欢');
     await vi.waitFor(() => expect(notices).toHaveLength(1));
     const text = formatNotice(notices[0]!, { formatCommand: path => path });
@@ -268,9 +266,9 @@ describe('new draft notices', () => {
 
   it('a failing notifier never loses the draft', async () => {
     const { fetch } = fake();
-    const { endpoint } = endpointFor(fetch, {}, () => { throw new Error('offline'); });
+    const { endpoint } = await endpointFor(fetch, {}, () => { throw new Error('offline'); });
     const id = await queue(endpoint);
-    expect(endpoint.drafts.get(id)).toBeDefined();
+    expect(endpoint.endpoint.drafts.get(id)).toBeDefined();
   });
 
   it('validates the notify target', () => {
@@ -283,10 +281,10 @@ describe('new draft notices', () => {
 describe('Console review RPC', () => {
   it('shows status without secrets and runs send / edit / drop / login', async () => {
     const { fetch, state } = fake();
-    const { endpoint, registry } = endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'secret-jct' });
+    const { endpoint, registry } = await endpointFor(fetch, { sessdata: 'config-sess', biliJct: 'secret-jct' });
     await endpoint.start();
-    const rpc = createBilibiliConsoleRpc(registry);
-    const run = (name: string, input: Record<string, unknown> = {}) => rpc.methods.get(name)!.handler(input as never, SIGNAL);
+    const rpc = createBilibiliConsoleRpc();
+    const run = (name: string, input: Record<string, unknown> = {}) => rpc.methods.get(name)!.handler(input as never, { ...SIGNAL, runtime: endpoint.context } as never);
 
     expect(rpc.methods.get('status')!.requiredPermissions).toEqual(['bilibili:read']);
     for (const name of ['send', 'edit', 'drop']) expect(rpc.methods.get(name)!.requiredPermissions).toEqual(['bilibili:review']);
@@ -320,13 +318,13 @@ describe('Console review RPC', () => {
     expect(login.image).toMatch(/^data:image\/png;base64,/);
     expect(await run('login-cancel', {})).toEqual({ state: 'idle' });
     await expect(run('login', { endpoint: 'nope' })).rejects.toMatchObject({ code: 'not_found' });
-    endpoint.stop();
+    await endpoint.stop();
   });
 
   it('reports a missing adapter plainly', async () => {
-    const rpc = createBilibiliConsoleRpc(new Map());
-    expect(await rpc.methods.get('status')!.handler({}, SIGNAL)).toMatchObject({ endpoints: [] });
-    await expect(rpc.methods.get('login')!.handler({}, SIGNAL)).rejects.toMatchObject({ code: 'unavailable' });
+    const rpc = createBilibiliConsoleRpc();
+    expect(() => rpc.methods.get('status')!.handler({}, SIGNAL)).toThrow(expect.objectContaining({ code: 'unsupported' }));
+    expect(() => rpc.methods.get('login')!.handler({}, SIGNAL)).toThrow(expect.objectContaining({ code: 'unsupported' }));
   });
 });
 

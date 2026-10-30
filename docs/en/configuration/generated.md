@@ -1092,7 +1092,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.heartbeat_interval` | number | no | `30000` | — |
 | `onebot12.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
 | `onebot12.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
-| `onebot12.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `onebot12.endpoints` | array&lt;object&gt; | yes | — | Each endpoint explicitly selects platform and userId. id is the local account name; other connection fields override instance defaults. |
 | `onebot12.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
 | `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | — | — |
@@ -1104,6 +1104,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.endpoints[].heartbeat_interval` | number | no | — | — |
 | `onebot12.endpoints[].commandPrefix` | string | no | — | — |
 | `onebot12.endpoints[].id` | string | yes | — | OneBot12 bot name |
+| `onebot12.endpoints[].platform` | string | yes | — | Selected OneBot12 bot platform |
+| `onebot12.endpoints[].userId` | string | yes | — | Selected OneBot12 bot user ID |
 | `onebot12.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### qq
@@ -1185,7 +1187,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `satori.heartbeat_interval` | number | no | `10000` | WS PING interval in milliseconds |
 | `satori.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
 | `satori.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
-| `satori.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and baseUrl are required; other fields override instance defaults. |
+| `satori.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry selects an explicit platform and userId. id and baseUrl are required; remaining fields override instance defaults. |
 | `satori.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
 | `satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `satori.endpoints[].baseUrl` | string | yes | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
@@ -1195,6 +1197,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `satori.endpoints[].heartbeat_interval` | number | no | — | — |
 | `satori.endpoints[].commandPrefix` | string | no | — | — |
 | `satori.endpoints[].id` | string | yes | — | Satori bot name |
+| `satori.endpoints[].platform` | string | yes | — | Selected Satori login platform |
+| `satori.endpoints[].userId` | string | yes | — | Selected Satori login user ID |
 | `satori.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### slack
@@ -1306,6 +1310,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wecom.endpoints[].apiBaseUrl` | string | no | — | — |
 | `wecom.endpoints[].commandPrefix` | string | no | — | — |
 | `wecom.endpoints[].id` | string | yes | — | WeCom bot name |
+| `wecom.endpoints[].agentId` | string | yes | — | WeCom application AgentId (not the application secret) |
 | `wecom.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 
 ### weixin-ilink

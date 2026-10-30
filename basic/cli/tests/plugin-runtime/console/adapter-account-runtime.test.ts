@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { unrestrictedConsoleAccess, type ConsoleAccess } from '@zhin.js/host-http';
 import { Adapter, AdapterIndex, AdapterManagementError, adapterFeatureId, createAdapterConsoleRpc,
-  createEndpointSpecification, defineAdapter, endpointConfigurationStoreToken, endpointEventGatewayToken,
+  createEndpointSpecification, defineAdapter, endpointEventGatewayToken,
   createEndpointCommands,
   endpointSpec, type EndpointDesiredRepository, type EndpointDesiredSnapshot, type EndpointDesiredRecord,
-  type PlatformEndpoint } from '@zhin.js/adapter';
-import { SnapshotStore, childPluginId, createCapabilitySlot, featureId, pluginConsoleRpcToken, rootPluginId,
+  type Endpoint as EndpointContract, type AdapterConsoleSpec } from '@zhin.js/adapter';
+import { SnapshotStore, childPluginId, createToken, createCapabilitySlot, pluginConsoleRpcToken, rootPluginId,
   type CapabilityId, type PluginConsoleRpcCall, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
 import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/console/plugin-console-rpc.js';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
@@ -31,7 +31,7 @@ class Repository implements EndpointDesiredRepository {
     const next = structuredClone({ revision: (revision ?? 0) + 1, endpoints, ...(commitId ? { commitId } : {}) }); this.state.set(id, next); return next;
   });
 }
-class ClientEndpoint implements PlatformEndpoint {
+class ClientEndpoint implements EndpointContract {
   readonly [endpointSpec];
   readonly stopped = vi.fn(async () => undefined);
   constructor(readiness: Promise<void>) {
@@ -45,21 +45,19 @@ class AccountAdapter extends Adapter<ClientEndpoint> {
   readonly created: ClientEndpoint[] = [];
   readiness = Promise.resolve();
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
-  override get configurationUpdateFields(): readonly string[] { return ['password', 'label']; }
+  override get configurationUpdateFields(): readonly string[] { return ['password', 'label', 'smtp.port', 'smtp.secure']; }
   protected createEndpoint(): ClientEndpoint { const endpoint = new ClientEndpoint(this.readiness); this.created.push(endpoint); return endpoint; }
 }
 
-async function fixture(extra: Readonly<Record<string, unknown>> = {}) {
+async function fixture(extra: Readonly<Record<string, unknown>> = {}, fields?: AdapterConsoleSpec['fields']) {
   const repository = new Repository();
   const adapters = new Map([[owner, new AccountAdapter()], [other, new AccountAdapter()]]);
-  const legacy = { list: vi.fn(async () => { throw new Error('legacy file read'); }),
-    add: vi.fn(async () => { throw new Error('legacy file write'); }), remove: vi.fn(async () => { throw new Error('legacy file write'); }) };
-  const spec = { adapterKey: 'account', adapterDisplayName: 'Account', readPermission: 'account:read', writePermission: 'account:write',
-    fields: [{ key: 'password', required: true, env: true }, { key: 'label' }] };
-  const rpcs = new Map([owner, other].map(id => [id, createAdapterConsoleRpc(spec, {
-    has: token => token.id === endpointConfigurationStoreToken.id,
-    use: () => legacy as never,
-  })]));
+  const files = { list: vi.fn(async () => { throw new Error('Forbidden project-file read'); }),
+    add: vi.fn(async () => { throw new Error('Forbidden project-file write'); }), remove: vi.fn(async () => { throw new Error('Forbidden project-file write'); }) };
+  const forbiddenFiles = createToken<typeof files>('fixture.forbidden-project-files');
+  const spec: AdapterConsoleSpec = { adapterKey: 'account', adapterDisplayName: 'Account', readPermission: 'account:read', writePermission: 'account:write',
+    fields: fields ?? [{ key: 'password', required: true, env: true }, { key: 'label' }] };
+  const rpcs = new Map([owner, other].map(id => [id, createAdapterConsoleRpc(spec)]));
   const slots = [...adapters].map(([id, adapter]) => createCapabilitySlot({ owner: id, feature: adapterFeatureId,
     localName: 'account', source: 'fixture', definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => adapter }) }));
   const state: SnapshotState = { root,
@@ -67,7 +65,7 @@ async function fixture(extra: Readonly<Record<string, unknown>> = {}) {
       ...[owner, other].map(id => [id, { id, parent: root, instanceKey: String(id), packageName: 'fixture', packageRoot: '/fixture', children: [] }] as const)]),
     config: new Map([owner, other].map(id => [id, { id: id === owner ? 'legacy-a' : 'legacy-b', password: `secret-${id}`, label: 'before', master: 'deployment-only', ...extra }])),
     resources: new Map([owner, other].map(id => [id, new Map<TokenId, unknown>([
-      [endpointEventGatewayToken.id, { receive: async () => undefined }], [pluginConsoleRpcToken.id, rpcs.get(id)],
+      [endpointEventGatewayToken.id, { receive: async () => undefined }], [pluginConsoleRpcToken.id, rpcs.get(id)], [forbiddenFiles.id, files],
     ])])), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
   };
   const index = await AdapterIndex.create(slots, { ...state, generation: 0 }, new AbortController().signal, { repository });
@@ -78,17 +76,17 @@ async function fixture(extra: Readonly<Record<string, unknown>> = {}) {
     dispatchPluginConsoleRpcRequest({ type: `plugin.${id}.${action}`, data }, { snapshots: store, access,
       pagesOwnedBy: () => [{ localName: 'index', requiredPermissions: ['account:read'], requiredRoles: [] }] as never,
       ...(timeoutMs === undefined ? {} : { timeoutMs }) });
-  return { repository, adapters, index, store, state, legacy, call, rpcs, slots };
+  return { repository, adapters, index, store, state, files, call, rpcs, slots };
 }
 
 describe('authenticated owner-scoped Adapter account RPC', () => {
-  it('projects only owned metadata, masks secrets and never reads the legacy file store', async () => {
+  it('projects only owned metadata, masks secrets and never reads an unrelated injected project-file resource', async () => {
     const f = await fixture();
     const reply = await f.call('status');
     expect(reply).toMatchObject({ status: 200, body: { data: { runtime: { generation: 0, revision: null, needsMigration: true, canMigrate: true },
       configured: [{ id: 'legacy-a', instanceId: expect.any(String), values: { password: '••••••', label: 'before' } }] } } });
     expect(JSON.stringify(reply)).not.toContain('secret-'); expect(JSON.stringify(reply)).not.toContain('deployment-only');
-    expect(JSON.stringify(reply)).not.toContain('legacy-b'); expect(f.legacy.list).not.toHaveBeenCalled();
+    expect(JSON.stringify(reply)).not.toContain('legacy-b'); expect(f.files.list).not.toHaveBeenCalled();
     const legacy = f.adapters.get(owner)!.list()[0];
     expect(legacy.endpointId).toBe('legacy-a');
     expect(legacy.instanceId).toBe(f.adapters.get(owner)!.descriptor.id);
@@ -114,7 +112,7 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
     expect(await f.call('endpoint-add', { ...input, expectedRevision: adapter.revision, id: 'delegated' }, scoped)).toMatchObject({ status: 200 });
     expect(f.store.current.generation).toBe(0);
     expect(f.state.config.get(owner)).toMatchObject({ id: 'legacy-a', label: 'before' });
-    expect(f.legacy.add).not.toHaveBeenCalled(); expect(f.legacy.remove).not.toHaveBeenCalled();
+    expect(f.files.add).not.toHaveBeenCalled(); expect(f.files.remove).not.toHaveBeenCalled();
   });
 
   it('preserves untouched secrets on patch, rejects identity/policy edits, and replaces with one disabled new identity', async () => {
@@ -168,8 +166,8 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
   it('routes actual CommandIndex add/remove to the same owned Adapter without files, bind flow, or Root rebuild', async () => {
     const f = await fixture(); const adapter = f.adapters.get(owner)!;
     const bindFlow = vi.fn(async () => 'legacy interactive binding');
-    const definitions = createEndpointCommands({ adapterKey: 'account', adapterDisplayName: 'Account',
-      fields: [{ key: 'password', required: true, env: true }], bindFlow }, defineCommand);
+    const definitions: ReturnType<typeof createEndpointCommands<ReturnType<typeof defineCommand>>> = Reflect.apply(createEndpointCommands, undefined, [{ adapterKey: 'account', adapterDisplayName: 'Account',
+      fields: [{ key: 'password', required: true, env: true }], bindFlow }, defineCommand]);
     const slots = (['list', 'add', 'remove'] as const).map(action => createCapabilitySlot({ owner, feature: commandFeatureId,
       localName: `account/endpoint/${action}${action === 'list' ? '' : '/$id'}`, source: 'fixture',
       definition: action === 'list' ? definitions[action] : { ...definitions[action], $parameter: { name: 'id', type: 'string' } } }));
@@ -182,6 +180,11 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
     expect(f.repository.compareAndSet).not.toHaveBeenCalled();
     await f.call('endpoint-add', { expectedGeneration: 0, expectedRevision: null, confirmMigration: true, id: 'migrated', values: { password: 'admin' } });
     const created = adapter.created.length, generation = f.store.current.generation, pid = process.pid;
+    const writesBeforeInvalid = f.repository.compareAndSet.mock.calls.length;
+    expect(await commands.dispatch('account endpoint add missing', source)).toMatchObject({ status: 'executed', value: expect.stringMatching(/必填.*password/u) });
+    expect(await commands.dispatch('account endpoint remove missing', source)).toMatchObject({ status: 'executed', value: expect.stringContaining('不存在') });
+    expect(f.repository.compareAndSet).toHaveBeenCalledTimes(writesBeforeInvalid);
+
     expect(await commands.dispatch('account endpoint add fresh password=secret', source)).toMatchObject({ status: 'executed', value: expect.stringContaining('尚未启动') });
     expect(adapter.created).toHaveLength(created); expect(bindFlow).not.toHaveBeenCalled();
     const record = adapter.list().find(entry => entry.endpointId === 'fresh')!;
@@ -193,11 +196,11 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
       expect(lease.signal.aborted).toBe(true); expect(endpoint.stopped).not.toHaveBeenCalled();
     } finally { lease.release(); }
     await vi.waitFor(() => expect(endpoint.stopped).toHaveBeenCalledTimes(1));
-    expect(f.legacy.add).not.toHaveBeenCalled(); expect(f.legacy.remove).not.toHaveBeenCalled();
+    expect(f.files.add).not.toHaveBeenCalled(); expect(f.files.remove).not.toHaveBeenCalled();
     expect(f.store.current.generation).toBe(generation); expect(process.pid).toBe(pid);
     const faulty = new CommandIndex(slots, { ...snapshot, projections: new Map() });
     await expect(faulty.dispatch('account endpoint add denied password=secret', source)).rejects.toThrow('projection');
-    expect(f.legacy.add).not.toHaveBeenCalled();
+    expect(f.files.add).not.toHaveBeenCalled();
   });
 
   it('verifies an unknown SQLite commit before status succeeds and resumes its unexecuted start once', async () => {
@@ -321,5 +324,39 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
       compareAndSet: (...args) => repository.compareAndSet(...args) });
     await expect(broken.index.activate(new AbortController().signal)).rejects.toMatchObject({ code: 'unavailable' });
     expect(broken.adapter.created).toHaveLength(0);
+  });
+});
+
+describe('declared nested account fields through the authenticated Console RPC', () => {
+  const fields: AdapterConsoleSpec['fields'] = [
+    { key: 'smtp.host', required: true }, { key: 'smtp.port', type: 'number', required: true },
+    { key: 'smtp.secure', type: 'boolean', required: true },
+    { key: 'smtp.auth.user', required: true }, { key: 'smtp.auth.pass', secret: true, required: true },
+  ];
+  const smtp = { host: 'smtp.synthetic.invalid', port: 465, secure: true, auth: { user: 'bot', pass: 'synthetic-secret' } };
+  it('saves actual numeric/boolean values and nested secrets without constructing the added Client', async () => {
+    const f = await fixture({ smtp }, fields), adapter = f.adapters.get(owner)!, before = adapter.created.length;
+    const reply = await f.call('endpoint-add', { id: 'mail', expectedGeneration: 0, expectedRevision: null, confirmMigration: true,
+      values: { 'smtp.host': 'smtp.synthetic.invalid', 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.auth.user': 'mailbot', 'smtp.auth.pass': 'new-synthetic-secret' } });
+    expect(reply).toMatchObject({ status: 200 });
+    const saved = f.repository.state.get(adapter.descriptor.id)!.endpoints.find(entry => entry.endpointId === 'mail')!;
+    expect(saved.config.smtp).toEqual({ host: 'smtp.synthetic.invalid', port: 587, secure: false, auth: { user: 'mailbot', pass: 'new-synthetic-secret' } });
+    expect(saved.desiredEnabled).toBe(false); expect(adapter.created).toHaveLength(before);
+    const status = await f.call('status');
+    expect(JSON.stringify(status)).not.toContain('new-synthetic-secret');
+    expect(status).toMatchObject({ body: { data: { configured: expect.arrayContaining([
+      expect.objectContaining({ id: 'mail', values: expect.objectContaining({ 'smtp.port': '587', 'smtp.secure': 'false', 'smtp.auth.pass': '••••••' }) }),
+    ]) } } });
+  });
+  it('patches declared nested values without erasing siblings and rejects invalid typed input before CAS', async () => {
+    const f = await fixture({ smtp }, fields), adapter = f.adapters.get(owner)!, target = adapter.list()[0];
+    const update = { instanceId: target.instanceId, expectedGeneration: 0, expectedRevision: null, confirmMigration: true };
+    expect(await f.call('endpoint-update', { ...update, values: { 'smtp.port': '587', 'smtp.secure': 'false' } })).toMatchObject({ status: 200 });
+    expect(f.repository.state.get(adapter.descriptor.id)!.endpoints[0].config.smtp).toEqual({ ...smtp, port: 587, secure: false });
+    const writes = f.repository.compareAndSet.mock.calls.length, revision = adapter.revision;
+    for (const values of [{ 'smtp.port': 'abc' }, { 'smtp.secure': '0' }, { 'smtp.auth.__proto__': 'x' }]) {
+      expect(await f.call('endpoint-update', { ...update, expectedRevision: revision, values })).toMatchObject({ status: 400 });
+    }
+    expect(f.repository.compareAndSet).toHaveBeenCalledTimes(writes); expect(adapter.revision).toBe(revision);
   });
 });

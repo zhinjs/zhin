@@ -289,7 +289,7 @@ export interface ${capitalizedName}Config {
 export function formatEcho(text: string, prefix = '你说：'): string {
   return \`\${prefix}\${text}\`;
 }
-` : ''}`;
+` : ''}${kind === 'adapter' ? `\nexport * from './adapter.js';\n` : ''}`;
   await fs.writeFile(path.join(pluginDir, 'src', 'index.ts'), libraryTs, 'utf8');
 
   // Vitest：与 tests/ 目录配套
@@ -414,73 +414,76 @@ export default defineCommand.withConfig<${capitalizedName}Config>()({
   }
 
   if (kind === 'adapter') {
-    const adapterTs = `/**
- * Convention entry: discover \`adapters/${pluginName}/index.ts\` → defineAdapter.
- * 最小形态参考 plugins/adapters/sandbox 与 plugins/adapters/email。
+    const adapterModuleTs = `/**
+ * Public Adapter, native Client/Endpoint and authoring type registration.
+ * Built into lib/ with declarations; the convention entry references these same classes.
  */
-import { Endpoint, defineAdapter, type EndpointSendRequest } from 'zhin.js/adapter';
+import { EventEmitter } from 'node:events';
+import { Adapter, createEndpointSpecification, endpointSpec,
+  type Endpoint, type EndpointIncomingMessage } from 'zhin.js/adapter';
 
 export interface ${capitalizedName}AdapterConfig {
-  /** Endpoint 唯一标识（对应 schema.json 的 id 字段） */
   id: string;
   /** 平台凭证等，按实际协议扩展 */
   token?: string;
 }
 
-export class ${capitalizedName}Client {
-  constructor(readonly token?: string) {}
+/** Replace this protocol skeleton with the platform SDK Client when available. */
+export class ${capitalizedName}Client extends EventEmitter<{ message: [EndpointIncomingMessage] }> {
+  readonly token?: string;
+  constructor(config: ${capitalizedName}AdapterConfig) { super(); this.token = config.token; }
 
+  async connect(signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    // TODO: Establish the platform transport and emit its native events.
+  }
+  async disconnect(): Promise<void> {
+    // TODO: Idempotently release transport, heartbeat and reconnect resources.
+  }
   async send(target: string, payload: unknown): Promise<string> {
-    // TODO: 调用平台 SDK / HTTP API，返回平台侧消息 ID。
+    // TODO: Call the platform API and return its real message ID.
     return \`stub-message-id:\${target}:\${typeof payload}\`;
   }
 }
 
-export class ${capitalizedName}Endpoint extends Endpoint<${capitalizedName}Client> {
-  readonly client: ${capitalizedName}Client;
-  #opened = false;
+export class ${capitalizedName}Endpoint extends ${capitalizedName}Client implements Endpoint {
+  readonly [endpointSpec] = createEndpointSpecification(this, {
+    start: signal => this.connect(signal),
+    open() {},
+    close() {},
+    stop: () => this.disconnect(),
+    send: request => this.send(request.conversation.id, request.payload),
+  });
 
-  constructor(
-    readonly endpointId: string,
-    config: ${capitalizedName}AdapterConfig,
-  ) {
-    super();
-    this.client = new ${capitalizedName}Client(config.token);
-  }
-
-  async start(_signal: AbortSignal): Promise<void> {
-    // TODO: 建立账号 Transport；收到任意平台事件后，经 emit() 统一投递。
-  }
-
-  open(): void {
-    this.#opened = true;
-  }
-
-  close(): void {
-    this.#opened = false;
-  }
-
-  async stop(): Promise<void> {
-    this.#opened = false;
-    // TODO: 幂等释放 Transport、心跳和重连任务。
-  }
-
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    return this.client.send(conversation.id, payload);
-  }
-
-  /** 示例：消息、通知、请求、生命周期和平台扩展事件都使用同一个 emit()。 */
-  admit(name: string, payload: unknown): Promise<unknown> {
-    if (!this.#opened) return Promise.resolve(undefined);
-    return this.emit(name, payload);
+  constructor(config: ${capitalizedName}AdapterConfig) {
+    super(config);
+    // Attach before connecting so the first platform event cannot be lost.
+    this.on('message', message => {
+      const events = this[endpointSpec].events;
+      void events.run(() => events.message(message)).catch(error => console.error(error));
+    });
   }
 }
 
+export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Endpoint, ${capitalizedName}AdapterConfig> {
+  protected createEndpoint(config: ${capitalizedName}AdapterConfig): ${capitalizedName}Endpoint {
+    return new ${capitalizedName}Endpoint(config);
+  }
+}
+
+declare module 'zhin.js/adapter' {
+  interface AdapterRegistry { '${pluginName}': ${capitalizedName}Adapter }
+}
+
+`;
+    await fs.outputFile(path.join(pluginDir, 'src', 'adapter.ts'), adapterModuleTs, 'utf8');
+    const adapterTs = `/** Convention discovery entry; public classes and types live in src/adapter.ts. */
+import { defineAdapter } from 'zhin.js/adapter';
+import { ${capitalizedName}Adapter, type ${capitalizedName}AdapterConfig } from '../../src/adapter.js';
+
 export default defineAdapter<${capitalizedName}AdapterConfig>({
   capabilities: ['inbound', 'outbound'],
-  create(context) {
-    return new ${capitalizedName}Endpoint(String(context.id), context.config);
-  },
+  createAdapter: () => new ${capitalizedName}Adapter(),
 });
 `;
     await fs.outputFile(path.join(pluginDir, 'adapters', pluginName, 'index.ts'), adapterTs, 'utf8');
@@ -488,7 +491,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
 
   const readmeIntro =
     kind === 'adapter'
-      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器；Endpoint 只管理账号 Transport，平台 Client 暴露业务 API，所有入站事件经 Endpoint.emit() 统一投递。`
+      ? `${capitalizedName} 适配器（\`zhin new --type adapter\` 生成）：约定式 Plugin Runtime 形态，\`adapters/\` 下的 \`defineAdapter\` 模块即适配器；Adapter 管理账号配置与生命周期；Endpoint 继承平台 Client，通过 endpointSpec 接入统一消息链路，保留原生 API 与事件。`
       : kind === 'service'
         ? `${capitalizedName} 服务插件（\`zhin new --type service\` 生成）：\`plugin.ts\` 的 \`setup(context)\` 负责初始化与清理，宿主资源（database/schedule/outbound）经 \`context.resources\` 按需取用。`
         : `${capitalizedName} 普通插件（\`zhin new\` / \`--type normal\` 生成）：\`commands/\` 下的 \`defineCommand\` 模块即命令，含动态段 \`[text]\` 示例。`;
@@ -525,7 +528,7 @@ ${readmeUse}
 - \`plugin.ts\`：插件入口（\`definePlugin\`）。\`zhin.entry\` 写的是 \`./plugin.js\`：本地运行时自动回退到 \`plugin.ts\`，npm 包里是打包时生成的 \`plugin.js\`
 - \`src/\`：库代码，\`pnpm build\` 编译到 \`lib/\`（\`.js\` + \`.d.ts\`），也是 \`import '${packageName}'\` 的入口；\`plugin.ts\` 和约定目录用 \`./src/xxx.js\` 这样的相对路径引用
 - \`schema.json\`：实例配置（\`<instanceKey>\`）的 JSON Schema，也是本插件唯一的配置声明。如改用 \`definePlugin({ config: Schema.object(...) })\` 获得自动推导的配置类型，请先删除 \`schema.json\`：两者同时存在会拒绝启动，Zhin 不会替你挑一个（见 https://zhin.js.org/authoring/define-plugin#choose-a-config-source）
-${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
+${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：薄约定入口（`defineAdapter`），`createAdapter` 返回 Adapter 实例\n- `src/adapter.ts`：公开 Client、Endpoint、Adapter、配置与 AdapterRegistry 类型注册，经 `src/index.ts` 导出\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
 
 ## AI 技能（skills）
@@ -639,41 +642,38 @@ async function generateTestFile(
   if (kind === 'adapter') {
     const capitalizedName = toCapitalizedName(pluginName);
     testContent = `import { describe, expect, it } from 'vitest';
-import { parseAdapterDefinition } from 'zhin.js/adapter';
+import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, endpointSpec, parseAdapterDefinition } from 'zhin.js/adapter';
+import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from 'zhin.js';
 import plugin from '../plugin.ts';
-import adapter, { ${capitalizedName}Endpoint } from '../adapters/${pluginName}/index.ts';
+import adapter from '../adapters/${pluginName}/index.ts';
+import { ${capitalizedName}Client, ${capitalizedName}Endpoint } from '../src/index.js';
 
 describe('${packageName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('${pluginName}');
-  });
-
-  it('brands the convention adapter', () => {
     expect(parseAdapterDefinition(adapter)).toBe(adapter);
   });
 
-  it('creates an endpoint that starts, sends and stops', async () => {
-    const endpoint = await adapter.create({
-      id: 'root/${pluginName}' as never,
-      name: '${pluginName}',
-      config: { id: 'test-bot' },
-      use: () => ({
-        receive: async () => ({ matched: false }),
-        send: async () => undefined,
-      }),
-    } as never);
-    expect(endpoint).toBeInstanceOf(${capitalizedName}Endpoint);
-    const typed = endpoint as ${capitalizedName}Endpoint;
-
-    await typed.start(new AbortController().signal);
-    typed.open();
-    const conversation = {
-      endpoint: { adapter: '${pluginName}', id: 'test-bot' },
-      kind: 'private',
-      id: 'c1',
-    } as const;
-    await expect(typed.send({ conversation, payload: 'hi' })).resolves.toBeTruthy();
-    await typed.stop();
+  it('creates a native Client endpoint through its owning Adapter', async () => {
+    const root = rootPluginId();
+    const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId,
+      localName: '${pluginName}', source: '/adapters/${pluginName}/index.ts', definition: adapter });
+    const snapshot: RuntimeSnapshot = {
+      generation: 1, root,
+      tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '${packageName}', packageRoot: '/', children: [] }]]),
+      config: new Map([[root, { id: 'test-bot' }]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+      resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]),
+    };
+    const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal);
+    try {
+      await index.start();
+      const endpoint = index.client<${capitalizedName}Endpoint>('${pluginName}', 'test-bot');
+      expect(endpoint).toBeInstanceOf(${capitalizedName}Client);
+      expect(endpoint).toBeInstanceOf(${capitalizedName}Endpoint);
+      expect(endpoint[endpointSpec].identity.id).toBe(index.resolve('${pluginName}', 'test-bot'));
+      await expect(index.send(endpoint[endpointSpec].identity.id, { conversation: { endpoint: { adapter: '${pluginName}', id: 'test-bot' },
+        kind: 'private', id: 'c1' }, payload: 'hi' })).resolves.toBeTruthy();
+    } finally { await index.stop(); }
   });
 });
 `;

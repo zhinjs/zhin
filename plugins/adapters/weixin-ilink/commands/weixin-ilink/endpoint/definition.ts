@@ -4,14 +4,12 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { weixinIlinkRuntimeStateToken } from '../../../src/weixin-ilink-runtime-state.js';
 
 export const weixinIlinkEndpointCommands = createEndpointCommands({
   adapterKey: 'weixin-ilink',
   adapterDisplayName: 'Weixin iLink',
   fields: [
-    { key: 'botToken', required: true, env: true, description: 'iLink bot token' },
+    { key: 'botToken', env: true, description: 'iLink bot token' },
   ],
-  running: (use) => use(weixinIlinkRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `botToken: ${String(entry.botToken)}`,
 }, defineCommand);

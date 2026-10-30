@@ -30,13 +30,12 @@ interface CommandTestClient {
   readonly id: string;
 }
 
+declare class RegisteredTestAdapter {
+  readonly adapterEvents: Record<string, unknown>;
+  getEndpoint(instanceId: string): CommandTestClient | undefined;
+}
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly 'command-test': {
-      readonly client: CommandTestClient;
-      readonly events: Record<string, unknown>;
-    };
-  }
+  interface AdapterRegistry { readonly 'command-test': RegisteredTestAdapter; }
 }
 
 function slotFor(owner: TestPluginId, localName: string, result = 'ok') {

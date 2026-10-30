@@ -2,8 +2,9 @@
  * Slack outbound — chat.postMessage + Block Kit + files.uploadV2
  */
 import type { Logger } from '@zhin.js/logger';
+import type { WebClient } from '@slack/web-api';
 import { markdownToMrkdwn, mrkdwnToPlainFallback, splitMrkdwnText } from './markdown-to-mrkdwn.js';
-import { formatOutboundWire, keyboardToBlockKitBlocks } from './protocol.js';
+import { formatOutboundWire, keyboardToBlockKitBlocks, type SlackBlock } from './protocol.js';
 
 export interface SlackOutboundResult {
   ts: string;
@@ -15,11 +16,8 @@ export interface SlackSendOptions {
 }
 
 export interface SlackChatClient {
-  chat: {
-    postMessage(opts: Record<string, unknown>): Promise<{ ts?: string }>;
-    update(opts: Record<string, unknown>): Promise<unknown>;
-  };
-  filesUploadV2?(opts: Record<string, unknown>): Promise<unknown>;
+  chat: Pick<WebClient['chat'], 'postMessage' | 'update'>;
+  filesUploadV2?: WebClient['filesUploadV2'];
 }
 
 const SLACK_MAX_BLOCKS_PER_MESSAGE = 48;
@@ -64,7 +62,7 @@ export async function editSlackContent(
   const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
   const payloadBlocks = blocks.slice(0, SLACK_MAX_BLOCKS_PER_MESSAGE);
 
-  const updateOpts: Record<string, unknown> = {
+  const updateOpts: { channel: string; ts: string; text: string; blocks?: SlackBlock[] } = {
     channel,
     ts,
     text: textDelivery.fallbackText || ' ',
@@ -75,7 +73,7 @@ export async function editSlackContent(
 
 function applyTextMrkdwnBlocks(
   textContent: string,
-  blocks: Record<string, unknown>[],
+  blocks: SlackBlock[],
 ): { fallbackText: string } {
   const trimmed = textContent.trim();
   if (!trimmed) return { fallbackText: '' };
@@ -99,7 +97,7 @@ async function postSlackMessage(
   opts: {
     channel: string;
     threadTs?: string;
-    blocks: Record<string, unknown>[];
+    blocks: SlackBlock[];
     attachments: Record<string, unknown>[];
     fallbackText: string;
   },

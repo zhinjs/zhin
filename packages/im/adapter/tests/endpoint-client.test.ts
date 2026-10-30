@@ -1,125 +1,80 @@
 import { EventEmitter } from 'node:events';
-import {
-  ClientEndpoint,
-  defineEndpointClient,
-  type EndpointClientContext,
-} from '../src/endpoint-client.js';
-import { bindEndpoint, endpointEventGatewayToken } from '../src/endpoint.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { readOperationClient } from '@zhin.js/feature-kit';
+import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken,
+  forwardEndpointClientEvents, type Endpoint, type EndpointEvent } from '../src/index.js';
 
-interface NativeClient {
-  readonly id: string;
-  call(action: string): string;
+class NativeClient extends EventEmitter { call(action: string): string { return action; } }
+class NativeEventEndpoint extends NativeClient implements Endpoint {
+  #release?: () => void;
+  readonly [endpointSpec] = createEndpointSpecification(this, {
+    start() {},
+    open: () => { this.#release = forwardEndpointClientEvents(this, ['native.event'], (name, event) => { void this[endpointSpec].events.platform(name, event); }); },
+    close: () => { this.#release?.(); this.#release = undefined; },
+    stop: () => { this.#release?.(); this.#release = undefined; },
+  });
+}
+class NativeAdapter extends Adapter<NativeEventEndpoint> {
+  protected createEndpoint(): NativeEventEndpoint { return new NativeEventEndpoint(); }
+}
+const cleanup: Array<() => Promise<void>> = [];
+afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close(); });
+async function fixture() {
+  const owner = rootPluginId(), receive = vi.fn(async (_event: EndpointEvent) => undefined);
+  const adapter = new NativeAdapter();
+  const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'native', source: '/fixture/adapters/native/index.ts',
+    definition: defineAdapter({ capabilities: ['inbound'], createAdapter: () => adapter }) });
+  const state: SnapshotState = { root: owner, tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
+    config: new Map([[owner, {}]]), resources: new Map([[owner, new Map([[endpointEventGatewayToken.id, { receive }]])]]), capabilities: new Map([[slot.id, slot]]), projections: new Map() };
+  const index = await AdapterIndex.create([slot], createSnapshotView(0, state), new AbortController().signal);
+  const store = new SnapshotStore({ ...state, projections: new Map([[adapterFeatureId, index]]) });
+  cleanup.push(() => store.close(), () => index.stop());
+  const endpoint = adapter.getEndpoint(adapter.list()[0]!.instanceId)!;
+  return { index, adapter, endpoint, receive, id: slot.id };
 }
 
-const nativeClient = defineEndpointClient<NativeClient>('native');
-
-class NativeEventEndpoint extends ClientEndpoint<EventEmitter> {
-  readonly client = new EventEmitter();
-
-  constructor() {
-    super();
-    this.bindClientEvents((receive) => {
-      const listener = (payload: unknown) => receive('native.event', payload);
-      this.client.on('native.event', listener);
-      return () => this.client.off('native.event', listener);
-    });
-  }
-
-  start(): void {}
-  stop(): void {}
-}
-
-describe('ClientEndpoint', () => {
-  it('owns the single open-gated Client event bridge', async () => {
-    const receive = vi.fn(async () => undefined);
-    const endpoint = new NativeEventEndpoint();
-    bindEndpoint(endpoint, {
-      id: 'native-endpoint',
-      name: 'native',
-      use: (token: unknown) => token === endpointEventGatewayToken ? { receive } : undefined,
-    } as never);
-
-    endpoint.client.emit('native.event', { phase: 'closed' });
-    expect(receive).not.toHaveBeenCalled();
-
-    endpoint.open();
-    endpoint.client.emit('native.event', { phase: 'open' });
-    await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
-    expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'platform.receive',
-      payload: { name: 'native.event', event: { phase: 'open' } },
-      client: endpoint.client,
-    }));
-
-    endpoint.close();
-    endpoint.client.emit('native.event', { phase: 'closed-again' });
-    expect(receive).toHaveBeenCalledOnce();
+describe('native Client events through the owning Adapter and symbol specification', () => {
+  it('owns a single open-gated bridge, retains native event identity, and detaches on close/stop', async () => {
+    const f = await fixture(), raw = { phase: 'open', nativeMethod: () => 'native-event' };
+    expect(f.endpoint).toBeInstanceOf(NativeClient); expect(f.endpoint.emit).toBe(EventEmitter.prototype.emit);
+    f.endpoint.emit('native.event', { phase: 'not-started' }); expect(f.receive).not.toHaveBeenCalled();
+    await f.index.start(); f.endpoint.emit('native.event', { phase: 'closed' }); expect(f.receive).not.toHaveBeenCalled();
+    f.index.open(); f.index.open(); expect(f.endpoint.listenerCount('native.event')).toBe(1);
+    f.endpoint.emit('native.event', raw); await vi.waitFor(() => expect(f.receive).toHaveBeenCalledOnce());
+    const event = f.receive.mock.calls[0]![0]; expect(event).toMatchObject({ name: 'platform.receive', payload: { name: 'native.event', event: raw } });
+    expect(event.client).toBe(f.endpoint); expect((event.payload as { event: unknown }).event).toBe(raw);
+    await f.index.close(); f.endpoint.emit('native.event', { phase: 'closed-again' }); expect(f.receive).toHaveBeenCalledOnce(); expect(f.endpoint.listenerCount('native.event')).toBe(0);
+    f.index.open(); expect(f.endpoint.listenerCount('native.event')).toBe(1); await f.index.stop();
+    f.endpoint.emit('native.event', { phase: 'retired' }); expect(f.receive).toHaveBeenCalledOnce(); expect(f.endpoint.listenerCount('native.event')).toBe(0);
   });
 });
 
-describe('EndpointClientToken.get', () => {
-  it('infers the current Client from command and inbound middleware input', () => {
-    const client: NativeClient = { id: 'bot', call: (action) => action };
-    const context = {
-      input: {
-        endpointId: 'bot',
-        clientAdapter: 'native',
-        conversation: { endpoint: { id: 'capability-id' } },
-        get $client() { return client; },
-      },
-    } as unknown as EndpointClientContext;
-
-    expect(nativeClient.get(context)).toBe(client);
-    expect(nativeClient.get(context, 'bot')).toBe(client);
-    expect(nativeClient.get(context, 'capability-id')).toBe(client);
-    expect(() => nativeClient.get(context, 'other')).toThrow(/does not match/);
-    expect(nativeClient.find(context)).toBe(client);
-    expect(defineEndpointClient<NativeClient>('other').find(context)).toBeUndefined();
+describe('the actual operation Client and explicit detached Index selection', () => {
+  it('infers command/inbound middleware input without a second Client descriptor registry', async () => {
+    const f = await fixture(); await f.index.start(); const lease = f.adapter.acquire(f.id);
+    const input = { clientAdapter: 'native', get $client() { lease.assertActive(); return lease.endpoint; } };
+    try {
+      expect(readOperationClient({ input }, 'native')).toBe(f.endpoint);
+      expect(readOperationClient(input, 'native')).toBe(f.endpoint); expect(f.endpoint.call('action')).toBe('action');
+      expect(() => readOperationClient({ input }, 'other')).toThrow('Adapter other cannot access native Client');
+    } finally { lease.release(); }
+    expect(() => readOperationClient({ input }, 'native')).toThrow('retired');
   });
-
-  it('resolves outbound middleware from its conversation endpoint', () => {
-    const client: NativeClient = { id: 'outbound', call: (action) => action };
-    const resolved: unknown[][] = [];
-    const context = projectionContext(client, resolved, {
-      input: { conversation: { endpoint: { id: 'native~main' } } },
-    });
-
-    expect(nativeClient.get(context)).toBe(client);
-    expect(resolved).toEqual([['native', 'native~main']]);
+  it('resolves outbound middleware’s exact conversation Endpoint through the real Index', async () => {
+    const f = await fixture(); expect(() => f.index.client('native', f.id)).toThrow('not active');
+    await f.index.start(); const conversation = { endpoint: { id: f.id, adapter: 'native' }, kind: 'private', id: 'room' };
+    expect(f.index.client('native', conversation.endpoint.id)).toBe(f.endpoint);
+    expect(f.index.findClient('other', conversation.endpoint.id)).toBeUndefined();
+    expect(() => f.index.client('other', conversation.endpoint.id)).toThrow('does not exist');
+    await f.index.stop(); expect(f.index.findClient('native', f.id)).toBeUndefined();
   });
-
-  it('infers an IM tool origin and requires detached tasks to select an endpoint', () => {
-    const client: NativeClient = { id: 'tool', call: (action) => action };
-    const resolved: unknown[][] = [];
-    const imTool = projectionContext(client, resolved, {
-      origin: { kind: 'im', platform: 'native', endpoint: 'bot-1' },
-    });
-    expect(nativeClient.get(imTool)).toBe(client);
-    expect(resolved).toEqual([['native', 'bot-1']]);
-
-    const detached = projectionContext(client, [], {});
-    expect(() => nativeClient.get(detached)).toThrow(/explicit endpoint key/);
-    expect(nativeClient.get(detached, 'bot-2')).toBe(client);
+  it('uses the existing operation Client for IM tools and requires explicit detached Endpoint selection', async () => {
+    const f = await fixture(); await f.index.start();
+    expect(readOperationClient({ clientAdapter: 'native', $client: f.endpoint }, 'native')).toBe(f.endpoint);
+    expect(() => readOperationClient({}, 'native')).toThrow('unavailable outside its IM operation');
+    expect(readOperationClient({})).toBeUndefined();
+    expect(f.index.client('native', f.id)).toBe(f.endpoint);
+    expect(() => f.index.client('native', 'other-account')).toThrow('does not exist');
   });
 });
-
-function projectionContext(
-  client: NativeClient,
-  resolved: unknown[][],
-  fields: Partial<EndpointClientContext>,
-): EndpointClientContext {
-  return {
-    ...fields,
-    project: () => ({
-      $projection: 'zhin.adapter-index/1',
-      client(adapter: string, endpointKey: string) {
-        resolved.push([adapter, endpointKey]);
-        return client;
-      },
-      findClient(adapter: string, endpointKey: string) {
-        resolved.push([adapter, endpointKey]);
-        return client;
-      },
-    }),
-  } as EndpointClientContext;
-}

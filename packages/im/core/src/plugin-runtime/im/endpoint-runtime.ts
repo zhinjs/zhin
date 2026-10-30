@@ -5,7 +5,7 @@ import {
   type AdapterEndpointPhase,
   type AdapterOperation,
   type EndpointControl,
-  type Endpoint,
+  type AdapterEndpointSummary,
   type EndpointTransportState,
   type EndpointManagement,
   type EndpointManagementCapability,
@@ -33,7 +33,7 @@ export interface EndpointRuntimeSummary {
   readonly connected: boolean;
   readonly admitted: boolean;
   readonly transportState: EndpointTransportState | 'unknown';
-  readonly eventDiagnostics: Endpoint['eventDiagnostics'];
+  readonly eventDiagnostics: AdapterEndpointSummary['eventDiagnostics'];
   readonly status: 'online' | 'offline';
   readonly phase: AdapterEndpointPhase;
   readonly operations: readonly AdapterOperation[];

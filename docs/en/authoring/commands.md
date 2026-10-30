@@ -529,45 +529,39 @@ Programmatic `CommandIndex.dispatch()` returns `status: unmatched | invalid | de
 ### Endpoint management commands for adapters
 
 ::: details Generate list / add / remove commands for an adapter
-`createEndpointCommands(spec, defineCommand)` from `@zhin.js/adapter` generates `<adapter> endpoint list / add / remove` so accounts can be managed from chat. Every platform adapter uses it except email (nested config objects) and sandbox (no credentials): qq, icqq, napcat, onebot11, onebot12, milky, satori, slack, telegram, discord, kook, lark, dingtalk, line, wecom, wechat-mp, weixin-ilink, github.
+`createEndpointCommands(spec, defineCommand)` generates `<adapter> endpoint list / add / remove` and shares the owning Adapter and persistence with Console. Declare platform-specific QR or login commands separately rather than hiding them in a generic `bindFlow` callback.
 
-For an Adapter subclass managed by the official CLI:
-
-- `list` reads desired accounts and live status from the owning Adapter.
-- `add <name> <key=value...>` saves encrypted configuration with the account disabled. Start it manually in Console; adding does not start login or QR binding.
-- `remove <name>` stops admission, cancels that account's work, then closes and removes it. History remains; recreating the name gets a new identity.
-- Before the first change, an administrator must confirm legacy-account migration in Console. A chat command cannot confirm it. Afterwards, changes use the database without rewriting startup files or `.env`, or restarting the process.
-- Existing master permissions still apply. Conflicts and storage failures are reported without falling back to file writes.
-
-The runtime-state and `EndpointConfigurationStore` example below describes the compatibility path for existing `defineAdapter({ create })` adapters or custom hosts. Only when runtime Adapter management is absent does it retain startup-file / `.env` writes, restart requirements and `spec.bindFlow`. Do not use both storage paths for the same account.
-
-Integration steps (Telegram example):
+- `list` reads account configuration and runtime status from the owning Adapter, without another Endpoint Map.
+- `add <id> <key=value...>` saves disabled configuration only. Start the account manually in Console.
+- `remove <id>` cancels the target incarnation and closes its connection. History remains; recreating the same name gets a new identity.
+- Before the first change, an administrator must review existing accounts and confirm migration in Console. Chat commands cannot confirm it.
+- Later changes use encrypted persistence without modifying startup files or `.env`, or restarting Root. Missing runtime or database support rejects writes without a file fallback.
+- Existing master permissions apply. Refresh on revision conflict; verify an unknown commit through authoritative state before any further action, without automatically retrying it.
 
 ```ts
-// 1. src/telegram-runtime-state.ts: registry of running accounts
-export const telegramRuntimeStateToken = defineEndpointRuntimeStateToken('telegram');
+// src/telegram-endpoint-commands.ts
+import { createEndpointCommands } from 'zhin.js/adapter';
+import { defineCommand } from 'zhin.js/command';
 
-// 2. provide the state in plugin.ts setup(); register in adapters/telegram/index.ts create()
-context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
-// create(): context.use(telegramRuntimeStateToken).endpoints.set(config.name, { name: config.name, mode: config.mode });
-
-// 3. src/telegram-endpoint-commands.ts: generate commands (defineCommand is injected by the adapter to avoid cross-package imports)
 export const telegramEndpointCommands = createEndpointCommands({
-  adapterKey: 'telegram',          // = top-level instance alias in zhin.config.yml
+  adapterKey: 'telegram',
   adapterDisplayName: 'Telegram',
-  fields: [{ key: 'token', required: true, env: true, description: 'Telegram bot token' }],
-  running: (use) => use(telegramRuntimeStateToken).endpoints.values(),
-  describeEntry: (entry) => `token: ${String(entry.token)}`,
+  fields: [{ key: 'token', required: true, env: true,
+    description: 'Telegram bot token' }],
 }, defineCommand);
 
-// 4. commands/telegram/endpoint/list/index.ts, add/[[name]]/index.ts, remove/[name]/index.ts
-export default telegramEndpointCommands.list; // / .add / .remove
+// commands/telegram/endpoint/list/index.ts
+export default telegramEndpointCommands.list;
+// add/[id]/index.ts exports .add; remove/[id]/index.ts exports .remove
 ```
 
-`fields` should match `endpoints.items.properties` in the adapter's `schema.json`; `add` reads `key=value` pairs from `args`, splitting on the first `=`.
+`adapterKey` is the registered Adapter name within the current owner. The framework resolves its directory from the real command operation’s owner, generation and AdapterIndex, never from display names. Register the actual `AdapterRegistry` type once; no RuntimeState token or separate Client token is needed.
 
-For finer business permissions, check inside `execute` — e.g. the endpoint commands' `isEndpointOperator` reads the `master` list from `config`, the sender id from `input`, and returns a refusal when they don't match.
+`fields` is a closed list matching the platform schema. Nested fields use explicitly declared dotpaths such as `smtp.port`; `type` accepts `string | number | boolean`, defaulting to string. Arbitrary object merging is not supported. `env: true` or `secret: true` marks sensitive fields for masked responses and Host-private persistence; it does not enable `.env` writes. `add` reads `key=value` arguments and splits at the first `=`.
+
+The real entry uses the common `isEndpointOperator` master check. Additional platform permissions must not replace or widen that gate.
 :::
+
 
 ## Next steps
 

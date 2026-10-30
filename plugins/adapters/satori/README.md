@@ -22,19 +22,19 @@ pnpm add @zhin.js/adapter-satori
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/satori/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、统一出站管道
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - `@zhin.js/host-http` — Webhook 模式需 `httpHostToken` 注册 POST 路由
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`（`baseUrl` / `token` / …）
 
-入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef：DIRECT 频道 → kind `private`，其余 → kind `group`、所属 guild 进 `parent`）  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef：DIRECT 频道 → kind `private`，其余 → kind `group`、所属 guild 进 `parent`）
+
 出站：`send({ conversation, payload })` → Satori `message.create`（`channel_id = conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
 
-入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（READY/事件 `login.user.id`）时置 `true`。
+入站 `metadata.mentioned`：消息 content 中 `<at id="…"/>` 元素的 id 等于登录 selfId（配置的 `userId`）时置 `true`。
 
-每个 Endpoint 的 `$client` 是 `@imhelper/satori-v1` 的 `SatoriV1Client`。业务代码直接调用
-`$client.call(resource, method, params)` 或其公开便捷方法；Client 负责协议事件变换，Endpoint
-只负责 Satori IDENTIFY/心跳、Webhook 鉴权和 Zhin 投影。
+每个 Endpoint 直接继承 `@imhelper/satori-v1` 的 `SatoriV1Client`，由所属 `SatoriAdapter` 管理。业务代码直接调用
+`$client.call(resource, method, params)` 或其公开便捷方法；协议事件变换、Satori IDENTIFY/心跳与 Webhook 鉴权由该实际 Client 处理，Zhin 投影经 `endpointSpec.events` 接入。
 
 ## 前置条件
 
@@ -54,17 +54,21 @@ satori:
   heartbeat_interval: 10000
   endpoints:
     - id: satori-bot
+      platform: qq
+      userId: "123456789"
       baseUrl: "http://127.0.0.1:5140"
       token: "${SATORI_TOKEN}"
 ```
 
 主配置 `plugins` 映射需引用 `@zhin.js/adapter-satori`（`instanceKey: satori`）。
 
-### 可选字段
+### Endpoint 字段
 
 | 字段 | 说明 |
 |------|------|
 | `heartbeat_interval` | WS PING 间隔（毫秒），默认 `10000` |
+| `platform` | 必填，远端 login 的平台标识 |
+| `userId` | 必填，远端 login 的用户标识（字符串） |
 | `token` | Bearer；可在 YAML 中引用 `${SATORI_TOKEN}` |
 
 ### Webhook
@@ -77,12 +81,14 @@ satori:
   connection: webhook
   endpoints:
     - id: satori-bot
+      platform: qq
+      userId: "123456789"
       baseUrl: "http://127.0.0.1:5140"
       path: "/satori/webhook"
       token: "${SATORI_TOKEN}"
 ```
 
-SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适配器从首个事件的 `login` 取得 platform / userId 用于后续 API 调用。
+SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；每个 Endpoint 必须配置 `platform` 与 `userId`。仅接纳这两个字段精确匹配的 login 事件；API 请求也固定使用这组身份。READY 中其他 login 不会改变当前账号。
 
 ## 鉴权
 
@@ -109,7 +115,7 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适�
 启动后打开 Console 的「Satori」页（地址 `/satori`），可以：
 
 - 查看运行中的连接、点「测试连接」做连通性诊断；
-- 增删 `plugins.satori.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
 读取需要 `satori:read`，写操作需要 `satori:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `satori endpoint add`。

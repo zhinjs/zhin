@@ -13,7 +13,7 @@ export default defineAgentTool({
     user_id: z.string().min(1).describe('目标成员的 member_openid（来自消息发送者或成员列表，不要猜测）'),
   }),
   async execute({ user_id }, context) {
-    const member = await context.$client.api.groupService.getMemberInfo(currentGroup(context), user_id);
+    const member = await context.$client.groupService.getMemberInfo(currentGroup(context), user_id);
     return { success: true, member };
   },
 });

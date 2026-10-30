@@ -4,7 +4,7 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
  */
 import WebSocket from 'ws';
 import {
-  Endpoint,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
@@ -38,12 +38,10 @@ import {
 } from './protocol.js';
 import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import {
-  callNapCatWsAction,
   handleNapCatWsMessage,
   rejectAllPending,
 } from './ws-transport.js';
 import {
-  type NapCatPendingAction,
   type NapCatWsCreateOptions,
   type NapCatWsSocket,
 } from './ws-types.js';
@@ -52,6 +50,7 @@ import { NapcatClient } from './client.js';
 
 export interface NapCatWsEndpointOptions {
   readonly id: CapabilityId;
+  readonly signal?: AbortSignal;
   readonly config: NapCatWsConfig;
   readonly createWebSocket?: (
     url: string,
@@ -59,25 +58,36 @@ export interface NapCatWsEndpointOptions {
   ) => NapCatWsSocket;
 }
 
-export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
-  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
+export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: NapCatWsEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
-  readonly management: EndpointManagement = createNapCatEndpointManagement(this.client);
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createNapCatContentPort((action, params) => this.client.callApi(action, params));
+  readonly #management: EndpointManagement = createNapCatEndpointManagement(this);
+  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
+  readonly #content = createNapCatContentPort((action, params) => this.callApi(action, params));
   readonly #lifecycle: EndpointLifecycle;
-  #ws?: NapCatWsSocket;
-  #requestId = { value: 0 };
-  #pending = new Map<string, NapCatPendingAction>();
   #open = false;
 
   constructor(options: NapCatWsEndpointOptions) {
-    super();
+    super(options.config, undefined, options.signal);
     this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
+    const readTransportState = () => this.#transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => this.#openEndpoint(),
+      close: () => this.#close(), stop: () => this.#stop(),
+      send: request => this.#send(request),
+      management: this.#management, control: this.#control, content: this.#content,
+      get transportState() { return readTransportState(); },
+    });
+    this.on('event', event => {
+      void this[endpointSpec].events.run(() => this.#admit(event)).catch((error: unknown) => {
+        this.#logger.debug(formatCompact({ op: 'napcat_receive_failed', error: error instanceof Error ? error.message : String(error) }));
+      });
+    });
     this.#lifecycle = createEndpointLifecycle({
       name: options.config.id,
       heartbeat: { intervalMs: options.config.heartbeat_interval, watchdogMisses: 2 },
@@ -91,42 +101,46 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
     });
   }
 
-  get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     return this.#lifecycle.state;
   }
 
-  async start(): Promise<void> {
+  protected override get actionSocket(): NapCatWsSocket | undefined {
+    return this.#lifecycle.state === 'open' ? this.transportSocket : undefined;
+  }
+
+  async #start(): Promise<void> {
     if (this.#lifecycle.started) return;
     await this.#lifecycle.start((handle) => this.#connect(handle));
   }
 
-  open(): void {
+  #openEndpoint(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #close(): void {
     this.#open = false;
   }
 
-  async stop(): Promise<void> {
+  async #stop(): Promise<void> {
     this.#open = false;
     await this.#lifecycle.stop();
-    rejectAllPending(this.#pending);
+    rejectAllPending(this.pendingActions);
     this.#inboundDeduper.clear();
-    if (this.#ws) {
+    if (this.transportSocket) {
       try {
-        this.#ws.close();
+        this.transportSocket.close();
       } catch {
         /* ignore */
       }
-      this.#ws = undefined;
+      this.transportSocket = undefined;
     }
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
-    const data = await this.client.callApi(action, params) as { message_id?: number | string } | undefined;
+    const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
     const rawId = data?.message_id;
     if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
       throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
@@ -141,19 +155,18 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
     return messageId;
   }
 
-  async recallMessage(messageId: string): Promise<void> {
+  async #recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.client.callApi('delete_msg', { message_id: Number(messageId) });
+    await this.callApi('delete_msg', { message_id: Number(messageId) });
   }
 
-  #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
-    return callNapCatWsAction(this.#lifecycle.state === 'open' ? this.#ws : undefined, this.#pending, this.#requestId, action, params);
-  }
+
 
   /** Test / internal: admit a parsed event when the endpoint is open. */
-  admit(ev: NapCatEvent): void {
-    if (!this.#open) return;
-    void this.emitPlatform(napCatPlatformEventName(ev), ev).catch((error) => {
+  #admit(ev: NapCatEvent): void {
+    const nativeEvent = ev;
+    if (!this.#open && !this.#lifecycle.started) return;
+    void this[endpointSpec].events.platform(napCatPlatformEventName(ev), ev).catch((error) => {
       this.#logger.warn(formatCompact({
         op: 'napcat_platform_event_failed',
         error: error instanceof Error ? error.message : String(error),
@@ -161,9 +174,9 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
     });
     if (!isMessageEvent(ev)) {
       receiveNapCatSideEvent(
-        (name, payload) => this.emit(name, payload),
+        (name, payload) => this[endpointSpec].events.emit(name, payload),
         this.#options.config.id,
-        this.client,
+        this,
         ev,
         this.#logger,
       );
@@ -175,11 +188,13 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
     if (Array.isArray(ev.message) || typeof ev.message === 'string') {
       ev = { ...ev, message: normalizeMessage(ev.message) };
     }
-    const conversation = napcatInboundConversation(String(this.#options.id), ev);
+    const conversation = { ...napcatInboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event: nativeEvent,
+      ...(typeof nativeEvent.time === 'number' ? { platformSentAt: nativeEvent.time * 1000 } : {}),
       conversation,
       message: { conversation, id: msgId },
       content,
@@ -217,10 +232,10 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       const ws = create(url, { headers });
-      this.#ws = ws;
+      this.transportSocket = ws;
       handle.onForceClose(() => {
-        if (this.#ws === ws) {
-          rejectAllPending(this.#pending);
+        if (this.transportSocket === ws) {
+          rejectAllPending(this.pendingActions);
         }
         try {
           ws.close();
@@ -230,7 +245,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
       });
 
       ws.on('open', () => {
-        if (settled || this.#ws !== ws || !this.#lifecycle.started) return;
+        if (settled || this.transportSocket !== ws || !this.#lifecycle.started) return;
         settled = true;
         if (!this.#options.config.access_token) {
           this.#logger.warn(formatCompact({
@@ -258,22 +273,22 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
       });
 
       ws.on('pong', () => {
-        if (this.#ws === ws) this.#lifecycle.notifyHeartbeatAck();
+        if (this.transportSocket === ws) this.#lifecycle.notifyHeartbeatAck();
       });
       ws.on('message', (data) => {
-        if (this.#ws !== ws || ws.readyState !== 1 || !this.#lifecycle.started) return;
+        if (this.transportSocket !== ws || ws.readyState !== 1 || !this.#lifecycle.started) return;
         this.#lifecycle.notifyHeartbeatAck();
         handleNapCatWsMessage(data, {
           endpointId: this.#options.config.id,
-          pending: this.#pending,
-          admit: (event) => this.admit(event),
+          pending: this.pendingActions,
+          admit: (event) => this.ingest(event),
         });
       });
 
       ws.on('close', (code, reason) => {
-        if (this.#ws !== ws) return;
-        this.#ws = undefined;
-        rejectAllPending(this.#pending);
+        if (this.transportSocket !== ws) return;
+        this.transportSocket = undefined;
+        rejectAllPending(this.pendingActions);
         const reasonStr = typeof reason === 'string'
           ? reason
           : Buffer.isBuffer(reason)
@@ -300,7 +315,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
       });
 
       ws.on('error', (err) => {
-        if (this.#ws !== ws) return;
+        if (this.transportSocket !== ws) return;
         const error = err instanceof Error ? err : new Error(String(err));
         this.#logger.warn(formatCompact({
           op: 'ws_error',

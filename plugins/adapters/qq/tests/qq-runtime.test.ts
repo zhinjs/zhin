@@ -1,4 +1,5 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { qqFixture } from './fixture.js';
+import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
@@ -8,7 +9,6 @@ import defineQqAdapter from '../adapters/qq/index.js';
 import {
   QqWebsocketEndpoint,
   QqHttpEndpoint,
-  type CreateQqBot,
   type QqBotTransport,
 } from '../src/endpoint.js';
 import {
@@ -19,8 +19,6 @@ import {
   type QqInboundMessage,
 } from '../src/protocol.js';
 import { formatOutbound, type QqOutboundMessage } from '../src/outbound.js';
-import { qqClient } from '../src/client.js';
-import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 import { stopQqOfficialBot } from '../src/ws.js';
 import type { Bot } from 'qq-official-bot';
 
@@ -39,17 +37,21 @@ it.each(['websocket', 'middleware'])('does not falsely confirm an unavailable QQ
   const http = createHttpHost({ host: '127.0.0.1', port: 0 });
   const id = capabilityId(rootPluginId(), adapterFeature, 'qq');
   const endpoint = mode === 'websocket'
-    ? new QqWebsocketEndpoint({ id, config: baseConfig, createBot: () => bot })
-    : new QqHttpEndpoint({ id, http, createBot: () => bot, config: { ...baseConfig, mode: 'middleware', webhookPath: '/qq/webhook' } });
+    ? await qqFixture(() => new QqWebsocketEndpoint({id,
+config: baseConfig}), () => bot)
+    : await qqFixture(() => new QqHttpEndpoint({id,
+http,
+config: { ...baseConfig, mode: 'middleware', webhookPath: '/qq/webhook' }}), () => bot);
   try {
     await endpoint.start();
-    await expect(endpoint.recallMessage('group-group-1:sent-1')).rejects.toMatchObject({ code: 'recall_unsupported', disposition: 'not_sent' });
+    Object.defineProperty(endpoint.endpoint, 'recallGroupMessage', { value: undefined, writable: true, configurable: true });
+    await expect(endpoint.endpoint.recallMessage('group-group-1:sent-1')).rejects.toMatchObject({ code: 'recall_unsupported', disposition: 'not_sent' });
     const recall = vi.fn(async () => undefined);
-    Object.assign(bot, { recallGroupMessage: recall });
-    await endpoint.recallMessage('group-group-1:sent-1');
+    Object.assign(endpoint.endpoint, { recallGroupMessage: recall });
+    await endpoint.endpoint.recallMessage('group-group-1:sent-1');
     expect(recall).toHaveBeenCalledWith('group-1', 'sent-1');
-    expect(recall.mock.contexts[0]).toBe(bot);
-    await expect(endpoint.recallMessage('group-group-1:')).rejects.toMatchObject({ code: 'invalid_message_id' });
+    expect(recall.mock.contexts[0]).toBe(endpoint.endpoint);
+    await expect(endpoint.endpoint.recallMessage('group-group-1:')).rejects.toMatchObject({ code: 'invalid_message_id' });
   } finally { await endpoint.stop(); await http.close(); }
 });
 
@@ -112,99 +114,75 @@ function createMockBot(): QqBotTransport & {
       sent.push({ kind: 'direct', id, message });
       return { id: `sent-${sent.length}` };
     }),
-    getGuilds: vi.fn(async () => [{ id: 'guild-1', name: 'Guild' }]),
-    getChannels: vi.fn(async () => [{ id: 'chan-1', name: 'general' }]),
-    getChannelInfo: vi.fn(async (id: string) => ({ id, name: 'general' })),
-    getGuildMember: vi.fn(async () => ({ user: { id: 'user-1' } })),
-    getGuildRoles: vi.fn(async () => [{ id: 'role-1', name: 'Admin' }]),
-    createGuildRole: vi.fn(async (_g: string, name: string) => ({ id: 'role-new', name })),
-    addMemberRole: vi.fn(async () => true),
-    removeMemberRole: vi.fn(async () => true),
+    guildService: { getList: vi.fn(async () => [{ id: 'guild-1', name: 'Guild' }]), getRoles: vi.fn(async () => [{ id: 'role-1', name: 'Admin' }]) },
+    channelService: { getList: vi.fn(async () => [{ id: 'chan-1', name: 'general' }]), getInfo: vi.fn(async (id: string) => ({ id, name: 'general' })) },
+    memberService: { getGuildMemberInfo: vi.fn(async () => ({ user: { id: 'user-1' } })) },
   };
 }
 
 afterEach(() => {
 });
 
-describe.each(['websocket', 'middleware'] as const)('QQ %s startup isolation', (mode) => {
-  function fixture() {
+describe.each(['websocket', 'middleware'] as const)('QQ %s startup isolation with the actual Bot and Session', mode => {
+  async function fixture() {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const oldBot = { ...createMockBot(), middleware: vi.fn(async () => undefined) };
     const newBot = { ...createMockBot(), middleware: vi.fn(async () => undefined) };
     const factory = vi.fn().mockReturnValueOnce(oldBot).mockReturnValue(newBot);
-    const id = capabilityId(rootPluginId(), adapterFeature, 'qq');
-    const endpoint = mode === 'websocket'
-      ? new QqWebsocketEndpoint({ id, config: baseConfig, createBot: factory })
-      : new QqHttpEndpoint({ id, http, createBot: factory, config: {
-        context: 'qq', mode: 'middleware', id: 'test-qq-bot', appid: 'app-1', secret: 'secret-1',
-        webhookPath: '/qq/webhook', sandbox: false,
-      } });
-    return { endpoint, oldBot, newBot, http };
+    const receive = vi.fn(async () => undefined);
+    const create = () => qqFixture(() => mode === 'websocket'
+      ? new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig })
+      : new QqHttpEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), http,
+        config: { ...baseConfig, mode: 'middleware', webhookPath: '/qq/webhook' } }), factory, { receive });
+    return { endpoint: await create(), create, oldBot, newBot, factory, receive, http };
   }
-
-  it.each(['resolve', 'reject'] as const)('ignores late startup %s after stop and restart', async (result) => {
-    const { endpoint, oldBot, newBot, http } = fixture();
-    let finish!: () => void;
-    let fail!: (error: Error) => void;
-    oldBot.start = vi.fn(() => new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; }));
-    const starting = endpoint.start();
-    const settled = starting.catch(() => undefined);
-    await vi.waitFor(() => expect(oldBot.start).toHaveBeenCalledTimes(1));
-    await endpoint.stop();
-    await endpoint.start();
-    if (result === 'resolve') finish();
-    else fail(new Error('old SDK failed late'));
-    await settled;
+  it.each(['resolve', 'reject'] as const)('ignores late receiver startup %s after stop and a fresh incarnation', async result => {
+    const f = await fixture(); let endpoint = f.endpoint;
+    let finish!: () => void; let fail!: (error: Error) => void;
+    f.oldBot.start = vi.fn(() => new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; }));
+    const starting = expect(endpoint.start()).rejects.toMatchObject({ code: 'inactive' });
+    await vi.waitFor(() => expect(f.oldBot.start).toHaveBeenCalledTimes(1));
+    const previous = endpoint.endpoint;
+    await endpoint.stop(); await starting;
+    endpoint = await f.create(); await endpoint.start();
+    if (result === 'resolve') finish(); else fail(new Error('old SDK failed late'));
+    await new Promise(done => setImmediate(done));
     try {
-      await vi.waitFor(() => expect(oldBot.stop).toHaveBeenCalledTimes(2));
-      expect(endpoint.client).toBe(newBot);
-      expect(newBot.stop).not.toHaveBeenCalled();
-    } finally {
-      await endpoint.stop();
-      await http.close();
-    }
+      // Native Session.stop already rejects its readiness promise and fences a late receiver.
+      expect(f.oldBot.stop).toHaveBeenCalledTimes(1);
+      expect(endpoint.endpoint).not.toBe(previous);
+      expect(f.newBot.stop).not.toHaveBeenCalled();
+      expect(endpoint.transportState).toBe('open');
+    } finally { await endpoint.stop(); await f.http.close(); }
   });
-
-  it('ignores callbacks already queued by a replaced SDK', async () => {
-    const { endpoint, oldBot, http } = fixture();
-    const callbacks: Array<(...args: unknown[]) => void> = [];
-    oldBot.on = (_event, listener) => { callbacks.push(listener); };
-    const emit = vi.spyOn(endpoint, 'emitPlatform').mockResolvedValue(undefined);
+  it('ignores queued native callbacks from the retired SDK incarnation', async () => {
+    const f = await fixture(); let endpoint = f.endpoint;
+    await endpoint.start(); endpoint.open();
+    const callbacks = endpoint.endpoint.listeners('message.group');
+    expect(callbacks.length).toBeGreaterThan(0);
+    await endpoint.stop(); endpoint = await f.create(); await endpoint.start(); endpoint.open();
     try {
-      await endpoint.start();
-      await endpoint.stop();
-      await endpoint.start();
-      endpoint.open();
-      for (const callback of callbacks) callback({});
-      expect(emit).not.toHaveBeenCalled();
-    } finally {
-      await endpoint.stop();
-      await http.close();
-    }
+      for (const callback of callbacks) callback({ message_type: 'group', message_id: 'old', group_id: 'g', user_id: 'u', raw_message: 'stale' });
+      await new Promise(done => setImmediate(done));
+      expect(f.receive).not.toHaveBeenCalled();
+    } finally { await endpoint.stop(); await f.http.close(); }
   });
-
-  it('cleans failed startup resources before retrying', async () => {
-    const { endpoint, oldBot, newBot, http } = fixture();
-    const register = http.route.bind(http);
-    const released = vi.fn();
-    vi.spyOn(http, 'route').mockImplementation((...args) => {
-      const release = register(...args);
-      return () => { released(); release(); };
-    });
-    oldBot.start = vi.fn().mockRejectedValue(new Error('SDK authentication failed'));
+  it('cleans failed startup and its routes before creating a fresh SDK incarnation', async () => {
+    const f = await fixture(); let endpoint = f.endpoint;
+    const register = f.http.route.bind(f.http), released = vi.fn();
+    vi.spyOn(f.http, 'route').mockImplementation((...args) => { const release = register(...args); return () => { released(); release(); }; });
+    f.oldBot.start = vi.fn().mockRejectedValue(new Error('SDK authentication failed'));
     try {
       await expect(endpoint.start()).rejects.toThrow('SDK authentication failed');
-      expect(oldBot.stop).toHaveBeenCalledTimes(1);
+      expect(f.oldBot.stop).toHaveBeenCalledTimes(1);
       expect(released).toHaveBeenCalledTimes(mode === 'middleware' ? 1 : 0);
-      await endpoint.start();
-      expect(endpoint.client).toBe(newBot);
+      const previous = endpoint.endpoint;
+      endpoint = await f.create(); await endpoint.start();
+      expect(endpoint.endpoint).not.toBe(previous);
       await endpoint.stop();
-      expect(newBot.stop).toHaveBeenCalledTimes(1);
+      expect(f.newBot.stop).toHaveBeenCalledTimes(1);
       expect(released).toHaveBeenCalledTimes(mode === 'middleware' ? 2 : 0);
-    } finally {
-      await endpoint.stop();
-      await http.close();
-    }
+    } finally { await endpoint.stop(); await f.http.close(); }
   });
 });
 
@@ -276,23 +254,20 @@ describe('qq plugin runtime adapter', () => {
   it('isolates two accounts and drops late events from a stopped account', async () => {
     const receives = [vi.fn(async () => ({ matched: false })), vi.fn(async () => ({ matched: false }))];
     const bots = [createMockBot(), createMockBot()];
-    const endpoints = bots.map((bot, index) => {
+    const endpoints = await Promise.all(bots.map(async (bot, index) => {
       const gateway = { receive: receives[index]!, send: vi.fn(async () => 'sent') };
-      return bindTestEndpoint(new QqWebsocketEndpoint({
-        id: capabilityId(rootPluginId(), adapterFeature, `qq-${index}`),
-        config: { ...baseConfig, id: `account-${index}`, appid: `app-${index}` },
-        createBot: () => bot,
-      }), gateway, undefined);
-    });
+      return await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, `qq-${index}`),
+config: { ...baseConfig, id: `account-${index}`, appid: `app-${index}` }}), () => bot, gateway, undefined);
+    }));
     try {
       await Promise.all(endpoints.map((endpoint) => endpoint.start()));
       endpoints.forEach((endpoint) => endpoint.open());
-      endpoints[0]!.admit(textMessage({ id: 'first' }));
+      endpoints[0]!.endpoint.admit(textMessage({ id: 'first' }));
       await vi.waitFor(() => expect(receives[0]).toHaveBeenCalledTimes(1));
       expect(receives[1]).not.toHaveBeenCalled();
       await endpoints[0]!.stop();
-      endpoints[0]!.admit(textMessage({ id: 'late' }));
-      endpoints[1]!.admit(textMessage({ id: 'second' }));
+      endpoints[0]!.endpoint.admit(textMessage({ id: 'late' }));
+      endpoints[1]!.endpoint.admit(textMessage({ id: 'second' }));
       await vi.waitFor(() => expect(receives[1]).toHaveBeenCalledTimes(1));
       expect(receives[0]).toHaveBeenCalledTimes(1);
       expect(bots[1]!.stop).not.toHaveBeenCalled();
@@ -309,17 +284,13 @@ describe('qq plugin runtime adapter', () => {
   it('projects official guild owner / admin role ids as canonical roles', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway,
-      config: baseConfig,
-      createBot: () => createMockBot(),
-    }), gateway, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => createMockBot(), gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const cases: Array<[string[], boolean]> = [[['1', '4'], true], [['1', '2'], true], [['1', '5'], false], [['1'], false]];
     for (const [index, [authorRoles]] of cases.entries()) {
-      endpoint.admit(textMessage({ id: `m-${index}`, channelKind: 'channel', channelId: 'c1', guildId: 'g1', authorRoles }));
+      endpoint.endpoint.admit(textMessage({ id: `m-${index}`, channelKind: 'channel', channelId: 'c1', guildId: 'g1', authorRoles }));
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
     }
     expect(receive.mock.calls.map((call) =>
@@ -335,17 +306,13 @@ describe('qq plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockBot();
-    const createBot: CreateQqBot = () => mock;
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway,
-      config: baseConfig,
-      createBot,
-    }), gateway, undefined);
+    const createBot = () => mock;
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), createBot, gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -363,26 +330,18 @@ describe('qq plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('sends outbound payloads via QQ APIs', async () => {
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     const messageId = await endpoint.send({ conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -397,17 +356,13 @@ describe('qq plugin runtime adapter', () => {
   it('answers a received message as a passive reply, and sends actively without one', async () => {
     const mock = createMockBot();
     const gateway = { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway,
-      config: baseConfig,
-      createBot: () => mock,
-    }), gateway, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: 'group-1' };
     await endpoint.send({ conversation: { ...conversation, id: 'group-2' }, payload: 'no source yet' });
-    endpoint.admit(textMessage({ id: 'msg-1' }));
+    endpoint.endpoint.admit(textMessage({ id: 'msg-1' }));
     await endpoint.send({ conversation, payload: 'pong' });
     const calls = vi.mocked(mock.sendGroupMessage).mock.calls;
     expect(calls[0]![2]).toBeUndefined();
@@ -417,27 +372,19 @@ describe('qq plugin runtime adapter', () => {
 
   it('registers agent endpoint for tools', async () => {
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    const client = qqClient.get(endpointClientContext(endpoint), 'test-qq-bot');
-    expect(client).toBe(mock);
-    const guilds = await client.getGuilds();
+    const client = endpoint.index.clientById<QqWebsocketEndpoint>(endpoint.canonicalId);
+    expect(client).toBe(endpoint.endpoint);
+    const guilds = await client.guildService.getList();
     expect(guilds).toHaveLength(1);
     await endpoint.stop();
   });
 
   it('normalizes guild channels through endpoint management', async () => {
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => createMockBot(),
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => createMockBot(), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await expect(endpoint.management.listChannels?.()).resolves.toEqual([
       {
@@ -449,32 +396,14 @@ describe('qq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('removes the endpoint from runtime state on stop', async () => {
-    const state = createQqRuntimeState();
-    const endpoint = defineQqAdapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      name: 'qq',
-      config: { appid: 'a', secret: 's', mode: 'websocket', id: 'ep-stop' },
-      use: (token: unknown) => {
-        if (token === outboundMessageToken) {
-          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-        }
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === qqRuntimeStateToken) return state;
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(state.endpoints.has('ep-stop')).toBe(true);
-    await endpoint.stop?.();
-    expect(state.endpoints.has('ep-stop')).toBe(false);
+  it('owns desired membership independently of live SDK retirement', async () => {
+    const endpoint = await createAdapterHarness(defineQqAdapter, { appid: 'a', secret: 's', mode: 'websocket', id: 'ep-stop' }, { name: 'qq' });
+    expect(endpoint.adapter.list()[0]).toMatchObject({ endpointId: 'ep-stop', desiredEnabled: true });
+    expect(endpoint.endpoint).toBeInstanceOf(QqWebsocketEndpoint);
+    await endpoint.stop();
+    expect(endpoint.adapter.list()[0]).toMatchObject({ endpointId: 'ep-stop', started: false });
+    expect(endpoint.adapter.getEndpoint(endpoint.adapter.list()[0]!.instanceId)).toBeUndefined();
   });
-
   it('keeps URL images in the text view and drops source-less images with a warn', () => {
     expect(formatOutboundText([{ type: 'image', data: { url: 'https://example.com/a.png' } }]))
       .toBe('https://example.com/a.png');
@@ -487,12 +416,8 @@ describe('qq plugin runtime adapter', () => {
 
   it('sends http(s) image segments directly as URL media', async () => {
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -512,12 +437,8 @@ describe('qq plugin runtime adapter', () => {
 
   it('uploads base64 / local image segments via the media file field', async () => {
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -551,12 +472,8 @@ describe('qq plugin runtime adapter', () => {
 
   it('sends markdown segments as msg_type=2 payloads', async () => {
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -590,12 +507,8 @@ describe('qq plugin runtime adapter', () => {
 
   it('expands keyboard rows into button segments with preceding text as markdown', async () => {
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await endpoint.send({
       conversation: {
@@ -658,12 +571,8 @@ describe('qq plugin runtime adapter', () => {
     mock.sendGroupMessage = vi.fn(async () => {
       throw new Error('QQ API 500');
     });
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await expect(endpoint.send({ conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -677,12 +586,8 @@ describe('qq plugin runtime adapter', () => {
   it('rejects when the send result carries no message id', async () => {
     const mock = createMockBot();
     mock.sendGroupMessage = vi.fn(async () => ({ code: 304023, message: 'audit rejected' }));
-    const endpoint = bindTestEndpoint(new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createBot: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await expect(endpoint.send({ conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -693,40 +598,19 @@ describe('qq plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('creates http endpoint when httpHostToken provided', () => {
+  it('creates a native middleware endpoint through the actual Adapter factory', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = defineQqAdapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      name: 'qq',
-      config: { id: 'qq', appid: 'a', secret: 's', mode: 'middleware' },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) {
-          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-        }
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === qqRuntimeStateToken) return createQqRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(endpoint).toBeInstanceOf(QqHttpEndpoint);
+    const endpoint = await createAdapterHarness(defineQqAdapter, { id: 'qq', appid: 'a', secret: 's', mode: 'middleware' }, { name: 'qq', resources: new Map([[httpHostToken.id, http]]) });
+    expect(endpoint.endpoint).toBeInstanceOf(QqHttpEndpoint);
+    await endpoint.stop(); await http.close();
   });
-
   it('routes admitted messages through http endpoint when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockBot();
-    const endpoint = bindTestEndpoint(new QqHttpEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      gateway,
-      http: createHttpHost({ host: '127.0.0.1', port: 0 }),
-      config: {
+    const endpoint = await qqFixture(() => new QqHttpEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+http: createHttpHost({ host: '127.0.0.1', port: 0 }),
+config: {
         context: 'qq',
         mode: 'middleware',
         id: 'test-qq-bot',
@@ -734,15 +618,13 @@ describe('qq plugin runtime adapter', () => {
         secret: 'secret-1',
         webhookPath: '/qq/webhook',
         sandbox: false,
-      },
-      createBot: () => ({
+      }}), () => ({
         ...mock,
         middleware: vi.fn(async () => undefined),
-      }),
-    }), gateway, undefined);
+      }), gateway, undefined);
     await endpoint.start();
     endpoint.open();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     await endpoint.stop();
   });
@@ -750,13 +632,12 @@ describe('qq plugin runtime adapter', () => {
 
 it('projects live QQ SDK transport status through disconnect and reconnect', async () => {
   const bot = createMockBot();
-  let status: 'open' | 'reconnecting' = 'open';
-  Object.defineProperty(bot, 'transportState', { get: () => status });
-  const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig, createBot: () => bot });
+  const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => bot);
   expect(endpoint.transportState).toBe('idle'); await endpoint.start();
   expect(endpoint.transportState).toBe('open');
-  status = 'reconnecting'; expect(endpoint.transportState).toBe('reconnecting');
-  status = 'open'; expect(endpoint.transportState).toBe('open');
+  Reflect.set(endpoint.endpoint.receiver, '_isReady', false); expect(endpoint.transportState).toBe('reconnecting');
+  Reflect.set(endpoint.endpoint.receiver, '_isReady', true); expect(endpoint.transportState).toBe('open');
   await endpoint.stop(); expect(endpoint.transportState).toBe('stopped');
 });
 
@@ -771,14 +652,16 @@ it('bounds stalled QQ startup and cleans resources created by late readiness', a
   try {
     const bot = createMockBot(); let resolve!: () => void;
     vi.mocked(bot.start).mockImplementation(() => new Promise<void>(done => { resolve = done; }));
-    const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig, createBot: () => bot });
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => bot);
     const starting = endpoint.start();
     const rejected = expect(starting).rejects.toThrow('startup timed out');
     await vi.advanceTimersByTimeAsync(30_000); await rejected;
     expect(bot.stop).toHaveBeenCalledTimes(1);
-    expect(endpoint.transportState).toBe('idle');
+    expect(endpoint.transportState).toBe('stopped');
     resolve(); await vi.advanceTimersByTimeAsync(0);
-    expect(bot.stop).toHaveBeenCalledTimes(2);
+    expect(bot.stop).toHaveBeenCalledTimes(1);
+    expect(endpoint.endpoint.receiver.isReady).toBe(false);
     await endpoint.stop(); expect(vi.getTimerCount()).toBe(0);
   } finally { vi.useRealTimers(); }
 });
@@ -787,8 +670,9 @@ it('cancels QQ startup deadline immediately when endpoint stops', async () => {
   vi.useFakeTimers();
   try {
     const bot = createMockBot(); vi.mocked(bot.start).mockImplementation(() => new Promise<void>(() => {}));
-    const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig, createBot: () => bot });
-    const starting = endpoint.start(); await vi.advanceTimersByTimeAsync(0);
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: baseConfig}), () => bot);
+    const starting = expect(endpoint.start()).rejects.toMatchObject({ code: 'inactive' }); await vi.advanceTimersByTimeAsync(0);
     await endpoint.stop(); await starting;
     expect(vi.getTimerCount()).toBe(0);
     expect(endpoint.transportState).toBe('stopped');
@@ -799,19 +683,16 @@ describe('qq outage notification', () => {
   it('notifies the configured master through another adapter on transport close', async () => {
     const notifier = { configured: true, send: vi.fn(async () => true) };
     const bot = createMockBot();
-    const endpoint = new QqWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
-      config: resolveQqConfig({
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+config: resolveQqConfig({
         id: 'test-qq-bot',
         appid: 'app-1',
         secret: 'secret-1',
         notify: { adapter: 'icqq', endpoint: '10001', id: 'master-uin' },
       }) as typeof baseConfig,
-      createBot: () => bot,
-      notifier,
-    });
+notifier}), () => bot);
     await endpoint.start();
-    bot.emit('transport.close');
+    endpoint.endpoint.receiver.emit('close');
     expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('QQ 机器人 test-qq-bot 掉线'));
     expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('qq endpoint add'));
     await endpoint.stop();

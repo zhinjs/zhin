@@ -1,3 +1,4 @@
+import { qqFixture } from './fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 import { rootPluginId } from 'zhin.js';
 import { outboundMessageToken } from '@zhin.js/core/runtime';
@@ -39,7 +40,7 @@ function fixture(kind: 'group' | 'private' | 'channel' = 'group') {
   const groups = groupService();
   const reactionService = { addGuildMessageReaction: vi.fn(async () => true), deleteGuildMessageReaction: vi.fn(async () => true) };
   const client = {
-    api: { groupService: groups, reactionService } as unknown as Bot,
+    groupService: groups, reactionService,
     recallGroupMessage: vi.fn(async () => true),
     recallPrivateMessage: vi.fn(async () => true),
     recallGuildMessage: vi.fn(async () => true),
@@ -61,35 +62,35 @@ function fixture(kind: 'group' | 'private' | 'channel' = 'group') {
 describe('QQ group management helpers', () => {
   it('mutes with an RFC3339 expiry, unmutes with del, and rejects >30 days', async () => {
     const { groups, client } = fixture();
-    await muteQqGroupMember(client.api, GROUP, 'U1', 600);
+    await muteQqGroupMember(client, GROUP, 'U1', 600);
     const [[, [add]]] = groups.setMemberMute.mock.calls as unknown as [[string, [{ op: string; mute_expire_at: string }]]];
     expect(add.op).toBe('add');
     expect(Date.parse(add.mute_expire_at)).toBeGreaterThan(Date.now() + 590_000);
-    await muteQqGroupMember(client.api, GROUP, 'U1', 0);
+    await muteQqGroupMember(client, GROUP, 'U1', 0);
     expect(groups.setMemberMute).toHaveBeenLastCalledWith(GROUP, [{ op: 'del', member_openid: 'U1', mute_expire_at: '' }]);
-    await expect(muteQqGroupMember(client.api, GROUP, 'U1', QQ_GROUP_MUTE_MAX_SECONDS + 1)).rejects.toThrow(RangeError);
+    await expect(muteQqGroupMember(client, GROUP, 'U1', QQ_GROUP_MUTE_MAX_SECONDS + 1)).rejects.toThrow(RangeError);
   });
 
   it('only lets an admin bot moderate ordinary human members', async () => {
     const { groups, client } = fixture();
     const signal = new AbortController().signal;
-    await expect(inspectQqGroupMember(client.api, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: true, platformRole: 'member' });
+    await expect(inspectQqGroupMember(client, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: true, platformRole: 'member' });
     groups.getMemberInfo.mockResolvedValueOnce({ member_openid: 'U1', username: 'x', member_role: 'admin', bot: false, joined_at: '' });
-    await expect(inspectQqGroupMember(client.api, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: false, platformRole: 'admin' });
+    await expect(inspectQqGroupMember(client, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: false, platformRole: 'admin' });
     groups.getBotState.mockResolvedValueOnce({ member_openid: 'BOT', member_role: 'member', allow_proactive_msg: false, recv_msg_setting: 'all', joined_at: '' });
-    await expect(inspectQqGroupMember(client.api, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: false });
+    await expect(inspectQqGroupMember(client, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: false });
   });
 
   it('moderation kick re-checks the newcomer window and requires platform success', async () => {
     const { groups, client } = fixture();
     const signal = new AbortController().signal;
-    const member = await inspectQqGroupMember(client.api, GROUP, 'U1', signal);
-    await moderateQqGroupMember(client.api, GROUP, 'U1', { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal, () => true);
+    const member = await inspectQqGroupMember(client, GROUP, 'U1', signal);
+    await moderateQqGroupMember(client, GROUP, 'U1', { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal, () => true);
     expect(groups.removeMembers).toHaveBeenCalledWith(GROUP, { member_openids: ['U1'] });
     groups.removeMembers.mockResolvedValueOnce({ remove_members_result: 'failed', add_to_member_blacklist_fail_openids: [] });
-    await expect(moderateQqGroupMember(client.api, GROUP, 'U1', { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal, () => true))
+    await expect(moderateQqGroupMember(client, GROUP, 'U1', { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal, () => true))
       .rejects.toThrow('did not confirm');
-    await expect(moderateQqGroupMember(client.api, GROUP, 'U1', { type: 'mute', durationSeconds: 60 }, signal, () => false))
+    await expect(moderateQqGroupMember(client, GROUP, 'U1', { type: 'mute', durationSeconds: 60 }, signal, () => false))
       .rejects.toThrow('permission');
   });
 });
@@ -98,16 +99,16 @@ describe('QQ endpoint management and control', () => {
   const adapterFeature = featureId('zhin.adapter');
   const config = resolveQqConfig({ id: 'qq-bot', appid: 'a', secret: 's', mode: 'websocket' }) as ReturnType<typeof resolveQqConfig> & { mode: 'websocket' };
 
-  function endpoint() {
+  async function endpoint() {
     const f = fixture();
     const bot = {
       ...f.client, start: vi.fn(async () => undefined), stop: vi.fn(async () => undefined), on: vi.fn(), removeAllListeners: vi.fn(),
     } as unknown as QqBotTransport;
-    return { f, endpoint: new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config, createBot: () => bot }) };
+    return { f, endpoint: await qqFixture(() => new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config }), () => bot) };
   }
 
   it('exposes group member list, kick and mute as management capabilities', async () => {
-    const { f, endpoint: ep } = endpoint();
+    const { f, endpoint: ep } = await endpoint();
     await ep.start();
     try {
       await ep.management.listGroupMembers?.(GROUP);
@@ -121,7 +122,7 @@ describe('QQ endpoint management and control', () => {
   });
 
   it('recalls native inbound IDs via the MessageRef conversation and reacts only in guild channels', async () => {
-    const { f, endpoint: ep } = endpoint();
+    const { f, endpoint: ep } = await endpoint();
     await ep.start();
     try {
       const group = { endpoint: { id: 'qq-bot', adapter: 'qq' }, kind: 'group' as const, id: GROUP };

@@ -1,3 +1,4 @@
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import http from 'node:http';
 import { once } from 'node:events';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -16,9 +17,10 @@ it.each(['lost', '500', '408', '429', '403', 'denied'] as const)('actual Lark HT
     response.end(JSON.stringify({ code: mode === 'denied' ? 40003 : 0, data: {} }));
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  const endpoint = new LarkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'lark'), http: createHttpHost({ host: '127.0.0.1', port: 0 }), config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture-only', apiBaseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}` }) });
+  const endpoint = await createEndpointHarness(() => new LarkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'lark'), http: createHttpHost({ host: '127.0.0.1', port: 0 }), config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture-only', apiBaseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}` }) }), { capabilities: ['inbound', 'outbound'], operations: ['recall'] });
   try {
+    await endpoint.start(); endpoint.open();
     await expect(endpoint.send({ conversation: { endpoint: { id: 'fixture', adapter: 'lark' }, kind: 'group', id: 'fixture' }, payload: 'fixture' })).rejects.toMatchObject({ disposition: mode === '429' || mode === '403' || mode === 'denied' ? 'rejected' : 'unknown' });
     expect(sends).toBe(1);
-  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+  } finally { await endpoint.stop(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });

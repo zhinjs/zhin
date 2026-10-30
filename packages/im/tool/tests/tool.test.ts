@@ -24,13 +24,12 @@ interface ToolTestClient {
   readonly id: string;
 }
 
+declare class RegisteredTestAdapter {
+  readonly adapterEvents: Record<string, unknown>;
+  getEndpoint(instanceId: string): ToolTestClient | undefined;
+}
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly 'tool-test': {
-      readonly client: ToolTestClient;
-      readonly events: Record<string, unknown>;
-    };
-  }
+  interface AdapterRegistry { readonly 'tool-test': RegisteredTestAdapter; }
 }
 
 describe('Tool Feature', () => {

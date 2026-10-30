@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import { EmailEndpoint } from '../src/endpoint.js';
 import { resolveEmailConfig } from '../src/protocol.js';
 import { type EmailImapTransport, type EmailSmtpTransport } from '../src/transport.js';
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 
 const config = resolveEmailConfig({ id: 'fixture', smtp: { host: 'smtp.fixture', port: 465, secure: true, auth: { user: 'bot@example.com', pass: 'fixture' } }, imap: { host: 'imap.fixture', port: 993, tls: true, user: 'bot@example.com', password: 'fixture', markSeen: false, checkInterval: 60000 } });
@@ -43,13 +43,13 @@ async function pollUntilFetched(imap: ReturnType<typeof imapFixture>, count: num
     expect(imap.fetch).toHaveBeenCalledTimes(count);
   });
 }
-function endpointFixture(imap: EmailImapTransport, receive = vi.fn(async () => {}), smtp: EmailSmtpTransport = { verify: vi.fn(async () => {}), sendMail: vi.fn(async () => ({ messageId: 'fixture' })), close: vi.fn() }) {
-  return bindTestEndpoint(new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => imap, createSmtp: () => smtp }), { receive });
+async function endpointFixture(imap: EmailImapTransport, receive = vi.fn(async () => {}), smtp: EmailSmtpTransport = { verify: vi.fn(async () => {}), sendMail: vi.fn(async () => ({ messageId: 'fixture' })), close: vi.fn() }) {
+  return await createEndpointHarness(() => new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => imap, createSmtp: () => smtp }), { gateway: createTestEventGateway({ receive }, undefined), capabilities: ['inbound', 'outbound'] });
 }
 it('holds polling lock through dispatch and deduplicates completed UID while allowing changed UIDVALIDITY', async () => {
   const imap = imapFixture(); let release!: () => void;
   const receive = vi.fn().mockImplementationOnce(() => new Promise<void>(done => { release = done; })).mockResolvedValue(undefined);
-  const endpoint = endpointFixture(imap.transport, receive);
+  const endpoint = await endpointFixture(imap.transport, receive);
   try {
     await endpoint.start(); endpoint.open();
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
@@ -71,7 +71,7 @@ it('holds polling lock through dispatch and deduplicates completed UID while all
 });
 it('failed dispatch does not permanently consume UID admission', async () => {
   const imap = imapFixture(); const receive = vi.fn().mockRejectedValueOnce(new Error('fixture rejection')).mockResolvedValue(undefined);
-  const endpoint = endpointFixture(imap.transport, receive);
+  const endpoint = await endpointFixture(imap.transport, receive);
   try {
     await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     await pollUntilFetched(imap, 2);
@@ -80,27 +80,28 @@ it('failed dispatch does not permanently consume UID admission', async () => {
 });
 it('stop settles startup waiting for IMAP ready and ignores late ready', async () => {
   const imap = imapFixture(); imap.connect.mockImplementation(() => {});
-  const endpoint = endpointFixture(imap.transport);
-  const starting = endpoint.start();
+  const endpoint = await endpointFixture(imap.transport);
+  const starting = endpoint.start().then(() => undefined, error => error);
   await vi.waitFor(() => expect(imap.connect).toHaveBeenCalledTimes(1));
-  await endpoint.stop(); await starting;
-  imap.emitter.emit('ready'); expect(endpoint.transportState).toBe('stopped'); expect(imap.end).toHaveBeenCalledTimes(1);
+  await endpoint.stop(); expect(await starting).toMatchObject({ code: 'inactive' });
+  imap.emitter.emit('ready'); expect(endpoint.endpoint.transportState).toBe('stopped'); expect(imap.end).toHaveBeenCalledTimes(1);
 });
 it('retired fetch cannot dispatch into restarted endpoint', async () => {
   const old = imapFixture(); old.state.defer = true;
   const next = imapFixture(); next.state.defer = true;
   const receive = vi.fn(async () => {}); let generation = 0;
-  const endpoint = bindTestEndpoint(new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => generation++ === 0 ? old.transport : next.transport, createSmtp: () => ({ verify: async () => {}, sendMail: async () => ({}), close: () => {} }) }), { receive });
+  const create = () => createEndpointHarness(() => new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => generation++ === 0 ? old.transport : next.transport, createSmtp: () => ({ verify: async () => {}, sendMail: async () => ({}), close: () => {} }) }), { gateway: createTestEventGateway({ receive }, undefined), capabilities: ['inbound', 'outbound'] });
+  let endpoint = await create();
   try {
     await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(old.fetch).toHaveBeenCalledTimes(1));
-    await endpoint.stop(); await endpoint.start(); endpoint.open();
+    await endpoint.stop(); endpoint = await create(); await endpoint.start(); endpoint.open();
     old.state.release(); await new Promise(done => setTimeout(done, 20)); expect(receive).not.toHaveBeenCalled();
     next.state.release(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
   } finally { await endpoint.stop(); }
 });
 it('never retries an uncertain SMTP send', async () => {
   const imap = imapFixture(); const sendMail = vi.fn(async () => { throw new Error('connection lost after DATA'); });
-  const endpoint = endpointFixture(imap.transport, undefined, { verify: async () => {}, close: () => {}, sendMail });
+  const endpoint = await endpointFixture(imap.transport, undefined, { verify: async () => {}, close: () => {}, sendMail });
   try {
     await endpoint.start();
     await expect(endpoint.send({ conversation: { endpoint: { id: 'fixture', adapter: 'email' }, kind: 'private', id: 'actor@example.com' }, payload: 'probe' })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
@@ -109,7 +110,7 @@ it('never retries an uncertain SMTP send', async () => {
 });
 it('expires instance UID dedup after 24h and permits the same still-unread mail again', async () => {
   const imap = imapFixture(); const receive = vi.fn(async () => {});
-  const endpoint = endpointFixture(imap.transport, receive); let clock: ReturnType<typeof vi.spyOn> | undefined;
+  const endpoint = await endpointFixture(imap.transport, receive); let clock: ReturnType<typeof vi.spyOn> | undefined;
   try {
     await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     imap.state.defer = true;
@@ -121,12 +122,23 @@ it('expires instance UID dedup after 24h and permits the same still-unread mail 
 });
 it('isolates a retired fetch even when a factory reuses the same transport object', async () => {
   const imap = imapFixture(); imap.state.defer = true;
-  const receive = vi.fn(async () => {}); const endpoint = endpointFixture(imap.transport, receive);
+  const receive = vi.fn(async () => {}); let endpoint = await endpointFixture(imap.transport, receive);
   try {
     await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(imap.fetch).toHaveBeenCalledTimes(1));
     const oldDelivery = imap.state.release;
-    await endpoint.stop(); await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(imap.fetch).toHaveBeenCalledTimes(2));
+    await endpoint.stop(); endpoint = await endpointFixture(imap.transport, receive); await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(imap.fetch).toHaveBeenCalledTimes(2));
     oldDelivery(); await new Promise(done => setTimeout(done, 20)); expect(receive).not.toHaveBeenCalled();
     imap.state.release(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+  } finally { await endpoint.stop(); }
+});
+it('keeps the very same native ParsedMail object in SDK-facing events and canonical ingress', async () => {
+  const imap = imapFixture(), receive = vi.fn(async (_message: unknown) => undefined);
+  const endpoint = await endpointFixture(imap.transport, receive), native = vi.fn();
+  endpoint.endpoint.on('mail', native);
+  try {
+    await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+    const parsed = native.mock.calls[0]![0];
+    expect(parsed.headers).toBeInstanceOf(Map); expect(parsed.messageId).toBe('<fixture@example.com>');
+    expect((receive.mock.calls[0]![0] as { event: unknown }).event).toBe(parsed);
   } finally { await endpoint.stop(); }
 });

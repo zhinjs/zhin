@@ -4,7 +4,7 @@ sidebar: false
 
 # Adapter、Endpoint 与消息 Session 重构实施方案
 
-状态：2026-10-30 已按确认方案完成本地实现与集成验证。本文保留实施合同和本地验收证据；变更以 PR 提交审查；尚未合并、发布或进行真实平台验收。
+状态：全量目标模式迁移中，尚未完成。用户进一步明确不保留 Adapter 兼容层，完整范围和分工以[全量目标模式迁移](./adapter-target-mode-migration.md)为准。下方本地绿测记录仅对应先前框架与 ICQQ 阶段，不能代表全部平台已完成。
 
 关联：[分层架构](../concepts/architecture.md)、[Plugin 模型](../concepts/plugin-model.md)、[ADR 0045：个人 Session 模型策略](../adr/0045-personal-session-model-policy.md)。
 

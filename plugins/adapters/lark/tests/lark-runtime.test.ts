@@ -1,4 +1,4 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { createHash } from 'node:crypto';
 import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { describe, expect, it, vi, afterEach } from 'vitest';
@@ -14,7 +14,6 @@ import {
   verifySignature,
   type LarkMessage,
 } from '../src/protocol.js';
-import { larkClient } from '../src/client.js';
 import defineLarkAdapter from '../adapters/lark/index.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -217,7 +216,7 @@ describe('lark plugin runtime adapter', () => {
   it('responds to url_verification challenge', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -226,10 +225,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: { ...baseConfig, encryptKey: undefined },
       fetch: mockFetchOk(),
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -250,13 +249,13 @@ describe('lark plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway,
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -294,13 +293,13 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -328,13 +327,13 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -370,13 +369,13 @@ describe('lark plugin runtime adapter', () => {
       appSecret: 'secret-test',
       verificationToken: 'vt-secret',
     });
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -404,13 +403,13 @@ describe('lark plugin runtime adapter', () => {
     try {
       const http = createHttpHost({ host: '127.0.0.1', port: 0 });
       hosts.push(http);
-      const endpoint = bindTestEndpoint(new LarkEndpoint({
+      const endpoint = await createEndpointHarness(() => new LarkEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
         gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
         http,
         config: resolveLarkConfig({ id: 'noauth-lark', appId: 'cli_test', appSecret: 'secret-test' }),
         fetch: mockFetchOk(),
-      }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
+      }), { gateway: createTestEventGateway({ receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
       await endpoint.start();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unauthenticated'));
       await endpoint.stop();
@@ -423,16 +422,16 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
-    endpoint.admit(textMessage({ chat_id: 'oc_p2pchat', chat_type: 'p2p' }));
+    endpoint.endpoint.admit(textMessage({ chat_id: 'oc_p2pchat', chat_type: 'p2p' }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'private', id: 'oc_p2pchat' }),
@@ -460,18 +459,18 @@ describe('lark plugin runtime adapter', () => {
       }
       return base(url, init as never);
     });
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const results: Record<string, boolean> = {};
     for (const [index, openId] of ['ou_owner', 'ou_admin', 'ou_member'].entries()) {
-      endpoint.admit(textMessage({ message_id: `om_${index}`, sender: { sender_id: { open_id: openId } } }));
+      endpoint.endpoint.admit(textMessage({ message_id: `om_${index}`, sender: { sender_id: { open_id: openId } } }));
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
       const inbound = receive.mock.calls[index]![0] as unknown;
       results[openId] = checkBuiltinPermit('role(owner,admin,master)', toPermissionSubject(inbound));
@@ -501,17 +500,17 @@ describe('lark plugin runtime adapter', () => {
       }
       return base(url, init as never);
     });
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     for (const index of [0, 1, 2]) {
-      endpoint.admit(textMessage({ message_id: `om_c${index}`, sender: { sender_id: { open_id: 'ou_owner' } } }));
+      endpoint.endpoint.admit(textMessage({ message_id: `om_c${index}`, sender: { sender_id: { open_id: 'ou_owner' } } }));
     }
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(3));
     expect(fetch.mock.calls.filter(([u]) => String(u).endsWith('/im/v1/chats/oc_group1'))).toHaveLength(1);
@@ -525,16 +524,16 @@ describe('lark plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
@@ -543,7 +542,7 @@ describe('lark plugin runtime adapter', () => {
     const fetchMock = mockFetchOk('out-42');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -552,10 +551,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({ conversation: groupConversation, payload: 'pong' });
@@ -594,7 +593,7 @@ describe('lark plugin runtime adapter', () => {
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -603,10 +602,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -669,7 +668,7 @@ describe('lark plugin runtime adapter', () => {
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -678,10 +677,10 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     await expect(endpoint.send({
@@ -700,10 +699,10 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('registers agent endpoint on start', async () => {
+  it('projects the actual Endpoint through the owning AdapterIndex', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -712,14 +711,14 @@ describe('lark plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
-    expect(larkClient.get(endpointClientContext(endpoint), 'test-lark-bot'))
-      .toBe(endpoint.client);
+    expect(endpoint.index.client('test-endpoint', endpoint.canonicalId))
+      .toBe(endpoint.endpoint);
     await endpoint.stop();
   });
 });

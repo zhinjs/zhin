@@ -104,6 +104,7 @@ export interface MilkyOutgoingSegment {
 export interface MilkyApiClientOptions {
   readonly baseUrl: string;
   readonly access_token?: string;
+  readonly signal?: AbortSignal;
 }
 
 function normalizeConnection(connection: string | undefined): 'ws' | 'sse' | 'webhook' | 'wss' {
@@ -208,6 +209,7 @@ export async function callApi<T = unknown>(
       ...authHeaders(access_token),
     },
     body: JSON.stringify(Object.keys(params).length ? params : {}),
+    signal: options.signal,
   });
 
   const text = await res.text();

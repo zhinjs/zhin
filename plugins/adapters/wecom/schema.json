@@ -103,11 +103,22 @@
           "id": {
             "type": "string",
             "description": "WeCom bot name"
+          },
+          "agentId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "企业微信应用 AgentId（非应用 Secret）",
+            "x-i18n": {
+              "en": {
+                "description": "WeCom application AgentId (not the application secret)"
+              }
+            }
           }
         },
         "required": [
           "id",
           "corpId",
+          "agentId",
           "agentSecret",
           "token",
           "encodingAESKey"

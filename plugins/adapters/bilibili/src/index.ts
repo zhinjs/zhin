@@ -2,7 +2,6 @@ export * from './protocol.js';
 export {
   BilibiliApiError,
   BilibiliClient,
-  bilibiliClient,
   type BilibiliClientEventMap,
   type BilibiliFetch,
 } from './client.js';
@@ -48,10 +47,7 @@ export {
   type BilibiliSentReply,
 } from './endpoint.js';
 export {
-  bilibiliEndpointRegistryToken,
   bilibiliNotifierToken,
-  bilibiliRuntimeStateToken,
-  type BilibiliEndpointRegistry,
   type BilibiliNotifier,
 } from './bilibili-runtime-state.js';
 export {
@@ -65,3 +61,6 @@ export {
   listDraftsText,
   showDraftText,
 } from './review.js';
+
+export { BilibiliAdapter } from './adapter.js';
+export { bilibiliEndpoints, type BilibiliDirectoryContext, type BilibiliEndpointDirectory, type BilibiliEndpointView } from './endpoint-directory.js';

@@ -69,6 +69,7 @@ export interface SatoriApiOptions {
   readonly platform: string;
   readonly userId: string;
   readonly token?: string;
+  readonly signal?: AbortSignal;
 }
 
 export interface SatoriWireSegment {
@@ -79,6 +80,9 @@ export interface SatoriWireSegment {
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
 export interface SatoriEndpointConfig {
   readonly id: string;
+  /** Exact remote login selected by this configured Endpoint. */
+  readonly platform: string;
+  readonly userId: string;
   readonly connection?: 'ws' | 'webhook';
   readonly baseUrl: string;
   readonly token?: string;
@@ -91,6 +95,8 @@ export interface ResolvedSatoriWsConfig {
   readonly context: 'satori';
   readonly connection: 'ws';
   readonly id: string;
+  readonly platform: string;
+  readonly userId: string;
   readonly baseUrl: string;
   readonly token?: string;
   readonly heartbeat_interval: number;
@@ -100,6 +106,8 @@ export interface ResolvedSatoriWebhookConfig {
   readonly context: 'satori';
   readonly connection: 'webhook';
   readonly id: string;
+  readonly platform: string;
+  readonly userId: string;
   readonly baseUrl: string;
   readonly token?: string;
   readonly path: string;
@@ -110,6 +118,8 @@ export type ResolvedSatoriConfig = ResolvedSatoriWsConfig | ResolvedSatoriWebhoo
 export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSatoriConfig {
   const connection = config.connection ?? 'ws';
   const id = requiredEndpointField(config.id, 'id');
+  const platform = requiredEndpointField(config.platform, 'platform');
+  const userId = requiredEndpointField(config.userId, 'userId');
   const baseUrl = requiredEndpointField(config.baseUrl, 'baseUrl');
   const token = typeof config.token === 'string' && config.token.trim()
     ? config.token.trim()
@@ -121,6 +131,8 @@ export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSator
       context: 'satori',
       connection: 'webhook',
       id,
+      platform,
+      userId,
       baseUrl,
       token,
       path,
@@ -132,6 +144,8 @@ export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSator
     context: 'satori',
     connection: 'ws',
     id,
+    platform,
+    userId,
     baseUrl,
     token,
     heartbeat_interval: heartbeat,
@@ -140,7 +154,7 @@ export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSator
 
 function requiredEndpointField(
   value: unknown,
-  field: 'id' | 'baseUrl' | 'path',
+  field: 'id' | 'baseUrl' | 'path' | 'platform' | 'userId',
 ): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`Satori endpoint requires a non-empty ${field}`);
@@ -189,6 +203,7 @@ export async function callSatoriApi<T = unknown>(
     method: 'POST',
     headers,
     body: JSON.stringify(params),
+    signal: options.signal,
   });
 
   const text = await res.text();

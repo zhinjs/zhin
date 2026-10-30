@@ -35,6 +35,7 @@ export interface GitHubCommitAuthor {
 }
 
 export interface GhClientOptions {
+  readonly signal?: AbortSignal;
   /** GitHub Enterprise 主机名（默认 github.com） */
   host?: string;
   /** 覆盖 gh CLI 默认认证的 Personal Access Token / OAuth Token */
@@ -44,7 +45,9 @@ export interface GhClientOptions {
 }
 
 export class GhClient {
-  private host?: string;
+  protected apiHost?: string;
+  protected executionSignal?: AbortSignal;
+  protected bindExecutionSignal(signal: AbortSignal): void { this.executionSignal = signal; }
   private token?: string;
   private _appAuth?: AppAuth;
   private _resolvedKey?: string;
@@ -59,14 +62,20 @@ export class GhClient {
   private _lastSyncTime = 0;
 
   constructor(options: GhClientOptions = {}) {
-    this.host = options.host;
+    this.apiHost = options.host;
+    this.executionSignal = options.signal;
     this.token = options.token;
     this._appAuth = options.appAuth;
   }
 
+  protected fetchNative(input: string, init?: RequestInit): Promise<Response> {
+    this.executionSignal?.throwIfAborted();
+    return fetch(input, { ...init, ...(this.executionSignal ? { signal: init?.signal ? AbortSignal.any([this.executionSignal, init.signal]) : this.executionSignal } : {}) });
+  }
+
   /** 创建使用指定 token 的副本（共享 host 配置，不继承 App 认证） */
   withToken(token: string): GhClient {
-    return new GhClient({ host: this.host, token });
+    return new GhClient({ host: this.apiHost, token, signal: this.executionSignal });
   }
 
   get authenticatedUser() { return this._user; }
@@ -74,12 +83,12 @@ export class GhClient {
   // ── 底层执行 ──────────────────────────────────────────────────────
 
   private exec(args: string[], stdin?: string): Promise<string> {
-    const fullArgs = this.host ? [...args, '--hostname', this.host] : args;
+    const fullArgs = this.apiHost ? [...args, '--hostname', this.apiHost] : args;
     const env = this.token
       ? { ...process.env, GH_TOKEN: this.token }
       : undefined;
     return new Promise((resolve, reject) => {
-      const proc = spawn('gh', fullArgs, { stdio: ['pipe', 'pipe', 'pipe'], env });
+      const proc = spawn('gh', fullArgs, { stdio: ['pipe', 'pipe', 'pipe'], env, signal: this.executionSignal });
       let stdout = '';
       let stderr = '';
       proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
@@ -204,8 +213,8 @@ export class GhClient {
         // 用 JWT 查询 App 信息（/app 端点只接受 JWT 认证，不能用 Installation Token）
         const key = this.resolvePrivateKey();
         const jwt = GhClient.createJWT(this._appAuth.appId, key);
-        const baseUrl = this.host ? `https://${this.host}/api/v3` : 'https://api.github.com';
-        const appRes = await fetch(`${baseUrl}/app`, {
+        const baseUrl = this.apiHost ? `https://${this.apiHost}/api/v3` : 'https://api.github.com';
+        const appRes = await this.fetchNative(`${baseUrl}/app`, {
           headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github+json' },
         });
         if (appRes.ok) {
@@ -409,7 +418,7 @@ export class GhClient {
   }
 
   buildCloneUrl(repo: string, token: string): string {
-    const host = this.host || 'github.com';
+    const host = this.apiHost || 'github.com';
     return `https://x-access-token:${encodeURIComponent(token)}@${host}/${repo}.git`;
   }
 
@@ -418,9 +427,9 @@ export class GhClient {
     const slug = this._appSlug;
     if (!slug) return null;
     const login = `${slug}[bot]`;
-    const baseUrl = this.host ? `https://${this.host}/api/v3` : 'https://api.github.com';
+    const baseUrl = this.apiHost ? `https://${this.apiHost}/api/v3` : 'https://api.github.com';
     try {
-      const res = await fetch(`${baseUrl}/users/${encodeURIComponent(login)}`, {
+      const res = await this.fetchNative(`${baseUrl}/users/${encodeURIComponent(login)}`, {
         headers: { Accept: 'application/vnd.github+json' },
       });
       if (!res.ok) return null;
@@ -491,10 +500,10 @@ export class GhClient {
     if (!this._appAuth) throw new Error('未配置 App 认证');
     const key = this.resolvePrivateKey();
     const jwt = GhClient.createJWT(this._appAuth.appId, key);
-    const baseUrl = this.host
-      ? `https://${this.host}/api/v3`
+    const baseUrl = this.apiHost
+      ? `https://${this.apiHost}/api/v3`
       : 'https://api.github.com';
-    const res = await fetch(
+    const res = await this.fetchNative(
       `${baseUrl}/app/installations/${installationId}/access_tokens`,
       {
         method: 'POST',
@@ -521,8 +530,8 @@ export class GhClient {
     if (!this._appAuth) return;
     const key = this.resolvePrivateKey();
     const jwt = GhClient.createJWT(this._appAuth.appId, key);
-    const baseUrl = this.host ? `https://${this.host}/api/v3` : 'https://api.github.com';
-    const listRes = await fetch(`${baseUrl}/app/installations`, {
+    const baseUrl = this.apiHost ? `https://${this.apiHost}/api/v3` : 'https://api.github.com';
+    const listRes = await this.fetchNative(`${baseUrl}/app/installations`, {
       headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github+json' },
     });
     if (!listRes.ok) {
@@ -539,7 +548,7 @@ export class GhClient {
         await this.refreshInstallationToken(inst.id);
         const cached = this._installationTokens.get(inst.id);
         if (!cached) continue;
-        const repoRes = await fetch(`${baseUrl}/installation/repositories?per_page=100`, {
+        const repoRes = await this.fetchNative(`${baseUrl}/installation/repositories?per_page=100`, {
           headers: { Authorization: `Bearer ${cached.token}`, Accept: 'application/vnd.github+json' },
         });
         if (repoRes.ok) {

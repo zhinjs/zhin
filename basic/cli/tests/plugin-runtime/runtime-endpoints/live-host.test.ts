@@ -71,7 +71,7 @@ class NativeEndpoint extends NativeClient {[endpointSpec]=createEndpointSpecific
 class Channel extends Adapter {get configurationUpdateFields(){return ['label','password'];}get configurationIdentityFields(){return ['id'];}createEndpoint(){return new NativeEndpoint();}}
 export default definePlugin({name:'account-built-fixture',setup(ctx){
 ctx.addAdapter('account',defineAdapter({capabilities:['inbound','outbound'],createAdapter:()=>new Channel()}));
-const accounts=createAdapterConsoleRpc({adapterKey:'account',adapterDisplayName:'Synthetic account',readPermission:'account:read',writePermission:'account:write',fields:[{key:'label'},{key:'password',env:true}]},ctx.resources);
+const accounts=createAdapterConsoleRpc({adapterKey:'account',adapterDisplayName:'Synthetic account',readPermission:'account:read',writePermission:'account:write',fields:[{key:'label'},{key:'password',env:true}]});
 const actions={};for(const name of ['add','update','start','stop','remove','replace'])actions['accounts-'+name]={requiredPermissions:['account:write'],handler:(input,call)=>accounts.methods.get('endpoint-'+name).handler(input,call)};
 ctx.resources.provide(pluginConsoleRpcToken,definePluginConsoleRpc({queries:{'accounts-status':{requiredPermissions:['account:read'],handler:(input,call)=>accounts.methods.get('status').handler(input,call)},'accounts-created':{requiredPermissions:['account:read'],handler:()=>({created})}},actions}));
 }});\n`);

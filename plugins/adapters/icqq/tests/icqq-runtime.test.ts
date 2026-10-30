@@ -1,7 +1,4 @@
-import {
-  bindTestEndpoint,
-  bindTestEndpointEvents,
-} from '../../test-utils/endpoint.js';
+import { icqqFixture } from './fixture.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
@@ -37,7 +34,7 @@ const baseConfig = resolveIcqqConfig({
   autoReconnect: false,
 });
 
-function createEndpoint(overrides: {
+async function createEndpoint(overrides: {
   receive?: ReturnType<typeof vi.fn>;
   gateway?: OutboundMessageService;
   friends?: Map<number, unknown>;
@@ -45,23 +42,20 @@ function createEndpoint(overrides: {
   config?: ReturnType<typeof resolveIcqqConfig>;
   events?: EndpointEventGateway;
   notifier?: { readonly configured: boolean; send(text: string): Promise<boolean> };
-} = {}): IcqqEndpoint {
+} = {}) {
   const receive = overrides.receive ?? vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
   const gateway = overrides.gateway ?? { receive, send: vi.fn(async () => 'sent') };
-  const unbound = new IcqqEndpoint({
+  const endpoint = await icqqFixture({
     id: capabilityId(rootPluginId(), adapterFeature, 'icqq'),
     gateway,
     config: overrides.config ?? baseConfig,
     ...(overrides.notifier ? { notifier: overrides.notifier } : {}),
     ...createIcqqTestPorts(),
-  });
-  const endpoint = overrides.events
-    ? bindTestEndpointEvents(unbound, overrides.events)
-    : bindTestEndpoint(unbound, gateway, undefined);
+  }, gateway, undefined, overrides.events);
   const friends = overrides.friends ?? new Map([[2, { user_id: 2, nickname: 'bob', sex: 'unknown', age: 0 }]]);
   const groups = overrides.groups ?? new Map([[100, { group_id: 100, group_name: 'g', member_count: 1, max_member_count: 200, owner_id: 1, admin_flag: false, last_join_time: 0, last_sent_time: 0, shutup_time_whole: 0, shutup_time_me: 0, create_time: 0, grade: 0, max_admin_count: 0, active_member_count: 0 }]]);
-  for (const [k, v] of friends) endpoint.fl.set(k, v as never);
-  for (const [k, v] of groups) endpoint.gl.set(k, v as never);
+  for (const [k, v] of friends) endpoint.endpoint.fl.set(k, v as never);
+  for (const [k, v] of groups) endpoint.endpoint.gl.set(k, v as never);
   return endpoint;
 }
 
@@ -73,15 +67,15 @@ afterEach(() => {
 describe('native Client Endpoint identity and callback binding', () => {
   it('retains native prototype methods/disposer semantics and sends the exact SDK event with its timestamp', async () => {
     const receive = vi.fn(async (_input: { event: unknown; platformSentAt?: number }) => undefined);
-    const endpoint = createEndpoint({ receive });
-    expect(endpoint).toBeInstanceOf(MockIcqqClient);
-    expect('client' in endpoint).toBe(false);
+    const endpoint = await createEndpoint({ receive });
+    expect(endpoint.endpoint).toBeInstanceOf(MockIcqqClient);
+    expect('client' in endpoint.endpoint).toBe(false);
     const native = vi.fn();
-    const dispose = endpoint.on('custom.event', native);
-    endpoint.emit('custom.event', { first: true });
+    const dispose = endpoint.endpoint.on('custom.event', native);
+    endpoint.endpoint.emit('custom.event', { first: true });
     expect(native).toHaveBeenCalledTimes(1);
     dispose();
-    endpoint.emit('custom.event', { second: true });
+    endpoint.endpoint.emit('custom.event', { second: true });
     expect(native).toHaveBeenCalledTimes(1);
     class MessageEvent {
       post_type = 'message'; message_type = 'private'; user_id = 2;
@@ -94,7 +88,7 @@ describe('native Client Endpoint identity and callback binding', () => {
     const event = new MessageEvent();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    endpoint.emit('message.private', event);
+    endpoint.endpoint.emit('message.private', event);
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     const input = receive.mock.calls[0][0];
     expect(input.event).toBe(event);
@@ -221,7 +215,7 @@ describe('icqq plugin runtime adapter', () => {
 
   it('forwards SDK extension events with the real Client through the unified gateway', async () => {
     const observed: Parameters<EndpointEventGateway['receive']>[0][] = [];
-    const endpoint = createEndpoint({
+    const endpoint = await createEndpoint({
       events: {
         async receive(event) {
           observed.push(event);
@@ -232,69 +226,69 @@ describe('icqq plugin runtime adapter', () => {
     endpoint.open();
 
     const extension = { value: 1 };
-    endpoint.emit('extension.custom', extension);
+    endpoint.endpoint.emit('extension.custom', extension);
 
     await vi.waitFor(() => expect(observed).toContainEqual(expect.objectContaining({
       name: 'platform.receive',
       payload: { name: 'extension.custom', event: extension },
-      client: endpoint,
-      endpoint: expect.objectContaining({ adapter: 'test-endpoint' }),
+      client: endpoint.endpoint,
+      endpoint: expect.objectContaining({ adapter: 'icqq' }),
     })));
     await endpoint.stop();
   });
 
   it('keeps the replacement TCP session alive when config HMR retires the old endpoint', async () => {
     const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
-    const previous = createEndpoint({ config: reconnectingConfig });
+    const previous = await createEndpoint({ config: reconnectingConfig });
     await previous.start(new AbortController().signal);
     previous.open();
 
-    const replacement = createEndpoint({ config: reconnectingConfig });
+    const replacement = await createEndpoint({ config: reconnectingConfig });
     await replacement.start(new AbortController().signal);
     replacement.open();
 
     await previous.close();
     await previous.stop();
 
-    expect(previous.logout).not.toHaveBeenCalled();
-    expect(previous.terminate).toHaveBeenCalledOnce();
-    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+    expect(previous.endpoint.logout).not.toHaveBeenCalled();
+    expect(previous.endpoint.terminate).toHaveBeenCalledOnce();
+    expect(isMockIcqqClientConnected(replacement.endpoint)).toBe(true);
     await replacement.stop();
   });
 
   it('cancels the retiring SDK reconnect timer before it can revive the old generation', async () => {
     vi.useFakeTimers();
     const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
-    const previous = createEndpoint({ config: reconnectingConfig });
-    const replacement = createEndpoint({ config: reconnectingConfig });
+    const previous = await createEndpoint({ config: reconnectingConfig });
+    const replacement = await createEndpoint({ config: reconnectingConfig });
     await previous.start(new AbortController().signal);
     previous.open();
     await replacement.start(new AbortController().signal);
     replacement.open();
 
-    scheduleMockIcqqReconnect(previous, 50);
+    scheduleMockIcqqReconnect(previous.endpoint, 50);
     await previous.close();
     await previous.stop();
     await vi.advanceTimersByTimeAsync(50);
 
-    expect(previous.login).toHaveBeenCalledTimes(1);
-    expect(isMockIcqqClientConnected(previous)).toBe(false);
-    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+    expect(previous.endpoint.login).toHaveBeenCalledTimes(1);
+    expect(isMockIcqqClientConnected(previous.endpoint)).toBe(false);
+    expect(isMockIcqqClientConnected(replacement.endpoint)).toBe(true);
     await replacement.stop();
   });
 
   it('retires an SDK reconnect whose login handshake already entered before stop', async () => {
     vi.useFakeTimers();
     const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
-    const previous = createEndpoint({ config: reconnectingConfig });
-    const replacement = createEndpoint({ config: reconnectingConfig });
+    const previous = await createEndpoint({ config: reconnectingConfig });
+    const replacement = await createEndpoint({ config: reconnectingConfig });
     await previous.start(new AbortController().signal);
     previous.open();
     await replacement.start(new AbortController().signal);
     replacement.open();
 
-    const handshake = hangNextMockIcqqLogin(previous);
-    scheduleMockIcqqReconnect(previous, 50);
+    const handshake = hangNextMockIcqqLogin(previous.endpoint);
+    scheduleMockIcqqReconnect(previous.endpoint, 50);
     await vi.advanceTimersByTimeAsync(50);
     await handshake.entered;
 
@@ -303,9 +297,9 @@ describe('icqq plugin runtime adapter', () => {
     handshake.release();
     await vi.runAllTimersAsync();
 
-    expect(previous.login).toHaveBeenCalledTimes(2);
-    expect(isMockIcqqClientConnected(previous)).toBe(false);
-    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+    expect(previous.endpoint.login).toHaveBeenCalledTimes(2);
+    expect(isMockIcqqClientConnected(previous.endpoint)).toBe(false);
+    expect(isMockIcqqClientConnected(replacement.endpoint)).toBe(true);
     await replacement.stop();
   });
 
@@ -318,14 +312,14 @@ describe('icqq plugin runtime adapter', () => {
       return Object.freeze({ matched: true, value: 'ok' });
     });
     const reconnectingConfig = resolveIcqqConfig({ id: '10001', autoReconnect: true });
-    const previous = createEndpoint({ config: reconnectingConfig, receive });
-    const replacement = createEndpoint({ config: reconnectingConfig });
+    const previous = await createEndpoint({ config: reconnectingConfig, receive });
+    const replacement = await createEndpoint({ config: reconnectingConfig });
     await previous.start(new AbortController().signal);
     previous.open();
     await replacement.start(new AbortController().signal);
     replacement.open();
 
-    previous.emit('message.group.normal', {
+    previous.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -337,8 +331,8 @@ describe('icqq plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
 
-    const handshake = hangNextMockIcqqLogin(previous);
-    scheduleMockIcqqReconnect(previous, 50);
+    const handshake = hangNextMockIcqqLogin(previous.endpoint);
+    scheduleMockIcqqReconnect(previous.endpoint, 50);
     await vi.advanceTimersByTimeAsync(50);
     await handshake.entered;
 
@@ -350,12 +344,12 @@ describe('icqq plugin runtime adapter', () => {
     await Promise.resolve();
     expect(closeSettled).toBe(false);
     expect(stopSettled).toBe(false);
-    expect(previous.terminate).not.toHaveBeenCalled();
+    expect(previous.endpoint.terminate).not.toHaveBeenCalled();
     handshake.release();
     await vi.runAllTimersAsync();
 
-    expect(isMockIcqqClientConnected(previous)).toBe(false);
-    expect(isMockIcqqClientConnected(replacement)).toBe(true);
+    expect(isMockIcqqClientConnected(previous.endpoint)).toBe(false);
+    expect(isMockIcqqClientConnected(replacement.endpoint)).toBe(true);
 
     releaseInbound();
     await Promise.all([closing, stopping]);
@@ -369,11 +363,11 @@ describe('icqq plugin runtime adapter', () => {
       await inboundGate;
       return Object.freeze({ matched: true, value: 'ok' });
     });
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.emit('message.guild.normal', {
+    endpoint.endpoint.emit('message.guild.normal', {
       type: 'guild',
       guild_id: 'g1',
       guild_name: 'Guild One',
@@ -404,10 +398,10 @@ describe('icqq plugin runtime adapter', () => {
       await inboundGate;
       return Object.freeze({ matched: true, value: 'ok' });
     });
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -451,12 +445,12 @@ describe('icqq plugin runtime adapter', () => {
         await inboundGate;
         return Object.freeze({ matched: true, value: 'ok' });
       });
-      const endpoint = createEndpoint({ receive });
+      const endpoint = await createEndpoint({ receive });
       holder.endpoint = endpoint;
       await endpoint.start(new AbortController().signal);
       endpoint.open();
 
-      endpoint.emit('message.group.normal', {
+      endpoint.endpoint.emit('message.group.normal', {
         post_type: 'message',
         message_type: 'group',
         group_id: 100,
@@ -483,11 +477,11 @@ describe('icqq plugin runtime adapter', () => {
 
   it('admits message events via OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -510,10 +504,10 @@ describe('icqq plugin runtime adapter', () => {
 
   it('holds inbound until open() then flushes to the gateway', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -536,11 +530,11 @@ describe('icqq plugin runtime adapter', () => {
 
   it('admits native GroupMessage whose toJSON(keys) throws if called without keys', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -567,11 +561,11 @@ describe('icqq plugin runtime adapter', () => {
 
   it('passes a canonical reply reference and resolves its observed content through EndpointContentPort', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -595,7 +589,7 @@ describe('icqq plugin runtime adapter', () => {
       replyTo: { id: 'quoted-1' },
     }));
     const conversation = receive.mock.calls[0]?.[0]?.conversation;
-    await expect(endpoint.content.resolve({
+    await expect(endpoint.index.resolveContent(endpoint.canonicalId, {
       kind: 'message',
       message: { conversation, id: 'quoted-1' },
     }, {
@@ -615,11 +609,11 @@ describe('icqq plugin runtime adapter', () => {
 
   it('omits reply references when event has no quote source', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -637,8 +631,9 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('resolves nested forwards within depth and entry budgets without following cycles', async () => {
-    const endpoint = createEndpoint();
-    endpoint.getForwardMsg = vi.fn(async (id: string) => {
+    const endpoint = await createEndpoint();
+    await endpoint.start();
+    endpoint.endpoint.getForwardMsg = vi.fn(async (id: string) => {
       if (id === 'root') return [{
         sender: { user_id: 1, nickname: 'root actor' },
         message: [{ type: 'forward', id: 'nested' }],
@@ -654,11 +649,11 @@ describe('icqq plugin runtime adapter', () => {
     }) as typeof endpoint.getForwardMsg;
 
     const conversation = {
-      endpoint: { adapter: 'icqq', id: endpoint.endpointName },
+      endpoint: { adapter: 'icqq', id: endpoint.endpoint.endpointName },
       kind: 'group' as const,
       id: '100',
     };
-    const result = await endpoint.content.resolve({
+    const result = await endpoint.index.resolveContent(endpoint.canonicalId, {
       kind: 'forward',
       conversation,
       forwardId: 'root',
@@ -688,16 +683,17 @@ describe('icqq plugin runtime adapter', () => {
         }],
       }],
     });
-    expect(endpoint.getForwardMsg).toHaveBeenCalledTimes(2);
+    expect(endpoint.endpoint.getForwardMsg).toHaveBeenCalledTimes(2);
+    await endpoint.stop();
   });
 
   it('marks mentioned when group message @s the bot uin', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -719,11 +715,11 @@ describe('icqq plugin runtime adapter', () => {
 
   it('does not mark mentioned when @ targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.emit('message.group.normal', {
+    endpoint.endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -741,9 +737,9 @@ describe('icqq plugin runtime adapter', () => {
 
   it('does not admit while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = createEndpoint({ receive });
+    const endpoint = await createEndpoint({ receive });
     await endpoint.start(new AbortController().signal);
-    endpoint.admit({
+    endpoint.endpoint.admit({
       id: '1',
       conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -759,7 +755,7 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('send posts group message via Client.sendGroupMsg', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
     const id = await endpoint.send({
@@ -771,12 +767,12 @@ describe('icqq plugin runtime adapter', () => {
       payload: 'pong',
     });
     expect(id).toEqual({ parts: [{ messageId: 'sent-1', sourceIndices: [0] }] });
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, 'pong');
+    expect(endpoint.endpoint.sendGroupMsg).toHaveBeenCalledWith(100, 'pong');
     await endpoint.stop();
   });
 
   it('sends music shares through the native ICQQ share protocol', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
     const sending = endpoint.send({
@@ -803,8 +799,8 @@ describe('icqq plugin runtime adapter', () => {
     });
 
     await expect(sending).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
-    expect(endpoint.pickGroup).toHaveBeenCalledWith(100);
-    expect(endpoint.share).toHaveBeenCalledWith({
+    expect(endpoint.endpoint.pickGroup).toHaveBeenCalledWith(100);
+    expect(endpoint.endpoint.share).toHaveBeenCalledWith({
       type: 'share',
       title: '海阔天空',
       url: 'https://music.163.com/#/song?id=387717',
@@ -816,7 +812,7 @@ describe('icqq plugin runtime adapter', () => {
         appid: 100495085,
       },
     });
-    expect(endpoint.sendGroupMsg).not.toHaveBeenCalled();
+    expect(endpoint.endpoint.sendGroupMsg).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
@@ -866,7 +862,7 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('sends text followed by a share as two messages and preserves its unknown id slot', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
     const id = await endpoint.send({
@@ -874,16 +870,16 @@ describe('icqq plugin runtime adapter', () => {
       payload: [{ type: 'text', data: { text: '找到了：' } }, { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } }],
     });
     expect(id).toEqual({ parts: [{ messageId: 'sent-1', sourceIndices: [0] }, { sourceIndices: [1] }] });
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, '找到了：');
-    expect(endpoint.share).toHaveBeenCalledWith({ type: 'share', title: '晴天', url: 'https://music.example/1' });
-    expect(endpoint.sendGroupMsg.mock.invocationCallOrder[0]).toBeLessThan(endpoint.share.mock.invocationCallOrder[0]!);
+    expect(endpoint.endpoint.sendGroupMsg).toHaveBeenCalledWith(100, '找到了：');
+    expect(endpoint.endpoint.share).toHaveBeenCalledWith({ type: 'share', title: '晴天', url: 'https://music.example/1' });
+    expect(endpoint.endpoint.sendGroupMsg.mock.invocationCallOrder[0]).toBeLessThan(endpoint.endpoint.share.mock.invocationCallOrder[0]!);
     await endpoint.stop();
   });
 
   it('retains every split bubble id with its own ordered source segments', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
-    endpoint.sendGroupMsg.mockResolvedValueOnce({ message_id: 'text-image' })
+    endpoint.endpoint.sendGroupMsg.mockResolvedValueOnce({ message_id: 'text-image' })
       .mockResolvedValueOnce({ message_id: 'audio' }).mockResolvedValueOnce({ message_id: 'tail' });
     const payload = [
       { type: 'text', data: { text: 'Before' } },
@@ -897,14 +893,14 @@ describe('icqq plugin runtime adapter', () => {
       { messageId: 'audio', sourceIndices: [2] },
       { messageId: 'tail', sourceIndices: [3] },
     ] });
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledTimes(3);
+    expect(endpoint.endpoint.sendGroupMsg).toHaveBeenCalledTimes(3);
     await endpoint.stop();
   });
 
   it('preserves unconfirmed share slots between confirmed text bubbles', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
-    endpoint.sendGroupMsg.mockResolvedValueOnce({ message_id: 'before' }).mockResolvedValueOnce({ message_id: 'after' });
+    endpoint.endpoint.sendGroupMsg.mockResolvedValueOnce({ message_id: 'before' }).mockResolvedValueOnce({ message_id: 'after' });
     const result = await endpoint.send({ conversation: { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group', id: '100' },
       payload: [{ type: 'text', data: { text: 'Before' } },
         { type: 'share', data: { title: 'Card', url: 'https://example.com/card' } },
@@ -913,17 +909,17 @@ describe('icqq plugin runtime adapter', () => {
     expect(result).toEqual({ parts: [
       { messageId: 'before', sourceIndices: [0] }, { sourceIndices: [1] }, { messageId: 'after', sourceIndices: [2] },
     ] });
-    expect(endpoint.getChatHistory).not.toHaveBeenCalled();
+    expect(endpoint.endpoint.getChatHistory).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('keeps file upload identifiers separate from platform message identities', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
-    const group = endpoint.pickGroup(100);
+    const group = endpoint.endpoint.pickGroup(100);
     const sendFile = vi.fn(async () => 'native-file-id');
-    endpoint.pickGroup.mockReturnValue({ ...group, sendFile } as never);
-    endpoint.sendGroupMsg.mockResolvedValueOnce({ message_id: 'before' }).mockResolvedValueOnce({ message_id: 'after' });
+    endpoint.endpoint.pickGroup.mockReturnValue({ ...group, sendFile } as never);
+    endpoint.endpoint.sendGroupMsg.mockResolvedValueOnce({ message_id: 'before' }).mockResolvedValueOnce({ message_id: 'after' });
     const conversation = { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
     const file = { type: 'file', data: { media: { kind: 'url', value: 'https://example.com/file.pdf' } } };
     const result = await endpoint.send({ conversation, payload: [
@@ -940,25 +936,25 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('reports a failure after the first delivered part as partial and unknown', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    endpoint.share.mockRejectedValueOnce(new Error('share rejected'));
+    endpoint.endpoint.share.mockRejectedValueOnce(new Error('share rejected'));
     const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
     const share = { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } };
     await expect(endpoint.send({ conversation, payload: [{ type: 'text', data: { text: '找到了' } }, share] }))
       .rejects.toMatchObject({ code: 'partial_delivery', disposition: 'unknown',
         parts: [{ messageId: 'sent-1', sourceIndices: [0] }], cause: { message: 'share rejected' } });
-    endpoint.share.mockRejectedValueOnce(new Error('share rejected'));
+    endpoint.endpoint.share.mockRejectedValueOnce(new Error('share rejected'));
     await expect(endpoint.send({ conversation, payload: [share, { type: 'text', data: { text: '找到了' } }] }))
       .rejects.toThrow('share rejected');
     await endpoint.stop();
   });
 
   it('retains unconfirmed completed sends when the next part fails and never retries either part', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
-    endpoint.sendGroupMsg.mockRejectedValueOnce(new Error('text outcome unknown'));
+    endpoint.endpoint.sendGroupMsg.mockRejectedValueOnce(new Error('text outcome unknown'));
     const conversation = { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
     await expect(endpoint.send({ conversation, payload: [
       { type: 'share', data: { title: 'Card', url: 'https://example.com/card' } },
@@ -966,18 +962,18 @@ describe('icqq plugin runtime adapter', () => {
       { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/a.mp3' } } },
     ] })).rejects.toMatchObject({ code: 'partial_delivery', disposition: 'unknown',
       parts: [{ sourceIndices: [0] }], cause: { message: 'text outcome unknown' } });
-    expect(endpoint.share).toHaveBeenCalledOnce();
-    expect(endpoint.sendGroupMsg).toHaveBeenCalledOnce();
+    expect(endpoint.endpoint.share).toHaveBeenCalledOnce();
+    expect(endpoint.endpoint.sendGroupMsg).toHaveBeenCalledOnce();
     await endpoint.stop();
   });
 
   it.each([false, true])('preserves send evidence when temporary media cleanup throws (partial=%s)', async partial => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     const payload = [{ type: 'text', data: { text: 'Before' } },
       ...(partial ? [{ type: 'share', data: { title: 'Card', url: 'https://example.com/card' } }] : [])];
     const sendFailure = new Error('share send outcome unknown');
-    if (partial) endpoint.share.mockRejectedValueOnce(sendFailure);
+    if (partial) endpoint.endpoint.share.mockRejectedValueOnce(sendFailure);
     const dispose = vi.fn(() => { throw new Error('temporary file cleanup failed'); });
     const prepare = vi.spyOn(outboundMedia, 'prepareIcqqOutboundMedia').mockReturnValue({ content: payload as never, dispose });
     try {
@@ -986,17 +982,17 @@ describe('icqq plugin runtime adapter', () => {
         parts: [{ messageId: 'sent-1', sourceIndices: [0] }] });
       else await expect(sending).resolves.toEqual({ parts: [{ messageId: 'sent-1', sourceIndices: [0] }] });
       expect(dispose).toHaveBeenCalledOnce();
-      expect(endpoint.sendGroupMsg).toHaveBeenCalledOnce();
+      expect(endpoint.endpoint.sendGroupMsg).toHaveBeenCalledOnce();
     } finally { prepare.mockRestore(); await endpoint.stop(); }
   });
 
   it('does not mistake a concurrent or similar own card for the share acknowledgement', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    const self = Number(endpoint.uin);
+    const self = Number(endpoint.endpoint.uin);
     const now = Math.floor(Date.now() / 1000);
-    endpoint.getChatHistory.mockResolvedValueOnce([
+    endpoint.endpoint.getChatHistory.mockResolvedValueOnce([
       { message_id: 'old-card', time: now - 60, sender: { user_id: self }, message: [{ type: 'json' }] },
       { message_id: 'someone-else', time: now, sender: { user_id: 42 }, message: [{ type: 'json' }] },
       { message_id: 'own-text', time: now, sender: { user_id: self }, message: [{ type: 'text' }] },
@@ -1005,22 +1001,22 @@ describe('icqq plugin runtime adapter', () => {
     const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
     await expect(endpoint.send({ conversation, payload: { type: 'share', data: { title: '晴天', url: 'https://y.qq.com/x' } } }))
       .rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown', parts: [{ sourceIndices: [0] }] });
-    expect(endpoint.getChatHistory).not.toHaveBeenCalled();
+    expect(endpoint.endpoint.getChatHistory).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('keeps a share unconfirmed without searching history or retrying the send', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
     const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
     const share = { type: 'share', data: { title: '晴天', url: 'https://y.qq.com/x' } };
     await expect(endpoint.send({ conversation, payload: share })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
-    expect(endpoint.getChatHistory).not.toHaveBeenCalled();
-    endpoint.getChatHistory.mockImplementation(() => { throw new Error('history api missing'); });
+    expect(endpoint.endpoint.getChatHistory).not.toHaveBeenCalled();
+    endpoint.endpoint.getChatHistory.mockImplementation(() => { throw new Error('history api missing'); });
     await expect(endpoint.send({ conversation, payload: share })).rejects.toMatchObject({ code: 'delivery_unconfirmed' });
-    expect(endpoint.share).toHaveBeenCalledTimes(2);
-    endpoint.getChatHistory.mockReset();
+    expect(endpoint.endpoint.share).toHaveBeenCalledTimes(2);
+    endpoint.endpoint.getChatHistory.mockReset();
     await endpoint.stop();
   });
 
@@ -1041,7 +1037,7 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('send posts temp message (群容器内的 private 会话)', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
     await endpoint.send({
@@ -1053,12 +1049,12 @@ describe('icqq plugin runtime adapter', () => {
       },
       payload: 'hi',
     });
-    expect(endpoint.sendTempMsg).toHaveBeenCalledWith(100, 2, 'hi');
+    expect(endpoint.endpoint.sendTempMsg).toHaveBeenCalledWith(100, 2, 'hi');
     await endpoint.stop();
   });
 
   it('send posts guild channel message (guild 容器内的 channel 会话)', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
     await endpoint.send({
@@ -1070,12 +1066,12 @@ describe('icqq plugin runtime adapter', () => {
       },
       payload: 'hi',
     });
-    expect(endpoint.sendGuildMsg).toHaveBeenCalledWith('g1', 'c1', 'hi');
+    expect(endpoint.endpoint.sendGuildMsg).toHaveBeenCalledWith('g1', 'c1', 'hi');
     await endpoint.stop();
   });
 
   it('send throws a clear error after stop', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
     await endpoint.stop();
     await expect(endpoint.send({
@@ -1085,14 +1081,14 @@ describe('icqq plugin runtime adapter', () => {
         id: '100',
       },
       payload: 'x',
-    })).rejects.toThrow(/未连接/);
+    })).rejects.toMatchObject({ code: 'closed' });
   });
 
   it('exposes the live SDK Client through the endpoint operation client', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
-    const registered = endpoint;
-    expect(registered).toBe(endpoint);
+    const registered = endpoint.index.clientById<IcqqEndpoint>(endpoint.canonicalId);
+    expect(registered).toBe(endpoint.endpoint);
     expect(registered.fl.size).toBe(1);
     expect(registered.gl.size).toBe(1);
     await endpoint.stop();
@@ -1104,7 +1100,8 @@ describe('icqq plugin runtime adapter', () => {
   });
 
   it('adds and removes group reactions via Group.setReaction', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
+    await endpoint.start();
     const message = {
       conversation: {
         endpoint: { id: 'icqq', adapter: 'icqq' },
@@ -1114,17 +1111,19 @@ describe('icqq plugin runtime adapter', () => {
       id: '42',
     };
     await expect(endpoint.control.addReaction!(message, '104')).resolves.toBe('104');
-    expect(vi.mocked(endpoint.pickGroup)).toHaveBeenCalledWith(100);
-    const group = vi.mocked(endpoint.pickGroup).mock.results[0]!.value;
+    expect(vi.mocked(endpoint.endpoint.pickGroup)).toHaveBeenCalledWith(100);
+    const group = vi.mocked(endpoint.endpoint.pickGroup).mock.results[0]!.value;
     expect(group.setReaction).toHaveBeenCalledWith(42, '104');
     await endpoint.control.removeReaction!(message, '104');
     expect(group.delReaction).toHaveBeenCalledWith(42, '104');
+    await endpoint.stop();
   });
 
   it('does not wait for reaction protocol ACK (packet timeout must not stall send)', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
+    await endpoint.start();
     const hung = new Promise<never>(() => undefined);
-    vi.mocked(endpoint.pickGroup).mockReturnValue({
+    vi.mocked(endpoint.endpoint.pickGroup).mockReturnValue({
       setReaction: vi.fn(() => hung),
       delReaction: vi.fn(() => hung),
     });
@@ -1138,10 +1137,12 @@ describe('icqq plugin runtime adapter', () => {
     };
     await expect(endpoint.control.addReaction!(message, '104')).resolves.toBe('104');
     await expect(endpoint.control.removeReaction!(message, '104')).resolves.toBeUndefined();
+    await endpoint.stop();
   });
 
   it('skips reactions in private chats and for outbound placeholders', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
+    await endpoint.start();
     await expect(endpoint.control.addReaction!({
       conversation: {
         endpoint: { id: 'icqq', adapter: 'icqq' },
@@ -1158,24 +1159,25 @@ describe('icqq plugin runtime adapter', () => {
       },
       id: 'outbound:1',
     }, '104')).resolves.toBeNull();
-    expect(endpoint.pickGroup).not.toHaveBeenCalled();
+    expect(endpoint.endpoint.pickGroup).not.toHaveBeenCalled();
+    await endpoint.stop();
   });
 });
 
 it('projects ICQQ online state independently from message admission', async () => {
-  const endpoint = createEndpoint({ config: resolveIcqqConfig({ id: '10001', autoReconnect: true }) });
+  const endpoint = await createEndpoint({ config: resolveIcqqConfig({ id: '10001', autoReconnect: true }) });
   expect(endpoint.transportState).toBe('idle');
   await endpoint.start(new AbortController().signal);
   expect(endpoint.transportState).toBe('open');
-  endpoint.emit('system.offline.network', {} as never);
+  endpoint.endpoint.emit('system.offline.network', {} as never);
   expect(endpoint.transportState).toBe('reconnecting');
-  endpoint.emit('system.online', {} as never);
+  endpoint.endpoint.emit('system.online', {} as never);
   expect(endpoint.transportState).toBe('open');
   await endpoint.stop(); expect(endpoint.transportState).toBe('stopped');
 });
 it('rejects absent ICQQ receipts without inventing an id or resending', async () => {
-  const endpoint = createEndpoint(); await endpoint.start(new AbortController().signal);
-  const send = vi.spyOn(endpoint, 'sendGroupMsg').mockResolvedValue({} as never);
+  const endpoint = await createEndpoint(); await endpoint.start(new AbortController().signal);
+  const send = vi.spyOn(endpoint.endpoint, 'sendGroupMsg').mockResolvedValue({} as never);
   await expect(endpoint.send({ conversation: { endpoint: { adapter: 'icqq', id: '10001' }, kind: 'group', id: '100' }, payload: 'hello' })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
   expect(send).toHaveBeenCalledOnce(); await endpoint.stop();
 });
@@ -1183,7 +1185,7 @@ it('rejects absent ICQQ receipts without inventing an id or resending', async ()
 describe('icqq outage recovery', () => {
   it('notifies the configured master and retries login after kickoff', async () => {
     const notifier = { configured: true, send: vi.fn(async () => true) };
-    const endpoint = createEndpoint({
+    const endpoint = await createEndpoint({
       config: resolveIcqqConfig({
         id: '10001',
         autoReconnect: true,
@@ -1192,44 +1194,44 @@ describe('icqq outage recovery', () => {
       notifier,
     });
     await endpoint.start(new AbortController().signal);
-    expect(endpoint.login).toHaveBeenCalledTimes(1);
+    expect(endpoint.endpoint.login).toHaveBeenCalledTimes(1);
 
     vi.useFakeTimers();
-    endpoint.emit('system.offline.kickoff', { message: 'kicked by another device' });
+    endpoint.endpoint.emit('system.offline.kickoff', { message: 'kicked by another device' });
     expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('掉线'));
     expect(endpoint.transportState).toBe('reconnecting');
 
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(endpoint.login).toHaveBeenCalledTimes(2);
-    expect(endpoint.loginControl.state()).toMatchObject({ endpointId: '10001', online: true });
+    expect(endpoint.endpoint.login).toHaveBeenCalledTimes(2);
+    expect(endpoint.endpoint.loginControl.state()).toMatchObject({ endpointId: '10001', online: true });
     expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('已重新上线'));
     await endpoint.stop();
   });
 
   it('does not auto-relogin when autoReconnect is disabled', async () => {
     const notifier = { configured: true, send: vi.fn(async () => true) };
-    const endpoint = createEndpoint({
+    const endpoint = await createEndpoint({
       config: resolveIcqqConfig({ id: '10001', autoReconnect: false }),
       notifier,
     });
     await endpoint.start(new AbortController().signal);
     vi.useFakeTimers();
-    endpoint.emit('system.offline.kickoff', { message: 'kicked' });
+    endpoint.endpoint.emit('system.offline.kickoff', { message: 'kicked' });
     expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('请手动重新登录'));
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(endpoint.login).toHaveBeenCalledTimes(1);
+    expect(endpoint.endpoint.login).toHaveBeenCalledTimes(1);
     await endpoint.stop();
   });
 
   it('exposes a login control for recovery commands', async () => {
-    const endpoint = createEndpoint();
+    const endpoint = await createEndpoint();
     await endpoint.start(new AbortController().signal);
-    expect(endpoint.loginControl.pending()).toEqual([]);
-    endpoint.emit('system.login.qrcode', { image: Buffer.from([1, 2, 3]) });
+    expect(endpoint.endpoint.loginControl.pending()).toEqual([]);
+    endpoint.endpoint.emit('system.login.qrcode', { image: Buffer.from([1, 2, 3]) });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const [task] = endpoint.loginControl.pending();
+    const [task] = endpoint.endpoint.loginControl.pending();
     expect(task).toMatchObject({ type: 'qrcode', endpointKey: '10001' });
-    expect(endpoint.loginControl.submit(task!.id, 'ok')).toBe(true);
+    expect(endpoint.endpoint.loginControl.submit(task!.id, 'ok')).toBe(true);
     await endpoint.stop();
   });
 });

@@ -1,8 +1,8 @@
 /** Draft review presentation; endpoint methods remain the approval and delivery authority. */
 import { createMessages, type Locale } from 'zhin.js/i18n';
 import type { BilibiliReplyDraft } from './drafts.js';
-import { BilibiliReviewError, type BilibiliEndpoint, type BilibiliNotice } from './endpoint.js';
-import type { BilibiliEndpointRegistry } from './bilibili-runtime-state.js';
+import { BilibiliReviewError, type BilibiliNotice } from './endpoint.js';
+import type { BilibiliEndpointDirectory, BilibiliEndpointView } from './endpoint-directory.js';
 import { BILIBILI_COMMENT_MAX_LENGTH } from './protocol.js';
 
 const LIST_LIMIT = 10;
@@ -82,7 +82,7 @@ export function formatDraft(draft: BilibiliReplyDraft, options: { readonly full?
   lines.push(t(locale, 'reply', { text: options.full ? draft.message : excerpt(draft.message) }));
   return lines.join('\n');
 }
-export function findDraft(registry: BilibiliEndpointRegistry, id: string): { endpoint: BilibiliEndpoint; draft: BilibiliReplyDraft } | undefined {
+export function findDraft(registry: BilibiliEndpointDirectory, id: string): { endpoint: BilibiliEndpointView; draft: BilibiliReplyDraft } | undefined {
   for (const endpoint of registry.values()) {
     const draft = endpoint.drafts.get(id);
     if (draft) return { endpoint, draft };
@@ -95,7 +95,7 @@ export function draftEditUsage(presentation: DraftPresentation = {}): string {
   return command === undefined ? t(presentation.locale, 'editRequired')
     : t(presentation.locale, 'editUsage', { command, content: t(presentation.locale, 'content') });
 }
-export function listDraftsText(registry: BilibiliEndpointRegistry, presentation: DraftPresentation = {}): string {
+export function listDraftsText(registry: BilibiliEndpointDirectory, presentation: DraftPresentation = {}): string {
   const { locale, formatCommand } = presentation;
   const drafts = [...registry.values()].flatMap(endpoint => endpoint.drafts.list());
   if (drafts.length === 0) return t(locale, 'empty');
@@ -110,11 +110,11 @@ export function listDraftsText(registry: BilibiliEndpointRegistry, presentation:
   if (hints.length) lines.push('', hints.join('\n'));
   return lines.join('\n');
 }
-export function showDraftText(registry: BilibiliEndpointRegistry, id: string, presentation: DraftPresentation = {}): string {
+export function showDraftText(registry: BilibiliEndpointDirectory, id: string, presentation: DraftPresentation = {}): string {
   const found = findDraft(registry, id);
   return found ? formatDraft(found.draft, { full: true, locale: presentation.locale }) : t(presentation.locale, 'missing', { id });
 }
-export function editDraftText(registry: BilibiliEndpointRegistry, id: string, message: string, presentation: DraftPresentation = {}): string {
+export function editDraftText(registry: BilibiliEndpointDirectory, id: string, message: string, presentation: DraftPresentation = {}): string {
   const { locale, formatCommand } = presentation;
   const found = findDraft(registry, id);
   if (!found) return t(locale, 'missing', { id });
@@ -125,13 +125,13 @@ export function editDraftText(registry: BilibiliEndpointRegistry, id: string, me
       ...(command === undefined ? [] : [t(locale, 'approveHint', { command: `${command} ${id}` })])].join('\n');
   } catch (error) { return reviewErrorText(id, error, locale); }
 }
-export function discardDraftText(registry: BilibiliEndpointRegistry, id: string, presentation: DraftPresentation = {}): string {
+export function discardDraftText(registry: BilibiliEndpointDirectory, id: string, presentation: DraftPresentation = {}): string {
   const found = findDraft(registry, id);
   if (!found) return t(presentation.locale, 'missing', { id });
   try { return t(presentation.locale, found.endpoint.discardDraft(id) ? 'dropped' : 'missing', { id }); }
   catch (error) { return reviewErrorText(id, error, presentation.locale); }
 }
-export async function approveDraftText(registry: BilibiliEndpointRegistry, id: string, presentation: DraftPresentation = {}): Promise<string> {
+export async function approveDraftText(registry: BilibiliEndpointDirectory, id: string, presentation: DraftPresentation = {}): Promise<string> {
   const found = findDraft(registry, id);
   if (!found) return t(presentation.locale, 'missing', { id });
   try {

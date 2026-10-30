@@ -10,7 +10,7 @@ import { join, relative, resolve } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
 import { createConfigDocument, type ConfigFileDocument } from '@zhin.js/config-file';
-import { adapterFeatureId, isAdapterIndex, endpointConfigurationStoreToken, endpointDesiredRepositoryToken } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, endpointDesiredRepositoryToken } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -63,7 +63,6 @@ import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
-import { ProjectEndpointConfigurationStore } from './endpoint-configuration-store.js';
 import { RootHost } from './root-host.js';
 import { PersistentEndpointRepository } from './runtime-endpoints/state.js';
 import { HostSelfChangeApply } from './self-change-apply.js';
@@ -190,11 +189,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const toolApprovals = new HostToolApprovals();
   // 受控自我进化审批（ADR 0040 §4）：进程持有，绑定当前 generation 的变更暂存区与审批。
   const selfChanges = new HostSelfChanges();
-  const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
-    projectRoot: options.root,
-    configFile,
-    document: config,
-  });
   const consoleConfigurationStore = new ConsoleConfigurationStore({
     projectRoot: options.root,
     document: config,
@@ -235,7 +229,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     disabledPluginInstanceKeys: [],
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
-      context.resources.provide(endpointConfigurationStoreToken, endpointConfigurationStore);
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);

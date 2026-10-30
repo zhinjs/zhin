@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { onebot11RuntimeStateToken } from './onebot11-runtime-state.js';
 import { onebot11ConsoleSpec } from './console-spec.js';
 
 export function createOnebot11ConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(onebot11RuntimeStateToken);
   return createAdapterConsoleRpc({
     ...onebot11ConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

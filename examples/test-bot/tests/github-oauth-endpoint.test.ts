@@ -157,20 +157,20 @@ describe('test-bot GitHub OAuth endpoint access', () => {
     }]);
     const endpoint = {
       host: 'https://github.example',
-      api: { verifyAuth: vi.fn(async () => ({ ok: true, user: 'bot' })) },
+      verifyAuth: vi.fn(async () => ({ ok: true, user: 'bot' })),
     };
     mocks.verifyAuth.mockResolvedValueOnce({ ok: false, message: 'expired' });
 
     await expect(whoamiOauth(endpoint as never, model as never, 'icqq', '10001'))
       .resolves.toContain('Token 已失效');
-    expect(endpoint.api.verifyAuth).toHaveBeenCalledOnce();
+    expect(endpoint.verifyAuth).toHaveBeenCalledOnce();
     expect(mocks.construct).toHaveBeenCalledWith({ host: endpoint.host, token: 'user-token' });
   });
 
   it('reports unbound and valid identities, then removes the binding', async () => {
     const endpoint = {
       host: 'https://github.example',
-      api: { verifyAuth: vi.fn(async () => ({ ok: false, message: 'app token missing' })) },
+      verifyAuth: vi.fn(async () => ({ ok: false, message: 'app token missing' })),
     };
     const unbound = modelWithRows([]);
     await expect(whoamiOauth(endpoint as never, unbound as never, 'icqq', '10001'))

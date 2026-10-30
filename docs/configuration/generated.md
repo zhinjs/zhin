@@ -1092,7 +1092,7 @@ outline: [2, 3]
 | `onebot12.heartbeat_interval` | number | 否 | `30000` | — |
 | `onebot12.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `onebot12.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `onebot12.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `onebot12.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项明确选择 platform/userId，id 为本地账号名称，其余连接字段覆盖实例默认值 |
 | `onebot12.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
 | `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | — | — |
@@ -1104,6 +1104,8 @@ outline: [2, 3]
 | `onebot12.endpoints[].heartbeat_interval` | number | 否 | — | — |
 | `onebot12.endpoints[].commandPrefix` | string | 否 | — | — |
 | `onebot12.endpoints[].id` | string | 是 | — | OneBot12 bot name |
+| `onebot12.endpoints[].platform` | string | 是 | — | Selected OneBot12 bot platform |
+| `onebot12.endpoints[].userId` | string | 是 | — | Selected OneBot12 bot user ID |
 | `onebot12.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### qq
@@ -1185,7 +1187,7 @@ outline: [2, 3]
 | `satori.heartbeat_interval` | number | 否 | `10000` | WS PING interval in milliseconds |
 | `satori.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `satori.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值 |
+| `satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项明确选择 platform/userId，id/baseUrl 必填，其余字段覆盖实例默认值 |
 | `satori.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
 | `satori.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `satori.endpoints[].baseUrl` | string | 是 | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
@@ -1195,6 +1197,8 @@ outline: [2, 3]
 | `satori.endpoints[].heartbeat_interval` | number | 否 | — | — |
 | `satori.endpoints[].commandPrefix` | string | 否 | — | — |
 | `satori.endpoints[].id` | string | 是 | — | Satori bot name |
+| `satori.endpoints[].platform` | string | 是 | — | Selected Satori login platform |
+| `satori.endpoints[].userId` | string | 是 | — | Selected Satori login user ID |
 | `satori.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### slack
@@ -1306,6 +1310,7 @@ outline: [2, 3]
 | `wecom.endpoints[].apiBaseUrl` | string | 否 | — | — |
 | `wecom.endpoints[].commandPrefix` | string | 否 | — | — |
 | `wecom.endpoints[].id` | string | 是 | — | WeCom bot name |
+| `wecom.endpoints[].agentId` | string | 是 | — | 企业微信应用 AgentId（非应用 Secret） |
 | `wecom.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### weixin-ilink

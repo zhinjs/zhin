@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { once } from 'node:events';
-import type { Client } from 'discord.js';
-import { defaultCreateClient } from '../src/gateway.js';
+import { Client } from 'discord.js';
+import { discordClientOptions } from '../src/gateway.js';
 
 it.each(['lost', '500', '429', 'denied'] as const)('actual Discord REST sends exactly one POST for %s', async mode => {
   let calls = 0;
@@ -13,7 +13,7 @@ it.each(['lost', '500', '429', 'denied'] as const)('actual Discord REST sends ex
     response.end(JSON.stringify(mode === '429' ? { retry_after: 0.01, global: false } : { code: 50013, message: 'fixture denied' }));
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  const client = defaultCreateClient([], undefined, { api: `http://127.0.0.1:${(server.address() as { port: number }).port}`, timeout: 1000 }) as unknown as Client;
+  const client = new Client(discordClientOptions([], undefined, { api: `http://127.0.0.1:${(server.address() as { port: number }).port}`, timeout: 1000 }));
   client.rest.setToken('fixture-only');
   try {
     await expect(client.rest.post('/channels/fixture/messages', { body: { content: 'fixture' } })).rejects.toBeDefined();

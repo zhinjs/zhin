@@ -2,6 +2,7 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type {
   OneBot12ActionRequest,
+  OneBot12Self,
   OneBot12ActionResponse,
   OneBot12Event,
 } from './protocol.js';
@@ -53,12 +54,13 @@ export function callOneBot12WsAction(
   requestId: { value: number },
   action: string,
   params: Record<string, unknown>,
+  self: OneBot12Self,
 ): Promise<OneBot12ActionResponse> {
   if (!ws || ws.readyState !== WS_OPEN) {
     return Promise.reject(new Error('WebSocket 未连接'));
   }
   const echo = `ob12_${++requestId.value}`;
-  const request: OneBot12ActionRequest = { action, params, echo };
+  const request: OneBot12ActionRequest = { action, params, echo, self };
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(echo);

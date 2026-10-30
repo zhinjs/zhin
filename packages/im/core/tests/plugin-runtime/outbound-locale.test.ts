@@ -1,6 +1,6 @@
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, projectLocaleToken, PluginOutboundHost,
-  userLocalePreferencesToken, type Locale, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointSendRequest } from '@zhin.js/adapter';
+  userLocalePreferencesToken, type Locale, type TokenId, type FeatureId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointSendRequest } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { MiddlewareIndex, middlewareFeatureId, defineMiddleware } from '@zhin.js/middleware';
 import { ImRuntime, type Message, type SendContent, type OutboundEnvelope } from '../../src/plugin-runtime/im/index.js';
@@ -12,13 +12,14 @@ async function fixture(projectLocale: Locale, replace = false) {
   const im = new ImRuntime();
   const sent: EndpointSendRequest[] = [];
   let userLocale: Locale = 'en';
-  class MemoryEndpoint extends Endpoint<object> {
-    readonly client = {};
-    start() {} open() {} close() {} stop() {}
+  class MemoryClient {
     async send(request: EndpointSendRequest) { sent.push(request); return `m${sent.length}`; }
   }
+  class MemoryEndpoint extends MemoryClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request) });
+  }
   const adapter = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'memory', source: '/adapters/memory/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => new MemoryEndpoint() }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<MemoryEndpoint> { protected createEndpoint() { return new MemoryEndpoint(); } }() }) });
   const command = createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: 'multiple', source: '/commands/multiple/index.ts',
     definition: defineCommand<{}, SendContent, Message>({ async execute({ input }) {
       await input!.$reply('第一条原文');
@@ -35,17 +36,17 @@ async function fixture(projectLocale: Locale, replace = false) {
   const state: SnapshotState = {
     root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@test/locale', packageRoot: '/project', children: [] }]]),
     config: new Map([[root, { commandPrefix: '/', locale: projectLocale }]]),
-    resources: new Map([[root, new Map<string, unknown>([
+    resources: new Map([[root, new Map<TokenId, unknown>([
       [projectLocaleToken.id, projectLocale], [endpointEventGatewayToken.id, im.endpointEvents],
       [userLocalePreferencesToken.id, { get: async () => userLocale, set: async () => undefined }],
     ])]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
   };
   const view = createSnapshotView(0, state);
   const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-  const store = new SnapshotStore({ ...state, projections: new Map<string, unknown>([
+  const store = new SnapshotStore({ ...state, projections: new Map<FeatureId, unknown>([
     [adapterFeatureId, adapters], [commandFeatureId, new CommandIndex([command], view)],
     [middlewareFeatureId, new MiddlewareIndex([middleware], view)],
-  ]) as SnapshotState['projections'] });
+  ]) });
   im.attach(store); await adapters.start(); adapters.open();
   const row = im.endpoints.list()[0]!;
   return { im, sent, row, async receive() {

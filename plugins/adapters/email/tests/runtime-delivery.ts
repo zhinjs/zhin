@@ -1,12 +1,13 @@
-import { AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from 'zhin.js/adapter';
+import { Adapter, AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from 'zhin.js/adapter';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import type { EmailEndpoint } from '../src/endpoint.js';
 
 /** Real unified rendering/middleware/AdapterIndex/Endpoint receipt path. */
-export async function emailDeliveryRuntime(endpoint: EmailEndpoint) {
+export async function emailDeliveryRuntime(factory: () => EmailEndpoint) {
+  class FixtureAdapter extends Adapter<EmailEndpoint> { protected createEndpoint(): EmailEndpoint { return factory(); } }
   const root = rootPluginId();
-  const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'email', source: '/fixture/email', definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => endpoint }) });
+  const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'email', source: '/fixture/email', definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new FixtureAdapter() }) });
   const base: SnapshotState = {
     root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@fixture/root', packageRoot: '/fixture', children: [] }]]),
     config: new Map([[root, {}]]), resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]),

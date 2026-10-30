@@ -43,9 +43,9 @@ flowchart LR
 
 The actual code locations for each step:
 
-1. **Client and Endpoint responsibilities**. Client is the real platform SDK or a clean protocol Client. It owns platform APIs and raw events. Endpoint owns the account, transport, hot-reload lifecycle, and framework boundary. Every platform Endpoint extends `Endpoint<TClient>` and enters Core only through `emit(name, payload)`. Core wraps every event as `{ name, payload, endpoint, client }`.
+1. **Adapter, native Client, and Endpoint**. The owning `Adapter` manages desired accounts, running instances, and lifecycle. A platform Endpoint extends the real SDK or a substantive protocol Client that owns its IO and implements the structural `Endpoint` interface. Framework hooks use `endpointSpec` without replacing native SDK methods. Inbound events enter through `endpoint[endpointSpec].events`; Core wraps each event as `{ name, payload, endpoint, client }`.
 
-   Native events are first emitted losslessly as `platform.receive` with `{ name, event }`; known events may additionally be projected to `message.receive`, `notice.receive`, `request.receive`, or `system.receive`. Messages, join requests, member changes, online/offline events, and platform extensions therefore all expose the same Client to plugins. Events produced while a candidate generation starts are buffered by the Endpoint base and replayed in order on admission; late events from a retired generation are dropped.
+   Native events are first emitted losslessly as `platform.receive` with `{ name, event }`; known events may additionally be projected to `message.receive`, `notice.receive`, `request.receive`, or `system.receive`. Messages, join requests, member changes, online/offline events, and platform extensions therefore all expose the same Client to plugins. The complete parsed, authenticated platform callback enters through `events.run(...)` before deduplication and asynchronous normalization. `close` drains accepted callbacks; `stop` cancels that running incarnation. Raw HTTP reading and signature checks stay with the Host or SDK, and existing platform ACK timing is preserved. Native events mean the objects actually exposed by the SDK or protocol Client, not unexposed wire packets. The internal admission runtime buffers events while a candidate generation starts and replays them in order on admission; late events from retired generations are rejected.
 
 2. **Message normalization**. A `message.receive` payload has this shape:
 
@@ -94,14 +94,14 @@ flowchart LR
     N --> V["createOutboundEnvelope<br/>conversation, requester, generation"]
     V --> MW["Middleware outbound<br/>can envelope.replace(payload)"]
     MW --> S[AdapterIndex.send<br/>validate outbound capability and online status]
-    S --> E["endpoint.send({conversation, payload})"]
+    S --> E["registered send hook({conversation, payload})"]
 ```
 
 - **SendContent forms** (`packages/im/core/src/plugin-runtime/im/contracts.ts`): string; canonical `Segment` (first-class citizen, see "Multimodal" below); `component(name, props)` component call (recursively rendered via `ComponentIndex`, depth limit 32); `raw(payload)` passthrough; and nested arrays of any of these.
 - **Envelope** carries `conversation` (structured conversation addressing, `ConversationRef` from `@zhin.js/im-contract`), `requester` (the originating plugin, used for component permissions and auditing), `generation`, and provides `replace(payload)` for outbound middleware to rewrite content.
 - **Outbound middleware** shares the same definition as inbound; `target: 'outbound'` intercepts outbound messages.
 - **Runtime ownership** belongs to `OutboundDeliveryRuntime`: it exclusively controls rendering, media and interaction policy projection, outbound middleware, Endpoint delivery, conversation fact recording, and observer event publication. `ImRuntime` only acquires the correct generation lease and delegates delivery.
-- **The last mile** is in `AdapterIndex.send`: the endpoint must declare `outbound` capability and be in `started && !stopped` state, otherwise an error is thrown; once passed, `endpoint.send()` is called to deliver to the platform.
+- **The last mile** is in `AdapterIndex.send`: the endpoint must declare `outbound` capability and be in `started && !stopped` state, otherwise an error is thrown; once passed, the incarnation lease invokes the send hook registered through `createEndpointSpecification` to deliver to the platform. Native SDK methods retain their own contracts.
 
 Ordinary message delivery must go through this unified pipeline (`$reply` / `$replyFrom` / `OutboundMessageService.send`) so rendering, middleware, and event broadcasting are preserved. Non-message business operations such as join approval, role management, and platform queries should resolve the Client from the current event/command/tool operation and call the platform SDK directly. Do not retain a Client beyond that operation.
 

@@ -4,7 +4,7 @@ import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { EndpointEvent } from 'zhin.js/adapter';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { bindTestEndpointEvents } from '../../test-utils/endpoint.js';
+import { createEndpointHarness } from '../../test-utils/endpoint.js';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 import { SandboxClient, type SandboxClientConnection } from '../src/client.js';
 import { resolveSandboxEndpoint } from '../src/protocol.js';
@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 function conversation(scene: Scene): ConversationRef {
-  return { endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0]! }, kind: scene.type, id: scene.id };
+  return { endpoint: { id: endpointKey, adapter: 'sandbox' }, kind: scene.type, id: scene.id };
 }
 
 async function fixture(authenticated = false) {
@@ -32,11 +32,11 @@ async function fixture(authenticated = false) {
   hosts.push(http);
   const receive = vi.fn(async (_input: unknown) => Object.freeze({ matched: true }));
   const events = vi.fn(async (event: EndpointEvent) => event.name === 'message.receive' ? receive(event.payload) : undefined);
-  const endpoint = bindTestEndpointEvents(new SandboxWsEndpoint({
+  const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'sandbox'),
     http, defaults: resolveSandboxEndpoint({ id: 'shared-bot', owner: 'shared-owner' }),
-  }), { receive: events });
-  endpoint.start();
+  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: { receive: events } });
+  await endpoint.start();
   endpoint.open();
   const { port } = await http.listen();
   const connect = async (token?: string) => {
@@ -79,7 +79,7 @@ describe('Sandbox scoped multi-connection transport', () => {
     expect(echo).toMatchObject({ ...scene, senderId: 'shared-owner', messageId: 'client-message', content: [{ type: 'text', data: { text: 'hello' } }] });
     expect(second.frames.find(frame => frame.direction === 'inbound')).toEqual(echo);
     expect(receive.mock.calls[0]![0]).toMatchObject({ endpointId: 'shared-bot', sender: { id: 'shared-owner' }, message: { id: echo.messageId } });
-    const receipt = endpoint.send({ conversation: conversation(scene), payload: 'reply' });
+    const receipt = await endpoint.send({ conversation: conversation(scene), payload: 'reply' });
     await vi.waitFor(() => expect(second.frames.some(frame => frame.messageId === receipt)).toBe(true));
     expect(first.frames.find(frame => frame.messageId === receipt)).toEqual(second.frames.find(frame => frame.messageId === receipt));
     await other.subscribe({ type: 'private', id: scene.id });
@@ -87,7 +87,7 @@ describe('Sandbox scoped multi-connection transport', () => {
     expect(receive).toHaveBeenCalledTimes(1);
     // A changed subscription replaces the old scene, including when IDs coincide.
     await first.subscribe({ type: 'private', id: scene.id });
-    const nextReceipt = endpoint.send({ conversation: conversation(scene), payload: 'remaining subscriber' });
+    const nextReceipt = await endpoint.send({ conversation: conversation(scene), payload: 'remaining subscriber' });
     await vi.waitFor(() => expect(second.frames.some(frame => frame.messageId === nextReceipt)).toBe(true));
     await first.subscribe({ type: 'private', id: scene.id });
     expect(first.frames.some(frame => frame.messageId === nextReceipt)).toBe(false);
@@ -105,12 +105,12 @@ describe('Sandbox scoped multi-connection transport', () => {
     expect(echo.messageId).toEqual(expect.any(String));
     expect(receive.mock.calls[0]![0]).toMatchObject({ message: { id: echo.messageId }, conversation: conversation({ type: 'channel', id: 'legacy-room' }) });
     expect(first.frames.some(frame => frame.direction === 'inbound')).toBe(false);
-    const receipt = endpoint.send({ conversation: conversation({ type: 'channel', id: 'legacy-room' }), payload: 'channel reply' });
+    const receipt = await endpoint.send({ conversation: conversation({ type: 'channel', id: 'legacy-room' }), payload: 'channel reply' });
     await vi.waitFor(() => expect(first.frames.some(frame => frame.messageId === receipt)).toBe(true));
     await vi.waitFor(() => expect(second.frames.some(frame => frame.messageId === receipt)).toBe(true));
     // Default subscriptions keep old clients able to receive private owner messages before input.
     const third = await connect();
-    const privateReceipt = endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'private reply' });
+    const privateReceipt = await endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'private reply' });
     await vi.waitFor(() => expect(third.frames.some(frame => frame.messageId === privateReceipt)).toBe(true));
   });
 
@@ -130,20 +130,20 @@ describe('Sandbox scoped multi-connection transport', () => {
     demo.client.send(JSON.stringify({ type: 'private', id: 'shared-owner', content: 'denied' }));
     await vi.waitFor(() => expect(full.frames.filter(frame => frame.type === 'error')).toHaveLength(invalid.length));
     await vi.waitFor(() => expect(demo.frames.filter(frame => frame.type === 'error')).toHaveLength(2));
-    const receipt = endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'full only' });
+    const receipt = await endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'full only' });
     await vi.waitFor(() => expect(full.frames.some(frame => frame.messageId === receipt)).toBe(true));
     expect(demo.frames.some(frame => frame.messageId === receipt)).toBe(false);
     expect(receive).not.toHaveBeenCalled();
     expect(events.mock.calls.filter(([event]) => event.name === 'platform.receive'
       && (event.payload as { name: string }).name === 'message')).toHaveLength(0);
-    expect(() => endpoint.send({ conversation: conversation({ type: 'group', id: 'room' }), payload: 'unsubscribed' }))
-      .toThrow(expect.objectContaining({ disposition: 'not_sent' }));
+    await expect(endpoint.send({ conversation: conversation({ type: 'group', id: 'room' }), payload: 'unsubscribed' }))
+      .rejects.toThrow(expect.objectContaining({ disposition: 'not_sent' }));
     const fullClosed = new Promise<void>(resolve => full.client.once('close', () => resolve()));
     full.client.close();
     await fullClosed;
-    await vi.waitFor(() => expect(endpoint.client.connections()).toHaveLength(1));
-    expect(() => endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'demo cannot receive' }))
-      .toThrow(expect.objectContaining({ disposition: 'not_sent' }));
+    await vi.waitFor(() => expect(endpoint.endpoint.connections()).toHaveLength(1));
+    await expect(endpoint.send({ conversation: conversation({ type: 'private', id: 'shared-owner' }), payload: 'demo cannot receive' }))
+      .rejects.toThrow(expect.objectContaining({ disposition: 'not_sent' }));
   });
 
   it('continues delivering after one socket fails and never confirms delivery if all subscribers fail', async () => {
@@ -152,14 +152,14 @@ describe('Sandbox scoped multi-connection transport', () => {
     const scene: Scene = { type: 'group', id: 'room' };
     await first.subscribe(scene);
     await second.subscribe(scene);
-    const failed = endpoint.client.connectionById(String(first.ready.connectionId))!;
-    const working = endpoint.client.connectionById(String(second.ready.connectionId))!;
+    const failed = endpoint.endpoint.connectionById(String(first.ready.connectionId))!;
+    const working = endpoint.endpoint.connectionById(String(second.ready.connectionId))!;
     vi.spyOn(failed.socket, 'send').mockImplementation(() => { throw new Error('synthetic socket failure'); });
-    const receipt = endpoint.send({ conversation: conversation(scene), payload: 'delivered once' });
+    const receipt = await endpoint.send({ conversation: conversation(scene), payload: 'delivered once' });
     await vi.waitFor(() => expect(second.frames.some(frame => frame.messageId === receipt)).toBe(true));
     vi.spyOn(working.socket, 'send').mockImplementation(() => { throw new Error('synthetic socket failure'); });
-    expect(() => endpoint.send({ conversation: conversation(scene), payload: 'not delivered' }))
-      .toThrow(expect.objectContaining({ disposition: 'unknown' }));
+    await expect(endpoint.send({ conversation: conversation(scene), payload: 'not delivered' }))
+      .rejects.toThrow(expect.objectContaining({ disposition: 'unknown' }));
     first.client.send(JSON.stringify({ ...scene, content: 'echo failure must not block input' }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
   });
@@ -170,7 +170,7 @@ describe('Sandbox scoped multi-connection transport', () => {
     const scene: Scene = { type: 'group', id: 'same-id' };
     await group.subscribe(scene);
     await direct.subscribe({ type: 'private', id: scene.id });
-    const receipt = endpoint.send({ conversation: conversation(scene), payload: {
+    const receipt = await endpoint.send({ conversation: conversation(scene), payload: {
       type: 'edit', id: scene.id, content: 'updated', messageId: 'edited-message',
       conversation: { type: 'private', id: 'wrong-envelope-scene' },
     } });
@@ -187,7 +187,7 @@ describe('Sandbox scoped multi-connection transport', () => {
     const envelopeScene: Scene = { type: 'private', id: 'envelope-room' };
     await group.subscribe(scene);
     await direct.subscribe(envelopeScene);
-    const receipt = endpoint.send({ conversation: conversation(scene), payload: {
+    const receipt = await endpoint.send({ conversation: conversation(scene), payload: {
       ...envelopeScene, conversation: envelopeScene, content: 'canonical request wins', messageId: 'native-message',
     } });
     await vi.waitFor(() => expect(group.frames.some(frame => frame.messageId === receipt)).toBe(true));
@@ -201,29 +201,32 @@ describe('Sandbox scoped multi-connection transport', () => {
   it('closes only the departing connection, preserves low-level targeting, and releases all sockets on stop', async () => {
     const { endpoint, connect } = await fixture();
     const first = await connect(), second = await connect();
-    expect(endpoint.client.connections()).toHaveLength(2);
-    expect(endpoint.client.connection('shared-bot')?.connectionId).toBe(second.ready.connectionId);
-    endpoint.client.send('shared-bot', JSON.stringify({ type: 'raw-client-test' }));
+    expect(endpoint.endpoint.connections()).toHaveLength(2);
+    expect(endpoint.endpoint.connection('shared-bot')?.connectionId).toBe(second.ready.connectionId);
+    endpoint.endpoint.send('shared-bot', JSON.stringify({ type: 'raw-client-test' }));
     await vi.waitFor(() => expect(second.frames.some(frame => frame.type === 'raw-client-test')).toBe(true));
     expect(first.frames.some(frame => frame.type === 'raw-client-test')).toBe(false);
     const firstClosed = new Promise<void>(resolve => first.client.once('close', () => resolve()));
     first.client.close();
     await firstClosed;
-    await vi.waitFor(() => expect(endpoint.client.connections()).toHaveLength(1));
-    expect(endpoint.client.connectionById(String(first.ready.connectionId))).toBeUndefined();
+    await vi.waitFor(() => expect(endpoint.endpoint.connections()).toHaveLength(1));
+    expect(endpoint.endpoint.connectionById(String(first.ready.connectionId))).toBeUndefined();
     expect(second.client.readyState).toBe(WebSocket.OPEN);
     const stopped = new Promise<number>(resolve => second.client.once('close', code => resolve(code)));
-    endpoint.stop();
+    await endpoint.stop();
     expect(await stopped).toBe(1001);
-    expect(endpoint.client.connections()).toHaveLength(0);
-    expect(() => endpoint.client.send('shared-bot', '{}')).toThrow();
+    expect(endpoint.endpoint.connections()).toHaveLength(0);
+    expect(() => endpoint.endpoint.send('shared-bot', '{}')).toThrow();
   });
 
-  it('preserves public client factories that supply the original connection shape', () => {
+  it('owns native client connections without an Endpoint callback or parallel directory', () => {
     const socket = { send: vi.fn(), close: vi.fn() };
     const legacy: SandboxClientConnection = { target: 'legacy', owner: 'owner', socket, placeholder: false };
-    const client = new SandboxClient(() => '/sandbox', () => [legacy]);
-    expect(client.connection('legacy')).toBe(legacy);
+    class Client extends SandboxClient {
+      constructor() { super(); this.connectionRecords.set('legacy', legacy); }
+    }
+    const client = new Client();
+    expect(client.connection('legacy')).toMatchObject(legacy);
     expect(client.connectionById('missing')).toBeUndefined();
     client.send('legacy', 'raw payload');
     expect(socket.send).toHaveBeenCalledExactlyOnceWith('raw payload');

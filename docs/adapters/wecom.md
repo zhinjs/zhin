@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=97b11a25099eabaa -->
+<!-- sync-adapter-docs:sha256=2faf5393dac43815 -->
 
 # @zhin.js/adapter-wecom
 
@@ -29,13 +29,16 @@ pnpm add @zhin.js/adapter-wecom
 
 ## Plugin Runtime
 
+`WecomEndpoint` 的 Client 实际拥有 Token/API HTTP 与加密 Webhook；原始 XML 保留。`agentId` 是独立必填应用身份，不以 secret 替代。所属 `Adapter` 是账号期望状态与运行实例的唯一管理者，目录按实际内部身份路由。
+
 - `@zhin.js/adapter` — 约定式 `adapters/wecom/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
-入站：`gateway.receive({ conversation, message: { conversation, id: MsgId }, content: text, sender, metadata })`（`conversation` 为 `ConversationRef`，`@chatroom` → kind `group`，其余 → kind `private`）  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message: { conversation, id: MsgId }, content: text, sender, metadata })`（`conversation` 为 `ConversationRef`，`@chatroom` → kind `group`，其余 → kind `private`）
+
 出站：`send({ conversation, payload })` → 企业微信 `message/send` API
 
 入站 `metadata.mentioned`：**未接线**。企业微信应用消息回调的 XML 事件不含 mentions/@ 字段，回调里的 `ToUserName` 是 CorpID（企业 ID）而非可比较的 bot 用户 id，配置中也没有 bot id/name 可作可靠判据，故无法可靠识别 @ 机器人。
@@ -51,7 +54,7 @@ pnpm add @zhin.js/adapter-wecom
    - **Token** / **EncodingAESKey** 与配置一致
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段（`endpoints[i]`）：`id`、`corpId`、`agentSecret`、`token`、`encodingAESKey`。
+必填字段（`endpoints[i]`）：`id`、`corpId`、`agentId`、`agentSecret`、`token`、`encodingAESKey`。
 运行时由 AdapterIndex 把实例级默认值与每个 endpoint 合并；协议实现只接收一份展开后的
 endpoint 配置。
 
@@ -68,6 +71,7 @@ wecom:
   endpoints:
     - id: wecom-bot
       corpId: ${WECOM_CORP_ID}
+      agentId: "100001"
       agentSecret: ${WECOM_AGENT_SECRET}
       token: ${WECOM_TOKEN}
       encodingAESKey: ${WECOM_AES_KEY}
@@ -116,13 +120,11 @@ Access Token 在过期前 5 分钟自动刷新。
 
 ## Console 页面
 
-启动后打开 Console 的「企业微信」页（地址 `/wecom`），可以：
+在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
 
-- 查看运行中的连接、点「测试连接」做连通性诊断；
-- 增删 `plugins.wecom.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
-- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
 
-读取需要 `wecom:read`，写操作需要 `wecom:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `wecom endpoint add`。
+读取需要 `wecom:read`，写入需要 `wecom:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 

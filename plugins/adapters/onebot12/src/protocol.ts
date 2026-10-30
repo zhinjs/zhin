@@ -10,6 +10,8 @@ const logger = getLogger('onebot12');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
 export interface OneBot12EndpointConfig {
+  readonly platform: string;
+  readonly userId: string;
   readonly connection?: 'ws' | 'webhook' | 'wss';
   readonly id: string;
   readonly access_token?: string;
@@ -21,6 +23,8 @@ export interface OneBot12EndpointConfig {
 }
 
 export interface OneBot12ConfigBase {
+  readonly platform: string;
+  readonly userId: string;
   readonly context: 'onebot12';
   readonly id: string;
   readonly access_token?: string;
@@ -78,10 +82,10 @@ export interface OneBot12Segment {
 }
 
 export interface OneBot12ActionRequest {
+  readonly self: OneBot12Self;
   action: string;
   params: Record<string, unknown>;
   echo?: string;
-  self?: OneBot12Self;
 }
 
 export interface OneBot12ActionResponse {
@@ -93,6 +97,8 @@ export interface OneBot12ActionResponse {
 }
 
 export interface OneBot12HttpOptions {
+  readonly self: OneBot12Self;
+  readonly signal?: AbortSignal;
   readonly url: string;
   readonly access_token?: string;
 }
@@ -105,12 +111,14 @@ export interface OneBot12WireSegment {
 export function resolveOneBot12Config(config: OneBot12EndpointConfig): ResolvedOneBot12Config {
   const connection = config.connection ?? 'ws';
   const id = requiredEndpointField(config.id, 'id');
+  const platform = requiredEndpointField(config.platform, 'platform');
+  const userId = requiredEndpointField(config.userId, 'userId');
   const access_token = optionalEndpointField(config.access_token);
 
   if (connection === 'ws') {
     const url = requiredEndpointField(config.url, 'url');
     return {
-      context: 'onebot12',
+      context: 'onebot12', platform, userId,
       connection: 'ws',
       id,
       access_token,
@@ -124,7 +132,7 @@ export function resolveOneBot12Config(config: OneBot12EndpointConfig): ResolvedO
     const path = requiredEndpointField(config.path, 'path');
     const api_url = requiredEndpointField(config.api_url, 'api_url');
     return {
-      context: 'onebot12',
+      context: 'onebot12', platform, userId,
       connection: 'webhook',
       id,
       access_token,
@@ -136,7 +144,7 @@ export function resolveOneBot12Config(config: OneBot12EndpointConfig): ResolvedO
   if (connection === 'wss') {
     const path = requiredEndpointField(config.path, 'path');
     return {
-      context: 'onebot12',
+      context: 'onebot12', platform, userId,
       connection: 'wss',
       id,
       access_token,
@@ -150,7 +158,7 @@ export function resolveOneBot12Config(config: OneBot12EndpointConfig): ResolvedO
 
 function requiredEndpointField(
   value: unknown,
-  field: 'id' | 'url' | 'path' | 'api_url',
+  field: 'id' | 'url' | 'path' | 'api_url' | 'platform' | 'userId',
 ): string {
   const resolved = optionalEndpointField(value);
   if (!resolved) {
@@ -529,14 +537,14 @@ export async function callOneBot12Action(
   if (options.access_token) {
     headers.Authorization = `Bearer ${options.access_token}`;
   }
-  const body: OneBot12ActionRequest = { action, params };
+  const body: OneBot12ActionRequest = { action, params, self: options.self };
   if (echo) body.echo = echo;
 
   const res = await fetch(options.url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000),
+    signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
   });
 
   const text = await res.text();
@@ -572,4 +580,10 @@ export function buildWsConnectOptions(config: OneBot12WsConfig): {
   const safeUrl = new URL(connectUrl);
   safeUrl.searchParams.delete('access_token');
   return { url: connectUrl, headers, safeUrl: safeUrl.toString() };
+}
+
+/** Route only the explicitly selected bot; service-wide frames carry no account authority. */
+export function matchesOneBot12Self(config: Pick<OneBot12ConfigBase, 'platform' | 'userId'>,
+  event: OneBot12Event): event is OneBot12Event & { readonly self: OneBot12Self } {
+  return event.self?.platform === config.platform && event.self?.user_id === config.userId;
 }

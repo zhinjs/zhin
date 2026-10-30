@@ -49,18 +49,18 @@ Two behaviors to remember:
 - **A failed first connection doesn't reconnect automatically.** `start()` throws the error to you and you decide whether to retry; only a connection that **was once open** reconnects after a disconnect.
 - **`stop()` is an intentional stop**: safe to call repeatedly, never triggers a reconnect; if called while connecting, `start()` resolves quietly (stopping isn't a failure).
 
-In the adapter's own `stop()`, call the base first, then clean up your own state:
+The specification’s `stop` hook calls private platform cleanup: stop the transport lifecycle, then release protocol resources:
 
 ```ts
 // plugins/adapters/napcat/src/ws-endpoint.ts (excerpt)
-async stop(): Promise<void> {
-  await this.#lifecycle.stop();          // clear timers + force-close ws + settle races
-  this.#unregisterAgent?.();             // adapter-specific cleanup
-  rejectAllPending(this.#pending);
+async #stop(): Promise<void> {
+  this.#open = false;
+  await this.#lifecycle.stop();
+  rejectAllPending(this.pendingActions);
   this.#inboundDeduper.clear();
-  if (this.#ws) {
-    try { this.#ws.close(); } catch { /* ignore */ }
-    this.#ws = undefined;
+  if (this.transportSocket) {
+    try { this.transportSocket.close(); } catch { /* ignore */ }
+    this.transportSocket = undefined;
   }
 }
 ```
@@ -125,27 +125,31 @@ napcat:
 
 - With a non-empty `endpoints`, each entry creates one account: the shared config (minus the `endpoints` key) is **shallow-merged** with the entry, and `id` is forced in. With `endpoints` empty or missing, one account is created from the shared config.
 - `id` must be a non-empty string without `~` or `\0`; duplicate or invalid ids make the new config fail. The expanded account id is `<capabilityId>~<id>`.
-- The `context.config` passed to `create(context)` is the **merged single-account config**, and `context.endpointId` is the account id (`context.name` is the adapter name). Adapter code never needs to know how many accounts exist; one instance serves one connection.
+- The owning Adapter’s `createEndpoint(config, execution)` receives **merged single-account config**. `execution` provides canonicalId, instanceId and the incarnation cancellation signal. One Adapter manages several accounts; each Endpoint is one actual Client.
 
 The expansion lives in `expandEndpointConfigs` in `packages/im/adapter/src/adapter-index.ts`.
 
 ## Endpoint lifecycle hooks
 
-When you extend `Endpoint` with your own connection flow, the framework calls these hooks at each stage of a version switch:
+A platform Endpoint extends a real SDK or substantive protocol Client, `implements Endpoint`, and declares these hooks through `createEndpointSpecification(this, hooks)`. There is no public Endpoint base class; framework hooks do not replace native SDK methods of the same name.
 
 | Hook | When |
 | --- | --- |
-| `start()` | The new version activates; allocate connection resources |
-| `open()` | The new version activates; open the local event stream (inbound is still refused until the switch commits) |
-| `close()` | Stop accepting new events; keep in-flight work |
-| `stop()` | Release connection resources; must be safe to call repeatedly |
-| `send(request)` | Send a message |
+| `start(signal)` | Allocate connection resources and honor incarnation cancellation |
+| `open()` | Open local ingress; candidate-generation events still require commit admission |
+| `close()` | Close new framework admission and detach listeners; the framework drains accepted callbacks and normalized continuations |
+| `stop()` | After retirement, cancellation and lease draining, release connection resources; cleanup must be repeatable |
+| `send(request)` | Send while holding the actual incarnation lease |
 
-For `NapCatWsEndpoint`: `start()` calls `lifecycle.start(...)` to connect; `open()` / `close()` flip an `#open` flag (events are accepted only while open); `stop()` calls the base `stop()` and then its own cleanup.
+Wrap the complete asynchronous SDK listener in `events.run(async () => { ... })`, including decoding, native events and normalized messages, rather than tracking only the final emit. `close` drains accepted callbacks; `stop` cancellation must reach actual IO. An inbound callback must not wait for its own account to close; the owning Adapter controls lifecycle.
+
+Preserve the actual public SDK payload and separately produce canonical messages. A native event is not automatically a raw network packet: do not claim exposure of wire bytes that the SDK never provides. Advance a cursor or ACK only after `events.emitAccepted` confirms real dispatch.
+
+`NapCatWsEndpoint` binds specification hooks to private `#start/#openEndpoint/#close/#stop` methods, preserving SDK APIs. The same Client uses `createEndpointLifecycle` for heartbeat and reconnect, without a second live-account state store.
 
 ## Resolving quotes, merged forwards and media
 
-If the platform can look up content by native id, the Endpoint should provide a single `content: EndpointContentPort` — don't stuff `$getMsg`, quote metadata or pre-expanded forward text into messages:
+If the platform can look up content by native id, the specification should provide a single `content: EndpointContentPort` — don't stuff `$getMsg`, quote metadata or pre-expanded forward text into messages:
 
 ```ts
 interface EndpointContentPort {
@@ -195,17 +199,15 @@ stateDiagram-v2
 `plugins/adapters/napcat/src/ws-endpoint.ts` is the canonical use of the base, in four parts:
 
 ```ts
-export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
-  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
+// Excerpt: private protocol methods remain in the actual platform implementation.
+export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly #lifecycle: EndpointLifecycle;
-  #ws?: NapCatWsSocket;
 
   constructor(options: NapCatWsEndpointOptions) {
-    super();
-    // 1. Create the base in the constructor; reconnect_interval keeps its legacy fixed-interval meaning:
-    //    multiplier 1, no jitter, no cap
+    super(options.config, undefined, options.signal);
     this.#lifecycle = createEndpointLifecycle({
-      name: options.config.name,
+      name: options.config.id,
       reconnect: {
         initialIntervalMs: options.config.reconnect_interval,
         multiplier: 1,
@@ -213,13 +215,12 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
         jitterMs: 0,
       },
     });
+    this[endpointSpec] = createEndpointSpecification(this, {
+      start: () => this.#start(), open: () => this.#openEndpoint(),
+      close: () => this.#close(), stop: () => this.#stop(),
+      send: request => this.#send(request),
+    });
   }
-
-  async start(): Promise<void> {
-    if (this.#lifecycle.started) return;                 // idempotent
-    await this.#lifecycle.start((handle) => this.#connect(handle));
-  }
-  // stop() as in "Minimal usage"; #connect(handle) as above
 }
 ```
 
@@ -233,7 +234,7 @@ What the base removes for you:
 | A late close from an old socket killing the new one | Stale handles expire automatically |
 | `stop()` racing a connect into an unhandled rejection | Racing waits are settled together and resolve silently |
 
-The adapter keeps only protocol logic: the Client's API transport, rejecting pending requests (`rejectAllPending`) and clearing the inbound deduper (`deduper.clear()`). The Client is a separate object; the Endpoint owns only the account connection, lifecycle and event entry.
+The adapter keeps only protocol logic: the Client's API transport, rejecting pending requests (`rejectAllPending`) and clearing the inbound deduper (`deduper.clear()`). The Endpoint is the actual Client instance. Framework hooks and ingress live in its symbol namespace; the Adapter owns account lifecycle.
 
 ## Next steps
 

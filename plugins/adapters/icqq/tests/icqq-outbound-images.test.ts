@@ -5,7 +5,7 @@ import {
   SnapshotStore, createCapabilitySlot, createSnapshotView, htmlRendererToken, rootPluginId,
   type CapabilityId, type CapabilitySlot, type FeatureId, type SnapshotState, type TokenId,
 } from '../../../../packages/im/plugin-runtime/src/index.js';
-import { AdapterIndex, adapterFeatureId, createEndpointRuntimeState, endpointEventGatewayToken } from 'zhin.js/adapter';
+import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken } from 'zhin.js/adapter';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '../../../../packages/im/middleware/src/index.js';
 import { ImRuntime, loginAssistToken, type OutboundEnvelope, type SendContent } from '@zhin.js/core/runtime';
 import { Html, Image, jsx } from 'zhin.js/jsx';
@@ -17,7 +17,6 @@ import definition from '../adapters/icqq/index.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { formatOutboundBody, normalizeIcqqImageMedia } from '../src/protocol.js';
 import { prepareIcqqOutboundMedia } from '../src/outbound-media.js';
-import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 
 const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT1sAAAAASUVORK5CYII=', 'base64');
 const base64 = bytes.toString('base64');
@@ -167,7 +166,7 @@ async function imageFixture(mode: 'file' | 'base64', handle: (input: OutboundEnv
   const resources = new Map<TokenId, unknown>([
     [projectLocaleToken.id, 'zh-CN'],
     [endpointEventGatewayToken.id, im.endpointEvents], [loginAssistToken.id, im.loginAssist],
-    [icqqRuntimeStateToken.id, createEndpointRuntimeState()], [htmlRendererToken.id, { render: renderHtml }],
+    [htmlRendererToken.id, { render: renderHtml }],
   ]);
   const state: SnapshotState = {
     root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@zhin.js/adapter-icqq', packageRoot: '/project', children: [] }]]),

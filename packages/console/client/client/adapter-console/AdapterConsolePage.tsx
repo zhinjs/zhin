@@ -371,7 +371,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
   });
 
   const addEndpoint = () => run('add', async () => {
-    if (!pluginId) return;
+    if (!pluginId || !status?.runtime) return;
     const id = addId.trim();
     if (!id) {
       setNotice({ kind: 'error', message: t(locale, '请填写 {0}', 'id') });
@@ -389,32 +389,11 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
         return;
       }
     }
-    if (status?.runtime) {
-      await runtimeMutation('add', { id, values: addValues }, addBase ?? status.runtime, () => { setAddOpen(false); setAddId(''); setAddValues({}); });
-      return;
-    }
-    if (!current()) return;
-    const result = await pluginRpc<{ message?: string }>(pluginId, 'endpoint-add', { id, values: addValues });
-    if (!current()) return;
-    setNotice({ kind: 'ok', message: result?.message ?? t(locale, '已添加，重启或热重载后生效。') });
-    setAddOpen(false);
-    setAddId('');
-    setAddValues({});
-    await refresh();
-  });
-
-  const removeEndpoint = (id: string) => run(`remove:${id}`, async () => {
-    if (!pluginId) return;
-    if (typeof window !== 'undefined' && !window.confirm(t(locale, '确定删除 endpoint「{0}」？配置会从 zhin.config.yml 移除。', id))) return;
-    if (!current()) return;
-    const result = await pluginRpc<{ message?: string }>(pluginId, 'endpoint-remove', { id });
-    if (!current()) return;
-    setNotice({ kind: 'ok', message: result?.message ?? t(locale, '已删除') });
-    await refresh();
+    await runtimeMutation('add', { id, values: addValues }, addBase ?? status.runtime, () => { setAddOpen(false); setAddId(''); setAddValues({}); });
   });
 
   const submitLogin = (task: AdapterConsoleLoginTask, value: string) => run(`login:${task.id}`, async () => {
-    if (latestRuntime.current && !runtimeLoginMatches(task, latestRuntime.current)) return;
+    if (!latestRuntime.current || !runtimeLoginMatches(task, latestRuntime.current)) return;
     await consoleRpc('login.submit', { taskId: task.id, value, ...(task.endpointIdentity ? { endpointIdentity: task.endpointIdentity } : {}) });
     if (!current()) return;
     setLoginValues((current) => ({ ...current, [task.id]: '' }));
@@ -423,7 +402,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
   });
 
   const cancelLogin = (task: AdapterConsoleLoginTask) => run(`login-cancel:${task.id}`, async () => {
-    if (latestRuntime.current && !runtimeLoginMatches(task, latestRuntime.current)) return;
+    if (!latestRuntime.current || !runtimeLoginMatches(task, latestRuntime.current)) return;
     await consoleRpc('login.cancel', { taskId: task.id, reason: 'console_cancelled', ...(task.endpointIdentity ? { endpointIdentity: task.endpointIdentity } : {}) });
     if (!current()) return;
     await refresh();
@@ -446,23 +425,40 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
         return;
       }
     }
-    if (!current()) return;
-    const result = await pluginRpc<AdapterConsoleActionResult>(pluginId, action.name, input);
-    if (!current()) return;
-    setActionResults((current) => ({ ...current, [action.name]: result ?? {} }));
-    if (result?.message) {
-      setNotice({
-        kind: result.tone === 'error' ? 'error' : 'ok',
-        message: result.message,
-        ...(result.url ? { url: result.url } : {}),
-        ...(result.image ? { image: result.image } : {}),
+    const base = status?.runtime;
+    const perform = async (confirmed = false) => {
+      if (!current()) return;
+      const result = await pluginRpc<AdapterConsoleActionResult>(pluginId, action.name, {
+        ...input,
+        ...(base ? { expectedGeneration: base.generation, expectedRevision: base.revision } : {}),
+        ...(confirmed ? { confirmMigration: true } : {}),
       });
+      if (!current()) return;
+      setActionResults((current) => ({ ...current, [action.name]: result ?? {} }));
+      if (result?.message) {
+        setNotice({
+          kind: result.tone === 'error' ? 'error' : 'ok',
+          message: result.message,
+          ...(result.url ? { url: result.url } : {}),
+          ...(result.image ? { image: result.image } : {}),
+        });
+      }
+      await refresh();
+      setMigration(undefined);
+    };
+    if (action.accountMutation) {
+      if (!status || !base?.canManage || runtimeBlocked) return;
+      if (base.needsMigration) {
+        if (!base.canMigrate) { setNotice({ kind: 'error', message: t(locale, '首次迁移需要管理员确认。') }); return; }
+        setMigration({ ids: status.configured.map(entry => entry.id), run: () => perform(true) });
+        return;
+      }
     }
-    await refresh();
+    await perform();
   });
 
   const runtime = status?.runtime;
-  const visibleLogins = runtime ? loginTasks.filter(task => runtimeLoginMatches(task, runtime)) : loginTasks;
+  const visibleLogins = runtime ? loginTasks.filter(task => runtimeLoginMatches(task, runtime)) : [];
 
   const runtimeMutation = async (action: string, payload: Record<string, unknown>, base: { generation: number; revision: number | null }, done?: () => void) => {
     if (!pluginId || !runtime || !runtime.canManage || runtimeBlocked || !current()) return;
@@ -540,7 +536,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
         <div>
           <h1 className="text-2xl font-semibold">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t(locale, runtime ? '管理 {0} 的账号与登录。' : '管理 {0} 的连接、登录待办和 endpoint 配置。', title)}
+            {t(locale, runtime ? '管理 {0} 的账号与登录。' : '查看 {0} 的连接与账号配置。', title)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -563,7 +559,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
       {!runtime && <section className="space-y-3">
         <h2 className="text-lg font-semibold">{t(locale, '运行中的连接')}</h2>
         {runningIds.length === 0
-          ? <p className="text-sm text-muted-foreground">{t(locale, '还没有运行中的连接。请检查配置并重启、或等待适配器启动。')}</p>
+          ? <p className="text-sm text-muted-foreground">{t(locale, '还没有运行中的连接。')}</p>
           : (
             <ul className="space-y-2">
               {runningIds.map((id) => {
@@ -688,7 +684,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
                       ))}
                     </select>
                   )}
-                  <Button variant="primary" disabled={busy !== ''} onClick={() => runAction(action)}>
+                  <Button variant="primary" disabled={busy !== '' || !!(action.accountMutation && (!runtime?.canManage || runtimeBlocked || migration || (runtime.needsMigration && !runtime.canMigrate)))} onClick={() => runAction(action)}>
                     {pickI18n(locale, action.label, action.labelI18n)}
                   </Button>
                   {result && (
@@ -780,7 +776,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
           {(editor.generation !== runtime.generation || editor.revision !== runtime.revision) && <p role="alert" className="text-sm text-red-600">{t(locale, '账号清单已变化，请取消编辑后重新打开。')}</p>}
           <label className="block space-y-1"><span className="text-sm">id</span><input aria-label="id" disabled={busy !== '' || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} className="w-full rounded-md border bg-background px-3 py-2 text-sm" /></label>
           {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => <label key={field.key} className="block space-y-1">
-            <span className="text-sm">{field.key}</span><input disabled={busy !== '' || !!migration} type={field.secret || field.env ? 'password' : 'text'} value={editor.values[field.key] ?? ''} placeholder={pickI18n(locale, field.description, field.descriptionI18n) ?? field.placeholder} onChange={event => setEditor({ ...editor, values: { ...editor.values, [field.key]: event.target.value } })} className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
+            <span className="text-sm">{field.key}</span><input disabled={busy !== '' || !!migration} type={field.secret || field.env ? 'password' : field.type === 'number' ? 'number' : 'text'} value={editor.values[field.key] ?? ''} placeholder={pickI18n(locale, field.description, field.descriptionI18n) ?? field.placeholder} onChange={event => setEditor({ ...editor, values: { ...editor.values, [field.key]: event.target.value } })} className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
           </label>)}
           <div className="flex gap-2"><Button variant="primary" disabled={busy !== '' || runtimeBlocked || !!migration || editor.generation !== runtime.generation || editor.revision !== runtime.revision} onClick={() => void saveEdit()}>{t(locale, '保存')}</Button><Button disabled={busy !== ''} onClick={() => setEditor(undefined)}>{t(locale, '取消')}</Button></div>
         </div>}
@@ -798,13 +794,9 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
                   <li key={entry.id} className="space-y-2 rounded-lg border p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{entry.id}</span>
-                      <Badge tone={running ? 'ok' : 'muted'}>{running ? t(locale, '运行中') : t(locale, '重启后生效')}</Badge>
+                      <Badge tone={running ? 'ok' : 'muted'}>{running ? t(locale, '运行中') : t(locale, '未运行')}</Badge>
                       <span className="grow" />
-                      {status.canRemove && (
-                        <Button variant="danger" disabled={busy !== ''} onClick={() => removeEndpoint(entry.id)}>
-                          {t(locale, '删除')}
-                        </Button>
-                      )}
+
                     </div>
                     {Object.keys(entry.values).length > 0 && (
                       <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-xs">
@@ -821,18 +813,15 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
               })}
             </ul>
           )}
-        {status && !status.configStore && (
-          <p className="text-xs text-muted-foreground">{t(locale, '配置存储不可用：当前环境只能查看，不能增删 endpoint。')}</p>
-        )}
-        <p className="text-xs text-muted-foreground">{t(locale, '写入配置后需要重启进程或等待热重载。')}</p>
+        <p className="text-xs text-muted-foreground">{t(locale, '当前环境只能查看账号配置。')}</p>
       </section>}
 
-      {status?.canAdd && (
+      {runtime && status?.canAdd && (
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">{t(locale, runtime ? '添加账号' : '添加 endpoint')}</h2>
+            <h2 className="text-lg font-semibold">{t(locale, '添加账号')}</h2>
             <span className="grow" />
-            <Button disabled={(runtime && !runtime.canManage) || busy !== '' || runtimeBlocked || !!migration || (runtime?.needsMigration && !runtime.canMigrate)} onClick={() => { setAddOpen(open => !open); if (runtime) setAddBase({ generation: runtime.generation, revision: runtime.revision }); }}>{addOpen ? t(locale, '取消') : t(locale, '添加')}</Button>
+            <Button disabled={!runtime.canManage || busy !== '' || runtimeBlocked || !!migration || (runtime.needsMigration && !runtime.canMigrate)} onClick={() => { setAddOpen(open => !open); setAddBase({ generation: runtime.generation, revision: runtime.revision }); }}>{addOpen ? t(locale, '取消') : t(locale, '添加')}</Button>
           </div>
           {addOpen && (
             <div className="space-y-3 rounded-lg border p-4">
@@ -854,7 +843,7 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
                   </span>
                   <input
                     disabled={busy !== '' || !!migration}
-                    type={field.secret || field.env ? 'password' : 'text'}
+                    type={field.secret || field.env ? 'password' : field.type === 'number' ? 'number' : 'text'}
                     value={addValues[field.key] ?? ''}
                     placeholder={pickI18n(locale, field.description, field.descriptionI18n) ?? field.placeholder}
                     onChange={(event) => setAddValues((current) => ({ ...current, [field.key]: event.target.value }))}
@@ -863,7 +852,6 @@ function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProp
                   {field.description && <span className="text-xs text-muted-foreground">{pickI18n(locale, field.description, field.descriptionI18n)}</span>}
                 </label>
               ))}
-              {!runtime && <p className="text-xs text-muted-foreground">{t(locale, '凭据会写入 .env，配置里只保留引用。')}</p>}
               <Button variant="primary" disabled={busy !== '' || runtimeBlocked || !!migration} onClick={addEndpoint}>{t(locale, '添加')}</Button>
             </div>
           )}

@@ -2,12 +2,8 @@
  * Convention entry: discover `adapters/napcat/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
-import { NapCatHttpEndpoint } from '../../src/http-endpoint.js';
-import { resolveNapCatConfig, type NapCatEndpointConfig } from '../../src/protocol.js';
-import { NapCatWsEndpoint } from '../../src/ws-endpoint.js';
-import { NapCatWssEndpoint } from '../../src/wss-endpoint.js';
-import { napcatRuntimeStateToken } from '../../src/napcat-runtime-state.js';
+import { NapcatAdapter } from '../../src/adapter.js';
+import type { NapCatEndpointConfig } from '../../src/protocol.js';
 
 export {
   NapCatHttpEndpoint,
@@ -23,12 +19,6 @@ export {
 } from '../../src/wss-endpoint.js';
 export type { NapCatWsSocket, NapCatWsCreateOptions } from '../../src/ws-types.js';
 
-declare module '@zhin.js/core' {
-  interface AdapterEndpoints {
-    napcat: import('../../src/ws-endpoint.js').NapCatWsEndpoint;
-  }
-}
-
 export default defineAdapter<NapCatEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
@@ -38,27 +28,5 @@ export default defineAdapter<NapCatEndpointConfig>({
     outboundMedia: ['url', 'base64', 'path'],
     interactive: 'text',
   },
-  create(context) {
-    const config = resolveNapCatConfig(context.config);
-    // 注册到插件运行时状态（napcat endpoint list 的"运行中"数据源）
-    context.use(napcatRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: config.connection,
-    });
-    if (config.connection === 'wss') {
-      return new NapCatWssEndpoint({
-        id: context.id,
-        http: context.use(httpHostToken),
-        config,
-      });
-    }
-    if (config.connection === 'http') {
-      return new NapCatHttpEndpoint({
-        id: context.id,
-        http: context.use(httpHostToken),
-        config,
-      });
-    }
-    return new NapCatWsEndpoint({ id: context.id, config });
-  },
+  createAdapter: context => new NapcatAdapter(context),
 });

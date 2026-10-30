@@ -1,13 +1,11 @@
+import { EmailAdapter } from '../../src/adapter.js';
 /**
  * Convention entry: discover `adapters/email/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { EmailEndpoint } from '../../src/endpoint.js';
 import {
-  resolveEmailConfig,
   type EmailEndpointConfig,
 } from '../../src/protocol.js';
-import { emailRuntimeStateToken } from '../../src/email-runtime-state.js';
 
 export { EmailEndpoint } from '../../src/endpoint.js';
 export type { EmailEndpointOptions } from '../../src/endpoint.js';
@@ -29,15 +27,5 @@ export default defineAdapter<EmailEndpointConfig>({
     markdown: 'native',
     interactive: 'text',
   },
-  create(context) {
-    const config = resolveEmailConfig(context.config);
-    context.use(emailRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: 'imap',
-    });
-    return new EmailEndpoint({
-      id: context.id,
-      config,
-    });
-  },
+  createAdapter: () => new EmailAdapter(),
 });

@@ -19,13 +19,16 @@ pnpm add @zhin.js/adapter-lark
 
 ## Plugin Runtime
 
+`LarkEndpoint` 继承真实飞书 SDK `Client`；长连接组合 SDK `WSClient`。SDK 原生 API 与事件接口不被框架覆盖，框架生命周期与事件入口放在 `endpointSpec`。所属 `Adapter` 是账号期望状态与运行实例的唯一管理者，目录按实际内部身份路由。
+
 - `@zhin.js/adapter` — 约定式 `adapters/lark/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
-入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message: { conversation, id }, content: text, sender, metadata })`
+
 出站：`send({ conversation, payload })` → `im/v1/messages`
 
 入站 `metadata.mentioned`：**未接线**。消息事件的 `mentions[]` 元素含 `id.open_id`，但本适配器拿不到 bot 自身的 open_id——配置（`appId` / `appSecret` / `id` 等）不含 bot open_id，代码也未调用 `bot/v3/info` 获取应用信息，故无可靠判据比对 mentions。
@@ -95,13 +98,11 @@ pnpm --filter @zhin.js/adapter-lark test
 
 ## Console 页面
 
-启动后打开 Console 的「Lark」页（地址 `/lark`），可以：
+在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
 
-- 查看运行中的连接、点「测试连接」做连通性诊断；
-- 增删 `plugins.lark.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
-- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
 
-读取需要 `lark:read`，写操作需要 `lark:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `lark endpoint add`。
+读取需要 `lark:read`，写入需要 `lark:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 

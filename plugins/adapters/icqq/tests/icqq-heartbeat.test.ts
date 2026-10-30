@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from '@icqqjs/icqq';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { icqqFixture } from './fixture.js';
 import { LoginAssist } from '@zhin.js/core';
 import { ManagedIcqqClient } from '../src/managed-client.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
@@ -119,18 +119,18 @@ describe('ICQQ background heartbeat ownership with the real SDK', () => {
       online = true;
       this.emit('system.online');
     });
-    const endpoint = bindTestEndpoint(new IcqqEndpoint({
+    const endpoint = await icqqFixture({
       id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq'),
       config: resolveIcqqConfig({ id: '10001', dataDir: directory, autoReconnect, qqnt: true }),
       loginAssist: new LoginAssist(null),
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
-    vi.spyOn(endpoint, 'isOnline').mockImplementation(() => online);
-    const terminate = vi.spyOn(endpoint, 'terminate').mockImplementation(() => { online = false; });
-    vi.spyOn(endpoint, 'getSystemMsg').mockResolvedValue([]);
+    }, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    vi.spyOn(endpoint.endpoint, 'isOnline').mockImplementation(() => online);
+    const terminate = vi.spyOn(endpoint.endpoint, 'terminate').mockImplementation(() => { online = false; });
+    vi.spyOn(endpoint.endpoint, 'getSystemMsg').mockResolvedValue([]);
     try {
       await endpoint.start(new AbortController().signal);
       endpoint.open();
-      await expect(endpoint.sendSsoHeartBeat()).rejects.toBe(failure);
+      await expect(endpoint.endpoint.sendSsoHeartBeat()).rejects.toBe(failure);
       expect(terminate).toHaveBeenCalledOnce();
       expect(endpoint.transportState).toBe(autoReconnect ? 'reconnecting' : 'closed');
       await vi.advanceTimersByTimeAsync(5000);
@@ -143,16 +143,16 @@ describe('ICQQ background heartbeat ownership with the real SDK', () => {
     let reject!: (error: unknown) => void;
     vi.spyOn(Client.prototype, 'sendUni').mockImplementation(() => new Promise((_, rejectTask) => { reject = rejectTask; }));
     const login = vi.spyOn(Client.prototype, 'login').mockImplementation(async function (this: Client) { this.emit('system.online'); });
-    const endpoint = bindTestEndpoint(new IcqqEndpoint({
+    const endpoint = await icqqFixture({
       id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq'),
       config: resolveIcqqConfig({ id: '10001', dataDir: directory, autoReconnect: true, qqnt: true }),
       loginAssist: new LoginAssist(null),
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
-    vi.spyOn(endpoint, 'isOnline').mockReturnValue(true);
-    vi.spyOn(endpoint, 'getSystemMsg').mockResolvedValue([]);
+    }, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    vi.spyOn(endpoint.endpoint, 'isOnline').mockReturnValue(true);
+    vi.spyOn(endpoint.endpoint, 'getSystemMsg').mockResolvedValue([]);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    const task = endpoint.sendSsoHeartBeat();
+    const task = endpoint.endpoint.sendSsoHeartBeat();
     await endpoint.stop();
     const failure = { code: -2, message: 'packet timeout (seq: 123)' };
     reject(failure);
@@ -167,17 +167,17 @@ describe('ICQQ background heartbeat ownership with the real SDK', () => {
     const login = vi.spyOn(Client.prototype, 'login')
       .mockImplementationOnce(async function (this: Client) { this.emit('system.online'); })
       .mockImplementationOnce(() => new Promise((_, rejectTask) => { reject = rejectTask; }));
-    const endpoint = bindTestEndpoint(new IcqqEndpoint({
+    const endpoint = await icqqFixture({
       id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq'),
       config: resolveIcqqConfig({ id: '10001', dataDir: directory, autoReconnect: true, qqnt: true }),
       loginAssist: new LoginAssist(null),
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
-    vi.spyOn(endpoint, 'getSystemMsg').mockResolvedValue([]);
+    }, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    vi.spyOn(endpoint.endpoint, 'getSystemMsg').mockResolvedValue([]);
     const networkErrors = vi.fn();
-    endpoint.on('internal.error.network', networkErrors);
+    endpoint.endpoint.on('internal.error.network', networkErrors);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    endpoint.emit('internal.error.network', -2, 'connection lost');
+    endpoint.endpoint.emit('internal.error.network', -2, 'connection lost');
     await vi.advanceTimersByTimeAsync(5000);
     expect(login).toHaveBeenCalledTimes(2);
     await endpoint.stop();

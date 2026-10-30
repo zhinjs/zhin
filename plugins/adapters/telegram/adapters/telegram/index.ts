@@ -2,13 +2,10 @@
  * Convention entry: discover `adapters/telegram/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
-import { TelegramEndpoint } from '../../src/endpoint.js';
+import { TelegramAdapter } from '../../src/adapter.js';
 import {
-  resolveTelegramConfig,
   type TelegramEndpointConfig,
 } from '../../src/protocol.js';
-import { telegramRuntimeStateToken } from '../../src/telegram-runtime-state.js';
 
 export { TelegramEndpoint } from '../../src/endpoint.js';
 export type { TelegramEndpointOptions, TelegramFetch } from '../../src/endpoint.js';
@@ -23,17 +20,5 @@ export default defineAdapter<TelegramEndpointConfig>({
     interactive: 'native',
     markdown: 'native',
   },
-  create(context) {
-    const config = resolveTelegramConfig(context.config);
-    // 注册到插件运行时状态（telegram endpoint list 的"运行中"数据源）
-    context.use(telegramRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: config.mode,
-    });
-    return new TelegramEndpoint({
-      id: context.id,
-      config,
-      http: config.mode === 'webhook' ? context.use(httpHostToken) : undefined,
-    });
-  },
+  createAdapter: context => new TelegramAdapter(context),
 });

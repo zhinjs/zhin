@@ -3,6 +3,7 @@ import type { ConsoleEndpointSummary } from '@zhin.js/console-protocol';
 
 export interface AdapterConsoleFieldView {
   readonly key: string;
+  readonly type?: 'string' | 'number' | 'boolean';
   readonly required: boolean;
   readonly env: boolean;
   readonly secret: boolean;
@@ -27,6 +28,7 @@ export interface AdapterConsoleActionOptionView {
 }
 
 export interface AdapterConsoleActionView {
+  readonly accountMutation?: boolean;
   readonly name: string;
   readonly label: string;
   readonly labelI18n?: Readonly<Record<string, string>>;

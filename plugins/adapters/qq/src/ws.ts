@@ -42,50 +42,7 @@ export type QqOfficialApi = Pick<Bot,
   | 'guild'
 >;
 
-/** Minimal bot surface used by the endpoint (real qq-official-bot or test mock). */
-export interface QqBotTransport {
-  readonly transportState?: EndpointTransportState;
-  /** Full qq-official-bot business API; lifecycle remains owned by the Endpoint. */
-  readonly api: QqOfficialApi;
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  on(event: string, listener: (...args: unknown[]) => void): void;
-  removeAllListeners(): void;
-  /** `source` makes it a passive reply; without it the platform treats the message as active. */
-  sendPrivateMessage(userId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
-  sendGroupMessage(groupId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
-  sendGuildMessage(channelId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
-  sendDirectMessage?(guildId: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown>;
-  recallPrivateMessage?(userId: string, messageId: string): Promise<unknown>;
-  recallGroupMessage?(groupId: string, messageId: string): Promise<unknown>;
-  recallGuildMessage?(channelId: string, messageId: string): Promise<unknown>;
-  recallDirectMessage?(guildId: string, messageId: string): Promise<unknown>;
-  getGuilds(): Promise<unknown[]>;
-  getChannels(guildId: string): Promise<unknown[]>;
-  getChannelInfo(channelId: string): Promise<unknown>;
-  getGuildMember(guildId: string, userId: string): Promise<unknown>;
-  getGuildRoles(guildId: string): Promise<unknown[]>;
-  createGuildRole(guildId: string, name: string, color?: number): Promise<unknown>;
-  addMemberRole(
-    guildId: string,
-    channelId: string,
-    userId: string,
-    roleId: string,
-  ): Promise<boolean>;
-  removeMemberRole(
-    guildId: string,
-    channelId: string,
-    userId: string,
-    roleId: string,
-  ): Promise<boolean>;
-  approveGroupJoinRequest?(
-    groupId: string,
-    userId: string,
-    options: ApproveJoinRequestOptions,
-  ): Promise<unknown>;
-}
-
-export type CreateQqBot = (config: ResolvedQqWebsocketConfig) => QqBotTransport;
+export type QqBotTransport = Bot;
 
 interface QqOfficialBotLifecycle {
   stop(): Promise<unknown>;
@@ -134,6 +91,7 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
     channel_id?: string | number;
     guild_id?: string | number;
     raw_message?: string;
+    timestamp?: number;
     message?: unknown;
     sender?: { user_id?: string | number; user_name?: string; roles?: (string | number)[] };
     member?: { roles?: (string | number)[] };
@@ -186,6 +144,8 @@ export function normalizeQqMessage(raw: unknown): QqInboundMessage | null {
 
   return {
     id: String(msg.message_id),
+    event: raw,
+    ...(typeof msg.timestamp === 'number' && Number.isFinite(msg.timestamp) ? { platformSentAt: msg.timestamp * 1_000 } : {}),
     content,
     channelKind,
     channelId,
@@ -286,78 +246,40 @@ function extractTextContent(message: unknown): string {
     .join('');
 }
 
-export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransport {
-  const bot = new Bot({
-    ...({ handleProcessErrors: false } as Record<string, unknown>),
-    appid: config.appid,
-    secret: config.secret,
-    mode: ReceiverMode.WEBSOCKET,
-    sandbox: config.sandbox,
-    dataDir: path.join(process.cwd(), 'data', 'qq'),
-    // 关闭 qq-official-bot 内置 log4js，入/出站由 getAdapterLogger('qq', …) 统一格式
-    logLevel: 'off',
+export function qqWebsocketBotOptions(config: ResolvedQqWebsocketConfig): ConstructorParameters<typeof Bot<ReceiverMode.WEBSOCKET>>[0] {
+  return { handleProcessErrors: false, appid: config.appid, secret: config.secret,
+    mode: ReceiverMode.WEBSOCKET, sandbox: config.sandbox,
+    dataDir: path.join(process.cwd(), 'data', 'qq'), logLevel: 'off',
     ...(config.intents ? { intents: config.intents as never } : {}),
     ...(config.accessTokenUrl ? { accessTokenUrl: config.accessTokenUrl } : {}),
     ...(config.gatewayUrl ? { gatewayUrl: config.gatewayUrl } : {}),
-  });
+  };
+}
 
-  const receiver = bot.receiver as unknown as { config: { autoReconnect: boolean; agent?: import('node:https').Agent }; on(event: string, listener: (...args: unknown[]) => void): void; removeListener(event: string, listener: (...args: unknown[]) => void): void };
+/** SDK 1.3.3 has no public receiver configuration/state accessor. This seam only reads its verified native fields. */
+export function configureQqWebsocketReceiver(bot: Bot<ReceiverMode.WEBSOCKET>, config: ResolvedQqWebsocketConfig) {
+  const receiver = bot.receiver as unknown as {
+    config: { autoReconnect: boolean; agent?: import('node:https').Agent };
+    isReady?: boolean; isStarted?: boolean; isClosed?: boolean; handler?: { ws?: { readyState: number } };
+  };
   receiver.config.autoReconnect = false;
   const agent = config.streamProxy ? createQqStreamAgent(config.streamProxy) : undefined;
   receiver.config.agent = agent;
-  const receiverListeners: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
-  // Keep receiver error ownership after Session.start removes its temporary listener.
-  const receiverError = () => {};
-  receiver.on('error', receiverError);
+  const observeError = () => undefined;
+  bot.receiver.on('error', observeError);
   return {
-    get transportState(): EndpointTransportState {
-      const receiver = bot.receiver as unknown as { isReady?: boolean; isStarted?: boolean; isClosed?: boolean; handler?: { ws?: { readyState: number } } };
+    state(): EndpointTransportState {
       const state = receiver.handler?.ws?.readyState;
       if (state === 1 && receiver.isReady && receiver.isClosed === false) return 'open';
       if (state === 0) return 'connecting';
-      if (receiver.isStarted) return 'reconnecting';
-      return 'closed';
+      return receiver.isStarted ? 'reconnecting' : 'closed';
     },
-    api: bot,
-    start: () => bot.start().then(() => undefined),
-    stop: async () => {
-      try { await stopQqOfficialBot(bot as unknown as QqOfficialBotLifecycle); }
-      finally { agent?.destroy(); }
-    },
-    on: (event, listener) => {
-      if (event === 'transport.close') { receiver.on('close', listener); receiverListeners.push({ event: 'close', listener }); }
-      else bot.on(event as never, listener as never);
-    },
-    removeAllListeners: () => {
-      for (const entry of receiverListeners.splice(0)) receiver.removeListener(entry.event, entry.listener);
-      bot.removeAllListeners(undefined as never);
-    },
-    sendPrivateMessage: (userId, message, source, options) => bot.sendPrivateMessage(userId, message as Sendable, source, options),
-    sendGroupMessage: (groupId, message, source, options) => bot.sendGroupMessage(groupId, message as Sendable, source, options),
-    sendGuildMessage: (channelId, message, source, options) => bot.sendGuildMessage(channelId, message as Sendable, source, options),
-    sendDirectMessage: (guildId, message, source, options) => bot.sendDirectMessage(guildId, message as Sendable, source, options),
-    recallPrivateMessage: (userId, messageId) => bot.recallPrivateMessage(userId, messageId),
-    recallGroupMessage: (groupId, messageId) => bot.recallGroupMessage(groupId, messageId),
-    recallGuildMessage: (channelId, messageId) => bot.recallGuildMessage(channelId, messageId),
-    recallDirectMessage: (guildId, messageId) => bot.recallDirectMessage(guildId, messageId),
-    getGuilds: () => bot.guildService.getList(),
-    getChannels: (guildId) => bot.channelService.getList(guildId),
-    getChannelInfo: (channelId) => bot.channelService.getInfo(channelId),
-    getGuildMember: (guildId, userId) => bot.memberService.getGuildMemberInfo(guildId, userId),
-    getGuildRoles: (guildId) => bot.guildService.getRoles(guildId),
-    createGuildRole: (guildId, name, color) =>
-      bot.guildService.createRole(guildId, { name, color: color || 0, hoist: 0 }),
-    addMemberRole: async (guildId, channelId, userId, roleId) => {
-      await bot.memberService.addMemberRole(guildId, channelId, userId, roleId);
-      return true;
-    },
-    removeMemberRole: async (guildId, channelId, userId, roleId) => {
-      await bot.memberService.removeMemberRole(guildId, channelId, userId, roleId);
-      return true;
-    },
-    approveGroupJoinRequest: (groupId, userId, options) =>
-      (bot as { approveGroupJoinRequest?: QqBotTransport['approveGroupJoinRequest'] })
-        .approveGroupJoinRequest?.(groupId, userId, options)
-      ?? Promise.reject(new Error('approveGroupJoinRequest is not available')),
+    dispose(): void { bot.receiver.off('error', observeError); agent?.destroy(); },
   };
+}
+
+/** Session.stop leaves Auth refresh alive for reconnect; actual instance retirement destroys it. */
+export function disposeQqAuthorization(bot: Bot): void {
+  const session = bot.sessionManager as unknown as { authManager: { destroy(): void } };
+  session.authManager.destroy();
 }

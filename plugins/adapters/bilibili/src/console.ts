@@ -5,10 +5,10 @@
  * - 动作都声明了 requiredPermissions：普通用户令牌只有持有对应权限才能操作（#977：未声明 = 仅管理员）。
  * - 配置（白名单视频、sendMode 等）不在这里改：用 YAML / config:patch。
  */
-import { definePluginConsoleRpc, PluginConsoleRpcError, type PluginConsoleRpc, type PluginConsoleRpcInput } from 'zhin.js';
+import { definePluginConsoleRpc, PluginConsoleRpcError, type PluginConsoleRpc, type PluginConsoleRpcInput, type PluginConsoleRpcCall, type PluginConsoleRpcJson } from 'zhin.js';
 import { isLocale, type Locale } from 'zhin.js/i18n';
-import type { BilibiliEndpointRegistry } from './bilibili-runtime-state.js';
-import { BilibiliReviewError, type BilibiliEndpoint } from './endpoint.js';
+import { bilibiliEndpoints, type BilibiliEndpointDirectory, type BilibiliEndpointView } from './endpoint-directory.js';
+import { BilibiliReviewError } from './endpoint.js';
 import { draftCommentUrl, findDraft, reviewErrorText } from './review.js';
 
 export const BILIBILI_CONSOLE_PAGE = 'index';
@@ -31,7 +31,7 @@ function requireString(input: PluginConsoleRpcInput, key: string, label: string)
   return value.trim();
 }
 
-function pickEndpoint(registry: BilibiliEndpointRegistry, input: PluginConsoleRpcInput): BilibiliEndpoint {
+function pickEndpoint(registry: BilibiliEndpointDirectory, input: PluginConsoleRpcInput): BilibiliEndpointView {
   const id = typeof input.endpoint === 'string' ? input.endpoint.trim() : '';
   if (id) {
     const endpoint = registry.get(id);
@@ -56,7 +56,7 @@ function reviewFailure(id: string, error: unknown, locale?: Locale): never {
   throw new PluginConsoleRpcError('unavailable', message);
 }
 
-function endpointView(endpoint: BilibiliEndpoint) {
+function endpointView(endpoint: BilibiliEndpointView) {
   const login = endpoint.login;
   const qr = endpoint.qrLogin;
   const circuit = endpoint.circuitBreaker;
@@ -99,7 +99,16 @@ function endpointView(endpoint: BilibiliEndpoint) {
   };
 }
 
-export function createBilibiliConsoleRpc(registry: BilibiliEndpointRegistry): PluginConsoleRpc {
+function scopedRegistry(operation: (directory: BilibiliEndpointDirectory, input: PluginConsoleRpcInput) => PluginConsoleRpcJson | Promise<PluginConsoleRpcJson>) {
+  return (input: PluginConsoleRpcInput, call: PluginConsoleRpcCall): PluginConsoleRpcJson | Promise<PluginConsoleRpcJson> => {
+    const runtime = call.runtime;
+    if (!runtime) throw new PluginConsoleRpcError('unsupported', 'Bilibili Adapter directory is unavailable');
+    const directory = bilibiliEndpoints({ owner: runtime.owner, signal: call.signal, project: feature => runtime.project(feature) });
+    return operation(directory, input);
+  };
+}
+
+export function createBilibiliConsoleRpc(): PluginConsoleRpc {
   const page = BILIBILI_CONSOLE_PAGE;
   const review = [BILIBILI_REVIEW_PERMISSION];
   const login = [BILIBILI_LOGIN_PERMISSION];
@@ -107,15 +116,15 @@ export function createBilibiliConsoleRpc(registry: BilibiliEndpointRegistry): Pl
     status: {
       page,
       requiredPermissions: [BILIBILI_READ_PERMISSION],
-      handler: () => ({
+      handler: scopedRegistry((registry) => ({
         endpoints: [...registry.values()].map(endpointView),
         updatedAt: Date.now(),
-      }),
+      })),
     },
     actions: {
       send: {
         page, requiredPermissions: review,
-        handler: async (input) => {
+        handler: scopedRegistry(async (registry, input) => {
           const id = requireString(input, 'id', '草稿 ID');
           const found = findDraft(registry, id);
           if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), localeOf(input)));
@@ -123,11 +132,11 @@ export function createBilibiliConsoleRpc(registry: BilibiliEndpointRegistry): Pl
             const { rpid, draft } = await found.endpoint.approveDraft(id);
             return { id, url: draftCommentUrl({ oid: draft.oid, parent: rpid }) };
           } catch (error) { return reviewFailure(id, error, localeOf(input)); }
-        },
+        }),
       },
       edit: {
         page, requiredPermissions: review,
-        handler: async (input) => {
+        handler: scopedRegistry(async (registry, input) => {
           const id = requireString(input, 'id', '草稿 ID');
           const message = typeof input.message === 'string' ? input.message : '';
           const found = findDraft(registry, id);
@@ -136,41 +145,41 @@ export function createBilibiliConsoleRpc(registry: BilibiliEndpointRegistry): Pl
             const draft = found.endpoint.editDraft(id, message);
             return { id, message: draft.message };
           } catch (error) { return reviewFailure(id, error, localeOf(input)); }
-        },
+        }),
       },
       drop: {
         page, requiredPermissions: review,
-        handler: async (input) => {
+        handler: scopedRegistry(async (registry, input) => {
           const id = requireString(input, 'id', '草稿 ID');
           const found = findDraft(registry, id);
           if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), localeOf(input)));
           try {
             return { id, dropped: found.endpoint.discardDraft(id) };
           } catch (error) { return reviewFailure(id, error, localeOf(input)); }
-        },
+        }),
       },
       login: {
         page, requiredPermissions: login,
-        handler: async (input) => {
+        handler: scopedRegistry(async (registry, input) => {
           const qr = await pickEndpoint(registry, input).startQrLogin();
           if (qr.state === 'failed') throw new PluginConsoleRpcError('unavailable', qr.error ?? '获取二维码失败，请重试');
           return { state: qr.state, ...(qr.image ? { image: qr.image } : {}), ...(qr.expiresAt ? { expiresAt: qr.expiresAt } : {}) };
-        },
+        }),
       },
       'login-cancel': {
         page, requiredPermissions: login,
-        handler: async (input) => {
+        handler: scopedRegistry(async (registry, input) => {
           pickEndpoint(registry, input).cancelQrLogin();
           return { state: 'idle' };
-        },
+        }),
       },
       logout: {
         page, requiredPermissions: login,
-        handler: async (input) => {
+        handler: scopedRegistry(async (registry, input) => {
           const ok = await pickEndpoint(registry, input).logout();
           if (!ok) throw new PluginConsoleRpcError('unsupported', 'Cookie 来自配置 / 环境变量，请在那里修改');
           return { state: 'logged_out' };
-        },
+        }),
       },
     },
   });

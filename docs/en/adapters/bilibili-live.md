@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page mirrors [`plugins/adapters/bilibili-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/bilibili-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 # @zhin.js/adapter-bilibili-live
@@ -90,8 +90,10 @@ The adapter writes nothing to disk. The dedupe table (the latest 500 danmaku ids
 Open the Console **Bilibili Live** page (route `/bilibili-live`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.bilibili-live.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `bilibili-live:read`; writes require `bilibili-live:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `bilibili-live endpoint add` command.
 

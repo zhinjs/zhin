@@ -16,7 +16,7 @@
     "lib"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/compact-schema.mjs",
     "clean": "rimraf lib",
     "test": "vitest run --root ../../.. packages/im/runtime/tests",
     "check:size": "node ../../../scripts/check-plugin-runtime-install-size.mjs @zhin.js/runtime"

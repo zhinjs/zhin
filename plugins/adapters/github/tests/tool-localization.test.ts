@@ -30,7 +30,7 @@ it('localizes repository results while preserving provider errors and authored c
   const api = { isAppAuth: true, getRepo: async () => ({ ok: true, data: { default_branch: 'trunk' } }),
     createPullRequest: vi.fn(async () => ({ ok: true, data: { number: 13, html_url: 'https://git.test/pr/13' } })),
     getFileContent: async () => ({ ok: false }), createOrUpdateFile: vi.fn(async () => ({ ok: false, data: { message: '服务端原文' } })) };
-  const client = { api };
+  const client = api;
   const created = await executeGithubCreatePr({ title: '作者标题', body: '正文' }, client as never, message as never);
   expect(created).toContain('PR #13 created');
   expect(api.createPullRequest).toHaveBeenCalledWith('team/repo', '作者标题', 'zhin/bot/issue-12', 'trunk', '正文');

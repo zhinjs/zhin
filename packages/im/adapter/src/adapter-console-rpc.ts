@@ -1,3 +1,5 @@
+import { redactConfigurationUrl } from './configuration-metadata.js';
+import { readConfigurationPath } from './configuration-fields.js';
 /**
  * Adapter Console RPC — 每个平台适配器 Console 页共享的服务端实现。
  *
@@ -8,14 +10,14 @@
  * - `status`：适配器标识、字段元数据、运行中 / 已配置 endpoint、可用动作与平台状态。
  * - Runtime 管理入口将 add/update/start/stop/remove/replace 委派给 exact-owned Adapter，
  *   通过私有 repository CAS 保存，不写启动配置或 `.env`，不重建 Root。
- * - 无 runtime 上下文的 embedded add/remove 保留旧配置文件入口。
+ * - 缺少 runtime 目录时仅展示安全配置视图；账号写入明确不可用。
  * - `actions`：适配器按需扩展的只读查询 / 有限动作；动作名只能用小写字母、数字和 `-`。
  *
  * 安全边界：
  * - 不返回原始错误、日志、聊天内容或密钥；`env` / `secret` 字段在管理清单一律遮蔽。
  * - 读取、写入分别用 `<adapterKey>:read` / `<adapterKey>:write` 权限；页面和方法各自声明，
  *   非管理员令牌必须同时满足。
- * - 没有配置存储（例如单元测试 / 非 CLI 装配）时 `canAdd` / `canRemove` 为 false，页面隐藏写操作。
+ * - 没有持久化账号目录时 `canAdd` / `canRemove` 为 false，页面隐藏写操作。
  */
 import {
   definePluginConsoleRpc,
@@ -27,24 +29,19 @@ import {
   type PluginConsoleRpcJson,
   type Token,
 } from '@zhin.js/plugin-runtime';
+import type { EndpointRunningInfo } from './endpoint-commands.js';
 import {
-  buildEndpointEnvKey,
-  type EndpointRunningInfo,
-} from './endpoint-commands.js';
-import {
-  EndpointConfigurationError,
-  endpointConfigurationStoreToken,
   type ConfiguredEndpointEntry,
-  type EndpointConfigurationStore,
 } from './endpoint-configuration.js';
 import { consoleRuntimeView, mutateConsoleAdapter, ownedConsoleAdapter, type AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
 export type { AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
 
-/** 适配器 Console 页面字段；`env` 是敏感字段，legacy 文件入口写入 `.env`。 */
+/** 适配器 Console 页面字段；`env` 和 `secret` 都声明需要遮蔽的敏感字段。 */
 export interface AdapterConsoleField {
   readonly key: string;
+  readonly type?: 'string' | 'number' | 'boolean';
   readonly required?: boolean;
-  /** 凭据字段；runtime 保存在私有持久库，legacy 文件入口保存环境变量引用。 */
+  /** 凭据字段；由所属 Adapter 保存到 Host 私有持久库。 */
   readonly env?: boolean;
   /** 非 env 字段也要遮蔽展示（例如 PEM 内容）。 */
   readonly secret?: boolean;
@@ -84,6 +81,8 @@ export interface AdapterConsoleActionResult {
  * 动作本身仍注册在 RPC 里，调用时由处理器校验状态。
  */
 export interface AdapterConsoleAction {
+  /** Uses the same runtime account revision and first-migration admission as standard account mutations. */
+  readonly accountMutation?: boolean;
   readonly label: string;
   readonly labelI18n?: Readonly<Partial<Record<string, string>>>;
   readonly description?: string;
@@ -93,7 +92,7 @@ export interface AdapterConsoleAction {
   readonly options?: readonly AdapterConsoleActionOption[];
   readonly requiredPermissions?: readonly string[];
   readonly requiredRoles?: readonly string[];
-  handler(input: PluginConsoleRpcInput): AdapterConsoleActionResult | PluginConsoleRpcJson | Promise<AdapterConsoleActionResult | PluginConsoleRpcJson>;
+  handler(input: PluginConsoleRpcInput, call: PluginConsoleRpcCall): AdapterConsoleActionResult | PluginConsoleRpcJson | Promise<AdapterConsoleActionResult | PluginConsoleRpcJson>;
 }
 
 /** Token 读取面：Plugin setup 的 `context.resources` 满足它。 */
@@ -119,7 +118,7 @@ export interface AdapterConsoleSpec {
   readonly idPattern?: RegExp;
   readonly idHint?: string;
   readonly idHintI18n?: Readonly<Partial<Record<string, string>>>;
-  /** 运行中 endpoint 数据源；通常读 adapter runtime state。 */
+  /** 无 runtime 目录的独立只读状态来源；Host 管理页始终使用所属 Adapter 目录。 */
   readonly running?: () => Iterable<EndpointRunningInfo>;
   /** 当前实例配置；没有配置存储时用于只读展示。 */
   readonly getConfig?: () => unknown;
@@ -156,6 +155,7 @@ interface StatusView {
 
 interface AdapterConsoleFieldView {
   key: string;
+  type?: 'string' | 'number' | 'boolean';
   required: boolean;
   env: boolean;
   secret: boolean;
@@ -166,6 +166,7 @@ interface AdapterConsoleFieldView {
 
 interface AdapterConsoleActionView {
   name: string;
+  accountMutation?: boolean;
   label: string;
   labelI18n?: Record<string, string>;
   description?: string;
@@ -201,16 +202,12 @@ function stringsI18n(input: Readonly<Partial<Record<string, string>>> | undefine
  */
 export function createAdapterConsoleRpc(
   spec: AdapterConsoleSpec,
-  resources: AdapterConsoleResources,
 ): PluginConsoleRpc {
   if (!spec.adapterKey) throw new TypeError('Adapter console RPC requires an adapterKey');
   const page = spec.page ?? 'index';
   if (!/^[a-z][a-z0-9-]*$/.test(page)) throw new TypeError(`Invalid page name: ${page}`);
   const readPermission = spec.readPermission;
   const writePermission = spec.writePermission;
-  const store: EndpointConfigurationStore | undefined = resources.has(endpointConfigurationStoreToken)
-    ? resources.use(endpointConfigurationStoreToken)
-    : undefined;
   const fields = spec.fields ?? [];
   const writePermissions = writePermission ? [writePermission] : undefined;
   const actions = spec.actions ?? {};
@@ -241,14 +238,14 @@ export function createAdapterConsoleRpc(
     methods['endpoint-add'] = {
       page,
       ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
-      handler: async (input, call) => call.runtime ? mutateConsoleAdapter(spec, call, 'add', input) : addEndpoint(input),
+      handler: async (input, call) => mutateConsoleAdapter(spec, call, 'add', input),
     };
   }
   if (spec.canRemove !== false) {
     methods['endpoint-remove'] = {
       page,
       ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
-      handler: async (input, call) => call.runtime ? mutateConsoleAdapter(spec, call, 'remove', input) : removeEndpoint(input),
+      handler: async (input, call) => mutateConsoleAdapter(spec, call, 'remove', input),
     };
   }
   for (const action of ['update', 'start', 'stop', 'replace'] as const) {
@@ -263,7 +260,7 @@ export function createAdapterConsoleRpc(
       page,
       requiredPermissions: action.requiredPermissions ?? writePermissions,
       ...(action.requiredRoles ? { requiredRoles: action.requiredRoles } : {}),
-      handler: async (input) => normalizeActionOutput(await action.handler(input)),
+      handler: async (input, call) => normalizeActionOutput(await action.handler(input, call)),
     };
   }
 
@@ -289,9 +286,9 @@ export function createAdapterConsoleRpc(
       displayName: spec.adapterDisplayName,
       page,
       fields: fields.map(fieldView),
-      canAdd: Boolean(adapter ? adapter.canManage : store) && spec.canAdd !== false,
-      canRemove: Boolean(adapter ? adapter.canManage : store) && spec.canRemove !== false,
-      configStore: Boolean(adapter ? adapter.canManage : store),
+      canAdd: Boolean(adapter?.canManage) && spec.canAdd !== false,
+      canRemove: Boolean(adapter?.canManage) && spec.canRemove !== false,
+      configStore: Boolean(adapter?.canManage),
       running: running.map((endpoint) => ({
         id: endpoint.id,
         ...(endpoint.mode ? { mode: endpoint.mode } : {}),
@@ -325,13 +322,6 @@ export function createAdapterConsoleRpc(
   }
 
   async function listConfigured(): Promise<readonly ConfiguredEndpointEntry[]> {
-    if (store) {
-      try {
-        return await store.list(spec.adapterKey);
-      } catch {
-        return [];
-      }
-    }
     return configuredFromConfig(spec.getConfig?.());
   }
 
@@ -353,7 +343,7 @@ export function createAdapterConsoleRpc(
   function entryValues(entry: ConfiguredEndpointEntry): Record<string, string> {
     const values: Record<string, string> = {};
     for (const field of fields) {
-      const raw = entry[field.key];
+      const raw = readConfigurationPath(entry, field.key);
       if (raw === undefined || raw === null) continue;
       const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
       if (!text) continue;
@@ -362,7 +352,7 @@ export function createAdapterConsoleRpc(
       } else if (field.secret) {
         values[field.key] = '••••••';
       } else {
-        values[field.key] = text;
+        values[field.key] = redactConfigurationUrl(field.key, text);
       }
     }
     return values;
@@ -385,77 +375,11 @@ export function createAdapterConsoleRpc(
     }
   }
 
-  async function addEndpoint(input: PluginConsoleRpcInput): Promise<PluginConsoleRpcJson> {
-    if (!store) throw new PluginConsoleRpcError('unsupported', '当前运行环境不支持写入 endpoint 配置');
-    const id = requireId(input.id);
-    const values = input.values;
-    if (!values || typeof values !== 'object' || Array.isArray(values)) {
-      throw new PluginConsoleRpcError('invalid_input', '缺少 endpoint 字段');
-    }
-    const record = values as Record<string, unknown>;
-    const known = new Map(fields.map((field) => [field.key, field]));
-    const entry: Record<string, unknown> = { id };
-    const environment: Record<string, string> = {};
-    for (const [key, raw] of Object.entries(record)) {
-      const field = known.get(key);
-      if (!field) throw new PluginConsoleRpcError('invalid_input', `未知字段：${key}`);
-      if (typeof raw !== 'string') throw new PluginConsoleRpcError('invalid_input', `字段 ${key} 必须是字符串`);
-      const value = raw.trim();
-      if (!value) continue;
-      if (field.env) {
-        const envKey = buildEndpointEnvKey(spec.adapterKey, id, field.key);
-        environment[envKey] = value;
-        entry[field.key] = `\${${envKey}}`;
-      } else {
-        entry[field.key] = value;
-      }
-    }
-    const missing = fields.filter((field) => field.required && entry[field.key] === undefined);
-    if (missing.length > 0) {
-      throw new PluginConsoleRpcError('invalid_input', `缺少必填字段：${missing.map((field) => field.key).join('、')}`);
-    }
-    try {
-      await store.add({ adapterKey: spec.adapterKey, entry: entry as ConfiguredEndpointEntry, environment });
-    } catch (error) {
-      if (error instanceof EndpointConfigurationError && error.code === 'duplicate_entry') {
-        throw new PluginConsoleRpcError('conflict', `endpoint「${id}」已经存在，请先删除或换一个 id`);
-      }
-      throw new PluginConsoleRpcError('unavailable', '写入配置失败，请检查配置文件和 .env 的权限');
-    }
-    return {
-      id,
-      message: `已写入 endpoint「${id}」；重启或热重载后生效`,
-      restartRequired: true,
-    };
-  }
-
-  async function removeEndpoint(input: PluginConsoleRpcInput): Promise<PluginConsoleRpcJson> {
-    if (!store) throw new PluginConsoleRpcError('unsupported', '当前运行环境不支持写入 endpoint 配置');
-    const id = requireId(input.id);
-    let removed: boolean;
-    try {
-      removed = (await store.remove(spec.adapterKey, id)).removed;
-    } catch {
-      throw new PluginConsoleRpcError('unavailable', '删除配置失败，请检查配置文件的权限');
-    }
-    if (!removed) throw new PluginConsoleRpcError('not_found', `配置里没有 endpoint「${id}」`);
-    return { id, removed, message: `已从配置中删除 endpoint「${id}」`, restartRequired: true };
-  }
-
-  function requireId(raw: unknown): string {
-    const id = typeof raw === 'string' ? raw.trim() : '';
-    if (!id) throw new PluginConsoleRpcError('invalid_input', '请填写 endpoint id');
-    if (id.length > 128) throw new PluginConsoleRpcError('invalid_input', 'endpoint id 过长');
-    if (spec.idPattern && !spec.idPattern.test(id)) {
-      throw new PluginConsoleRpcError('invalid_input', spec.idHint ?? 'endpoint id 格式不正确');
-    }
-    return id;
-  }
-
   function fieldView(field: AdapterConsoleField): AdapterConsoleFieldView {
     const descriptionI18n = stringsI18n(field.descriptionI18n);
     return {
       key: field.key,
+      ...(field.type ? { type: field.type } : {}),
       required: field.required === true,
       env: field.env === true,
       secret: field.secret === true || field.env === true,
@@ -471,6 +395,7 @@ export function createAdapterConsoleRpc(
     return {
       name,
       label: action.label,
+      ...(action.accountMutation ? { accountMutation: true } : {}),
       ...(labelI18n ? { labelI18n } : {}),
       ...(action.description ? { description: action.description } : {}),
       ...(descriptionI18n ? { descriptionI18n } : {}),

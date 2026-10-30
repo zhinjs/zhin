@@ -1,3 +1,4 @@
+import { Bot, ReceiverMode } from 'qq-official-bot';
 import { installQqUploadDiagnostics } from './upload-diagnostics.js';
 import { projectQqGuildSenderRoles } from './platform-permit.js';
 import { qqDeliveryFailure } from './delivery-error.js';
@@ -17,7 +18,7 @@ import {
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
 import {
-  Endpoint, createEndpointLifecycle, type EndpointLifecycle,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle, type EndpointLifecycle,
   type EndpointControl,
   type EndpointChannel,
   type EndpointManagement,
@@ -43,16 +44,14 @@ import {
   type ResolvedQqWebsocketConfig,
 } from './protocol.js';
 import {
-  defaultCreateHttpBot,
+  qqHttpBotOptions,
   registerQqWebhookRoutes,
-  type CreateQqHttpBot,
   type QqHttpBotTransport,
 } from './webhook.js';
 import {
   bindQqBotInboundEvents,
-  defaultCreateBot,
+  qqWebsocketBotOptions, configureQqWebsocketReceiver, disposeQqAuthorization,
   normalizeQqMessage,
-  type CreateQqBot,
   type QqBotTransport,
 } from './ws.js';
 import {
@@ -61,24 +60,26 @@ import {
   type QqSideEventCaller,
 } from './side-event-dispatch.js';
 
-export type { CreateQqBot, QqBotTransport, QqOfficialApi } from './ws.js';
-export type { CreateQqHttpBot, QqHttpBotTransport } from './webhook.js';
+export type { QqBotTransport, QqOfficialApi } from './ws.js';
+export type { QqHttpBotTransport } from './webhook.js';
 
 export interface QqEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedQqWebsocketConfig;
-  readonly createBot?: CreateQqBot;
   /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
   readonly notifier?: AdapterOutageNotifier;
 }
 
-export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
+export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  readonly #receiverResources: ReturnType<typeof configureQqWebsocketReceiver>;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: QqEndpointOptions;
-  readonly #createBot: CreateQqBot;
-  #bot: QqBotTransport | null = null;
+  #connection?: AbortController;
+  #stopping?: Promise<void>;
   #open = false;
+  #executionSignal?: AbortSignal;
   #offlineNoticeAt = 0;
   readonly #seenInteractions = new Map<string, number>();
   /** Recent msg_id / event_id per conversation, so replies go out as passive messages. */
@@ -86,19 +87,22 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   readonly #activeGate = new QqActiveMessageGate();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
-  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot(), () => this.#open && this.#bot !== null);
-  readonly control: EndpointControl = createQqEndpointControl(() => this.#requireBot(), (id) => this.recallMessage(id));
+  readonly #management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot(), () => this.#open && this.#connection !== undefined);
+  readonly #control: EndpointControl = createQqEndpointControl(() => this.#requireBot(), (id) => this.recallMessage(id));
 
   constructor(options: QqEndpointOptions) {
-    super();
+    super(qqWebsocketBotOptions(options.config));
     this.#logger = getAdapterLogger('qq', options.config.id);
     this.#lifecycle = createEndpointLifecycle({ name: options.config.id });
     this.#options = options;
-    this.#createBot = options.createBot ?? defaultCreateBot;
-  }
-
-  get client(): QqBotTransport {
-    return this.#requireBot();
+    this.#receiverResources = configureQqWebsocketReceiver(this, options.config);
+    const endpoint = this;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
+      stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
+      get transportState() { return endpoint.#transportState; }, management: this.#management, control: this.#control,
+    });
+    this.#bindBot(this);
   }
 
   /** Live endpoint 名（Console/AdapterIndex 展示用，如 bot appid 别名）。 */
@@ -106,46 +110,48 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     return this.#options.config.id;
   }
 
-  get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     if (this.#lifecycle.state !== 'open') return this.#lifecycle.state;
-    return this.#bot?.transportState ?? this.#lifecycle.state;
+    return this.#receiverResources.state();
   }
 
-  async start(): Promise<void> {
+  async #startFramework(executionSignal: AbortSignal): Promise<void> {
+    this.#executionSignal = executionSignal;
     await this.#lifecycle.start(async (handle) => {
-      const bot = this.#createBot(this.#options.config);
-      this.#bot = bot;
-      const releaseUploadDiagnostics = installQqUploadDiagnostics(bot.api, metadata => this.#logger.debug(formatCompact(metadata)));
+      const bot = this;
+      const previousCleanup = this.#cleanup;
+      await previousCleanup?.();
+      const releaseUploadDiagnostics = installQqUploadDiagnostics(bot, metadata => this.#logger.debug(formatCompact(metadata)));
       let cancelled = false;
       const startupAbort = new AbortController();
+      this.#connection = startupAbort;
+      let nativeStart: Promise<unknown> | undefined;
       let stopping: Promise<void> | undefined;
+      let transportClose: (() => void) | undefined;
       const stopBot = async () => {
-        try { bot.removeAllListeners(); } catch { /* continue SDK cleanup */ }
-        try { await bot.stop(); } catch { /* best-effort SDK cleanup */ }
+        await super.stop();
+        await nativeStart?.catch(() => undefined);
       };
       const cleanup = () => {
         cancelled = true;
         releaseUploadDiagnostics();
         startupAbort.abort();
-        if (this.#bot === bot) this.#bot = null;
+        if (transportClose) this.receiver.off('close', transportClose);
+        if (this.#connection === startupAbort) this.#connection = undefined;
         return stopping ??= stopBot();
       };
       this.#cleanup = cleanup;
-      handle.onForceClose(() => { void cleanup(); });
+      handle.onForceClose(() => { void cleanup().catch(() => undefined); });
       try {
-        bot.on('transport.close', () => {
-          if (cancelled || this.#bot !== bot) return;
+        transportClose = () => {
+          if (cancelled || this.#connection === undefined) return;
           this.#notifyOffline('transport_close');
-          void cleanup();
+          void cleanup().catch(() => undefined);
           handle.notifyClosed();
-        });
-        this.#bindBot(bot);
-        await awaitQqStartup(bot.start().then(async () => {
-          if (cancelled) await stopBot();
-        }, async (error) => {
-          if (cancelled) await stopBot();
-          throw error;
-        }), startupAbort.signal);
+        };
+        this.receiver.on('close', transportClose);
+        nativeStart = super.start();
+        await awaitQqStartup(nativeStart.then(() => undefined), startupAbort.signal);
         if (cancelled) {
           // SDK startup may create resources after stop; close this exact old client again.
           await stopping;
@@ -167,24 +173,27 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     });
   }
 
-  open(): void {
+  #openFramework(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #closeFramework(): void {
     this.#open = false;
   }
 
-  async stop(): Promise<void> {
-    this.#open = false;
-    const cleanup = this.#cleanup;
-    this.#cleanup = undefined;
-    await this.#lifecycle.stop();
-    await cleanup?.();
+  async #stopFramework(): Promise<void> {
+    this.#stopping ??= Promise.resolve().then(async () => {
+      this.#open = false;
+      const cleanup = this.#cleanup;
+      this.#cleanup = undefined;
+      try { await this.#lifecycle.stop(); await cleanup?.(); }
+      finally { this.removeAllListeners(undefined as never); this.#receiverResources.dispose(); disposeQqAuthorization(this); }
+    });
+    await this.#stopping;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
     // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
     // 拿不到 URL/尺寸的媒体降级为独立消息先发
     const messages = formatOutboundMessages(payload, { imageSizes: await collectOutboundImageSizes(payload) });
@@ -238,8 +247,10 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     );
     const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.emit('message.receive', {
       conversation,
+      event: msg.event,
+      platformSentAt: msg.platformSentAt,
       message: { conversation, id: msg.id },
       content,
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
@@ -278,12 +289,15 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     this.#seenInteractions.set(action.message.id, now);
     if (this.#seenInteractions.size > 10_000) this.#seenInteractions.delete(this.#seenInteractions.keys().next().value!);
     // ACK owns only platform loading state, never implies business acceptance.
-    void action.ack().then(ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); }, () => this.#logger.warn('qq_interaction_ack_failed'));
+    void this[endpointSpec].events.run(() => awaitOwnedAck(action.ack(), this.#executionSignal)).then(
+      ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); },
+      () => { if (this.#executionSignal?.aborted) this.#logger.debug('QQ ACK wait cancelled'); else this.#logger.warn('qq_interaction_ack_failed'); },
+    );
     const conversation = qqInboundConversation(String(this.#options.id), action.message);
     // INTERACTION_CREATE's id is an event_id the reply may answer passively.
     this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { event_id: action.message.id });
-    void this.emit('message.receive', {
-      conversation, message: { conversation, id: action.message.id }, content: '',
+    void this[endpointSpec].events.emit('message.receive', {
+      event: action.message.event, conversation, message: { conversation, id: action.message.id }, content: '',
       segments: action.message.segments, sender: { id: action.message.authorId }, endpointId: this.#options.config.id,
       metadata: Object.freeze({ eventType: 'INTERACTION_CREATE', sourceMessageIdAvailable: action.sourceMessageId !== undefined,
         ...(action.sourceMessageId ? { sourceMessageId: action.sourceMessageId } : {}),
@@ -312,28 +326,32 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
 
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
-      if (this.#bot !== bot) return;
-      this.#emitPlatformEvent('message', raw);
-      const msg = normalizeQqMessage(raw);
-      if (msg) this.admit(msg);
+      void this[endpointSpec].events.run(() => {
+        if (this.#connection === undefined) return;
+        this.#emitPlatformEvent('message', raw);
+        const msg = normalizeQqMessage(raw);
+        if (msg) this.admit(msg);
+      }).catch(() => this.#logger.debug('Native callback was not admitted'));
     });
     bindQqBotSideEvents(bot, (eventName, raw) => {
-      if (this.#bot !== bot) return;
-      this.#emitPlatformEvent(eventName, raw);
-      if (this.admitInteraction(raw)) return;
-      receiveQqSideEvent(
-        (name, payload) => this.emit(name, payload),
-        this.#options.config.id,
-        bot as QqSideEventCaller,
-        eventName,
-        raw,
-        this.#logger,
-      );
+      void this[endpointSpec].events.run(() => {
+        if (this.#connection === undefined) return;
+        this.#emitPlatformEvent(eventName, raw);
+        if (this.admitInteraction(raw)) return;
+        receiveQqSideEvent(
+          (name, payload) => this[endpointSpec].events.emit(name, payload),
+          this.#options.config.id,
+          bot,
+          eventName,
+          raw,
+          this.#logger,
+        );
+      }).catch(() => this.#logger.debug('Native callback was not admitted'));
     });
   }
 
   #emitPlatformEvent(name: string, event: unknown): void {
-    void this.emitPlatform(name, event).catch((error) => {
+    void this[endpointSpec].events.platform(name, event).catch((error) => {
       this.#logger.warn(formatCompact({
         op: 'qq_platform_event_failed',
         event: name,
@@ -343,8 +361,8 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   }
 
   #requireBot(): QqBotTransport {
-    if (!this.#bot) throw new EndpointDeliveryError('endpoint_disconnected', 'QQ bot not connected', 'not_sent');
-    return this.#bot;
+    if (!this.#connection) throw new EndpointDeliveryError('endpoint_disconnected', 'QQ bot not connected', 'not_sent');
+    return this;
   }
 }
 
@@ -352,19 +370,20 @@ export interface QqHttpEndpointOptions {
   readonly id: CapabilityId;
   readonly http: HttpHost;
   readonly config: ResolvedQqHttpConfig;
-  readonly createBot?: CreateQqHttpBot;
   /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
   readonly notifier?: AdapterOutageNotifier;
 }
 
 /** Webhook / middleware inbound via httpHostToken POST (qq-official-bot Middleware receiver). */
-export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
+export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: QqHttpEndpointOptions;
-  readonly #createBot: CreateQqHttpBot;
-  #bot: QqHttpBotTransport | null = null;
+  #connection?: AbortController;
+  #stopping?: Promise<void>;
   #open = false;
+  #executionSignal?: AbortSignal;
   #offlineNoticeAt = 0;
   readonly #seenInteractions = new Map<string, number>();
   /** Recent msg_id / event_id per conversation, so replies go out as passive messages. */
@@ -372,19 +391,22 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   readonly #activeGate = new QqActiveMessageGate();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
-  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot(), () => this.#open && this.#bot !== null);
-  readonly control: EndpointControl = createQqEndpointControl(() => this.#requireBot(), (id) => this.recallMessage(id));
+  readonly #management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot(), () => this.#open && this.#connection !== undefined);
+  readonly #control: EndpointControl = createQqEndpointControl(() => this.#requireBot(), (id) => this.recallMessage(id));
 
   constructor(options: QqHttpEndpointOptions) {
-    super();
+    super(qqHttpBotOptions(options.config));
     this.#logger = getAdapterLogger('qq', options.config.id);
     this.#lifecycle = createEndpointLifecycle({ name: options.config.id, reconnect: false });
     this.#options = options;
-    this.#createBot = options.createBot ?? defaultCreateHttpBot;
-  }
-
-  get client(): QqHttpBotTransport {
-    return this.#requireBot();
+    const endpoint = this;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
+      stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
+      get transportState() { return endpoint.#transportState; },
+      management: this.#management, control: this.#control,
+    });
+    this.#bindBot(this);
   }
 
   /** Live endpoint 名（Console/AdapterIndex 展示用）。 */
@@ -392,45 +414,44 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     return this.#options.config.id;
   }
 
-  get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     return this.#lifecycle.state;
   }
 
-  async start(): Promise<void> {
+  async #startFramework(executionSignal: AbortSignal): Promise<void> {
+    this.#executionSignal = executionSignal;
     await this.#lifecycle.start(async (handle) => {
-      const bot = this.#createBot(this.#options.config);
-      this.#bot = bot;
-      const releaseUploadDiagnostics = installQqUploadDiagnostics(bot.api, metadata => this.#logger.debug(formatCompact(metadata)));
+      const bot = this;
+      const previousCleanup = this.#cleanup;
+      await previousCleanup?.();
+      const releaseUploadDiagnostics = installQqUploadDiagnostics(bot, metadata => this.#logger.debug(formatCompact(metadata)));
       let cancelled = false;
       const startupAbort = new AbortController();
+      this.#connection = startupAbort;
+      let nativeStart: Promise<unknown> | undefined;
       let stopping: Promise<void> | undefined;
       const routes: Array<() => void> = [];
       const stopBot = async () => {
-        try { bot.removeAllListeners(); } catch { /* continue SDK cleanup */ }
-        try { await bot.stop(); } catch { /* best-effort SDK cleanup */ }
+        await super.stop();
+        await nativeStart?.catch(() => undefined);
       };
       const cleanup = () => {
         cancelled = true;
         releaseUploadDiagnostics();
         startupAbort.abort();
-        if (this.#bot === bot) this.#bot = null;
+        if (this.#connection === startupAbort) this.#connection = undefined;
         for (const release of routes.splice(0)) release();
         return stopping ??= stopBot();
       };
       this.#cleanup = cleanup;
-      handle.onForceClose(() => { void cleanup(); });
+      handle.onForceClose(() => { void cleanup().catch(() => undefined); });
       try {
-        this.#bindBot(bot);
         routes.push(...registerQqWebhookRoutes(this.#options.http, {
           config: this.#options.config,
           getBot: () => cancelled ? null : bot,
         }));
-        await awaitQqStartup(bot.start().then(async () => {
-          if (cancelled) await stopBot();
-        }, async (error) => {
-          if (cancelled) await stopBot();
-          throw error;
-        }), startupAbort.signal);
+        nativeStart = super.start();
+        await awaitQqStartup(nativeStart.then(() => undefined), startupAbort.signal);
         if (cancelled) {
           // SDK startup may create resources after stop; close this exact old client again.
           await stopping;
@@ -448,24 +469,27 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     });
   }
 
-  open(): void {
+  #openFramework(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #closeFramework(): void {
     this.#open = false;
   }
 
-  async stop(): Promise<void> {
-    this.#open = false;
-    const cleanup = this.#cleanup;
-    this.#cleanup = undefined;
-    await this.#lifecycle.stop();
-    await cleanup?.();
-    this.#logger.debug(formatCompact({ op: 'disconnect' }));
+  async #stopFramework(): Promise<void> {
+    this.#stopping ??= Promise.resolve().then(async () => {
+      this.#open = false;
+      const cleanup = this.#cleanup;
+      this.#cleanup = undefined;
+      try { await this.#lifecycle.stop(); await cleanup?.(); }
+      finally { this.removeAllListeners(undefined as never); disposeQqAuthorization(this); }
+      this.#logger.debug(formatCompact({ op: 'disconnect' }));
+    });
+    await this.#stopping;
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
     // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
     // 拿不到 URL/尺寸的媒体降级为独立消息先发
     const messages = formatOutboundMessages(payload, { imageSizes: await collectOutboundImageSizes(payload) });
@@ -518,8 +542,10 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     );
     const roleProjection = projectQqGuildSenderRoles(msg.authorRoles);
     if (msg.id) this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { id: msg.id });
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.emit('message.receive', {
       conversation,
+      event: msg.event,
+      platformSentAt: msg.platformSentAt,
       message: { conversation, id: msg.id },
       content,
       ...(msg.segments?.length ? { segments: msg.segments } : {}),
@@ -558,12 +584,15 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     this.#seenInteractions.set(action.message.id, now);
     if (this.#seenInteractions.size > 10_000) this.#seenInteractions.delete(this.#seenInteractions.keys().next().value!);
     // ACK owns only platform loading state, never implies business acceptance.
-    void action.ack().then(ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); }, () => this.#logger.warn('qq_interaction_ack_failed'));
+    void this[endpointSpec].events.run(() => awaitOwnedAck(action.ack(), this.#executionSignal)).then(
+      ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); },
+      () => { if (this.#executionSignal?.aborted) this.#logger.debug('QQ ACK wait cancelled'); else this.#logger.warn('qq_interaction_ack_failed'); },
+    );
     const conversation = qqInboundConversation(String(this.#options.id), action.message);
     // INTERACTION_CREATE's id is an event_id the reply may answer passively.
     this.#passiveReplies.record(qqOutboundKind(conversation), conversation.id, { event_id: action.message.id });
-    void this.emit('message.receive', {
-      conversation, message: { conversation, id: action.message.id }, content: '',
+    void this[endpointSpec].events.emit('message.receive', {
+      event: action.message.event, conversation, message: { conversation, id: action.message.id }, content: '',
       segments: action.message.segments, sender: { id: action.message.authorId }, endpointId: this.#options.config.id,
       metadata: Object.freeze({ eventType: 'INTERACTION_CREATE', sourceMessageIdAvailable: action.sourceMessageId !== undefined,
         ...(action.sourceMessageId ? { sourceMessageId: action.sourceMessageId } : {}),
@@ -592,28 +621,32 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
 
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
-      if (this.#bot !== bot) return;
-      this.#emitPlatformEvent('message', raw);
-      const msg = normalizeQqMessage(raw);
-      if (msg) this.admit(msg);
+      void this[endpointSpec].events.run(() => {
+        if (this.#connection === undefined) return;
+        this.#emitPlatformEvent('message', raw);
+        const msg = normalizeQqMessage(raw);
+        if (msg) this.admit(msg);
+      }).catch(() => this.#logger.debug('Native callback was not admitted'));
     });
     bindQqBotSideEvents(bot, (eventName, raw) => {
-      if (this.#bot !== bot) return;
-      this.#emitPlatformEvent(eventName, raw);
-      if (this.admitInteraction(raw)) return;
-      receiveQqSideEvent(
-        (name, payload) => this.emit(name, payload),
-        this.#options.config.id,
-        bot as QqSideEventCaller,
-        eventName,
-        raw,
-        this.#logger,
-      );
+      void this[endpointSpec].events.run(() => {
+        if (this.#connection === undefined) return;
+        this.#emitPlatformEvent(eventName, raw);
+        if (this.admitInteraction(raw)) return;
+        receiveQqSideEvent(
+          (name, payload) => this[endpointSpec].events.emit(name, payload),
+          this.#options.config.id,
+          bot,
+          eventName,
+          raw,
+          this.#logger,
+        );
+      }).catch(() => this.#logger.debug('Native callback was not admitted'));
     });
   }
 
   #emitPlatformEvent(name: string, event: unknown): void {
-    void this.emitPlatform(name, event).catch((error) => {
+    void this[endpointSpec].events.platform(name, event).catch((error) => {
       this.#logger.warn(formatCompact({
         op: 'qq_platform_event_failed',
         event: name,
@@ -623,16 +656,16 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   }
 
   #requireBot(): QqHttpBotTransport {
-    if (!this.#bot) throw new EndpointDeliveryError('endpoint_disconnected', 'QQ bot not connected', 'not_sent');
-    return this.#bot;
+    if (!this.#connection) throw new EndpointDeliveryError('endpoint_disconnected', 'QQ bot not connected', 'not_sent');
+    return this;
   }
 }
 
 function createQqEndpointManagement(
-  requireClient: () => Pick<QqBotTransport, 'getGuilds' | 'getChannels' | 'api'>,
+  requireClient: () => QqBotTransport,
   isActive: () => boolean,
 ): EndpointManagement {
-  const api = () => requireClient().api;
+  const api = () => requireClient();
   return Object.freeze<EndpointManagement>({
     // QQ 群（group_openid / member_openid）：官方 v2 群管理接口，部分为白名单能力（11253）。
     inspectGroupMember: (group, user, signal) => inspectQqGroupMember(api(), group, user, signal),
@@ -651,13 +684,13 @@ function createQqEndpointManagement(
     async listChannels(): Promise<readonly EndpointChannel[]> {
       const channels: EndpointChannel[] = [];
       const client = requireClient();
-      const guilds = await client.getGuilds();
+      const guilds = await client.guildService.getList();
       for (const guildValue of Array.isArray(guilds) ? guilds : []) {
         const guild = asRecord(guildValue);
         const guildId = String(guild.id ?? guild.guild_id ?? guildValue ?? '');
         if (!guildId) continue;
         const guildName = String(guild.name ?? guild.guild_name ?? guildId);
-        const rows = await client.getChannels(guildId);
+        const rows = await client.channelService.getList(guildId);
         for (const channelValue of Array.isArray(rows) ? rows : []) {
           const channel = asRecord(channelValue);
           const id = String(channel.id ?? channel.channel_id ?? channelValue ?? '');
@@ -698,13 +731,13 @@ function createQqEndpointControl(
     addReaction: async (message: MessageRef, emoji: string) => {
       const target = qqGuildReactionTarget(message, emoji);
       if (!target) return null;
-      await requireBot().api.reactionService.addGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
+      await requireBot().reactionService.addGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
       return `${target.type}:${target.id}`;
     },
     removeReaction: async (message: MessageRef, reactionId: string) => {
       const target = qqGuildReactionTarget(message, reactionId);
       if (!target) return;
-      await requireBot().api.reactionService.deleteGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
+      await requireBot().reactionService.deleteGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
     },
   });
 }
@@ -739,4 +772,15 @@ async function recallQqMessage(bot: QqBotTransport, kind: ReturnType<typeof qqOu
   if (!recall) throw new EndpointDeliveryError('recall_unsupported', 'QQ transport does not support recall for this conversation', 'not_sent');
   if (!messageId) throw new EndpointDeliveryError('invalid_message_id', 'QQ recall requires a nonempty message ID', 'not_sent');
   await recall.call(bot, channelId, messageId);
+}
+
+/** Logical cancellation only; the native SDK still owns its already-started ACK. */
+function awaitOwnedAck<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation;
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    void operation.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    if (signal.aborted) abort();
+  });
 }

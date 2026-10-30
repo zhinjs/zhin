@@ -32,12 +32,13 @@ pnpm add @zhin.js/adapter-telegram
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/telegram/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpoint[endpointSpec].events` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 - **无需** `@zhin.js/host-http`（polling 路径）
 
-入站：`gateway.receive({ conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef，由 `telegramInboundConversation` 归一化）  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })`（`conversation` 为 ConversationRef，由 `telegramInboundConversation` 归一化）
+
 出站：`send({ conversation, payload })` → Telegram Bot API
 
 ### 平台权限（platform permit）
@@ -139,10 +140,16 @@ Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自
 启动后打开 Console 的「Telegram」页（地址 `/telegram`），可以：
 
 - 查看运行中的连接、点「测试连接」做连通性诊断；
-- 增删 `plugins.telegram.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
 读取需要 `telegram:read`，写操作需要 `telegram:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `telegram endpoint add`。
+
+首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
+
+启停意图在进程重启后恢复。停止或删除会取消并关闭目标账号的在途操作，其他账号继续运行；删除保留历史。已启动账号的连接配置更新先关闭旧 incarnation，再仅重连该账号；平台身份变化按替换处理，分配新内部身份、保留旧历史，新账号不继承旧 Session、个人设置或启动意图。提交结果未知时先刷新核实，不自动重复 CAS 或平台操作。
+
+Telegram 的 token / apiBaseUrl 更新通过只读 `getMe` 核验真实 bot ID。核验失败或操作取消时不提交配置、不改正在运行的 Client；身份变化由统一 Adapter 账号替换流程保存为未启动的新身份。
 
 ## 故障排查
 

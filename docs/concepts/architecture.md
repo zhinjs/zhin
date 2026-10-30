@@ -85,7 +85,7 @@ flowchart BT
 
 Plugin 正常注册 command、component、page、middleware 等能力，Adapter 只是其中的 IM Channel 能力。`Adapter<E, Config, Events>` 基类统一持有所属账号的 desired 状态、连接代次和操作租约；平台子类负责创建 SDK Endpoint 及平台特殊逻辑。`AdapterIndex` 提供目录与路由，不另建 Controller 或 Worker 管理账号。
 
-新的平台 Endpoint 可以继承真实 SDK Client，并通过 `endpointSpec` 实现框架规范；SDK 的原生事件 API 保留。旧 `defineAdapter({ create })` 与 `Endpoint<TClient>` 输入仍兼容，由同一 Adapter 生命周期管理。
+平台 Endpoint 继承真实 SDK 或实质协议 Client，通过 `endpointSpec` 实现框架规范并保留原生 SDK API。`Endpoint` 是结构 interface；唯一构造入口是 `defineAdapter({ createAdapter })`，平台类型只注册到实际 `AdapterRegistry`，不保留旧基类、紧凑 create 或 Client token。
 
 Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint、场景、发言者、规范消息与原生事件。Command、Handler、Middleware 读取同一数据的作者绑定视图；平台类型通过开放注册表与 `adapter: 'icqq'` 推导。这个操作 Session 与持久化的个人 AI Session 分开。
 

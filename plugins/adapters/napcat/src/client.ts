@@ -1,5 +1,7 @@
-import { defineEndpointClient } from 'zhin.js/adapter';
-import type { NapCatEvent } from './protocol.js';
+import { EventEmitter } from 'node:events';
+import { callNapCatHttpAction, type NapCatEvent, type ResolvedNapCatConfig } from './protocol.js';
+import { callNapCatWsAction } from './ws-transport.js';
+import type { NapCatPendingAction, NapCatWsSocket } from './ws-types.js';
 
 export type NapcatApiCall = (
   action: string,
@@ -7,8 +9,37 @@ export type NapcatApiCall = (
 ) => Promise<unknown>;
 
 /** Transport-independent NapCat protocol Client produced by every Endpoint mode. */
-export class NapcatClient {
-  constructor(readonly callApi: NapcatApiCall) {}
+export class NapcatClient extends EventEmitter<Record<string, [NapCatEvent]>> {
+  protected transportSocket?: NapCatWsSocket;
+  protected readonly pendingActions = new Map<string, NapCatPendingAction>();
+  protected readonly actionSequence = { value: 0 };
+  constructor(
+    protected readonly protocolConfig: ResolvedNapCatConfig,
+    protected readonly httpAction: typeof callNapCatHttpAction = callNapCatHttpAction,
+    protected readonly executionSignal?: AbortSignal,
+  ) { super(); }
+
+  ingest(event: NapCatEvent): void {
+    this.emit('event', event);
+    const name = [event.post_type, event.message_type ?? event.notice_type ?? event.request_type, event.sub_type].filter(Boolean).join('.');
+    if (name && name !== 'event') this.emit(name, event);
+  }
+
+  protected get actionSocket(): NapCatWsSocket | undefined { return this.transportSocket; }
+
+  /** Actual HTTP/echo protocol state belongs to this Client instance. */
+  readonly callApi: NapcatApiCall = async (action, params = {}) => {
+    this.executionSignal?.throwIfAborted();
+    if (this.protocolConfig.connection === 'http') {
+      const response = await this.httpAction({
+        http_url: this.protocolConfig.http_url, access_token: this.protocolConfig.access_token,
+        signal: this.executionSignal,
+      }, action, params);
+      this.executionSignal?.throwIfAborted();
+      return response.data;
+    }
+    return callNapCatWsAction(this.actionSocket, this.pendingActions, this.actionSequence, action, params);
+  };
 
   async setTitle(groupId: number, userId: number, title: string, duration = -1): Promise<boolean> {
     await this.callApi('set_group_special_title', {
@@ -66,14 +97,3 @@ export class NapcatClient {
   }
 }
 export type NapcatClientEventMap = Record<string, NapCatEvent>;
-
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly napcat: {
-      readonly client: NapcatClient;
-      readonly events: NapcatClientEventMap;
-    };
-  }
-}
-
-export const napcatClient = defineEndpointClient<NapcatClient, NapcatClientEventMap>('napcat');

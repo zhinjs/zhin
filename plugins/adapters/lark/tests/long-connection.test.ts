@@ -1,3 +1,4 @@
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, rootPluginId } from 'zhin.js';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { resolveLarkConfig } from '../src/protocol.js';
@@ -5,9 +6,10 @@ import type { LarkLongConnectionOptions } from '../src/long-connection.js';
 
 describe('Lark long connection lifecycle', () => {
   afterEach(() => vi.useRealTimers());
-  function setup(connect = vi.fn(async () => {})) {
+  async function setup(connect = vi.fn(async () => {})) {
+    const receive = vi.fn(async (_event: unknown) => undefined);
     const sessions: Array<{ options: LarkLongConnectionOptions; close: ReturnType<typeof vi.fn> }> = [];
-    const endpoint = new LarkEndpoint({
+    const endpoint = await createEndpointHarness(() => new LarkEndpoint({
       id: capabilityId(rootPluginId('test'), 'adapter', 'lark'),
       config: resolveLarkConfig({ id: 'bot', appId: 'cli', appSecret: 'secret', mode: 'websocket' }),
       fetch: vi.fn(() => { throw new Error('HTTP must not be required'); }),
@@ -15,51 +17,49 @@ describe('Lark long connection lifecycle', () => {
         const close = vi.fn(); sessions.push({ options, close });
         return { connect, close };
       },
-    });
-    return { endpoint, sessions, connect };
+    }), { gateway: { receive }, capabilities: ['inbound', 'outbound'], operations: ['recall'] });
+    return { endpoint, sessions, connect, receive };
   }
   it('observes handshake, gates admission, and deduplicates message ids', async () => {
-    const { endpoint, sessions } = setup();
-    const emit = vi.spyOn(endpoint, 'emit').mockResolvedValue(undefined);
+    const { endpoint, sessions, receive: emit } = await setup();
     await endpoint.start();
-    expect(endpoint.transportState).toBe('open');
+    expect(endpoint.endpoint.transportState).toBe('open');
     const message = { message_id: 'om1', chat_id: 'oc1', chat_type: 'p2p', message_type: 'text', content: '{"text":"hello"}' };
     sessions[0]!.options.receive(message);
     expect(emit).not.toHaveBeenCalled();
     endpoint.open();
     sessions[0]!.options.receive(message); sessions[0]!.options.receive(message);
-    expect(emit).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(emit).toHaveBeenCalledTimes(1));
     await endpoint.stop();
     sessions[0]!.options.receive({ ...message, message_id: 'om2' });
     expect(emit).toHaveBeenCalledTimes(1);
-    expect(endpoint.transportState).toBe('stopped');
+    expect(endpoint.endpoint.transportState).toBe('stopped');
     expect(sessions[0]!.close).toHaveBeenCalledTimes(1);
   });
   it('cancels an in-progress connect and ignores late settlement', async () => {
     let finish!: () => void;
-    const { endpoint, sessions } = setup(vi.fn(() => new Promise<void>((resolve) => { finish = resolve; })));
-    const start = endpoint.start();
-    await Promise.resolve();
+    const { endpoint, sessions } = await setup(vi.fn(() => new Promise<void>((resolve) => { finish = resolve; })));
+    const start = endpoint.start().then(() => undefined, error => error);
+    await vi.waitFor(() => expect(sessions).toHaveLength(1));
     await endpoint.stop();
-    await start;
+    expect(await start).toMatchObject({ code: 'inactive' });
     finish(); await Promise.resolve();
-    expect(endpoint.transportState).toBe('stopped');
+    expect(endpoint.endpoint.transportState).toBe('stopped');
     expect(sessions[0]!.close).toHaveBeenCalledTimes(1);
   });
   it('reports initial failure without claiming readiness', async () => {
-    const { endpoint } = setup(vi.fn(async () => { throw new Error('handshake rejected'); }));
+    const { endpoint } = await setup(vi.fn(async () => { throw new Error('handshake rejected'); }));
     await expect(endpoint.start()).rejects.toThrow('handshake rejected');
-    expect(endpoint.transportState).toBe('stopped');
+    expect(endpoint.endpoint.transportState).toBe('stopped');
   });
   it('reconnects through the shared lifecycle and suppresses old receive callbacks', async () => {
     vi.useFakeTimers();
-    const { endpoint, sessions } = setup();
-    const emit = vi.spyOn(endpoint, 'emit').mockResolvedValue(undefined);
+    const { endpoint, sessions, receive: emit } = await setup();
     await endpoint.start(); endpoint.open();
     sessions[0]!.options.disconnected();
-    expect(endpoint.transportState).toBe('reconnecting');
+    expect(endpoint.endpoint.transportState).toBe('reconnecting');
     await vi.advanceTimersByTimeAsync(5_500);
-    expect(endpoint.transportState).toBe('open');
+    expect(endpoint.endpoint.transportState).toBe('open');
     expect(sessions).toHaveLength(2);
     sessions[0]!.options.receive({ message_id: 'old' });
     expect(emit).not.toHaveBeenCalled();

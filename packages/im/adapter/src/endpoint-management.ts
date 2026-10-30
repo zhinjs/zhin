@@ -1,3 +1,5 @@
+import { isEndpoint, endpointRuntimeOf } from './endpoint-specification.js';
+
 export interface EndpointFriend {
   /** 数字平台（QQ 系）用 number；Slack/LINE/微信系用 string。 */
   readonly user_id: number | string;
@@ -145,7 +147,7 @@ export function resolveEndpointManagement(endpoint: unknown): EndpointManagement
 export function listEndpointManagementCapabilities(
   endpoint: unknown,
 ): readonly EndpointManagementCapability[] {
-  const management = resolveEndpointManagement(endpoint);
+  const management = isEndpoint(endpoint) ? endpointRuntimeOf(endpoint).management : resolveEndpointManagement(endpoint);
   if (!management) return Object.freeze([]);
   return Object.freeze(endpointManagementCapabilityIds.filter(
     (capability) => typeof management[capability] === 'function',

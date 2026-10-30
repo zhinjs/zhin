@@ -1,5 +1,5 @@
 import { deflateSync } from 'node:zlib';
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
@@ -81,7 +81,7 @@ async function connected(config: Record<string, unknown> = {}, fetchOptions: Par
   const sockets: FakeSocket[] = [];
   let clock = 1_000_000;
   const receive = vi.fn(async (_payload: unknown) => undefined);
-  const endpoint = bindTestEndpoint(new BilibiliLiveEndpoint({
+  const endpoint = await createEndpointHarness(() => new BilibiliLiveEndpoint({
     id: endpointId,
     fetch,
     socket: (url) => {
@@ -96,7 +96,7 @@ async function connected(config: Record<string, unknown> = {}, fetchOptions: Par
     now: () => clock,
     chunkDelayMs: 0,
     config: resolveBilibiliLiveConfig({ id: 'live', roomId: 12, sessdata: 's', biliJct: 'c', ...config }),
-  }), { receive });
+  }), { name: 'bilibili-live', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway({ receive }) });
   await endpoint.start();
   endpoint.open();
   return { endpoint, sockets, receive, sends, advance: (ms: number) => { clock += ms; } };
@@ -113,9 +113,9 @@ describe('bilibili live adapter definition', () => {
 describe('BilibiliLiveEndpoint', () => {
   it('authenticates on the real room with the danmaku token and starts heartbeats', async () => {
     const { endpoint, sockets } = await connected({}, { selfMid: 99 });
-    expect(endpoint.roomId).toBe('5050');
-    expect(endpoint.transportState).toBe('open');
-    expect(endpoint.selfUserId).toBe('99');
+    expect(endpoint.endpoint.roomId).toBe('5050');
+    expect(endpoint.index.describe()[0]?.transportState).toBe('open');
+    expect(endpoint.index.connection('bilibili-live', endpoint.canonicalId)?.selfUserId).toBe('99');
     const socket = sockets[0]!;
     expect(socket.url).toBe('wss://live.example:2245/sub');
     expect(socket.binaryType).toBe('arraybuffer');
@@ -149,7 +149,7 @@ describe('BilibiliLiveEndpoint', () => {
 
   it('ignores danmaku before open', async () => {
     const { endpoint, sockets, receive } = await connected();
-    endpoint.close();
+    await endpoint.close();
     sockets[0]!.receive(danmuFrame('closed'));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(receive).not.toHaveBeenCalled();
@@ -194,7 +194,7 @@ describe('BilibiliLiveEndpoint', () => {
     const error = await endpoint.send({ conversation: conversation('5050'), payload: 'hi' }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(EndpointDeliveryError);
     expect(error).toMatchObject({ code: 'platform_error', disposition: 'not_sent' });
-    expect(endpoint.circuitBreaker?.code).toBe(10031);
+    expect(endpoint.endpoint.circuitBreaker?.code).toBe(10031);
     advance(60_000);
     await expect(endpoint.send({ conversation: conversation('5050'), payload: 'hi' })).rejects.toMatchObject({ code: 'circuit_open' });
     await endpoint.stop();

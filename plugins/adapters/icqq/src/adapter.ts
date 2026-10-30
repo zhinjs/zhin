@@ -4,11 +4,9 @@ import { loginAssistToken } from '@zhin.js/core/runtime';
 import { outboundHostToken } from 'zhin.js';
 import { IcqqEndpoint } from './endpoint.js';
 import { resolveIcqqConfig, type IcqqEndpointConfig } from './protocol.js';
-import { icqqRuntimeStateToken } from './icqq-runtime-state.js';
-import { icqqLoginControlToken } from './icqq-login-control.js';
 import type { IcqqClientEventMap } from './client.js';
 
-/** ICQQ account construction and its compatibility control projections belong to this Adapter. */
+/** ICQQ account construction and actual SDK ownership belong to this Adapter. */
 export class IcqqAdapter extends Adapter<IcqqEndpoint, IcqqEndpointConfig, IcqqClientEventMap> {
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
   override get configurationUpdateFields(): readonly string[] {
@@ -26,18 +24,6 @@ export class IcqqAdapter extends Adapter<IcqqEndpoint, IcqqEndpointConfig, IcqqC
       loginAssist: context.use(loginAssistToken), locale: context.use(projectLocaleToken),
       notifier: createAdapterOutageNotifier(outbound, config.notify),
     });
-    if (context.has?.(icqqRuntimeStateToken)) context.use(icqqRuntimeStateToken).endpoints.set(config.id, { id: config.id, mode: 'direct' });
-    if (context.has?.(icqqLoginControlToken)) context.use(icqqLoginControlToken).set(config.id, endpoint.loginControl);
     return endpoint;
-  }
-  protected override endpointDisposed(endpoint: IcqqEndpoint): void {
-    const context = this.#context;
-    if (context.has?.(icqqLoginControlToken)) {
-      const controls = context.use(icqqLoginControlToken);
-      if (controls.get(endpoint.endpointName) === endpoint.loginControl) {
-        controls.delete(endpoint.endpointName);
-        if (context.has?.(icqqRuntimeStateToken)) context.use(icqqRuntimeStateToken).endpoints.delete(endpoint.endpointName);
-      }
-    }
   }
 }

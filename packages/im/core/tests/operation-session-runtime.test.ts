@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { Adapter, AdapterIndex, adapterFeatureId, defineAdapter, createEndpointSpecification, endpointSpec,
   endpointEventGatewayToken, type EndpointDesiredSnapshot, type EndpointDesiredRepository, type EndpointSendRequest,
-  type PlatformEndpoint } from '@zhin.js/adapter';
+  type Endpoint as EndpointContract } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { MiddlewareIndex, middlewareFeatureId, defineMiddleware } from '@zhin.js/middleware';
 import { HandlerIndex, handlerFeatureId } from '@zhin.js/handler';
@@ -19,7 +19,7 @@ function deferred() {
 class SdkClient extends EventEmitter {
   nativeMethod() { return 'native'; }
 }
-class NativeEndpoint extends SdkClient implements PlatformEndpoint {
+class NativeEndpoint extends SdkClient implements EndpointContract {
   readonly sent: EndpointSendRequest[] = [];
   readonly stopped = vi.fn();
   readonly setGroupAdmin = vi.fn(async () => undefined);

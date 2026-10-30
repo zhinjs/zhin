@@ -1,4 +1,5 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { EventEmitter } from 'node:events';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
@@ -20,7 +21,12 @@ import { MilkyWssEndpoint } from '../src/wss-endpoint.js';
 const adapterFeature = featureId('zhin.adapter');
 const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'milky');
 const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
+const httpStub = { ws: vi.fn(() => ({ onConnection: vi.fn(() => () => undefined) })), route: vi.fn(() => () => undefined) } as unknown as HttpHost;
+
+function createSocket() {
+  const socket = Object.assign(new EventEmitter(), { readyState: 1, send: vi.fn(), ping: vi.fn(), close: vi.fn() });
+  queueMicrotask(() => socket.emit('open')); return socket;
+}
 
 const expectedCapabilities = ['listFriends', 'listGroups', 'listGroupMembers'];
 
@@ -124,22 +130,24 @@ describe('milky endpoint management wiring', () => {
     }) as MilkyWebhookConfig;
 
     const endpoints = [
-      bindTestEndpoint(new MilkyWsEndpoint({ id: endpointKey, gateway, config: wsConfig }), gateway, undefined),
-      bindTestEndpoint(new MilkyWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }), gateway, undefined),
-      bindTestEndpoint(new MilkySseEndpoint({ id: endpointKey, gateway, config: sseConfig }), gateway, undefined),
-      bindTestEndpoint(new MilkyWebhookEndpoint({ id: endpointKey, gateway, http: httpStub, config: webhookConfig }), gateway, undefined),
+      await createEndpointHarness(() => new MilkyWsEndpoint({ id: endpointKey, config: wsConfig, createWebSocket: createSocket }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
+      await createEndpointHarness(() => new MilkyWssEndpoint({ id: endpointKey, http: httpStub, config: wssConfig }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
+      await createEndpointHarness(() => new MilkySseEndpoint({ id: endpointKey, config: sseConfig, createSseStream: options => { queueMicrotask(() => options.onOpen?.()); return { closed: new Promise<void>(() => undefined), close() {} }; } }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
+      await createEndpointHarness(() => new MilkyWebhookEndpoint({ id: endpointKey, http: httpStub, config: webhookConfig }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
     ];
     for (const endpoint of endpoints) {
-      expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-      const call = vi.spyOn(endpoint.client, 'call').mockResolvedValue({
+      await endpoint.start(); endpoint.open();
+      expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual(expectedCapabilities);
+      const call = vi.spyOn(endpoint.endpoint, 'call').mockResolvedValue({
         status: 'ok',
         retcode: 0,
         data: { friends: [{ user_id: 10001, nickname: 'Alice' }] },
       });
-      await expect(endpoint.management.listFriends?.()).resolves.toEqual([
+      await expect(endpoint.index.management(endpoint.canonicalId)!.listFriends?.()).resolves.toEqual([
         { user_id: 10001, nickname: 'Alice', remark: '' },
       ]);
       expect(call).toHaveBeenCalledWith('get_friend_list', undefined);
+      await endpoint.stop();
     }
   });
 });

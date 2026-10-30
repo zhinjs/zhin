@@ -1,9 +1,11 @@
 /**
  * ICQQ login control surface exposed to the Plugin Runtime, Console and the
- * recovery command. One control per endpoint instance (UIN), provided by the
- * ICQQ plugin setup and filled by `adapters/icqq/create()`.
+ * recovery command. Controls are projected from actual current incarnations in
+ * the owning IcqqAdapter; no plugin resource keeps a second Endpoint directory.
  */
-import { createToken } from 'zhin.js';
+import { adapterFeatureId, isAdapterIndex } from 'zhin.js/adapter';
+import type { FeatureId, PluginId } from 'zhin.js';
+import { IcqqAdapter } from './adapter.js';
 import type { PendingLoginTask } from '@zhin.js/core';
 
 export interface IcqqLoginControlState {
@@ -23,8 +25,18 @@ export interface IcqqLoginControl {
   cancel(taskId: string, reason?: string): boolean;
 }
 
-/** `endpoint id (QQ uin)` → control for the current generation. */
-export const icqqLoginControlToken = createToken<Map<string, IcqqLoginControl>>(
-  'zhin.icqq.login-control',
-  'ICQQ login control surface for recovery commands',
-);
+/** Read the owning Adapter's actual incarnations; this projection retains no independent directory. */
+export function icqqLoginControls(context: Readonly<{ owner: PluginId | Readonly<{ id: PluginId }>; project<T>(id: FeatureId): T }>): ReadonlyMap<string, IcqqLoginControl> {
+  const index = context.project<unknown>(adapterFeatureId);
+  if (!isAdapterIndex(index)) throw new Error('ICQQ Adapter projection is unavailable');
+  const owner = typeof context.owner === 'string' ? context.owner : context.owner.id;
+  const controls = new Map<string, IcqqLoginControl>();
+  for (const adapter of index.forOwner(owner).adapters()) {
+    if (!(adapter instanceof IcqqAdapter)) continue;
+    for (const row of adapter.list()) {
+      const endpoint = adapter.getEndpoint(row.instanceId);
+      if (endpoint) controls.set(row.endpointId, endpoint.loginControl);
+    }
+  }
+  return controls;
+}

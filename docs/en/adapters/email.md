@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=75b5de0301a147f8 -->
@@ -30,12 +30,14 @@ pnpm add @zhin.js/adapter-email
 
 ## Plugin Runtime
 
+The owning `Adapter` manages desired accounts and running incarnations. The actual SDK or protocol Client implements structural `Endpoint`; framework hooks use `endpointSpec` without replacing native SDK APIs. Complete accepted callbacks enter through `events.run(...)` before deduplication and asynchronous normalization; see [Adapter authoring](/en/authoring/adapters).
+
 - `@zhin.js/adapter` — convention-based `adapters/email/index.ts` (`defineAdapter`)
-- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
+- `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json` (`smtp` / `imap`)
 
-Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the sender address)
+Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the sender address)
 Outbound: `send({ conversation, payload })` -> nodemailer (recipient is `conversation.id`; payload is rendered by gateway/core; no segment-mapper)
 
 ## Prerequisites

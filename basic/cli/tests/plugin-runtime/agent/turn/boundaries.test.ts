@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
+import type { UserInteractionRequest } from '@zhin.js/interaction';
 import type { AITriggerConfig } from '@zhin.js/core';
 import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
@@ -41,7 +42,10 @@ describe('Workroom Orchestrator turn routing', () => {
     $feature: 'zhin.agent/1' as const,
     name: 'support',
     qualifiedName: 'root/support',
+    displayName: 'Support', version: '1.0.0',
     description: 'support',
+    triggerRules: { filePatterns: [], keywords: [] },
+    entryPoints: ['system.md', 'boundaries.md', 'conventions.md'], workflows: [], knowledge: [],
     instructions: 'help',
     owner: rootPluginId(),
     source: '/agents/support.md',
@@ -104,7 +108,7 @@ describe('Workroom Orchestrator turn routing', () => {
 
 describe('Plugin Runtime Tool policy bridge', () => {
   it('requires a fresh human answer even for master and previously remembered permission', async () => {
-    const ask = vi.fn(async () => 'approve-once' as never);
+    const ask = vi.fn(async (_input: UserInteractionRequest) => 'approve-once' as never);
     const memory = { recall: vi.fn(() => true), remember: vi.fn() };
     const port = createRuntimeApprovalPort({ isMaster: true, memory,
       interaction: { ask, async sequence() { return {} as never; } } });
@@ -114,7 +118,9 @@ describe('Plugin Runtime Tool policy bridge', () => {
     await expect(port.requestApproval(request)).resolves.toBe(true);
     expect(ask).toHaveBeenCalledTimes(2);
     expect(memory.recall).not.toHaveBeenCalled(); expect(memory.remember).not.toHaveBeenCalled();
-    expect(ask.mock.calls[0][0].options.map(option => option.value)).toEqual(['reject', 'approve-once']);
+    const prompt = ask.mock.calls[0]?.[0];
+    if (prompt?.type !== 'select') throw new Error('Expected the real approval choice question');
+    expect(prompt.options.map(option => option.value)).toEqual(['reject', 'approve-once']);
     expect(runtimeApprovalPolicy('human')).toBe('human');
   });
   it('preserves never/on-risk/always for the Agent approval gate', () => {
@@ -226,7 +232,7 @@ describe('canonical IM TurnRequest ingress', () => {
     });
     const endpointId = message.conversation.endpoint.id;
     const connection = vi.fn((adapterKey, endpointKey) => adapterKey === endpointId && endpointKey === endpointId
-      ? { selfUserId: 'platform-account' }
+      ? { identity: message.conversation.endpoint, selfUserId: 'platform-account' }
       : undefined);
     const snapshot = { projections: new Map([[adapterFeatureId, { $projection: 'zhin.adapter-index/1', connection }]]) };
     const signal = new AbortController().signal;
@@ -240,7 +246,7 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(request.input.contextState).toEqual({ bot: { id: 'platform-account' } });
     expect(Object.isFrozen(state?.bot)).toBe(true);
     const nextGeneration = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: 'replacement-account' }),
+      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: message.conversation.endpoint, selfUserId: 'replacement-account' }),
     }]]) };
     expect(await resolveRuntimeTurnContextState(nextGeneration as never, message.conversation, signal)).toEqual({ bot: { id: 'replacement-account' } });
     expect(request.input.contextState?.bot?.id).toBe('platform-account');
@@ -251,7 +257,7 @@ describe('canonical IM TurnRequest ingress', () => {
       endpoint: '10001', self_id: '20002', botRole: 'owner', muteAll: false,
     } });
     const unknownAccount = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ name: '10001' }),
+      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: message.conversation.endpoint, name: '10001' }),
     }]]) };
     const signal = new AbortController().signal;
     expect(await resolveRuntimeTurnContextState(unknownAccount as never, message.conversation, signal)).toBeUndefined();
@@ -268,7 +274,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const conversation = { ...message.conversation, endpoint: { ...message.conversation.endpoint, adapter: 'icqq' } };
     const inspectGroupMember = vi.fn(async () => ({ canModerate: false, platformRole }));
     const snapshot = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: '8596238', management: { inspectGroupMember } }),
+      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => ({ inspectGroupMember }),
     }]]) };
     const signal = new AbortController().signal;
     const contextState = await resolveRuntimeTurnContextState(snapshot as never, conversation, signal);
@@ -285,7 +291,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const inspectGroupMember = vi.fn();
     const conversation = { endpoint: { id: 'endpoint', adapter: scope.adapter }, kind: scope.kind, id: 'scene' };
     const snapshot = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: 'actual-account', management: { inspectGroupMember } }),
+      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: 'actual-account' }), management: () => ({ inspectGroupMember }),
     }]]) };
     expect(await resolveRuntimeTurnContextState(snapshot as never, conversation, new AbortController().signal))
       .toEqual({ bot: { id: 'actual-account' } });
@@ -296,7 +302,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const conversation = { endpoint: { id: 'endpoint', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
     const signal = new AbortController().signal;
     const snapshot = (management?: object) => ({ projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: '8596238', management }),
+      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => management,
     }]]) });
     expect(await resolveRuntimeTurnContextState(snapshot() as never, conversation, signal))
       .toEqual({ bot: { id: '8596238', platformRoleError: 'unsupported' } });
@@ -385,7 +391,7 @@ describe('canonical IM TurnRequest ingress', () => {
     });
     const signal = new AbortController().signal;
     const readConversationContext = vi.fn(async () => ({ blocks: [], cursor: 0 }));
-    const commitConversationContext = vi.fn(async () => undefined);
+    const commitConversationContext = vi.fn(async (_consumer: string, _cursor: number) => undefined);
     const request = createRuntimeTurnRequest(message, 'look closer', {
       isMaster: false,
       isTrusted: true,
@@ -395,7 +401,7 @@ describe('canonical IM TurnRequest ingress', () => {
       signal,
       projectRoot: '/workspace', workspaceRoot: '/workspace',
       network: { enabled: true, httpsOnly: true, allowedDomains: ['example.com'] },
-      ports: {},
+      ports: {}, intent: { kind: 'new' },
       resolveReference: async (reference) => reference.kind === 'forward'
         ? ({
             status: 'resolved',
@@ -464,7 +470,7 @@ describe('canonical IM TurnRequest ingress', () => {
 
   it('fails closed when authenticated sender or endpoint identity is absent', () => {
     const signal = new AbortController().signal;
-    const options = { traceId: 't', turnId: 'u', signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {} } as const;
+    const options = { traceId: 't', turnId: 'u', signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } } as const;
     expect(() => createRuntimeTurnRequest(makeMessage({
       content: 'x', sender: null, metadata: { endpoint: 'bot' },
     }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('sender identity');
@@ -480,7 +486,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const request = createRuntimeTurnRequest(message, 'x', {
       isMaster: false,
       isTrusted: true,
-    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {} });
+    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } });
     expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
     expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
   });
@@ -709,7 +715,7 @@ describe('canonical IM interaction adapter', () => {
 
   it('can remember only the same sender and operation within one sandbox session', async () => {
     const remembered = new Set<string>();
-    const ask = vi.fn(async () => 'approve-always' as never);
+    const ask = vi.fn(async (_input: UserInteractionRequest) => 'approve-always' as never);
     const port = createRuntimeApprovalPort({
       isMaster: false,
       interaction: { ask, async sequence() { return {} as never; } },

@@ -4,7 +4,7 @@ import { RuntimeInteractionCoordinator } from '../../../../../../packages/im/cor
 import { describe, expect, it, vi } from 'vitest';
 import type { DecisionProvider } from '@zhin.js/ai';
 import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/runtime';
-import type { TurnRequest } from '@zhin.js/agent';
+import { requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../../packages/im/core/src/plugin-runtime/im/conversation-runtime.js';
@@ -21,13 +21,13 @@ describe('AgentTurnIngressRoute', () => {
     const snapshot = {
       root: rootPluginId(), resources: new Map(), tree: new Map(), capabilities: new Map(),
       projections: new Map([[adapterFeatureId, {
-        $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: '8596238', management: { inspectGroupMember } }),
+        $projection: 'zhin.adapter-index/1', connection: () => ({ identity: endpoint, selfUserId: '8596238' }), management: () => ({ inspectGroupMember }),
       }]]),
     } as unknown as RuntimeSnapshot;
     const read = vi.fn().mockResolvedValue({ agents: [], tools: [] });
     const executeLeased = vi.fn().mockResolvedValue({ status: 'completed', output: [] });
     const reply = vi.fn().mockResolvedValue({ status: 'sent' });
-    const message = { conversation, content: '#hello', endpointId: 'configured-bot', sender: { id: 'sender' }, $reply: reply } as Message;
+    const message = new RuntimeMessage(conversation, '#hello', 1, reply, { id: 'sender' }, {}, [], undefined, 'configured-bot');
     const retirement = new AbortController();
     const route = new AgentTurnIngressRoute({
       projectRoot: process.cwd(), runtime: { executeLeased } as never,
@@ -82,17 +82,14 @@ describe('AgentTurnIngressRoute', () => {
     const endpoint = { id: 'root\u0000zhin.adapter\u0000test', adapter: 'root' };
     const conversation = { endpoint, kind: scenario.source, id: 'source' };
     const reply = vi.fn().mockResolvedValue({ status: 'sent' });
-    const message = {
-      conversation, content: '#hello', endpointId: 'bot', sender: { id: 'sender' },
-      ...(scenario.messageId ? { message: { conversation, id: scenario.messageId } } : {}),
-      $reply: reply,
-    } as Message;
+    const message = new RuntimeMessage(conversation, '#hello', 1, reply, { id: 'sender' }, {}, [],
+      scenario.messageId ? { conversation, id: scenario.messageId } : undefined, 'bot');
     const snapshot = {
       root: rootPluginId(), resources: new Map(), tree: new Map(),
       projections: new Map([[adapterFeatureId, {
         $projection: 'zhin.adapter-index/1',
         connection: (adapter: string, id: string) => adapter === endpoint.id && id === endpoint.id
-          ? { selfUserId: 'actual-platform-account' }
+          ? { identity: endpoint, selfUserId: 'actual-platform-account' }
           : undefined,
       }]]),
       capabilities: new Map([[endpoint.id, { definition: { segments: {
@@ -168,12 +165,13 @@ describe('AgentTurnIngressRoute', () => {
 
   it('selects a visible specialist only when no deterministic Agent was selected', async () => {
     const specialist = agent('reminders');
-    const evaluate = vi.fn<DecisionProvider['evaluate']>().mockResolvedValue({
+    const { provider, evaluate } = decisionFixture();
+    evaluate.mockResolvedValue({
       model: 'jev-test', usage: { inputTokens: 1, outputTokens: 1 },
       answers: { candidate_0: { type: 'score', score: 0.95, confidence: 0.99, legend: { 0: 'irrelevant', 1: 'relevant' }, probabilities: { 0: 0.05, 1: 0.95 } } },
     });
     const decisionRuntime: AgentDecisionRuntime = {
-      provider: { evaluate }, config: { provider: '/typesafe', agents: { mode: 'active' } },
+      provider, config: { provider: '/typesafe', agents: { mode: 'active' } },
     };
     const selection = await selectDecisionAgentRoute({
       routed: { userText: 'Remind me tomorrow' }, capabilities: { agents: [specialist] },
@@ -185,30 +183,36 @@ describe('AgentTurnIngressRoute', () => {
 
   it.each(['platform', 'workroom', 'explicit'])('preserves %s routing without consulting Jev', async (kind) => {
     const specialist = agent('qq');
-    const evaluate = vi.fn<DecisionProvider['evaluate']>();
+    const { provider, evaluate } = decisionFixture();
     const routed = kind === 'platform' ? { userText: 'request', agent: specialist }
       : { userText: kind === 'explicit' ? '@zhin request' : 'request' };
     await expect(selectDecisionAgentRoute({
       routed, capabilities: { agents: [specialist] },
-      decisionRuntime: { provider: { evaluate }, config: { provider: '/typesafe', agents: { mode: 'active' } } },
+      decisionRuntime: { provider, config: { provider: '/typesafe', agents: { mode: 'active' } } },
       workroomTurn: kind === 'workroom', signal: new AbortController().signal,
     })).resolves.toBe(routed);
     expect(evaluate).not.toHaveBeenCalled();
   });
 
   it('keeps the current default when the active selector abstains', async () => {
-    const evaluate = vi.fn<DecisionProvider['evaluate']>().mockResolvedValue({
+    const { provider, evaluate } = decisionFixture();
+    evaluate.mockResolvedValue({
       model: 'jev-test', usage: { inputTokens: 1, outputTokens: 1 },
       answers: { candidate_0: { type: 'score', score: 0.01, confidence: 0.99, legend: { 0: 'irrelevant', 1: 'relevant' }, probabilities: { 0: 0.99, 1: 0.01 } } },
     });
     const routed = { userText: 'hello' };
     await expect(selectDecisionAgentRoute({
       routed, capabilities: { agents: [agent('reminders')] },
-      decisionRuntime: { provider: { evaluate }, config: { provider: '/typesafe', agents: { mode: 'active' } } },
+      decisionRuntime: { provider, config: { provider: '/typesafe', agents: { mode: 'active' } } },
       workroomTurn: false, signal: new AbortController().signal,
     })).resolves.toBe(routed);
   });
 });
+
+function decisionFixture() {
+  const provider: DecisionProvider = { async evaluate() { throw new Error('Unexpected synthetic decision request'); } };
+  return { provider, evaluate: vi.spyOn(provider, 'evaluate') };
+}
 
 function agent(name: string): AgentCapabilities['agents'][number] {
   return {
@@ -274,7 +278,7 @@ it('does not invent a prefix for an API message with no command environment', as
 it('passes captured ingress locale into a real pending human approval', async () => {
   const flow = localizedIngress({ prefix: '!', locale: 'en', text: 'hello', enabled: true,
     execute: async request => {
-      const result = await request.ports.approval!.requestApprovalOutcome!({ requestId: 'approval', question: 'Custom question', humanOnly: true, timeoutMs: 1000 });
+      const result = await requestApprovalOutcome(request.ports.approval!, { requestId: 'approval', toolName: 'synthetic-operation', question: 'Custom question', humanOnly: true, timeoutMs: 1000, signal: request.signal });
       expect(result).toMatchObject({ status: 'approved' });
       return { status: 'completed', output: [] };
     },

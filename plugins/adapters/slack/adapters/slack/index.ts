@@ -2,13 +2,10 @@
  * Convention entry: discover `adapters/slack/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
-import { SlackEndpoint } from '../../src/endpoint.js';
+import { SlackAdapter } from '../../src/adapter.js';
 import {
-  resolveSlackConfig,
   type SlackEndpointConfig,
 } from '../../src/protocol.js';
-import { slackRuntimeStateToken } from '../../src/slack-runtime-state.js';
 
 export { SlackEndpoint } from '../../src/endpoint.js';
 export type { SlackEndpointOptions, SlackSocketLike, SlackWebClientLike } from '../../src/endpoint.js';
@@ -24,23 +21,5 @@ export default defineAdapter<SlackEndpointConfig>({
     interactive: 'native',
     markdown: 'native',
   },
-  create(context) {
-    const config = resolveSlackConfig(context.config);
-    // 注册到插件运行时状态（slack endpoint list 的"运行中"数据源）
-    context.use(slackRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: config.mode,
-    });
-    if (config.mode === 'http') {
-      return new SlackEndpoint({
-        id: context.id,
-        http: context.use(httpHostToken),
-        config,
-      });
-    }
-    return new SlackEndpoint({
-      id: context.id,
-      config,
-    });
-  },
+  createAdapter: context => new SlackAdapter(context),
 });

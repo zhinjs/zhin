@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { dingtalkRuntimeStateToken } from './dingtalk-runtime-state.js';
 import { dingtalkConsoleSpec } from './console-spec.js';
 
 export function createDingtalkConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(dingtalkRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...dingtalkConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

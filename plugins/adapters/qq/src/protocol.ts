@@ -57,6 +57,8 @@ export type ResolvedQqConfig = ResolvedQqWebsocketConfig | ResolvedQqHttpConfig;
 export type QqChannelKind = 'private' | 'group' | 'channel' | 'direct';
 
 export interface QqInboundMessage {
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly id: string;
   readonly content: string;
   readonly channelKind: QqChannelKind;

@@ -36,7 +36,7 @@ export default defineAgentTool({
         leaveGroup: false,
       },
     };
-    const api = context.$client.api;
+    const api = context.$client;
     if (conversation.kind === 'group') {
       const [state, info] = await Promise.all([
         api.groupService.getBotState(conversation.id),

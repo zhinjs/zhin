@@ -1,4 +1,4 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { createCipheriv, createHash, randomBytes } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -15,7 +15,6 @@ import {
   type WecomEndpointConfig,
   type WecomMessage,
 } from '../src/protocol.js';
-import { wecomClient } from '../src/client.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -28,7 +27,7 @@ const TOKEN = 'wecom-test-token';
 
 const baseConfig = resolveWecomConfig({
   id: 'test-wecom-bot',
-  corpId: CORP_ID,
+  corpId: CORP_ID, agentId: '100001',
   agentSecret: 'test-agent-secret',
   token: TOKEN,
   encodingAESKey: ENCODING_AES_KEY,
@@ -106,7 +105,7 @@ describe('wecom protocol helpers', () => {
   it('resolves plugin config with defaults', () => {
     const resolved = resolveWecomConfig({
       id: 'wecom-bot',
-      corpId: 'c',
+      corpId: 'c', agentId: '100001',
       agentSecret: 's',
       token: 't',
       encodingAESKey: ENCODING_AES_KEY,
@@ -123,7 +122,7 @@ describe('wecom protocol helpers', () => {
     vi.stubEnv('WECOM_AES_KEY', ENCODING_AES_KEY);
     expect(() => resolveWecomConfig({
       id: 'wecom-bot',
-      corpId: '',
+      corpId: '', agentId: '100001',
       agentSecret: '',
       token: '',
       encodingAESKey: '',
@@ -131,7 +130,7 @@ describe('wecom protocol helpers', () => {
     expect(() => resolveWecomConfig({
       endpoints: [{
         id: 'nested-bot',
-        corpId: 'nested-corp',
+        corpId: 'nested-corp', agentId: '100001',
         agentSecret: 'nested-secret',
         token: 'nested-token',
         encodingAESKey: ENCODING_AES_KEY,
@@ -221,13 +220,13 @@ describe('wecom plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway,
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -250,13 +249,13 @@ describe('wecom plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway,
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -300,13 +299,13 @@ describe('wecom plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -330,17 +329,17 @@ describe('wecom plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     // intentionally not open()
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
@@ -349,7 +348,7 @@ describe('wecom plugin runtime adapter', () => {
     const fetchMock = mockFetchOk('out-42');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -358,10 +357,10 @@ describe('wecom plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({ conversation: privateConversation('user001'), payload: 'pong' });
@@ -400,7 +399,7 @@ describe('wecom plugin runtime adapter', () => {
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -409,10 +408,10 @@ describe('wecom plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -449,7 +448,7 @@ describe('wecom plugin runtime adapter', () => {
     const fetchMock = mockFetchOk('out-11');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -458,10 +457,10 @@ describe('wecom plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -486,7 +485,7 @@ describe('wecom plugin runtime adapter', () => {
     const fetchMock = mockFetchOk('out-12');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -495,10 +494,10 @@ describe('wecom plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -547,7 +546,7 @@ describe('wecom plugin runtime adapter', () => {
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -556,10 +555,10 @@ describe('wecom plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -584,10 +583,10 @@ describe('wecom plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('registers agent endpoint on start', async () => {
+  it('projects the actual Endpoint through the owning AdapterIndex', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new WecomEndpoint({
+    const endpoint = await createEndpointHarness(() => new WecomEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wecom'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -596,14 +595,14 @@ describe('wecom plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     await endpoint.start();
     await http.listen();
-    expect(wecomClient.get(endpointClientContext(endpoint), 'test-wecom-bot'))
-      .toBe(endpoint.client);
+    expect(endpoint.index.client('test-endpoint', endpoint.canonicalId))
+      .toBe(endpoint.endpoint);
     await endpoint.stop();
   });
 });
@@ -614,7 +613,7 @@ it('uses each send operation language for link defaults while preserving explici
   const http = createHttpHost();
   hosts.push(http);
   const gateway = { receive: vi.fn(async () => ({ matched: false })), send: vi.fn(async () => 'sent') };
-  const endpoint = bindTestEndpoint(new WecomEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'wecom'), gateway, http, config: baseConfig, fetch: fetchMock }), gateway, undefined);
+  const endpoint = await createEndpointHarness(() => new WecomEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'wecom'), gateway, http, config: baseConfig, fetch: fetchMock }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
   await endpoint.start();
   try {
     for (const [locale, title] of [['en', undefined], ['zh-CN', undefined], ['en', '用户标题']] as const) {

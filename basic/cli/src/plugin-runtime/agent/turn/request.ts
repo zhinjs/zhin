@@ -12,7 +12,6 @@ import type { UserInteraction } from '@zhin.js/interaction';
 import {
   adapterFeatureId,
   isAdapterIndex,
-  resolveEndpointManagement,
   type GroupMemberProfile,
   type GroupSceneFacts,
 } from '@zhin.js/adapter';
@@ -245,7 +244,9 @@ export async function resolveRuntimeTurnContextState(
   if (conversation.endpoint.adapter !== 'icqq' || conversation.kind !== 'group') {
     return Object.freeze({ bot: Object.freeze(bot) });
   }
-  const management = resolveEndpointManagement(endpoint);
+  // Each inspection supplies its own signal: foreground turn or generation-owned background refresh.
+  // The captured port still pins the exact source incarnation for every invocation.
+  const management = adapters.management(endpoint.identity.id);
   if (!management?.inspectGroupMember && !management?.inspectGroupMemberProfile) {
     return Object.freeze({ bot: Object.freeze({ ...bot, platformRoleError: 'unsupported' }) });
   }

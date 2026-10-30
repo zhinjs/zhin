@@ -1,24 +1,28 @@
 import type { UserInteraction } from '@zhin.js/interaction';
 import { describe, expect, it, vi } from 'vitest';
-import { Adapter, AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken,
+import { Adapter, AdapterIndex, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken,
   type EndpointSendRequest, type EndpointDesiredRepository, type EndpointDesiredSnapshot, type EndpointEvent } from '@zhin.js/adapter';
 import { HandlerIndex, handlerFeatureId } from '@zhin.js/handler';
-import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState, type FeatureId } from '@zhin.js/plugin-runtime';
 import { readOperationSession } from '@zhin.js/feature-kit';
 import { defineHandler } from '../src/feature/handler.js';
 import { ImRuntime, type IncomingMessage, type Message, type IncomingNotice, type IncomingRequest, type IncomingSystemEvent, type Notice, type Request, type SystemEvent } from '../src/plugin-runtime/im/index.js';
 
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
-class EventEndpoint extends Endpoint<{ account: string }> {
-  readonly client: { account: string };
+class EventClient {
   readonly stopped = vi.fn();
-  onStart?: () => Promise<void> | undefined;
   readonly sent: EndpointSendRequest[] = [];
-  constructor(account: string) { super(); this.client = { account }; }
-  start() { return this.onStart?.(); } open() {} close() {} stop() { this.stopped(); }
+  constructor(readonly account: string) {}
   send(request: EndpointSendRequest) { this.sent.push(request); return `sent-${this.sent.length}`; }
-  receiveMessage(input: IncomingMessage) { return this.emit('message.receive', input); }
-  receive(input: IncomingRequest | IncomingNotice | IncomingSystemEvent) { return this.emit(`${input.type}.receive`, input); }
+}
+class EventEndpoint extends EventClient implements Endpoint {
+  onStart?: () => Promise<void> | undefined;
+  readonly [endpointSpec] = createEndpointSpecification(this, {
+    start: () => this.onStart?.(), open() {}, close() {}, stop: () => { this.stopped(); },
+    send: request => this.send(request),
+  });
+  receiveMessage(input: IncomingMessage) { return this[endpointSpec].events.emit('message.receive', input); }
+  receive(input: IncomingRequest | IncomingNotice | IncomingSystemEvent) { return this[endpointSpec].events.emit(`${input.type}.receive`, input); }
 }
 class EventAdapter extends Adapter<EventEndpoint> {
   onStart?: (endpoint: EventEndpoint) => Promise<void>;
@@ -62,7 +66,7 @@ async function fixture(callbacks: { message?: (message: Message) => Promise<void
     let released = false;
     return Object.freeze({ ...lease, release: () => { if (!released) { held--; released = true; } lease.release(); } });
   });
-  const store = new SnapshotStore({ ...base, projections: new Map<string, unknown>([[adapterFeatureId, index], [handlerFeatureId, new HandlerIndex(handlers, view)]]) as SnapshotState['projections'] });
+  const store = new SnapshotStore({ ...base, projections: new Map<FeatureId, unknown>([[adapterFeatureId, index], [handlerFeatureId, new HandlerIndex(handlers, view)]]) });
   im.attach(store); await index.start(); index.open();
   const rows = adapter.list(), one = adapter.getEndpoint(rows[0]!.instanceId)!, two = adapter.getEndpoint(rows[1]!.instanceId)!;
   const approved = vi.fn(async () => undefined), rejected = vi.fn(async () => undefined);
@@ -81,21 +85,21 @@ describe('canonical Endpoint event operation lifetime', () => {
       const third = added.endpoints.find(endpoint => endpoint.endpointId === 'third')!;
       expect((await f.adapter.start(third.instanceId, f.adapter.revision)).execution.status).toBe('applied');
       expect(f.received).toHaveLength(1); expect(f.received[0]!.payload).toMatchObject({ id: 'starting-online', name: 'system.online' });
-      expect(f.received[0]!.client).toBe(f.adapter.getEndpoint(third.instanceId)!.client); expect(f.held()).toBe(0);
+      expect(f.received[0]!.client).toBe(f.adapter.getEndpoint(third.instanceId)!); expect(f.held()).toBe(0);
     } finally { await f.close(); }
   });
   it('admits a captured message during SDK start while keeping its reply send behind ready', async () => {
     const native = { buffer: Buffer.from('native') }; let source: EventEndpoint | undefined;
     const f = await fixture({ message: async message => {
       const session = readOperationSession(message)!;
-      expect(session.event).toBe(native); expect(session.endpoint).toBe(source); expect(message.$client).toBe(source!.client);
+      expect(session.event).toBe(native); expect(session.endpoint).toBe(source); expect(message.$client).toBe(source!);
       expect((await session.reply('before ready'))).toMatchObject({ status: 'failed' });
       expect(source!.sent).toEqual([]);
     } });
     try {
       f.adapter.onStart = async endpoint => {
         source = endpoint;
-        await endpoint.receiveMessage({ conversation: { endpoint: endpoint.identity, kind: 'private', id: 'user' }, sender: { id: 'user' }, content: 'hello', event: native });
+        await endpoint.receiveMessage({ conversation: { endpoint: endpoint[endpointSpec].identity, kind: 'private', id: 'user' }, sender: { id: 'user' }, content: 'hello', event: native });
       };
       const added = await f.adapter.add(f.adapter.revision, { endpointId: 'third', config: { id: 'third' } });
       const third = added.endpoints.find(endpoint => endpoint.endpointId === 'third')!;
@@ -202,7 +206,7 @@ describe('canonical Endpoint event operation lifetime', () => {
         { name: 'notice.receive', payload: { type: 'notice', id: 'notice', timestamp: 123, metadata: { marker: 'notice' }, actor: { id: 'person' }, conversation: { kind: 'group', id: 'group', threadId: 'thread', parent: { id: 'parent' } } } },
         { name: 'system.receive', payload: { type: 'system', id: 'system', timestamp: 456, metadata: { marker: 'system' } } },
       ]);
-      expect(f.received[0]!.client).toBe(f.one.client); expect(f.received[1]!.client).toBe(f.two.client);
+      expect(f.received[0]!.client).toBe(f.one); expect(f.received[1]!.client).toBe(f.two);
       expect(f.received.every(event => readOperationSession(event) === undefined)).toBe(true); expect(f.held()).toBe(0);
     } finally { await f.close(); }
   });

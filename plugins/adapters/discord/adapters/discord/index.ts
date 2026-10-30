@@ -2,23 +2,16 @@
  * Convention entry: discover `adapters/discord/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
+import { DiscordAdapter } from '../../src/adapter.js';
 import {
-  DiscordGatewayEndpoint,
-  DiscordInteractionsEndpoint,
-} from '../../src/endpoint.js';
-import {
-  resolveDiscordConfig,
   type DiscordEndpointConfig,
 } from '../../src/protocol.js';
-import { discordRuntimeStateToken } from '../../src/discord-runtime-state.js';
 
 export {
   DiscordGatewayEndpoint,
   DiscordInteractionsEndpoint,
 } from '../../src/endpoint.js';
 export type {
-  CreateDiscordClient,
   DiscordClientTransport,
   DiscordEndpointOptions,
   DiscordInteractionsEndpointOptions,
@@ -35,23 +28,5 @@ export default defineAdapter<DiscordEndpointConfig>({
     interactive: 'native',
     markdown: 'native',
   },
-  create(context) {
-    const config = resolveDiscordConfig(context.config);
-    // 注册到插件运行时状态（discord endpoint list 的"运行中"数据源）
-    context.use(discordRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: config.connection,
-    });
-    if (config.connection === 'interactions') {
-      return new DiscordInteractionsEndpoint({
-        id: context.id,
-        http: context.use(httpHostToken),
-        config,
-      });
-    }
-    return new DiscordGatewayEndpoint({
-      id: context.id,
-      config,
-    });
-  },
+  createAdapter: context => new DiscordAdapter(context),
 });

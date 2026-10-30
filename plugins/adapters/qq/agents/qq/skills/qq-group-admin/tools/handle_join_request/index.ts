@@ -21,7 +21,7 @@ export default defineAgentTool({
   async execute({ user_id, join_request_id, approve, reason, blacklist }, context) {
     const group = currentGroup(context);
     if (!await requireGroupManager(context, group)) return { success: false, message: t(context.locale, 'botNotManager') };
-    await context.$client.api.groupService.approveJoinRequest(group, user_id, {
+    await context.$client.groupService.approveJoinRequest(group, user_id, {
       op: approve ? 'approve' : 'decline',
       ...(join_request_id ? { join_request_id } : {}),
       ...(!approve && reason ? { reject_reason: reason } : {}),

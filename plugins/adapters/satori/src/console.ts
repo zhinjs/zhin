@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { satoriRuntimeStateToken } from './satori-runtime-state.js';
 import { satoriConsoleSpec } from './console-spec.js';
 
 export function createSatoriConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(satoriRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...satoriConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

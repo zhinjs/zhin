@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
-import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
+import { childPluginId, createCapabilitySlot, rootPluginId, type PluginId, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { Message } from '@zhin.js/core/runtime';
 import { createEndpointRoleResolver, createSenderEnricher } from '../../src/plugin-runtime/sender-enrichment.js';
 import { resolveOwnerForRuntimeMessage, resolveTrustedForRuntimeMessage } from '../../src/plugin-runtime/agent/turn/request.js';
 
 const document = (configs: Record<string, unknown>) => ({ configVersion: 2 as const,
   plugins: Object.fromEntries(Object.keys(configs).map(key => [key, '@fixture/adapter'])), ...configs });
-class LocalEndpoint extends Endpoint {
-  readonly client = {};
-  start() {} open() {} close() {} stop() {}
+class LocalClient {}
+class LocalEndpoint extends LocalClient implements Endpoint {
+  readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {} });
 }
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
@@ -17,9 +17,9 @@ async function runtime(configs: Record<string, unknown>) {
   const root = rootPluginId();
   const slots = Object.keys(configs).map(key => createCapabilitySlot({ owner: childPluginId(root, key),
     feature: adapterFeatureId, localName: 'shared-capability-name', source: '/fixture/adapter.ts',
-    definition: defineAdapter({ capabilities: ['inbound'], create: () => new LocalEndpoint() }) }));
+    definition: defineAdapter({ capabilities: ['inbound'], createAdapter: () => new class extends Adapter<LocalEndpoint> { protected createEndpoint() { return new LocalEndpoint(); } }() }) }));
   const snapshot: RuntimeSnapshot = { generation: 7, root,
-    tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@fixture/root', packageRoot: '/fixture', children: slots.map(slot => slot.owner) }],
+    tree: new Map<PluginId, PluginNodeSnapshot>([[root, { id: root, instanceKey: 'root', packageName: '@fixture/root', packageRoot: '/fixture', children: slots.map(slot => slot.owner) }],
       ...slots.map((slot, i) => [slot.owner, { id: slot.owner, instanceKey: Object.keys(configs)[i]!, packageName: '@fixture/same-adapter', packageRoot: '/fixture', children: [] }] as const)]),
     config: new Map(slots.map((slot, i) => [slot.owner, configs[Object.keys(configs)[i]!]])),
     resources: new Map(slots.map(slot => [slot.owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])])),

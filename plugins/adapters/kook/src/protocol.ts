@@ -114,6 +114,8 @@ export interface KookWebhookFrame {
 export type ResolvedKookConfig = ResolvedKookWebsocketConfig | ResolvedKookWebhookConfig;
 
 export interface KookInboundMessage {
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly id: string;
   readonly content: string;
   readonly channelKind: 'private' | 'channel';
@@ -445,6 +447,8 @@ export function normalizeKookWebhookEvent(
 
   return {
     id: String(event.msg_id),
+    event,
+    ...(typeof event.msg_timestamp === 'number' ? { platformSentAt: event.msg_timestamp } : {}),
     content: event.content ?? '',
     channelKind,
     channelId,
@@ -460,7 +464,7 @@ export function normalizeKookWebhookEvent(
 }
 
 /** Native Card return-val events; routing and actor must come from the click event. */
-export function normalizeKookButtonEvent(raw: unknown): { id: string; sourceMessageId: string; payload: string; userId: string; channelKind: 'private' | 'channel'; channelId: string; timestamp: number } | null {
+export function normalizeKookButtonEvent(raw: unknown): { event: unknown; platformSentAt?: number; id: string; sourceMessageId: string; payload: string; userId: string; channelKind: 'private' | 'channel'; channelId: string; timestamp: number } | null {
   if (!raw || typeof raw !== 'object') return null;
   const event = raw as KookWebhookEventData;
   if (event.extra?.type !== 'message_btn_click') return null;
@@ -473,5 +477,5 @@ export function normalizeKookButtonEvent(raw: unknown): { id: string; sourceMess
   const channelId = channelKind === 'private' ? String(body.user_id) : String(bodyTarget || event.target_id || '');
   if (!channelId) return null;
   const timestamp = event.msg_timestamp ?? Date.now();
-  return { id: String(event.msg_id || `button:${body.msg_id}:${timestamp}`), sourceMessageId: String(body.msg_id), payload: body.value, userId: String(body.user_id), channelKind, channelId, timestamp };
+  return { event: raw, ...(typeof event.msg_timestamp === 'number' ? { platformSentAt: event.msg_timestamp } : {}), id: String(event.msg_id || `button:${body.msg_id}:${timestamp}`), sourceMessageId: String(body.msg_id), payload: body.value, userId: String(body.user_id), channelKind, channelId, timestamp };
 }

@@ -1,9 +1,9 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
+import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { createHttpHost } from '@zhin.js/host-http';
-import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type PluginId, type PluginNodeSnapshot, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { registerWorkspaceConversationRoutes } from '../../../src/plugin-runtime/console/workspace-conversation-routes.js';
 import { defineWorkspaceConversationTable } from '../../../src/plugin-runtime/console/workspace-conversations.js';
@@ -30,17 +30,19 @@ async function fixture(options: { filename?: string; unavailable?: boolean } = {
   const connection = (owner: string) => ({ target: 'sandbox-bot', owner, placeholder: false, socket: { readyState: 1 } });
   const connections = new Map([['first-page', connection('configured-owner')], ['second-page', connection('configured-owner')], ['other-owner', connection('other-owner')]]);
   const secondConnections = new Map([['other-endpoint', connection('configured-owner')]]);
-  class TestEndpoint extends Endpoint<object> {
-    constructor(readonly client: object) { super(); }
-    start() {} open() {} close() {} stop() {}
-    send() { throw new Error('Directory reads and writes must not send messages'); }
+  type WorkspaceConnections = typeof connections;
+  class WorkspaceClient {
+    constructor(private readonly connections: WorkspaceConnections) {}
+    connectionById(id: string) { return this.connections.get(id); }
+    send(): never { throw new Error('Directory reads and writes must not send messages'); }
+  }
+  class TestEndpoint extends WorkspaceClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: () => this.send() });
   }
   const root = rootPluginId(), owners = [childPluginId(root, 'sandbox-one'), childPluginId(root, 'sandbox-two')];
   const slots = owners.map((owner, index) => createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'sandbox', source: '/sandbox/adapters/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => new TestEndpoint({
-      connectionById: (id: string) => (index === 0 ? connections : secondConnections).get(id),
-    }) }) }));
-  const base: SnapshotState = { root, tree: new Map([
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(index === 0 ? connections : secondConnections); } }() }) }));
+  const base: SnapshotState = { root, tree: new Map<PluginId, PluginNodeSnapshot>([
     [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: directory, children: owners }],
     ...owners.map(owner => [owner, { id: owner, instanceKey: String(owner), packageName: '@zhin.js/adapter-sandbox', packageRoot: directory, parent: root, children: [] }] as const),
   ]), config: new Map(), resources: new Map(owners.map(owner => [owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])])),

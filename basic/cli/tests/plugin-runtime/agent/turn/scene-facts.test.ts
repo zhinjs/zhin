@@ -10,7 +10,9 @@ import {
 const conversation = { endpoint: { id: 'endpoint', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
 
 function generation(management: object | undefined, selfUserId = '8596238') {
-  const index = { $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId, management }) };
+  const index = { $projection: 'zhin.adapter-index/1',
+    connection: () => Object.freeze({ identity: conversation.endpoint, selfUserId }),
+    management: () => management };
   return { index, snapshot: { projections: new Map([[adapterFeatureId, index]]) } as never };
 }
 

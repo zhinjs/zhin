@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=c700b782d7d3ce67 -->
@@ -33,13 +33,15 @@ pnpm add @zhin.js/adapter-satori
 
 ## Plugin Runtime
 
+The owning `Adapter` manages desired accounts and running incarnations. The actual SDK or protocol Client implements structural `Endpoint`; framework hooks use `endpointSpec` without replacing native SDK APIs. Complete accepted callbacks enter through `events.run(...)` before deduplication and asynchronous normalization; see [Adapter authoring](/en/authoring/adapters).
+
 - `@zhin.js/adapter` — convention-based `adapters/satori/index.ts` (`defineAdapter`)
-- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
+- `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - `@zhin.js/host-http` — Webhook mode requires `httpHostToken` to register POST route
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json` (`baseUrl` / `token` / ...)
 
-Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId; guild lands in `parent`)
+Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (`conversation.id` is the channelId; guild lands in `parent`)
 Outbound: `send({ conversation, payload })` -> Satori `message.create` (`channel_id` is `conversation.id`; payload is rendered by gateway/core; no segment-mapper)
 
 Inbound `metadata.mentioned`: set to `true` when the id of an `<at id="..."/>` element in the message content equals the login selfId (from READY/event `login.user.id`).
@@ -61,19 +63,23 @@ satori:
   connection: ws
   heartbeat_interval: 10000
   endpoints:
-    - name: satori-bot
+    - id: satori-bot
+      platform: qq
+      userId: "123456789"
       baseUrl: "http://127.0.0.1:5140"
       token: "${SATORI_TOKEN}"
 ```
 
 The root plugin the main configuration `plugins` map (or project graph) must reference `@zhin.js/adapter-satori` (`instanceKey: satori`).
 
-### Optional Fields
+### Endpoint Fields
 
 | Field | Description |
 |-------|-------------|
 | `heartbeat_interval` | WS PING interval (milliseconds), default `10000` |
-| `token` | Bearer; can also be set via the `SATORI_TOKEN` environment variable |
+| `platform` | Required remote login platform |
+| `userId` | Required remote login user identity (string) |
+| `token` | Bearer; YAML may reference `${SATORI_TOKEN}` |
 
 ### Webhook
 
@@ -84,13 +90,15 @@ plugins:
 satori:
   connection: webhook
   endpoints:
-    - name: satori-bot
+    - id: satori-bot
+      platform: qq
+      userId: "123456789"
       baseUrl: "http://127.0.0.1:5140"
       path: "/satori/webhook"
       token: "${SATORI_TOKEN}"
 ```
 
-The SDK sends POST requests to `path`, with header `Satori-Opcode: 0` indicating events; the adapter obtains the platform / userId from the `login` in the first event for subsequent API calls.
+The SDK sends POST requests to `path`, with header `Satori-Opcode: 0` indicating events; each Endpoint must configure `platform` and `userId`. Only events with an exactly matching login are admitted, and API requests use that same fixed identity. Other logins in READY do not change the selected account.
 
 ## Authentication
 
@@ -117,8 +125,10 @@ See `skills/satori/SKILL.md` for skill documentation.
 Open the Console **Satori** page (route `/satori`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.satori.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `satori:read`; writes require `satori:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `satori endpoint add` command.
 

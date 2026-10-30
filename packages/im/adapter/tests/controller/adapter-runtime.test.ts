@@ -1,9 +1,10 @@
+import { bindPlatformEndpoint } from '../../src/endpoint-specification.js';
 import { EventEmitter } from 'node:events';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId, type CapabilityId, type RuntimeSnapshot, type TokenId, createCapabilitySlot } from '@zhin.js/plugin-runtime';
-import { Adapter, AdapterIndex, AdapterManagementError, endpointEventGatewayToken, bindPlatformEndpoint, createEndpointSpecification, endpointSpec,
+import { Adapter, AdapterIndex, AdapterManagementError, endpointEventGatewayToken, createEndpointSpecification, endpointSpec,
   defineAdapter, parseAdapterDefinition, type EndpointCreationContext, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
-  type EndpointDesiredRecord, type PlatformEndpoint } from '../../src/index.js';
+  type EndpointDesiredRecord, type EndpointPreviousIdentity, type EndpointConnectionInfo, type Endpoint } from '../../src/index.js';
 
 const adapterId = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'native');
 function gate<T>() {
@@ -24,11 +25,11 @@ class NativeClient extends EventEmitter {
   readonly nativeCalls: string[] = [];
   nativeMethod(value: string): number { this.nativeCalls.push(value); return this.nativeCalls.length; }
 }
-class NativeEndpoint extends NativeClient implements PlatformEndpoint {
+class NativeEndpoint extends NativeClient implements Endpoint {
   readonly listed = vi.fn(async () => []);
   readonly recalled = vi.fn(async () => undefined);
   readonly stopped = vi.fn(async () => undefined);
-  readonly connected = vi.fn(async (_signal: AbortSignal) => undefined);
+  readonly connected = vi.fn(async (_signal: AbortSignal): Promise<void> => undefined);
   readonly sent = vi.fn(async () => 'message-id');
   readonly [endpointSpec] = createEndpointSpecification(this, {
     start: signal => this.connected(signal), open: () => undefined, close: async () => undefined,
@@ -62,7 +63,7 @@ class SocketClient {
   readonly writes: string[] = [];
   send(data: string): number { this.writes.push(data); return this.writes.length; }
 }
-class SocketEndpoint extends SocketClient implements PlatformEndpoint {
+class SocketEndpoint extends SocketClient implements Endpoint {
   readonly [endpointSpec] = createEndpointSpecification(this, {
     start: async () => undefined, open: () => undefined, close: () => undefined, stop: () => undefined,
     send: async request => { this.send(String(request.payload)); return 'socket-message'; },
@@ -294,10 +295,16 @@ describe('Adapter-owned native Endpoint runtime', () => {
     const original = adapter.getEndpoint(one.instanceId)!;
     expect(index.adapterForEndpoint(one.canonicalId)).toBe(adapter);
     expect(index.client('native', 'one')).toBe(original);
+    expectTypeOf(index.connection).returns.toEqualTypeOf<EndpointConnectionInfo | undefined>();
     const metadata = index.connection('native', 'one')!;
     expect(metadata.identity.id).toBe(one.canonicalId);
-    expect(metadata.client).toBe(original);
-    expect(metadata.management).toBeDefined();
+    expect(Object.isFrozen(metadata)).toBe(true);
+    expect(Object.isFrozen(metadata.identity)).toBe(true);
+    expect(Object.keys(metadata).sort()).toEqual(['eventDiagnostics', 'identity', 'name', 'selfUserId', 'transportState']);
+    expect(Reflect.get(metadata, 'client')).toBeUndefined();
+    expect(Reflect.get(metadata, 'management')).toBeUndefined();
+    expect(Reflect.get(metadata, 'start')).toBeUndefined();
+    expect(index.management(one.canonicalId)).toBeDefined();
     expect(metadata.selfUserId).toBeUndefined();
     expect(index.resolve('native', 'one')).toBe(one.canonicalId);
     const enumeration = vi.spyOn(adapter, 'runtimeEntries');
@@ -329,6 +336,27 @@ describe('Adapter-owned native Endpoint runtime', () => {
     expect(adapter.find(one.canonicalId)).toBeUndefined();
     expect(adapter.find(recreated.canonicalId)?.desired.instanceId).toBe(recreated.instanceId);
     await index.stop();
+  });
+
+  it('drains a pending-start native receipt before SDK shutdown even before a canonical lease exists', async () => {
+    const { adapter } = await create();
+    const ready = gate<void>(), normalization = gate<void>();
+    adapter.connect = endpoint => { endpoint.connected.mockImplementation(() => ready.promise); };
+    const target = await add(adapter, 'pending-receipt');
+    await adapter.start(target.instanceId, adapter.revision, { waitForExecution: false });
+    await vi.waitFor(() => expect(adapter.created[0]?.connected).toHaveBeenCalledOnce());
+    const endpoint = adapter.created[0];
+    const receipt = endpoint[endpointSpec].events.run(() => normalization.promise);
+    try {
+      await adapter.stop(target.instanceId, adapter.revision, { waitForExecution: false });
+      await vi.waitFor(() => expect(adapter.getEndpoint(target.instanceId)).toBeUndefined());
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(endpoint.stopped).not.toHaveBeenCalled();
+    } finally {
+      normalization.resolve(); ready.resolve(); await receipt;
+      await vi.waitFor(() => expect(endpoint.stopped).toHaveBeenCalledOnce());
+      await adapter.dispose();
+    }
   });
 
   it('captures an exact pending inbound source while keeping send and management ready-gated and draining its lease', async () => {
@@ -507,4 +535,210 @@ describe('Adapter-owned native Endpoint runtime', () => {
     await adapter.dispose();
   });
 
+});
+
+class VerifiedAdapter extends NativeAdapter {
+  override get configurationIdentityProbeFields() { return ['token', 'remote.url']; }
+  override get configurationUpdateFields() { return ['token', 'remote.url', 'reconnectDelay']; }
+  readonly identify = vi.fn(async (config: Record<string, unknown>, signal: AbortSignal, fields: readonly string[]): Promise<string | undefined> => {
+    signal.throwIfAborted();
+    void fields;
+    if (config.token === 'failed') throw new Error('identity verification failed');
+    if (config.token === 'unsupported') return undefined;
+    return config.token === 'other' ? 'platform:other' : 'platform:original';
+  });
+  protected override identifyConfiguration(config: Record<string, unknown>, signal: AbortSignal, fields: readonly string[]) {
+    return this.identify(config, signal, fields);
+  }
+  protected override prepareConfiguration(config: Record<string, unknown>, identity: {instanceId: string}) {
+    return { ...config, resourceDirectory: identity.instanceId };
+  }
+}
+describe('verified account identity at the desired-state boundary', () => {
+  async function fixture() {
+    const adapter = new VerifiedAdapter(); const result = await create(new Repository(), adapter);
+    const saved = await adapter.add(adapter.revision, { endpointId: 'one', config: { token: 'original', remote: { url: 'https://one.example' } } });
+    return { ...result, adapter, target: saved.endpoints[0] };
+  }
+  it('prepares a new resource namespace before persistence without constructing a Client', async () => {
+    const { adapter, repository, target } = await fixture();
+    expect(repository.state?.endpoints[0].config.resourceDirectory).toBe(target.instanceId);
+    expect(adapter.created).toHaveLength(0); expect(adapter.identify).not.toHaveBeenCalled();
+    await adapter.dispose();
+  });
+  it('verifies rotated credentials, retains identity, and reconnects only the current account', async () => {
+    const { adapter, target } = await fixture(); await adapter.start(target.instanceId, adapter.revision);
+    const original = adapter.getEndpoint(target.instanceId)!;
+    const result = await adapter.patchConfiguration(target.instanceId, adapter.revision, { token: 'rotated' });
+    expect(result.endpoints[0].instanceId).toBe(target.instanceId);
+    expect(adapter.getEndpoint(target.instanceId)).not.toBe(original);
+    expect(adapter.identify.mock.calls.map(call => [call[0].token, call[2]])).toEqual([['original', ['token']], ['rotated', ['token']]]);
+    expect(original.stopped).toHaveBeenCalledOnce(); await adapter.dispose();
+  });
+  it('replaces verified different accounts atomically, disabled with a new resource namespace', async () => {
+    const { adapter, repository, target } = await fixture(); await adapter.start(target.instanceId, adapter.revision);
+    const original = adapter.getEndpoint(target.instanceId)!;
+    const result = await adapter.patchConfiguration(target.instanceId, adapter.revision, { token: 'other' });
+    expect(result.endpoints[0].instanceId).not.toBe(target.instanceId);
+    expect(result.endpoints[0].desiredEnabled).toBe(false);
+    expect(repository.state?.endpoints[0].config.resourceDirectory).toBe(result.endpoints[0].instanceId);
+    expect(adapter.created).toHaveLength(1); expect(original.stopped).toHaveBeenCalledOnce(); await adapter.dispose();
+  });
+  it.each(['failed','unsupported'])('does not save or reconnect when identity is %s', async token => {
+    const { adapter, repository, target } = await fixture(); await adapter.start(target.instanceId, adapter.revision);
+    const original = adapter.getEndpoint(target.instanceId), revision = adapter.revision;
+    const writes = repository.compareAndSet.mock.calls.length;
+    await expect(adapter.patchConfiguration(target.instanceId, revision, { token })).rejects.toThrow();
+    expect(repository.compareAndSet).toHaveBeenCalledTimes(writes); expect(adapter.revision).toBe(revision);
+    expect(adapter.getEndpoint(target.instanceId)).toBe(original); await adapter.dispose();
+  });
+  it('checks nested identity-bearing targets but does not probe ordinary connection fields', async () => {
+    const { adapter, target } = await fixture();
+    await adapter.update(target.instanceId, adapter.revision, { config: { token: 'original', remote: { url: 'https://two.example' } } });
+    expect(adapter.identify).toHaveBeenCalledTimes(2); expect(adapter.identify.mock.calls[0][2]).toEqual(['remote.url']);
+    adapter.identify.mockClear();
+    await adapter.update(target.instanceId, adapter.revision, { config: { token: 'original', remote: { url: 'https://two.example' }, reconnectDelay: 1000 } });
+    expect(adapter.identify).not.toHaveBeenCalled(); await adapter.dispose();
+  });
+  it('rejects a verified result made stale by an intervening stop', async () => {
+    const { adapter, repository, target } = await fixture(); const pending = gate<string>();
+    adapter.identify.mockImplementationOnce(() => pending.promise);
+    const revision = adapter.revision;
+    const updating = adapter.update(target.instanceId, revision, { config: { token: 'rotated', remote: { url: 'https://one.example' } } });
+    await vi.waitFor(() => expect(adapter.identify).toHaveBeenCalledOnce());
+    await adapter.stop(target.instanceId, revision); const writes = repository.compareAndSet.mock.calls.length;
+    pending.resolve('platform:original'); await expect(updating).rejects.toMatchObject({ code: 'conflict' });
+    expect(repository.compareAndSet).toHaveBeenCalledTimes(writes); await adapter.dispose();
+  });
+  it('cancels verification when the owning Adapter is disposed', async () => {
+    const { adapter, target } = await fixture(); const pending = gate<string>();
+    adapter.identify.mockImplementationOnce(async (_config, signal) => { await pending.promise; signal.throwIfAborted(); return 'platform:original'; });
+    const updating = adapter.update(target.instanceId, adapter.revision, { config: { token: 'rotated' } });
+    await vi.waitFor(() => expect(adapter.identify).toHaveBeenCalledOnce());
+    const signal = adapter.identify.mock.calls[0][1]; await adapter.dispose(); expect(signal.aborted).toBe(true);
+    pending.resolve('platform:original'); await expect(updating).rejects.toThrow();
+  });
+
+  it('persists the exact configuration whose identity was probed despite caller mutation during verification', async () => {
+    const { adapter, repository, target } = await fixture();
+    const entered = gate<void>(), resume = gate<void>();
+    adapter.identify.mockImplementationOnce(async () => 'platform:original');
+    adapter.identify.mockImplementationOnce(async () => { entered.resolve(); await resume.promise; return 'platform:original'; });
+    const config = { token: 'rotated', remote: { url: 'https://one.example' } };
+    const updating = adapter.update(target.instanceId, adapter.revision, { config });
+    await entered.promise;
+    config.token = 'other'; config.remote.url = 'https://unverified.example';
+    resume.resolve();
+    try {
+      await updating;
+      expect(adapter.identify.mock.calls.map(call => call[0].token)).toEqual(['original', 'rotated']);
+      expect(repository.state?.endpoints[0].config).toMatchObject({ token: 'rotated', remote: { url: 'https://one.example' } });
+      expect(adapter.list()[0].instanceId).toBe(target.instanceId);
+      expect(adapter.created).toHaveLength(0);
+    } finally { resume.resolve(); await updating.catch(() => undefined); await adapter.dispose(); }
+  });
+  it('rejects a direct caller cancellation before its queued CAS without saving desired state', async () => {
+    const { adapter, repository } = await fixture(), controller = new AbortController();
+    const beforeCommit = vi.fn();
+    const writes = repository.compareAndSet.mock.calls.length, reason = new Error('synthetic caller cancelled');
+    const saving = adapter.add(adapter.revision, { endpointId: 'two', config: { token: 'rotated' } }, { signal: controller.signal, beforeCommit });
+    controller.abort(reason);
+    try {
+      await expect(saving).rejects.toBe(reason);
+      expect(beforeCommit).not.toHaveBeenCalled();
+      expect(repository.compareAndSet).toHaveBeenCalledTimes(writes);
+      expect(adapter.list().map(record => record.endpointId)).toEqual(['one']);
+      expect(adapter.created).toHaveLength(0);
+    } finally { await saving.catch(() => undefined); await adapter.dispose(); }
+  });
+  it('rejects a queued CAS when its owning Adapter is disposed in the same tick', async () => {
+    const { adapter, repository } = await fixture(), writes = repository.compareAndSet.mock.calls.length;
+    const beforeCommit = vi.fn();
+    const saving = adapter.add(adapter.revision, { endpointId: 'two', config: { token: 'rotated' } }, { beforeCommit });
+    const observed = saving.catch(error => error), disposing = adapter.dispose();
+    try {
+      expect(await observed).toMatchObject({ code: 'closed' });
+      expect(beforeCommit).not.toHaveBeenCalled();
+      await disposing;
+      expect(repository.compareAndSet).toHaveBeenCalledTimes(writes);
+      expect(repository.state?.endpoints.map(record => record.endpointId)).toEqual(['one']);
+      expect(adapter.created).toHaveLength(0);
+    } finally { await observed; await disposing; }
+  });
+  it('owns an immutable secret reference snapshot before the add CAS is queued', async () => {
+    const { adapter, repository } = await fixture(), secretRefs = { token: 'synthetic-reference-before' };
+    const saving = adapter.add(adapter.revision, { endpointId: 'two', config: { token: 'placeholder' }, secretRefs });
+    secretRefs.token = 'synthetic-reference-after';
+    try {
+      await saving;
+      expect(repository.state?.endpoints.find(record => record.endpointId === 'two')?.secretRefs).toEqual({ token: 'synthetic-reference-before' });
+      expect(adapter.list().find(record => record.endpointId === 'two')?.desiredEnabled).toBe(false);
+      expect(adapter.created).toHaveLength(0);
+    } finally { await saving.catch(() => undefined); await adapter.dispose(); }
+  });
+
+});
+
+class LoginAdapter extends NativeAdapter {
+  readonly contexts: EndpointCreationContext[] = [];
+  protected override createEndpoint(config: Record<string, unknown>, context: EndpointCreationContext): NativeEndpoint {
+    this.contexts.push(context); return super.createEndpoint(config, context);
+  }
+  saveLogin(context: EndpointCreationContext, userId: string, config: Record<string, unknown>, previousIdentity: EndpointPreviousIdentity = { kind: 'unbound' }) {
+    return this.acceptVerifiedLogin(context, { userId, config, previousIdentity });
+  }
+}
+describe('verified login completion belongs to the exact account incarnation', () => {
+  async function fixture() {
+    const adapter = new LoginAdapter(), repository = new Repository(); await create(repository, adapter);
+    const target = await add(adapter, 'login'); await adapter.start(target.instanceId, adapter.revision);
+    return { adapter, repository, target, endpoint: adapter.getEndpoint(target.instanceId)!, context: adapter.contexts[0] };
+  }
+  it('persists a first verified identity and credentials without restarting the active login Client', async () => {
+    const { adapter, repository, target, endpoint, context } = await fixture();
+    await expect(adapter.saveLogin(context, 'first-user', { token: 'verified-fixture' })).resolves.toBe('retained');
+    expect(adapter.getEndpoint(target.instanceId)).toBe(endpoint); expect(endpoint.stopped).not.toHaveBeenCalled();
+    expect(repository.state?.endpoints[0]).toMatchObject({ instanceId: target.instanceId, platformUserId: 'first-user', config: { token: 'verified-fixture' } });
+    expect(adapter.list()[0]).not.toHaveProperty('platformUserId'); await adapter.dispose();
+  });
+  it('replaces a different verified login with a fresh disabled identity', async () => {
+    const { adapter, repository, target, endpoint, context } = await fixture();
+    endpoint[endpointSpec].reportSelfUserId('previous-user');
+    await expect(adapter.saveLogin(context, 'different-user', { token: 'other-fixture' })).resolves.toBe('replaced');
+    const next = adapter.list()[0]; expect(next.instanceId).not.toBe(target.instanceId); expect(next.desiredEnabled).toBe(false);
+    expect(repository.state?.endpoints[0].config).toMatchObject({ token: 'other-fixture' });
+    expect(adapter.created).toHaveLength(1); await vi.waitFor(() => expect(endpoint.stopped).toHaveBeenCalledOnce());
+    await adapter.dispose();
+  });
+  it('keeps a persisted identity binding after logout and process restoration', async () => {
+    const { adapter, repository, context } = await fixture();
+    await adapter.saveLogin(context, 'previous-user', { token: 'old-fixture' }); await adapter.dispose();
+    const restored = new LoginAdapter(); await create(repository, restored);
+    const saved = restored.list()[0]; await restored.start(saved.instanceId, restored.revision);
+    await expect(restored.saveLogin(restored.contexts[0], 'different-user', { token: 'other-fixture' })).resolves.toBe('replaced');
+    expect(restored.list()[0].instanceId).not.toBe(saved.instanceId); await restored.dispose();
+  });
+  it('does not save a late login from an old execution or an old restored incarnation', async () => {
+    const { adapter, repository, target, context } = await fixture();
+    await adapter.stop(target.instanceId, adapter.revision); await adapter.start(target.instanceId, adapter.revision);
+    const writes = repository.compareAndSet.mock.calls.length;
+    await expect(adapter.saveLogin(context, 'late-user', { token: 'late-fixture' })).rejects.toMatchObject({ code: 'inactive' });
+    const current = adapter.contexts.at(-1)!;
+    await expect(adapter.saveLogin({ ...current, incarnationId: 'stale-incarnation' }, 'late-user', {})).rejects.toMatchObject({ code: 'inactive' });
+    expect(repository.compareAndSet).toHaveBeenCalledTimes(writes); await adapter.dispose();
+  });
+  it('does not treat an unknown previous login as a first binding', async () => {
+    const { adapter, repository, context, endpoint } = await fixture();
+    const writes = repository.compareAndSet.mock.calls.length;
+    await expect(adapter.saveLogin(context, 'verified-new', { token: 'new-fixture' }, { kind: 'unknown' }))
+      .rejects.toMatchObject({ code: 'unsupported' });
+    expect(repository.compareAndSet).toHaveBeenCalledTimes(writes); expect(endpoint.stopped).not.toHaveBeenCalled(); await adapter.dispose();
+  });
+  it('does not mutate the live Client or saved record if persistence fails', async () => {
+    const { adapter, repository, target, context, endpoint } = await fixture(), revision = adapter.revision;
+    repository.compareAndSet.mockRejectedValueOnce(new AdapterManagementError('conflict', 'concurrent change'));
+    await expect(adapter.saveLogin(context, 'verified-user', { token: 'new-fixture' })).rejects.toMatchObject({ code: 'conflict' });
+    expect(adapter.revision).toBe(revision); expect(adapter.getEndpoint(target.instanceId)).toBe(endpoint);
+    expect(repository.state?.endpoints[0].config.token).toBeUndefined(); expect(endpoint.stopped).not.toHaveBeenCalled(); await adapter.dispose();
+  });
 });

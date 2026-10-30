@@ -49,6 +49,10 @@ it('pins reply parsing to the flow language and keys every canonical identity di
     { ...message, conversation: { ...message.conversation, threadId: 'other-thread' } },
     { ...message, conversation: { ...message.conversation, parent: { kind: 'channel', id: 'other-guild' } } },
     { ...message, conversation: { ...message.conversation, endpoint: { adapter: 'qq', id: 'other-bot' } } },
+    { ...message, conversation: { ...message.conversation, endpoint: { adapter: 'other-platform', id: 'bot' } } },
+    { ...message, conversation: { ...message.conversation, kind: 'private' } },
+    { ...message, conversation: { ...message.conversation, id: 'other-room' } },
   ]) expect(qqCommandSessionKey(other)).not.toBe(key);
   expect(qqCommandSessionKey({ ...message, sender: {} })).toBeUndefined();
+  expect(qqCommandSessionKey({ ...message, sender: { id: '  ' } })).toBeUndefined();
 });

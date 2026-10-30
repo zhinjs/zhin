@@ -3,15 +3,15 @@
  * 搬到 Console 页面。
  *
  * - `start` 返回扫码链接；后续状态写入 `state.consoleBind`，页面轮询 status。
- * - 扫码成功后凭据只留在内存，等页面选择公域 / 私域再一次性写 `.env` + 配置。
+ * - 扫码成功后凭据只留在内存，等页面选择公域 / 私域再通过捕获的所属 Adapter CAS 保存。
  * - 与聊天命令共享 `state.bindFlow` 单例，同一时间只允许一个绑定流程。
  */
 import { PluginConsoleRpcError } from 'zhin.js';
+import { AdapterManagementError } from 'zhin.js/adapter';
 import { startQqBindFlow } from './qq-bind-flow.js';
-import { writeQqEndpointWithBotKind, type QqEndpointWriteResult } from './qq-endpoint-write.js';
+import { writeQqEndpointWithBotKind, type QqEndpointWriteResult, type QqEndpointSavePort } from './qq-endpoint-write.js';
 import { parseQqBotKind } from './qq-intents.js';
 import type { QqRuntimeState } from './qq-runtime-state.js';
-import type { EndpointConfigurationStore } from 'zhin.js/adapter';
 
 /** 启动 Console 扫码；resolve 时二维码链接已就绪。 */
 export function startQqConsoleBind(
@@ -86,10 +86,10 @@ export function startQqConsoleBind(
   });
 }
 
-/** 扫码成功后选择公域 / 私域并写回配置。 */
+/** 扫码成功后选择公域 / 私域并保存未启动账号。 */
 export async function completeQqConsoleBind(
   state: QqRuntimeState,
-  store: EndpointConfigurationStore,
+  save: QqEndpointSavePort,
   kindValue: unknown,
 ): Promise<QqEndpointWriteResult> {
   const pending = state.consoleBind?.pending;
@@ -101,11 +101,16 @@ export async function completeQqConsoleBind(
     throw new PluginConsoleRpcError('invalid_input', '请选择公域（public）或私域（private）');
   }
   try {
-    const result = await writeQqEndpointWithBotKind({ ...pending, botKind }, store);
+    const result = await writeQqEndpointWithBotKind({ ...pending, botKind }, save);
     state.consoleBind = null;
+    state.consoleAdmission = null;
     return result;
-  } catch {
-    throw new PluginConsoleRpcError('unavailable', '写入配置失败，请检查配置文件和 .env 的权限');
+  } catch (error) {
+    if (error instanceof PluginConsoleRpcError) throw error;
+    const code = error instanceof AdapterManagementError ? error.code : 'unavailable';
+    if (code === 'commit_unknown') throw new PluginConsoleRpcError('commit_unknown', '提交结果未知，请刷新核实，勿重复提交');
+    if (code === 'conflict' || code === 'duplicate_entry' || code === 'closed') throw new PluginConsoleRpcError('conflict', '账号清单已变化，请刷新核实');
+    throw new PluginConsoleRpcError('unavailable', '账号配置未能保存，请刷新状态');
   }
 }
 
@@ -120,5 +125,6 @@ export function cancelQqConsoleBind(state: QqRuntimeState): boolean {
   state.bindFlow = null;
   state.pendingBotKind = null;
   state.consoleBind = null;
+  state.consoleAdmission = null;
   return active;
 }

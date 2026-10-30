@@ -82,18 +82,12 @@ description: "插件是什么、插件树如何组成、Plugin 与 Feature 的�
 ```ts
 // plugins/adapters/sandbox/adapters/sandbox/index.ts
 import { defineAdapter } from 'zhin.js/adapter';
-import { outboundMessageToken } from '@zhin.js/core/runtime';
-import { SandboxWsEndpoint } from '../src/endpoint.js';
+import { SandboxAdapter } from '../../src/adapter.js';
+import type { SandboxEndpointConfig } from '../../src/protocol.js';
 
-export default defineAdapter({
+export default defineAdapter<SandboxEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  create(context) {
-    return new SandboxWsEndpoint({
-      gateway: context.use(outboundMessageToken),
-      defaults: resolveSandboxEndpoint(context.config),
-      // ...
-    });
-  },
+  createAdapter: context => new SandboxAdapter(context),
 });
 ```
 

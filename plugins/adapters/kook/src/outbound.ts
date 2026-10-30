@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import type { Sendable } from 'kook-client';
 import { EndpointDeliveryError, isMediaRef, type MessageRef } from '@zhin.js/im-contract';
 import type { EndpointSendRequest } from 'zhin.js/adapter';
 import { formatOutboundKmarkdown } from './protocol.js';
@@ -72,10 +73,11 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
       }
     }
     const body = hasImage || hasCard ? { __isCard: true, type: 'card', theme: 'secondary', size: 'lg', modules } : formatOutboundKmarkdown(payload, locale);
-    const result = conversation.kind === 'private'
-      ? await client.sendPrivateMsg(conversation.id, body, quote)
-      : await client.sendChannelMsg(conversation.id, body, quote);
-    const id = result?.msg_id != null ? String(result.msg_id) : '';
+    // SDK 1.0.5 implements __isCard and returns the API's msg_id; its declaration still describes Message.Ret.
+    const result: unknown = conversation.kind === 'private'
+      ? await client.sendPrivateMsg(conversation.id, body as unknown as Sendable, quote)
+      : await client.sendChannelMsg(conversation.id, body as unknown as Sendable, quote);
+    const id = result && typeof result === 'object' && 'msg_id' in result && result.msg_id != null ? String(result.msg_id) : '';
     if (!id.trim()) throw new EndpointDeliveryError('delivery_unconfirmed', 'KOOK did not return a real message ID', 'unknown');
     return id;
   } catch (error) {

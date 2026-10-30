@@ -5,7 +5,7 @@ tier: Advanced
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=41c1f0a84a180dcd -->
@@ -30,13 +30,15 @@ pnpm add @zhin.js/adapter-wechat-mp
 
 ## Plugin Runtime
 
+The owning `Adapter` manages desired accounts and running incarnations. The actual SDK or protocol Client implements structural `Endpoint`; framework hooks use `endpointSpec` without replacing native SDK APIs. Complete accepted callbacks enter through `events.run(...)` before deduplication and asynchronous normalization; see [Adapter authoring](/en/authoring/adapters).
+
 - `@zhin.js/adapter` — convention-based `adapters/wechat-mp/index.ts` (`defineAdapter`)
-- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
+- `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the openid)
+Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (always `kind: 'private'`, `conversation.id` is the openid)
 Outbound: `send({ conversation, payload })` -> passive reply XML (default) or Customer Service Message API (`replyMode: customer_service`; touser is `conversation.id`)
 
 ## Prerequisites
@@ -92,8 +94,10 @@ The Runtime Host (`http`) must already be listening for the Webhook to be reacha
 Open the Console **WeChat MP** page (route `/wechat-mp`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.wechat-mp.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `wechat-mp:read`; writes require `wechat-mp:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `wechat-mp endpoint add` command.
 

@@ -13,7 +13,7 @@ export default defineAgentTool<{ guild_id: string }>({
   permissions: [platformPermission('qq', 'manage_channels')],
   async execute({ guild_id  }: { guild_id: string }, context) {
     const client = context.$client;
-    const channels = await client.getChannels(guild_id);
+    const channels = await client.channelService.getList(guild_id);
     return { channels, count: channels.length };
   },
 });

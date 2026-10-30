@@ -5,7 +5,6 @@ import {
 } from '@imhelper/onebot-v11';
 import { EventFactory, type EventMap, type ImHelperEventMap } from 'imhelper';
 import {
-  defineEndpointClient,
   forwardEndpointClientEvents,
   type ClientEventPayloads,
 } from 'zhin.js/adapter';
@@ -25,11 +24,11 @@ type Onebot11ClientEvents = ImHelperEventMap<
 >;
 export type Onebot11ClientEventMap = ClientEventPayloads<Onebot11ClientEvents>;
 
-export function createOnebot11EndpointClient(
+export function onebot11ClientOptions(
   config: ResolvedOneBot11Config,
   request: Onebot11ApiCall,
-): OneBotV11Client {
-  return new OneBotV11Client({
+): ConstructorParameters<typeof OneBotV11Client>[0] {
+  return {
     baseUrl: config.connection === 'ws'
       ? config.url.replace(/^ws(s?):/, 'http$1:')
       : 'http://localhost',
@@ -37,7 +36,7 @@ export function createOnebot11EndpointClient(
     accessToken: config.access_token,
     receiveMode: 'manual',
     call: request,
-  });
+  };
 }
 
 export async function callOnebot11Client<T = unknown>(
@@ -65,14 +64,3 @@ export function forwardOnebot11ClientEvents(
 ): () => void {
   return forwardEndpointClientEvents(client, onebot11ClientEventNames, receive);
 }
-
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly onebot11: {
-      readonly client: OneBotV11Client;
-      readonly events: Onebot11ClientEventMap;
-    };
-  }
-}
-
-export const onebot11Client = defineEndpointClient<OneBotV11Client, Onebot11ClientEventMap>('onebot11');

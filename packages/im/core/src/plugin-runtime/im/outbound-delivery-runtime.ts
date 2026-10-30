@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { endpointClientOf } from '@zhin.js/adapter';
 import { operationEndpoint } from './operation-endpoint.js';
 import { projectLocale } from './locale.js';
 import {
@@ -113,7 +112,7 @@ export class OutboundDeliveryRuntime {
     }, initialPayload, () => {
       if (!boundEndpoint) return adapters.clientById(adapter);
       boundEndpoint.assertActive();
-      return endpointClientOf(boundEndpoint.endpoint);
+      return boundEndpoint.endpoint;
     });
     // Record identities and fallback text before middleware can mutate the array
     // or its segments. Do not copy/serialize media buffers or streams.

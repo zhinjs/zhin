@@ -36,7 +36,7 @@ export interface WeChatMpWebhookHandler {
   readonly config: ResolvedWeChatMpConfig;
   readonly isOpen: boolean;
   readonly id: CapabilityId;
-  admit(msg: WeChatMessage): void | Promise<unknown>;
+  admit(msg: WeChatMessage, nativeEvent?: unknown): void | Promise<unknown>;
   resolveLocale?(senderId: string): Promise<Locale | undefined>;
   /** MsgId 去重缓存（可选；实现见 WeChatMpEndpoint）。 */
   getCachedReply?(msgId: string): string | undefined;
@@ -181,9 +181,9 @@ export async function handleWeChatMpMessage(
 
     if (!replyXML && handler.isOpen) {
       if (config.replyMode === 'passive') {
-        replyXML = await collectPassiveReply(handler, wechatMessage);
+        replyXML = await collectPassiveReply(handler, wechatMessage, xmlString);
       } else {
-        handler.admit(wechatMessage);
+        handler.admit(wechatMessage, xmlString);
       }
     }
 
@@ -219,12 +219,13 @@ export async function handleWeChatMpMessage(
 export async function collectPassiveReply(
   handler: WeChatMpWebhookHandler,
   wechatMsg: WeChatMessage,
+  nativeEvent?: unknown,
 ): Promise<string> {
   const timeoutMs = handler.config.passiveReplyTimeoutMs;
   const text = await runWithPassiveReplyCapture(async () => {
     const conversation = wechatMpInboundConversation(String(handler.id), wechatMsg);
     await Promise.race([
-      Promise.resolve(handler.admit(wechatMsg)),
+      Promise.resolve(nativeEvent === undefined ? handler.admit(wechatMsg) : handler.admit(wechatMsg, nativeEvent)),
       new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
     ]);
     return getPassiveReplyCapture()?.text ?? null;

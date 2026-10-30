@@ -1,12 +1,9 @@
-import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 /**
  * Convention entry: discover `adapters/sandbox/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
-import { SandboxWsEndpoint } from '../../src/endpoint.js';
+import { SandboxAdapter } from '../../src/adapter.js';
 import {
-  resolveSandboxEndpoint,
   type SandboxEndpointConfig,
 } from '../../src/protocol.js';
 
@@ -22,12 +19,5 @@ export default defineAdapter<SandboxEndpointConfig>({
     outboundMedia: ['url', 'base64', 'path'],
     interactive: 'native',
   },
-  create(context) {
-    return new SandboxWsEndpoint({
-      id: context.id,
-      locale: resolveLocale(context.use(projectLocaleToken)),
-      http: context.use(httpHostToken),
-      defaults: resolveSandboxEndpoint(context.config),
-    });
-  },
+  createAdapter: context => new SandboxAdapter(context),
 });

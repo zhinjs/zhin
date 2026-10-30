@@ -22,7 +22,7 @@ export default defineAgentTool({
   }),
   async execute({ user_id, blacklist, delete_history_days }, context) {
     const { guildId } = currentGuildChannel(context);
-    const ok = await context.$client.api.memberService.kickMember(guildId, user_id, delete_history_days ?? 0, blacklist === true);
+    const ok = await context.$client.memberService.kickMember(guildId, user_id, delete_history_days ?? 0, blacklist === true);
     if (ok === false) return { success: false, message: t(context.locale, 'operationFailed') };
     return { success: true, message: t(context.locale, 'memberKicked', { p0: user_id }) };
   },

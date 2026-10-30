@@ -5,6 +5,8 @@ import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contrac
 
 /** Persistent account identity is independent of its reusable display/config name. */
 export interface EndpointDesiredRecord {
+  /** Last verified platform identity; private persistence, never a credential or public metadata. */
+  readonly platformUserId?: string;
   readonly instanceId: string;
   readonly canonicalId: CapabilityId;
   readonly endpointId: string;
@@ -31,8 +33,8 @@ export interface EndpointDesiredRepository {
 
 export class AdapterManagementError extends Error {
   constructor(readonly code: 'conflict' | 'unavailable' | 'closed' | 'not_found' | 'duplicate_entry'
-    | 'inactive' | 'invalid_configuration' | 'commit_unknown' | 'integrity' | 'unsupported', message: string) {
-    super(message);
+    | 'inactive' | 'invalid_configuration' | 'commit_unknown' | 'integrity' | 'unsupported', message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'AdapterManagementError';
   }
 }
@@ -41,6 +43,9 @@ export class AdapterManagementError extends Error {
 export interface EndpointSecretResolver {
   resolve(reference: string, context: Readonly<{ instanceId: string; signal: AbortSignal }>): Promise<string>;
 }
+
+/** Previous login evidence is distinct from an unbound account or an unknown identity. */
+export type EndpointPreviousIdentity = Readonly<{ kind: 'unbound' } | { kind: 'verified'; userId: string } | { kind: 'unknown' }>;
 
 export interface EndpointCreationContext {
   readonly signal: AbortSignal;
@@ -60,7 +65,7 @@ export interface AdapterDescriptorInfo {
   readonly segments?: AdapterSegmentPolicy;
 }
 
-export type EndpointDesiredMetadata = Omit<EndpointDesiredRecord, 'config' | 'secretRefs'>;
+export type EndpointDesiredMetadata = Omit<EndpointDesiredRecord, 'config' | 'secretRefs' | 'platformUserId'>;
 export type EndpointAction = 'add' | 'update' | 'start' | 'stop' | 'remove' | 'replace';
 export interface EndpointExecution {
   readonly instanceId: string;
@@ -70,6 +75,7 @@ export interface EndpointExecution {
   readonly code?: string;
 }
 export interface AdapterMutationOptions {
+  readonly signal?: AbortSignal;
   /** Acknowledge the committed desired state without waiting for login or drain. */
   readonly waitForExecution?: boolean;
   /** Internal request boundary, after validation and immediately before the single CAS. */

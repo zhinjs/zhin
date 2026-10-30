@@ -13,7 +13,8 @@ const conversation = { endpoint, kind: 'group' as const, id: '100' };
 const BOT = '8596238';
 
 function generation(management: object) {
-  const index = { $projection: 'zhin.adapter-index/1', connection: () => ({ selfUserId: BOT, management }) };
+  const index = { $projection: 'zhin.adapter-index/1',
+    connection: () => Object.freeze({ identity: endpoint, selfUserId: BOT }), management: () => management };
   return { index, snapshot: { projections: new Map([[adapterFeatureId, index]]) } as never };
 }
 

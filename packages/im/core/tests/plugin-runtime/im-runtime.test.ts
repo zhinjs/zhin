@@ -20,6 +20,7 @@ import {
   htmlRendererToken,
   rootPluginId,
   type CapabilitySlot,
+  type CapabilityId,
   type SnapshotState,
   type PluginId,
   type PluginNodeSnapshot,
@@ -27,12 +28,12 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
-  Endpoint,
+  Adapter, endpointSpec, createEndpointSpecification, type Endpoint,
+  type EndpointHooks, type EndpointSpecification, type EndpointSendRequest,
   adapterFeatureId,
-  defineAdapter as defineAdapterContract,
+  defineAdapter,
   endpointEventGatewayToken,
   type AdapterOperation,
-  type AdapterContext,
   type AdapterDefinition,
   type EndpointEvent,
   type EndpointControl,
@@ -62,7 +63,9 @@ import {
   defineHandler,
   handlerFeatureId,
 } from '@zhin.js/handler';
-import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationAddress, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
+import type { ConversationAddress } from '../../src/plugin-runtime/im/contracts.js';
+import type { IngressRoute } from '../../src/plugin-runtime/im/ingress-route.js';
 import type { RoomInboundRouteInput, RoomRouteDecision } from '../../src/plugin-runtime/im/inbound-origin.js';
 import {
   ImRuntime,
@@ -81,36 +84,20 @@ import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.
 import { InboundDeduper } from '../../src/plugin-runtime/im/inbound-dedup.js';
 import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
 
-type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
-  create(context: AdapterContext<TConfig>): object | Promise<object>;
-};
-
-class TestEndpoint extends Endpoint<object> {
-  readonly client: object;
-
-  constructor(surface: object) {
-    super();
-    this.client = surface;
-    Object.defineProperties(this, Object.getOwnPropertyDescriptors(surface));
-  }
-
-  emitMessage(conversation: ConversationAddress, content: string) {
-    return this.emit('message.receive', { conversation: { ...conversation, endpoint: this.identity }, content, sender: { id: 'alice' } });
-  }
-
-  emitMessagePayload(payload: unknown) { return this.emit('message.receive', payload); }
+class TestClient {
+  constructor(readonly transmit: (request: EndpointSendRequest) => EndpointSendResult | Promise<EndpointSendResult>) {}
+  send(request: EndpointSendRequest) { return this.transmit(request); }
 }
-
-function defineAdapter<TConfig = unknown>(
-  definition: TestAdapterDefinition<TConfig>,
-): Readonly<AdapterDefinition<TConfig>> {
-  return defineAdapterContract<TConfig>({
-    ...definition,
-    async create(context) {
-      const value = await definition.create(context);
-      return value instanceof Endpoint ? value : new TestEndpoint(value);
-    },
-  });
+class TestEndpoint extends TestClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  constructor(transmit: TestClient['transmit'], hooks: Omit<EndpointHooks, 'send'> = { start() {}, open() {}, close() {}, stop() {} }) {
+    super(transmit);
+    this[endpointSpec] = createEndpointSpecification(this, { ...hooks, send: request => this.send(request) });
+  }
+  emitMessage(conversation: ConversationAddress, content: string) {
+    return this[endpointSpec].events.message({ conversation, content, sender: { id: 'alice' } });
+  }
+  emitMessagePayload(payload: unknown) { return this[endpointSpec].events.emit('message.receive', payload); }
 }
 
 const ignoredEndpointEvents = Object.freeze({
@@ -1144,7 +1131,7 @@ describe('IM Runtime', () => {
     const current = fixture.store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([
-      [ingressRouteToken.id, Object.freeze({
+      [ingressRouteToken.id, Object.freeze<IngressRoute>({
         async route(_message, _lease, _requester, conversationSequence) {
           routedSequence = conversationSequence;
           events.push('fallback:g1');
@@ -1199,7 +1186,7 @@ describe('IM Runtime', () => {
     const current = fixture.store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([
-      [ingressRouteToken.id, Object.freeze({
+      [ingressRouteToken.id, Object.freeze<IngressRoute>({
         async preRoute(message, _lease, _requester, conversationSequence) {
           events.push(`pre-route:${message.conversation.id}:${conversationSequence}`);
           return true;
@@ -1246,7 +1233,7 @@ describe('IM Runtime', () => {
     const current = fixture.store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([
-      [ingressRouteToken.id, Object.freeze({
+      [ingressRouteToken.id, Object.freeze<IngressRoute>({
         async preRoute() {
           events.push('pre-route:false');
           return false;
@@ -1285,7 +1272,7 @@ describe('IM Runtime', () => {
     const current = fixture.store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([
-      [ingressRouteToken.id, Object.freeze({
+      [ingressRouteToken.id, Object.freeze<IngressRoute>({
         async preRoute() {
           events.push('pre-route:false');
           return false;
@@ -1327,7 +1314,7 @@ describe('IM Runtime', () => {
     const current = fixture.store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([
-      [ingressRouteToken.id, Object.freeze({
+      [ingressRouteToken.id, Object.freeze<IngressRoute>({
         async preRoute(_message, _lease, _requester, conversationSequence) {
           receivedSequence = conversationSequence;
           return true;
@@ -1422,7 +1409,7 @@ describe('IM Runtime', () => {
     const owner = childPluginId(root, 'slack');
     const adapter = createCapabilitySlot({
       owner, feature: adapterFeatureId, localName: 'slack', source: '/slack/adapters/slack/index.ts',
-      definition: defineAdapterContract({ capabilities: ['inbound', 'outbound'], create: () => ({ client: {}, connect() {}, send: () => 'receipt' }) }),
+      definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(() => 'receipt'); } }() }),
     });
     const command = createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: 'acceptance', source: '/commands/acceptance/index.ts', definition: defineCommand({ execute: () => 'accepted' }) });
     const state: SnapshotState = {
@@ -1430,11 +1417,11 @@ describe('IM Runtime', () => {
       tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/project', children: [owner] }], [owner, { id: owner, instanceKey: 'slack', packageName: 'slack', packageRoot: '/slack', parent: root, children: [] }]]),
       config: new Map([[root, {}], [owner, { commandPrefix: '!', endpoints: [{ id: 'test-bot' }, { id: 'test-bot-b', commandPrefix: '#' }] }]]),
       resources: new Map([[root, new Map([[endpointEventGatewayToken.id, ignoredEndpointEvents]])], [owner, new Map([[endpointEventGatewayToken.id, ignoredEndpointEvents]])]]),
-      capabilities: new Map([[adapter.id, adapter], [command.id, command]]), projections: new Map(),
+      capabilities: new Map<CapabilityId, CapabilitySlot>([[adapter.id, adapter], [command.id, command]]), projections: new Map(),
     };
     const base = createSnapshotView(1, state);
     const index = await AdapterIndex.create([adapter], base, new AbortController().signal);
-    const snapshot = createSnapshotView(1, { ...state, projections: new Map([[adapterFeatureId, index], [commandFeatureId, new CommandIndex([command], base)]]) });
+    const snapshot = createSnapshotView(1, { ...state, projections: new Map<FeatureId, unknown>([[adapterFeatureId, index], [commandFeatureId, new CommandIndex([command], base)]]) });
     try {
       for (const [endpoint, prefix] of [['test-bot', '!'], ['test-bot-b', '#']]) {
         const id = index.resolve(String(owner), endpoint)!;
@@ -1539,7 +1526,7 @@ describe('IM Runtime', () => {
       feature: commandFeatureId,
       localName: '同意',
       source: '/commands/同意/index.ts',
-      definition: defineCommand({ execute: (context) => `approved:${context.message?.replyTo?.id ?? 'none'}` }),
+      definition: defineCommand<unknown, string, Message>({ execute: (context) => `approved:${context.input?.replyTo?.id ?? 'none'}` }),
     });
     const makeSnapshot = (config: Record<string, unknown>) => {
       const state: SnapshotState = {
@@ -1866,10 +1853,7 @@ describe('IM Runtime', () => {
     const secondSent: unknown[] = [];
     const captured = new Map<string, Message>();
     const second = createCapabilitySlot({ owner: secondOwner, feature: adapterFeatureId, localName: 'memory', source: '/second/adapters/memory/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound', 'outbound'], segments: { html: 'text' }, create: () => ({
-        start() {}, open() {}, close() {}, stop() {},
-        send(request) { secondSent.push(request); return 'second-message'; },
-      }) }),
+      definition: defineAdapter({ capabilities: ['inbound', 'outbound'], segments: { html: 'text' }, createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(request => { secondSent.push(request); return 'second-message'; }); } }() }),
     });
     const fixture = await createFixture([], firstSent, message => captured.set(message.conversation.endpoint.id, message), undefined, undefined, {
       routeEndpointEvents: true, outboundMiddleware: (_envelope, next) => next(), adapterOwner: firstOwner, adapterSegments: { html: 'direct' }, additionalAdapters: [second],
@@ -1887,7 +1871,7 @@ describe('IM Runtime', () => {
       for (const row of rows) expect(fixture.im.endpoints.get(row.adapter, row.id)?.endpoint).toEqual(row.endpoint);
       const address = { kind: 'channel' as const, id: 'same-channel', parent: { kind: 'channel' as const, id: 'same-guild' }, threadId: 'same-thread' };
       for (const row of rows) {
-        const endpoint = fixture.adapters.connection(row.id, row.id);
+        const endpoint = fixture.adapters.clientById(fixture.adapters.resolve(row.endpoint.adapter, row.endpoint.id)!);
         if (!(endpoint instanceof TestEndpoint)) throw new Error('missing actual test Endpoint');
         await endpoint.emitMessage(address, 'platform inbound');
         expect(captured.get(row.id)?.conversation.endpoint).toEqual(row.endpoint);
@@ -1896,7 +1880,7 @@ describe('IM Runtime', () => {
       const secondTarget = createDeliveryTarget(captured.get(other.id)!);
       expect(firstTarget).toEqual({ endpoint: first.endpoint, ...address });
       expect(secondTarget).toEqual({ endpoint: other.endpoint, ...address });
-      const firstEndpoint = fixture.adapters.connection(first.id, first.id);
+      const firstEndpoint = fixture.adapters.clientById(fixture.adapters.resolve(first.endpoint.adapter, first.endpoint.id)!);
       if (!(firstEndpoint instanceof TestEndpoint)) throw new Error('missing source Endpoint');
       const untrustedConversation = { ...address, endpoint: { id: other.endpoint.id, adapter: String(firstOwner) } };
       await firstEndpoint.emitMessagePayload({ content: 'untrusted normalized identity', conversation: untrustedConversation,
@@ -2282,21 +2266,13 @@ describe('IM Runtime', () => {
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         operations: ['recall'],
-        create: () => ({
-          name: '111111',
-          transportState: 'open' as const,
-          control: { recall: async () => undefined },
-          management: {
-            async listFriends() { return []; },
-            async listGroups() { return []; },
-            async kickGroupMember() {},
-          },
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send() { return 'sent-1'; },
-        }),
+        createAdapter: () => new class extends Adapter<TestEndpoint> {
+          protected createEndpoint() { return new TestEndpoint(() => 'sent-1', {
+            name: '111111', transportState: 'open', control: { recall: async () => undefined },
+            management: { async listFriends() { return []; }, async listGroups() { return []; }, async kickGroupMember() {} },
+            start() {}, open() {}, close() {}, stop() {},
+          }); }
+        }(),
       }),
     });
     const state: SnapshotState = {
@@ -3111,20 +3087,16 @@ async function createFixture(
       capabilities: options?.adapterCapabilities ?? ['inbound', 'outbound'],
       ...(options?.adapterOperations ? { operations: options.adapterOperations } : {}),
       ...(options?.adapterSegments ? { segments: options.adapterSegments } : {}),
-      create: () => ({
-        ...(options?.endpointControl ? { control: options.endpointControl } : {}),
-        ...(options?.endpointManagement ? { management: options.endpointManagement } : {}),
-        ...(options?.endpointContent ? { content: options.endpointContent } : {}),
-        start() { events.push('endpoint:start'); },
-        open() { events.push('endpoint:open'); },
-        close() { events.push('endpoint:close'); },
-        stop() { events.push('endpoint:stop'); },
-        send(request) {
-          events.push('endpoint:send');
-          sent.push(request);
+      createAdapter: () => new class extends Adapter<TestEndpoint> {
+        protected createEndpoint() { return new TestEndpoint(request => {
+          events.push('endpoint:send'); sent.push(request);
           return options?.endpointSend?.(request) ?? 'sent-1';
-        },
-      }),
+        }, {
+          control: options?.endpointControl, management: options?.endpointManagement, content: options?.endpointContent,
+          start() { events.push('endpoint:start'); }, open() { events.push('endpoint:open'); },
+          close() { events.push('endpoint:close'); }, stop() { events.push('endpoint:stop'); },
+        }); }
+      }(),
     }),
   });
   const command = createCapabilitySlot({
@@ -3856,7 +3828,7 @@ describe('full-operation command admission', () => {
   it('isolates actual bound Endpoint accounts instead of a payload adapter label', async () => {
     const gate = admissionDeferred(); let count = 0;
     const extra = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'memory-two', source: '/adapters/memory-two/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => ({ send: () => 'sent-extra' }) }) });
+      definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(() => 'sent-extra'); } }() }) });
     const f = await createFixture([], [], undefined, gate.promise, () => { count++; }, {
       execution: { maxConcurrent: 1 }, middleware: false, additionalAdapters: [extra], commandResult: () => 'ok',
     });
@@ -4137,7 +4109,7 @@ describe('Message.$replyToGroup', () => {
         sent.push({ targetConversation });
         return { status: 'sent' as const };
       },
-      'u1',
+      { id: 'u1' },
     );
     await message.$replyToGroup('group-99', '群通知');
     expect(sent[0]!.targetConversation).toEqual({ kind: 'group', id: 'group-99' });
@@ -4155,7 +4127,7 @@ describe('Message.$replyToChannel', () => {
         sent.push({ targetConversation });
         return { status: 'sent' as const };
       },
-      'u1',
+      { id: 'u1' },
     );
     await message.$replyToChannel('ch-1', 'guild-1', '频道通知');
     expect(sent[0]!.targetConversation).toEqual({
@@ -4175,7 +4147,7 @@ describe('Message.$replyToChannel', () => {
         sent.push({ targetConversation });
         return { status: 'sent' as const };
       },
-      'u1',
+      { id: 'u1' },
     );
     await message.$replyToChannel('ch-1', 'guild-1', '话题回复', 'thread-42');
     expect(sent[0]!.targetConversation).toEqual({
@@ -4891,7 +4863,7 @@ describe('IM Runtime inbound origin routing', () => {
       const { f, ids, route, seen, msg } = await room();
       try {
         const c = ids[2]!;
-        commitMembership(f, { isMember: () => false, hasRoom: (conv) => conv.endpoint.id !== c, route });
+        commitMembership(f, { isMember: () => false, hasRoom: (conv: ConversationRef) => conv.endpoint.id !== c, route });
         const mentionC = [{ type: 'mention', data: { target: 'bot-c' } }] as never;
         await expect(receive(f.im, msg(c, 'tk-5', { content: '@bot-c hello', segments: mentionC }))).resolves.toMatchObject({ matched: true });
         expect(seen).toEqual([{ id: c, mentioned: undefined }]);

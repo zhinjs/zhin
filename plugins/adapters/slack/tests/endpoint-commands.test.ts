@@ -1,99 +1,60 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { rootPluginId } from 'zhin.js';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
-import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
+import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { MemoryDesiredRepository } from '../../test-utils/desired-repository.js';
+import definition from '../adapters/slack/index.js';
 import listCommand from '../commands/slack/endpoint/list/index.js';
 import addCommand from '../commands/slack/endpoint/add/[id]/index.js';
 import removeCommand from '../commands/slack/endpoint/remove/[id]/index.js';
-import { slackRuntimeStateToken } from '../src/slack-runtime-state.js';
 
-/**
- * commands/ 下的命令定义冒烟 + kv add / remove 基本行为（通用套件逻辑见
- * packages/im/adapter/tests/endpoint-commands.test.ts）。
- */
-
-let store: MemoryEndpointConfigurationStore;
-
-beforeEach(() => {
-  store = new MemoryEndpointConfigurationStore();
-});
-
-function fakeContext(overrides: Record<string, unknown> = {}) {
-  const state = createEndpointRuntimeState();
-  return {
-    state,
-    use: (token: unknown) => {
-      if (token === slackRuntimeStateToken) return state;
-      if (token === endpointConfigurationStoreToken) return store;
-      throw new Error(`unexpected token: ${String(token)}`);
-    },
-    params: Object.freeze({}),
-    args: Object.freeze([]),
-    input: undefined,
-    config: undefined,
-    ...overrides,
-  } as never;
+const fixtures: Awaited<ReturnType<typeof createAdapterHarness>>[] = [];
+afterEach(async () => { await Promise.all(fixtures.splice(0).map(fixture => fixture.stop())); });
+async function fixture(config: Record<string, unknown> = {}) {
+  const repository = new MemoryDesiredRepository();
+  const runtime = await createAdapterHarness(definition, config, { name: 'slack', repository });
+  fixtures.push(runtime); await runtime.start(); runtime.open();
+  const use = vi.fn(() => { throw new Error('No file/env port belongs to account management'); });
+  function context(overrides: Record<string, unknown> = {}) {
+    return { owner: rootPluginId(), generation: 1, project: () => runtime.index,
+      use, config, input: undefined, params: {}, args: [], ...overrides } as never;
+  }
+  return { adapter: runtime.adapter, index: runtime.index, repository, use, context };
 }
 
-describe('slack endpoint command definitions', async () => {
-  it('三个命令模块均为合法 defineCommand', async () => {
-    for (const definition of [listCommand, addCommand, removeCommand]) {
-      expect(() => parseCommandDefinition(definition)).not.toThrow();
-    }
+describe('Slack commands use the owning runtime account authority', () => {
+  it('retains the three actual command definitions', () => {
+    for (const command of [listCommand, addCommand, removeCommand]) expect(() => parseCommandDefinition(command)).not.toThrow();
   });
-
-  it('add 走 kv 参数：凭据写 .env，yaml 存 ${REF}，连接字段内联', async () => {
-    const text = await addCommand.execute(fakeContext({
-      params: { id: 'bot1' },
-      args: ['token=xoxb-1', 'appToken=xapp-1'],
-    })) as string;
-
-    expect(text).toContain('✅');
-    const envContent = store.environmentText();
-    expect(envContent).toContain('SLACK_BOT1_TOKEN=xoxb-1');
-    expect(envContent).toContain('SLACK_BOT1_APP_TOKEN=xapp-1');
-    const config = store.configurationText('slack');
-    expect(config).toContain('${SLACK_BOT1_TOKEN}');
-    expect(config).toContain('${SLACK_BOT1_APP_TOKEN}');
+  it('saves a new inactive account through one CAS without constructing a Client, env write, or restart', async () => {
+    const runtime = await fixture();
+    const text = await addCommand.execute(runtime.context({ params: { id: 'bot1' }, args: ['token=123:abc', 'appToken=xapp-synthetic'] })) as string;
+    expect(text).toContain('配置已保存，尚未启动'); expect(text).toContain('无需重启进程');
+    expect(runtime.repository.writes).toHaveLength(1);
+    expect(runtime.repository.snapshot?.endpoints[0]).toMatchObject({ endpointId: 'bot1', desiredEnabled: false, config: { id: 'bot1', token: '123:abc', appToken: 'xapp-synthetic' } });
+    expect(runtime.adapter.getEndpoint(runtime.adapter.list()[0]!.instanceId)).toBeUndefined();
+    expect(runtime.use).not.toHaveBeenCalled();
+    const listed = await listCommand.execute(runtime.context()) as string;
+    expect(listed).toContain('bot1'); expect(listed).not.toContain('123:abc');
   });
-
-  it('add 缺少必填字段时报错', async () => {
-    expect(await addCommand.execute(fakeContext({ params: { id: 'bot1' } })))
-      .toContain('缺少必填字段：token');
+  it('rejects a missing credential without writing', async () => {
+    const runtime = await fixture();
+    expect(await addCommand.execute(runtime.context({ params: { id: 'bot1' } }))).toContain('缺少必填字段：token');
+    expect(runtime.repository.writes).toHaveLength(0);
   });
-
-
-  it('list 显示运行中 + 配置中的 endpoints', async () => {
-    const context = fakeContext();
-    (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('bot1', { id: 'bot1', mode: 'socket' });
-    await addCommand.execute(fakeContext({ params: { id: 'conf-bot' }, args: ['token=xoxb-1', 'appToken=xapp-1'] }));
-
-    const text = await listCommand.execute(context) as string;
-
-    expect(text).toContain('bot1（socket）');
-    expect(text).toContain('conf-bot');
+  it('removes the exact owned saved account without touching startup files', async () => {
+    const runtime = await fixture();
+    await addCommand.execute(runtime.context({ params: { id: 'bot1' }, args: ['token=t', 'appToken=xapp-synthetic'] }));
+    const result = await removeCommand.execute(runtime.context({ params: { id: 'bot1' } })) as string;
+    expect(result).toContain('删除配置已保存'); expect(result).not.toContain('重启');
+    expect(runtime.adapter.list()).toHaveLength(0); expect(runtime.repository.writes).toHaveLength(2);
+    expect(runtime.use).not.toHaveBeenCalled();
   });
-
-  it('remove 从配置移除并提示重启', async () => {
-    await addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['token=xoxb-1', 'appToken=xapp-1'] }));
-
-    const text = await removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
-
-    expect(text).toContain('移除');
-    expect(text).toContain('重启');
-    expect(store.configurationText('slack')).not.toContain('bot1');
-  });
-
-  it('配置 master 后非 master 拒绝 add/remove', async () => {
-    const denied = fakeContext({
-      config: { master: 'alice' },
-      input: { sender: { id: 'bob' } },
-      params: { id: 'bot1' },
-      args: ['token=xoxb-1', 'appToken=xapp-1'],
-    });
-
+  it('preserves the existing master authorization before account admission', async () => {
+    const runtime = await fixture({ master: 'alice' });
+    const denied = runtime.context({ input: { sender: { id: 'bob' } }, params: { id: 'bot1' }, args: ['token=t', 'appToken=xapp-synthetic'] });
     expect(await addCommand.execute(denied)).toBe('仅 master 可执行 Slack endpoint 管理命令');
     expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 Slack endpoint 管理命令');
+    expect(runtime.repository.writes).toHaveLength(0);
   });
 });

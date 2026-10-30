@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
+import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { createHttpHost } from '@zhin.js/host-http';
 import { CONVERSATION_EVENT_MODEL, CONVERSATION_CURSOR_MODEL, DatabaseConversationEventStore, type ConversationRef } from '@zhin.js/im-contract';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, childPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
@@ -15,15 +15,16 @@ it('reads the connected endpoint canonical history even when display names canno
   db.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
   await db.start();
   let endpointKey = 'sandbox-bot';
-  class TestEndpoint extends Endpoint<object> {
-    readonly client = { connectionById: (id: string) => id === 'connected-page'
-      ? { target: endpointKey, owner: 'owner', placeholder: false, socket: { readyState: 1 } } : undefined };
-    start() {} open() {} close() {} stop() {}
-    send() { throw new Error('History recovery must not send messages'); }
+  class WorkspaceClient {
+    connectionById(id: string) { return id === 'connected-page' ? { target: endpointKey, owner: 'owner', placeholder: false, socket: { readyState: 1 } } : undefined; }
+    send(): never { throw new Error('History recovery must not send messages'); }
+  }
+  class TestEndpoint extends WorkspaceClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: () => this.send() });
   }
   const root = rootPluginId(), owner = childPluginId(root, 'sandbox');
   const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'sandbox', source: '/sandbox/adapters/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => new TestEndpoint() }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(); } }() }) });
   const base: SnapshotState = { root, tree: new Map([
     [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: directory, children: [owner] }],
     [owner, { id: owner, instanceKey: 'sandbox', packageName: '@zhin.js/adapter-sandbox', packageRoot: directory, parent: root, children: [] }],

@@ -27,7 +27,7 @@ describe('published Lark SDK long connection contract', () => {
     (client as unknown as { onReady(): void }).onReady();
     await connection;
     await dispatcher.invoke({ schema: '2.0', header: { event_type: 'im.message.receive_v1', event_id: 'event1' }, event: { message: { message_id: 'om1', chat_id: 'oc1', chat_type: 'p2p', message_type: 'text', content: '{"text":"hello"}' }, sender: { sender_id: { open_id: 'ou1' } } } }, { needCheck: false });
-    expect(receive).toHaveBeenCalledWith(expect.objectContaining({ message_id: 'om1', sender: { sender_id: { open_id: 'ou1' } } }));
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({ message_id: 'om1', sender: { sender_id: { open_id: 'ou1' } } }), expect.objectContaining({ message: expect.objectContaining({ message_id: 'om1' }), sender: { sender_id: { open_id: 'ou1' } } }));
     const action = { context: { open_message_id: 'om1', open_chat_id: 'oc1' }, operator: { open_id: 'ou1' }, action: { tag: 'button', value: { zhin_payload: 'confirm' } } };
     await dispatcher.invoke({ schema: '2.0', header: { event_type: 'card.action.trigger', event_id: 'click1' }, event: action }, { needCheck: false });
     expect(cardAction).toHaveBeenCalledWith(expect.objectContaining(action));

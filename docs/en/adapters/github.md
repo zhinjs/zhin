@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=dfc5b10c5f19d69e -->
@@ -17,7 +17,7 @@ GitHub Plugin Runtime adapter — Issue/PR comment sections serve as chat channe
 ## Features
 
 - **Chat channel**: Issue/PR comment sections are mapped as group chats, supporting message send/receive
-- **Webhook inbound**: HMAC-SHA256 signature verification -> `Endpoint.emit(...)`
+- **Webhook inbound**: HMAC-SHA256 signature verification -> `endpoint[endpointSpec].events.emit(...)`
 - **Outbound**: `send({ conversation, payload })` -> Issue/PR comment (`conversation.id` is the channel ID, e.g. `owner/repo/issues/42`)
 - **GitHub App authentication**: JWT -> Installation Token
 - **Agent tools**: `tools/` provides star, bind, subscribe, workspace, and related capabilities.
@@ -104,7 +104,7 @@ See `tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_
 | `src/protocol.ts` | Protocol pure functions (channel / payload) |
 | `src/gh-client.ts` | GitHub API client |
 
-- Inbound: `httpHostToken` POST -> `Endpoint.emit(...)`
+- Inbound: `httpHostToken` POST -> `endpoint[endpointSpec].events.emit(...)`
 - Outbound: `send({ conversation, payload })`
 
 ## Console page
@@ -112,8 +112,10 @@ See `tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_
 Open the Console **GitHub** page (route `/github`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.github.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `github:read`; writes require `github:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `github endpoint add` command.
 

@@ -1,6 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
 import {
-  icqqLoginControlToken,
+  icqqLoginControls,
   icqqLoginForbidden,
   isIcqqLoginOperator,
   pendingTaskLabel,
@@ -10,9 +10,9 @@ import {
 export default defineCommand({
   description: '提交 ICQQ 滑块/短信/设备验证内容',
   descriptionI18n: { en: 'Submit an ICQQ slider, SMS or device verification value' },
-  async execute({ args, config, input, use }) {
+  async execute({ args, config, input, project, owner }) {
     if (!isIcqqLoginOperator(config, input)) return icqqLoginForbidden();
-    const controls = use(icqqLoginControlToken);
+    const controls = icqqLoginControls({ project, owner });
     // One endpoint: the whole argument is the code. Multiple: first arg selects the UIN.
     const requested = controls.size > 1 ? args[0] : undefined;
     const value = (controls.size > 1 ? args.slice(1) : args).join(' ').trim();

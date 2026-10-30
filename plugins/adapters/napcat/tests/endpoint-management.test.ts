@@ -1,4 +1,5 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { EventEmitter } from 'node:events';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
@@ -18,7 +19,12 @@ import { NapCatWssEndpoint } from '../src/wss-endpoint.js';
 const adapterFeature = featureId('zhin.adapter');
 const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'napcat');
 const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
+const httpStub = { ws: vi.fn(() => ({ onConnection: vi.fn(() => () => undefined) })), route: vi.fn(() => () => undefined) } as unknown as HttpHost;
+
+function createSocket() {
+  const socket = Object.assign(new EventEmitter(), { readyState: 1, send: vi.fn(), ping: vi.fn(), close: vi.fn() });
+  queueMicrotask(() => socket.emit('open')); return socket;
+}
 
 const expectedCapabilities = ['listFriends', 'listGroups', 'listGroupMembers'];
 
@@ -119,19 +125,21 @@ describe('napcat endpoint management wiring', () => {
     }) as NapCatHttpConfig;
 
     const endpoints = [
-      bindTestEndpoint(new NapCatWsEndpoint({ id: endpointKey, gateway, config: wsConfig }), gateway, undefined),
-      bindTestEndpoint(new NapCatWssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }), gateway, undefined),
-      bindTestEndpoint(new NapCatHttpEndpoint({ id: endpointKey, gateway, http: httpStub, config: httpConfig }), gateway, undefined),
+      await createEndpointHarness(() => new NapCatWsEndpoint({ id: endpointKey, config: wsConfig, createWebSocket: createSocket }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
+      await createEndpointHarness(() => new NapCatWssEndpoint({ id: endpointKey, http: httpStub, config: wssConfig }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
+      await createEndpointHarness(() => new NapCatHttpEndpoint({ id: endpointKey, http: httpStub, config: httpConfig }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
     ];
     for (const endpoint of endpoints) {
-      expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-      const callApi = vi.spyOn(endpoint.client, 'callApi').mockResolvedValue([
+      await endpoint.start(); endpoint.open();
+      expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual(expectedCapabilities);
+      const callApi = vi.spyOn(endpoint.endpoint, 'callApi').mockResolvedValue([
         { user_id: 10001, nickname: 'Alice' },
       ]);
-      await expect(endpoint.management.listFriends?.()).resolves.toEqual([
+      await expect(endpoint.index.management(endpoint.canonicalId)!.listFriends?.()).resolves.toEqual([
         { user_id: 10001, nickname: 'Alice', remark: '' },
       ]);
       expect(callApi).toHaveBeenCalledWith('get_friend_list');
+      await endpoint.stop();
     }
   });
 });

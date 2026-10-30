@@ -1,5 +1,4 @@
-import { defineEndpointClient } from 'zhin.js/adapter';
-import type { SlackWebClientLike } from './endpoint.js';
+import type { SlackAdapter } from './adapter.js';
 import type { SlackEvent } from './protocol.js';
 
 /** Slack users.info response fields projected by the bundled tools. */
@@ -19,12 +18,5 @@ export interface SlackUserInfo {
 export type SlackClientEventMap = Record<string, SlackEvent>;
 
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly slack: {
-      readonly client: SlackWebClientLike;
-      readonly events: SlackClientEventMap;
-    };
-  }
+  interface AdapterRegistry { readonly slack: SlackAdapter; }
 }
-
-export const slackClient = defineEndpointClient<SlackWebClientLike, SlackClientEventMap>('slack');

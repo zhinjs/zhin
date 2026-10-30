@@ -1,4 +1,4 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
@@ -42,14 +42,14 @@ function fakeFetch(pages: BilibiliReply[][], options: { selfMid?: number; riskCo
   return { fetch, calls };
 }
 
-function makeEndpoint(fetch: BilibiliFetch, config: Record<string, unknown> = {}) {
+async function makeEndpoint(fetch: BilibiliFetch, config: Record<string, unknown> = {}) {
   const receive = vi.fn(async () => undefined);
-  const endpoint = bindTestEndpoint(new BilibiliEndpoint({
+  const endpoint = await createEndpointHarness(() => new BilibiliEndpoint({
     id: endpointId,
     autoPoll: false,
     fetch,
     config: resolveBilibiliConfig({ id: 'bili', videos: ['BV1xx411c7mD'], sessdata: 's', biliJct: 'c', ...config }),
-  }), { receive });
+  }), { name: 'bilibili', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway({ receive }) });
   return { endpoint, receive };
 }
 
@@ -77,21 +77,37 @@ describe('bilibili protocol', () => {
 });
 
 describe('BilibiliEndpoint', () => {
+  it('does not advance native comment dedupe while closed and admits the same reply after reopen', async () => {
+    const { fetch } = fakeFetch([[reply(1)], [reply(1), reply(2)]], { selfMid: 99 });
+    const { endpoint, receive } = await makeEndpoint(fetch);
+    try {
+      await endpoint.start(); endpoint.open();
+      await endpoint.endpoint.pollOnce();
+      await endpoint.close();
+      await endpoint.endpoint.pollOnce();
+      expect(receive).not.toHaveBeenCalled();
+      endpoint.open();
+      await endpoint.endpoint.pollOnce();
+      expect(receive).toHaveBeenCalledTimes(1);
+      expect(receive).toHaveBeenCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: '2' }) }));
+    } finally { await endpoint.stop(); }
+  });
+
   it('baselines first poll, then admits only new comments per thread, skipping self', async () => {
     const { fetch } = fakeFetch([
       [reply(1)],
       [reply(1), reply(2, { root: 1, parent: 1 }), reply(3, { mid: 99 }), reply(4)],
     ], { selfMid: 99 });
-    const { endpoint, receive } = makeEndpoint(fetch);
+    const { endpoint, receive } = await makeEndpoint(fetch);
     await endpoint.start();
     endpoint.open();
-    expect(endpoint.selfUserId).toBe('99');
-    expect(endpoint.videoAids).toEqual(['170001']);
+    expect(endpoint.index.connection('bilibili', endpoint.canonicalId)?.selfUserId).toBe('99');
+    expect(endpoint.endpoint.videoAids).toEqual(['170001']);
 
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).not.toHaveBeenCalled();
 
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).toHaveBeenCalledTimes(2);
     expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'channel', id: 'video:170001:1', parent: { kind: 'channel', id: 'video:170001' } }),
@@ -103,44 +119,46 @@ describe('BilibiliEndpoint', () => {
       conversation: expect.objectContaining({ id: 'video:170001:4' }),
     }));
 
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).toHaveBeenCalledTimes(2);
-    endpoint.stop();
+    await endpoint.stop();
   });
 
   it('opens circuit breaker on risk codes and stops polling', async () => {
     const { fetch, calls } = fakeFetch([[reply(1)]], { riskCode: -412 });
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
     await endpoint.start();
     endpoint.open();
-    await endpoint.pollOnce();
-    await endpoint.pollOnce();
-    expect(endpoint.circuitBreaker?.code).toBe(-412);
-    expect(endpoint.transportState).toBe('closed');
+    await endpoint.endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
+    expect(endpoint.endpoint.circuitBreaker?.code).toBe(-412);
+    expect(endpoint.index.describe()[0]?.transportState).toBe('closed');
     const before = calls.length;
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(calls.length).toBe(before);
   });
 
   it('queues drafts in review mode and never calls the write API', async () => {
     const { fetch, calls } = fakeFetch([[]]);
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
+    await endpoint.start(); endpoint.open();
     const conversation = { endpoint: { id: 'e', adapter: 'bilibili' }, kind: 'channel' as const, id: 'video:170001:1' };
     const error = await endpoint.send({ conversation, payload: '感谢支持' }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(EndpointDeliveryError);
     expect((error as EndpointDeliveryError).code).toBe('approval_pending');
     expect((error as EndpointDeliveryError).disposition).toBe('not_sent');
-    expect(endpoint.drafts.list()).toEqual([expect.objectContaining({ oid: '170001', root: '1', message: '感谢支持' })]);
+    expect(endpoint.endpoint.drafts.list()).toEqual([expect.objectContaining({ oid: '170001', root: '1', message: '感谢支持' })]);
     expect(calls.some((url) => url.includes('/x/v2/reply/add'))).toBe(false);
   });
 
   it('refuses outbound when sendMode is off or target is not a thread', async () => {
     const { fetch } = fakeFetch([[]]);
-    const { endpoint } = makeEndpoint(fetch, { sendMode: 'off' });
+    const { endpoint } = await makeEndpoint(fetch, { sendMode: 'off' });
+    await endpoint.start(); endpoint.open();
     const thread = { endpoint: { id: 'e', adapter: 'bilibili' }, kind: 'channel' as const, id: 'video:170001:1' };
     await expect(endpoint.send({ conversation: thread, payload: 'hi' })).rejects.toMatchObject({ code: 'send_disabled' });
     await expect(endpoint.send({ conversation: { ...thread, id: 'video:170001' }, payload: 'hi' }))
       .rejects.toMatchObject({ code: 'invalid_recipient' });
-    expect(endpoint.drafts.list()).toHaveLength(0);
+    expect(endpoint.endpoint.drafts.list()).toHaveLength(0);
   });
 });

@@ -39,14 +39,12 @@ const expectedSurface = new Map([
     'StateScope', 'StateRecord', 'StateWriteOptions', 'PersistentStatePort', 'PluginStateStore',
   ]],
   ['zhin.js/adapter', [
-    'AdapterContext', 'AdapterDefinition', 'AdapterSegmentModelExtension', 'AdapterSegmentPolicy', 'Endpoint',
-    'EndpointActivationContext',
-    'EndpointCleanup', 'EndpointClientContext', 'EndpointClientToken', 'EndpointConnectionContext',
+    'AdapterContext', 'AdapterDefinition', 'AdapterRegistry', 'AdapterSegmentModelExtension', 'AdapterSegmentPolicy', 'Endpoint',
     'EndpointConversation', 'EndpointEvent', 'EndpointEventSink', 'EndpointIdentity',
-    'EndpointImplementation', 'EndpointIncomingMessage', 'EndpointSendPart', 'EndpointSendRequest', 'EndpointSendResult',
+    'EndpointIncomingMessage', 'EndpointSendPart', 'EndpointSendRequest', 'EndpointSendResult',
     'PlatformEvent', 'AdapterCapability', 'AdapterInteractiveMode',
     'AdapterMarkdownMode', 'AdapterOperation', 'AdapterOperationDeclaration',
-    'AdapterOutboundMedia', 'AdapterReactionDeclaration', 'HtmlOutboundMode', 'defineAdapter', 'defineEndpointClient',
+    'AdapterOutboundMedia', 'AdapterReactionDeclaration', 'HtmlOutboundMode', 'defineAdapter',
   ]],
   ['zhin.js/agent', [
     'AgentResourceHub', 'AgentPreset', 'AgentTool', 'AgentToolExecutionContext',

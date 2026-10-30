@@ -4,31 +4,19 @@
  * One adapter augments this interface once; every authoring Feature then
  * derives the same Client and native event types from its literal `adapter`.
  */
-/** @deprecated New platforms augment AdapterRegistry with their Adapter type. */
-export interface AdapterClientRegistry {
-  // Augmented by platform adapter packages.
-}
-
-export interface AdapterClientTypes<TClient = unknown, TEvents extends object = Record<string, unknown>> {
-  readonly client: TClient;
-  readonly events: TEvents;
-}
-
-/** Canonical registry: new adapters register their Adapter class here once.
- * Legacy Client descriptors remain accepted through the same registry during migration. */
-export interface AdapterRegistry extends AdapterClientRegistry {}
+/** Each platform registers its Adapter class once for all authoring Features. */
+export interface AdapterRegistry {}
 
 export type RegisteredAdapterName = Extract<keyof AdapterRegistry, string>;
 export type EndpointOf<TAdapter> = TAdapter extends { getEndpoint(...args: never[]): infer TEndpoint }
   ? NonNullable<TEndpoint> : unknown;
 export type EventsOf<TAdapter> = TAdapter extends { readonly adapterEvents: infer TEvents extends object }
-  ? TEvents : TAdapter extends AdapterClientTypes<unknown, infer TEvents> ? TEvents : Record<string, unknown>;
+  ? TEvents : Record<string, unknown>;
 export type AdapterInstance<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
   ? AdapterRegistry[TAdapter] extends { getEndpoint(...args: never[]): unknown } ? AdapterRegistry[TAdapter] : unknown
   : unknown;
 export type AdapterClient<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
-  ? AdapterRegistry[TAdapter] extends { getEndpoint(...args: never[]): infer TEndpoint } ? NonNullable<TEndpoint>
-    : AdapterRegistry[TAdapter] extends AdapterClientTypes<infer TClient, object> ? TClient : unknown
+  ? EndpointOf<AdapterRegistry[TAdapter]>
   : unknown;
 export type AdapterEvents<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
   ? EventsOf<AdapterRegistry[TAdapter]> : Record<string, unknown>;

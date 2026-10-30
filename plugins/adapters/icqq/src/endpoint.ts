@@ -11,7 +11,7 @@ import {
 import { inspect } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
-  createEndpointSpecification, endpointSpec, endpointRuntimeOf, type PlatformEndpoint, type EndpointSpecification,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   type EndpointControl,
   type EndpointManagement,
   type EndpointPendingRequest,
@@ -97,10 +97,8 @@ const BOUND_EVENTS = [
   'system.login.auth',
 ] as const;
 
-export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint {
+export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
   readonly [endpointSpec]: EndpointSpecification;
-  get identity() { return endpointRuntimeOf(this).identity; }
-  get selfUserId() { return endpointRuntimeOf(this).selfUserId; }
   readonly #logger: ReturnType<typeof getAdapterLogger>;
   readonly #options: IcqqEndpointOptions;
   readonly endpointName: string;
@@ -121,7 +119,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
   readonly #inflightInbound = new Set<Promise<void>>();
   readonly #inboundOwner = new AsyncLocalStorage<symbol>();
   readonly #contentResolver: IcqqContentResolver;
-  readonly content: EndpointContentPort;
+  readonly #content: EndpointContentPort;
   readonly loginControl: IcqqLoginControl;
   #reloginTimer?: ReturnType<typeof setTimeout>;
   #reloginAttempts = 0;
@@ -129,7 +127,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
   #offlineNoticeAt = 0;
   #challengeNoticeAt = 0;
 
-  readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
+  readonly #management: EndpointManagement = Object.freeze<EndpointManagement>({
     inspectGroupMember: (group, user, signal) => inspectGroupMember(this, group, user, signal),
     inspectGroupScene: (group, signal) => inspectGroupScene(this, group, signal),
     inspectGroupMemberProfile: (group, user, signal) => inspectGroupMemberProfile(this, group, user, signal),
@@ -175,7 +173,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     },
   });
 
-  readonly control: EndpointControl = Object.freeze({
+  readonly #control: EndpointControl = Object.freeze({
     recall: async (message: MessageRef) => {
       if (!message.id || message.id.startsWith('outbound:')) return;
       if (!await this.deleteMsg(message.id)) throw new Error('QQ did not confirm message recall');
@@ -218,17 +216,17 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     super(Number(options.config.id), resolveNativeClientConfig(options.config),
       (operation, error) => this.#handleBackgroundFailure(operation, error));
     const name = () => this.endpointName;
-    const state = () => this.transportState;
-    const content = () => this.content;
+    const state = () => this.#transportState;
+    const content = () => this.#content;
     this[endpointSpec] = createEndpointSpecification(this, {
-      start: signal => this.start(signal), open: () => this.open(), close: () => this.close(), stop: () => this.stop(),
-      send: request => this.send(request), get name() { return name(); },
+      start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(), stop: () => this.#stopFramework(),
+      send: request => this.#sendFramework(request), get name() { return name(); },
       get transportState() { return state(); },
-      management: this.management, control: this.control,
+      management: this.#management, control: this.#control,
       get content() { return content(); },
     });
     this.#contentResolver = new IcqqContentResolver(this);
-    this.content = this.#contentResolver.port;
+    this.#content = this.#contentResolver.port;
     this.#logger = getAdapterLogger('icqq', options.config.id);
     this.#options = options;
     this.endpointName = options.config.id;
@@ -236,7 +234,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
       endpointId: this.endpointName,
       state: () => ({
         endpointId: this.endpointName,
-        transportState: this.transportState,
+        transportState: this.#transportState,
         online: this.isOnline(),
         pending: this.#pendingLoginTasks(),
       }),
@@ -413,7 +411,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     });
   }
 
-  get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     if (this.#stopped || this.#retiring) return 'stopped';
     if (!this.#started) return 'idle';
     if (this.isOnline()) return 'open';
@@ -421,7 +419,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     return this.#options.config.autoReconnect ? 'reconnecting' : 'closed';
   }
 
-  async start(signal: AbortSignal): Promise<void> {
+  async #startFramework(signal: AbortSignal): Promise<void> {
     if (this.#started) return;
     signal.throwIfAborted();
     this.#stopped = false;
@@ -451,7 +449,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
       );
     } catch (error) {
       this.#notifyOffline('start_failed', false);
-      await this.stop();
+      await this.#stopFramework();
       this.#logger.debug(`Failed to connect ICQQ client: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
       throw error;
     } finally {
@@ -460,7 +458,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     }
   }
 
-  open(): void {
+  #openFramework(): void {
     if (this.#retirementArmed) {
       this.#retirementEpoch += 1;
       this.#retirementArmed = false;
@@ -477,16 +475,16 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     }
   }
 
-  async close(): Promise<void> {
+  async #closeFramework(): Promise<void> {
     this.#assertExternalLifecycle('close');
     this.#armRetirementFence();
     await Promise.allSettled([...this.#inflightInbound]);
   }
 
-  async stop(): Promise<void> {
+  async #stopFramework(): Promise<void> {
+    this.#assertExternalLifecycle('stop');
     this.#stopped = true;
     this.#clearReloginTimer();
-    this.#assertExternalLifecycle('stop');
     this.#armRetirementFence();
     await Promise.allSettled([...this.#inflightInbound]);
     this.#resolveStartOnline?.();
@@ -536,7 +534,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     });
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<EndpointSendResult> {
+  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<EndpointSendResult> {
     if (!this.#started) throw new EndpointDeliveryError('endpoint_disconnected', 'icqq endpoint 未连接', 'not_sent');
     const mediaMode = resolveIcqqOutboundMediaMode(this.#options.config);
     const prepared = isIcqqSegmentPayload(payload)
@@ -654,7 +652,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
     this.#inflightInbound.add(settlement);
     let operation: Promise<void>;
     try {
-      operation = this.#inboundOwner.run(owner, run);
+      operation = this.#inboundOwner.run(owner, () => this[endpointSpec].events.run(run));
     } catch (error) {
       this.#inflightInbound.delete(settlement);
       settle();
@@ -737,16 +735,9 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
   #bindClientEvents(): void {
     this.#bindNativeEvents();
     const safe = (label: string, fn: () => void): void => {
-      try {
-        fn();
-      } catch (error) {
-        this.#logger.warn(formatCompact({
-          op: 'icqq_event_handler',
-          endpoint: this.endpointName,
-          event: label,
-          error: error instanceof Error ? error.message : String(error),
-        }));
-      }
+      void this[endpointSpec].events.run(fn).catch(() => {
+        this.#logger.debug(formatCompact({ op: 'icqq_event_not_admitted', endpoint: this.endpointName, event: label }));
+      });
     };
     this.on('message.private', (event) => {
       this.#startMessageEvent('message.private', event);
@@ -755,7 +746,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements PlatformEndpoint 
       this.#startMessageEvent('message.group', event);
     });
     this.on('message.guild', (event) => {
-      void this.#handleGuildEvent(event).catch((error) => {
+      void this.#trackInbound(() => this.#handleGuildEvent(event)).catch((error) => {
         this.#logInboundHandlerFailure('message.guild', error);
       });
     });

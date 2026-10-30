@@ -2,6 +2,8 @@
 
 Adapters connect external platforms to Zhin's common message and Endpoint model. Choose by deployment constraints first, then verify capabilities and support tier. A platform name alone is not enough.
 
+The owning `Adapter` manages desired accounts and running incarnations. Endpoint is the actual SDK or protocol Client implementing `endpointSpec`; native APIs retain their contracts. Framework inbound events use `endpoint[endpointSpec].events`, with complete callbacks admitted through `events.run(...)`. See [Adapter authoring](/en/authoring/adapters).
+
 ## Make the choice first
 
 | Your constraint | Prefer | Representative adapters |

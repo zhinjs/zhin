@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=28156c308b7af5ab -->
@@ -20,7 +20,7 @@ Zhin.js [Milky](https://milky.ntqqrev.org/) protocol adapter (Plugin Runtime). D
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - **Forward WebSocket** (`connection: ws`): the application connects to the protocol endpoint `ws(s)://baseUrl/event`
 - `access_token` authentication (Bearer + query)
-- Inbound via `Endpoint.emit(...)`; outbound `send({ conversation, payload })` -> HTTP `send_*_message`
+- Inbound via `endpoint[endpointSpec].events.emit(...)`; outbound through the registered send hook -> HTTP `send_*_message`
 
 ## Installation
 
@@ -30,14 +30,16 @@ pnpm add @zhin.js/adapter-milky
 
 ## Plugin Runtime
 
+The owning `Adapter` manages desired accounts and running incarnations. The actual SDK or protocol Client implements structural `Endpoint`; framework hooks use `endpointSpec` without replacing native SDK APIs. Complete accepted callbacks enter through `events.run(...)` before deduplication and asynchronous normalization; see [Adapter authoring](/en/authoring/adapters).
+
 - `@zhin.js/adapter` — convention-based `adapters/milky/index.ts` (`defineAdapter`)
-- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
+- `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
 `AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol layer receives one expanded endpoint configuration and does not inspect nested endpoint rows or infer endpoint identity from process environment variables.
 
-Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; temp sessions carry the group in `parent`)
+Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; temp sessions carry the group in `parent`)
 Outbound: `send({ conversation, payload })` -> HTTP `send_private_message` / `send_group_message` (payload is rendered by gateway/core; no segment-mapper)
 
 ## Prerequisites
@@ -101,8 +103,10 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 Open the Console **Milky** page (route `/milky`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.milky.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `milky:read`; writes require `milky:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `milky endpoint add` command.
 

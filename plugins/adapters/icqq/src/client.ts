@@ -1,7 +1,6 @@
 import type { IcqqAdapter } from './adapter.js';
 import type { IcqqEndpoint } from './endpoint.js';
 import type { EventMap } from '@icqqjs/icqq';
-import { defineEndpointClient } from 'zhin.js/adapter';
 
 type EventPayload<TListener> = TListener extends (
   event: infer TEvent,
@@ -23,6 +22,3 @@ declare module '@zhin.js/feature-kit' {
     readonly icqq: IcqqAdapter;
   }
 }
-
-/** Typed, generation-checked identity used by handlers, commands, tools and schedules. */
-export const icqqClient = defineEndpointClient<IcqqClient, IcqqClientEventMap>('icqq');

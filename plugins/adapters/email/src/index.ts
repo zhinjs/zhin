@@ -20,7 +20,6 @@ export {
 
 export {
   EmailClient,
-  emailClient,
   type EmailClientEventMap,
 } from './client.js';
 
@@ -36,3 +35,4 @@ export {
   type EmailImapTransport,
   type EmailSmtpTransport,
 } from './transport.js';
+export { EmailAdapter } from './adapter.js';

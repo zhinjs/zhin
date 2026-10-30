@@ -17,7 +17,8 @@ export default defineAgentTool<{ guild_id: string; channel_id: string; user_id: 
   permissions: [platformPermission('qq', 'manage_roles')],
   async execute({ guild_id, channel_id, user_id, role_id  }: { guild_id: string; channel_id: string; user_id: string; role_id: string }, context) {
     const client = context.$client;
-    const success = await client.addMemberRole(guild_id, channel_id, user_id, role_id);
+    await client.memberService.addMemberRole(guild_id, channel_id, user_id, role_id);
+    const success = true;
     return { success, message: success ? t(context.locale, 'roleAdded') : t(context.locale, 'operationFailed') };
   },
 });

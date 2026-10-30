@@ -13,7 +13,7 @@ export default defineAgentTool({
     cursor: z.string().optional().describe('上一页返回的 next_cursor；首次不传'),
   }),
   async execute({ cursor }, context) {
-    const page = await context.$client.api.groupService.getMembersPage(currentGroup(context), cursor ? { cursor } : {});
+    const page = await context.$client.groupService.getMembersPage(currentGroup(context), cursor ? { cursor } : {});
     return { success: true, members: page.members ?? [], count: page.members?.length ?? 0, next_cursor: page.next_cursor || undefined };
   },
 });

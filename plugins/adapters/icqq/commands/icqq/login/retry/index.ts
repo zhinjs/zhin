@@ -1,6 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
 import {
-  icqqLoginControlToken,
+  icqqLoginControls,
   icqqLoginForbidden,
   isIcqqLoginOperator,
   pickIcqqLoginControl,
@@ -9,9 +9,9 @@ import {
 export default defineCommand({
   description: '重新触发 ICQQ 登录',
   descriptionI18n: { en: 'Trigger an ICQQ login attempt again' },
-  async execute({ args, config, input, use }) {
+  async execute({ args, config, input, project, owner }) {
     if (!isIcqqLoginOperator(config, input)) return icqqLoginForbidden();
-    const picked = pickIcqqLoginControl(use(icqqLoginControlToken), args[0]);
+    const picked = pickIcqqLoginControl(icqqLoginControls({ project, owner }), args[0]);
     if (!picked.control) return picked.text ?? 'ICQQ 适配器还没有启动';
     try {
       await picked.control.relogin();

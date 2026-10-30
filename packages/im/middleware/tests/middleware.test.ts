@@ -29,13 +29,12 @@ interface MiddlewareTestClient {
   readonly id: string;
 }
 
+declare class RegisteredTestAdapter {
+  readonly adapterEvents: Record<string, unknown>;
+  getEndpoint(instanceId: string): MiddlewareTestClient | undefined;
+}
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly 'middleware-test': {
-      readonly client: MiddlewareTestClient;
-      readonly events: Record<string, unknown>;
-    };
-  }
+  interface AdapterRegistry { readonly 'middleware-test': RegisteredTestAdapter; }
 }
 
 describe('Middleware Feature', () => {

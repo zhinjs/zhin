@@ -1,12 +1,14 @@
 /**
- * Runtime `gh *` 命令共享：从当前 generation 的 Adapter projection 取 GithubClient。
+ * Runtime `gh *` commands resolve the native GithubEndpoint from the current projection.
  */
 import {
-  githubClient,
   type GhClient,
-  type GithubClient,
+  type GithubEndpoint,
 } from '@zhin.js/adapter-github';
-import type { EndpointClientContext } from 'zhin.js/adapter';
+import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
+import type { CapabilityContext } from 'zhin.js';
+
+type GithubOperationContext = Pick<CapabilityContext, 'project'> & { readonly input?: unknown };
 
 const GITHUB_ENDPOINT = process.env.GITHUB_ENDPOINT_ID?.trim() || 'zhin-dev';
 
@@ -44,15 +46,15 @@ function platformFromInput(input: unknown): { adapter?: string; senderId?: strin
   return { adapter, senderId };
 }
 
-export function resolveGithubEndpoint(context: EndpointClientContext): GithubClient | string {
+export function resolveGithubEndpoint(context: GithubOperationContext): GithubEndpoint | string {
   try {
-    return githubClient.get({ project: context.project }, GITHUB_ENDPOINT);
+    return context.project<AdapterIndex>(adapterFeatureId).client<GithubEndpoint>('github', GITHUB_ENDPOINT);
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
   }
 }
 
-export async function resolveGhClient(context: EndpointClientContext): Promise<GhClient | string> {
+export async function resolveGhClient(context: GithubOperationContext): Promise<GhClient | string> {
   const endpoint = resolveGithubEndpoint(context);
   if (typeof endpoint === 'string') return endpoint;
   const { adapter, senderId } = platformFromInput(context.input);

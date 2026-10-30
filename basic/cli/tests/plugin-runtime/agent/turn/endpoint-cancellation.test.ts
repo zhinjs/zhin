@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec,
-  type EndpointDesiredRepository, type EndpointDesiredSnapshot, type PlatformEndpoint } from '@zhin.js/adapter';
+  type EndpointDesiredRepository, type EndpointDesiredSnapshot, type Endpoint as EndpointContract } from '@zhin.js/adapter';
 import { ImRuntime, ingressRouteToken } from '@zhin.js/core/runtime';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import { AgentTurnIngressRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
-class LocalEndpoint implements PlatformEndpoint {
+class LocalEndpoint implements EndpointContract {
   readonly [endpointSpec] = createEndpointSpecification(this, {
     start() {}, open() {}, close() {}, stop() {}, send: async () => 'sent',
   });

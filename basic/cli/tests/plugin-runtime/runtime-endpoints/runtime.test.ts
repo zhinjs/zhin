@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Adapter, AdapterIndex, adapterFeature, adapterFeatureId, createEndpointSpecification, defineAdapter,
-  endpointDesiredRepositoryToken, endpointEventGatewayToken, endpointSpec, type PlatformEndpoint } from '@zhin.js/adapter';
+  endpointDesiredRepositoryToken, endpointEventGatewayToken, endpointSpec, type Endpoint as EndpointContract } from '@zhin.js/adapter';
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { definePlugin } from '@zhin.js/plugin-runtime';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
@@ -15,7 +15,7 @@ class Modules implements ModuleRuntime {
   invalidate() {} affectedSources(source: string) { return [source]; } async close() {}
 }
 class NativeClient { constructor(readonly configuration: Readonly<Record<string, unknown>>) {} }
-class Endpoint extends NativeClient implements PlatformEndpoint {
+class Endpoint extends NativeClient implements EndpointContract {
   readonly stopped = vi.fn();
   readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop: () => this.stopped(), send: async () => 'mid' });
 }

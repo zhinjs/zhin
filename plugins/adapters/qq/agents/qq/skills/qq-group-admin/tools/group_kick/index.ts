@@ -21,14 +21,14 @@ export default defineAgentTool({
     const client = context.$client;
     const [self, member] = await Promise.all([
       requireGroupManager(context, group),
-      client.api.groupService.getMemberInfo(group, user_id),
+      client.groupService.getMemberInfo(group, user_id),
     ]);
     if (!self) return { success: false, message: t(context.locale, 'botNotManager') };
     if (member.member_openid !== user_id || member.member_role !== 'member' || member.bot || user_id === self.member_openid) {
       return { success: false, message: t(context.locale, 'targetNotMember') };
     }
     context.signal.throwIfAborted();
-    const { blacklistFailed } = await kickQqGroupMember(client.api, group, user_id, blacklist === true);
+    const { blacklistFailed } = await kickQqGroupMember(client, group, user_id, blacklist === true);
     return {
       success: true,
       message: t(context.locale, 'memberKicked', { p0: member.username || user_id }),

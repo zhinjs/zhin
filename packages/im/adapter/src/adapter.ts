@@ -1,15 +1,19 @@
+import { redactConfigurationUrl } from './configuration-metadata.js';
+import { AsyncResource } from 'node:async_hooks';
+import { sameConfigurationIdentity } from './configuration-identity.js';
+import { readConfigurationPath, writeConfigurationPath } from './configuration-fields.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
-import { retireEndpoint } from './endpoint.js';
-import { endpointClientOf, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
+import { retireEndpoint } from './endpoint-specification.js';
+import { isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
 import {
   AdapterManagementError,
   type AdapterDescriptorInfo, type EndpointChildLease, type EndpointChildView,
   type EndpointDesiredRecord, type EndpointDesiredRepository, type EndpointDesiredSnapshot,
-  type EndpointCreationContext, type EndpointMetadata, type AdapterMutationResult, type EndpointSecretResolver,
+  type EndpointCreationContext, type EndpointPreviousIdentity, type EndpointMetadata, type AdapterMutationResult, type EndpointSecretResolver,
   type EndpointExecution, type EndpointAction, type AdapterMutationOptions, type EndpointConfigurationView,
 } from './adapter-types.js';
 
@@ -69,6 +73,46 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   /** Platforms must explicitly declare fields safe to update and fields defining identity. */
   get configurationUpdateFields(): readonly string[] | undefined { return undefined; }
   get configurationIdentityFields(): readonly string[] | undefined { return undefined; }
+  /** Opaque identity-bearing credential paths; changes require verified read-only identity. */
+  get configurationIdentityProbeFields(): readonly string[] { return []; }
+  protected identifyConfiguration(_config: Config, _signal: AbortSignal,
+    _changedFields: readonly string[]): Promise<string | undefined> { return Promise.resolve(undefined); }
+  /** Pure per-account resource configuration; only used for fresh add/replace identities. */
+  protected prepareConfiguration(config: Config, _identity: Readonly<{
+    instanceId: string; canonicalId: CapabilityId; endpointId: string;
+  }>): Config { return config; }
+
+  /** Platform-owned login completion, after read-only identity verification and before changing live credentials. */
+  protected async acceptVerifiedLogin(context: EndpointCreationContext, input: Readonly<{
+    userId: string; config: Config; previousIdentity: EndpointPreviousIdentity; signal?: AbortSignal;
+  }>): Promise<'retained' | 'replaced'> {
+    const child = this.#require(context.instanceId), epoch = child.current;
+    if (!epoch?.endpoint || epoch.retired || epoch.epoch !== context.epoch
+      || epoch.incarnationId !== context.incarnationId || child.desired.canonicalId !== context.canonicalId) {
+      throw new AdapterManagementError('inactive', 'Login belongs to a retired account incarnation');
+    }
+    const signal = input.signal ? AbortSignal.any([context.signal, input.signal]) : context.signal;
+    signal.throwIfAborted();
+    if (!input.userId.trim()) throw new AdapterManagementError('invalid_configuration', 'Verified platform identity is required');
+    if (this.needsMigration) throw new AdapterManagementError('conflict', 'Account migration must be confirmed before saving login credentials');
+    this.validateConfiguration(input.config);
+    const previousUserId = child.desired.platformUserId ?? endpointRuntimeOf(epoch.endpoint).selfUserId
+      ?? (input.previousIdentity.kind === 'verified' ? input.previousIdentity.userId : undefined);
+    if (previousUserId === undefined && input.previousIdentity.kind === 'unknown') {
+      throw new AdapterManagementError('unsupported', 'Previous account identity is unknown; use explicit replacement');
+    }
+    const options: AdapterMutationOptions = { signal, waitForExecution: false, beforeCommit: () => signal.throwIfAborted() };
+    if (previousUserId !== undefined && previousUserId !== input.userId) {
+      await this.replace(context.instanceId, this.#revision, { endpointId: child.desired.endpointId,
+        config: input.config as Readonly<Record<string, unknown>> }, options);
+      return 'replaced';
+    }
+    await this.#mutate(this.#revision, () => this.#replace(context.instanceId, record => ({
+      ...record, config: input.config as Readonly<Record<string, unknown>>, platformUserId: input.userId, revision: record.revision + 1,
+    })), undefined, { instanceId: context.instanceId, action: 'update', child }, options);
+    return 'retained';
+  }
+
   protected endpointDisposed(_endpoint: E): void {}
   protected abstract createEndpoint(config: Config, context: EndpointCreationContext): E | Promise<E>;
   #descriptor?: AdapterDescriptorInfo;
@@ -81,6 +125,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   #options!: AdapterInitialization<E>;
   #revision: number | null = null;
   #closed = false;
+  readonly #verificationAbort = new AbortController();
   #admission = false;
   #repositoryReady = false;
   #restoration?: Promise<void>;
@@ -88,6 +133,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   #uncertain?: UncertainMutation<E>;
   #verification?: Promise<void>;
   readonly #operations = new Set<Promise<unknown>>();
+  // Account jobs belong to the Adapter, not the SDK callback which submitted them.
+  readonly #executionScope = new AsyncResource('zhin.adapter.execution');
   /** Retains actual resources after directory removal or replacement of current. */
   readonly #retiredEpochs = new Set<ChildEpoch<E>>();
   #lastMutation?: ExecutionState;
@@ -163,10 +210,10 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     return Object.freeze([...this.#children.values()].map(child => {
       const values: Record<string, string> = {};
       for (const field of fields) {
-        const value = child.desired.config[field.key];
+        const value = readConfigurationPath(child.desired.config, field.key);
         if (value === undefined && !child.desired.secretRefs?.[field.key]) continue;
         if (field.secret || field.env || child.desired.secretRefs?.[field.key]) values[field.key] = '••••••';
-        else if (value !== undefined && value !== null) values[field.key] = typeof value === 'string' ? value : JSON.stringify(value);
+        else if (value !== undefined && value !== null) values[field.key] = typeof value === 'string' ? redactConfigurationUrl(field.key, value) : JSON.stringify(value);
       }
       return Object.freeze({ id: child.desired.endpointId, instanceId: child.desired.instanceId, values: Object.freeze(values) });
     }));
@@ -206,9 +253,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
 
   add(expectedRevision: number | null, input: Readonly<{ endpointId: string; config: Readonly<Record<string, unknown>>;
     secretRefs?: Readonly<Record<string, string>> }>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
-    const config = this.#creationConfiguration(input.endpointId, input.config);
-    this.validateConfiguration(config as Config);
     const instanceId = randomUUID();
+    const config = this.#newConfiguration(input.endpointId, input.config, instanceId);
+    this.validateConfiguration(config as Config);
     return this.#mutate(expectedRevision, () => {
       const record: EndpointDesiredRecord = Object.freeze({ ...input, config, instanceId,
         canonicalId: `${this.descriptor.id}~${instanceId}` as CapabilityId,
@@ -217,23 +264,39 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     }, undefined, { instanceId, action: 'add' }, options);
   }
 
-  update(instanceId: string, expectedRevision: number | null, input: Readonly<{
+  update(instanceId: string, expectedRevision: number | null, candidate: Readonly<{
     config: Readonly<Record<string, unknown>>; secretRefs?: Readonly<Record<string, string>>;
   }>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
+    const input = structuredClone(candidate);
     const target = this.#require(instanceId);
     for (const field of this.configurationIdentityFields ?? []) {
-      if (JSON.stringify(target.desired.config[field]) !== JSON.stringify(input.config[field])) {
+      if (!isDeepStrictEqual(readConfigurationPath(target.desired.config, field), readConfigurationPath(input.config, field))) {
         throw new AdapterManagementError('invalid_configuration', 'Account identity changes require explicit replacement');
       }
     }
     this.validateConfiguration(input.config as Config);
-    return this.#mutate(expectedRevision, () => this.#replace(instanceId, record => ({
+    const commit = () => this.#mutate(expectedRevision, () => this.#replace(instanceId, record => ({
       ...record, config: input.config, secretRefs: input.secretRefs, revision: record.revision + 1,
     })), async () => {
       const child = this.#require(instanceId);
       await this.#stop(child);
       if (child.desired.desiredEnabled) await this.#start(child);
     }, { instanceId, action: 'update', child: target }, options);
+    const changedFields = this.configurationIdentityProbeFields.filter(field =>
+      !isDeepStrictEqual(readConfigurationPath(target.desired.config, field), readConfigurationPath(input.config, field))
+      || target.desired.secretRefs?.[field] !== input.secretRefs?.[field]);
+    if (!changedFields.length) return commit();
+    this.#assertOpen();
+    if (!this.canManage) throw new AdapterManagementError('unavailable', 'Endpoint desired repository is unavailable');
+    if (this.#uncertain) throw unknownCommit();
+    if (this.#mutation || this.#revision !== expectedRevision) throw new AdapterManagementError('conflict', 'Endpoint desired state revision conflicts');
+    const signal = options?.signal ? AbortSignal.any([options.signal, this.#verificationAbort.signal]) : this.#verificationAbort.signal;
+    return sameConfigurationIdentity<Config>({ previous: target.desired, next: input, changedFields, signal,
+      secrets: this.#options.secrets, identify: (config, signal, changed) => this.identifyConfiguration(config, signal, changed),
+    }).then(same => {
+      signal.throwIfAborted();
+      return same ? commit() : this.replace(instanceId, expectedRevision, { endpointId: target.desired.endpointId, ...input }, options);
+    });
   }
 
   start(instanceId: string, expectedRevision: number | null, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
@@ -259,9 +322,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     endpointId: string; config: Readonly<Record<string, unknown>>; secretRefs?: Readonly<Record<string, string>>;
   }>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
     const child = this.#require(instanceId);
-    const config = this.#creationConfiguration(input.endpointId, input.config);
-    this.validateConfiguration(config as Config);
     const replacementId = randomUUID();
+    const config = this.#newConfiguration(input.endpointId, input.config, replacementId);
+    this.validateConfiguration(config as Config);
     const record: EndpointDesiredRecord = Object.freeze({ ...input, config, instanceId: replacementId,
       canonicalId: `${this.descriptor.id}~${replacementId}` as CapabilityId, revision: 1, desiredEnabled: false });
     return this.#mutate(expectedRevision, () => this.#desired().map(value => value.instanceId === instanceId ? record : value),
@@ -277,7 +340,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     const previous = this.#require(instanceId).desired;
     const secretRefs = { ...previous.secretRefs };
     for (const key of Object.keys(patch)) delete secretRefs[key];
-    return this.update(instanceId, expectedRevision, { config: { ...previous.config, ...patch }, secretRefs }, options);
+    const config = structuredClone(previous.config) as Record<string, unknown>;
+    for (const [field, value] of Object.entries(patch)) writeConfigurationPath(config, field, value);
+    return this.update(instanceId, expectedRevision, { config, secretRefs }, options);
   }
 
   async activate(signal: AbortSignal): Promise<void> {
@@ -296,7 +361,16 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     }
     if (errors.length) throw new AggregateError(errors, 'Adapter Endpoint open failed');
   }
+  /** @internal Reject a self-wait before any Adapter or Index lifecycle state changes. */
+  assertExternalLifecycle(operation: 'close' | 'stop'): void {
+    const epochs = new Set(this.#retiredEpochs);
+    for (const child of this.#children.values()) if (child.current) epochs.add(child.current);
+    for (const epoch of epochs) {
+      if (epoch.endpoint) endpointRuntimeOf(epoch.endpoint).assertExternalLifecycle(operation);
+    }
+  }
   async close(): Promise<void> {
+    this.assertExternalLifecycle('close');
     this.#admission = false;
     const stack = new DisposeStack();
     for (const child of this.#children.values()) {
@@ -309,7 +383,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     await stack.dispose();
   }
   async dispose(primaryError?: unknown): Promise<void> {
+    this.assertExternalLifecycle('stop');
     this.#closed = true;
+    this.#verificationAbort.abort(new AdapterManagementError('closed', 'Adapter disposed'));
     this.#admission = false;
     const stack = new DisposeStack();
     const epochs = new Set(this.#retiredEpochs);
@@ -408,6 +484,12 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     if (defaults === undefined) return explicit;
     return { ...structuredClone(defaults), ...explicit, id: endpointId };
   }
+  #newConfiguration(endpointId: string, explicit: Readonly<Record<string, unknown>>, instanceId: string): Readonly<Record<string, unknown>> {
+    const config = this.#creationConfiguration(endpointId, explicit);
+    return this.prepareConfiguration(structuredClone(config) as Config, {
+      instanceId, endpointId, canonicalId: `${this.descriptor.id}~${instanceId}` as CapabilityId,
+    }) as Readonly<Record<string, unknown>>;
+  }
   #replace(instanceId: string, update: (record: EndpointDesiredRecord) => EndpointDesiredRecord): readonly EndpointDesiredRecord[] {
     this.#require(instanceId);
     return this.#desired().map(record => record.instanceId === instanceId ? Object.freeze(update(record)) : record);
@@ -450,10 +532,15 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     if (this.#mutation || this.#revision !== expectedRevision) {
       throw new AdapterManagementError('conflict', 'Endpoint desired state revision conflicts');
     }
-    const endpoints = next();
+    if (options?.waitForExecution !== false && request.action !== 'start' && request.child?.current?.endpoint && apply) {
+      endpointRuntimeOf(request.child.current.endpoint).assertExternalLifecycle('stop');
+    }
+    const endpoints = next().map(freezeRecord);
     assertSnapshot({ revision: expectedRevision ?? 0, endpoints });
     const commitId = randomUUID();
     const commit = Promise.resolve().then(async () => {
+      this.#assertOpen();
+      options?.signal?.throwIfAborted();
       options?.beforeCommit?.();
       let committed: EndpointDesiredSnapshot;
       try { committed = await repository.compareAndSet(this.descriptor.id, expectedRevision, endpoints, commitId); }
@@ -489,13 +576,13 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       request.child.current.execution = execution;
       this.#retiredEpochs.add(request.child.current);
     }
-    const completion = Promise.resolve().then(async () => {
+    const completion = this.#executionScope.runInAsyncScope(() => Promise.resolve().then(async () => {
       try {
         if (this.#closed) { execution.status = 'failed'; execution.code = 'adapter_closed'; }
         else { await apply?.(); execution.status = 'applied'; }
       } catch { execution.status = 'failed'; execution.code = 'endpoint_execution_failed'; }
       return this.#mutationResult(execution);
-    });
+    }));
     this.#operations.add(completion);
     void completion.finally(() => this.#operations.delete(completion)).catch(() => undefined);
     return { execution, completion };
@@ -518,12 +605,13 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       const config: Record<string, unknown> = structuredClone(child.desired.config);
       for (const [field, reference] of Object.entries(child.desired.secretRefs ?? {})) {
         if (!this.#options.secrets) throw new AdapterManagementError('unavailable', 'Endpoint secret resolver is unavailable');
-        config[field] = await this.#options.secrets.resolve(reference, { instanceId: child.desired.instanceId, signal: cancellation.signal });
+        writeConfigurationPath(config, field, await this.#options.secrets.resolve(reference, { instanceId: child.desired.instanceId, signal: cancellation.signal }));
       }
       const endpoint = await this.createEndpoint(config as Config, {
         signal: cancellation.signal, epoch: epoch.epoch, incarnationId: epoch.incarnationId, instanceId: child.desired.instanceId,
         canonicalId: child.desired.canonicalId, endpointId: child.desired.endpointId,
       });
+      if (!isEndpoint(endpoint)) throw new TypeError('Adapter factory result must implement Endpoint');
       epoch.endpoint = endpoint;
       epoch.operations = this.#options.bind(endpoint, child.desired, cancellation.signal);
       if (epoch.retired || cancellation.signal.aborted || this.#closed) {
@@ -597,7 +685,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     epoch.retired = true;
     const wasOpen = epoch.open;
     epoch.open = false;
-    if (epoch.endpoint) retireEndpoint(endpointRuntimeOf(epoch.endpoint));
+    if (epoch.endpoint) retireEndpoint(epoch.endpoint);
     // Publish the cleanup promise before abort callbacks can reenter stop().
     const cleanup = Promise.resolve().then(async () => {
       await epoch.preparation?.catch(() => undefined);
@@ -625,7 +713,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
 }
 
 function metadata(record: EndpointDesiredRecord): import('./adapter-types.js').EndpointDesiredMetadata {
-  const { config: _config, secretRefs: _secretRefs, ...view } = record;
+  const { config: _config, secretRefs: _secretRefs, platformUserId: _platformUserId, ...view } = record;
   return Object.freeze(view);
 }
 function freezeRecord(record: EndpointDesiredRecord): EndpointDesiredRecord {
@@ -666,7 +754,7 @@ function unknownCommit(): AdapterManagementError {
 }
 
 function assertEndpointSource(endpoint: AnyEndpoint, expectedClient: unknown): void {
-  if (endpointClientOf(endpoint) !== expectedClient) {
+  if (endpoint !== expectedClient) {
     throw new EndpointDeliveryError('endpoint_inactive', 'Endpoint source incarnation is retired', 'not_sent');
   }
 }

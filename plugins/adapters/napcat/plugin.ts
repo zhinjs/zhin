@@ -1,7 +1,5 @@
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
 import { permissionHostToken, createSceneRolePlatformChecker } from '@zhin.js/permission';
-import { napcatRuntimeStateToken } from './src/napcat-runtime-state.js';
 import { createNapcatConsoleRpc } from './src/console.js';
 
 export default definePlugin({
@@ -10,7 +8,6 @@ export default definePlugin({
     displayName: 'NapCat Adapter',
   },
   setup(context) {
-    context.resources.provide(napcatRuntimeStateToken, createEndpointRuntimeState());
     context.resources.provide(pluginConsoleRpcToken, createNapcatConsoleRpc(context.resources, () => context.config.get()));
     if (context.resources.has(permissionHostToken)) {
       const host = context.resources.use(permissionHostToken);

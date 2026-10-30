@@ -50,7 +50,6 @@ export type { OneBot12WsSocket, OneBot12WsCreateOptions } from './ws-types.js';
 export { verifyOneBotAccessToken } from './wss-auth.js';
 export {
   Onebot12Client,
-  onebot12Client,
   type Onebot12ClientEventMap,
 } from './client.js';
 
@@ -64,3 +63,4 @@ export type {
 } from '@imhelper/onebot-v12';
 export { ProtocolError } from '@imhelper/onebot-v12';
 export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';
+export { Onebot12Adapter } from './adapter.js';

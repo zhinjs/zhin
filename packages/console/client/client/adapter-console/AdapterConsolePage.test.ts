@@ -210,8 +210,69 @@ describe('shared runtime Adapter page production handlers', () => {
     expect(f.calls.find(call => call.body.type === 'endpoint.test')!.body).toMatchObject({ endpointKey: 'canonical-old' }); expect(f.writes()).toHaveLength(0); f.h.unmount();
   });
 
-  it('retains the legacy embedded source writer when no runtime directory is offered', async () => {
-    const s = status(); delete s.runtime; const f = fixture(s); await f.h.settle(); expect(f.h.text()).toContain('重启后生效'); await f.h.button('删除').onClick(); await f.h.settle();
-    expect(f.writes()[0]!.body.data).toEqual({ id: '10001' }); f.h.unmount();
+  it('shows configured accounts read-only without a runtime directory even if obsolete flags offer writes', async () => {
+    const s = status(); delete s.runtime;
+    const f = fixture(s); await f.h.settle();
+    expect(f.h.text()).toContain('10001'); expect(f.h.text()).toContain('old-server');
+    expect(f.h.text()).toContain('当前环境只能查看');
+    expect(f.h.text()).not.toMatch(/重启后生效|写入配置后|\.env/u);
+    expect(f.h.nodes().some(node => typeof node.type === 'function' && node.type.name === 'Button' && ['添加', '删除', '编辑', '保存', '启动', '停止'].includes(text(node)))).toBe(false);
+    expect(f.writes()).toHaveLength(0); f.h.unmount();
+  });
+
+  it('hides login controls and rejects captured submit/cancel handlers after its runtime disappears', async () => {
+    const base = status();
+    const identity = { canonicalId: 'canonical-old', instanceId: 'instance-old', epoch: 5, incarnationId: 'incarnation-current' };
+    const live = { ...base, runtime: { ...base.runtime!, endpoints: base.runtime!.endpoints.map(endpoint => ({ ...endpoint, desiredEnabled: true })) } };
+    const f = fixture(live, [{ id: 'task', adapter: 'icqq', endpointKey: '10001', type: 'qrcode', payload: {}, createdAt: 1, endpointIdentity: identity }]);
+    await f.h.settle(); const submit = f.h.button('已扫码，继续'), cancel = f.h.button('取消');
+    f.replaceView({ ...base, runtime: undefined }); await f.h.button('刷新').onClick(); await f.h.settle();
+    expect(f.h.text()).not.toContain('登录待办');
+    await submit.onClick(); await cancel.onClick(); await f.h.settle();
+    expect(f.calls.some(call => call.body.type === 'login.submit' || call.body.type === 'login.cancel')).toBe(false);
+    f.h.unmount();
+  });
+
+  it('keeps ordinary custom actions available without runtime while rejecting custom account mutations', async () => {
+    const s = { ...status(), runtime: undefined, actions: [
+      { name: 'inspect', label: '查看平台资料', fields: [], options: [] },
+      { name: 'save-account', label: '保存平台账号', accountMutation: true, fields: [], options: [] },
+    ] };
+    const f = fixture(s); await f.h.settle();
+    expect(f.h.button('保存平台账号').disabled).toBe(true);
+    await f.h.button('保存平台账号').onClick(); await f.h.settle();
+    expect(f.calls.some(call => call.body.type === 'plugin.plugin-a.save-account')).toBe(false);
+    await f.h.button('查看平台资料').onClick(); await f.h.settle();
+    expect(f.calls.find(call => call.body.type === 'plugin.plugin-a.inspect')!.body.data).toEqual({});
+    expect(f.writes()).toHaveLength(0); f.h.unmount();
+  });
+
+  it('captures custom account mutation CAS and requests migration consent before invoking its handler', async () => {
+    const base = status();
+    const f = fixture({ ...base, runtime: { ...base.runtime!, needsMigration: true, canMigrate: true, revision: null },
+      actions: [{ name: 'save-account', label: '保存平台账号', accountMutation: true, fields: [], options: [] }] });
+    await f.h.settle(); await f.h.button('保存平台账号').onClick(); await f.h.settle();
+    expect(f.calls.some(call => call.body.type === 'plugin.plugin-a.save-account')).toBe(false);
+    expect(f.h.text()).toContain('确认迁移以下账号');
+    await f.h.button('确认迁移').onClick(); await f.h.settle();
+    expect(f.calls.find(call => call.body.type === 'plugin.plugin-a.save-account')!.body.data).toEqual({ expectedGeneration: 4, expectedRevision: null, confirmMigration: true });
+    f.h.unmount();
+  });
+
+  it('does not resubmit an unchanged masked nonsecret URL while editing nested number and boolean fields', async () => {
+    const base = status();
+    const f = fixture({ ...base, fields: [...base.fields,
+      { key: 'url', type: 'string', required: false, env: false, secret: false },
+      { key: 'proxy.port', type: 'number', required: false, env: false, secret: false },
+      { key: 'enabled', type: 'boolean', required: false, env: false, secret: false },
+    ], configured: [{ ...base.configured[0]!, values: { ...base.configured[0]!.values, url: '••••••', 'proxy.port': '1080', enabled: 'false' } }],
+    runtime: { ...base.runtime!, mutableFields: [...base.runtime!.mutableFields, 'url', 'proxy.port', 'enabled'] } });
+    await f.h.settle(); await f.h.button('编辑').onClick(); await f.h.settle();
+    expect(f.h.input(3).value).toBe('••••••'); expect(f.h.input(4).value).toBe('1080'); expect(f.h.input(5).value).toBe('false');
+    expect(f.h.nodes().filter(node => node.type === 'input')[4]!.props!.type).toBe('number');
+    f.h.input(4).onChange({ target: { value: '1081' } }); await f.h.settle(); f.h.input(5).onChange({ target: { value: 'true' } }); await f.h.settle();
+    await f.h.button('保存').onClick(); await f.h.settle();
+    expect(f.writes()[0]!.body.data).toEqual({ instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: 2, values: { 'proxy.port': '1081', enabled: 'true' } });
+    expect(JSON.stringify(f.writes())).not.toContain('••••••'); f.h.unmount();
   });
 });

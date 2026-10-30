@@ -134,7 +134,7 @@ Events you can listen to:
   - `endpoint`, `generation`: the connection and version the event belongs to; `endpointId` is the platform account id and `clientAdapter` the platform id.
   - Notice / Request `conversation?`, `actor?`, `target?` are present only when they exist; Request always has `actor`. SystemEvent has none of the three.
 - `$client` and Request's `$approve()` / `$reject()` are valid only while the event is being handled. Read raw platform fields from `metadata`; for strongly typed SDK events, use a native-event handler with `adapter`.
-- Adapters report events through `Endpoint.emit(...)`, and the runtime builds these standard objects.
+- Adapters report events through `endpoint[endpointSpec].events`, and the runtime builds these standard objects.
 - `addHandler(name, defineHandler(...))` in `setup` works the same way.
 :::
 
@@ -160,14 +160,15 @@ A job has no incoming message to reply to; send messages with proactive delivery
 ### adapters/: connecting a new platform
 
 ```ts
-// adapters/napcat/index.ts (excerpt)
+// adapters/napcat/index.ts
 import { defineAdapter } from 'zhin.js/adapter';
+import { NapcatAdapter } from '../../src/adapter.js';
+import type { NapCatEndpointConfig } from '../../src/protocol.js';
 
 export default defineAdapter<NapCatEndpointConfig>({
-  capabilities: ['inbound', 'outbound'], // at least one of the two
-  create(context) {
-    return new NapCatWsEndpoint({ id: context.id, config: resolveNapCatConfig(context.config) });
-  },
+  capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
+  createAdapter: context => new NapcatAdapter(context),
 });
 ```
 

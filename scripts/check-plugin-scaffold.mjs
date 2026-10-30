@@ -14,10 +14,10 @@
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readWorkspaceGraph } from './lib/workspace-graph.mjs';
 import { resolveWorkspacePackClosure, withWorkspaceTarballOverrides } from './workspace-pack-closure.mjs';
 import { hasSourceConditions } from './sync-publish-exports.mjs';
@@ -112,6 +112,65 @@ async function duplicateStackProblems(root) {
     .map(([name, dirs]) => `${name} is installed ${dirs.length} times: ${dirs.join(', ')}`);
 }
 
+/** An external author imports only the installed tarball's public API, never its source convention entry. */
+async function checkPackedAdapterConsumer(plugin, manifest, packedFile, scaffold, temp) {
+  const consumer = path.join(temp, `${plugin.name}-consumer`);
+  const modules = path.join(consumer, 'node_modules');
+  await mkdir(modules, { recursive: true });
+  // Reuse the candidate stack already installed from tarballs, keeping one module identity.
+  for (const name of await readdir(path.join(scaffold, 'node_modules'))) {
+    await symlink(path.join(scaffold, 'node_modules', name), path.join(modules, name), 'dir');
+  }
+  const installed = path.join(modules, ...manifest.name.split('/'));
+  await mkdir(installed, { recursive: true });
+  await run('tar', ['-xzf', packedFile, '--strip-components=1', '-C', installed], consumer);
+  await writeFile(path.join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+  await writeFile(path.join(consumer, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
+    target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true,
+    noEmit: true, skipLibCheck: false, types: ['node'],
+  }, include: ['consumer.ts'] }));
+  await writeFile(path.join(consumer, 'consumer.ts'), `import '${manifest.name}';
+import { defineCommand } from 'zhin.js/command';
+export const command = defineCommand({ adapter: '${plugin.name}', execute({ session }) {
+  if (!session) return;
+  session.endpoint.connect(session.signal);
+  session.endpoint.send('native-target', 'native-payload');
+  session.adapter.getEndpoint('instance')?.send('native-target', 'native-payload');
+  // @ts-expect-error The inferred native Client must reject nonexistent SDK methods.
+  session.endpoint.notARealSdkMethod();
+  // @ts-expect-error The inferred native Client requires a string send target.
+  session.endpoint.send(123, 'native-payload');
+  return 'typed' as const;
+} });
+`);
+  console.log(`${plugin.name}: packed public consumer tsc (positive + negative native inference)`);
+  await run(process.execPath, [path.join(scaffold, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', path.join(consumer, 'tsconfig.json')], consumer);
+  const prefix = plugin.name.charAt(0).toUpperCase() + plugin.name.slice(1).replace(/-([a-z])/gu, (_match, letter) => letter.toUpperCase());
+  await writeFile(path.join(consumer, 'runtime.mjs'), `import assert from 'node:assert/strict';
+import { ${prefix}Adapter, ${prefix}Client, ${prefix}Endpoint } from '${manifest.name}';
+import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, endpointSpec } from 'zhin.js/adapter';
+import { createCapabilitySlot, rootPluginId } from 'zhin.js';
+import definition from ${JSON.stringify(pathToFileURL(path.join(installed, 'adapters', plugin.name, 'index.js')).href)};
+const root = rootPluginId();
+const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: '${plugin.name}', source: '/fixture/adapters/${plugin.name}/index.js', definition });
+const snapshot = { generation: 1, root,
+  tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '${manifest.name}', packageRoot: '/', children: [] }]]),
+  config: new Map([[root, { id: 'packed-account' }]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+  resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]) };
+const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal);
+try {
+  await index.start();
+  assert.ok(index.adapter(slot.id) instanceof ${prefix}Adapter);
+  const endpoint = index.client('${plugin.name}', 'packed-account');
+  assert.ok(endpoint instanceof ${prefix}Client); assert.ok(endpoint instanceof ${prefix}Endpoint);
+  assert.equal(endpoint.connect, ${prefix}Client.prototype.connect);
+  assert.equal(await index.send(endpoint[endpointSpec].identity.id, { conversation: { endpoint: { adapter: '${plugin.name}', id: String(endpoint[endpointSpec].identity.id) }, kind: 'private', id: 'peer' }, payload: 'hi' }), 'stub-message-id:peer:string');
+} finally { await index.stop(); }
+`);
+  console.log(`${plugin.name}: packed public classes + convention runtime identity`);
+  await run(process.execPath, [path.join(consumer, 'runtime.mjs')], consumer);
+}
+
 const temp = await mkdtemp(path.join(tmpdir(), 'zhin-plugin-scaffold-'));
 try {
   const packs = path.join(temp, 'packs');
@@ -195,6 +254,7 @@ try {
     if (!files.has(packedManifest.zhin.entry.replace(/^\.\//u, ''))) {
       throw new Error(`${plugin.name}: zhin.entry ${packedManifest.zhin.entry} is not in the tarball`);
     }
+    if (plugin.type === 'adapter') await checkPackedAdapterConsumer(plugin, packedManifest, path.join(packs, created[0]), dir, temp);
     // The author-facing check must accept what `zhin new` generates, warnings included.
     console.log(`${plugin.name}: zhin plugin check --strict`);
     await run(process.execPath, [cli, 'plugin', 'check', '--strict'], dir);

@@ -1,6 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
 import {
-  icqqLoginControlToken,
+  icqqLoginControls,
   icqqLoginForbidden,
   isIcqqLoginOperator,
   pendingTaskLabel,
@@ -10,9 +10,9 @@ import {
 export default defineCommand({
   description: '查看 ICQQ 掉线状态与登录待办',
   descriptionI18n: { en: 'Show ICQQ offline status and pending login tasks' },
-  async execute({ args, config, input, use }) {
+  async execute({ args, config, input, project, owner }) {
     if (!isIcqqLoginOperator(config, input)) return icqqLoginForbidden();
-    const picked = pickIcqqLoginControl(use(icqqLoginControlToken), args[0]);
+    const picked = pickIcqqLoginControl(icqqLoginControls({ project, owner }), args[0]);
     if (!picked.control) return picked.text ?? 'ICQQ 适配器还没有启动';
     const state = picked.control.state();
     const lines = [

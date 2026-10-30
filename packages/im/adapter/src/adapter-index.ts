@@ -13,15 +13,16 @@ import { createConstructionContext } from '@zhin.js/feature-kit';
 import {
   endpointCapabilitiesOf,
   resolveAdapterOperations,
+  parseAdapterDefinition,
   type AdapterCapability,
   type AdapterDefinition,
   type AdapterOperation,
   type AdapterSegmentPolicy,
+  type EndpointIdentity,
   type EndpointSendRequest,
   type EndpointSendResult,
 } from './definition.js';
-import { type Endpoint, type EndpointTransportState } from './endpoint.js';
-import { materializeEndpoint } from './managed-endpoint.js';
+import { type EndpointRuntime, type EndpointTransportState } from './endpoint.js';
 import {
   listEndpointManagementCapabilities,
   type EndpointManagementCapability,
@@ -40,9 +41,9 @@ import {
   type EndpointCapabilities,
 } from '@zhin.js/im-contract';
 
-import { Adapter, type AdapterInstance } from './adapter.js';
-import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointCreationContext, type EndpointChildLease, type EndpointChildView } from './adapter-types.js';
-import { bindPlatformEndpoint, endpointRuntimeOf, endpointClientOf, type AnyEndpoint } from './endpoint-specification.js';
+import type { AdapterInstance } from './adapter.js';
+import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView } from './adapter-types.js';
+import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 
 /** Trusted composition input, excluded from public snapshot resources and authoring contexts. */
 export interface AdapterPersistencePorts {
@@ -63,11 +64,20 @@ export interface AdapterDescriptor {
 export interface AdapterEndpointSummary extends AdapterDescriptor {
   readonly admitted: boolean;
   readonly transportState: EndpointTransportState | 'unknown';
-  readonly eventDiagnostics: Endpoint['eventDiagnostics'];
+  readonly eventDiagnostics: EndpointRuntime['eventDiagnostics'];
   readonly connected: boolean;
   readonly status: 'online' | 'offline';
   readonly phase: AdapterEndpointPhase;
   readonly managementCapabilities: readonly EndpointManagementCapability[];
+}
+
+/** Immutable connection data. SDK and executable framework ports remain lease-scoped. */
+export interface EndpointConnectionInfo {
+  readonly identity: EndpointIdentity;
+  readonly name?: string;
+  readonly selfUserId?: string;
+  readonly transportState?: EndpointTransportState;
+  readonly eventDiagnostics: AdapterEndpointSummary['eventDiagnostics'];
 }
 
 export type AdapterEndpointPhase =
@@ -123,8 +133,8 @@ export class AdapterIndex {
     return adapter && child ? projectRecord(adapter, child) : undefined;
   }
 
-  static async create(
-    slots: readonly Readonly<CapabilitySlot<AdapterDefinition>>[],
+  static async create<TDefinition extends AdapterDefinition<never>>(
+    slots: readonly Readonly<CapabilitySlot<TDefinition>>[],
     snapshot: RuntimeSnapshot,
     signal: AbortSignal,
     persistence: AdapterPersistencePorts = {},
@@ -134,6 +144,7 @@ export class AdapterIndex {
     try {
       for (const slot of [...slots].sort((left, right) => left.id.localeCompare(right.id))) {
         signal.throwIfAborted();
+        const definition = parseAdapterDefinition(slot.definition);
         const construction = createConstructionContext(snapshot, slot.owner, admission, signal);
         const { endpoints: _endpoints, master: _master, trusted: _trusted, ...creationDefaults } =
           (construction.config ?? {}) as Readonly<Record<string, unknown>>;
@@ -147,24 +158,17 @@ export class AdapterIndex {
           id: record.canonicalId, endpointId: record.endpointId, name: slot.localName,
         });
         const baseContext = Object.freeze({ ...construction, id: slot.id, endpointId: slot.localName, name: slot.localName });
-        const legacyCreate = slot.definition.create;
-        const adapter = slot.definition.createAdapter?.(baseContext) ?? new LegacyAdapter(async (config, execution) => {
-          if (!legacyCreate) throw new TypeError('Adapter requires create or createAdapter');
-          const context = makeContext({ instanceId: execution.instanceId, canonicalId: execution.canonicalId,
-            endpointId: execution.endpointId, revision: 1, desiredEnabled: true, config }, execution.signal);
-          const implementation = await legacyCreate(context);
-          return materializeEndpoint(implementation, context);
-        });
+        const adapter = definition.createAdapter(baseContext);
         await adapter.initialize({
           descriptor: { id: slot.id, owner: slot.owner, name: slot.localName, source: slot.source,
-            capabilities: slot.definition.capabilities, segments: slot.definition.segments }, initial,
+            capabilities: definition.capabilities, segments: definition.segments }, initial,
           ...persistence,
           creationDefaults,
           bind: (endpoint, record, childSignal) => {
             const context = makeContext(record, childSignal);
-            const operations = resolveAdapterOperations(slot.definition, context);
+            const operations = resolveAdapterOperations(definition, context);
             const runtime = endpointRuntimeOf(endpoint);
-            if (slot.definition.capabilities.includes('outbound') && typeof runtime.send !== 'function') {
+            if (definition.capabilities.includes('outbound') && typeof runtime.send !== 'function') {
               throw new TypeError(`Adapter Endpoint ${record.canonicalId} declares outbound but send() is missing`);
             }
             bindPlatformEndpoint(endpoint, context, admission);
@@ -229,12 +233,19 @@ export class AdapterIndex {
     return exact?.id ?? matches[0]?.id;
   }
 
-  /** Resolve the framework-owned Endpoint for internal Host control ports. */
-  connection(adapter: string, endpointKey: string): Endpoint | undefined {
+  /** Read connection facts without exposing SDK objects or unscoped framework operations. */
+  connection(adapter: string, endpointKey: string): EndpointConnectionInfo | undefined {
     const id = this.resolve(adapter, endpointKey);
-    if (!id) return undefined;
-    const endpoint = this.#record(id)?.endpoint;
-    return endpoint ? endpointRuntimeOf(endpoint) : undefined;
+    const endpoint = id ? this.#record(id)?.endpoint : undefined;
+    if (!endpoint) return undefined;
+    const runtime = endpointRuntimeOf(endpoint);
+    return Object.freeze({
+      identity: runtime.identity,
+      name: endpointLiveName(endpoint),
+      selfUserId: runtime.selfUserId,
+      transportState: runtime.transportState,
+      eventDiagnostics: runtime.eventDiagnostics,
+    });
   }
 
   /** Resolve the platform-native client owned by one active Endpoint. */
@@ -245,7 +256,7 @@ export class AdapterIndex {
     if (!record.started || record.stopped || !record.endpoint) {
       throw new Error(`Endpoint ${adapter}/${endpointKey} is not active`);
     }
-    return endpointClientOf(record.endpoint) as TClient;
+    return record.endpoint as TClient;
   }
 
   /** Resolve the Client directly from a generation-stable CapabilityId. */
@@ -255,7 +266,7 @@ export class AdapterIndex {
     if (!record.started || record.stopped || !record.endpoint) {
       throw new Error(`Adapter Endpoint ${id} is not active`);
     }
-    return endpointClientOf(record.endpoint) as TClient;
+    return record.endpoint as TClient;
   }
 
   /** Literal adapter name used by authoring-context type discrimination. */
@@ -275,7 +286,7 @@ export class AdapterIndex {
     const id = this.resolve(adapter, endpointKey);
     const record = id ? this.#record(id) : undefined;
     if (!record || !record.started || record.stopped || !record.endpoint) return undefined;
-    return endpointClientOf(record.endpoint) as TClient;
+    return record.endpoint as TClient;
   }
 
   owner(id: CapabilityId): PluginId {
@@ -306,19 +317,21 @@ export class AdapterIndex {
     return port && record?.endpoint ? this.#scopedPort(id, record.endpoint, port, assertScope) : undefined;
   }
   #scopedPort<T extends object>(id: CapabilityId, endpoint: AnyEndpoint, port: T, assertScope?: () => void): T {
-    const expectedClient = endpointClientOf(endpoint);
-    return new Proxy({ ...port }, { get: (target, key) => {
+    const expectedClient = endpoint;
+    const scoped = { ...port };
+    for (const key of Reflect.ownKeys(scoped)) {
       const value = Reflect.get(port, key);
-      if (typeof value !== 'function') return value;
-      return async (...args: unknown[]) => {
+      if (typeof value !== 'function') continue;
+      Reflect.set(scoped, key, async (...args: unknown[]) => {
         assertScope?.();
         const callerSignal = args.find((argument): argument is AbortSignal => argument instanceof AbortSignal);
         const lease = this.acquire(id, callerSignal, expectedClient);
         const scopedArgs = args.map(argument => argument === callerSignal ? lease.signal : argument);
         try { return await lease.run(() => Reflect.apply(value, port, scopedArgs)); }
         finally { lease.release(); }
-      };
-    } });
+      });
+    }
+    return Object.freeze(scoped);
   }
 
   /**
@@ -353,11 +366,13 @@ export class AdapterIndex {
     if (errors.length) throw new AggregateError(errors, 'Adapter Endpoint open failed');
   }
   async close(): Promise<void> {
+    for (const adapter of this.#adapters) adapter.assertExternalLifecycle('close');
     const stack = new DisposeStack();
     for (const adapter of this.#adapters) stack.add(() => adapter.close());
     await stack.dispose();
   }
   async stop(): Promise<void> {
+    for (const adapter of this.#adapters) adapter.assertExternalLifecycle('stop');
     const stack = new DisposeStack();
     for (const adapter of this.#adapters) stack.add(() => adapter.dispose());
     await stack.dispose();
@@ -382,7 +397,7 @@ export class AdapterIndex {
     const content = endpointContentOf(record.endpoint ? endpointRuntimeOf(record.endpoint) : undefined);
     if (!content) return Object.freeze({ status: 'unsupported', code: 'content_resolution_unsupported' });
     context.signal.throwIfAborted();
-    const lease = this.acquire(id, context.signal, endpointClientOf(record.endpoint));
+    const lease = this.acquire(id, context.signal, record.endpoint);
     try { return await lease.run((_endpoint, signal) => content.resolve(reference, { ...context, signal })); }
     finally { lease.release(); }
   }
@@ -463,7 +478,7 @@ interface EndpointExpansion {
  * 否则按实例 config 创建单个 endpoint（历史行为）。
  */
 function expandEndpointConfigs(
-  slot: Readonly<CapabilitySlot<AdapterDefinition>>,
+  slot: Readonly<Pick<CapabilitySlot, 'id' | 'owner' | 'localName'>>,
   snapshot: RuntimeSnapshot,
 ): readonly EndpointExpansion[] {
   const config = snapshot.config.get(slot.owner) as
@@ -505,14 +520,6 @@ function expandEndpointConfigs(
     endpointId: entry.id,
     config: Object.freeze({ ...base, ...entry, id: entry.id }),
   })));
-}
-
-class LegacyAdapter extends Adapter<AnyEndpoint> {
-  readonly #create: (config: Readonly<Record<string, unknown>>, context: EndpointCreationContext) => Promise<AnyEndpoint>;
-  constructor(create: (config: Readonly<Record<string, unknown>>, context: EndpointCreationContext) => Promise<AnyEndpoint>) { super(); this.#create = create; }
-  protected createEndpoint(config: Readonly<Record<string, unknown>>, context: EndpointCreationContext): Promise<AnyEndpoint> {
-    return this.#create(config, context);
-  }
 }
 
 /** Narrow Console projection, never a second account manager or lifecycle owner. */

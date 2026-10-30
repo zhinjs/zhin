@@ -5,7 +5,7 @@ tier: Advanced
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=d2fc8a756013bf56 -->
@@ -17,7 +17,7 @@ ICQQ Plugin Runtime adapter — runs an [@icqqjs/icqq](https://github.com/icqqjs
 ## Features
 
 - Group chat / private chat / temporary group session / QQ channel messages
-- Inbound native Client events enter Zhin through the single `Endpoint.emit(...)` gateway and normalize media to canonical `Segment` + `MediaRef` values
+- Inbound native Client events enter Zhin through the single `endpoint[endpointSpec].events.emit(...)` gateway and normalize media to canonical `Segment` + `MediaRef` values
 - Outbound canonical segments project to native ICQQ `Sendable` values and use `sendGroupMsg`, `sendPrivateMsg`, and the matching conversation operation
 - Group reactions use `control.addReaction` and `control.removeReaction`
 - Agent tools live under `tools/<name>/index.ts`
@@ -79,11 +79,11 @@ icqq:
 ## Architecture
 
 - `plugin.ts` + `adapters/icqq/index.ts`: Plugin Runtime entry and `defineAdapter` declaration
-- `src/endpoint.ts`: owns the native Client and coordinates transport, Zhin lifecycle, and capability ports
+- `src/endpoint.ts`: extends the actual native Client and registers framework hooks and capability ports through `endpointSpec`
 - `src/content-resolver.ts`: stores observed messages and expands forwarded messages within explicit limits
 - `src/icqq-inbound.ts`: normalizes native ICQQ events into Zhin inbound messages
 - `src/protocol.ts`: resolves one expanded endpoint configuration and maps conversations and outbound targets
-- `src/client.ts`: registers the public ICQQ Client and event types for feature authors
+- `src/client.ts`: derives native SDK event types and registers the actual `IcqqAdapter` in the single `AdapterRegistry`
 
 Start with `src/endpoint.ts` when reading the implementation, then follow the capability it composes. External code imports only from `@zhin.js/adapter-icqq` and the public Zhin entry points.
 
@@ -102,8 +102,10 @@ Start with `src/endpoint.ts` when reading the implementation, then follow the ca
 Open the Console **ICQQ** page (route `/icqq`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.icqq.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider, SMS or device confirmation) without returning to the terminal;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `icqq:read`; writes require `icqq:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `icqq endpoint add` command.
 

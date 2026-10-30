@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { wechatMpRuntimeStateToken } from './wechat-mp-runtime-state.js';
 import { wechatMpConsoleSpec } from './console-spec.js';
 
 export function createWechatMpConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(wechatMpRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...wechatMpConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

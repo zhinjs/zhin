@@ -1,13 +1,14 @@
 /**
  * SlackEndpoint — lifecycle, outbound, admit, Socket Mode, agent tool surface.
  */
+import { WebClient, type WebClientOptions } from '@slack/web-api';
 import { SocketModeClient } from '@slack/socket-mode';
 import { createSlackWebApiAgent } from './web-api-proxy.js';
 import { createSlackStreamAgent } from './stream-proxy.js';
 import { slackSocketConnectionError } from './socket-error.js';
-import { createSlackWebClient, slackDeliveryError } from './web-client.js';
+import { slackWebClientOptions, slackDeliveryError } from './web-client.js';
 import {
-  Endpoint,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createEndpointLifecycle,
   type EndpointFriend,
   type EndpointGroup,
@@ -51,52 +52,14 @@ export interface SlackSocketLike {
   disconnect(): Promise<void>;
 }
 
-export interface SlackWebClientLike extends SlackChatClient {
-  auth: {
-    test(): Promise<{ user_id?: string; user?: string }>;
-  };
-  conversations: {
-    invite(opts: { channel: string; users: string }): Promise<unknown>;
-    kick(opts: { channel: string; user: string }): Promise<unknown>;
-    setTopic(opts: { channel: string; topic: string }): Promise<unknown>;
-    setPurpose(opts: { channel: string; purpose: string }): Promise<unknown>;
-    archive(opts: { channel: string }): Promise<unknown>;
-    unarchive(opts: { channel: string }): Promise<unknown>;
-    rename(opts: { channel: string; name: string }): Promise<unknown>;
-    members(opts: { channel: string }): Promise<{ members?: string[] }>;
-    info(opts: { channel: string }): Promise<{ channel?: unknown }>;
-    list(opts?: {
-      types?: string;
-      limit?: number;
-      cursor?: string;
-      exclude_archived?: boolean;
-    }): Promise<{ channels?: unknown[]; response_metadata?: { next_cursor?: string } }>;
-  };
-  users: {
-    info(opts: { user: string }): Promise<{ user?: unknown }>;
-    list(opts?: {
-      limit?: number;
-      cursor?: string;
-    }): Promise<{ members?: unknown[]; response_metadata?: { next_cursor?: string } }>;
-  };
-  reactions: {
-    add(opts: { channel: string; timestamp: string; name: string }): Promise<unknown>;
-    remove(opts: { channel: string; timestamp: string; name: string }): Promise<unknown>;
-  };
-  pins: {
-    add(opts: { channel: string; timestamp: string }): Promise<unknown>;
-    remove(opts: { channel: string; timestamp: string }): Promise<unknown>;
-  };
-  chat: SlackChatClient['chat'] & {
-    delete(opts: { channel: string; ts: string }): Promise<unknown>;
-  };
-}
+export type SlackWebClientLike = WebClient;
 
 export interface SlackEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedSlackConfig;
   readonly http?: HttpHost;
-  readonly createClient?: (token: string) => SlackWebClientLike;
+  readonly webApiAgent?: ReturnType<typeof createSlackWebApiAgent>;
+  readonly webOptions?: WebClientOptions;
   readonly createSocket?: (opts: {
     readonly appToken: string;
     readonly clientPingTimeout: number;
@@ -104,26 +67,25 @@ export interface SlackEndpointOptions {
   }) => SlackSocketLike;
 }
 
-export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements SlackWebhookHandler {
+export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHandler {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SlackEndpointOptions;
   readonly #inboundFilter = createSlackInboundFilterState();
   readonly #messageChannelMap = new Map<string, string>();
-  #client?: SlackWebClientLike;
-  #webApiAgent?: ReturnType<typeof createSlackWebApiAgent>;
   #socket?: SlackSocketLike;
   readonly #lifecycle: ReturnType<typeof createEndpointLifecycle>;
   #routeReleases: HttpRouteRegistration[] = [];
   #botUserId?: string;
-  #open = false;
+  #executionSignal?: AbortSignal;
   #started = false;
-  readonly management: EndpointManagement = createSlackEndpointManagement(() => this.client);
-  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+  readonly #management: EndpointManagement = createSlackEndpointManagement(() => this);
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: async (message) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
-      if (!ref || !this.#client) return;
-      await this.#client.chat.delete(ref);
+      if (!ref || !this.#started) return;
+      await this.chat.delete(ref);
     },
     edit: async (message, content) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
@@ -146,10 +108,17 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
   });
 
   constructor(options: SlackEndpointOptions) {
-    super();
+    super(options.config.token, slackWebClientOptions({ ...options.webOptions, ...(options.webApiAgent ? { agent: options.webApiAgent } : {}) }));
     this.#logger = getAdapterLogger('slack', options.config.id);
     this.#options = options;
     this.#lifecycle = createEndpointLifecycle({ name: options.config.id });
+    const endpoint = this;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      start: signal => this.#startFramework(signal), open: () => undefined, close: () => undefined,
+      stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
+      name: options.config.id, get transportState() { return endpoint.#transportState; },
+      management: this.#management, control: this.#control,
+    });
   }
 
   /** Console 展示 / AdapterIndex live name（多 endpoint 时与 entry name 一致）。 */
@@ -157,12 +126,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     return this.#options.config.id;
   }
 
-  get client(): SlackWebClientLike {
-    if (!this.#client) throw new Error('Slack client not connected');
-    return this.#client;
-  }
-
-  get transportState() { return this.config.mode === 'socket' ? this.#lifecycle.state : this.#started ? 'open' : 'stopped'; }
+  get #transportState() { return this.config.mode === 'socket' ? this.#lifecycle.state : this.#started ? 'open' : 'stopped'; }
 
   get platformUserId(): string | undefined {
     return this.#botUserId;
@@ -172,14 +136,12 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     return this.#options.config;
   }
 
-  async start(): Promise<void> {
+  async #startFramework(signal: AbortSignal): Promise<void> {
+    this.#executionSignal = signal;
     if (this.#started) return;
     this.#started = true;
     try {
       const { config } = this.#options;
-      if (config.webApiProxy && !this.#options.createClient) this.#webApiAgent = createSlackWebApiAgent(config.webApiProxy);
-      this.#client = this.#options.createClient?.(config.token)
-        ?? (createSlackWebClient(config.token, this.#webApiAgent ? { agent: this.#webApiAgent } : {}) as unknown as SlackWebClientLike);
 
       if (config.mode === 'socket') {
         await this.#startSocket();
@@ -196,7 +158,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
         }));
       }
 
-      const authTest = await this.#client.auth.test();
+      const authTest = await this.auth.test();
       if (authTest.user_id) this.#botUserId = String(authTest.user_id);
 
       this.#logger.info(
@@ -204,24 +166,14 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
         + (this.#botUserId ? ` | user: ${this.#botUserId}` : ''),
       );
     } catch (error) {
-      await this.stop();
+      await this.#stopFramework();
       this.#logger.error('Failed to connect Slack endpoint:', error);
       throw error;
     }
   }
 
-  open(): void {
-    this.#open = true;
-  }
-
-  close(): void {
-    this.#open = false;
-  }
-
-  async stop(): Promise<void> {
-    this.#open = false;
-    this.#webApiAgent?.destroy();
-    this.#webApiAgent = undefined;
+  async #stopFramework(): Promise<void> {
+    this.#options.webApiAgent?.destroy();
     await this.#lifecycle.stop();
     if (this.#socket) {
       try {
@@ -232,18 +184,17 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
       this.#socket = undefined;
     }
     for (const release of this.#routeReleases.splice(0)) release();
-    this.#client = undefined;
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    if (!this.#client) throw new Error('Slack client not connected');
+  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+    if (!this.#started) throw new Error('Slack client not connected');
     const channel = conversation.id;
     const threadTs = conversation.threadId;
     try {
     const result = await sendSlackContent(
-      this.#client,
+      this,
       payload,
       { channel, threadTs },
       this.#logger,
@@ -254,126 +205,137 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
   }
 
   /** Test / internal: admit a message event when open. */
-  admit(event: SlackMessageEvent | SlackEvent): void {
-    if (!this.#open) return;
-    void this.#emitPlatformEvent(event.type || 'event', event);
-    if (event.type !== 'message' && event.type !== 'app_mention') return;
-    const msg = event as SlackMessageEvent;
-    if (shouldDropSlackInboundMessage(msg, this.#inboundFilter, this.#botUserId)) return;
-    if (!msg.channel || !msg.ts) return;
+  admit(event: SlackMessageEvent | SlackEvent, original: unknown = event): void {
+    void this[endpointSpec].events.run(() => {
+      void this.#emitPlatformEvent(event.type || 'event', event);
+      if (event.type !== 'message' && event.type !== 'app_mention') return;
+      const msg = event as SlackMessageEvent;
+      if (shouldDropSlackInboundMessage(msg, this.#inboundFilter, this.#botUserId)) return;
+      if (!msg.channel || !msg.ts) return;
 
-    this.trackMessageChannel(msg.ts, msg.channel);
-    const threadTs = msg.thread_ts && msg.thread_ts !== msg.ts ? msg.thread_ts : undefined;
-    const conversation = slackInboundConversation(String(this.#options.id), {
-      channelId: msg.channel,
-      channelType: msg.channel_type,
-      threadId: threadTs,
-    });
-    void this.emit('message.receive', {
-      conversation,
-      message: { conversation, id: msg.ts },
-      content: formatInboundContent(msg),
-      sender: { id: msg.user ?? msg.channel ?? '' },
-      endpointId: this.#options.config.id,
-      ...(msg.type === 'app_mention' ? { mentioned: true } : {}),
-      metadata: Object.freeze({
-        channelType: resolveSlackChannelType(msg),
-        userId: msg.user,
-        threadTs,
-        ts: msg.ts,
-      }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'slack_gateway_receive_failed',
-        target: `${conversation.kind}:${conversation.id}`,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-    });
+      this.trackMessageChannel(msg.ts, msg.channel);
+      const threadTs = msg.thread_ts && msg.thread_ts !== msg.ts ? msg.thread_ts : undefined;
+      const conversation = slackInboundConversation(String(this.#options.id), {
+        channelId: msg.channel,
+        channelType: msg.channel_type,
+        threadId: threadTs,
+      });
+      void this[endpointSpec].events.emit('message.receive', {
+        conversation,
+        event: original,
+        ...(typeof msg.ts === 'string' && Number.isFinite(Number(msg.ts)) ? { platformSentAt: Number(msg.ts) * 1_000 } : {}),
+        message: { conversation, id: msg.ts },
+        content: formatInboundContent(msg),
+        sender: { id: msg.user ?? msg.channel ?? '' },
+        endpointId: this.#options.config.id,
+        ...(msg.type === 'app_mention' ? { mentioned: true } : {}),
+        metadata: Object.freeze({
+          channelType: resolveSlackChannelType(msg),
+          userId: msg.user,
+          threadTs,
+          ts: msg.ts,
+        }),
+      }).catch((err) => {
+        this.#logger.warn(formatCompact({
+          op: 'slack_gateway_receive_failed',
+          target: `${conversation.kind}:${conversation.id}`,
+          error: err instanceof Error ? err.message : String(err),
+        }));
+      });
+    }).catch(() => this.#logger.debug('Inbound callback did not complete'));
   }
 
   admitInteraction(payload: SlackInteractionPayload): void {
-    if (!this.#open) return;
-    void this.#emitPlatformEvent(`interaction.${payload.type}`, payload);
-    if (payload.type !== 'block_actions' || !payload.actions?.length) return;
-    const channelId = payload.channel?.id ?? '';
-    const userId = payload.user.id;
-    const messageTs = payload.message?.ts ?? '';
-    const sourceThread = payload.message?.thread_ts;
-    const threadTs = typeof sourceThread === 'string' && sourceThread && sourceThread !== messageTs ? sourceThread : undefined;
-    if (payload.response_url) {
-      postSlackEphemeral(payload.response_url, '已收到', this.#logger);
-    }
-    const actionTs = payload.actions[0]?.action_ts ?? messageTs ?? `action-${Date.now()}`;
-    const conversation = slackInboundConversation(String(this.#options.id), {
-      channelId: channelId || userId,
-      // block_actions 无 channel_type；无 channel 时按与发起用户的 DM 处理
-      channelType: channelId ? undefined : 'im',
-      threadId: threadTs,
-    });
-    void this.emit('message.receive', {
-      conversation,
-      message: { conversation, id: actionTs },
-      content: formatInteractionContent(payload),
-      segments: [{ type: 'action', data: { id: actionTs, payload: payload.actions[0].value ?? payload.actions[0].action_id, ...(messageTs ? { sourceMessageId: messageTs } : {}) } }],
-      sender: { id: userId },
-      endpointId: this.#options.config.id,
-      metadata: Object.freeze({
-        eventType: 'block_actions',
-        actionId: payload.actions[0]?.action_id,
-        threadTs,
-      }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'slack_gateway_receive_failed',
-        target: `${conversation.kind}:${conversation.id}`,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-    });
+    void this[endpointSpec].events.run(() => {
+      void this.#emitPlatformEvent(`interaction.${payload.type}`, payload);
+      if (payload.type !== 'block_actions' || !payload.actions?.length) return;
+      const channelId = payload.channel?.id ?? '';
+      const userId = payload.user.id;
+      const messageTs = payload.message?.ts ?? '';
+      const sourceThread = payload.message?.thread_ts;
+      const threadTs = typeof sourceThread === 'string' && sourceThread && sourceThread !== messageTs ? sourceThread : undefined;
+      if (payload.response_url) {
+        postSlackEphemeral(payload.response_url, '已收到', this.#logger);
+      }
+      const actionTs = payload.actions[0]?.action_ts ?? messageTs ?? `action-${Date.now()}`;
+      const platformSentAt = Number(payload.actions[0]?.action_ts) * 1_000;
+      const conversation = slackInboundConversation(String(this.#options.id), {
+        channelId: channelId || userId,
+        // block_actions 无 channel_type；无 channel 时按与发起用户的 DM 处理
+        channelType: channelId ? undefined : 'im',
+        threadId: threadTs,
+      });
+      void this[endpointSpec].events.emit('message.receive', {
+        conversation,
+        event: payload,
+        ...(Number.isFinite(platformSentAt) ? { platformSentAt } : {}),
+        message: { conversation, id: actionTs },
+        content: formatInteractionContent(payload),
+        segments: [{ type: 'action', data: { id: actionTs, payload: payload.actions[0].value ?? payload.actions[0].action_id, ...(messageTs ? { sourceMessageId: messageTs } : {}) } }],
+        sender: { id: userId },
+        endpointId: this.#options.config.id,
+        metadata: Object.freeze({
+          eventType: 'block_actions',
+          actionId: payload.actions[0]?.action_id,
+          threadTs,
+        }),
+      }).catch((err) => {
+        this.#logger.warn(formatCompact({
+          op: 'slack_gateway_receive_failed',
+          target: `${conversation.kind}:${conversation.id}`,
+          error: err instanceof Error ? err.message : String(err),
+        }));
+      });
+    }).catch(() => this.#logger.debug('Inbound callback did not complete'));
   }
 
   admitSlashCommand(cmd: SlackSlashCommand): void {
-    if (!this.#open) return;
-    void this.#emitPlatformEvent(`slash.${cmd.command}`, cmd);
-    postSlackEphemeral(cmd.response_url, '处理中…', this.#logger);
-    const conversation = slackInboundConversation(String(this.#options.id), {
-      channelId: cmd.channel_id,
-    });
-    void this.emit('message.receive', {
-      conversation,
-      message: { conversation, id: cmd.trigger_id },
-      content: formatSlashContent(cmd),
-      sender: { id: cmd.user_id, name: cmd.user_name },
-      endpointId: this.#options.config.id,
-      metadata: Object.freeze({
-        eventType: 'slash_command',
-        command: cmd.command,
-      }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'slack_gateway_receive_failed',
-        target: `${conversation.kind}:${conversation.id}`,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-    });
+    void this[endpointSpec].events.run(() => {
+      void this.#emitPlatformEvent(`slash.${cmd.command}`, cmd);
+      postSlackEphemeral(cmd.response_url, '处理中…', this.#logger);
+      const conversation = slackInboundConversation(String(this.#options.id), {
+        channelId: cmd.channel_id,
+      });
+      void this[endpointSpec].events.emit('message.receive', {
+        conversation,
+        message: { conversation, id: cmd.trigger_id },
+        event: cmd,
+        content: formatSlashContent(cmd),
+        sender: { id: cmd.user_id, name: cmd.user_name },
+        endpointId: this.#options.config.id,
+        metadata: Object.freeze({
+          eventType: 'slash_command',
+          command: cmd.command,
+        }),
+      }).catch((err) => {
+        this.#logger.warn(formatCompact({
+          op: 'slack_gateway_receive_failed',
+          target: `${conversation.kind}:${conversation.id}`,
+          error: err instanceof Error ? err.message : String(err),
+        }));
+      });
+    }).catch(() => this.#logger.debug('Inbound callback did not complete'));
   }
 
   handleEnvelope(body: unknown): void {
-    const envelope = body as SlackEventEnvelope;
-    if (envelope?.type === 'event_callback' && envelope.event) {
-      const event = envelope.event;
-      if (event.type !== 'message' && event.type !== 'app_mention') {
-        void this.#emitPlatformEvent(event.type || 'event', event);
-        receiveSlackSideEvent(
-          (name, payload) => this.emit(name, payload),
-          String(this.#options.id),
-          this.#options.config.id,
-          event,
-          this.#logger,
-        );
-        return;
+    void this[endpointSpec].events.run(() => {
+      const envelope = body as SlackEventEnvelope;
+      if (envelope?.type === 'event_callback' && envelope.event) {
+        const event = envelope.event;
+        if (event.type !== 'message' && event.type !== 'app_mention') {
+          void this.#emitPlatformEvent(event.type || 'event', event);
+          receiveSlackSideEvent(
+            (name, payload) => this[endpointSpec].events.emit(name, payload),
+            String(this.#options.id),
+            this.#options.config.id,
+            event,
+            this.#logger,
+          );
+          return;
+        }
+        this.admit(event, body);
       }
-      this.admit(event);
-    }
+    }).catch(() => this.#logger.debug('Inbound callback did not complete'));
   }
 
   trackMessageChannel(ts: string, channel: string): void {
@@ -399,21 +361,21 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
   }
 
   async recallMessage(messageId: string): Promise<void> {
-    if (!this.#client) return;
+    if (!this.#started) return;
     const ref = this.resolveMessageRef(messageId);
     if (!ref) return;
-    await this.#client.chat.delete({ channel: ref.channel, ts: ref.ts });
+    await this.chat.delete({ channel: ref.channel, ts: ref.ts });
   }
 
   async #editMessage(channel: string, messageTs: string, content: unknown): Promise<void> {
-    if (!this.#client) throw new Error('Slack client not connected');
-    await editSlackContent(this.#client, channel, messageTs, content);
+    if (!this.#started) throw new Error('Slack client not connected');
+    await editSlackContent(this, channel, messageTs, content);
   }
 
   async #addReaction(channel: string, timestamp: string, name: string): Promise<void> {
     const reaction = normalizeSlackReactionName(name);
     try {
-      await this.#client!.reactions.add({ channel, timestamp, name: reaction });
+      await this.reactions.add({ channel, timestamp, name: reaction });
     } catch (error) {
       const code = (error as { data?: { error?: string } })?.data?.error;
       if (code === 'already_reacted') return;
@@ -424,7 +386,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
   async #removeReaction(channel: string, timestamp: string, name: string): Promise<void> {
     const reaction = normalizeSlackReactionName(name);
     try {
-      await this.#client!.reactions.remove({ channel, timestamp, name: reaction });
+      await this.reactions.remove({ channel, timestamp, name: reaction });
     } catch (error) {
       const code = (error as { data?: { error?: string } })?.data?.error;
       if (code === 'no_reaction') return;
@@ -433,12 +395,23 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
   }
 
   async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
-    await this.emitPlatform(name, event).catch((error) => {
+    await this[endpointSpec].events.platform(name, event).catch((error) => {
       this.#logger.warn(formatCompact({
         op: 'slack_platform_event_failed',
         event: name,
         error: error instanceof Error ? error.message : String(error),
       }));
+    });
+  }
+
+  #awaitSocketAck(ack: Promise<unknown>): Promise<unknown> {
+    const signal = this.#executionSignal;
+    if (!signal) return ack;
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason);
+      signal.addEventListener('abort', abort, { once: true });
+      void ack.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+      if (signal.aborted) abort();
     });
   }
 
@@ -462,9 +435,39 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
       handle.onForceClose(release);
       socket.on('disconnected', () => { if (!active) return; release(); handle.notifyClosed('Slack socket disconnected'); });
       socket.on('error', error => { connectionError = slackSocketConnectionError(error); if (!active) return; release(); handle.notifyClosed('Slack socket error'); });
-      socket.on('slack_event', async ({ ack, body }) => { if (!active || this.#socket !== socket) return; await ack(); if (active) this.handleEnvelope(body); });
-      socket.on('interactive', async ({ ack, body }) => { if (!active || this.#socket !== socket) return; await ack(); if (active) this.admitInteraction(body as SlackInteractionPayload); });
-      socket.on('slash_commands', async ({ ack, body }) => { if (!active || this.#socket !== socket) return; await ack(); if (active) this.admitSlashCommand(body as SlackSlashCommand); });
+      socket.on('slack_event', ({ ack, body }) => {
+        if (!active || this.#socket !== socket) return;
+        void this[endpointSpec].events.run(async () => {
+          try { await this.#awaitSocketAck(ack()); } catch (error) {
+            if (!this.#executionSignal?.aborted) this.#logger.warn(formatCompact({ op: 'slack_socket_ack_failed' }));
+            throw error;
+          }
+          this.#executionSignal?.throwIfAborted();
+          if (active) this.handleEnvelope(body);
+        }).catch(() => this.#logger.debug('Socket callback did not complete'));
+      });
+      socket.on('interactive', ({ ack, body }) => {
+        if (!active || this.#socket !== socket) return;
+        void this[endpointSpec].events.run(async () => {
+          try { await this.#awaitSocketAck(ack()); } catch (error) {
+            if (!this.#executionSignal?.aborted) this.#logger.warn(formatCompact({ op: 'slack_socket_ack_failed' }));
+            throw error;
+          }
+          this.#executionSignal?.throwIfAborted();
+          if (active) this.admitInteraction(body as SlackInteractionPayload);
+        }).catch(() => this.#logger.debug('Socket callback did not complete'));
+      });
+      socket.on('slash_commands', ({ ack, body }) => {
+        if (!active || this.#socket !== socket) return;
+        void this[endpointSpec].events.run(async () => {
+          try { await this.#awaitSocketAck(ack()); } catch (error) {
+            if (!this.#executionSignal?.aborted) this.#logger.warn(formatCompact({ op: 'slack_socket_ack_failed' }));
+            throw error;
+          }
+          this.#executionSignal?.throwIfAborted();
+          if (active) this.admitSlashCommand(body as SlackSlashCommand);
+        }).catch(() => this.#logger.debug('Socket callback did not complete'));
+      });
       try { await socket.start(); } catch (error) { release(); throw connectionError ?? slackSocketConnectionError(error); }
     });
   }

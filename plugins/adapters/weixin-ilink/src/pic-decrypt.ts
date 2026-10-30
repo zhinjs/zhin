@@ -5,11 +5,13 @@ import { logger } from "./ilink-logger.js";
 /**
  * Download raw bytes from the CDN (no decryption).
  */
-async function fetchCdnBytes(url: string, label: string): Promise<Buffer> {
+async function fetchCdnBytes(url: string, label: string, signal?: AbortSignal): Promise<Buffer> {
+  signal?.throwIfAborted();
   let res: Response;
   try {
-    res = await fetch(url);
+    res = await fetch(url, { signal });
   } catch (err) {
+    signal?.throwIfAborted();
     const cause =
       (err as NodeJS.ErrnoException).cause ?? (err as NodeJS.ErrnoException).code ?? "(no cause)";
     logger.error(
@@ -24,7 +26,9 @@ async function fetchCdnBytes(url: string, label: string): Promise<Buffer> {
     logger.error(msg);
     throw new Error(msg);
   }
-  return Buffer.from(await res.arrayBuffer());
+  const bytes = await res.arrayBuffer();
+  signal?.throwIfAborted();
+  return Buffer.from(bytes);
 }
 
 /**
@@ -61,6 +65,7 @@ export async function downloadAndDecryptBuffer(
   cdnBaseUrl: string,
   label: string,
   fullUrl?: string,
+  signal?: AbortSignal,
 ): Promise<Buffer> {
   const key = parseAesKey(aesKeyBase64, label);
   let url: string;
@@ -72,7 +77,7 @@ export async function downloadAndDecryptBuffer(
     throw new Error(`${label}: fullUrl is required (CDN URL fallback is disabled)`);
   }
   logger.debug(`${label}: fetching url=${url}`);
-  const encrypted = await fetchCdnBytes(url, label);
+  const encrypted = await fetchCdnBytes(url, label, signal);
   logger.debug(`${label}: downloaded ${encrypted.byteLength} bytes, decrypting`);
   const decrypted = decryptAesEcb(encrypted, key);
   logger.debug(`${label}: decrypted ${decrypted.length} bytes`);
@@ -87,6 +92,7 @@ export async function downloadPlainCdnBuffer(
   cdnBaseUrl: string,
   label: string,
   fullUrl?: string,
+  signal?: AbortSignal,
 ): Promise<Buffer> {
   let url: string;
   if (fullUrl) {
@@ -97,5 +103,5 @@ export async function downloadPlainCdnBuffer(
     throw new Error(`${label}: fullUrl is required (CDN URL fallback is disabled)`);
   }
   logger.debug(`${label}: fetching url=${url}`);
-  return fetchCdnBytes(url, label);
+  return fetchCdnBytes(url, label, signal);
 }

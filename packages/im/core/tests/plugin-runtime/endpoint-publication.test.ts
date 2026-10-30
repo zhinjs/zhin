@@ -1,5 +1,5 @@
 import { RootController, createSnapshotView, createCapabilitySlot, createGenerationAdmissionGate, createToken, generationAdmissionSource, rootPluginId, type SnapshotState, type TokenId, type CapabilityId, type CapabilitySlot, type FeatureId, type GenerationAdmissionGate } from '@zhin.js/plugin-runtime';
-import { AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
+import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
 import { HandlerIndex, defineHandler, handlerFeatureId } from '@zhin.js/handler';
 import { ImRuntime } from '../../src/plugin-runtime/im/index.js';
 
@@ -16,12 +16,21 @@ it('dispatches system.online buffered during login only into the published snaps
   async function prepare(version: number, foreign?: GenerationAdmissionGate, failActivation = false) {
     const serviceGate = createGenerationAdmissionGate();
     const service = { [generationAdmissionSource]: [serviceGate], read: () => serviceGate.enter(() => version) };
+    class PublicationClient { constructor(readonly version: number) {} }
+    class PublicationEndpoint extends PublicationClient implements Endpoint {
+      readonly [endpointSpec] = createEndpointSpecification(this, {
+        start: () => {
+          const events = this[endpointSpec].events;
+          sinks.push(events);
+          const event = events.emit('system.receive', { type: 'system', name: 'system.online', id: `online-${version}`, timestamp: Date.now(), metadata: {} });
+          pending.push(event); void event.catch(() => undefined);
+        }, open() {}, close() {}, stop() {},
+      });
+    }
     const adapter = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'synthetic', source: '/fixture/adapters/synthetic/index.ts', definition: defineAdapter({
-      capabilities: ['inbound'], create: () => ({ client: { version }, connect({ events }) {
-        sinks.push(events);
-        const event = events.emit('system.receive', { type: 'system', name: 'system.online', id: `online-${version}`, timestamp: Date.now(), metadata: {} });
-        pending.push(event); void event.catch(() => undefined);
-      } }),
+      capabilities: ['inbound'], createAdapter: () => new class extends Adapter<PublicationEndpoint> {
+        protected createEndpoint() { return new PublicationEndpoint(version); }
+      }(),
     }) });
     const handler = createCapabilitySlot({ owner, feature: handlerFeatureId, localName: 'online', source: '/fixture/handlers/online/index.ts', definition: defineHandler({
       event: 'system.receive', handle(event) { seen.push({ generation: event.payload.generation, service: this.use(serviceToken).read() }); },

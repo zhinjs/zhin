@@ -2,9 +2,8 @@ import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contrac
 /**
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import { Client } from 'kook-client';
 import {
-  Endpoint,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   type EndpointControl,
   type EndpointChannel,
   type EndpointGroup,
@@ -30,10 +29,8 @@ import {
 } from './protocol.js';
 import { registerKookWebhookRoutes } from './webhook.js';
 import {
-  defaultCreateClient,
-  defaultCreateWebhookClient,
+  RuntimeKookClient, kookWebsocketClientOptions, kookWebhookClientOptions,
   normalizeKookMessage,
-  type CreateKookClient,
   type KookClientTransport,
 } from './ws.js';
 import { recallKookMessage, sendKookOutbound } from './outbound.js';
@@ -43,7 +40,6 @@ import { receiveKookSideEvent } from './side-event-dispatch.js';
 export interface KookEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedKookWebsocketConfig;
-  readonly createClient?: CreateKookClient;
 }
 
 /** 入站 message.receive 载荷：规范角色 owner/admin 进 roles，原始角色 id 进 permissions。 */
@@ -56,6 +52,8 @@ function kookInboundPayload(
 ) {
   return {
     conversation,
+    event: msg.event,
+    platformSentAt: msg.platformSentAt,
     message: { conversation, id: msg.id },
     content: formatInboundContent(msg),
     sender: {
@@ -76,82 +74,78 @@ function kookInboundPayload(
   };
 }
 
-export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
+export class KookWebsocketEndpoint extends RuntimeKookClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   #sentConversations = new Map<string, ConversationRef>();
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: KookEndpointOptions;
-  readonly #createClient: CreateKookClient;
-  #client: KookClientTransport | null = null;
-  readonly #roles = new KookSenderRoleResolver(() => this.#client);
+  readonly #roles = new KookSenderRoleResolver(() => this);
   #open = false;
+  #executionSignal?: AbortSignal;
   #started = false;
-  readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
-  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: (message) => recallKookMessage(this.#requireClient(), message),
   });
 
   constructor(options: KookEndpointOptions) {
-    super();
+    super(kookWebsocketClientOptions(options.config), undefined, options.config.apiProxy);
     this.#logger = getAdapterLogger('kook', options.config.id);
     this.#options = options;
-    this.#createClient = options.createClient ?? (defaultCreateClient as CreateKookClient);
+    const endpoint = this;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
+      stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
+      name: options.config.id, get transportState() { return endpoint.#transportState; },
+      management: this.#management, control: this.#control,
+    });
   }
 
-  get client(): KookClientTransport {
-    return this.#requireClient();
-  }
-
-  get transportState(): EndpointTransportState | undefined {
+  get #transportState(): EndpointTransportState | undefined {
     if (!this.#started) return 'stopped';
-    return this.#client?.getTransportState?.();
+    return this.getTransportState?.();
   }
 
-  async start(): Promise<void> {
+  async #startFramework(signal: AbortSignal): Promise<void> {
+    this.#executionSignal = signal;
+    this.request.interceptors.request.use(request => { request.signal = signal; return request; });
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#client = this.#createClient(this.#options.config);
-      this.#bindClient(this.#client);
-      await this.#client.connect();
+      this.#bindClient(this);
+      await this.connect();
       this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.id,
         mode: 'websocket',
-        self_id: this.#client.self_id != null ? String(this.#client.self_id) : undefined,
+        self_id: this.self_id != null ? String(this.self_id) : undefined,
       }));
     } catch (error) {
-      await this.stop();
+      await this.#stopFramework();
       this.#logger.error('Failed to connect KOOK websocket:', error);
       throw error;
     }
   }
 
-  open(): void {
+  #openFramework(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #closeFramework(): void {
     this.#open = false;
   }
 
-  async stop(): Promise<void> {
+  async #stopFramework(): Promise<void> {
     this.#open = false;
     this.#sentConversations.clear();
-    if (this.#client) {
-      try {
-        this.#client.removeAllListeners();
-        await this.#client.disconnect();
-      } catch {
-        /* ignore */
-      }
-      this.#client = null;
-    }
+    this.removeAllListeners();
+    await this.disconnect();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send(request: EndpointSendRequest): Promise<string> {
+  async #sendFramework(request: EndpointSendRequest): Promise<string> {
     const { conversation } = request;
     const messageId = await sendKookOutbound(this.#requireClient(), request);
     rememberKookConversation(this.#sentConversations, messageId, conversation);
@@ -166,19 +160,22 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
 
   /** Test / internal: admit a normalized message when open. */
   admit(msg: KookInboundMessage): void {
-    if (!this.#open) return;
-    if (msg.authorBot) return;
-    const conversation = kookInboundConversation(String(this.#options.id), msg);
-    const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
-    void this.#roles.resolve(msg).then((projection) => this.emit('message.receive',
-      kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId),
-    )).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'kook_gateway_receive_failed',
-        target: `${conversation.kind}:${conversation.id}`,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-    });
+    void this[endpointSpec].events.run(() => {
+      if (msg.authorBot) return;
+      const conversation = kookInboundConversation(String(this.#options.id), msg);
+      const selfId = this.self_id != null ? String(this.self_id) : undefined;
+      return this.#roles.resolve(msg).then((projection) => {
+        this.#executionSignal?.throwIfAborted();
+        return this[endpointSpec].events.emit('message.receive',
+          kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId));
+      }).catch((err) => {
+        this.#logger.warn(formatCompact({
+          op: 'kook_gateway_receive_failed',
+          target: `${conversation.kind}:${conversation.id}`,
+          error: err instanceof Error ? err.message : String(err),
+        }));
+      });
+    }).catch(() => this.#logger.debug('Inbound callback was not admitted'));
   }
 
   async recallMessage(messageId: string, conversation?: ConversationRef): Promise<void> {
@@ -188,31 +185,36 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
 
   #bindClient(client: KookClientTransport): void {
     client.on('message', (raw) => {
-      this.#emitPlatformEvent('message', raw);
-      const msg = normalizeKookMessage(raw);
-      if (msg) this.admit(msg);
+      void this[endpointSpec].events.run(() => {
+        this.#emitPlatformEvent('message', raw);
+        const msg = normalizeKookMessage(raw);
+        if (msg) this.admit(msg);
+      }).catch(() => this.#logger.debug('Native callback was not admitted'));
     });
     const receiver = (client as { receiver?: { on(event: string, listener: (...args: unknown[]) => void): void } }).receiver;
     receiver?.on('event', (raw) => {
-      if (this.#client !== client || !this.#open) return;
-      this.#emitPlatformEvent('event', raw);
-      if (normalizeKookButtonEvent(raw)) {
-        void this.admitButton(raw).catch(error => this.#logger.warn(formatCompact({ op: 'kook_button_failed', error: error instanceof Error ? error.message : 'dispatch failed' })));
-        return;
-      }
-      receiveKookSideEvent((name, payload) => this.emit(name, payload), this.#options.config.id, raw, this.#logger);
+      void this[endpointSpec].events.run(() => {
+        if (this !== client || !this.#open) return;
+        this.#emitPlatformEvent('event', raw);
+        if (normalizeKookButtonEvent(raw)) {
+          void this.admitButton(raw).catch(error => this.#logger.warn(formatCompact({ op: 'kook_button_failed', error: error instanceof Error ? error.message : 'dispatch failed' })));
+          return;
+        }
+        receiveKookSideEvent((name, payload) => this[endpointSpec].events.emit(name, payload), this.#options.config.id, raw, this.#logger);
+      }).catch(() => this.#logger.debug('Native callback was not admitted'));
     });
   }
 
   async admitButton(raw: unknown): Promise<void> {
-    if (!this.#open) throw new Error('KOOK endpoint is closed');
-    const event = normalizeKookButtonEvent(raw);
-    if (!event) throw new Error('Invalid KOOK button event');
-    await this.emitAccepted('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, event, this.#sentConversations.get(event.sourceMessageId)));
+    return this[endpointSpec].events.run(async () => {
+      const event = normalizeKookButtonEvent(raw);
+      if (!event) throw new Error('Invalid KOOK button event');
+      await this[endpointSpec].events.emitAccepted('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, event, this.#sentConversations.get(event.sourceMessageId)));
+    });
   }
 
   #emitPlatformEvent(name: string, event: unknown): void {
-    void this.emitPlatform(name, event).catch((error) => {
+    void this[endpointSpec].events.platform(name, event).catch((error) => {
       this.#logger.warn(formatCompact({
         op: 'kook_platform_event_failed',
         event: name,
@@ -222,8 +224,8 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
   }
 
   #requireClient(): KookClientTransport {
-    if (!this.#client) throw new Error('KOOK client not connected');
-    return this.#client;
+    if (!this.#started) throw new Error('KOOK client not connected');
+    return this;
   }
 }
 
@@ -231,35 +233,34 @@ export interface KookWebhookEndpointOptions {
   readonly id: CapabilityId;
   readonly http: HttpHost;
   readonly config: ResolvedKookWebhookConfig;
-  readonly createClient?: CreateKookClient;
 }
 
-export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
+export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   #sentConversations = new Map<string, ConversationRef>();
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: KookWebhookEndpointOptions;
-  readonly #createClient: CreateKookClient;
-  #client: KookClientTransport | null = null;
-  readonly #roles = new KookSenderRoleResolver(() => this.#client);
+  readonly #roles = new KookSenderRoleResolver(() => this);
   #routeReleases: HttpRouteRegistration[] = [];
   #processedSn = new Set<number>();
   #open = false;
+  #executionSignal?: AbortSignal;
   #started = false;
-  readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
-  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+  readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: (message) => recallKookMessage(this.#requireClient(), message),
   });
 
   constructor(options: KookWebhookEndpointOptions) {
-    super();
+    super(kookWebhookClientOptions(options.config), undefined, options.config.apiProxy);
     this.#logger = getAdapterLogger('kook', options.config.id);
     this.#options = options;
-    this.#createClient = options.createClient ?? (defaultCreateWebhookClient as CreateKookClient);
-  }
-
-  get client(): KookClientTransport {
-    return this.#requireClient();
+    this[endpointSpec] = createEndpointSpecification(this, {
+      start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
+      stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
+      management: this.#management, control: this.#control,
+    });
   }
 
   /** Used by webhook handler. */
@@ -267,62 +268,56 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
     return this.#open;
   }
 
-  get config(): ResolvedKookWebhookConfig {
+  get endpointConfig(): ResolvedKookWebhookConfig {
     return this.#options.config;
   }
 
   get selfId(): string | undefined {
-    return this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
+    return this.self_id != null ? String(this.self_id) : undefined;
   }
 
-  async start(): Promise<void> {
+  async #startFramework(signal: AbortSignal): Promise<void> {
+    this.#executionSignal = signal;
+    this.request.interceptors.request.use(request => { request.signal = signal; return request; });
     if (this.#started) return;
     this.#started = true;
     try {
-      this.#client = this.#createClient(this.#options.config);
-      await (this.#client as Client).init();
+      await this.init();
       this.#routeReleases.push(...registerKookWebhookRoutes(this.#options.http, this));
       this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.id,
         mode: 'webhook',
         path: this.#options.config.webhookPath,
-        self_id: this.#client.self_id != null ? String(this.#client.self_id) : undefined,
+        self_id: this.self_id != null ? String(this.self_id) : undefined,
       }));
     } catch (error) {
-      await this.stop();
+      await this.#stopFramework();
       this.#logger.error('Failed to connect KOOK webhook:', error);
       throw error;
     }
   }
 
-  open(): void {
+  #openFramework(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #closeFramework(): void {
     this.#open = false;
   }
 
-  async stop(): Promise<void> {
+  async #stopFramework(): Promise<void> {
     this.#open = false;
     this.#sentConversations.clear();
     for (const release of this.#routeReleases.splice(0)) release();
     this.#processedSn.clear();
-    if (this.#client) {
-      try {
-        this.#client.removeAllListeners();
-        await this.#client.disconnect();
-      } catch {
-        /* ignore */
-      }
-      this.#client = null;
-    }
+    this.removeAllListeners();
+    await this.disconnect();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send(request: EndpointSendRequest): Promise<string> {
+  async #sendFramework(request: EndpointSendRequest): Promise<string> {
     const { conversation } = request;
     const messageId = await sendKookOutbound(this.#requireClient(), request);
     rememberKookConversation(this.#sentConversations, messageId, conversation);
@@ -336,47 +331,52 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
   }
 
   async admitEvent(event: KookWebhookEventData): Promise<void> {
-    if (normalizeKookButtonEvent(event)) {
-      if (!this.#open) throw new Error('KOOK endpoint is closed');
-      const button = normalizeKookButtonEvent(event)!;
-      await this.emitAccepted('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, button, this.#sentConversations.get(button.sourceMessageId)));
-      return;
-    }
-    void this.emitPlatform(String(event.type ?? 'event'), event).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'kook_platform_event_failed',
-        event: String(event.type ?? 'event'),
-        error: error instanceof Error ? error.message : String(error),
-      }));
+    return this[endpointSpec].events.run(async () => {
+      if (normalizeKookButtonEvent(event)) {
+        if (!this.#open) throw new Error('KOOK endpoint is closed');
+        const button = normalizeKookButtonEvent(event)!;
+        await this[endpointSpec].events.emitAccepted('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, button, this.#sentConversations.get(button.sourceMessageId)));
+        return;
+      }
+      void this[endpointSpec].events.platform(String(event.type ?? 'event'), event).catch((error) => {
+        this.#logger.warn(formatCompact({
+          op: 'kook_platform_event_failed',
+          event: String(event.type ?? 'event'),
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      });
+      if (receiveKookSideEvent(
+        (name, payload) => this[endpointSpec].events.emit(name, payload),
+        this.#options.config.id,
+        event,
+        this.#logger,
+      )) return;
+      const message = normalizeKookWebhookEvent(event, {
+        ignore: this.#options.config.ignore,
+        selfId: this.selfId,
+      });
+      if (message) this.admit(message);
     });
-    if (receiveKookSideEvent(
-      (name, payload) => this.emit(name, payload),
-      this.#options.config.id,
-      event,
-      this.#logger,
-    )) return;
-    const message = normalizeKookWebhookEvent(event, {
-      ignore: this.#options.config.ignore,
-      selfId: this.selfId,
-    });
-    if (message) this.admit(message);
   }
 
   /** Test / internal: admit a message when open. */
   admit(msg: KookInboundMessage): void {
-    if (!this.#open) return;
-    if (msg.authorBot) return;
-    const conversation = kookInboundConversation(String(this.#options.id), msg);
-    const selfId = this.#client?.self_id != null ? String(this.#client.self_id) : undefined;
-    void this.#roles.resolve(msg).then((projection) => this.emit('message.receive',
-      kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId),
-    )).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'kook_gateway_receive_failed',
-        target: `${conversation.kind}:${conversation.id}`,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-    });
+    void this[endpointSpec].events.run(() => {
+      if (msg.authorBot) return;
+      const conversation = kookInboundConversation(String(this.#options.id), msg);
+      const selfId = this.self_id != null ? String(this.self_id) : undefined;
+      return this.#roles.resolve(msg).then((projection) => {
+        this.#executionSignal?.throwIfAborted();
+        return this[endpointSpec].events.emit('message.receive',
+          kookInboundPayload(this.#options.config.id, conversation, msg, projection, selfId));
+      }).catch((err) => {
+        this.#logger.warn(formatCompact({
+          op: 'kook_gateway_receive_failed',
+          target: `${conversation.kind}:${conversation.id}`,
+          error: err instanceof Error ? err.message : String(err),
+        }));
+      });
+    }).catch(() => this.#logger.debug('Inbound callback was not admitted'));
   }
 
   async recallMessage(messageId: string, conversation?: ConversationRef): Promise<void> {
@@ -397,8 +397,8 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
   forgetSn(sn: number): void { this.#processedSn.delete(sn); }
 
   #requireClient(): KookClientTransport {
-    if (!this.#client) throw new Error('KOOK client not initialized');
-    return this.#client;
+    if (!this.#started) throw new Error('KOOK client not initialized');
+    return this;
   }
 }
 
@@ -422,7 +422,7 @@ function kookButtonIngress(endpointKey: string, endpointId: string, event: NonNu
   const conversation: ConversationRef = { endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: sentConversation?.kind ?? event.channelKind, id: sentConversation?.id ?? event.channelId,
     ...(sentConversation?.parent ? { parent: sentConversation.parent } : {}) };
-  return { conversation, message: { conversation, id: event.id }, content: `[action: ${event.payload}]`,
+  return { event: event.event, platformSentAt: event.platformSentAt, conversation, message: { conversation, id: event.id }, content: `[action: ${event.payload}]`,
     segments: [{ type: 'action', data: { id: event.id, payload: event.payload, sourceMessageId: event.sourceMessageId } }],
     sender: { id: event.userId }, endpointId,
     metadata: Object.freeze({ eventType: 'message_btn_click', payload: event.payload, sourceMessageId: event.sourceMessageId, timestamp: event.timestamp }) };

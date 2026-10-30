@@ -1,16 +1,19 @@
 import WebSocket from 'ws';
 import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, type EndpointEvent } from '@zhin.js/adapter';
-import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, projectLocaleToken, type SnapshotState } from 'zhin.js';
+import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, projectLocaleToken, readOperationSession, type OperationSession, type SnapshotState } from 'zhin.js';
 import { ImRuntime, RuntimeMessage, type Message } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import sandboxAdapter from '../adapters/sandbox/index.js';
+import { SandboxClient } from '../src/client.js';
 
 it('settles the original Core confirm once through the real Sandbox wire, never admitting its callback as ordinary chat', async () => {
   const root = rootPluginId(), abort = new AbortController();
   const ordinary = vi.fn();
+  const sessions: OperationSession[] = [];
   const im = new ImRuntime({ inboundClaim(message: Message) {
     // The normal chat consumer leaves explicit platform actions to Core's interaction authority.
     if (message.segments?.some(segment => segment.type === 'action')) return false;
+    const session = readOperationSession(message); if (!session) throw new Error('Sandbox Core Session is missing'); sessions.push(session);
     ordinary(message.content); return true;
   } });
   const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'local-full' });
@@ -48,9 +51,16 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
       return { socket, frames };
     };
     const first = await connect(), second = await connect();
-    first.socket.send(JSON.stringify({ type: 'group', id: 'room', messageId: 'normal-input', content: 'normal chat', timestamp: 1 }));
+    const frame = JSON.stringify({ type: 'group', id: 'room', messageId: 'normal-input', content: 'normal chat', timestamp: 1 });
+    first.socket.send(frame);
     await vi.waitFor(() => expect(processed).toBe(1));
     expect(ordinary).toHaveBeenCalledExactlyOnceWith('normal chat'); ordinary.mockClear();
+    const native = adapters.client<SandboxClient>('sandbox', String(adapter.id));
+    expect(native).toBeInstanceOf(SandboxClient);
+    expect(sessions[0]?.endpoint).toBe(native); expect(sessions[0]?.adapter).toBe(adapters.adapter(adapter.id));
+    expect(sessions[0]?.event).toBe(frame); expect(sessions[0]?.sender?.id).toBe('configured-owner');
+    expect(sessions[0]?.message).toMatchObject({ id: 'normal-input', text: 'normal chat' });
+    expect(sessions[0]?.scene).toMatchObject({ kind: 'group', id: 'room', endpoint: { adapter: 'sandbox', id: adapter.id } });
     const conversation = { endpoint: { adapter: 'sandbox', id: String(adapter.id) }, kind: 'group' as const, id: 'room' };
     let settlements = 0;
     answer = im.createInteraction(new RuntimeMessage(conversation, 'ask', 0,

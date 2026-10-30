@@ -17,7 +17,7 @@ for (const file of typescriptFiles(adapterFeatureRoot)) {
   if (/from\s+['"](?:node:(?:fs|path)|yaml)['"]/u.test(source)
     || /\b(?:process\.cwd|ZHIN_PROJECT_ROOT|ZHIN_CONFIG)\b/u.test(source)) {
     errors.push(
-      `${relative}: platform-neutral Adapter code must use EndpointConfigurationStore; `
+      `${relative}: platform-neutral Adapter code must use its desired-state repository; `
       + 'project files and YAML belong to the composition root',
     );
   }
@@ -82,10 +82,10 @@ for (const file of typescriptFiles(adaptersRoot)) {
     }
     if (/\breadonly\s+client\s*=\s*this\b/u.test(source)
       || /\bget\s+client\s*\([^)]*\)\s*\{\s*return\s+this\s*;/su.test(source)) {
-      errors.push(`${relative}: Endpoint must produce a distinct SDK/protocol Client, not expose itself as Client`);
+      errors.push(`${relative}: Endpoint is the actual Client; a compatibility client alias must not be added`);
     }
     if (/\bclass\s+\w+Endpoint\s+extends\s+Endpoint\s*\{/u.test(source)) {
-      errors.push(`${relative}: Endpoint must declare Endpoint<TClient> explicitly`);
+      errors.push(`${relative}: Endpoint must inherit its native Client and implement the structural Endpoint contract`);
     }
   }
 }
@@ -104,7 +104,7 @@ for (const entry of fs.readdirSync(adaptersRoot, { withFileTypes: true })) {
     declaresAdapterTypeRegistry(fs.readFileSync(file, 'utf8'))
   ));
   if (!hasClientRegistry) {
-    errors.push(`plugins/adapters/${entry.name}: adapter must register its Adapter in AdapterRegistry or its legacy Client descriptor in AdapterClientRegistry`);
+    errors.push(`plugins/adapters/${entry.name}: adapter must register its actual Adapter class in AdapterRegistry`);
   }
 }
 

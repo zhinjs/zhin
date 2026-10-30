@@ -27,6 +27,7 @@ export {
   type ParsedSendTarget,
   type ResolvedNapCatConfig,
 } from './protocol.js';
+export { NapcatAdapter } from './adapter.js';
 
 export {
   InboundMessageDeduper,
@@ -36,7 +37,6 @@ export {
 } from './napcat-inbound.js';
 
 export {
-  napcatClient,
   type NapcatClient,
   type NapcatClientEventMap,
 } from './client.js';

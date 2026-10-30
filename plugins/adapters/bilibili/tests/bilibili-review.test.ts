@@ -1,4 +1,5 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createTestEventGateway } from '../../test-utils/endpoint.js';
+import { createBilibiliHarness } from './bilibili-harness.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { BilibiliEndpoint, BilibiliReviewError } from '../src/endpoint.js';
@@ -69,24 +70,18 @@ function fakeFetch(options: FakeOptions = {}) {
   return { fetch, calls, posts };
 }
 
-function makeEndpoint(fetch: BilibiliFetch, config: Record<string, unknown> = {}, clock = { now: 1_000_000 }) {
+async function makeEndpoint(fetch: BilibiliFetch, config: Record<string, unknown> = {}, clock = { now: 1_000_000 }) {
   const receive = vi.fn(async () => undefined);
   const registry = new Map<string, BilibiliEndpoint>();
-  const endpoint = bindTestEndpoint(new BilibiliEndpoint({
-    id: endpointId,
-    autoPoll: false,
-    fetch,
-    registry,
-    now: () => clock.now,
-    config: resolveBilibiliConfig({ id: 'bili', videos: [String(AID)], sessdata: 's', biliJct: 'csrf-token', ...config }),
-  }), { receive });
-  registry.set('bili', endpoint);
+  const endpoint = await createBilibiliHarness({ id: 'bili', videos: [String(AID)], sessdata: 's', biliJct: 'csrf-token', ...config },
+    { fetch, now: () => clock.now }, createTestEventGateway({ receive }));
+  registry.set('bili', endpoint.endpoint);
   return { endpoint, receive, registry, clock };
 }
 
-async function queueDraft(endpoint: BilibiliEndpoint, payload: unknown = '感谢支持'): Promise<string> {
+async function queueDraft(endpoint: Awaited<ReturnType<typeof createBilibiliHarness>>, payload: unknown = '感谢支持'): Promise<string> {
   await endpoint.send({ conversation: thread, payload }).catch(() => undefined);
-  const drafts = endpoint.drafts.list();
+  const drafts = endpoint.endpoint.drafts.list();
   return drafts[drafts.length - 1]!.id;
 }
 
@@ -120,128 +115,128 @@ describe('bilibili protocol (notifications / reply target)', () => {
 describe('BilibiliEndpoint review-then-send', () => {
   it('send() never posts; approveDraft() posts once with csrf and dequeues', async () => {
     const { fetch, calls, posts } = fakeFetch();
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
     const id = await queueDraft(endpoint);
     expect(calls.some((url) => url.includes('/x/v2/reply/add'))).toBe(false);
 
-    const sent = await endpoint.approveDraft(id);
+    const sent = await endpoint.endpoint.approveDraft(id);
     expect(sent.rpid).toBe('9001');
     expect(posts).toEqual([{ type: '1', oid: String(AID), root: '1', parent: '1', message: '感谢支持', csrf: 'csrf-token' }]);
-    expect(endpoint.drafts.list()).toHaveLength(0);
-    await expect(endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'not_found' });
+    expect(endpoint.endpoint.drafts.list()).toHaveLength(0);
+    await expect(endpoint.endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'not_found' });
   });
 
   it('uses the reply segment as parent and keeps the quoted comment for review', async () => {
     const { fetch, posts } = fakeFetch({ pages: [[reply(1)], [reply(1), reply(5, { root: 1, parent: 1, content: { message: '求更新' } })]] });
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
     await endpoint.start();
     endpoint.open();
-    await endpoint.pollOnce();
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     const id = await queueDraft(endpoint, [{ type: 'reply', data: { id: '5' } }, { type: 'text', data: { text: '在做了' } }]);
-    expect(endpoint.drafts.get(id)).toMatchObject({ parent: '5', root: '1', context: { author: 'viewer', text: '求更新' } });
-    await endpoint.approveDraft(id);
+    expect(endpoint.endpoint.drafts.get(id)).toMatchObject({ parent: '5', root: '1', context: { author: 'viewer', text: '求更新' } });
+    await endpoint.endpoint.approveDraft(id);
     expect(posts[0]).toMatchObject({ root: '1', parent: '5', message: '在做了' });
-    endpoint.stop();
+    await endpoint.stop();
   });
 
   it('enforces the minimum send interval without queueing', async () => {
     const { fetch, posts } = fakeFetch();
-    const { endpoint, clock } = makeEndpoint(fetch, { minSendIntervalSec: 30 });
+    const { endpoint, clock } = await makeEndpoint(fetch, { minSendIntervalSec: 30 });
     const first = await queueDraft(endpoint, 'a');
     const second = await queueDraft(endpoint, 'b');
-    await endpoint.approveDraft(first);
+    await endpoint.endpoint.approveDraft(first);
     clock.now += 5_000;
-    const error = await endpoint.approveDraft(second).catch((e: unknown) => e);
+    const error = await endpoint.endpoint.approveDraft(second).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(BilibiliReviewError);
     expect(error).toMatchObject({ code: 'rate_limited', retryAfterMs: 25_000 });
-    expect(endpoint.drafts.get(second)?.status).toBe('pending');
+    expect(endpoint.endpoint.drafts.get(second)?.status).toBe('pending');
     clock.now += 25_000;
-    await endpoint.approveDraft(second);
+    await endpoint.endpoint.approveDraft(second);
     expect(posts).toHaveLength(2);
   });
 
   it('trips the circuit breaker on risk codes and keeps the draft', async () => {
     const { fetch, posts } = fakeFetch({ addCode: 12015 });
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
     const id = await queueDraft(endpoint);
-    await expect(endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'circuit_open' });
-    expect(endpoint.circuitBreaker?.code).toBe(12015);
-    expect(endpoint.drafts.get(id)?.status).toBe('pending');
-    await expect(endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'circuit_open' });
+    await expect(endpoint.endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'circuit_open' });
+    expect(endpoint.endpoint.circuitBreaker?.code).toBe(12015);
+    expect(endpoint.endpoint.drafts.get(id)?.status).toBe('pending');
+    await expect(endpoint.endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'circuit_open' });
     expect(posts).toHaveLength(1);
   });
 
   it('keeps the draft on ordinary platform errors', async () => {
     const { fetch } = fakeFetch({ addCode: 12002 });
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
     const id = await queueDraft(endpoint);
-    await expect(endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'platform_error' });
-    expect(endpoint.circuitBreaker).toBeUndefined();
-    expect(endpoint.drafts.get(id)?.status).toBe('pending');
+    await expect(endpoint.endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'platform_error' });
+    expect(endpoint.endpoint.circuitBreaker).toBeUndefined();
+    expect(endpoint.endpoint.drafts.get(id)?.status).toBe('pending');
   });
 
   it('refuses to post without SESSDATA + bili_jct', async () => {
     const { fetch, posts } = fakeFetch();
-    const { endpoint } = makeEndpoint(fetch, { biliJct: '' });
+    const { endpoint } = await makeEndpoint(fetch, { biliJct: '' });
     const id = await queueDraft(endpoint);
-    await expect(endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'no_cookie' });
+    await expect(endpoint.endpoint.approveDraft(id)).rejects.toMatchObject({ code: 'no_cookie' });
     expect(posts).toHaveLength(0);
   });
 
   it('edits and discards drafts before sending', async () => {
     const { fetch, posts } = fakeFetch();
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
     const id = await queueDraft(endpoint, 'old');
-    expect(endpoint.editDraft(id, '  new text ').message).toBe('new text');
-    expect(() => endpoint.editDraft(id, '')).toThrow(BilibiliReviewError);
-    expect(() => endpoint.editDraft(id, 'x'.repeat(1001))).toThrow(/1000/);
-    await endpoint.approveDraft(id);
+    expect(endpoint.endpoint.editDraft(id, '  new text ').message).toBe('new text');
+    expect(() => endpoint.endpoint.editDraft(id, '')).toThrow(BilibiliReviewError);
+    expect(() => endpoint.endpoint.editDraft(id, 'x'.repeat(1001))).toThrow(/1000/);
+    await endpoint.endpoint.approveDraft(id);
     expect(posts[0]?.message).toBe('new text');
     const other = await queueDraft(endpoint, 'drop me');
-    expect(endpoint.discardDraft(other)).toBe(true);
-    expect(endpoint.discardDraft(other)).toBe(false);
+    expect(endpoint.endpoint.discardDraft(other)).toBe(true);
+    expect(endpoint.endpoint.discardDraft(other)).toBe(false);
   });
 
-  it('removes itself from the review registry on stop', () => {
+  it('removes the stopped account from its owner Adapter directory', async () => {
     const { fetch } = fakeFetch();
-    const { endpoint, registry } = makeEndpoint(fetch);
-    endpoint.stop();
-    expect(registry.size).toBe(0);
+    const { endpoint, registry } = await makeEndpoint(fetch);
+    await endpoint.stop();
+    expect(endpoint.directory().size).toBe(0);
   });
 });
 
 describe('bili-draft review texts', () => {
   it('localizes English limits and risk stops while keeping drafts and avoiding automatic retries', async () => {
     const normal = fakeFetch();
-    const { endpoint, registry, clock } = makeEndpoint(normal.fetch);
+    const { endpoint, registry, clock } = await makeEndpoint(normal.fetch);
     const first = await queueDraft(endpoint, '第一条原文');
     const second = await queueDraft(endpoint, '第二条原文');
     expect(await approveDraftText(registry, first, { locale: 'en' })).toContain('Posted to Bilibili');
     expect(await approveDraftText(registry, second, { locale: 'en' })).toContain('30 seconds');
     expect(normal.posts).toHaveLength(1);
-    expect(endpoint.drafts.get(second)?.message).toBe('第二条原文');
+    expect(endpoint.endpoint.drafts.get(second)?.message).toBe('第二条原文');
     expect(editDraftText(registry, second, 'x'.repeat(1001), { locale: 'en' })).toContain('at most 1000 characters');
-    expect(endpoint.drafts.get(second)?.message).toBe('第二条原文');
+    expect(endpoint.endpoint.drafts.get(second)?.message).toBe('第二条原文');
     clock.now += 30_000;
     await approveDraftText(registry, second, { locale: 'en' });
     expect(normal.posts).toHaveLength(2);
 
     const risk = fakeFetch({ addCode: -412 });
-    const stopped = makeEndpoint(risk.fetch);
+    const stopped = await makeEndpoint(risk.fetch);
     const id = await queueDraft(stopped.endpoint, '风险时保留的原文');
     for (let attempt = 0; attempt < 2; attempt++) {
       expect(await approveDraftText(stopped.registry, id, { locale: 'en' })).toContain('risk controls stopped');
     }
     expect(risk.posts).toHaveLength(1);
-    expect(stopped.endpoint.drafts.get(id)?.message).toBe('风险时保留的原文');
-    endpoint.stop();
-    stopped.endpoint.stop();
+    expect(stopped.endpoint.endpoint.drafts.get(id)?.message).toBe('风险时保留的原文');
+    await endpoint.stop();
+    await stopped.endpoint.stop();
   });
 
   it('lists, edits, sends and drops drafts across endpoints', async () => {
     const { fetch, posts } = fakeFetch();
-    const { endpoint, registry } = makeEndpoint(fetch);
+    const { endpoint, registry } = await makeEndpoint(fetch);
     expect(listDraftsText(registry)).toContain('没有待审');
     const id = await queueDraft(endpoint, '谢谢喜欢');
     const listed = listDraftsText(registry);
@@ -262,13 +257,29 @@ describe('bili-draft review texts', () => {
 
   it('explains rate limits and risk stops in plain words', async () => {
     const { fetch } = fakeFetch({ addCode: -412 });
-    const { endpoint, registry } = makeEndpoint(fetch);
+    const { endpoint, registry } = await makeEndpoint(fetch);
     const id = await queueDraft(endpoint);
     expect(await approveDraftText(registry, id)).toContain('风控熔断');
   });
 });
 
 describe('BilibiliEndpoint reply-me / at-me notifications', () => {
+  it('does not advance the notification cursor while closed before receiving the same native item after reopen', async () => {
+    const incoming = notification(101, { subject_id: AID, root_id: 1, source_id: 3, target_id: 1 });
+    const { fetch } = fakeFetch({ feeds: { reply: [[], [incoming]] } });
+    const { endpoint, receive } = await makeEndpoint(fetch, { notifications: ['reply'] });
+    try {
+      await endpoint.endpoint.pollNotificationsOnce();
+      await endpoint.close();
+      await endpoint.endpoint.pollNotificationsOnce();
+      expect(receive).not.toHaveBeenCalled();
+      endpoint.open();
+      await endpoint.endpoint.pollNotificationsOnce();
+      expect(receive).toHaveBeenCalledTimes(1);
+      expect(receive).toHaveBeenCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: '3' }), mentioned: true }));
+    } finally { await endpoint.stop(); }
+  });
+
   it('baselines, then admits new video notifications as mentioned, within the whitelist, once', async () => {
     const old = notification(100, { subject_id: AID, root_id: 1, source_id: 2, target_id: 1 });
     const replyMe = notification(101, { subject_id: AID, root_id: 1, source_id: 3, target_id: 1, source_content: '回复你' });
@@ -279,13 +290,13 @@ describe('BilibiliEndpoint reply-me / at-me notifications', () => {
       pages: [[]],
       feeds: { reply: [[old], [old, replyMe, outside]], at: [[], [atMe, dynamic]] },
     });
-    const { endpoint, receive } = makeEndpoint(fetch, { notifications: ['reply', 'at'] });
+    const { endpoint, receive } = await makeEndpoint(fetch, { notifications: ['reply', 'at'] });
     await endpoint.start();
     endpoint.open();
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).not.toHaveBeenCalled();
 
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).toHaveBeenCalledTimes(2);
     expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
       conversation: expect.objectContaining({ id: `video:${AID}:1` }),
@@ -302,23 +313,23 @@ describe('BilibiliEndpoint reply-me / at-me notifications', () => {
       metadata: expect.objectContaining({ via: 'at' }),
     }));
 
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).toHaveBeenCalledTimes(2);
-    endpoint.stop();
+    await endpoint.stop();
   });
 
   it('accepts notifications outside the whitelist only with notificationScope=all', async () => {
     const outside = notification(102, { subject_id: 999, root_id: 0, source_id: 4, target_id: 0 });
     const { fetch } = fakeFetch({ pages: [[]], feeds: { reply: [[], [outside]] } });
-    const { endpoint, receive } = makeEndpoint(fetch, { notifications: ['reply'], notificationScope: 'all' });
+    const { endpoint, receive } = await makeEndpoint(fetch, { notifications: ['reply'], notificationScope: 'all' });
     await endpoint.start();
     endpoint.open();
-    await endpoint.pollOnce();
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
       conversation: expect.objectContaining({ id: 'video:999:4' }),
     }));
-    endpoint.stop();
+    await endpoint.stop();
   });
 
   it('does not double-admit a comment seen by both the video poll and a notification', async () => {
@@ -327,21 +338,21 @@ describe('BilibiliEndpoint reply-me / at-me notifications', () => {
       pages: [[reply(1)], [reply(1), dup]],
       feeds: { reply: [[], [notification(101, { subject_id: AID, root_id: 1, source_id: 3, target_id: 1 })]] },
     });
-    const { endpoint, receive } = makeEndpoint(fetch, { notifications: ['reply'] });
+    const { endpoint, receive } = await makeEndpoint(fetch, { notifications: ['reply'] });
     await endpoint.start();
     endpoint.open();
-    await endpoint.pollOnce();
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(receive).toHaveBeenCalledTimes(1);
-    endpoint.stop();
+    await endpoint.stop();
   });
 
   it('skips notification polling when not configured', async () => {
     const { fetch, calls } = fakeFetch({ pages: [[]] });
-    const { endpoint } = makeEndpoint(fetch);
+    const { endpoint } = await makeEndpoint(fetch);
     await endpoint.start();
-    await endpoint.pollOnce();
+    await endpoint.endpoint.pollOnce();
     expect(calls.some((url) => url.includes('/x/msgfeed/'))).toBe(false);
-    endpoint.stop();
+    await endpoint.stop();
   });
 });

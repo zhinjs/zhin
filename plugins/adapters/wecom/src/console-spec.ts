@@ -8,6 +8,7 @@ export const wecomConsoleSpec = {
   adapterDisplayName: '企业微信',
   fields: [
     { key: 'corpId', required: true, env: true, description: '企业 corpId', descriptionI18n: { en: 'WeCom corporation ID' } },
+    { key: 'agentId', required: true, description: '应用 AgentId', descriptionI18n: { en: 'WeCom application AgentId' } },
     { key: 'agentSecret', required: true, env: true, description: '应用 secret', descriptionI18n: { en: 'Application secret' } },
     { key: 'token', required: true, env: true, description: '回调 token', descriptionI18n: { en: 'Callback token' } },
     { key: 'encodingAESKey', required: true, env: true, description: '回调加解密 key', descriptionI18n: { en: 'Callback encryption key' } },

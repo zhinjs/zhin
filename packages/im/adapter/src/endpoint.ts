@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   createToken,
   type GenerationAdmissionGate,
@@ -18,14 +19,10 @@ import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
 
 export type {
-  EndpointActivationContext,
-  EndpointCleanup,
-  EndpointConnectionContext,
   EndpointConversation,
   EndpointEvent,
   EndpointEventSink,
   EndpointIdentity,
-  EndpointImplementation,
   EndpointIncomingMessage,
   EndpointSendRequest,
   EndpointSendPart,
@@ -41,7 +38,7 @@ export interface EndpointEventGateway {
   resolveLocale?(endpoint: EndpointIdentity, senderId?: string): Promise<Locale | undefined>;
 }
 
-/** Callback shape used by protocol normalizers which feed Endpoint.emit(). */
+/** Callback shape used by protocol normalizers which feed the framework event sink. */
 export type EndpointEventEmitter = <TPayload>(name: string, payload: TPayload) => Promise<unknown>;
 
 /** Generation-bound gateway injected into Endpoint by AdapterIndex. */
@@ -69,22 +66,10 @@ interface EndpointBindingContext {
   use<T>(token: Token<T>): T;
 }
 
-/**
- * Deep platform boundary.
- *
- * Compatibility base for existing platform implementations. Native SDK subclasses
- * implement PlatformEndpoint instead; both paths use this admission attachment.
- * Legacy implementations inherit this class, expose the platform-native
- * `client`, own account/transport lifecycle, and normalize every inbound SDK
- * callback through `emit()`. Core owns dispatch, admission and plugin context.
- */
-export abstract class Endpoint<TClient = unknown> {
+/** Internal admission attachment; platform Endpoints implement the symbol contract. */
+export abstract class EndpointRuntime<TClient = unknown> {
   readonly [endpointBrand] = true;
-  /**
-   * Platform SDK or protocol client exposed to plugin code.
-   * It must be a distinct object: Endpoint owns framework lifecycle, Client
-   * owns platform operations.
-   */
+  /** Actual native Endpoint instance managed by this internal admission attachment. */
   abstract readonly client: TClient;
 
   /** Optional local transport health. Absence means unobserved, not online. */
@@ -97,6 +82,9 @@ export abstract class Endpoint<TClient = unknown> {
   #identity?: EndpointIdentity;
   #events?: EndpointEventGateway;
   #admissionState: 'unbound' | 'pending' | 'active' | 'retired' = 'unbound';
+  #ingressSuspended = false;
+  readonly #inboundScope = new AsyncLocalStorage<{ active: boolean }>();
+  readonly #inflightInbound = new Set<Promise<unknown>>();
   #pendingEvents: Array<{ event: EndpointEvent; resolve?: (value: unknown) => void; reject?: (error: Error) => void }> = [];
   #droppedEvents = 0;
   #dispatchFailures = 0;
@@ -172,7 +160,7 @@ export abstract class Endpoint<TClient = unknown> {
         try {
           // Enter the gateway synchronously: its generation lease must be acquired
           // before retirement can make an unadmitted event look successful.
-          const dispatched = events.receive(entry.event);
+          const dispatched = this.runInbound(() => events.receive(entry.event));
           void Promise.resolve(dispatched).then(entry.resolve).catch(fail);
         } catch {
           fail();
@@ -191,7 +179,10 @@ export abstract class Endpoint<TClient = unknown> {
     }
   }
 
-  /** The identity is available after AdapterDefinition.create returns. */
+  /** Retire admission before releasing transport resources. */
+  retire(): void { this[endpointRetire](); }
+
+  /** The identity is available after Adapter initialization binds this runtime. */
   get identity(): EndpointIdentity {
     if (!this.#identity) throw new Error('Endpoint is not bound to a runtime generation');
     return this.#identity;
@@ -203,23 +194,75 @@ export abstract class Endpoint<TClient = unknown> {
     return this.#events?.resolveLocale?.(this.#identity, senderId);
   }
 
+  /** Local handoff can suspend ingress without permanently retiring the generation. */
+  protected suspendIngress(): void {
+    this.#ingressSuspended = true;
+    for (const entry of this.#pendingEvents.splice(0)) {
+      entry.reject?.(new Error('Endpoint closed before event admission'));
+    }
+  }
+  protected resumeIngress(): void { this.#ingressSuspended = false; }
+
+  /** One receipt scope owns normalization and all of its canonical continuations. */
+  runInbound<T>(receive: () => T | Promise<T>): Promise<T> {
+    return this.#receiveInbound(receive, this.#inboundScope.getStore());
+  }
+
+  #receiveInbound<T>(receive: () => T | Promise<T>, parent?: Readonly<{ active: boolean }>): Promise<T> {
+    if (!this.#events) throw new Error('Endpoint emitted before it was bound to a runtime generation');
+    if (this.#admissionState === 'retired') return Promise.reject(new Error('Endpoint generation is retired'));
+    if (this.#ingressSuspended && !parent?.active) return Promise.reject(new Error('Endpoint ingress is closed'));
+    const scope = { active: true };
+    let result: T | Promise<T>;
+    try { result = this.#inboundScope.run(scope, receive); }
+    catch (error) { scope.active = false; return Promise.reject(error); }
+    const operation: Promise<T> = Promise.resolve(result).finally(() => {
+      scope.active = false;
+      this.#inflightInbound.delete(operation);
+    });
+    this.#inflightInbound.add(operation);
+    return operation;
+  }
+
+  assertExternalLifecycle(operation: 'close' | 'stop'): void {
+    if (this.#inboundScope.getStore()?.active) {
+      throw new Error(`Endpoint ${operation} cannot run inside its own inbound receive; invoke it from the owning lifecycle`);
+    }
+  }
+
+  protected async drainInbound(): Promise<void> {
+    while (this.#inflightInbound.size) await Promise.allSettled([...this.#inflightInbound]);
+  }
+
   /** The only legal platform-to-framework event ingress. */
   protected emit<TPayload, TName extends string>(
     name: TName,
     payload: TPayload,
   ): Promise<unknown> {
-    return this.#publish(name, payload, false);
+    return this.#publishInScope(name, payload, false);
   }
 
   /** Await actual generation admission and dispatch before acknowledging a platform update. */
   protected emitAccepted<TPayload, TName extends string>(name: TName, payload: TPayload): Promise<unknown> {
-    return this.#publish(name, payload, true);
+    return this.#publishInScope(name, payload, true);
+  }
+
+  #publishInScope<TPayload>(name: string, payload: TPayload, accepted: boolean): Promise<unknown> {
+    const parent = this.#inboundScope.getStore();
+    if ((this.#ingressSuspended && !parent?.active) || this.#admissionState === 'retired') {
+      return this.#publish(name, payload, accepted);
+    }
+    return this.#receiveInbound(() => this.#publish(name, payload, accepted), parent);
   }
 
   #publish<TPayload, TName extends string>(name: TName, payload: TPayload, accepted: boolean): Promise<unknown> {
     if (!this.#events || !this.#identity) {
       throw new Error('Endpoint emitted before it was bound to a runtime generation');
     }
+    if (this.#admissionState === 'retired') return accepted
+      ? Promise.reject(new Error('Endpoint generation is retired')) : Promise.resolve(undefined);
+    if (this.#ingressSuspended && !this.#inboundScope.getStore()?.active) return accepted
+      ? Promise.reject(new Error('Endpoint ingress is closed')) : Promise.resolve(undefined);
     const event = Object.freeze({
       name,
       payload,
@@ -241,8 +284,6 @@ export abstract class Endpoint<TClient = unknown> {
       this.#pendingEvents.push({ event });
       return Promise.resolve(undefined);
     }
-    if (this.#admissionState === 'retired') return accepted
-      ? Promise.reject(new Error('Endpoint generation is retired')) : Promise.resolve(undefined);
     return this.#events.receive(event);
   }
 
@@ -266,27 +307,17 @@ export abstract class Endpoint<TClient = unknown> {
 
 /** @internal AdapterIndex binding hook; deliberately not exported by name. */
 export function bindEndpoint(
-  endpoint: Endpoint,
+  endpoint: EndpointRuntime,
   context: EndpointBindingContext,
   admission?: GenerationAdmissionGate,
 ): void {
   endpoint[endpointBind](context, admission);
 }
 
-/** @internal Called before releasing transport resources on rollback/stop. */
-export function retireEndpoint(endpoint: Endpoint | import('./endpoint-specification.js').PlatformEndpoint): void {
-  const runtime = isEndpoint(endpoint) ? endpoint : Reflect.get(
-    Reflect.get(endpoint, Symbol.for('zhin.endpoint.specification/1')),
-    Symbol.for('zhin.endpoint.specification-runtime/1'),
-  );
-  if (!isEndpoint(runtime)) throw new TypeError('Invalid Endpoint specification');
-  runtime[endpointRetire]();
-}
-
 /** @internal Cross-generation Endpoint check that survives ESM module re-evaluation. */
-export function isEndpoint(value: unknown): value is Endpoint {
+export function isEndpointRuntime(value: unknown): value is EndpointRuntime {
   if (!value || typeof value !== 'object') return false;
-  const candidate = value as Partial<Endpoint> & {
+  const candidate = value as Partial<EndpointRuntime> & {
     readonly [endpointBrand]?: unknown;
     readonly [endpointBind]?: unknown;
   };

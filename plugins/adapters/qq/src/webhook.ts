@@ -3,7 +3,7 @@
  */
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { Bot, ReceiverMode, type Sendable } from 'qq-official-bot';
+import { Bot, ReceiverMode } from 'qq-official-bot';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ResolvedQqHttpConfig } from './protocol.js';
@@ -11,11 +11,7 @@ import type { QqBotTransport } from './ws.js';
 
 const logger = getLogger('qq');
 
-export type QqHttpBotTransport = QqBotTransport & {
-  middleware: (ctx: unknown, next: () => Promise<void>) => Promise<unknown>;
-};
-
-export type CreateQqHttpBot = (config: ResolvedQqHttpConfig) => QqHttpBotTransport;
+export type QqHttpBotTransport = Bot<ReceiverMode.MIDDLEWARE, 'koa'>;
 
 export interface QqWebhookHandler {
   readonly config: ResolvedQqHttpConfig;
@@ -53,6 +49,7 @@ export async function handleQqWebhookRequest(
       req: request,
       res: response,
       request: { body: undefined },
+      response: {},
     }, async () => undefined);
   } catch (error) {
     logger.error('QQ webhook error:', error);
@@ -78,55 +75,8 @@ export async function readRequestBodyText(request: IncomingMessage): Promise<str
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export function defaultCreateHttpBot(config: ResolvedQqHttpConfig): QqHttpBotTransport {
-  const bot = new Bot({
-    appid: config.appid,
-    secret: config.secret,
-    mode: ReceiverMode.MIDDLEWARE,
-    platform: 'koa',
-    sandbox: config.sandbox,
-    dataDir: path.join(process.cwd(), 'data', 'qq'),
-    // 关闭内置 log4js，与 WebSocket 模式一致走 zhin adapter logger
-    logLevel: 'off',
-  } as never) as Bot<ReceiverMode.MIDDLEWARE, 'koa'> & QqBotTransport;
-
-  return {
-    api: bot,
-    start: () => bot.start().then(() => undefined),
-    stop: () => bot.stop().then(() => undefined),
-    on: (event, listener) => {
-      bot.on(event as never, listener as never);
-    },
-    removeAllListeners: () => {
-      bot.removeAllListeners(undefined as never);
-    },
-    sendPrivateMessage: (userId, message, source, options) => bot.sendPrivateMessage(userId, message as Sendable, source, options),
-    sendGroupMessage: (groupId, message, source, options) => bot.sendGroupMessage(groupId, message as Sendable, source, options),
-    sendGuildMessage: (channelId, message, source, options) => bot.sendGuildMessage(channelId, message as Sendable, source, options),
-    sendDirectMessage: (guildId, message, source, options) => bot.sendDirectMessage(guildId, message as Sendable, source, options),
-    recallPrivateMessage: (userId, messageId) => bot.recallPrivateMessage(userId, messageId),
-    recallGroupMessage: (groupId, messageId) => bot.recallGroupMessage(groupId, messageId),
-    recallGuildMessage: (channelId, messageId) => bot.recallGuildMessage(channelId, messageId),
-    recallDirectMessage: (guildId, messageId) => bot.recallDirectMessage(guildId, messageId),
-    getGuilds: () => bot.guildService.getList(),
-    getChannels: (guildId) => bot.channelService.getList(guildId),
-    getChannelInfo: (channelId) => bot.channelService.getInfo(channelId),
-    getGuildMember: (guildId, userId) => bot.memberService.getGuildMemberInfo(guildId, userId),
-    getGuildRoles: (guildId) => bot.guildService.getRoles(guildId),
-    createGuildRole: (guildId, name, color) =>
-      bot.guildService.createRole(guildId, { name, color: color || 0, hoist: 0 }),
-    addMemberRole: async (guildId, channelId, userId, roleId) => {
-      await bot.memberService.addMemberRole(guildId, channelId, userId, roleId);
-      return true;
-    },
-    removeMemberRole: async (guildId, channelId, userId, roleId) => {
-      await bot.memberService.removeMemberRole(guildId, channelId, userId, roleId);
-      return true;
-    },
-    approveGroupJoinRequest: (groupId, userId, options) =>
-      (bot as { approveGroupJoinRequest?: QqBotTransport['approveGroupJoinRequest'] })
-        .approveGroupJoinRequest?.(groupId, userId, options)
-      ?? Promise.reject(new Error('approveGroupJoinRequest is not available')),
-    middleware: (ctx, next) => bot.middleware(ctx as never, next as never),
-  };
+export function qqHttpBotOptions(config: ResolvedQqHttpConfig): ConstructorParameters<typeof Bot<ReceiverMode.MIDDLEWARE, 'koa'>>[0] {
+  return { handleProcessErrors: false, appid: config.appid, secret: config.secret,
+    mode: ReceiverMode.MIDDLEWARE, platform: 'koa', sandbox: config.sandbox,
+    dataDir: path.join(process.cwd(), 'data', 'qq'), logLevel: 'off' };
 }

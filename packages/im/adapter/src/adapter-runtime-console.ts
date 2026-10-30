@@ -1,3 +1,4 @@
+import { writeConfigurationPath } from './configuration-fields.js';
 import { PluginConsoleRpcError, type PluginConsoleRpcCall, type PluginConsoleRpcInput, type PluginConsoleRpcJson } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from './provider.js';
 import { isOwnedAdapterDirectory } from './adapter-index.js';
@@ -53,8 +54,9 @@ export function consoleRuntimeView(spec: AdapterConsoleSpec, call: PluginConsole
   });
 }
 
-export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall, action: AdapterConsoleMutation,
-  input: PluginConsoleRpcInput): Promise<PluginConsoleRpcJson> {
+/** Common admission for typed platform actions such as a verified QR account binding. */
+export function prepareConsoleAdapterMutation(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall,
+  input: PluginConsoleRpcInput) {
   const adapter = ownedConsoleAdapter(spec, call);
   const runtime = call.runtime;
   if (!runtime || !adapter.canManage) throw new PluginConsoleRpcError('unsupported', '此环境不支持持久化账号管理');
@@ -71,13 +73,19 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
     if (input.confirmMigration !== true) throw new PluginConsoleRpcError('conflict', '请先确认迁移当前账号清单；将保留原身份和历史');
   }
   call.signal.throwIfAborted();
-  const options = { waitForExecution: false, beforeCommit: () => { call.signal.throwIfAborted(); call.commitStarted?.(); } };
+  const options = { signal: call.signal, waitForExecution: false, beforeCommit: () => { call.signal.throwIfAborted(); call.commitStarted?.(); } };
+  return { adapter, revision, options };
+}
+
+export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: PluginConsoleRpcCall, action: AdapterConsoleMutation,
+  input: PluginConsoleRpcInput): Promise<PluginConsoleRpcJson> {
+  const { adapter, revision, options } = prepareConsoleAdapterMutation(spec, call, input);
   try {
     let result;
     if (action === 'add') {
       if (spec.canAdd === false) throw new PluginConsoleRpcError('unsupported', '此 Adapter 不支持新增账号');
       const id = requireRuntimeId(spec, input.id);
-      result = await adapter.add(revision, { endpointId: id, config: { id, ...runtimeValues(spec, input.values, false) } }, options);
+      result = await adapter.add(revision, { endpointId: id, config: accountConfiguration(id, runtimeValues(spec, input.values, false)) }, options);
     } else {
       const target = runtimeTarget(adapter, input, action === 'replace');
       switch (action) {
@@ -90,7 +98,7 @@ export async function mutateConsoleAdapter(spec: AdapterConsoleSpec, call: Plugi
           if (spec.canAdd === false || spec.canRemove === false) throw new PluginConsoleRpcError('unsupported', '此 Adapter 不支持替换账号');
           if (!adapter.configurationIdentityFields?.length) throw new PluginConsoleRpcError('unsupported', '平台尚未声明账号身份替换合同');
           const id = requireRuntimeId(spec, input.id);
-          result = await adapter.replace(target.instanceId, revision, { endpointId: id, config: { id, ...runtimeValues(spec, input.values, false) } }, options);
+          result = await adapter.replace(target.instanceId, revision, { endpointId: id, config: accountConfiguration(id, runtimeValues(spec, input.values, false)) }, options);
           break;
         }
         case 'start': result = await adapter.start(target.instanceId, revision, options); break;
@@ -129,6 +137,7 @@ function runtimeTarget(adapter: AdapterInstance, input: PluginConsoleRpcInput, r
   if (!replacing && typeof input.id === 'string') {
     const matches = entries.filter(entry => entry.endpointId === input.id);
     if (matches.length === 1) return matches[0];
+    if (matches.length === 0) throw new PluginConsoleRpcError('not_found', '此 Adapter 没有该账号');
   }
   throw new PluginConsoleRpcError('invalid_input', '需要明确的账号 instanceId');
 }
@@ -141,12 +150,12 @@ function requireRuntimeId(spec: AdapterConsoleSpec, raw: unknown): string {
   return id;
 }
 
-/** Same string authoring fields as legacy Console, with no environment-file writer. */
-function runtimeValues(spec: AdapterConsoleSpec, raw: unknown, patch: boolean): Record<string, string> {
+/** UI values are parsed using only explicitly declared account fields. */
+function runtimeValues(spec: AdapterConsoleSpec, raw: unknown, patch: boolean): Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new PluginConsoleRpcError('invalid_input', '缺少账号字段');
   const fields = spec.fields ?? [];
   const known = new Map(fields.map(field => [field.key, field]));
-  const values: Record<string, string> = {};
+  const values: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
     const field = known.get(key);
     if (!field || key === 'id') throw new PluginConsoleRpcError('invalid_input', '包含未声明或不可修改的字段');
@@ -157,10 +166,23 @@ function runtimeValues(spec: AdapterConsoleSpec, raw: unknown, patch: boolean): 
       throw new PluginConsoleRpcError('invalid_input', '请重新填写密钥，不能提交遮蔽值');
     }
     if (!text && (field.secret || field.env || !patch)) continue;
-    values[key] = text;
+    if (field.type === 'number') {
+      const number = Number(text);
+      if (!text || !Number.isFinite(number)) throw new PluginConsoleRpcError('invalid_input', `字段 ${key} 需要有效数字`);
+      values[key] = number;
+    } else if (field.type === 'boolean') {
+      if (text !== 'true' && text !== 'false') throw new PluginConsoleRpcError('invalid_input', `字段 ${key} 需要 true 或 false`);
+      values[key] = text === 'true';
+    } else values[key] = text;
   }
   if (!patch && fields.some(field => field.required && values[field.key] === undefined)) {
     throw new PluginConsoleRpcError('invalid_input', '缺少必填账号字段');
   }
   return values;
+}
+
+function accountConfiguration(id: string, values: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const config: Record<string, unknown> = { id };
+  for (const [field, value] of Object.entries(values)) writeConfigurationPath(config, field, value);
+  return config;
 }

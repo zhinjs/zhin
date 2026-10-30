@@ -13,7 +13,7 @@ export default defineAgentTool<{ guild_id: string }>({
   permissions: [platformPermission('qq', 'manage_roles')],
   async execute({ guild_id  }: { guild_id: string }, context) {
     const client = context.$client;
-    const roles = await client.getGuildRoles(guild_id);
+    const roles = await client.guildService.getRoles(guild_id);
     return { roles, count: roles.length };
   },
 });

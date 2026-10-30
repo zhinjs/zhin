@@ -1,97 +1,68 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
-import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
+import { AdapterIndex, AdapterManagementError, adapterFeatureId, endpointEventGatewayToken,
+  type EndpointDesiredRepository, type EndpointDesiredSnapshot } from 'zhin.js/adapter';
+import { createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from 'zhin.js';
+import definition from '../adapters/line/index.js';
 import listCommand from '../commands/line/endpoint/list/index.js';
 import addCommand from '../commands/line/endpoint/add/[id]/index.js';
 import removeCommand from '../commands/line/endpoint/remove/[id]/index.js';
-import { lineRuntimeStateToken } from '../src/line-runtime-state.js';
 
-/**
- * commands/ 下的命令定义冒烟 + kv add / remove 基本行为（通用套件逻辑见
- * packages/im/adapter/tests/endpoint-commands.test.ts）。
- */
-
-let store: MemoryEndpointConfigurationStore;
-
-beforeEach(() => {
-  store = new MemoryEndpointConfigurationStore();
-});
-
-function fakeContext(overrides: Record<string, unknown> = {}) {
-  const state = createEndpointRuntimeState();
-  return {
-    state,
-    use: (token: unknown) => {
-      if (token === lineRuntimeStateToken) return state;
-      if (token === endpointConfigurationStoreToken) return store;
-      throw new Error(`unexpected token: ${String(token)}`);
-    },
-    params: Object.freeze({}),
-    args: Object.freeze([]),
-    input: undefined,
-    config: undefined,
-    ...overrides,
-  } as never;
+const cleanups: Array<() => Promise<void>> = [];
+afterEach(async () => { for (const close of cleanups.splice(0)) await close(); });
+const args = ['channelSecret=synthetic-secret', 'channelAccessToken=synthetic-token'];
+async function fixture() {
+  const owner = rootPluginId(), source = { endpoints: [] };
+  let saved: EndpointDesiredSnapshot = { revision: 0, endpoints: [] };
+  const write = vi.fn<EndpointDesiredRepository['compareAndSet']>(async (_id, revision, endpoints, commitId) => {
+    if (revision !== saved.revision) throw new AdapterManagementError('conflict', 'synthetic conflict');
+    return saved = structuredClone({ revision: revision + 1, endpoints, commitId });
+  });
+  const repository: EndpointDesiredRepository = { load: async () => saved, compareAndSet: write };
+  const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'line', source: '/fixture/adapters/line/index.ts', definition });
+  const state: SnapshotState = { root: owner, tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
+    config: new Map([[owner, source]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(), resources: new Map([[owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]) };
+  const index = await AdapterIndex.create([slot], createSnapshotView(1, state), new AbortController().signal, { repository });
+  await index.activate(new AbortController().signal); cleanups.push(() => index.stop());
+  const adapter = index.adapter(slot.id)!;
+  const use = vi.fn(() => { throw new Error('startup config/.env store must not be used'); });
+  const context = (overrides: Record<string, unknown> = {}) => ({ owner, generation: 1, project: () => index, use,
+    params: { id: 'bot1' }, args, input: undefined, config: source, signal: new AbortController().signal, ...overrides }) as never;
+  return { index, adapter, source, context, write, use, saved: () => saved };
 }
 
-describe('line endpoint command definitions', async () => {
-  it('三个命令模块均为合法 defineCommand', async () => {
-    for (const definition of [listCommand, addCommand, removeCommand]) {
-      expect(() => parseCommandDefinition(definition)).not.toThrow();
-    }
+describe('line actual convention Adapter account commands', () => {
+  it('keeps all three convention command definitions valid', () => {
+    for (const command of [listCommand, addCommand, removeCommand]) expect(() => parseCommandDefinition(command)).not.toThrow();
   });
-
-  it('add 走 kv 参数：凭据写 .env，yaml 存 ${REF}', async () => {
-    const text = await addCommand.execute(fakeContext({
-      params: { id: 'bot1' },
-      args: ['channelSecret=cs-1', 'channelAccessToken=cat-1'],
-    })) as string;
-
-    expect(text).toContain('✅');
-    const envContent = store.environmentText();
-    expect(envContent).toContain('LINE_BOT1_CHANNEL_SECRET=cs-1');
-    expect(envContent).toContain('LINE_BOT1_CHANNEL_ACCESS_TOKEN=cat-1');
-    const config = store.configurationText('line');
-    expect(config).toContain('${LINE_BOT1_CHANNEL_ACCESS_TOKEN}');
+  it('adds with one runtime CAS, saves disabled without constructing SDK, and leaves startup config/.env untouched', async () => {
+    const f = await fixture(); const pid = process.pid;
+    expect(await addCommand.execute(f.context())).toContain('尚未启动');
+    expect(f.write).toHaveBeenCalledTimes(1); expect(f.saved().endpoints).toHaveLength(1);
+    const account = f.adapter.list()[0]!; expect(account.endpointId).toBe('bot1'); expect(account.desiredEnabled).toBe(false);
+    expect(f.adapter.getEndpoint(account.instanceId)).toBeUndefined(); expect(f.source).toEqual({ endpoints: [] });
+    expect(f.use).not.toHaveBeenCalled(); expect(process.pid).toBe(pid);
   });
-
-  it('add 缺少必填字段时报错', async () => {
-    expect(await addCommand.execute(fakeContext({ params: { id: 'bot1' } })))
-      .toContain('缺少必填字段：channelSecret、channelAccessToken');
+  it('rejects missing required or undeclared input without a CAS', async () => {
+    const f = await fixture();
+    expect(await addCommand.execute(f.context({ args: [] }))).toContain('缺少必填字段');
+    expect(await addCommand.execute(f.context({ args: [...args, 'undeclared=synthetic'] }))).toContain('未声明');
+    expect(f.write).not.toHaveBeenCalled(); expect(f.adapter.list()).toEqual([]);
   });
-
-  it('list 显示运行中 + 配置中的 endpoints', async () => {
-    const context = fakeContext();
-    (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('bot1', { id: 'bot1', mode: 'webhook' });
-    await addCommand.execute(fakeContext({ params: { id: 'conf-bot' }, args: ['channelSecret=cs-1', 'channelAccessToken=cat-1'] }));
-
-    const text = await listCommand.execute(context) as string;
-
-    expect(text).toContain('bot1（webhook）');
-    expect(text).toContain('conf-bot');
+  it('lists the authoritative runtime directory rather than a separate running Map or startup file', async () => {
+    const f = await fixture(); await addCommand.execute(f.context({ params: { id: 'conf-bot' } }));
+    const text = await listCommand.execute(f.context()); expect(text).toContain('conf-bot');
+    expect(text).not.toContain('synthetic-secret'); expect(text).not.toContain('synthetic-token'); expect(f.use).not.toHaveBeenCalled();
   });
-
-  it('remove 从配置移除并提示重启', async () => {
-    await addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['channelSecret=cs-1', 'channelAccessToken=cat-1'] }));
-
-    const text = await removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
-
-    expect(text).toContain('移除');
-    expect(text).toContain('重启');
-    expect(store.configurationText('line')).not.toContain('id: bot1');
+  it('removes from the same desired repository without requesting process restart', async () => {
+    const f = await fixture(); await addCommand.execute(f.context());
+    const text = await removeCommand.execute(f.context()); expect(text).toContain('取消'); expect(text).not.toContain('重启');
+    expect(f.saved().endpoints).toHaveLength(0); expect(f.write).toHaveBeenCalledTimes(2); expect(f.source).toEqual({ endpoints: [] });
+    expect(f.use).not.toHaveBeenCalled();
   });
-
-  it('配置 master 后非 master 拒绝 add/remove', async () => {
-    const denied = fakeContext({
-      config: { master: 'alice' },
-      input: { sender: { id: 'bob' } },
-      params: { id: 'bot1' },
-      args: ['channelSecret=cs-1', 'channelAccessToken=cat-1'],
-    });
-
+  it('retains the configured master guard before either add/remove can reach persistence', async () => {
+    const f = await fixture(), denied = f.context({ config: { master: 'alice' }, input: { sender: { id: 'bob' } } });
     expect(await addCommand.execute(denied)).toBe('仅 master 可执行 LINE endpoint 管理命令');
-    expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 LINE endpoint 管理命令');
+    expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 LINE endpoint 管理命令'); expect(f.write).not.toHaveBeenCalled();
   });
 });

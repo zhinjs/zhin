@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { weixinIlinkRuntimeStateToken } from './weixin-ilink-runtime-state.js';
 import { weixinIlinkConsoleSpec } from './console-spec.js';
 
 export function createWeixinIlinkConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(weixinIlinkRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...weixinIlinkConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }
