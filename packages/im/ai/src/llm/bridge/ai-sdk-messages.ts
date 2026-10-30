@@ -17,6 +17,7 @@ import { repairAgentMessagesForLlm } from '../repair-agent-messages.js';
 import type { LlmTool } from '../types/tool.js';
 import { geminiCompatibleSchema } from '../json-schema-zod.js';
 import { createToolNameCodec, type ToolNameCodec } from './tool-name-wire.js';
+import { RUNTIME_CONTEXT_MARKER } from '../types/runtime-context.js';
 
 /**
  * DeepSeek thinking + tools requires `reasoning_content` on every assistant
@@ -65,19 +66,13 @@ function userBlocksToAiContent(
   mediaCapabilities: readonly ProviderMediaKind[],
 ): UserModelMessage['content'] {
   const parts: AiSdkUserPart[] = [];
-  let previous: string | undefined;
-  for (const block of message.content) {
+  // Only host-owned metadata identifies the tail; participant text is never a boundary.
+  const marker = message.content.findIndex(block => block.type === 'text'
+    && block.perTurn === true && block.text === RUNTIME_CONTEXT_MARKER);
+  const body = marker < 0 ? message.content : message.content.slice(0, marker);
+  for (const block of body) {
     if (block.type === 'text') {
-      // Several providers (DeepSeek, Gemini) concatenate text parts: every part after the first
-      // starts on its own line and ends with a newline. The first part (header + body) is left
-      // untouched so it stays byte-identical to the same message sent later as history.
-      let text = block.text;
-      if (previous !== undefined) {
-        if (!previous.endsWith('\n') && !text.startsWith('\n')) text = `\n${text}`;
-        if (!text.endsWith('\n')) text = `${text}\n`;
-      }
-      parts.push({ type: 'text', text });
-      previous = text;
+      parts.push({ type: 'text', text: block.text });
     }
   }
   const { accepted, placeholders } = filterMediaBlocksForProvider(message.media, mediaCapabilities);
@@ -95,6 +90,18 @@ function userBlocksToAiContent(
   }
   for (const text of placeholders) {
     parts.push({ type: 'text', text });
+  }
+  // Participant media and its placeholders belong before the host-data boundary. Only the
+  // runtime tail needs separators for providers that concatenate adjacent text parts.
+  if (marker >= 0) {
+    for (const block of message.content.slice(marker)) {
+      if (block.type !== 'text') continue;
+      const previous = parts.at(-1);
+      let text = block.text;
+      if (!(previous?.type === 'text' && previous.text.endsWith('\n')) && !text.startsWith('\n')) text = `\n${text}`;
+      if (!text.endsWith('\n')) text = `${text}\n`;
+      parts.push({ type: 'text', text });
+    }
   }
   if (parts.length === 1 && parts[0]?.type === 'text') {
     return parts[0].text;
